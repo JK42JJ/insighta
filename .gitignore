@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Database
+data/*.db
+data/*.db-journal
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Cache
+cache/
+.cache/
+*.cache
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# OAuth credentials (sensitive)
+credentials.json
+token.json
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Prisma
+prisma/migrations/
+!prisma/migrations/.gitkeep
+
+# Husky
+.husky/_

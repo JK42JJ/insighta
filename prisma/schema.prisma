@@ -1,0 +1,193 @@
+// Prisma Schema for YouTube Playlist Sync Module
+// Database: SQLite (development), PostgreSQL (production)
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ============================================================================
+// Core Models
+// ============================================================================
+
+model Playlist {
+  id           String         @id @default(uuid())
+  youtubeId    String         @unique @map("youtube_id")
+  title        String
+  description  String?
+  channelId    String         @map("channel_id")
+  channelTitle String         @map("channel_title")
+  thumbnailUrl String?        @map("thumbnail_url")
+  itemCount    Int            @default(0) @map("item_count")
+  syncStatus   SyncStatus     @default(PENDING) @map("sync_status")
+  lastSyncedAt DateTime?      @map("last_synced_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  items        PlaylistItem[]
+  syncHistory  SyncHistory[]
+
+  @@map("playlists")
+}
+
+model Video {
+  id            String          @id @default(uuid())
+  youtubeId     String          @unique @map("youtube_id")
+  title         String
+  description   String?
+  channelId     String          @map("channel_id")
+  channelTitle  String          @map("channel_title")
+  publishedAt   DateTime        @map("published_at")
+  duration      Int             // in seconds
+  thumbnailUrls String          @map("thumbnail_urls") // JSON string
+  viewCount     Int             @default(0) @map("view_count")
+  likeCount     Int             @default(0) @map("like_count")
+  commentCount  Int             @default(0) @map("comment_count")
+  tags          String?         // JSON string array
+  categoryId    String?         @map("category_id")
+  language      String?
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  playlistItems PlaylistItem[]
+  userState     UserVideoState?
+
+  @@map("videos")
+}
+
+model PlaylistItem {
+  id         String    @id @default(uuid())
+  playlistId String    @map("playlist_id")
+  videoId    String    @map("video_id")
+  position   Int
+  addedAt    DateTime  @map("added_at")
+  removedAt  DateTime? @map("removed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  playlist   Playlist  @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  video      Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, videoId, addedAt])
+  @@index([playlistId, position])
+  @@index([videoId])
+  @@index([playlistId, addedAt])
+  @@map("playlist_items")
+}
+
+model UserVideoState {
+  id           String      @id @default(uuid())
+  videoId      String      @unique @map("video_id")
+  watchStatus  WatchStatus @default(UNWATCHED) @map("watch_status")
+  lastPosition Int         @default(0) @map("last_position") // in seconds
+  watchCount   Int         @default(0) @map("watch_count")
+  notes        String?
+  summary      String?
+  tags         String?     // JSON string array
+  rating       Int?        // 1-5
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  video        Video       @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@map("user_video_states")
+}
+
+// ============================================================================
+// Operational Models
+// ============================================================================
+
+model SyncHistory {
+  id          String     @id @default(uuid())
+  playlistId  String     @map("playlist_id")
+  status      SyncStatus
+  startedAt   DateTime   @map("started_at")
+  completedAt DateTime?  @map("completed_at")
+  duration    Int?       // in milliseconds
+  itemsAdded  Int        @default(0) @map("items_added")
+  itemsRemoved Int       @default(0) @map("items_removed")
+  itemsReordered Int     @default(0) @map("items_reordered")
+  quotaUsed   Int        @default(0) @map("quota_used")
+  errorMessage String?   @map("error_message")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  playlist    Playlist   @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+
+  @@index([playlistId, startedAt])
+  @@index([status])
+  @@map("sync_history")
+}
+
+model QuotaUsage {
+  id        String   @id @default(uuid())
+  date      DateTime @unique
+  used      Int      @default(0)
+  limit     Int      @default(10000)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  operations QuotaOperation[]
+
+  @@map("quota_usage")
+}
+
+model QuotaOperation {
+  id           String      @id @default(uuid())
+  quotaUsageId String      @map("quota_usage_id")
+  operationType String     @map("operation_type")
+  cost         Int
+  timestamp    DateTime    @default(now())
+
+  quotaUsage   QuotaUsage  @relation(fields: [quotaUsageId], references: [id], onDelete: Cascade)
+
+  @@index([quotaUsageId])
+  @@index([timestamp])
+  @@map("quota_operations")
+}
+
+model Credentials {
+  id        String   @id @default(uuid())
+  userId    String   @unique @default("default") @map("user_id")
+  data      String   // Encrypted JSON
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("credentials")
+}
+
+model SyncSchedule {
+  id          String    @id @default(uuid())
+  playlistId  String    @unique @map("playlist_id")
+  interval    Int       // in milliseconds
+  enabled     Boolean   @default(true)
+  lastRun     DateTime? @map("last_run")
+  nextRun     DateTime  @map("next_run")
+  retryCount  Int       @default(0) @map("retry_count")
+  maxRetries  Int       @default(3) @map("max_retries")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([nextRun, enabled])
+  @@map("sync_schedules")
+}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum SyncStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum WatchStatus {
+  UNWATCHED
+  WATCHING
+  COMPLETED
+}
