@@ -90,15 +90,26 @@ export async function buildServer() {
   await registerAuth(fastify);
 
   // ============================================================================
-  // Documentation Plugins (skip in test mode)
+  // Documentation Plugins (skip in test mode and serverless)
   // ============================================================================
 
-  if (process.env['NODE_ENV'] !== 'test') {
+  const isServerless = !!(
+    process.env['VERCEL'] ||
+    process.env['AWS_LAMBDA_FUNCTION_NAME'] ||
+    process.env['FUNCTION_NAME']
+  );
+
+  if (process.env['NODE_ENV'] !== 'test' && !isServerless) {
     // Use dynamic imports to avoid loading ESM modules in Jest
+    // Note: Scalar uses ESM-only modules that don't work in Vercel's CommonJS environment
     const { registerSwagger } = await import('./plugins/swagger');
     const { registerScalar } = await import('./plugins/scalar');
     await registerSwagger(fastify);
     await registerScalar(fastify);
+  } else if (process.env['NODE_ENV'] !== 'test') {
+    // In serverless, only register Swagger (works with CommonJS)
+    const { registerSwagger } = await import('./plugins/swagger');
+    await registerSwagger(fastify);
   }
 
   // ============================================================================
