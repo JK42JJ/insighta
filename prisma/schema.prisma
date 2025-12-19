@@ -14,6 +14,17 @@ generator client {
 // Core Models
 // ============================================================================
 
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
 model Playlist {
   id           String         @id @default(uuid())
   youtubeId    String         @unique @map("youtube_id")
@@ -23,7 +34,7 @@ model Playlist {
   channelTitle String         @map("channel_title")
   thumbnailUrl String?        @map("thumbnail_url")
   itemCount    Int            @default(0) @map("item_count")
-  syncStatus   SyncStatus     @default(PENDING) @map("sync_status")
+  syncStatus   String         @default("PENDING") @map("sync_status")
   lastSyncedAt DateTime?      @map("last_synced_at")
   createdAt    DateTime       @default(now()) @map("created_at")
   updatedAt    DateTime       @updatedAt @map("updated_at")
@@ -55,6 +66,9 @@ model Video {
 
   playlistItems PlaylistItem[]
   userState     UserVideoState?
+  captions      VideoCaption[]
+  notes         VideoNote[]
+  watchSessions WatchSession[]
 
   @@map("videos")
 }
@@ -82,7 +96,7 @@ model PlaylistItem {
 model UserVideoState {
   id           String      @id @default(uuid())
   videoId      String      @unique @map("video_id")
-  watchStatus  WatchStatus @default(UNWATCHED) @map("watch_status")
+  watchStatus  String      @default("UNWATCHED") @map("watch_status")
   lastPosition Int         @default(0) @map("last_position") // in seconds
   watchCount   Int         @default(0) @map("watch_count")
   notes        String?
@@ -104,7 +118,7 @@ model UserVideoState {
 model SyncHistory {
   id          String     @id @default(uuid())
   playlistId  String     @map("playlist_id")
-  status      SyncStatus
+  status      String
   startedAt   DateTime   @map("started_at")
   completedAt DateTime?  @map("completed_at")
   duration    Int?       // in milliseconds
@@ -176,18 +190,164 @@ model SyncSchedule {
 }
 
 // ============================================================================
-// Enums
+// Phase 2: Learning Platform Models
 // ============================================================================
 
-enum SyncStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  FAILED
+model VideoCaption {
+  id        String   @id @default(uuid())
+  videoId   String   @map("video_id")
+  language  String
+  text      String   // Full transcript
+  segments  String   // JSON array of {text, start, duration}
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, language])
+  @@index([videoId])
+  @@map("video_captions")
 }
 
-enum WatchStatus {
-  UNWATCHED
-  WATCHING
-  COMPLETED
+model VideoNote {
+  id        String   @id @default(uuid())
+  videoId   String   @map("video_id")
+  timestamp Int      // in seconds
+  content   String   // Markdown text
+  tags      String?  // JSON array
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId, timestamp])
+  @@map("video_notes")
 }
+
+model WatchSession {
+  id        String   @id @default(uuid())
+  videoId   String   @map("video_id")
+  startedAt DateTime @map("started_at")
+  endedAt   DateTime @map("ended_at")
+  startPos  Int      @map("start_pos") // in seconds
+  endPos    Int      @map("end_pos")   // in seconds
+  duration  Int      // actual watch duration in seconds
+  createdAt DateTime @default(now()) @map("created_at")
+
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId, startedAt])
+  @@map("watch_sessions")
+}
+
+// ============================================================================
+// Universal Adapter Models (DataSourceAdapter)
+// ============================================================================
+
+model Collection {
+  id              String    @id @default(uuid())
+  sourceId        String    @map("source_id")    // YouTube playlist ID, Notion database ID, etc.
+  sourceType      String    @map("source_type")  // 'youtube', 'notion', 'linkedin', etc.
+  sourceUrl       String?   @map("source_url")   // Original URL
+
+  title           String
+  description     String?
+  creatorId       String?   @map("creator_id")   // Channel ID, user ID, author ID
+  creatorName     String?   @map("creator_name") // Channel title, username, author name
+  thumbnailUrl    String?   @map("thumbnail_url")
+
+  itemCount       Int       @default(0) @map("item_count")
+
+  publishedAt     DateTime? @map("published_at")
+  lastModifiedAt  DateTime? @map("last_modified_at")
+
+  metadata        String?   // JSON: source-specific metadata
+
+  syncStatus      String    @default("PENDING") @map("sync_status")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  items           CollectionItemLink[]
+
+  @@unique([sourceId, sourceType])
+  @@index([sourceType])
+  @@index([syncStatus])
+  @@index([lastSyncedAt])
+  @@map("collections")
+}
+
+model CollectionItemLink {
+  id            String    @id @default(uuid())
+  collectionId  String    @map("collection_id")
+  contentItemId String    @map("content_item_id")
+
+  sourceId      String    @map("source_id")      // Video ID, page ID, file path within source
+  sourceType    String    @map("source_type")
+  position      Int
+
+  addedAt       DateTime  @map("added_at")
+  removedAt     DateTime? @map("removed_at")
+
+  metadata      String?   // JSON: source-specific metadata
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  collection    Collection  @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, contentItemId])
+  @@index([collectionId, position])
+  @@index([contentItemId])
+  @@map("collection_item_links")
+}
+
+model ContentItem {
+  id              String    @id @default(uuid())
+  sourceId        String    @map("source_id")    // YouTube video ID, Notion page ID, file path
+  sourceType      String    @map("source_type")  // 'youtube', 'notion', 'linkedin', etc.
+  sourceUrl       String?   @map("source_url")   // Original URL
+
+  title           String
+  description     String?
+  content         String?   // Full text content (Markdown)
+  contentType     String    @map("content_type") // 'video', 'article', 'document', 'note', etc.
+
+  creatorId       String?   @map("creator_id")
+  creatorName     String?   @map("creator_name")
+
+  thumbnailUrls   String?   @map("thumbnail_urls") // JSON: {default, medium, high, standard, maxres}
+
+  duration        Int?      // seconds (for video/audio)
+  publishedAt     DateTime? @map("published_at")
+  lastModifiedAt  DateTime? @map("last_modified_at")
+
+  tags            String?   // JSON array
+  category        String?
+  language        String?
+
+  metadata        String?   // JSON: source-specific metadata (viewCount, likeCount, etc.)
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  collections     CollectionItemLink[]
+
+  @@unique([sourceId, sourceType])
+  @@index([sourceType])
+  @@index([contentType])
+  @@index([publishedAt])
+  @@map("content_items")
+}
+
+// ============================================================================
+// Note: Enums are replaced with String fields for SQLite compatibility
+// Valid values are enforced at the application layer:
+//
+// SyncStatus: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED"
+// WatchStatus: "UNWATCHED" | "WATCHING" | "COMPLETED"
+// SourceType: "youtube" | "notion" | "linkedin" | "file" | "google_drive" | "vimeo" | "spotify" | string
+// ContentType: "video" | "article" | "document" | "note" | "audio" | "image" | "playlist" | string
+// ============================================================================

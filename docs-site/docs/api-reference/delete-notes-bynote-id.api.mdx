@@ -1,0 +1,71 @@
+---
+id: delete-notes-bynote-id
+title: "Delete a note"
+description: "Delete a note"
+sidebar_label: "Delete a note"
+hide_title: true
+hide_table_of_contents: true
+api: eJztWEtz2zYQ/isYnpIZ25LbtNPRqbREJWgYUuHDtevxaCASspBQBAOCblQN/3t3QYqmHm16yvSgk8DFPoFvPwjYWpo9ldbowcql5qX1eGGlvEyUKLSQuTWyJjzjmhNGcN66sAqm2BokCo22Vpms+JpZo62lNwUH/VIrkT+B4lKqNdMgqSqRWvWFJdBdwfQKJnPwAV/ok6bwrfiXSiieWiOtKn6YgwdqhE6sGrIreVIpoTcm+oIzxZVdgc/RwyNOK14WMi+hEkjph+EQfw4LWrIq0yRoNSF6InPNc426rCgykTDUHXwq0eBEjXLxiScaF0PJgistmnBrXpbsiZ9ajP0UwipJQJfsDOq6vwIPnaPHusapN8Pr71kGV0qqb6slMj1ZKs+rNRYRe3YcvfMD+oczATH1bm2XTuaR/97x4Nv8zp27GQ3M/NQPbuhkYuaoF8bTKR1Tx4vmMyf4QMOQ+l4IU4ET+nEwduaeH82nfuyh7cy1710aRnvCWzpx/H0JJmBH4GnuBIEf9LKi3iyO4NtE8t7OA+djjInNp9Rx++mPQQhZUdvFbMa+N3XpGC0n8QxGduTMdyn2s7XdwLEn91AvpBn2Uz6aCe+9MeQznwX+W7A3RaNbl36gEaiNHcgAU/oY+5HdF1AvcgLPduehE9w6QVck1Gzf2KHTCZy7VtGe0U6IRhRShX27talr37hYwb0fR/GNYzT7M0c84SBqCIKCiBRQKJYbwAPRK04QIUQuSQMsAPR/bpR31Zrll4qzlC0y3jh46RrU1kxk5Smw7juy01TgkGWtk9aSvJJFI38NNqzTmvWgjowEsbSAwJqti38lu5RpfomqRynQ0Ce//Dy8Jp0jXJM/Vzw3i9SkJRNgN2SB+qKhym8uEWwMQU30pPhJVwfsYhr3ZRP6lbVBHw9Nmp3r6OjNmY7OdHSmozMd/R/o6Kfv+yfvTEdnOjrT0ZmOTtMRzODSGGqBiy1UbK7PeIEtbzbddRcu0Cv5Mr3zPLIGrBCD5+uBuYwPto1BbeG1Vz3v7tyVykB1pXUxGgwymbBsJUs9+nEITHh8fX/mmSzWgDnS+IDF67sowQcEvdrISqVyzUR+lcj1kR/Y8rRK8KNz07uMh0ieDfH1r+Td7mAgLMKowXejBJJmMN3h47ffo6PIICOsuS9r+RnwIBcAzpynZKnkmgwYhIJVeBI5wgJKec83vdCtoHtyuLsETFw2IvMisYL+MbkcI+cz3xDArqlYJIBcedkOCUbFPm5OEYMikS+lCSx0hpHuZRVVC05mGdtkotQk3OQJAb9HsYDIIpwwwXZmxc6sBLOVkrn4y8QiLE9JBuuWI4MAAwBMcXvBKyKk8Xh9NbwatoceS8yh19aPYcKqKKRCCzjyBCKhbCS/8q8A9IwbCEBJcEpyPD1fzIFlwWwfPoD4vAT4JPxKqqdBa1QOUBcXpgB0Qp49L4ePSnvLsX05qo8U203V/KsewAI1e26y2bYt9IA7jmtxjXtu3rQurFHbeQBZbBXU2m4XrOSxyuoaxV8qrvBNCYbPTAkkVNNrqShxDL26ZFl5+DLVT/VV0FLCa7J7r/qHfHfIzBGDzyyr8AuGnxG4uzex+hE0W2xiIs2kDY1Q6J7Z0V8ZbMuOXiaO60R4ULH9fjzoPxPgZFawSkYjws6r6y5J04mYY13/DaYRolY=
+sidebar_class_name: "delete api-method"
+info_path: docs/api-reference/youtube-playlist-sync-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Delete a note"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"delete"}
+  path={"/api/v1/notes/{noteId}"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Delete a note
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+  children={"Request"}
+>
+</Heading>
+
+<ParamsDetails
+  parameters={[{"schema":{"type":"string","format":"uuid"},"in":"path","name":"noteId","required":true,"description":"Note ID"}]}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  title={"Body"}
+  body={undefined}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  id={undefined}
+  label={undefined}
+  responses={{"200":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"message":{"type":"string","description":"Success message"}},"required":["message"]}}}},"401":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}},"404":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}},"500":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}}}}
+>
+  
+</StatusCodes>
+
+
+      

@@ -1,0 +1,71 @@
+---
+id: post-auth-logout
+title: "Invalidate refresh token and log out user"
+description: "Invalidate refresh token and log out user"
+sidebar_label: "Invalidate refresh token and log out user"
+hide_title: true
+hide_table_of_contents: true
+api: eJztWN+T2jYQ/lc0empn4Ljrr+nwVB+YxA21iX9cc71hGGEEODGWK8mXEIb/vbuSzRm4Jr089YE85Iy0u/p29e0nWzuq2UrR/gNllV7TaYcuuEplVupMFLRPveKR5dmCaU4kX0qu1kSLD7wgrFiQXKyIqDSpFJe0QyX/u+JK34rFlvZ3NBWF5oXGR1aWeZYyjNl7rzDwjqp0zTcMn/S25LCUmL/nqYY4pRQllzrjCmfrZWNctWWttMyKFT3FGx6B1IJkhwTofm8xZpIvMOOjyNP98bSWFYcBxdNKZhoSetjROWeSSwcL1X+Y7qdor0pRKIv0h+tr/HMMaCxWWCJVpSlXalnlAPk/V+brob5cuw3YsRU/L9ve/OvQn56DPORLVuWahHVyL0H8ZTxcSiG/bpaKxTOYO5QX1QY3LvGdJH4dhN5f7hCGPf/OGXvDWRy8cX34bf7O3HcTLzTzoyC89YZDM+f5UTIaeQPP9ePZxA3/8KLIC/wIpkI3CpJw4M78IJ6NgsRH38nYuR97UXw0eOcN3eB4BAE4MUSauWEYhC1Unj9JYvhtVvJfzUL3bYLAZiPPHbfhD2AQUHnOGNEMAn809gboOUwm8OTE7qyB2EbrjEPXGd5DvgAzakM+m4nu/QHgmU3C4BX4m6Qx7Nj7w4vBbOACAoT0Nglipz3g+bEb+s54FrnhnRsekoScnVsncg8D7rva0Jl4h0F08gAq7Nud442d2zFmcB8kcXLrGsv2zJkGucgagqQg2QJYmC23wAei15wgQ4hYEkssIPS/Mv406Otqw4qu5GzB5jm3AUjjvUdrzbJcPUfW40DOYpHhI8vrILUn+U6Udvx78GEHq0mL6rXI6AwW1mxTPgd7KeSGQedR1LAump5B8KKA/PrL9Q05BMKafFyjAq6b3EQKSobSBguWDCXsayWCjSFoiZEkfzbUiaKaxn3ahHZm9aLTUxe7c9NGjm7O5Sgp8GgSMvvMF6TbCDrB7cqUQiYwI4hW879dXl+8zkXrLlp30bqL1n2b1v18efW6yNFFji5y9H+QI5jB0hhp8WCSlkJp/NC135wmMLwbNTNNyD7tsTLrPd708NWplzfGistHLpX5aK5kDnZrrct+DyxSlq8hQv/Ha9C/07SH/JHnotwA04iNASVrh1AQA1a82opKLsSGZcVVKjZncWCjF1WKPw5hpk/f8hFKppW79hf9YU9wIUzCmMFvawQj9mHUsOL3P+OzlWHs6DWRiDlQsoA3yqUUG3KoU1YgGSCVN3zbWroe6NCCmaXfdYEJXTuUYfw1dI3Bcs6XD3xLgLEm4ywFvopu/UhwVexee3YY7uD5ET5d2LifgCk5P79wOdwYIIClMFgzjZb0XlRxNedkkrNtnilNom2REoByfivjRjFOGHyNW9m4KXBbS1Fknw08e7UEpS5QakAqgM/ICIiKpLIRb66ur67r05Gl5nSsS4bLRFVZCokecDZmSB5lR37jNk/DGkgJjlOOx+yTO8gxuB0zDlqjUMC4lF8JuerVTqqHtlhLbAnA2Yrykmuzo1K1rs1eFKTmj+afdA8Ka+llstjVrfqA5MIa3qAmIuMhfduw0BvYk2iz282Z4onM93scBn5IvPuCx0cmM9Rrc/XVaYiIHf4BKUwHFnc3RiRonleW0SfvLNjQ1sOBPin1F22nLeGZBBFuzby+XtyYNxUq2UcYxP/7lKKKobe9OMSxHc1ZsarMuURtTNwxdtzxJx1usmo6sti2EEJ5jIVpDihRp07FfhLuUUv/ARZiDIo=
+sidebar_class_name: "post api-method"
+info_path: docs/api-reference/youtube-playlist-sync-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Invalidate refresh token and log out user"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/api/v1/auth/logout"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Invalidate refresh token and log out user
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+  children={"Request"}
+>
+</Heading>
+
+<ParamsDetails
+  parameters={undefined}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  title={"Body"}
+  body={{"content":{"application/json":{"schema":{"type":"object","properties":{"refreshToken":{"type":"string","description":"Refresh token to invalidate"}},"required":["refreshToken"]}}},"required":true}}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  id={undefined}
+  label={undefined}
+  responses={{"200":{"description":"Logout successful","content":{"application/json":{"schema":{"description":"Logout successful","type":"object","properties":{"message":{"type":"string"}}}}}},"400":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}},"401":{"description":"Unauthorized - invalid or missing access token","content":{"application/json":{"schema":{"description":"Unauthorized - invalid or missing access token","type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}},"500":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}}}}
+>
+  
+</StatusCodes>
+
+
+      

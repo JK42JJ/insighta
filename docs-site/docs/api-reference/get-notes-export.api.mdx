@@ -1,0 +1,71 @@
+---
+id: get-notes-export
+title: "Export notes in specified format"
+description: "Export notes in specified format"
+sidebar_label: "Export notes in specified format"
+hide_title: true
+hide_table_of_contents: true
+api: eJztWE1z2zYQ/SsYnpIZ25LbtNPRqbREJWhUUiEpN24mo4FI2EJMEgwAOlE9/u/dBT9MWbKd5NDpQScRwH48LB4exb11DLvSzuiDU0jDtfPxyEm5TpQojZCFM3K8r6VUhthVIgqiS56IS8FTcilVzoxz5JRMsZwbrjDOraOTNc+ZM7p1zKbkEEIbJYor5+7IERjxc8XVBtwKcILhjUi5pClMKP65EoqnzuiSZZo/RDIVGeQgqw2xLoROyIsLWcXVisPzS4i/JzdTimEyYXiu92B6BJQtyncgsvZ7ATSJjhxeVDnWOWfqOpVfCpj6pCX+JPqmrvslqzIDPp3JI+i6yj+Drzm7xvwOcmieVEqYjT2oFWeKK7cyaxh+xGXFdSkLzW2lfhoO8WdfSDj9mi4AXhaGFwYtWVlmImFoObBbG/Xr8Uycplxy9YknllRKllwZUWPpZXlY10fith5Qwmb/338myI77En/oUHQhwQJtXg1Pd3c4qY+ThE1Nv6dWTxeDKyXV82aJTPlTm1747iJ+E4T0b28C09Q/d2d0soyDt54PY/u79N7PaWjXp0F4RicTu0b9aDGd0jH1/Hg598I/aRTRwI9gKfSiYBGOvaUfxMtpsPDRdz5zL2Y0ircmz+nEC7ZnEIAbQ6SlF4ZB2ENF/fkihrHN5L9eht67BQJbTqk368MfwySgou4M0YwDfzqjY/ScLObw5MbesoXYR+vOQs+dXMB+AWbUh7yzEl34Y8CznIfBa/C3m8awM/onjcFs7AEChPRuEcRuf4L6sRf67mwZeeG5F3abhD27Z27kdRPe+8bQndNuEp0oQIVzO3fpzD2b4Q4ugkW8OPOsZX9lV8iRNQRJQUA+CyMuN8AHYtacIEOIvCQ1sYDQOdeaXe1lz3bQN1XOimPFWcpWGa8DkNb7Dq0NE5neR9btQG6aCnxkWROk8SQvZFnPvwQf1lnNe1Q3quKQywhIbFhe7oPdaoCTMsOP0XQHAo0C8tuvw1PSBcKafFnzwhaphiUTEFCUgzt876FyPlciOBiClhhJ8b2hdmQmRXRtGfs7a5LuKFN9cp0cvTrI0UGODnJ0kKP/gxz9su9/5EGODnJ0kKODHP3XcgQrWBorLRQWnStufPwErT8cbWCzls1KG3HkDFgpBjenA/u5OuCtsebqpu17VCoDw7Ux5WgwyGTCsrXUZvTzEPTv4bYn/IZnssyBaaSOYbsH9yE0xICUJxtZqVTmTBQnicx34sBBp1WCgy5M7ys/Qsms5a7/rd+dCSbCTVgzGNdGMFM/TFtW/PFXvJMZ5ghLEjgFYuQ1sECugJIF9oWUzMmAQSqowpWwXQzYylu+6fdl6omupfH+GJhwXE/Zlscabo3FssuXa77BnobdsUiAr/K4eSSYFW9v/e5o2juX0iYWJsNMbctonrFNJrQh0aZICMTdyQXyFeOCTda6la2bBre1koX4x+YirEhJBnUrUDfg3gM587pZgAypI56eDE+GzauOJfZV1+wf00RV2dAKXnQCmaDrmd/5V6B3xi0FYEvwbuT4zrx3B20Ft236AM8LDfRJ+IlUV4PGSQ/QFgtTAjsBZy/KN/T6tirU68t8i29z9IZ/NQMoY80Mi/m2uWYfkBdYsVNkRtMZai4b8BrvExrd3q6Y5guV3d3hdN0dwyuYCo1K+0g/rA/3uWbiI2ivkcS9luUNyyq0srf3R7I3jcYnkjUWP5hpuwX4ZKLO5j7VRxwogblsi/CovZZY7NrLBQ0o+147/90wSieqrz0kKtvWoQe6Y6O3OlFserHh4K1FjIoDh9/VCMeQCPT9X/MVhRM=
+sidebar_class_name: "get api-method"
+info_path: docs/api-reference/youtube-playlist-sync-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Export notes in specified format"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/api/v1/notes/export"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Export notes in specified format
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+  children={"Request"}
+>
+</Heading>
+
+<ParamsDetails
+  parameters={[{"schema":{"type":"string"},"in":"query","name":"videoId","required":false,"description":"Filter by video ID (YouTube ID)"},{"schema":{"type":"array","items":{"type":"string"}},"in":"query","name":"tags","required":false,"description":"Filter by tags"},{"schema":{"type":"string","enum":["markdown","json","csv"],"default":"markdown"},"in":"query","name":"format","required":false,"description":"Export format"}]}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  title={"Body"}
+  body={undefined}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  id={undefined}
+  label={undefined}
+  responses={{"200":{"description":"Exported notes","content":{"application/json":{"schema":{"description":"Exported notes","type":"object","properties":{"content":{"type":"string","description":"Exported content"},"format":{"type":"string","enum":["markdown","json","csv"]}},"required":["content","format"]}}}},"401":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}},"404":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}},"500":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}}}}
+>
+  
+</StatusCodes>
+
+
+      

@@ -1,0 +1,55 @@
+{
+  "hooks": {
+    "PostToolUse:Write": [
+      {
+        "matcher": "\\.(ts|tsx)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx eslint --fix $CLAUDE_FILE_PATH && npx prettier --write $CLAUDE_FILE_PATH"
+          }
+        ]
+      },
+      {
+        "matcher": "prisma/schema\\.prisma$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx prisma format"
+          }
+        ]
+      }
+    ],
+    "PostToolUse:Edit": [
+      {
+        "matcher": "src/.*\\.(ts|tsx)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx tsc --noEmit --skipLibCheck"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Subagent 작업이 완료되었습니다. 결과를 검토하고:\n1. 변경된 파일 목록\n2. 다음 단계 권장사항\n3. 필요한 테스트\n을 요약해주세요."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git status --short"
+          }
+        ]
+      }
+    ]
+  }
+}

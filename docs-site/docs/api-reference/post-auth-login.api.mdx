@@ -1,0 +1,71 @@
+---
+id: post-auth-login
+title: "Authenticate user and obtain access tokens"
+description: "Authenticate user and obtain access tokens"
+sidebar_label: "Authenticate user and obtain access tokens"
+hide_title: true
+hide_table_of_contents: true
+api: eJztWEtz2zYQ/isYnpKZ2JLbpg+dSktUwoYhFZJy42Y8GoiELCQUwQKgE1Wj/95dkJSoR6047aEH+WBRi90Pu4vdj9CuLE3vldX7YNFSz627F1bKVCJ5obnIrZ5lg5TlmidUM1IqJgnNUyKmmvKc0CRhShEtPrFcWS8syf4smdLXIl1avZWViFyDLT7SosgQA0A7HxUiryyVzNmC4pNeFgz2EtOPLNGAU0hRMKk5U7gKSjxrqSkteX4PajMhFxTga41918forVkiNE0leGqtAZsq9VnI9FHAjdJRzM3qel3FzCVLMYWNHxuFu/WuipYlMwJViFxV4X3X7eLH7j6euIf8qtIkeFYi6Fdn8yTS4+nGQz59KPzxBJYl/4fklTmHIiE8xaqacdgLEvLfHnFOF+wY2BHblKsio0tiTMA0kQwKPbX1o86koHOhOZgctEuSiDLXxOCAiKCW0nRRIHpZpP8K3aNKkwqkDbxXhSbzTb5MYO242l7cgWXdvCcPvOr1GLVP5/a33+MdciDP2JcC/FMEavHqJVnwvNRMPbeM6zNYmD8BubY4Av0TSemygq2lbhszLxdTKLgjh7b11Nhtzw5RFYPeSxV59ku3S+CYdiPYy347T3vBtZ2627czbbc5DiQOUPjhGDcM2IyWmSZhzSJP4YYTTCul+IreT0R6tL8Y5BdDGfv2OH4dhO4fzgDErn9je+5gEgdvHB++m8+J837khmZ9GITX7mBg1lw/Gg+Hbt91/HgycsK3bhS5gR/BUuhEwTjsOxM/iCfDYOyj7cizbz03ineEN+7ACXYl6IAdA9LECcMgbHnl+qNxDN/NTv6rSei8G6Njk6HreG33+yAEr1zbQ2/6gT/03D5aDsYjeLJjZ9K42PbW9kLHHtxCvOBm1Hb5YCW69fvgz2QUBq/A3gSNsJ771o1Bre+AB+jSu3EQ222B68dO6NveJHLCGyfcBAkx29d25GwEzvta0R65GyEaueAqnNuN7Xr2tYcR3AbjeHztGM32ysEVwcGqIVgUDasvoR4I3BsIVggRM1IVFhQ0cJai91/Bzq/LBc0vgLVSOs1YBUAa6zVqww0kO8pbe82dphwfaVaD1JbkmSgq+XOwoRutUavU69f1lmq/jbbdKCA//9i92nI25uQz3KtMkiq3RJKUErnA3FHgKnYyRXAwBDURSbKjUHscYxp3ewjtyOpND2ipOrkNHV0d0pGbP9CMp/jKM6dPM/Xtt5XjYGfWOrPWmbXOrPVtrPXyfIk609GZjs509H+gI1jB1BhqcVMcNQmlcchm5jQGV89Fs9Ag9qwOLXjn4aqDU7pOVuvCT8YHJnF6t7JKmYHaXOui1wGFhGZzAOh93wX22w96wB5YJooF1BmpMCBhbQgFGLDh5VKUMhULyvPLRCwOcOCY0zIxv5UbmDv0CjLH9TJCwqzIbsqoZBLDbJ0IboRBGDX4XimBpHoYNjUBP/lPDxiqiSRLyUyKBWmnCTIOobxhy9bWtaAZFVnvL6AOLioRR/w59MyxSQFUyye2NEMAjJgnUK3ion4kdDssRX08bHx7hNuxqPMF6iRjrbGm+eH/K6vkdZa3M8qmbNfo10yYELhGAOtWlHE5ZWSU0WXGlSbRMk8IeHjgNdBgjAvG7casaMwUmM2lyPlf1dQD57sZnECO/AP8AUWOhQKoWGsV4tVl97JbvzJpYl6ZdSZxm6gsCiHRoolRVZKdMCEkeMcyfPduzYGjwWy3EKFfcgWFmLBLIe87tZHqoC6mGBsF/Gw78ZSh9U6uWkPrp6HUhaXZF92B1FZ1Z+JY1S38AasOs3iFVImtAAkwFQo9g72KKqvVlCo2ltl6jWKoGwl1+wEeH6jkyOL4DaDrAsXO/4SlbfUrvy9idATVs7Kq9L2bDDZ6ZYFjr0I/qnvX4qNREOHZTOvh/sLcXyxJP4MQ//csC7kNrU3PG9nKymh+X5q3lVVh4t/fx5ogbQ==
+sidebar_class_name: "post api-method"
+info_path: docs/api-reference/youtube-playlist-sync-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Authenticate user and obtain access tokens"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/api/v1/auth/login"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Authenticate user and obtain access tokens
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+  children={"Request"}
+>
+</Heading>
+
+<ParamsDetails
+  parameters={undefined}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  title={"Body"}
+  body={{"content":{"application/json":{"schema":{"type":"object","properties":{"email":{"type":"string","format":"email","description":"User email address"},"password":{"type":"string","format":"password","description":"User password"}},"required":["email","password"]}}},"required":true}}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  id={undefined}
+  label={undefined}
+  responses={{"200":{"description":"Login successful","content":{"application/json":{"schema":{"description":"Login successful","type":"object","properties":{"user":{"type":"object","properties":{"id":{"type":"string","format":"uuid","description":"User unique identifier"},"email":{"type":"string","format":"email","description":"User email address"},"name":{"type":"string","description":"User display name"},"createdAt":{"type":"string","format":"date-time","description":"Account creation timestamp"},"updatedAt":{"type":"string","format":"date-time","description":"Last update timestamp"}},"required":["id","email","name","createdAt","updatedAt"]},"tokens":{"type":"object","properties":{"accessToken":{"type":"string","description":"JWT access token (expires in 15 minutes)"},"refreshToken":{"type":"string","description":"JWT refresh token (expires in 7 days)"},"expiresIn":{"type":"number","description":"Access token expiration time in seconds (900 for 15 minutes)"}},"required":["accessToken","refreshToken","expiresIn"]}},"required":["user","tokens"]}}}},"400":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}},"401":{"description":"Invalid credentials","content":{"application/json":{"schema":{"description":"Invalid credentials","type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}},"500":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}}}}
+>
+  
+</StatusCodes>
+
+
+      

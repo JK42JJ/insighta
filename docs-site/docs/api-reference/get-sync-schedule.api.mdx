@@ -1,0 +1,63 @@
+---
+id: get-sync-schedule
+title: "List all sync schedules"
+description: "List all sync schedules"
+sidebar_label: "List all sync schedules"
+hide_title: true
+hide_table_of_contents: true
+api: eJztWFtz4jYU/isaP7UzSSC9TYenOmCy7rI2a5s0aYZhhC1AG9vySnIayvDfe45swAZ2N/vSpzxhn/vlO0cWG0vTpbJ6j5Za57E1vbASpmLJC81FbvWsEVea0DQlyCYqXrGkTJmyLizF4lJyvQbdjTVnVDJpl3oFr9MtmJFMFSJXINrbWD91u/hzxrRYtIzGItcs1yhMiyLlMUXhzieFGhsLRTP6OlN6XTBgifknFmt4L6QomNS8iuggCS+1KJWSrkGSa5Y16V8wwZOGjNKS50uQWQiZUUjAKksQ2IJSStcpxOe+TpxDAeQzTRvCSFoyaR33xq1FCc9JxlNwwqB+iUIzLKfzlDVdzoVIGc2RmVKlgzI/MB+tvExTbGoV17QRWEI1u9Q8Y6iZs5e25plMWgqSabnui7Lq6VFCwM/oSwAivNWIBj+WDMwltn69y7JIvk/FhPm55BLr9Yh9bXWt0ZNDXQ+laOXYSqgZfTOs6fbY5QGNyAPmL93rU5QP2IKWqSZBPVrfMy9fhzKTUshvi8UiYeeKyvIywzQmnj2J3vmB+7czALLr3dkjdzCL/PeOB+/md+bcj93A8Id+cOMOBobneuFkOHT7ruNFs7ETfHDD0PW9EFiBE/qToO/MPD+aDf2Jh7rjkf0wcsOoRbxzB47fpmAAdgSWZk4Q+EEjKtcbTyJ4N56821ngfJxgYLOh64ya4feBCFG59gij6fvecOT2UXMwGcOTHTmzXYjNaO1R4NiDB8gXwgybIZ9wwgevD/HMxoF/C/omaTQ7cj+4EYj1HYgAQ/o48SO7SXC9yAk8ezQLneDOCfZJQs72jR06e4JzXwvaY3dPRCUXQoW+3dnuyL4ZYQYP/iSa3DhGssk5ORscRA1BUBCeAAr5Yg14IHrFCCIEF3IFLJxzphRdnkVP2+i7MqP5JcxNgoNWGSA77S1Ka8rTs+u5bchOEo6PsB8rI7Um+UEUFf1H0KF7qXED6lqWDHzhelCaZsUrN8nJgg598vtv3WuyN4Q1+WfFclOkKiwRwzmKewDPCooH6LdKBI0hKImWJDtr6mi/mME9NKGZWe10eqxSda5eR7+eO7/f1tHbOnpbR2/r6P9eR8DB0pjVgh/V1pLpEG4nYf0RZSzrlahZO5M9q0ML3nm+7uBVpqMO0go+7phU5iJTSvjytlZaF71OJxUxTVdC6d7PXdiAx4kP2DNLRZEB1khlA4rWNKHABvi8WotSJiKjPL+KRXZiB1qdlDG+7M1MD/crTCurFl7zlrXvCjrCJIwYfucbIaBUD8MdLv78KzrxDDRC4xj6QLR4AhyIOYAyZwlZSJGRDgVXUIUlN9cGSOU9WzcvTBUBvoWpcX1/CVi4rEgc7a9gbs5cXBAxT2xNALMmYx4DYsVl/UjQK85vdXoY9PB8IYxjrlP09CDKqJwzMq4/0wkCgIDdE1+wwCJkGGc7td3XvbnVrqTI+b/GF6F5QuCWJHPcHDD5AE9sL1hFhFQWr6+6V936sKOxOezq/NFNWBaFkKgBRx1HJKiK8gd7AYCnzEAAL2GQKp6aB3XYrnhPaMEHkJ4rgE/MroRcdmol1UFZLEwB6IQ4G1a+fGNvFWZzOKy/olI3WsNdpwNFq3BgItzUU/WIKMD6XCMI8T+Ei/11Bnc0jg9KbTZzqthEptstkj+XTOJfB/D4TCXH5Wr+ObjYYQaH8QnRZtkA0MK0gKZlBbujTwscl/3I3zpYRdoekqOhMNZ3IM7XDdsQppGIcBwg1Is6CDMe4AjWz382erP8
+sidebar_class_name: "get api-method"
+info_path: docs/api-reference/youtube-playlist-sync-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"List all sync schedules"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/api/v1/sync/schedule"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+List all sync schedules
+
+<ParamsDetails
+  parameters={undefined}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  title={"Body"}
+  body={undefined}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  id={undefined}
+  label={undefined}
+  responses={{"200":{"description":"List of schedules","content":{"application/json":{"schema":{"description":"List of schedules","type":"object","properties":{"schedules":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string","format":"uuid"},"playlistId":{"type":"string","format":"uuid"},"interval":{"type":"integer","description":"Interval in milliseconds"},"enabled":{"type":"boolean"},"lastRun":{"type":["null","string"],"format":"date-time"},"nextRun":{"type":"string","format":"date-time"},"retryCount":{"type":"integer"},"maxRetries":{"type":"integer"},"createdAt":{"type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"}},"required":["id","playlistId","interval","enabled","nextRun","retryCount","maxRetries","createdAt","updatedAt"]}}},"required":["schedules"]}}}},"401":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}},"500":{"description":"Default Response","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string","enum":["UNAUTHORIZED","INVALID_TOKEN","TOKEN_EXPIRED","FORBIDDEN","INSUFFICIENT_PERMISSIONS","RESOURCE_NOT_FOUND","PLAYLIST_NOT_FOUND","VIDEO_NOT_FOUND","VALIDATION_ERROR","INVALID_INPUT","MISSING_REQUIRED_FIELD","INVALID_CREDENTIALS","CONFLICT","DUPLICATE_RESOURCE","RESOURCE_ALREADY_EXISTS","PLAYLIST_ALREADY_EXISTS","SYNC_IN_PROGRESS","RATE_LIMIT_EXCEEDED","QUOTA_EXCEEDED","INTERNAL_SERVER_ERROR","DATABASE_ERROR","EXTERNAL_API_ERROR","SERVICE_UNAVAILABLE","YOUTUBE_API_UNAVAILABLE"],"description":"Error code identifying the type of error"},"message":{"type":"string","description":"Human-readable error message"},"details":{"type":"object","description":"Additional error details (optional)","additionalProperties":true},"timestamp":{"type":"string","format":"date-time","description":"ISO 8601 timestamp of when the error occurred"},"path":{"type":"string","description":"API path where the error occurred"}},"required":["code","message","timestamp","path"]}},"required":["error"]}}}}}}
+>
+  
+</StatusCodes>
+
+
+      

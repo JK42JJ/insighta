@@ -1,0 +1,379 @@
+# Database Schema
+
+TubeArchive uses Prisma ORM with SQLite (development) or PostgreSQL (production).
+
+## Entity Relationship Diagram
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│    User     │────<│  Playlist   │────<│ PlaylistItem│
+└─────────────┘     └─────────────┘     └─────────────┘
+       │                                       │
+       │                                       │
+       ▼                                       ▼
+┌─────────────┐                        ┌─────────────┐
+│UserVideoState│───────────────────────│    Video    │
+└─────────────┘                        └─────────────┘
+       │                                       │
+       │                                       │
+       ▼                                       ▼
+┌─────────────┐                        ┌─────────────┐
+│    Note     │                        │   Caption   │
+└─────────────┘                        └─────────────┘
+       │
+       ▼
+┌─────────────┐
+│  NoteTag    │
+└─────────────┘
+```
+
+## Core Tables
+
+### User
+
+Stores user accounts and authentication data.
+
+```prisma
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  playlists       Playlist[]
+  userVideoStates UserVideoState[]
+  notes           Note[]
+  watchSessions   WatchSession[]
+  refreshTokens   RefreshToken[]
+}
+```
+
+### Playlist
+
+YouTube playlist metadata and sync status.
+
+```prisma
+model Playlist {
+  id          String   @id @default(cuid())
+  youtubeId   String
+  title       String
+  description String?
+  channelId   String?
+  channelTitle String?
+  thumbnailUrl String?
+  videoCount  Int      @default(0)
+  isPublic    Boolean  @default(true)
+  lastSyncedAt DateTime?
+  syncStatus  String   @default("idle") // idle, syncing, completed, failed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  userId        String
+  user          User @relation(fields: [userId], references: [id])
+  playlistItems PlaylistItem[]
+  syncSchedule  SyncSchedule?
+  syncHistory   SyncHistory[]
+
+  @@unique([userId, youtubeId])
+}
+```
+
+### Video
+
+Video metadata from YouTube.
+
+```prisma
+model Video {
+  id           String   @id @default(cuid())
+  youtubeId    String   @unique
+  title        String
+  description  String?
+  channelId    String
+  channelTitle String
+  duration     Int      // seconds
+  thumbnailUrl String?
+  publishedAt  DateTime?
+  viewCount    Int?
+  likeCount    Int?
+  tags         String?  // JSON array
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  playlistItems   PlaylistItem[]
+  userVideoStates UserVideoState[]
+  captions        Caption[]
+}
+```
+
+### PlaylistItem
+
+Junction table linking playlists to videos with position.
+
+```prisma
+model PlaylistItem {
+  id         String   @id @default(cuid())
+  position   Int      // Order in playlist
+  addedAt    DateTime @default(now())
+
+  // Relations
+  playlistId String
+  playlist   Playlist @relation(fields: [playlistId], references: [id])
+  videoId    String
+  video      Video    @relation(fields: [videoId], references: [id])
+
+  @@unique([playlistId, videoId])
+  @@index([playlistId, position])
+}
+```
+
+### UserVideoState
+
+Per-user video state (watch progress, notes, ratings).
+
+```prisma
+model UserVideoState {
+  id             String   @id @default(cuid())
+  watchProgress  Int      @default(0) // seconds
+  completedAt    DateTime?
+  rating         Int?     // 1-5
+  isFavorite     Boolean  @default(false)
+  lastWatchedAt  DateTime?
+  totalWatchTime Int      @default(0) // seconds
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  userId    String
+  user      User  @relation(fields: [userId], references: [id])
+  videoId   String
+  video     Video @relation(fields: [videoId], references: [id])
+  summary   Summary?
+
+  @@unique([userId, videoId])
+}
+```
+
+## Supporting Tables
+
+### Note
+
+User notes with timestamps.
+
+```prisma
+model Note {
+  id        String   @id @default(cuid())
+  timestamp Int?     // seconds into video
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId  String
+  user    User @relation(fields: [userId], references: [id])
+  videoId String
+  tags    NoteTag[]
+
+  @@index([userId, videoId])
+}
+```
+
+### NoteTag
+
+Tags for organizing notes.
+
+```prisma
+model NoteTag {
+  id     String @id @default(cuid())
+  name   String
+
+  // Relations
+  noteId String
+  note   Note @relation(fields: [noteId], references: [id])
+
+  @@unique([noteId, name])
+}
+```
+
+### Caption
+
+Video captions by language.
+
+```prisma
+model Caption {
+  id              String  @id @default(cuid())
+  language        String
+  isAutoGenerated Boolean @default(false)
+  content         String  // JSON array of caption segments
+
+  // Relations
+  videoId String
+  video   Video @relation(fields: [videoId], references: [id])
+
+  @@unique([videoId, language])
+}
+```
+
+### Summary
+
+AI-generated video summaries.
+
+```prisma
+model Summary {
+  id        String   @id @default(cuid())
+  level     String   // brief, detailed, comprehensive
+  language  String
+  content   String
+  createdAt DateTime @default(now())
+
+  // Relations
+  userVideoStateId String @unique
+  userVideoState   UserVideoState @relation(fields: [userVideoStateId], references: [id])
+}
+```
+
+### WatchSession
+
+Individual viewing sessions for analytics.
+
+```prisma
+model WatchSession {
+  id            String   @id @default(cuid())
+  videoId       String
+  startPosition Int      // seconds
+  endPosition   Int      // seconds
+  startTime     DateTime
+  endTime       DateTime
+  duration      Int      // computed: endPosition - startPosition
+
+  // Relations
+  userId String
+  user   User @relation(fields: [userId], references: [id])
+
+  @@index([userId, videoId])
+  @@index([userId, startTime])
+}
+```
+
+### SyncSchedule
+
+Automatic sync scheduling.
+
+```prisma
+model SyncSchedule {
+  id              String   @id @default(cuid())
+  intervalMinutes Int
+  enabled         Boolean  @default(true)
+  lastRunAt       DateTime?
+  nextRunAt       DateTime?
+
+  // Relations
+  playlistId String   @unique
+  playlist   Playlist @relation(fields: [playlistId], references: [id])
+}
+```
+
+### SyncHistory
+
+Sync operation history.
+
+```prisma
+model SyncHistory {
+  id           String   @id @default(cuid())
+  status       String   // completed, failed
+  startedAt    DateTime
+  completedAt  DateTime?
+  videosAdded  Int      @default(0)
+  videosRemoved Int     @default(0)
+  errors       String?  // JSON array
+
+  // Relations
+  playlistId String
+  playlist   Playlist @relation(fields: [playlistId], references: [id])
+
+  @@index([playlistId, startedAt])
+}
+```
+
+### RefreshToken
+
+JWT refresh token management.
+
+```prisma
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  // Relations
+  userId String
+  user   User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+```
+
+## Indexes
+
+Key indexes for query performance:
+
+```prisma
+// Playlist lookups
+@@unique([userId, youtubeId]) on Playlist
+
+// Video in playlist ordering
+@@index([playlistId, position]) on PlaylistItem
+
+// User's video state
+@@unique([userId, videoId]) on UserVideoState
+
+// Note retrieval
+@@index([userId, videoId]) on Note
+
+// Analytics queries
+@@index([userId, startTime]) on WatchSession
+
+// Sync history
+@@index([playlistId, startedAt]) on SyncHistory
+```
+
+## Migrations
+
+### Creating Migrations
+
+```bash
+# Create a new migration
+npx prisma migrate dev --name add_summary_table
+
+# Apply migrations to production
+npx prisma migrate deploy
+```
+
+### Seeding Data
+
+```bash
+# Run seed script
+npx prisma db seed
+```
+
+## Database GUI
+
+Explore data with Prisma Studio:
+
+```bash
+npx prisma studio
+```
+
+Opens at http://localhost:5555
+
+## Next Steps
+
+- [Modules](/docs/architecture/modules) - Business logic
+- [Architecture Overview](/docs/architecture/overview) - System design
+- [API Reference](/docs/api-reference/tubearchive-api) - Endpoints
