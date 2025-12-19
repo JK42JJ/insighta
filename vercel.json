@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "installCommand": "npm ci",
-  "buildCommand": "npm run build && npx prisma generate",
+  "buildCommand": "rm -rf dist && npm run build && npx prisma generate",
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 30
