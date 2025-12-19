@@ -99,6 +99,20 @@ Phase 4 (Advanced API Features) 구현 계획 및 상세 문서입니다.
 
 ---
 
+## 🎨 개발 가이드 (`docs/guides/`)
+
+### [FRONTEND_INTEGRATION_GUIDE.md](./guides/FRONTEND_INTEGRATION_GUIDE.md)
+**프론트엔드 개발 통합 가이드** ⭐ NEW
+
+- 전체 42개 API 엔드포인트 상세 문서
+- 8개 화면별 ASCII 와이어프레임
+- React/TypeScript 코드 예제
+- 상태 관리 패턴 (TanStack Query, Zustand)
+- 에러 처리 및 인증 패턴
+- 컴포넌트 구조 가이드
+
+---
+
 ## 📊 구현 현황
 
 ### Phase 1: Core Infrastructure ✅
@@ -165,6 +179,7 @@ sync-youtube-playlists/
     │
     ├── api/                     # API 문서
     ├── guides/                  # 사용 가이드
+    │   └── FRONTEND_INTEGRATION_GUIDE.md  # 프론트엔드 통합 가이드 (2954줄)
     └── reports/                 # 기타 보고서
 ```
 

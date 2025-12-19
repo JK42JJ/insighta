@@ -1,8 +1,9 @@
 // Prisma Schema for YouTube Playlist Sync Module
-// Database: SQLite (development), PostgreSQL (production)
+// Database: PostgreSQL (production on Neon/Supabase/Railway)
+// For local development with SQLite, use: provider = "sqlite" and DATABASE_URL="file:./data/youtube-sync.db"
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -343,7 +344,7 @@ model ContentItem {
 }
 
 // ============================================================================
-// Note: Enums are replaced with String fields for SQLite compatibility
+// Note: Enums are implemented as String fields for cross-database compatibility
 // Valid values are enforced at the application layer:
 //
 // SyncStatus: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED"
