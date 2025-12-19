@@ -40,11 +40,15 @@ import { logger } from '../../utils/logger';
 
 /**
  * Sync routes plugin
+ *
+ * Note: Managers are lazily loaded in each route handler to avoid
+ * initializing YouTube API client at plugin registration time.
  */
 export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
-  const playlistManager = getPlaylistManager();
-  const schedulerManager = getSchedulerManager();
-  const db = getPrismaClient();
+  // Lazy getters for managers - only initialize when actually needed
+  const getManager = () => getPlaylistManager();
+  const getScheduler = () => getSchedulerManager();
+  const getDb = () => getPrismaClient();
 
   /**
    * GET /api/v1/sync/status - All sync statuses
@@ -63,7 +67,7 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Getting all sync statuses', { userId: request.user.userId });
 
-      const { playlists } = await playlistManager.listPlaylists();
+      const { playlists } = await getManager().listPlaylists();
 
       const statuses: SyncStatusResponse[] = playlists.map((playlist) => ({
         playlistId: playlist.id,
@@ -97,7 +101,7 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Getting playlist sync status', { playlistId, userId: request.user.userId });
 
-      const playlist = await playlistManager.getPlaylist(playlistId);
+      const playlist = await getManager().getPlaylist(playlistId);
 
       const status: SyncStatusResponse = {
         playlistId: playlist.id,
@@ -140,14 +144,14 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
 
       // Get total count
-      const total = await db.syncHistory.count({ where });
+      const total = await getDb().syncHistory.count({ where });
 
       // Calculate pagination
       const totalPages = Math.ceil(total / validatedQuery.limit);
       const skip = (validatedQuery.page - 1) * validatedQuery.limit;
 
       // Get history
-      const history = await db.syncHistory.findMany({
+      const history = await getDb().syncHistory.findMany({
         where,
         orderBy: { startedAt: 'desc' },
         skip,
@@ -198,7 +202,7 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Getting sync details', { syncId, userId: request.user.userId });
 
-      const syncHistory = await db.syncHistory.findUnique({
+      const syncHistory = await getDb().syncHistory.findUnique({
         where: { id: syncId },
         include: {
           playlist: true,
@@ -252,7 +256,7 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Listing schedules', { userId: request.user.userId });
 
-      const schedules = await schedulerManager.listSchedules();
+      const schedules = await getScheduler().listSchedules();
 
       const response: ScheduleResponse[] = schedules.map((s) => ({
         id: s.id,
@@ -294,10 +298,10 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       });
 
       // Check if playlist exists
-      await playlistManager.getPlaylist(validatedData.playlistId);
+      await getManager().getPlaylist(validatedData.playlistId);
 
       // Create schedule
-      const schedule = await schedulerManager.createSchedule({
+      const schedule = await getScheduler().createSchedule({
         playlistId: validatedData.playlistId,
         interval: validatedData.interval,
         enabled: validatedData.enabled,
@@ -344,7 +348,7 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       logger.info('Updating schedule', { scheduleId: id, userId: request.user.userId });
 
       // Update schedule (id is playlistId in this context)
-      const schedule = await schedulerManager.updateSchedule(id, {
+      const schedule = await getScheduler().updateSchedule(id, {
         interval: validatedData.interval,
         enabled: validatedData.enabled,
       });
@@ -389,7 +393,7 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       logger.info('Deleting schedule', { scheduleId: id, userId: request.user.userId });
 
       // Delete schedule (id is playlistId in this context)
-      await schedulerManager.deleteSchedule(id);
+      await getScheduler().deleteSchedule(id);
 
       logger.info('Schedule deleted successfully', { scheduleId: id });
 

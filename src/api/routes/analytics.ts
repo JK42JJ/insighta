@@ -26,9 +26,13 @@ import { logger } from '../../utils/logger';
 
 /**
  * Analytics routes plugin
+ *
+ * Note: Managers are lazily loaded in each route handler to avoid
+ * initializing YouTube API client at plugin registration time.
  */
 export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
-  const analyticsTracker = getAnalyticsTracker();
+  // Lazy getter for tracker - only initialize when actually needed
+  const getTracker = () => getAnalyticsTracker();
 
   /**
    * GET /api/v1/analytics/dashboard - Learning dashboard
@@ -47,7 +51,7 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
 
       logger.info('Getting learning dashboard', { userId: request.user.userId });
 
-      const dashboard = await analyticsTracker.getLearningDashboard();
+      const dashboard = await getTracker().getLearningDashboard();
 
       const response: DashboardResponse = {
         totalVideos: dashboard.totalVideos,
@@ -102,7 +106,7 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
 
       logger.info('Getting video analytics', { videoId: id, userId: request.user.userId });
 
-      const analytics = await analyticsTracker.getVideoAnalytics(id);
+      const analytics = await getTracker().getVideoAnalytics(id);
 
       if (!analytics) {
         return reply.code(404).send({
@@ -152,7 +156,7 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
 
       logger.info('Getting playlist analytics', { playlistId: id, userId: request.user.userId });
 
-      const analytics = await analyticsTracker.getPlaylistAnalytics(id);
+      const analytics = await getTracker().getPlaylistAnalytics(id);
 
       if (!analytics) {
         return reply.code(404).send({
@@ -202,7 +206,7 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
         userId: request.user.userId,
       });
 
-      const result = await analyticsTracker.recordSession({
+      const result = await getTracker().recordSession({
         videoId: validatedData.videoId,
         startPos: validatedData.startPosition,
         endPos: validatedData.endPosition,

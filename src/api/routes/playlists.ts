@@ -32,10 +32,16 @@ import { logger } from '../../utils/logger';
 
 /**
  * Playlist routes plugin
+ *
+ * Note: PlaylistManager and SyncEngine are lazily loaded in each route handler
+ * to avoid initializing YouTube API client at plugin registration time.
+ * This is required for serverless environments where credentials may not be available
+ * until the actual request is made.
  */
 export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
-  const playlistManager = getPlaylistManager();
-  const syncEngine = getSyncEngine();
+  // Lazy getters for managers - only initialize when actually needed
+  const getManager = () => getPlaylistManager();
+  const getSync = () => getSyncEngine();
 
   /**
    * POST /api/v1/playlists/import - Import playlist
@@ -57,7 +63,7 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Importing playlist', { playlistUrl, userId: request.user.userId });
 
-      const playlist = await playlistManager.importPlaylist(playlistUrl);
+      const playlist = await getManager().importPlaylist(playlistUrl);
 
       const response: PlaylistResponse = {
         id: playlist.id,
@@ -99,7 +105,7 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Listing playlists', { userId: request.user.userId, query: validatedQuery });
 
-      const { playlists, total } = await playlistManager.listPlaylists({
+      const { playlists, total } = await getManager().listPlaylists({
         filter: validatedQuery.filter,
         sortBy: validatedQuery.sortBy,
         sortOrder: validatedQuery.sortOrder,
@@ -153,7 +159,7 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Getting playlist details', { playlistId: id, userId: request.user.userId });
 
-      const playlist = await playlistManager.getPlaylistWithItems(id);
+      const playlist = await getManager().getPlaylistWithItems(id);
 
       const response: PlaylistWithItemsResponse = {
         id: playlist.id,
@@ -210,7 +216,7 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Syncing playlist', { playlistId: id, userId: request.user.userId });
 
-      const result = await syncEngine.syncPlaylist(id);
+      const result = await getSync().syncPlaylist(id);
 
       const response: SyncResultResponse = {
         playlistId: result.playlistId,
@@ -249,7 +255,7 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Deleting playlist', { playlistId: id, userId: request.user.userId });
 
-      await playlistManager.deletePlaylist(id);
+      await getManager().deletePlaylist(id);
 
       logger.info('Playlist deleted successfully', { playlistId: id });
 

@@ -35,11 +35,15 @@ import { createErrorResponse, ErrorCode } from '../schemas/common.schema';
 
 /**
  * Video routes plugin
+ *
+ * Note: Managers are lazily loaded in each route handler to avoid
+ * initializing YouTube API client at plugin registration time.
  */
 export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
-  const videoManager = getVideoManager();
-  const captionExtractor = getCaptionExtractor();
-  const db = getPrismaClient();
+  // Lazy getters for managers - only initialize when actually needed
+  const getVideo = () => getVideoManager();
+  const getCaption = () => getCaptionExtractor();
+  const getDb = () => getPrismaClient();
 
   /**
    * GET /api/v1/videos - List videos
@@ -104,13 +108,13 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       // Fetch videos
       const [videos, total] = await Promise.all([
-        db.video.findMany({
+        getDb().video.findMany({
           where,
           orderBy,
           skip,
           take: validatedQuery.limit,
         }),
-        db.video.count({ where }),
+        getDb().video.count({ where }),
       ]);
 
       // Filter by tags if specified (client-side)
@@ -177,7 +181,7 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Getting video details', { videoId: id, userId: request.user.userId });
 
-      const videoWithState = await videoManager.getVideoWithState(id);
+      const videoWithState = await getVideo().getVideoWithState(id);
 
       const response: VideoWithStateResponse = {
         id: videoWithState.id,
@@ -239,10 +243,10 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       logger.info('Getting captions', { videoId: id, language, userId: request.user.userId });
 
       // Get video to get YouTube ID
-      const video = await videoManager.getVideo(id);
+      const video = await getVideo().getVideo(id);
 
       // Extract captions (will use cached if available)
-      const result = await captionExtractor.extractCaptions(video.youtubeId, language);
+      const result = await getCaption().extractCaptions(video.youtubeId, language);
 
       if (!result.success || !result.caption) {
         const error = createErrorResponse(
@@ -285,10 +289,10 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       logger.info('Getting available caption languages', { videoId: id, userId: request.user.userId });
 
       // Get video to get YouTube ID
-      const video = await videoManager.getVideo(id);
+      const video = await getVideo().getVideo(id);
 
       // Get available languages
-      const result = await captionExtractor.getAvailableLanguages(video.youtubeId);
+      const result = await getCaption().getAvailableLanguages(video.youtubeId);
 
       const response: AvailableLanguagesResponse = {
         videoId: result.videoId,
@@ -320,7 +324,7 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       logger.info('Getting summary', { videoId: id, userId: request.user.userId });
 
       // Get video with state
-      const videoWithState = await videoManager.getVideoWithState(id);
+      const videoWithState = await getVideo().getVideoWithState(id);
 
       // Check if summary exists
       if (!videoWithState.userState || !videoWithState.userState.summary) {
@@ -367,10 +371,10 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       logger.info('Generating summary', { videoId: id, level, language, userId: request.user.userId });
 
       // Get video
-      const video = await videoManager.getVideo(id);
+      const video = await getVideo().getVideo(id);
 
       // Extract captions first
-      const captionResult = await captionExtractor.extractCaptions(video.youtubeId, language);
+      const captionResult = await getCaption().extractCaptions(video.youtubeId, language);
 
       if (!captionResult.success || !captionResult.caption) {
         const error = createErrorResponse(
@@ -402,7 +406,7 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
 
       // Save summary to user state
-      await videoManager.addSummary(id, summaryText);
+      await getVideo().addSummary(id, summaryText);
 
       const response: SummaryResponse = {
         videoId: video.youtubeId,

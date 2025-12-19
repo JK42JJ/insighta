@@ -5,7 +5,7 @@
  */
 
 import { FastifyPluginCallback } from 'fastify';
-import { PrismaClient } from '@prisma/client';
+import { getPrismaClient } from '../../modules/database';
 import {
   getQuotaUsageSchema,
   getQuotaLimitsSchema,
@@ -13,8 +13,6 @@ import {
   type QuotaLimitsResponse,
 } from '../schemas/quota.schema';
 import { logger } from '../../utils/logger';
-
-const prisma = new PrismaClient();
 
 /**
  * YouTube API quota costs (in quota units)
@@ -88,8 +86,14 @@ const RATE_LIMIT_CONFIGS = [
 
 /**
  * Quota routes plugin
+ *
+ * Note: Database client is lazily loaded in each route handler to avoid
+ * initializing at plugin registration time.
  */
 export const quotaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
+  // Lazy getter for database - only initialize when actually needed
+  const getDb = () => getPrismaClient();
+
   // Guard against missing authenticate decorator (can happen in tests)
   if (!fastify.authenticate) {
     fastify.log.warn('authenticate decorator not found, quota routes skipped');
@@ -119,12 +123,12 @@ export const quotaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       today.setUTCHours(0, 0, 0, 0);
 
       // Get or create today's quota usage record
-      let quotaUsage = await prisma.quotaUsage.findUnique({
+      let quotaUsage = await getDb().quotaUsage.findUnique({
         where: { date: today },
       });
 
       if (!quotaUsage) {
-        quotaUsage = await prisma.quotaUsage.create({
+        quotaUsage = await getDb().quotaUsage.create({
           data: {
             date: today,
             used: 0,

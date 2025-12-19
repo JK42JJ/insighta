@@ -37,10 +37,14 @@ import { createErrorResponse, ErrorCode } from '../schemas/common.schema';
 
 /**
  * Note routes plugin
+ *
+ * Note: Managers are lazily loaded in each route handler to avoid
+ * initializing YouTube API client at plugin registration time.
  */
 export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
-  const noteManager = getNoteManager();
-  const videoManager = getVideoManager();
+  // Lazy getters for managers - only initialize when actually needed
+  const getNote = () => getNoteManager();
+  const getVideo = () => getVideoManager();
 
   /**
    * GET /api/v1/videos/:id/notes - List notes for video
@@ -64,7 +68,7 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       logger.info('Listing notes for video', { videoId: id, userId: request.user.userId, query: validatedQuery });
 
       // Get video to get YouTube ID
-      const video = await videoManager.getVideo(id);
+      const video = await getVideo().getVideo(id);
 
       // Build filters
       const filters: any = {
@@ -83,7 +87,7 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
 
       // Search notes
-      const notes = await noteManager.searchNotes(filters);
+      const notes = await getNote().searchNotes(filters);
 
       const noteResponses: NoteResponse[] = notes.map((n) => ({
         id: n.id,
@@ -126,10 +130,10 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       logger.info('Creating note for video', { videoId: id, userId: request.user.userId });
 
       // Get video to get YouTube ID
-      const video = await videoManager.getVideo(id);
+      const video = await getVideo().getVideo(id);
 
       // Create note
-      const result = await noteManager.createNote({
+      const result = await getNote().createNote({
         videoId: video.youtubeId,
         timestamp: validatedBody.timestamp,
         content: validatedBody.content,
@@ -181,7 +185,7 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Getting note', { noteId, userId: request.user.userId });
 
-      const note = await noteManager.getNote(noteId);
+      const note = await getNote().getNote(noteId);
 
       if (!note) {
         const error = createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'Note not found', request.url);
@@ -223,7 +227,7 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Updating note', { noteId, userId: request.user.userId });
 
-      const result = await noteManager.updateNote(noteId, validatedBody);
+      const result = await getNote().updateNote(noteId, validatedBody);
 
       if (!result.success || !result.note) {
         const error = createErrorResponse(
@@ -270,7 +274,7 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Deleting note', { noteId, userId: request.user.userId });
 
-      const result = await noteManager.deleteNote(noteId);
+      const result = await getNote().deleteNote(noteId);
 
       if (!result.success) {
         const error = createErrorResponse(
@@ -318,7 +322,7 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
 
       // Export notes
-      const result = await noteManager.exportNotes(filters, validatedQuery.format);
+      const result = await getNote().exportNotes(filters, validatedQuery.format);
 
       if (!result.success || !result.content) {
         const error = createErrorResponse(
