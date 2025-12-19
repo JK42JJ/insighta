@@ -1,14 +1,18 @@
 import { FastifyInstance } from 'fastify';
-import scalarPlugin from '@scalar/fastify-api-reference';
 
 /**
  * Scalar Plugin Configuration
  *
  * Provides modern, interactive API reference documentation
  * powered by Scalar. More user-friendly alternative to Swagger UI.
+ *
+ * Note: Uses dynamic import for ESM module compatibility in serverless environments.
  */
 
 export async function registerScalar(fastify: FastifyInstance) {
+  // Dynamic import for ESM module compatibility (required for Vercel serverless)
+  const scalarPlugin = (await import('@scalar/fastify-api-reference')).default;
+
   await fastify.register(scalarPlugin, {
     routePrefix: '/api-reference',
     configuration: {
