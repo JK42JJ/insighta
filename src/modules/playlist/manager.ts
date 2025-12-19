@@ -22,10 +22,20 @@ import {
 
 /**
  * Playlist Manager
+ *
+ * Note: YouTube client and quota manager are lazily loaded to avoid
+ * initializing at class instantiation time. This is required for
+ * serverless environments where credentials may not be available
+ * until the actual request is made.
  */
 export class PlaylistManager {
-  private youtubeClient = getYouTubeClient();
-  private quotaManager = getQuotaManager();
+  // Lazy getters for dependencies - only initialize when actually needed
+  private get youtubeClient() {
+    return getYouTubeClient();
+  }
+  private get quotaManager() {
+    return getQuotaManager();
+  }
 
   /**
    * Import playlist from YouTube

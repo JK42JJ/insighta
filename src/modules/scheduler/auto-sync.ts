@@ -34,11 +34,22 @@ export interface SchedulerStatus {
  * Singleton scheduler that manages automatic playlist synchronization.
  * Uses node-cron for flexible scheduling and integrates with existing
  * sync infrastructure.
+ *
+ * Note: Managers are lazily loaded to avoid initializing at class instantiation time.
+ * This is required for serverless environments where credentials may not be available
+ * until the actual request is made.
  */
 export class AutoSyncScheduler {
-  private syncEngine = getSyncEngine();
-  private quotaManager = getQuotaManager();
-  private schedulerManager = getSchedulerManager();
+  // Lazy getters for dependencies - only initialize when actually needed
+  private get syncEngine() {
+    return getSyncEngine();
+  }
+  private get quotaManager() {
+    return getQuotaManager();
+  }
+  private get schedulerManager() {
+    return getSchedulerManager();
+  }
 
   private running = false;
   private startTime: number | null = null;

@@ -19,10 +19,20 @@ import { youtube_v3 } from 'googleapis';
 
 /**
  * Video Manager
+ *
+ * Note: YouTube client and quota manager are lazily loaded to avoid
+ * initializing at class instantiation time. This is required for
+ * serverless environments where credentials may not be available
+ * until the actual request is made.
  */
 export class VideoManager {
-  private youtubeClient = getYouTubeClient();
-  private quotaManager = getQuotaManager();
+  // Lazy getters for dependencies - only initialize when actually needed
+  private get youtubeClient() {
+    return getYouTubeClient();
+  }
+  private get quotaManager() {
+    return getQuotaManager();
+  }
 
   /**
    * Create or update video from YouTube data

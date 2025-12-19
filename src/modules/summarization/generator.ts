@@ -19,10 +19,20 @@ import type {
 
 /**
  * Summary Generator Service
+ *
+ * Note: Database and caption extractor are lazily loaded to avoid
+ * initializing at class instantiation time. This is required for
+ * serverless environments where credentials may not be available
+ * until the actual request is made.
  */
 export class SummaryGenerator {
-  private db = getPrismaClient();
-  private captionExtractor = getCaptionExtractor();
+  // Lazy getters for dependencies - only initialize when actually needed
+  private get db() {
+    return getPrismaClient();
+  }
+  private get captionExtractor() {
+    return getCaptionExtractor();
+  }
   private genAI: GoogleGenerativeAI | null = null;
 
   constructor() {

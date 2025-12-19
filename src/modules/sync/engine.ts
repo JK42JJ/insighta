@@ -37,12 +37,25 @@ export interface SyncResult {
 
 /**
  * Sync Engine
+ *
+ * Note: Managers are lazily loaded to avoid initializing at class instantiation time.
+ * This is required for serverless environments where credentials may not be available
+ * until the actual request is made.
  */
 export class SyncEngine {
-  private playlistManager = getPlaylistManager();
-  private videoManager = getVideoManager();
-  private youtubeClient = getYouTubeClient();
-  private quotaManager = getQuotaManager();
+  // Lazy getters for dependencies - only initialize when actually needed
+  private get playlistManager() {
+    return getPlaylistManager();
+  }
+  private get videoManager() {
+    return getVideoManager();
+  }
+  private get youtubeClient() {
+    return getYouTubeClient();
+  }
+  private get quotaManager() {
+    return getQuotaManager();
+  }
   private recoveryManager = getErrorRecoveryManager({
     maxRetries: 5,
     initialDelayMs: 1000,
