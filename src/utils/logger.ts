@@ -34,14 +34,22 @@ const consoleFormat = winston.format.combine(
 );
 
 /**
+ * Check if running in serverless environment (Vercel, AWS Lambda, etc.)
+ */
+const isServerless = !!(
+  process.env['VERCEL'] ||
+  process.env['AWS_LAMBDA_FUNCTION_NAME'] ||
+  process.env['FUNCTION_NAME']
+);
+
+/**
  * Create logger instance
  */
-export const logger = winston.createLogger({
-  level: config.app.logLevel,
-  format: logFormat,
-  defaultMeta: { service: 'youtube-sync' },
-  transports: [
-    // File transports
+const transports: winston.transport[] = [];
+
+// File transports only in non-serverless environments
+if (!isServerless) {
+  transports.push(
     new winston.transports.File({
       filename: path.join(config.paths.logs, 'error.log'),
       level: 'error',
@@ -52,20 +60,25 @@ export const logger = winston.createLogger({
       filename: path.join(config.paths.logs, 'combined.log'),
       maxsize: 5242880, // 5MB
       maxFiles: 5,
-    }),
-  ],
-});
-
-/**
- * Console transport for non-production environments
- */
-if (!config.app.isProduction) {
-  logger.add(
-    new winston.transports.Console({
-      format: consoleFormat,
     })
   );
 }
+
+// Console transport for development or serverless
+if (!config.app.isProduction || isServerless) {
+  transports.push(
+    new winston.transports.Console({
+      format: isServerless ? logFormat : consoleFormat,
+    })
+  );
+}
+
+export const logger = winston.createLogger({
+  level: config.app.logLevel,
+  format: logFormat,
+  defaultMeta: { service: 'youtube-sync' },
+  transports,
+});
 
 /**
  * Create child logger with context
