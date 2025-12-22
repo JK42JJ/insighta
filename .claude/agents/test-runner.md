@@ -269,6 +269,51 @@ jobs:
       - uses: codecov/codecov-action@v3
 ```
 
+## Code Review Integration
+
+### PR Review Workflow
+코드 변경사항 리뷰 시 다음 순서로 진행:
+
+1. **변경 분석**: `git diff main...HEAD` 분석
+2. **영향도 평가**: 변경된 파일별 테스트 영향도 파악
+3. **커버리지 확인**: 새 코드에 대한 테스트 존재 여부
+4. **품질 체크**: TypeScript, ESLint 통과 여부
+
+### Quality Gates
+PR 승인 전 반드시 확인:
+
+- [ ] `npm run typecheck` 통과 (TypeScript strict)
+- [ ] `npm run lint` 통과 (ESLint 에러 없음)
+- [ ] 새 코드에 대한 테스트 존재
+- [ ] `npm test` 전체 통과
+- [ ] 커버리지 저하 없음
+
+### Test Generation Suggestions
+변경된 파일 분석 후 누락된 테스트 케이스 제안:
+
+| 변경 유형 | 제안 테스트 |
+|----------|------------|
+| 새 함수/클래스 | 단위 테스트 (정상, 예외, 엣지 케이스) |
+| API 변경 | 통합 테스트 (요청/응답 검증) |
+| 로직 수정 | 변경된 분기에 대한 테스트 |
+| 유틸리티 추가 | 입력 검증, 경계값 테스트 |
+
+### Test Impact Analysis
+```bash
+# 변경된 파일 확인
+git diff --name-only main...HEAD
+
+# 관련 테스트 파일 찾기
+# src/services/sync.ts 변경 → tests/unit/sync.test.ts, tests/integration/sync.integration.test.ts 확인
+```
+
+### Review Checklist
+- [ ] 테스트 커버리지 80%+ 유지
+- [ ] 새 public API에 대한 테스트 존재
+- [ ] 에러 핸들링 테스트 포함
+- [ ] 비동기 코드 적절히 테스트됨
+- [ ] mock이 적절히 정리됨 (afterEach)
+
 ## Reference Files
 - tests/unit/ - Unit test examples
 - tests/integration/ - Integration test examples

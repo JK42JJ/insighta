@@ -1,32 +1,26 @@
 {
   "mcpServers": {
-    "context7": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@anthropic-ai/context7-mcp"],
-      "env": {}
-    },
-    "postgres": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres"],
-      "env": {
-        "DATABASE_URL": "${DATABASE_URL}"
+    "supabase": {
+      "type": "http",
+      "url": "http://localhost:8000",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJzZXJ2aWNlX3JvbGUiLCJpYXQiOjE3NjYyMjcwOTYsImV4cCI6MTkyMzkwNzA5Nn0.1OwIG3LYKlEFJdj8sQiOskY2T_MgoljmgW05fgPp2HE",
+        "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzY2MjI3MDk2LCJleHAiOjE5MjM5MDcwOTZ9._PPvvvOcDKL3jmTJqVhstKC4g7fJg_EjjKDdQA43mSA"
       }
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
     },
     "github": {
-      "type": "http",
-      "url": "https://api.githubcopilot.com/mcp",
-      "headers": {
-        "Authorization": "Bearer ${GITHUB_TOKEN}"
-      }
-    },
-    "filesystem": {
-      "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@anthropic-ai/mcp-server-filesystem"],
+      "args": ["-y", "@modelcontextprotocol/server-github"],
       "env": {
-        "ALLOWED_DIRECTORIES": "${PROJECT_ROOT}"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
       }
     }
   }
