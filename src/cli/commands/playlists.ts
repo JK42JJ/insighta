@@ -110,12 +110,16 @@ export async function importPlaylistCommand(playlistUrl?: string): Promise<void>
     if (error instanceof ApiClientError) {
       console.error(`\n❌ Import failed: ${error.message}\n`);
       if (error.code === 'DUPLICATE_RESOURCE') {
-        console.error('💡 This playlist is already imported. Use playlist-list to see all playlists.\n');
+        console.error(
+          '💡 This playlist is already imported. Use playlist-list to see all playlists.\n'
+        );
       } else if (error.statusCode === 401) {
         console.error('💡 Your session has expired. Please login again: yt-sync user-login\n');
       }
     } else {
-      console.error(`\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`);
+      console.error(
+        `\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`
+      );
     }
     process.exit(1);
   }
@@ -160,7 +164,9 @@ export async function listPlaylistsCommand(options: {
       console.log(`${idx + 1}. ${playlist.title}`);
       console.log(`   Channel: ${playlist.channelTitle}`);
       console.log(`   Items: ${playlist.itemCount} | Status: ${playlist.syncStatus}`);
-      console.log(`   Last Synced: ${playlist.lastSyncedAt ? new Date(playlist.lastSyncedAt).toLocaleString() : 'Never'}`);
+      console.log(
+        `   Last Synced: ${playlist.lastSyncedAt ? new Date(playlist.lastSyncedAt).toLocaleString() : 'Never'}`
+      );
       console.log(`   ID: ${playlist.id}`);
       console.log('');
     });
@@ -177,7 +183,9 @@ export async function listPlaylistsCommand(options: {
         console.error('💡 Your session has expired. Please login again: yt-sync user-login\n');
       }
     } else {
-      console.error(`\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`);
+      console.error(
+        `\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`
+      );
     }
     process.exit(1);
   }
@@ -207,11 +215,15 @@ export async function getPlaylistCommand(playlistId: string): Promise<void> {
     console.log(`Title: ${playlist.title}`);
     console.log(`Channel: ${playlist.channelTitle}`);
     if (playlist.description) {
-      console.log(`Description: ${playlist.description.substring(0, 200)}${playlist.description.length > 200 ? '...' : ''}`);
+      console.log(
+        `Description: ${playlist.description.substring(0, 200)}${playlist.description.length > 200 ? '...' : ''}`
+      );
     }
     console.log(`\nTotal Items: ${playlist.itemCount}`);
     console.log(`Sync Status: ${playlist.syncStatus}`);
-    console.log(`Last Synced: ${playlist.lastSyncedAt ? new Date(playlist.lastSyncedAt).toLocaleString() : 'Never'}`);
+    console.log(
+      `Last Synced: ${playlist.lastSyncedAt ? new Date(playlist.lastSyncedAt).toLocaleString() : 'Never'}`
+    );
     console.log(`Created: ${new Date(playlist.createdAt).toLocaleString()}`);
     console.log(`\nPlaylist ID: ${playlist.id}`);
     console.log(`YouTube ID: ${playlist.youtubeId}`);
@@ -225,7 +237,9 @@ export async function getPlaylistCommand(playlistId: string): Promise<void> {
         const video = item.video;
         console.log(`${item.position + 1}. ${video.title}`);
         console.log(`   Channel: ${video.channelTitle}`);
-        console.log(`   Duration: ${formatDuration(video.duration)} | Views: ${formatNumber(video.viewCount)}`);
+        console.log(
+          `   Duration: ${formatDuration(video.duration)} | Views: ${formatNumber(video.viewCount)}`
+        );
         console.log(`   Published: ${new Date(video.publishedAt).toLocaleDateString()}`);
         console.log(`   YouTube ID: ${video.youtubeId}`);
         console.log('');
@@ -249,7 +263,9 @@ export async function getPlaylistCommand(playlistId: string): Promise<void> {
         console.error('💡 Your session has expired. Please login again: yt-sync user-login\n');
       }
     } else {
-      console.error(`\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`);
+      console.error(
+        `\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`
+      );
     }
     process.exit(1);
   }
@@ -302,7 +318,9 @@ export async function syncPlaylistCommand(playlistId: string): Promise<void> {
         console.error('💡 Your session has expired. Please login again: yt-sync user-login\n');
       }
     } else {
-      console.error(`\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`);
+      console.error(
+        `\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`
+      );
     }
     process.exit(1);
   }
@@ -311,7 +329,10 @@ export async function syncPlaylistCommand(playlistId: string): Promise<void> {
 /**
  * Delete playlist
  */
-export async function deletePlaylistCommand(playlistId: string, options: { force?: boolean }): Promise<void> {
+export async function deletePlaylistCommand(
+  playlistId: string,
+  options: { force?: boolean }
+): Promise<void> {
   try {
     if (!playlistId) {
       console.error('\n❌ Playlist ID is required\n');
@@ -321,7 +342,9 @@ export async function deletePlaylistCommand(playlistId: string, options: { force
 
     // Confirm deletion unless --force flag is used
     if (!options.force) {
-      console.log('\n⚠️  WARNING: This will permanently delete the playlist and all associated data.\n');
+      console.log(
+        '\n⚠️  WARNING: This will permanently delete the playlist and all associated data.\n'
+      );
       const confirmed = await promptConfirm('Are you sure you want to continue?');
 
       if (!confirmed) {
@@ -346,7 +369,9 @@ export async function deletePlaylistCommand(playlistId: string, options: { force
         console.error('💡 Your session has expired. Please login again: yt-sync user-login\n');
       }
     } else {
-      console.error(`\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`);
+      console.error(
+        `\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`
+      );
     }
     process.exit(1);
   }

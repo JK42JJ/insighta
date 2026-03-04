@@ -51,7 +51,7 @@ export class YouTubeClient {
       autoRefresh: true,
     });
     this.initializeClient();
-    this.initializeCache();
+    void this.initializeCache();
   }
 
   /**
@@ -93,7 +93,11 @@ export class YouTubeClient {
   /**
    * Set OAuth credentials
    */
-  public setCredentials(credentials: { access_token?: string | null; refresh_token?: string | null; expiry_date?: number | null }): void {
+  public setCredentials(credentials: {
+    access_token?: string | null;
+    refresh_token?: string | null;
+    expiry_date?: number | null;
+  }): void {
     if (!this.oauth2Client) {
       throw new AuthenticationError('OAuth client not initialized');
     }
@@ -164,7 +168,11 @@ export class YouTubeClient {
       });
 
       // Filter out null values for type safety
-      const filteredTokens: { access_token?: string; refresh_token?: string; expiry_date?: number } = {};
+      const filteredTokens: {
+        access_token?: string;
+        refresh_token?: string;
+        expiry_date?: number;
+      } = {};
       if (tokens.access_token) filteredTokens.access_token = tokens.access_token;
       if (tokens.refresh_token) filteredTokens.refresh_token = tokens.refresh_token;
       if (tokens.expiry_date) filteredTokens.expiry_date = tokens.expiry_date;
@@ -240,7 +248,10 @@ export class YouTubeClient {
   /**
    * Get playlist details
    */
-  public async getPlaylist(playlistId: string, useCache: boolean = true): Promise<youtube_v3.Schema$Playlist> {
+  public async getPlaylist(
+    playlistId: string,
+    useCache: boolean = true
+  ): Promise<youtube_v3.Schema$Playlist> {
     const cacheKey = `playlist:${playlistId}`;
 
     // Check cache first
@@ -369,7 +380,10 @@ export class YouTubeClient {
   /**
    * Get video details in batch (up to 50 videos)
    */
-  public async getVideos(videoIds: string[], useCache: boolean = true): Promise<youtube_v3.Schema$Video[]> {
+  public async getVideos(
+    videoIds: string[],
+    useCache: boolean = true
+  ): Promise<youtube_v3.Schema$Video[]> {
     if (videoIds.length === 0) {
       return [];
     }
@@ -433,7 +447,7 @@ export class YouTubeClient {
       batches.push(videoIds.slice(i, i + 50));
     }
 
-    const results = await Promise.all(batches.map(batch => this.getVideos(batch)));
+    const results = await Promise.all(batches.map((batch) => this.getVideos(batch)));
 
     return results.flat();
   }

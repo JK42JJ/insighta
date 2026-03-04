@@ -65,7 +65,7 @@ function parseEnv(): Env {
     return envSchema.parse(process.env);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const missingVars = error.errors.map(err => `${err.path.join('.')}: ${err.message}`);
+      const missingVars = error.errors.map((err) => `${err.path.join('.')}: ${err.message}`);
       throw new Error(`Configuration validation failed:\n${missingVars.join('\n')}`);
     }
     throw error;
@@ -164,7 +164,7 @@ export function validateApiCredentials(): void {
   if (missing.length > 0) {
     throw new Error(
       `Missing required API credentials:\n${missing.join('\n')}\n\n` +
-      'Please check .env.example for configuration instructions.'
+        'Please check .env.example for configuration instructions.'
     );
   }
 }

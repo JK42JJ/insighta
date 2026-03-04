@@ -188,7 +188,10 @@ export class CaptionExtractor {
   /**
    * Get caption from database
    */
-  public async getCaption(youtubeId: string, language: string = 'en'): Promise<CaptionMetadata | null> {
+  public async getCaption(
+    youtubeId: string,
+    language: string = 'en'
+  ): Promise<CaptionMetadata | null> {
     try {
       // Find video by YouTube ID
       const video = await this.db.youtube_videos.findUnique({

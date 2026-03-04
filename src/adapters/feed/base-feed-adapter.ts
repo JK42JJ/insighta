@@ -107,18 +107,12 @@ export abstract class BaseFeedAdapter extends BaseAdapter {
   // Collection Operations
   // ============================================================================
 
-  async fetchCollection(
-    collectionId: string,
-    options?: FetchOptions
-  ): Promise<Collection> {
+  async fetchCollection(collectionId: string, options?: FetchOptions): Promise<Collection> {
     this.ensureInitialized();
 
     const feedUrl = collectionId || this.feedUrl;
     if (!feedUrl) {
-      throw this.createError(
-        AdapterErrorCode.INVALID_INPUT,
-        'No feed URL provided'
-      );
+      throw this.createError(AdapterErrorCode.INVALID_INPUT, 'No feed URL provided');
     }
 
     const feed = await this.fetchAndParseFeed(feedUrl, options);
@@ -145,27 +139,22 @@ export abstract class BaseFeedAdapter extends BaseAdapter {
 
     const feedUrl = collectionId || this.feedUrl;
     if (!feedUrl) {
-      throw this.createError(
-        AdapterErrorCode.INVALID_INPUT,
-        'No feed URL provided'
-      );
+      throw this.createError(AdapterErrorCode.INVALID_INPUT, 'No feed URL provided');
     }
 
     const feed = await this.fetchAndParseFeed(feedUrl, options);
     const maxResults = options?.maxResults ?? feed.items.length;
 
-    const items: CollectionItem[] = feed.items
-      .slice(0, maxResults)
-      .map((item, index) => ({
-        sourceId: item.id || item.link,
-        sourceType: this.sourceType,
-        position: index,
-        addedAt: item.pubDate,
-        metadata: {
-          title: item.title,
-          link: item.link,
-        },
-      }));
+    const items: CollectionItem[] = feed.items.slice(0, maxResults).map((item, index) => ({
+      sourceId: item.id || item.link,
+      sourceType: this.sourceType,
+      position: index,
+      addedAt: item.pubDate,
+      metadata: {
+        title: item.title,
+        link: item.link,
+      },
+    }));
 
     return {
       items,
@@ -177,31 +166,20 @@ export abstract class BaseFeedAdapter extends BaseAdapter {
   // Content Operations
   // ============================================================================
 
-  async fetchContentItem(
-    contentId: string,
-    options?: FetchOptions
-  ): Promise<ContentItem> {
+  async fetchContentItem(contentId: string, options?: FetchOptions): Promise<ContentItem> {
     this.ensureInitialized();
 
     // For feeds, we need to fetch the whole feed and find the item
     const feedUrl = this.feedUrl;
     if (!feedUrl) {
-      throw this.createError(
-        AdapterErrorCode.INVALID_INPUT,
-        'No feed URL configured'
-      );
+      throw this.createError(AdapterErrorCode.INVALID_INPUT, 'No feed URL configured');
     }
 
     const feed = await this.fetchAndParseFeed(feedUrl, options);
-    const item = feed.items.find(
-      (i) => i.id === contentId || i.link === contentId
-    );
+    const item = feed.items.find((i) => i.id === contentId || i.link === contentId);
 
     if (!item) {
-      throw this.createError(
-        AdapterErrorCode.NOT_FOUND,
-        `Item not found: ${contentId}`
-      );
+      throw this.createError(AdapterErrorCode.NOT_FOUND, `Item not found: ${contentId}`);
     }
 
     return this.mapFeedItemToContentItem(item);
@@ -215,10 +193,7 @@ export abstract class BaseFeedAdapter extends BaseAdapter {
 
     const feedUrl = this.feedUrl;
     if (!feedUrl) {
-      throw this.createError(
-        AdapterErrorCode.INVALID_INPUT,
-        'No feed URL configured'
-      );
+      throw this.createError(AdapterErrorCode.INVALID_INPUT, 'No feed URL configured');
     }
 
     const feed = await this.fetchAndParseFeed(feedUrl, options);
@@ -239,10 +214,7 @@ export abstract class BaseFeedAdapter extends BaseAdapter {
       const parsedUrl = new URL(url);
       return parsedUrl.href;
     } catch {
-      throw this.createError(
-        AdapterErrorCode.INVALID_URL,
-        `Invalid feed URL: ${url}`
-      );
+      throw this.createError(AdapterErrorCode.INVALID_URL, `Invalid feed URL: ${url}`);
     }
   }
 
@@ -287,10 +259,7 @@ export abstract class BaseFeedAdapter extends BaseAdapter {
   /**
    * Fetch and parse feed from URL
    */
-  protected async fetchAndParseFeed(
-    feedUrl: string,
-    options?: FetchOptions
-  ): Promise<ParsedFeed> {
+  protected async fetchAndParseFeed(feedUrl: string, options?: FetchOptions): Promise<ParsedFeed> {
     const cacheKey = `feed:${feedUrl}`;
 
     // Check cache

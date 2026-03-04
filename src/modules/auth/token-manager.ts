@@ -82,7 +82,8 @@ export class TokenManager {
   private oauth2Client: OAuth2Client | null = null;
   private credentials: OAuthCredentials | null = null;
   private refreshPromise: Promise<OAuthCredentials> | null = null;
-  private config: Required<Omit<TokenManagerConfig, 'onTokenRefresh' | 'onRefreshError'>> & TokenManagerConfig;
+  private config: Required<Omit<TokenManagerConfig, 'onTokenRefresh' | 'onRefreshError'>> &
+    TokenManagerConfig;
 
   /**
    * Private constructor for singleton pattern

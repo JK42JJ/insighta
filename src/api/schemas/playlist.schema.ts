@@ -144,7 +144,17 @@ const playlistResponseSchema = {
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
   },
-  required: ['id', 'youtubeId', 'title', 'channelId', 'channelTitle', 'itemCount', 'syncStatus', 'createdAt', 'updatedAt'],
+  required: [
+    'id',
+    'youtubeId',
+    'title',
+    'channelId',
+    'channelTitle',
+    'itemCount',
+    'syncStatus',
+    'createdAt',
+    'updatedAt',
+  ],
 } as const;
 
 /**
@@ -163,7 +173,16 @@ const videoResponseSchema = {
     viewCount: { type: 'integer' },
     publishedAt: { type: 'string', format: 'date-time' },
   },
-  required: ['id', 'youtubeId', 'title', 'channelTitle', 'duration', 'thumbnailUrls', 'viewCount', 'publishedAt'],
+  required: [
+    'id',
+    'youtubeId',
+    'title',
+    'channelTitle',
+    'duration',
+    'thumbnailUrls',
+    'viewCount',
+    'publishedAt',
+  ],
 } as const;
 
 /**
@@ -210,7 +229,15 @@ const syncResultResponseSchema = {
     quotaUsed: { type: 'integer' },
     error: { type: 'string' },
   },
-  required: ['playlistId', 'status', 'itemsAdded', 'itemsRemoved', 'itemsReordered', 'duration', 'quotaUsed'],
+  required: [
+    'playlistId',
+    'status',
+    'itemsAdded',
+    'itemsRemoved',
+    'itemsReordered',
+    'duration',
+    'quotaUsed',
+  ],
 } as const;
 
 /**
@@ -253,7 +280,17 @@ export const importPlaylistSchema: FastifySchema = {
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
           },
-          required: ['id', 'youtubeId', 'title', 'channelId', 'channelTitle', 'itemCount', 'syncStatus', 'createdAt', 'updatedAt'],
+          required: [
+            'id',
+            'youtubeId',
+            'title',
+            'channelId',
+            'channelTitle',
+            'itemCount',
+            'syncStatus',
+            'createdAt',
+            'updatedAt',
+          ],
         },
       },
       required: ['playlist'],

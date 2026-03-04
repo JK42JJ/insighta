@@ -180,7 +180,16 @@ const syncHistoryItemResponseSchema = {
     quotaUsed: { type: 'integer' },
     errorMessage: { type: ['string', 'null'] },
   },
-  required: ['id', 'playlistId', 'status', 'startedAt', 'itemsAdded', 'itemsRemoved', 'itemsReordered', 'quotaUsed'],
+  required: [
+    'id',
+    'playlistId',
+    'status',
+    'startedAt',
+    'itemsAdded',
+    'itemsRemoved',
+    'itemsReordered',
+    'quotaUsed',
+  ],
 } as const;
 
 /**
@@ -200,7 +209,17 @@ const scheduleResponseSchema = {
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
   },
-  required: ['id', 'playlistId', 'interval', 'enabled', 'nextRun', 'retryCount', 'maxRetries', 'createdAt', 'updatedAt'],
+  required: [
+    'id',
+    'playlistId',
+    'interval',
+    'enabled',
+    'nextRun',
+    'retryCount',
+    'maxRetries',
+    'createdAt',
+    'updatedAt',
+  ],
 } as const;
 
 /**
@@ -355,7 +374,17 @@ export const getSyncDetailsSchema: FastifySchema = {
             quotaUsed: { type: 'integer' },
             errorMessage: { type: ['string', 'null'] },
           },
-          required: ['id', 'playlistId', 'playlistTitle', 'status', 'startedAt', 'itemsAdded', 'itemsRemoved', 'itemsReordered', 'quotaUsed'],
+          required: [
+            'id',
+            'playlistId',
+            'playlistTitle',
+            'status',
+            'startedAt',
+            'itemsAdded',
+            'itemsRemoved',
+            'itemsReordered',
+            'quotaUsed',
+          ],
         },
       },
       required: ['sync'],

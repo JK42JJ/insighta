@@ -191,7 +191,11 @@ export class YouTubeAdapter implements DataSourceAdapter {
         cacheEnabled: config.cacheEnabled ?? true,
       });
     } catch (error) {
-      throw this.handleError('Failed to initialize YouTubeAdapter', error, AdapterErrorCode.INTERNAL_ERROR);
+      throw this.handleError(
+        'Failed to initialize YouTubeAdapter',
+        error,
+        AdapterErrorCode.INTERNAL_ERROR
+      );
     }
   }
 
@@ -207,7 +211,11 @@ export class YouTubeAdapter implements DataSourceAdapter {
       this.quotaUsed = 0;
       logger.info('YouTubeAdapter shutdown complete');
     } catch (error) {
-      throw this.handleError('Failed to shutdown YouTubeAdapter', error, AdapterErrorCode.INTERNAL_ERROR);
+      throw this.handleError(
+        'Failed to shutdown YouTubeAdapter',
+        error,
+        AdapterErrorCode.INTERNAL_ERROR
+      );
     }
   }
 
@@ -343,7 +351,7 @@ export class YouTubeAdapter implements DataSourceAdapter {
 
     // Handle API key by storing it for direct googleapis usage
     if (credentials.apiKey || credentials['apiKey']) {
-      this.apiKey = (credentials.apiKey || credentials['apiKey']) as string;
+      this.apiKey = credentials.apiKey || credentials['apiKey'];
     }
   }
 
@@ -457,15 +465,22 @@ export class YouTubeAdapter implements DataSourceAdapter {
         ytItems = items.slice(0, maxResults);
       } else {
         // Use existing YouTubeClient for OAuth
-        ytItems = await this.client.getPlaylistItems(collectionId, maxResults, options?.useCache ?? true);
+        ytItems = await this.client.getPlaylistItems(
+          collectionId,
+          maxResults,
+          options?.useCache ?? true
+        );
       }
 
       // Track quota usage (1 unit per 50 items)
-      const quotaCost = Math.ceil(ytItems.length / 50) * (this.config?.quotaCosts?.collectionItems ?? 1);
+      const quotaCost =
+        Math.ceil(ytItems.length / 50) * (this.config?.quotaCosts?.collectionItems ?? 1);
       this.trackQuota(quotaCost);
 
       // Transform YouTube playlist items to unified CollectionItems
-      const items = ytItems.map((item, index) => this.transformPlaylistItemToCollectionItem(item, index));
+      const items = ytItems.map((item, index) =>
+        this.transformPlaylistItemToCollectionItem(item, index)
+      );
 
       return {
         items,
@@ -558,7 +573,10 @@ export class YouTubeAdapter implements DataSourceAdapter {
    * console.log(`Fetched ${videos.length} videos`);
    * ```
    */
-  async fetchContentItemsBatch(contentIds: string[], _options?: FetchOptions): Promise<ContentItem[]> {
+  async fetchContentItemsBatch(
+    contentIds: string[],
+    _options?: FetchOptions
+  ): Promise<ContentItem[]> {
     this.validateInitialized();
 
     try {
@@ -589,7 +607,8 @@ export class YouTubeAdapter implements DataSourceAdapter {
       }
 
       // Track quota usage (1 unit per 50 videos)
-      const quotaCost = Math.ceil(contentIds.length / 50) * (this.config?.quotaCosts?.contentDetails ?? 1);
+      const quotaCost =
+        Math.ceil(contentIds.length / 50) * (this.config?.quotaCosts?.contentDetails ?? 1);
       this.trackQuota(quotaCost);
 
       // Transform YouTube videos to unified ContentItems
@@ -634,7 +653,9 @@ export class YouTubeAdapter implements DataSourceAdapter {
         if (/[A-Z0-9]/.test(url) && url.length > 10) {
           return url;
         }
-        throw new Error('Invalid playlist ID format: must contain uppercase letters/numbers and be sufficiently long');
+        throw new Error(
+          'Invalid playlist ID format: must contain uppercase letters/numbers and be sufficiently long'
+        );
       }
 
       // Extract from various YouTube URL formats
@@ -688,7 +709,9 @@ export class YouTubeAdapter implements DataSourceAdapter {
         if (/[A-Z0-9]/.test(url)) {
           return url;
         }
-        throw new Error('Invalid video ID format: must contain at least one number or uppercase letter');
+        throw new Error(
+          'Invalid video ID format: must contain at least one number or uppercase letter'
+        );
       }
 
       // Extract from various YouTube URL formats
@@ -963,7 +986,9 @@ export class YouTubeAdapter implements DataSourceAdapter {
   private getQuotaResetTime(): Date {
     const now = new Date();
     const pacificOffset = -8 * 60; // PST is UTC-8
-    const pacificTime = new Date(now.getTime() + (now.getTimezoneOffset() + pacificOffset) * 60 * 1000);
+    const pacificTime = new Date(
+      now.getTime() + (now.getTimezoneOffset() + pacificOffset) * 60 * 1000
+    );
 
     // Set to next midnight
     const resetTime = new Date(pacificTime);
@@ -995,7 +1020,8 @@ export class YouTubeAdapter implements DataSourceAdapter {
       description: snippet?.description ?? undefined,
       creatorId: snippet?.channelId ?? undefined,
       creatorName: snippet?.channelTitle ?? undefined,
-      thumbnailUrl: snippet?.thumbnails?.high?.url ?? snippet?.thumbnails?.default?.url ?? undefined,
+      thumbnailUrl:
+        snippet?.thumbnails?.high?.url ?? snippet?.thumbnails?.default?.url ?? undefined,
       itemCount: contentDetails?.itemCount ?? 0,
       publishedAt: snippet?.publishedAt ? new Date(snippet.publishedAt) : undefined,
       metadata: {

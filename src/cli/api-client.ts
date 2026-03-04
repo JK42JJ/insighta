@@ -186,14 +186,18 @@ export class ApiClient {
   /**
    * Register a new user
    */
-  async register(data: RegisterRequest): Promise<{ user: { id: string; email: string; name: string }; tokens: AuthTokens }> {
+  async register(
+    data: RegisterRequest
+  ): Promise<{ user: { id: string; email: string; name: string }; tokens: AuthTokens }> {
     return this.request('POST', '/api/v1/auth/register', { body: data });
   }
 
   /**
    * Login user
    */
-  async login(data: LoginRequest): Promise<{ user: { id: string; email: string; name: string }; tokens: AuthTokens }> {
+  async login(
+    data: LoginRequest
+  ): Promise<{ user: { id: string; email: string; name: string }; tokens: AuthTokens }> {
     return this.request('POST', '/api/v1/auth/login', { body: data });
   }
 
@@ -207,14 +211,18 @@ export class ApiClient {
   /**
    * Refresh access token
    */
-  async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
+  async refresh(
+    refreshToken: string
+  ): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
     return this.request('POST', '/api/v1/auth/refresh', { body: { refreshToken } });
   }
 
   /**
    * Get current user profile
    */
-  async getProfile(): Promise<{ user: { id: string; email: string; name: string; createdAt: string } }> {
+  async getProfile(): Promise<{
+    user: { id: string; email: string; name: string; createdAt: string };
+  }> {
     return this.request('GET', '/api/v1/auth/me');
   }
 
@@ -233,7 +241,9 @@ export class ApiClient {
    * List playlists
    */
   async listPlaylists(query?: ListPlaylistsQuery): Promise<ListPlaylistsResponse> {
-    return this.request('GET', '/api/v1/playlists', { query: query as Record<string, string | number | undefined> });
+    return this.request('GET', '/api/v1/playlists', {
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**

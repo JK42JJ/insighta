@@ -38,7 +38,9 @@ export class TokenStorage {
       const data = JSON.stringify(tokens, null, 2);
       await fs.writeFile(this.tokenFilePath, data, { mode: 0o600 }); // Owner read/write only
     } catch (error) {
-      throw new Error(`Failed to save tokens: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to save tokens: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -61,7 +63,9 @@ export class TokenStorage {
         // File doesn't exist - not an error, just no tokens
         return null;
       }
-      throw new Error(`Failed to load tokens: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to load tokens: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -73,7 +77,9 @@ export class TokenStorage {
       await fs.unlink(this.tokenFilePath);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw new Error(`Failed to clear tokens: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(
+          `Failed to clear tokens: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
       // File doesn't exist - already cleared
     }
@@ -118,7 +124,11 @@ export class TokenStorage {
   /**
    * Update only the access token (after refresh)
    */
-  async updateAccessToken(accessToken: string, refreshToken: string, expiresIn: number): Promise<void> {
+  async updateAccessToken(
+    accessToken: string,
+    refreshToken: string,
+    expiresIn: number
+  ): Promise<void> {
     const existingTokens = await this.loadTokens();
 
     if (!existingTokens) {

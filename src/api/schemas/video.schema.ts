@@ -156,7 +156,19 @@ const videoResponseSchema = {
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
   },
-  required: ['id', 'youtubeId', 'title', 'channelId', 'channelTitle', 'duration', 'thumbnailUrls', 'viewCount', 'publishedAt', 'createdAt', 'updatedAt'],
+  required: [
+    'id',
+    'youtubeId',
+    'title',
+    'channelId',
+    'channelTitle',
+    'duration',
+    'thumbnailUrls',
+    'viewCount',
+    'publishedAt',
+    'createdAt',
+    'updatedAt',
+  ],
 } as const;
 
 /**
@@ -235,11 +247,30 @@ export const listVideosSchema: FastifySchema = {
       playlistId: { type: 'string', format: 'uuid', description: 'Filter by playlist ID' },
       search: { type: 'string', description: 'Search in title and description' },
       tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
-      status: { type: 'string', enum: ['UNWATCHED', 'WATCHING', 'COMPLETED'], description: 'Filter by watch status' },
+      status: {
+        type: 'string',
+        enum: ['UNWATCHED', 'WATCHING', 'COMPLETED'],
+        description: 'Filter by watch status',
+      },
       page: { type: 'integer', minimum: 1, default: 1, description: 'Page number' },
-      limit: { type: 'integer', minimum: 1, maximum: 100, default: 20, description: 'Items per page' },
-      sortBy: { type: 'string', enum: ['title', 'publishedAt', 'duration', 'viewCount'], description: 'Sort field' },
-      sortOrder: { type: 'string', enum: ['asc', 'desc'], default: 'desc', description: 'Sort order' },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 100,
+        default: 20,
+        description: 'Items per page',
+      },
+      sortBy: {
+        type: 'string',
+        enum: ['title', 'publishedAt', 'duration', 'viewCount'],
+        description: 'Sort field',
+      },
+      sortOrder: {
+        type: 'string',
+        enum: ['asc', 'desc'],
+        default: 'desc',
+        description: 'Sort order',
+      },
     },
   },
   response: {
@@ -309,7 +340,11 @@ export const getCaptionsSchema: FastifySchema = {
   querystring: {
     type: 'object',
     properties: {
-      language: { type: 'string', default: 'en', description: 'Caption language code (e.g., en, ko, ja)' },
+      language: {
+        type: 'string',
+        default: 'en',
+        description: 'Caption language code (e.g., en, ko, ja)',
+      },
     },
   },
   response: {
@@ -413,7 +448,12 @@ export const generateSummarySchema: FastifySchema = {
   body: {
     type: 'object',
     properties: {
-      level: { type: 'string', enum: ['brief', 'detailed', 'comprehensive'], default: 'brief', description: 'Summary detail level' },
+      level: {
+        type: 'string',
+        enum: ['brief', 'detailed', 'comprehensive'],
+        default: 'brief',
+        description: 'Summary detail level',
+      },
       language: { type: 'string', default: 'en', description: 'Summary language' },
     },
   },

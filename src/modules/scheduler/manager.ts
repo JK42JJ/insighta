@@ -264,8 +264,8 @@ export class SchedulerManager {
       const cronExpression = this.intervalToCron(schedule.interval_ms);
 
       // Create cron job
-      const job = cron.schedule(cronExpression, async () => {
-        await this.executeSyncJob(playlistId);
+      const job = cron.schedule(cronExpression, () => {
+        void this.executeSyncJob(playlistId);
       });
 
       this.cronJobs.set(playlistId, job);

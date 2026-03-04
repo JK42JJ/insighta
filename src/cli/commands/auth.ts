@@ -140,7 +140,9 @@ export async function registerCommand(): Promise<void> {
         console.error('   yt-sync user-login\n');
       }
     } else {
-      console.error(`\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`);
+      console.error(
+        `\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`
+      );
     }
     process.exit(1);
   }
@@ -206,7 +208,9 @@ export async function loginCommand(): Promise<void> {
         console.error('\n💡 Incorrect email or password. Please try again.\n');
       }
     } else {
-      console.error(`\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`);
+      console.error(
+        `\n❌ Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`
+      );
     }
     process.exit(1);
   }
@@ -242,7 +246,9 @@ export async function logoutCommand(): Promise<void> {
     console.log('✅ Logged out successfully\n');
     console.log('💡 To login again, use: yt-sync user-login\n');
   } catch (error) {
-    console.error(`\n❌ Logout failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    console.error(
+      `\n❌ Logout failed: ${error instanceof Error ? error.message : String(error)}\n`
+    );
     process.exit(1);
   }
 }
@@ -300,7 +306,9 @@ export async function whoamiCommand(): Promise<void> {
       const tokenStorage = getTokenStorage();
       await tokenStorage.clearTokens();
     } else {
-      console.error(`\n❌ Failed to get profile: ${error instanceof Error ? error.message : String(error)}\n`);
+      console.error(
+        `\n❌ Failed to get profile: ${error instanceof Error ? error.message : String(error)}\n`
+      );
     }
     process.exit(1);
   }
@@ -315,15 +323,9 @@ export function registerAuthCommands(program: Command): void {
     .description('Register a new user account')
     .action(registerCommand);
 
-  program
-    .command('user-login')
-    .description('Login to your account')
-    .action(loginCommand);
+  program.command('user-login').description('Login to your account').action(loginCommand);
 
-  program
-    .command('user-logout')
-    .description('Logout and clear session')
-    .action(logoutCommand);
+  program.command('user-logout').description('Logout and clear session').action(logoutCommand);
 
   program
     .command('user-whoami')

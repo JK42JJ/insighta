@@ -37,7 +37,10 @@ export type GetVideoNotesQuery = z.infer<typeof GetVideoNotesQuerySchema>;
  */
 export const CreateNoteRequestSchema = z.object({
   timestamp: z.number().int().min(0, 'Timestamp must be non-negative'),
-  content: z.string().min(1, 'Content is required').max(5000, 'Content must be less than 5000 characters'),
+  content: z
+    .string()
+    .min(1, 'Content is required')
+    .max(5000, 'Content must be less than 5000 characters'),
   tags: z.array(z.string()).optional(),
 });
 
@@ -146,8 +149,16 @@ export const listVideoNotesSchema: FastifySchema = {
     type: 'object',
     properties: {
       tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
-      timestampStart: { type: 'integer', minimum: 0, description: 'Filter by start timestamp (seconds)' },
-      timestampEnd: { type: 'integer', minimum: 0, description: 'Filter by end timestamp (seconds)' },
+      timestampStart: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Filter by start timestamp (seconds)',
+      },
+      timestampEnd: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Filter by end timestamp (seconds)',
+      },
     },
   },
   response: {
@@ -188,7 +199,12 @@ export const createNoteSchema: FastifySchema = {
     required: ['timestamp', 'content'],
     properties: {
       timestamp: { type: 'integer', minimum: 0, description: 'Timestamp in seconds' },
-      content: { type: 'string', minLength: 1, maxLength: 5000, description: 'Note content (Markdown)' },
+      content: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 5000,
+        description: 'Note content (Markdown)',
+      },
       tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
     },
   },
@@ -254,7 +270,12 @@ export const updateNoteSchema: FastifySchema = {
   body: {
     type: 'object',
     properties: {
-      content: { type: 'string', minLength: 1, maxLength: 5000, description: 'Note content (Markdown)' },
+      content: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 5000,
+        description: 'Note content (Markdown)',
+      },
       tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
       timestamp: { type: 'integer', minimum: 0, description: 'Timestamp in seconds' },
     },
@@ -309,7 +330,12 @@ export const exportNotesSchema: FastifySchema = {
     properties: {
       videoId: { type: 'string', description: 'Filter by video ID (YouTube ID)' },
       tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
-      format: { type: 'string', enum: ['markdown', 'json', 'csv'], default: 'markdown', description: 'Export format' },
+      format: {
+        type: 'string',
+        enum: ['markdown', 'json', 'csv'],
+        default: 'markdown',
+        description: 'Export format',
+      },
     },
   },
   response: {

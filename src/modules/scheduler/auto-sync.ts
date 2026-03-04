@@ -84,7 +84,7 @@ export class AutoSyncScheduler {
 
       logger.info('AutoSyncScheduler started', {
         scheduleCount: schedules.length,
-        schedules: schedules.map(s => ({
+        schedules: schedules.map((s) => ({
           playlistId: s.playlistId,
           interval: s.interval,
           nextRun: s.nextRun,
@@ -125,7 +125,7 @@ export class AutoSyncScheduler {
         logger.info('Waiting for running jobs to complete', {
           remaining: Array.from(this.runningJobs),
         });
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
       if (this.runningJobs.size > 0) {
@@ -250,8 +250,8 @@ export class AutoSyncScheduler {
       const cronExpression = this.intervalToCron(schedule.interval);
 
       // Create and start cron job
-      const job = cron.schedule(cronExpression, async () => {
-        await this.executeSyncJob(playlistId);
+      const job = cron.schedule(cronExpression, () => {
+        void this.executeSyncJob(playlistId);
       });
 
       this.cronJobs.set(playlistId, job);

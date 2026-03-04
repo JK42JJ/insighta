@@ -32,7 +32,7 @@ export type SourceType =
   // Feed-based services
   | 'rss'
   // File parsers
-  | 'file'       // Generic file/directory
+  | 'file' // Generic file/directory
   | 'markdown'
   | 'pdf'
   | 'docx'
@@ -63,14 +63,14 @@ export interface AdapterInfo {
  * Content types across all sources
  */
 export type ContentType =
-  | 'video'        // YouTube videos, Vimeo videos
-  | 'article'      // Notion pages, LinkedIn posts, Medium articles
-  | 'document'     // Google Docs, PDF files, Markdown files
-  | 'note'         // Notion databases, text files
-  | 'audio'        // Spotify tracks, podcasts
-  | 'image'        // Image files, galleries
-  | 'playlist'     // YouTube playlists, Spotify playlists
-  | string;        // Allow custom content types
+  | 'video' // YouTube videos, Vimeo videos
+  | 'article' // Notion pages, LinkedIn posts, Medium articles
+  | 'document' // Google Docs, PDF files, Markdown files
+  | 'note' // Notion databases, text files
+  | 'audio' // Spotify tracks, podcasts
+  | 'image' // Image files, galleries
+  | 'playlist' // YouTube playlists, Spotify playlists
+  | string; // Allow custom content types
 
 /**
  * Sync status for collections and content items
@@ -138,15 +138,15 @@ export interface QuotaCostConfig {
  */
 export interface Collection {
   // Source Information
-  sourceId: string;           // YouTube playlist ID, Notion database ID, folder path
+  sourceId: string; // YouTube playlist ID, Notion database ID, folder path
   sourceType: SourceType;
-  sourceUrl?: string;         // Original URL
+  sourceUrl?: string; // Original URL
 
   // Metadata
   title: string;
   description?: string;
-  creatorId?: string;         // Channel ID, user ID, author ID
-  creatorName?: string;       // Channel title, username, author name
+  creatorId?: string; // Channel ID, user ID, author ID
+  creatorName?: string; // Channel title, username, author name
   thumbnailUrl?: string;
 
   // Stats
@@ -164,13 +164,13 @@ export interface Collection {
  * Collection item (video in playlist, page in database, file in folder)
  */
 export interface CollectionItem {
-  sourceId: string;           // Video ID, page ID, file path
+  sourceId: string; // Video ID, page ID, file path
   sourceType: SourceType;
-  position: number;           // Order within collection
+  position: number; // Order within collection
   addedAt?: Date;
 
   // Reference to content item
-  contentId?: string;         // Internal database ID (populated after fetch)
+  contentId?: string; // Internal database ID (populated after fetch)
 
   // Source-specific metadata
   metadata?: Record<string, any>;
@@ -185,14 +185,14 @@ export interface CollectionItem {
  */
 export interface ContentItem {
   // Source Information
-  sourceId: string;           // YouTube video ID, Notion page ID, file path
+  sourceId: string; // YouTube video ID, Notion page ID, file path
   sourceType: SourceType;
-  sourceUrl?: string;         // Original URL
+  sourceUrl?: string; // Original URL
 
   // Content
   title: string;
   description?: string;
-  content?: string;           // Full text content (Markdown)
+  content?: string; // Full text content (Markdown)
   contentType: ContentType;
 
   // Creator Information
@@ -209,7 +209,7 @@ export interface ContentItem {
   };
 
   // Temporal Data
-  duration?: number;          // seconds (for video/audio)
+  duration?: number; // seconds (for video/audio)
   publishedAt?: Date;
   lastModifiedAt?: Date;
 
@@ -275,22 +275,22 @@ export interface ContentSchema {
  */
 export interface SourceCapabilities {
   // Core Features
-  supportsCollections: boolean;     // Can fetch playlists/databases
-  supportsDirectContent: boolean;   // Can fetch individual content items
-  supportsSearch: boolean;          // Can search content
+  supportsCollections: boolean; // Can fetch playlists/databases
+  supportsDirectContent: boolean; // Can fetch individual content items
+  supportsSearch: boolean; // Can search content
 
   // Sync Features
   supportsIncrementalSync: boolean; // Can detect changes since last sync
-  supportsRealTimeSync: boolean;    // Can subscribe to real-time updates
+  supportsRealTimeSync: boolean; // Can subscribe to real-time updates
 
   // Content Features
-  supportsFullText: boolean;        // Can extract full text content
-  supportsTranscripts: boolean;     // Can extract transcripts/captions
-  supportsComments: boolean;        // Can fetch comments
+  supportsFullText: boolean; // Can extract full text content
+  supportsTranscripts: boolean; // Can extract transcripts/captions
+  supportsComments: boolean; // Can fetch comments
 
   // Quota and Rate Limiting
-  hasQuotaLimit: boolean;           // Has daily/monthly quota limits
-  hasRateLimit: boolean;            // Has requests-per-second limits
+  hasQuotaLimit: boolean; // Has daily/monthly quota limits
+  hasRateLimit: boolean; // Has requests-per-second limits
   quotaLimit?: number;
   rateLimitPerSecond?: number;
 }
@@ -415,10 +415,7 @@ export interface DataSourceAdapter {
    * @returns Collection metadata
    * @throws AdapterError if collection not found or fetch fails
    */
-  fetchCollection(
-    collectionId: string,
-    options?: FetchOptions
-  ): Promise<Collection>;
+  fetchCollection(collectionId: string, options?: FetchOptions): Promise<Collection>;
 
   /**
    * Fetch collection items (paginated)
@@ -441,10 +438,7 @@ export interface DataSourceAdapter {
    * @returns Change set with added/removed/modified items
    * @throws AdapterError if change detection not supported or fails
    */
-  detectCollectionChanges?(
-    collectionId: string,
-    since: Date
-  ): Promise<ChangeSet>;
+  detectCollectionChanges?(collectionId: string, since: Date): Promise<ChangeSet>;
 
   // ============================================================================
   // Content Operations
@@ -458,10 +452,7 @@ export interface DataSourceAdapter {
    * @returns Content item metadata
    * @throws AdapterError if content not found or fetch fails
    */
-  fetchContentItem(
-    contentId: string,
-    options?: FetchOptions
-  ): Promise<ContentItem>;
+  fetchContentItem(contentId: string, options?: FetchOptions): Promise<ContentItem>;
 
   /**
    * Fetch multiple content items in batch
@@ -471,10 +462,7 @@ export interface DataSourceAdapter {
    * @returns Array of content items (may be partial if some IDs fail)
    * @throws AdapterError if batch fetch fails
    */
-  fetchContentItemsBatch(
-    contentIds: string[],
-    options?: FetchOptions
-  ): Promise<ContentItem[]>;
+  fetchContentItemsBatch(contentIds: string[], options?: FetchOptions): Promise<ContentItem[]>;
 
   /**
    * Search content items
@@ -484,10 +472,7 @@ export interface DataSourceAdapter {
    * @returns Paginated search results
    * @throws AdapterError if search not supported or fails
    */
-  searchContent?(
-    query: string,
-    options?: FetchOptions
-  ): Promise<FetchResult<ContentItem>>;
+  searchContent?(query: string, options?: FetchOptions): Promise<FetchResult<ContentItem>>;
 
   // ============================================================================
   // URL Extraction
@@ -570,10 +555,7 @@ export interface DataSourceAdapter {
  * await adapter.initialize();
  * ```
  */
-export type AdapterFactory = (
-  sourceType: SourceType,
-  config: AdapterConfig
-) => DataSourceAdapter;
+export type AdapterFactory = (sourceType: SourceType, config: AdapterConfig) => DataSourceAdapter;
 
 // ============================================================================
 // Error Handling

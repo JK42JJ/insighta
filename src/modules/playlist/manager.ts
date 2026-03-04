@@ -14,11 +14,7 @@ import { db } from '../database/client';
 import { getYouTubeClient } from '../../api/client';
 import { getQuotaManager } from '../quota/manager';
 import { logger } from '../../utils/logger';
-import {
-  InvalidPlaylistError,
-  RecordNotFoundError,
-  ConcurrentSyncError,
-} from '../../utils/errors';
+import { InvalidPlaylistError, RecordNotFoundError, ConcurrentSyncError } from '../../utils/errors';
 
 /**
  * Playlist Manager
@@ -107,13 +103,15 @@ export class PlaylistManager {
   /**
    * List all playlists
    */
-  public async listPlaylists(options: {
-    filter?: string;
-    sortBy?: 'title' | 'last_synced_at' | 'created_at';
-    sortOrder?: 'asc' | 'desc';
-    limit?: number;
-    offset?: number;
-  } = {}): Promise<{ playlists: youtube_playlists[]; total: number }> {
+  public async listPlaylists(
+    options: {
+      filter?: string;
+      sortBy?: 'title' | 'last_synced_at' | 'created_at';
+      sortOrder?: 'asc' | 'desc';
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<{ playlists: youtube_playlists[]; total: number }> {
     const where = options.filter
       ? {
           OR: [
@@ -149,7 +147,9 @@ export class PlaylistManager {
     const ytPlaylist = await this.youtubeClient.getPlaylist(playlist.youtube_playlist_id);
 
     if (!ytPlaylist.snippet) {
-      throw new InvalidPlaylistError(playlist.youtube_playlist_id, { reason: 'Missing snippet data' });
+      throw new InvalidPlaylistError(playlist.youtube_playlist_id, {
+        reason: 'Missing snippet data',
+      });
     }
 
     // Update in database
@@ -299,8 +299,10 @@ export class PlaylistManager {
     });
 
     const totalSyncs = history.length;
-    const successfulSyncs = history.filter((h) => h.status === SyncStatus.COMPLETED).length;
-    const failedSyncs = history.filter((h) => h.status === SyncStatus.FAILED).length;
+    const successfulSyncs = history.filter(
+      (h) => h.status === (SyncStatus.COMPLETED as string)
+    ).length;
+    const failedSyncs = history.filter((h) => h.status === (SyncStatus.FAILED as string)).length;
     const lastSync = history[0]?.started_at ?? null;
 
     // New schema does not have a duration column; compute from started_at/completed_at
@@ -308,8 +310,7 @@ export class PlaylistManager {
     const averageDuration =
       completedSyncs.length > 0
         ? completedSyncs.reduce(
-            (sum, h) =>
-              sum + (h.completed_at!.getTime() - h.started_at.getTime()),
+            (sum, h) => sum + (h.completed_at!.getTime() - h.started_at.getTime()),
             0
           ) / completedSyncs.length
         : null;

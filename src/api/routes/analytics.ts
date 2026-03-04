@@ -89,7 +89,10 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
   /**
    * GET /api/v1/analytics/videos/:id - Video analytics
    */
-  fastify.get<{ Params: GetVideoAnalyticsParams; Reply: { analytics: VideoAnalyticsResponse } | { error: unknown } }>(
+  fastify.get<{
+    Params: GetVideoAnalyticsParams;
+    Reply: { analytics: VideoAnalyticsResponse } | { error: unknown };
+  }>(
     '/videos/:id',
     {
       schema: getVideoAnalyticsSchema,
@@ -139,7 +142,10 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
   /**
    * GET /api/v1/analytics/playlists/:id - Playlist analytics
    */
-  fastify.get<{ Params: GetPlaylistAnalyticsParams; Reply: { analytics: PlaylistAnalyticsResponse } | { error: unknown } }>(
+  fastify.get<{
+    Params: GetPlaylistAnalyticsParams;
+    Reply: { analytics: PlaylistAnalyticsResponse } | { error: unknown };
+  }>(
     '/playlists/:id',
     {
       schema: getPlaylistAnalyticsSchema,
@@ -187,7 +193,10 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
   /**
    * POST /api/v1/analytics/sessions - Record watch session
    */
-  fastify.post<{ Body: RecordSessionRequest; Reply: { session: WatchSessionResponse } | { error: unknown } }>(
+  fastify.post<{
+    Body: RecordSessionRequest;
+    Reply: { session: WatchSessionResponse } | { error: unknown };
+  }>(
     '/sessions',
     {
       schema: recordSessionSchema,

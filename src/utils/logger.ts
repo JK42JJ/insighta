@@ -95,10 +95,12 @@ export function logQuotaUsage(operation: string, cost: number, remaining: number
     operation,
     cost,
     remaining,
-    percentUsed: ((config.quota.dailyLimit - remaining) / config.quota.dailyLimit * 100).toFixed(2),
+    percentUsed: (((config.quota.dailyLimit - remaining) / config.quota.dailyLimit) * 100).toFixed(
+      2
+    ),
   });
 
-  if (remaining < (config.quota.dailyLimit - config.quota.warningThreshold)) {
+  if (remaining < config.quota.dailyLimit - config.quota.warningThreshold) {
     logger.warn('API quota warning', {
       remaining,
       threshold: config.quota.warningThreshold,

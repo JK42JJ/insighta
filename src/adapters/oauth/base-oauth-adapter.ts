@@ -100,9 +100,7 @@ export abstract class BaseOAuthAdapter extends BaseAdapter {
     // If we have an authorization code, exchange it for tokens
     if (credentials['authorizationCode']) {
       try {
-        const tokens = await this.exchangeCodeForTokens(
-          credentials['authorizationCode'] as string
-        );
+        const tokens = await this.exchangeCodeForTokens(credentials['authorizationCode'] as string);
 
         this.credentials = {
           accessToken: tokens.accessToken,
@@ -193,10 +191,7 @@ export abstract class BaseOAuthAdapter extends BaseAdapter {
     if (this.isTokenExpired()) {
       const result = await this.refreshAuth();
       if (!result.success) {
-        throw this.createError(
-          AdapterErrorCode.AUTH_EXPIRED,
-          'Failed to refresh expired token'
-        );
+        throw this.createError(AdapterErrorCode.AUTH_EXPIRED, 'Failed to refresh expired token');
       }
     }
 

@@ -53,7 +53,7 @@ export async function registerAuth(fastify: FastifyInstance) {
   if (!jwtSecret) {
     throw new Error(
       'SUPABASE_JWT_SECRET (or JWT_SECRET) environment variable is required. ' +
-      'Get it from Supabase Dashboard > Settings > API > JWT Secret.'
+        'Get it from Supabase Dashboard > Settings > API > JWT Secret.'
     );
   }
 
@@ -89,22 +89,21 @@ export async function registerAuth(fastify: FastifyInstance) {
    *     }
    *   });
    */
-  fastify.decorate('authenticate', async function (
-    request: FastifyRequest,
-    reply: FastifyReply
-  ) {
+  fastify.decorate('authenticate', async function (request: FastifyRequest, reply: FastifyReply) {
     try {
       // Verify JWT and decode Supabase claims
       const decoded = await request.jwtVerify<SupabaseJWTClaims>();
 
       // Map Supabase JWT claims to our JWTPayload for backward compatibility
-      const userMeta = (decoded.user_metadata || {}) as Record<string, unknown>;
+      const userMeta: Record<string, unknown> = decoded.user_metadata || {};
       request.user = {
         userId: decoded.sub,
         email: decoded.email || '',
-        name: (userMeta['name'] as string) ||
-              (userMeta['full_name'] as string) ||
-              (decoded.email?.split('@')[0] || ''),
+        name:
+          (userMeta['name'] as string) ||
+          (userMeta['full_name'] as string) ||
+          decoded.email?.split('@')[0] ||
+          '',
       };
     } catch (err) {
       const error = err as Error;

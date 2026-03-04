@@ -211,7 +211,11 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   /**
    * GET /api/v1/videos/:id/captions - Get captions
    */
-  fastify.get<{ Params: GetVideoParams; Querystring: GetCaptionsQuery; Reply: { caption: CaptionResponse } }>(
+  fastify.get<{
+    Params: GetVideoParams;
+    Querystring: GetCaptionsQuery;
+    Reply: { caption: CaptionResponse };
+  }>(
     '/:id/captions',
     {
       schema: getCaptionsSchema,
@@ -274,7 +278,10 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const validatedParams = GetVideoParamsSchema.parse(request.params);
       const { id } = validatedParams;
 
-      logger.info('Getting available caption languages', { videoId: id, userId: request.user.userId });
+      logger.info('Getting available caption languages', {
+        videoId: id,
+        userId: request.user.userId,
+      });
 
       // Get video to get YouTube ID
       const video = await getVideo().getVideo(id);
@@ -340,7 +347,11 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   /**
    * POST /api/v1/videos/:id/summary - Generate summary
    */
-  fastify.post<{ Params: GetVideoParams; Body: GenerateSummaryRequest; Reply: { summary: SummaryResponse } }>(
+  fastify.post<{
+    Params: GetVideoParams;
+    Body: GenerateSummaryRequest;
+    Reply: { summary: SummaryResponse };
+  }>(
     '/:id/summary',
     {
       schema: generateSummarySchema,
@@ -357,7 +368,12 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const { id } = validatedParams;
       const { level, language } = validatedBody;
 
-      logger.info('Generating summary', { videoId: id, level, language, userId: request.user.userId });
+      logger.info('Generating summary', {
+        videoId: id,
+        level,
+        language,
+        userId: request.user.userId,
+      });
 
       // Get video
       const video = await getVideo().getVideo(id);

@@ -128,10 +128,10 @@ export function createRateLimitConfig(
     category === 'global'
       ? RATE_LIMIT_CONFIG.global
       : subcategory && category in RATE_LIMIT_CONFIG
-      ? (RATE_LIMIT_CONFIG[category] as Record<string, { max: number; timeWindow: string }>)[
-          subcategory
-        ]
-      : RATE_LIMIT_CONFIG.global;
+        ? (RATE_LIMIT_CONFIG[category] as Record<string, { max: number; timeWindow: string }>)[
+            subcategory
+          ]
+        : RATE_LIMIT_CONFIG.global;
 
   if (!config) {
     throw new Error(`Invalid rate limit configuration: ${category}.${subcategory}`);

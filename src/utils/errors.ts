@@ -9,9 +9,9 @@
  */
 export enum ErrorSeverity {
   CRITICAL = 'critical', // System-critical errors requiring immediate attention
-  HIGH = 'high',         // High-impact errors affecting core functionality
-  MEDIUM = 'medium',     // Moderate errors with workarounds available
-  LOW = 'low',          // Minor errors with minimal impact
+  HIGH = 'high', // High-impact errors affecting core functionality
+  MEDIUM = 'medium', // Moderate errors with workarounds available
+  LOW = 'low', // Minor errors with minimal impact
 }
 
 /**
@@ -52,7 +52,10 @@ export class QuotaExceededError extends YouTubeAPIError {
 }
 
 export class AuthenticationError extends YouTubeAPIError {
-  constructor(message: string = 'YouTube API authentication failed', details?: Record<string, any>) {
+  constructor(
+    message: string = 'YouTube API authentication failed',
+    details?: Record<string, any>
+  ) {
     super(message, 401, details);
     this.code = 'AUTHENTICATION_ERROR';
     this.severity = ErrorSeverity.HIGH;

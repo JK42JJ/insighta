@@ -150,8 +150,8 @@ export class CacheService {
       const files = await fs.readdir(this.cacheDir);
       await Promise.all(
         files
-          .filter(file => file.endsWith('.json'))
-          .map(file => fs.unlink(path.join(this.cacheDir, file)))
+          .filter((file) => file.endsWith('.json'))
+          .map((file) => fs.unlink(path.join(this.cacheDir, file)))
       );
       logger.info('Cache cleared', { count: files.length });
     } catch (error) {
@@ -170,7 +170,7 @@ export class CacheService {
   }> {
     try {
       const files = await fs.readdir(this.cacheDir);
-      const jsonFiles = files.filter(file => file.endsWith('.json'));
+      const jsonFiles = files.filter((file) => file.endsWith('.json'));
 
       let totalSize = 0;
       let oldestFile: { age: number; key: string } | null = null;
@@ -227,8 +227,8 @@ export class CacheService {
       const files = await fs.readdir(this.cacheDir);
       const fileStats = await Promise.all(
         files
-          .filter(file => file.endsWith('.json'))
-          .map(async file => {
+          .filter((file) => file.endsWith('.json'))
+          .map(async (file) => {
             const filePath = path.join(this.cacheDir, file);
             const stat = await fs.stat(filePath);
             return { file, age: Date.now() - stat.mtimeMs };

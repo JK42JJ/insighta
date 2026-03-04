@@ -173,12 +173,13 @@ export class VideoManager {
       create: {
         user_id: userId,
         videoId: video.id,
-        is_watched: data.isWatched ?? (data.watchStatus === WatchStatus.COMPLETED),
+        is_watched: data.isWatched ?? data.watchStatus === WatchStatus.COMPLETED,
         watch_position_seconds: data.lastPosition ?? 0,
         user_note: data.notes ?? null,
       },
       update: {
-        is_watched: data.isWatched ?? (data.watchStatus === WatchStatus.COMPLETED ? true : undefined),
+        is_watched:
+          data.isWatched ?? (data.watchStatus === WatchStatus.COMPLETED ? true : undefined),
         watch_position_seconds: data.lastPosition,
         user_note: data.notes,
       },
@@ -192,7 +193,11 @@ export class VideoManager {
   /**
    * Mark video as watched
    */
-  public async markAsWatched(videoId: string, userId: string, position?: number): Promise<UserVideoState> {
+  public async markAsWatched(
+    videoId: string,
+    userId: string,
+    position?: number
+  ): Promise<UserVideoState> {
     return this.updateUserState(videoId, userId, {
       watchStatus: WatchStatus.COMPLETED,
       lastPosition: position,
@@ -203,7 +208,11 @@ export class VideoManager {
   /**
    * Update watch progress
    */
-  public async updateProgress(videoId: string, userId: string, position: number): Promise<UserVideoState> {
+  public async updateProgress(
+    videoId: string,
+    userId: string,
+    position: number
+  ): Promise<UserVideoState> {
     return this.updateUserState(videoId, userId, {
       watchStatus: WatchStatus.WATCHING,
       lastPosition: position,

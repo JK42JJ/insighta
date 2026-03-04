@@ -167,7 +167,7 @@ export async function buildServer() {
   // ============================================================================
 
   // API version prefix
-  fastify.register(
+  void fastify.register(
     async (instance) => {
       // Health check for API version
       instance.get('/', async (_request, reply) => {
@@ -210,73 +210,61 @@ export async function buildServer() {
   // ============================================================================
 
   // Custom error handler
-  fastify.setErrorHandler(
-    (error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
-      const statusCode = error.statusCode || 500;
+  fastify.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
+    const statusCode = error.statusCode || 500;
 
-      // Log error
-      if (statusCode >= 500) {
-        fastify.log.error(
-          {
-            err: error,
-            requestId: request.id,
-            url: request.url,
-            method: request.method,
-          },
-          'Internal server error'
-        );
-      } else {
-        fastify.log.warn(
-          {
-            err: error,
-            requestId: request.id,
-            url: request.url,
-            method: request.method,
-          },
-          'Client error'
-        );
-      }
-
-      // Validation errors (400)
-      if (error.validation) {
-        return reply.code(400).send(
-          createErrorResponse(
-            ErrorCode.VALIDATION_ERROR,
-            'Request validation failed',
-            request.url,
-            {
-              validation: error.validation,
-            }
-          )
-        );
-      }
-
-      // Generic error response
-      const errorCode =
-        statusCode >= 500
-          ? ErrorCode.INTERNAL_SERVER_ERROR
-          : ErrorCode.INVALID_INPUT;
-
-      const message =
-        statusCode >= 500
-          ? 'An internal server error occurred'
-          : error.message || 'Bad request';
-
-      return reply
-        .code(statusCode)
-        .send(createErrorResponse(errorCode, message, request.url));
+    // Log error
+    if (statusCode >= 500) {
+      fastify.log.error(
+        {
+          err: error,
+          requestId: request.id,
+          url: request.url,
+          method: request.method,
+        },
+        'Internal server error'
+      );
+    } else {
+      fastify.log.warn(
+        {
+          err: error,
+          requestId: request.id,
+          url: request.url,
+          method: request.method,
+        },
+        'Client error'
+      );
     }
-  );
+
+    // Validation errors (400)
+    if (error.validation) {
+      return reply.code(400).send(
+        createErrorResponse(ErrorCode.VALIDATION_ERROR, 'Request validation failed', request.url, {
+          validation: error.validation,
+        })
+      );
+    }
+
+    // Generic error response
+    const errorCode = statusCode >= 500 ? ErrorCode.INTERNAL_SERVER_ERROR : ErrorCode.INVALID_INPUT;
+
+    const message =
+      statusCode >= 500 ? 'An internal server error occurred' : error.message || 'Bad request';
+
+    return reply.code(statusCode).send(createErrorResponse(errorCode, message, request.url));
+  });
 
   // 404 handler
   fastify.setNotFoundHandler((request, reply) => {
-    return reply.code(404).send(
-      createErrorResponse(
-        ErrorCode.RESOURCE_NOT_FOUND,
-        `Route ${request.method} ${request.url} not found`,
-        request.url
-      )
-    );
+    return reply
+      .code(404)
+      .send(
+        createErrorResponse(
+          ErrorCode.RESOURCE_NOT_FOUND,
+          `Route ${request.method} ${request.url} not found`,
+          request.url
+        )
+      );
   });
 
   return fastify;
@@ -294,15 +282,9 @@ export async function startServer() {
 
     await fastify.listen({ port, host });
 
-    fastify.log.info(
-      `Server listening on http://${host}:${port}`
-    );
-    fastify.log.info(
-      `Swagger UI available at http://${host}:${port}/documentation`
-    );
-    fastify.log.info(
-      `Scalar API Reference available at http://${host}:${port}/api-reference`
-    );
+    fastify.log.info(`Server listening on http://${host}:${port}`);
+    fastify.log.info(`Swagger UI available at http://${host}:${port}/documentation`);
+    fastify.log.info(`Scalar API Reference available at http://${host}:${port}/api-reference`);
 
     // Graceful shutdown
     const shutdown = async (signal: string) => {
@@ -311,8 +293,12 @@ export async function startServer() {
       process.exit(0);
     };
 
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => {
+      void shutdown('SIGTERM');
+    });
+    process.on('SIGINT', () => {
+      void shutdown('SIGINT');
+    });
   } catch (err) {
     console.error('Error starting server:', err);
     process.exit(1);
@@ -324,5 +310,5 @@ export { buildServer as buildApp };
 
 // Start server if this file is run directly
 if (require.main === module) {
-  startServer();
+  void startServer();
 }

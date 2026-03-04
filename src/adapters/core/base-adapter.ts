@@ -136,20 +136,14 @@ export abstract class BaseAdapter implements DataSourceAdapter {
   // Abstract Methods (must be implemented by subclasses)
   // ============================================================================
 
-  abstract fetchCollection(
-    collectionId: string,
-    options?: FetchOptions
-  ): Promise<Collection>;
+  abstract fetchCollection(collectionId: string, options?: FetchOptions): Promise<Collection>;
 
   abstract fetchCollectionItems(
     collectionId: string,
     options?: FetchOptions
   ): Promise<FetchResult<CollectionItem>>;
 
-  abstract fetchContentItem(
-    contentId: string,
-    options?: FetchOptions
-  ): Promise<ContentItem>;
+  abstract fetchContentItem(contentId: string, options?: FetchOptions): Promise<ContentItem>;
 
   abstract fetchContentItemsBatch(
     contentIds: string[],

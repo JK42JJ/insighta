@@ -20,7 +20,8 @@ export interface RetryOptions {
  * Calculate delay with exponential backoff and jitter
  */
 function calculateDelay(attempt: number, options: Required<RetryOptions>): number {
-  const exponentialDelay = options.initialDelayMs * Math.pow(options.backoffMultiplier, attempt - 1);
+  const exponentialDelay =
+    options.initialDelayMs * Math.pow(options.backoffMultiplier, attempt - 1);
   const jitter = Math.random() * 0.3 * exponentialDelay; // Add up to 30% jitter
   const delay = Math.min(exponentialDelay + jitter, options.maxDelayMs);
   return Math.floor(delay);
@@ -30,7 +31,7 @@ function calculateDelay(attempt: number, options: Required<RetryOptions>): numbe
  * Sleep for specified milliseconds
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -152,5 +153,5 @@ export async function retryBatch<T>(
   operations: (() => Promise<T>)[],
   options: RetryOptions = {}
 ): Promise<T[]> {
-  return Promise.all(operations.map(op => retry(op, options)));
+  return Promise.all(operations.map((op) => retry(op, options)));
 }

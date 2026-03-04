@@ -22,8 +22,8 @@ import {
  * Circuit breaker states
  */
 export enum CircuitState {
-  CLOSED = 'closed',     // Normal operation
-  OPEN = 'open',         // Circuit is open, blocking requests
+  CLOSED = 'closed', // Normal operation
+  OPEN = 'open', // Circuit is open, blocking requests
   HALF_OPEN = 'half_open', // Testing if service recovered
 }
 
@@ -31,12 +31,12 @@ export enum CircuitState {
  * Recovery strategy types
  */
 export enum RecoveryStrategy {
-  RETRY = 'retry',                      // Retry with exponential backoff
-  WAIT_AND_RETRY = 'wait_and_retry',    // Wait specified time then retry
+  RETRY = 'retry', // Retry with exponential backoff
+  WAIT_AND_RETRY = 'wait_and_retry', // Wait specified time then retry
   REFRESH_AND_RETRY = 'refresh_and_retry', // Refresh credentials then retry
   RESOLVE_AND_RETRY = 'resolve_and_retry', // Resolve conflict then retry
-  SKIP = 'skip',                        // Skip operation
-  FAIL = 'fail',                        // Fail immediately
+  SKIP = 'skip', // Skip operation
+  FAIL = 'fail', // Fail immediately
 }
 
 /**
@@ -55,9 +55,9 @@ export interface RecoveryResult<T> {
  * Circuit breaker options
  */
 export interface CircuitBreakerOptions {
-  failureThreshold: number;  // Number of failures before opening circuit
-  successThreshold: number;  // Number of successes to close circuit
-  timeout: number;           // Time in ms to wait before attempting half-open
+  failureThreshold: number; // Number of failures before opening circuit
+  successThreshold: number; // Number of successes to close circuit
+  timeout: number; // Time in ms to wait before attempting half-open
 }
 
 /**

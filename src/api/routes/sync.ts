@@ -185,7 +185,10 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   /**
    * GET /api/v1/sync/history/:syncId - Sync details
    */
-  fastify.get<{ Params: GetSyncDetailsParams; Reply: { sync: SyncDetailsResponse } | { error: unknown } }>(
+  fastify.get<{
+    Params: GetSyncDetailsParams;
+    Reply: { sync: SyncDetailsResponse } | { error: unknown };
+  }>(
     '/history/:syncId',
     {
       schema: getSyncDetailsSchema,
@@ -329,7 +332,11 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   /**
    * PATCH /api/v1/sync/schedule/:id - Update schedule
    */
-  fastify.patch<{ Params: UpdateScheduleParams; Body: UpdateScheduleRequest; Reply: { schedule: ScheduleResponse } }>(
+  fastify.patch<{
+    Params: UpdateScheduleParams;
+    Body: UpdateScheduleRequest;
+    Reply: { schedule: ScheduleResponse };
+  }>(
     '/schedule/:id',
     {
       schema: updateScheduleSchema,

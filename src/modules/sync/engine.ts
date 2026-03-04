@@ -115,7 +115,9 @@ export class SyncEngine {
 
       try {
         // Fetch playlist items from YouTube
-        const { items: ytItems, quotaCost } = await this.fetchPlaylistItems(playlist.youtube_playlist_id);
+        const { items: ytItems, quotaCost } = await this.fetchPlaylistItems(
+          playlist.youtube_playlist_id
+        );
         quotaUsed += quotaCost;
 
         // Fetch video details
@@ -353,9 +355,7 @@ export class SyncEngine {
       currentItems.map((item) => [item.youtube_videos.youtube_video_id, item])
     );
 
-    const ytMap = new Map(
-      ytItems.map((item: any) => [item.snippet?.resourceId?.videoId, item])
-    );
+    const ytMap = new Map(ytItems.map((item: any) => [item.snippet?.resourceId?.videoId, item]));
 
     // Find added items (in YouTube but not in DB)
     const added = ytItems.filter(
@@ -363,9 +363,7 @@ export class SyncEngine {
     );
 
     // Find removed items (in DB but not in YouTube)
-    const removed = currentItems.filter(
-      (item) => !ytMap.has(item.youtube_videos.youtube_video_id)
-    );
+    const removed = currentItems.filter((item) => !ytMap.has(item.youtube_videos.youtube_video_id));
 
     // Find reordered items
     const reordered: Array<{ item: any; newPosition: number }> = [];

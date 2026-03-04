@@ -115,16 +115,14 @@ export class AnalyticsTracker {
       // Calculate metrics
       const totalWatchTime = sessions.reduce((sum, s) => sum + s.duration, 0);
       const maxPosition = Math.max(...sessions.map((s) => s.end_pos));
-      const completionPercentage = videoDuration > 0
-        ? Math.min(100, (maxPosition / videoDuration) * 100)
-        : 0;
+      const completionPercentage =
+        videoDuration > 0 ? Math.min(100, (maxPosition / videoDuration) * 100) : 0;
       const averageSessionDuration = totalWatchTime / sessions.length;
 
       // Count rewatches (sessions after reaching 80% completion)
       const completionThreshold = videoDuration * 0.8;
       const firstCompleteIndex = sessions.findIndex((s) => s.end_pos >= completionThreshold);
-      const rewatchCount =
-        firstCompleteIndex >= 0 ? sessions.length - firstCompleteIndex - 1 : 0;
+      const rewatchCount = firstCompleteIndex >= 0 ? sessions.length - firstCompleteIndex - 1 : 0;
 
       return {
         videoId,
@@ -438,7 +436,7 @@ export class AnalyticsTracker {
       // Current streak starts from today or yesterday
       if (dates[0] === today || dates[0] === yesterdayStr) {
         currentStreak = 1;
-        let currentDate = new Date(dates[0]!);
+        let currentDate = new Date(dates[0]);
 
         for (let i = 1; i < dates.length; i++) {
           const prevDate = new Date(currentDate);

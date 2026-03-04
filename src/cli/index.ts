@@ -63,7 +63,10 @@ program
       console.log(`   Items: ${playlist.item_count}`);
       console.log('\nRun "yt-sync sync" to synchronize the playlist items.');
     } catch (error) {
-      console.error('❌ Failed to import playlist:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to import playlist:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -150,11 +153,16 @@ program
         console.log(`   Channel: ${playlist.channel_title}`);
         console.log(`   Items: ${playlist.item_count}`);
         console.log(`   Status: ${playlist.sync_status}`);
-        console.log(`   Last Sync: ${playlist.last_synced_at ? playlist.last_synced_at.toISOString() : 'Never'}`);
+        console.log(
+          `   Last Sync: ${playlist.last_synced_at ? playlist.last_synced_at.toISOString() : 'Never'}`
+        );
         console.log('');
       }
     } catch (error) {
-      console.error('❌ Failed to list playlists:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to list playlists:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -179,13 +187,17 @@ program
       console.log(`   Description: ${playlist.description ?? 'N/A'}`);
       console.log(`   Items: ${playlist.item_count}`);
       console.log(`   Status: ${playlist.sync_status}`);
-      console.log(`   Last Sync: ${playlist.last_synced_at ? playlist.last_synced_at.toISOString() : 'Never'}`);
+      console.log(
+        `   Last Sync: ${playlist.last_synced_at ? playlist.last_synced_at.toISOString() : 'Never'}`
+      );
 
       console.log('\n📊 Sync Statistics:\n');
       console.log(`   Total Syncs: ${stats.totalSyncs}`);
       console.log(`   Successful: ${stats.successfulSyncs}`);
       console.log(`   Failed: ${stats.failedSyncs}`);
-      console.log(`   Average Duration: ${stats.averageDuration ? `${stats.averageDuration.toFixed(0)}ms` : 'N/A'}`);
+      console.log(
+        `   Average Duration: ${stats.averageDuration ? `${stats.averageDuration.toFixed(0)}ms` : 'N/A'}`
+      );
 
       console.log(`\n📹 Videos (${playlist.youtube_playlist_items.length}):\n`);
       for (const item of playlist.youtube_playlist_items.slice(0, 10)) {
@@ -196,7 +208,10 @@ program
         console.log(`   ... and ${playlist.youtube_playlist_items.length - 10} more`);
       }
     } catch (error) {
-      console.error('❌ Failed to get playlist info:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to get playlist info:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -214,7 +229,7 @@ program
       const today = await quotaManager.getTodayUsage();
       const stats = await quotaManager.getUsageStats(parseInt(options.days ?? '7', 10));
 
-      console.log('\n📊 Today\'s Quota Usage:\n');
+      console.log("\n📊 Today's Quota Usage:\n");
       console.log(`   Used: ${today.used} / ${today.limit}`);
       console.log(`   Remaining: ${today.remaining}`);
       console.log(`   Percent: ${((today.used / today.limit) * 100).toFixed(2)}%`);
@@ -225,10 +240,15 @@ program
 
       console.log(`\n📈 Usage History (${stats.length} days):\n`);
       for (const stat of stats) {
-        console.log(`   ${stat.date.toISOString().split('T')[0]}: ${stat.used}/${stat.limit} (${stat.percentUsed.toFixed(1)}%)`);
+        console.log(
+          `   ${stat.date.toISOString().split('T')[0]}: ${stat.used}/${stat.limit} (${stat.percentUsed.toFixed(1)}%)`
+        );
       }
     } catch (error) {
-      console.error('❌ Failed to get quota usage:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to get quota usage:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -245,29 +265,38 @@ program
   .argument('<interval>', 'Sync interval (e.g., 1h, 30m, 1d)')
   .option('--disabled', 'Create schedule in disabled state')
   .option('--max-retries <n>', 'Maximum retry attempts', '3')
-  .action(async (playlistId: string, interval: string, options: { disabled?: boolean; maxRetries?: string }) => {
-    try {
-      const schedulerManager = getSchedulerManager();
-      const intervalMs = parseInterval(interval);
+  .action(
+    async (
+      playlistId: string,
+      interval: string,
+      options: { disabled?: boolean; maxRetries?: string }
+    ) => {
+      try {
+        const schedulerManager = getSchedulerManager();
+        const intervalMs = parseInterval(interval);
 
-      const schedule = await schedulerManager.createSchedule({
-        playlistId,
-        interval: intervalMs,
-        enabled: !options.disabled,
-        maxRetries: parseInt(options.maxRetries ?? '3', 10),
-      });
+        const schedule = await schedulerManager.createSchedule({
+          playlistId,
+          interval: intervalMs,
+          enabled: !options.disabled,
+          maxRetries: parseInt(options.maxRetries ?? '3', 10),
+        });
 
-      console.log('✅ Schedule created successfully');
-      console.log(`   Playlist ID: ${schedule.playlistId}`);
-      console.log(`   Interval: ${formatInterval(schedule.interval)}`);
-      console.log(`   Enabled: ${schedule.enabled ? 'Yes' : 'No'}`);
-      console.log(`   Next Run: ${schedule.nextRun.toISOString()}`);
-      console.log(`   Max Retries: ${schedule.maxRetries}`);
-    } catch (error) {
-      console.error('❌ Failed to create schedule:', error instanceof Error ? error.message : String(error));
-      process.exit(1);
+        console.log('✅ Schedule created successfully');
+        console.log(`   Playlist ID: ${schedule.playlistId}`);
+        console.log(`   Interval: ${formatInterval(schedule.interval)}`);
+        console.log(`   Enabled: ${schedule.enabled ? 'Yes' : 'No'}`);
+        console.log(`   Next Run: ${schedule.nextRun.toISOString()}`);
+        console.log(`   Max Retries: ${schedule.maxRetries}`);
+      } catch (error) {
+        console.error(
+          '❌ Failed to create schedule:',
+          error instanceof Error ? error.message : String(error)
+        );
+        process.exit(1);
+      }
     }
-  });
+  );
 
 // Schedule list
 program
@@ -281,7 +310,9 @@ program
 
       if (schedules.length === 0) {
         console.log('No schedules found.');
-        console.log('\nUse "yt-sync schedule-create <playlist-id> <interval>" to create a schedule.');
+        console.log(
+          '\nUse "yt-sync schedule-create <playlist-id> <interval>" to create a schedule.'
+        );
         return;
       }
 
@@ -297,7 +328,10 @@ program
         console.log('');
       }
     } catch (error) {
-      console.error('❌ Failed to list schedules:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to list schedules:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -329,7 +363,10 @@ program
       console.log(`   Next Run: ${schedule.nextRun.toISOString()}`);
       console.log(`   Max Retries: ${schedule.maxRetries}`);
     } catch (error) {
-      console.error('❌ Failed to update schedule:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to update schedule:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -346,7 +383,10 @@ program
 
       console.log('✅ Schedule deleted successfully');
     } catch (error) {
-      console.error('❌ Failed to delete schedule:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to delete schedule:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -363,7 +403,10 @@ program
 
       console.log('✅ Schedule enabled');
     } catch (error) {
-      console.error('❌ Failed to enable schedule:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to enable schedule:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -380,7 +423,10 @@ program
 
       console.log('✅ Schedule disabled');
     } catch (error) {
-      console.error('❌ Failed to disable schedule:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to disable schedule:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -400,7 +446,10 @@ program
       // Keep process alive
       await new Promise(() => {});
     } catch (error) {
-      console.error('❌ Failed to start scheduler:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to start scheduler:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -425,7 +474,10 @@ program
         console.log(`   Newest: ${(stats.newestFile.age / (1000 * 60 * 60)).toFixed(1)} hours ago`);
       }
     } catch (error) {
-      console.error('❌ Failed to get cache stats:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to get cache stats:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -442,7 +494,10 @@ program
 
       console.log('✅ Cache cleared successfully');
     } catch (error) {
-      console.error('❌ Failed to clear cache:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to clear cache:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -464,7 +519,9 @@ program
         console.error('\nPlease set the following environment variables:');
         console.error('  - YOUTUBE_CLIENT_ID');
         console.error('  - YOUTUBE_CLIENT_SECRET');
-        console.error('  - YOUTUBE_REDIRECT_URI (optional, default: http://localhost:3000/oauth2callback)\n');
+        console.error(
+          '  - YOUTUBE_REDIRECT_URI (optional, default: http://localhost:3000/oauth2callback)\n'
+        );
         process.exit(1);
       }
 
@@ -478,7 +535,10 @@ program
       console.log('3. Copy the authorization code from the redirect URL');
       console.log('4. Run: yt-sync auth-callback <code>\n');
     } catch (error) {
-      console.error('❌ Failed to generate auth URL:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to generate auth URL:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -515,7 +575,10 @@ program
       console.log('   - yt-sync import <playlist-url>');
       console.log('   - yt-sync sync --all\n');
     } catch (error) {
-      console.error('❌ Authentication failed:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Authentication failed:',
+        error instanceof Error ? error.message : String(error)
+      );
       console.error('\nPossible issues:');
       console.error('  - Invalid authorization code');
       console.error('  - Code expired (codes are valid for 10 minutes)');
@@ -569,7 +632,10 @@ program
 
       console.log('═══════════════════════════════════════════\n');
     } catch (error) {
-      console.error('❌ Failed to check auth status:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Failed to check auth status:',
+        error instanceof Error ? error.message : String(error)
+      );
       process.exit(1);
     }
   });
@@ -710,7 +776,7 @@ program
 
         if (result.summary.timestamps && result.summary.timestamps.length > 0) {
           console.log('\n⏱️  Key Timestamps:');
-          result.summary.timestamps.forEach(ts => {
+          result.summary.timestamps.forEach((ts) => {
             const minutes = Math.floor(ts.time / 60);
             const seconds = ts.time % 60;
             console.log(`   ${minutes}:${seconds.toString().padStart(2, '0')} - ${ts.description}`);
@@ -745,7 +811,7 @@ program
         language: options.language,
       });
 
-      const successCount = results.filter(r => r.success).length;
+      const successCount = results.filter((r) => r.success).length;
       const failedCount = results.length - successCount;
 
       console.log('\n📊 Summary Generation Results:');
@@ -756,8 +822,8 @@ program
       if (failedCount > 0) {
         console.log('\n❌ Failed videos:');
         results
-          .filter(r => !r.success)
-          .forEach(r => {
+          .filter((r) => !r.success)
+          .forEach((r) => {
             console.log(`   - ${r.videoId}: ${r.error}`);
           });
       }
@@ -777,36 +843,38 @@ program
   .argument('<timestamp>', 'Timestamp in seconds (e.g., 120 for 2:00)')
   .argument('<content>', 'Note content (Markdown supported)')
   .option('-t, --tags <tags>', 'Comma-separated tags (e.g., "important,review")')
-  .action(async (videoId: string, timestamp: string, content: string, options: { tags?: string }) => {
-    try {
-      console.log(`📝 Adding note to video ${videoId} at ${timestamp}s...`);
+  .action(
+    async (videoId: string, timestamp: string, content: string, options: { tags?: string }) => {
+      try {
+        console.log(`📝 Adding note to video ${videoId} at ${timestamp}s...`);
 
-      const noteManager = getNoteManager();
-      const tags = options.tags ? options.tags.split(',').map(t => t.trim()) : undefined;
+        const noteManager = getNoteManager();
+        const tags = options.tags ? options.tags.split(',').map((t) => t.trim()) : undefined;
 
-      const result = await noteManager.createNote({
-        videoId,
-        timestamp: parseInt(timestamp, 10),
-        content,
-        tags,
-      });
+        const result = await noteManager.createNote({
+          videoId,
+          timestamp: parseInt(timestamp, 10),
+          content,
+          tags,
+        });
 
-      if (result.success && result.note) {
-        console.log('\n✅ Note added successfully');
-        console.log(`   ID: ${result.note.id}`);
-        console.log(`   Timestamp: ${formatTimestamp(result.note.timestamp)}`);
-        if (result.note.tags.length > 0) {
-          console.log(`   Tags: ${result.note.tags.join(', ')}`);
+        if (result.success && result.note) {
+          console.log('\n✅ Note added successfully');
+          console.log(`   ID: ${result.note.id}`);
+          console.log(`   Timestamp: ${formatTimestamp(result.note.timestamp)}`);
+          if (result.note.tags.length > 0) {
+            console.log(`   Tags: ${result.note.tags.join(', ')}`);
+          }
+        } else {
+          console.error(`\n❌ Failed to add note: ${result.error}`);
+          process.exit(1);
         }
-      } else {
-        console.error(`\n❌ Failed to add note: ${result.error}`);
+      } catch (error) {
+        console.error('❌ Error:', error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
-    } catch (error) {
-      console.error('❌ Error:', error instanceof Error ? error.message : String(error));
-      process.exit(1);
     }
-  });
+  );
 
 /**
  * Note list command
@@ -819,55 +887,57 @@ program
   .option('-s, --search <text>', 'Search in note content')
   .option('--from <seconds>', 'Start timestamp filter')
   .option('--to <seconds>', 'End timestamp filter')
-  .action(async (options: {
-    video?: string;
-    tags?: string;
-    search?: string;
-    from?: string;
-    to?: string;
-  }) => {
-    try {
-      const noteManager = getNoteManager();
+  .action(
+    async (options: {
+      video?: string;
+      tags?: string;
+      search?: string;
+      from?: string;
+      to?: string;
+    }) => {
+      try {
+        const noteManager = getNoteManager();
 
-      const filters: any = {};
-      if (options.video) filters.videoId = options.video;
-      if (options.tags) filters.tags = options.tags.split(',').map(t => t.trim());
-      if (options.search) filters.contentSearch = options.search;
-      if (options.from || options.to) {
-        filters.timestampRange = {
-          start: options.from ? parseInt(options.from, 10) : 0,
-          end: options.to ? parseInt(options.to, 10) : Number.MAX_SAFE_INTEGER,
-        };
-      }
-
-      const notes = await noteManager.searchNotes(filters);
-
-      if (notes.length === 0) {
-        console.log('\n📭 No notes found matching the criteria');
-        return;
-      }
-
-      console.log(`\n📝 Found ${notes.length} note(s):\n`);
-
-      for (const note of notes) {
-        console.log(`┌─ ID: ${note.id}`);
-        console.log(`│  Video: ${note.videoId}`);
-        console.log(`│  Time: ${formatTimestamp(note.timestamp)}`);
-        if (note.tags.length > 0) {
-          console.log(`│  Tags: ${note.tags.join(', ')}`);
+        const filters: any = {};
+        if (options.video) filters.videoId = options.video;
+        if (options.tags) filters.tags = options.tags.split(',').map((t) => t.trim());
+        if (options.search) filters.contentSearch = options.search;
+        if (options.from || options.to) {
+          filters.timestampRange = {
+            start: options.from ? parseInt(options.from, 10) : 0,
+            end: options.to ? parseInt(options.to, 10) : Number.MAX_SAFE_INTEGER,
+          };
         }
-        console.log(`│  Content:`);
-        const contentLines = note.content.split('\n');
-        contentLines.forEach(line => {
-          console.log(`│    ${line}`);
-        });
-        console.log(`└─ Updated: ${note.updatedAt.toISOString()}\n`);
+
+        const notes = await noteManager.searchNotes(filters);
+
+        if (notes.length === 0) {
+          console.log('\n📭 No notes found matching the criteria');
+          return;
+        }
+
+        console.log(`\n📝 Found ${notes.length} note(s):\n`);
+
+        for (const note of notes) {
+          console.log(`┌─ ID: ${note.id}`);
+          console.log(`│  Video: ${note.videoId}`);
+          console.log(`│  Time: ${formatTimestamp(note.timestamp)}`);
+          if (note.tags.length > 0) {
+            console.log(`│  Tags: ${note.tags.join(', ')}`);
+          }
+          console.log(`│  Content:`);
+          const contentLines = note.content.split('\n');
+          contentLines.forEach((line) => {
+            console.log(`│    ${line}`);
+          });
+          console.log(`└─ Updated: ${note.updatedAt.toISOString()}\n`);
+        }
+      } catch (error) {
+        console.error('❌ Error:', error instanceof Error ? error.message : String(error));
+        process.exit(1);
       }
-    } catch (error) {
-      console.error('❌ Error:', error instanceof Error ? error.message : String(error));
-      process.exit(1);
     }
-  });
+  );
 
 /**
  * Note update command
@@ -879,39 +949,44 @@ program
   .option('-c, --content <text>', 'New content')
   .option('-t, --tags <tags>', 'New tags (comma-separated)')
   .option('--timestamp <seconds>', 'New timestamp')
-  .action(async (noteId: string, options: {
-    content?: string;
-    tags?: string;
-    timestamp?: string;
-  }) => {
-    try {
-      console.log(`✏️  Updating note ${noteId}...`);
+  .action(
+    async (
+      noteId: string,
+      options: {
+        content?: string;
+        tags?: string;
+        timestamp?: string;
+      }
+    ) => {
+      try {
+        console.log(`✏️  Updating note ${noteId}...`);
 
-      const noteManager = getNoteManager();
+        const noteManager = getNoteManager();
 
-      const updates: any = {};
-      if (options.content) updates.content = options.content;
-      if (options.tags) updates.tags = options.tags.split(',').map(t => t.trim());
-      if (options.timestamp) updates.timestamp = parseInt(options.timestamp, 10);
+        const updates: any = {};
+        if (options.content) updates.content = options.content;
+        if (options.tags) updates.tags = options.tags.split(',').map((t) => t.trim());
+        if (options.timestamp) updates.timestamp = parseInt(options.timestamp, 10);
 
-      const result = await noteManager.updateNote(noteId, updates);
+        const result = await noteManager.updateNote(noteId, updates);
 
-      if (result.success && result.note) {
-        console.log('\n✅ Note updated successfully');
-        console.log(`   ID: ${result.note.id}`);
-        console.log(`   Timestamp: ${formatTimestamp(result.note.timestamp)}`);
-        if (result.note.tags.length > 0) {
-          console.log(`   Tags: ${result.note.tags.join(', ')}`);
+        if (result.success && result.note) {
+          console.log('\n✅ Note updated successfully');
+          console.log(`   ID: ${result.note.id}`);
+          console.log(`   Timestamp: ${formatTimestamp(result.note.timestamp)}`);
+          if (result.note.tags.length > 0) {
+            console.log(`   Tags: ${result.note.tags.join(', ')}`);
+          }
+        } else {
+          console.error(`\n❌ Failed to update note: ${result.error}`);
+          process.exit(1);
         }
-      } else {
-        console.error(`\n❌ Failed to update note: ${result.error}`);
+      } catch (error) {
+        console.error('❌ Error:', error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
-    } catch (error) {
-      console.error('❌ Error:', error instanceof Error ? error.message : String(error));
-      process.exit(1);
     }
-  });
+  );
 
 /**
  * Note delete command
@@ -946,42 +1021,51 @@ program
   .command('note-export')
   .description('Export notes to a file')
   .argument('<output-path>', 'Output file path')
-  .option('-f, --format <format>', 'Export format: markdown, json, csv (default: markdown)', 'markdown')
+  .option(
+    '-f, --format <format>',
+    'Export format: markdown, json, csv (default: markdown)',
+    'markdown'
+  )
   .option('-v, --video <video-id>', 'Filter by video ID')
   .option('-t, --tags <tags>', 'Filter by tags (comma-separated)')
-  .action(async (outputPath: string, options: {
-    format: string;
-    video?: string;
-    tags?: string;
-  }) => {
-    try {
-      console.log(`📤 Exporting notes to ${outputPath}...`);
+  .action(
+    async (
+      outputPath: string,
+      options: {
+        format: string;
+        video?: string;
+        tags?: string;
+      }
+    ) => {
+      try {
+        console.log(`📤 Exporting notes to ${outputPath}...`);
 
-      const noteManager = getNoteManager();
+        const noteManager = getNoteManager();
 
-      const filters: any = {};
-      if (options.video) filters.videoId = options.video;
-      if (options.tags) filters.tags = options.tags.split(',').map(t => t.trim());
+        const filters: any = {};
+        if (options.video) filters.videoId = options.video;
+        if (options.tags) filters.tags = options.tags.split(',').map((t) => t.trim());
 
-      const result = await noteManager.exportNotes(
-        filters,
-        options.format as 'markdown' | 'json' | 'csv',
-        outputPath
-      );
+        const result = await noteManager.exportNotes(
+          filters,
+          options.format as 'markdown' | 'json' | 'csv',
+          outputPath
+        );
 
-      if (result.success) {
-        console.log('\n✅ Notes exported successfully');
-        console.log(`   Format: ${result.format}`);
-        console.log(`   File: ${result.filepath}`);
-      } else {
-        console.error(`\n❌ Failed to export notes: ${result.error}`);
+        if (result.success) {
+          console.log('\n✅ Notes exported successfully');
+          console.log(`   Format: ${result.format}`);
+          console.log(`   File: ${result.filepath}`);
+        } else {
+          console.error(`\n❌ Failed to export notes: ${result.error}`);
+          process.exit(1);
+        }
+      } catch (error) {
+        console.error('❌ Error:', error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
-    } catch (error) {
-      console.error('❌ Error:', error instanceof Error ? error.message : String(error));
-      process.exit(1);
     }
-  });
+  );
 
 /**
  * Session record command
@@ -994,44 +1078,53 @@ program
   .argument('<end-pos>', 'End position in seconds')
   .option('--start-time <iso>', 'Start time (ISO 8601 format)')
   .option('--end-time <iso>', 'End time (ISO 8601 format)')
-  .action(async (videoId: string, startPos: string, endPos: string, options: {
-    startTime?: string;
-    endTime?: string;
-  }) => {
-    try {
-      console.log(`📊 Recording watch session for video ${videoId}...`);
-
-      const tracker = getAnalyticsTracker();
-
-      const sessionData: any = {
-        videoId,
-        startPos: parseInt(startPos, 10),
-        endPos: parseInt(endPos, 10),
-      };
-
-      if (options.startTime) {
-        sessionData.startedAt = new Date(options.startTime);
+  .action(
+    async (
+      videoId: string,
+      startPos: string,
+      endPos: string,
+      options: {
+        startTime?: string;
+        endTime?: string;
       }
-      if (options.endTime) {
-        sessionData.endedAt = new Date(options.endTime);
-      }
+    ) => {
+      try {
+        console.log(`📊 Recording watch session for video ${videoId}...`);
 
-      const result = await tracker.recordSession(sessionData);
+        const tracker = getAnalyticsTracker();
 
-      if (result.success && result.session) {
-        console.log('\n✅ Watch session recorded');
-        console.log(`   Session ID: ${result.session.id}`);
-        console.log(`   Duration: ${formatDuration(result.session.duration)}`);
-        console.log(`   Position: ${formatTimestamp(result.session.startPos)} → ${formatTimestamp(result.session.endPos)}`);
-      } else {
-        console.error(`\n❌ Failed to record session: ${result.error}`);
+        const sessionData: any = {
+          videoId,
+          startPos: parseInt(startPos, 10),
+          endPos: parseInt(endPos, 10),
+        };
+
+        if (options.startTime) {
+          sessionData.startedAt = new Date(options.startTime);
+        }
+        if (options.endTime) {
+          sessionData.endedAt = new Date(options.endTime);
+        }
+
+        const result = await tracker.recordSession(sessionData);
+
+        if (result.success && result.session) {
+          console.log('\n✅ Watch session recorded');
+          console.log(`   Session ID: ${result.session.id}`);
+          console.log(`   Duration: ${formatDuration(result.session.duration)}`);
+          console.log(
+            `   Position: ${formatTimestamp(result.session.startPos)} → ${formatTimestamp(result.session.endPos)}`
+          );
+        } else {
+          console.error(`\n❌ Failed to record session: ${result.error}`);
+          process.exit(1);
+        }
+      } catch (error) {
+        console.error('❌ Error:', error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
-    } catch (error) {
-      console.error('❌ Error:', error instanceof Error ? error.message : String(error));
-      process.exit(1);
     }
-  });
+  );
 
 /**
  * Analytics video command
@@ -1097,7 +1190,9 @@ program
 
       console.log(`📚 ${analytics.playlistTitle}\n`);
       console.log(`📹 Total Videos: ${analytics.totalVideos}`);
-      console.log(`✅ Completed: ${analytics.completedVideos} (${Math.round((analytics.completedVideos / analytics.totalVideos) * 100)}%)`);
+      console.log(
+        `✅ Completed: ${analytics.completedVideos} (${Math.round((analytics.completedVideos / analytics.totalVideos) * 100)}%)`
+      );
       console.log(`⏳ In Progress: ${analytics.watchedVideos - analytics.completedVideos}`);
       console.log(`📭 Not Started: ${analytics.totalVideos - analytics.watchedVideos}`);
       console.log(`👁️  Total Watch Time: ${formatDuration(analytics.totalWatchTime)}`);
@@ -1116,7 +1211,9 @@ program
 
         topVideos.forEach((video, i) => {
           console.log(`   ${i + 1}. ${video.videoTitle}`);
-          console.log(`      Watch Time: ${formatDuration(video.totalWatchTime)} | Completion: ${video.completionPercentage.toFixed(1)}%`);
+          console.log(
+            `      Watch Time: ${formatDuration(video.totalWatchTime)} | Completion: ${video.completionPercentage.toFixed(1)}%`
+          );
         });
       }
     } catch (error) {
@@ -1157,15 +1254,19 @@ program
       console.log(`   Current: ${dashboard.learningStreak.currentStreak} day(s)`);
       console.log(`   Longest: ${dashboard.learningStreak.longestStreak} day(s)`);
       if (dashboard.learningStreak.lastActiveDate) {
-        console.log(`   Last Active: ${dashboard.learningStreak.lastActiveDate.toLocaleDateString()}\n`);
+        console.log(
+          `   Last Active: ${dashboard.learningStreak.lastActiveDate.toLocaleDateString()}\n`
+        );
       }
 
       // Recent Activity
       if (dashboard.recentActivity.length > 0) {
         console.log('⏱️  Recent Activity:');
-        dashboard.recentActivity.slice(0, 5).forEach(activity => {
+        dashboard.recentActivity.slice(0, 5).forEach((activity) => {
           console.log(`   • ${activity.videoTitle}`);
-          console.log(`     ${activity.watchedAt.toLocaleDateString()} | ${formatDuration(activity.duration)} | ${activity.progress.toFixed(1)}% complete`);
+          console.log(
+            `     ${activity.watchedAt.toLocaleDateString()} | ${formatDuration(activity.duration)} | ${activity.progress.toFixed(1)}% complete`
+          );
         });
         console.log('');
       }
@@ -1175,7 +1276,9 @@ program
         console.log('🏆 Most Watched Videos:');
         dashboard.topVideos.slice(0, 5).forEach((video, i) => {
           console.log(`   ${i + 1}. ${video.videoTitle}`);
-          console.log(`      ${formatDuration(video.watchTime)} | ${video.sessionCount} session(s) | ${video.completionRate.toFixed(1)}% complete`);
+          console.log(
+            `      ${formatDuration(video.watchTime)} | ${video.sessionCount} session(s) | ${video.completionRate.toFixed(1)}% complete`
+          );
         });
       }
 
@@ -1220,9 +1323,13 @@ program
         );
 
         if (daysUntil > 0) {
-          console.log(`\n💡 Recommended Review: ${metrics.recommendedReviewDate.toLocaleDateString()} (in ${daysUntil} days)`);
+          console.log(
+            `\n💡 Recommended Review: ${metrics.recommendedReviewDate.toLocaleDateString()} (in ${daysUntil} days)`
+          );
         } else {
-          console.log(`\n⚠️  Review Recommended: ${metrics.recommendedReviewDate.toLocaleDateString()} (overdue by ${Math.abs(daysUntil)} days)`);
+          console.log(
+            `\n⚠️  Review Recommended: ${metrics.recommendedReviewDate.toLocaleDateString()} (overdue by ${Math.abs(daysUntil)} days)`
+          );
         }
       }
 
@@ -1283,10 +1390,12 @@ process.on('unhandledRejection', (error) => {
   process.exit(1);
 });
 
-process.on('SIGINT', async () => {
-  console.log('\n\nGracefully shutting down...');
-  await disconnectDatabase();
-  process.exit(0);
+process.on('SIGINT', () => {
+  void (async () => {
+    console.log('\n\nGracefully shutting down...');
+    await disconnectDatabase();
+    process.exit(0);
+  })();
 });
 
 // Register user authentication commands

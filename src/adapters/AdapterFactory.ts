@@ -77,9 +77,7 @@ export const createAdapter: IAdapterFactory = (
 
   if (!AdapterConstructor) {
     const supportedTypes = Array.from(adapterConstructors.keys()).join(', ');
-    throw new Error(
-      `Unsupported adapter type: ${sourceType}. Supported types: ${supportedTypes}`
-    );
+    throw new Error(`Unsupported adapter type: ${sourceType}. Supported types: ${supportedTypes}`);
   }
 
   const adapter = new AdapterConstructor();

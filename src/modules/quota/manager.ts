@@ -218,12 +218,7 @@ export class QuotaManager {
  * Quota operation type
  */
 export interface QuotaOperation {
-  type:
-    | 'playlist.details'
-    | 'playlist.items'
-    | 'video.details'
-    | 'search'
-    | 'channel.details';
+  type: 'playlist.details' | 'playlist.items' | 'video.details' | 'search' | 'channel.details';
   itemCount?: number;
 }
 

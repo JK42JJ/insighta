@@ -103,10 +103,7 @@ export abstract class BaseFileAdapter extends BaseAdapter {
     this.recursive = fileConfig.recursive ?? true;
 
     if (fileConfig.ignorePatterns) {
-      this.ignorePatterns = [
-        ...this.ignorePatterns,
-        ...fileConfig.ignorePatterns,
-      ];
+      this.ignorePatterns = [...this.ignorePatterns, ...fileConfig.ignorePatterns];
     }
 
     await super.onInitialize(config);
@@ -116,10 +113,7 @@ export abstract class BaseFileAdapter extends BaseAdapter {
   // Collection Operations (Directory = Collection)
   // ============================================================================
 
-  async fetchCollection(
-    collectionId: string,
-    _options?: FetchOptions
-  ): Promise<Collection> {
+  async fetchCollection(collectionId: string, _options?: FetchOptions): Promise<Collection> {
     this.ensureInitialized();
 
     const dirPath = this.resolvePath(collectionId);
@@ -127,10 +121,7 @@ export abstract class BaseFileAdapter extends BaseAdapter {
 
     const stats = await fs.stat(dirPath);
     if (!stats.isDirectory()) {
-      throw this.createError(
-        AdapterErrorCode.INVALID_INPUT,
-        `Path is not a directory: ${dirPath}`
-      );
+      throw this.createError(AdapterErrorCode.INVALID_INPUT, `Path is not a directory: ${dirPath}`);
     }
 
     const files = await this.scanDirectory(dirPath);
@@ -180,10 +171,7 @@ export abstract class BaseFileAdapter extends BaseAdapter {
   // Content Operations
   // ============================================================================
 
-  async fetchContentItem(
-    contentId: string,
-    _options?: FetchOptions
-  ): Promise<ContentItem> {
+  async fetchContentItem(contentId: string, _options?: FetchOptions): Promise<ContentItem> {
     this.ensureInitialized();
 
     const filePath = this.resolvePath(contentId);
@@ -191,10 +179,7 @@ export abstract class BaseFileAdapter extends BaseAdapter {
 
     const stats = await fs.stat(filePath);
     if (!stats.isFile()) {
-      throw this.createError(
-        AdapterErrorCode.INVALID_INPUT,
-        `Path is not a file: ${filePath}`
-      );
+      throw this.createError(AdapterErrorCode.INVALID_INPUT, `Path is not a file: ${filePath}`);
     }
 
     const content = await fs.readFile(filePath);
@@ -331,9 +316,7 @@ export abstract class BaseFileAdapter extends BaseAdapter {
    * Check if path should be ignored
    */
   protected shouldIgnore(name: string): boolean {
-    return this.ignorePatterns.some(
-      (pattern) => name === pattern || name.startsWith(pattern)
-    );
+    return this.ignorePatterns.some((pattern) => name === pattern || name.startsWith(pattern));
   }
 
   // ============================================================================
@@ -360,10 +343,7 @@ export abstract class BaseFileAdapter extends BaseAdapter {
     try {
       await fs.access(filePath);
     } catch {
-      throw this.createError(
-        AdapterErrorCode.NOT_FOUND,
-        `Path not found: ${filePath}`
-      );
+      throw this.createError(AdapterErrorCode.NOT_FOUND, `Path not found: ${filePath}`);
     }
   }
 

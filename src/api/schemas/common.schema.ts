@@ -171,14 +171,15 @@ export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 /**
  * Generic success response wrapper
  */
-export const successResponseSchema = <T extends Record<string, unknown>>(dataSchema: T) => ({
-  type: 'object',
-  properties: {
-    success: { type: 'boolean', default: true },
-    data: dataSchema,
-  },
-  required: ['success', 'data'],
-} as const);
+export const successResponseSchema = <T extends Record<string, unknown>>(dataSchema: T) =>
+  ({
+    type: 'object',
+    properties: {
+      success: { type: 'boolean', default: true },
+      data: dataSchema,
+    },
+    required: ['success', 'data'],
+  }) as const;
 
 // ============================================================================
 // Common Field Schemas
@@ -280,12 +281,7 @@ export type SearchQuery = z.infer<typeof SearchQuerySchema>;
 /**
  * Create a paginated response
  */
-export function createPaginatedResponse<T>(
-  items: T[],
-  page: number,
-  limit: number,
-  total: number
-) {
+export function createPaginatedResponse<T>(items: T[], page: number, limit: number, total: number) {
   const totalPages = Math.ceil(total / limit);
 
   return {

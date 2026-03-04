@@ -49,7 +49,11 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   /**
    * GET /api/v1/videos/:id/notes - List notes for video
    */
-  fastify.get<{ Params: GetVideoNotesParams; Querystring: GetVideoNotesQuery; Reply: ListNotesResponse }>(
+  fastify.get<{
+    Params: GetVideoNotesParams;
+    Querystring: GetVideoNotesQuery;
+    Reply: ListNotesResponse;
+  }>(
     '/videos/:id/notes',
     {
       schema: listVideoNotesSchema,
@@ -65,7 +69,11 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const validatedQuery = GetVideoNotesQuerySchema.parse(request.query);
       const { id } = validatedParams;
 
-      logger.info('Listing notes for video', { videoId: id, userId: request.user.userId, query: validatedQuery });
+      logger.info('Listing notes for video', {
+        videoId: id,
+        userId: request.user.userId,
+        query: validatedQuery,
+      });
 
       // Get video to get YouTube ID
       const video = await getVideo().getVideo(id);
@@ -79,7 +87,10 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         filters.tags = validatedQuery.tags;
       }
 
-      if (validatedQuery.timestampStart !== undefined || validatedQuery.timestampEnd !== undefined) {
+      if (
+        validatedQuery.timestampStart !== undefined ||
+        validatedQuery.timestampEnd !== undefined
+      ) {
         filters.timestampRange = {
           start: validatedQuery.timestampStart ?? 0,
           end: validatedQuery.timestampEnd ?? Number.MAX_SAFE_INTEGER,
@@ -111,7 +122,11 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   /**
    * POST /api/v1/videos/:id/notes - Create note
    */
-  fastify.post<{ Params: GetVideoNotesParams; Body: CreateNoteRequest; Reply: { note: NoteResponse } }>(
+  fastify.post<{
+    Params: GetVideoNotesParams;
+    Body: CreateNoteRequest;
+    Reply: { note: NoteResponse };
+  }>(
     '/videos/:id/notes',
     {
       schema: createNoteSchema,
@@ -188,7 +203,11 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const note = await getNote().getNote(noteId);
 
       if (!note) {
-        const error = createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'Note not found', request.url);
+        const error = createErrorResponse(
+          ErrorCode.RESOURCE_NOT_FOUND,
+          'Note not found',
+          request.url
+        );
         return reply.code(404).send(error as any);
       }
 

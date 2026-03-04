@@ -19,9 +19,7 @@ import { getPlaylistManager } from '../../modules/playlist/manager';
  * Register scheduler commands with commander program
  */
 export function registerSchedulerCommands(program: Command): void {
-  const schedulerCmd = program
-    .command('scheduler')
-    .description('Manage auto-sync scheduler');
+  const schedulerCmd = program.command('scheduler').description('Manage auto-sync scheduler');
 
   /**
    * Start scheduler daemon
@@ -62,22 +60,29 @@ export function registerSchedulerCommands(program: Command): void {
 
         // Keep process alive
         await new Promise<void>((resolve) => {
-          process.on('SIGINT', async () => {
-            console.log('\n\n⏹️  Stopping scheduler...');
-            await scheduler.stop();
-            console.log('✅ Scheduler stopped');
-            resolve();
+          process.on('SIGINT', () => {
+            void (async () => {
+              console.log('\n\n⏹️  Stopping scheduler...');
+              await scheduler.stop();
+              console.log('✅ Scheduler stopped');
+              resolve();
+            })();
           });
 
-          process.on('SIGTERM', async () => {
-            console.log('\n\n⏹️  Stopping scheduler...');
-            await scheduler.stop();
-            console.log('✅ Scheduler stopped');
-            resolve();
+          process.on('SIGTERM', () => {
+            void (async () => {
+              console.log('\n\n⏹️  Stopping scheduler...');
+              await scheduler.stop();
+              console.log('✅ Scheduler stopped');
+              resolve();
+            })();
           });
         });
       } catch (error) {
-        console.error('❌ Failed to start scheduler:', error instanceof Error ? error.message : String(error));
+        console.error(
+          '❌ Failed to start scheduler:',
+          error instanceof Error ? error.message : String(error)
+        );
         process.exit(1);
       }
     });
@@ -104,7 +109,10 @@ export function registerSchedulerCommands(program: Command): void {
 
         console.log('✅ Scheduler stopped successfully');
       } catch (error) {
-        console.error('❌ Failed to stop scheduler:', error instanceof Error ? error.message : String(error));
+        console.error(
+          '❌ Failed to stop scheduler:',
+          error instanceof Error ? error.message : String(error)
+        );
         process.exit(1);
       }
     });
@@ -159,7 +167,9 @@ export function registerSchedulerCommands(program: Command): void {
             const statusIcon = schedule.enabled ? '✅' : '⏸️';
             console.log(`${statusIcon} ${schedule.playlistId}`);
             console.log(`   Interval: ${formatInterval(schedule.interval)}`);
-            console.log(`   Last run: ${schedule.lastRun ? schedule.lastRun.toLocaleString() : 'Never'}`);
+            console.log(
+              `   Last run: ${schedule.lastRun ? schedule.lastRun.toLocaleString() : 'Never'}`
+            );
             console.log(`   Next run: ${schedule.nextRun.toLocaleString()}`);
             console.log(`   Retries: ${schedule.retryCount}/${schedule.maxRetries}`);
             console.log('');
@@ -172,7 +182,10 @@ export function registerSchedulerCommands(program: Command): void {
 
         console.log('═══════════════════════════════════════════\n');
       } catch (error) {
-        console.error('❌ Failed to get scheduler status:', error instanceof Error ? error.message : String(error));
+        console.error(
+          '❌ Failed to get scheduler status:',
+          error instanceof Error ? error.message : String(error)
+        );
         process.exit(1);
       }
     });
@@ -187,55 +200,67 @@ export function registerSchedulerCommands(program: Command): void {
     .argument('<cron-expression>', 'Cron expression (e.g., "0 */6 * * *" for every 6 hours)')
     .option('--disabled', 'Create schedule in disabled state')
     .option('--max-retries <n>', 'Maximum retry attempts on failure', '3')
-    .action(async (playlistId: string, cronExpression: string, options: { disabled?: boolean; maxRetries?: string }) => {
-      try {
-        console.log(`➕ Adding playlist to auto-sync schedule...\n`);
-
-        // Validate playlist exists
-        const playlistManager = getPlaylistManager();
-        let playlist;
-
+    .action(
+      async (
+        playlistId: string,
+        cronExpression: string,
+        options: { disabled?: boolean; maxRetries?: string }
+      ) => {
         try {
-          playlist = await playlistManager.getPlaylist(playlistId);
-        } catch {
-          // Try as YouTube ID
-          const { playlists } = await playlistManager.listPlaylists({ filter: playlistId });
+          console.log(`➕ Adding playlist to auto-sync schedule...\n`);
 
-          if (playlists.length === 0) {
-            throw new Error(`Playlist not found: ${playlistId}`);
+          // Validate playlist exists
+          const playlistManager = getPlaylistManager();
+          let playlist;
+
+          try {
+            playlist = await playlistManager.getPlaylist(playlistId);
+          } catch {
+            // Try as YouTube ID
+            const { playlists } = await playlistManager.listPlaylists({ filter: playlistId });
+
+            if (playlists.length === 0) {
+              throw new Error(`Playlist not found: ${playlistId}`);
+            }
+
+            // playlists.length > 0 is guaranteed by the check above
+            const foundPlaylist = playlists[0];
+            if (!foundPlaylist) throw new Error(`Playlist not found: ${playlistId}`);
+            playlist = foundPlaylist;
+            playlistId = playlist.id;
           }
 
-          playlist = playlists[0];
-          playlistId = playlist!.id;
+          // Add to schedule
+          const scheduler = getAutoSyncScheduler();
+          const schedule = await scheduler.addPlaylist(
+            playlistId,
+            cronExpression,
+            !options.disabled,
+            parseInt(options.maxRetries ?? '3', 10)
+          );
+
+          console.log('✅ Playlist added to schedule successfully\n');
+          console.log(`   Playlist: ${playlist?.title}`);
+          console.log(`   Playlist ID: ${schedule.playlistId}`);
+          console.log(`   Cron expression: ${cronExpression}`);
+          console.log(`   Interval: ${formatInterval(schedule.interval)}`);
+          console.log(`   Enabled: ${schedule.enabled ? 'Yes' : 'No'}`);
+          console.log(`   Next run: ${schedule.nextRun.toLocaleString()}`);
+          console.log(`   Max retries: ${schedule.maxRetries}`);
+
+          if (!options.disabled) {
+            console.log('\n💡 Start the scheduler with:');
+            console.log('   yt-sync scheduler start');
+          }
+        } catch (error) {
+          console.error(
+            '❌ Failed to add playlist to schedule:',
+            error instanceof Error ? error.message : String(error)
+          );
+          process.exit(1);
         }
-
-        // Add to schedule
-        const scheduler = getAutoSyncScheduler();
-        const schedule = await scheduler.addPlaylist(
-          playlistId,
-          cronExpression,
-          !options.disabled,
-          parseInt(options.maxRetries ?? '3', 10)
-        );
-
-        console.log('✅ Playlist added to schedule successfully\n');
-        console.log(`   Playlist: ${playlist!.title}`);
-        console.log(`   Playlist ID: ${schedule.playlistId}`);
-        console.log(`   Cron expression: ${cronExpression}`);
-        console.log(`   Interval: ${formatInterval(schedule.interval)}`);
-        console.log(`   Enabled: ${schedule.enabled ? 'Yes' : 'No'}`);
-        console.log(`   Next run: ${schedule.nextRun.toLocaleString()}`);
-        console.log(`   Max retries: ${schedule.maxRetries}`);
-
-        if (!options.disabled) {
-          console.log('\n💡 Start the scheduler with:');
-          console.log('   yt-sync scheduler start');
-        }
-      } catch (error) {
-        console.error('❌ Failed to add playlist to schedule:', error instanceof Error ? error.message : String(error));
-        process.exit(1);
       }
-    });
+    );
 
   /**
    * Remove playlist from schedule
@@ -254,7 +279,10 @@ export function registerSchedulerCommands(program: Command): void {
         console.log('✅ Playlist removed from schedule successfully');
         console.log(`   Playlist ID: ${playlistId}`);
       } catch (error) {
-        console.error('❌ Failed to remove playlist from schedule:', error instanceof Error ? error.message : String(error));
+        console.error(
+          '❌ Failed to remove playlist from schedule:',
+          error instanceof Error ? error.message : String(error)
+        );
         process.exit(1);
       }
     });
@@ -297,14 +325,19 @@ export function registerSchedulerCommands(program: Command): void {
           console.log(`${statusIcon} ${playlistTitle}`);
           console.log(`   ID: ${schedule.playlistId}`);
           console.log(`   Interval: ${formatInterval(schedule.interval)}`);
-          console.log(`   Last run: ${schedule.lastRun ? schedule.lastRun.toLocaleString() : 'Never'}`);
+          console.log(
+            `   Last run: ${schedule.lastRun ? schedule.lastRun.toLocaleString() : 'Never'}`
+          );
           console.log(`   Next run: ${schedule.nextRun.toLocaleString()}`);
           console.log(`   Status: ${schedule.enabled ? 'Enabled' : 'Disabled'}`);
           console.log(`   Retries: ${schedule.retryCount}/${schedule.maxRetries}`);
           console.log('');
         }
       } catch (error) {
-        console.error('❌ Failed to list schedules:', error instanceof Error ? error.message : String(error));
+        console.error(
+          '❌ Failed to list schedules:',
+          error instanceof Error ? error.message : String(error)
+        );
         process.exit(1);
       }
     });

@@ -1,9 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { db as prisma } from '../../modules/database/client';
-import {
-  getMeSchema,
-  GetMeResponse,
-} from '../schemas/auth.schema';
+import { getMeSchema, GetMeResponse } from '../schemas/auth.schema';
 import { createErrorResponse, ErrorCode } from '../schemas/common.schema';
 
 /**
@@ -35,13 +32,9 @@ export async function authRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!request.user || !('userId' in request.user)) {
-        return reply.code(401).send(
-          createErrorResponse(
-            ErrorCode.UNAUTHORIZED,
-            'Not authenticated',
-            request.url
-          )
-        );
+        return reply
+          .code(401)
+          .send(createErrorResponse(ErrorCode.UNAUTHORIZED, 'Not authenticated', request.url));
       }
 
       // Fetch user data from database
@@ -50,20 +43,17 @@ export async function authRoutes(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.code(404).send(
-          createErrorResponse(
-            ErrorCode.RESOURCE_NOT_FOUND,
-            'User not found',
-            request.url
-          )
-        );
+        return reply
+          .code(404)
+          .send(createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'User not found', request.url));
       }
 
       // Extract name from metadata
       const meta = user.raw_user_meta_data as Record<string, unknown> | null;
-      const name = (meta?.['name'] as string) ||
-                   (meta?.['full_name'] as string) ||
-                   (user.email?.split('@')[0] ?? '');
+      const name =
+        (meta?.['name'] as string) ||
+        (meta?.['full_name'] as string) ||
+        (user.email?.split('@')[0] ?? '');
 
       const response: GetMeResponse = {
         user: {

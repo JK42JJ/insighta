@@ -130,7 +130,10 @@ const videoAnalyticsResponseSchema = {
     videoId: { type: 'string' },
     videoTitle: { type: 'string' },
     totalDuration: { type: 'integer', description: 'Video duration in seconds' },
-    totalWatchTime: { type: 'integer', description: 'Total time spent watching (all sessions) in seconds' },
+    totalWatchTime: {
+      type: 'integer',
+      description: 'Total time spent watching (all sessions) in seconds',
+    },
     completionPercentage: { type: 'number', description: 'Completion percentage (0-100)' },
     watchCount: { type: 'integer', description: 'Number of watch sessions' },
     lastWatchedAt: { type: ['string', 'null'], format: 'date-time' },
@@ -162,7 +165,10 @@ const playlistAnalyticsResponseSchema = {
     watchedVideos: { type: 'integer', description: 'Videos with at least one session' },
     completedVideos: { type: 'integer', description: 'Videos with >=80% completion' },
     totalWatchTime: { type: 'integer', description: 'Sum of all watch sessions in seconds' },
-    averageCompletion: { type: 'number', description: 'Average completion across all videos (0-100)' },
+    averageCompletion: {
+      type: 'number',
+      description: 'Average completion across all videos (0-100)',
+    },
     lastActivity: { type: ['string', 'null'], format: 'date-time' },
   },
   required: [
@@ -234,7 +240,16 @@ const watchSessionResponseSchema = {
     duration: { type: 'integer', description: 'Actual watch duration in seconds' },
     createdAt: { type: 'string', format: 'date-time' },
   },
-  required: ['id', 'videoId', 'startedAt', 'endedAt', 'startPos', 'endPos', 'duration', 'createdAt'],
+  required: [
+    'id',
+    'videoId',
+    'startedAt',
+    'endedAt',
+    'startPos',
+    'endPos',
+    'duration',
+    'createdAt',
+  ],
 } as const;
 
 /**
@@ -255,7 +270,10 @@ export const getDashboardSchema: FastifySchema = {
             totalVideos: { type: 'integer' },
             totalWatchTime: { type: 'integer', description: 'Total watch time in seconds' },
             totalSessions: { type: 'integer' },
-            averageSessionDuration: { type: 'integer', description: 'Average session duration in seconds' },
+            averageSessionDuration: {
+              type: 'integer',
+              description: 'Average session duration in seconds',
+            },
             completedVideos: { type: 'integer' },
             inProgressVideos: { type: 'integer' },
             notStartedVideos: { type: 'integer' },
