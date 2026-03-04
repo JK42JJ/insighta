@@ -1,0 +1,4 @@
+project_id = "pxoksmtqtlbqtpefgspx"
+
+[functions.fetch-url-metadata]
+verify_jwt = false
