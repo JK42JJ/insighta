@@ -580,5 +580,5 @@ For more CLI commands, see: [CLI Documentation](./implementation-reports/03-cli-
 
 **Document Version**: 1.0
 **Last Updated**: 2025-12-17
-**Maintained by**: Claude Code
+**Maintained by**: James Kim (jamesjk4242@gmail.com)
 **Project**: YouTube Playlist Sync

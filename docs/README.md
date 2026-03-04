@@ -131,5 +131,5 @@ docs/
 
 ---
 
-**Maintained by**: Claude Code
+**Maintained by**: James Kim (jamesjk4242@gmail.com)
 **Project**: YouTube Playlist Sync (TubeArchive)

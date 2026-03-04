@@ -670,7 +670,7 @@ function formatDuration(seconds: number): string {
 |                                                                  |
 |  +------------------------------------------------------------+ |
 |  | +--------+                                                  | |
-|  | |        |  React Complete Course 2024                     | |
+|  | |        |  React Complete Course 2025                     | |
 |  | | [Thumb]|  by Traversy Media                              | |
 |  | |        |  42 videos | 12h total | Last sync: 2h ago      | |
 |  | +--------+  Status: COMPLETED                              | |
@@ -925,7 +925,7 @@ export default function PlaylistsPage() {
 +------------------------------------------------------------------+
 |                                                                  |
 |  +-------------+                                                 |
-|  |             |  React Complete Course 2024                     |
+|  |             |  React Complete Course 2025                     |
 |  |   [Large    |  by Traversy Media                             |
 |  |  Thumbnail] |  42 videos | 12h 30m total                     |
 |  |             |  Last synced: 2 hours ago                      |
@@ -1051,7 +1051,7 @@ interface PlaylistAnalyticsResponse {
 +------------------------------------------------------------------+
 | [Logo] Insighta                           [User Avatar] [Logout] |
 +------------------------------------------------------------------+
-| [< Back to Playlist: React Complete Course 2024]                 |
+| [< Back to Playlist: React Complete Course 2025]                 |
 +------------------------------------------------------------------+
 |                                                                  |
 |  +------------------------------------------------------------+ |
@@ -1064,7 +1064,7 @@ interface PlaylistAnalyticsResponse {
 |  +------------------------------------------------------------+ |
 |                                                                  |
 |  React Components Deep Dive                                      |
-|  by Traversy Media | 25:30 | 1.2M views | Published: 2024-01-15 |
+|  by Traversy Media | 25:30 | 1.2M views | Published: 2025-01-15 |
 |                                                                  |
 +------------------------------------------------------------------+
 |  [Transcript] [Summary] [Notes] [Info]                           |
@@ -1108,7 +1108,7 @@ interface PlaylistAnalyticsResponse {
 |  | components, props vs state, and best practices for         | |
 |  | component composition.                                     | |
 |  |                                                            | |
-|  | Generated at: 2024-01-16 10:30:00                          | |
+|  | Generated at: 2025-01-16 10:30:00                          | |
 |  +------------------------------------------------------------+ |
 |                                                                  |
 +------------------------------------------------------------------+
@@ -1393,20 +1393,20 @@ interface RecordSessionResponse {
 |  Tags: [All v]  Video: [All v]                                   |
 +------------------------------------------------------------------+
 |                                                                  |
-|  React Complete Course 2024                                      |
+|  React Complete Course 2025                                      |
 |  +------------------------------------------------------------+ |
 |  | @ 5:30  - React Components Deep Dive                       | |
 |  |   Props are read-only and cannot be modified directly.     | |
 |  |   Use state for mutable data.                              | |
 |  |   Tags: #react #props                                      | |
-|  |   Created: 2024-01-16 10:30                                | |
+|  |   Created: 2025-01-16 10:30                                | |
 |  |                                           [Edit] [Delete]  | |
 |  +------------------------------------------------------------+ |
 |  | @ 10:15 - React Components Deep Dive                       | |
 |  |   useState hook returns [value, setter] tuple              | |
 |  |   Example: const [count, setCount] = useState(0)           | |
 |  |   Tags: #react #hooks #useState                            | |
-|  |   Created: 2024-01-16 11:00                                | |
+|  |   Created: 2025-01-16 11:00                                | |
 |  |                                           [Edit] [Delete]  | |
 |  +------------------------------------------------------------+ |
 |                                                                  |
@@ -1415,7 +1415,7 @@ interface RecordSessionResponse {
 |  | @ 3:00  - Introduction to TypeScript                       | |
 |  |   TypeScript provides excellent type inference             | |
 |  |   Tags: #typescript #types                                 | |
-|  |   Created: 2024-01-15 14:20                                | |
+|  |   Created: 2025-01-15 14:20                                | |
 |  |                                           [Edit] [Delete]  | |
 |  +------------------------------------------------------------+ |
 |                                                                  |
@@ -1637,7 +1637,7 @@ interface VideoAnalyticsResponse {
 |  +------------------------------------------------------------+ |
 |  | Name: John Doe                                 [Edit]      | |
 |  | Email: john@example.com                                    | |
-|  | Member since: January 15, 2024                             | |
+|  | Member since: January 15, 2025                             | |
 |  +------------------------------------------------------------+ |
 |                                                                  |
 +------------------------------------------------------------------+
@@ -2938,7 +2938,7 @@ export function parseThumbnailUrl(
 ## 문서 정보
 
 - **작성일**: 2025-12-19
-- **작성자**: Claude Code
+- **작성자**: James Kim (jamesjk4242@gmail.com)
 - **프로젝트**: Insighta (TubeArchive)
 - **버전**: 2.0.0
 - **API 버전**: v1

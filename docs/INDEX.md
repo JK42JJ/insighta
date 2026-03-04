@@ -2,8 +2,8 @@
 
 YouTube Playlist Sync 프로젝트의 전체 문서 목록입니다.
 
-**Last Updated**: 2025-12-19
-**Current Phase**: Phase 4 Complete → Documentation & Stabilization
+**Last Updated**: 2025-12-22
+**Current Phase**: Phase 5.2 Complete - Extensible Adapter System
 
 ---
 
@@ -72,6 +72,9 @@ YouTube Playlist Sync 프로젝트의 전체 문서 목록입니다.
 | 06 | [Token Refresh](./implementation-reports/06-token-refresh.md) | 토큰 자동 갱신 | 2025-12-18 |
 | 07 | [Error Handling](./implementation-reports/07-error-handling.md) | 에러 처리 시스템 | 2025-12-18 |
 | 08 | [Test Improvements](./implementation-reports/08-test-improvements.md) | 테스트 개선 | 2025-12-18 |
+| 09 | [Frontend Integration](./implementation-reports/09-frontend-integration.md) | 프론트엔드 모노레포 통합 | 2025-12-20 |
+| 10 | [Supabase Edge Functions](./implementation-reports/10-supabase-edge-functions.md) | YouTube OAuth & 동기화 Edge Functions | 2025-12-21 |
+| 11 | [Extensible Adapter System](./implementation-reports/11-extensible-adapter-system.md) | 확장 가능한 플러그인 기반 어댑터 시스템 | 2025-12-22 |
 
 ---
 
@@ -102,7 +105,7 @@ Phase 4 (Advanced API Features) 구현 계획 및 상세 문서입니다.
 ## 🎨 개발 가이드 (`docs/guides/`)
 
 ### [FRONTEND_INTEGRATION_GUIDE.md](./guides/FRONTEND_INTEGRATION_GUIDE.md)
-**프론트엔드 개발 통합 가이드** ⭐ NEW
+**프론트엔드 개발 통합 가이드**
 
 - 전체 42개 API 엔드포인트 상세 문서
 - 8개 화면별 ASCII 와이어프레임
@@ -110,6 +113,36 @@ Phase 4 (Advanced API Features) 구현 계획 및 상세 문서입니다.
 - 상태 관리 패턴 (TanStack Query, Zustand)
 - 에러 처리 및 인증 패턴
 - 컴포넌트 구조 가이드
+
+---
+
+## 🔌 어댑터 개발 가이드 ⭐ NEW
+
+### 어댑터 시스템 개요
+TubeArchive의 확장 가능한 플러그인 기반 어댑터 시스템입니다.
+
+| 카테고리 | Base 클래스 | 지원 서비스 |
+|---------|------------|-----------|
+| OAuth 2.0 | `BaseOAuthAdapter` | YouTube, Notion, Google Drive, LinkedIn |
+| Feed | `BaseFeedAdapter` | RSS, Atom |
+| File | `BaseFileAdapter` | Markdown, PDF, DOCX, PPTX, TXT |
+
+### 관련 파일
+- **[adapter-patterns Skill](../.claude/skills/adapter-patterns/SKILL.md)** - 어댑터 개발 패턴 가이드
+- **[adapter-dev Agent](../.claude/agents/adapter-dev.md)** - 어댑터 개발 전문 subagent
+- **[create-adapter Command](../.claude/commands/create-adapter.md)** - 어댑터 스캐폴딩 명령
+
+### 새 어댑터 생성
+```bash
+# OAuth 어댑터 생성
+npm run create:adapter -- --name notion --category oauth
+
+# Feed 어댑터 생성
+npm run create:adapter -- --name rss --category feed
+
+# File 어댑터 생성
+npm run create:adapter -- --name markdown --category file
+```
 
 ---
 
@@ -140,6 +173,25 @@ Phase 4 (Advanced API Features) 구현 계획 및 상세 문서입니다.
 - Rate Limiting
 - Documentation (Docusaurus + OpenAPI)
 
+### Phase 5: Frontend Integration ✅
+- React + Vite + shadcn/ui 프론트엔드
+- Docker nginx 배포
+- Monorepo 개발 환경
+- API 클라이언트 통합 (JWT)
+- 개발 스크립트 (dev.sh, docker-build.sh)
+
+### Phase 5.1: Supabase Edge Functions ✅
+- YouTube OAuth 2.0 플로우 (Edge Function)
+- 플레이리스트 동기화 API (Edge Function)
+- Kong API Gateway 설정
+- React Query 훅 (useYouTubeAuth, useYouTubeSync)
+
+### Phase 5.2: Extensible Adapter System ✅ ⭐ NEW
+- 플러그인 기반 어댑터 아키텍처
+- Base 클래스 계층 (OAuth, Feed, File)
+- adapter-dev subagent 및 자동화 스크립트
+- adapter-patterns skill 및 create-adapter 명령
+
 ---
 
 ## 🗂️ 문서 구조
@@ -148,6 +200,19 @@ Phase 4 (Advanced API Features) 구현 계획 및 상세 문서입니다.
 sync-youtube-playlists/
 ├── README.md                    # 프로젝트 메인
 ├── CLAUDE.md                    # Claude Code 가이드
+├── CHANGELOG.md                 # 버전별 변경 이력 ⭐ NEW
+│
+├── frontend/                    # React 프론트엔드 ⭐ NEW
+│   ├── src/
+│   │   ├── lib/api-client.ts   # JWT API 클라이언트
+│   │   └── hooks/use-api.ts    # React Query 훅
+│   ├── Dockerfile              # Multi-stage 빌드
+│   └── nginx/                  # nginx 설정
+│
+├── scripts/                     # 개발 스크립트
+│   ├── dev.sh                  # 개발 환경 시작
+│   ├── docker-build.sh         # Docker 빌드
+│   └── create-adapter.ts       # 어댑터 스캐폴딩 ⭐ NEW
 │
 └── docs/
     ├── INDEX.md                 # 📍 이 문서
@@ -169,7 +234,9 @@ sync-youtube-playlists/
     │   ├── 05-auto-sync.md
     │   ├── 06-token-refresh.md
     │   ├── 07-error-handling.md
-    │   └── 08-test-improvements.md
+    │   ├── 08-test-improvements.md
+    │   ├── 09-frontend-integration.md
+    │   └── 10-supabase-edge-functions.md  # ⭐ NEW
     │
     ├── phases/                  # Phase별 계획
     │   └── phase4/
@@ -185,6 +252,6 @@ sync-youtube-playlists/
 
 ---
 
-**Last Updated**: 2025-12-19
-**Maintained by**: Claude Code
-**Project**: YouTube Playlist Sync
+**Last Updated**: 2025-12-22
+**Maintained by**: James Kim (jamesjk4242@gmail.com)
+**Project**: YouTube Playlist Sync (TubeArchive)

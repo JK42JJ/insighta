@@ -271,6 +271,6 @@ sync-youtube-playlists/
 
 ---
 
-**작성자**: Claude Code (SuperClaude)
+**작성자**: James Kim (jamesjk4242@gmail.com)
 **버전**: 1.0
 **상태**: 제안 중 - 사용자 승인 대기

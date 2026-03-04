@@ -960,5 +960,5 @@ API-Version: 1.2.0
 ---
 
 **문서 버전**: 1.0
-**작성자**: SuperClaude
+**작성자**: James Kim (jamesjk4242@gmail.com)
 **작성일**: 2025-12-16

@@ -141,16 +141,16 @@ Output:
 ✅ Tech News Daily
    ID: clfy7x8x70001abc123def457
    Interval: 6 hours
-   Last run: 2024-01-15T14:30:00.000Z
-   Next run: 2024-01-15T20:30:00.000Z
+   Last run: 2025-01-15T14:30:00.000Z
+   Next run: 2025-01-15T20:30:00.000Z
    Status: Enabled
    Retries: 0/3
 
 ✅ Course Tutorials
    ID: clfy7x8x70002abc123def458
    Interval: 1 day
-   Last run: 2024-01-15T00:00:00.000Z
-   Next run: 2024-01-16T00:00:00.000Z
+   Last run: 2025-01-15T00:00:00.000Z
+   Next run: 2025-01-16T00:00:00.000Z
    Status: Enabled
    Retries: 0/3
 ```
@@ -179,8 +179,8 @@ Uptime: 2h 15m 30s
 
 ✅ clfy7x8x70001abc123def457
    Interval: 6 hours
-   Last run: 2024-01-15T14:30:00.000Z
-   Next run: 2024-01-15T20:30:00.000Z
+   Last run: 2025-01-15T14:30:00.000Z
+   Next run: 2025-01-15T20:30:00.000Z
    Retries: 0/3
 ```
 

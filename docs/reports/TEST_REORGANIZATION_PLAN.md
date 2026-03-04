@@ -547,5 +547,5 @@ git checkout HEAD -- test-*.js
 ---
 
 **Created**: 2025-12-16
-**Author**: Claude Code (SuperClaude)
+**Author**: James Kim (jamesjk4242@gmail.com)
 **Document Version**: 1.0

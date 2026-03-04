@@ -150,6 +150,108 @@ YouTube API → API Client → Playlist Manager → Database
 - **E2E tests**: Full sync workflows
 - **Coverage target**: 80%+
 
+## Work Delegation Rules
+
+### Supabase 작업 위임 (필수 준수)
+
+⚠️ **MANDATORY**: Supabase 관련 모든 작업은 반드시 `supabase-dev` subagent에게 위임하여 수행할 것.
+
+| 작업 유형 | 위임 대상 | 비고 |
+|----------|----------|------|
+| Edge Functions 개발/수정 | `supabase-dev` | `superbase/volumes/functions/` |
+| Kong API Gateway 설정 | `supabase-dev` | `superbase/volumes/api/kong.template.yml` |
+| Supabase 마이그레이션 | `supabase-dev` | SQL migrations |
+| Docker Compose 설정 | `supabase-dev` | Supabase 서비스 관련 |
+| Supabase Auth 설정 | `supabase-dev` | GoTrue 설정 |
+
+```bash
+# Task tool 사용 예시
+Task(subagent_type="supabase-dev", prompt="Edge Function 수정: ...")
+```
+
+**관련 파일 경로**:
+- Edge Functions: `/Users/jeonhokim/cursor/superbase/volumes/functions/`
+- Kong 설정: `/Users/jeonhokim/cursor/superbase/volumes/api/`
+- Docker: `/Users/jeonhokim/cursor/superbase/docker-compose.yml`
+
+### Adapter 개발 위임 (필수 준수)
+
+⚠️ **MANDATORY**: 데이터 소스 어댑터 관련 모든 작업은 반드시 `adapter-dev` subagent에게 위임하여 수행할 것.
+
+| 작업 유형 | 위임 대상 | 비고 |
+|----------|----------|------|
+| 새 어댑터 구현 | `adapter-dev` | OAuth, Feed, File 카테고리 |
+| 어댑터 테스트 작성 | `adapter-dev` | MSW 기반 통합 테스트 |
+| JSON Schema 정의 | `adapter-dev` | Frontend 폼 자동 생성용 |
+| 어댑터 버그 수정 | `adapter-dev` | 기존 어댑터 유지보수 |
+| 어댑터 기능 확장 | `adapter-dev` | 기존 어댑터 기능 추가 |
+
+```bash
+# Task tool 사용 예시
+Task(subagent_type="adapter-dev", prompt="RSS 어댑터 구현: ...")
+Task(subagent_type="adapter-dev", prompt="Notion 어댑터 OAuth 연동: ...")
+Task(subagent_type="adapter-dev", prompt="Markdown 어댑터 frontmatter 파싱: ...")
+```
+
+**어댑터 카테고리**:
+- **OAuth**: YouTube, Notion, Google Drive, LinkedIn (OAuth 2.0 기반)
+- **Feed**: RSS, Atom (피드 기반)
+- **File**: Markdown, PDF, DOCX, PPTX, TXT (파일 파서)
+
+**관련 파일 경로**:
+- Base 클래스: `src/adapters/core/`, `src/adapters/oauth/`, `src/adapters/feed/`, `src/adapters/file/`
+- 어댑터 구현: `src/adapters/{category}/{name}/`
+- Skill: `.claude/skills/adapter-patterns/SKILL.md`
+
+**Scaffolding 명령**:
+```bash
+npm run create:adapter -- --name <name> --category <oauth|feed|file>
+```
+
+### Frontend 개발 위임 (필수 준수)
+
+⚠️ **MANDATORY**: Frontend UI 관련 모든 작업은 반드시 `frontend-dev` subagent에게 위임하여 수행할 것.
+
+| 작업 유형 | 위임 대상 | 비고 |
+|----------|----------|------|
+| React 컴포넌트 개발/수정 | `frontend-dev` | `frontend/src/components/` |
+| 커스텀 훅 개발/수정 | `frontend-dev` | `frontend/src/hooks/` |
+| 상태 관리 (React Query, Context) | `frontend-dev` | 플로팅 윈도우, UI 설정 등 |
+| UI 버그 수정 | `frontend-dev` | 무한 루프, 렌더링 이슈 |
+| 접근성/반응형 디자인 | `frontend-dev` | WCAG 2.1 AA 준수 |
+
+```bash
+# Task tool 사용 예시
+Task(subagent_type="frontend-dev", prompt="플로팅 윈도우 위치 저장 기능 수정: ...")
+Task(subagent_type="frontend-dev", prompt="만다라트 컴포넌트 상태 관리 개선: ...")
+Task(subagent_type="frontend-dev", prompt="useUIPreferences 훅 디버깅: ...")
+```
+
+**기술 스택**:
+- **Framework**: React 18+ with TypeScript
+- **State**: TanStack Query (React Query), Zustand
+- **UI**: shadcn/ui, Radix UI, Tailwind CSS
+- **Build**: Vite
+
+**관련 파일 경로**:
+- 컴포넌트: `frontend/src/components/`
+- 훅: `frontend/src/hooks/`
+- 페이지: `frontend/src/pages/`
+- 타입: `frontend/src/types/`
+- Agent 설정: `.claude/agents/frontend-dev.md`
+
+---
+
+## Protected Folders & Files
+
+⚠️ **절대 삭제 금지 (DO NOT DELETE)**:
+
+| Path | Description |
+|------|-------------|
+| `prompt/*.md` | 사용자 개인 작업 파일. 정리/삭제 대상 아님 |
+
+작업 중 폴더 정리 시 위 경로의 파일은 반드시 보존할 것.
+
 ## Future Enhancements (Phase 2)
 
 See PRD.md for detailed specifications:

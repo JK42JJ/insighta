@@ -740,7 +740,7 @@ Get current YouTube API quota usage.
     "limit": 10000,
     "remaining": 8500,
     "percentage": 15.0,
-    "resetAt": "2024-01-01T00:00:00.000Z"
+    "resetAt": "2025-01-01T00:00:00.000Z"
   }
 }
 ```
