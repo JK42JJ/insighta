@@ -289,7 +289,7 @@ export function registerSchedulerCommands(program: Command): void {
 
           try {
             const playlist = await playlistManager.getPlaylist(schedule.playlistId);
-            playlistTitle = playlist.title;
+            playlistTitle = playlist.title ?? schedule.playlistId;
           } catch {
             // Keep playlistId as title if fetch fails
           }

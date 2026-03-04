@@ -33,8 +33,8 @@ export class AnalyticsTracker {
       logger.info('Recording watch session', { videoId: input.videoId });
 
       // Verify video exists
-      const video = await this.db.video.findUnique({
-        where: { youtubeId: input.videoId },
+      const video = await this.db.youtube_videos.findUnique({
+        where: { youtube_video_id: input.videoId },
       });
 
       if (!video) {
@@ -50,13 +50,13 @@ export class AnalyticsTracker {
       const duration = Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000);
 
       // Create session
-      const session = await this.db.watchSession.create({
+      const session = await this.db.watch_sessions.create({
         data: {
-          videoId: video.id,
-          startedAt,
-          endedAt,
-          startPos: input.startPos,
-          endPos: input.endPos,
+          video_id: video.id,
+          started_at: startedAt,
+          ended_at: endedAt,
+          start_pos: input.startPos,
+          end_pos: input.endPos,
           duration,
         },
       });
@@ -81,11 +81,11 @@ export class AnalyticsTracker {
    */
   public async getVideoAnalytics(videoId: string): Promise<VideoAnalytics | null> {
     try {
-      const video = await this.db.video.findUnique({
-        where: { youtubeId: videoId },
+      const video = await this.db.youtube_videos.findUnique({
+        where: { youtube_video_id: videoId },
         include: {
-          watchSessions: {
-            orderBy: { startedAt: 'asc' },
+          watch_sessions: {
+            orderBy: { started_at: 'asc' },
           },
         },
       });
@@ -94,13 +94,14 @@ export class AnalyticsTracker {
         return null;
       }
 
-      const sessions = video.watchSessions;
+      const sessions = video.watch_sessions;
+      const videoDuration = video.duration_seconds ?? 0;
 
       if (sessions.length === 0) {
         return {
           videoId,
           videoTitle: video.title,
-          totalDuration: video.duration,
+          totalDuration: videoDuration,
           totalWatchTime: 0,
           completionPercentage: 0,
           watchCount: 0,
@@ -113,25 +114,27 @@ export class AnalyticsTracker {
 
       // Calculate metrics
       const totalWatchTime = sessions.reduce((sum, s) => sum + s.duration, 0);
-      const maxPosition = Math.max(...sessions.map(s => s.endPos));
-      const completionPercentage = Math.min(100, (maxPosition / video.duration) * 100);
+      const maxPosition = Math.max(...sessions.map((s) => s.end_pos));
+      const completionPercentage = videoDuration > 0
+        ? Math.min(100, (maxPosition / videoDuration) * 100)
+        : 0;
       const averageSessionDuration = totalWatchTime / sessions.length;
 
       // Count rewatches (sessions after reaching 80% completion)
-      const completionThreshold = video.duration * 0.8;
-      const firstCompleteIndex = sessions.findIndex(s => s.endPos >= completionThreshold);
+      const completionThreshold = videoDuration * 0.8;
+      const firstCompleteIndex = sessions.findIndex((s) => s.end_pos >= completionThreshold);
       const rewatchCount =
         firstCompleteIndex >= 0 ? sessions.length - firstCompleteIndex - 1 : 0;
 
       return {
         videoId,
         videoTitle: video.title,
-        totalDuration: video.duration,
+        totalDuration: videoDuration,
         totalWatchTime,
         completionPercentage: Math.round(completionPercentage * 100) / 100,
         watchCount: sessions.length,
-        lastWatchedAt: sessions[sessions.length - 1]!.startedAt,
-        firstWatchedAt: sessions[0]!.startedAt,
+        lastWatchedAt: sessions[sessions.length - 1]!.started_at,
+        firstWatchedAt: sessions[0]!.started_at,
         averageSessionDuration: Math.round(averageSessionDuration),
         rewatchCount,
       };
@@ -146,17 +149,17 @@ export class AnalyticsTracker {
    */
   public async getPlaylistAnalytics(playlistId: string): Promise<PlaylistAnalytics | null> {
     try {
-      const playlist = await this.db.playlist.findFirst({
+      const playlist = await this.db.youtube_playlists.findFirst({
         where: {
-          OR: [{ id: playlistId }, { youtubeId: playlistId }],
+          OR: [{ id: playlistId }, { youtube_playlist_id: playlistId }],
         },
         include: {
-          items: {
-            where: { removedAt: null },
+          youtube_playlist_items: {
+            where: { removed_at: null },
             include: {
-              video: {
+              youtube_videos: {
                 include: {
-                  watchSessions: true,
+                  watch_sessions: true,
                 },
               },
             },
@@ -168,13 +171,13 @@ export class AnalyticsTracker {
         return null;
       }
 
-      const videos = playlist.items.map(item => item.video);
+      const videos = playlist.youtube_playlist_items.map((item) => item.youtube_videos);
       const totalVideos = videos.length;
 
       if (totalVideos === 0) {
         return {
           playlistId,
-          playlistTitle: playlist.title,
+          playlistTitle: playlist.title ?? '',
           totalVideos: 0,
           watchedVideos: 0,
           completedVideos: 0,
@@ -194,7 +197,7 @@ export class AnalyticsTracker {
       let lastActivity: Date | null = null;
 
       for (const video of videos) {
-        const analytics = await this.getVideoAnalytics(video.youtubeId);
+        const analytics = await this.getVideoAnalytics(video.youtube_video_id);
         if (analytics) {
           videoAnalyticsList.push(analytics);
           totalWatchTime += analytics.totalWatchTime;
@@ -218,7 +221,7 @@ export class AnalyticsTracker {
 
       return {
         playlistId,
-        playlistTitle: playlist.title,
+        playlistTitle: playlist.title ?? '',
         totalVideos,
         watchedVideos,
         completedVideos,
@@ -239,10 +242,10 @@ export class AnalyticsTracker {
   public async getLearningDashboard(): Promise<LearningDashboard> {
     try {
       // Get all videos with sessions
-      const videos = await this.db.video.findMany({
+      const videos = await this.db.youtube_videos.findMany({
         include: {
-          watchSessions: {
-            orderBy: { startedAt: 'desc' },
+          watch_sessions: {
+            orderBy: { started_at: 'desc' },
           },
         },
       });
@@ -258,9 +261,10 @@ export class AnalyticsTracker {
       const topVideosList: TopVideo[] = [];
 
       for (const video of videos) {
-        const sessions = video.watchSessions;
+        const sessions = video.watch_sessions;
         const sessionCount = sessions.length;
         totalSessions += sessionCount;
+        const videoDuration = video.duration_seconds ?? 0;
 
         if (sessionCount === 0) {
           notStartedVideos++;
@@ -270,8 +274,8 @@ export class AnalyticsTracker {
         const watchTime = sessions.reduce((sum, s) => sum + s.duration, 0);
         totalWatchTime += watchTime;
 
-        const maxPosition = Math.max(...sessions.map(s => s.endPos));
-        const completion = (maxPosition / video.duration) * 100;
+        const maxPosition = Math.max(...sessions.map((s) => s.end_pos));
+        const completion = videoDuration > 0 ? (maxPosition / videoDuration) * 100 : 0;
 
         if (completion >= 80) {
           completedVideos++;
@@ -281,7 +285,7 @@ export class AnalyticsTracker {
 
         // Add to top videos
         topVideosList.push({
-          videoId: video.youtubeId,
+          videoId: video.youtube_video_id,
           videoTitle: video.title,
           watchTime,
           sessionCount,
@@ -292,9 +296,9 @@ export class AnalyticsTracker {
         if (recentActivityList.length < 10 && sessions.length > 0) {
           const lastSession = sessions[0]!;
           recentActivityList.push({
-            videoId: video.youtubeId,
+            videoId: video.youtube_video_id,
             videoTitle: video.title,
-            watchedAt: lastSession.startedAt,
+            watchedAt: lastSession.started_at,
             duration: lastSession.duration,
             progress: Math.round(completion * 100) / 100,
           });
@@ -367,13 +371,11 @@ export class AnalyticsTracker {
       }
 
       // Calculate retention score (0-100)
-      // Higher score = better retention (fewer rewatches needed, higher completion)
       const completionFactor = analytics.completionPercentage / 100;
       const rewatchPenalty = Math.max(0, 1 - analytics.rewatchCount * 0.15);
       const retentionScore = Math.round(completionFactor * rewatchPenalty * 100);
 
       // Recommend review date based on retention score
-      // Higher retention = longer interval before review
       let recommendedReviewDate: Date | null = null;
       if (analytics.lastWatchedAt && analytics.completionPercentage >= 50) {
         const daysUntilReview =
@@ -404,8 +406,8 @@ export class AnalyticsTracker {
   private async calculateLearningStreak(): Promise<LearningStreak> {
     try {
       // Get all sessions ordered by date
-      const sessions = await this.db.watchSession.findMany({
-        orderBy: { startedAt: 'desc' },
+      const sessions = await this.db.watch_sessions.findMany({
+        orderBy: { started_at: 'desc' },
       });
 
       if (sessions.length === 0) {
@@ -419,7 +421,7 @@ export class AnalyticsTracker {
       // Group sessions by date
       const dateMap = new Map<string, boolean>();
       for (const session of sessions) {
-        const dateStr = session.startedAt.toISOString().split('T')[0]!;
+        const dateStr = session.started_at.toISOString().split('T')[0]!;
         dateMap.set(dateStr, true);
       }
 
@@ -491,7 +493,7 @@ export class AnalyticsTracker {
    */
   public async deleteSession(sessionId: string): Promise<SessionOperationResult> {
     try {
-      await this.db.watchSession.delete({
+      await this.db.watch_sessions.delete({
         where: { id: sessionId },
       });
 
@@ -514,11 +516,11 @@ export class AnalyticsTracker {
    */
   public async getVideoSessions(videoId: string): Promise<WatchSession[]> {
     try {
-      const video = await this.db.video.findUnique({
-        where: { youtubeId: videoId },
+      const video = await this.db.youtube_videos.findUnique({
+        where: { youtube_video_id: videoId },
         include: {
-          watchSessions: {
-            orderBy: { startedAt: 'desc' },
+          watch_sessions: {
+            orderBy: { started_at: 'desc' },
           },
         },
       });
@@ -527,7 +529,7 @@ export class AnalyticsTracker {
         return [];
       }
 
-      return video.watchSessions.map(s => this.mapToWatchSession(s));
+      return video.watch_sessions.map((s) => this.mapToWatchSession(s));
     } catch (error) {
       logger.error('Failed to get video sessions', { videoId, error });
       return [];
@@ -540,13 +542,13 @@ export class AnalyticsTracker {
   private mapToWatchSession(session: any): WatchSession {
     return {
       id: session.id,
-      videoId: session.videoId,
-      startedAt: session.startedAt,
-      endedAt: session.endedAt,
-      startPos: session.startPos,
-      endPos: session.endPos,
+      videoId: session.video_id,
+      startedAt: session.started_at,
+      endedAt: session.ended_at,
+      startPos: session.start_pos,
+      endPos: session.end_pos,
       duration: session.duration,
-      createdAt: session.createdAt,
+      createdAt: session.created_at,
     };
   }
 }

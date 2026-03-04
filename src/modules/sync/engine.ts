@@ -100,26 +100,28 @@ export class SyncEngine {
       await this.playlistManager.acquireSyncLock(playlist.id);
 
       logSyncOperation(playlist.id, 'started', {
-        youtubeId: playlist.youtubeId,
+        youtubeId: playlist.youtube_playlist_id,
         title: playlist.title,
       });
 
       // Record sync history start
-      const syncHistory = await db.syncHistory.create({
+      const syncHistory = await db.youtube_sync_history.create({
         data: {
-          playlistId: playlist.id,
+          playlist_id: playlist.id,
           status: SyncStatus.IN_PROGRESS,
-          startedAt: new Date(),
+          started_at: new Date(),
         },
       });
 
       try {
         // Fetch playlist items from YouTube
-        const { items: ytItems, quotaCost } = await this.fetchPlaylistItems(playlist.youtubeId);
+        const { items: ytItems, quotaCost } = await this.fetchPlaylistItems(playlist.youtube_playlist_id);
         quotaUsed += quotaCost;
 
         // Fetch video details
-        const videoIds = ytItems.map((item) => item.snippet?.resourceId?.videoId).filter(Boolean) as string[];
+        const videoIds = ytItems
+          .map((item: any) => item.snippet?.resourceId?.videoId)
+          .filter(Boolean) as string[];
         const { videos, quotaCost: videosQuotaCost } = await this.fetchVideos(videoIds);
         quotaUsed += videosQuotaCost;
 
@@ -127,12 +129,12 @@ export class SyncEngine {
         await this.videoManager.upsertVideos(videos);
 
         // Get current state from database
-        const currentItems = await db.playlistItem.findMany({
+        const currentItems = await db.youtube_playlist_items.findMany({
           where: {
-            playlistId: playlist.id,
-            removedAt: null,
+            playlist_id: playlist.id,
+            removed_at: null,
           },
-          include: { video: true },
+          include: { youtube_videos: true },
         });
 
         // Detect changes
@@ -142,9 +144,9 @@ export class SyncEngine {
         await executeTransaction(async (tx) => {
           // Remove items
           for (const item of changes.removed) {
-            await tx.playlistItem.update({
+            await tx.youtube_playlist_items.update({
               where: { id: item.id },
-              data: { removedAt: new Date() },
+              data: { removed_at: new Date() },
             });
             itemsRemoved++;
           }
@@ -154,18 +156,18 @@ export class SyncEngine {
             const videoId = ytItem.snippet?.resourceId?.videoId;
             if (!videoId) continue;
 
-            const video = await tx.video.findUnique({
-              where: { youtubeId: videoId },
+            const video = await tx.youtube_videos.findUnique({
+              where: { youtube_video_id: videoId },
             });
 
             if (!video) continue;
 
-            await tx.playlistItem.create({
+            await tx.youtube_playlist_items.create({
               data: {
-                playlistId: playlist.id,
-                videoId: video.id,
+                playlist_id: playlist.id,
+                video_id: video.id,
                 position: ytItem.snippet?.position ?? 0,
-                addedAt: ytItem.snippet?.publishedAt
+                added_at: ytItem.snippet?.publishedAt
                   ? new Date(ytItem.snippet.publishedAt)
                   : new Date(),
               },
@@ -175,7 +177,7 @@ export class SyncEngine {
 
           // Update positions
           for (const { item, newPosition } of changes.reordered) {
-            await tx.playlistItem.update({
+            await tx.youtube_playlist_items.update({
               where: { id: item.id },
               data: { position: newPosition },
             });
@@ -183,27 +185,25 @@ export class SyncEngine {
           }
 
           // Update playlist metadata
-          await tx.playlist.update({
+          await tx.youtube_playlists.update({
             where: { id: playlist.id },
             data: {
-              itemCount: ytItems.length,
-              lastSyncedAt: new Date(),
+              item_count: ytItems.length,
+              last_synced_at: new Date(),
             },
           });
         });
 
         // Update sync history
         const duration = Date.now() - startTime;
-        await db.syncHistory.update({
+        await db.youtube_sync_history.update({
           where: { id: syncHistory.id },
           data: {
             status: SyncStatus.COMPLETED,
-            completedAt: new Date(),
-            duration,
-            itemsAdded,
-            itemsRemoved,
-            itemsReordered,
-            quotaUsed,
+            completed_at: new Date(),
+            items_added: itemsAdded,
+            items_removed: itemsRemoved,
+            quota_used: quotaUsed,
           },
         });
 
@@ -228,13 +228,12 @@ export class SyncEngine {
         };
       } catch (error) {
         // Update sync history with error
-        await db.syncHistory.update({
+        await db.youtube_sync_history.update({
           where: { id: syncHistory.id },
           data: {
             status: SyncStatus.FAILED,
-            completedAt: new Date(),
-            duration: Date.now() - startTime,
-            errorMessage: error instanceof Error ? error.message : String(error),
+            completed_at: new Date(),
+            error_message: error instanceof Error ? error.message : String(error),
           },
         });
 
@@ -351,21 +350,21 @@ export class SyncEngine {
     reordered: Array<{ item: any; newPosition: number }>;
   }> {
     const currentMap = new Map(
-      currentItems.map((item) => [item.video.youtubeId, item])
+      currentItems.map((item) => [item.youtube_videos.youtube_video_id, item])
     );
 
     const ytMap = new Map(
-      ytItems.map((item) => [item.snippet?.resourceId?.videoId, item])
+      ytItems.map((item: any) => [item.snippet?.resourceId?.videoId, item])
     );
 
     // Find added items (in YouTube but not in DB)
     const added = ytItems.filter(
-      (ytItem) => !currentMap.has(ytItem.snippet?.resourceId?.videoId)
+      (ytItem: any) => !currentMap.has(ytItem.snippet?.resourceId?.videoId)
     );
 
     // Find removed items (in DB but not in YouTube)
     const removed = currentItems.filter(
-      (item) => !ytMap.has(item.video.youtubeId)
+      (item) => !ytMap.has(item.youtube_videos.youtube_video_id)
     );
 
     // Find reordered items

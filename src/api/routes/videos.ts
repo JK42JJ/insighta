@@ -69,10 +69,10 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       // Filter by playlist
       if (validatedQuery.playlistId) {
-        where.playlistItems = {
+        where.youtube_playlist_items = {
           some: {
-            playlistId: validatedQuery.playlistId,
-            removedAt: null,
+            playlist_id: validatedQuery.playlistId,
+            removed_at: null,
           },
         };
       }
@@ -85,22 +85,18 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         ];
       }
 
-      // Filter by watch status
-      if (validatedQuery.status) {
-        where.userState = {
-          watchStatus: validatedQuery.status,
-        };
-      }
-
-      // Filter by tags (client-side since tags are JSON)
-      // This will be handled after fetching
-
       // Build order by
       const orderBy: any = {};
-      if (validatedQuery.sortBy) {
-        orderBy[validatedQuery.sortBy] = validatedQuery.sortOrder;
+      if (validatedQuery.sortBy === 'publishedAt') {
+        orderBy['published_at'] = validatedQuery.sortOrder;
+      } else if (validatedQuery.sortBy === 'duration') {
+        orderBy['duration_seconds'] = validatedQuery.sortOrder;
+      } else if (validatedQuery.sortBy === 'viewCount') {
+        orderBy['view_count'] = validatedQuery.sortOrder;
+      } else if (validatedQuery.sortBy === 'title') {
+        orderBy['title'] = validatedQuery.sortOrder;
       } else {
-        orderBy.publishedAt = 'desc';
+        orderBy['published_at'] = 'desc';
       }
 
       // Calculate pagination
@@ -108,43 +104,33 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       // Fetch videos
       const [videos, total] = await Promise.all([
-        getDb().video.findMany({
+        getDb().youtube_videos.findMany({
           where,
           orderBy,
           skip,
           take: validatedQuery.limit,
         }),
-        getDb().video.count({ where }),
+        getDb().youtube_videos.count({ where }),
       ]);
 
-      // Filter by tags if specified (client-side)
-      let filteredVideos = videos;
-      if (validatedQuery.tags && validatedQuery.tags.length > 0) {
-        filteredVideos = videos.filter((video) => {
-          if (!video.tags) return false;
-          const videoTags = JSON.parse(video.tags);
-          return validatedQuery.tags!.some((tag) => videoTags.includes(tag));
-        });
-      }
-
-      const videoResponses: VideoResponse[] = filteredVideos.map((v) => ({
+      const videoResponses: VideoResponse[] = videos.map((v) => ({
         id: v.id,
-        youtubeId: v.youtubeId,
+        youtubeId: v.youtube_video_id,
         title: v.title,
-        description: v.description,
-        channelId: v.channelId,
-        channelTitle: v.channelTitle,
-        duration: v.duration,
-        thumbnailUrls: v.thumbnailUrls,
-        viewCount: v.viewCount,
-        likeCount: v.likeCount,
-        commentCount: v.commentCount,
-        publishedAt: v.publishedAt.toISOString(),
-        tags: v.tags,
-        categoryId: v.categoryId,
-        language: v.language,
-        createdAt: v.createdAt.toISOString(),
-        updatedAt: v.updatedAt.toISOString(),
+        description: v.description ?? null,
+        channelId: '',
+        channelTitle: v.channel_title ?? '',
+        duration: v.duration_seconds ?? 0,
+        thumbnailUrls: v.thumbnail_url ?? '',
+        viewCount: v.view_count ? Number(v.view_count) : 0,
+        likeCount: v.like_count ? Number(v.like_count) : 0,
+        commentCount: 0,
+        publishedAt: v.published_at ? v.published_at.toISOString() : v.created_at.toISOString(),
+        tags: null,
+        categoryId: null,
+        language: null,
+        createdAt: v.created_at.toISOString(),
+        updatedAt: v.updated_at.toISOString(),
       }));
 
       const totalPages = Math.ceil(total / validatedQuery.limit);
@@ -181,35 +167,37 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Getting video details', { videoId: id, userId: request.user.userId });
 
-      const videoWithState = await getVideo().getVideoWithState(id);
+      const videoWithState = await getVideo().getVideoWithState(id, request.user.userId);
 
       const response: VideoWithStateResponse = {
         id: videoWithState.id,
-        youtubeId: videoWithState.youtubeId,
+        youtubeId: videoWithState.youtube_video_id,
         title: videoWithState.title,
-        description: videoWithState.description,
-        channelId: videoWithState.channelId,
-        channelTitle: videoWithState.channelTitle,
-        duration: videoWithState.duration,
-        thumbnailUrls: videoWithState.thumbnailUrls,
-        viewCount: videoWithState.viewCount,
-        likeCount: videoWithState.likeCount,
-        commentCount: videoWithState.commentCount,
-        publishedAt: videoWithState.publishedAt.toISOString(),
-        tags: videoWithState.tags,
-        categoryId: videoWithState.categoryId,
-        language: videoWithState.language,
-        createdAt: videoWithState.createdAt.toISOString(),
-        updatedAt: videoWithState.updatedAt.toISOString(),
+        description: videoWithState.description ?? null,
+        channelId: '',
+        channelTitle: videoWithState.channel_title ?? '',
+        duration: videoWithState.duration_seconds ?? 0,
+        thumbnailUrls: videoWithState.thumbnail_url ?? '',
+        viewCount: videoWithState.view_count ? Number(videoWithState.view_count) : 0,
+        likeCount: videoWithState.like_count ? Number(videoWithState.like_count) : 0,
+        commentCount: 0,
+        publishedAt: videoWithState.published_at
+          ? videoWithState.published_at.toISOString()
+          : videoWithState.created_at.toISOString(),
+        tags: null,
+        categoryId: null,
+        language: null,
+        createdAt: videoWithState.created_at.toISOString(),
+        updatedAt: videoWithState.updated_at.toISOString(),
         userState: videoWithState.userState
           ? {
-              watchStatus: videoWithState.userState.watchStatus,
-              lastPosition: videoWithState.userState.lastPosition,
-              watchCount: videoWithState.userState.watchCount,
-              notes: videoWithState.userState.notes,
-              summary: videoWithState.userState.summary,
-              tags: videoWithState.userState.tags,
-              rating: videoWithState.userState.rating,
+              watchStatus: videoWithState.userState.is_watched ? 'COMPLETED' : 'UNWATCHED',
+              lastPosition: videoWithState.userState.watch_position_seconds ?? 0,
+              watchCount: 0,
+              notes: videoWithState.userState.user_note ?? null,
+              summary: null,
+              tags: null,
+              rating: null,
               createdAt: videoWithState.userState.createdAt.toISOString(),
               updatedAt: videoWithState.userState.updatedAt.toISOString(),
             }
@@ -246,7 +234,7 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const video = await getVideo().getVideo(id);
 
       // Extract captions (will use cached if available)
-      const result = await getCaption().extractCaptions(video.youtubeId, language);
+      const result = await getCaption().extractCaptions(video.youtube_video_id, language);
 
       if (!result.success || !result.caption) {
         const error = createErrorResponse(
@@ -292,7 +280,7 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const video = await getVideo().getVideo(id);
 
       // Get available languages
-      const result = await getCaption().getAvailableLanguages(video.youtubeId);
+      const result = await getCaption().getAvailableLanguages(video.youtube_video_id);
 
       const response: AvailableLanguagesResponse = {
         videoId: result.videoId,
@@ -324,10 +312,11 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       logger.info('Getting summary', { videoId: id, userId: request.user.userId });
 
       // Get video with state
-      const videoWithState = await getVideo().getVideoWithState(id);
+      const videoWithState = await getVideo().getVideoWithState(id, request.user.userId);
 
-      // Check if summary exists
-      if (!videoWithState.userState || !videoWithState.userState.summary) {
+      // Check if summary exists - summary is not a direct field in the new schema
+      // user_note serves as general notes; no dedicated summary field in UserVideoState
+      if (!videoWithState.userState || !videoWithState.userState.user_note) {
         const error = createErrorResponse(
           ErrorCode.RESOURCE_NOT_FOUND,
           'Summary not found for this video. Generate it first using POST /videos/:id/summary',
@@ -337,8 +326,8 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
 
       const response: SummaryResponse = {
-        videoId: videoWithState.youtubeId,
-        summary: videoWithState.userState.summary,
+        videoId: videoWithState.youtube_video_id,
+        summary: videoWithState.userState.user_note,
         level: 'brief', // Default, could be stored separately
         language: 'en', // Default, could be stored separately
         generatedAt: videoWithState.userState.updatedAt.toISOString(),
@@ -374,7 +363,7 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const video = await getVideo().getVideo(id);
 
       // Extract captions first
-      const captionResult = await getCaption().extractCaptions(video.youtubeId, language);
+      const captionResult = await getCaption().extractCaptions(video.youtube_video_id, language);
 
       if (!captionResult.success || !captionResult.caption) {
         const error = createErrorResponse(
@@ -405,11 +394,11 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           summaryText = words.slice(0, 100).join(' ') + '...';
       }
 
-      // Save summary to user state
-      await getVideo().addSummary(id, summaryText);
+      // Save summary to user state via notes field
+      await getVideo().addNotes(id, request.user.userId, summaryText);
 
       const response: SummaryResponse = {
-        videoId: video.youtubeId,
+        videoId: video.youtube_video_id,
         summary: summaryText,
         level,
         language,

@@ -19,7 +19,7 @@ export class QuotaManager {
   public async getTodayUsage(): Promise<{ used: number; remaining: number; limit: number }> {
     const today = this.getTodayDate();
 
-    const quotaUsage = await db.quotaUsage.findUnique({
+    const quotaUsage = await db.quota_usage.findUnique({
       where: { date: today },
     });
 
@@ -63,12 +63,12 @@ export class QuotaManager {
     // Update quota usage
     await db.$transaction(async (tx) => {
       // Get or create today's quota usage
-      const quotaUsage = await tx.quotaUsage.upsert({
+      const quotaUsage = await tx.quota_usage.upsert({
         where: { date: today },
         create: {
           date: today,
           used: cost,
-          limit: config.quota.dailyLimit,
+          quota_limit: config.quota.dailyLimit,
         },
         update: {
           used: { increment: cost },
@@ -76,10 +76,10 @@ export class QuotaManager {
       });
 
       // Record operation
-      await tx.quotaOperation.create({
+      await tx.quota_operations.create({
         data: {
-          quotaUsageId: quotaUsage.id,
-          operationType,
+          quota_usage_id: quotaUsage.id,
+          operation_type: operationType,
           cost,
           timestamp: new Date(),
         },
@@ -146,14 +146,14 @@ export class QuotaManager {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const usage = await db.quotaUsage.findMany({
+    const usage = await db.quota_usage.findMany({
       where: {
         date: { gte: startDate },
       },
       include: {
-        operations: {
+        quota_operations: {
           select: {
-            operationType: true,
+            operation_type: true,
             cost: true,
             timestamp: true,
           },
@@ -165,10 +165,10 @@ export class QuotaManager {
     return usage.map((u) => ({
       date: u.date,
       used: u.used,
-      limit: u.limit,
-      percentUsed: (u.used / u.limit) * 100,
-      operations: u.operations.length,
-      operationsByType: this.groupOperationsByType(u.operations),
+      limit: u.quota_limit,
+      percentUsed: (u.used / u.quota_limit) * 100,
+      operations: u.quota_operations.length,
+      operationsByType: this.groupOperationsByType(u.quota_operations),
     }));
   }
 
@@ -178,7 +178,7 @@ export class QuotaManager {
   public async resetDailyQuota(): Promise<void> {
     const today = this.getTodayDate();
 
-    await db.quotaUsage.update({
+    await db.quota_usage.update({
       where: { date: today },
       data: { used: 0 },
     });
@@ -198,16 +198,16 @@ export class QuotaManager {
    * Group operations by type
    */
   private groupOperationsByType(
-    operations: { operationType: string; cost: number }[]
+    operations: { operation_type: string; cost: number }[]
   ): Record<string, { count: number; totalCost: number }> {
     const grouped: Record<string, { count: number; totalCost: number }> = {};
 
     for (const op of operations) {
-      if (!grouped[op.operationType]) {
-        grouped[op.operationType] = { count: 0, totalCost: 0 };
+      if (!grouped[op.operation_type]) {
+        grouped[op.operation_type] = { count: 0, totalCost: 0 };
       }
-      grouped[op.operationType]!.count += 1;
-      grouped[op.operationType]!.totalCost += op.cost;
+      grouped[op.operation_type]!.count += 1;
+      grouped[op.operation_type]!.totalCost += op.cost;
     }
 
     return grouped;

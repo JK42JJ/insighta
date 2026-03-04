@@ -56,13 +56,13 @@ export class SchedulerManager {
     logger.info('Scheduler starting...');
 
     // Load all enabled schedules
-    const schedules = await this.db.syncSchedule.findMany({
+    const schedules = await this.db.sync_schedules.findMany({
       where: { enabled: true },
     });
 
     // Start cron jobs for each schedule
     for (const schedule of schedules) {
-      await this.startSchedule(schedule.playlistId);
+      await this.startSchedule(schedule.playlist_id);
     }
 
     logger.info('Scheduler started', { scheduleCount: schedules.length });
@@ -96,8 +96,8 @@ export class SchedulerManager {
   public async createSchedule(config: ScheduleConfig): Promise<ScheduleInfo> {
     try {
       // Check if schedule already exists
-      const existing = await this.db.syncSchedule.findUnique({
-        where: { playlistId: config.playlistId },
+      const existing = await this.db.sync_schedules.findUnique({
+        where: { playlist_id: config.playlistId },
       });
 
       if (existing) {
@@ -108,13 +108,13 @@ export class SchedulerManager {
       const nextRun = new Date(Date.now() + config.interval);
 
       // Create schedule
-      const schedule = await this.db.syncSchedule.create({
+      const schedule = await this.db.sync_schedules.create({
         data: {
-          playlistId: config.playlistId,
-          interval: config.interval,
+          playlist_id: config.playlistId,
+          interval_ms: config.interval,
           enabled: config.enabled ?? true,
-          nextRun,
-          maxRetries: config.maxRetries ?? 3,
+          next_run: nextRun,
+          max_retries: config.maxRetries ?? 3,
         },
       });
 
@@ -126,7 +126,7 @@ export class SchedulerManager {
 
       // Start cron job if enabled
       if (schedule.enabled && this.running) {
-        await this.startSchedule(schedule.playlistId);
+        await this.startSchedule(schedule.playlist_id);
       }
 
       return this.mapScheduleInfo(schedule);
@@ -144,8 +144,8 @@ export class SchedulerManager {
     updates: Partial<ScheduleConfig>
   ): Promise<ScheduleInfo> {
     try {
-      const existing = await this.db.syncSchedule.findUnique({
-        where: { playlistId },
+      const existing = await this.db.sync_schedules.findUnique({
+        where: { playlist_id: playlistId },
       });
 
       if (!existing) {
@@ -153,18 +153,18 @@ export class SchedulerManager {
       }
 
       // Calculate new next run time if interval changed
-      let nextRun = existing.nextRun;
-      if (updates.interval && updates.interval !== existing.interval) {
+      let nextRun = existing.next_run;
+      if (updates.interval && updates.interval !== existing.interval_ms) {
         nextRun = new Date(Date.now() + updates.interval);
       }
 
       // Update schedule
-      const schedule = await this.db.syncSchedule.update({
-        where: { playlistId },
+      const schedule = await this.db.sync_schedules.update({
+        where: { playlist_id: playlistId },
         data: {
-          ...(updates.interval && { interval: updates.interval, nextRun }),
+          ...(updates.interval && { interval_ms: updates.interval, next_run: nextRun }),
           ...(updates.enabled !== undefined && { enabled: updates.enabled }),
-          ...(updates.maxRetries && { maxRetries: updates.maxRetries }),
+          ...(updates.maxRetries && { max_retries: updates.maxRetries }),
         },
       });
 
@@ -196,8 +196,8 @@ export class SchedulerManager {
       }
 
       // Delete schedule
-      await this.db.syncSchedule.delete({
-        where: { playlistId },
+      await this.db.sync_schedules.delete({
+        where: { playlist_id: playlistId },
       });
 
       logger.info('Schedule deleted', { playlistId });
@@ -211,8 +211,8 @@ export class SchedulerManager {
    * Get schedule info
    */
   public async getSchedule(playlistId: string): Promise<ScheduleInfo | null> {
-    const schedule = await this.db.syncSchedule.findUnique({
-      where: { playlistId },
+    const schedule = await this.db.sync_schedules.findUnique({
+      where: { playlist_id: playlistId },
     });
 
     return schedule ? this.mapScheduleInfo(schedule) : null;
@@ -222,12 +222,12 @@ export class SchedulerManager {
    * List all schedules
    */
   public async listSchedules(enabledOnly: boolean = false): Promise<ScheduleInfo[]> {
-    const schedules = await this.db.syncSchedule.findMany({
+    const schedules = await this.db.sync_schedules.findMany({
       where: enabledOnly ? { enabled: true } : undefined,
-      orderBy: { nextRun: 'asc' },
+      orderBy: { next_run: 'asc' },
     });
 
-    return schedules.map(s => this.mapScheduleInfo(s));
+    return schedules.map((s) => this.mapScheduleInfo(s));
   }
 
   /**
@@ -249,8 +249,8 @@ export class SchedulerManager {
    */
   private async startSchedule(playlistId: string): Promise<void> {
     try {
-      const schedule = await this.db.syncSchedule.findUnique({
-        where: { playlistId },
+      const schedule = await this.db.sync_schedules.findUnique({
+        where: { playlist_id: playlistId },
       });
 
       if (!schedule || !schedule.enabled) {
@@ -261,7 +261,7 @@ export class SchedulerManager {
       await this.stopSchedule(playlistId);
 
       // Calculate cron expression from interval
-      const cronExpression = this.intervalToCron(schedule.interval);
+      const cronExpression = this.intervalToCron(schedule.interval_ms);
 
       // Create cron job
       const job = cron.schedule(cronExpression, async () => {
@@ -294,8 +294,8 @@ export class SchedulerManager {
     try {
       logger.info('Executing scheduled sync', { playlistId });
 
-      const schedule = await this.db.syncSchedule.findUnique({
-        where: { playlistId },
+      const schedule = await this.db.sync_schedules.findUnique({
+        where: { playlist_id: playlistId },
       });
 
       if (!schedule || !schedule.enabled) {
@@ -304,11 +304,11 @@ export class SchedulerManager {
       }
 
       // Update last run time
-      await this.db.syncSchedule.update({
-        where: { playlistId },
+      await this.db.sync_schedules.update({
+        where: { playlist_id: playlistId },
         data: {
-          lastRun: new Date(),
-          nextRun: new Date(Date.now() + schedule.interval),
+          last_run: new Date(),
+          next_run: new Date(Date.now() + schedule.interval_ms),
         },
       });
 
@@ -317,29 +317,29 @@ export class SchedulerManager {
         const result = await this.syncEngine.syncPlaylist(playlistId);
 
         // Reset retry count on success
-        await this.db.syncSchedule.update({
-          where: { playlistId },
-          data: { retryCount: 0 },
+        await this.db.sync_schedules.update({
+          where: { playlist_id: playlistId },
+          data: { retry_count: 0 },
         });
 
         logger.info('Scheduled sync completed', { playlistId, result });
       } catch (error) {
         // Increment retry count
-        const newRetryCount = schedule.retryCount + 1;
-        await this.db.syncSchedule.update({
-          where: { playlistId },
-          data: { retryCount: newRetryCount },
+        const newRetryCount = schedule.retry_count + 1;
+        await this.db.sync_schedules.update({
+          where: { playlist_id: playlistId },
+          data: { retry_count: newRetryCount },
         });
 
         logger.error('Scheduled sync failed', {
           playlistId,
           retryCount: newRetryCount,
-          maxRetries: schedule.maxRetries,
+          maxRetries: schedule.max_retries,
           error,
         });
 
         // Disable schedule if max retries exceeded
-        if (newRetryCount >= schedule.maxRetries) {
+        if (newRetryCount >= schedule.max_retries) {
           await this.disableSchedule(playlistId);
           logger.warn('Schedule disabled due to max retries', { playlistId });
         }
@@ -379,27 +379,27 @@ export class SchedulerManager {
    */
   private mapScheduleInfo(schedule: {
     id: string;
-    playlistId: string;
-    interval: number;
+    playlist_id: string;
+    interval_ms: number;
     enabled: boolean;
-    lastRun: Date | null;
-    nextRun: Date;
-    retryCount: number;
-    maxRetries: number;
-    createdAt: Date;
-    updatedAt: Date;
+    last_run: Date | null;
+    next_run: Date;
+    retry_count: number;
+    max_retries: number;
+    created_at: Date;
+    updated_at: Date;
   }): ScheduleInfo {
     return {
       id: schedule.id,
-      playlistId: schedule.playlistId,
-      interval: schedule.interval,
+      playlistId: schedule.playlist_id,
+      interval: schedule.interval_ms,
       enabled: schedule.enabled,
-      lastRun: schedule.lastRun,
-      nextRun: schedule.nextRun,
-      retryCount: schedule.retryCount,
-      maxRetries: schedule.maxRetries,
-      createdAt: schedule.createdAt,
-      updatedAt: schedule.updatedAt,
+      lastRun: schedule.last_run,
+      nextRun: schedule.next_run,
+      retryCount: schedule.retry_count,
+      maxRetries: schedule.max_retries,
+      createdAt: schedule.created_at,
+      updatedAt: schedule.updated_at,
     };
   }
 }

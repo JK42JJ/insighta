@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 import { db as prisma } from '../../modules/database/client';
 import {
   RegisterRequestSchema,
@@ -55,7 +56,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         const { email, password, name } = validatedData;
 
         // Check if user already exists
-        const existingUser = await prisma.user.findUnique({
+        const existingUser = await prisma.users.findFirst({
           where: { email },
         });
 
@@ -73,26 +74,31 @@ export async function authRoutes(fastify: FastifyInstance) {
         const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
         // Create user
-        const user = await prisma.user.create({
+        const user = await prisma.users.create({
           data: {
+            id: randomUUID(),
             email,
-            passwordHash,
-            name,
+            encrypted_password: passwordHash,
+            raw_user_meta_data: { name },
           },
         });
 
         // Generate tokens
-        const jwtPayload = createJWTPayload(user);
+        const jwtPayload = createJWTPayload({
+          id: user.id,
+          email: user.email ?? '',
+          name,
+        });
         const tokens = await fastify.generateTokens(jwtPayload);
 
         // Prepare response
         const response: RegisterResponse = {
           user: {
             id: user.id,
-            email: user.email,
-            name: user.name,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt,
+            email: user.email ?? '',
+            name,
+            createdAt: user.created_at ?? new Date(),
+            updatedAt: user.updated_at ?? new Date(),
           },
           tokens,
         };
@@ -138,7 +144,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         const { email, password } = validatedData;
 
         // Find user by email
-        const user = await prisma.user.findUnique({
+        const user = await prisma.users.findFirst({
           where: { email },
         });
 
@@ -153,7 +159,9 @@ export async function authRoutes(fastify: FastifyInstance) {
         }
 
         // Verify password
-        const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+        const passwordMatch = user.encrypted_password
+          ? await bcrypt.compare(password, user.encrypted_password)
+          : false;
 
         if (!passwordMatch) {
           return reply.code(401).send(
@@ -165,18 +173,26 @@ export async function authRoutes(fastify: FastifyInstance) {
           );
         }
 
+        // Extract name from metadata
+        const meta = user.raw_user_meta_data as Record<string, unknown> | null;
+        const name = (meta?.['name'] as string) ?? '';
+
         // Generate tokens
-        const jwtPayload = createJWTPayload(user);
+        const jwtPayload = createJWTPayload({
+          id: user.id,
+          email: user.email ?? '',
+          name,
+        });
         const tokens = await fastify.generateTokens(jwtPayload);
 
         // Prepare response
         const response: LoginResponse = {
           user: {
             id: user.id,
-            email: user.email,
-            name: user.name,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt,
+            email: user.email ?? '',
+            name,
+            createdAt: user.created_at ?? new Date(),
+            updatedAt: user.updated_at ?? new Date(),
           },
           tokens,
         };
@@ -247,7 +263,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         }
 
         // Verify user still exists
-        const user = await prisma.user.findUnique({
+        const user = await prisma.users.findUnique({
           where: { id: payload.userId },
         });
 
@@ -262,7 +278,13 @@ export async function authRoutes(fastify: FastifyInstance) {
         }
 
         // Generate new tokens
-        const jwtPayload = createJWTPayload(user);
+        const meta = user.raw_user_meta_data as Record<string, unknown> | null;
+        const name = (meta?.['name'] as string) ?? '';
+        const jwtPayload = createJWTPayload({
+          id: user.id,
+          email: user.email ?? '',
+          name,
+        });
         const tokens = await fastify.generateTokens(jwtPayload);
 
         // Prepare response
@@ -349,7 +371,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       }
 
       // Fetch fresh user data from database
-      const user = await prisma.user.findUnique({
+      const user = await prisma.users.findUnique({
         where: { id: request.user.userId },
       });
 
@@ -357,14 +379,18 @@ export async function authRoutes(fastify: FastifyInstance) {
         throw new Error('User not found');
       }
 
+      // Extract name from metadata
+      const meta = user.raw_user_meta_data as Record<string, unknown> | null;
+      const name = (meta?.['name'] as string) ?? '';
+
       // Prepare response
       const response: GetMeResponse = {
         user: {
           id: user.id,
-          email: user.email,
-          name: user.name,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
+          email: user.email ?? '',
+          name,
+          createdAt: user.created_at ?? new Date(),
+          updatedAt: user.updated_at ?? new Date(),
         },
       };
 

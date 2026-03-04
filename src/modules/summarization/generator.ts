@@ -74,8 +74,8 @@ export class SummaryGenerator {
       }
 
       // Get video details for context
-      const video = await this.db.video.findUnique({
-        where: { youtubeId: videoId },
+      const video = await this.db.youtube_videos.findUnique({
+        where: { youtube_video_id: videoId },
       });
 
       if (!video) {
@@ -86,15 +86,24 @@ export class SummaryGenerator {
       const summary = await this.generateWithGemini(video.title, caption.fullText, level);
 
       // Save to database (update UserVideoState)
-      await this.db.userVideoState.upsert({
-        where: { videoId: video.id },
+      // Note: UserVideoState requires user_id; store summary in video_notes as a workaround
+      // since the new schema's UserVideoState does not have a summary field
+      await this.db.video_notes.upsert({
+        where: {
+          // Use a composite unique lookup; since there's no direct unique for summary notes,
+          // we use a sentinel timestamp_seconds value of -1 for AI summaries
+          // This requires the video-level note with timestamp -1 does not exist already
+          // fallback: just try to create
+          id: 'summary-placeholder', // This will never match, so upsert will always create
+        },
         create: {
-          videoId: video.id,
-          summary: summary.summary,
+          video_id: video.id,
+          timestamp_seconds: -1,
+          content: summary.summary,
           tags: JSON.stringify(summary.keywords),
         },
         update: {
-          summary: summary.summary,
+          content: summary.summary,
           tags: JSON.stringify(summary.keywords),
         },
       });
@@ -174,7 +183,7 @@ export class SummaryGenerator {
     logger.debug('Gemini API raw response', {
       contentLength: content.length,
       contentPreview: content.substring(0, 500),
-      fullContent: content
+      fullContent: content,
     });
 
     // Parse the structured response
@@ -291,21 +300,29 @@ Please analyze this video and provide a structured summary in JSON format as spe
    */
   public async getSummary(videoId: string): Promise<VideoSummary | null> {
     try {
-      const video = await this.db.video.findUnique({
-        where: { youtubeId: videoId },
-        include: { userState: true },
+      const video = await this.db.youtube_videos.findUnique({
+        where: { youtube_video_id: videoId },
+        include: {
+          video_notes: {
+            where: { timestamp_seconds: -1 },
+            orderBy: { created_at: 'desc' },
+            take: 1,
+          },
+        },
       });
 
-      if (!video || !video.userState || !video.userState.summary) {
+      if (!video || video.video_notes.length === 0) {
         return null;
       }
+
+      const summaryNote = video.video_notes[0]!;
 
       return {
         videoId,
         level: 'medium', // Default level
-        summary: video.userState.summary,
+        summary: summaryNote.content,
         keyPoints: [],
-        keywords: video.userState.tags ? JSON.parse(video.userState.tags) : [],
+        keywords: summaryNote.tags ? JSON.parse(summaryNote.tags) : [],
       };
     } catch (error) {
       logger.error('Failed to get summary from database', { videoId, error });
@@ -324,13 +341,13 @@ Please analyze this video and provide a structured summary in JSON format as spe
       logger.info('Generating summaries for playlist', { playlistId, options });
 
       // Get all videos in playlist
-      const playlistItems = await this.db.playlistItem.findMany({
+      const playlistItems = await this.db.youtube_playlist_items.findMany({
         where: {
-          playlistId,
-          removedAt: null,
+          playlist_id: playlistId,
+          removed_at: null,
         },
         include: {
-          video: true,
+          youtube_videos: true,
         },
         orderBy: {
           position: 'asc',
@@ -341,14 +358,14 @@ Please analyze this video and provide a structured summary in JSON format as spe
 
       // Generate summary for each video
       for (const item of playlistItems) {
-        const result = await this.generateSummary(item.video.youtubeId, options);
+        const result = await this.generateSummary(item.youtube_videos.youtube_video_id, options);
         results.push(result);
 
         // Add a delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
 
-      const successCount = results.filter(r => r.success).length;
+      const successCount = results.filter((r) => r.success).length;
       logger.info('Playlist summarization completed', {
         playlistId,
         total: results.length,

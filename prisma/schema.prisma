@@ -1,354 +1,668 @@
-// Prisma Schema for YouTube Playlist Sync Module
-// Database: PostgreSQL (production on Neon/Supabase/Railway)
-// For local development with SQLite, use: provider = "sqlite" and DATABASE_URL="file:./data/youtube-sync.db"
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-}
-
-generator client {
-  provider = "prisma-client-js"
-}
-
-// ============================================================================
-// Core Models
-// ============================================================================
-
-model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  name         String
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  @@map("users")
-}
-
-model Playlist {
-  id           String         @id @default(uuid())
-  youtubeId    String         @unique @map("youtube_id")
-  title        String
-  description  String?
-  channelId    String         @map("channel_id")
-  channelTitle String         @map("channel_title")
-  thumbnailUrl String?        @map("thumbnail_url")
-  itemCount    Int            @default(0) @map("item_count")
-  syncStatus   String         @default("PENDING") @map("sync_status")
-  lastSyncedAt DateTime?      @map("last_synced_at")
-  createdAt    DateTime       @default(now()) @map("created_at")
-  updatedAt    DateTime       @updatedAt @map("updated_at")
-
-  items        PlaylistItem[]
-  syncHistory  SyncHistory[]
-
-  @@map("playlists")
-}
-
-model Video {
-  id            String          @id @default(uuid())
-  youtubeId     String          @unique @map("youtube_id")
-  title         String
-  description   String?
-  channelId     String          @map("channel_id")
-  channelTitle  String          @map("channel_title")
-  publishedAt   DateTime        @map("published_at")
-  duration      Int             // in seconds
-  thumbnailUrls String          @map("thumbnail_urls") // JSON string
-  viewCount     Int             @default(0) @map("view_count")
-  likeCount     Int             @default(0) @map("like_count")
-  commentCount  Int             @default(0) @map("comment_count")
-  tags          String?         // JSON string array
-  categoryId    String?         @map("category_id")
-  language      String?
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
-
-  playlistItems PlaylistItem[]
-  userState     UserVideoState?
-  captions      VideoCaption[]
-  notes         VideoNote[]
-  watchSessions WatchSession[]
-
-  @@map("videos")
-}
-
-model PlaylistItem {
-  id         String    @id @default(uuid())
-  playlistId String    @map("playlist_id")
-  videoId    String    @map("video_id")
-  position   Int
-  addedAt    DateTime  @map("added_at")
-  removedAt  DateTime? @map("removed_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
-
-  playlist   Playlist  @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  video      Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
-
-  @@unique([playlistId, videoId, addedAt])
-  @@index([playlistId, position])
-  @@index([videoId])
-  @@index([playlistId, addedAt])
-  @@map("playlist_items")
+  schemas  = ["auth", "public"]
 }
 
 model UserVideoState {
-  id           String      @id @default(uuid())
-  videoId      String      @unique @map("video_id")
-  watchStatus  String      @default("UNWATCHED") @map("watch_status")
-  lastPosition Int         @default(0) @map("last_position") // in seconds
-  watchCount   Int         @default(0) @map("watch_count")
-  notes        String?
-  summary      String?
-  tags         String?     // JSON string array
-  rating       Int?        // 1-5
-  createdAt    DateTime    @default(now()) @map("created_at")
-  updatedAt    DateTime    @updatedAt @map("updated_at")
+  id                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                String         @db.Uuid
+  videoId                String         @map("video_id") @db.Uuid
+  is_in_ideation         Boolean        @default(true)
+  user_note              String?
+  watch_position_seconds Int?           @default(0)
+  is_watched             Boolean?       @default(false)
+  cell_index             Int?           @default(-1)
+  level_id               String?        @default("scratchpad")
+  sort_order             Int?
+  added_to_ideation_at   DateTime       @default(now()) @db.Timestamptz(6)
+  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  users                  users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  video                  youtube_videos @relation(fields: [videoId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  video        Video       @relation(fields: [videoId], references: [id], onDelete: Cascade)
-
+  @@unique([user_id, videoId])
+  @@index([user_id], map: "idx_user_video_states_user_id")
+  @@index([videoId], map: "idx_user_video_states_video_id")
   @@map("user_video_states")
+  @@schema("public")
 }
 
-// ============================================================================
-// Operational Models
-// ============================================================================
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model audit_log_entries {
+  instance_id String?   @db.Uuid
+  id          String    @id @db.Uuid
+  payload     Json?     @db.Json
+  created_at  DateTime? @db.Timestamptz(6)
+  ip_address  String    @default("") @db.VarChar(64)
 
-model SyncHistory {
-  id          String     @id @default(uuid())
-  playlistId  String     @map("playlist_id")
-  status      String
-  startedAt   DateTime   @map("started_at")
-  completedAt DateTime?  @map("completed_at")
-  duration    Int?       // in milliseconds
-  itemsAdded  Int        @default(0) @map("items_added")
-  itemsRemoved Int       @default(0) @map("items_removed")
-  itemsReordered Int     @default(0) @map("items_reordered")
-  quotaUsed   Int        @default(0) @map("quota_used")
-  errorMessage String?   @map("error_message")
-  createdAt   DateTime   @default(now()) @map("created_at")
-
-  playlist    Playlist   @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-
-  @@index([playlistId, startedAt])
-  @@index([status])
-  @@map("sync_history")
+  @@index([instance_id], map: "audit_logs_instance_id_idx")
+  @@schema("auth")
 }
 
-model QuotaUsage {
-  id        String   @id @default(uuid())
-  date      DateTime @unique
-  used      Int      @default(0)
-  limit     Int      @default(10000)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model flow_state {
+  id                     String                @id @db.Uuid
+  user_id                String?               @db.Uuid
+  auth_code              String
+  code_challenge_method  code_challenge_method
+  code_challenge         String
+  provider_type          String
+  provider_access_token  String?
+  provider_refresh_token String?
+  created_at             DateTime?             @db.Timestamptz(6)
+  updated_at             DateTime?             @db.Timestamptz(6)
+  authentication_method  String
+  auth_code_issued_at    DateTime?             @db.Timestamptz(6)
+  saml_relay_states      saml_relay_states[]
 
-  operations QuotaOperation[]
-
-  @@map("quota_usage")
+  @@index([created_at(sort: Desc)])
+  @@index([auth_code], map: "idx_auth_code")
+  @@index([user_id, authentication_method], map: "idx_user_id_auth_method")
+  @@schema("auth")
 }
 
-model QuotaOperation {
-  id           String      @id @default(uuid())
-  quotaUsageId String      @map("quota_usage_id")
-  operationType String     @map("operation_type")
-  cost         Int
-  timestamp    DateTime    @default(now())
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model identities {
+  provider_id     String
+  user_id         String    @db.Uuid
+  identity_data   Json
+  provider        String
+  last_sign_in_at DateTime? @db.Timestamptz(6)
+  created_at      DateTime? @db.Timestamptz(6)
+  updated_at      DateTime? @db.Timestamptz(6)
+  email           String?   @default(dbgenerated("lower((identity_data ->> 'email'::text))"))
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  users           users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  quotaUsage   QuotaUsage  @relation(fields: [quotaUsageId], references: [id], onDelete: Cascade)
-
-  @@index([quotaUsageId])
-  @@index([timestamp])
-  @@map("quota_operations")
+  @@unique([provider_id, provider], map: "identities_provider_id_provider_unique")
+  @@index([email])
+  @@index([user_id])
+  @@schema("auth")
 }
 
-model Credentials {
-  id        String   @id @default(uuid())
-  userId    String   @unique @default("default") @map("user_id")
-  data      String   // Encrypted JSON
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model instances {
+  id              String    @id @db.Uuid
+  uuid            String?   @db.Uuid
+  raw_base_config String?
+  created_at      DateTime? @db.Timestamptz(6)
+  updated_at      DateTime? @db.Timestamptz(6)
 
-  @@map("credentials")
+  @@schema("auth")
 }
 
-model SyncSchedule {
-  id          String    @id @default(uuid())
-  playlistId  String    @unique @map("playlist_id")
-  interval    Int       // in milliseconds
-  enabled     Boolean   @default(true)
-  lastRun     DateTime? @map("last_run")
-  nextRun     DateTime  @map("next_run")
-  retryCount  Int       @default(0) @map("retry_count")
-  maxRetries  Int       @default(3) @map("max_retries")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model mfa_amr_claims {
+  session_id            String   @db.Uuid
+  created_at            DateTime @db.Timestamptz(6)
+  updated_at            DateTime @db.Timestamptz(6)
+  authentication_method String
+  id                    String   @id(map: "amr_id_pk") @db.Uuid
+  sessions              sessions @relation(fields: [session_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([nextRun, enabled])
-  @@map("sync_schedules")
+  @@unique([session_id, authentication_method], map: "mfa_amr_claims_session_id_authentication_method_pkey")
+  @@schema("auth")
 }
 
-// ============================================================================
-// Phase 2: Learning Platform Models
-// ============================================================================
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model mfa_challenges {
+  id                     String      @id @db.Uuid
+  factor_id              String      @db.Uuid
+  created_at             DateTime    @db.Timestamptz(6)
+  verified_at            DateTime?   @db.Timestamptz(6)
+  ip_address             String      @db.Inet
+  otp_code               String?
+  web_authn_session_data Json?
+  mfa_factors            mfa_factors @relation(fields: [factor_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "mfa_challenges_auth_factor_id_fkey")
 
-model VideoCaption {
-  id        String   @id @default(uuid())
-  videoId   String   @map("video_id")
-  language  String
-  text      String   // Full transcript
-  segments  String   // JSON array of {text, start, duration}
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-
-  @@unique([videoId, language])
-  @@index([videoId])
-  @@map("video_captions")
+  @@index([created_at(sort: Desc)], map: "mfa_challenge_created_at_idx")
+  @@schema("auth")
 }
 
-model VideoNote {
-  id        String   @id @default(uuid())
-  videoId   String   @map("video_id")
-  timestamp Int      // in seconds
-  content   String   // Markdown text
-  tags      String?  // JSON array
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model mfa_factors {
+  id                   String           @id @db.Uuid
+  user_id              String           @db.Uuid
+  friendly_name        String?
+  factor_type          factor_type
+  status               factor_status
+  created_at           DateTime         @db.Timestamptz(6)
+  updated_at           DateTime         @db.Timestamptz(6)
+  secret               String?
+  phone                String?
+  last_challenged_at   DateTime?        @unique @db.Timestamptz(6)
+  web_authn_credential Json?
+  web_authn_aaguid     String?          @db.Uuid
+  mfa_challenges       mfa_challenges[]
+  users                users            @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-
-  @@index([videoId, timestamp])
-  @@map("video_notes")
+  @@unique([user_id, phone], map: "unique_phone_factor_per_user")
+  @@index([user_id, created_at], map: "factor_id_created_at_idx")
+  @@index([user_id])
+  @@schema("auth")
 }
 
-model WatchSession {
-  id        String   @id @default(uuid())
-  videoId   String   @map("video_id")
-  startedAt DateTime @map("started_at")
-  endedAt   DateTime @map("ended_at")
-  startPos  Int      @map("start_pos") // in seconds
-  endPos    Int      @map("end_pos")   // in seconds
-  duration  Int      // actual watch duration in seconds
-  createdAt DateTime @default(now()) @map("created_at")
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model one_time_tokens {
+  id         String              @id @db.Uuid
+  user_id    String              @db.Uuid
+  token_type one_time_token_type
+  token_hash String
+  relates_to String
+  created_at DateTime            @default(now()) @db.Timestamp(6)
+  updated_at DateTime            @default(now()) @db.Timestamp(6)
+  users      users               @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-
-  @@index([videoId, startedAt])
-  @@map("watch_sessions")
+  @@unique([user_id, token_type])
+  @@index([relates_to], map: "one_time_tokens_relates_to_hash_idx", type: Hash)
+  @@index([token_hash], map: "one_time_tokens_token_hash_hash_idx", type: Hash)
+  @@schema("auth")
 }
 
-// ============================================================================
-// Universal Adapter Models (DataSourceAdapter)
-// ============================================================================
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model refresh_tokens {
+  instance_id String?   @db.Uuid
+  id          BigInt    @id @default(autoincrement())
+  token       String?   @unique(map: "refresh_tokens_token_unique") @db.VarChar(255)
+  user_id     String?   @db.VarChar(255)
+  revoked     Boolean?
+  created_at  DateTime? @db.Timestamptz(6)
+  updated_at  DateTime? @db.Timestamptz(6)
+  parent      String?   @db.VarChar(255)
+  session_id  String?   @db.Uuid
+  sessions    sessions? @relation(fields: [session_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-model Collection {
-  id              String    @id @default(uuid())
-  sourceId        String    @map("source_id")    // YouTube playlist ID, Notion database ID, etc.
-  sourceType      String    @map("source_type")  // 'youtube', 'notion', 'linkedin', etc.
-  sourceUrl       String?   @map("source_url")   // Original URL
-
-  title           String
-  description     String?
-  creatorId       String?   @map("creator_id")   // Channel ID, user ID, author ID
-  creatorName     String?   @map("creator_name") // Channel title, username, author name
-  thumbnailUrl    String?   @map("thumbnail_url")
-
-  itemCount       Int       @default(0) @map("item_count")
-
-  publishedAt     DateTime? @map("published_at")
-  lastModifiedAt  DateTime? @map("last_modified_at")
-
-  metadata        String?   // JSON: source-specific metadata
-
-  syncStatus      String    @default("PENDING") @map("sync_status")
-  lastSyncedAt    DateTime? @map("last_synced_at")
-
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-
-  items           CollectionItemLink[]
-
-  @@unique([sourceId, sourceType])
-  @@index([sourceType])
-  @@index([syncStatus])
-  @@index([lastSyncedAt])
-  @@map("collections")
+  @@index([instance_id])
+  @@index([instance_id, user_id])
+  @@index([parent])
+  @@index([session_id, revoked])
+  @@index([updated_at(sort: Desc)])
+  @@schema("auth")
 }
 
-model CollectionItemLink {
-  id            String    @id @default(uuid())
-  collectionId  String    @map("collection_id")
-  contentItemId String    @map("content_item_id")
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model saml_providers {
+  id                String        @id @db.Uuid
+  sso_provider_id   String        @db.Uuid
+  entity_id         String        @unique
+  metadata_xml      String
+  metadata_url      String?
+  attribute_mapping Json?
+  created_at        DateTime?     @db.Timestamptz(6)
+  updated_at        DateTime?     @db.Timestamptz(6)
+  name_id_format    String?
+  sso_providers     sso_providers @relation(fields: [sso_provider_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  sourceId      String    @map("source_id")      // Video ID, page ID, file path within source
-  sourceType    String    @map("source_type")
-  position      Int
-
-  addedAt       DateTime  @map("added_at")
-  removedAt     DateTime? @map("removed_at")
-
-  metadata      String?   // JSON: source-specific metadata
-
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  collection    Collection  @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
-
-  @@unique([collectionId, contentItemId])
-  @@index([collectionId, position])
-  @@index([contentItemId])
-  @@map("collection_item_links")
+  @@index([sso_provider_id])
+  @@schema("auth")
 }
 
-model ContentItem {
-  id              String    @id @default(uuid())
-  sourceId        String    @map("source_id")    // YouTube video ID, Notion page ID, file path
-  sourceType      String    @map("source_type")  // 'youtube', 'notion', 'linkedin', etc.
-  sourceUrl       String?   @map("source_url")   // Original URL
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model saml_relay_states {
+  id              String        @id @db.Uuid
+  sso_provider_id String        @db.Uuid
+  request_id      String
+  for_email       String?
+  redirect_to     String?
+  created_at      DateTime?     @db.Timestamptz(6)
+  updated_at      DateTime?     @db.Timestamptz(6)
+  flow_state_id   String?       @db.Uuid
+  flow_state      flow_state?   @relation(fields: [flow_state_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sso_providers   sso_providers @relation(fields: [sso_provider_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  title           String
-  description     String?
-  content         String?   // Full text content (Markdown)
-  contentType     String    @map("content_type") // 'video', 'article', 'document', 'note', etc.
-
-  creatorId       String?   @map("creator_id")
-  creatorName     String?   @map("creator_name")
-
-  thumbnailUrls   String?   @map("thumbnail_urls") // JSON: {default, medium, high, standard, maxres}
-
-  duration        Int?      // seconds (for video/audio)
-  publishedAt     DateTime? @map("published_at")
-  lastModifiedAt  DateTime? @map("last_modified_at")
-
-  tags            String?   // JSON array
-  category        String?
-  language        String?
-
-  metadata        String?   // JSON: source-specific metadata (viewCount, likeCount, etc.)
-
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-
-  collections     CollectionItemLink[]
-
-  @@unique([sourceId, sourceType])
-  @@index([sourceType])
-  @@index([contentType])
-  @@index([publishedAt])
-  @@map("content_items")
+  @@index([created_at(sort: Desc)])
+  @@index([for_email])
+  @@index([sso_provider_id])
+  @@schema("auth")
 }
 
-// ============================================================================
-// Note: Enums are implemented as String fields for cross-database compatibility
-// Valid values are enforced at the application layer:
-//
-// SyncStatus: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED"
-// WatchStatus: "UNWATCHED" | "WATCHING" | "COMPLETED"
-// SourceType: "youtube" | "notion" | "linkedin" | "file" | "google_drive" | "vimeo" | "spotify" | string
-// ContentType: "video" | "article" | "document" | "note" | "audio" | "image" | "playlist" | string
-// ============================================================================
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model schema_migrations {
+  version String @id @db.VarChar(255)
+
+  @@schema("auth")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model sessions {
+  id             String           @id @db.Uuid
+  user_id        String           @db.Uuid
+  created_at     DateTime?        @db.Timestamptz(6)
+  updated_at     DateTime?        @db.Timestamptz(6)
+  factor_id      String?          @db.Uuid
+  aal            aal_level?
+  not_after      DateTime?        @db.Timestamptz(6)
+  refreshed_at   DateTime?        @db.Timestamp(6)
+  user_agent     String?
+  ip             String?          @db.Inet
+  tag            String?
+  mfa_amr_claims mfa_amr_claims[]
+  refresh_tokens refresh_tokens[]
+  users          users            @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([not_after(sort: Desc)])
+  @@index([user_id])
+  @@index([user_id, created_at], map: "user_id_created_at_idx")
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model sso_domains {
+  id              String        @id @db.Uuid
+  sso_provider_id String        @db.Uuid
+  domain          String
+  created_at      DateTime?     @db.Timestamptz(6)
+  updated_at      DateTime?     @db.Timestamptz(6)
+  sso_providers   sso_providers @relation(fields: [sso_provider_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([sso_provider_id])
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model sso_providers {
+  id                String              @id @db.Uuid
+  resource_id       String?
+  created_at        DateTime?           @db.Timestamptz(6)
+  updated_at        DateTime?           @db.Timestamptz(6)
+  saml_providers    saml_providers[]
+  saml_relay_states saml_relay_states[]
+  sso_domains       sso_domains[]
+
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model users {
+  instance_id                 String?                @db.Uuid
+  id                          String                 @id @db.Uuid
+  aud                         String?                @db.VarChar(255)
+  role                        String?                @db.VarChar(255)
+  email                       String?                @db.VarChar(255)
+  encrypted_password          String?                @db.VarChar(255)
+  email_confirmed_at          DateTime?              @db.Timestamptz(6)
+  invited_at                  DateTime?              @db.Timestamptz(6)
+  confirmation_token          String?                @db.VarChar(255)
+  confirmation_sent_at        DateTime?              @db.Timestamptz(6)
+  recovery_token              String?                @db.VarChar(255)
+  recovery_sent_at            DateTime?              @db.Timestamptz(6)
+  email_change_token_new      String?                @db.VarChar(255)
+  email_change                String?                @db.VarChar(255)
+  email_change_sent_at        DateTime?              @db.Timestamptz(6)
+  last_sign_in_at             DateTime?              @db.Timestamptz(6)
+  raw_app_meta_data           Json?
+  raw_user_meta_data          Json?
+  is_super_admin              Boolean?
+  created_at                  DateTime?              @db.Timestamptz(6)
+  updated_at                  DateTime?              @db.Timestamptz(6)
+  phone                       String?                @unique
+  phone_confirmed_at          DateTime?              @db.Timestamptz(6)
+  phone_change                String?                @default("")
+  phone_change_token          String?                @default("") @db.VarChar(255)
+  phone_change_sent_at        DateTime?              @db.Timestamptz(6)
+  confirmed_at                DateTime?              @default(dbgenerated("LEAST(email_confirmed_at, phone_confirmed_at)")) @db.Timestamptz(6)
+  email_change_token_current  String?                @default("") @db.VarChar(255)
+  email_change_confirm_status Int?                   @default(0) @db.SmallInt
+  banned_until                DateTime?              @db.Timestamptz(6)
+  reauthentication_token      String?                @default("") @db.VarChar(255)
+  reauthentication_sent_at    DateTime?              @db.Timestamptz(6)
+  is_sso_user                 Boolean                @default(false)
+  deleted_at                  DateTime?              @db.Timestamptz(6)
+  is_anonymous                Boolean                @default(false)
+  identities                  identities[]
+  mfa_factors                 mfa_factors[]
+  one_time_tokens             one_time_tokens[]
+  sessions                    sessions[]
+  user_local_cards            user_local_cards[]
+  user_subscriptions          user_subscriptions?
+  user_ui_preferences         user_ui_preferences?
+  user_video_states           UserVideoState[]
+  youtube_playlists           youtube_playlists[]
+  youtube_sync_settings       youtube_sync_settings?
+
+  @@index([instance_id])
+  @@index([is_anonymous])
+  @@schema("auth")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_local_cards {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id              String    @db.Uuid
+  url                  String
+  title                String?
+  thumbnail            String?
+  link_type            String
+  user_note            String?
+  metadata_title       String?
+  metadata_description String?
+  metadata_image       String?
+  cell_index           Int?      @default(-1)
+  level_id             String?   @default("scratchpad")
+  sort_order           Int?
+  created_at           DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime? @default(now()) @db.Timestamptz(6)
+  users                users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, url])
+  @@index([created_at(sort: Desc)], map: "idx_user_local_cards_created_at")
+  @@index([level_id], map: "idx_user_local_cards_level_id")
+  @@index([user_id], map: "idx_user_local_cards_user_id")
+  @@schema("public")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_subscriptions {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String    @unique @db.Uuid
+  tier              String?   @default("free")
+  local_cards_limit Int?      @default(10)
+  created_at        DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime? @default(now()) @db.Timestamptz(6)
+  users             users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_user_subscriptions_user_id")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_ui_preferences {
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                  String   @unique @db.Uuid
+  scratchpad_is_floating   Boolean  @default(false)
+  scratchpad_dock_position String?  @default("top")
+  scratchpad_position_x    Int?     @default(100)
+  scratchpad_position_y    Int?     @default(100)
+  scratchpad_width         Int?     @default(320)
+  scratchpad_height        Int?     @default(320)
+  mandala_is_floating      Boolean  @default(false)
+  mandala_is_minimized     Boolean  @default(false)
+  mandala_dock_position    String?  @default("left")
+  mandala_position_x       Int?     @default(100)
+  mandala_position_y       Int?     @default(80)
+  created_at               DateTime @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime @default(now()) @db.Timestamptz(6)
+  users                    users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_user_ui_preferences_user_id")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model youtube_playlist_items {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  playlist_id       String            @db.Uuid
+  video_id          String            @db.Uuid
+  position          Int               @default(0)
+  added_at          DateTime          @default(now()) @db.Timestamptz(6)
+  removed_at        DateTime?         @db.Timestamptz(6)
+  youtube_playlists youtube_playlists @relation(fields: [playlist_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  youtube_videos    youtube_videos    @relation(fields: [video_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([playlist_id, video_id])
+  @@index([playlist_id], map: "idx_youtube_playlist_items_playlist_id")
+  @@index([video_id], map: "idx_youtube_playlist_items_video_id")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model youtube_playlists {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                String                   @db.Uuid
+  youtube_playlist_id    String
+  youtube_playlist_url   String
+  title                  String?
+  description            String?
+  thumbnail_url          String?
+  channel_title          String?
+  item_count             Int?                     @default(0)
+  last_synced_at         DateTime?                @db.Timestamptz(6)
+  sync_status            String?                  @default("pending")
+  sync_error             String?
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  sync_schedules         sync_schedules?
+  youtube_playlist_items youtube_playlist_items[]
+  users                  users                    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  youtube_sync_history   youtube_sync_history[]
+
+  @@unique([user_id, youtube_playlist_id])
+  @@index([user_id], map: "idx_youtube_playlists_user_id")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model youtube_sync_history {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  playlist_id       String            @db.Uuid
+  status            String
+  started_at        DateTime          @default(now()) @db.Timestamptz(6)
+  completed_at      DateTime?         @db.Timestamptz(6)
+  items_added       Int?              @default(0)
+  items_removed     Int?              @default(0)
+  error_message     String?
+  quota_used        Int?              @default(0)
+  youtube_playlists youtube_playlists @relation(fields: [playlist_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([playlist_id], map: "idx_youtube_sync_history_playlist_id")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model youtube_sync_settings {
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                  String    @unique @db.Uuid
+  sync_interval            String    @default("manual")
+  auto_sync_enabled        Boolean   @default(false)
+  youtube_access_token     String?
+  youtube_refresh_token    String?
+  youtube_token_expires_at DateTime? @db.Timestamptz(6)
+  created_at               DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime  @default(now()) @db.Timestamptz(6)
+  users                    users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model youtube_videos {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  youtube_video_id       String                   @unique
+  title                  String
+  description            String?
+  thumbnail_url          String?
+  channel_title          String?
+  duration_seconds       Int?
+  published_at           DateTime?                @db.Timestamptz(6)
+  view_count             BigInt?
+  like_count             BigInt?
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  userState              UserVideoState[]
+  video_captions         video_captions[]
+  video_notes            video_notes[]
+  watch_sessions         watch_sessions[]
+  youtube_playlist_items youtube_playlist_items[]
+
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model credentials {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @unique @default("default")
+  data       String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model quota_operations {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quota_usage_id String      @db.Uuid
+  operation_type String
+  cost           Int
+  timestamp      DateTime    @default(now()) @db.Timestamptz(6)
+  quota_usage    quota_usage @relation(fields: [quota_usage_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([quota_usage_id], map: "idx_quota_operations_quota_usage_id")
+  @@index([timestamp], map: "idx_quota_operations_timestamp")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model quota_usage {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  date             DateTime           @unique @db.Timestamptz(6)
+  used             Int                @default(0)
+  quota_limit      Int                @default(10000)
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(now()) @db.Timestamptz(6)
+  quota_operations quota_operations[]
+
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model sync_schedules {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  playlist_id       String            @unique @db.Uuid
+  interval_ms       Int
+  enabled           Boolean           @default(true)
+  last_run          DateTime?         @db.Timestamptz(6)
+  next_run          DateTime          @db.Timestamptz(6)
+  retry_count       Int               @default(0)
+  max_retries       Int               @default(3)
+  created_at        DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime          @default(now()) @db.Timestamptz(6)
+  youtube_playlists youtube_playlists @relation(fields: [playlist_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([next_run, enabled], map: "idx_sync_schedules_next_run_enabled")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model video_captions {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  video_id       String         @db.Uuid
+  language       String
+  text           String
+  segments       String
+  created_at     DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime       @default(now()) @db.Timestamptz(6)
+  youtube_videos youtube_videos @relation(fields: [video_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([video_id, language])
+  @@index([video_id], map: "idx_video_captions_video_id")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model video_notes {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  video_id          String         @db.Uuid
+  timestamp_seconds Int
+  content           String
+  tags              String?
+  created_at        DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime       @default(now()) @db.Timestamptz(6)
+  youtube_videos    youtube_videos @relation(fields: [video_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([video_id, timestamp_seconds], map: "idx_video_notes_video_id_timestamp")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model watch_sessions {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  video_id       String         @db.Uuid
+  started_at     DateTime       @db.Timestamptz(6)
+  ended_at       DateTime       @db.Timestamptz(6)
+  start_pos      Int
+  end_pos        Int
+  duration       Int
+  created_at     DateTime       @default(now()) @db.Timestamptz(6)
+  youtube_videos youtube_videos @relation(fields: [video_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([video_id, started_at], map: "idx_watch_sessions_video_id_started_at")
+  @@schema("public")
+}
+
+enum aal_level {
+  aal1
+  aal2
+  aal3
+
+  @@schema("auth")
+}
+
+enum code_challenge_method {
+  s256
+  plain
+
+  @@schema("auth")
+}
+
+enum factor_status {
+  unverified
+  verified
+
+  @@schema("auth")
+}
+
+enum factor_type {
+  totp
+  webauthn
+  phone
+
+  @@schema("auth")
+}
+
+enum one_time_token_type {
+  confirmation_token
+  reauthentication_token
+  recovery_token
+  email_change_token_new
+  email_change_token_current
+  phone_change_token
+
+  @@schema("auth")
+}

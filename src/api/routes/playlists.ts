@@ -63,21 +63,21 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Importing playlist', { playlistUrl, userId: request.user.userId });
 
-      const playlist = await getManager().importPlaylist(playlistUrl);
+      const playlist = await getManager().importPlaylist(playlistUrl, request.user.userId);
 
       const response: PlaylistResponse = {
         id: playlist.id,
-        youtubeId: playlist.youtubeId,
-        title: playlist.title,
-        description: playlist.description,
-        channelId: playlist.channelId,
-        channelTitle: playlist.channelTitle,
-        thumbnailUrl: playlist.thumbnailUrl,
-        itemCount: playlist.itemCount,
-        syncStatus: playlist.syncStatus,
-        lastSyncedAt: playlist.lastSyncedAt?.toISOString() ?? null,
-        createdAt: playlist.createdAt.toISOString(),
-        updatedAt: playlist.updatedAt.toISOString(),
+        youtubeId: playlist.youtube_playlist_id,
+        title: playlist.title ?? '',
+        description: playlist.description ?? null,
+        channelId: '',
+        channelTitle: playlist.channel_title ?? '',
+        thumbnailUrl: playlist.thumbnail_url ?? null,
+        itemCount: playlist.item_count ?? 0,
+        syncStatus: playlist.sync_status ?? 'PENDING',
+        lastSyncedAt: playlist.last_synced_at?.toISOString() ?? null,
+        createdAt: playlist.created_at.toISOString(),
+        updatedAt: playlist.updated_at.toISOString(),
       };
 
       logger.info('Playlist imported successfully', { playlistId: playlist.id });
@@ -105,9 +105,19 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Listing playlists', { userId: request.user.userId, query: validatedQuery });
 
+      // Map sortBy to new field names
+      let sortBy: 'title' | 'last_synced_at' | 'created_at' | undefined;
+      if (validatedQuery.sortBy === 'lastSyncedAt') {
+        sortBy = 'last_synced_at';
+      } else if (validatedQuery.sortBy === 'createdAt') {
+        sortBy = 'created_at';
+      } else if (validatedQuery.sortBy === 'title') {
+        sortBy = 'title';
+      }
+
       const { playlists, total } = await getManager().listPlaylists({
         filter: validatedQuery.filter,
-        sortBy: validatedQuery.sortBy,
+        sortBy,
         sortOrder: validatedQuery.sortOrder,
         limit: validatedQuery.limit,
         offset: validatedQuery.offset,
@@ -115,17 +125,17 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       const playlistResponses: PlaylistResponse[] = playlists.map((p) => ({
         id: p.id,
-        youtubeId: p.youtubeId,
-        title: p.title,
-        description: p.description,
-        channelId: p.channelId,
-        channelTitle: p.channelTitle,
-        thumbnailUrl: p.thumbnailUrl,
-        itemCount: p.itemCount,
-        syncStatus: p.syncStatus,
-        lastSyncedAt: p.lastSyncedAt?.toISOString() ?? null,
-        createdAt: p.createdAt.toISOString(),
-        updatedAt: p.updatedAt.toISOString(),
+        youtubeId: p.youtube_playlist_id,
+        title: p.title ?? '',
+        description: p.description ?? null,
+        channelId: '',
+        channelTitle: p.channel_title ?? '',
+        thumbnailUrl: p.thumbnail_url ?? null,
+        itemCount: p.item_count ?? 0,
+        syncStatus: p.sync_status ?? 'PENDING',
+        lastSyncedAt: p.last_synced_at?.toISOString() ?? null,
+        createdAt: p.created_at.toISOString(),
+        updatedAt: p.updated_at.toISOString(),
       }));
 
       const response: ListPlaylistsResponse = {
@@ -163,31 +173,33 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       const response: PlaylistWithItemsResponse = {
         id: playlist.id,
-        youtubeId: playlist.youtubeId,
-        title: playlist.title,
-        description: playlist.description,
-        channelId: playlist.channelId,
-        channelTitle: playlist.channelTitle,
-        thumbnailUrl: playlist.thumbnailUrl,
-        itemCount: playlist.itemCount,
-        syncStatus: playlist.syncStatus,
-        lastSyncedAt: playlist.lastSyncedAt?.toISOString() ?? null,
-        createdAt: playlist.createdAt.toISOString(),
-        updatedAt: playlist.updatedAt.toISOString(),
-        items: playlist.items.map((item) => ({
+        youtubeId: playlist.youtube_playlist_id,
+        title: playlist.title ?? '',
+        description: playlist.description ?? null,
+        channelId: '',
+        channelTitle: playlist.channel_title ?? '',
+        thumbnailUrl: playlist.thumbnail_url ?? null,
+        itemCount: playlist.item_count ?? 0,
+        syncStatus: playlist.sync_status ?? 'PENDING',
+        lastSyncedAt: playlist.last_synced_at?.toISOString() ?? null,
+        createdAt: playlist.created_at.toISOString(),
+        updatedAt: playlist.updated_at.toISOString(),
+        items: playlist.youtube_playlist_items.map((item) => ({
           id: item.id,
           position: item.position,
-          addedAt: item.addedAt.toISOString(),
+          addedAt: item.added_at.toISOString(),
           video: {
-            id: item.video.id,
-            youtubeId: item.video.youtubeId,
-            title: item.video.title,
-            description: item.video.description,
-            channelTitle: item.video.channelTitle,
-            duration: item.video.duration,
-            thumbnailUrls: item.video.thumbnailUrls,
-            viewCount: item.video.viewCount,
-            publishedAt: item.video.publishedAt.toISOString(),
+            id: item.youtube_videos.id,
+            youtubeId: item.youtube_videos.youtube_video_id,
+            title: item.youtube_videos.title,
+            description: item.youtube_videos.description ?? null,
+            channelTitle: item.youtube_videos.channel_title ?? '',
+            duration: item.youtube_videos.duration_seconds ?? 0,
+            thumbnailUrls: item.youtube_videos.thumbnail_url ?? '',
+            viewCount: item.youtube_videos.view_count ? Number(item.youtube_videos.view_count) : 0,
+            publishedAt: item.youtube_videos.published_at
+              ? item.youtube_videos.published_at.toISOString()
+              : item.youtube_videos.created_at.toISOString(),
           },
         })),
       };

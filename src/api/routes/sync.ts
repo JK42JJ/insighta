@@ -71,10 +71,10 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       const statuses: SyncStatusResponse[] = playlists.map((playlist) => ({
         playlistId: playlist.id,
-        status: playlist.syncStatus,
-        lastSyncedAt: playlist.lastSyncedAt?.toISOString() ?? null,
-        itemCount: playlist.itemCount,
-        isRunning: playlist.syncStatus === 'IN_PROGRESS',
+        status: playlist.sync_status ?? 'PENDING',
+        lastSyncedAt: playlist.last_synced_at?.toISOString() ?? null,
+        itemCount: playlist.item_count ?? 0,
+        isRunning: playlist.sync_status === 'IN_PROGRESS',
       }));
 
       return reply.code(200).send({ statuses });
@@ -105,10 +105,10 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       const status: SyncStatusResponse = {
         playlistId: playlist.id,
-        status: playlist.syncStatus,
-        lastSyncedAt: playlist.lastSyncedAt?.toISOString() ?? null,
-        itemCount: playlist.itemCount,
-        isRunning: playlist.syncStatus === 'IN_PROGRESS',
+        status: playlist.sync_status ?? 'PENDING',
+        lastSyncedAt: playlist.last_synced_at?.toISOString() ?? null,
+        itemCount: playlist.item_count ?? 0,
+        isRunning: playlist.sync_status === 'IN_PROGRESS',
       };
 
       return reply.code(200).send({ status });
@@ -137,23 +137,23 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       // Build where clause
       const where: any = {};
       if (validatedQuery.playlistId) {
-        where.playlistId = validatedQuery.playlistId;
+        where.playlist_id = validatedQuery.playlistId;
       }
       if (validatedQuery.status) {
         where.status = validatedQuery.status;
       }
 
       // Get total count
-      const total = await getDb().syncHistory.count({ where });
+      const total = await getDb().youtube_sync_history.count({ where });
 
       // Calculate pagination
       const totalPages = Math.ceil(total / validatedQuery.limit);
       const skip = (validatedQuery.page - 1) * validatedQuery.limit;
 
       // Get history
-      const history = await getDb().syncHistory.findMany({
+      const history = await getDb().youtube_sync_history.findMany({
         where,
-        orderBy: { startedAt: 'desc' },
+        orderBy: { started_at: 'desc' },
         skip,
         take: validatedQuery.limit,
       });
@@ -161,16 +161,16 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const response: SyncHistoryResponse = {
         history: history.map((h) => ({
           id: h.id,
-          playlistId: h.playlistId,
+          playlistId: h.playlist_id,
           status: h.status,
-          startedAt: h.startedAt.toISOString(),
-          completedAt: h.completedAt?.toISOString() ?? null,
-          duration: h.duration,
-          itemsAdded: h.itemsAdded,
-          itemsRemoved: h.itemsRemoved,
-          itemsReordered: h.itemsReordered,
-          quotaUsed: h.quotaUsed,
-          errorMessage: h.errorMessage,
+          startedAt: h.started_at.toISOString(),
+          completedAt: h.completed_at?.toISOString() ?? null,
+          duration: null,
+          itemsAdded: h.items_added ?? 0,
+          itemsRemoved: h.items_removed ?? 0,
+          itemsReordered: 0,
+          quotaUsed: h.quota_used ?? 0,
+          errorMessage: h.error_message ?? null,
         })),
         total,
         page: validatedQuery.page,
@@ -202,10 +202,10 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Getting sync details', { syncId, userId: request.user.userId });
 
-      const syncHistory = await getDb().syncHistory.findUnique({
+      const syncHistory = await getDb().youtube_sync_history.findUnique({
         where: { id: syncId },
         include: {
-          playlist: true,
+          youtube_playlists: true,
         },
       });
 
@@ -222,17 +222,17 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       const response: SyncDetailsResponse = {
         id: syncHistory.id,
-        playlistId: syncHistory.playlistId,
-        playlistTitle: syncHistory.playlist.title,
+        playlistId: syncHistory.playlist_id,
+        playlistTitle: syncHistory.youtube_playlists.title ?? '',
         status: syncHistory.status,
-        startedAt: syncHistory.startedAt.toISOString(),
-        completedAt: syncHistory.completedAt?.toISOString() ?? null,
-        duration: syncHistory.duration,
-        itemsAdded: syncHistory.itemsAdded,
-        itemsRemoved: syncHistory.itemsRemoved,
-        itemsReordered: syncHistory.itemsReordered,
-        quotaUsed: syncHistory.quotaUsed,
-        errorMessage: syncHistory.errorMessage,
+        startedAt: syncHistory.started_at.toISOString(),
+        completedAt: syncHistory.completed_at?.toISOString() ?? null,
+        duration: null,
+        itemsAdded: syncHistory.items_added ?? 0,
+        itemsRemoved: syncHistory.items_removed ?? 0,
+        itemsReordered: 0,
+        quotaUsed: syncHistory.quota_used ?? 0,
+        errorMessage: syncHistory.error_message ?? null,
       };
 
       return reply.code(200).send({ sync: response });

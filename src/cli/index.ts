@@ -53,14 +53,14 @@ program
   .action(async (urlOrId: string) => {
     try {
       const playlistManager = getPlaylistManager();
-      const playlist = await playlistManager.importPlaylist(urlOrId);
+      const playlist = await playlistManager.importPlaylist(urlOrId, 'default');
 
       console.log('✅ Playlist imported successfully');
       console.log(`   ID: ${playlist.id}`);
-      console.log(`   YouTube ID: ${playlist.youtubeId}`);
+      console.log(`   YouTube ID: ${playlist.youtube_playlist_id}`);
       console.log(`   Title: ${playlist.title}`);
-      console.log(`   Channel: ${playlist.channelTitle}`);
-      console.log(`   Items: ${playlist.itemCount}`);
+      console.log(`   Channel: ${playlist.channel_title}`);
+      console.log(`   Items: ${playlist.item_count}`);
       console.log('\nRun "yt-sync sync" to synchronize the playlist items.');
     } catch (error) {
       console.error('❌ Failed to import playlist:', error instanceof Error ? error.message : String(error));
@@ -146,11 +146,11 @@ program
 
       for (const playlist of playlists) {
         console.log(`   ${playlist.title}`);
-        console.log(`   ID: ${playlist.youtubeId}`);
-        console.log(`   Channel: ${playlist.channelTitle}`);
-        console.log(`   Items: ${playlist.itemCount}`);
-        console.log(`   Status: ${playlist.syncStatus}`);
-        console.log(`   Last Sync: ${playlist.lastSyncedAt ? playlist.lastSyncedAt.toISOString() : 'Never'}`);
+        console.log(`   ID: ${playlist.youtube_playlist_id}`);
+        console.log(`   Channel: ${playlist.channel_title}`);
+        console.log(`   Items: ${playlist.item_count}`);
+        console.log(`   Status: ${playlist.sync_status}`);
+        console.log(`   Last Sync: ${playlist.last_synced_at ? playlist.last_synced_at.toISOString() : 'Never'}`);
         console.log('');
       }
     } catch (error) {
@@ -174,12 +174,12 @@ program
 
       console.log('\n📋 Playlist Information:\n');
       console.log(`   Title: ${playlist.title}`);
-      console.log(`   YouTube ID: ${playlist.youtubeId}`);
-      console.log(`   Channel: ${playlist.channelTitle}`);
+      console.log(`   YouTube ID: ${playlist.youtube_playlist_id}`);
+      console.log(`   Channel: ${playlist.channel_title}`);
       console.log(`   Description: ${playlist.description ?? 'N/A'}`);
-      console.log(`   Items: ${playlist.itemCount}`);
-      console.log(`   Status: ${playlist.syncStatus}`);
-      console.log(`   Last Sync: ${playlist.lastSyncedAt ? playlist.lastSyncedAt.toISOString() : 'Never'}`);
+      console.log(`   Items: ${playlist.item_count}`);
+      console.log(`   Status: ${playlist.sync_status}`);
+      console.log(`   Last Sync: ${playlist.last_synced_at ? playlist.last_synced_at.toISOString() : 'Never'}`);
 
       console.log('\n📊 Sync Statistics:\n');
       console.log(`   Total Syncs: ${stats.totalSyncs}`);
@@ -187,13 +187,13 @@ program
       console.log(`   Failed: ${stats.failedSyncs}`);
       console.log(`   Average Duration: ${stats.averageDuration ? `${stats.averageDuration.toFixed(0)}ms` : 'N/A'}`);
 
-      console.log(`\n📹 Videos (${playlist.items.length}):\n`);
-      for (const item of playlist.items.slice(0, 10)) {
-        console.log(`   ${item.position + 1}. ${item.video.title}`);
+      console.log(`\n📹 Videos (${playlist.youtube_playlist_items.length}):\n`);
+      for (const item of playlist.youtube_playlist_items.slice(0, 10)) {
+        console.log(`   ${item.position + 1}. ${item.youtube_videos.title}`);
       }
 
-      if (playlist.items.length > 10) {
-        console.log(`   ... and ${playlist.items.length - 10} more`);
+      if (playlist.youtube_playlist_items.length > 10) {
+        console.log(`   ... and ${playlist.youtube_playlist_items.length - 10} more`);
       }
     } catch (error) {
       console.error('❌ Failed to get playlist info:', error instanceof Error ? error.message : String(error));

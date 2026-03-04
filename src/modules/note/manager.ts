@@ -32,8 +32,8 @@ export class NoteManager {
       logger.info('Creating note', { videoId: input.videoId, timestamp: input.timestamp });
 
       // Verify video exists
-      const video = await this.db.video.findUnique({
-        where: { youtubeId: input.videoId },
+      const video = await this.db.youtube_videos.findUnique({
+        where: { youtube_video_id: input.videoId },
       });
 
       if (!video) {
@@ -44,10 +44,10 @@ export class NoteManager {
       }
 
       // Create note
-      const note = await this.db.videoNote.create({
+      const note = await this.db.video_notes.create({
         data: {
-          videoId: video.id,
-          timestamp: input.timestamp,
+          video_id: video.id,
+          timestamp_seconds: input.timestamp,
           content: input.content,
           tags: input.tags ? JSON.stringify(input.tags) : null,
         },
@@ -77,10 +77,10 @@ export class NoteManager {
 
       const updateData: any = {};
       if (input.content !== undefined) updateData.content = input.content;
-      if (input.timestamp !== undefined) updateData.timestamp = input.timestamp;
+      if (input.timestamp !== undefined) updateData.timestamp_seconds = input.timestamp;
       if (input.tags !== undefined) updateData.tags = JSON.stringify(input.tags);
 
-      const note = await this.db.videoNote.update({
+      const note = await this.db.video_notes.update({
         where: { id: noteId },
         data: updateData,
       });
@@ -107,7 +107,7 @@ export class NoteManager {
     try {
       logger.info('Deleting note', { noteId });
 
-      await this.db.videoNote.delete({
+      await this.db.video_notes.delete({
         where: { id: noteId },
       });
 
@@ -130,7 +130,7 @@ export class NoteManager {
    */
   public async getNote(noteId: string): Promise<VideoNote | null> {
     try {
-      const note = await this.db.videoNote.findUnique({
+      const note = await this.db.video_notes.findUnique({
         where: { id: noteId },
       });
 
@@ -156,17 +156,17 @@ export class NoteManager {
 
       // Filter by video
       if (filters.videoId) {
-        const video = await this.db.video.findUnique({
-          where: { youtubeId: filters.videoId },
+        const video = await this.db.youtube_videos.findUnique({
+          where: { youtube_video_id: filters.videoId },
         });
         if (video) {
-          where.videoId = video.id;
+          where.video_id = video.id;
         }
       }
 
       // Filter by timestamp range
       if (filters.timestampRange) {
-        where.timestamp = {
+        where.timestamp_seconds = {
           gte: filters.timestampRange.start,
           lte: filters.timestampRange.end,
         };
@@ -179,22 +179,22 @@ export class NoteManager {
         };
       }
 
-      const notes = await this.db.videoNote.findMany({
+      const notes = await this.db.video_notes.findMany({
         where,
-        orderBy: [{ videoId: 'asc' }, { timestamp: 'asc' }],
+        orderBy: [{ video_id: 'asc' }, { timestamp_seconds: 'asc' }],
       });
 
       // Filter by tags (client-side since tags are stored as JSON)
       let filteredNotes = notes;
       if (filters.tags && filters.tags.length > 0) {
-        filteredNotes = notes.filter(note => {
+        filteredNotes = notes.filter((note) => {
           if (!note.tags) return false;
           const noteTags = JSON.parse(note.tags);
-          return filters.tags!.some(tag => noteTags.includes(tag));
+          return filters.tags!.some((tag) => noteTags.includes(tag));
         });
       }
 
-      return filteredNotes.map(note => this.mapToVideoNote(note));
+      return filteredNotes.map((note) => this.mapToVideoNote(note));
     } catch (error) {
       logger.error('Failed to search notes', { filters, error });
       return [];
@@ -297,13 +297,13 @@ export class NoteManager {
     // Format each video's notes
     for (const [videoId, videoNotes] of notesByVideo) {
       // Get video title
-      const video = await this.db.video.findFirst({
+      const video = await this.db.youtube_videos.findFirst({
         where: { id: videoId },
       });
 
       lines.push(`## ${video?.title || videoId}\n`);
-      if (video?.youtubeId) {
-        lines.push(`**Video ID**: ${video.youtubeId}\n`);
+      if (video?.youtube_video_id) {
+        lines.push(`**Video ID**: ${video.youtube_video_id}\n`);
       }
       lines.push('');
 
@@ -372,12 +372,12 @@ export class NoteManager {
   private mapToVideoNote(note: any): VideoNote {
     return {
       id: note.id,
-      videoId: note.videoId,
-      timestamp: note.timestamp,
+      videoId: note.video_id,
+      timestamp: note.timestamp_seconds,
       content: note.content,
       tags: note.tags ? JSON.parse(note.tags) : [],
-      createdAt: note.createdAt,
-      updatedAt: note.updatedAt,
+      createdAt: note.created_at,
+      updatedAt: note.updated_at,
     };
   }
 }

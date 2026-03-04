@@ -8,7 +8,7 @@
  * - Manage playlist items
  */
 
-import { Playlist, PlaylistItem } from '@prisma/client';
+import { youtube_playlists, youtube_playlist_items } from '@prisma/client';
 import { SyncStatus } from '../../types/enums';
 import { db } from '../database/client';
 import { getYouTubeClient } from '../../api/client';
@@ -40,12 +40,12 @@ export class PlaylistManager {
   /**
    * Import playlist from YouTube
    */
-  public async importPlaylist(playlistIdOrUrl: string): Promise<Playlist> {
+  public async importPlaylist(playlistIdOrUrl: string, userId: string): Promise<youtube_playlists> {
     const playlistId = this.extractPlaylistId(playlistIdOrUrl);
 
     // Check if already exists
-    const existing = await db.playlist.findUnique({
-      where: { youtubeId: playlistId },
+    const existing = await db.youtube_playlists.findFirst({
+      where: { youtube_playlist_id: playlistId, user_id: userId },
     });
 
     if (existing) {
@@ -64,22 +64,23 @@ export class PlaylistManager {
     }
 
     // Create in database
-    const playlist = await db.playlist.create({
+    const playlist = await db.youtube_playlists.create({
       data: {
-        youtubeId: playlistId,
+        user_id: userId,
+        youtube_playlist_id: playlistId,
+        youtube_playlist_url: `https://www.youtube.com/playlist?list=${playlistId}`,
         title: ytPlaylist.snippet.title ?? 'Untitled Playlist',
         description: ytPlaylist.snippet.description ?? null,
-        channelId: ytPlaylist.snippet.channelId ?? '',
-        channelTitle: ytPlaylist.snippet.channelTitle ?? '',
-        thumbnailUrl: ytPlaylist.snippet.thumbnails?.default?.url ?? null,
-        itemCount: ytPlaylist.contentDetails?.itemCount ?? 0,
-        syncStatus: SyncStatus.PENDING,
+        channel_title: ytPlaylist.snippet.channelTitle ?? '',
+        thumbnail_url: ytPlaylist.snippet.thumbnails?.default?.url ?? null,
+        item_count: ytPlaylist.contentDetails?.itemCount ?? 0,
+        sync_status: SyncStatus.PENDING,
       },
     });
 
     logger.info('Playlist imported successfully', {
       playlistId: playlist.id,
-      youtubeId: playlist.youtubeId,
+      youtubeId: playlist.youtube_playlist_id,
       title: playlist.title,
     });
 
@@ -89,10 +90,10 @@ export class PlaylistManager {
   /**
    * Get playlist by ID or YouTube ID
    */
-  public async getPlaylist(id: string): Promise<Playlist> {
-    const playlist = await db.playlist.findFirst({
+  public async getPlaylist(id: string): Promise<youtube_playlists> {
+    const playlist = await db.youtube_playlists.findFirst({
       where: {
-        OR: [{ id }, { youtubeId: id }],
+        OR: [{ id }, { youtube_playlist_id: id }],
       },
     });
 
@@ -108,29 +109,28 @@ export class PlaylistManager {
    */
   public async listPlaylists(options: {
     filter?: string;
-    sortBy?: 'title' | 'lastSyncedAt' | 'createdAt';
+    sortBy?: 'title' | 'last_synced_at' | 'created_at';
     sortOrder?: 'asc' | 'desc';
     limit?: number;
     offset?: number;
-  } = {}): Promise<{ playlists: Playlist[]; total: number }> {
-    // Note: SQLite doesn't support mode: 'insensitive', but it's case-insensitive by default
+  } = {}): Promise<{ playlists: youtube_playlists[]; total: number }> {
     const where = options.filter
       ? {
           OR: [
             { title: { contains: options.filter } },
-            { channelTitle: { contains: options.filter } },
+            { channel_title: { contains: options.filter } },
           ],
         }
       : undefined;
 
     const [playlists, total] = await Promise.all([
-      db.playlist.findMany({
+      db.youtube_playlists.findMany({
         where,
-        orderBy: { [options.sortBy ?? 'createdAt']: options.sortOrder ?? 'desc' },
+        orderBy: { [options.sortBy ?? 'created_at']: options.sortOrder ?? 'desc' },
         take: options.limit,
         skip: options.offset,
       }),
-      db.playlist.count({ where }),
+      db.youtube_playlists.count({ where }),
     ]);
 
     return { playlists, total };
@@ -139,29 +139,29 @@ export class PlaylistManager {
   /**
    * Update playlist metadata from YouTube
    */
-  public async updatePlaylistMetadata(playlistId: string): Promise<Playlist> {
+  public async updatePlaylistMetadata(playlistId: string): Promise<youtube_playlists> {
     const playlist = await this.getPlaylist(playlistId);
 
     // Reserve quota
     await this.quotaManager.reserveQuota('playlist.details', 1);
 
     // Fetch latest data
-    const ytPlaylist = await this.youtubeClient.getPlaylist(playlist.youtubeId);
+    const ytPlaylist = await this.youtubeClient.getPlaylist(playlist.youtube_playlist_id);
 
     if (!ytPlaylist.snippet) {
-      throw new InvalidPlaylistError(playlist.youtubeId, { reason: 'Missing snippet data' });
+      throw new InvalidPlaylistError(playlist.youtube_playlist_id, { reason: 'Missing snippet data' });
     }
 
     // Update in database
-    const updated = await db.playlist.update({
+    const updated = await db.youtube_playlists.update({
       where: { id: playlist.id },
       data: {
         title: ytPlaylist.snippet.title ?? playlist.title,
         description: ytPlaylist.snippet.description ?? playlist.description,
-        channelTitle: ytPlaylist.snippet.channelTitle ?? playlist.channelTitle,
-        thumbnailUrl: ytPlaylist.snippet.thumbnails?.default?.url ?? playlist.thumbnailUrl,
-        itemCount: ytPlaylist.contentDetails?.itemCount ?? playlist.itemCount,
-        updatedAt: new Date(),
+        channel_title: ytPlaylist.snippet.channelTitle ?? playlist.channel_title,
+        thumbnail_url: ytPlaylist.snippet.thumbnails?.default?.url ?? playlist.thumbnail_url,
+        item_count: ytPlaylist.contentDetails?.itemCount ?? playlist.item_count,
+        updated_at: new Date(),
       },
     });
 
@@ -176,7 +176,7 @@ export class PlaylistManager {
   public async deletePlaylist(playlistId: string): Promise<void> {
     const playlist = await this.getPlaylist(playlistId);
 
-    await db.playlist.delete({
+    await db.youtube_playlists.delete({
       where: { id: playlist.id },
     });
 
@@ -187,18 +187,18 @@ export class PlaylistManager {
    * Get playlist with items
    */
   public async getPlaylistWithItems(playlistId: string): Promise<
-    Playlist & {
-      items: (PlaylistItem & { video: any })[];
+    youtube_playlists & {
+      youtube_playlist_items: (youtube_playlist_items & { youtube_videos: any })[];
     }
   > {
     const playlist = await this.getPlaylist(playlistId);
 
-    const playlistWithItems = await db.playlist.findUnique({
+    const playlistWithItems = await db.youtube_playlists.findUnique({
       where: { id: playlist.id },
       include: {
-        items: {
-          where: { removedAt: null },
-          include: { video: true },
+        youtube_playlist_items: {
+          where: { removed_at: null },
+          include: { youtube_videos: true },
           orderBy: { position: 'asc' },
         },
       },
@@ -215,9 +215,9 @@ export class PlaylistManager {
    * Set playlist sync status
    */
   public async setSyncStatus(playlistId: string, status: SyncStatus): Promise<void> {
-    await db.playlist.update({
+    await db.youtube_playlists.update({
       where: { id: playlistId },
-      data: { syncStatus: status },
+      data: { sync_status: status },
     });
   }
 
@@ -226,7 +226,7 @@ export class PlaylistManager {
    */
   public async isSyncing(playlistId: string): Promise<boolean> {
     const playlist = await this.getPlaylist(playlistId);
-    return playlist.syncStatus === SyncStatus.IN_PROGRESS;
+    return playlist.sync_status === SyncStatus.IN_PROGRESS;
   }
 
   /**
@@ -235,7 +235,7 @@ export class PlaylistManager {
   public async acquireSyncLock(playlistId: string): Promise<void> {
     const playlist = await this.getPlaylist(playlistId);
 
-    if (playlist.syncStatus === SyncStatus.IN_PROGRESS) {
+    if (playlist.sync_status === SyncStatus.IN_PROGRESS) {
       throw new ConcurrentSyncError(playlistId);
     }
 
@@ -246,11 +246,11 @@ export class PlaylistManager {
    * Release sync lock
    */
   public async releaseSyncLock(playlistId: string, status: SyncStatus): Promise<void> {
-    await db.playlist.update({
+    await db.youtube_playlists.update({
       where: { id: playlistId },
       data: {
-        syncStatus: status,
-        lastSyncedAt: status === SyncStatus.COMPLETED ? new Date() : undefined,
+        sync_status: status,
+        last_synced_at: status === SyncStatus.COMPLETED ? new Date() : undefined,
       },
     });
   }
@@ -293,20 +293,25 @@ export class PlaylistManager {
   }> {
     const playlist = await this.getPlaylist(playlistId);
 
-    const history = await db.syncHistory.findMany({
-      where: { playlistId: playlist.id },
-      orderBy: { startedAt: 'desc' },
+    const history = await db.youtube_sync_history.findMany({
+      where: { playlist_id: playlist.id },
+      orderBy: { started_at: 'desc' },
     });
 
     const totalSyncs = history.length;
     const successfulSyncs = history.filter((h) => h.status === SyncStatus.COMPLETED).length;
     const failedSyncs = history.filter((h) => h.status === SyncStatus.FAILED).length;
-    const lastSync = history[0]?.startedAt ?? null;
+    const lastSync = history[0]?.started_at ?? null;
 
-    const completedSyncs = history.filter((h) => h.duration !== null);
+    // New schema does not have a duration column; compute from started_at/completed_at
+    const completedSyncs = history.filter((h) => h.completed_at !== null);
     const averageDuration =
       completedSyncs.length > 0
-        ? completedSyncs.reduce((sum, h) => sum + (h.duration ?? 0), 0) / completedSyncs.length
+        ? completedSyncs.reduce(
+            (sum, h) =>
+              sum + (h.completed_at!.getTime() - h.started_at.getTime()),
+            0
+          ) / completedSyncs.length
         : null;
 
     return {

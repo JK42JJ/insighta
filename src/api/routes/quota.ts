@@ -123,16 +123,16 @@ export const quotaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       today.setUTCHours(0, 0, 0, 0);
 
       // Get or create today's quota usage record
-      let quotaUsage = await getDb().quotaUsage.findUnique({
+      let quotaUsage = await getDb().quota_usage.findUnique({
         where: { date: today },
       });
 
       if (!quotaUsage) {
-        quotaUsage = await getDb().quotaUsage.create({
+        quotaUsage = await getDb().quota_usage.create({
           data: {
             date: today,
             used: 0,
-            limit: parseInt(process.env['YOUTUBE_QUOTA_LIMIT'] || '10000', 10),
+            quota_limit: parseInt(process.env['YOUTUBE_QUOTA_LIMIT'] || '10000', 10),
           },
         });
       }
@@ -144,9 +144,9 @@ export const quotaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const response: QuotaUsageResponse = {
         date: quotaUsage.date.toISOString(),
         used: quotaUsage.used,
-        limit: quotaUsage.limit,
-        remaining: Math.max(0, quotaUsage.limit - quotaUsage.used),
-        percentage: Math.min(100, (quotaUsage.used / quotaUsage.limit) * 100),
+        limit: quotaUsage.quota_limit,
+        remaining: Math.max(0, quotaUsage.quota_limit - quotaUsage.used),
+        percentage: Math.min(100, (quotaUsage.used / quotaUsage.quota_limit) * 100),
         resetAt: resetAt.toISOString(),
       };
 

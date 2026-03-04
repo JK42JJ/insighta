@@ -32,31 +32,30 @@ export class CaptionExtractor {
       logger.info('Extracting captions', { videoId: youtubeId, language });
 
       // Get or create video record
-      let video = await this.db.video.findUnique({
-        where: { youtubeId },
+      let video = await this.db.youtube_videos.findUnique({
+        where: { youtube_video_id: youtubeId },
       });
 
       if (!video) {
         // Video not in database yet, create a minimal record
-        video = await this.db.video.create({
+        video = await this.db.youtube_videos.create({
           data: {
-            youtubeId,
+            youtube_video_id: youtubeId,
             title: `Video ${youtubeId}`,
-            channelId: 'unknown',
-            channelTitle: 'Unknown',
-            publishedAt: new Date(),
-            duration: 0,
-            thumbnailUrls: '[]',
+            channel_title: 'Unknown',
+            published_at: new Date(),
+            duration_seconds: 0,
+            thumbnail_url: null,
           },
         });
         logger.info('Created video record', { youtubeId, videoId: video.id });
       }
 
       // Check if caption already exists in database
-      const existing = await this.db.videoCaption.findUnique({
+      const existing = await this.db.video_captions.findUnique({
         where: {
-          videoId_language: {
-            videoId: video.id,
+          video_id_language: {
+            video_id: video.id,
             language: language || 'en',
           },
         },
@@ -99,7 +98,7 @@ export class CaptionExtractor {
         duration: parseFloat(item.dur) || 0, // Convert to number
       }));
 
-      const fullText = segments.map(s => s.text).join(' ');
+      const fullText = segments.map((s) => s.text).join(' ');
 
       const caption: CaptionMetadata = {
         videoId: youtubeId,
@@ -109,9 +108,9 @@ export class CaptionExtractor {
       };
 
       // Save to database
-      await this.db.videoCaption.create({
+      await this.db.video_captions.create({
         data: {
-          videoId: video.id,
+          video_id: video.id,
           language: language || 'en',
           text: fullText,
           segments: JSON.stringify(segments),
@@ -192,18 +191,18 @@ export class CaptionExtractor {
   public async getCaption(youtubeId: string, language: string = 'en'): Promise<CaptionMetadata | null> {
     try {
       // Find video by YouTube ID
-      const video = await this.db.video.findUnique({
-        where: { youtubeId },
+      const video = await this.db.youtube_videos.findUnique({
+        where: { youtube_video_id: youtubeId },
       });
 
       if (!video) {
         return null;
       }
 
-      const caption = await this.db.videoCaption.findUnique({
+      const caption = await this.db.video_captions.findUnique({
         where: {
-          videoId_language: {
-            videoId: video.id,
+          video_id_language: {
+            video_id: video.id,
             language,
           },
         },
@@ -231,8 +230,8 @@ export class CaptionExtractor {
   public async deleteCaption(youtubeId: string, language: string): Promise<boolean> {
     try {
       // Find video by YouTube ID
-      const video = await this.db.video.findUnique({
-        where: { youtubeId },
+      const video = await this.db.youtube_videos.findUnique({
+        where: { youtube_video_id: youtubeId },
       });
 
       if (!video) {
@@ -240,10 +239,10 @@ export class CaptionExtractor {
         return false;
       }
 
-      await this.db.videoCaption.delete({
+      await this.db.video_captions.delete({
         where: {
-          videoId_language: {
-            videoId: video.id,
+          video_id_language: {
+            video_id: video.id,
             language,
           },
         },
@@ -268,13 +267,13 @@ export class CaptionExtractor {
       logger.info('Extracting captions for playlist', { playlistId, language });
 
       // Get all videos in playlist
-      const playlistItems = await this.db.playlistItem.findMany({
+      const playlistItems = await this.db.youtube_playlist_items.findMany({
         where: {
-          playlistId,
-          removedAt: null,
+          playlist_id: playlistId,
+          removed_at: null,
         },
         include: {
-          video: true,
+          youtube_videos: true,
         },
         orderBy: {
           position: 'asc',
@@ -285,14 +284,14 @@ export class CaptionExtractor {
 
       // Extract captions for each video
       for (const item of playlistItems) {
-        const result = await this.extractCaptions(item.video.youtubeId, language);
+        const result = await this.extractCaptions(item.youtube_videos.youtube_video_id, language);
         results.push(result);
 
         // Add a small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
-      const successCount = results.filter(r => r.success).length;
+      const successCount = results.filter((r) => r.success).length;
       logger.info('Playlist caption extraction completed', {
         playlistId,
         total: results.length,

@@ -8,7 +8,7 @@
  * - Handle duplicates
  */
 
-import { Video, UserVideoState } from '@prisma/client';
+import { youtube_videos, UserVideoState } from '@prisma/client';
 import { WatchStatus } from '../../types/enums';
 import { db } from '../database/client';
 import { getYouTubeClient } from '../../api/client';
@@ -37,32 +37,27 @@ export class VideoManager {
   /**
    * Create or update video from YouTube data
    */
-  public async upsertVideo(ytVideo: youtube_v3.Schema$Video): Promise<Video> {
+  public async upsertVideo(ytVideo: youtube_v3.Schema$Video): Promise<youtube_videos> {
     if (!ytVideo.id || !ytVideo.snippet || !ytVideo.contentDetails) {
       throw new Error('Invalid video data: missing required fields');
     }
 
     const videoData = {
-      youtubeId: ytVideo.id,
+      youtube_video_id: ytVideo.id,
       title: ytVideo.snippet.title ?? 'Untitled Video',
       description: ytVideo.snippet.description ?? null,
-      channelId: ytVideo.snippet.channelId ?? '',
-      channelTitle: ytVideo.snippet.channelTitle ?? '',
-      publishedAt: ytVideo.snippet.publishedAt
+      channel_title: ytVideo.snippet.channelTitle ?? '',
+      published_at: ytVideo.snippet.publishedAt
         ? new Date(ytVideo.snippet.publishedAt)
         : new Date(),
-      duration: this.parseDuration(ytVideo.contentDetails.duration ?? 'PT0S'),
-      thumbnailUrls: JSON.stringify(ytVideo.snippet.thumbnails ?? {}),
-      viewCount: parseInt(ytVideo.statistics?.viewCount ?? '0', 10),
-      likeCount: parseInt(ytVideo.statistics?.likeCount ?? '0', 10),
-      commentCount: parseInt(ytVideo.statistics?.commentCount ?? '0', 10),
-      tags: ytVideo.snippet.tags ? JSON.stringify(ytVideo.snippet.tags) : null,
-      categoryId: ytVideo.snippet.categoryId ?? null,
-      language: ytVideo.snippet.defaultLanguage ?? ytVideo.snippet.defaultAudioLanguage ?? null,
+      duration_seconds: this.parseDuration(ytVideo.contentDetails.duration ?? 'PT0S'),
+      thumbnail_url: ytVideo.snippet.thumbnails?.default?.url ?? null,
+      view_count: ytVideo.statistics?.viewCount ? BigInt(ytVideo.statistics.viewCount) : null,
+      like_count: ytVideo.statistics?.likeCount ? BigInt(ytVideo.statistics.likeCount) : null,
     };
 
-    const video = await db.video.upsert({
-      where: { youtubeId: ytVideo.id },
+    const video = await db.youtube_videos.upsert({
+      where: { youtube_video_id: ytVideo.id },
       create: videoData,
       update: videoData,
     });
@@ -73,8 +68,8 @@ export class VideoManager {
   /**
    * Batch upsert videos
    */
-  public async upsertVideos(ytVideos: youtube_v3.Schema$Video[]): Promise<Video[]> {
-    const videos: Video[] = [];
+  public async upsertVideos(ytVideos: youtube_v3.Schema$Video[]): Promise<youtube_videos[]> {
+    const videos: youtube_videos[] = [];
 
     for (const ytVideo of ytVideos) {
       try {
@@ -94,7 +89,7 @@ export class VideoManager {
   /**
    * Fetch and store videos from YouTube
    */
-  public async fetchAndStoreVideos(videoIds: string[]): Promise<Video[]> {
+  public async fetchAndStoreVideos(videoIds: string[]): Promise<youtube_videos[]> {
     if (videoIds.length === 0) {
       return [];
     }
@@ -116,10 +111,10 @@ export class VideoManager {
   /**
    * Get video by ID or YouTube ID
    */
-  public async getVideo(id: string): Promise<Video> {
-    const video = await db.video.findFirst({
+  public async getVideo(id: string): Promise<youtube_videos> {
+    const video = await db.youtube_videos.findFirst({
       where: {
-        OR: [{ id }, { youtubeId: id }],
+        OR: [{ id }, { youtube_video_id: id }],
       },
     });
 
@@ -133,23 +128,29 @@ export class VideoManager {
   /**
    * Get video with user state
    */
-  public async getVideoWithState(videoId: string): Promise<
-    Video & {
-      userState: UserVideoState | null;
-    }
-  > {
+  public async getVideoWithState(
+    videoId: string,
+    userId: string
+  ): Promise<youtube_videos & { userState: UserVideoState | null }> {
     const video = await this.getVideo(videoId);
 
-    const videoWithState = await db.video.findUnique({
+    const videoWithState = await db.youtube_videos.findUnique({
       where: { id: video.id },
-      include: { userState: true },
+      include: {
+        userState: {
+          where: { user_id: userId },
+        },
+      },
     });
 
     if (!videoWithState) {
       throw new RecordNotFoundError('Video', videoId);
     }
 
-    return videoWithState;
+    return {
+      ...videoWithState,
+      userState: videoWithState.userState[0] ?? null,
+    };
   }
 
   /**
@@ -157,41 +158,33 @@ export class VideoManager {
    */
   public async updateUserState(
     videoId: string,
+    userId: string,
     data: {
       watchStatus?: WatchStatus;
       lastPosition?: number;
       notes?: string;
-      summary?: string;
-      tags?: string[];
-      rating?: number;
+      isWatched?: boolean;
     }
   ): Promise<UserVideoState> {
     const video = await this.getVideo(videoId);
 
     const state = await db.userVideoState.upsert({
-      where: { videoId: video.id },
+      where: { user_id_videoId: { user_id: userId, videoId: video.id } },
       create: {
+        user_id: userId,
         videoId: video.id,
-        watchStatus: data.watchStatus ?? WatchStatus.UNWATCHED,
-        lastPosition: data.lastPosition ?? 0,
-        watchCount: data.watchStatus === WatchStatus.COMPLETED ? 1 : 0,
-        notes: data.notes ?? null,
-        summary: data.summary ?? null,
-        tags: data.tags ? JSON.stringify(data.tags) : null,
-        rating: data.rating ?? null,
+        is_watched: data.isWatched ?? (data.watchStatus === WatchStatus.COMPLETED),
+        watch_position_seconds: data.lastPosition ?? 0,
+        user_note: data.notes ?? null,
       },
       update: {
-        watchStatus: data.watchStatus,
-        lastPosition: data.lastPosition,
-        watchCount: data.watchStatus === WatchStatus.COMPLETED ? { increment: 1 } : undefined,
-        notes: data.notes,
-        summary: data.summary,
-        tags: data.tags ? JSON.stringify(data.tags) : undefined,
-        rating: data.rating,
+        is_watched: data.isWatched ?? (data.watchStatus === WatchStatus.COMPLETED ? true : undefined),
+        watch_position_seconds: data.lastPosition,
+        user_note: data.notes,
       },
     });
 
-    logger.info('User video state updated', { videoId: video.id });
+    logger.info('User video state updated', { videoId: video.id, userId });
 
     return state;
   }
@@ -199,18 +192,19 @@ export class VideoManager {
   /**
    * Mark video as watched
    */
-  public async markAsWatched(videoId: string, position?: number): Promise<UserVideoState> {
-    return this.updateUserState(videoId, {
+  public async markAsWatched(videoId: string, userId: string, position?: number): Promise<UserVideoState> {
+    return this.updateUserState(videoId, userId, {
       watchStatus: WatchStatus.COMPLETED,
       lastPosition: position,
+      isWatched: true,
     });
   }
 
   /**
    * Update watch progress
    */
-  public async updateProgress(videoId: string, position: number): Promise<UserVideoState> {
-    return this.updateUserState(videoId, {
+  public async updateProgress(videoId: string, userId: string, position: number): Promise<UserVideoState> {
+    return this.updateUserState(videoId, userId, {
       watchStatus: WatchStatus.WATCHING,
       lastPosition: position,
     });
@@ -219,25 +213,8 @@ export class VideoManager {
   /**
    * Add notes to video
    */
-  public async addNotes(videoId: string, notes: string): Promise<UserVideoState> {
-    return this.updateUserState(videoId, { notes });
-  }
-
-  /**
-   * Add summary to video
-   */
-  public async addSummary(videoId: string, summary: string): Promise<UserVideoState> {
-    return this.updateUserState(videoId, { summary });
-  }
-
-  /**
-   * Rate video
-   */
-  public async rateVideo(videoId: string, rating: number): Promise<UserVideoState> {
-    if (rating < 1 || rating > 5) {
-      throw new Error('Rating must be between 1 and 5');
-    }
-    return this.updateUserState(videoId, { rating });
+  public async addNotes(videoId: string, userId: string, notes: string): Promise<UserVideoState> {
+    return this.updateUserState(videoId, userId, { notes });
   }
 
   /**
@@ -253,19 +230,19 @@ export class VideoManager {
   > {
     const duplicates = await db.$queryRaw<
       Array<{
-        youtubeId: string;
+        youtube_video_id: string;
         title: string;
         count: bigint;
       }>
     >`
       SELECT
-        v.youtube_id as "youtubeId",
+        v.youtube_video_id,
         v.title,
         COUNT(DISTINCT pi.playlist_id) as count
-      FROM videos v
-      INNER JOIN playlist_items pi ON v.id = pi.video_id
+      FROM youtube_videos v
+      INNER JOIN youtube_playlist_items pi ON v.id = pi.video_id
       WHERE pi.removed_at IS NULL
-      GROUP BY v.youtube_id, v.title
+      GROUP BY v.youtube_video_id, v.title
       HAVING COUNT(DISTINCT pi.playlist_id) > 1
       ORDER BY count DESC
     `;
@@ -273,22 +250,22 @@ export class VideoManager {
     const result = [];
 
     for (const dup of duplicates) {
-      const video = await db.video.findUnique({
-        where: { youtubeId: dup.youtubeId },
+      const video = await db.youtube_videos.findUnique({
+        where: { youtube_video_id: dup.youtube_video_id },
         include: {
-          playlistItems: {
-            where: { removedAt: null },
-            include: { playlist: true },
+          youtube_playlist_items: {
+            where: { removed_at: null },
+            include: { youtube_playlists: true },
           },
         },
       });
 
       if (video) {
         result.push({
-          youtubeId: dup.youtubeId,
+          youtubeId: dup.youtube_video_id,
           title: dup.title,
           count: Number(dup.count),
-          playlists: video.playlistItems.map((pi) => pi.playlist.title),
+          playlists: video.youtube_playlist_items.map((pi) => pi.youtube_playlists.title ?? ''),
         });
       }
     }
@@ -315,14 +292,14 @@ export class VideoManager {
   /**
    * Update video statistics from YouTube
    */
-  public async updateVideoStats(videoId: string): Promise<Video> {
+  public async updateVideoStats(videoId: string): Promise<youtube_videos> {
     const video = await this.getVideo(videoId);
 
     // Reserve quota
     await this.quotaManager.reserveQuota('video.details', 1);
 
     // Fetch from YouTube
-    const ytVideos = await this.youtubeClient.getVideos([video.youtubeId]);
+    const ytVideos = await this.youtubeClient.getVideos([video.youtube_video_id]);
 
     if (ytVideos.length === 0) {
       throw new RecordNotFoundError('Video', videoId);

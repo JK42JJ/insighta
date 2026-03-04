@@ -72,7 +72,7 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       // Build filters
       const filters: any = {
-        videoId: video.youtubeId,
+        videoId: video.youtube_video_id,
       };
 
       if (validatedQuery.tags && validatedQuery.tags.length > 0) {
@@ -134,7 +134,7 @@ export const noteRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       // Create note
       const result = await getNote().createNote({
-        videoId: video.youtubeId,
+        videoId: video.youtube_video_id,
         timestamp: validatedBody.timestamp,
         content: validatedBody.content,
         tags: validatedBody.tags,
