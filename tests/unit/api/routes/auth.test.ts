@@ -1,5 +1,9 @@
 /**
- * Auth API Routes Unit Tests
+ * Auth API Routes Unit Tests (Supabase Auth)
+ *
+ * Tests for the simplified auth routes that delegate
+ * registration/login to Supabase Auth.
+ * Only /auth/me and /auth/logout are backend-managed.
  */
 
 import { FastifyInstance } from 'fastify';
@@ -13,51 +17,25 @@ const mockUserMethods = {
   update: jest.fn(),
 };
 
-const mockRefreshTokenMethods = {
-  create: jest.fn(),
-  findFirst: jest.fn(),
-  delete: jest.fn(),
-  deleteMany: jest.fn(),
-};
-
-const mockTransaction = jest.fn((callback: any) => callback({
-  user: mockUserMethods,
-  refreshToken: mockRefreshTokenMethods,
-}));
-
 // Mock modules before importing authRoutes
 jest.mock('../../../../src/modules/database/client', () => ({
   db: {
     users: mockUserMethods,
-    $transaction: mockTransaction,
   },
   getPrismaClient: () => ({
     users: mockUserMethods,
-    $transaction: mockTransaction,
   }),
   prisma: {
     users: mockUserMethods,
-    $transaction: mockTransaction,
   },
 }));
 
-// Mock bcrypt
-jest.mock('bcrypt', () => ({
-  hash: jest.fn().mockResolvedValue('hashed-password'),
-  compare: jest.fn().mockResolvedValue(true),
-}));
-
-// Mock auth plugin functions
+// Mock auth plugin (no longer exports createJWTPayload/verifyRefreshToken)
 jest.mock('../../../../src/api/plugins/auth', () => ({
-  createJWTPayload: jest.fn((user) => ({
-    userId: user.id,
-    email: user.email,
-    name: user.name,
-  })),
-  verifyRefreshToken: jest.fn().mockResolvedValue({
-    userId: 'test-user-id',
-    email: 'test@example.com',
-    name: 'Test User',
+  extractTokenFromHeader: jest.fn((header?: string) => {
+    if (!header) return null;
+    const parts = header.split(' ');
+    return parts.length === 2 && parts[0] === 'Bearer' ? parts[1] : null;
   }),
 }));
 
@@ -74,32 +52,20 @@ jest.mock('../../../../src/utils/logger', () => ({
 // Import after mocks are set up
 import { authRoutes } from '../../../../src/api/routes/auth';
 
-describe('Auth Routes', () => {
+describe('Auth Routes (Supabase Auth)', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
     app = Fastify({ logger: false });
 
-    // Register generateTokens decorator
-    app.decorate('generateTokens', async () => ({
-      accessToken: 'mock-access-token',
-      refreshToken: 'mock-refresh-token',
-      expiresIn: 900,
-    }));
-
-    // Register JWT decorator with all required properties
-    app.decorate('jwt', {
-      sign: jest.fn().mockReturnValue('mock-token'),
-      verify: jest.fn(),
-      decode: jest.fn(),
-      lookupToken: jest.fn(),
-      options: {},
-    } as any);
-
-    // Register authenticate decorator - must properly stop request processing
+    // Register authenticate decorator (simulates Supabase JWT verification)
     app.decorate('authenticate', async function (request: any, reply: any) {
       if (request.headers.authorization) {
-        request.user = { userId: 'test-user-id' };
+        request.user = {
+          userId: 'test-user-id',
+          email: 'test@example.com',
+          name: 'Test User',
+        };
       } else {
         reply.hijack();
         reply.raw.statusCode = 401;
@@ -108,10 +74,9 @@ describe('Auth Routes', () => {
       }
     });
 
-    // Custom error handler to format validation errors correctly
+    // Custom error handler
     app.setErrorHandler((error, request, reply) => {
       if (error.validation) {
-        // Fastify validation error - format it correctly
         return reply.code(400).send({
           error: {
             code: 'VALIDATION_ERROR',
@@ -122,7 +87,6 @@ describe('Auth Routes', () => {
           },
         });
       }
-      // For other errors, return as-is
       return reply.code(error.statusCode || 500).send({
         error: {
           code: 'INTERNAL_SERVER_ERROR',
@@ -145,188 +109,22 @@ describe('Auth Routes', () => {
     jest.clearAllMocks();
   });
 
-  describe('POST /auth/register', () => {
-    const validRegisterPayload = {
-      email: 'test@example.com',
-      password: 'Password123!',
-      name: 'Test User',
-    };
-
-    test('should register a new user successfully', async () => {
-      mockUserMethods.findFirst.mockResolvedValue(null);
-      mockUserMethods.create.mockResolvedValue({
-        id: 'new-user-id',
-        email: 'test@example.com',
-        encrypted_password: 'hashed-password',
-        created_at: new Date(),
-        updated_at: new Date(),
-        raw_user_meta_data: { name: 'Test User' },
-      });
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/register',
-        payload: validRegisterPayload,
-      });
-
-      expect(response.statusCode).toBe(201);
-      const body = JSON.parse(response.body);
-      expect(body.user).toBeDefined();
-      expect(body.user.email).toBe('test@example.com');
-      expect(body.tokens).toBeDefined();
-      expect(body.tokens.accessToken).toBe('mock-access-token');
-    });
-
-    test('should convert email to lowercase', async () => {
-      mockUserMethods.findFirst.mockResolvedValue(null);
-      mockUserMethods.create.mockResolvedValue({
-        id: 'new-user-id',
-        email: 'test@example.com',
-        encrypted_password: 'hashed-password',
-        created_at: new Date(),
-        updated_at: new Date(),
-        raw_user_meta_data: { name: 'Test User' },
-      });
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/register',
-        payload: {
-          email: 'TEST@EXAMPLE.COM',
-          password: 'Password123!',
-          name: 'Test User',
-        },
-      });
-
-      expect(response.statusCode).toBe(201);
-      const body = JSON.parse(response.body);
-      expect(body.user.email).toBe('test@example.com');
-    });
-
-    test('should return 409 if email already exists', async () => {
-      mockUserMethods.findFirst.mockResolvedValue({
-        id: 'existing-user-id',
-        email: 'test@example.com',
-      });
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/register',
-        payload: validRegisterPayload,
-      });
-
-      expect(response.statusCode).toBe(409);
-      const body = JSON.parse(response.body);
-      expect(body.error.code).toBe('RESOURCE_ALREADY_EXISTS');
-    });
-
-    test('should return 400 for invalid email format', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/register',
-        payload: {
-          email: 'invalid-email',
-          password: 'Password123!',
-          name: 'Test User',
-        },
-      });
-
-      // Fastify schema validation catches invalid email format and returns 400
-      expect(response.statusCode).toBe(400);
-      const body = JSON.parse(response.body);
-      expect(body.error.code).toBe('VALIDATION_ERROR');
-    });
-
-    test('should return 400 for short password', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/register',
-        payload: {
-          email: 'test@example.com',
-          password: '123',
-          name: 'Test User',
-        },
-      });
-
-      // Fastify schema validation catches short password and returns 400
-      expect(response.statusCode).toBe(400);
-      const body = JSON.parse(response.body);
-      expect(body.error.code).toBe('VALIDATION_ERROR');
-    });
-
-    test('should return 400 for password without special characters', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/register',
-        payload: {
-          email: 'test@example.com',
-          password: 'Password123',
-          name: 'Test User',
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    test('should return 400 for missing name field', async () => {
+  describe('Removed endpoints (handled by Supabase)', () => {
+    test('POST /auth/register should return 404', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/auth/register',
         payload: {
           email: 'test@example.com',
           password: 'Password123!',
+          name: 'Test User',
         },
       });
 
-      expect(response.statusCode).toBe(400);
-      const body = JSON.parse(response.body);
-      expect(body.error.code).toBe('VALIDATION_ERROR');
+      expect(response.statusCode).toBe(404);
     });
 
-    test('should return 400 for empty name', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/register',
-        payload: {
-          email: 'test@example.com',
-          password: 'Password123!',
-          name: '',
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    test('should handle database error during registration', async () => {
-      mockUserMethods.findFirst.mockResolvedValue(null);
-      mockUserMethods.create.mockRejectedValue(new Error('Database connection failed'));
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/register',
-        payload: validRegisterPayload,
-      });
-
-      expect(response.statusCode).toBe(500);
-      const body = JSON.parse(response.body);
-      expect(body.error.code).toBe('INTERNAL_SERVER_ERROR');
-    });
-  });
-
-  describe('POST /auth/login', () => {
-    test('should login successfully with valid credentials', async () => {
-      mockUserMethods.findFirst.mockResolvedValue({
-        id: 'user-id',
-        email: 'test@example.com',
-        encrypted_password: 'hashed-password',
-        raw_user_meta_data: { name: 'Test User' },
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
-
-      const bcrypt = require('bcrypt');
-      bcrypt.compare.mockResolvedValue(true);
-
+    test('POST /auth/login should return 404', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/auth/login',
@@ -336,228 +134,19 @@ describe('Auth Routes', () => {
         },
       });
 
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body.user).toBeDefined();
-      expect(body.tokens).toBeDefined();
-      expect(body.tokens.accessToken).toBe('mock-access-token');
+      expect(response.statusCode).toBe(404);
     });
 
-    test('should handle case-insensitive email login', async () => {
-      mockUserMethods.findFirst.mockResolvedValue({
-        id: 'user-id',
-        email: 'test@example.com',
-        encrypted_password: 'hashed-password',
-        raw_user_meta_data: { name: 'Test User' },
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
-
-      const bcrypt = require('bcrypt');
-      bcrypt.compare.mockResolvedValue(true);
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/login',
-        payload: {
-          email: 'TEST@EXAMPLE.COM',
-          password: 'password123',
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-    });
-
-    test('should return 401 for non-existent user', async () => {
-      mockUserMethods.findFirst.mockResolvedValue(null);
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/login',
-        payload: {
-          email: 'nonexistent@example.com',
-          password: 'password123',
-        },
-      });
-
-      expect(response.statusCode).toBe(401);
-      const body = JSON.parse(response.body);
-      expect(body.error.code).toBe('INVALID_CREDENTIALS');
-    });
-
-    test('should return 401 for invalid password', async () => {
-      mockUserMethods.findFirst.mockResolvedValue({
-        id: 'user-id',
-        email: 'test@example.com',
-        encrypted_password: 'hashed-password',
-        raw_user_meta_data: { name: 'Test User' },
-      });
-
-      const bcrypt = require('bcrypt');
-      bcrypt.compare.mockResolvedValue(false);
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/login',
-        payload: {
-          email: 'test@example.com',
-          password: 'wrongpassword',
-        },
-      });
-
-      expect(response.statusCode).toBe(401);
-      const body = JSON.parse(response.body);
-      expect(body.error.code).toBe('INVALID_CREDENTIALS');
-    });
-
-    test('should return 400 for missing password', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/login',
-        payload: {
-          email: 'test@example.com',
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    test('should handle database error during login', async () => {
-      mockUserMethods.findFirst.mockRejectedValue(new Error('Database connection failed'));
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/login',
-        payload: {
-          email: 'test@example.com',
-          password: 'password123',
-        },
-      });
-
-      expect(response.statusCode).toBe(500);
-      const body = JSON.parse(response.body);
-      expect(body.error.code).toBe('INTERNAL_SERVER_ERROR');
-    });
-  });
-
-  describe('POST /auth/refresh', () => {
-    test('should refresh access token with valid refresh token', async () => {
-      const { verifyRefreshToken } = require('../../../../src/api/plugins/auth');
-      verifyRefreshToken.mockResolvedValue({
-        userId: 'user-id',
-        email: 'test@example.com',
-        name: 'Test User',
-      });
-
-      mockUserMethods.findUnique.mockResolvedValue({
-        id: 'user-id',
-        email: 'test@example.com',
-        raw_user_meta_data: { name: 'Test User' },
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
-
+    test('POST /auth/refresh should return 404', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/auth/refresh',
         payload: {
-          refreshToken: 'valid-refresh-token',
+          refreshToken: 'some-token',
         },
       });
 
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body.tokens).toBeDefined();
-      expect(body.tokens.accessToken).toBe('mock-access-token');
-    });
-
-    test('should return 401 for invalid refresh token', async () => {
-      const { verifyRefreshToken } = require('../../../../src/api/plugins/auth');
-      verifyRefreshToken.mockRejectedValue(new Error('Invalid token'));
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/refresh',
-        payload: {
-          refreshToken: 'invalid-token',
-        },
-      });
-
-      expect(response.statusCode).toBe(401);
-      const body = JSON.parse(response.body);
-      expect(body.error.code).toBe('INVALID_TOKEN');
-    });
-
-    test('should return 401 for expired refresh token', async () => {
-      const { verifyRefreshToken } = require('../../../../src/api/plugins/auth');
-      const error = new Error('REFRESH_TOKEN_EXPIRED');
-      verifyRefreshToken.mockRejectedValue(error);
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/refresh',
-        payload: {
-          refreshToken: 'expired-refresh-token',
-        },
-      });
-
-      expect(response.statusCode).toBe(401);
-      const body = JSON.parse(response.body);
-      expect(body.error.code).toBe('TOKEN_EXPIRED');
-    });
-
-    test('should return 401 if user not found during refresh', async () => {
-      const { verifyRefreshToken } = require('../../../../src/api/plugins/auth');
-      verifyRefreshToken.mockResolvedValue({
-        userId: 'deleted-user-id',
-        email: 'deleted@example.com',
-        name: 'Deleted User',
-      });
-
-      mockUserMethods.findUnique.mockResolvedValue(null);
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/refresh',
-        payload: {
-          refreshToken: 'valid-refresh-token',
-        },
-      });
-
-      expect(response.statusCode).toBe(401);
-      const body = JSON.parse(response.body);
-      expect(body.error.code).toBe('UNAUTHORIZED');
-    });
-
-    test('should return 400 for missing refresh token', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/refresh',
-        payload: {},
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    test('should handle database error during refresh', async () => {
-      const { verifyRefreshToken } = require('../../../../src/api/plugins/auth');
-      verifyRefreshToken.mockResolvedValue({
-        userId: 'user-id',
-        email: 'test@example.com',
-        name: 'Test User',
-      });
-
-      mockUserMethods.findUnique.mockRejectedValue(new Error('Database error'));
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/auth/refresh',
-        payload: {
-          refreshToken: 'valid-refresh-token',
-        },
-      });
-
-      expect(response.statusCode).toBe(500);
+      expect(response.statusCode).toBe(404);
     });
   });
 
@@ -567,10 +156,7 @@ describe('Auth Routes', () => {
         method: 'POST',
         url: '/auth/logout',
         headers: {
-          authorization: 'Bearer mock-token',
-        },
-        payload: {
-          refreshToken: 'valid-refresh-token',
+          authorization: 'Bearer mock-supabase-token',
         },
       });
 
@@ -583,9 +169,6 @@ describe('Auth Routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/auth/logout',
-        payload: {
-          refreshToken: 'valid-refresh-token',
-        },
       });
 
       expect(response.statusCode).toBe(401);
@@ -606,7 +189,7 @@ describe('Auth Routes', () => {
         method: 'GET',
         url: '/auth/me',
         headers: {
-          authorization: 'Bearer mock-token',
+          authorization: 'Bearer mock-supabase-token',
         },
       });
 
@@ -614,6 +197,51 @@ describe('Auth Routes', () => {
       const body = JSON.parse(response.body);
       expect(body.user).toBeDefined();
       expect(body.user.email).toBe('test@example.com');
+      expect(body.user.name).toBe('Test User');
+    });
+
+    test('should extract name from full_name metadata', async () => {
+      mockUserMethods.findUnique.mockResolvedValue({
+        id: 'test-user-id',
+        email: 'test@example.com',
+        raw_user_meta_data: { full_name: 'Google User' },
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/auth/me',
+        headers: {
+          authorization: 'Bearer mock-supabase-token',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.user.name).toBe('Google User');
+    });
+
+    test('should fallback to email prefix for name', async () => {
+      mockUserMethods.findUnique.mockResolvedValue({
+        id: 'test-user-id',
+        email: 'test@example.com',
+        raw_user_meta_data: {},
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/auth/me',
+        headers: {
+          authorization: 'Bearer mock-supabase-token',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.user.name).toBe('test');
     });
 
     test('should return 401 without authorization header', async () => {
@@ -625,18 +253,20 @@ describe('Auth Routes', () => {
       expect(response.statusCode).toBe(401);
     });
 
-    test('should return 500 if user not found', async () => {
+    test('should return 404 if user not found in database', async () => {
       mockUserMethods.findUnique.mockResolvedValue(null);
 
       const response = await app.inject({
         method: 'GET',
         url: '/auth/me',
         headers: {
-          authorization: 'Bearer mock-token',
+          authorization: 'Bearer mock-supabase-token',
         },
       });
 
-      expect(response.statusCode).toBe(500);
+      expect(response.statusCode).toBe(404);
+      const body = JSON.parse(response.body);
+      expect(body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
   });
 });

@@ -1,9 +1,12 @@
 /**
  * TubeArchive API Client
  *
- * Replaces Supabase integration with custom backend API.
- * Handles JWT authentication, token refresh, and all API endpoints.
+ * Uses Supabase Auth for authentication.
+ * Gets access token from Supabase session for API calls.
+ * Token refresh is handled automatically by Supabase SDK.
  */
+
+import { supabase } from '../integrations/supabase/client';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -13,20 +16,11 @@ interface ApiError {
   error?: string;
 }
 
-interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-}
-
 interface User {
   id: string;
   email: string;
   name?: string;
   createdAt: string;
-}
-
-interface LoginResponse extends AuthTokens {
-  user: User;
 }
 
 interface Playlist {
@@ -77,32 +71,31 @@ interface SyncStatus {
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
-  private refreshToken: string | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
-    this.loadTokens();
+    this.setupAuthListener();
   }
 
-  // Token Management
-  private loadTokens(): void {
-    this.accessToken = localStorage.getItem('accessToken');
-    this.refreshToken = localStorage.getItem('refreshToken');
+  /**
+   * Listen to Supabase auth state changes and cache the access token.
+   * This keeps isAuthenticated() synchronous for component usage.
+   */
+  private setupAuthListener(): void {
+    // Load initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      this.accessToken = session?.access_token || null;
+    });
+
+    // Listen for auth state changes (login, logout, token refresh)
+    supabase.auth.onAuthStateChange((_event, session) => {
+      this.accessToken = session?.access_token || null;
+    });
   }
 
-  private saveTokens(access: string, refresh: string): void {
-    this.accessToken = access;
-    this.refreshToken = refresh;
-    localStorage.setItem('accessToken', access);
-    localStorage.setItem('refreshToken', refresh);
-  }
-
-  private clearTokens(): void {
-    this.accessToken = null;
-    this.refreshToken = null;
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-  }
+  // ========================================
+  // Token Management (Supabase-managed)
+  // ========================================
 
   public isAuthenticated(): boolean {
     return !!this.accessToken;
@@ -112,29 +105,53 @@ class ApiClient {
     return this.accessToken;
   }
 
+  /**
+   * Get fresh access token from Supabase session.
+   * Falls back to cached token if session fetch fails.
+   */
+  private async getFreshToken(): Promise<string | null> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        this.accessToken = session.access_token;
+        return session.access_token;
+      }
+    } catch {
+      // Fall back to cached token
+    }
+    return this.accessToken;
+  }
+
+  // ========================================
   // HTTP Request Wrapper
+  // ========================================
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}/api/v1${endpoint}`;
+    const token = await this.getFreshToken();
+
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
 
-    if (this.accessToken) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${this.accessToken}`;
+    if (token) {
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
 
-    let response = await fetch(url, { ...options, headers });
+    const response = await fetch(url, { ...options, headers });
 
-    // Handle token refresh on 401
-    if (response.status === 401 && this.refreshToken) {
-      const refreshed = await this.refreshAccessToken();
-      if (refreshed) {
-        (headers as Record<string, string>)['Authorization'] = `Bearer ${this.accessToken}`;
-        response = await fetch(url, { ...options, headers });
+    // On 401, try refreshing session once
+    if (response.status === 401) {
+      const { data: { session } } = await supabase.auth.refreshSession();
+      if (session?.access_token) {
+        this.accessToken = session.access_token;
+        (headers as Record<string, string>)['Authorization'] = `Bearer ${session.access_token}`;
+        const retryResponse = await fetch(url, { ...options, headers });
+        return this.handleResponse<T>(retryResponse);
       }
     }
 
@@ -155,7 +172,6 @@ class ApiClient {
       throw new Error(error.message || `HTTP Error: ${response.status}`);
     }
 
-    // Handle 204 No Content
     if (response.status === 204) {
       return undefined as T;
     }
@@ -163,54 +179,81 @@ class ApiClient {
     return response.json();
   }
 
-  private async refreshAccessToken(): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: this.refreshToken }),
-      });
-
-      if (response.ok) {
-        const data: AuthTokens = await response.json();
-        this.saveTokens(data.accessToken, data.refreshToken);
-        return true;
-      }
-
-      this.clearTokens();
-      return false;
-    } catch {
-      this.clearTokens();
-      return false;
-    }
-  }
-
   // ========================================
-  // Authentication Endpoints
+  // Authentication (Supabase-managed)
   // ========================================
 
-  async login(email: string, password: string): Promise<LoginResponse> {
-    const data = await this.request<LoginResponse>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
+  /**
+   * Sign in with Google OAuth via Supabase
+   */
+  async signInWithGoogle(): Promise<void> {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/`,
+      },
     });
-    this.saveTokens(data.accessToken, data.refreshToken);
-    return data;
+    if (error) throw new Error(error.message);
   }
 
-  async register(email: string, password: string, name?: string): Promise<{ user: User }> {
-    return this.request<{ user: User }>('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, name }),
+  /**
+   * Sign in with email/password via Supabase
+   */
+  async signInWithEmail(email: string, password: string): Promise<User> {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
+    if (error) throw new Error(error.message);
+
+    this.accessToken = data.session?.access_token || null;
+
+    return {
+      id: data.user.id,
+      email: data.user.email || '',
+      name: (data.user.user_metadata?.['name'] as string) || '',
+      createdAt: data.user.created_at,
+    };
   }
 
+  /**
+   * Sign up with email/password via Supabase
+   */
+  async signUpWithEmail(email: string, password: string, name?: string): Promise<User> {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name },
+      },
+    });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error('Registration failed');
+
+    return {
+      id: data.user.id,
+      email: data.user.email || '',
+      name: name || '',
+      createdAt: data.user.created_at,
+    };
+  }
+
+  /**
+   * Sign out via Supabase
+   */
   async logout(): Promise<void> {
+    // Notify backend (optional)
     try {
-      await this.request<void>('/auth/logout', { method: 'POST' });
-    } finally {
-      this.clearTokens();
+      if (this.accessToken) {
+        await this.request<void>('/auth/logout', { method: 'POST' });
+      }
+    } catch {
+      // Ignore backend logout errors
     }
+
+    // Sign out from Supabase (clears session)
+    await supabase.auth.signOut();
+    this.accessToken = null;
   }
 
   async getCurrentUser(): Promise<User> {
@@ -340,7 +383,5 @@ export type {
   Video,
   Note,
   SyncStatus,
-  AuthTokens,
-  LoginResponse,
   ApiError,
 };

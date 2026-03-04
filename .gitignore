@@ -77,5 +77,8 @@ docker-compose.override.yml
 .env.docker.local
 .env.docker
 
+# Production environment (NEVER commit)
+.env.production
+
 # MCP Configuration (contains sensitive keys)
 .mcp.json

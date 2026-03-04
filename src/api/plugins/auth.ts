@@ -4,18 +4,31 @@ import { JWTPayload } from '../schemas/auth.schema';
 import { createErrorResponse, ErrorCode } from '../schemas/common.schema';
 
 /**
- * JWT Authentication Plugin
+ * Supabase JWT Authentication Plugin
  *
- * Provides JWT token generation, verification, and authentication middleware.
- * Integrates with @fastify/jwt for secure token handling.
+ * Verifies Supabase-issued JWT tokens using SUPABASE_JWT_SECRET.
+ * Maps Supabase JWT claims (sub, email, user_metadata) to our JWTPayload format
+ * for backward compatibility with existing route handlers.
  *
- * Features:
- * - Access token generation (15 min expiry)
- * - Refresh token generation (7 day expiry)
- * - Token verification with error handling
- * - Request decorator for authenticated user
- * - Route-level authentication hook
+ * Token lifecycle is managed entirely by Supabase Auth on the frontend.
+ * This plugin only verifies and decodes tokens.
  */
+
+/** Supabase JWT token payload structure */
+interface SupabaseJWTClaims {
+  aud: string;
+  exp: number;
+  iat: number;
+  iss: string;
+  sub: string;
+  email?: string;
+  phone?: string;
+  app_metadata?: Record<string, unknown>;
+  user_metadata?: Record<string, unknown>;
+  role?: string;
+  aal?: string;
+  session_id?: string;
+}
 
 // Extend @fastify/jwt type definitions for user payload
 declare module '@fastify/jwt' {
@@ -28,39 +41,27 @@ declare module '@fastify/jwt' {
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: preHandlerHookHandler;
-    generateTokens: (payload: JWTPayload) => Promise<{ accessToken: string; refreshToken: string; expiresIn: number }>;
   }
 }
 
 /**
- * Token expiration times
- */
-const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes
-const REFRESH_TOKEN_EXPIRY = '7d'; // 7 days
-const ACCESS_TOKEN_EXPIRY_SECONDS = 900; // 15 * 60
-
-/**
- * Register JWT authentication plugin
+ * Register Supabase JWT authentication plugin
  */
 export async function registerAuth(fastify: FastifyInstance) {
-  // Ensure JWT_SECRET is set
-  const jwtSecret = process.env['JWT_SECRET'];
+  // Support both Supabase JWT secret and legacy JWT_SECRET for backward compatibility
+  const jwtSecret = process.env['SUPABASE_JWT_SECRET'] || process.env['JWT_SECRET'];
   if (!jwtSecret) {
     throw new Error(
-      'JWT_SECRET environment variable is required. Please set it in your .env file.'
+      'SUPABASE_JWT_SECRET (or JWT_SECRET) environment variable is required. ' +
+      'Get it from Supabase Dashboard > Settings > API > JWT Secret.'
     );
   }
 
-  const jwtRefreshSecret = process.env['JWT_REFRESH_SECRET'] || `${jwtSecret}_refresh`;
-
-  // Register JWT plugin for access tokens
+  // Register JWT plugin for token verification only (no signing)
   await fastify.register(fastifyJWT, {
     secret: jwtSecret,
-    sign: {
-      expiresIn: ACCESS_TOKEN_EXPIRY,
-    },
     decode: {
-      complete: false, // Return payload only, not full JWT object
+      complete: false,
     },
     messages: {
       badRequestErrorMessage: 'Authorization header format must be: Bearer <token>',
@@ -73,39 +74,18 @@ export async function registerAuth(fastify: FastifyInstance) {
   });
 
   /**
-   * Decorator: Generate both access and refresh tokens
-   */
-  fastify.decorate('generateTokens', async function (payload: JWTPayload) {
-    // Generate access token using the main JWT instance
-    const accessToken = await fastify.jwt.sign(payload);
-
-    // Generate refresh token with refresh secret and unique JTI for rotation
-    // Add jti (JWT ID) to ensure each refresh token is unique even with same payload
-    const refreshPayload = {
-      ...payload,
-      jti: `${payload.userId}_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-    };
-
-    const refreshToken = await fastify.jwt.sign(refreshPayload, {
-      expiresIn: REFRESH_TOKEN_EXPIRY,
-      key: jwtRefreshSecret,
-    });
-
-    return {
-      accessToken,
-      refreshToken,
-      expiresIn: ACCESS_TOKEN_EXPIRY_SECONDS,
-    };
-  });
-
-  /**
    * Decorator: Authentication hook for protected routes
    *
-   * Usage:
+   * Verifies Supabase JWT and maps claims to JWTPayload format:
+   *   sub → userId
+   *   email → email
+   *   user_metadata.name / user_metadata.full_name → name
+   *
+   * Usage unchanged from custom JWT:
    *   fastify.get('/protected', {
-   *     preHandler: [fastify.authenticate],
+   *     onRequest: [fastify.authenticate],
    *     handler: async (request, reply) => {
-   *       // Access authenticated user via request.user
+   *       // request.user.userId, request.user.email, request.user.name
    *     }
    *   });
    */
@@ -114,17 +94,22 @@ export async function registerAuth(fastify: FastifyInstance) {
     reply: FastifyReply
   ) {
     try {
-      // Verify JWT and decode payload
-      const payload = await request.jwtVerify<JWTPayload>();
+      // Verify JWT and decode Supabase claims
+      const decoded = await request.jwtVerify<SupabaseJWTClaims>();
 
-      // Attach user to request
-      request.user = payload;
+      // Map Supabase JWT claims to our JWTPayload for backward compatibility
+      const userMeta = (decoded.user_metadata || {}) as Record<string, unknown>;
+      request.user = {
+        userId: decoded.sub,
+        email: decoded.email || '',
+        name: (userMeta['name'] as string) ||
+              (userMeta['full_name'] as string) ||
+              (decoded.email?.split('@')[0] || ''),
+      };
     } catch (err) {
-      // Handle JWT errors
       const error = err as Error;
       let errorCode = ErrorCode.INVALID_TOKEN;
       let message = 'Invalid authentication token';
-      let statusCode = 401;
 
       if (error.message.includes('expired')) {
         errorCode = ErrorCode.TOKEN_EXPIRED;
@@ -134,7 +119,7 @@ export async function registerAuth(fastify: FastifyInstance) {
         message = 'No authorization token provided';
       }
 
-      return reply.code(statusCode).send(
+      return reply.code(401).send(
         createErrorResponse(errorCode, message, request.url, {
           error: error.message,
         })
@@ -142,45 +127,11 @@ export async function registerAuth(fastify: FastifyInstance) {
     }
   });
 
-  fastify.log.info('JWT authentication plugin registered');
-}
-
-/**
- * Helper: Verify refresh token
- *
- * @param fastify - Fastify instance
- * @param refreshToken - Refresh token to verify
- * @returns Decoded JWT payload
- */
-export async function verifyRefreshToken(
-  fastify: FastifyInstance,
-  refreshToken: string
-): Promise<JWTPayload> {
-  try {
-    const jwtRefreshSecret = process.env['JWT_REFRESH_SECRET'] || `${process.env['JWT_SECRET']}_refresh`;
-
-    // Verify refresh token with refresh secret using 'key' option
-    const payload = await fastify.jwt.verify<JWTPayload>(refreshToken, {
-      key: jwtRefreshSecret,
-    });
-
-    return payload;
-  } catch (err) {
-    const error = err as Error;
-
-    if (error.message.includes('expired')) {
-      throw new Error('REFRESH_TOKEN_EXPIRED');
-    } else {
-      throw new Error('INVALID_REFRESH_TOKEN');
-    }
-  }
+  fastify.log.info('Supabase JWT authentication plugin registered');
 }
 
 /**
  * Helper: Extract token from Authorization header
- *
- * @param authHeader - Authorization header value
- * @returns Extracted token or null
  */
 export function extractTokenFromHeader(authHeader?: string): string | null {
   if (!authHeader) {
@@ -193,22 +144,4 @@ export function extractTokenFromHeader(authHeader?: string): string | null {
   }
 
   return parts[1] || null;
-}
-
-/**
- * Helper: Create JWT payload from user data
- *
- * @param user - User object with id, email, name
- * @returns JWT payload
- */
-export function createJWTPayload(user: {
-  id: string;
-  email: string;
-  name: string;
-}): JWTPayload {
-  return {
-    userId: user.id,
-    email: user.email,
-    name: user.name,
-  };
 }

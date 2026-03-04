@@ -1,0 +1,66 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Image tag to rollback to (commit SHA or "previous")'
+        required: true
+        default: previous
+        type: string
+
+env:
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/insighta-api
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/insighta-frontend
+
+jobs:
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Rollback via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/tubearchive
+
+            VERSION="${{ github.event.inputs.version }}"
+
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            if [ "$VERSION" = "previous" ]; then
+              echo "Rolling back to previous deployment..."
+              docker compose -f docker-compose.prod.yml down
+              docker compose -f docker-compose.prod.yml up -d
+            else
+              echo "Rolling back to version: $VERSION"
+              export API_IMAGE_TAG="${{ env.API_IMAGE }}:${VERSION}"
+              export FRONTEND_IMAGE_TAG="${{ env.FRONTEND_IMAGE }}:${VERSION}"
+
+              # Update image tags in env
+              sed -i "s|API_IMAGE=.*|API_IMAGE=${API_IMAGE_TAG}|" .env.production
+              sed -i "s|FRONTEND_IMAGE=.*|FRONTEND_IMAGE=${FRONTEND_IMAGE_TAG}|" .env.production
+
+              docker compose -f docker-compose.prod.yml pull
+              docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            fi
+
+            # Verify rollback
+            sleep 10
+            RETRIES=6
+            for i in $(seq 1 $RETRIES); do
+              if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+                echo "Rollback successful! Health check passed."
+                exit 0
+              fi
+              echo "Waiting for health check... ($i/$RETRIES)"
+              sleep 10
+            done
+
+            echo "WARNING: Health check failed after rollback"
+            exit 1

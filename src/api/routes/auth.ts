@@ -1,359 +1,28 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import bcrypt from 'bcrypt';
-import { randomUUID } from 'crypto';
 import { db as prisma } from '../../modules/database/client';
 import {
-  RegisterRequestSchema,
-  LoginRequestSchema,
-  RefreshTokenRequestSchema,
-  registerSchema,
-  loginSchema,
-  refreshTokenSchema,
-  logoutSchema,
   getMeSchema,
-  RegisterRequest,
-  LoginRequest,
-  RefreshTokenRequest,
-  RegisterResponse,
-  LoginResponse,
-  RefreshTokenResponse,
-  LogoutResponse,
   GetMeResponse,
 } from '../schemas/auth.schema';
 import { createErrorResponse, ErrorCode } from '../schemas/common.schema';
-import { createJWTPayload, verifyRefreshToken } from '../plugins/auth';
 
 /**
- * Authentication Routes
+ * Authentication Routes (Supabase Auth)
  *
- * Endpoints:
- * - POST /auth/register - Register new user
- * - POST /auth/login - Authenticate user
- * - POST /auth/refresh - Refresh access token
- * - POST /auth/logout - Invalidate refresh token
- * - GET /auth/me - Get current user
- */
-
-const BCRYPT_ROUNDS = 10;
-
-/**
- * Register authentication routes
+ * User registration, login, and token management are handled entirely by
+ * Supabase Auth on the frontend using @supabase/supabase-js.
+ *
+ * This module only provides:
+ * - GET /auth/me - Get current authenticated user info
+ * - POST /auth/logout - Server-side logout acknowledgment
+ *
+ * Frontend auth flow:
+ *   1. supabase.auth.signInWithOAuth({ provider: 'google' })
+ *   2. Supabase handles OAuth flow, returns session with JWT
+ *   3. Frontend sends JWT in Authorization header to API
+ *   4. API verifies JWT using SUPABASE_JWT_SECRET (see plugins/auth.ts)
  */
 export async function authRoutes(fastify: FastifyInstance) {
-  /**
-   * POST /auth/register
-   * Register a new user account
-   */
-  fastify.post<{ Body: RegisterRequest; Reply: RegisterResponse }>(
-    '/register',
-    {
-      schema: registerSchema,
-    },
-    async (request: FastifyRequest<{ Body: RegisterRequest }>, reply: FastifyReply) => {
-      try {
-        // Validate request body
-        const validatedData = RegisterRequestSchema.parse(request.body);
-        const { email, password, name } = validatedData;
-
-        // Check if user already exists
-        const existingUser = await prisma.users.findFirst({
-          where: { email },
-        });
-
-        if (existingUser) {
-          return reply.code(409).send(
-            createErrorResponse(
-              ErrorCode.RESOURCE_ALREADY_EXISTS,
-              'An account with this email already exists',
-              request.url
-            )
-          );
-        }
-
-        // Hash password
-        const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-
-        // Create user
-        const user = await prisma.users.create({
-          data: {
-            id: randomUUID(),
-            email,
-            encrypted_password: passwordHash,
-            raw_user_meta_data: { name },
-          },
-        });
-
-        // Generate tokens
-        const jwtPayload = createJWTPayload({
-          id: user.id,
-          email: user.email ?? '',
-          name,
-        });
-        const tokens = await fastify.generateTokens(jwtPayload);
-
-        // Prepare response
-        const response: RegisterResponse = {
-          user: {
-            id: user.id,
-            email: user.email ?? '',
-            name,
-            createdAt: user.created_at ?? new Date(),
-            updatedAt: user.updated_at ?? new Date(),
-          },
-          tokens,
-        };
-
-        return reply.code(201).send(response);
-      } catch (error) {
-        if (error instanceof Error && error.name === 'ZodError') {
-          return reply.code(400).send(
-            createErrorResponse(
-              ErrorCode.VALIDATION_ERROR,
-              'Request validation failed',
-              request.url,
-              { errors: error }
-            )
-          );
-        }
-
-        fastify.log.error({ err: error }, 'Registration error');
-        return reply.code(500).send(
-          createErrorResponse(
-            ErrorCode.INTERNAL_SERVER_ERROR,
-            'An error occurred during registration',
-            request.url
-          )
-        );
-      }
-    }
-  );
-
-  /**
-   * POST /auth/login
-   * Authenticate user and obtain tokens
-   */
-  fastify.post<{ Body: LoginRequest; Reply: LoginResponse }>(
-    '/login',
-    {
-      schema: loginSchema,
-    },
-    async (request: FastifyRequest<{ Body: LoginRequest }>, reply: FastifyReply) => {
-      try {
-        // Validate request body
-        const validatedData = LoginRequestSchema.parse(request.body);
-        const { email, password } = validatedData;
-
-        // Find user by email
-        const user = await prisma.users.findFirst({
-          where: { email },
-        });
-
-        if (!user) {
-          return reply.code(401).send(
-            createErrorResponse(
-              ErrorCode.INVALID_CREDENTIALS,
-              'Invalid email or password',
-              request.url
-            )
-          );
-        }
-
-        // Verify password
-        const passwordMatch = user.encrypted_password
-          ? await bcrypt.compare(password, user.encrypted_password)
-          : false;
-
-        if (!passwordMatch) {
-          return reply.code(401).send(
-            createErrorResponse(
-              ErrorCode.INVALID_CREDENTIALS,
-              'Invalid email or password',
-              request.url
-            )
-          );
-        }
-
-        // Extract name from metadata
-        const meta = user.raw_user_meta_data as Record<string, unknown> | null;
-        const name = (meta?.['name'] as string) ?? '';
-
-        // Generate tokens
-        const jwtPayload = createJWTPayload({
-          id: user.id,
-          email: user.email ?? '',
-          name,
-        });
-        const tokens = await fastify.generateTokens(jwtPayload);
-
-        // Prepare response
-        const response: LoginResponse = {
-          user: {
-            id: user.id,
-            email: user.email ?? '',
-            name,
-            createdAt: user.created_at ?? new Date(),
-            updatedAt: user.updated_at ?? new Date(),
-          },
-          tokens,
-        };
-
-        return reply.code(200).send(response);
-      } catch (error) {
-        if (error instanceof Error && error.name === 'ZodError') {
-          return reply.code(400).send(
-            createErrorResponse(
-              ErrorCode.VALIDATION_ERROR,
-              'Request validation failed',
-              request.url,
-              { errors: error }
-            )
-          );
-        }
-
-        fastify.log.error({ err: error }, 'Login error');
-        return reply.code(500).send(
-          createErrorResponse(
-            ErrorCode.INTERNAL_SERVER_ERROR,
-            'An error occurred during login',
-            request.url
-          )
-        );
-      }
-    }
-  );
-
-  /**
-   * POST /auth/refresh
-   * Refresh access token using refresh token
-   */
-  fastify.post<{ Body: RefreshTokenRequest; Reply: RefreshTokenResponse }>(
-    '/refresh',
-    {
-      schema: refreshTokenSchema,
-    },
-    async (request: FastifyRequest<{ Body: RefreshTokenRequest }>, reply: FastifyReply) => {
-      try {
-        // Validate request body
-        const validatedData = RefreshTokenRequestSchema.parse(request.body);
-        const { refreshToken } = validatedData;
-
-        // Verify refresh token
-        let payload;
-        try {
-          payload = await verifyRefreshToken(fastify, refreshToken);
-        } catch (error) {
-          const err = error as Error;
-          if (err.message === 'REFRESH_TOKEN_EXPIRED') {
-            return reply.code(401).send(
-              createErrorResponse(
-                ErrorCode.TOKEN_EXPIRED,
-                'Refresh token has expired. Please log in again.',
-                request.url
-              )
-            );
-          } else {
-            return reply.code(401).send(
-              createErrorResponse(
-                ErrorCode.INVALID_TOKEN,
-                'Invalid refresh token',
-                request.url
-              )
-            );
-          }
-        }
-
-        // Verify user still exists
-        const user = await prisma.users.findUnique({
-          where: { id: payload.userId },
-        });
-
-        if (!user) {
-          return reply.code(401).send(
-            createErrorResponse(
-              ErrorCode.UNAUTHORIZED,
-              'User not found',
-              request.url
-            )
-          );
-        }
-
-        // Generate new tokens
-        const meta = user.raw_user_meta_data as Record<string, unknown> | null;
-        const name = (meta?.['name'] as string) ?? '';
-        const jwtPayload = createJWTPayload({
-          id: user.id,
-          email: user.email ?? '',
-          name,
-        });
-        const tokens = await fastify.generateTokens(jwtPayload);
-
-        // Prepare response
-        const response: RefreshTokenResponse = {
-          tokens,
-        };
-
-        return reply.code(200).send(response);
-      } catch (error) {
-        if (error instanceof Error && error.name === 'ZodError') {
-          return reply.code(400).send(
-            createErrorResponse(
-              ErrorCode.VALIDATION_ERROR,
-              'Request validation failed',
-              request.url,
-              { errors: error }
-            )
-          );
-        }
-
-        fastify.log.error({ err: error }, 'Token refresh error');
-        return reply.code(500).send(
-          createErrorResponse(
-            ErrorCode.INTERNAL_SERVER_ERROR,
-            'An error occurred during token refresh',
-            request.url
-          )
-        );
-      }
-    }
-  );
-
-  /**
-   * POST /auth/logout
-   * Invalidate refresh token (client-side token deletion)
-   */
-  fastify.post<{ Body: RefreshTokenRequest; Reply: LogoutResponse }>(
-    '/logout',
-    {
-      schema: logoutSchema,
-      preHandler: [fastify.authenticate],
-    },
-    async (request: FastifyRequest<{ Body: RefreshTokenRequest }>, reply: FastifyReply) => {
-      try {
-        // Note: In a production system, you would typically:
-        // 1. Add the refresh token to a blacklist/revocation list in Redis or database
-        // 2. Set token expiration time in the blacklist
-        // 3. Check blacklist during token refresh
-        //
-        // For now, we'll just return success and rely on client-side token deletion
-
-        const response: LogoutResponse = {
-          message: 'Logged out successfully',
-        };
-
-        return reply.code(200).send(response);
-      } catch (error) {
-        fastify.log.error({ err: error }, 'Logout error');
-        return reply.code(500).send(
-          createErrorResponse(
-            ErrorCode.INTERNAL_SERVER_ERROR,
-            'An error occurred during logout',
-            request.url
-          )
-        );
-      }
-    }
-  );
-
   /**
    * GET /auth/me
    * Get current authenticated user information
@@ -365,25 +34,37 @@ export async function authRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate],
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      // Type guard for authenticated user
       if (!request.user || !('userId' in request.user)) {
-        throw new Error('Unauthorized');
+        return reply.code(401).send(
+          createErrorResponse(
+            ErrorCode.UNAUTHORIZED,
+            'Not authenticated',
+            request.url
+          )
+        );
       }
 
-      // Fetch fresh user data from database
+      // Fetch user data from database
       const user = await prisma.users.findUnique({
         where: { id: request.user.userId },
       });
 
       if (!user) {
-        throw new Error('User not found');
+        return reply.code(404).send(
+          createErrorResponse(
+            ErrorCode.RESOURCE_NOT_FOUND,
+            'User not found',
+            request.url
+          )
+        );
       }
 
       // Extract name from metadata
       const meta = user.raw_user_meta_data as Record<string, unknown> | null;
-      const name = (meta?.['name'] as string) ?? '';
+      const name = (meta?.['name'] as string) ||
+                   (meta?.['full_name'] as string) ||
+                   (user.email?.split('@')[0] ?? '');
 
-      // Prepare response
       const response: GetMeResponse = {
         user: {
           id: user.id,
@@ -398,5 +79,35 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
   );
 
-  fastify.log.info('Authentication routes registered');
+  /**
+   * POST /auth/logout
+   * Server-side logout acknowledgment
+   *
+   * Actual session invalidation is handled by Supabase Auth on the frontend:
+   *   await supabase.auth.signOut()
+   */
+  fastify.post(
+    '/logout',
+    {
+      schema: {
+        description: 'Acknowledge server-side logout',
+        tags: ['auth'],
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' },
+            },
+          },
+        },
+      },
+      preHandler: [fastify.authenticate],
+    },
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      return reply.code(200).send({ message: 'Logged out successfully' });
+    }
+  );
+
+  fastify.log.info('Authentication routes registered (Supabase Auth mode)');
 }

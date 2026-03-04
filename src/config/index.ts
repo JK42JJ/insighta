@@ -18,6 +18,13 @@ dotenv.config();
 const envSchema = z.object({
   // Database
   DATABASE_URL: z.string().default('file:./data/youtube-sync.db'),
+  DIRECT_URL: z.string().optional(),
+
+  // Supabase
+  SUPABASE_URL: z.string().optional(),
+  SUPABASE_ANON_KEY: z.string().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  SUPABASE_JWT_SECRET: z.string().optional(),
 
   // YouTube API
   YOUTUBE_API_KEY: z.string().optional(),
@@ -76,6 +83,15 @@ export const config = {
   // Database
   database: {
     url: env.DATABASE_URL,
+    directUrl: env.DIRECT_URL,
+  },
+
+  // Supabase
+  supabase: {
+    url: env.SUPABASE_URL,
+    anonKey: env.SUPABASE_ANON_KEY,
+    serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
+    jwtSecret: env.SUPABASE_JWT_SECRET,
   },
 
   // YouTube API
