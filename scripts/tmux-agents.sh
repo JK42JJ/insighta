@@ -146,7 +146,7 @@ case "$LAYOUT" in
 
     # Launch claude in Pane 0
     tmux select-pane -t "$SESSION_NAME:0.0"
-    tmux send-keys -t "$SESSION_NAME:0.0" "claude --resume" Enter
+    tmux send-keys -t "$SESSION_NAME:0.0" "claude --dangerously-skip-permissions --resume" Enter
     ;;
 esac
 
