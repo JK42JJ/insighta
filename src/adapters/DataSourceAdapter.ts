@@ -22,14 +22,42 @@
  * Supported data source types
  */
 export type SourceType =
+  // OAuth-based services
   | 'youtube'
   | 'notion'
   | 'linkedin'
-  | 'file'
   | 'google_drive'
   | 'vimeo'
   | 'spotify'
+  // Feed-based services
+  | 'rss'
+  // File parsers
+  | 'file'       // Generic file/directory
+  | 'markdown'
+  | 'pdf'
+  | 'docx'
+  | 'pptx'
+  | 'txt'
   | string; // Allow custom source types
+
+/**
+ * Adapter category for organizational purposes
+ */
+export type AdapterCategory = 'oauth' | 'feed' | 'file';
+
+/**
+ * Adapter metadata with category information
+ */
+export interface AdapterInfo {
+  id: SourceType;
+  name: string;
+  description: string;
+  icon: string;
+  category: AdapterCategory;
+  authType: 'oauth2' | 'api_key' | 'none';
+  supportedContentTypes: ContentType[];
+  configSchema?: Record<string, unknown>; // JSON Schema for UI generation
+}
 
 /**
  * Content types across all sources
