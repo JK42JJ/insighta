@@ -1,7 +1,7 @@
 {
-  "name": "youtube-playlist-sync",
-  "version": "0.1.1",
-  "description": "YouTube playlist synchronization module for personal knowledge management and learning platforms",
+  "name": "tubearchive",
+  "version": "0.2.0",
+  "description": "TubeArchive - YouTube playlist synchronization with frontend for personal knowledge management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -9,7 +9,16 @@
   },
   "scripts": {
     "dev": "ts-node src/index.ts",
+    "dev:all": "concurrently --names \"API,FRONTEND\" --prefix-colors \"blue,green\" \"npm run api:dev\" \"cd frontend && npm run dev\"",
+    "dev:frontend": "cd frontend && npm run dev",
     "build": "tsc",
+    "build:frontend": "cd frontend && npm run build",
+    "build:all": "npm run build && npm run build:frontend",
+    "install:all": "npm install && cd frontend && npm install",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
     "build:watch": "tsc --watch",
     "start": "node dist/index.js",
     "cli": "ts-node src/cli/index.ts",
@@ -40,7 +49,8 @@
     "typecheck": "tsc --noEmit",
     "prepare": "husky install",
     "precommit": "npm run lint && npm run typecheck",
-    "prepush": "npm run test"
+    "prepush": "npm run test",
+    "create:adapter": "tsx scripts/create-adapter.ts"
   },
   "keywords": [
     "youtube",
@@ -85,6 +95,7 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
+    "concurrently": "^9.1.2",
     "@types/jest": "^29.5.11",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.10.6",
@@ -101,7 +112,8 @@
     "ts-jest": "^29.1.1",
     "ts-node": "^10.9.2",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "msw": "^2.7.3"
   },
   "engines": {
     "node": "20.x",

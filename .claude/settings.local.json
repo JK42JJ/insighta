@@ -50,7 +50,25 @@
       "Skill(tubearchive-conventions)",
       "Bash(npx jest:*)",
       "Bash(npx tsc:*)",
-      "Bash(xargs kill:*)"
+      "Bash(xargs kill:*)",
+      "WebFetch(domain:insighta-sandy.vercel.app)",
+      "Bash(xxd:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker restart:*)",
+      "Bash(cd /Users/jeonhokim/cursor/superbase:*)",
+      "Bash(tmux:*)",
+      "Bash(brew list:*)",
+      "Bash(brew install:*)",
+      "Bash(fswatch:*)",
+      "Bash(wc:*)",
+      "Bash(PGPASSWORD=j1sMYPQxTQZ7QLlFd6wpNbV30Y5P47fo psql:*)",
+      "Bash(python3:*)"
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "python3 /Users/jeonhokim/cursor/sync-youtube-playlists/.claude/scripts/context-monitor.py"
   }
 }

@@ -12,7 +12,7 @@
     ],
     "deny": [
       "Bash(rm -rf /)",
-      "Bash(sudo *)"
+      "Bash(sudo:*)"
     ]
   },
   "env": {
