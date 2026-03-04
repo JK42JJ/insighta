@@ -231,8 +231,8 @@ index.html 에 다음 코드가 삽입되어 있어.
   ⎿  (No content)
 
 ⏺ Bash(grep -E "^YOUTUBE|^GOOGLE" /Users/jeonhokim/cursor/superbase/.env.dev 2>/dev/null | head -10)
-  ⎿  GOOGLE_CLIENT_ID=1014306212181-4ngpusiopta8matoh8gu4nvf2kqaavnr.apps.googleusercontent.com
-     GOOGLE_CLIENT_SECRET=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
+  ⎿  GOOGLE_CLIENT_ID=<REDACTED>
+     GOOGLE_CLIENT_SECRET=<REDACTED>
 
 ⏺ YouTube OAuth 환경변수를 Edge Functions 서비스에 추가해야 합니다.
 
@@ -250,8 +250,8 @@ index.html 에 다음 코드가 삽입되어 있어.
       142 +############
       143 +# YouTube OAuth (for Edge Functions)
       144 +############
-      145 +YOUTUBE_CLIENT_ID=1014306212181-4ngpusiopta8matoh8gu4nvf2kqaavnr.apps.googleusercontent.com
-      146 +YOUTUBE_CLIENT_SECRET=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
+      145 +YOUTUBE_CLIENT_ID=<REDACTED>
+      146 +YOUTUBE_CLIENT_SECRET=<REDACTED>
       147 +YOUTUBE_REDIRECT_URI=http://localhost:8000/functions/v1/youtube-auth?action=callback
 
 ⏺ docker-compose.dev.yml의 functions 서비스에 YouTube OAuth 환경변수를 추가합니다.
