@@ -11,8 +11,8 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  API_IMAGE: ghcr.io/${{ github.repository_owner }}/insighta-api
-  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/insighta-frontend
+  API_IMAGE: ghcr.io/jk42jj/insighta-api
+  FRONTEND_IMAGE: ghcr.io/jk42jj/insighta-frontend
 
 jobs:
   ci:
