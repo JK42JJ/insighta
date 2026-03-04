@@ -52,6 +52,7 @@ jobs:
       - run: npm test -- --passWithNoTests --forceExit
         env:
           NODE_ENV: test
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
           ENCRYPTION_SECRET: ${{ secrets.ENCRYPTION_SECRET || '0000000000000000000000000000000000000000000000000000000000000000' }}
 
   build-api:
