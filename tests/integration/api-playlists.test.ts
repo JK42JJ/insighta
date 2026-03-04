@@ -13,6 +13,10 @@ import { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/api/server';
 import { db as prisma } from '../../src/modules/database/client';
 
+// Skip integration tests when no PostgreSQL database is available
+const hasPostgresDb = process.env['DATABASE_URL']?.startsWith('postgres');
+const describeOrSkip = hasPostgresDb ? describe : describe.skip;
+
 // Mock YouTube API Client - must define mock inside jest.mock factory for hoisting
 jest.mock('../../src/api/client', () => {
   const mockYouTubeClient = {
@@ -83,16 +87,17 @@ jest.mock('../../src/api/client', () => {
   };
 });
 
-describe('Playlist API', () => {
+describeOrSkip('Playlist API', () => {
   let app: FastifyInstance;
   let accessToken: string;
+  let testUserId: string;
 
   beforeAll(async () => {
     // Build Fastify app
     app = await buildApp();
 
     // Clean up test user first to ensure fresh registration
-    await prisma.user.deleteMany({
+    await prisma.users.deleteMany({
       where: { email: 'playlist-test@example.com' },
     });
 
@@ -109,6 +114,7 @@ describe('Playlist API', () => {
 
     const body = JSON.parse(registerResponse.body);
     accessToken = body.tokens.accessToken;
+    testUserId = body.user.id;
   });
 
   afterAll(async () => {
@@ -119,10 +125,10 @@ describe('Playlist API', () => {
   });
 
   beforeEach(async () => {
-    // Clean up playlists before each test
-    await prisma.playlistItem.deleteMany({});
-    await prisma.playlist.deleteMany({});
-    await prisma.video.deleteMany({});
+    // Clean up playlists before each test (cascade deletes playlist items)
+    await prisma.youtube_playlist_items.deleteMany({});
+    await prisma.youtube_playlists.deleteMany({});
+    await prisma.youtube_videos.deleteMany({});
   });
 
   describe('POST /api/v1/playlists/import', () => {
@@ -195,42 +201,45 @@ describe('Playlist API', () => {
   describe('GET /api/v1/playlists', () => {
     beforeEach(async () => {
       // Create test playlists directly in database
-      await prisma.playlist.create({
+      await prisma.youtube_playlists.create({
         data: {
-          youtubeId: 'PLtest1',
+          user_id: testUserId,
+          youtube_playlist_id: 'PLtest1',
+          youtube_playlist_url: 'https://www.youtube.com/playlist?list=PLtest1',
           title: 'Test Playlist 1',
           description: 'Description 1',
-          channelId: 'UCtest',
-          channelTitle: 'Test Channel',
-          thumbnailUrl: 'https://example.com/thumb1.jpg',
-          itemCount: 5,
-          syncStatus: 'synced',
+          channel_title: 'Test Channel',
+          thumbnail_url: 'https://example.com/thumb1.jpg',
+          item_count: 5,
+          sync_status: 'synced',
         },
       });
 
-      await prisma.playlist.create({
+      await prisma.youtube_playlists.create({
         data: {
-          youtubeId: 'PLtest2',
+          user_id: testUserId,
+          youtube_playlist_id: 'PLtest2',
+          youtube_playlist_url: 'https://www.youtube.com/playlist?list=PLtest2',
           title: 'Test Playlist 2',
           description: 'Description 2',
-          channelId: 'UCtest',
-          channelTitle: 'Test Channel',
-          thumbnailUrl: 'https://example.com/thumb2.jpg',
-          itemCount: 10,
-          syncStatus: 'synced',
+          channel_title: 'Test Channel',
+          thumbnail_url: 'https://example.com/thumb2.jpg',
+          item_count: 10,
+          sync_status: 'synced',
         },
       });
 
-      await prisma.playlist.create({
+      await prisma.youtube_playlists.create({
         data: {
-          youtubeId: 'PLtest3',
+          user_id: testUserId,
+          youtube_playlist_id: 'PLtest3',
+          youtube_playlist_url: 'https://www.youtube.com/playlist?list=PLtest3',
           title: 'Test Playlist 3',
           description: 'Description 3',
-          channelId: 'UCtest',
-          channelTitle: 'Test Channel',
-          thumbnailUrl: 'https://example.com/thumb3.jpg',
-          itemCount: 15,
-          syncStatus: 'pending',
+          channel_title: 'Test Channel',
+          thumbnail_url: 'https://example.com/thumb3.jpg',
+          item_count: 15,
+          sync_status: 'pending',
         },
       });
     });
@@ -321,40 +330,41 @@ describe('Playlist API', () => {
 
     beforeEach(async () => {
       // Create test playlist
-      const playlist = await prisma.playlist.create({
+      const playlist = await prisma.youtube_playlists.create({
         data: {
-          youtubeId: 'PLtest',
+          user_id: testUserId,
+          youtube_playlist_id: 'PLtest',
+          youtube_playlist_url: 'https://www.youtube.com/playlist?list=PLtest',
           title: 'Test Playlist',
           description: 'Description',
-          channelId: 'UCtest',
-          channelTitle: 'Test Channel',
-          thumbnailUrl: 'https://example.com/thumb.jpg',
-          itemCount: 1,
-          syncStatus: 'synced',
+          channel_title: 'Test Channel',
+          thumbnail_url: 'https://example.com/thumb.jpg',
+          item_count: 1,
+          sync_status: 'synced',
         },
       });
       playlistId = playlist.id;
 
       // Create test video and playlist item
-      const video = await prisma.video.create({
+      const video = await prisma.youtube_videos.create({
         data: {
-          youtubeId: 'vid1',
+          youtube_video_id: 'vid1',
           title: 'Test Video',
           description: 'Video description',
-          channelId: 'UCtest',
-          channelTitle: 'Test Channel',
-          duration: 630, // 10 minutes 30 seconds in seconds
-          publishedAt: new Date(),
-          thumbnailUrls: '["https://example.com/vid1.jpg"]',
+          channel_title: 'Test Channel',
+          duration_seconds: 630, // 10 minutes 30 seconds in seconds
+          published_at: new Date(),
+          thumbnail_url: 'https://example.com/vid1.jpg',
+          view_count: BigInt(0),
+          like_count: BigInt(0),
         },
       });
 
-      await prisma.playlistItem.create({
+      await prisma.youtube_playlist_items.create({
         data: {
-          playlistId,
-          videoId: video.id,
+          playlist_id: playlistId,
+          video_id: video.id,
           position: 0,
-          addedAt: new Date(),
         },
       });
     });
@@ -431,16 +441,17 @@ describe('Playlist API', () => {
 
     beforeEach(async () => {
       // Create test playlist
-      const playlist = await prisma.playlist.create({
+      const playlist = await prisma.youtube_playlists.create({
         data: {
-          youtubeId: 'PLtest',
+          user_id: testUserId,
+          youtube_playlist_id: 'PLtest',
+          youtube_playlist_url: 'https://www.youtube.com/playlist?list=PLtest',
           title: 'Test Playlist',
           description: 'Description',
-          channelId: 'UCtest',
-          channelTitle: 'Test Channel',
-          thumbnailUrl: 'https://example.com/thumb.jpg',
-          itemCount: 1,
-          syncStatus: 'synced',
+          channel_title: 'Test Channel',
+          thumbnail_url: 'https://example.com/thumb.jpg',
+          item_count: 1,
+          sync_status: 'synced',
         },
       });
       playlistId = playlist.id;
@@ -514,16 +525,17 @@ describe('Playlist API', () => {
 
     beforeEach(async () => {
       // Create test playlist
-      const playlist = await prisma.playlist.create({
+      const playlist = await prisma.youtube_playlists.create({
         data: {
-          youtubeId: 'PLtest',
+          user_id: testUserId,
+          youtube_playlist_id: 'PLtest',
+          youtube_playlist_url: 'https://www.youtube.com/playlist?list=PLtest',
           title: 'Test Playlist',
           description: 'Description',
-          channelId: 'UCtest',
-          channelTitle: 'Test Channel',
-          thumbnailUrl: 'https://example.com/thumb.jpg',
-          itemCount: 1,
-          syncStatus: 'synced',
+          channel_title: 'Test Channel',
+          thumbnail_url: 'https://example.com/thumb.jpg',
+          item_count: 1,
+          sync_status: 'synced',
         },
       });
       playlistId = playlist.id;
@@ -579,25 +591,25 @@ describe('Playlist API', () => {
 
     test('should delete associated playlist items', async () => {
       // Create playlist item
-      const video = await prisma.video.create({
+      const video = await prisma.youtube_videos.create({
         data: {
-          youtubeId: 'vid1',
+          youtube_video_id: 'vid1',
           title: 'Test Video',
           description: 'Video description',
-          channelId: 'UCtest',
-          channelTitle: 'Test Channel',
-          duration: 630, // 10 minutes 30 seconds in seconds
-          publishedAt: new Date(),
-          thumbnailUrls: '["https://example.com/vid1.jpg"]',
+          channel_title: 'Test Channel',
+          duration_seconds: 630, // 10 minutes 30 seconds in seconds
+          published_at: new Date(),
+          thumbnail_url: 'https://example.com/vid1.jpg',
+          view_count: BigInt(0),
+          like_count: BigInt(0),
         },
       });
 
-      await prisma.playlistItem.create({
+      await prisma.youtube_playlist_items.create({
         data: {
-          playlistId,
-          videoId: video.id,
+          playlist_id: playlistId,
+          video_id: video.id,
           position: 0,
-          addedAt: new Date(),
         },
       });
 
@@ -611,8 +623,8 @@ describe('Playlist API', () => {
       });
 
       // Verify playlist items are deleted
-      const items = await prisma.playlistItem.findMany({
-        where: { playlistId },
+      const items = await prisma.youtube_playlist_items.findMany({
+        where: { playlist_id: playlistId },
       });
 
       expect(items).toHaveLength(0);

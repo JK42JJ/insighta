@@ -26,7 +26,7 @@ const mockCronTask = {
 
 // Mock database - create singleton mock instance
 const mockDb = {
-  syncSchedule: {
+  sync_schedules: {
     findMany: jest.fn(),
     findUnique: jest.fn(),
     create: jest.fn(),
@@ -75,25 +75,25 @@ describe('SchedulerManager', () => {
     it('should start scheduler and load enabled schedules', async () => {
       const mockSchedules = [
         {
-          playlistId: 'playlist-1',
-          interval: 3600000,
+          playlist_id: 'playlist-1',
+          interval_ms: 3600000,
           enabled: true,
         },
         {
-          playlistId: 'playlist-2',
-          interval: 7200000,
+          playlist_id: 'playlist-2',
+          interval_ms: 7200000,
           enabled: true,
         },
       ];
 
-      mockDb.syncSchedule.findMany.mockResolvedValue(mockSchedules);
-      mockDb.syncSchedule.findUnique
+      mockDb.sync_schedules.findMany.mockResolvedValue(mockSchedules);
+      mockDb.sync_schedules.findUnique
         .mockResolvedValueOnce({ ...mockSchedules[0], id: 'sched-1' })
         .mockResolvedValueOnce({ ...mockSchedules[1], id: 'sched-2' });
 
       await schedulerManager.start();
 
-      expect(mockDb.syncSchedule.findMany).toHaveBeenCalledWith({
+      expect(mockDb.sync_schedules.findMany).toHaveBeenCalledWith({
         where: { enabled: true },
       });
       expect(mockSchedule).toHaveBeenCalledTimes(2);
@@ -101,7 +101,7 @@ describe('SchedulerManager', () => {
     });
 
     it('should not start if already running', async () => {
-      mockDb.syncSchedule.findMany.mockResolvedValue([]);
+      mockDb.sync_schedules.findMany.mockResolvedValue([]);
 
       await schedulerManager.start();
       await schedulerManager.start();
@@ -110,7 +110,7 @@ describe('SchedulerManager', () => {
     });
 
     it('should handle empty schedules', async () => {
-      mockDb.syncSchedule.findMany.mockResolvedValue([]);
+      mockDb.sync_schedules.findMany.mockResolvedValue([]);
 
       await schedulerManager.start();
 
@@ -123,14 +123,14 @@ describe('SchedulerManager', () => {
       const mockSchedules = [
         {
           id: 'sched-1',
-          playlistId: 'playlist-1',
-          interval: 3600000,
+          playlist_id: 'playlist-1',
+          interval_ms: 3600000,
           enabled: true,
         },
       ];
 
-      mockDb.syncSchedule.findMany.mockResolvedValue(mockSchedules);
-      mockDb.syncSchedule.findUnique.mockResolvedValue(mockSchedules[0]);
+      mockDb.sync_schedules.findMany.mockResolvedValue(mockSchedules);
+      mockDb.sync_schedules.findUnique.mockResolvedValue(mockSchedules[0]);
 
       await schedulerManager.start();
       await schedulerManager.stop();
@@ -157,29 +157,29 @@ describe('SchedulerManager', () => {
 
       const mockSchedule = {
         id: 'sched-1',
-        playlistId: 'playlist-1',
-        interval: 3600000,
+        playlist_id: 'playlist-1',
+        interval_ms: 3600000,
         enabled: true,
-        nextRun: expect.any(Date),
-        lastRun: null,
-        retryCount: 0,
-        maxRetries: 3,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        next_run: expect.any(Date),
+        last_run: null,
+        retry_count: 0,
+        max_retries: 3,
+        created_at: new Date(),
+        updated_at: new Date(),
       };
 
-      mockDb.syncSchedule.findUnique.mockResolvedValue(null);
-      mockDb.syncSchedule.create.mockResolvedValue(mockSchedule);
+      mockDb.sync_schedules.findUnique.mockResolvedValue(null);
+      mockDb.sync_schedules.create.mockResolvedValue(mockSchedule);
 
       const result = await schedulerManager.createSchedule(config);
 
-      expect(mockDb.syncSchedule.create).toHaveBeenCalledWith(
+      expect(mockDb.sync_schedules.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            playlistId: 'playlist-1',
-            interval: 3600000,
+            playlist_id: 'playlist-1',
+            interval_ms: 3600000,
             enabled: true,
-            maxRetries: 3,
+            max_retries: 3,
           }),
         })
       );
@@ -193,7 +193,7 @@ describe('SchedulerManager', () => {
         interval: 3600000,
       };
 
-      mockDb.syncSchedule.findUnique.mockResolvedValue({ id: 'existing' });
+      mockDb.sync_schedules.findUnique.mockResolvedValue({ id: 'existing' });
 
       await expect(schedulerManager.createSchedule(config)).rejects.toThrow(
         'Schedule already exists for playlist playlist-1'
@@ -206,26 +206,27 @@ describe('SchedulerManager', () => {
         interval: 3600000,
       };
 
-      mockDb.syncSchedule.findUnique.mockResolvedValue(null);
-      mockDb.syncSchedule.create.mockResolvedValue({
+      mockDb.sync_schedules.findUnique.mockResolvedValue(null);
+      mockDb.sync_schedules.create.mockResolvedValue({
         id: 'sched-1',
-        ...config,
+        playlist_id: config.playlistId,
+        interval_ms: config.interval,
         enabled: true,
-        maxRetries: 3,
-        nextRun: new Date(),
-        lastRun: null,
-        retryCount: 0,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        max_retries: 3,
+        next_run: new Date(),
+        last_run: null,
+        retry_count: 0,
+        created_at: new Date(),
+        updated_at: new Date(),
       });
 
       await schedulerManager.createSchedule(config);
 
-      expect(mockDb.syncSchedule.create).toHaveBeenCalledWith(
+      expect(mockDb.sync_schedules.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             enabled: true,
-            maxRetries: 3,
+            max_retries: 3,
           }),
         })
       );
@@ -240,24 +241,24 @@ describe('SchedulerManager', () => {
 
       const mockSchedule = {
         id: 'sched-1',
-        playlistId: 'playlist-1',
-        interval: 3600000,
+        playlist_id: 'playlist-1',
+        interval_ms: 3600000,
         enabled: true,
-        nextRun: new Date(),
-        lastRun: null,
-        retryCount: 0,
-        maxRetries: 3,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        next_run: new Date(),
+        last_run: null,
+        retry_count: 0,
+        max_retries: 3,
+        created_at: new Date(),
+        updated_at: new Date(),
       };
 
-      mockDb.syncSchedule.findMany.mockResolvedValue([]);
-      mockDb.syncSchedule.create.mockResolvedValue(mockSchedule);
+      mockDb.sync_schedules.findMany.mockResolvedValue([]);
+      mockDb.sync_schedules.create.mockResolvedValue(mockSchedule);
 
       await schedulerManager.start();
 
       // First call (existence check in createSchedule) returns null, second call (startSchedule) returns the schedule
-      mockDb.syncSchedule.findUnique
+      mockDb.sync_schedules.findUnique
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(mockSchedule);
 
@@ -271,37 +272,37 @@ describe('SchedulerManager', () => {
     it('should update schedule interval', async () => {
       const existing = {
         id: 'sched-1',
-        playlistId: 'playlist-1',
-        interval: 3600000,
+        playlist_id: 'playlist-1',
+        interval_ms: 3600000,
         enabled: true,
-        nextRun: new Date(),
-        lastRun: null,
-        retryCount: 0,
-        maxRetries: 3,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        next_run: new Date(),
+        last_run: null,
+        retry_count: 0,
+        max_retries: 3,
+        created_at: new Date(),
+        updated_at: new Date(),
       };
 
-      mockDb.syncSchedule.findUnique.mockResolvedValue(existing);
-      mockDb.syncSchedule.update.mockResolvedValue({
+      mockDb.sync_schedules.findUnique.mockResolvedValue(existing);
+      mockDb.sync_schedules.update.mockResolvedValue({
         ...existing,
-        interval: 7200000,
+        interval_ms: 7200000,
       });
 
       await schedulerManager.updateSchedule('playlist-1', { interval: 7200000 });
 
-      expect(mockDb.syncSchedule.update).toHaveBeenCalledWith(
+      expect(mockDb.sync_schedules.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { playlistId: 'playlist-1' },
+          where: { playlist_id: 'playlist-1' },
           data: expect.objectContaining({
-            interval: 7200000,
+            interval_ms: 7200000,
           }),
         })
       );
     });
 
     it('should throw error when schedule not found', async () => {
-      mockDb.syncSchedule.findUnique.mockResolvedValue(null);
+      mockDb.sync_schedules.findUnique.mockResolvedValue(null);
 
       await expect(
         schedulerManager.updateSchedule('playlist-1', { interval: 7200000 })
@@ -311,21 +312,21 @@ describe('SchedulerManager', () => {
     it('should restart cron job if scheduler is running', async () => {
       const existing = {
         id: 'sched-1',
-        playlistId: 'playlist-1',
-        interval: 3600000,
+        playlist_id: 'playlist-1',
+        interval_ms: 3600000,
         enabled: true,
-        nextRun: new Date(),
-        lastRun: null,
-        retryCount: 0,
-        maxRetries: 3,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        next_run: new Date(),
+        last_run: null,
+        retry_count: 0,
+        max_retries: 3,
+        created_at: new Date(),
+        updated_at: new Date(),
       };
 
       // Start scheduler with existing schedule to create a cron job
-      mockDb.syncSchedule.findMany.mockResolvedValue([existing]);
-      mockDb.syncSchedule.findUnique.mockResolvedValue(existing);
-      mockDb.syncSchedule.update.mockResolvedValue(existing);
+      mockDb.sync_schedules.findMany.mockResolvedValue([existing]);
+      mockDb.sync_schedules.findUnique.mockResolvedValue(existing);
+      mockDb.sync_schedules.update.mockResolvedValue(existing);
 
       await schedulerManager.start();
 
@@ -334,8 +335,8 @@ describe('SchedulerManager', () => {
       mockSchedule.mockReturnValue(mockCronTask);
 
       // findUnique will be called twice: once in updateSchedule, once in startSchedule
-      mockDb.syncSchedule.findUnique.mockResolvedValue(existing);
-      mockDb.syncSchedule.update.mockResolvedValue(existing);
+      mockDb.sync_schedules.findUnique.mockResolvedValue(existing);
+      mockDb.sync_schedules.update.mockResolvedValue(existing);
 
       await schedulerManager.updateSchedule('playlist-1', { enabled: true });
 
@@ -345,32 +346,32 @@ describe('SchedulerManager', () => {
 
   describe('deleteSchedule', () => {
     it('should delete schedule', async () => {
-      mockDb.syncSchedule.delete.mockResolvedValue({});
+      mockDb.sync_schedules.delete.mockResolvedValue({});
 
       await schedulerManager.deleteSchedule('playlist-1');
 
-      expect(mockDb.syncSchedule.delete).toHaveBeenCalledWith({
-        where: { playlistId: 'playlist-1' },
+      expect(mockDb.sync_schedules.delete).toHaveBeenCalledWith({
+        where: { playlist_id: 'playlist-1' },
       });
       expect(logger.info).toHaveBeenCalledWith('Schedule deleted', { playlistId: 'playlist-1' });
     });
 
     it('should stop cron job before deleting', async () => {
-      mockDb.syncSchedule.findMany.mockResolvedValue([
+      mockDb.sync_schedules.findMany.mockResolvedValue([
         {
           id: 'sched-1',
-          playlistId: 'playlist-1',
-          interval: 3600000,
+          playlist_id: 'playlist-1',
+          interval_ms: 3600000,
           enabled: true,
         },
       ]);
-      mockDb.syncSchedule.findUnique.mockResolvedValue({
+      mockDb.sync_schedules.findUnique.mockResolvedValue({
         id: 'sched-1',
-        playlistId: 'playlist-1',
+        playlist_id: 'playlist-1',
         enabled: true,
-        interval: 3600000,
+        interval_ms: 3600000,
       });
-      mockDb.syncSchedule.delete.mockResolvedValue({});
+      mockDb.sync_schedules.delete.mockResolvedValue({});
 
       await schedulerManager.start();
       await schedulerManager.deleteSchedule('playlist-1');
@@ -383,18 +384,18 @@ describe('SchedulerManager', () => {
     it('should return schedule info', async () => {
       const mockSchedule = {
         id: 'sched-1',
-        playlistId: 'playlist-1',
-        interval: 3600000,
+        playlist_id: 'playlist-1',
+        interval_ms: 3600000,
         enabled: true,
-        nextRun: new Date(),
-        lastRun: null,
-        retryCount: 0,
-        maxRetries: 3,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        next_run: new Date(),
+        last_run: null,
+        retry_count: 0,
+        max_retries: 3,
+        created_at: new Date(),
+        updated_at: new Date(),
       };
 
-      mockDb.syncSchedule.findUnique.mockResolvedValue(mockSchedule);
+      mockDb.sync_schedules.findUnique.mockResolvedValue(mockSchedule);
 
       const result = await schedulerManager.getSchedule('playlist-1');
 
@@ -406,7 +407,7 @@ describe('SchedulerManager', () => {
     });
 
     it('should return null when schedule not found', async () => {
-      mockDb.syncSchedule.findUnique.mockResolvedValue(null);
+      mockDb.sync_schedules.findUnique.mockResolvedValue(null);
 
       const result = await schedulerManager.getSchedule('playlist-1');
 
@@ -419,19 +420,19 @@ describe('SchedulerManager', () => {
       const mockSchedules = [
         {
           id: 'sched-1',
-          playlistId: 'playlist-1',
-          interval: 3600000,
+          playlist_id: 'playlist-1',
+          interval_ms: 3600000,
           enabled: true,
-          nextRun: new Date(),
-          lastRun: null,
-          retryCount: 0,
-          maxRetries: 3,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          next_run: new Date(),
+          last_run: null,
+          retry_count: 0,
+          max_retries: 3,
+          created_at: new Date(),
+          updated_at: new Date(),
         },
       ];
 
-      mockDb.syncSchedule.findMany.mockResolvedValue(mockSchedules);
+      mockDb.sync_schedules.findMany.mockResolvedValue(mockSchedules);
 
       const result = await schedulerManager.listSchedules();
 
@@ -440,13 +441,13 @@ describe('SchedulerManager', () => {
     });
 
     it('should list only enabled schedules when flag is set', async () => {
-      mockDb.syncSchedule.findMany.mockResolvedValue([]);
+      mockDb.sync_schedules.findMany.mockResolvedValue([]);
 
       await schedulerManager.listSchedules(true);
 
-      expect(mockDb.syncSchedule.findMany).toHaveBeenCalledWith({
+      expect(mockDb.sync_schedules.findMany).toHaveBeenCalledWith({
         where: { enabled: true },
-        orderBy: { nextRun: 'asc' },
+        orderBy: { next_run: 'asc' },
       });
     });
   });
@@ -455,23 +456,23 @@ describe('SchedulerManager', () => {
     it('should enable schedule', async () => {
       const mockSchedule = {
         id: 'sched-1',
-        playlistId: 'playlist-1',
-        interval: 3600000,
+        playlist_id: 'playlist-1',
+        interval_ms: 3600000,
         enabled: false,
-        nextRun: new Date(),
-        lastRun: null,
-        retryCount: 0,
-        maxRetries: 3,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        next_run: new Date(),
+        last_run: null,
+        retry_count: 0,
+        max_retries: 3,
+        created_at: new Date(),
+        updated_at: new Date(),
       };
 
-      mockDb.syncSchedule.findUnique.mockResolvedValue(mockSchedule);
-      mockDb.syncSchedule.update.mockResolvedValue({ ...mockSchedule, enabled: true });
+      mockDb.sync_schedules.findUnique.mockResolvedValue(mockSchedule);
+      mockDb.sync_schedules.update.mockResolvedValue({ ...mockSchedule, enabled: true });
 
       await schedulerManager.enableSchedule('playlist-1');
 
-      expect(mockDb.syncSchedule.update).toHaveBeenCalledWith(
+      expect(mockDb.sync_schedules.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ enabled: true }),
         })
@@ -483,23 +484,23 @@ describe('SchedulerManager', () => {
     it('should disable schedule', async () => {
       const mockSchedule = {
         id: 'sched-1',
-        playlistId: 'playlist-1',
-        interval: 3600000,
+        playlist_id: 'playlist-1',
+        interval_ms: 3600000,
         enabled: true,
-        nextRun: new Date(),
-        lastRun: null,
-        retryCount: 0,
-        maxRetries: 3,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        next_run: new Date(),
+        last_run: null,
+        retry_count: 0,
+        max_retries: 3,
+        created_at: new Date(),
+        updated_at: new Date(),
       };
 
-      mockDb.syncSchedule.findUnique.mockResolvedValue(mockSchedule);
-      mockDb.syncSchedule.update.mockResolvedValue({ ...mockSchedule, enabled: false });
+      mockDb.sync_schedules.findUnique.mockResolvedValue(mockSchedule);
+      mockDb.sync_schedules.update.mockResolvedValue({ ...mockSchedule, enabled: false });
 
       await schedulerManager.disableSchedule('playlist-1');
 
-      expect(mockDb.syncSchedule.update).toHaveBeenCalledWith(
+      expect(mockDb.sync_schedules.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ enabled: false }),
         })
@@ -557,25 +558,25 @@ describe('SchedulerManager', () => {
     it('should execute sync and update schedule on success', async () => {
       const mockSchedule = {
         id: 'sched-1',
-        playlistId: 'playlist-1',
-        interval: 3600000,
+        playlist_id: 'playlist-1',
+        interval_ms: 3600000,
         enabled: true,
-        retryCount: 0,
-        maxRetries: 3,
+        retry_count: 0,
+        max_retries: 3,
       };
 
-      mockDb.syncSchedule.findUnique.mockResolvedValue(mockSchedule);
-      mockDb.syncSchedule.update.mockResolvedValue({});
+      mockDb.sync_schedules.findUnique.mockResolvedValue(mockSchedule);
+      mockDb.sync_schedules.update.mockResolvedValue({});
       mockSyncEngine.syncPlaylist.mockResolvedValue({ success: true });
 
       const executeSyncJob = (schedulerManager as any).executeSyncJob.bind(schedulerManager);
       await executeSyncJob('playlist-1');
 
       expect(mockSyncEngine.syncPlaylist).toHaveBeenCalledWith('playlist-1');
-      expect(mockDb.syncSchedule.update).toHaveBeenCalledWith(
+      expect(mockDb.sync_schedules.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            retryCount: 0,
+            retry_count: 0,
           }),
         })
       );
@@ -584,24 +585,24 @@ describe('SchedulerManager', () => {
     it('should increment retry count on failure', async () => {
       const mockSchedule = {
         id: 'sched-1',
-        playlistId: 'playlist-1',
-        interval: 3600000,
+        playlist_id: 'playlist-1',
+        interval_ms: 3600000,
         enabled: true,
-        retryCount: 0,
-        maxRetries: 3,
+        retry_count: 0,
+        max_retries: 3,
       };
 
-      mockDb.syncSchedule.findUnique.mockResolvedValue(mockSchedule);
-      mockDb.syncSchedule.update.mockResolvedValue({});
+      mockDb.sync_schedules.findUnique.mockResolvedValue(mockSchedule);
+      mockDb.sync_schedules.update.mockResolvedValue({});
       mockSyncEngine.syncPlaylist.mockRejectedValue(new Error('Sync failed'));
 
       const executeSyncJob = (schedulerManager as any).executeSyncJob.bind(schedulerManager);
       await executeSyncJob('playlist-1');
 
-      expect(mockDb.syncSchedule.update).toHaveBeenCalledWith(
+      expect(mockDb.sync_schedules.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            retryCount: 1,
+            retry_count: 1,
           }),
         })
       );
@@ -610,15 +611,15 @@ describe('SchedulerManager', () => {
     it('should disable schedule when max retries exceeded', async () => {
       const mockSchedule = {
         id: 'sched-1',
-        playlistId: 'playlist-1',
-        interval: 3600000,
+        playlist_id: 'playlist-1',
+        interval_ms: 3600000,
         enabled: true,
-        retryCount: 2,
-        maxRetries: 3,
+        retry_count: 2,
+        max_retries: 3,
       };
 
-      mockDb.syncSchedule.findUnique.mockResolvedValue(mockSchedule);
-      mockDb.syncSchedule.update.mockResolvedValue({ ...mockSchedule, enabled: false });
+      mockDb.sync_schedules.findUnique.mockResolvedValue(mockSchedule);
+      mockDb.sync_schedules.update.mockResolvedValue({ ...mockSchedule, enabled: false });
       mockSyncEngine.syncPlaylist.mockRejectedValue(new Error('Sync failed'));
 
       const executeSyncJob = (schedulerManager as any).executeSyncJob.bind(schedulerManager);
@@ -631,7 +632,7 @@ describe('SchedulerManager', () => {
     });
 
     it('should skip sync when schedule is disabled', async () => {
-      mockDb.syncSchedule.findUnique.mockResolvedValue({ enabled: false });
+      mockDb.sync_schedules.findUnique.mockResolvedValue({ enabled: false });
 
       const executeSyncJob = (schedulerManager as any).executeSyncJob.bind(schedulerManager);
       await executeSyncJob('playlist-1');

@@ -29,13 +29,12 @@ describe('CaptionExtractor', () => {
   const mockVideoId = 'test-video-123';
   const mockVideoRecord = {
     id: 'db-video-1',
-    youtubeId: mockVideoId,
+    youtube_video_id: mockVideoId,
     title: 'Test Video',
-    channelId: 'test-channel',
-    channelTitle: 'Test Channel',
-    publishedAt: new Date('2024-01-01'),
-    duration: 600,
-    thumbnailUrls: '[]',
+    channel_title: 'Test Channel',
+    published_at: new Date('2024-01-01'),
+    duration_seconds: 600,
+    thumbnail_url: null,
   };
 
   const mockCaptionData = [
@@ -46,7 +45,7 @@ describe('CaptionExtractor', () => {
 
   const mockCaptionRecord = {
     id: 'caption-1',
-    videoId: 'db-video-1',
+    video_id: 'db-video-1',
     language: 'en',
     text: 'Hello world This is a test YouTube caption',
     segments: JSON.stringify([
@@ -59,16 +58,16 @@ describe('CaptionExtractor', () => {
   beforeEach(() => {
     // Setup mock database
     mockDb = {
-      video: {
+      youtube_videos: {
         findUnique: jest.fn(),
         create: jest.fn(),
       },
-      videoCaption: {
+      video_captions: {
         findUnique: jest.fn(),
         create: jest.fn(),
         delete: jest.fn(),
       },
-      playlistItem: {
+      youtube_playlist_items: {
         findMany: jest.fn(),
       },
     };
@@ -85,11 +84,11 @@ describe('CaptionExtractor', () => {
   describe('extractCaptions', () => {
     it('should extract captions successfully for new video', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(null);
-      mockDb.video.create.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.create.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(null);
       mockGetSubtitles.mockResolvedValue(mockCaptionData);
-      mockDb.videoCaption.create.mockResolvedValue(mockCaptionRecord);
+      mockDb.video_captions.create.mockResolvedValue(mockCaptionRecord);
 
       // Act
       const result = await extractor.extractCaptions(mockVideoId);
@@ -109,25 +108,25 @@ describe('CaptionExtractor', () => {
 
     it('should use existing video record if available', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(null);
       mockGetSubtitles.mockResolvedValue(mockCaptionData);
-      mockDb.videoCaption.create.mockResolvedValue(mockCaptionRecord);
+      mockDb.video_captions.create.mockResolvedValue(mockCaptionRecord);
 
       // Act
       await extractor.extractCaptions(mockVideoId);
 
       // Assert
-      expect(mockDb.video.create).not.toHaveBeenCalled();
-      expect(mockDb.video.findUnique).toHaveBeenCalledWith({
-        where: { youtubeId: mockVideoId },
+      expect(mockDb.youtube_videos.create).not.toHaveBeenCalled();
+      expect(mockDb.youtube_videos.findUnique).toHaveBeenCalledWith({
+        where: { youtube_video_id: mockVideoId },
       });
     });
 
     it('should return cached caption if already exists', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(mockCaptionRecord);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(mockCaptionRecord);
 
       // Act
       const result = await extractor.extractCaptions(mockVideoId, 'en');
@@ -136,16 +135,16 @@ describe('CaptionExtractor', () => {
       expect(result.success).toBe(true);
       expect(result.caption).toBeDefined();
       expect(mockGetSubtitles).not.toHaveBeenCalled();
-      expect(mockDb.videoCaption.create).not.toHaveBeenCalled();
+      expect(mockDb.video_captions.create).not.toHaveBeenCalled();
     });
 
     it('should extract captions in specified language', async () => {
       // Arrange
       const language = 'ko';
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(null);
       mockGetSubtitles.mockResolvedValue(mockCaptionData);
-      mockDb.videoCaption.create.mockResolvedValue(mockCaptionRecord);
+      mockDb.video_captions.create.mockResolvedValue(mockCaptionRecord);
 
       // Act
       const result = await extractor.extractCaptions(mockVideoId, language);
@@ -161,8 +160,8 @@ describe('CaptionExtractor', () => {
 
     it('should handle empty caption data', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(null);
       mockGetSubtitles.mockResolvedValue([]);
 
       // Act
@@ -175,8 +174,8 @@ describe('CaptionExtractor', () => {
 
     it('should handle YouTube API errors', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(null);
       mockGetSubtitles.mockRejectedValue(new Error('YouTube API error'));
 
       // Act
@@ -189,7 +188,7 @@ describe('CaptionExtractor', () => {
 
     it('should handle database errors', async () => {
       // Arrange
-      mockDb.video.findUnique.mockRejectedValue(new Error('Database connection failed'));
+      mockDb.youtube_videos.findUnique.mockRejectedValue(new Error('Database connection failed'));
 
       // Act
       const result = await extractor.extractCaptions(mockVideoId);
@@ -201,10 +200,10 @@ describe('CaptionExtractor', () => {
 
     it('should properly format caption segments', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(null);
       mockGetSubtitles.mockResolvedValue(mockCaptionData);
-      mockDb.videoCaption.create.mockResolvedValue(mockCaptionRecord);
+      mockDb.video_captions.create.mockResolvedValue(mockCaptionRecord);
 
       // Act
       const result = await extractor.extractCaptions(mockVideoId);
@@ -219,10 +218,10 @@ describe('CaptionExtractor', () => {
 
     it('should concatenate segments into full text', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(null);
       mockGetSubtitles.mockResolvedValue(mockCaptionData);
-      mockDb.videoCaption.create.mockResolvedValue(mockCaptionRecord);
+      mockDb.video_captions.create.mockResolvedValue(mockCaptionRecord);
 
       // Act
       const result = await extractor.extractCaptions(mockVideoId);
@@ -283,8 +282,8 @@ describe('CaptionExtractor', () => {
   describe('getCaption', () => {
     it('should retrieve caption from database', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(mockCaptionRecord);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(mockCaptionRecord);
 
       // Act
       const result = await extractor.getCaption(mockVideoId, 'en');
@@ -298,7 +297,7 @@ describe('CaptionExtractor', () => {
 
     it('should return null if video not found', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(null);
 
       // Act
       const result = await extractor.getCaption(mockVideoId);
@@ -309,8 +308,8 @@ describe('CaptionExtractor', () => {
 
     it('should return null if caption not found', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(null);
 
       // Act
       const result = await extractor.getCaption(mockVideoId);
@@ -321,8 +320,8 @@ describe('CaptionExtractor', () => {
 
     it('should parse JSON segments correctly', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(mockCaptionRecord);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(mockCaptionRecord);
 
       // Act
       const result = await extractor.getCaption(mockVideoId);
@@ -338,7 +337,7 @@ describe('CaptionExtractor', () => {
 
     it('should handle database errors', async () => {
       // Arrange
-      mockDb.video.findUnique.mockRejectedValue(new Error('Database error'));
+      mockDb.youtube_videos.findUnique.mockRejectedValue(new Error('Database error'));
 
       // Act
       const result = await extractor.getCaption(mockVideoId);
@@ -351,18 +350,18 @@ describe('CaptionExtractor', () => {
   describe('deleteCaption', () => {
     it('should delete caption successfully', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.delete.mockResolvedValue(mockCaptionRecord);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.delete.mockResolvedValue(mockCaptionRecord);
 
       // Act
       const result = await extractor.deleteCaption(mockVideoId, 'en');
 
       // Assert
       expect(result).toBe(true);
-      expect(mockDb.videoCaption.delete).toHaveBeenCalledWith({
+      expect(mockDb.video_captions.delete).toHaveBeenCalledWith({
         where: {
-          videoId_language: {
-            videoId: mockVideoRecord.id,
+          video_id_language: {
+            video_id: mockVideoRecord.id,
             language: 'en',
           },
         },
@@ -371,20 +370,20 @@ describe('CaptionExtractor', () => {
 
     it('should return false if video not found', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(null);
 
       // Act
       const result = await extractor.deleteCaption(mockVideoId, 'en');
 
       // Assert
       expect(result).toBe(false);
-      expect(mockDb.videoCaption.delete).not.toHaveBeenCalled();
+      expect(mockDb.video_captions.delete).not.toHaveBeenCalled();
     });
 
     it('should handle deletion errors', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.delete.mockRejectedValue(new Error('Delete failed'));
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.delete.mockRejectedValue(new Error('Delete failed'));
 
       // Act
       const result = await extractor.deleteCaption(mockVideoId, 'en');
@@ -399,31 +398,31 @@ describe('CaptionExtractor', () => {
     const mockPlaylistItems = [
       {
         id: 'item-1',
-        playlistId: mockPlaylistId,
+        playlist_id: mockPlaylistId,
         position: 0,
-        video: { ...mockVideoRecord, youtubeId: 'video-1' },
+        youtube_videos: { ...mockVideoRecord, youtube_video_id: 'video-1' },
       },
       {
         id: 'item-2',
-        playlistId: mockPlaylistId,
+        playlist_id: mockPlaylistId,
         position: 1,
-        video: { ...mockVideoRecord, youtubeId: 'video-2' },
+        youtube_videos: { ...mockVideoRecord, youtube_video_id: 'video-2' },
       },
       {
         id: 'item-3',
-        playlistId: mockPlaylistId,
+        playlist_id: mockPlaylistId,
         position: 2,
-        video: { ...mockVideoRecord, youtubeId: 'video-3' },
+        youtube_videos: { ...mockVideoRecord, youtube_video_id: 'video-3' },
       },
     ];
 
     it('should extract captions for all videos in playlist', async () => {
       // Arrange
-      mockDb.playlistItem.findMany.mockResolvedValue(mockPlaylistItems);
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(null);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue(mockPlaylistItems);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(null);
       mockGetSubtitles.mockResolvedValue(mockCaptionData);
-      mockDb.videoCaption.create.mockResolvedValue(mockCaptionRecord);
+      mockDb.video_captions.create.mockResolvedValue(mockCaptionRecord);
 
       // Act
       const results = await extractor.extractPlaylistCaptions(mockPlaylistId);
@@ -436,36 +435,36 @@ describe('CaptionExtractor', () => {
 
     it('should skip removed playlist items', async () => {
       // Arrange
-      mockDb.playlistItem.findMany.mockResolvedValue(mockPlaylistItems);
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(null);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue(mockPlaylistItems);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(null);
       mockGetSubtitles.mockResolvedValue(mockCaptionData);
-      mockDb.videoCaption.create.mockResolvedValue(mockCaptionRecord);
+      mockDb.video_captions.create.mockResolvedValue(mockCaptionRecord);
 
       // Act
       await extractor.extractPlaylistCaptions(mockPlaylistId);
 
       // Assert
-      expect(mockDb.playlistItem.findMany).toHaveBeenCalledWith({
+      expect(mockDb.youtube_playlist_items.findMany).toHaveBeenCalledWith({
         where: {
-          playlistId: mockPlaylistId,
-          removedAt: null,
+          playlist_id: mockPlaylistId,
+          removed_at: null,
         },
-        include: { video: true },
+        include: { youtube_videos: true },
         orderBy: { position: 'asc' },
       });
     });
 
     it('should continue on individual video failures', async () => {
       // Arrange
-      mockDb.playlistItem.findMany.mockResolvedValue(mockPlaylistItems);
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(null);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue(mockPlaylistItems);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(null);
       mockGetSubtitles
         .mockResolvedValueOnce(mockCaptionData) // video-1 success
         .mockRejectedValueOnce(new Error('Failed')) // video-2 fail
         .mockResolvedValueOnce(mockCaptionData); // video-3 success
-      mockDb.videoCaption.create.mockResolvedValue(mockCaptionRecord);
+      mockDb.video_captions.create.mockResolvedValue(mockCaptionRecord);
 
       // Act
       const results = await extractor.extractPlaylistCaptions(mockPlaylistId);
@@ -480,11 +479,11 @@ describe('CaptionExtractor', () => {
     it('should respect language parameter', async () => {
       // Arrange
       const language = 'ko';
-      mockDb.playlistItem.findMany.mockResolvedValue([mockPlaylistItems[0]!]);
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
-      mockDb.videoCaption.findUnique.mockResolvedValue(null);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue([mockPlaylistItems[0]!]);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.video_captions.findUnique.mockResolvedValue(null);
       mockGetSubtitles.mockResolvedValue(mockCaptionData);
-      mockDb.videoCaption.create.mockResolvedValue(mockCaptionRecord);
+      mockDb.video_captions.create.mockResolvedValue(mockCaptionRecord);
 
       // Act
       await extractor.extractPlaylistCaptions(mockPlaylistId, language);
@@ -498,7 +497,7 @@ describe('CaptionExtractor', () => {
 
     it('should handle empty playlist', async () => {
       // Arrange
-      mockDb.playlistItem.findMany.mockResolvedValue([]);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue([]);
 
       // Act
       const results = await extractor.extractPlaylistCaptions(mockPlaylistId);

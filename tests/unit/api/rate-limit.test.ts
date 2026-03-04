@@ -30,7 +30,11 @@ import { buildServer } from '../../../src/api/server';
 
 const prisma = new PrismaClient();
 
-describe('Rate Limit', () => {
+// Skip integration tests when no PostgreSQL database is available
+const hasPostgresDb = process.env['DATABASE_URL']?.startsWith('postgres');
+const describeOrSkip = hasPostgresDb ? describe : describe.skip;
+
+describeOrSkip('Rate Limit', () => {
   let server: FastifyInstance;
   let authToken: string;
 
@@ -56,7 +60,7 @@ describe('Rate Limit', () => {
 
   afterAll(async () => {
     // Clean up test user
-    await prisma.user.deleteMany({
+    await prisma.users.deleteMany({
       where: { email: 'ratelimit@test.com' },
     });
     await server.close();

@@ -17,13 +17,13 @@ import { config } from '../../../src/config';
 // Mock dependencies
 jest.mock('../../../src/modules/database/client', () => ({
   db: {
-    quotaUsage: {
+    quota_usage: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
       upsert: jest.fn(),
       update: jest.fn(),
     },
-    quotaOperation: {
+    quota_operations: {
       create: jest.fn(),
     },
     $transaction: jest.fn(),
@@ -64,7 +64,7 @@ describe('QuotaManager', () => {
         limit: 10000,
       };
 
-      (db.quotaUsage.findUnique as jest.Mock).mockResolvedValue(mockUsage);
+      (db.quota_usage.findUnique as jest.Mock).mockResolvedValue(mockUsage);
 
       const result = await quotaManager.getTodayUsage();
 
@@ -76,7 +76,7 @@ describe('QuotaManager', () => {
     });
 
     it('should return zero usage when no quota record exists', async () => {
-      (db.quotaUsage.findUnique as jest.Mock).mockResolvedValue(null);
+      (db.quota_usage.findUnique as jest.Mock).mockResolvedValue(null);
 
       const result = await quotaManager.getTodayUsage();
 
@@ -88,7 +88,7 @@ describe('QuotaManager', () => {
     });
 
     it('should use config daily limit', async () => {
-      (db.quotaUsage.findUnique as jest.Mock).mockResolvedValue(null);
+      (db.quota_usage.findUnique as jest.Mock).mockResolvedValue(null);
 
       const result = await quotaManager.getTodayUsage();
 
@@ -98,7 +98,7 @@ describe('QuotaManager', () => {
 
   describe('canUseQuota', () => {
     it('should return true when quota is available', async () => {
-      (db.quotaUsage.findUnique as jest.Mock).mockResolvedValue({
+      (db.quota_usage.findUnique as jest.Mock).mockResolvedValue({
         used: 5000,
         limit: 10000,
       });
@@ -109,7 +109,7 @@ describe('QuotaManager', () => {
     });
 
     it('should return false when quota would be exceeded', async () => {
-      (db.quotaUsage.findUnique as jest.Mock).mockResolvedValue({
+      (db.quota_usage.findUnique as jest.Mock).mockResolvedValue({
         used: 9500,
         limit: 10000,
       });
@@ -120,7 +120,7 @@ describe('QuotaManager', () => {
     });
 
     it('should return true when quota exactly matches', async () => {
-      (db.quotaUsage.findUnique as jest.Mock).mockResolvedValue({
+      (db.quota_usage.findUnique as jest.Mock).mockResolvedValue({
         used: 9000,
         limit: 10000,
       });
@@ -133,18 +133,18 @@ describe('QuotaManager', () => {
 
   describe('reserveQuota', () => {
     beforeEach(() => {
-      (db.quotaUsage.findUnique as jest.Mock).mockResolvedValue({
+      (db.quota_usage.findUnique as jest.Mock).mockResolvedValue({
         used: 1000,
         limit: 10000,
       });
 
-      (db.quotaUsage.upsert as jest.Mock).mockResolvedValue({
+      (db.quota_usage.upsert as jest.Mock).mockResolvedValue({
         id: 'quota-1',
         used: 1100,
         limit: 10000,
       });
 
-      (db.quotaOperation.create as jest.Mock).mockResolvedValue({
+      (db.quota_operations.create as jest.Mock).mockResolvedValue({
         id: 'op-1',
       });
     });
@@ -153,12 +153,12 @@ describe('QuotaManager', () => {
       await quotaManager.reserveQuota('playlist.details', 100);
 
       expect(mockTransaction).toHaveBeenCalled();
-      expect(db.quotaUsage.upsert).toHaveBeenCalled();
-      expect(db.quotaOperation.create).toHaveBeenCalled();
+      expect(db.quota_usage.upsert).toHaveBeenCalled();
+      expect(db.quota_operations.create).toHaveBeenCalled();
     });
 
     it('should throw QuotaExceededError when quota insufficient', async () => {
-      (db.quotaUsage.findUnique as jest.Mock).mockResolvedValue({
+      (db.quota_usage.findUnique as jest.Mock).mockResolvedValue({
         used: 9500,
         limit: 10000,
       });
@@ -169,8 +169,8 @@ describe('QuotaManager', () => {
     });
 
     it('should create quota usage record if not exists', async () => {
-      (db.quotaUsage.findUnique as jest.Mock).mockResolvedValue(null);
-      (db.quotaUsage.upsert as jest.Mock).mockResolvedValue({
+      (db.quota_usage.findUnique as jest.Mock).mockResolvedValue(null);
+      (db.quota_usage.upsert as jest.Mock).mockResolvedValue({
         id: 'quota-1',
         used: 100,
         limit: 10000,
@@ -178,11 +178,11 @@ describe('QuotaManager', () => {
 
       await quotaManager.reserveQuota('playlist.details', 100);
 
-      expect(db.quotaUsage.upsert).toHaveBeenCalledWith(
+      expect(db.quota_usage.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           create: expect.objectContaining({
             used: 100,
-            limit: config.quota.dailyLimit,
+            quota_limit: config.quota.dailyLimit,
           }),
         })
       );
@@ -191,7 +191,7 @@ describe('QuotaManager', () => {
     it('should increment existing quota usage', async () => {
       await quotaManager.reserveQuota('playlist.details', 100);
 
-      expect(db.quotaUsage.upsert).toHaveBeenCalledWith(
+      expect(db.quota_usage.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           update: expect.objectContaining({
             used: { increment: 100 },
@@ -203,10 +203,10 @@ describe('QuotaManager', () => {
     it('should record quota operation', async () => {
       await quotaManager.reserveQuota('video.details', 50);
 
-      expect(db.quotaOperation.create).toHaveBeenCalledWith(
+      expect(db.quota_operations.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            operationType: 'video.details',
+            operation_type: 'video.details',
             cost: 50,
           }),
         })
@@ -224,11 +224,11 @@ describe('QuotaManager', () => {
     });
 
     it('should warn when approaching quota limit', async () => {
-      (db.quotaUsage.findUnique as jest.Mock)
+      (db.quota_usage.findUnique as jest.Mock)
         .mockResolvedValueOnce({ used: 1000, limit: 10000 })
         .mockResolvedValueOnce({ used: 9100, limit: 10000 });
 
-      (db.quotaUsage.upsert as jest.Mock).mockResolvedValue({
+      (db.quota_usage.upsert as jest.Mock).mockResolvedValue({
         id: 'quota-1',
         used: 9100,
         limit: 10000,
@@ -342,16 +342,16 @@ describe('QuotaManager', () => {
         {
           date: new Date('2024-01-01'),
           used: 5000,
-          limit: 10000,
-          operations: [
-            { operationType: 'playlist.details', cost: 1, timestamp: new Date() },
-            { operationType: 'playlist.items', cost: 2, timestamp: new Date() },
-            { operationType: 'playlist.details', cost: 1, timestamp: new Date() },
+          quota_limit: 10000,
+          quota_operations: [
+            { operation_type: 'playlist.details', cost: 1, timestamp: new Date() },
+            { operation_type: 'playlist.items', cost: 2, timestamp: new Date() },
+            { operation_type: 'playlist.details', cost: 1, timestamp: new Date() },
           ],
         },
       ];
 
-      (db.quotaUsage.findMany as jest.Mock).mockResolvedValue(mockUsage);
+      (db.quota_usage.findMany as jest.Mock).mockResolvedValue(mockUsage);
 
       const stats = await quotaManager.getUsageStats(7);
 
@@ -371,7 +371,7 @@ describe('QuotaManager', () => {
     });
 
     it('should handle empty usage', async () => {
-      (db.quotaUsage.findMany as jest.Mock).mockResolvedValue([]);
+      (db.quota_usage.findMany as jest.Mock).mockResolvedValue([]);
 
       const stats = await quotaManager.getUsageStats(7);
 
@@ -379,11 +379,11 @@ describe('QuotaManager', () => {
     });
 
     it('should use default days parameter', async () => {
-      (db.quotaUsage.findMany as jest.Mock).mockResolvedValue([]);
+      (db.quota_usage.findMany as jest.Mock).mockResolvedValue([]);
 
       await quotaManager.getUsageStats();
 
-      expect(db.quotaUsage.findMany).toHaveBeenCalledWith(
+      expect(db.quota_usage.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             date: { gte: expect.any(Date) },
@@ -395,11 +395,11 @@ describe('QuotaManager', () => {
 
   describe('resetDailyQuota', () => {
     it('should reset quota to zero', async () => {
-      (db.quotaUsage.update as jest.Mock).mockResolvedValue({});
+      (db.quota_usage.update as jest.Mock).mockResolvedValue({});
 
       await quotaManager.resetDailyQuota();
 
-      expect(db.quotaUsage.update).toHaveBeenCalledWith(
+      expect(db.quota_usage.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: { used: 0 },
         })
@@ -407,7 +407,7 @@ describe('QuotaManager', () => {
     });
 
     it('should log reset action', async () => {
-      (db.quotaUsage.update as jest.Mock).mockResolvedValue({});
+      (db.quota_usage.update as jest.Mock).mockResolvedValue({});
 
       await quotaManager.resetDailyQuota();
 

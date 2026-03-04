@@ -10,7 +10,7 @@ const mockGetVideo = jest.fn();
 const mockGetVideoWithState = jest.fn();
 const mockExtractCaptions = jest.fn();
 const mockGetAvailableLanguages = jest.fn();
-const mockAddSummary = jest.fn();
+const mockAddNotes = jest.fn();
 const mockFindMany = jest.fn();
 const mockCount = jest.fn();
 
@@ -18,7 +18,7 @@ jest.mock('../../../src/modules/video', () => ({
   getVideoManager: () => ({
     getVideo: mockGetVideo,
     getVideoWithState: mockGetVideoWithState,
-    addSummary: mockAddSummary,
+    addNotes: mockAddNotes,
   }),
 }));
 
@@ -31,7 +31,7 @@ jest.mock('../../../src/modules/caption/extractor', () => ({
 
 jest.mock('../../../src/modules/database', () => ({
   getPrismaClient: () => ({
-    video: {
+    youtube_videos: {
       findMany: mockFindMany,
       count: mockCount,
     },
@@ -130,22 +130,17 @@ describe('Videos API Routes', () => {
       const mockVideos = [
         {
           id: '123e4567-e89b-12d3-a456-426614174000',
-          youtubeId: 'test123',
+          youtube_video_id: 'test123',
           title: 'Test Video',
           description: 'Test Description',
-          channelId: 'channel123',
-          channelTitle: 'Test Channel',
-          duration: 300,
-          thumbnailUrls: '{}',
-          viewCount: 1000,
-          likeCount: 100,
-          commentCount: 10,
-          publishedAt: new Date('2024-01-01'),
-          tags: null,
-          categoryId: null,
-          language: 'en',
-          createdAt: new Date('2024-01-01'),
-          updatedAt: new Date('2024-01-01'),
+          channel_title: 'Test Channel',
+          duration_seconds: 300,
+          thumbnail_url: '{}',
+          view_count: BigInt(1000),
+          like_count: BigInt(100),
+          published_at: new Date('2024-01-01'),
+          created_at: new Date('2024-01-01'),
+          updated_at: new Date('2024-01-01'),
         },
       ];
 
@@ -185,7 +180,7 @@ describe('Videos API Routes', () => {
       expect(mockFindMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            playlistItems: expect.any(Object),
+            youtube_playlist_items: expect.any(Object),
           }),
         })
       );
@@ -205,30 +200,21 @@ describe('Videos API Routes', () => {
     test('should get video details with user state', async () => {
       const mockVideo = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        youtubeId: 'test123',
+        youtube_video_id: 'test123',
         title: 'Test Video',
         description: 'Test Description',
-        channelId: 'channel123',
-        channelTitle: 'Test Channel',
-        duration: 300,
-        thumbnailUrls: '{}',
-        viewCount: 1000,
-        likeCount: 100,
-        commentCount: 10,
-        publishedAt: new Date('2024-01-01'),
-        tags: null,
-        categoryId: null,
-        language: 'en',
-        createdAt: new Date('2024-01-01'),
-        updatedAt: new Date('2024-01-01'),
+        channel_title: 'Test Channel',
+        duration_seconds: 300,
+        thumbnail_url: '{}',
+        view_count: BigInt(1000),
+        like_count: BigInt(100),
+        published_at: new Date('2024-01-01'),
+        created_at: new Date('2024-01-01'),
+        updated_at: new Date('2024-01-01'),
         userState: {
-          watchStatus: 'WATCHING',
-          lastPosition: 120,
-          watchCount: 1,
-          notes: null,
-          summary: null,
-          tags: null,
-          rating: null,
+          is_watched: true,
+          watch_position_seconds: 120,
+          user_note: null,
           createdAt: new Date('2024-01-01'),
           updatedAt: new Date('2024-01-01'),
         },
@@ -248,7 +234,7 @@ describe('Videos API Routes', () => {
       const body = JSON.parse(response.body);
       expect(body.video.id).toBe(mockVideo.id);
       expect(body.video.userState).toBeDefined();
-      expect(body.video.userState.watchStatus).toBe('WATCHING');
+      expect(body.video.userState.watchStatus).toBe('COMPLETED');
     });
 
     test('should return 500 for non-existent video', async () => {
@@ -270,7 +256,7 @@ describe('Videos API Routes', () => {
     test('should get video captions', async () => {
       const mockVideo = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        youtubeId: 'test123',
+        youtube_video_id: 'test123',
       };
 
       const mockCaption = {
@@ -309,7 +295,7 @@ describe('Videos API Routes', () => {
     test('should support language parameter', async () => {
       const mockVideo = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        youtubeId: 'test123',
+        youtube_video_id: 'test123',
       };
 
       mockGetVideo.mockResolvedValue(mockVideo);
@@ -340,7 +326,7 @@ describe('Videos API Routes', () => {
     test('should return 404 when captions not found', async () => {
       const mockVideo = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        youtubeId: 'test123',
+        youtube_video_id: 'test123',
       };
 
       mockGetVideo.mockResolvedValue(mockVideo);
@@ -367,7 +353,7 @@ describe('Videos API Routes', () => {
     test('should get available caption languages', async () => {
       const mockVideo = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        youtubeId: 'test123',
+        youtube_video_id: 'test123',
       };
 
       mockGetVideo.mockResolvedValue(mockVideo);
@@ -394,9 +380,9 @@ describe('Videos API Routes', () => {
     test('should get existing summary', async () => {
       const mockVideo = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        youtubeId: 'test123',
+        youtube_video_id: 'test123',
         userState: {
-          summary: 'This is a test summary',
+          user_note: 'This is a test summary',
           updatedAt: new Date('2024-01-01'),
         },
       };
@@ -419,7 +405,7 @@ describe('Videos API Routes', () => {
     test('should return 404 when summary not found', async () => {
       const mockVideo = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        youtubeId: 'test123',
+        youtube_video_id: 'test123',
         userState: null,
       };
 
@@ -441,7 +427,7 @@ describe('Videos API Routes', () => {
     test('should generate summary from captions', async () => {
       const mockVideo = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        youtubeId: 'test123',
+        youtube_video_id: 'test123',
       };
 
       const mockCaption = {
@@ -458,7 +444,7 @@ describe('Videos API Routes', () => {
         language: 'en',
         caption: mockCaption,
       });
-      mockAddSummary.mockResolvedValue({});
+      mockAddNotes.mockResolvedValue({});
 
       const response = await app.inject({
         method: 'POST',
@@ -476,13 +462,13 @@ describe('Videos API Routes', () => {
       const body = JSON.parse(response.body);
       expect(body.summary.summary).toBeDefined();
       expect(body.summary.level).toBe('brief');
-      expect(mockAddSummary).toHaveBeenCalled();
+      expect(mockAddNotes).toHaveBeenCalled();
     });
 
     test('should return 404 when captions not available', async () => {
       const mockVideo = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        youtubeId: 'test123',
+        youtube_video_id: 'test123',
       };
 
       mockGetVideo.mockResolvedValue(mockVideo);

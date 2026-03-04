@@ -28,14 +28,14 @@ jest.mock('../../../src/config', () => ({
 
 // Mock database
 const mockDb: any = {
-  video: {
+  youtube_videos: {
     findUnique: jest.fn(),
     findMany: jest.fn(),
   },
-  playlist: {
+  youtube_playlists: {
     findFirst: jest.fn(),
   },
-  watchSession: {
+  watch_sessions: {
     create: jest.fn(),
     delete: jest.fn(),
     findMany: jest.fn(),
@@ -53,20 +53,20 @@ describe('AnalyticsTracker', () => {
   // Mock data
   const mockVideo = {
     id: 'video-db-1',
-    youtubeId: 'video-yt-1',
+    youtube_video_id: 'video-yt-1',
     title: 'Test Video',
-    duration: 600, // 10 minutes
+    duration_seconds: 600, // 10 minutes
   };
 
   const mockSession = {
     id: 'session-1',
-    videoId: 'video-db-1',
-    startedAt: new Date('2024-01-01T10:00:00Z'),
-    endedAt: new Date('2024-01-01T10:05:00Z'),
-    startPos: 0,
-    endPos: 300,
+    video_id: 'video-db-1',
+    started_at: new Date('2024-01-01T10:00:00Z'),
+    ended_at: new Date('2024-01-01T10:05:00Z'),
+    start_pos: 0,
+    end_pos: 300,
     duration: 300,
-    createdAt: new Date('2024-01-01T10:05:00Z'),
+    created_at: new Date('2024-01-01T10:05:00Z'),
   };
 
   beforeEach(() => {
@@ -85,8 +85,8 @@ describe('AnalyticsTracker', () => {
 
     it('should record session successfully', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideo);
-      mockDb.watchSession.create.mockResolvedValue(mockSession);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideo);
+      mockDb.watch_sessions.create.mockResolvedValue(mockSession);
 
       // Act
       const result = await tracker.recordSession(createInput);
@@ -96,23 +96,25 @@ describe('AnalyticsTracker', () => {
       expect(result.session).toBeDefined();
       expect(result.session?.id).toBe('session-1');
       expect(result.session?.duration).toBe(300);
-      expect(mockDb.video.findUnique).toHaveBeenCalledWith({
-        where: { youtubeId: 'video-yt-1' },
-      });
-      expect(mockDb.watchSession.create).toHaveBeenCalled();
+      expect(mockDb.youtube_videos.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { youtube_video_id: 'video-yt-1' },
+        })
+      );
+      expect(mockDb.watch_sessions.create).toHaveBeenCalled();
     });
 
     it('should calculate duration from start and end times', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(mockVideo);
-      mockDb.watchSession.create.mockResolvedValue(mockSession);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideo);
+      mockDb.watch_sessions.create.mockResolvedValue(mockSession);
 
       // Act
       await tracker.recordSession(createInput);
 
       // Assert
-      const createCall = mockDb.watchSession.create.mock.calls[0][0];
-      expect(createCall.data.duration).toBe(300); // 5 minutes
+      const createCall = mockDb.watch_sessions.create.mock.calls[0][0];
+      expect(createCall.data.duration).toBe(300); // 5 minutes (field name stays `duration`)
     });
 
     it('should use current time if startedAt/endedAt not provided', async () => {
@@ -122,22 +124,22 @@ describe('AnalyticsTracker', () => {
         startPos: 0,
         endPos: 300,
       };
-      mockDb.video.findUnique.mockResolvedValue(mockVideo);
-      mockDb.watchSession.create.mockResolvedValue(mockSession);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideo);
+      mockDb.watch_sessions.create.mockResolvedValue(mockSession);
 
       // Act
       const result = await tracker.recordSession(input);
 
       // Assert
       expect(result.success).toBe(true);
-      const createCall = mockDb.watchSession.create.mock.calls[0][0];
-      expect(createCall.data.startedAt).toBeInstanceOf(Date);
-      expect(createCall.data.endedAt).toBeInstanceOf(Date);
+      const createCall = mockDb.watch_sessions.create.mock.calls[0][0];
+      expect(createCall.data.started_at).toBeInstanceOf(Date);
+      expect(createCall.data.ended_at).toBeInstanceOf(Date);
     });
 
     it('should return error when video not found', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(null);
 
       // Act
       const result = await tracker.recordSession(createInput);
@@ -145,12 +147,12 @@ describe('AnalyticsTracker', () => {
       // Assert
       expect(result.success).toBe(false);
       expect(result.error).toBe('Video not found in database');
-      expect(mockDb.watchSession.create).not.toHaveBeenCalled();
+      expect(mockDb.watch_sessions.create).not.toHaveBeenCalled();
     });
 
     it('should handle database errors gracefully', async () => {
       // Arrange
-      mockDb.video.findUnique.mockRejectedValue(new Error('Database error'));
+      mockDb.youtube_videos.findUnique.mockRejectedValue(new Error('Database error'));
 
       // Act
       const result = await tracker.recordSession(createInput);
@@ -164,7 +166,7 @@ describe('AnalyticsTracker', () => {
   describe('getVideoAnalytics', () => {
     it('should return null for non-existent video', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(null);
 
       // Act
       const analytics = await tracker.getVideoAnalytics('non-existent');
@@ -175,9 +177,9 @@ describe('AnalyticsTracker', () => {
 
     it('should return zero metrics for video with no sessions', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: [],
+        watch_sessions: [],
       });
 
       // Act
@@ -200,9 +202,9 @@ describe('AnalyticsTracker', () => {
 
     it('should calculate metrics correctly for single session', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: [mockSession],
+        watch_sessions: [mockSession],
       });
 
       // Act
@@ -220,12 +222,12 @@ describe('AnalyticsTracker', () => {
     it('should calculate completion percentage correctly', async () => {
       // Arrange
       const sessions = [
-        { ...mockSession, startPos: 0, endPos: 200, duration: 200 },
-        { ...mockSession, id: 'session-2', startPos: 200, endPos: 500, duration: 300 },
+        { ...mockSession, start_pos: 0, end_pos: 200, duration: 200 },
+        { ...mockSession, id: 'session-2', start_pos: 200, end_pos: 500, duration: 300 },
       ];
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: sessions,
+        watch_sessions: sessions,
       });
 
       // Act
@@ -238,11 +240,11 @@ describe('AnalyticsTracker', () => {
     it('should cap completion percentage at 100%', async () => {
       // Arrange
       const sessions = [
-        { ...mockSession, startPos: 0, endPos: 700, duration: 700 },
+        { ...mockSession, start_pos: 0, end_pos: 700, duration: 700 },
       ];
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: sessions,
+        watch_sessions: sessions,
       });
 
       // Act
@@ -255,15 +257,15 @@ describe('AnalyticsTracker', () => {
     it('should count rewatches correctly', async () => {
       // Arrange
       const sessions = [
-        { ...mockSession, id: 's1', startPos: 0, endPos: 200, duration: 200 },
-        { ...mockSession, id: 's2', startPos: 200, endPos: 500, duration: 300 }, // Reaches 80%+ (83%)
-        { ...mockSession, id: 's3', startPos: 500, endPos: 600, duration: 100 }, // Rewatch
-        { ...mockSession, id: 's4', startPos: 0, endPos: 100, duration: 100 }, // Rewatch
-        { ...mockSession, id: 's5', startPos: 100, endPos: 300, duration: 200 }, // Rewatch
+        { ...mockSession, id: 's1', start_pos: 0, end_pos: 200, duration: 200 },
+        { ...mockSession, id: 's2', start_pos: 200, end_pos: 500, duration: 300 }, // Reaches 80%+ (83%)
+        { ...mockSession, id: 's3', start_pos: 500, end_pos: 600, duration: 100 }, // Rewatch
+        { ...mockSession, id: 's4', start_pos: 0, end_pos: 100, duration: 100 }, // Rewatch
+        { ...mockSession, id: 's5', start_pos: 100, end_pos: 300, duration: 200 }, // Rewatch
       ];
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: sessions,
+        watch_sessions: sessions,
       });
 
       // Act
@@ -276,13 +278,13 @@ describe('AnalyticsTracker', () => {
     it('should track first and last watched dates', async () => {
       // Arrange
       const sessions = [
-        { ...mockSession, id: 's1', startedAt: new Date('2024-01-01T10:00:00Z') },
-        { ...mockSession, id: 's2', startedAt: new Date('2024-01-02T10:00:00Z') },
-        { ...mockSession, id: 's3', startedAt: new Date('2024-01-03T10:00:00Z') },
+        { ...mockSession, id: 's1', started_at: new Date('2024-01-01T10:00:00Z') },
+        { ...mockSession, id: 's2', started_at: new Date('2024-01-02T10:00:00Z') },
+        { ...mockSession, id: 's3', started_at: new Date('2024-01-03T10:00:00Z') },
       ];
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: sessions,
+        watch_sessions: sessions,
       });
 
       // Act
@@ -295,7 +297,7 @@ describe('AnalyticsTracker', () => {
 
     it('should handle database errors gracefully', async () => {
       // Arrange
-      mockDb.video.findUnique.mockRejectedValue(new Error('Database error'));
+      mockDb.youtube_videos.findUnique.mockRejectedValue(new Error('Database error'));
 
       // Act
       const analytics = await tracker.getVideoAnalytics('video-yt-1');
@@ -309,14 +311,14 @@ describe('AnalyticsTracker', () => {
   describe('getPlaylistAnalytics', () => {
     const mockPlaylist = {
       id: 'playlist-db-1',
-      youtubeId: 'playlist-yt-1',
+      youtube_playlist_id: 'playlist-yt-1',
       title: 'Test Playlist',
-      items: [],
+      youtube_playlist_items: [],
     };
 
     it('should return null for non-existent playlist', async () => {
       // Arrange
-      mockDb.playlist.findFirst.mockResolvedValue(null);
+      mockDb.youtube_playlists.findFirst.mockResolvedValue(null);
 
       // Act
       const analytics = await tracker.getPlaylistAnalytics('non-existent');
@@ -327,9 +329,9 @@ describe('AnalyticsTracker', () => {
 
     it('should return zero metrics for playlist with no videos', async () => {
       // Arrange
-      mockDb.playlist.findFirst.mockResolvedValue({
+      mockDb.youtube_playlists.findFirst.mockResolvedValue({
         ...mockPlaylist,
-        items: [],
+        youtube_playlist_items: [],
       });
 
       // Act
@@ -354,37 +356,37 @@ describe('AnalyticsTracker', () => {
       const video1 = {
         ...mockVideo,
         id: 'v1',
-        youtubeId: 'yt1',
-        watchSessions: [
-          { ...mockSession, endPos: 480, duration: 480 }, // 80% complete
+        youtube_video_id: 'yt1',
+        watch_sessions: [
+          { ...mockSession, end_pos: 480, duration: 480 }, // 80% complete
         ],
       };
       const video2 = {
         ...mockVideo,
         id: 'v2',
-        youtubeId: 'yt2',
-        watchSessions: [
-          { ...mockSession, endPos: 300, duration: 300 }, // 50% complete
+        youtube_video_id: 'yt2',
+        watch_sessions: [
+          { ...mockSession, end_pos: 300, duration: 300 }, // 50% complete
         ],
       };
       const video3 = {
         ...mockVideo,
         id: 'v3',
-        youtubeId: 'yt3',
-        watchSessions: [], // Not started
+        youtube_video_id: 'yt3',
+        watch_sessions: [], // Not started
       };
 
-      mockDb.playlist.findFirst.mockResolvedValue({
+      mockDb.youtube_playlists.findFirst.mockResolvedValue({
         ...mockPlaylist,
-        items: [
-          { video: video1 },
-          { video: video2 },
-          { video: video3 },
+        youtube_playlist_items: [
+          { youtube_videos: video1 },
+          { youtube_videos: video2 },
+          { youtube_videos: video3 },
         ],
       });
 
       // Mock getVideoAnalytics calls
-      mockDb.video.findUnique
+      mockDb.youtube_videos.findUnique
         .mockResolvedValueOnce(video1)
         .mockResolvedValueOnce(video2)
         .mockResolvedValueOnce(video3);
@@ -404,26 +406,26 @@ describe('AnalyticsTracker', () => {
       const video1 = {
         ...mockVideo,
         id: 'v1',
-        youtubeId: 'yt1',
-        watchSessions: [
-          { ...mockSession, startedAt: new Date('2024-01-01T10:00:00Z') },
+        youtube_video_id: 'yt1',
+        watch_sessions: [
+          { ...mockSession, started_at: new Date('2024-01-01T10:00:00Z') },
         ],
       };
       const video2 = {
         ...mockVideo,
         id: 'v2',
-        youtubeId: 'yt2',
-        watchSessions: [
-          { ...mockSession, startedAt: new Date('2024-01-03T10:00:00Z') }, // Latest
+        youtube_video_id: 'yt2',
+        watch_sessions: [
+          { ...mockSession, started_at: new Date('2024-01-03T10:00:00Z') }, // Latest
         ],
       };
 
-      mockDb.playlist.findFirst.mockResolvedValue({
+      mockDb.youtube_playlists.findFirst.mockResolvedValue({
         ...mockPlaylist,
-        items: [{ video: video1 }, { video: video2 }],
+        youtube_playlist_items: [{ youtube_videos: video1 }, { youtube_videos: video2 }],
       });
 
-      mockDb.video.findUnique
+      mockDb.youtube_videos.findUnique
         .mockResolvedValueOnce(video1)
         .mockResolvedValueOnce(video2);
 
@@ -436,7 +438,7 @@ describe('AnalyticsTracker', () => {
 
     it('should handle database errors gracefully', async () => {
       // Arrange
-      mockDb.playlist.findFirst.mockRejectedValue(new Error('Database error'));
+      mockDb.youtube_playlists.findFirst.mockRejectedValue(new Error('Database error'));
 
       // Act
       const analytics = await tracker.getPlaylistAnalytics('playlist-yt-1');
@@ -450,8 +452,8 @@ describe('AnalyticsTracker', () => {
   describe('getLearningDashboard', () => {
     it('should return empty dashboard when no videos exist', async () => {
       // Arrange
-      mockDb.video.findMany.mockResolvedValue([]);
-      mockDb.watchSession.findMany.mockResolvedValue([]);
+      mockDb.youtube_videos.findMany.mockResolvedValue([]);
+      mockDb.watch_sessions.findMany.mockResolvedValue([]);
 
       // Act
       const dashboard = await tracker.getLearningDashboard();
@@ -481,25 +483,25 @@ describe('AnalyticsTracker', () => {
         {
           ...mockVideo,
           id: 'v1',
-          youtubeId: 'yt1',
-          watchSessions: [{ ...mockSession, endPos: 480, duration: 480 }], // 80% - completed
+          youtube_video_id: 'yt1',
+          watch_sessions: [{ ...mockSession, end_pos: 480, duration: 480 }], // 80% - completed
         },
         {
           ...mockVideo,
           id: 'v2',
-          youtubeId: 'yt2',
-          watchSessions: [{ ...mockSession, endPos: 300, duration: 300 }], // 50% - in progress
+          youtube_video_id: 'yt2',
+          watch_sessions: [{ ...mockSession, end_pos: 300, duration: 300 }], // 50% - in progress
         },
         {
           ...mockVideo,
           id: 'v3',
-          youtubeId: 'yt3',
-          watchSessions: [], // Not started
+          youtube_video_id: 'yt3',
+          watch_sessions: [], // Not started
         },
       ];
 
-      mockDb.video.findMany.mockResolvedValue(videos);
-      mockDb.watchSession.findMany.mockResolvedValue([]);
+      mockDb.youtube_videos.findMany.mockResolvedValue(videos);
+      mockDb.watch_sessions.findMany.mockResolvedValue([]);
 
       // Act
       const dashboard = await tracker.getLearningDashboard();
@@ -517,7 +519,7 @@ describe('AnalyticsTracker', () => {
         {
           ...mockVideo,
           id: 'v1',
-          watchSessions: [
+          watch_sessions: [
             { ...mockSession, duration: 300 },
             { ...mockSession, duration: 200 },
           ],
@@ -525,12 +527,12 @@ describe('AnalyticsTracker', () => {
         {
           ...mockVideo,
           id: 'v2',
-          watchSessions: [{ ...mockSession, duration: 500 }],
+          watch_sessions: [{ ...mockSession, duration: 500 }],
         },
       ];
 
-      mockDb.video.findMany.mockResolvedValue(videos);
-      mockDb.watchSession.findMany.mockResolvedValue([]);
+      mockDb.youtube_videos.findMany.mockResolvedValue(videos);
+      mockDb.watch_sessions.findMany.mockResolvedValue([]);
 
       // Act
       const dashboard = await tracker.getLearningDashboard();
@@ -547,25 +549,25 @@ describe('AnalyticsTracker', () => {
         {
           ...mockVideo,
           id: 'v1',
-          youtubeId: 'yt1',
+          youtube_video_id: 'yt1',
           title: 'Video 1',
-          watchSessions: [
-            { ...mockSession, duration: 500, endPos: 500 },
+          watch_sessions: [
+            { ...mockSession, duration: 500, end_pos: 500 },
           ],
         },
         {
           ...mockVideo,
           id: 'v2',
-          youtubeId: 'yt2',
+          youtube_video_id: 'yt2',
           title: 'Video 2',
-          watchSessions: [
-            { ...mockSession, duration: 300, endPos: 300 },
+          watch_sessions: [
+            { ...mockSession, duration: 300, end_pos: 300 },
           ],
         },
       ];
 
-      mockDb.video.findMany.mockResolvedValue(videos);
-      mockDb.watchSession.findMany.mockResolvedValue([]);
+      mockDb.youtube_videos.findMany.mockResolvedValue(videos);
+      mockDb.watch_sessions.findMany.mockResolvedValue([]);
 
       // Act
       const dashboard = await tracker.getLearningDashboard();
@@ -582,13 +584,13 @@ describe('AnalyticsTracker', () => {
       const videos = Array.from({ length: 15 }, (_, i) => ({
         ...mockVideo,
         id: `v${i}`,
-        youtubeId: `yt${i}`,
+        youtube_video_id: `yt${i}`,
         title: `Video ${i}`,
-        watchSessions: [{ ...mockSession, duration: 100 * i }],
+        watch_sessions: [{ ...mockSession, duration: 100 * i }],
       }));
 
-      mockDb.video.findMany.mockResolvedValue(videos);
-      mockDb.watchSession.findMany.mockResolvedValue([]);
+      mockDb.youtube_videos.findMany.mockResolvedValue(videos);
+      mockDb.watch_sessions.findMany.mockResolvedValue([]);
 
       // Act
       const dashboard = await tracker.getLearningDashboard();
@@ -603,35 +605,35 @@ describe('AnalyticsTracker', () => {
         {
           ...mockVideo,
           id: 'v1',
-          youtubeId: 'yt1',
+          youtube_video_id: 'yt1',
           title: 'Video 1',
-          watchSessions: [
+          watch_sessions: [
             {
               ...mockSession,
-              startedAt: new Date('2024-01-03T10:00:00Z'),
+              started_at: new Date('2024-01-03T10:00:00Z'),
               duration: 300,
-              endPos: 300,
+              end_pos: 300,
             },
           ],
         },
         {
           ...mockVideo,
           id: 'v2',
-          youtubeId: 'yt2',
+          youtube_video_id: 'yt2',
           title: 'Video 2',
-          watchSessions: [
+          watch_sessions: [
             {
               ...mockSession,
-              startedAt: new Date('2024-01-01T10:00:00Z'),
+              started_at: new Date('2024-01-01T10:00:00Z'),
               duration: 200,
-              endPos: 200,
+              end_pos: 200,
             },
           ],
         },
       ];
 
-      mockDb.video.findMany.mockResolvedValue(videos);
-      mockDb.watchSession.findMany.mockResolvedValue([]);
+      mockDb.youtube_videos.findMany.mockResolvedValue(videos);
+      mockDb.watch_sessions.findMany.mockResolvedValue([]);
 
       // Act
       const dashboard = await tracker.getLearningDashboard();
@@ -646,8 +648,8 @@ describe('AnalyticsTracker', () => {
 
     it('should handle database errors gracefully', async () => {
       // Arrange
-      mockDb.video.findMany.mockRejectedValue(new Error('Database error'));
-      mockDb.watchSession.findMany.mockResolvedValue([]);
+      mockDb.youtube_videos.findMany.mockRejectedValue(new Error('Database error'));
+      mockDb.watch_sessions.findMany.mockResolvedValue([]);
 
       // Act
       const dashboard = await tracker.getLearningDashboard();
@@ -661,7 +663,7 @@ describe('AnalyticsTracker', () => {
   describe('getRetentionMetrics', () => {
     it('should return null for non-existent video', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(null);
 
       // Act
       const metrics = await tracker.getRetentionMetrics('non-existent');
@@ -672,9 +674,9 @@ describe('AnalyticsTracker', () => {
 
     it('should classify difficulty as easy for no rewatches', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: [{ ...mockSession, endPos: 500, duration: 500 }],
+        watch_sessions: [{ ...mockSession, end_pos: 500, duration: 500 }],
       });
 
       // Act
@@ -686,12 +688,12 @@ describe('AnalyticsTracker', () => {
 
     it('should classify difficulty as medium for 1-2 rewatches', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: [
-          { ...mockSession, id: 's1', endPos: 480, duration: 480 }, // Reaches 80%
-          { ...mockSession, id: 's2', endPos: 300, duration: 300 }, // Rewatch 1
-          { ...mockSession, id: 's3', endPos: 400, duration: 400 }, // Rewatch 2
+        watch_sessions: [
+          { ...mockSession, id: 's1', end_pos: 480, duration: 480 }, // Reaches 80%
+          { ...mockSession, id: 's2', end_pos: 300, duration: 300 }, // Rewatch 1
+          { ...mockSession, id: 's3', end_pos: 400, duration: 400 }, // Rewatch 2
         ],
       });
 
@@ -705,13 +707,13 @@ describe('AnalyticsTracker', () => {
 
     it('should classify difficulty as hard for 3+ rewatches', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: [
-          { ...mockSession, id: 's1', endPos: 480, duration: 480 }, // Reaches 80%
-          { ...mockSession, id: 's2', endPos: 300, duration: 300 }, // Rewatch 1
-          { ...mockSession, id: 's3', endPos: 400, duration: 400 }, // Rewatch 2
-          { ...mockSession, id: 's4', endPos: 500, duration: 500 }, // Rewatch 3
+        watch_sessions: [
+          { ...mockSession, id: 's1', end_pos: 480, duration: 480 }, // Reaches 80%
+          { ...mockSession, id: 's2', end_pos: 300, duration: 300 }, // Rewatch 1
+          { ...mockSession, id: 's3', end_pos: 400, duration: 400 }, // Rewatch 2
+          { ...mockSession, id: 's4', end_pos: 500, duration: 500 }, // Rewatch 3
         ],
       });
 
@@ -725,10 +727,10 @@ describe('AnalyticsTracker', () => {
 
     it('should calculate retention score correctly', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: [
-          { ...mockSession, endPos: 480, duration: 480 }, // 80% completion
+        watch_sessions: [
+          { ...mockSession, end_pos: 480, duration: 480 }, // 80% completion
         ],
       });
 
@@ -743,12 +745,12 @@ describe('AnalyticsTracker', () => {
 
     it('should penalize retention score for rewatches', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: [
-          { ...mockSession, id: 's1', endPos: 480, duration: 480 }, // 80% completion
-          { ...mockSession, id: 's2', endPos: 300, duration: 300 }, // Rewatch 1
-          { ...mockSession, id: 's3', endPos: 400, duration: 400 }, // Rewatch 2
+        watch_sessions: [
+          { ...mockSession, id: 's1', end_pos: 480, duration: 480 }, // 80% completion
+          { ...mockSession, id: 's2', end_pos: 300, duration: 300 }, // Rewatch 1
+          { ...mockSession, id: 's3', end_pos: 400, duration: 400 }, // Rewatch 2
         ],
       });
 
@@ -763,10 +765,10 @@ describe('AnalyticsTracker', () => {
     it('should recommend review date based on retention score', async () => {
       // Arrange
       const lastWatched = new Date('2024-01-01T10:00:00Z');
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: [
-          { ...mockSession, endPos: 540, duration: 540, startedAt: lastWatched }, // 90% completion
+        watch_sessions: [
+          { ...mockSession, end_pos: 540, duration: 540, started_at: lastWatched }, // 90% completion
         ],
       });
 
@@ -783,10 +785,10 @@ describe('AnalyticsTracker', () => {
 
     it('should return null review date for low completion', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: [
-          { ...mockSession, endPos: 100, duration: 100 }, // 16% completion
+        watch_sessions: [
+          { ...mockSession, end_pos: 100, duration: 100 }, // 16% completion
         ],
       });
 
@@ -799,7 +801,7 @@ describe('AnalyticsTracker', () => {
 
     it('should handle database errors gracefully', async () => {
       // Arrange
-      mockDb.video.findUnique.mockRejectedValue(new Error('Database error'));
+      mockDb.youtube_videos.findUnique.mockRejectedValue(new Error('Database error'));
 
       // Act
       const metrics = await tracker.getRetentionMetrics('video-yt-1');
@@ -813,7 +815,7 @@ describe('AnalyticsTracker', () => {
   describe('calculateLearningStreak', () => {
     it('should return zero streak when no sessions exist', async () => {
       // Arrange
-      mockDb.watchSession.findMany.mockResolvedValue([]);
+      mockDb.watch_sessions.findMany.mockResolvedValue([]);
 
       // Act
       const dashboard = await tracker.getLearningDashboard();
@@ -834,21 +836,21 @@ describe('AnalyticsTracker', () => {
       const twoDaysAgo = new Date(today);
       twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
 
-      mockDb.video.findMany.mockResolvedValue([
+      mockDb.youtube_videos.findMany.mockResolvedValue([
         {
           ...mockVideo,
-          watchSessions: [
-            { ...mockSession, startedAt: today },
-            { ...mockSession, startedAt: yesterday },
-            { ...mockSession, startedAt: twoDaysAgo },
+          watch_sessions: [
+            { ...mockSession, started_at: today },
+            { ...mockSession, started_at: yesterday },
+            { ...mockSession, started_at: twoDaysAgo },
           ],
         },
       ]);
 
-      mockDb.watchSession.findMany.mockResolvedValue([
-        { ...mockSession, startedAt: today },
-        { ...mockSession, startedAt: yesterday },
-        { ...mockSession, startedAt: twoDaysAgo },
+      mockDb.watch_sessions.findMany.mockResolvedValue([
+        { ...mockSession, started_at: today },
+        { ...mockSession, started_at: yesterday },
+        { ...mockSession, started_at: twoDaysAgo },
       ]);
 
       // Act
@@ -865,19 +867,19 @@ describe('AnalyticsTracker', () => {
       const twoDaysAgo = new Date();
       twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
 
-      mockDb.video.findMany.mockResolvedValue([
+      mockDb.youtube_videos.findMany.mockResolvedValue([
         {
           ...mockVideo,
-          watchSessions: [
-            { ...mockSession, startedAt: yesterday },
-            { ...mockSession, startedAt: twoDaysAgo },
+          watch_sessions: [
+            { ...mockSession, started_at: yesterday },
+            { ...mockSession, started_at: twoDaysAgo },
           ],
         },
       ]);
 
-      mockDb.watchSession.findMany.mockResolvedValue([
-        { ...mockSession, startedAt: yesterday },
-        { ...mockSession, startedAt: twoDaysAgo },
+      mockDb.watch_sessions.findMany.mockResolvedValue([
+        { ...mockSession, started_at: yesterday },
+        { ...mockSession, started_at: twoDaysAgo },
       ]);
 
       // Act
@@ -894,19 +896,19 @@ describe('AnalyticsTracker', () => {
       const fourDaysAgo = new Date();
       fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
 
-      mockDb.video.findMany.mockResolvedValue([
+      mockDb.youtube_videos.findMany.mockResolvedValue([
         {
           ...mockVideo,
-          watchSessions: [
-            { ...mockSession, startedAt: threeDaysAgo },
-            { ...mockSession, startedAt: fourDaysAgo },
+          watch_sessions: [
+            { ...mockSession, started_at: threeDaysAgo },
+            { ...mockSession, started_at: fourDaysAgo },
           ],
         },
       ]);
 
-      mockDb.watchSession.findMany.mockResolvedValue([
-        { ...mockSession, startedAt: threeDaysAgo },
-        { ...mockSession, startedAt: fourDaysAgo },
+      mockDb.watch_sessions.findMany.mockResolvedValue([
+        { ...mockSession, started_at: threeDaysAgo },
+        { ...mockSession, started_at: fourDaysAgo },
       ]);
 
       // Act
@@ -919,21 +921,21 @@ describe('AnalyticsTracker', () => {
     it('should calculate longest streak correctly', async () => {
       // Arrange
       const sessions = [
-        { ...mockSession, startedAt: new Date('2024-01-01') },
-        { ...mockSession, startedAt: new Date('2024-01-02') },
-        { ...mockSession, startedAt: new Date('2024-01-03') },
+        { ...mockSession, started_at: new Date('2024-01-01') },
+        { ...mockSession, started_at: new Date('2024-01-02') },
+        { ...mockSession, started_at: new Date('2024-01-03') },
         // Gap
-        { ...mockSession, startedAt: new Date('2024-01-05') },
-        { ...mockSession, startedAt: new Date('2024-01-06') },
-        { ...mockSession, startedAt: new Date('2024-01-07') },
-        { ...mockSession, startedAt: new Date('2024-01-08') },
+        { ...mockSession, started_at: new Date('2024-01-05') },
+        { ...mockSession, started_at: new Date('2024-01-06') },
+        { ...mockSession, started_at: new Date('2024-01-07') },
+        { ...mockSession, started_at: new Date('2024-01-08') },
       ];
 
-      mockDb.video.findMany.mockResolvedValue([
-        { ...mockVideo, watchSessions: sessions },
+      mockDb.youtube_videos.findMany.mockResolvedValue([
+        { ...mockVideo, watch_sessions: sessions },
       ]);
 
-      mockDb.watchSession.findMany.mockResolvedValue(sessions);
+      mockDb.watch_sessions.findMany.mockResolvedValue(sessions);
 
       // Act
       const dashboard = await tracker.getLearningDashboard();
@@ -946,21 +948,21 @@ describe('AnalyticsTracker', () => {
   describe('deleteSession', () => {
     it('should delete session successfully', async () => {
       // Arrange
-      mockDb.watchSession.delete.mockResolvedValue(mockSession);
+      mockDb.watch_sessions.delete.mockResolvedValue(mockSession);
 
       // Act
       const result = await tracker.deleteSession('session-1');
 
       // Assert
       expect(result.success).toBe(true);
-      expect(mockDb.watchSession.delete).toHaveBeenCalledWith({
+      expect(mockDb.watch_sessions.delete).toHaveBeenCalledWith({
         where: { id: 'session-1' },
       });
     });
 
     it('should handle deletion errors gracefully', async () => {
       // Arrange
-      mockDb.watchSession.delete.mockRejectedValue(new Error('Not found'));
+      mockDb.watch_sessions.delete.mockRejectedValue(new Error('Not found'));
 
       // Act
       const result = await tracker.deleteSession('non-existent');
@@ -974,7 +976,7 @@ describe('AnalyticsTracker', () => {
   describe('getVideoSessions', () => {
     it('should return empty array for non-existent video', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(null);
 
       // Act
       const sessions = await tracker.getVideoSessions('non-existent');
@@ -986,14 +988,14 @@ describe('AnalyticsTracker', () => {
     it('should return all sessions for a video', async () => {
       // Arrange
       const sessions = [
-        { ...mockSession, id: 's1', startedAt: new Date('2024-01-01') },
-        { ...mockSession, id: 's2', startedAt: new Date('2024-01-02') },
-        { ...mockSession, id: 's3', startedAt: new Date('2024-01-03') },
+        { ...mockSession, id: 's1', started_at: new Date('2024-01-01') },
+        { ...mockSession, id: 's2', started_at: new Date('2024-01-02') },
+        { ...mockSession, id: 's3', started_at: new Date('2024-01-03') },
       ];
 
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
-        watchSessions: sessions,
+        watch_sessions: sessions,
       });
 
       // Act
@@ -1006,7 +1008,7 @@ describe('AnalyticsTracker', () => {
 
     it('should handle database errors gracefully', async () => {
       // Arrange
-      mockDb.video.findUnique.mockRejectedValue(new Error('Database error'));
+      mockDb.youtube_videos.findUnique.mockRejectedValue(new Error('Database error'));
 
       // Act
       const sessions = await tracker.getVideoSessions('video-yt-1');

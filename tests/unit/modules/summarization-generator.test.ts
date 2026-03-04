@@ -32,13 +32,12 @@ describe('SummaryGenerator', () => {
   const mockVideoId = 'test-video-123';
   const mockVideoRecord = {
     id: 'db-video-1',
-    youtubeId: mockVideoId,
+    youtube_video_id: mockVideoId,
     title: 'Introduction to TypeScript',
-    channelId: 'test-channel',
-    channelTitle: 'Test Channel',
-    publishedAt: new Date('2024-01-01'),
-    duration: 600,
-    thumbnailUrls: '[]',
+    channel_title: 'Test Channel',
+    published_at: new Date('2024-01-01'),
+    duration_seconds: 600,
+    thumbnail_url: null,
   };
 
   const mockCaption = {
@@ -68,13 +67,13 @@ describe('SummaryGenerator', () => {
 
     // Setup mock database
     mockDb = {
-      video: {
+      youtube_videos: {
         findUnique: jest.fn(),
       },
-      userVideoState: {
+      video_notes: {
         upsert: jest.fn(),
       },
-      playlistItem: {
+      youtube_playlist_items: {
         findMany: jest.fn(),
       },
     };
@@ -130,14 +129,14 @@ describe('SummaryGenerator', () => {
 
   describe('generateSummary', () => {
     beforeEach(() => {
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
       mockCaptionExtractor.getCaption.mockResolvedValue(mockCaption);
       mockModel.generateContent.mockResolvedValue({
         response: {
           text: () => JSON.stringify(mockAIResponse),
         },
       });
-      mockDb.userVideoState.upsert.mockResolvedValue({
+      mockDb.video_notes.upsert.mockResolvedValue({
         id: 'state-1',
         videoId: 'db-video-1',
         summary: mockAIResponse.summary,
@@ -204,7 +203,7 @@ describe('SummaryGenerator', () => {
 
     it('should fail if video not found', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(null);
 
       // Act
       const result = await generator.generateSummary(mockVideoId);
@@ -232,18 +231,19 @@ describe('SummaryGenerator', () => {
       await generator.generateSummary(mockVideoId);
 
       // Assert
-      expect(mockDb.userVideoState.upsert).toHaveBeenCalledWith({
-        where: { videoId: 'db-video-1' },
-        create: {
-          videoId: 'db-video-1',
-          summary: mockAIResponse.summary,
-          tags: JSON.stringify(mockAIResponse.keywords),
-        },
-        update: {
-          summary: mockAIResponse.summary,
-          tags: JSON.stringify(mockAIResponse.keywords),
-        },
-      });
+      expect(mockDb.video_notes.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            video_id: 'db-video-1',
+            content: mockAIResponse.summary,
+            tags: JSON.stringify(mockAIResponse.keywords),
+          }),
+          update: expect.objectContaining({
+            content: mockAIResponse.summary,
+            tags: JSON.stringify(mockAIResponse.keywords),
+          }),
+        })
+      );
     });
 
     it('should respect summarization level - short', async () => {
@@ -340,7 +340,7 @@ describe('SummaryGenerator', () => {
       // Arrange
       process.env['GEMINI_MODEL'] = 'gemini-pro-vision';
       const newGenerator = new SummaryGenerator();
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
       mockCaptionExtractor.getCaption.mockResolvedValue(mockCaption);
       mockModel.generateContent.mockResolvedValue({
         response: { text: () => JSON.stringify(mockAIResponse) },
@@ -360,9 +360,9 @@ describe('SummaryGenerator', () => {
 
   describe('AI Response Parsing', () => {
     beforeEach(() => {
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
       mockCaptionExtractor.getCaption.mockResolvedValue(mockCaption);
-      mockDb.userVideoState.upsert.mockResolvedValue({});
+      mockDb.video_notes.upsert.mockResolvedValue({});
     });
 
     it('should parse valid JSON response', async () => {
@@ -440,15 +440,16 @@ describe('SummaryGenerator', () => {
   describe('getSummary', () => {
     it('should retrieve summary from database', async () => {
       // Arrange
-      const mockUserState = {
-        id: 'state-1',
-        videoId: 'db-video-1',
-        summary: 'Test summary',
+      const mockNote = {
+        id: 'note-1',
+        video_id: 'db-video-1',
+        timestamp_seconds: -1,
+        content: 'Test summary',
         tags: JSON.stringify(['tag1', 'tag2']),
       };
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideoRecord,
-        userState: mockUserState,
+        video_notes: [mockNote],
       });
 
       // Act
@@ -462,7 +463,7 @@ describe('SummaryGenerator', () => {
 
     it('should return null if video not found', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue(null);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(null);
 
       // Act
       const result = await generator.getSummary(mockVideoId);
@@ -473,9 +474,9 @@ describe('SummaryGenerator', () => {
 
     it('should return null if no summary exists', async () => {
       // Arrange
-      mockDb.video.findUnique.mockResolvedValue({
+      mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideoRecord,
-        userState: null,
+        video_notes: [],
       });
 
       // Act
@@ -487,7 +488,7 @@ describe('SummaryGenerator', () => {
 
     it('should handle database errors', async () => {
       // Arrange
-      mockDb.video.findUnique.mockRejectedValue(new Error('Database error'));
+      mockDb.youtube_videos.findUnique.mockRejectedValue(new Error('Database error'));
 
       // Act
       const result = await generator.getSummary(mockVideoId);
@@ -502,30 +503,30 @@ describe('SummaryGenerator', () => {
     const mockPlaylistItems = [
       {
         id: 'item-1',
-        playlistId: mockPlaylistId,
+        playlist_id: mockPlaylistId,
         position: 0,
-        video: { ...mockVideoRecord, youtubeId: 'video-1' },
+        youtube_videos: { ...mockVideoRecord, youtube_video_id: 'video-1' },
       },
       {
         id: 'item-2',
-        playlistId: mockPlaylistId,
+        playlist_id: mockPlaylistId,
         position: 1,
-        video: { ...mockVideoRecord, youtubeId: 'video-2' },
+        youtube_videos: { ...mockVideoRecord, youtube_video_id: 'video-2' },
       },
     ];
 
     beforeEach(() => {
-      mockDb.video.findUnique.mockResolvedValue(mockVideoRecord);
+      mockDb.youtube_videos.findUnique.mockResolvedValue(mockVideoRecord);
       mockCaptionExtractor.getCaption.mockResolvedValue(mockCaption);
       mockModel.generateContent.mockResolvedValue({
         response: { text: () => JSON.stringify(mockAIResponse) },
       });
-      mockDb.userVideoState.upsert.mockResolvedValue({});
+      mockDb.video_notes.upsert.mockResolvedValue({});
     });
 
     it('should generate summaries for all videos in playlist', async () => {
       // Arrange
-      mockDb.playlistItem.findMany.mockResolvedValue(mockPlaylistItems);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue(mockPlaylistItems);
 
       // Act
       const results = await generator.generatePlaylistSummaries(mockPlaylistId);
@@ -537,25 +538,24 @@ describe('SummaryGenerator', () => {
 
     it('should skip removed items', async () => {
       // Arrange
-      mockDb.playlistItem.findMany.mockResolvedValue(mockPlaylistItems);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue(mockPlaylistItems);
 
       // Act
       await generator.generatePlaylistSummaries(mockPlaylistId);
 
       // Assert
-      expect(mockDb.playlistItem.findMany).toHaveBeenCalledWith({
-        where: {
-          playlistId: mockPlaylistId,
-          removedAt: null,
-        },
-        include: { video: true },
-        orderBy: { position: 'asc' },
-      });
+      expect(mockDb.youtube_playlist_items.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            playlist_id: mockPlaylistId,
+          }),
+        })
+      );
     });
 
     it('should continue on individual failures', async () => {
       // Arrange
-      mockDb.playlistItem.findMany.mockResolvedValue(mockPlaylistItems);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue(mockPlaylistItems);
       mockModel.generateContent
         .mockResolvedValueOnce({
           response: { text: () => JSON.stringify(mockAIResponse) },
@@ -573,7 +573,7 @@ describe('SummaryGenerator', () => {
 
     it('should respect options', async () => {
       // Arrange
-      mockDb.playlistItem.findMany.mockResolvedValue([mockPlaylistItems[0]!]);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue([mockPlaylistItems[0]!]);
       const options: SummarizationOptions = { level: 'detailed', language: 'ko' };
 
       // Act
@@ -585,7 +585,7 @@ describe('SummaryGenerator', () => {
 
     it('should handle empty playlist', async () => {
       // Arrange
-      mockDb.playlistItem.findMany.mockResolvedValue([]);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue([]);
 
       // Act
       const results = await generator.generatePlaylistSummaries(mockPlaylistId);

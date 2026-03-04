@@ -40,7 +40,7 @@ const mockSyncHistoryFindUnique = jest.fn();
 
 jest.mock('../../../src/modules/database', () => ({
   getPrismaClient: () => ({
-    syncHistory: {
+    youtube_sync_history: {
       findMany: mockSyncHistoryFindMany,
       count: mockSyncHistoryCount,
       findUnique: mockSyncHistoryFindUnique,
@@ -132,15 +132,15 @@ describe('Sync API Routes', () => {
         playlists: [
           {
             id: '550e8400-e29b-41d4-a716-446655440001',
-            syncStatus: 'COMPLETED',
-            lastSyncedAt: new Date('2024-01-01T10:00:00Z'),
-            itemCount: 10,
+            sync_status: 'COMPLETED',
+            last_synced_at: new Date('2024-01-01T10:00:00Z'),
+            item_count: 10,
           },
           {
             id: '550e8400-e29b-41d4-a716-446655440002',
-            syncStatus: 'IN_PROGRESS',
-            lastSyncedAt: null,
-            itemCount: 5,
+            sync_status: 'IN_PROGRESS',
+            last_synced_at: null,
+            item_count: 5,
           },
         ],
         total: 2,
@@ -178,9 +178,9 @@ describe('Sync API Routes', () => {
     it('should return playlist sync status', async () => {
       const mockPlaylist = {
         id: '550e8400-e29b-41d4-a716-446655440000',
-        syncStatus: 'COMPLETED',
-        lastSyncedAt: new Date('2024-01-01T10:00:00Z'),
-        itemCount: 10,
+        sync_status: 'COMPLETED',
+        last_synced_at: new Date('2024-01-01T10:00:00Z'),
+        item_count: 10,
       };
 
       mockGetPlaylist.mockResolvedValue(mockPlaylist);
@@ -227,16 +227,14 @@ describe('Sync API Routes', () => {
       const mockHistory = [
         {
           id: '550e8400-e29b-41d4-a716-446655440001',
-          playlistId: '550e8400-e29b-41d4-a716-446655440000',
+          playlist_id: '550e8400-e29b-41d4-a716-446655440000',
           status: 'COMPLETED',
-          startedAt: new Date('2024-01-01T10:00:00Z'),
-          completedAt: new Date('2024-01-01T10:05:00Z'),
-          duration: 300000,
-          itemsAdded: 5,
-          itemsRemoved: 2,
-          itemsReordered: 1,
-          quotaUsed: 10,
-          errorMessage: null,
+          started_at: new Date('2024-01-01T10:00:00Z'),
+          completed_at: new Date('2024-01-01T10:05:00Z'),
+          items_added: 5,
+          items_removed: 2,
+          quota_used: 10,
+          error_message: null,
         },
       ];
 
@@ -274,7 +272,7 @@ describe('Sync API Routes', () => {
 
       expect(response.statusCode).toBe(200);
       expect(mockSyncHistoryCount).toHaveBeenCalledWith({
-        where: { playlistId: '550e8400-e29b-41d4-a716-446655440000' },
+        where: { playlist_id: '550e8400-e29b-41d4-a716-446655440000' },
       });
     });
 
@@ -310,17 +308,15 @@ describe('Sync API Routes', () => {
     it('should return sync details', async () => {
       const mockSyncHistory = {
         id: '550e8400-e29b-41d4-a716-446655440001',
-        playlistId: '550e8400-e29b-41d4-a716-446655440000',
+        playlist_id: '550e8400-e29b-41d4-a716-446655440000',
         status: 'COMPLETED',
-        startedAt: new Date('2024-01-01T10:00:00Z'),
-        completedAt: new Date('2024-01-01T10:05:00Z'),
-        duration: 300000,
-        itemsAdded: 5,
-        itemsRemoved: 2,
-        itemsReordered: 1,
-        quotaUsed: 10,
-        errorMessage: null,
-        playlist: {
+        started_at: new Date('2024-01-01T10:00:00Z'),
+        completed_at: new Date('2024-01-01T10:05:00Z'),
+        items_added: 5,
+        items_removed: 2,
+        quota_used: 10,
+        error_message: null,
+        youtube_playlists: {
           title: 'Test Playlist',
         },
       };

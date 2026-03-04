@@ -28,18 +28,15 @@ const mockTransaction = jest.fn((callback: any) => callback({
 // Mock modules before importing authRoutes
 jest.mock('../../../../src/modules/database/client', () => ({
   db: {
-    user: mockUserMethods,
-    refreshToken: mockRefreshTokenMethods,
+    users: mockUserMethods,
     $transaction: mockTransaction,
   },
   getPrismaClient: () => ({
-    user: mockUserMethods,
-    refreshToken: mockRefreshTokenMethods,
+    users: mockUserMethods,
     $transaction: mockTransaction,
   }),
   prisma: {
-    user: mockUserMethods,
-    refreshToken: mockRefreshTokenMethods,
+    users: mockUserMethods,
     $transaction: mockTransaction,
   },
 }));
@@ -156,14 +153,14 @@ describe('Auth Routes', () => {
     };
 
     test('should register a new user successfully', async () => {
-      mockUserMethods.findUnique.mockResolvedValue(null);
+      mockUserMethods.findFirst.mockResolvedValue(null);
       mockUserMethods.create.mockResolvedValue({
         id: 'new-user-id',
         email: 'test@example.com',
-        name: 'Test User',
-        passwordHash: 'hashed-password',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        encrypted_password: 'hashed-password',
+        created_at: new Date(),
+        updated_at: new Date(),
+        raw_user_meta_data: { name: 'Test User' },
       });
 
       const response = await app.inject({
@@ -181,14 +178,14 @@ describe('Auth Routes', () => {
     });
 
     test('should convert email to lowercase', async () => {
-      mockUserMethods.findUnique.mockResolvedValue(null);
+      mockUserMethods.findFirst.mockResolvedValue(null);
       mockUserMethods.create.mockResolvedValue({
         id: 'new-user-id',
         email: 'test@example.com',
-        name: 'Test User',
-        passwordHash: 'hashed-password',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        encrypted_password: 'hashed-password',
+        created_at: new Date(),
+        updated_at: new Date(),
+        raw_user_meta_data: { name: 'Test User' },
       });
 
       const response = await app.inject({
@@ -207,7 +204,7 @@ describe('Auth Routes', () => {
     });
 
     test('should return 409 if email already exists', async () => {
-      mockUserMethods.findUnique.mockResolvedValue({
+      mockUserMethods.findFirst.mockResolvedValue({
         id: 'existing-user-id',
         email: 'test@example.com',
       });
@@ -301,7 +298,7 @@ describe('Auth Routes', () => {
     });
 
     test('should handle database error during registration', async () => {
-      mockUserMethods.findUnique.mockResolvedValue(null);
+      mockUserMethods.findFirst.mockResolvedValue(null);
       mockUserMethods.create.mockRejectedValue(new Error('Database connection failed'));
 
       const response = await app.inject({
@@ -318,13 +315,13 @@ describe('Auth Routes', () => {
 
   describe('POST /auth/login', () => {
     test('should login successfully with valid credentials', async () => {
-      mockUserMethods.findUnique.mockResolvedValue({
+      mockUserMethods.findFirst.mockResolvedValue({
         id: 'user-id',
         email: 'test@example.com',
-        passwordHash: 'hashed-password',
-        name: 'Test User',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        encrypted_password: 'hashed-password',
+        raw_user_meta_data: { name: 'Test User' },
+        created_at: new Date(),
+        updated_at: new Date(),
       });
 
       const bcrypt = require('bcrypt');
@@ -347,13 +344,13 @@ describe('Auth Routes', () => {
     });
 
     test('should handle case-insensitive email login', async () => {
-      mockUserMethods.findUnique.mockResolvedValue({
+      mockUserMethods.findFirst.mockResolvedValue({
         id: 'user-id',
         email: 'test@example.com',
-        passwordHash: 'hashed-password',
-        name: 'Test User',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        encrypted_password: 'hashed-password',
+        raw_user_meta_data: { name: 'Test User' },
+        created_at: new Date(),
+        updated_at: new Date(),
       });
 
       const bcrypt = require('bcrypt');
@@ -372,7 +369,7 @@ describe('Auth Routes', () => {
     });
 
     test('should return 401 for non-existent user', async () => {
-      mockUserMethods.findUnique.mockResolvedValue(null);
+      mockUserMethods.findFirst.mockResolvedValue(null);
 
       const response = await app.inject({
         method: 'POST',
@@ -389,11 +386,11 @@ describe('Auth Routes', () => {
     });
 
     test('should return 401 for invalid password', async () => {
-      mockUserMethods.findUnique.mockResolvedValue({
+      mockUserMethods.findFirst.mockResolvedValue({
         id: 'user-id',
         email: 'test@example.com',
-        passwordHash: 'hashed-password',
-        name: 'Test User',
+        encrypted_password: 'hashed-password',
+        raw_user_meta_data: { name: 'Test User' },
       });
 
       const bcrypt = require('bcrypt');
@@ -426,7 +423,7 @@ describe('Auth Routes', () => {
     });
 
     test('should handle database error during login', async () => {
-      mockUserMethods.findUnique.mockRejectedValue(new Error('Database connection failed'));
+      mockUserMethods.findFirst.mockRejectedValue(new Error('Database connection failed'));
 
       const response = await app.inject({
         method: 'POST',
@@ -455,9 +452,9 @@ describe('Auth Routes', () => {
       mockUserMethods.findUnique.mockResolvedValue({
         id: 'user-id',
         email: 'test@example.com',
-        name: 'Test User',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        raw_user_meta_data: { name: 'Test User' },
+        created_at: new Date(),
+        updated_at: new Date(),
       });
 
       const response = await app.inject({
@@ -600,9 +597,9 @@ describe('Auth Routes', () => {
       mockUserMethods.findUnique.mockResolvedValue({
         id: 'test-user-id',
         email: 'test@example.com',
-        name: 'Test User',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        raw_user_meta_data: { name: 'Test User' },
+        created_at: new Date(),
+        updated_at: new Date(),
       });
 
       const response = await app.inject({

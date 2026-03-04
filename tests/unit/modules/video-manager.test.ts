@@ -21,7 +21,7 @@ import { getQuotaManager } from '../../../src/modules/quota/manager';
 // Mock dependencies
 jest.mock('../../../src/modules/database/client', () => ({
   db: {
-    video: {
+    youtube_videos: {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       upsert: jest.fn(),
@@ -49,7 +49,7 @@ describe('VideoManager', () => {
 
     // Setup mock db
     mockDb = {
-      video: {
+      youtube_videos: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
         upsert: jest.fn(),
@@ -61,7 +61,7 @@ describe('VideoManager', () => {
     };
 
     // Assign mocks using type assertion
-    (db as any).video = mockDb.video;
+    (db as any).youtube_videos = mockDb.youtube_videos;
     (db as any).userVideoState = mockDb.userVideoState;
     (db as any).$queryRaw = mockDb.$queryRaw;
 
@@ -114,39 +114,32 @@ describe('VideoManager', () => {
 
     const mockDbVideo = {
       id: 'db-video-1',
-      youtubeId: 'video123',
+      youtube_video_id: 'video123',
       title: 'Test Video',
       description: 'Test Description',
-      channelId: 'UCxxx',
-      channelTitle: 'Test Channel',
-      publishedAt: new Date('2024-01-01T00:00:00Z'),
-      duration: 630,
-      thumbnailUrls: JSON.stringify(mockYtVideo.snippet.thumbnails),
-      viewCount: 1000,
-      likeCount: 100,
-      commentCount: 10,
-      tags: JSON.stringify(['tag1', 'tag2']),
-      categoryId: '22',
-      language: 'en',
+      channel_title: 'Test Channel',
+      published_at: new Date('2024-01-01T00:00:00Z'),
+      duration_seconds: 630,
+      thumbnail_url: 'https://example.com/thumb.jpg',
+      view_count: BigInt(1000),
+      like_count: BigInt(100),
     };
 
     test('should upsert video with complete data', async () => {
-      (db.video.upsert as jest.Mock).mockResolvedValue(mockDbVideo);
+      (db.youtube_videos.upsert as jest.Mock).mockResolvedValue(mockDbVideo);
 
       const result = await manager.upsertVideo(mockYtVideo);
 
-      expect(db.video.upsert).toHaveBeenCalledWith({
-        where: { youtubeId: 'video123' },
+      expect(db.youtube_videos.upsert).toHaveBeenCalledWith({
+        where: { youtube_video_id: 'video123' },
         create: expect.objectContaining({
-          youtubeId: 'video123',
+          youtube_video_id: 'video123',
           title: 'Test Video',
           description: 'Test Description',
-          channelId: 'UCxxx',
-          channelTitle: 'Test Channel',
-          duration: 630,
-          viewCount: 1000,
-          likeCount: 100,
-          commentCount: 10,
+          channel_title: 'Test Channel',
+          duration_seconds: 630,
+          view_count: BigInt(1000),
+          like_count: BigInt(100),
         }),
         update: expect.objectContaining({
           title: 'Test Video',
@@ -161,22 +154,18 @@ describe('VideoManager', () => {
         snippet: {},
         contentDetails: {},
       };
-      (db.video.upsert as jest.Mock).mockResolvedValue(mockDbVideo);
+      (db.youtube_videos.upsert as jest.Mock).mockResolvedValue(mockDbVideo);
 
       await manager.upsertVideo(minimalVideo);
 
-      expect(db.video.upsert).toHaveBeenCalledWith({
-        where: { youtubeId: 'video123' },
+      expect(db.youtube_videos.upsert).toHaveBeenCalledWith({
+        where: { youtube_video_id: 'video123' },
         create: expect.objectContaining({
           title: 'Untitled Video',
           description: null,
-          duration: 0,
-          viewCount: 0,
-          likeCount: 0,
-          commentCount: 0,
-          tags: null,
-          categoryId: null,
-          language: null,
+          duration_seconds: 0,
+          view_count: null,
+          like_count: null,
         }),
         update: expect.anything(),
       });
@@ -193,36 +182,35 @@ describe('VideoManager', () => {
         ...mockYtVideo,
         contentDetails: { duration: 'PT1H30M45S' },
       };
-      (db.video.upsert as jest.Mock).mockResolvedValue(mockDbVideo);
+      (db.youtube_videos.upsert as jest.Mock).mockResolvedValue(mockDbVideo);
 
       await manager.upsertVideo(videoWithDuration);
 
-      expect(db.video.upsert).toHaveBeenCalledWith(
+      expect(db.youtube_videos.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           create: expect.objectContaining({
-            duration: 5445, // 1*3600 + 30*60 + 45
+            duration_seconds: 5445, // 1*3600 + 30*60 + 45
           }),
         })
       );
     });
 
-    test('should use defaultAudioLanguage if defaultLanguage is missing', async () => {
-      const videoWithAudioLanguage = {
+    test('should use channel title from snippet', async () => {
+      const videoWithChannelTitle = {
         ...mockYtVideo,
         snippet: {
           ...mockYtVideo.snippet,
-          defaultLanguage: undefined,
-          defaultAudioLanguage: 'ko',
+          channelTitle: 'My Channel',
         },
       };
-      (db.video.upsert as jest.Mock).mockResolvedValue(mockDbVideo);
+      (db.youtube_videos.upsert as jest.Mock).mockResolvedValue(mockDbVideo);
 
-      await manager.upsertVideo(videoWithAudioLanguage);
+      await manager.upsertVideo(videoWithChannelTitle);
 
-      expect(db.video.upsert).toHaveBeenCalledWith(
+      expect(db.youtube_videos.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           create: expect.objectContaining({
-            language: 'ko',
+            channel_title: 'My Channel',
           }),
         })
       );
@@ -244,17 +232,17 @@ describe('VideoManager', () => {
     ];
 
     test('should upsert multiple videos', async () => {
-      (db.video.upsert as jest.Mock).mockResolvedValueOnce({ id: '1' });
-      (db.video.upsert as jest.Mock).mockResolvedValueOnce({ id: '2' });
+      (db.youtube_videos.upsert as jest.Mock).mockResolvedValueOnce({ id: '1' });
+      (db.youtube_videos.upsert as jest.Mock).mockResolvedValueOnce({ id: '2' });
 
       const results = await manager.upsertVideos(mockYtVideos);
 
-      expect(db.video.upsert).toHaveBeenCalledTimes(2);
+      expect(db.youtube_videos.upsert).toHaveBeenCalledTimes(2);
       expect(results).toHaveLength(2);
     });
 
     test('should continue on individual video errors', async () => {
-      (db.video.upsert as jest.Mock)
+      (db.youtube_videos.upsert as jest.Mock)
         .mockRejectedValueOnce(new Error('Failed'))
         .mockResolvedValueOnce({ id: '2' });
 
@@ -276,7 +264,7 @@ describe('VideoManager', () => {
 
     test('should fetch and store videos', async () => {
       mockYouTubeClient.getVideosBatch.mockResolvedValue(mockYtVideos);
-      (db.video.upsert as jest.Mock).mockResolvedValue({ id: '1' });
+      (db.youtube_videos.upsert as jest.Mock).mockResolvedValue({ id: '1' });
 
       const results = await manager.fetchAndStoreVideos(['video1']);
 
@@ -300,25 +288,25 @@ describe('VideoManager', () => {
   describe('getVideo', () => {
     const mockVideo = {
       id: 'db-video-1',
-      youtubeId: 'video123',
+      youtube_video_id: 'video123',
       title: 'Test Video',
     };
 
     test('should get video by database ID', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue(mockVideo);
+      (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue(mockVideo);
 
       const result = await manager.getVideo('db-video-1');
 
-      expect(db.video.findFirst).toHaveBeenCalledWith({
+      expect(db.youtube_videos.findFirst).toHaveBeenCalledWith({
         where: {
-          OR: [{ id: 'db-video-1' }, { youtubeId: 'db-video-1' }],
+          OR: [{ id: 'db-video-1' }, { youtube_video_id: 'db-video-1' }],
         },
       });
       expect(result).toEqual(mockVideo);
     });
 
     test('should get video by YouTube ID', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue(mockVideo);
+      (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue(mockVideo);
 
       const result = await manager.getVideo('video123');
 
@@ -326,7 +314,7 @@ describe('VideoManager', () => {
     });
 
     test('should throw error if video not found', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue(null);
+      (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(manager.getVideo('non-existent')).rejects.toThrow(
         RecordNotFoundError
@@ -337,114 +325,105 @@ describe('VideoManager', () => {
   describe('getVideoWithState', () => {
     const mockVideoWithState = {
       id: 'db-video-1',
-      youtubeId: 'video123',
+      youtube_video_id: 'video123',
       title: 'Test Video',
-      userState: {
-        id: 'state-1',
-        watchStatus: WatchStatus.WATCHING,
-        lastPosition: 100,
-      },
+      userState: [
+        {
+          id: 'state-1',
+          is_watched: true,
+          watch_position_seconds: 100,
+        },
+      ],
     };
 
     test('should get video with user state', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue({ id: 'db-video-1' });
-      (db.video.findUnique as jest.Mock).mockResolvedValue(mockVideoWithState);
+      (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue({ id: 'db-video-1' });
+      (db.youtube_videos.findUnique as jest.Mock).mockResolvedValue(mockVideoWithState);
 
-      const result = await manager.getVideoWithState('db-video-1');
+      const result = await manager.getVideoWithState('db-video-1', 'user-1');
 
-      expect(db.video.findUnique).toHaveBeenCalledWith({
+      expect(db.youtube_videos.findUnique).toHaveBeenCalledWith({
         where: { id: 'db-video-1' },
-        include: { userState: true },
+        include: {
+          userState: {
+            where: { user_id: 'user-1' },
+          },
+        },
       });
-      expect(result).toEqual(mockVideoWithState);
+      expect(result).toMatchObject({
+        id: 'db-video-1',
+        youtube_video_id: 'video123',
+      });
     });
   });
 
   describe('updateUserState', () => {
-    const mockVideo = { id: 'db-video-1', youtubeId: 'video123' };
+    const mockVideo = { id: 'db-video-1', youtube_video_id: 'video123' };
     const mockState = {
       id: 'state-1',
       videoId: 'db-video-1',
-      watchStatus: WatchStatus.WATCHING,
-      lastPosition: 100,
+      user_id: 'user-1',
+      is_watched: false,
+      watch_position_seconds: 100,
     };
 
     test('should create new user state', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue(mockVideo);
+      (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue(mockVideo);
       (db.userVideoState.upsert as jest.Mock).mockResolvedValue(mockState);
 
-      const result = await manager.updateUserState('db-video-1', {
+      const result = await manager.updateUserState('db-video-1', 'user-1', {
         watchStatus: WatchStatus.WATCHING,
         lastPosition: 100,
       });
 
       expect(db.userVideoState.upsert).toHaveBeenCalledWith({
-        where: { videoId: 'db-video-1' },
+        where: { user_id_videoId: { user_id: 'user-1', videoId: 'db-video-1' } },
         create: expect.objectContaining({
+          user_id: 'user-1',
           videoId: 'db-video-1',
-          watchStatus: WatchStatus.WATCHING,
-          lastPosition: 100,
-          watchCount: 0,
+          watch_position_seconds: 100,
         }),
         update: expect.objectContaining({
-          watchStatus: WatchStatus.WATCHING,
-          lastPosition: 100,
+          watch_position_seconds: 100,
         }),
       });
       expect(result).toEqual(mockState);
     });
 
-    test('should increment watch count when completed', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue(mockVideo);
+    test('should set is_watched when completed', async () => {
+      (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue(mockVideo);
       (db.userVideoState.upsert as jest.Mock).mockResolvedValue(mockState);
 
-      await manager.updateUserState('db-video-1', {
+      await manager.updateUserState('db-video-1', 'user-1', {
         watchStatus: WatchStatus.COMPLETED,
       });
 
       expect(db.userVideoState.upsert).toHaveBeenCalledWith({
-        where: { videoId: 'db-video-1' },
+        where: { user_id_videoId: { user_id: 'user-1', videoId: 'db-video-1' } },
         create: expect.objectContaining({
-          watchCount: 1,
+          is_watched: true,
         }),
         update: expect.objectContaining({
-          watchCount: { increment: 1 },
+          is_watched: true,
         }),
       });
     });
 
     test('should update notes', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue(mockVideo);
+      (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue(mockVideo);
       (db.userVideoState.upsert as jest.Mock).mockResolvedValue(mockState);
 
-      await manager.updateUserState('db-video-1', {
+      await manager.updateUserState('db-video-1', 'user-1', {
         notes: 'My notes',
       });
 
       expect(db.userVideoState.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           create: expect.objectContaining({
-            notes: 'My notes',
+            user_note: 'My notes',
           }),
           update: expect.objectContaining({
-            notes: 'My notes',
-          }),
-        })
-      );
-    });
-
-    test('should update tags as JSON', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue(mockVideo);
-      (db.userVideoState.upsert as jest.Mock).mockResolvedValue(mockState);
-
-      await manager.updateUserState('db-video-1', {
-        tags: ['tag1', 'tag2'],
-      });
-
-      expect(db.userVideoState.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          create: expect.objectContaining({
-            tags: JSON.stringify(['tag1', 'tag2']),
+            user_note: 'My notes',
           }),
         })
       );
@@ -453,16 +432,16 @@ describe('VideoManager', () => {
 
   describe('markAsWatched', () => {
     test('should mark video as watched', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue({ id: 'db-video-1' });
+      (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue({ id: 'db-video-1' });
       (db.userVideoState.upsert as jest.Mock).mockResolvedValue({});
 
-      await manager.markAsWatched('db-video-1', 100);
+      await manager.markAsWatched('db-video-1', 'user-1', 100);
 
       expect(db.userVideoState.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           create: expect.objectContaining({
-            watchStatus: WatchStatus.COMPLETED,
-            lastPosition: 100,
+            is_watched: true,
+            watch_position_seconds: 100,
           }),
         })
       );
@@ -471,16 +450,15 @@ describe('VideoManager', () => {
 
   describe('updateProgress', () => {
     test('should update watch progress', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue({ id: 'db-video-1' });
+      (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue({ id: 'db-video-1' });
       (db.userVideoState.upsert as jest.Mock).mockResolvedValue({});
 
-      await manager.updateProgress('db-video-1', 200);
+      await manager.updateProgress('db-video-1', 'user-1', 200);
 
       expect(db.userVideoState.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           create: expect.objectContaining({
-            watchStatus: WatchStatus.WATCHING,
-            lastPosition: 200,
+            watch_position_seconds: 200,
           }),
         })
       );
@@ -489,62 +467,17 @@ describe('VideoManager', () => {
 
   describe('addNotes', () => {
     test('should add notes to video', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue({ id: 'db-video-1' });
+      (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue({ id: 'db-video-1' });
       (db.userVideoState.upsert as jest.Mock).mockResolvedValue({});
 
-      await manager.addNotes('db-video-1', 'Test notes');
+      await manager.addNotes('db-video-1', 'user-1', 'Test notes');
 
       expect(db.userVideoState.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           create: expect.objectContaining({
-            notes: 'Test notes',
+            user_note: 'Test notes',
           }),
         })
-      );
-    });
-  });
-
-  describe('addSummary', () => {
-    test('should add summary to video', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue({ id: 'db-video-1' });
-      (db.userVideoState.upsert as jest.Mock).mockResolvedValue({});
-
-      await manager.addSummary('db-video-1', 'Test summary');
-
-      expect(db.userVideoState.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          create: expect.objectContaining({
-            summary: 'Test summary',
-          }),
-        })
-      );
-    });
-  });
-
-  describe('rateVideo', () => {
-    test('should rate video with valid rating', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue({ id: 'db-video-1' });
-      (db.userVideoState.upsert as jest.Mock).mockResolvedValue({});
-
-      await manager.rateVideo('db-video-1', 5);
-
-      expect(db.userVideoState.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          create: expect.objectContaining({
-            rating: 5,
-          }),
-        })
-      );
-    });
-
-    test('should throw error for invalid rating', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue({ id: 'db-video-1' });
-
-      await expect(manager.rateVideo('db-video-1', 0)).rejects.toThrow(
-        'Rating must be between 1 and 5'
-      );
-      await expect(manager.rateVideo('db-video-1', 6)).rejects.toThrow(
-        'Rating must be between 1 and 5'
       );
     });
   });
@@ -552,7 +485,7 @@ describe('VideoManager', () => {
   describe('findDuplicates', () => {
     const mockDuplicates = [
       {
-        youtubeId: 'video1',
+        youtube_video_id: 'video1',
         title: 'Duplicate Video',
         count: BigInt(3),
       },
@@ -560,18 +493,18 @@ describe('VideoManager', () => {
 
     const mockVideoWithPlaylists = {
       id: 'db-video-1',
-      youtubeId: 'video1',
+      youtube_video_id: 'video1',
       title: 'Duplicate Video',
-      playlistItems: [
-        { playlist: { title: 'Playlist 1' } },
-        { playlist: { title: 'Playlist 2' } },
-        { playlist: { title: 'Playlist 3' } },
+      youtube_playlist_items: [
+        { youtube_playlists: { title: 'Playlist 1' } },
+        { youtube_playlists: { title: 'Playlist 2' } },
+        { youtube_playlists: { title: 'Playlist 3' } },
       ],
     };
 
     test('should find duplicate videos across playlists', async () => {
       (db.$queryRaw as jest.Mock).mockResolvedValue(mockDuplicates);
-      (db.video.findUnique as jest.Mock).mockResolvedValue(mockVideoWithPlaylists);
+      (db.youtube_videos.findUnique as jest.Mock).mockResolvedValue(mockVideoWithPlaylists);
 
       const results = await manager.findDuplicates();
 
@@ -595,7 +528,7 @@ describe('VideoManager', () => {
 
     test('should handle missing video data', async () => {
       (db.$queryRaw as jest.Mock).mockResolvedValue(mockDuplicates);
-      (db.video.findUnique as jest.Mock).mockResolvedValue(null);
+      (db.youtube_videos.findUnique as jest.Mock).mockResolvedValue(null);
 
       const results = await manager.findDuplicates();
 
@@ -606,7 +539,7 @@ describe('VideoManager', () => {
   describe('updateVideoStats', () => {
     const mockVideo = {
       id: 'db-video-1',
-      youtubeId: 'video123',
+      youtube_video_id: 'video123',
     };
 
     const mockYtVideo = {
@@ -619,9 +552,9 @@ describe('VideoManager', () => {
     };
 
     test('should update video statistics from YouTube', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue(mockVideo);
+      (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue(mockVideo);
       mockYouTubeClient.getVideos.mockResolvedValue([mockYtVideo]);
-      (db.video.upsert as jest.Mock).mockResolvedValue({ ...mockVideo, viewCount: 2000 });
+      (db.youtube_videos.upsert as jest.Mock).mockResolvedValue({ ...mockVideo, view_count: BigInt(2000) });
 
       await manager.updateVideoStats('db-video-1');
 
@@ -630,11 +563,11 @@ describe('VideoManager', () => {
         1
       );
       expect(mockYouTubeClient.getVideos).toHaveBeenCalledWith(['video123']);
-      expect(db.video.upsert).toHaveBeenCalled();
+      expect(db.youtube_videos.upsert).toHaveBeenCalled();
     });
 
     test('should throw error if video not found on YouTube', async () => {
-      (db.video.findFirst as jest.Mock).mockResolvedValue(mockVideo);
+      (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue(mockVideo);
       mockYouTubeClient.getVideos.mockResolvedValue([]);
 
       await expect(manager.updateVideoStats('db-video-1')).rejects.toThrow(
@@ -661,14 +594,14 @@ describe('VideoManager', () => {
           snippet: { title: 'Test' },
           contentDetails: { duration: input },
         };
-        (db.video.upsert as jest.Mock).mockResolvedValue({});
+        (db.youtube_videos.upsert as jest.Mock).mockResolvedValue({});
 
         await manager.upsertVideo(ytVideo);
 
-        expect(db.video.upsert).toHaveBeenCalledWith(
+        expect(db.youtube_videos.upsert).toHaveBeenCalledWith(
           expect.objectContaining({
             create: expect.objectContaining({
-              duration: expected,
+              duration_seconds: expected,
             }),
           })
         );

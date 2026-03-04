@@ -19,7 +19,7 @@ if (!process.env['JWT_REFRESH_SECRET']) {
 
 // Set default encryption secret for tests (minimum 64 characters)
 if (!process.env['ENCRYPTION_SECRET']) {
-  process.env['ENCRYPTION_SECRET'] = 'test-encryption-secret-key-for-testing-only-needs-64-chars-min';
+  process.env['ENCRYPTION_SECRET'] = 'test-encryption-secret-key-for-testing-only-needs-to-be-64-chars-ok';
 }
 
 // Set default database URL for tests (SQLite in-memory)

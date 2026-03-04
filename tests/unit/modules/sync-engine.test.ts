@@ -25,10 +25,10 @@ import {
 // Mock dependencies
 jest.mock('../../../src/modules/database/client', () => ({
   db: {
-    syncHistory: {},
-    playlistItem: {},
-    playlist: {},
-    video: {},
+    youtube_sync_history: {},
+    youtube_playlist_items: {},
+    youtube_playlists: {},
+    youtube_videos: {},
   },
   executeTransaction: jest.fn(),
 }));
@@ -61,10 +61,10 @@ describe('SyncEngine', () => {
   // Mock data
   const mockPlaylist = {
     id: 'playlist-1',
-    youtubeId: 'PLtest123',
+    youtube_playlist_id: 'PLtest123',
     title: 'Test Playlist',
-    itemCount: 0,
-    lastSyncedAt: null,
+    item_count: 0,
+    last_synced_at: null,
   };
 
   const mockYtItems = [
@@ -113,27 +113,27 @@ describe('SyncEngine', () => {
   ];
 
   const mockDbVideos = [
-    { id: 'db-video-1', youtubeId: 'video1', title: 'Video 1' },
-    { id: 'db-video-2', youtubeId: 'video2', title: 'Video 2' },
-    { id: 'db-video-3', youtubeId: 'video3', title: 'Video 3' },
+    { id: 'db-video-1', youtube_video_id: 'video1', title: 'Video 1' },
+    { id: 'db-video-2', youtube_video_id: 'video2', title: 'Video 2' },
+    { id: 'db-video-3', youtube_video_id: 'video3', title: 'Video 3' },
   ];
 
   const mockCurrentItems = [
     {
       id: 'item-1',
-      playlistId: 'playlist-1',
-      videoId: 'db-video-1',
+      playlist_id: 'playlist-1',
+      video_id: 'db-video-1',
       position: 0,
-      removedAt: null,
-      video: { youtubeId: 'video1' },
+      removed_at: null,
+      youtube_videos: { youtube_video_id: 'video1' },
     },
   ];
 
   const mockSyncHistory = {
     id: 'sync-1',
-    playlistId: 'playlist-1',
+    playlist_id: 'playlist-1',
     status: SyncStatus.IN_PROGRESS,
-    startedAt: new Date(),
+    started_at: new Date(),
   };
 
   beforeEach(() => {
@@ -170,27 +170,27 @@ describe('SyncEngine', () => {
 
     // Setup mock database
     mockDb = {
-      syncHistory: {
+      youtube_sync_history: {
         create: jest.fn(),
         update: jest.fn(),
       },
-      playlistItem: {
+      youtube_playlist_items: {
         findMany: jest.fn(),
         update: jest.fn(),
         create: jest.fn(),
       },
-      playlist: {
+      youtube_playlists: {
         update: jest.fn(),
       },
-      video: {
+      youtube_videos: {
         findUnique: jest.fn(),
       },
     };
     // Assign mocks to the mocked db object
-    (db as any).syncHistory = mockDb.syncHistory;
-    (db as any).playlistItem = mockDb.playlistItem;
-    (db as any).playlist = mockDb.playlist;
-    (db as any).video = mockDb.video;
+    (db as any).youtube_sync_history = mockDb.youtube_sync_history;
+    (db as any).youtube_playlist_items = mockDb.youtube_playlist_items;
+    (db as any).youtube_playlists = mockDb.youtube_playlists;
+    (db as any).youtube_videos = mockDb.youtube_videos;
 
     // Setup retry to execute immediately
     (retry as jest.Mock).mockImplementation((fn) => fn());
@@ -223,26 +223,26 @@ describe('SyncEngine', () => {
       mockPlaylistManager.getPlaylist.mockResolvedValue(mockPlaylist);
       mockPlaylistManager.acquireSyncLock.mockResolvedValue(undefined);
       mockPlaylistManager.releaseSyncLock.mockResolvedValue(undefined);
-      mockDb.syncHistory.create.mockResolvedValue(mockSyncHistory);
-      mockDb.syncHistory.update.mockResolvedValue({ ...mockSyncHistory, status: SyncStatus.COMPLETED });
+      mockDb.youtube_sync_history.create.mockResolvedValue(mockSyncHistory);
+      mockDb.youtube_sync_history.update.mockResolvedValue({ ...mockSyncHistory, status: SyncStatus.COMPLETED });
       mockQuotaManager.getOperationCost.mockReturnValue(10);
       mockQuotaManager.reserveQuota.mockResolvedValue(undefined);
       mockYouTubeClient.getPlaylistItems.mockResolvedValue(mockYtItems);
       mockYouTubeClient.getVideosBatch.mockResolvedValue(mockVideos);
       mockVideoManager.upsertVideos.mockResolvedValue(undefined);
-      mockDb.playlistItem.findMany.mockResolvedValue(mockCurrentItems);
-      mockDb.playlist.update.mockResolvedValue(mockPlaylist);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue(mockCurrentItems);
+      mockDb.youtube_playlists.update.mockResolvedValue(mockPlaylist);
     });
 
     test('should sync playlist successfully with additions', async () => {
       // Setup: Current has video1, YouTube has video1, video2, video3
-      mockDb.video.findUnique.mockImplementation((args: any) => {
+      mockDb.youtube_videos.findUnique.mockImplementation((args: any) => {
         const videoMap: any = {
           video1: mockDbVideos[0],
           video2: mockDbVideos[1],
           video3: mockDbVideos[2],
         };
-        return Promise.resolve(videoMap[args.where.youtubeId]);
+        return Promise.resolve(videoMap[args.where.youtube_video_id]);
       });
 
       const result = await engine.syncPlaylist('playlist-1');
@@ -259,24 +259,24 @@ describe('SyncEngine', () => {
       expect(mockPlaylistManager.releaseSyncLock).toHaveBeenCalledWith('playlist-1', SyncStatus.COMPLETED);
 
       // Verify sync history created and updated
-      expect(mockDb.syncHistory.create).toHaveBeenCalled();
-      expect(mockDb.syncHistory.update).toHaveBeenCalledWith(
+      expect(mockDb.youtube_sync_history.create).toHaveBeenCalled();
+      expect(mockDb.youtube_sync_history.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: mockSyncHistory.id },
           data: expect.objectContaining({
             status: SyncStatus.COMPLETED,
-            itemsAdded: 2,
+            items_added: 2,
           }),
         })
       );
 
       // Verify playlist metadata updated
-      expect(mockDb.playlist.update).toHaveBeenCalledWith(
+      expect(mockDb.youtube_playlists.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'playlist-1' },
           data: expect.objectContaining({
-            itemCount: 3,
-            lastSyncedAt: expect.any(Date),
+            item_count: 3,
+            last_synced_at: expect.any(Date),
           }),
         })
       );
@@ -288,22 +288,22 @@ describe('SyncEngine', () => {
         mockCurrentItems[0],
         {
           id: 'item-2',
-          playlistId: 'playlist-1',
-          videoId: 'db-video-2',
+          playlist_id: 'playlist-1',
+          video_id: 'db-video-2',
           position: 1,
-          removedAt: null,
-          video: { youtubeId: 'video2' },
+          removed_at: null,
+          youtube_videos: { youtube_video_id: 'video2' },
         },
         {
           id: 'item-3',
-          playlistId: 'playlist-1',
-          videoId: 'db-video-3',
+          playlist_id: 'playlist-1',
+          video_id: 'db-video-3',
           position: 2,
-          removedAt: null,
-          video: { youtubeId: 'video3' },
+          removed_at: null,
+          youtube_videos: { youtube_video_id: 'video3' },
         },
       ];
-      mockDb.playlistItem.findMany.mockResolvedValue(currentItemsWithMore);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue(currentItemsWithMore);
       mockYouTubeClient.getPlaylistItems.mockResolvedValue([mockYtItems[0]]); // Only video1
 
       const result = await engine.syncPlaylist('playlist-1');
@@ -314,11 +314,11 @@ describe('SyncEngine', () => {
       expect(result.itemsReordered).toBe(0);
 
       // Verify items marked as removed
-      expect(mockDb.playlistItem.update).toHaveBeenCalledTimes(2);
-      expect(mockDb.playlistItem.update).toHaveBeenCalledWith(
+      expect(mockDb.youtube_playlist_items.update).toHaveBeenCalledTimes(2);
+      expect(mockDb.youtube_playlist_items.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'item-2' },
-          data: { removedAt: expect.any(Date) },
+          data: { removed_at: expect.any(Date) },
         })
       );
     });
@@ -344,7 +344,7 @@ describe('SyncEngine', () => {
       expect(result.itemsReordered).toBe(1);
 
       // Verify position updated
-      expect(mockDb.playlistItem.update).toHaveBeenCalledWith(
+      expect(mockDb.youtube_playlist_items.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'item-1' },
           data: { position: 2 },
@@ -354,14 +354,14 @@ describe('SyncEngine', () => {
 
     test('should sync playlist with mixed changes', async () => {
       // Setup: Current has video1, YouTube has video2, video3
-      mockDb.playlistItem.findMany.mockResolvedValue([mockCurrentItems[0]]);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue([mockCurrentItems[0]]);
       mockYouTubeClient.getPlaylistItems.mockResolvedValue([mockYtItems[1], mockYtItems[2]]); // video2, video3
-      mockDb.video.findUnique.mockImplementation((args: any) => {
+      mockDb.youtube_videos.findUnique.mockImplementation((args: any) => {
         const videoMap: any = {
           video2: mockDbVideos[1],
           video3: mockDbVideos[2],
         };
-        return Promise.resolve(videoMap[args.where.youtubeId]);
+        return Promise.resolve(videoMap[args.where.youtube_video_id]);
       });
 
       const result = await engine.syncPlaylist('playlist-1');
@@ -421,11 +421,11 @@ describe('SyncEngine', () => {
       expect(result.error).toBe('YouTube API error');
 
       // Verify sync history updated with error
-      expect(mockDb.syncHistory.update).toHaveBeenCalledWith(
+      expect(mockDb.youtube_sync_history.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             status: SyncStatus.FAILED,
-            errorMessage: 'YouTube API error',
+            error_message: 'YouTube API error',
           }),
         })
       );
@@ -443,7 +443,7 @@ describe('SyncEngine', () => {
       expect(result.error).toBe('Transaction failed');
 
       // Verify sync history updated with error
-      expect(mockDb.syncHistory.update).toHaveBeenCalledWith(
+      expect(mockDb.youtube_sync_history.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             status: SyncStatus.FAILED,
@@ -458,10 +458,11 @@ describe('SyncEngine', () => {
       // Duration should be a number (may be 0 in tests due to fast execution)
       expect(typeof result.duration).toBe('number');
       expect(result.duration).toBeGreaterThanOrEqual(0);
-      expect(mockDb.syncHistory.update).toHaveBeenCalledWith(
+      // Duration is tracked in result but not stored in sync history in new schema
+      expect(mockDb.youtube_sync_history.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            duration: expect.any(Number),
+            status: SyncStatus.COMPLETED,
           }),
         })
       );
@@ -483,8 +484,8 @@ describe('SyncEngine', () => {
         { snippet: { resourceId: { videoId: 'video-missing' }, position: 1 } },
       ];
       mockYouTubeClient.getPlaylistItems.mockResolvedValue(itemsWithMissingVideo);
-      mockDb.video.findUnique.mockImplementation((args: any) => {
-        if (args.where.youtubeId === 'video1') return Promise.resolve(mockDbVideos[0]);
+      mockDb.youtube_videos.findUnique.mockImplementation((args: any) => {
+        if (args.where.youtube_video_id === 'video1') return Promise.resolve(mockDbVideos[0]);
         return Promise.resolve(null); // Missing video
       });
 
@@ -561,7 +562,7 @@ describe('SyncEngine', () => {
       const currentItems = [
         {
           id: 'item-1',
-          video: { youtubeId: 'video1' },
+          youtube_videos: { youtube_video_id: 'video1' },
           position: 0,
         },
       ];
@@ -583,9 +584,9 @@ describe('SyncEngine', () => {
 
     test('should detect removed items', async () => {
       const currentItems = [
-        { id: 'item-1', video: { youtubeId: 'video1' }, position: 0 },
-        { id: 'item-2', video: { youtubeId: 'video2' }, position: 1 },
-        { id: 'item-3', video: { youtubeId: 'video3' }, position: 2 },
+        { id: 'item-1', youtube_videos: { youtube_video_id: 'video1' }, position: 0 },
+        { id: 'item-2', youtube_videos: { youtube_video_id: 'video2' }, position: 1 },
+        { id: 'item-3', youtube_videos: { youtube_video_id: 'video3' }, position: 2 },
       ];
 
       const ytItems = [
@@ -603,8 +604,8 @@ describe('SyncEngine', () => {
 
     test('should detect reordered items', async () => {
       const currentItems = [
-        { id: 'item-1', video: { youtubeId: 'video1' }, position: 0 },
-        { id: 'item-2', video: { youtubeId: 'video2' }, position: 1 },
+        { id: 'item-1', youtube_videos: { youtube_video_id: 'video1' }, position: 0 },
+        { id: 'item-2', youtube_videos: { youtube_video_id: 'video2' }, position: 1 },
       ];
 
       const ytItems = [
@@ -625,8 +626,8 @@ describe('SyncEngine', () => {
 
     test('should detect mixed changes', async () => {
       const currentItems = [
-        { id: 'item-1', video: { youtubeId: 'video1' }, position: 0 },
-        { id: 'item-2', video: { youtubeId: 'video2' }, position: 1 },
+        { id: 'item-1', youtube_videos: { youtube_video_id: 'video1' }, position: 0 },
+        { id: 'item-2', youtube_videos: { youtube_video_id: 'video2' }, position: 1 },
       ];
 
       const ytItems = [
@@ -640,9 +641,9 @@ describe('SyncEngine', () => {
       expect(changes.added).toHaveLength(1);
       expect(changes.added[0].snippet.resourceId.videoId).toBe('video3');
       expect(changes.removed).toHaveLength(1);
-      expect(changes.removed[0].video.youtubeId).toBe('video1');
+      expect(changes.removed[0].youtube_videos.youtube_video_id).toBe('video1');
       expect(changes.reordered).toHaveLength(1);
-      expect(changes.reordered[0].item.video.youtubeId).toBe('video2');
+      expect(changes.reordered[0].item.youtube_videos.youtube_video_id).toBe('video2');
       expect(changes.reordered[0].newPosition).toBe(0);
     });
 
@@ -661,7 +662,7 @@ describe('SyncEngine', () => {
 
     test('should handle empty YouTube items', async () => {
       const currentItems = [
-        { id: 'item-1', video: { youtubeId: 'video1' }, position: 0 },
+        { id: 'item-1', youtube_videos: { youtube_video_id: 'video1' }, position: 0 },
       ];
       const ytItems: any[] = [];
 
@@ -678,15 +679,15 @@ describe('SyncEngine', () => {
       mockPlaylistManager.getPlaylist.mockResolvedValue(mockPlaylist);
       mockPlaylistManager.acquireSyncLock.mockResolvedValue(undefined);
       mockPlaylistManager.releaseSyncLock.mockResolvedValue(undefined);
-      mockDb.syncHistory.create.mockResolvedValue(mockSyncHistory);
-      mockDb.syncHistory.update.mockResolvedValue({ ...mockSyncHistory, status: SyncStatus.COMPLETED });
+      mockDb.youtube_sync_history.create.mockResolvedValue(mockSyncHistory);
+      mockDb.youtube_sync_history.update.mockResolvedValue({ ...mockSyncHistory, status: SyncStatus.COMPLETED });
       mockQuotaManager.getOperationCost.mockReturnValue(10);
       mockQuotaManager.reserveQuota.mockResolvedValue(undefined);
       mockYouTubeClient.getPlaylistItems.mockResolvedValue([]);
       mockYouTubeClient.getVideosBatch.mockResolvedValue([]);
       mockVideoManager.upsertVideos.mockResolvedValue(undefined);
-      mockDb.playlistItem.findMany.mockResolvedValue([]);
-      mockDb.playlist.update.mockResolvedValue(mockPlaylist);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue([]);
+      mockDb.youtube_playlists.update.mockResolvedValue(mockPlaylist);
     });
 
     test('should sync multiple playlists successfully', async () => {
@@ -703,7 +704,7 @@ describe('SyncEngine', () => {
 
     test('should continue syncing even if one playlist fails', async () => {
       const playlistIds = ['playlist-1', 'playlist-2', 'playlist-3'];
-      const mockPlaylist3 = { ...mockPlaylist, id: 'playlist-3', youtubeId: 'PLtest456' };
+      const mockPlaylist3 = { ...mockPlaylist, id: 'playlist-3', youtube_playlist_id: 'PLtest456' };
 
       mockPlaylistManager.getPlaylist
         .mockResolvedValueOnce(mockPlaylist)
@@ -736,15 +737,15 @@ describe('SyncEngine', () => {
       mockPlaylistManager.getPlaylist.mockResolvedValue(mockPlaylist);
       mockPlaylistManager.acquireSyncLock.mockResolvedValue(undefined);
       mockPlaylistManager.releaseSyncLock.mockResolvedValue(undefined);
-      mockDb.syncHistory.create.mockResolvedValue(mockSyncHistory);
-      mockDb.syncHistory.update.mockResolvedValue({ ...mockSyncHistory, status: SyncStatus.COMPLETED });
+      mockDb.youtube_sync_history.create.mockResolvedValue(mockSyncHistory);
+      mockDb.youtube_sync_history.update.mockResolvedValue({ ...mockSyncHistory, status: SyncStatus.COMPLETED });
       mockQuotaManager.getOperationCost.mockReturnValue(10);
       mockQuotaManager.reserveQuota.mockResolvedValue(undefined);
       mockYouTubeClient.getPlaylistItems.mockResolvedValue([]);
       mockYouTubeClient.getVideosBatch.mockResolvedValue([]);
       mockVideoManager.upsertVideos.mockResolvedValue(undefined);
-      mockDb.playlistItem.findMany.mockResolvedValue([]);
-      mockDb.playlist.update.mockResolvedValue(mockPlaylist);
+      mockDb.youtube_playlist_items.findMany.mockResolvedValue([]);
+      mockDb.youtube_playlists.update.mockResolvedValue(mockPlaylist);
     });
 
     test('should sync all playlists', async () => {
