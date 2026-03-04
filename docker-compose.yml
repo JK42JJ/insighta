@@ -1,0 +1,108 @@
+version: '3.9'
+
+# =============================================================================
+# TubeArchive - Docker Compose Configuration
+# =============================================================================
+# Full-stack deployment with API backend and React frontend.
+# Uses external PostgreSQL database (set DATABASE_URL in .env.docker).
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # API Server (Backend)
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tubearchive-api
+    restart: unless-stopped
+    command: ["api"]
+    ports:
+      - "${API_PORT:-3000}:3000"
+    env_file:
+      - .env.docker
+    environment:
+      - NODE_ENV=production
+      - API_HOST=0.0.0.0
+      - CORS_ORIGIN=http://localhost:${FRONTEND_PORT:-8081},http://frontend:8081
+    volumes:
+      - cache_data:/app/cache
+      - logs_data:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - tubearchive-network
+
+  # ---------------------------------------------------------------------------
+  # Frontend (React/Vite with Nginx)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=/api
+    container_name: tubearchive-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8081}:8081"
+    environment:
+      - API_URL=http://api:3000
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - tubearchive-network
+
+  # ---------------------------------------------------------------------------
+  # Scheduler Daemon (Optional)
+  # ---------------------------------------------------------------------------
+  # Uncomment to enable background sync scheduler
+  # ---------------------------------------------------------------------------
+  # scheduler:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: tubearchive-scheduler
+  #   restart: unless-stopped
+  #   command: ["scheduler"]
+  #   env_file:
+  #     - .env.docker
+  #   environment:
+  #     - NODE_ENV=production
+  #     - SKIP_MIGRATIONS=true
+  #   volumes:
+  #     - cache_data:/app/cache
+  #     - logs_data:/app/logs
+  #   depends_on:
+  #     api:
+  #       condition: service_healthy
+  #   networks:
+  #     - tubearchive-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  cache_data:
+    driver: local
+  logs_data:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  tubearchive-network:
+    driver: bridge
