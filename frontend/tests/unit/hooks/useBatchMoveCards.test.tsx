@@ -21,10 +21,12 @@ let capturedRequests: { url: string; body: unknown }[] = [];
 
 // Mock supabase client
 const mockGetSession = vi.fn();
+const mockRefreshSession = vi.fn();
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     auth: {
       getSession: () => mockGetSession(),
+      refreshSession: () => mockRefreshSession(),
     },
   },
 }));
@@ -63,6 +65,7 @@ describe('useBatchMoveCards', () => {
     vi.clearAllMocks();
     capturedRequests = [];
 
+    mockRefreshSession.mockResolvedValue({ data: { session: null }, error: null });
     mockGetSession.mockResolvedValue({
       data: { session: { access_token: 'test-token' } },
     });

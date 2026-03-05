@@ -10,7 +10,7 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { getAuthHeaders, getEdgeFunctionUrl } from '@/lib/supabase-auth';
 import { localCardsKeys } from './useLocalCards';
 import { youtubeSyncKeys } from './useYouTubeSync';
 import type { InsightCard } from '@/types/mandala';
@@ -29,31 +29,23 @@ interface BatchMoveParams {
   items: BatchMoveItem[];
 }
 
-function getEdgeFunctionUrl(fn: string, action: string): string {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-  return `${supabaseUrl}/functions/v1/${fn}?action=${action}`;
-}
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('Not authenticated');
-  }
-  const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-  return {
-    Authorization: `Bearer ${session.access_token}`,
-    'Content-Type': 'application/json',
-    apikey: apiKey,
-  };
-}
-
 export function useBatchMoveCards() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ items }: BatchMoveParams) => {
+      if (import.meta.env.DEV) {
+        console.log('[batchMoveCards] mutationFn called with', items.length, 'items');
+        console.log(
+          '[batchMoveCards] items:',
+          items.map((i) => ({
+            id: i.card.id.slice(0, 8),
+            source: i.source,
+            cellIndex: i.cellIndex,
+            levelId: i.levelId,
+          }))
+        );
+      }
       const headers = await getAuthHeaders();
 
       const syncedItems = items.filter((i) => i.source === 'synced');
@@ -209,7 +201,8 @@ export function useBatchMoveCards() {
       return { previousLocal, previousVideo };
     },
 
-    onError: (_err, _vars, context) => {
+    onError: (err, _vars, context) => {
+      console.error('[batchMoveCards] mutation error:', err);
       // Rollback to snapshots
       if (context?.previousLocal) {
         queryClient.setQueryData(localCardsKeys.list(), context.previousLocal);

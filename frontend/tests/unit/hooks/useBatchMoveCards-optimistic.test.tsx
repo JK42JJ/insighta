@@ -26,6 +26,7 @@ vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     auth: {
       getSession: () => mockGetSession(),
+      refreshSession: () => Promise.resolve({ data: { session: null }, error: null }),
     },
   },
 }));

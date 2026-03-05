@@ -834,20 +834,22 @@ const Index = () => {
         batchMoveCards.mutate(
           { items: batchItems },
           {
-            onError: () => {
+            onSuccess: () => {
+              toast({
+                title: `${multiCardIds.length}개 카드 이동됨`,
+                description: `"${currentLevel.subjects[cellIndex]}"로 이동했습니다.`,
+              });
+            },
+            onError: (error) => {
+              console.error('[handleCardDrop] batch move failed:', error);
               toast({
                 title: '이동 실패',
-                description: '카드가 원래 위치로 돌아갔습니다. 잠시 후 다시 시도해 주세요.',
+                description: error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.',
                 variant: 'destructive',
               });
             },
           }
         );
-
-        toast({
-          title: `${multiCardIds.length}개 카드 이동됨`,
-          description: `"${currentLevel.subjects[cellIndex]}"로 이동했습니다.`,
-        });
         return;
       }
 
@@ -871,10 +873,18 @@ const Index = () => {
           setPendingLocalCards((prev) => prev.filter((c) => c.id !== cardId));
         }
 
-        const errorHandler = () => {
+        const successHandler = () => {
+          toast({
+            title: '카드 이동됨',
+            description: `"${currentLevel.subjects[cellIndex]}"로 이동했습니다.`,
+          });
+        };
+
+        const errorHandler = (error: unknown) => {
+          console.error('[handleCardDrop] single card move failed:', error);
           toast({
             title: '이동 실패',
-            description: '카드가 원래 위치로 돌아갔습니다. 잠시 후 다시 시도해 주세요.',
+            description: error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.',
             variant: 'destructive',
           });
         };
@@ -885,12 +895,12 @@ const Index = () => {
               videoStateId: cardId,
               updates: { is_in_ideation: false, cell_index: cellIndex, level_id: currentLevelId },
             },
-            { onError: errorHandler }
+            { onSuccess: successHandler, onError: errorHandler }
           );
         } else if (source === 'local') {
-          updateLocalCard({ id: cardId, cell_index: cellIndex, level_id: currentLevelId }).catch(
-            errorHandler
-          );
+          updateLocalCard({ id: cardId, cell_index: cellIndex, level_id: currentLevelId })
+            .then(successHandler)
+            .catch(errorHandler);
         } else {
           // Pending card → persist via addLocalCard
           addLocalCard({
@@ -901,13 +911,10 @@ const Index = () => {
             user_note: card.userNote,
             cell_index: cellIndex,
             level_id: currentLevelId,
-          }).catch(errorHandler);
+          })
+            .then(successHandler)
+            .catch(errorHandler);
         }
-
-        toast({
-          title: '카드 이동됨',
-          description: `"${currentLevel.subjects[cellIndex]}"로 이동했습니다.`,
-        });
         return;
       }
 
@@ -1131,10 +1138,18 @@ const Index = () => {
       if (!card) return;
       const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
 
-      const errorHandler = () => {
+      const successHandler = () => {
+        toast({
+          title: '아이디에이션으로 이동됨',
+          description: '나중에 다시 분류할 수 있습니다.',
+        });
+      };
+
+      const errorHandler = (error: unknown) => {
+        console.error('[handleScratchPadCardDrop] move failed:', error);
         toast({
           title: '이동 실패',
-          description: '카드가 원래 위치로 돌아갔습니다. 잠시 후 다시 시도해 주세요.',
+          description: error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.',
           variant: 'destructive',
         });
       };
@@ -1145,16 +1160,13 @@ const Index = () => {
             videoStateId: cardId,
             updates: { is_in_ideation: true, cell_index: -1, level_id: 'scratchpad' },
           },
-          { onError: errorHandler }
+          { onSuccess: successHandler, onError: errorHandler }
         );
       } else {
-        updateLocalCard({ id: cardId, cell_index: -1, level_id: 'scratchpad' }).catch(errorHandler);
+        updateLocalCard({ id: cardId, cell_index: -1, level_id: 'scratchpad' })
+          .then(successHandler)
+          .catch(errorHandler);
       }
-
-      toast({
-        title: '아이디에이션으로 이동됨',
-        description: '나중에 다시 분류할 수 있습니다.',
-      });
     },
     [allMandalaCards, syncedCards, persistedLocalCards, updateVideoState, updateLocalCard, toast]
   );
@@ -1173,20 +1185,22 @@ const Index = () => {
       batchMoveCards.mutate(
         { items: batchItems },
         {
-          onError: () => {
+          onSuccess: () => {
+            toast({
+              title: `${batchItems.length}개 카드 이동됨`,
+              description: '아이디에이션으로 이동했습니다.',
+            });
+          },
+          onError: (error) => {
+            console.error('[handleScratchPadMultiCardDrop] batch move failed:', error);
             toast({
               title: '이동 실패',
-              description: '카드가 원래 위치로 돌아갔습니다. 잠시 후 다시 시도해 주세요.',
+              description: error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.',
               variant: 'destructive',
             });
           },
         }
       );
-
-      toast({
-        title: `${batchItems.length}개 카드 이동됨`,
-        description: '아이디에이션으로 이동했습니다.',
-      });
     },
     [allMandalaCards, syncedCards, persistedLocalCards, batchMoveCards, toast]
   );

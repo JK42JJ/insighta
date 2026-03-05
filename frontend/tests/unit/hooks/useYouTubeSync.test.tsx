@@ -12,10 +12,12 @@ import { ReactNode } from 'react';
 
 // Mock Supabase client
 const mockGetSession = vi.fn();
+const mockRefreshSession = vi.fn();
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     auth: {
       getSession: () => mockGetSession(),
+      refreshSession: () => mockRefreshSession(),
     },
   },
 }));
@@ -148,6 +150,7 @@ describe('YouTube Sync Hooks', () => {
       data: { session: mockSession },
       error: null,
     });
+    mockRefreshSession.mockResolvedValue({ data: { session: null }, error: null });
 
     originalFetch = global.fetch;
     global.fetch = vi.fn();
