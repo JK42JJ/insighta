@@ -73,16 +73,30 @@ export async function registerAuth(fastify: FastifyInstance) {
   const jwtSecret = process.env['SUPABASE_JWT_SECRET'] || process.env['JWT_SECRET'];
 
   // Try JWKS first (ES256), fall back to HS256 secret
-  let secret: string;
+  let jwtOptions: Parameters<typeof fastifyJWT>[1];
   let method: string;
 
   if (supabaseUrl) {
     const publicKeyPem = await fetchSupabasePublicKey(supabaseUrl);
     if (publicKeyPem) {
-      secret = publicKeyPem;
+      // ES256: use asymmetric key config — public key for verification only
+      // @fastify/jwt requires both public and private keys for asymmetric algorithms,
+      // but we never sign tokens (only Supabase does), so private is unused placeholder.
+      jwtOptions = {
+        secret: {
+          public: publicKeyPem,
+          private: 'unused-we-never-sign-tokens',
+        },
+        decode: { complete: false },
+        verify: { algorithms: ['ES256'] as const },
+      };
       method = 'JWKS (ES256)';
     } else if (jwtSecret) {
-      secret = jwtSecret;
+      jwtOptions = {
+        secret: jwtSecret,
+        decode: { complete: false },
+        verify: { algorithms: ['HS256'] as const },
+      };
       method = 'HS256 (JWKS fetch failed, using fallback)';
     } else {
       throw new Error(
@@ -90,7 +104,11 @@ export async function registerAuth(fastify: FastifyInstance) {
       );
     }
   } else if (jwtSecret) {
-    secret = jwtSecret;
+    jwtOptions = {
+      secret: jwtSecret,
+      decode: { complete: false },
+      verify: { algorithms: ['HS256'] as const },
+    };
     method = 'HS256';
   } else {
     throw new Error(
@@ -100,13 +118,7 @@ export async function registerAuth(fastify: FastifyInstance) {
 
   // Register JWT plugin
   await fastify.register(fastifyJWT, {
-    secret,
-    decode: {
-      complete: false,
-    },
-    verify: {
-      algorithms: method.includes('ES256') ? ['ES256'] : ['HS256'],
-    },
+    ...jwtOptions,
     messages: {
       badRequestErrorMessage: 'Authorization header format must be: Bearer <token>',
       noAuthorizationInHeaderMessage: 'No Authorization header found',
