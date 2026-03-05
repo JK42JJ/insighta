@@ -55,6 +55,43 @@ export function detectCardSource(
 }
 
 /**
+ * Pre-build ID sets for O(1) card source detection.
+ * Call once per render cycle, pass result to detectCardSourceFast.
+ */
+export function buildCardIdSets(
+  syncedCards: InsightCard[],
+  persistedLocalCards: InsightCard[]
+): { syncedIds: Set<string>; localIds: Set<string> } {
+  return {
+    syncedIds: new Set(syncedCards.map((c) => c.id)),
+    localIds: new Set(persistedLocalCards.map((c) => c.id)),
+  };
+}
+
+/**
+ * O(1) card source detection using pre-built Sets.
+ */
+export function detectCardSourceFast(
+  cardId: string,
+  sets: { syncedIds: Set<string>; localIds: Set<string> },
+  card?: InsightCard | null
+): CardSource {
+  if (sets.syncedIds.has(cardId)) return 'synced';
+  if (sets.localIds.has(cardId)) return 'local';
+
+  if (card && typeof card.isInIdeation === 'boolean') {
+    if (import.meta.env.DEV) {
+      console.warn(
+        `[detectCardSource] Card ${cardId.slice(0, 8)} not in syncedCards but has isInIdeation=${card.isInIdeation}; treating as 'synced'`
+      );
+    }
+    return 'synced';
+  }
+
+  return 'pending';
+}
+
+/**
  * Get a card by ID from multiple sources
  *
  * @param cardId - The card ID to find
