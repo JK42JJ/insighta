@@ -1,17 +1,15 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, preHandlerHookHandler } from 'fastify';
 import fastifyJWT from '@fastify/jwt';
+import { createPublicKey } from 'crypto';
 import { JWTPayload } from '../schemas/auth.schema';
 import { createErrorResponse, ErrorCode } from '../schemas/common.schema';
 
 /**
  * Supabase JWT Authentication Plugin
  *
- * Verifies Supabase-issued JWT tokens using SUPABASE_JWT_SECRET.
- * Maps Supabase JWT claims (sub, email, user_metadata) to our JWTPayload format
- * for backward compatibility with existing route handlers.
- *
- * Token lifecycle is managed entirely by Supabase Auth on the frontend.
- * This plugin only verifies and decodes tokens.
+ * Verifies Supabase-issued JWT tokens.
+ * Supabase Cloud uses ES256 asymmetric keys — we fetch the public key from JWKS.
+ * Fallback to HS256 via SUPABASE_JWT_SECRET for self-hosted or legacy setups.
  */
 
 /** Supabase JWT token payload structure */
@@ -45,23 +43,69 @@ declare module 'fastify' {
 }
 
 /**
+ * Fetch the ES256 public key from Supabase JWKS endpoint and convert to PEM.
+ */
+async function fetchSupabasePublicKey(supabaseUrl: string): Promise<string | null> {
+  try {
+    const jwksUrl = `${supabaseUrl}/auth/v1/.well-known/jwks.json`;
+    const response = await fetch(jwksUrl);
+    if (!response.ok) return null;
+
+    const jwks = (await response.json()) as {
+      keys: Array<{ kty: string; crv: string; x: string; y: string; alg: string }>;
+    };
+    const key = jwks.keys.find((k) => k.alg === 'ES256');
+    if (!key) return null;
+
+    // Convert JWK to PEM using Node.js crypto
+    const publicKey = createPublicKey({ key, format: 'jwk' });
+    return publicKey.export({ type: 'spki', format: 'pem' }) as string;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Register Supabase JWT authentication plugin
  */
 export async function registerAuth(fastify: FastifyInstance) {
-  // Support both Supabase JWT secret and legacy JWT_SECRET for backward compatibility
+  const supabaseUrl = process.env['SUPABASE_URL'];
   const jwtSecret = process.env['SUPABASE_JWT_SECRET'] || process.env['JWT_SECRET'];
-  if (!jwtSecret) {
+
+  // Try JWKS first (ES256), fall back to HS256 secret
+  let secret: string;
+  let method: string;
+
+  if (supabaseUrl) {
+    const publicKeyPem = await fetchSupabasePublicKey(supabaseUrl);
+    if (publicKeyPem) {
+      secret = publicKeyPem;
+      method = 'JWKS (ES256)';
+    } else if (jwtSecret) {
+      secret = jwtSecret;
+      method = 'HS256 (JWKS fetch failed, using fallback)';
+    } else {
+      throw new Error(
+        'Failed to fetch JWKS from Supabase and no SUPABASE_JWT_SECRET fallback configured.'
+      );
+    }
+  } else if (jwtSecret) {
+    secret = jwtSecret;
+    method = 'HS256';
+  } else {
     throw new Error(
-      'SUPABASE_JWT_SECRET (or JWT_SECRET) environment variable is required. ' +
-        'Get it from Supabase Dashboard > Settings > API > JWT Secret.'
+      'Either SUPABASE_URL (for JWKS/ES256) or SUPABASE_JWT_SECRET (for HS256) is required.'
     );
   }
 
-  // Register JWT plugin for token verification only (no signing)
+  // Register JWT plugin
   await fastify.register(fastifyJWT, {
-    secret: jwtSecret,
+    secret,
     decode: {
       complete: false,
+    },
+    verify: {
+      algorithms: method.includes('ES256') ? ['ES256'] : ['HS256'],
     },
     messages: {
       badRequestErrorMessage: 'Authorization header format must be: Bearer <token>',
@@ -75,26 +119,11 @@ export async function registerAuth(fastify: FastifyInstance) {
 
   /**
    * Decorator: Authentication hook for protected routes
-   *
-   * Verifies Supabase JWT and maps claims to JWTPayload format:
-   *   sub → userId
-   *   email → email
-   *   user_metadata.name / user_metadata.full_name → name
-   *
-   * Usage unchanged from custom JWT:
-   *   fastify.get('/protected', {
-   *     onRequest: [fastify.authenticate],
-   *     handler: async (request, reply) => {
-   *       // request.user.userId, request.user.email, request.user.name
-   *     }
-   *   });
    */
   fastify.decorate('authenticate', async function (request: FastifyRequest, reply: FastifyReply) {
     try {
-      // Verify JWT and decode Supabase claims
       const decoded = await request.jwtVerify<SupabaseJWTClaims>();
 
-      // Map Supabase JWT claims to our JWTPayload for backward compatibility
       const userMeta: Record<string, unknown> = decoded.user_metadata || {};
       request.user = {
         userId: decoded.sub,
@@ -126,7 +155,7 @@ export async function registerAuth(fastify: FastifyInstance) {
     }
   });
 
-  fastify.log.info('Supabase JWT authentication plugin registered');
+  fastify.log.info(`Supabase JWT authentication registered (${method})`);
 }
 
 /**
