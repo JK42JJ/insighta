@@ -59,15 +59,7 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-  console.log('[local-cards] Request received:', {
-    method: req.method,
-    url: req.url,
-    hasAuthHeader: !!req.headers.get('Authorization'),
-    hasApiKey: !!req.headers.get('apikey'),
-    supabaseUrlSet: !!supabaseUrl,
-    serviceKeySet: !!supabaseServiceKey,
-    serviceKeyPrefix: supabaseServiceKey?.substring(0, 20) + '...',
-  });
+  console.log('[local-cards]', req.method, new URL(req.url).searchParams.get('action'));
 
   // Get user from authorization header
   const authHeader = req.headers.get('Authorization');
@@ -83,29 +75,12 @@ Deno.serve(async (req) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
   if (userError || !user) {
-    console.error('[local-cards] Auth failed:', {
-      error: userError?.message,
-      errorStatus: userError?.status,
-      errorName: userError?.name,
-      tokenPrefix: token?.substring(0, 20) + '...',
-      tokenLength: token?.length,
-      hasUser: !!user,
-    });
+    console.error('[local-cards] Auth failed:', userError?.message);
     return new Response(
-      JSON.stringify({
-        error: 'Invalid user token',
-        debug: {
-          message: userError?.message,
-          status: userError?.status,
-          tokenLength: token?.length,
-          tokenPrefix: token?.substring(0, 20) + '...',
-        }
-      }),
+      JSON.stringify({ error: 'Invalid user token' }),
       { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-
-  console.log('[local-cards] Auth success:', { userId: user.id, email: user.email });
 
   const url = new URL(req.url);
   const action = url.searchParams.get('action');
@@ -113,23 +88,27 @@ Deno.serve(async (req) => {
   try {
     switch (action) {
       case 'list': {
-        const limitInfo = await checkCardLimit(supabase, user.id);
+        // Parallel fetch: subscription + cards (was 3 sequential queries, now 2 parallel)
+        const [subscription, cardsResult] = await Promise.all([
+          getOrCreateSubscription(supabase, user.id),
+          supabase
+            .from('user_local_cards')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('sort_order', { ascending: true }),
+        ]);
 
-        const { data: cards, error: cardsError } = await supabase
-          .from('user_local_cards')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('sort_order', { ascending: true });
+        if (cardsResult.error) throw cardsResult.error;
 
-        if (cardsError) throw cardsError;
+        const cards = cardsResult.data || [];
 
         return new Response(
           JSON.stringify({
-            cards: cards || [],
+            cards,
             subscription: {
-              tier: limitInfo.tier,
-              limit: limitInfo.limit,
-              used: limitInfo.used
+              tier: subscription.tier,
+              limit: subscription.local_cards_limit,
+              used: cards.length
             }
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -369,10 +348,9 @@ Deno.serve(async (req) => {
     }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const errorDetails = error instanceof Error ? { name: error.name, stack: error.stack?.split('\n').slice(0, 3) } : {};
-    console.error('[local-cards] Error:', { message: errorMessage, ...errorDetails });
+    console.error('[local-cards] Error:', errorMessage);
     return new Response(
-      JSON.stringify({ error: errorMessage, debug: errorDetails }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

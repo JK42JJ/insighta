@@ -4,11 +4,23 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
+let cachedHeaders: { headers: Record<string, string>; expiresAt: number } | null = null;
+const CACHE_TTL_MS = 30_000; // 30 seconds
+
+// Invalidate cache on auth state changes (sign-in, sign-out, token refresh)
+supabase.auth.onAuthStateChange(() => {
+  cachedHeaders = null;
+});
+
 /**
  * Get auth headers for Edge Function calls.
- * Attempts session refresh if the current session is expired.
+ * Caches headers for 30s to avoid repeated getSession() calls during rapid mutations.
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
+  if (cachedHeaders && Date.now() < cachedHeaders.expiresAt) {
+    return cachedHeaders.headers;
+  }
+
   let {
     data: { session },
   } = await supabase.auth.getSession();
@@ -21,11 +33,14 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
     }
   }
   const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-  return {
+  const headers = {
     Authorization: `Bearer ${session.access_token}`,
     'Content-Type': 'application/json',
     apikey: apiKey,
   };
+
+  cachedHeaders = { headers, expiresAt: Date.now() + CACHE_TTL_MS };
+  return headers;
 }
 
 /**
