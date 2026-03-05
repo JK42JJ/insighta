@@ -646,6 +646,7 @@ describe('Retry Utilities', () => {
 
         await expect(retryIf(operation, shouldRetry)).rejects.toThrow('string error');
         expect(shouldRetry).toHaveBeenCalledWith(expect.any(Error));
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         expect(shouldRetry.mock.calls[0][0].message).toBe('string error');
       });
     });
