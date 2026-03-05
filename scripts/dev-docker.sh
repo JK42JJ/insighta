@@ -82,9 +82,9 @@ check_network() {
 check_env_file() {
     if [ ! -f "$PROJECT_DIR/$ENV_FILE" ]; then
         log_warn "⚠️  $ENV_FILE not found"
-        if [ -f "$PROJECT_DIR/.env.docker.example" ]; then
-            log_info "Creating from .env.docker.example..."
-            cp "$PROJECT_DIR/.env.docker.example" "$PROJECT_DIR/$ENV_FILE"
+        if [ -f "$PROJECT_DIR/.env.example" ]; then
+            log_info "Creating from .env.example..."
+            cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/$ENV_FILE"
             log_warn "Please edit $ENV_FILE with your configuration"
             return 1
         else

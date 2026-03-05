@@ -18,7 +18,7 @@ Insighta를 Docker로 배포하는 방법을 설명합니다.
 
 ```bash
 # 1. 환경 파일 설정
-cp .env.docker.example .env.docker
+cp .env.example .env.docker
 # .env.docker 파일을 편집하여 필수 값 입력
 
 # 2. Docker 이미지 빌드
@@ -49,7 +49,7 @@ curl http://localhost:3000/health
 ### 1. 환경 파일 생성
 
 ```bash
-cp .env.docker.example .env.docker
+cp .env.example .env.docker
 ```
 
 ### 2. 필수 환경변수 설정
