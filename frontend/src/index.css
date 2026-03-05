@@ -36,7 +36,7 @@
     --secondary-foreground: 40 15% 99%;
 
     --muted: 35 8% 85%;
-    --muted-foreground: 24 10% 40%;
+    --muted-foreground: 24 10% 30%;
 
     --accent: 35 30% 95%;
     --accent-foreground: 20 90% 45%;
@@ -483,5 +483,15 @@
       transform: translate(-50%, -50%) scale(0);
       opacity: 1;
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

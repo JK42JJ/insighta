@@ -30,7 +30,11 @@
     "termsOfService": "Terms of Service",
     "privacyPolicy": "Privacy Policy",
     "noAccount": "Don't have an account?",
-    "signUp": "Sign up"
+    "signUp": "Sign up",
+    "goHome": "Go to home page",
+    "openUserMenu": "Open user menu",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode"
   },
   "login": {
     "subtitle": "Mandala-based YouTube Archive",
@@ -412,5 +416,11 @@
   "draggableCard": {
     "shareOnX": "Share on X",
     "viewOnYouTube": "View on YouTube"
+  },
+  "footer": {
+    "brand": "Insighta",
+    "termsOfService": "Terms of Service",
+    "privacyPolicy": "Privacy Policy",
+    "allRightsReserved": "All rights reserved."
   }
 }
