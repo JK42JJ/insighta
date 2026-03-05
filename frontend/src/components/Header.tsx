@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -33,6 +34,7 @@ interface HeaderProps {
 
 export function Header({ onNavigateHome }: HeaderProps) {
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
   const { isLoggedIn, isLoading, userName, userEmail, userAvatar, signInWithGoogle, signOut } =
     useAuth();
   const [isDark, setIsDark] = useState(false);
@@ -73,6 +75,11 @@ export function Header({ onNavigateHome }: HeaderProps) {
     document.documentElement.classList.toggle('dark', newIsDark);
   };
 
+  const toggleLanguage = () => {
+    const newLang = i18n.language === 'ko' ? 'en' : 'ko';
+    i18n.changeLanguage(newLang);
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-surface-mid/95 backdrop-blur-md border-b border-border/50">
       <div
@@ -101,7 +108,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
                   <span className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent animate-[shimmer_2s_ease-in-out_infinite] -translate-x-full" />
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground">만다라트 기반 YouTube 아카이브</p>
+              <p className="text-xs text-muted-foreground">{t('header.subtitle')}</p>
             </div>
           </button>
 
@@ -113,7 +120,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
             className="rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
           >
             <Home className="w-4 h-4" />
-            <span className="hidden sm:inline">홈</span>
+            <span className="hidden sm:inline">{t('header.home')}</span>
           </Button>
 
           {/* Mandala Settings Button */}
@@ -124,7 +131,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
             className="rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
           >
             <LayoutGrid className="w-4 h-4" />
-            <span className="hidden sm:inline">만다라트 설계</span>
+            <span className="hidden sm:inline">{t('header.mandalaDesign')}</span>
           </Button>
         </div>
 
@@ -160,21 +167,21 @@ export function Header({ onNavigateHome }: HeaderProps) {
                   onClick={() => navigate('/profile')}
                 >
                   <User className="w-4 h-4" />
-                  <span>프로필</span>
+                  <span>{t('header.profile')}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="gap-2 cursor-pointer hover:bg-surface-light"
                   onClick={() => navigate('/subscription')}
                 >
                   <CreditCard className="w-4 h-4" />
-                  <span>구독 관리</span>
+                  <span>{t('header.subscription')}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="gap-2 cursor-pointer hover:bg-surface-light"
                   onClick={() => navigate('/settings')}
                 >
                   <Settings className="w-4 h-4" />
-                  <span>설정</span>
+                  <span>{t('header.settings')}</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-border/50" />
                 <DropdownMenuItem
@@ -182,14 +189,14 @@ export function Header({ onNavigateHome }: HeaderProps) {
                   onClick={() => navigate('/terms')}
                 >
                   <FileText className="w-4 h-4" />
-                  <span>Terms of Service</span>
+                  <span>{t('header.termsOfService')}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="gap-2 cursor-pointer hover:bg-surface-light"
                   onClick={() => navigate('/privacy')}
                 >
                   <Shield className="w-4 h-4" />
-                  <span>Privacy Policy</span>
+                  <span>{t('header.privacyPolicy')}</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-border/50" />
                 <DropdownMenuItem
@@ -202,7 +209,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
                   ) : (
                     <LogOut className="w-4 h-4" />
                   )}
-                  <span>로그아웃</span>
+                  <span>{t('common.logout')}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -221,22 +228,32 @@ export function Header({ onNavigateHome }: HeaderProps) {
                 ) : (
                   <LogIn className="w-4 h-4" />
                 )}
-                <span>Login</span>
+                <span>{t('common.login')}</span>
               </Button>
 
               {/* Sign up link - now uses Google OAuth, same as login */}
               <div className="hidden sm:flex items-center gap-1 text-sm text-muted-foreground">
-                <span>계정이 없으신가요?</span>
+                <span>{t('header.noAccount')}</span>
                 <button
                   className="text-primary hover:underline font-medium"
                   onClick={handleLogin}
                   disabled={isSigningIn}
                 >
-                  가입하기
+                  {t('header.signUp')}
                 </button>
               </div>
             </>
           )}
+
+          {/* Language Toggle */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleLanguage}
+            className="rounded-xl hover:bg-surface-light transition-all duration-200 text-xs font-medium px-2"
+          >
+            {i18n.language === 'ko' ? 'EN' : 'KO'}
+          </Button>
 
           {/* Theme Toggle */}
           <Button

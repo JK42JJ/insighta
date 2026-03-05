@@ -1,14 +1,24 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, GripVertical, Save, AlertTriangle, Sparkles, ChevronDown, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
-import { mandalaTemplates, MandalaTemplate } from "@/data/mandalaTemplates";
-import { MandalaLevel } from "@/types/mandala";
-import { mockMandalaLevels } from "@/data/mockData";
-import { parseValidatedMandalaLevel, parseValidatedSubLevel } from "@/lib/localStorageValidation";
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Check,
+  GripVertical,
+  Save,
+  AlertTriangle,
+  Sparkles,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
+import { mandalaTemplates, MandalaTemplate } from '@/data/mandalaTemplates';
+import { MandalaLevel } from '@/types/mandala';
+import { mockMandalaLevels } from '@/data/mockData';
+import { parseValidatedMandalaLevel, parseValidatedSubLevel } from '@/lib/localStorageValidation';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,23 +28,20 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+} from '@/components/ui/alert-dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const GRID_ORDER = [0, 1, 2, 3, -1, 4, 5, 6, 7]; // -1 is center
 
 export default function MandalaSettings() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+  const { t } = useTranslation();
+
   // Load from localStorage or use mock data (with validation)
   const [mandalaData, setMandalaData] = useState<MandalaLevel>(() => {
-    const validated = parseValidatedMandalaLevel("mandala-root");
-    return validated || mockMandalaLevels["root"];
+    const validated = parseValidatedMandalaLevel('mandala-root');
+    return validated || mockMandalaLevels['root'];
   });
 
   // Load all L2 levels from localStorage (with validation)
@@ -42,11 +49,11 @@ export default function MandalaSettings() {
     const levels: Record<string, string[]> = {};
     // Check localStorage for existing sub-levels
     const keys = Object.keys(localStorage);
-    keys.forEach(key => {
-      if (key.startsWith("mandala-l2-")) {
+    keys.forEach((key) => {
+      if (key.startsWith('mandala-l2-')) {
         const subjects = parseValidatedSubLevel(key);
         if (subjects) {
-          levels[key.replace("mandala-l2-", "")] = subjects;
+          levels[key.replace('mandala-l2-', '')] = subjects;
         }
       }
     });
@@ -63,7 +70,7 @@ export default function MandalaSettings() {
 
   // Get or initialize sub-subjects for a given subject
   const getSubSubjects = (subject: string): string[] => {
-    const key = subject.toLowerCase().replace(/\s/g, "");
+    const key = subject.toLowerCase().replace(/\s/g, '');
     if (subLevels[key]) {
       return subLevels[key];
     }
@@ -74,14 +81,14 @@ export default function MandalaSettings() {
   // Update sub-subject
   const handleSubSubjectChange = (subjectIndex: number, subIndex: number, value: string) => {
     const subject = editingSubjects[subjectIndex];
-    const key = subject.toLowerCase().replace(/\s/g, "");
+    const key = subject.toLowerCase().replace(/\s/g, '');
     const currentSubs = getSubSubjects(subject);
     const newSubs = [...currentSubs];
     newSubs[subIndex] = value;
-    
-    setSubLevels(prev => ({
+
+    setSubLevels((prev) => ({
       ...prev,
-      [key]: newSubs
+      [key]: newSubs,
     }));
     setHasChanges(true);
   };
@@ -89,7 +96,8 @@ export default function MandalaSettings() {
   // Track changes
   useEffect(() => {
     const centerChanged = editingCenterGoal !== mandalaData.centerGoal;
-    const subjectsChanged = JSON.stringify(editingSubjects) !== JSON.stringify(mandalaData.subjects);
+    const subjectsChanged =
+      JSON.stringify(editingSubjects) !== JSON.stringify(mandalaData.subjects);
     if (centerChanged || subjectsChanged) {
       setHasChanges(true);
     }
@@ -100,13 +108,13 @@ export default function MandalaSettings() {
     const newSubjects = [...editingSubjects];
     newSubjects[index] = value;
     setEditingSubjects(newSubjects);
-    
+
     // If subject name changed, migrate sub-levels
     if (oldSubject !== value && oldSubject.trim()) {
-      const oldKey = oldSubject.toLowerCase().replace(/\s/g, "");
-      const newKey = value.toLowerCase().replace(/\s/g, "");
+      const oldKey = oldSubject.toLowerCase().replace(/\s/g, '');
+      const newKey = value.toLowerCase().replace(/\s/g, '');
       if (subLevels[oldKey]) {
-        setSubLevels(prev => {
+        setSubLevels((prev) => {
           const updated = { ...prev };
           updated[newKey] = prev[oldKey];
           delete updated[oldKey];
@@ -118,12 +126,12 @@ export default function MandalaSettings() {
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
+    e.dataTransfer.dropEffect = 'move';
   };
 
   const handleDrop = (e: React.DragEvent, targetIndex: number) => {
@@ -141,19 +149,19 @@ export default function MandalaSettings() {
     // Validation
     if (!editingCenterGoal.trim()) {
       toast({
-        title: "저장 실패",
-        description: "중앙 목표는 필수입니다.",
-        variant: "destructive",
+        title: t('mandalaSettings.saveFailed'),
+        description: t('mandalaSettings.saveFailedCenterRequired'),
+        variant: 'destructive',
       });
       return;
     }
 
-    const validSubjects = editingSubjects.filter(s => s.trim());
+    const validSubjects = editingSubjects.filter((s) => s.trim());
     if (validSubjects.length === 0) {
       toast({
-        title: "저장 실패",
-        description: "최소 1개 이상의 주제가 필요합니다.",
-        variant: "destructive",
+        title: t('mandalaSettings.saveFailed'),
+        description: t('mandalaSettings.saveFailedSubjectRequired'),
+        variant: 'destructive',
       });
       return;
     }
@@ -161,43 +169,46 @@ export default function MandalaSettings() {
     const updatedMandala: MandalaLevel = {
       ...mandalaData,
       centerGoal: editingCenterGoal.trim(),
-      subjects: editingSubjects.map(s => s.trim() || ""),
+      subjects: editingSubjects.map((s) => s.trim() || ''),
     };
 
     // Save to localStorage
-    localStorage.setItem("mandala-root", JSON.stringify(updatedMandala));
-    
+    localStorage.setItem('mandala-root', JSON.stringify(updatedMandala));
+
     // Save all L2 levels
-    editingSubjects.forEach(subject => {
+    editingSubjects.forEach((subject) => {
       if (subject.trim()) {
-        const key = subject.toLowerCase().replace(/\s/g, "");
+        const key = subject.toLowerCase().replace(/\s/g, '');
         const subs = subLevels[key] || getSubSubjects(subject);
         const l2Data: MandalaLevel = {
           id: key,
           centerGoal: subject,
           subjects: subs,
-          parentId: "root",
+          parentId: 'root',
           parentCellIndex: editingSubjects.indexOf(subject),
           cards: [],
         };
         localStorage.setItem(`mandala-l2-${key}`, JSON.stringify(l2Data));
       }
     });
-    
+
     setMandalaData(updatedMandala);
     setHasChanges(false);
 
     toast({
-      title: "저장 완료",
-      description: "만다라트가 성공적으로 저장되었습니다.",
+      title: t('mandalaSettings.saved'),
+      description: t('mandalaSettings.savedDesc'),
     });
   };
 
   const handleTemplateClick = (template: MandalaTemplate) => {
     // Check if mandala already has content
-    const hasContent = mandalaData.centerGoal !== "2024년 목표" || 
-                       mandalaData.subjects.some(s => s !== mockMandalaLevels["root"].subjects[mandalaData.subjects.indexOf(s)]);
-    
+    const hasContent =
+      mandalaData.centerGoal !== '2024년 목표' ||
+      mandalaData.subjects.some(
+        (s) => s !== mockMandalaLevels['root'].subjects[mandalaData.subjects.indexOf(s)]
+      );
+
     if (hasContent) {
       setSelectedTemplate(template);
       setShowTemplateConfirm(true);
@@ -211,10 +222,10 @@ export default function MandalaSettings() {
     setEditingSubjects([...template.subjects]);
     setShowTemplateConfirm(false);
     setSelectedTemplate(null);
-    
+
     toast({
-      title: "템플릿 적용됨",
-      description: `"${template.name}" 템플릿이 적용되었습니다. 저장 버튼을 눌러 확정하세요.`,
+      title: t('mandalaSettings.templateApplied'),
+      description: t('mandalaSettings.templateAppliedDesc', { name: template.name }),
     });
   };
 
@@ -232,23 +243,19 @@ export default function MandalaSettings() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate("/")}
+              onClick={() => navigate('/')}
               className="rounded-lg"
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold text-foreground">만다라트 설계</h1>
-              <p className="text-sm text-muted-foreground">목표와 주제를 편집하세요</p>
+              <h1 className="text-xl font-bold text-foreground">{t('mandalaSettings.title')}</h1>
+              <p className="text-sm text-muted-foreground">{t('mandalaSettings.subtitle')}</p>
             </div>
           </div>
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges}
-            className="gap-2"
-          >
+          <Button onClick={handleSave} disabled={!hasChanges} className="gap-2">
             <Save className="w-4 h-4" />
-            저장
+            {t('common.save')}
           </Button>
         </div>
       </header>
@@ -259,17 +266,15 @@ export default function MandalaSettings() {
           <div className="space-y-6">
             <Card className="bg-surface-mid border-border/50">
               <CardHeader>
-                <CardTitle className="text-lg">L1 만다라트 편집</CardTitle>
-                <CardDescription>
-                  중앙 목표와 8개 핵심 주제를 편집합니다. 주제를 드래그하여 순서를 변경할 수 있습니다.
-                </CardDescription>
+                <CardTitle className="text-lg">{t('mandalaSettings.l1Edit')}</CardTitle>
+                <CardDescription>{t('mandalaSettings.l1EditDesc')}</CardDescription>
               </CardHeader>
               <CardContent>
                 {/* 3x3 Grid Preview */}
                 <div className="grid grid-cols-3 gap-2 aspect-square max-w-md mx-auto">
                   {GRID_ORDER.map((subjectIdx, gridIdx) => {
                     const isCenter = subjectIdx === -1;
-                    
+
                     if (isCenter) {
                       return (
                         <div
@@ -279,7 +284,7 @@ export default function MandalaSettings() {
                           <Input
                             value={editingCenterGoal}
                             onChange={(e) => setEditingCenterGoal(e.target.value)}
-                            placeholder="중앙 목표"
+                            placeholder={t('mandalaSettings.centerGoalPlaceholder')}
                             className="text-center text-sm font-semibold bg-transparent border-0 focus-visible:ring-0 h-auto p-1"
                             maxLength={50}
                           />
@@ -287,7 +292,7 @@ export default function MandalaSettings() {
                       );
                     }
 
-                    const subject = editingSubjects[subjectIdx] || "";
+                    const subject = editingSubjects[subjectIdx] || '';
                     const isEmpty = !subject.trim();
 
                     return (
@@ -301,8 +306,8 @@ export default function MandalaSettings() {
                           relative group cursor-grab active:cursor-grabbing
                           bg-surface-light border border-border/50 rounded-lg p-2
                           transition-all duration-200
-                          ${draggedIndex === subjectIdx ? "opacity-50 scale-95" : ""}
-                          ${isEmpty ? "border-dashed opacity-60" : ""}
+                          ${draggedIndex === subjectIdx ? 'opacity-50 scale-95' : ''}
+                          ${isEmpty ? 'border-dashed opacity-60' : ''}
                           hover:border-primary/50 hover:shadow-md
                         `}
                       >
@@ -310,7 +315,9 @@ export default function MandalaSettings() {
                         <Input
                           value={subject}
                           onChange={(e) => handleSubjectChange(subjectIdx, e.target.value)}
-                          placeholder={`주제 ${subjectIdx + 1}`}
+                          placeholder={t('mandalaSettings.subjectPlaceholder', {
+                            index: subjectIdx + 1,
+                          })}
                           className="text-center text-xs bg-transparent border-0 focus-visible:ring-0 h-auto p-1"
                           maxLength={30}
                         />
@@ -321,7 +328,9 @@ export default function MandalaSettings() {
 
                 {/* Subject List with expandable L2 */}
                 <div className="mt-6 space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground mb-3">주제 목록 (클릭하여 L2 하위 항목 편집)</p>
+                  <p className="text-sm font-medium text-muted-foreground mb-3">
+                    {t('mandalaSettings.subjectList')}
+                  </p>
                   {editingSubjects.map((subject, idx) => (
                     <Collapsible
                       key={idx}
@@ -336,8 +345,8 @@ export default function MandalaSettings() {
                         className={`
                           rounded-lg bg-surface-light border border-border/30
                           transition-all duration-200
-                          ${draggedIndex === idx ? "opacity-50 scale-95" : ""}
-                          ${expandedSubject === idx ? "border-primary/50 ring-1 ring-primary/20" : "hover:border-primary/50"}
+                          ${draggedIndex === idx ? 'opacity-50 scale-95' : ''}
+                          ${expandedSubject === idx ? 'border-primary/50 ring-1 ring-primary/20' : 'hover:border-primary/50'}
                         `}
                       >
                         <CollapsibleTrigger asChild>
@@ -353,7 +362,9 @@ export default function MandalaSettings() {
                                 handleSubjectChange(idx, e.target.value);
                               }}
                               onClick={(e) => e.stopPropagation()}
-                              placeholder={`주제 ${idx + 1}`}
+                              placeholder={t('mandalaSettings.subjectPlaceholder', {
+                                index: idx + 1,
+                              })}
                               className="flex-1 bg-transparent border-0 focus-visible:ring-1 h-8 text-sm"
                               maxLength={30}
                             />
@@ -367,11 +378,13 @@ export default function MandalaSettings() {
                             )}
                           </div>
                         </CollapsibleTrigger>
-                        
+
                         <CollapsibleContent>
                           {subject.trim() && (
                             <div className="px-4 pb-3 pt-1 border-t border-border/30 space-y-1.5">
-                              <p className="text-xs text-muted-foreground mb-2">L2 하위 항목 (8개)</p>
+                              <p className="text-xs text-muted-foreground mb-2">
+                                {t('mandalaSettings.l2SubItems')}
+                              </p>
                               {getSubSubjects(subject).map((subItem, subIdx) => (
                                 <div key={subIdx} className="flex items-center gap-2">
                                   <span className="w-5 h-5 flex items-center justify-center text-[10px] font-medium text-muted-foreground bg-surface-mid rounded">
@@ -379,7 +392,9 @@ export default function MandalaSettings() {
                                   </span>
                                   <Input
                                     value={subItem}
-                                    onChange={(e) => handleSubSubjectChange(idx, subIdx, e.target.value)}
+                                    onChange={(e) =>
+                                      handleSubSubjectChange(idx, subIdx, e.target.value)
+                                    }
                                     placeholder={`${subject} ${subIdx + 1}`}
                                     className="flex-1 bg-surface-mid/50 border-0 focus-visible:ring-1 h-7 text-xs"
                                     maxLength={30}
@@ -403,11 +418,11 @@ export default function MandalaSettings() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-primary" />
-                  <CardTitle className="text-lg">템플릿으로 시작하기</CardTitle>
+                  <CardTitle className="text-lg">
+                    {t('mandalaSettings.startWithTemplate')}
+                  </CardTitle>
                 </div>
-                <CardDescription>
-                  직업이나 목적에 맞는 템플릿을 선택하면 추천 목표와 주제가 자동으로 채워집니다.
-                </CardDescription>
+                <CardDescription>{t('mandalaSettings.startWithTemplateDesc')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid sm:grid-cols-2 gap-3">
@@ -437,13 +452,13 @@ export default function MandalaSettings() {
             {/* Tips */}
             <Card className="bg-surface-mid border-border/50">
               <CardHeader>
-                <CardTitle className="text-lg">💡 만다라트 설계 팁</CardTitle>
+                <CardTitle className="text-lg">{t('mandalaSettings.designTips')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <p>• <strong>중앙 목표</strong>는 구체적이고 측정 가능하게 작성하세요.</p>
-                <p>• <strong>8개 주제</strong>는 목표 달성에 필요한 핵심 영역을 균형있게 배치하세요.</p>
-                <p>• 각 주제를 클릭하면 <strong>L2 하위 항목 8개</strong>를 편집할 수 있습니다.</p>
-                <p>• 주제 순서는 드래그 앤 드롭으로 우선순위에 맞게 조정하세요.</p>
+                <p>• {t('mandalaSettings.tip1')}</p>
+                <p>• {t('mandalaSettings.tip2')}</p>
+                <p>• {t('mandalaSettings.tip3')}</p>
+                <p>• {t('mandalaSettings.tip4')}</p>
               </CardContent>
             </Card>
           </div>
@@ -456,17 +471,16 @@ export default function MandalaSettings() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-amber-500" />
-              기존 만다라트 덮어쓰기
+              {t('mandalaSettings.overwriteTitle')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              이미 편집된 만다라트가 있습니다. "{selectedTemplate?.name}" 템플릿을 적용하면 
-              현재 중앙 목표와 8개 주제가 모두 덮어쓰기됩니다. 계속하시겠습니까?
+              {t('mandalaSettings.overwriteDesc', { name: selectedTemplate?.name })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => selectedTemplate && applyTemplate(selectedTemplate)}>
-              적용하기
+              {t('common.apply')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { VideoPlayerModal } from './VideoPlayerModal';
+import { useTranslation } from 'react-i18next';
 
 interface InsightCardItemProps {
   card: InsightCard;
@@ -25,6 +26,7 @@ export function InsightCardItem({
   onSave,
   isDraggable = true,
 }: InsightCardItemProps) {
+  const { t } = useTranslation();
   const [isFlipped, setIsFlipped] = useState(false);
   const [note, setNote] = useState(card.userNote || '');
   const [isDragOver, setIsDragOver] = useState(false);
@@ -128,7 +130,7 @@ export function InsightCardItem({
           link +
           note.slice(cursorPos);
         setNote(newNote);
-        toast.success('타임스탬프 링크가 추가되었습니다');
+        toast.success(t('videoPlayer.timestampLinkAdded'));
         return true;
       }
     }
@@ -152,7 +154,7 @@ export function InsightCardItem({
           link +
           note.slice(cursorPos);
         setNote(newNote);
-        toast.success('타임스탬프 링크가 추가되었습니다');
+        toast.success(t('videoPlayer.timestampLinkAdded'));
         return true;
       }
 
@@ -295,7 +297,7 @@ export function InsightCardItem({
                 <Play className="w-6 h-6 text-primary-foreground fill-primary-foreground" />
               </div>
               <span className="absolute bottom-12 text-xs text-white/80 font-medium px-2 py-1 rounded-full bg-black/50 backdrop-blur-sm">
-                Shift+Click 재생
+                {t('insightCard.shiftClickToPlay')}
               </span>
             </div>
 
@@ -344,7 +346,7 @@ export function InsightCardItem({
                               openVideoModal(url);
                             }}
                             className="text-primary hover:underline inline-flex items-center gap-0.5 cursor-pointer"
-                            title="클릭하여 앱 내 재생"
+                            title={t('insightCard.clickToPlayInApp')}
                           >
                             {match[1]}
                             <Play className="w-2.5 h-2.5" />
@@ -359,7 +361,7 @@ export function InsightCardItem({
 
                       return parts.length > 0 ? parts : text;
                     })()
-                  : '메모 없음 - 클릭하여 작성'}
+                  : t('insightCard.noMemo')}
               </div>
             </div>
 
@@ -404,7 +406,7 @@ export function InsightCardItem({
                   <MessageSquare className="w-3 h-3 text-primary" />
                 </div>
                 <span className="text-xs font-semibold text-foreground whitespace-nowrap">
-                  메모 편집
+                  {t('insightCard.memoEdit')}
                 </span>
               </div>
               <span className="text-[10px] text-muted-foreground flex items-center gap-1 bg-surface-sunken px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
@@ -434,7 +436,7 @@ export function InsightCardItem({
                   onDragLeave={handleTextareaDragLeave}
                   onDrop={handleTextareaDrop}
                   autoFocus
-                  placeholder="유튜브 타임스탬프를 드래그하여 추가하세요."
+                  placeholder={t('insightCard.dragTimestamp')}
                   className="w-full h-full resize-none text-xs bg-surface-mid border-border/30 rounded-xl focus:ring-primary/30 focus:border-primary/40 transition-all duration-200"
                 />
               ) : (
@@ -473,7 +475,7 @@ export function InsightCardItem({
                               openVideoModal(url);
                             }}
                             className="text-primary hover:underline inline-flex items-center gap-0.5 cursor-pointer"
-                            title="클릭하여 앱 내 재생"
+                            title={t('insightCard.clickToPlayInApp')}
                           >
                             {match[1]}
                             <Play className="w-3 h-3" />
@@ -495,7 +497,9 @@ export function InsightCardItem({
                       return parts.length > 0 ? <div key={lineIdx}>{parts}</div> : null;
                     })
                   ) : (
-                    <span className="text-muted-foreground">클릭하여 메모 작성...</span>
+                    <span className="text-muted-foreground">
+                      {t('insightCard.clickToWriteNote')}
+                    </span>
                   )}
                 </div>
               )}
@@ -526,10 +530,10 @@ export function InsightCardItem({
 
                   const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
                   window.open(twitterUrl, '_blank', 'noopener,noreferrer,width=550,height=420');
-                  toast.success('X 공유 창이 열렸습니다');
+                  toast.success(t('videoPlayer.xShareOpened'));
                 }}
                 className="h-7 w-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-mid transition-colors"
-                title="X에 공유"
+                title={t('videoPlayer.shareOnX')}
               >
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />

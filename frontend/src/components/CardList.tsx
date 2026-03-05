@@ -1,9 +1,10 @@
-import { useMemo, useState, useCallback, useEffect, useRef } from "react";
-import { InsightCard } from "@/types/mandala";
-import { InsightCardItem } from "./InsightCardItem";
-import { FileVideo, Move, Clock, Check, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useDragSelect } from "@/hooks/useDragSelect";
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { InsightCard } from '@/types/mandala';
+import { InsightCardItem } from './InsightCardItem';
+import { FileVideo, Move, Clock, Check, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useDragSelect } from '@/hooks/useDragSelect';
 
 interface CardListProps {
   cards: InsightCard[];
@@ -16,22 +17,23 @@ interface CardListProps {
   onDeleteCards?: (cardIds: string[]) => void;
 }
 
-export function CardList({ 
-  cards, 
-  title, 
-  onCardClick, 
-  onCardDragStart, 
+export function CardList({
+  cards,
+  title,
+  onCardClick,
+  onCardDragStart,
   onMultiCardDragStart,
-  onSaveNote, 
+  onSaveNote,
   onCardsReorder,
-  onDeleteCards
+  onDeleteCards,
 }: CardListProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
-  
+
   // Sort cards: by sortOrder if available, otherwise by createdAt (newest first)
   const sortedCards = useMemo(() => {
     return [...cards].sort((a, b) => {
@@ -48,9 +50,9 @@ export function CardList({
 
   // Clear selection when cards change (e.g., after moving cards)
   useEffect(() => {
-    setSelectedCardIds(prev => {
-      const cardIdSet = new Set(cards.map(c => c.id));
-      const filtered = new Set([...prev].filter(id => cardIdSet.has(id)));
+    setSelectedCardIds((prev) => {
+      const cardIdSet = new Set(cards.map((c) => c.id));
+      const filtered = new Set([...prev].filter((id) => cardIdSet.has(id)));
       if (filtered.size !== prev.size) {
         return filtered;
       }
@@ -84,13 +86,18 @@ export function CardList({
   }, []);
 
   // Drag select hook
-  const handleDragSelectChange = useCallback((selectedIndices: number[]) => {
-    const newSelectedIds = new Set(selectedIndices.map(idx => sortedCards[idx]?.id).filter(Boolean));
-    setSelectedCardIds(prev => {
-      const combined = new Set([...prev, ...newSelectedIds]);
-      return combined;
-    });
-  }, [sortedCards]);
+  const handleDragSelectChange = useCallback(
+    (selectedIndices: number[]) => {
+      const newSelectedIds = new Set(
+        selectedIndices.map((idx) => sortedCards[idx]?.id).filter(Boolean)
+      );
+      setSelectedCardIds((prev) => {
+        const combined = new Set([...prev, ...newSelectedIds]);
+        return combined;
+      });
+    },
+    [sortedCards]
+  );
 
   const { selectionStyle, justFinishedDrag } = useDragSelect({
     containerRef: gridRef,
@@ -103,7 +110,7 @@ export function CardList({
     e.preventDefault();
     e.stopPropagation();
     // Only handle internal card reorder
-    if (e.dataTransfer.types.includes("application/card-reorder")) {
+    if (e.dataTransfer.types.includes('application/card-reorder')) {
       setDragOverId(cardId);
     }
   }, []);
@@ -112,52 +119,56 @@ export function CardList({
     setDragOverId(null);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent, targetCardId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const draggedCardId = e.dataTransfer.getData("application/card-reorder");
-    if (!draggedCardId || draggedCardId === targetCardId) {
-      setDragOverId(null);
-      return;
-    }
-    
-    const draggedIndex = sortedCards.findIndex(c => c.id === draggedCardId);
-    const targetIndex = sortedCards.findIndex(c => c.id === targetCardId);
-    
-    if (draggedIndex === -1 || targetIndex === -1) {
-      setDragOverId(null);
-      return;
-    }
-    
-    // Create new order
-    const newCards = [...sortedCards];
-    const [removed] = newCards.splice(draggedIndex, 1);
-    newCards.splice(targetIndex, 0, removed);
-    
-    // Assign sortOrder to maintain custom order
-    const reorderedCards = newCards.map((card, index) => ({
-      ...card,
-      sortOrder: index
-    }));
-    
-    onCardsReorder?.(reorderedCards);
-    setDragOverId(null);
-  }, [sortedCards, onCardsReorder]);
+  const handleDrop = useCallback(
+    (e: React.DragEvent, targetCardId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-  const handleCardInternalDragStart = useCallback((e: React.DragEvent, card: InsightCard) => {
-    // If dragging a selected card and multiple are selected, drag all
-    if (selectedCardIds.has(card.id) && selectedCardIds.size > 1) {
-      const selectedCards = sortedCards.filter(c => selectedCardIds.has(c.id));
-      const cardIds = selectedCards.map(c => c.id);
-      e.dataTransfer.setData("application/multi-card-ids", JSON.stringify(cardIds));
-      e.dataTransfer.setData("application/card-id", card.id);
-      e.dataTransfer.setData("text/plain", selectedCards.map(c => c.videoUrl).join('\n'));
-      e.dataTransfer.effectAllowed = "move";
-      
-      // Create professional drag image with stacked cards effect
-      const dragImage = document.createElement('div');
-      dragImage.style.cssText = `
+      const draggedCardId = e.dataTransfer.getData('application/card-reorder');
+      if (!draggedCardId || draggedCardId === targetCardId) {
+        setDragOverId(null);
+        return;
+      }
+
+      const draggedIndex = sortedCards.findIndex((c) => c.id === draggedCardId);
+      const targetIndex = sortedCards.findIndex((c) => c.id === targetCardId);
+
+      if (draggedIndex === -1 || targetIndex === -1) {
+        setDragOverId(null);
+        return;
+      }
+
+      // Create new order
+      const newCards = [...sortedCards];
+      const [removed] = newCards.splice(draggedIndex, 1);
+      newCards.splice(targetIndex, 0, removed);
+
+      // Assign sortOrder to maintain custom order
+      const reorderedCards = newCards.map((card, index) => ({
+        ...card,
+        sortOrder: index,
+      }));
+
+      onCardsReorder?.(reorderedCards);
+      setDragOverId(null);
+    },
+    [sortedCards, onCardsReorder]
+  );
+
+  const handleCardInternalDragStart = useCallback(
+    (e: React.DragEvent, card: InsightCard) => {
+      // If dragging a selected card and multiple are selected, drag all
+      if (selectedCardIds.has(card.id) && selectedCardIds.size > 1) {
+        const selectedCards = sortedCards.filter((c) => selectedCardIds.has(c.id));
+        const cardIds = selectedCards.map((c) => c.id);
+        e.dataTransfer.setData('application/multi-card-ids', JSON.stringify(cardIds));
+        e.dataTransfer.setData('application/card-id', card.id);
+        e.dataTransfer.setData('text/plain', selectedCards.map((c) => c.videoUrl).join('\n'));
+        e.dataTransfer.effectAllowed = 'move';
+
+        // Create professional drag image with stacked cards effect
+        const dragImage = document.createElement('div');
+        dragImage.style.cssText = `
         position: absolute; 
         left: -9999px; 
         display: flex; 
@@ -166,25 +177,25 @@ export function CardList({
         width: 140px;
         height: 100px;
       `;
-      
-      // Create stacked cards container
-      const stackContainer = document.createElement('div');
-      stackContainer.style.cssText = `
+
+        // Create stacked cards container
+        const stackContainer = document.createElement('div');
+        stackContainer.style.cssText = `
         position: relative;
         width: 100px;
         height: 70px;
         transform-style: preserve-3d;
         perspective: 400px;
       `;
-      
-      const maxThumbs = Math.min(selectedCards.length, 3);
-      for (let i = maxThumbs - 1; i >= 0; i--) {
-        const cardWrapper = document.createElement('div');
-        const offset = i * 6;
-        const rotation = (i - 1) * -3;
-        const scale = 1 - (i * 0.02);
-        
-        cardWrapper.style.cssText = `
+
+        const maxThumbs = Math.min(selectedCards.length, 3);
+        for (let i = maxThumbs - 1; i >= 0; i--) {
+          const cardWrapper = document.createElement('div');
+          const offset = i * 6;
+          const rotation = (i - 1) * -3;
+          const scale = 1 - i * 0.02;
+
+          cardWrapper.style.cssText = `
           position: absolute;
           left: ${offset}px;
           top: ${offset}px;
@@ -200,34 +211,34 @@ export function CardList({
           background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
           z-index: ${maxThumbs - i};
         `;
-        
-        if (selectedCards[i]) {
-          const thumb = document.createElement('img');
-          thumb.src = selectedCards[i].thumbnail;
-          thumb.style.cssText = `
+
+          if (selectedCards[i]) {
+            const thumb = document.createElement('img');
+            thumb.src = selectedCards[i].thumbnail;
+            thumb.style.cssText = `
             width: 100%; 
             height: 100%; 
             object-fit: cover;
             filter: brightness(0.95);
           `;
-          cardWrapper.appendChild(thumb);
-          
-          // Add subtle gradient overlay
-          const overlay = document.createElement('div');
-          overlay.style.cssText = `
+            cardWrapper.appendChild(thumb);
+
+            // Add subtle gradient overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
             position: absolute;
             inset: 0;
             background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.4) 100%);
           `;
-          cardWrapper.appendChild(overlay);
+            cardWrapper.appendChild(overlay);
+          }
+
+          stackContainer.appendChild(cardWrapper);
         }
-        
-        stackContainer.appendChild(cardWrapper);
-      }
-      
-      // Create professional count badge
-      const badge = document.createElement('div');
-      badge.style.cssText = `
+
+        // Create professional count badge
+        const badge = document.createElement('div');
+        badge.style.cssText = `
         position: absolute;
         right: -4px;
         top: -8px;
@@ -250,25 +261,25 @@ export function CardList({
         z-index: 100;
         letter-spacing: -0.5px;
       `;
-      badge.textContent = `${selectedCards.length}`;
-      stackContainer.appendChild(badge);
-      
-      dragImage.appendChild(stackContainer);
-      document.body.appendChild(dragImage);
-      e.dataTransfer.setDragImage(dragImage, 60, 45);
-      setTimeout(() => document.body.removeChild(dragImage), 0);
-      
-      onMultiCardDragStart?.(selectedCards);
-    } else {
-      // Single card drag
-      e.dataTransfer.setData("application/card-reorder", card.id);
-      e.dataTransfer.setData("application/card-id", card.id);
-      e.dataTransfer.setData("text/plain", card.videoUrl);
-      e.dataTransfer.effectAllowed = "move";
-      
-      // Create single card drag image
-      const dragImage = document.createElement('div');
-      dragImage.style.cssText = `
+        badge.textContent = `${selectedCards.length}`;
+        stackContainer.appendChild(badge);
+
+        dragImage.appendChild(stackContainer);
+        document.body.appendChild(dragImage);
+        e.dataTransfer.setDragImage(dragImage, 60, 45);
+        setTimeout(() => document.body.removeChild(dragImage), 0);
+
+        onMultiCardDragStart?.(selectedCards);
+      } else {
+        // Single card drag
+        e.dataTransfer.setData('application/card-reorder', card.id);
+        e.dataTransfer.setData('application/card-id', card.id);
+        e.dataTransfer.setData('text/plain', card.videoUrl);
+        e.dataTransfer.effectAllowed = 'move';
+
+        // Create single card drag image
+        const dragImage = document.createElement('div');
+        dragImage.style.cssText = `
         position: absolute; 
         left: -9999px; 
         display: flex; 
@@ -277,9 +288,9 @@ export function CardList({
         width: 120px;
         height: 85px;
       `;
-      
-      const cardWrapper = document.createElement('div');
-      cardWrapper.style.cssText = `
+
+        const cardWrapper = document.createElement('div');
+        cardWrapper.style.cssText = `
         width: 100px;
         height: 64px;
         border-radius: 8px;
@@ -291,85 +302,90 @@ export function CardList({
         background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
         transform: rotate(-2deg);
       `;
-      
-      if (card.thumbnail) {
-        const thumb = document.createElement('img');
-        thumb.src = card.thumbnail;
-        thumb.style.cssText = `
+
+        if (card.thumbnail) {
+          const thumb = document.createElement('img');
+          thumb.src = card.thumbnail;
+          thumb.style.cssText = `
           width: 100%; 
           height: 100%; 
           object-fit: cover;
           filter: brightness(0.95);
         `;
-        cardWrapper.appendChild(thumb);
-        
-        // Add subtle gradient overlay
-        const overlay = document.createElement('div');
-        overlay.style.cssText = `
+          cardWrapper.appendChild(thumb);
+
+          // Add subtle gradient overlay
+          const overlay = document.createElement('div');
+          overlay.style.cssText = `
           position: absolute;
           inset: 0;
           background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.4) 100%);
         `;
-        cardWrapper.appendChild(overlay);
-      }
-      
-      dragImage.appendChild(cardWrapper);
-      document.body.appendChild(dragImage);
-      e.dataTransfer.setDragImage(dragImage, 50, 32);
-      setTimeout(() => document.body.removeChild(dragImage), 0);
-      
-      onCardDragStart?.(card);
-    }
-  }, [selectedCardIds, sortedCards, onCardDragStart, onMultiCardDragStart]);
+          cardWrapper.appendChild(overlay);
+        }
 
-  const handleCardClick = useCallback((e: React.MouseEvent, card: InsightCard, cardIndex: number) => {
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
-      // Ctrl+Shift+Click: range selection
-      e.preventDefault();
-      e.stopPropagation();
-      
-      if (lastSelectedIndex !== null) {
-        const start = Math.min(lastSelectedIndex, cardIndex);
-        const end = Math.max(lastSelectedIndex, cardIndex);
-        const rangeCardIds = sortedCards.slice(start, end + 1).map(c => c.id);
-        
-        setSelectedCardIds(prev => {
+        dragImage.appendChild(cardWrapper);
+        document.body.appendChild(dragImage);
+        e.dataTransfer.setDragImage(dragImage, 50, 32);
+        setTimeout(() => document.body.removeChild(dragImage), 0);
+
+        onCardDragStart?.(card);
+      }
+    },
+    [selectedCardIds, sortedCards, onCardDragStart, onMultiCardDragStart]
+  );
+
+  const handleCardClick = useCallback(
+    (e: React.MouseEvent, card: InsightCard, cardIndex: number) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+        // Ctrl+Shift+Click: range selection
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (lastSelectedIndex !== null) {
+          const start = Math.min(lastSelectedIndex, cardIndex);
+          const end = Math.max(lastSelectedIndex, cardIndex);
+          const rangeCardIds = sortedCards.slice(start, end + 1).map((c) => c.id);
+
+          setSelectedCardIds((prev) => {
+            const next = new Set(prev);
+            rangeCardIds.forEach((id) => next.add(id));
+            return next;
+          });
+        } else {
+          setSelectedCardIds(new Set([card.id]));
+          setLastSelectedIndex(cardIndex);
+        }
+      } else if (e.ctrlKey || e.metaKey) {
+        // Ctrl+Click: toggle selection
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedCardIds((prev) => {
           const next = new Set(prev);
-          rangeCardIds.forEach(id => next.add(id));
+          if (next.has(card.id)) {
+            next.delete(card.id);
+          } else {
+            next.add(card.id);
+          }
           return next;
         });
-      } else {
-        setSelectedCardIds(new Set([card.id]));
         setLastSelectedIndex(cardIndex);
+      } else {
+        // Normal click: clear selection and trigger onClick
+        setSelectedCardIds(new Set());
+        setLastSelectedIndex(null);
+        onCardClick?.(card);
       }
-    } else if (e.ctrlKey || e.metaKey) {
-      // Ctrl+Click: toggle selection
-      e.preventDefault();
-      e.stopPropagation();
-      setSelectedCardIds(prev => {
-        const next = new Set(prev);
-        if (next.has(card.id)) {
-          next.delete(card.id);
-        } else {
-          next.add(card.id);
-        }
-        return next;
-      });
-      setLastSelectedIndex(cardIndex);
-    } else {
-      // Normal click: clear selection and trigger onClick
-      setSelectedCardIds(new Set());
-      setLastSelectedIndex(null);
-      onCardClick?.(card);
-    }
-  }, [lastSelectedIndex, sortedCards, onCardClick]);
+    },
+    [lastSelectedIndex, sortedCards, onCardClick]
+  );
 
   if (cards.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
         <FileVideo className="w-12 h-12 mx-auto mb-3 opacity-50" />
-        <p>아직 저장된 인사이트가 없습니다</p>
-        <p className="text-sm mt-1">유튜브 링크를 드래그하여 추가하세요</p>
+        <p>{t('cards.noInsights')}</p>
+        <p className="text-sm mt-1">{t('cards.dragToAdd')}</p>
       </div>
     );
   }
@@ -390,11 +406,13 @@ export function CardList({
     <div className="space-y-4 animate-fade-in" onClick={handleContainerClick} ref={containerRef}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h3 className="text-lg font-semibold">{title} 인사이트</h3>
+          <h3 className="text-lg font-semibold">
+            {title} {t('cards.insights')}
+          </h3>
           {selectedCardIds.size > 0 && (
             <>
               <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
-                {selectedCardIds.size}개 선택됨
+                {t('cards.selected', { count: selectedCardIds.size })}
               </span>
               <button
                 onClick={(e) => {
@@ -404,7 +422,7 @@ export function CardList({
                   setLastSelectedIndex(null);
                 }}
                 className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
-                title="선택된 카드 삭제"
+                title={t('cards.deleteSelected')}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -414,17 +432,17 @@ export function CardList({
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="w-3 h-3" />
-            <span>최신순</span>
+            <span>{t('cards.latestFirst')}</span>
           </div>
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <Move className="w-3 h-3" />
-            <span>드래그하여 이동</span>
+            <span>{t('cards.dragToMove')}</span>
           </div>
         </div>
       </div>
-      <div 
+      <div
         ref={gridRef}
-        className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center" 
+        className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center"
         style={{ minHeight: 'calc(100vh - 200px)' }}
         onClick={handleContainerClick}
       >
@@ -439,22 +457,23 @@ export function CardList({
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, card.id)}
               className={cn(
-                "w-full transition-all duration-200 rounded-2xl relative",
-                dragOverId === card.id && "ring-2 ring-primary ring-offset-2 ring-offset-background scale-[1.02]"
+                'w-full transition-all duration-200 rounded-2xl relative',
+                dragOverId === card.id &&
+                  'ring-2 ring-primary ring-offset-2 ring-offset-background scale-[1.02]'
               )}
             >
               {isSelected && (
-                <div 
+                <div
                   className="absolute top-2 left-2 z-20 bg-primary rounded-full p-1 cursor-pointer hover:bg-primary/80 transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setSelectedCardIds(prev => {
+                    setSelectedCardIds((prev) => {
                       const next = new Set(prev);
                       next.delete(card.id);
                       return next;
                     });
                   }}
-                  title="선택 해제"
+                  title={t('cards.deselectCard')}
                 >
                   <Check className="w-3 h-3 text-primary-foreground" />
                 </div>

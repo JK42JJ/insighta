@@ -15,6 +15,7 @@ import { Loader2, RefreshCw, Trash2, ExternalLink, AlertCircle } from 'lucide-re
 import type { YouTubePlaylist } from '@/types/youtube';
 import { formatDistanceToNow } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { useTranslation } from 'react-i18next';
 
 interface PlaylistItemProps {
   playlist: YouTubePlaylist;
@@ -31,23 +32,29 @@ export function PlaylistItem({
   isSyncing,
   isDeleting,
 }: PlaylistItemProps) {
+  const { t } = useTranslation();
+
   const lastSyncedText = playlist.last_synced_at
     ? formatDistanceToNow(new Date(playlist.last_synced_at), {
         addSuffix: true,
         locale: ko,
       })
-    : '동기화된 적 없음';
+    : t('playlist.neverSynced');
 
   const statusBadge = () => {
     switch (playlist.sync_status) {
       case 'syncing':
-        return <Badge variant="secondary">동기화 중...</Badge>;
+        return <Badge variant="secondary">{t('playlist.syncing')}</Badge>;
       case 'completed':
-        return <Badge variant="default" className="bg-green-600">완료</Badge>;
+        return (
+          <Badge variant="default" className="bg-green-600">
+            {t('playlist.completed')}
+          </Badge>
+        );
       case 'failed':
-        return <Badge variant="destructive">실패</Badge>;
+        return <Badge variant="destructive">{t('playlist.failed')}</Badge>;
       default:
-        return <Badge variant="outline">대기 중</Badge>;
+        return <Badge variant="outline">{t('playlist.pending')}</Badge>;
     }
   };
 
@@ -63,11 +70,7 @@ export function PlaylistItem({
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-            <svg
-              className="w-6 h-6"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
               <path d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zm0 2v12h16V6H4zm6 3l6 3-6 3V9z" />
             </svg>
           </div>
@@ -78,7 +81,7 @@ export function PlaylistItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <h4 className="font-medium text-sm truncate">
-            {playlist.title || '제목 없음'}
+            {playlist.title || t('playlist.noTitle')}
           </h4>
           <a
             href={playlist.youtube_playlist_url}
@@ -90,7 +93,7 @@ export function PlaylistItem({
           </a>
         </div>
         <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-          <span>{playlist.item_count}개 동영상</span>
+          <span>{t('playlist.videoCount', { count: playlist.item_count })}</span>
           <span>•</span>
           <span>{lastSyncedText}</span>
           {statusBadge()}
@@ -110,7 +113,7 @@ export function PlaylistItem({
           size="icon"
           onClick={() => onSync(playlist.id)}
           disabled={isSyncing || playlist.sync_status === 'syncing'}
-          title="동기화"
+          title={t('playlist.sync')}
         >
           {isSyncing || playlist.sync_status === 'syncing' ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -121,12 +124,7 @@ export function PlaylistItem({
 
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={isDeleting}
-              title="삭제"
-            >
+            <Button variant="ghost" size="icon" disabled={isDeleting} title={t('common.delete')}>
               {isDeleting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -136,19 +134,18 @@ export function PlaylistItem({
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>플레이리스트를 삭제하시겠습니까?</AlertDialogTitle>
+              <AlertDialogTitle>{t('playlist.deleteConfirmTitle')}</AlertDialogTitle>
               <AlertDialogDescription>
-                "{playlist.title}" 플레이리스트가 삭제됩니다.
-                이미 아이디에이션 팔레트에 추가된 동영상은 유지됩니다.
+                {t('playlist.deleteConfirmDesc', { title: playlist.title })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>취소</AlertDialogCancel>
+              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => onDelete(playlist.id)}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                삭제
+                {t('common.delete')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

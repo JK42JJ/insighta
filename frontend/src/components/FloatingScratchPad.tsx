@@ -28,6 +28,7 @@ import {
 } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { useDragSelect } from '@/hooks/useDragSelect';
+import { useTranslation } from 'react-i18next';
 
 export type DockPosition = 'top' | 'bottom' | 'left' | 'right';
 
@@ -52,18 +53,21 @@ interface FloatingScratchPadProps {
   onPositionChange?: (x: number, y: number) => void;
 }
 
-function getTimeLabel(date: Date): string {
+function getTimeLabel(
+  date: Date,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
   const now = new Date();
   const hours = differenceInHours(now, date);
   const days = differenceInDays(now, date);
   const weeks = differenceInWeeks(now, date);
   const months = differenceInMonths(now, date);
 
-  if (hours < 1) return '방금';
-  if (hours < 24) return `${hours}시간`;
-  if (days < 7) return `${days}일`;
-  if (weeks < 4) return `${weeks}주`;
-  if (months < 12) return `${months}개월`;
+  if (hours < 1) return t('time.justNow');
+  if (hours < 24) return t('time.hoursAgo', { count: hours });
+  if (days < 7) return t('time.daysAgo', { count: days });
+  if (weeks < 4) return t('time.weeksAgo', { count: weeks });
+  if (months < 12) return t('time.monthsAgo', { count: months });
   return format(date, 'yy.MM');
 }
 
@@ -94,6 +98,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     }: FloatingScratchPadProps,
     forwardedRef
   ) {
+    const { t } = useTranslation();
     const [position, setPosition] = useState(() => initialPosition ?? { x: 100, y: 100 });
     // Sync position when initialPosition arrives from async Supabase fetch
     useEffect(() => {
@@ -804,7 +809,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 timeSize
               )}
             >
-              {getTimeLabel(new Date(card.createdAt))}
+              {getTimeLabel(new Date(card.createdAt), t)}
             </span>
             {isSelected && (
               <div
@@ -868,7 +873,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               {isDropTarget && (
                 <div className="absolute inset-0 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] pointer-events-none z-10">
                   <span className="text-primary-foreground font-medium text-xs bg-primary/90 px-3 py-1 rounded-full">
-                    드롭하여 추가
+                    {t('ideation.dropToAdd')}
                   </span>
                 </div>
               )}
@@ -881,7 +886,9 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   <GripHorizontal className="w-3 h-3 text-muted-foreground/40" />
                   <div className="flex items-center gap-1.5">
                     <Lightbulb className="w-3.5 h-3.5 text-primary/80" />
-                    <span className="text-xs font-medium text-foreground/80">아이디에이션</span>
+                    <span className="text-xs font-medium text-foreground/80">
+                      {t('ideation.title')}
+                    </span>
                     {cards.length > 0 && (
                       <span className="text-[10px] text-primary/70 font-medium bg-primary/10 px-1.5 py-0.5 rounded-full">
                         {cards.length}
@@ -914,7 +921,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   {cards.length === 0 ? (
                     <div className="flex items-center gap-1.5 text-muted-foreground/60">
                       <Plus className="w-3 h-3" />
-                      <span className="text-xs">유튜브 링크를 드롭하세요</span>
+                      <span className="text-xs">{t('ideation.emptyHint')}</span>
                     </div>
                   ) : (
                     sortedCards.map((card, idx) => renderCardItem(card, idx, true))
@@ -940,7 +947,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   size="icon"
                   className="h-6 w-6 text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 flex-shrink-0"
                   onClick={onToggleFloating}
-                  title="플로팅으로 전환"
+                  title={t('mandala.switchToFloating')}
                 >
                   <Move className="w-3 h-3" />
                 </Button>
@@ -978,7 +985,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
             {isDropTarget && (
               <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] pointer-events-none z-10">
                 <span className="text-primary-foreground font-semibold text-[10px] bg-primary px-2 py-1 rounded-md whitespace-nowrap">
-                  드롭
+                  {t('ideation.dropToAdd')}
                 </span>
               </div>
             )}
@@ -1001,7 +1008,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   size="icon"
                   className="h-4 w-4 text-muted-foreground hover:text-foreground ml-auto"
                   onClick={onToggleFloating}
-                  title="플로팅으로 전환"
+                  title={t('mandala.switchToFloating')}
                 >
                   <Move className="w-2.5 h-2.5" />
                 </Button>
@@ -1030,10 +1037,8 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 {cards.length === 0 ? (
                   <div className="flex flex-col items-center justify-center gap-1 text-muted-foreground py-3 flex-1">
                     <Plus className="w-3 h-3 opacity-50" />
-                    <span className="text-[9px] text-center leading-tight">
-                      링크
-                      <br />
-                      드롭
+                    <span className="text-[9px] text-center leading-tight whitespace-pre-line">
+                      {t('ideation.emptyHintVertical')}
                     </span>
                   </div>
                 ) : (
@@ -1059,7 +1064,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                             loading="lazy"
                           />
                           <span className="absolute bottom-0 right-0 text-[7px] bg-background/80 text-foreground px-0.5 font-medium rounded-tl">
-                            {getTimeLabel(new Date(card.createdAt))}
+                            {getTimeLabel(new Date(card.createdAt), t)}
                           </span>
                           {isSelected && (
                             <div
@@ -1144,16 +1149,16 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               <div className="p-1 rounded-md bg-primary/10">
                 <Lightbulb className="w-3.5 h-3.5 text-primary" />
               </div>
-              <span className="text-xs font-semibold text-foreground">아이디에이션</span>
+              <span className="text-xs font-semibold text-foreground">{t('ideation.title')}</span>
               {cards.length > 0 && (
                 <span className="text-[10px] text-primary font-medium bg-primary/10 px-1.5 py-0.5 rounded">
-                  {cards.length}개
+                  {t('common.items', { count: cards.length })}
                 </span>
               )}
               {selectedCardIds.size > 0 && (
                 <>
                   <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">
-                    {selectedCardIds.size}개 선택됨
+                    {t('common.selected', { count: selectedCardIds.size })}
                   </span>
                   <button
                     onClick={(e) => {
@@ -1164,7 +1169,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
                     className="p-1 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
-                    title="선택된 카드 삭제"
+                    title={t('cards.deleteSelected')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -1190,7 +1195,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 size="icon"
                 className="h-6 w-6 text-muted-foreground hover:text-foreground"
                 onClick={onToggleFloating}
-                title="도킹하기"
+                title={t('mandala.switchToDock')}
               >
                 <X className="w-3.5 h-3.5" />
               </Button>
@@ -1203,7 +1208,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               {isDropTarget && (
                 <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] rounded-xl pointer-events-none z-10">
                   <span className="text-primary-foreground font-semibold text-sm bg-primary px-4 py-2 rounded-lg">
-                    아이디에이션에 드롭
+                    {t('ideation.dropHere')}
                   </span>
                 </div>
               )}
@@ -1211,7 +1216,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               {cards.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <Plus className="w-4 h-4 mr-2 opacity-50" />
-                  <span className="text-sm">유튜브 링크를 드롭하세요</span>
+                  <span className="text-sm">{t('ideation.emptyHint')}</span>
                 </div>
               ) : (
                 <div
