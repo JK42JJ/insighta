@@ -130,10 +130,7 @@ export class YouTubeClient {
 
     return this.oauth2Client.generateAuthUrl({
       access_type: 'offline',
-      scope: [
-        'https://www.googleapis.com/auth/youtube.readonly',
-        'https://www.googleapis.com/auth/youtube.force-ssl',
-      ],
+      scope: ['https://www.googleapis.com/auth/youtube.readonly'],
     });
   }
 
