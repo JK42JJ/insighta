@@ -280,6 +280,10 @@ KNOWN_TYPES = {'pm','backend-dev','frontend-dev','adapter-dev','supabase-dev',
 if agent_type not in KNOWN_TYPES:
     agent_type = 'general'
 
+# Detect stale agents: RUNNING but file not modified in >5 minutes
+if status == 'RUNNING' and (time.time() - mtime) > 300:
+    status = 'STALE'
+
 # FORMAT: status|agent_type|tool_count|elapsed|tools_str|detail|task_desc|files_str
 print(f'{status}|{agent_type}|{tool_count}|{elapsed_total}|{tools_str}|{detail}|{task_desc}|{files_str}')
 " 2>/dev/null || echo "UNKNOWN|general|0|0|||parse error|"
@@ -406,6 +410,9 @@ render_agents() {
       done=$((done + 1))
       echo -e "  ${G}✓${NC} ${badge} ${D}${short_id}${NC}  ${D}${time_str}${NC}  tools:${BD}${tool_count}${NC}  ${D}[${tools_str}]${NC}"
       [ -n "$task_desc" ] && echo -e "    ${D}└─ ${task_desc:0:60}${NC}"
+    elif [ "$status" = "STALE" ]; then
+      done=$((done + 1))
+      echo -e "  ${D}✗${NC} ${badge} ${D}${short_id}${NC}  ${D}${time_str}${NC}  tools:${BD}${tool_count}${NC}  ${R}(stale)${NC}"
     elif [ "$status" = "RUNNING" ]; then
       running=$((running + 1))
       echo -e "  ${Y}●${NC} ${badge} ${D}${short_id}${NC}  ${Y}${time_str}${NC}  tools:${BD}${tool_count}${NC}  ${D}[${tools_str}]${NC}"
