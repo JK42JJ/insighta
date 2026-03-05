@@ -25,6 +25,11 @@ import {
   SourceCapabilities,
 } from '../../src/adapters/DataSourceAdapter';
 
+// Provide dummy YouTube credentials for adapter construction in CI
+if (!process.env['YOUTUBE_API_KEY']) {
+  process.env['YOUTUBE_API_KEY'] = 'test-youtube-api-key';
+}
+
 describe('AdapterFactory', () => {
   const mockConfig: AdapterConfig = {
     sourceType: 'youtube',

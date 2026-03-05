@@ -17,6 +17,11 @@ import {
   SourceCapabilities,
 } from '../../src/adapters/DataSourceAdapter';
 
+// Provide dummy YouTube credentials for adapter construction in CI
+if (!process.env['YOUTUBE_API_KEY']) {
+  process.env['YOUTUBE_API_KEY'] = 'test-youtube-api-key';
+}
+
 describe('AdapterRegistry', () => {
   let registry: AdapterRegistry;
   let youtubeAdapter: YouTubeAdapter;
