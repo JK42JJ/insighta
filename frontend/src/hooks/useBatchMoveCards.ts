@@ -15,6 +15,7 @@ import { localCardsKeys } from './useLocalCards';
 import { youtubeSyncKeys } from './useYouTubeSync';
 import type { InsightCard } from '@/types/mandala';
 import type { LocalCardsResponse } from '@/types/local-cards';
+import type { UserVideoStateWithVideo } from '@/types/youtube';
 import { detectCardSource, type CardSource } from '@/lib/cardUtils';
 
 interface BatchMoveItem {
@@ -138,7 +139,18 @@ export function useBatchMoveCards() {
         };
       });
 
-      // 2. 5초 후 백그라운드 리프레시 (데이터 정합성 보장, 시각적 영향 없음)
+      // 2. ideationVideos 캐시에서 이동된 synced 카드 즉시 제거
+      const movedSyncedIds = new Set(
+        items.filter((i) => i.source === 'synced').map((i) => i.card.id)
+      );
+      if (movedSyncedIds.size > 0) {
+        queryClient.setQueryData<UserVideoStateWithVideo[]>(
+          youtubeSyncKeys.ideationVideos,
+          (prev) => prev?.filter((v) => !movedSyncedIds.has(v.id))
+        );
+      }
+
+      // 3. 5초 후 백그라운드 리프레시 (데이터 정합성 보장, 시각적 영향 없음)
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
         queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.ideationVideos });

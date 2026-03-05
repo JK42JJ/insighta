@@ -244,14 +244,20 @@ export function useUpdateVideoState() {
         youtubeSyncKeys.ideationVideos
       );
 
-      // 위치 변경은 이미 optimistic setState로 처리됨 — 캐시 업데이트 스킵
-      const isPositionChange =
-        'cell_index' in updates || 'level_id' in updates || 'is_in_ideation' in updates;
-      if (previous && !isPositionChange) {
-        queryClient.setQueryData<UserVideoStateWithVideo[]>(
-          youtubeSyncKeys.ideationVideos,
-          (prev) => prev?.map((item) => (item.id === videoStateId ? { ...item, ...updates } : item))
-        );
+      if (previous) {
+        // 아이디에이션에서 만다라로 이동하는 경우: 캐시에서 즉시 제거
+        if (updates.is_in_ideation === false) {
+          queryClient.setQueryData<UserVideoStateWithVideo[]>(
+            youtubeSyncKeys.ideationVideos,
+            (prev) => prev?.filter((item) => item.id !== videoStateId)
+          );
+        } else {
+          queryClient.setQueryData<UserVideoStateWithVideo[]>(
+            youtubeSyncKeys.ideationVideos,
+            (prev) =>
+              prev?.map((item) => (item.id === videoStateId ? { ...item, ...updates } : item))
+          );
+        }
       }
 
       return { previous };
