@@ -1,9 +1,11 @@
+import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 
 const Privacy = () => {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <div className="flex-1 p-8 max-w-3xl mx-auto w-full">
+      <Header />
+      <div className="flex-1 p-4 sm:p-8 max-w-3xl mx-auto w-full">
         <h1 className="text-3xl font-bold mb-6">Privacy Policy</h1>
         <p className="text-muted-foreground mb-4">Last updated: March 5, 2026</p>
 
@@ -26,7 +28,10 @@ const Privacy = () => {
             <li>
               <strong>YouTube Data</strong>: Playlist metadata, video titles, descriptions, and
               thumbnails from your YouTube playlists (read-only access via{' '}
-              <code>youtube.readonly</code> scope).
+              <code className="bg-muted text-muted-foreground px-1 py-0.5 rounded text-sm font-mono">
+                youtube.readonly
+              </code>{' '}
+              scope).
             </li>
             <li>
               <strong>User-Generated Content</strong>: Notes, cards, and settings you create within
@@ -60,6 +65,7 @@ const Privacy = () => {
               className="text-primary underline"
             >
               YouTube Terms of Service
+              <span className="sr-only"> (opens in new tab)</span>
             </a>{' '}
             and the{' '}
             <a
@@ -69,12 +75,17 @@ const Privacy = () => {
               className="text-primary underline"
             >
               Google Privacy Policy
+              <span className="sr-only"> (opens in new tab)</span>
             </a>
             .
           </p>
           <p className="mt-2">
-            We request <code>youtube.readonly</code> access to read your playlist and video
-            metadata. We never modify or delete any YouTube content.
+            We request{' '}
+            <code className="bg-muted text-muted-foreground px-1 py-0.5 rounded text-sm font-mono">
+              youtube.readonly
+            </code>{' '}
+            access to read your playlist and video metadata. We never modify or delete any YouTube
+            content.
           </p>
         </section>
 
@@ -111,6 +122,7 @@ const Privacy = () => {
                 className="text-primary underline"
               >
                 Google Account Permissions
+                <span className="sr-only"> (opens in new tab)</span>
               </a>
               .
             </li>
@@ -123,6 +135,7 @@ const Privacy = () => {
             For privacy-related questions, contact:{' '}
             <a href="mailto:jamesjk4242@gmail.com" className="text-primary underline">
               jamesjk4242@gmail.com
+              <span className="sr-only"> (opens email client)</span>
             </a>
           </p>
         </section>

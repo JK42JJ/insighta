@@ -30,7 +30,11 @@
     "termsOfService": "Terms of Service",
     "privacyPolicy": "Privacy Policy",
     "noAccount": "계정이 없으신가요?",
-    "signUp": "가입하기"
+    "signUp": "가입하기",
+    "goHome": "홈으로 이동",
+    "openUserMenu": "사용자 메뉴 열기",
+    "switchToLight": "라이트 모드로 전환",
+    "switchToDark": "다크 모드로 전환"
   },
   "login": {
     "subtitle": "만다라트 기반 YouTube 아카이브",
@@ -412,5 +416,11 @@
   "draggableCard": {
     "shareOnX": "X에 공유",
     "viewOnYouTube": "YouTube에서 보기"
+  },
+  "footer": {
+    "brand": "Insighta",
+    "termsOfService": "서비스 이용약관",
+    "privacyPolicy": "개인정보처리방침",
+    "allRightsReserved": "All rights reserved."
   }
 }

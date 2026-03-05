@@ -1,9 +1,11 @@
+import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 
 const Terms = () => {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <div className="flex-1 p-8 max-w-3xl mx-auto w-full">
+      <Header />
+      <div className="flex-1 p-4 sm:p-8 max-w-3xl mx-auto w-full">
         <h1 className="text-3xl font-bold mb-6">Terms of Service</h1>
         <p className="text-muted-foreground mb-4">Last updated: March 5, 2026</p>
 
@@ -45,6 +47,7 @@ const Terms = () => {
               className="text-primary underline"
             >
               YouTube Terms of Service
+              <span className="sr-only"> (opens in new tab)</span>
             </a>
             .
           </p>
@@ -101,6 +104,7 @@ const Terms = () => {
             For questions about these terms, contact:{' '}
             <a href="mailto:jamesjk4242@gmail.com" className="text-primary underline">
               jamesjk4242@gmail.com
+              <span className="sr-only"> (opens email client)</span>
             </a>
           </p>
         </section>
