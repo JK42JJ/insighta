@@ -13,9 +13,10 @@ import {
   FileText,
   Shield,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -37,7 +38,8 @@ export function Header({ onNavigateHome }: HeaderProps) {
   const { t, i18n } = useTranslation();
   const { isLoggedIn, isLoading, userName, userEmail, userAvatar, signInWithGoogle, signOut } =
     useAuth();
-  const [isDark, setIsDark] = useState(false);
+  const { theme, setTheme } = useTheme();
+  const isDark = theme === 'dark';
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -64,15 +66,8 @@ export function Header({ onNavigateHome }: HeaderProps) {
     }
   };
 
-  useEffect(() => {
-    const isDarkMode = document.documentElement.classList.contains('dark');
-    setIsDark(isDarkMode);
-  }, []);
-
   const toggleTheme = () => {
-    const newIsDark = !isDark;
-    setIsDark(newIsDark);
-    document.documentElement.classList.toggle('dark', newIsDark);
+    setTheme(isDark ? 'light' : 'dark');
   };
 
   const toggleLanguage = () => {
@@ -92,7 +87,8 @@ export function Header({ onNavigateHome }: HeaderProps) {
         <div className="flex items-center gap-4">
           <button
             onClick={onNavigateHome}
-            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+            aria-label={t('header.goHome')}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-xl"
           >
             <div
               className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center"
@@ -119,8 +115,9 @@ export function Header({ onNavigateHome }: HeaderProps) {
             onClick={onNavigateHome}
             className="rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
           >
-            <Home className="w-4 h-4" />
+            <Home className="w-4 h-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t('header.home')}</span>
+            <span className="sr-only sm:hidden">{t('header.home')}</span>
           </Button>
 
           {/* Mandala Settings Button */}
@@ -130,19 +127,26 @@ export function Header({ onNavigateHome }: HeaderProps) {
             onClick={() => navigate('/settings/mandala')}
             className="rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
           >
-            <LayoutGrid className="w-4 h-4" />
+            <LayoutGrid className="w-4 h-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t('header.mandalaDesign')}</span>
+            <span className="sr-only sm:hidden">{t('header.mandalaDesign')}</span>
           </Button>
         </div>
 
         <div className="flex items-center gap-3">
           {isLoading ? (
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            <>
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              <span className="sr-only">{t('common.loading')}</span>
+            </>
           ) : isLoggedIn ? (
             /* Profile Dropdown */
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 p-1 rounded-xl hover:bg-surface-light transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50">
+                <button
+                  aria-label={t('header.openUserMenu')}
+                  className="flex items-center gap-2 p-1 rounded-xl hover:bg-surface-light transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                >
                   <Avatar className="w-8 h-8 border-2 border-primary/20">
                     <AvatarImage src={userAvatar ?? undefined} alt={userName || 'User'} />
                     <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
@@ -162,41 +166,36 @@ export function Header({ onNavigateHome }: HeaderProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-border/50" />
-                <DropdownMenuItem
-                  className="gap-2 cursor-pointer hover:bg-surface-light"
-                  onClick={() => navigate('/profile')}
-                >
-                  <User className="w-4 h-4" />
-                  <span>{t('header.profile')}</span>
+                <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
+                  <Link to="/profile">
+                    <User className="w-4 h-4" />
+                    <span>{t('header.profile')}</span>
+                  </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="gap-2 cursor-pointer hover:bg-surface-light"
-                  onClick={() => navigate('/subscription')}
-                >
-                  <CreditCard className="w-4 h-4" />
-                  <span>{t('header.subscription')}</span>
+                <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
+                  <Link to="/subscription">
+                    <CreditCard className="w-4 h-4" />
+                    <span>{t('header.subscription')}</span>
+                  </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="gap-2 cursor-pointer hover:bg-surface-light"
-                  onClick={() => navigate('/settings')}
-                >
-                  <Settings className="w-4 h-4" />
-                  <span>{t('header.settings')}</span>
+                <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
+                  <Link to="/settings">
+                    <Settings className="w-4 h-4" />
+                    <span>{t('header.settings')}</span>
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-border/50" />
-                <DropdownMenuItem
-                  className="gap-2 cursor-pointer hover:bg-surface-light"
-                  onClick={() => navigate('/terms')}
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>{t('header.termsOfService')}</span>
+                <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
+                  <Link to="/terms">
+                    <FileText className="w-4 h-4" />
+                    <span>{t('header.termsOfService')}</span>
+                  </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="gap-2 cursor-pointer hover:bg-surface-light"
-                  onClick={() => navigate('/privacy')}
-                >
-                  <Shield className="w-4 h-4" />
-                  <span>{t('header.privacyPolicy')}</span>
+                <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
+                  <Link to="/privacy">
+                    <Shield className="w-4 h-4" />
+                    <span>{t('header.privacyPolicy')}</span>
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-border/50" />
                 <DropdownMenuItem
@@ -235,7 +234,8 @@ export function Header({ onNavigateHome }: HeaderProps) {
               <div className="hidden sm:flex items-center gap-1 text-sm text-muted-foreground">
                 <span>{t('header.noAccount')}</span>
                 <button
-                  className="text-primary hover:underline font-medium"
+                  type="button"
+                  className="text-primary hover:underline font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-sm"
                   onClick={handleLogin}
                   disabled={isSigningIn}
                 >
@@ -250,6 +250,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
             variant="ghost"
             size="sm"
             onClick={toggleLanguage}
+            aria-label={i18n.language === 'ko' ? 'Switch to English' : '한국어로 전환'}
             className="rounded-xl hover:bg-surface-light transition-all duration-200 text-xs font-medium px-2"
           >
             {i18n.language === 'ko' ? 'EN' : 'KO'}
@@ -260,6 +261,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
             variant="ghost"
             size="icon"
             onClick={toggleTheme}
+            aria-label={isDark ? t('header.switchToLight') : t('header.switchToDark')}
             className="rounded-xl hover:bg-surface-light transition-all duration-200"
             style={{ boxShadow: 'var(--shadow-sm)' }}
           >
