@@ -12,10 +12,12 @@ import { ReactNode } from 'react';
 
 // Mock Supabase client
 const mockGetSession = vi.fn();
+const mockRefreshSession = vi.fn();
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     auth: {
       getSession: () => mockGetSession(),
+      refreshSession: () => mockRefreshSession(),
     },
   },
 }));
@@ -148,6 +150,7 @@ describe('YouTube Sync Hooks', () => {
       data: { session: mockSession },
       error: null,
     });
+    mockRefreshSession.mockResolvedValue({ data: { session: null }, error: null });
 
     originalFetch = global.fetch;
     global.fetch = vi.fn();
@@ -338,7 +341,7 @@ describe('YouTube Sync Hooks', () => {
         })
       );
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: youtubeSyncKeys.playlists });
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: youtubeSyncKeys.ideationVideos });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: youtubeSyncKeys.allVideoStates });
     });
 
     it('should handle sync error', async () => {
@@ -583,14 +586,31 @@ describe('YouTube Sync Hooks', () => {
   // ============================================
 
   describe('useUpdateVideoState', () => {
-    it('should update video state successfully', async () => {
+    it('should update video state successfully with optimistic update', async () => {
+      const existingState = {
+        id: 'state-1',
+        user_id: 'test-user-id',
+        video_id: 'video-1',
+        is_watched: false,
+        watch_position_seconds: 0,
+        is_in_ideation: true,
+        user_note: 'Old note',
+        cell_index: 0,
+        level_id: 'root',
+        sort_order: 0,
+        added_to_ideation_at: '2024-03-01T00:00:00Z',
+        created_at: '2024-03-01T00:00:00Z',
+        updated_at: '2024-03-01T00:00:00Z',
+      };
+
       (global.fetch as Mock).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({}),
       });
 
       const queryClient = createTestQueryClient();
-      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+      // Pre-populate the allVideoStates cache so onMutate can apply optimistic update
+      queryClient.setQueryData(youtubeSyncKeys.allVideoStates, [existingState]);
 
       const { result } = renderHook(() => useUpdateVideoState(), {
         wrapper: createWrapper(queryClient),
@@ -606,6 +626,7 @@ describe('YouTube Sync Hooks', () => {
         });
       });
 
+      // Verify the API was called correctly
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining('action=update-video-state'),
         expect.objectContaining({
@@ -619,7 +640,15 @@ describe('YouTube Sync Hooks', () => {
           }),
         })
       );
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: youtubeSyncKeys.ideationVideos });
+
+      // Verify the optimistic update was applied to the allVideoStates cache
+      const cachedStates = queryClient.getQueryData<typeof existingState[]>(
+        youtubeSyncKeys.allVideoStates
+      );
+      expect(cachedStates).toBeDefined();
+      const updatedState = cachedStates?.find((s) => s.id === 'state-1');
+      expect(updatedState?.is_watched).toBe(true);
+      expect(updatedState?.user_note).toBe('Updated note');
     });
 
     it('should update cell_index and sort_order', async () => {
