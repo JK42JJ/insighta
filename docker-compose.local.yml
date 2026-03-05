@@ -1,12 +1,12 @@
 version: '3.9'
 
 # =============================================================================
-# TubeArchive - Local Development with Supabase
+# Insighta - Local Development with Supabase
 # =============================================================================
 # Usage:
 #   1. Ensure Supabase is running:
 #      cd ~/cursor/superbase && docker compose -f docker-compose.dev.yml --env-file .env.dev up -d
-#   2. Start TubeArchive:
+#   2. Start Insighta:
 #      ./scripts/dev-docker.sh start
 #   Or manually:
 #      docker compose -f docker-compose.local.yml up -d --build
@@ -20,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: tubearchive-api-local
+    container_name: insighta-api-local
     restart: unless-stopped
     command: ["api"]
     ports:
@@ -44,7 +44,7 @@ services:
       start_period: 60s
     networks:
       - supabase-dev_supabase-dev  # Join Supabase network for DB access
-      - tubearchive-local
+      - insighta-local
 
   # ---------------------------------------------------------------------------
   # Frontend (React/Vite with Nginx)
@@ -57,9 +57,9 @@ services:
         - VITE_API_URL=/api
         - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-http://localhost:8000}
         - VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzY2MjI3MDk2LCJleHAiOjE5MjM5MDcwOTZ9._PPvvvOcDKL3jmTJqVhstKC4g7fJg_EjjKDdQA43mSA}
-        - VITE_APP_NAME=${VITE_APP_NAME:-TubeArchive (Docker Dev)}
+        - VITE_APP_NAME=${VITE_APP_NAME:-Insighta (Docker Dev)}
         - VITE_APP_VERSION=${VITE_APP_VERSION:-1.0.0-dev}
-    container_name: tubearchive-frontend-local
+    container_name: insighta-frontend-local
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-8081}:8081"
@@ -76,7 +76,7 @@ services:
       start_period: 10s
     networks:
       - supabase-dev_supabase-dev
-      - tubearchive-local
+      - insighta-local
 
   # ---------------------------------------------------------------------------
   # Scheduler Daemon (Optional)
@@ -87,7 +87,7 @@ services:
   #   build:
   #     context: .
   #     dockerfile: Dockerfile
-  #   container_name: tubearchive-scheduler-local
+  #   container_name: insighta-scheduler-local
   #   restart: unless-stopped
   #   command: ["scheduler"]
   #   env_file:
@@ -103,7 +103,7 @@ services:
   #       condition: service_healthy
   #   networks:
   #     - supabase-dev_supabase-dev
-  #     - tubearchive-local
+  #     - insighta-local
 
 # =============================================================================
 # Volumes
@@ -122,6 +122,6 @@ networks:
   # This network is created by Supabase docker-compose
   supabase-dev_supabase-dev:
     external: true
-  # Internal network for TubeArchive services
-  tubearchive-local:
+  # Internal network for Insighta services
+  insighta-local:
     driver: bridge

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: YouTube Playlist Sync API
-  description: REST API for YouTube playlist synchronization and learning management
+  title: Insighta API
+  description: REST API for personal knowledge management with YouTube playlist synchronization
   version: 1.0.0
   contact:
     name: API Support

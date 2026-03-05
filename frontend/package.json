@@ -1,9 +1,9 @@
 {
-  "name": "tubearchive-frontend",
+  "name": "insighta-frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.3.0",
   "type": "module",
-  "description": "TubeArchive Frontend - React/Vite application for YouTube playlist management",
+  "description": "Insighta Frontend - React/Vite application for personal knowledge management",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

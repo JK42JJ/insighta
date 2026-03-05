@@ -83,24 +83,6 @@ export const MandalaCell = memo(
 
       if (isCenter) return;
 
-      // Debug: log drop data
-      try {
-        const types = Array.from(e.dataTransfer.types || []);
-        const debugCardId = e.dataTransfer.getData('application/card-id');
-        const debugMulti = e.dataTransfer.getData('application/multi-card-ids');
-        const debugUrl =
-          e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
-        // eslint-disable-next-line no-console
-        console.log('[MandalaCell] drop', {
-          index,
-          types,
-          debugCardId,
-          debugMulti,
-          debugUrl,
-          hasFiles: e.dataTransfer.files.length > 0,
-        });
-      } catch {}
-
       const fromCellIndex = e.dataTransfer.getData('application/cell-index');
       if (fromCellIndex) {
         onCellSwap(parseInt(fromCellIndex), index);

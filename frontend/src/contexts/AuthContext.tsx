@@ -27,7 +27,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Get initial session
     const getInitialSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
         if (error) {
           console.error('Error getting session:', error);
           setError(error);
@@ -45,23 +48,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     getInitialSession();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (import.meta.env.DEV) {
         console.log('Auth state changed:', event, session?.user?.email);
-        setSession(session);
-        setUser(session?.user ?? null);
-        setError(null);
-
-        // Handle specific events
-        if (event === 'SIGNED_IN') {
-          console.log('User signed in:', session?.user?.email);
-        } else if (event === 'SIGNED_OUT') {
-          console.log('User signed out');
-        } else if (event === 'TOKEN_REFRESHED') {
-          console.log('Token refreshed');
-        }
       }
-    );
+      setSession(session);
+      setUser(session?.user ?? null);
+      setError(null);
+    });
 
     return () => {
       subscription.unsubscribe();

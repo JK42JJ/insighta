@@ -34,10 +34,11 @@ export async function registerScalar(fastify: FastifyInstance) {
         url: '/documentation/json',
       },
       metaData: {
-        title: 'YouTube Playlist Sync API Reference',
-        description: 'Interactive API documentation for YouTube Playlist Sync service',
-        ogDescription: 'REST API for YouTube playlist synchronization and learning management',
-        ogTitle: 'YouTube Playlist Sync API',
+        title: 'Insighta API Reference',
+        description: 'Interactive API documentation for Insighta',
+        ogDescription:
+          'REST API for personal knowledge management with YouTube playlist synchronization',
+        ogTitle: 'Insighta API',
         ogImage: 'https://example.com/og-image.png',
         twitterCard: 'summary_large_image',
       },

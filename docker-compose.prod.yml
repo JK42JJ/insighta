@@ -1,5 +1,5 @@
 # =============================================================================
-# TubeArchive - Production Docker Compose
+# Insighta - Production Docker Compose
 # =============================================================================
 # Uses pre-built images from GHCR (GitHub Container Registry).
 # EC2 host Nginx handles SSL termination.
@@ -12,7 +12,7 @@ services:
   # ---------------------------------------------------------------------------
   api:
     image: ${API_IMAGE:-ghcr.io/jk42jj/insighta-api:latest}
-    container_name: tubearchive-api
+    container_name: insighta-api
     restart: unless-stopped
     command: ["api"]
     ports:
@@ -42,14 +42,14 @@ services:
         max-size: "10m"
         max-file: "3"
     networks:
-      - tubearchive-network
+      - insighta-network
 
   # ---------------------------------------------------------------------------
   # Frontend (React/Vite with Nginx)
   # ---------------------------------------------------------------------------
   frontend:
     image: ${FRONTEND_IMAGE:-ghcr.io/jk42jj/insighta-frontend:latest}
-    container_name: tubearchive-frontend
+    container_name: insighta-frontend
     restart: unless-stopped
     ports:
       - "127.0.0.1:8081:8081"
@@ -74,7 +74,7 @@ services:
         max-size: "10m"
         max-file: "3"
     networks:
-      - tubearchive-network
+      - insighta-network
 
 # =============================================================================
 # Volumes
@@ -89,5 +89,5 @@ volumes:
 # Networks
 # =============================================================================
 networks:
-  tubearchive-network:
+  insighta-network:
     driver: bridge

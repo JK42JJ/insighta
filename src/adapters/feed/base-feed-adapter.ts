@@ -271,7 +271,7 @@ export abstract class BaseFeedAdapter extends BaseAdapter {
     // Fetch feed content
     const response = await fetch(feedUrl, {
       headers: {
-        'User-Agent': 'TubeArchive/1.0 (+https://github.com/tubearchive)',
+        'User-Agent': 'Insighta/1.0 (+https://github.com/JK42JJ/insighta)',
         Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml',
       },
     });

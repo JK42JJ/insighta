@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * CLI entry point for YouTube Playlist Sync
+ * CLI entry point for Insighta
  *
  * Provides command-line interface for:
  * - import: Import a YouTube playlist
@@ -34,7 +34,7 @@ const program = new Command();
 
 program
   .name('yt-sync')
-  .description('YouTube Playlist Sync CLI')
+  .description('Insighta CLI')
   .version(VERSION)
   .hook('preAction', async () => {
     await connectDatabase();

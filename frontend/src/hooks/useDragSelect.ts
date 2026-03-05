@@ -28,18 +28,21 @@ export function useDragSelect({
   const startClientRef = useRef({ x: 0, y: 0 });
   const DRAG_THRESHOLD = 5; // Minimum pixels to move before starting drag selection
 
-  const getRelativePosition = useCallback((e: MouseEvent) => {
-    if (!containerRef.current) return { x: 0, y: 0 };
-    const rect = containerRef.current.getBoundingClientRect();
-    return {
-      x: e.clientX - rect.left + containerRef.current.scrollLeft,
-      y: e.clientY - rect.top + containerRef.current.scrollTop,
-    };
-  }, [containerRef]);
+  const getRelativePosition = useCallback(
+    (e: MouseEvent) => {
+      if (!containerRef.current) return { x: 0, y: 0 };
+      const rect = containerRef.current.getBoundingClientRect();
+      return {
+        x: e.clientX - rect.left + containerRef.current.scrollLeft,
+        y: e.clientY - rect.top + containerRef.current.scrollTop,
+      };
+    },
+    [containerRef]
+  );
 
   const getSelectedIndices = useCallback(() => {
     if (!containerRef.current || !selectionBox) return [];
-    
+
     const items = containerRef.current.querySelectorAll(itemSelector);
     const containerRect = containerRef.current.getBoundingClientRect();
     const selectedIndices: number[] = [];
@@ -65,73 +68,85 @@ export function useDragSelect({
     return selectedIndices;
   }, [containerRef, itemSelector, selectionBox]);
 
-  const handleMouseDown = useCallback((e: MouseEvent) => {
-    if (!enabled) return;
-    // Only start drag selection on left click
-    if (e.button !== 0) return;
-    // Don't start if Ctrl/Meta key is pressed (for individual selection)
-    if (e.ctrlKey || e.metaKey) return;
-    
-    // If the mousedown started on a draggable card, let native drag happen
-    const target = e.target as HTMLElement | null;
-    if (target && target.closest('[draggable="true"]')) {
-      isPendingRef.current = false;
-      return;
-    }
-    
-    // Store start position and mark as pending
-    const pos = getRelativePosition(e);
-    startPosRef.current = pos;
-    startClientRef.current = { x: e.clientX, y: e.clientY };
-    isPendingRef.current = true;
-    
-    // Prevent text selection during drag-select
-    e.preventDefault();
-  }, [enabled, getRelativePosition]);
+  const handleMouseDown = useCallback(
+    (e: MouseEvent) => {
+      if (!enabled) return;
+      // Only start drag selection on left click
+      if (e.button !== 0) return;
+      // Don't start if Ctrl/Meta key is pressed (for individual selection)
+      if (e.ctrlKey || e.metaKey) return;
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    // Check if we should start dragging (threshold check)
-    if (isPendingRef.current && !isDragging) {
-      const dx = Math.abs(e.clientX - startClientRef.current.x);
-      const dy = Math.abs(e.clientY - startClientRef.current.y);
-      
-      if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
-        // Check if we started on a card that is actually draggable (selected cards)
-        const target = document.elementFromPoint(startClientRef.current.x, startClientRef.current.y) as HTMLElement;
-        const cardItem = target?.closest('[data-card-item]');
-        // Only block if the card itself has draggable=true (selected cards can be dragged)
-        const draggableElement = target?.closest('[draggable="true"]');
-        if (cardItem && draggableElement) {
-          // This card is draggable (selected), don't start selection
-          isPendingRef.current = false;
-          return;
-        }
-        
-        setSelectionBox({
-          startX: startPosRef.current.x,
-          startY: startPosRef.current.y,
-          endX: startPosRef.current.x,
-          endY: startPosRef.current.y,
-        });
-        setIsDragging(true);
+      // If the mousedown started on a draggable card, let native drag happen
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('[draggable="true"]')) {
         isPendingRef.current = false;
+        return;
       }
-    }
-    
-    if (!isDragging) return;
-    
-    const pos = getRelativePosition(e);
-    setSelectionBox(prev => prev ? {
-      ...prev,
-      endX: pos.x,
-      endY: pos.y,
-    } : null);
-  }, [isDragging, getRelativePosition]);
+
+      // Store start position and mark as pending
+      const pos = getRelativePosition(e);
+      startPosRef.current = pos;
+      startClientRef.current = { x: e.clientX, y: e.clientY };
+      isPendingRef.current = true;
+
+      // Prevent text selection during drag-select
+      e.preventDefault();
+    },
+    [enabled, getRelativePosition]
+  );
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      // Check if we should start dragging (threshold check)
+      if (isPendingRef.current && !isDragging) {
+        const dx = Math.abs(e.clientX - startClientRef.current.x);
+        const dy = Math.abs(e.clientY - startClientRef.current.y);
+
+        if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+          // Check if we started on a card that is actually draggable (selected cards)
+          const target = document.elementFromPoint(
+            startClientRef.current.x,
+            startClientRef.current.y
+          ) as HTMLElement;
+          const cardItem = target?.closest('[data-card-item]');
+          // Only block if the card itself has draggable=true (selected cards can be dragged)
+          const draggableElement = target?.closest('[draggable="true"]');
+          if (cardItem && draggableElement) {
+            // This card is draggable (selected), don't start selection
+            isPendingRef.current = false;
+            return;
+          }
+
+          setSelectionBox({
+            startX: startPosRef.current.x,
+            startY: startPosRef.current.y,
+            endX: startPosRef.current.x,
+            endY: startPosRef.current.y,
+          });
+          setIsDragging(true);
+          isPendingRef.current = false;
+        }
+      }
+
+      if (!isDragging) return;
+
+      const pos = getRelativePosition(e);
+      setSelectionBox((prev) =>
+        prev
+          ? {
+              ...prev,
+              endX: pos.x,
+              endY: pos.y,
+            }
+          : null
+      );
+    },
+    [isDragging, getRelativePosition]
+  );
 
   const handleMouseUp = useCallback(() => {
     if (isDragging && selectionBox) {
       const selectedIndices = getSelectedIndices();
-      console.log('[useDragSelect] mouseUp', { selectionBox, selectedIndices });
       onSelectionChange(selectedIndices);
       // Prevent click event from clearing selection
       setJustFinishedDrag(true);
@@ -172,18 +187,21 @@ export function useDragSelect({
     };
   }, [containerRef, enabled, handleMouseDown, handleMouseMove, handleMouseUp]);
 
-  const selectionStyle = selectionBox && isDragging ? {
-    position: 'absolute' as const,
-    left: Math.min(selectionBox.startX, selectionBox.endX),
-    top: Math.min(selectionBox.startY, selectionBox.endY),
-    width: Math.abs(selectionBox.endX - selectionBox.startX),
-    height: Math.abs(selectionBox.endY - selectionBox.startY),
-    backgroundColor: 'rgba(255, 107, 61, 0.15)',
-    border: '1px solid rgba(255, 107, 61, 0.5)',
-    borderRadius: '4px',
-    pointerEvents: 'none' as const,
-    zIndex: 50,
-  } : null;
+  const selectionStyle =
+    selectionBox && isDragging
+      ? {
+          position: 'absolute' as const,
+          left: Math.min(selectionBox.startX, selectionBox.endX),
+          top: Math.min(selectionBox.startY, selectionBox.endY),
+          width: Math.abs(selectionBox.endX - selectionBox.startX),
+          height: Math.abs(selectionBox.endY - selectionBox.startY),
+          backgroundColor: 'rgba(255, 107, 61, 0.15)',
+          border: '1px solid rgba(255, 107, 61, 0.5)',
+          borderRadius: '4px',
+          pointerEvents: 'none' as const,
+          zIndex: 50,
+        }
+      : null;
 
   return {
     isDragging,

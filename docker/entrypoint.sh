@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "=== YouTube Playlist Sync Container ==="
+echo "=== Insighta Container ==="
 echo "Mode: $1"
 echo "Node ENV: $NODE_ENV"
 
