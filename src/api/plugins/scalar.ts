@@ -39,18 +39,18 @@ export async function registerScalar(fastify: FastifyInstance) {
         ogDescription:
           'REST API for personal knowledge management with YouTube playlist synchronization',
         ogTitle: 'Insighta API',
-        ogImage: 'https://example.com/og-image.png',
+        ogImage: 'https://insighta.one/og-image.png',
         twitterCard: 'summary_large_image',
       },
       searchHotKey: 'k',
       servers: [
         {
-          url: 'http://localhost:3000',
-          description: 'Development',
+          url: 'https://insighta.one',
+          description: 'Production',
         },
         {
-          url: 'https://api.yourdomain.com',
-          description: 'Production',
+          url: 'http://localhost:3000',
+          description: 'Development',
         },
       ],
       defaultOpenAllTags: false,
