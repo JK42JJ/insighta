@@ -1,7 +1,14 @@
-import { InsightCard } from "@/types/mandala";
-import { Lightbulb, Plus, ExternalLink } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { format, differenceInHours, differenceInDays, differenceInWeeks, differenceInMonths } from "date-fns";
+import { InsightCard } from '@/types/mandala';
+import { Lightbulb, Plus, ExternalLink } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  format,
+  differenceInHours,
+  differenceInDays,
+  differenceInWeeks,
+  differenceInMonths,
+} from 'date-fns';
+import { useTranslation } from 'react-i18next';
 
 interface ScratchPadProps {
   cards: InsightCard[];
@@ -15,7 +22,10 @@ interface ScratchPadProps {
 }
 
 // Dynamic time label based on age
-function getTimeLabel(date: Date): string {
+function getTimeLabel(
+  date: Date,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
   const now = new Date();
   const hours = differenceInHours(now, date);
   const days = differenceInDays(now, date);
@@ -23,17 +33,17 @@ function getTimeLabel(date: Date): string {
   const months = differenceInMonths(now, date);
 
   if (hours < 1) {
-    return "방금";
+    return t('time.justNow');
   } else if (hours < 24) {
-    return `${hours}시간`;
+    return t('time.hoursAgo', { count: hours });
   } else if (days < 7) {
-    return `${days}일`;
+    return t('time.daysAgo', { count: days });
   } else if (weeks < 4) {
-    return `${weeks}주`;
+    return t('time.weeksAgo', { count: weeks });
   } else if (months < 12) {
-    return `${months}개월`;
+    return t('time.monthsAgo', { count: months });
   } else {
-    return format(date, "yy.MM");
+    return format(date, 'yy.MM');
   }
 }
 
@@ -41,15 +51,17 @@ function getTimeLabel(date: Date): string {
 function getTickStyle(date: Date): { height: string; opacity: string } {
   const now = new Date();
   const hours = differenceInHours(now, date);
-  
+
   if (hours < 24) {
-    return { height: "h-3", opacity: "bg-primary" };
-  } else if (hours < 168) { // 7 days
-    return { height: "h-2.5", opacity: "bg-primary/80" };
-  } else if (hours < 720) { // 30 days
-    return { height: "h-2", opacity: "bg-primary/60" };
+    return { height: 'h-3', opacity: 'bg-primary' };
+  } else if (hours < 168) {
+    // 7 days
+    return { height: 'h-2.5', opacity: 'bg-primary/80' };
+  } else if (hours < 720) {
+    // 30 days
+    return { height: 'h-2', opacity: 'bg-primary/60' };
   } else {
-    return { height: "h-1.5", opacity: "bg-primary/40" };
+    return { height: 'h-1.5', opacity: 'bg-primary/40' };
   }
 }
 
@@ -63,6 +75,8 @@ export function ScratchPad({
   onDragLeave,
   onCardDragStart,
 }: ScratchPadProps) {
+  const { t } = useTranslation();
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     onDragOver(e);
@@ -70,41 +84,39 @@ export function ScratchPad({
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    
+
     // Check if it's an internal card drag
-    const cardId = e.dataTransfer.getData("application/card-id");
+    const cardId = e.dataTransfer.getData('application/card-id');
     if (cardId) {
       onCardDrop(cardId);
       return;
     }
-    
+
     // External URL drop
-    const url = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
-    if (url && url.includes("youtube")) {
+    const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+    if (url && url.includes('youtube')) {
       onDrop(url);
     }
   };
 
   const handleCardDragStart = (e: React.DragEvent, card: InsightCard) => {
-    e.dataTransfer.setData("application/card-id", card.id);
-    e.dataTransfer.setData("text/plain", card.videoUrl);
-    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData('application/card-id', card.id);
+    e.dataTransfer.setData('text/plain', card.videoUrl);
+    e.dataTransfer.effectAllowed = 'move';
     onCardDragStart(card);
   };
 
   // Sort cards by date (most recent first)
-  const sortedCards = [...cards].sort((a, b) => 
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  const sortedCards = [...cards].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 
   return (
     <div
       className={cn(
-        "relative px-4 py-3 rounded-xl transition-all duration-300",
-        "bg-surface-light border border-border/40",
-        isDropTarget
-          ? "border-primary bg-primary/8 scale-[1.01]"
-          : "hover:border-border/60"
+        'relative px-4 py-3 rounded-xl transition-all duration-300',
+        'bg-surface-light border border-border/40',
+        isDropTarget ? 'border-primary bg-primary/8 scale-[1.01]' : 'hover:border-border/60'
       )}
       style={{ boxShadow: isDropTarget ? 'var(--shadow-lg)' : 'var(--shadow-sm)' }}
       onDragOver={handleDragOver}
@@ -114,28 +126,28 @@ export function ScratchPad({
       {/* Drop target overlay */}
       {isDropTarget && (
         <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] rounded-xl pointer-events-none z-10">
-          <span 
+          <span
             className="text-primary-foreground font-semibold text-sm bg-primary px-4 py-2 rounded-lg"
             style={{ boxShadow: 'var(--shadow-lg)' }}
           >
-            아이디에이션에 드롭
+            {t('ideation.dropOnScratchPad')}
           </span>
         </div>
       )}
       <div className="flex items-center gap-4">
         {/* Label */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <div 
+          <div
             className="p-1.5 rounded-lg bg-primary/10"
             style={{ boxShadow: 'var(--shadow-inset-raised)' }}
           >
             <Lightbulb className="w-4 h-4 text-primary" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-foreground">아이디에이션</span>
+            <span className="text-xs font-semibold text-foreground">{t('ideation.title')}</span>
             {cards.length > 0 && (
               <span className="text-[10px] text-primary font-medium">
-                {cards.length}개 아이템
+                {t('common.items', { count: cards.length })}
               </span>
             )}
           </div>
@@ -149,11 +161,12 @@ export function ScratchPad({
               {cards.length === 0 ? (
                 <div className="flex items-center gap-1 px-2">
                   {Array.from({ length: 20 }).map((_, i) => (
-                    <div key={i} className="flex flex-col items-center" style={{ minWidth: '40px' }}>
-                      <div className={cn(
-                        "w-px bg-border/50",
-                        i % 5 === 0 ? "h-2" : "h-1"
-                      )} />
+                    <div
+                      key={i}
+                      className="flex flex-col items-center"
+                      style={{ minWidth: '40px' }}
+                    >
+                      <div className={cn('w-px bg-border/50', i % 5 === 0 ? 'h-2' : 'h-1')} />
                     </div>
                   ))}
                 </div>
@@ -161,22 +174,28 @@ export function ScratchPad({
                 <div className="flex items-end">
                   {sortedCards.map((card, idx) => {
                     const tickStyle = getTickStyle(new Date(card.createdAt));
-                    const timeLabel = getTimeLabel(new Date(card.createdAt));
+                    const timeLabel = getTimeLabel(new Date(card.createdAt), t);
                     // Show label for first, last, or every 3rd item to avoid clutter
                     const showLabel = idx === 0 || idx === sortedCards.length - 1 || idx % 3 === 0;
-                    
+
                     return (
-                      <div key={card.id} className="flex-shrink-0 flex flex-col items-start" style={{ width: '88px' }}>
+                      <div
+                        key={card.id}
+                        className="flex-shrink-0 flex flex-col items-start"
+                        style={{ width: '88px' }}
+                      >
                         {/* Time label */}
-                        <span className={cn(
-                          "text-[8px] text-muted-foreground mb-0.5 pl-0.5 font-medium",
-                          showLabel ? "opacity-100" : "opacity-0"
-                        )}>
+                        <span
+                          className={cn(
+                            'text-[8px] text-muted-foreground mb-0.5 pl-0.5 font-medium',
+                            showLabel ? 'opacity-100' : 'opacity-0'
+                          )}
+                        >
                           {timeLabel}
                         </span>
                         {/* Tick marks */}
                         <div className="flex items-end w-full">
-                          <div className={cn("w-px", tickStyle.height, tickStyle.opacity)} />
+                          <div className={cn('w-px', tickStyle.height, tickStyle.opacity)} />
                           <div className="flex-1 flex justify-evenly">
                             {[1, 2, 3].map((tick) => (
                               <div key={tick} className="w-px h-1 bg-border/40" />
@@ -195,12 +214,14 @@ export function ScratchPad({
 
           {/* Timeline Cards */}
           {cards.length === 0 ? (
-            <div className={cn(
-              "flex items-center gap-2 text-muted-foreground py-1",
-              isDropTarget && "text-primary"
-            )}>
+            <div
+              className={cn(
+                'flex items-center gap-2 text-muted-foreground py-1',
+                isDropTarget && 'text-primary'
+              )}
+            >
               <Plus className="w-4 h-4 opacity-50" />
-              <p className="text-xs">유튜브 링크를 드롭하세요</p>
+              <p className="text-xs">{t('ideation.emptyHint')}</p>
             </div>
           ) : (
             <div className="flex gap-2 overflow-x-auto scrollbar-none py-1">
@@ -213,7 +234,7 @@ export function ScratchPad({
                   className="group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform duration-200 hover:-translate-y-0.5"
                 >
                   {/* Compact Thumbnail with depth */}
-                  <div 
+                  <div
                     className="relative w-[80px] h-[45px] overflow-hidden bg-muted"
                     style={{ boxShadow: 'var(--shadow-sm)' }}
                   >
@@ -222,16 +243,17 @@ export function ScratchPad({
                       alt={card.title}
                       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = "https://via.placeholder.com/320x180?text=Thumbnail";
+                        (e.target as HTMLImageElement).src =
+                          'https://via.placeholder.com/320x180?text=Thumbnail';
                       }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    
+
                     {/* Dynamic time badge */}
                     <span className="absolute bottom-0.5 right-0.5 text-[8px] bg-background/90 text-foreground px-1 font-medium rounded-sm">
-                      {getTimeLabel(new Date(card.createdAt))}
+                      {getTimeLabel(new Date(card.createdAt), t)}
                     </span>
-                    
+
                     {/* External Link on hover */}
                     <a
                       href={card.videoUrl}

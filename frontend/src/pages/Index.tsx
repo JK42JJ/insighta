@@ -29,10 +29,12 @@ import { useLocalCards, isLimitExceededError } from '@/hooks/useLocalCards';
 import { useBatchMoveCards } from '@/hooks/useBatchMoveCards';
 import { convertToInsightCards } from '@/lib/youtubeToInsightCard';
 import { detectCardSource, getCardById } from '@/lib/cardUtils';
+import { useTranslation } from 'react-i18next';
 
 const Index = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { isLoggedIn } = useAuth();
   const {
     preferences,
@@ -410,8 +412,8 @@ const Index = () => {
       // Require login for paste operations
       if (!isLoggedIn) {
         toast({
-          title: '로그인이 필요합니다',
-          description: '아이디에이션에 추가하려면 먼저 로그인해주세요.',
+          title: t('index.loginRequired'),
+          description: t('index.loginRequiredAddIdeation'),
           variant: 'destructive',
         });
         navigate('/login');
@@ -421,8 +423,8 @@ const Index = () => {
       const linkType = detectLinkType(text);
       if (linkType === 'other') {
         toast({
-          title: '지원하지 않는 링크',
-          description: 'YouTube, LinkedIn, Facebook, Notion 링크만 추가할 수 있습니다.',
+          title: t('index.unsupportedLink'),
+          description: t('index.unsupportedLinkDesc'),
           variant: 'destructive',
         });
         return;
@@ -431,8 +433,11 @@ const Index = () => {
       // Check subscription limit
       if (!canAddCard) {
         toast({
-          title: '저장 한도 초과',
-          description: `${subscription.tier === 'free' ? '무료' : subscription.tier} 플랜의 저장 한도(${subscription.limit}개)에 도달했습니다.`,
+          title: t('index.storageLimitExceeded'),
+          description: t('index.storageLimitDesc', {
+            tier: subscription.tier === 'free' ? t('index.tierFree') : subscription.tier,
+            limit: subscription.limit,
+          }),
           variant: 'destructive',
         });
         return;
@@ -443,8 +448,17 @@ const Index = () => {
       setPendingLocalCards((prev) => [...prev, newCard]);
 
       toast({
-        title: '아이디에이션에 추가됨',
-        description: `${linkType === 'facebook' ? 'Facebook' : linkType === 'youtube' || linkType === 'youtube-shorts' ? 'YouTube' : linkType === 'linkedin' ? 'LinkedIn' : 'Notion'} 링크가 추가되었습니다.`,
+        title: t('index.addedToIdeation'),
+        description: t('index.addedToIdeationLinkDesc', {
+          linkType:
+            linkType === 'facebook'
+              ? 'Facebook'
+              : linkType === 'youtube' || linkType === 'youtube-shorts'
+                ? 'YouTube'
+                : linkType === 'linkedin'
+                  ? 'LinkedIn'
+                  : 'Notion',
+        }),
       });
 
       // Fetch metadata and persist to Supabase
@@ -491,14 +505,14 @@ const Index = () => {
         } catch (error) {
           if (isLimitExceededError(error)) {
             toast({
-              title: '저장 한도 초과',
+              title: t('index.storageLimitExceeded'),
               description: error.message,
               variant: 'destructive',
             });
           } else {
             toast({
-              title: '저장 실패',
-              description: error instanceof Error ? error.message : '카드를 저장하지 못했습니다.',
+              title: t('index.saveFailed'),
+              description: error instanceof Error ? error.message : t('index.saveFailedDesc'),
               variant: 'destructive',
             });
           }
@@ -585,8 +599,8 @@ const Index = () => {
       setEntryGridIndex(gridIndex); // Remember entry direction for back navigation
 
       toast({
-        title: `${subject} 레벨로 이동`,
-        description: '하위 만다라트로 이동했습니다.',
+        title: t('index.navigatedToLevel', { subject }),
+        description: t('index.navigatedToLevelDesc'),
       });
     },
     [
@@ -642,8 +656,8 @@ const Index = () => {
       }
 
       toast({
-        title: '우선순위 변경됨',
-        description: '만다라트 셀 위치가 업데이트되었습니다.',
+        title: t('index.priorityChanged'),
+        description: t('index.priorityChangedDesc'),
       });
     },
     [
@@ -680,8 +694,8 @@ const Index = () => {
       setSelectedCellIndex(null);
       setEntryGridIndex(null); // Clear entry direction when going back to L1
       toast({
-        title: '상위 레벨로 이동',
-        description: `${parentPath.label}로 돌아왔습니다.`,
+        title: t('index.navigatedToParent'),
+        description: t('index.navigatedToParentDesc', { label: parentPath.label }),
       });
     }
   }, [path, toast]);
@@ -691,23 +705,23 @@ const Index = () => {
     async (file: File, cellIndex: number, levelId: string): Promise<InsightCard | null> => {
       if (!isSupportedFileType(file.name)) {
         toast({
-          title: '지원하지 않는 파일 형식',
-          description: 'txt, md, pdf 파일만 업로드할 수 있습니다.',
+          title: t('index.unsupportedFileType'),
+          description: t('index.unsupportedFileTypeDesc'),
           variant: 'destructive',
         });
         return null;
       }
 
       toast({
-        title: '파일 업로드 중...',
+        title: t('index.uploadingFile'),
         description: file.name,
       });
 
       const result = await uploadFile(file);
       if (!result) {
         toast({
-          title: '업로드 실패',
-          description: '파일 업로드에 실패했습니다.',
+          title: t('index.uploadFailed'),
+          description: t('index.uploadFailedDesc'),
           variant: 'destructive',
         });
         return null;
@@ -751,8 +765,8 @@ const Index = () => {
             .then(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)))
             .catch(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)));
           toast({
-            title: '파일 추가됨',
-            description: `"${currentLevel.subjects[cellIndex]}"에 저장되었습니다.`,
+            title: t('index.fileAdded'),
+            description: t('index.fileAddedToCell', { subject: currentLevel.subjects[cellIndex] }),
           });
         }
       }
@@ -779,13 +793,13 @@ const Index = () => {
             .then(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)))
             .catch(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)));
           toast({
-            title: '파일이 아이디에이션에 추가됨',
+            title: t('index.fileAddedToIdeation'),
             description: file.name,
           });
         }
       }
     },
-    [handleFileUpload, toast, addLocalCard]
+    [handleFileUpload, toast, addLocalCard, t]
   );
 
   const handleCardDrop = useCallback(
@@ -812,8 +826,8 @@ const Index = () => {
         });
         if (pendingIds.length > 0 && !canAddCard) {
           toast({
-            title: '저장 한도 초과',
-            description: `최대 ${subscription.limit}개까지 저장할 수 있습니다.`,
+            title: t('index.storageLimitExceeded'),
+            description: t('index.storageLimitMaxDesc', { limit: subscription.limit }),
             variant: 'destructive',
           });
           return;
@@ -836,15 +850,15 @@ const Index = () => {
           {
             onSuccess: () => {
               toast({
-                title: `${multiCardIds.length}개 카드 이동됨`,
-                description: `"${currentLevel.subjects[cellIndex]}"로 이동했습니다.`,
+                title: t('index.multiCardMoved', { count: multiCardIds.length }),
+                description: t('index.movedToCell', { subject: currentLevel.subjects[cellIndex] }),
               });
             },
             onError: (error) => {
               console.error('[handleCardDrop] batch move failed:', error);
               toast({
-                title: '이동 실패',
-                description: error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.',
+                title: t('index.moveFailed'),
+                description: error instanceof Error ? error.message : t('index.moveFailedDesc'),
                 variant: 'destructive',
               });
             },
@@ -861,8 +875,8 @@ const Index = () => {
 
         if (source === 'pending' && !canAddCard) {
           toast({
-            title: '저장 한도 초과',
-            description: `최대 ${subscription.limit}개까지 저장할 수 있습니다.`,
+            title: t('index.storageLimitExceeded'),
+            description: t('index.storageLimitMaxDesc', { limit: subscription.limit }),
             variant: 'destructive',
           });
           return;
@@ -875,16 +889,16 @@ const Index = () => {
 
         const successHandler = () => {
           toast({
-            title: '카드 이동됨',
-            description: `"${currentLevel.subjects[cellIndex]}"로 이동했습니다.`,
+            title: t('index.cardMoved'),
+            description: t('index.movedToCell', { subject: currentLevel.subjects[cellIndex] }),
           });
         };
 
         const errorHandler = (error: unknown) => {
           console.error('[handleCardDrop] single card move failed:', error);
           toast({
-            title: '이동 실패',
-            description: error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.',
+            title: t('index.moveFailed'),
+            description: error instanceof Error ? error.message : t('index.moveFailedDesc'),
             variant: 'destructive',
           });
         };
@@ -922,8 +936,8 @@ const Index = () => {
       if (url) {
         if (!isLoggedIn) {
           toast({
-            title: '로그인이 필요합니다',
-            description: '만다라트에 추가하려면 먼저 로그인해주세요.',
+            title: t('index.loginRequired'),
+            description: t('index.loginRequiredAddMandala'),
             variant: 'destructive',
           });
           navigate('/login');
@@ -938,8 +952,10 @@ const Index = () => {
           setPendingLocalCards((prev) => [...prev, newCard]);
 
           toast({
-            title: '인사이트 추가됨',
-            description: `"${currentLevel.subjects[cellIndex]}"에 저장되었습니다.`,
+            title: t('index.insightAdded'),
+            description: t('index.insightAddedToCell', {
+              subject: currentLevel.subjects[cellIndex],
+            }),
           });
 
           // Persist to Supabase (fetch metadata first for non-YouTube links)
@@ -983,15 +999,15 @@ const Index = () => {
           persistCard().catch(() => {
             setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id));
             toast({
-              title: '저장 실패',
-              description: '카드를 저장하지 못했습니다.',
+              title: t('common.saveFailed'),
+              description: t('index.saveFailedDesc'),
               variant: 'destructive',
             });
           });
         } else {
           toast({
-            title: '유효하지 않은 URL',
-            description: 'YouTube, LinkedIn, Notion, txt, md, pdf 파일을 추가할 수 있습니다.',
+            title: t('index.invalidUrl'),
+            description: t('index.invalidUrlDesc'),
             variant: 'destructive',
           });
         }
@@ -1013,6 +1029,7 @@ const Index = () => {
       subscription,
       addLocalCard,
       batchMoveCards,
+      t,
     ]
   );
 
@@ -1021,8 +1038,8 @@ const Index = () => {
       // Require login for D&D operations
       if (!isLoggedIn) {
         toast({
-          title: '로그인이 필요합니다',
-          description: '아이디에이션에 추가하려면 먼저 로그인해주세요.',
+          title: t('index.loginRequired'),
+          description: t('index.loginRequiredAddIdeation'),
           variant: 'destructive',
         });
         navigate('/login');
@@ -1034,8 +1051,8 @@ const Index = () => {
 
         if (linkType === 'other') {
           toast({
-            title: '지원하지 않는 링크',
-            description: 'YouTube, LinkedIn, Facebook, Notion 링크만 추가할 수 있습니다.',
+            title: t('index.unsupportedLink'),
+            description: t('index.invalidUrlLinkDesc'),
             variant: 'destructive',
           });
           return;
@@ -1044,8 +1061,11 @@ const Index = () => {
         // Check subscription limit
         if (!canAddCard) {
           toast({
-            title: '저장 한도 초과',
-            description: `${subscription.tier === 'free' ? '무료' : subscription.tier} 플랜의 저장 한도(${subscription.limit}개)에 도달했습니다.`,
+            title: t('index.storageLimitExceeded'),
+            description: t('index.storageLimitDesc', {
+              tier: subscription.tier === 'free' ? t('index.tierFree') : subscription.tier,
+              limit: subscription.limit,
+            }),
             variant: 'destructive',
           });
           return;
@@ -1055,8 +1075,8 @@ const Index = () => {
         // Add to pending for optimistic UI
         setPendingLocalCards((prev) => [...prev, newCard]);
         toast({
-          title: '아이디에이션에 추가됨',
-          description: '나중에 원하는 카테고리로 이동하세요.',
+          title: t('index.addedToIdeation'),
+          description: t('index.addedToIdeationMoveDesc'),
         });
 
         // Fetch metadata and persist to Supabase
@@ -1103,14 +1123,14 @@ const Index = () => {
           } catch (error) {
             if (isLimitExceededError(error)) {
               toast({
-                title: '저장 한도 초과',
+                title: t('index.storageLimitExceeded'),
                 description: error.message,
                 variant: 'destructive',
               });
             } else {
               toast({
-                title: '저장 실패',
-                description: error instanceof Error ? error.message : '카드를 저장하지 못했습니다.',
+                title: t('common.saveFailed'),
+                description: error instanceof Error ? error.message : t('index.saveFailedDesc'),
                 variant: 'destructive',
               });
             }
@@ -1122,13 +1142,13 @@ const Index = () => {
         persistCard();
       } else {
         toast({
-          title: '유효하지 않은 URL',
-          description: 'YouTube, LinkedIn, Facebook, Notion 링크만 추가할 수 있습니다.',
+          title: t('index.invalidUrl'),
+          description: t('index.invalidUrlLinkDesc'),
           variant: 'destructive',
         });
       }
     },
-    [isLoggedIn, navigate, toast, canAddCard, subscription, addLocalCard]
+    [isLoggedIn, navigate, toast, canAddCard, subscription, addLocalCard, t]
   );
 
   const handleScratchPadCardDrop = useCallback(
@@ -1140,16 +1160,16 @@ const Index = () => {
 
       const successHandler = () => {
         toast({
-          title: '아이디에이션으로 이동됨',
-          description: '나중에 다시 분류할 수 있습니다.',
+          title: t('index.movedToIdeation'),
+          description: t('index.movedToIdeationDesc'),
         });
       };
 
       const errorHandler = (error: unknown) => {
         console.error('[handleScratchPadCardDrop] move failed:', error);
         toast({
-          title: '이동 실패',
-          description: error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.',
+          title: t('index.moveFailed'),
+          description: error instanceof Error ? error.message : t('index.moveFailedDesc'),
           variant: 'destructive',
         });
       };
@@ -1168,7 +1188,7 @@ const Index = () => {
           .catch(errorHandler);
       }
     },
-    [allMandalaCards, syncedCards, persistedLocalCards, updateVideoState, updateLocalCard, toast]
+    [allMandalaCards, syncedCards, persistedLocalCards, updateVideoState, updateLocalCard, toast, t]
   );
 
   const handleScratchPadMultiCardDrop = useCallback(
@@ -1187,22 +1207,22 @@ const Index = () => {
         {
           onSuccess: () => {
             toast({
-              title: `${batchItems.length}개 카드 이동됨`,
-              description: '아이디에이션으로 이동했습니다.',
+              title: t('index.multiCardMoved', { count: batchItems.length }),
+              description: t('index.multiCardMovedToIdeation'),
             });
           },
           onError: (error) => {
             console.error('[handleScratchPadMultiCardDrop] batch move failed:', error);
             toast({
-              title: '이동 실패',
-              description: error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.',
+              title: t('index.moveFailed'),
+              description: error instanceof Error ? error.message : t('index.moveFailedDesc'),
               variant: 'destructive',
             });
           },
         }
       );
     },
-    [allMandalaCards, syncedCards, persistedLocalCards, batchMoveCards, toast]
+    [allMandalaCards, syncedCards, persistedLocalCards, batchMoveCards, toast, t]
   );
 
   const handleCardClick = useCallback((card: InsightCard) => {
@@ -1223,12 +1243,12 @@ const Index = () => {
         switch (source) {
           case 'synced':
             await updateVideoState.mutateAsync({ videoStateId: id, updates: { user_note: note } });
-            toast({ title: '메모 저장됨', description: 'YouTube 동영상 메모가 동기화되었습니다.' });
+            toast({ title: t('index.memoSaved'), description: t('index.memoSavedYouTube') });
             break;
 
           case 'local':
             await updateLocalCard({ id, user_note: note });
-            toast({ title: '메모 저장됨', description: '로컬 카드 메모가 동기화되었습니다.' });
+            toast({ title: t('index.memoSaved'), description: t('index.memoSavedLocal') });
             break;
 
           case 'pending': {
@@ -1247,11 +1267,11 @@ const Index = () => {
                 level_id: pendingCard.levelId ?? 'scratchpad',
               });
               setPendingLocalCards((prev) => prev.filter((c) => c.id !== id));
-              toast({ title: '카드 저장됨', description: '카드와 메모가 저장되었습니다.' });
+              toast({ title: t('index.cardSaved'), description: t('index.cardSavedDesc') });
             } else {
               toast({
-                title: '저장 실패',
-                description: '카드를 찾을 수 없습니다.',
+                title: t('common.saveFailed'),
+                description: t('index.saveFailedCardNotFound'),
                 variant: 'destructive',
               });
             }
@@ -1260,8 +1280,8 @@ const Index = () => {
         }
       } catch (error) {
         toast({
-          title: '저장 실패',
-          description: error instanceof Error ? error.message : '메모를 저장하지 못했습니다.',
+          title: t('common.saveFailed'),
+          description: error instanceof Error ? error.message : t('index.memoSaveFailed'),
           variant: 'destructive',
         });
       }
@@ -1275,6 +1295,7 @@ const Index = () => {
       updateLocalCard,
       addLocalCard,
       toast,
+      t,
     ]
   );
 
@@ -1312,11 +1333,11 @@ const Index = () => {
         batchMoveCards.mutate({ items: batchItems });
       }
       toast({
-        title: '순서 변경됨',
-        description: '카드 순서가 업데이트되었습니다.',
+        title: t('index.orderChanged'),
+        description: t('index.orderChangedDesc'),
       });
     },
-    [toast, syncedCards, persistedLocalCards, batchMoveCards]
+    [toast, syncedCards, persistedLocalCards, batchMoveCards, t]
   );
 
   const handleDeleteCards = useCallback(
@@ -1336,15 +1357,15 @@ const Index = () => {
         )
           .then(() =>
             toast({
-              title: '삭제됨',
-              description: `${syncedToDelete.length}개의 동영상이 아이디에이션에서 제거되었습니다.`,
+              title: t('index.deleted'),
+              description: t('index.deletedVideoDesc', { count: syncedToDelete.length }),
             })
           )
           .catch((error) =>
             toast({
-              title: '삭제 실패',
+              title: t('index.deleteFailed'),
               description:
-                error instanceof Error ? error.message : '일부 동영상을 삭제하지 못했습니다.',
+                error instanceof Error ? error.message : t('index.deleteFailedVideoDesc'),
               variant: 'destructive',
             })
           );
@@ -1354,15 +1375,15 @@ const Index = () => {
         Promise.all(persistedToDelete.map((id) => deleteLocalCard(id)))
           .then(() =>
             toast({
-              title: '삭제됨',
-              description: `${persistedToDelete.length}개의 로컬 카드가 삭제되었습니다.`,
+              title: t('index.deleted'),
+              description: t('index.deletedLocalDesc', { count: persistedToDelete.length }),
             })
           )
           .catch((error) =>
             toast({
-              title: '삭제 실패',
+              title: t('index.deleteFailed'),
               description:
-                error instanceof Error ? error.message : '일부 카드를 삭제하지 못했습니다.',
+                error instanceof Error ? error.message : t('index.deleteFailedLocalDesc'),
               variant: 'destructive',
             })
           );
@@ -1372,12 +1393,12 @@ const Index = () => {
       if (pendingToDelete.length > 0) {
         setPendingLocalCards((prev) => prev.filter((c) => !pendingToDelete.includes(c.id)));
         toast({
-          title: '삭제됨',
-          description: `${pendingToDelete.length}개의 카드가 삭제되었습니다.`,
+          title: t('index.deleted'),
+          description: t('index.deletedCardDesc', { count: pendingToDelete.length }),
         });
       }
     },
-    [syncedCards, persistedLocalCards, updateVideoState, deleteLocalCard, toast]
+    [syncedCards, persistedLocalCards, updateVideoState, deleteLocalCard, toast, t]
   );
 
   // Get cards for selected cell or all cards in current level (including sub-levels)

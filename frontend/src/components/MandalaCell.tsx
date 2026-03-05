@@ -5,6 +5,7 @@ import { InsightCard } from '@/types/mandala';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTranslation } from 'react-i18next';
 
 export interface MandalaCellProps {
   index: number;
@@ -62,6 +63,8 @@ export const MandalaCell = memo(
     hasSubLevel,
     onNavigateToSubLevel,
   }: MandalaCellProps) {
+    const { t } = useTranslation();
+
     const handleDragOver = (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -216,7 +219,7 @@ export const MandalaCell = memo(
 
         const tooltipText = card.title
           ? `${card.title} (${formatCardDate(card.createdAt)})`
-          : `제목 로딩중... (${formatCardDate(card.createdAt)})`;
+          : `${t('mandala.titleLoading')} (${formatCardDate(card.createdAt)})`;
 
         return (
           <TooltipProvider key={card.id} delayDuration={200}>
@@ -279,7 +282,7 @@ export const MandalaCell = memo(
               {isExpanded ? (
                 <>
                   <ChevronUp className="w-3 h-3" />
-                  접기
+                  {t('mandala.collapse')}
                 </>
               ) : (
                 <>
@@ -383,7 +386,7 @@ export const MandalaCell = memo(
                 <div key={i} className="w-2 h-2 rounded-[1px] bg-muted-foreground/30" />
               ))}
             </div>
-            <span className="text-[9px]">드래그하여 추가</span>
+            <span className="text-[9px]">{t('mandala.dragToAdd')}</span>
           </div>
         )}
 
@@ -391,7 +394,7 @@ export const MandalaCell = memo(
         {isDropTarget && !isCenter && !isCellSwapTarget && (
           <div className="absolute inset-0 flex items-center justify-center bg-primary/30 backdrop-blur-[1px] rounded-xl pointer-events-none">
             <span className="text-primary-foreground font-semibold text-sm bg-primary/90 px-3 py-1.5 rounded-lg shadow-lg">
-              여기에 드롭
+              {t('mandala.dropHere')}
             </span>
           </div>
         )}
@@ -400,7 +403,7 @@ export const MandalaCell = memo(
         {isCellSwapTarget && !isCenter && (
           <div className="absolute inset-0 flex items-center justify-center bg-accent/60 backdrop-blur-[1px] rounded-xl pointer-events-none">
             <span className="text-accent-foreground font-semibold text-sm bg-accent px-3 py-1.5 rounded-lg shadow-lg">
-              위치 교체
+              {t('mandala.swapPosition')}
             </span>
           </div>
         )}

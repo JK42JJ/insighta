@@ -1,7 +1,8 @@
-import { InsightCard } from "@/types/mandala";
-import { GripVertical, ExternalLink } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { InsightCard } from '@/types/mandala';
+import { GripVertical, ExternalLink } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 interface DraggableCardProps {
   card: InsightCard;
@@ -11,10 +12,11 @@ interface DraggableCardProps {
 }
 
 export function DraggableCard({ card, onClick, onDragStart, compact = false }: DraggableCardProps) {
+  const { t } = useTranslation();
   const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData("application/card-id", card.id);
-    e.dataTransfer.setData("text/plain", card.videoUrl);
-    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData('application/card-id', card.id);
+    e.dataTransfer.setData('text/plain', card.videoUrl);
+    e.dataTransfer.effectAllowed = 'move';
     onDragStart();
   };
 
@@ -23,10 +25,10 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
     // Extract first timestamp link from memo
     const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/;
     const linkMatch = card.userNote?.match(linkPattern);
-    
+
     let shareUrl: string;
     let shareText: string;
-    
+
     if (linkMatch) {
       const linkLabel = linkMatch[1];
       const linkUrl = linkMatch[2];
@@ -34,13 +36,13 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
       shareText = memoWithoutLink ? `${linkLabel} ${memoWithoutLink}` : linkLabel;
       shareUrl = linkUrl;
     } else {
-      shareText = card.title || "Check out this video!";
+      shareText = card.title || 'Check out this video!';
       shareUrl = card.videoUrl;
     }
-    
+
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
     window.open(twitterUrl, '_blank', 'noopener,noreferrer,width=550,height=420');
-    toast.success("X 공유 창이 열렸습니다");
+    toast.success(t('videoPlayer.xShareOpened'));
   };
 
   return (
@@ -49,9 +51,9 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
       onDragStart={handleDragStart}
       onClick={onClick}
       className={cn(
-        "group relative overflow-hidden rounded-lg bg-card border border-border shadow-sm cursor-grab active:cursor-grabbing transition-all duration-200",
-        "hover:shadow-md hover:border-primary/30 hover:scale-[1.02]",
-        compact ? "p-2" : ""
+        'group relative overflow-hidden rounded-lg bg-card border border-border shadow-sm cursor-grab active:cursor-grabbing transition-all duration-200',
+        'hover:shadow-md hover:border-primary/30 hover:scale-[1.02]',
+        compact ? 'p-2' : ''
       )}
     >
       {/* Drag Handle Indicator */}
@@ -62,32 +64,35 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
       </div>
 
       {/* Thumbnail */}
-      <div className={cn(
-        "relative overflow-hidden",
-        compact ? "aspect-video rounded" : "aspect-video"
-      )}>
+      <div
+        className={cn(
+          'relative overflow-hidden',
+          compact ? 'aspect-video rounded' : 'aspect-video'
+        )}
+      >
         <img
           src={card.thumbnail}
           alt={card.title}
           className="w-full h-full object-cover"
           onError={(e) => {
-            (e.target as HTMLImageElement).src = "https://via.placeholder.com/320x180?text=Thumbnail";
+            (e.target as HTMLImageElement).src =
+              'https://via.placeholder.com/320x180?text=Thumbnail';
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 to-transparent" />
-        <h3 className={cn(
-          "absolute bottom-1 left-1 right-1 font-medium text-primary-foreground line-clamp-2",
-          compact ? "text-[10px] leading-tight" : "text-xs"
-        )}>
+        <h3
+          className={cn(
+            'absolute bottom-1 left-1 right-1 font-medium text-primary-foreground line-clamp-2',
+            compact ? 'text-[10px] leading-tight' : 'text-xs'
+          )}
+        >
           {card.title}
         </h3>
       </div>
 
       {!compact && card.userNote && (
         <div className="p-2">
-          <p className="text-[10px] text-muted-foreground line-clamp-1">
-            {card.userNote}
-          </p>
+          <p className="text-[10px] text-muted-foreground line-clamp-1">{card.userNote}</p>
         </div>
       )}
 
@@ -97,7 +102,7 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
         <button
           onClick={handleShareToX}
           className="bg-background/80 backdrop-blur-sm rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
-          title="X에 공유"
+          title={t('draggableCard.shareOnX')}
         >
           <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
             <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -110,7 +115,7 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           className="bg-background/80 backdrop-blur-sm rounded p-1 text-primary hover:text-primary/80"
-          title="YouTube에서 보기"
+          title={t('draggableCard.viewOnYouTube')}
         >
           <ExternalLink className="w-3 h-3" />
         </a>
