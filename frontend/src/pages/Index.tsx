@@ -680,7 +680,7 @@ const Index = () => {
         for (const card of affectedCards) {
           const newCellIndex =
             card.cellIndex === swappedIndices.from ? swappedIndices.to : swappedIndices.from;
-          const source = detectCardSource(card.id, syncedCards, persistedLocalCards);
+          const source = detectCardSource(card.id, syncedCards, persistedLocalCards, card);
 
           try {
             if (source === 'synced') {
@@ -862,9 +862,10 @@ const Index = () => {
       // Handle multi-card drop (process multiple cards at once)
       if (multiCardIds && multiCardIds.length > 0) {
         // Check pending cards for quota limit
-        const pendingIds = multiCardIds.filter(
-          (id) => detectCardSource(id, syncedCards, persistedLocalCards) === 'pending'
-        );
+        const pendingIds = multiCardIds.filter((id) => {
+          const c = getCardById(id, syncedCards, persistedLocalCards, pendingLocalCards);
+          return detectCardSource(id, syncedCards, persistedLocalCards, c) === 'pending';
+        });
         if (pendingIds.length > 0 && !canAddCard) {
           toast({
             title: '저장 한도 초과',
@@ -905,9 +906,9 @@ const Index = () => {
         // Phase C: BACKGROUND — 네트워크 (fire-and-forget)
         const batchItems = multiCardIds
           .map((id) => {
-            const source = detectCardSource(id, syncedCards, persistedLocalCards);
             const card = getCardById(id, syncedCards, persistedLocalCards, pendingLocalCards);
             if (!card) return null;
+            const source = detectCardSource(id, syncedCards, persistedLocalCards, card);
             return { card, source, cellIndex, levelId: currentLevelId };
           })
           .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -920,7 +921,7 @@ const Index = () => {
           setPendingLocalCards(previousPending);
           toast({
             title: '이동 실패',
-            description: `카드 이동에 실패했습니다: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            description: '카드가 원래 위치로 돌아갔습니다. 잠시 후 다시 시도해 주세요.',
             variant: 'destructive',
           });
         });
@@ -929,10 +930,9 @@ const Index = () => {
 
       // Handle single card drop
       if (cardId) {
-        const source = detectCardSource(cardId, syncedCards, persistedLocalCards);
         const card = getCardById(cardId, syncedCards, persistedLocalCards, pendingLocalCards);
-
         if (!card) return;
+        const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
 
         // Pending card quota check (must happen before optimistic update)
         if (source === 'pending' && !canAddCard) {
@@ -1012,7 +1012,7 @@ const Index = () => {
           setPendingLocalCards(previousPending);
           toast({
             title: '이동 실패',
-            description: `카드 이동에 실패했습니다: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            description: '카드가 원래 위치로 돌아갔습니다. 잠시 후 다시 시도해 주세요.',
             variant: 'destructive',
           });
         });
@@ -1214,10 +1214,10 @@ const Index = () => {
   const handleScratchPadCardDrop = useCallback(
     (cardId: string) => {
       // Moving card from mandala back to ideation
-      const source = detectCardSource(cardId, syncedCards, persistedLocalCards);
       const card = cards.find((c) => c.id === cardId);
-
       if (!card) return;
+      // Pass card as fallback hint to avoid misclassification during refetch
+      const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
 
       // Phase A: URGENT — 만다라에서 즉시 제거
       const previousCards = cards;
@@ -1250,7 +1250,7 @@ const Index = () => {
         setCards(previousCards);
         toast({
           title: '이동 실패',
-          description: `카드를 이동하지 못했습니다: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          description: '카드가 원래 위치로 돌아갔습니다. 잠시 후 다시 시도해 주세요.',
           variant: 'destructive',
         });
       });
@@ -1275,19 +1275,22 @@ const Index = () => {
       // Phase C: BACKGROUND — fire-and-forget
       const batchItems = cardIds
         .map((cardId) => {
-          const source = detectCardSource(cardId, syncedCards, persistedLocalCards);
           const card = previousCards.find((c) => c.id === cardId);
           if (!card) return null;
+          // Pass card as fallback hint: if syncedCards is stale/empty during refetch,
+          // detectCardSource uses card.isInIdeation to avoid misclassifying synced as pending
+          const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
           return { card, source, cellIndex: -1, levelId: 'scratchpad' };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null);
 
-      batchMoveCards.mutateAsync({ items: batchItems }).catch(() => {
+      batchMoveCards.mutateAsync({ items: batchItems }).catch((error) => {
+        console.error('[handleScratchPadMultiCardDrop] Failed:', error);
         skipNextSyncRef.current = false;
         setCards(previousCards);
         toast({
           title: '이동 실패',
-          description: `일부 카드 이동에 실패했습니다.`,
+          description: '카드가 원래 위치로 돌아갔습니다. 잠시 후 다시 시도해 주세요.',
           variant: 'destructive',
         });
       });
