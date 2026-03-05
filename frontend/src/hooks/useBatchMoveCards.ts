@@ -34,18 +34,6 @@ export function useBatchMoveCards() {
 
   return useMutation({
     mutationFn: async ({ items }: BatchMoveParams) => {
-      if (import.meta.env.DEV) {
-        console.log('[batchMoveCards] mutationFn called with', items.length, 'items');
-        console.log(
-          '[batchMoveCards] items:',
-          items.map((i) => ({
-            id: i.card.id.slice(0, 8),
-            source: i.source,
-            cellIndex: i.cellIndex,
-            levelId: i.levelId,
-          }))
-        );
-      }
       const headers = await getAuthHeaders();
 
       const syncedItems = items.filter((i) => i.source === 'synced');

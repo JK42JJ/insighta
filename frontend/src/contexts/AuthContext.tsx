@@ -51,9 +51,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (import.meta.env.DEV) {
-        console.log('Auth state changed:', event, session?.user?.email);
-      }
       setSession(session);
       setUser(session?.user ?? null);
       setError(null);
