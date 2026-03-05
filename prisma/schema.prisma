@@ -543,7 +543,7 @@ model youtube_videos {
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model credentials {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id    String   @unique @default("default")
+  user_id    String   @unique @db.Uuid
   data       String
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @db.Timestamptz(6)
@@ -616,6 +616,7 @@ model video_captions {
 model video_notes {
   id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   video_id          String         @db.Uuid
+  user_id           String?        @db.Uuid
   timestamp_seconds Int
   content           String
   tags              String?
@@ -624,6 +625,7 @@ model video_notes {
   youtube_videos    youtube_videos @relation(fields: [video_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([video_id, timestamp_seconds], map: "idx_video_notes_video_id_timestamp")
+  @@index([user_id], map: "idx_video_notes_user_id")
   @@schema("public")
 }
 
@@ -631,6 +633,7 @@ model video_notes {
 model watch_sessions {
   id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   video_id       String         @db.Uuid
+  user_id        String?        @db.Uuid
   started_at     DateTime       @db.Timestamptz(6)
   ended_at       DateTime       @db.Timestamptz(6)
   start_pos      Int
@@ -640,6 +643,7 @@ model watch_sessions {
   youtube_videos youtube_videos @relation(fields: [video_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([video_id, started_at], map: "idx_watch_sessions_video_id_started_at")
+  @@index([user_id], map: "idx_watch_sessions_user_id")
   @@schema("public")
 }
 
