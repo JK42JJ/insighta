@@ -163,9 +163,9 @@ describe('QuotaManager', () => {
         limit: 10000,
       });
 
-      await expect(
-        quotaManager.reserveQuota('playlist.details', 1000)
-      ).rejects.toThrow(QuotaExceededError);
+      await expect(quotaManager.reserveQuota('playlist.details', 1000)).rejects.toThrow(
+        QuotaExceededError
+      );
     });
 
     it('should create quota usage record if not exists', async () => {
@@ -216,11 +216,7 @@ describe('QuotaManager', () => {
     it('should log quota usage', async () => {
       await quotaManager.reserveQuota('playlist.details', 100);
 
-      expect(logQuotaUsage).toHaveBeenCalledWith(
-        'playlist.details',
-        100,
-        expect.any(Number)
-      );
+      expect(logQuotaUsage).toHaveBeenCalledWith('playlist.details', 100, expect.any(Number));
     });
 
     it('should warn when approaching quota limit', async () => {

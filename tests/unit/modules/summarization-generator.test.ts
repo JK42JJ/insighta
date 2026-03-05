@@ -43,7 +43,8 @@ describe('SummaryGenerator', () => {
   const mockCaption = {
     videoId: mockVideoId,
     language: 'en',
-    fullText: 'This video introduces TypeScript, a typed superset of JavaScript. It covers basic types, interfaces, and best practices.',
+    fullText:
+      'This video introduces TypeScript, a typed superset of JavaScript. It covers basic types, interfaces, and best practices.',
     segments: [
       { text: 'This video introduces TypeScript', start: 0, duration: 3 },
       { text: 'a typed superset of JavaScript', start: 3, duration: 3 },
@@ -533,7 +534,7 @@ describe('SummaryGenerator', () => {
 
       // Assert
       expect(results).toHaveLength(2);
-      expect(results.every(r => r.success)).toBe(true);
+      expect(results.every((r) => r.success)).toBe(true);
     });
 
     it('should skip removed items', async () => {

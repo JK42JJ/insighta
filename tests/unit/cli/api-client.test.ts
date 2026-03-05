@@ -257,10 +257,7 @@ describe('ApiClient', () => {
 
       await client.listPlaylists();
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${baseUrl}/api/v1/playlists`,
-        expect.any(Object)
-      );
+      expect(mockFetch).toHaveBeenCalledWith(`${baseUrl}/api/v1/playlists`, expect.any(Object));
     });
 
     test('should get playlist details', async () => {

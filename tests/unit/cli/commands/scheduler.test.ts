@@ -127,10 +127,12 @@ describe('Scheduler CLI Commands', () => {
       mockSchedulerManager.listSchedules.mockResolvedValue([]);
 
       // Start the command but don't wait for it (it would hang)
-      const startPromise = program.parseAsync(['node', 'test', 'scheduler', 'start'], { from: 'node' });
+      const startPromise = program.parseAsync(['node', 'test', 'scheduler', 'start'], {
+        from: 'node',
+      });
 
       // Give it time to register signal handlers
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Trigger SIGINT to stop the scheduler and resolve the promise
       if (signalHandlers['SIGINT']) {
@@ -172,9 +174,11 @@ describe('Scheduler CLI Commands', () => {
         },
       ]);
 
-      const startPromise = program.parseAsync(['node', 'test', 'scheduler', 'start'], { from: 'node' });
+      const startPromise = program.parseAsync(['node', 'test', 'scheduler', 'start'], {
+        from: 'node',
+      });
 
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       if (signalHandlers['SIGTERM']) {
         await signalHandlers['SIGTERM']();
@@ -310,9 +314,9 @@ describe('Scheduler CLI Commands', () => {
         throw new Error('Status retrieval failed');
       });
 
-      await expect(
-        statusCmd!.parseAsync(['status'], { from: 'user' })
-      ).rejects.toThrow('process.exit called');
+      await expect(statusCmd!.parseAsync(['status'], { from: 'user' })).rejects.toThrow(
+        'process.exit called'
+      );
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         '❌ Failed to get scheduler status:',
@@ -378,9 +382,7 @@ describe('Scheduler CLI Commands', () => {
       await program.parseAsync(['node', 'test', 'scheduler', 'remove', 'pl1'], { from: 'node' });
 
       expect(mockScheduler.removePlaylist).toHaveBeenCalledWith('pl1');
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        '✅ Playlist removed from schedule successfully'
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith('✅ Playlist removed from schedule successfully');
     });
 
     test('should handle remove error', async () => {
@@ -421,9 +423,7 @@ describe('Scheduler CLI Commands', () => {
 
       await listCmd!.parseAsync(['list'], { from: 'user' });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Auto-sync schedules')
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Auto-sync schedules'));
     });
 
     test('should show no schedules message', async () => {
@@ -476,9 +476,9 @@ describe('Scheduler CLI Commands', () => {
 
       mockSchedulerManager.listSchedules.mockRejectedValue(new Error('Database error'));
 
-      await expect(
-        listCmd!.parseAsync(['list'], { from: 'user' })
-      ).rejects.toThrow('process.exit called');
+      await expect(listCmd!.parseAsync(['list'], { from: 'user' })).rejects.toThrow(
+        'process.exit called'
+      );
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         '❌ Failed to list schedules:',
@@ -502,12 +502,12 @@ describe('Scheduler CLI Commands', () => {
         maxRetries: 3,
       });
 
-      await program.parseAsync(['node', 'test', 'scheduler', 'add', 'pl1', '0 */6 * * *'], { from: 'node' });
+      await program.parseAsync(['node', 'test', 'scheduler', 'add', 'pl1', '0 */6 * * *'], {
+        from: 'node',
+      });
 
       expect(mockScheduler.addPlaylist).toHaveBeenCalledWith('pl1', '0 */6 * * *', true, 3);
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        '✅ Playlist added to schedule successfully\n'
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith('✅ Playlist added to schedule successfully\n');
     });
 
     test('should try youtube ID if database ID fails', async () => {
@@ -524,7 +524,9 @@ describe('Scheduler CLI Commands', () => {
         maxRetries: 3,
       });
 
-      await program.parseAsync(['node', 'test', 'scheduler', 'add', 'PLtest123', '0 */6 * * *'], { from: 'node' });
+      await program.parseAsync(['node', 'test', 'scheduler', 'add', 'PLtest123', '0 */6 * * *'], {
+        from: 'node',
+      });
 
       expect(mockPlaylistManager.listPlaylists).toHaveBeenCalledWith({ filter: 'PLtest123' });
     });
@@ -534,7 +536,9 @@ describe('Scheduler CLI Commands', () => {
       mockPlaylistManager.listPlaylists.mockResolvedValue({ playlists: [] });
 
       await expect(
-        program.parseAsync(['node', 'test', 'scheduler', 'add', 'nonexistent', '0 */6 * * *'], { from: 'node' })
+        program.parseAsync(['node', 'test', 'scheduler', 'add', 'nonexistent', '0 */6 * * *'], {
+          from: 'node',
+        })
       ).rejects.toThrow('process.exit called');
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -557,7 +561,10 @@ describe('Scheduler CLI Commands', () => {
         maxRetries: 3,
       });
 
-      await program.parseAsync(['node', 'test', 'scheduler', 'add', 'pl1', '0 */6 * * *', '--disabled'], { from: 'node' });
+      await program.parseAsync(
+        ['node', 'test', 'scheduler', 'add', 'pl1', '0 */6 * * *', '--disabled'],
+        { from: 'node' }
+      );
 
       expect(mockScheduler.addPlaylist).toHaveBeenCalledWith('pl1', '0 */6 * * *', false, 3);
     });
@@ -576,7 +583,10 @@ describe('Scheduler CLI Commands', () => {
         maxRetries: 5,
       });
 
-      await program.parseAsync(['node', 'test', 'scheduler', 'add', 'pl1', '0 */6 * * *', '--max-retries', '5'], { from: 'node' });
+      await program.parseAsync(
+        ['node', 'test', 'scheduler', 'add', 'pl1', '0 */6 * * *', '--max-retries', '5'],
+        { from: 'node' }
+      );
 
       expect(mockScheduler.addPlaylist).toHaveBeenCalledWith('pl1', '0 */6 * * *', true, 5);
     });

@@ -84,7 +84,7 @@ describe('AutoSyncScheduler', () => {
       await scheduler.start();
 
       // Add small delay to ensure uptime is > 0
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(mockSchedulerManager.start).toHaveBeenCalled();
       expect(mockSchedulerManager.listSchedules).toHaveBeenCalledWith(true);
@@ -138,16 +138,23 @@ describe('AutoSyncScheduler', () => {
 
     it('should wait for running jobs to complete', async () => {
       mockSchedulerManager.listSchedules.mockResolvedValue([]);
-      mockSyncEngine.syncPlaylist.mockImplementation(() =>
-        new Promise((resolve) => setTimeout(() => resolve({
-          playlistId: 'playlist-1',
-          status: SyncStatus.COMPLETED,
-          itemsAdded: 0,
-          itemsRemoved: 0,
-          itemsReordered: 0,
-          duration: 100,
-          quotaUsed: 10,
-        }), 100))
+      mockSyncEngine.syncPlaylist.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  playlistId: 'playlist-1',
+                  status: SyncStatus.COMPLETED,
+                  itemsAdded: 0,
+                  itemsRemoved: 0,
+                  itemsReordered: 0,
+                  duration: 100,
+                  quotaUsed: 10,
+                }),
+              100
+            )
+          )
       );
       mockQuotaManager.getTodayUsage.mockResolvedValue({
         used: 0,
@@ -182,7 +189,7 @@ describe('AutoSyncScheduler', () => {
       await scheduler.start();
 
       // Add small delay to ensure uptime is > 0
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       const status = scheduler.getStatus();
 
@@ -220,9 +227,9 @@ describe('AutoSyncScheduler', () => {
     });
 
     it('should reject invalid cron expression', async () => {
-      await expect(
-        scheduler.addPlaylist('playlist-1', 'invalid cron', true, 3)
-      ).rejects.toThrow('Invalid cron expression');
+      await expect(scheduler.addPlaylist('playlist-1', 'invalid cron', true, 3)).rejects.toThrow(
+        'Invalid cron expression'
+      );
     });
 
     it('should handle default parameters', async () => {
@@ -399,16 +406,23 @@ describe('AutoSyncScheduler', () => {
       });
 
       // Mock a long-running sync
-      mockSyncEngine.syncPlaylist.mockImplementation(() =>
-        new Promise((resolve) => setTimeout(() => resolve({
-          playlistId: 'playlist-1',
-          status: SyncStatus.COMPLETED,
-          itemsAdded: 0,
-          itemsRemoved: 0,
-          itemsReordered: 0,
-          duration: 1000,
-          quotaUsed: 10,
-        }), 1000))
+      mockSyncEngine.syncPlaylist.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  playlistId: 'playlist-1',
+                  status: SyncStatus.COMPLETED,
+                  itemsAdded: 0,
+                  itemsRemoved: 0,
+                  itemsReordered: 0,
+                  duration: 1000,
+                  quotaUsed: 10,
+                }),
+              1000
+            )
+          )
       );
 
       await scheduler.start();
@@ -474,9 +488,9 @@ describe('AutoSyncScheduler', () => {
     it('should handle addPlaylist errors', async () => {
       mockSchedulerManager.createSchedule.mockRejectedValue(new Error('Create failed'));
 
-      await expect(
-        scheduler.addPlaylist('playlist-1', '0 */6 * * *')
-      ).rejects.toThrow('Create failed');
+      await expect(scheduler.addPlaylist('playlist-1', '0 */6 * * *')).rejects.toThrow(
+        'Create failed'
+      );
     });
   });
 
@@ -577,11 +591,12 @@ describe('AutoSyncScheduler', () => {
 
       // Make syncPlaylist take a long time
       let syncResolve: Function;
-      mockSyncEngine.syncPlaylist.mockImplementation(() =>
-        new Promise((resolve) => {
-          syncResolve = resolve;
-          // Never resolve - simulates long-running job
-        })
+      mockSyncEngine.syncPlaylist.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            syncResolve = resolve;
+            // Never resolve - simulates long-running job
+          })
       );
       mockQuotaManager.getTodayUsage.mockResolvedValue({
         used: 0,
@@ -802,10 +817,11 @@ describe('AutoSyncScheduler', () => {
 
       // Make syncPlaylist take a long time
       let syncResolve: Function;
-      mockSyncEngine.syncPlaylist.mockImplementation(() =>
-        new Promise((resolve) => {
-          syncResolve = resolve;
-        })
+      mockSyncEngine.syncPlaylist.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            syncResolve = resolve;
+          })
       );
 
       const mockSchedule: ScheduleInfo = {
@@ -892,7 +908,9 @@ describe('AutoSyncScheduler', () => {
         (call: any[]) => call[0] === '0 */6 * * *'
       );
       if (cronCall && cronCall[1]) {
-        await cronCall[1]();
+        cronCall[1]();
+        // The cron callback uses void (fire-and-forget), so we need to flush promises
+        await new Promise(process.nextTick);
       }
 
       const status = scheduler.getStatus();
@@ -911,7 +929,7 @@ describe('AutoSyncScheduler', () => {
       mockSchedulerManager.start.mockRejectedValueOnce(new Error('Initial error'));
       await expect(scheduler.start()).rejects.toThrow('Initial error');
 
-      let statusAfterError = scheduler.getStatus();
+      const statusAfterError = scheduler.getStatus();
       expect(statusAfterError.lastError).toBe('Initial error');
 
       // Reset and start successfully

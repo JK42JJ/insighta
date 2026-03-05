@@ -6,7 +6,12 @@
 
 import Fastify, { FastifyInstance } from 'fastify';
 import jwt from '@fastify/jwt';
-import type { LearningDashboard, VideoAnalytics, PlaylistAnalytics, SessionOperationResult } from '../../../src/modules/analytics/types';
+import type {
+  LearningDashboard,
+  VideoAnalytics,
+  PlaylistAnalytics,
+  SessionOperationResult,
+} from '../../../src/modules/analytics/types';
 
 // Mock analytics tracker
 const mockGetLearningDashboard = jest.fn();

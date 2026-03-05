@@ -274,8 +274,8 @@ describe('Database Client', () => {
         return { users: 1, posts: 1 };
       });
 
-      (mockPrismaInstance as any).user = { create: jest.fn() };
-      (mockPrismaInstance as any).post = { create: jest.fn() };
+      mockPrismaInstance.user = { create: jest.fn() };
+      mockPrismaInstance.post = { create: jest.fn() };
       mockPrismaInstance.$transaction.mockImplementation(async (callback: any) => {
         return callback(mockPrismaInstance);
       });
@@ -292,14 +292,9 @@ describe('Database Client', () => {
         throw new Error('Something went wrong');
       });
 
-      (mockPrismaInstance as any).user = { create: jest.fn() };
+      mockPrismaInstance.user = { create: jest.fn() };
       mockPrismaInstance.$transaction.mockImplementation(async (callback: any) => {
-        try {
-          return await callback(mockPrismaInstance);
-        } catch (error) {
-          // Simulate rollback
-          throw error;
-        }
+        return await callback(mockPrismaInstance);
       });
 
       await expect(executeTransaction(mockCallback)).rejects.toThrow(DatabaseError);

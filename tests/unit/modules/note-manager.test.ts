@@ -499,11 +499,7 @@ describe('NoteManager', () => {
 
       expect(result.success).toBe(true);
       expect(result.filepath).toBe(outputPath);
-      expect(fs.writeFileSync).toHaveBeenCalledWith(
-        outputPath,
-        expect.any(String),
-        'utf-8'
-      );
+      expect(fs.writeFileSync).toHaveBeenCalledWith(outputPath, expect.any(String), 'utf-8');
     });
 
     test('should create directory if not exists when saving file', async () => {

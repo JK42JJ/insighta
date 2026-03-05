@@ -67,7 +67,9 @@ describe('Sync API Routes', () => {
         reply.hijack();
         reply.raw.statusCode = 401;
         reply.raw.setHeader('content-type', 'application/json');
-        reply.raw.end(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Invalid token' } }));
+        reply.raw.end(
+          JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Invalid token' } })
+        );
       }
     });
 

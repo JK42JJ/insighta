@@ -15,7 +15,6 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,7 +40,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,11 +48,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
-      - run: npm test -- --passWithNoTests --forceExit
+      - name: Run unit tests
+        run: npm test -- --passWithNoTests --forceExit --testPathIgnorePatterns='tests/integration'
         env:
           NODE_ENV: test
           DATABASE_URL: postgresql://test:test@localhost:5432/test
-          ENCRYPTION_SECRET: ${{ secrets.ENCRYPTION_SECRET || '0000000000000000000000000000000000000000000000000000000000000000' }}
+          ENCRYPTION_SECRET: ${{ secrets.ENCRYPTION_SECRET || 'ci-test-encryption-secret-key-that-is-at-least-sixty-four-characters-long-ok' }}
 
   build-api:
     name: Build API

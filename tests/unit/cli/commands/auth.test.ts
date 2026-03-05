@@ -183,16 +183,12 @@ describe('User Authentication Commands', () => {
         user: { email: 'test@example.com', name: 'Test User', id: '123' },
       };
       mockTokenStorage.getValidTokens.mockResolvedValue(tokens);
-      mockApiClient.getProfile.mockRejectedValue(
-        new ApiClientError('Unauthorized', 401)
-      );
+      mockApiClient.getProfile.mockRejectedValue(new ApiClientError('Unauthorized', 401));
 
       await expect(whoamiCommand()).rejects.toThrow('process.exit called');
 
       expect(mockTokenStorage.clearTokens).toHaveBeenCalled();
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Session expired')
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Session expired'));
     });
 
     test('should display token expiry in hours', async () => {
@@ -214,9 +210,7 @@ describe('User Authentication Commands', () => {
 
       await whoamiCommand();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('hour')
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('hour'));
     });
 
     test('should display token expiry in minutes', async () => {
@@ -238,9 +232,7 @@ describe('User Authentication Commands', () => {
 
       await whoamiCommand();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('minute')
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('minute'));
     });
 
     test('should display soon expiry warning', async () => {
@@ -262,9 +254,7 @@ describe('User Authentication Commands', () => {
 
       await whoamiCommand();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Soon')
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Soon'));
     });
 
     test('should handle non-401 API errors', async () => {
@@ -276,9 +266,7 @@ describe('User Authentication Commands', () => {
         user: { email: 'test@example.com', name: 'Test User', id: '123' },
       };
       mockTokenStorage.getValidTokens.mockResolvedValue(tokens);
-      mockApiClient.getProfile.mockRejectedValue(
-        new ApiClientError('Server error', 500)
-      );
+      mockApiClient.getProfile.mockRejectedValue(new ApiClientError('Server error', 500));
 
       await expect(whoamiCommand()).rejects.toThrow('process.exit called');
 
@@ -299,9 +287,7 @@ describe('User Authentication Commands', () => {
 
       await expect(whoamiCommand()).rejects.toThrow('process.exit called');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Network error')
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Network error'));
     });
   });
 
@@ -317,9 +303,7 @@ describe('User Authentication Commands', () => {
 
       await registerCommand();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('already logged in')
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('already logged in'));
     });
   });
 
@@ -335,9 +319,7 @@ describe('User Authentication Commands', () => {
 
       await loginCommand();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('already logged in')
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('already logged in'));
     });
   });
 
@@ -347,9 +329,7 @@ describe('User Authentication Commands', () => {
 
       await expect(logoutCommand()).rejects.toThrow('process.exit called');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Logout failed')
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Logout failed'));
     });
 
     test('should handle non-Error objects in logout', async () => {
@@ -357,9 +337,7 @@ describe('User Authentication Commands', () => {
 
       await expect(logoutCommand()).rejects.toThrow('process.exit called');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Logout failed')
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Logout failed'));
     });
   });
 });

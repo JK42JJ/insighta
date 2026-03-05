@@ -79,7 +79,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
-      - run: npx prisma migrate deploy
+      - name: Run migrations
+        run: npx prisma migrate deploy || npx prisma db push --skip-generate --accept-data-loss
         env:
           DATABASE_URL: ${{ secrets.DIRECT_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}

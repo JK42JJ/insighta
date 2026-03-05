@@ -157,9 +157,7 @@ describe('Playlist Routes', () => {
     });
 
     test('should handle import error with 500 status', async () => {
-      mockPlaylistManager.importPlaylist.mockRejectedValue(
-        new Error('Failed to import playlist')
-      );
+      mockPlaylistManager.importPlaylist.mockRejectedValue(new Error('Failed to import playlist'));
 
       const response = await app.inject({
         method: 'POST',
@@ -305,9 +303,7 @@ describe('Playlist Routes', () => {
     });
 
     test('should handle list error', async () => {
-      mockPlaylistManager.listPlaylists.mockRejectedValue(
-        new Error('Database error')
-      );
+      mockPlaylistManager.listPlaylists.mockRejectedValue(new Error('Database error'));
 
       const response = await app.inject({
         method: 'GET',
@@ -447,9 +443,7 @@ describe('Playlist Routes', () => {
     });
 
     test('should return 500 when getPlaylistWithItems fails', async () => {
-      mockPlaylistManager.getPlaylistWithItems.mockRejectedValue(
-        new Error('Playlist not found')
-      );
+      mockPlaylistManager.getPlaylistWithItems.mockRejectedValue(new Error('Playlist not found'));
 
       const response = await app.inject({
         method: 'GET',
@@ -580,15 +574,11 @@ describe('Playlist Routes', () => {
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
       expect(body.message).toBe('Playlist deleted successfully');
-      expect(mockPlaylistManager.deletePlaylist).toHaveBeenCalledWith(
-        TEST_PLAYLIST_ID
-      );
+      expect(mockPlaylistManager.deletePlaylist).toHaveBeenCalledWith(TEST_PLAYLIST_ID);
     });
 
     test('should return 500 when delete fails', async () => {
-      mockPlaylistManager.deletePlaylist.mockRejectedValue(
-        new Error('Playlist not found')
-      );
+      mockPlaylistManager.deletePlaylist.mockRejectedValue(new Error('Playlist not found'));
 
       const response = await app.inject({
         method: 'DELETE',

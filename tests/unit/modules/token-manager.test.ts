@@ -351,9 +351,7 @@ describe('TokenManager', () => {
       // Simulate slow refresh
       (mockOAuth2Client.refreshAccessToken as jest.Mock).mockImplementation(
         () =>
-          new Promise((resolve) =>
-            setTimeout(() => resolve({ credentials: newCredentials }), 100)
-          )
+          new Promise((resolve) => setTimeout(() => resolve({ credentials: newCredentials }), 100))
       );
 
       // Start 3 concurrent refresh calls
@@ -657,7 +655,9 @@ describe('TokenManager', () => {
 
       tokenManager.initialize(mockOAuth2Client as OAuth2Client, credentials);
 
-      (mockOAuth2Client.refreshAccessToken as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+      (mockOAuth2Client.refreshAccessToken as jest.Mock).mockRejectedValueOnce(
+        new Error('Network error')
+      );
 
       await expect(tokenManager.refreshToken()).rejects.toThrow();
 

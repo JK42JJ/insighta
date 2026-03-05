@@ -247,9 +247,7 @@ describe('YouTubeClient', () => {
         new AuthenticationError('Token refresh failed')
       );
 
-      await expect(client.refreshAccessToken()).rejects.toThrow(
-        AuthenticationError
-      );
+      await expect(client.refreshAccessToken()).rejects.toThrow(AuthenticationError);
     });
   });
 
@@ -346,11 +344,7 @@ describe('YouTubeClient', () => {
 
       await client.getPlaylist('PLtest123');
 
-      expect(mockCacheService.set).toHaveBeenCalledWith(
-        'playlist:PLtest123',
-        mockPlaylist,
-        3600
-      );
+      expect(mockCacheService.set).toHaveBeenCalledWith('playlist:PLtest123', mockPlaylist, 3600);
     });
 
     test('should throw YouTubeAPIError when playlist not found', async () => {
@@ -361,9 +355,7 @@ describe('YouTubeClient', () => {
         },
       });
 
-      await expect(client.getPlaylist('nonexistent')).rejects.toThrow(
-        YouTubeAPIError
-      );
+      await expect(client.getPlaylist('nonexistent')).rejects.toThrow(YouTubeAPIError);
     });
   });
 
@@ -618,9 +610,7 @@ describe('Error handling', () => {
     const { retry } = require('../../../src/utils/retry');
     retry.mockImplementation((fn: () => Promise<any>) => fn());
 
-    await expect(client.getPlaylist('PLtest123')).rejects.toThrow(
-      QuotaExceededError
-    );
+    await expect(client.getPlaylist('PLtest123')).rejects.toThrow(QuotaExceededError);
   });
 
   test('should handle authentication error', async () => {
@@ -639,8 +629,6 @@ describe('Error handling', () => {
     const { retry } = require('../../../src/utils/retry');
     retry.mockImplementation((fn: () => Promise<any>) => fn());
 
-    await expect(client.getPlaylist('PLtest123')).rejects.toThrow(
-      AuthenticationError
-    );
+    await expect(client.getPlaylist('PLtest123')).rejects.toThrow(AuthenticationError);
   });
 });

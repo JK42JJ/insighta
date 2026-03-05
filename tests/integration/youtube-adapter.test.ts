@@ -24,7 +24,9 @@ describe('YouTubeAdapter Integration Tests', () => {
 
   beforeAll(() => {
     if (!API_KEY) {
-      console.warn('⚠️  YOUTUBE_API_KEY or GEMINI_API_KEY not set. Integration tests will be skipped.');
+      console.warn(
+        '⚠️  YOUTUBE_API_KEY or GEMINI_API_KEY not set. Integration tests will be skipped.'
+      );
     }
   });
 

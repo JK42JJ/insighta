@@ -181,9 +181,9 @@ describe('PlaylistManager', () => {
     });
 
     test('should throw error for invalid playlist URL', async () => {
-      await expect(manager.importPlaylist('https://example.com/invalid', mockUserId)).rejects.toThrow(
-        InvalidPlaylistError
-      );
+      await expect(
+        manager.importPlaylist('https://example.com/invalid', mockUserId)
+      ).rejects.toThrow(InvalidPlaylistError);
     });
 
     test('should throw error if snippet is missing', async () => {
@@ -249,9 +249,7 @@ describe('PlaylistManager', () => {
     test('should throw error if playlist not found', async () => {
       (db.youtube_playlists.findFirst as jest.Mock).mockResolvedValue(null);
 
-      await expect(manager.getPlaylist('non-existent')).rejects.toThrow(
-        RecordNotFoundError
-      );
+      await expect(manager.getPlaylist('non-existent')).rejects.toThrow(RecordNotFoundError);
     });
   });
 
@@ -407,9 +405,7 @@ describe('PlaylistManager', () => {
     test('should throw error if playlist not found', async () => {
       (db.youtube_playlists.findFirst as jest.Mock).mockResolvedValue(null);
 
-      await expect(manager.deletePlaylist('non-existent')).rejects.toThrow(
-        RecordNotFoundError
-      );
+      await expect(manager.deletePlaylist('non-existent')).rejects.toThrow(RecordNotFoundError);
     });
   });
 
@@ -496,9 +492,7 @@ describe('PlaylistManager', () => {
         sync_status: SyncStatus.IN_PROGRESS,
       });
 
-      await expect(manager.acquireSyncLock('playlist-1')).rejects.toThrow(
-        ConcurrentSyncError
-      );
+      await expect(manager.acquireSyncLock('playlist-1')).rejects.toThrow(ConcurrentSyncError);
     });
 
     test('should release sync lock with completed status', async () => {
@@ -563,10 +557,7 @@ describe('PlaylistManager', () => {
       });
       (db.youtube_playlists.create as jest.Mock).mockResolvedValue({ id: '1' });
 
-      await manager.importPlaylist(
-        'https://www.youtube.com/watch?v=xxx&list=PLxxx123',
-        mockUserId
-      );
+      await manager.importPlaylist('https://www.youtube.com/watch?v=xxx&list=PLxxx123', mockUserId);
 
       expect(mockYouTubeClient.getPlaylist).toHaveBeenCalledWith('PLxxx123');
     });

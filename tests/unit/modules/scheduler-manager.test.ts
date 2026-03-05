@@ -625,10 +625,9 @@ describe('SchedulerManager', () => {
       const executeSyncJob = (schedulerManager as any).executeSyncJob.bind(schedulerManager);
       await executeSyncJob('playlist-1');
 
-      expect(logger.warn).toHaveBeenCalledWith(
-        'Schedule disabled due to max retries',
-        { playlistId: 'playlist-1' }
-      );
+      expect(logger.warn).toHaveBeenCalledWith('Schedule disabled due to max retries', {
+        playlistId: 'playlist-1',
+      });
     });
 
     it('should skip sync when schedule is disabled', async () => {

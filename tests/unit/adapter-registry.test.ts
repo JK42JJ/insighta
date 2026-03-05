@@ -249,7 +249,13 @@ describe('AdapterRegistry', () => {
         return 'mock-collection';
       }
       getSchema(): any {
-        return { sourceType: 'mock', supportedContentTypes: [], requiredFields: [], optionalFields: [], metadataFields: {} };
+        return {
+          sourceType: 'mock',
+          supportedContentTypes: [],
+          requiredFields: [],
+          optionalFields: [],
+          metadataFields: {},
+        };
       }
       getCapabilities(): SourceCapabilities {
         return {

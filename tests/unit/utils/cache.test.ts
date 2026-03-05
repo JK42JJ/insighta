@@ -668,9 +668,7 @@ describe('CacheService', () => {
       mockFs.readdir.mockResolvedValue(mockFiles as any);
       mockFs.readFile
         .mockResolvedValueOnce('invalid json {')
-        .mockResolvedValueOnce(
-          JSON.stringify({ data: {}, timestamp: Date.now(), ttl: 3600 })
-        );
+        .mockResolvedValueOnce(JSON.stringify({ data: {}, timestamp: Date.now(), ttl: 3600 }));
       mockFs.unlink.mockResolvedValue(undefined);
 
       const removedCount = await cacheService.removeExpired();
@@ -698,9 +696,7 @@ describe('CacheService', () => {
       const mockFiles = ['file1.json'];
 
       mockFs.readdir.mockResolvedValue(mockFiles as any);
-      mockFs.readFile.mockResolvedValue(
-        JSON.stringify({ data: {}, timestamp: now, ttl: 3600 })
-      );
+      mockFs.readFile.mockResolvedValue(JSON.stringify({ data: {}, timestamp: now, ttl: 3600 }));
 
       const removedCount = await cacheService.removeExpired();
 
@@ -735,9 +731,7 @@ describe('CacheService', () => {
       mockFs.readdir.mockResolvedValue(mockFiles as any);
       mockFs.readFile
         .mockRejectedValueOnce(new Error('Read error'))
-        .mockResolvedValueOnce(
-          JSON.stringify({ data: {}, timestamp: Date.now(), ttl: 3600 })
-        );
+        .mockResolvedValueOnce(JSON.stringify({ data: {}, timestamp: Date.now(), ttl: 3600 }));
       mockFs.unlink.mockResolvedValue(undefined);
 
       const removedCount = await cacheService.removeExpired();
@@ -816,11 +810,7 @@ describe('CacheService', () => {
       const expectedHash = Buffer.from(specialKey).toString('base64url');
       const expectedPath = path.join('./cache', `${expectedHash}.json`);
 
-      expect(mockFs.writeFile).toHaveBeenCalledWith(
-        expectedPath,
-        expect.any(String),
-        'utf-8'
-      );
+      expect(mockFs.writeFile).toHaveBeenCalledWith(expectedPath, expect.any(String), 'utf-8');
     });
 
     test('should handle unicode characters in cache key', async () => {
@@ -911,11 +901,7 @@ describe('CacheService', () => {
       const expectedHash = Buffer.from('').toString('base64url');
       const expectedPath = path.join('./cache', `${expectedHash}.json`);
 
-      expect(mockFs.writeFile).toHaveBeenCalledWith(
-        expectedPath,
-        expect.any(String),
-        'utf-8'
-      );
+      expect(mockFs.writeFile).toHaveBeenCalledWith(expectedPath, expect.any(String), 'utf-8');
     });
   });
 
@@ -931,10 +917,7 @@ describe('CacheService', () => {
 
       // Initialize
       await cacheService.initialize();
-      expect(logger.info).toHaveBeenCalledWith(
-        'Cache service initialized',
-        expect.any(Object)
-      );
+      expect(logger.info).toHaveBeenCalledWith('Cache service initialized', expect.any(Object));
 
       // Set cache
       await cacheService.set('test-key', { data: 'test' });

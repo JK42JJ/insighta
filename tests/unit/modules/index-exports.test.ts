@@ -78,9 +78,7 @@ describe('Module Index Exports', () => {
     });
 
     test('should export types', () => {
-      const {
-        credentialsToStoredTokens,
-      } = require('../../../src/modules/auth');
+      const { credentialsToStoredTokens } = require('../../../src/modules/auth');
       expect(typeof credentialsToStoredTokens).toBe('function');
     });
   });

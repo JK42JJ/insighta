@@ -316,9 +316,7 @@ describe('VideoManager', () => {
     test('should throw error if video not found', async () => {
       (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue(null);
 
-      await expect(manager.getVideo('non-existent')).rejects.toThrow(
-        RecordNotFoundError
-      );
+      await expect(manager.getVideo('non-existent')).rejects.toThrow(RecordNotFoundError);
     });
   });
 
@@ -554,14 +552,14 @@ describe('VideoManager', () => {
     test('should update video statistics from YouTube', async () => {
       (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue(mockVideo);
       mockYouTubeClient.getVideos.mockResolvedValue([mockYtVideo]);
-      (db.youtube_videos.upsert as jest.Mock).mockResolvedValue({ ...mockVideo, view_count: BigInt(2000) });
+      (db.youtube_videos.upsert as jest.Mock).mockResolvedValue({
+        ...mockVideo,
+        view_count: BigInt(2000),
+      });
 
       await manager.updateVideoStats('db-video-1');
 
-      expect(mockQuotaManager.reserveQuota).toHaveBeenCalledWith(
-        'video.details',
-        1
-      );
+      expect(mockQuotaManager.reserveQuota).toHaveBeenCalledWith('video.details', 1);
       expect(mockYouTubeClient.getVideos).toHaveBeenCalledWith(['video123']);
       expect(db.youtube_videos.upsert).toHaveBeenCalled();
     });
@@ -570,9 +568,7 @@ describe('VideoManager', () => {
       (db.youtube_videos.findFirst as jest.Mock).mockResolvedValue(mockVideo);
       mockYouTubeClient.getVideos.mockResolvedValue([]);
 
-      await expect(manager.updateVideoStats('db-video-1')).rejects.toThrow(
-        RecordNotFoundError
-      );
+      await expect(manager.updateVideoStats('db-video-1')).rejects.toThrow(RecordNotFoundError);
     });
   });
 

@@ -40,15 +40,17 @@ jest.mock('../../../src/api/routes/quota', () => ({
 }));
 
 jest.mock('../../../src/api/schemas/common.schema', () => ({
-  createErrorResponse: jest.fn((code: string, message: string, path: string, details?: unknown) => ({
-    error: {
-      code,
-      message,
-      timestamp: new Date().toISOString(),
-      path,
-      details,
-    },
-  })),
+  createErrorResponse: jest.fn(
+    (code: string, message: string, path: string, details?: unknown) => ({
+      error: {
+        code,
+        message,
+        timestamp: new Date().toISOString(),
+        path,
+        details,
+      },
+    })
+  ),
   ErrorCode: {
     VALIDATION_ERROR: 'VALIDATION_ERROR',
     INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR',
@@ -69,7 +71,9 @@ import { createErrorResponse } from '../../../src/api/schemas/common.schema';
 const mockRegisterAuth = registerAuth as jest.MockedFunction<typeof registerAuth>;
 const mockAuthRoutes = authRoutes as jest.MockedFunction<typeof authRoutes>;
 const mockPlaylistRoutes = playlistRoutes as jest.MockedFunction<typeof playlistRoutes>;
-const mockCreateErrorResponse = createErrorResponse as jest.MockedFunction<typeof createErrorResponse>;
+const mockCreateErrorResponse = createErrorResponse as jest.MockedFunction<
+  typeof createErrorResponse
+>;
 
 describe('API Server', () => {
   let app: FastifyInstance;

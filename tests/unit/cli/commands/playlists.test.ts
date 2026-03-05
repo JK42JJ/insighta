@@ -119,9 +119,7 @@ describe('Playlist Management Commands', () => {
       await listPlaylistsCommand({});
 
       expect(mockApiClient.listPlaylists).toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Found 1 playlist')
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Found 1 playlist'));
     });
 
     test('should show message when no playlists found', async () => {
@@ -142,9 +140,7 @@ describe('Playlist Management Commands', () => {
     test('should exit when not logged in', async () => {
       mockTokenStorage.getValidTokens.mockResolvedValue(null);
 
-      await expect(listPlaylistsCommand({})).rejects.toThrow(
-        'process.exit called'
-      );
+      await expect(listPlaylistsCommand({})).rejects.toThrow('process.exit called');
 
       expect(consoleErrorSpy).toHaveBeenCalledWith('\n❌ You are not logged in\n');
     });
@@ -155,13 +151,9 @@ describe('Playlist Management Commands', () => {
         accessToken: 'test-token',
         user: { email: 'test@example.com' },
       });
-      mockApiClient.listPlaylists.mockRejectedValue(
-        new ApiClientError('Server error', 500)
-      );
+      mockApiClient.listPlaylists.mockRejectedValue(new ApiClientError('Server error', 500));
 
-      await expect(listPlaylistsCommand({})).rejects.toThrow(
-        'process.exit called'
-      );
+      await expect(listPlaylistsCommand({})).rejects.toThrow('process.exit called');
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         expect.stringContaining('Failed to list playlists')
@@ -174,17 +166,11 @@ describe('Playlist Management Commands', () => {
         accessToken: 'test-token',
         user: { email: 'test@example.com' },
       });
-      mockApiClient.listPlaylists.mockRejectedValue(
-        new ApiClientError('Unauthorized', 401)
-      );
+      mockApiClient.listPlaylists.mockRejectedValue(new ApiClientError('Unauthorized', 401));
 
-      await expect(listPlaylistsCommand({})).rejects.toThrow(
-        'process.exit called'
-      );
+      await expect(listPlaylistsCommand({})).rejects.toThrow('process.exit called');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('session has expired')
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('session has expired'));
     });
 
     test('should pass query parameters correctly', async () => {
@@ -251,19 +237,13 @@ describe('Playlist Management Commands', () => {
       await getPlaylistCommand('pl1');
 
       expect(mockApiClient.getPlaylist).toHaveBeenCalledWith('pl1');
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('PLAYLIST DETAILS')
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('PLAYLIST DETAILS'));
     });
 
     test('should exit when playlist ID not provided', async () => {
-      await expect(getPlaylistCommand('')).rejects.toThrow(
-        'process.exit called'
-      );
+      await expect(getPlaylistCommand('')).rejects.toThrow('process.exit called');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '\n❌ Playlist ID is required\n'
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith('\n❌ Playlist ID is required\n');
     });
 
     test('should handle playlist not found', async () => {
@@ -272,17 +252,11 @@ describe('Playlist Management Commands', () => {
         accessToken: 'test-token',
         user: { email: 'test@example.com' },
       });
-      mockApiClient.getPlaylist.mockRejectedValue(
-        new ApiClientError('Not found', 404)
-      );
+      mockApiClient.getPlaylist.mockRejectedValue(new ApiClientError('Not found', 404));
 
-      await expect(getPlaylistCommand('pl1')).rejects.toThrow(
-        'process.exit called'
-      );
+      await expect(getPlaylistCommand('pl1')).rejects.toThrow('process.exit called');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('not found')
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('not found'));
     });
 
     test('should display videos with more than 10 items message', async () => {
@@ -318,9 +292,7 @@ describe('Playlist Management Commands', () => {
 
       await getPlaylistCommand('pl1');
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('and 5 more videos')
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('and 5 more videos'));
     });
   });
 
@@ -345,19 +317,13 @@ describe('Playlist Management Commands', () => {
       await syncPlaylistCommand('pl1');
 
       expect(mockApiClient.syncPlaylist).toHaveBeenCalledWith('pl1');
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        '✅ Sync completed successfully!\n'
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith('✅ Sync completed successfully!\n');
     });
 
     test('should exit when playlist ID not provided', async () => {
-      await expect(syncPlaylistCommand('')).rejects.toThrow(
-        'process.exit called'
-      );
+      await expect(syncPlaylistCommand('')).rejects.toThrow('process.exit called');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '\n❌ Playlist ID is required\n'
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith('\n❌ Playlist ID is required\n');
     });
 
     test('should handle sync conflict (409)', async () => {
@@ -366,17 +332,11 @@ describe('Playlist Management Commands', () => {
         accessToken: 'test-token',
         user: { email: 'test@example.com' },
       });
-      mockApiClient.syncPlaylist.mockRejectedValue(
-        new ApiClientError('Sync in progress', 409)
-      );
+      mockApiClient.syncPlaylist.mockRejectedValue(new ApiClientError('Sync in progress', 409));
 
-      await expect(syncPlaylistCommand('pl1')).rejects.toThrow(
-        'process.exit called'
-      );
+      await expect(syncPlaylistCommand('pl1')).rejects.toThrow('process.exit called');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('already in progress')
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('already in progress'));
     });
 
     test('should display error in sync result', async () => {
@@ -399,9 +359,7 @@ describe('Playlist Management Commands', () => {
 
       await syncPlaylistCommand('pl1');
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Some warning message')
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Some warning message'));
     });
   });
 
@@ -416,19 +374,13 @@ describe('Playlist Management Commands', () => {
       await deletePlaylistCommand('pl1', { force: true });
 
       expect(mockApiClient.deletePlaylist).toHaveBeenCalledWith('pl1');
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        '✅ Playlist deleted successfully!\n'
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith('✅ Playlist deleted successfully!\n');
     });
 
     test('should exit when playlist ID not provided', async () => {
-      await expect(deletePlaylistCommand('', {})).rejects.toThrow(
-        'process.exit called'
-      );
+      await expect(deletePlaylistCommand('', {})).rejects.toThrow('process.exit called');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '\n❌ Playlist ID is required\n'
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith('\n❌ Playlist ID is required\n');
     });
 
     test('should handle playlist not found on delete', async () => {
@@ -437,17 +389,13 @@ describe('Playlist Management Commands', () => {
         accessToken: 'test-token',
         user: { email: 'test@example.com' },
       });
-      mockApiClient.deletePlaylist.mockRejectedValue(
-        new ApiClientError('Not found', 404)
-      );
+      mockApiClient.deletePlaylist.mockRejectedValue(new ApiClientError('Not found', 404));
 
       await expect(deletePlaylistCommand('pl1', { force: true })).rejects.toThrow(
         'process.exit called'
       );
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('already been deleted')
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('already been deleted'));
     });
   });
 
@@ -472,9 +420,7 @@ describe('Playlist Management Commands', () => {
       expect(mockApiClient.importPlaylist).toHaveBeenCalledWith({
         playlistUrl: 'https://youtube.com/playlist?list=PLtest123',
       });
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        '✅ Playlist imported successfully!\n'
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith('✅ Playlist imported successfully!\n');
     });
 
     test('should handle duplicate playlist', async () => {
@@ -491,9 +437,7 @@ describe('Playlist Management Commands', () => {
         importPlaylistCommand('https://youtube.com/playlist?list=PLtest123')
       ).rejects.toThrow('process.exit called');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('already imported')
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('already imported'));
     });
 
     test('should handle expired session on import', async () => {
@@ -502,17 +446,13 @@ describe('Playlist Management Commands', () => {
         accessToken: 'test-token',
         user: { email: 'test@example.com' },
       });
-      mockApiClient.importPlaylist.mockRejectedValue(
-        new ApiClientError('Unauthorized', 401)
-      );
+      mockApiClient.importPlaylist.mockRejectedValue(new ApiClientError('Unauthorized', 401));
 
       await expect(
         importPlaylistCommand('https://youtube.com/playlist?list=PLtest123')
       ).rejects.toThrow('process.exit called');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('session has expired')
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('session has expired'));
     });
   });
 });

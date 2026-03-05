@@ -224,7 +224,10 @@ describe('SyncEngine', () => {
       mockPlaylistManager.acquireSyncLock.mockResolvedValue(undefined);
       mockPlaylistManager.releaseSyncLock.mockResolvedValue(undefined);
       mockDb.youtube_sync_history.create.mockResolvedValue(mockSyncHistory);
-      mockDb.youtube_sync_history.update.mockResolvedValue({ ...mockSyncHistory, status: SyncStatus.COMPLETED });
+      mockDb.youtube_sync_history.update.mockResolvedValue({
+        ...mockSyncHistory,
+        status: SyncStatus.COMPLETED,
+      });
       mockQuotaManager.getOperationCost.mockReturnValue(10);
       mockQuotaManager.reserveQuota.mockResolvedValue(undefined);
       mockYouTubeClient.getPlaylistItems.mockResolvedValue(mockYtItems);
@@ -256,7 +259,10 @@ describe('SyncEngine', () => {
 
       // Verify sync lock acquired and released
       expect(mockPlaylistManager.acquireSyncLock).toHaveBeenCalledWith('playlist-1');
-      expect(mockPlaylistManager.releaseSyncLock).toHaveBeenCalledWith('playlist-1', SyncStatus.COMPLETED);
+      expect(mockPlaylistManager.releaseSyncLock).toHaveBeenCalledWith(
+        'playlist-1',
+        SyncStatus.COMPLETED
+      );
 
       // Verify sync history created and updated
       expect(mockDb.youtube_sync_history.create).toHaveBeenCalled();
@@ -431,7 +437,10 @@ describe('SyncEngine', () => {
       );
 
       // Verify lock released with failed status
-      expect(mockPlaylistManager.releaseSyncLock).toHaveBeenCalledWith('playlist-1', SyncStatus.FAILED);
+      expect(mockPlaylistManager.releaseSyncLock).toHaveBeenCalledWith(
+        'playlist-1',
+        SyncStatus.FAILED
+      );
     });
 
     test('should handle database transaction errors', async () => {
@@ -589,9 +598,7 @@ describe('SyncEngine', () => {
         { id: 'item-3', youtube_videos: { youtube_video_id: 'video3' }, position: 2 },
       ];
 
-      const ytItems = [
-        { snippet: { resourceId: { videoId: 'video1' }, position: 0 } },
-      ];
+      const ytItems = [{ snippet: { resourceId: { videoId: 'video1' }, position: 0 } }];
 
       const changes = await (engine as any).detectChanges('playlist-1', currentItems, ytItems);
 
@@ -649,9 +656,7 @@ describe('SyncEngine', () => {
 
     test('should handle empty current items', async () => {
       const currentItems: any[] = [];
-      const ytItems = [
-        { snippet: { resourceId: { videoId: 'video1' }, position: 0 } },
-      ];
+      const ytItems = [{ snippet: { resourceId: { videoId: 'video1' }, position: 0 } }];
 
       const changes = await (engine as any).detectChanges('playlist-1', currentItems, ytItems);
 
@@ -680,7 +685,10 @@ describe('SyncEngine', () => {
       mockPlaylistManager.acquireSyncLock.mockResolvedValue(undefined);
       mockPlaylistManager.releaseSyncLock.mockResolvedValue(undefined);
       mockDb.youtube_sync_history.create.mockResolvedValue(mockSyncHistory);
-      mockDb.youtube_sync_history.update.mockResolvedValue({ ...mockSyncHistory, status: SyncStatus.COMPLETED });
+      mockDb.youtube_sync_history.update.mockResolvedValue({
+        ...mockSyncHistory,
+        status: SyncStatus.COMPLETED,
+      });
       mockQuotaManager.getOperationCost.mockReturnValue(10);
       mockQuotaManager.reserveQuota.mockResolvedValue(undefined);
       mockYouTubeClient.getPlaylistItems.mockResolvedValue([]);
@@ -738,7 +746,10 @@ describe('SyncEngine', () => {
       mockPlaylistManager.acquireSyncLock.mockResolvedValue(undefined);
       mockPlaylistManager.releaseSyncLock.mockResolvedValue(undefined);
       mockDb.youtube_sync_history.create.mockResolvedValue(mockSyncHistory);
-      mockDb.youtube_sync_history.update.mockResolvedValue({ ...mockSyncHistory, status: SyncStatus.COMPLETED });
+      mockDb.youtube_sync_history.update.mockResolvedValue({
+        ...mockSyncHistory,
+        status: SyncStatus.COMPLETED,
+      });
       mockQuotaManager.getOperationCost.mockReturnValue(10);
       mockQuotaManager.reserveQuota.mockResolvedValue(undefined);
       mockYouTubeClient.getPlaylistItems.mockResolvedValue([]);

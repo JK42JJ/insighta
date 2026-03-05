@@ -77,9 +77,7 @@ describe('AdapterFactory', () => {
         credentials: {},
       };
 
-      expect(() => createAdapter('unsupported', unsupportedConfig)).toThrow(
-        /Supported types:/
-      );
+      expect(() => createAdapter('unsupported', unsupportedConfig)).toThrow(/Supported types:/);
     });
   });
 
@@ -91,7 +89,9 @@ describe('AdapterFactory', () => {
       expect(adapter).toBeInstanceOf(YouTubeAdapter);
 
       // Calling methods before initialization should throw
-      expect(() => adapter.extractCollectionId('https://youtube.com/playlist?list=PLxxx')).not.toThrow();
+      expect(() =>
+        adapter.extractCollectionId('https://youtube.com/playlist?list=PLxxx')
+      ).not.toThrow();
     });
 
     test('should create and initialize adapter', async () => {
@@ -100,7 +100,9 @@ describe('AdapterFactory', () => {
       expect(adapter).toBeInstanceOf(YouTubeAdapter);
 
       // Adapter should be initialized
-      expect(() => adapter.extractCollectionId('https://youtube.com/playlist?list=PLxxx')).not.toThrow();
+      expect(() =>
+        adapter.extractCollectionId('https://youtube.com/playlist?list=PLxxx')
+      ).not.toThrow();
 
       await adapter.shutdown();
     });

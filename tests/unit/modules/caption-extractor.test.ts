@@ -429,7 +429,7 @@ describe('CaptionExtractor', () => {
 
       // Assert
       expect(results).toHaveLength(3);
-      expect(results.every(r => r.success)).toBe(true);
+      expect(results.every((r) => r.success)).toBe(true);
       expect(mockGetSubtitles).toHaveBeenCalledTimes(3);
     });
 

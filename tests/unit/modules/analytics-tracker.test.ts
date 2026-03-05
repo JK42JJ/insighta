@@ -239,9 +239,7 @@ describe('AnalyticsTracker', () => {
 
     it('should cap completion percentage at 100%', async () => {
       // Arrange
-      const sessions = [
-        { ...mockSession, start_pos: 0, end_pos: 700, duration: 700 },
-      ];
+      const sessions = [{ ...mockSession, start_pos: 0, end_pos: 700, duration: 700 }];
       mockDb.youtube_videos.findUnique.mockResolvedValue({
         ...mockVideo,
         watch_sessions: sessions,
@@ -407,9 +405,7 @@ describe('AnalyticsTracker', () => {
         ...mockVideo,
         id: 'v1',
         youtube_video_id: 'yt1',
-        watch_sessions: [
-          { ...mockSession, started_at: new Date('2024-01-01T10:00:00Z') },
-        ],
+        watch_sessions: [{ ...mockSession, started_at: new Date('2024-01-01T10:00:00Z') }],
       };
       const video2 = {
         ...mockVideo,
@@ -425,9 +421,7 @@ describe('AnalyticsTracker', () => {
         youtube_playlist_items: [{ youtube_videos: video1 }, { youtube_videos: video2 }],
       });
 
-      mockDb.youtube_videos.findUnique
-        .mockResolvedValueOnce(video1)
-        .mockResolvedValueOnce(video2);
+      mockDb.youtube_videos.findUnique.mockResolvedValueOnce(video1).mockResolvedValueOnce(video2);
 
       // Act
       const analytics = await tracker.getPlaylistAnalytics('playlist-yt-1');
@@ -551,18 +545,14 @@ describe('AnalyticsTracker', () => {
           id: 'v1',
           youtube_video_id: 'yt1',
           title: 'Video 1',
-          watch_sessions: [
-            { ...mockSession, duration: 500, end_pos: 500 },
-          ],
+          watch_sessions: [{ ...mockSession, duration: 500, end_pos: 500 }],
         },
         {
           ...mockVideo,
           id: 'v2',
           youtube_video_id: 'yt2',
           title: 'Video 2',
-          watch_sessions: [
-            { ...mockSession, duration: 300, end_pos: 300 },
-          ],
+          watch_sessions: [{ ...mockSession, duration: 300, end_pos: 300 }],
         },
       ];
 
@@ -641,9 +631,7 @@ describe('AnalyticsTracker', () => {
       // Assert
       expect(dashboard.recentActivity).toHaveLength(2);
       expect(dashboard.recentActivity[0]?.videoId).toBe('yt1'); // Sorted by date desc
-      expect(dashboard.recentActivity[0]?.watchedAt).toEqual(
-        new Date('2024-01-03T10:00:00Z')
-      );
+      expect(dashboard.recentActivity[0]?.watchedAt).toEqual(new Date('2024-01-03T10:00:00Z'));
     });
 
     it('should handle database errors gracefully', async () => {
