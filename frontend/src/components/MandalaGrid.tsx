@@ -4,6 +4,7 @@ import { MandalaCell } from './MandalaCell';
 import { MandalaDashboard } from './MandalaDashboard';
 import { MandalaLevel, InsightCard } from '@/types/mandala';
 import { Sparkles, ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface MandalaGridProps {
   level: MandalaLevel;
@@ -52,6 +53,7 @@ export const MandalaGrid = memo(function MandalaGrid({
   hideHeader = false,
   isCompact = false,
 }: MandalaGridProps) {
+  const { t } = useTranslation();
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionDirection, setTransitionDirection] = useState<'in' | 'out'>('in');
   const [rippleOrigin, setRippleOrigin] = useState<{ x: number; y: number } | null>(null);
@@ -298,11 +300,11 @@ export const MandalaGrid = memo(function MandalaGrid({
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium text-foreground">만다라트</span>
+            <span className="text-sm font-medium text-foreground">{t('mandala.title')}</span>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
-              {totalCards} 카드
+              {t('common.cards', { count: totalCards })}
             </span>
           </div>
         </div>
@@ -425,7 +427,7 @@ export const MandalaGrid = memo(function MandalaGrid({
                     style={{ transform: `rotate(${backArrowConfig.rotation}deg)` }}
                   />
                   <span className="text-[8px] font-medium text-muted-foreground group-hover:text-primary transition-colors">
-                    뒤로
+                    {t('mandala.back')}
                   </span>
                 </div>
               </button>
@@ -499,9 +501,7 @@ export const MandalaGrid = memo(function MandalaGrid({
       {/* Hint */}
       {showHint && (
         <p className="text-[10px] text-center text-muted-foreground/60">
-          {isFlipped
-            ? '되돌리기 버튼을 클릭하여 만다라 보기'
-            : '중앙 셀을 더블클릭하여 통계 보기 · 셀을 드래그하여 우선순위 변경'}
+          {isFlipped ? t('mandala.hintFlipped') : t('mandala.hintDefault')}
         </p>
       )}
     </div>

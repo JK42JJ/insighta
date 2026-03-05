@@ -89,6 +89,7 @@ CLAUDE.md
 
 # Developer tool configs (personal environment)
 .tmux.project.conf
+scripts/agent-dashboard.sh
 
 # Personal work files
 prompt/

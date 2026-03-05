@@ -1,11 +1,6 @@
 import { useState } from 'react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { useTranslation } from 'react-i18next';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,16 +23,11 @@ import { PlaylistItem } from './PlaylistItem';
 import { Loader2, Plus, RefreshCw, Youtube, LogIn } from 'lucide-react';
 import type { SyncInterval } from '@/types/youtube';
 
-const SYNC_INTERVALS: { value: SyncInterval; label: string }[] = [
-  { value: 'manual', label: '수동' },
-  { value: '1h', label: '1시간마다' },
-  { value: '6h', label: '6시간마다' },
-  { value: '12h', label: '12시간마다' },
-  { value: '24h', label: '24시간마다' },
-];
+const SYNC_INTERVAL_KEYS: SyncInterval[] = ['manual', '1h', '6h', '12h', '24h'];
 
 export function YouTubeSyncCard() {
   const { toast } = useToast();
+  const { t } = useTranslation();
   const { isLoggedIn, isLoading: isAuthLoading, signInWithGoogle } = useAuth();
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [syncingPlaylistId, setSyncingPlaylistId] = useState<string | null>(null);
@@ -53,8 +43,8 @@ export function YouTubeSyncCard() {
     } catch (error) {
       console.error('Sign in failed:', error);
       toast({
-        title: '로그인 실패',
-        description: error instanceof Error ? error.message : '로그인 중 오류가 발생했습니다.',
+        title: t('youtube.signInFailed'),
+        description: error instanceof Error ? error.message : t('youtube.signInError'),
         variant: 'destructive',
       });
     } finally {
@@ -76,8 +66,8 @@ export function YouTubeSyncCard() {
   const handleAddPlaylist = async () => {
     if (!playlistUrl.trim()) {
       toast({
-        title: '오류',
-        description: 'YouTube 플레이리스트 URL을 입력해주세요.',
+        title: t('common.error'),
+        description: t('youtube.urlRequired'),
         variant: 'destructive',
       });
       return;
@@ -87,13 +77,13 @@ export function YouTubeSyncCard() {
       await addPlaylist(playlistUrl.trim());
       setPlaylistUrl('');
       toast({
-        title: '플레이리스트 추가됨',
-        description: '플레이리스트가 성공적으로 추가되었습니다. 동기화를 시작해주세요.',
+        title: t('youtube.playlistAdded'),
+        description: t('youtube.playlistAddedDesc'),
       });
     } catch (error) {
       toast({
-        title: '추가 실패',
-        description: error instanceof Error ? error.message : '플레이리스트를 추가하지 못했습니다.',
+        title: t('youtube.addFailed'),
+        description: error instanceof Error ? error.message : t('youtube.addFailedDesc'),
         variant: 'destructive',
       });
     }
@@ -104,13 +94,16 @@ export function YouTubeSyncCard() {
     try {
       const result = await syncPlaylist(playlistId);
       toast({
-        title: '동기화 완료',
-        description: `${result.itemsAdded}개 추가, ${result.itemsRemoved}개 제거됨`,
+        title: t('youtube.syncComplete'),
+        description: t('youtube.syncCompleteDesc', {
+          added: result.itemsAdded,
+          removed: result.itemsRemoved,
+        }),
       });
     } catch (error) {
       toast({
-        title: '동기화 실패',
-        description: error instanceof Error ? error.message : '동기화 중 오류가 발생했습니다.',
+        title: t('youtube.syncFailed'),
+        description: error instanceof Error ? error.message : t('youtube.syncError'),
         variant: 'destructive',
       });
     } finally {
@@ -123,13 +116,13 @@ export function YouTubeSyncCard() {
     try {
       await deletePlaylist(playlistId);
       toast({
-        title: '삭제됨',
-        description: '플레이리스트가 삭제되었습니다.',
+        title: t('youtube.deleted'),
+        description: t('youtube.playlistDeleted'),
       });
     } catch (error) {
       toast({
-        title: '삭제 실패',
-        description: error instanceof Error ? error.message : '삭제 중 오류가 발생했습니다.',
+        title: t('youtube.deleteFailed'),
+        description: error instanceof Error ? error.message : t('youtube.deleteError'),
         variant: 'destructive',
       });
     } finally {
@@ -141,14 +134,17 @@ export function YouTubeSyncCard() {
     try {
       const result = await syncAll();
       toast({
-        title: '전체 동기화 완료',
-        description: `${result.synced}개 성공, ${result.failed}개 실패`,
+        title: t('youtube.syncAllComplete'),
+        description: t('youtube.syncAllCompleteDesc', {
+          synced: result.synced,
+          failed: result.failed,
+        }),
         variant: result.failed > 0 ? 'destructive' : 'default',
       });
     } catch (error) {
       toast({
-        title: '동기화 실패',
-        description: error instanceof Error ? error.message : '동기화 중 오류가 발생했습니다.',
+        title: t('youtube.syncFailed'),
+        description: error instanceof Error ? error.message : t('youtube.syncError'),
         variant: 'destructive',
       });
     }
@@ -161,13 +157,15 @@ export function YouTubeSyncCard() {
         autoSyncEnabled: value !== 'manual',
       });
       toast({
-        title: '설정 저장됨',
-        description: `동기화 간격이 "${SYNC_INTERVALS.find(i => i.value === value)?.label}"(으)로 변경되었습니다.`,
+        title: t('youtube.settingsSaved'),
+        description: t('youtube.settingsSavedDesc', {
+          interval: t(`youtube.syncInterval.${value}`),
+        }),
       });
     } catch (error) {
       toast({
-        title: '설정 저장 실패',
-        description: error instanceof Error ? error.message : '설정을 저장하지 못했습니다.',
+        title: t('youtube.settingsSaveFailed'),
+        description: error instanceof Error ? error.message : t('youtube.settingsSaveError'),
         variant: 'destructive',
       });
     }
@@ -180,11 +178,9 @@ export function YouTubeSyncCard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Youtube className="h-5 w-5 text-red-600" />
-            YouTube 플레이리스트 동기화
+            {t('youtube.syncTitle')}
           </CardTitle>
-          <CardDescription>
-            YouTube 플레이리스트를 자동으로 동기화하여 아이디에이션 팔레트에서 사용합니다
-          </CardDescription>
+          <CardDescription>{t('youtube.syncDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
@@ -201,11 +197,9 @@ export function YouTubeSyncCard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Youtube className="h-5 w-5 text-red-600" />
-            YouTube 플레이리스트 동기화
+            {t('youtube.syncTitle')}
           </CardTitle>
-          <CardDescription>
-            YouTube 플레이리스트를 자동으로 동기화하여 아이디에이션 팔레트에서 사용합니다
-          </CardDescription>
+          <CardDescription>{t('youtube.syncDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 space-y-4">
@@ -214,10 +208,8 @@ export function YouTubeSyncCard() {
                 <LogIn className="h-8 w-8 text-muted-foreground" />
               </div>
               <div>
-                <p className="font-medium">로그인이 필요합니다</p>
-                <p className="text-sm text-muted-foreground">
-                  YouTube 플레이리스트 동기화 기능을 사용하려면 먼저 로그인하세요.
-                </p>
+                <p className="font-medium">{t('youtube.loginRequired')}</p>
+                <p className="text-sm text-muted-foreground">{t('youtube.loginRequiredDesc')}</p>
               </div>
             </div>
             <Button
@@ -230,7 +222,7 @@ export function YouTubeSyncCard() {
               ) : (
                 <Youtube className="mr-2 h-4 w-4" />
               )}
-              Google 계정으로 로그인
+              {t('youtube.signInWithGoogle')}
             </Button>
           </div>
         </CardContent>
@@ -243,19 +235,15 @@ export function YouTubeSyncCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Youtube className="h-5 w-5 text-red-600" />
-          YouTube 플레이리스트 동기화
+          {t('youtube.syncTitle')}
         </CardTitle>
-        <CardDescription>
-          YouTube 플레이리스트를 자동으로 동기화하여 아이디에이션 팔레트에서 사용합니다
-        </CardDescription>
+        <CardDescription>{t('youtube.syncDesc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Google Account Connection */}
         <div className="space-y-2">
-          <Label>Google 계정 연결</Label>
-          <p className="text-sm text-muted-foreground">
-            비공개 플레이리스트에 접근하려면 Google 계정을 연결하세요.
-          </p>
+          <Label>{t('youtube.googleAccount')}</Label>
+          <p className="text-sm text-muted-foreground">{t('youtube.googleAccountDesc')}</p>
           <YouTubeConnectButton />
         </div>
 
@@ -263,11 +251,11 @@ export function YouTubeSyncCard() {
 
         {/* Add Playlist */}
         <div className="space-y-2">
-          <Label htmlFor="playlist-url">플레이리스트 추가</Label>
+          <Label htmlFor="playlist-url">{t('youtube.addPlaylist')}</Label>
           <div className="flex gap-2">
             <Input
               id="playlist-url"
-              placeholder="YouTube 플레이리스트 URL 입력..."
+              placeholder={t('youtube.playlistUrlPlaceholder')}
               value={playlistUrl}
               onChange={(e) => setPlaylistUrl(e.target.value)}
               onKeyDown={(e) => {
@@ -276,16 +264,13 @@ export function YouTubeSyncCard() {
                 }
               }}
             />
-            <Button
-              onClick={handleAddPlaylist}
-              disabled={isAdding || !playlistUrl.trim()}
-            >
+            <Button onClick={handleAddPlaylist} disabled={isAdding || !playlistUrl.trim()}>
               {isAdding ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Plus className="h-4 w-4" />
               )}
-              <span className="ml-2 hidden sm:inline">추가</span>
+              <span className="ml-2 hidden sm:inline">{t('common.add')}</span>
             </Button>
           </div>
         </div>
@@ -294,21 +279,16 @@ export function YouTubeSyncCard() {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label>
-              등록된 플레이리스트 ({playlists.length})
+              {t('youtube.registeredPlaylists')} ({playlists.length})
             </Label>
             {playlists.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSyncAll}
-                disabled={isSyncingAll}
-              >
+              <Button variant="outline" size="sm" onClick={handleSyncAll} disabled={isSyncingAll}>
                 {isSyncingAll ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <RefreshCw className="mr-2 h-4 w-4" />
                 )}
-                전체 동기화
+                {t('youtube.syncAll')}
               </Button>
             )}
           </div>
@@ -320,8 +300,8 @@ export function YouTubeSyncCard() {
           ) : playlists.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Youtube className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>등록된 플레이리스트가 없습니다.</p>
-              <p className="text-sm">위에서 YouTube 플레이리스트 URL을 추가해보세요.</p>
+              <p>{t('youtube.noPlaylists')}</p>
+              <p className="text-sm">{t('youtube.noPlaylistsHint')}</p>
             </div>
           ) : (
             <ScrollArea className="h-[300px]">
@@ -345,16 +325,14 @@ export function YouTubeSyncCard() {
 
         {/* Sync Settings */}
         <div className="space-y-4">
-          <Label>동기화 설정</Label>
+          <Label>{t('youtube.syncSettings')}</Label>
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="sync-interval" className="text-sm font-normal">
-                자동 동기화 간격
+                {t('youtube.autoSyncInterval')}
               </Label>
-              <p className="text-xs text-muted-foreground">
-                플레이리스트를 자동으로 동기화할 주기를 선택하세요
-              </p>
+              <p className="text-xs text-muted-foreground">{t('youtube.autoSyncIntervalDesc')}</p>
             </div>
             <Select
               value={syncInterval}
@@ -365,9 +343,9 @@ export function YouTubeSyncCard() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {SYNC_INTERVALS.map((interval) => (
-                  <SelectItem key={interval.value} value={interval.value}>
-                    {interval.label}
+                {SYNC_INTERVAL_KEYS.map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {t(`youtube.syncInterval.${key}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -377,11 +355,9 @@ export function YouTubeSyncCard() {
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="auto-sync" className="text-sm font-normal">
-                백그라운드 동기화
+                {t('youtube.backgroundSync')}
               </Label>
-              <p className="text-xs text-muted-foreground">
-                브라우저가 열려있을 때 자동으로 동기화합니다
-              </p>
+              <p className="text-xs text-muted-foreground">{t('youtube.backgroundSyncDesc')}</p>
             </div>
             <Switch
               id="auto-sync"

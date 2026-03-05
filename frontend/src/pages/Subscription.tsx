@@ -1,111 +1,97 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Header } from "@/components/Header";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Check, ArrowLeft, Crown, Zap, Star } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
-
-const plans = [
-  {
-    id: "free",
-    name: "무료",
-    price: "₩0",
-    period: "월",
-    description: "기본 기능을 무료로 사용하세요",
-    icon: Star,
-    features: [
-      "만다라트 1개 생성",
-      "최대 50개 카드 저장",
-      "기본 템플릿 사용",
-      "커뮤니티 지원",
-    ],
-    buttonText: "현재 플랜",
-    current: true,
-  },
-  {
-    id: "pro",
-    name: "프로",
-    price: "₩9,900",
-    period: "월",
-    description: "더 많은 기능으로 생산성을 높이세요",
-    icon: Zap,
-    popular: true,
-    features: [
-      "만다라트 무제한 생성",
-      "카드 무제한 저장",
-      "프리미엄 템플릿 사용",
-      "클라우드 동기화",
-      "우선 지원",
-    ],
-    buttonText: "업그레이드",
-    current: false,
-  },
-  {
-    id: "enterprise",
-    name: "엔터프라이즈",
-    price: "₩29,900",
-    period: "월",
-    description: "팀과 함께 협업하세요",
-    icon: Crown,
-    features: [
-      "프로 플랜의 모든 기능",
-      "팀 협업 기능",
-      "관리자 대시보드",
-      "API 접근",
-      "전담 지원",
-      "맞춤형 온보딩",
-    ],
-    buttonText: "문의하기",
-    current: false,
-  },
-];
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { Header } from '@/components/Header';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Check, ArrowLeft, Crown, Zap, Star } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 export default function Subscription() {
   const navigate = useNavigate();
-  const [selectedPlan, setSelectedPlan] = useState("free");
+  const { t } = useTranslation();
+  const [selectedPlan, setSelectedPlan] = useState('free');
+
+  const plans = [
+    {
+      id: 'free',
+      name: t('subscription.free.name'),
+      price: '₩0',
+      period: t('subscription.monthly'),
+      description: t('subscription.free.description'),
+      icon: Star,
+      features: t('subscription.free.features', { returnObjects: true }) as string[],
+      buttonText: t('subscription.currentPlan'),
+      current: true,
+    },
+    {
+      id: 'pro',
+      name: t('subscription.pro.name'),
+      price: '₩9,900',
+      period: t('subscription.monthly'),
+      description: t('subscription.pro.description'),
+      icon: Zap,
+      popular: true,
+      features: t('subscription.pro.features', { returnObjects: true }) as string[],
+      buttonText: t('subscription.upgrade'),
+      current: false,
+    },
+    {
+      id: 'enterprise',
+      name: t('subscription.enterprise.name'),
+      price: '₩29,900',
+      period: t('subscription.monthly'),
+      description: t('subscription.enterprise.description'),
+      icon: Crown,
+      features: t('subscription.enterprise.features', { returnObjects: true }) as string[],
+      buttonText: t('subscription.contactSales'),
+      current: false,
+    },
+  ];
 
   const handleSelectPlan = (planId: string) => {
-    if (planId === "free") return;
-    
+    if (planId === 'free') return;
+
     toast({
-      title: "준비 중",
-      description: "결제 기능은 곧 출시될 예정입니다.",
+      title: 'Coming Soon',
+      description: 'Payment feature will be available soon.',
     });
   };
 
   return (
     <div className="min-h-screen bg-background">
-      <Header onNavigateHome={() => navigate("/")} />
-      
+      <Header onNavigateHome={() => navigate('/')} />
+
       <main className="container mx-auto px-4 py-8">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(-1)}
-          className="mb-6 gap-2"
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="mb-6 gap-2">
           <ArrowLeft className="w-4 h-4" />
-          뒤로가기
+          {t('common.back')}
         </Button>
 
         <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-foreground mb-2">구독 플랜</h1>
-          <p className="text-muted-foreground">필요에 맞는 플랜을 선택하세요</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">{t('subscription.title')}</h1>
+          <p className="text-muted-foreground">{t('subscription.subtitle')}</p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {plans.map((plan) => (
-            <Card 
+            <Card
               key={plan.id}
               className={`bg-surface-mid border-border/50 relative transition-all duration-200 hover:border-primary/50 ${
-                plan.popular ? "ring-2 ring-primary" : ""
+                plan.popular ? 'ring-2 ring-primary' : ''
               }`}
             >
               {plan.popular && (
                 <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
-                  인기
+                  {t('subscription.pro.popular')}
                 </Badge>
               )}
               <CardHeader className="text-center pb-2">
@@ -130,9 +116,9 @@ export default function Subscription() {
                 </ul>
               </CardContent>
               <CardFooter>
-                <Button 
+                <Button
                   className="w-full"
-                  variant={plan.current ? "outline" : "default"}
+                  variant={plan.current ? 'outline' : 'default'}
                   disabled={plan.current}
                   onClick={() => handleSelectPlan(plan.id)}
                 >
@@ -146,20 +132,12 @@ export default function Subscription() {
         {/* Current Plan Info */}
         <Card className="mt-10 max-w-2xl mx-auto bg-surface-mid border-border/50">
           <CardHeader>
-            <CardTitle className="text-lg">현재 구독 정보</CardTitle>
+            <CardTitle className="text-lg">{t('subscription.currentPlan')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">현재 플랜</span>
-              <Badge variant="outline">무료</Badge>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">사용 중인 만다라트</span>
-              <span className="font-medium">1 / 1</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">저장된 카드</span>
-              <span className="font-medium">12 / 50</span>
+              <span className="text-muted-foreground">{t('subscription.currentPlan')}</span>
+              <Badge variant="outline">{t('subscription.free.name')}</Badge>
             </div>
           </CardContent>
         </Card>

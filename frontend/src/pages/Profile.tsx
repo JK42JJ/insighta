@@ -1,51 +1,48 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Header } from "@/components/Header";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Camera, Save, ArrowLeft } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { Header } from '@/components/Header';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Camera, Save, ArrowLeft } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 export default function Profile() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [profile, setProfile] = useState({
-    name: "사용자",
-    email: "user@example.com",
-    bio: "",
-    avatarUrl: "",
+    name: t('profile.defaultName'),
+    email: 'user@example.com',
+    bio: '',
+    avatarUrl: '',
   });
 
   const handleSave = () => {
-    localStorage.setItem("user-profile", JSON.stringify(profile));
+    localStorage.setItem('user-profile', JSON.stringify(profile));
     toast({
-      title: "저장 완료",
-      description: "프로필이 성공적으로 저장되었습니다.",
+      title: t('common.saved'),
+      description: t('profile.savedDesc'),
     });
   };
 
   return (
     <div className="min-h-screen bg-background">
-      <Header onNavigateHome={() => navigate("/")} />
-      
+      <Header onNavigateHome={() => navigate('/')} />
+
       <main className="container mx-auto px-4 py-8 max-w-2xl">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(-1)}
-          className="mb-6 gap-2"
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="mb-6 gap-2">
           <ArrowLeft className="w-4 h-4" />
-          뒤로가기
+          {t('common.back')}
         </Button>
 
         <Card className="bg-surface-mid border-border/50">
           <CardHeader>
-            <CardTitle className="text-2xl">프로필</CardTitle>
-            <CardDescription>계정 정보를 관리하세요</CardDescription>
+            <CardTitle className="text-2xl">{t('profile.title')}</CardTitle>
+            <CardDescription>{t('profile.subtitle')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Avatar Section */}
@@ -70,35 +67,35 @@ export default function Profile() {
             {/* Form Fields */}
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">이름</Label>
+                <Label htmlFor="name">{t('profile.name')}</Label>
                 <Input
                   id="name"
                   value={profile.name}
                   onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                  placeholder="이름을 입력하세요"
+                  placeholder={t('profile.namePlaceholder')}
                   className="bg-surface-light border-border/50"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">이메일</Label>
+                <Label htmlFor="email">{t('profile.email')}</Label>
                 <Input
                   id="email"
                   type="email"
                   value={profile.email}
                   onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                  placeholder="이메일을 입력하세요"
+                  placeholder={t('profile.emailPlaceholder')}
                   className="bg-surface-light border-border/50"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="bio">소개</Label>
+                <Label htmlFor="bio">{t('profile.bio')}</Label>
                 <Textarea
                   id="bio"
                   value={profile.bio}
                   onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                  placeholder="자기소개를 작성하세요"
+                  placeholder={t('profile.bioPlaceholder')}
                   className="bg-surface-light border-border/50 min-h-[100px]"
                 />
               </div>
@@ -106,7 +103,7 @@ export default function Profile() {
 
             <Button onClick={handleSave} className="w-full gap-2">
               <Save className="w-4 h-4" />
-              저장하기
+              {t('profile.saveProfile')}
             </Button>
           </CardContent>
         </Card>

@@ -1,12 +1,14 @@
 import { Archive, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Footer } from '@/components/Footer';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { isLoggedIn, isLoading, signInWithGoogle } = useAuth();
   const [isSigningIn, setIsSigningIn] = useState(false);
 
@@ -59,31 +61,29 @@ export default function Login() {
                   beta
                 </span>
               </div>
-              <p className="mt-2 text-muted-foreground">만다라트 기반 YouTube 아카이브</p>
+              <p className="mt-2 text-muted-foreground">{t('login.subtitle')}</p>
             </div>
           </div>
 
           {/* Description */}
           <div className="bg-surface-mid/50 rounded-xl p-6 border border-border/50 space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">
-              당신의 학습을 체계적으로 관리하세요
-            </h2>
+            <h2 className="text-lg font-semibold text-foreground">{t('login.heading')}</h2>
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-0.5">•</span>
-                <span>YouTube 동영상을 만다라트 구조로 정리</span>
+                <span>{t('login.feature1')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-0.5">•</span>
-                <span>타임스탬프 기반 메모 작성</span>
+                <span>{t('login.feature2')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-0.5">•</span>
-                <span>아이디어 드래그 앤 드롭으로 쉬운 정리</span>
+                <span>{t('login.feature3')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-0.5">•</span>
-                <span>플레이리스트 자동 동기화</span>
+                <span>{t('login.feature4')}</span>
               </li>
             </ul>
           </div>
@@ -118,25 +118,25 @@ export default function Login() {
                   />
                 </svg>
               )}
-              Google로 계속하기
+              {t('login.continueWithGoogle')}
             </Button>
 
             <p className="text-center text-xs text-muted-foreground">
-              로그인하면{' '}
+              {t('login.agreeToTerms')}{' '}
               <Link
                 to="/terms"
                 className="text-foreground underline hover:text-primary transition-colors"
               >
-                서비스 이용약관
+                {t('login.termsOfService')}
               </Link>{' '}
-              및{' '}
+              {t('login.and')}{' '}
               <Link
                 to="/privacy"
                 className="text-foreground underline hover:text-primary transition-colors"
               >
-                개인정보처리방침
+                {t('login.privacyPolicy')}
               </Link>
-              에 동의하는 것으로 간주됩니다.
+              {t('login.agreeSuffix')}
             </p>
           </div>
         </div>

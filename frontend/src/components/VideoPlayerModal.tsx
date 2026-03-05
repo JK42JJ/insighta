@@ -12,6 +12,7 @@ import {
   Globe,
 } from 'lucide-react';
 import { useState, useEffect, useRef, DragEvent, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { InsightCard, LinkType } from '@/types/mandala';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Textarea } from '@/components/ui/textarea';
@@ -132,6 +133,7 @@ export function VideoPlayerModal({
   onSave,
   onSaveWatchPosition,
 }: VideoPlayerModalProps) {
+  const { t } = useTranslation();
   const [note, setNote] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -377,7 +379,7 @@ export function VideoPlayerModal({
   // Add current timestamp to note
   const addCurrentTimestamp = useCallback(() => {
     if (!playerRef.current || !videoId) {
-      toast.error('플레이어가 준비되지 않았습니다');
+      toast.error(t('videoPlayer.playerNotReady'));
       return;
     }
 
@@ -403,11 +405,11 @@ export function VideoPlayerModal({
         }
       }, 50);
 
-      toast.success(`${timestamp} 타임스탬프 추가됨`);
+      toast.success(t('videoPlayer.timestampAdded', { timestamp }));
     } catch (e) {
-      toast.error('타임스탬프를 가져올 수 없습니다');
+      toast.error(t('videoPlayer.timestampFailed'));
     }
-  }, [note, videoId]);
+  }, [note, videoId, t]);
 
   if (!card) return null;
   // Allow non-YouTube links to proceed without videoId
@@ -486,7 +488,7 @@ export function VideoPlayerModal({
           link +
           note.slice(cursorPos);
         setNote(newNote);
-        toast.success('타임스탬프 링크가 추가되었습니다');
+        toast.success(t('videoPlayer.timestampLinkAdded'));
         return;
       }
     }
@@ -504,7 +506,7 @@ export function VideoPlayerModal({
           link +
           note.slice(cursorPos);
         setNote(newNote);
-        toast.success('타임스탬프 링크가 추가되었습니다');
+        toast.success(t('videoPlayer.timestampLinkAdded'));
         return;
       }
 
@@ -517,7 +519,7 @@ export function VideoPlayerModal({
   const handleSave = () => {
     if (onSave && card) {
       onSave(card.id, note);
-      toast.success('메모가 저장되었습니다');
+      toast.success(t('videoPlayer.noteSaved'));
     }
     setIsEditing(false);
   };
@@ -531,7 +533,8 @@ export function VideoPlayerModal({
 
   // Render markdown links in preview
   const renderNotePreview = () => {
-    if (!note) return <span className="text-muted-foreground">클릭하여 메모 작성...</span>;
+    if (!note)
+      return <span className="text-muted-foreground">{t('videoPlayer.clickToWriteNote')}</span>;
 
     return note.split('\n').map((line, lineIdx) => {
       const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g;
@@ -644,13 +647,15 @@ export function VideoPlayerModal({
                       <>
                         <Rewind className="w-5 h-5 text-foreground/50" />
                         <span className="text-sm font-medium text-foreground/50">
-                          {seekIndicator.seconds}초
+                          {seekIndicator.seconds}
+                          {t('videoPlayer.secondsUnit')}
                         </span>
                       </>
                     ) : (
                       <>
                         <span className="text-sm font-medium text-foreground/50">
-                          {seekIndicator.seconds}초
+                          {seekIndicator.seconds}
+                          {t('videoPlayer.secondsUnit')}
                         </span>
                         <FastForward className="w-5 h-5 text-foreground/50" />
                       </>
@@ -716,7 +721,7 @@ export function VideoPlayerModal({
                 {/* Title & Description */}
                 <div className="px-4 py-3 flex-1 overflow-auto">
                   <h3 className="text-sm font-medium text-foreground leading-relaxed mb-2">
-                    {card.metadata?.title || card.title || '외부 콘텐츠'}
+                    {card.metadata?.title || card.title || t('videoPlayer.externalContent')}
                   </h3>
                   {card.metadata?.description && (
                     <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
@@ -738,7 +743,7 @@ export function VideoPlayerModal({
                     }}
                   >
                     <ExternalLink className="w-4 h-4" />
-                    원본 보기
+                    {t('videoPlayer.viewOriginal')}
                   </a>
                 </div>
               </div>
@@ -755,10 +760,12 @@ export function VideoPlayerModal({
                 >
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-xs font-medium text-muted-foreground">콘텐츠 요약</span>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {t('videoPlayer.contentSummary')}
+                    </span>
                   </div>
                   <span className="text-xs text-muted-foreground/60">
-                    원본 페이지에서 텍스트를 복사하여 붙여넣으세요
+                    {t('videoPlayer.pasteFromOriginal')}
                   </span>
                 </div>
 
@@ -773,7 +780,7 @@ export function VideoPlayerModal({
                         handleSave();
                       }
                     }}
-                    placeholder={`📋 원본 페이지에서 중요한 내용을 복사해서 붙여넣으세요.\n\n💡 나의 인사이트:\n- 핵심 내용 요약\n- 적용할 점\n- 참고할 아이디어\n\n(Ctrl+Enter로 저장)`}
+                    placeholder={t('videoPlayer.pastePlaceholder')}
                     className="w-full h-full min-h-[200px] resize-none text-sm border-0 focus:ring-0 focus:outline-none p-3 rounded-lg"
                     style={{
                       background: 'hsl(var(--bg-sunken) / 0.3)',
@@ -790,9 +797,11 @@ export function VideoPlayerModal({
                     borderTop: '1px solid hsl(var(--border) / 0.2)',
                   }}
                 >
-                  <span className="text-xs text-muted-foreground">Ctrl+Enter로 저장</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t('videoPlayer.ctrlEnterToSave')}
+                  </span>
                   <Button size="sm" onClick={handleSave} className="px-4">
-                    저장
+                    {t('common.save')}
                   </Button>
                 </div>
               </div>
@@ -833,13 +842,15 @@ export function VideoPlayerModal({
                     onClick={addCurrentTimestamp}
                     disabled={!playerReady}
                     className="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-40"
-                    title="현재 재생 시점을 메모에 추가"
+                    title={t('videoPlayer.addTimestamp')}
                   >
                     <Timer className="w-3.5 h-3.5" />
                   </Button>
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-3.5 h-3.5 text-foreground/60" />
-                    <span className="text-xs font-medium text-foreground/60">메모</span>
+                    <span className="text-xs font-medium text-foreground/60">
+                      {t('videoPlayer.memo')}
+                    </span>
                   </div>
                 </div>
                 {/* X Share Button */}
@@ -864,10 +875,10 @@ export function VideoPlayerModal({
 
                     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
                     window.open(twitterUrl, '_blank', 'noopener,noreferrer,width=550,height=420');
-                    toast.success('X 공유 창이 열렸습니다');
+                    toast.success(t('videoPlayer.xShareOpened'));
                   }}
                   className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-surface-mid rounded transition-colors"
-                  title="X에 공유"
+                  title={t('videoPlayer.shareOnX')}
                 >
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -892,7 +903,7 @@ export function VideoPlayerModal({
                     onClick={(e) => e.stopPropagation()}
                     onFocus={(e) => e.stopPropagation()}
                     autoFocus
-                    placeholder="메모 입력... (Enter 저장, Shift+Enter 줄바꿈)"
+                    placeholder={t('videoPlayer.notePlaceholder')}
                     className="w-full min-h-[50px] max-h-[200px] resize-none text-sm bg-transparent border-0 focus:ring-0 focus:outline-none p-0 text-foreground/60 placeholder:text-muted-foreground/40 overflow-y-auto scrollbar-thin"
                     style={{ caretColor: 'hsl(var(--primary))' }}
                   />
@@ -905,7 +916,7 @@ export function VideoPlayerModal({
                       <div className="space-y-0.5 text-foreground/60">{renderNotePreview()}</div>
                     ) : (
                       <span className="text-muted-foreground/60 text-xs">
-                        클릭하여 메모 작성...
+                        {t('videoPlayer.clickToWriteNote')}
                       </span>
                     )}
                   </div>
