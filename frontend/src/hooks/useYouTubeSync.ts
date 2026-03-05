@@ -6,7 +6,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { getAuthHeaders, getEdgeFunctionUrl } from '@/lib/supabase-auth';
 import type { YouTubePlaylist, SyncInterval, UserVideoStateWithVideo } from '@/types/youtube';
 
 // Query Keys
@@ -17,26 +17,9 @@ export const youtubeSyncKeys = {
   allVideoStates: ['youtube', 'all-video-states'] as const,
 };
 
-// Edge Function URL helper
-function getEdgeFunctionUrl(action: string): string {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-  return `${supabaseUrl}/functions/v1/youtube-sync?action=${action}`;
-}
-
-// Get auth headers (includes apikey for Kong API Gateway)
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('Not authenticated');
-  }
-  const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-  return {
-    Authorization: `Bearer ${session.access_token}`,
-    'Content-Type': 'application/json',
-    apikey: apiKey,
-  };
+// Shorthand for youtube-sync Edge Function URLs
+function ytSyncUrl(action: string): string {
+  return getEdgeFunctionUrl('youtube-sync', action);
 }
 
 /**
@@ -47,7 +30,7 @@ export function useYouTubePlaylists() {
     queryKey: youtubeSyncKeys.playlists,
     queryFn: async (): Promise<YouTubePlaylist[]> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('list-playlists'), { headers });
+      const response = await fetch(ytSyncUrl('list-playlists'), { headers });
 
       if (!response.ok) {
         throw new Error('Failed to get playlists');
@@ -69,7 +52,7 @@ export function useAddPlaylist() {
   return useMutation({
     mutationFn: async (playlistUrl: string): Promise<YouTubePlaylist> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('add-playlist'), {
+      const response = await fetch(ytSyncUrl('add-playlist'), {
         method: 'POST',
         headers,
         body: JSON.stringify({ playlistUrl }),
@@ -106,7 +89,7 @@ export function useSyncPlaylist() {
       quotaUsed: number;
     }> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('sync-playlist'), {
+      const response = await fetch(ytSyncUrl('sync-playlist'), {
         method: 'POST',
         headers,
         body: JSON.stringify({ playlistId }),
@@ -135,7 +118,7 @@ export function useDeletePlaylist() {
   return useMutation({
     mutationFn: async (playlistId: string): Promise<void> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('delete-playlist'), {
+      const response = await fetch(ytSyncUrl('delete-playlist'), {
         method: 'POST',
         headers,
         body: JSON.stringify({ playlistId }),
@@ -167,7 +150,7 @@ export function useUpdateSyncSettings() {
       autoSyncEnabled?: boolean;
     }): Promise<void> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('update-settings'), {
+      const response = await fetch(ytSyncUrl('update-settings'), {
         method: 'POST',
         headers,
         body: JSON.stringify({ syncInterval, autoSyncEnabled }),
@@ -193,7 +176,7 @@ export function useIdeationVideos() {
     queryKey: youtubeSyncKeys.ideationVideos,
     queryFn: async (): Promise<UserVideoStateWithVideo[]> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('get-ideation-videos'), { headers });
+      const response = await fetch(ytSyncUrl('get-ideation-videos'), { headers });
 
       if (!response.ok) {
         throw new Error('Failed to get ideation videos');
@@ -216,7 +199,7 @@ export function useAllVideoStates() {
     queryKey: youtubeSyncKeys.allVideoStates,
     queryFn: async (): Promise<UserVideoStateWithVideo[]> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('get-all-video-states'), { headers });
+      const response = await fetch(ytSyncUrl('get-all-video-states'), { headers });
 
       if (!response.ok) {
         throw new Error('Failed to get video states');
@@ -252,7 +235,7 @@ export function useUpdateVideoState() {
   return useMutation({
     mutationFn: async ({ videoStateId, updates }: UpdateVideoStateVars): Promise<void> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('update-video-state'), {
+      const response = await fetch(ytSyncUrl('update-video-state'), {
         method: 'POST',
         headers,
         body: JSON.stringify({ videoStateId, updates }),
@@ -282,7 +265,12 @@ export function useUpdateVideoState() {
     onError: (_err, _vars, context) => {
       if (context?.previousAll) {
         queryClient.setQueryData(youtubeSyncKeys.allVideoStates, context.previousAll);
+      } else {
+        queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
       }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
     },
   });
 }

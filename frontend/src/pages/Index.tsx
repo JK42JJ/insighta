@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Header } from '@/components/Header';
@@ -12,7 +12,6 @@ import { FloatingMandala, MandalaDockPosition } from '@/components/FloatingManda
 import {
   mockMandalaLevels,
   createMockCards,
-  createScratchPadCards,
   createCardFromUrl,
   isValidUrl,
   fetchLinkTitle,
@@ -29,7 +28,6 @@ import { useAllVideoStates, useUpdateVideoState } from '@/hooks/useYouTubeSync';
 import { useLocalCards, isLimitExceededError } from '@/hooks/useLocalCards';
 import { useBatchMoveCards } from '@/hooks/useBatchMoveCards';
 import { convertToInsightCards } from '@/lib/youtubeToInsightCard';
-import { insightCardToAddPayload, localCardToInsightCard } from '@/types/local-cards';
 import { detectCardSource, getCardById } from '@/lib/cardUtils';
 
 const Index = () => {
@@ -178,8 +176,8 @@ const Index = () => {
     [isLoggedIn, updateMandalaDockPosition]
   );
 
-  // Cards state
-  const [cards, setCards] = useState<InsightCard[]>(createMockCards());
+  // Demo cards for non-logged-in users
+  const [demoCards] = useState<InsightCard[]>(() => (isLoggedIn ? [] : createMockCards()));
   // Local state for optimistic UI updates (before Supabase sync completes)
   const [pendingLocalCards, setPendingLocalCards] = useState<InsightCard[]>([]);
 
@@ -221,7 +219,7 @@ const Index = () => {
 
   // YouTube 카드 중 아이디에이션에 있어야 할 것들 (is_in_ideation !== false)
   const ideationVideoCards = useMemo(() => {
-    return syncedCards.filter((c) => c.isInIdeation !== false);
+    return syncedCards.filter((c) => c.isInIdeation === true);
   }, [syncedCards]);
 
   // Merged scratchpad cards: ideation YouTube videos + scratchpad local cards + pending cards
@@ -234,83 +232,22 @@ const Index = () => {
     return [...ideationVideoCards, ...scratchpadLocalCards, ...filteredPending];
   }, [ideationVideoCards, scratchpadLocalCards, pendingLocalCards, persistedLocalCards]);
 
-  // Helper to update pending scratchpad cards (for optimistic UI)
-  const setScratchPadCards = useCallback(
-    (updater: InsightCard[] | ((prev: InsightCard[]) => InsightCard[])) => {
-      if (typeof updater === 'function') {
-        // For function updaters, only update pending cards
-        setPendingLocalCards((prev) => {
-          const allCards = [...syncedCards, ...persistedLocalCards, ...prev];
-          const updatedCards = updater(allCards);
-          // Filter out synced and persisted cards to only keep pending changes
-          const syncedIds = new Set(syncedCards.map((c) => c.id));
-          const persistedIds = new Set(persistedLocalCards.map((c) => c.id));
-          return updatedCards.filter((c) => !syncedIds.has(c.id) && !persistedIds.has(c.id));
-        });
-      } else {
-        // For direct value, only set pending cards (filter out synced and persisted)
-        const syncedIds = new Set(syncedCards.map((c) => c.id));
-        const persistedIds = new Set(persistedLocalCards.map((c) => c.id));
-        setPendingLocalCards(
-          updater.filter((c) => !syncedIds.has(c.id) && !persistedIds.has(c.id))
-        );
-      }
-    },
-    [syncedCards, persistedLocalCards]
-  );
+  // Pending cards that are in mandala grid (not scratchpad)
+  const pendingMandalaCards = useMemo(() => {
+    return pendingLocalCards.filter(
+      (c) =>
+        typeof c.cellIndex === 'number' &&
+        c.cellIndex >= 0 &&
+        c.levelId &&
+        c.levelId !== 'scratchpad'
+    );
+  }, [pendingLocalCards]);
 
-  // Guard ref: skip query-data sync when we already applied optimistic setState
-  const skipNextSyncRef = useRef(false);
-
-  // Sync mandala cards (both local and YouTube video cards) to cards state on load
-  // ✅ Bug 2 Fix: mandalaVideoCards도 함께 동기화
-  // This ensures persisted cards appear in the correct mandala cells after refresh
-  useEffect(() => {
-    if (skipNextSyncRef.current) {
-      skipNextSyncRef.current = false;
-      return;
-    }
-    // Combine both local and YouTube video mandala cards
-    const allMandalaCards = [...mandalaLocalCards, ...mandalaVideoCards];
-
-    if (allMandalaCards.length > 0) {
-      setCards((prev) => {
-        const existingIds = new Set(prev.map((c) => c.id));
-
-        // 1. Update positions of existing cards that are in mandala
-        // ✅ Fix: Track actual changes to avoid infinite re-render
-        let hasChanges = false;
-        const updatedPrev = prev.map((card) => {
-          const mandalaCard = allMandalaCards.find((m) => m.id === card.id);
-          if (mandalaCard) {
-            // Only update if position actually changed (value comparison, not reference)
-            const cellIndexChanged = card.cellIndex !== mandalaCard.cellIndex;
-            const levelIdChanged = card.levelId !== mandalaCard.levelId;
-
-            if (cellIndexChanged || levelIdChanged) {
-              hasChanges = true;
-              return { ...card, cellIndex: mandalaCard.cellIndex, levelId: mandalaCard.levelId };
-            }
-          }
-          return card;
-        });
-
-        // 2. Add new cards that don't exist in prev
-        const newCards = allMandalaCards.filter((c) => !existingIds.has(c.id));
-
-        if (newCards.length > 0) {
-          hasChanges = true;
-        }
-
-        // ✅ Fix: Return prev if no actual changes (prevents infinite re-render)
-        if (!hasChanges) {
-          return prev;
-        }
-
-        return [...updatedPrev, ...newCards];
-      });
-    }
-  }, [mandalaLocalCards, mandalaVideoCards]);
+  // All mandala cards = RQ-derived (single source of truth, no manual sync needed)
+  const allMandalaCards = useMemo(() => {
+    if (!isLoggedIn) return demoCards;
+    return [...mandalaLocalCards, ...mandalaVideoCards, ...pendingMandalaCards];
+  }, [isLoggedIn, demoCards, mandalaLocalCards, mandalaVideoCards, pendingMandalaCards]);
 
   // Mandala levels state - load from localStorage if available (with validation)
   const [mandalaLevels, setMandalaLevels] = useState<Record<string, MandalaLevel>>(() => {
@@ -372,7 +309,7 @@ const Index = () => {
 
   // Group cards by cell index - filter by current level AND include cards from sub-levels
   const cardsByCell = useMemo(() => {
-    return cards.reduce(
+    return allMandalaCards.reduce(
       (acc, card) => {
         // Direct cards for current level
         if (card.levelId === currentLevelId && card.cellIndex >= 0) {
@@ -394,7 +331,7 @@ const Index = () => {
       },
       {} as Record<number, InsightCard[]>
     );
-  }, [cards, currentLevelId, currentLevel.subjects]);
+  }, [allMandalaCards, currentLevelId, currentLevel.subjects]);
 
   const totalCards = useMemo(() => {
     return Object.values(cardsByCell).reduce((sum, cellCards) => sum + cellCards.length, 0);
@@ -518,7 +455,9 @@ const Index = () => {
         // Fetch title
         try {
           title = await fetchLinkTitle(text, linkType);
-        } catch {}
+        } catch {
+          /* metadata fetch failures are non-critical */
+        }
 
         // For non-YouTube links, also fetch full metadata
         if (linkType !== 'youtube' && linkType !== 'youtube-shorts') {
@@ -528,7 +467,9 @@ const Index = () => {
               title = fetchedMetadata.title || title;
               metadata = fetchedMetadata;
             }
-          } catch {}
+          } catch {
+            /* metadata fetch failures are non-critical */
+          }
         }
 
         // Persist to Supabase
@@ -606,7 +547,9 @@ const Index = () => {
             if (parsed.subjects && Array.isArray(parsed.subjects)) {
               subjects = parsed.subjects;
             }
-          } catch {}
+          } catch {
+            /* metadata fetch failures are non-critical */
+          }
         }
 
         setMandalaLevels((prev) => ({
@@ -623,14 +566,18 @@ const Index = () => {
       }
 
       // Migrate cards from current level's cell to the new sub-level's first cell (index 0)
-      setCards((prev) =>
-        prev.map((card) => {
-          if (card.levelId === currentLevelId && card.cellIndex === parentCellIndex) {
-            return { ...card, levelId: nextLevelId, cellIndex: 0 };
-          }
-          return card;
-        })
+      const cardsToMigrate = allMandalaCards.filter(
+        (c) => c.levelId === currentLevelId && c.cellIndex === parentCellIndex
       );
+      if (cardsToMigrate.length > 0) {
+        const batchItems = cardsToMigrate.map((card) => ({
+          card,
+          source: detectCardSource(card.id, syncedCards, persistedLocalCards, card),
+          cellIndex: 0,
+          levelId: nextLevelId,
+        }));
+        batchMoveCards.mutate({ items: batchItems });
+      }
 
       setPath([...path, { id: currentLevelId, label: currentLevel.centerGoal }]);
       setCurrentLevelId(nextLevelId);
@@ -642,11 +589,21 @@ const Index = () => {
         description: '하위 만다라트로 이동했습니다.',
       });
     },
-    [mandalaLevels, path, currentLevelId, currentLevel, toast]
+    [
+      mandalaLevels,
+      path,
+      currentLevelId,
+      currentLevel,
+      toast,
+      allMandalaCards,
+      syncedCards,
+      persistedLocalCards,
+      batchMoveCards,
+    ]
   );
 
   const handleSubjectsReorder = useCallback(
-    async (newSubjects: string[], swappedIndices?: { from: number; to: number }) => {
+    (newSubjects: string[], swappedIndices?: { from: number; to: number }) => {
       setMandalaLevels((prev) => ({
         ...prev,
         [currentLevelId]: {
@@ -655,44 +612,24 @@ const Index = () => {
         },
       }));
 
-      // Swap cards between the two cells
+      // Swap cards between the two cells via batch mutation (onMutate handles optimistic UI)
       if (swappedIndices) {
-        // 영향받는 카드 찾기
-        const affectedCards = cards.filter(
-          (c) => c.cellIndex === swappedIndices.from || c.cellIndex === swappedIndices.to
+        const affectedCards = allMandalaCards.filter(
+          (c) =>
+            c.levelId === currentLevelId &&
+            (c.cellIndex === swappedIndices.from || c.cellIndex === swappedIndices.to)
         );
 
-        // DB에 카드 위치 업데이트
-        for (const card of affectedCards) {
-          const newCellIndex =
-            card.cellIndex === swappedIndices.from ? swappedIndices.to : swappedIndices.from;
-          const source = detectCardSource(card.id, syncedCards, persistedLocalCards);
-
-          try {
-            if (source === 'synced') {
-              await updateVideoState.mutateAsync({
-                videoStateId: card.id,
-                updates: { cell_index: newCellIndex },
-              });
-            } else if (source === 'local') {
-              await updateLocalCard({ id: card.id, cell_index: newCellIndex });
-            }
-          } catch (error) {
-            console.error('[handleSubjectsReorder] Failed to update card:', card.id, error);
-          }
+        if (affectedCards.length > 0) {
+          const batchItems = affectedCards.map((card) => ({
+            card,
+            source: detectCardSource(card.id, syncedCards, persistedLocalCards, card),
+            cellIndex:
+              card.cellIndex === swappedIndices.from ? swappedIndices.to : swappedIndices.from,
+            levelId: currentLevelId,
+          }));
+          batchMoveCards.mutate({ items: batchItems });
         }
-
-        // 로컬 상태 업데이트
-        setCards((prev) =>
-          prev.map((card) => {
-            if (card.cellIndex === swappedIndices.from) {
-              return { ...card, cellIndex: swappedIndices.to };
-            } else if (card.cellIndex === swappedIndices.to) {
-              return { ...card, cellIndex: swappedIndices.from };
-            }
-            return card;
-          })
-        );
 
         // If the selected cell was swapped, follow it to the new position
         if (selectedCellIndex !== null) {
@@ -713,11 +650,10 @@ const Index = () => {
       currentLevelId,
       toast,
       selectedCellIndex,
-      cards,
+      allMandalaCards,
       syncedCards,
       persistedLocalCards,
-      updateVideoState,
-      updateLocalCard,
+      batchMoveCards,
     ]
   );
 
@@ -795,13 +731,25 @@ const Index = () => {
     [toast]
   );
 
-  // Handle file drop for cells
+  // Handle file drop for cells — add as pending then persist
   const handleFileDrop = useCallback(
     async (cellIndex: number, files: FileList) => {
       for (const file of Array.from(files)) {
         const newCard = await handleFileUpload(file, cellIndex, currentLevelId);
         if (newCard) {
-          setCards((prev) => [...prev, newCard]);
+          // Add to pending, then persist to Supabase
+          setPendingLocalCards((prev) => [...prev, newCard]);
+          addLocalCard({
+            url: newCard.videoUrl,
+            title: newCard.title,
+            thumbnail: newCard.thumbnail,
+            link_type: newCard.linkType || 'other',
+            user_note: '',
+            cell_index: cellIndex,
+            level_id: currentLevelId,
+          })
+            .then(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)))
+            .catch(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)));
           toast({
             title: '파일 추가됨',
             description: `"${currentLevel.subjects[cellIndex]}"에 저장되었습니다.`,
@@ -809,7 +757,7 @@ const Index = () => {
         }
       }
     },
-    [handleFileUpload, currentLevelId, currentLevel.subjects, toast]
+    [handleFileUpload, currentLevelId, currentLevel.subjects, toast, addLocalCard]
   );
 
   // Handle file drop for scratchpad
@@ -818,7 +766,18 @@ const Index = () => {
       for (const file of Array.from(files)) {
         const newCard = await handleFileUpload(file, -1, 'scratchpad');
         if (newCard) {
-          setScratchPadCards((prev) => [...prev, newCard]);
+          setPendingLocalCards((prev) => [...prev, newCard]);
+          addLocalCard({
+            url: newCard.videoUrl,
+            title: newCard.title,
+            thumbnail: newCard.thumbnail,
+            link_type: newCard.linkType || 'other',
+            user_note: '',
+            cell_index: -1,
+            level_id: 'scratchpad',
+          })
+            .then(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)))
+            .catch(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)));
           toast({
             title: '파일이 아이디에이션에 추가됨',
             description: file.name,
@@ -826,11 +785,11 @@ const Index = () => {
         }
       }
     },
-    [handleFileUpload, toast]
+    [handleFileUpload, toast, addLocalCard]
   );
 
   const handleCardDrop = useCallback(
-    async (
+    (
       cellIndex: number,
       url?: string,
       cardId?: string,
@@ -845,12 +804,12 @@ const Index = () => {
         return;
       }
 
-      // Handle multi-card drop (process multiple cards at once)
+      // Handle multi-card drop — batchMoveCards.onMutate handles optimistic UI
       if (multiCardIds && multiCardIds.length > 0) {
-        // Check pending cards for quota limit
-        const pendingIds = multiCardIds.filter(
-          (id) => detectCardSource(id, syncedCards, persistedLocalCards) === 'pending'
-        );
+        const pendingIds = multiCardIds.filter((id) => {
+          const c = getCardById(id, syncedCards, persistedLocalCards, pendingLocalCards);
+          return detectCardSource(id, syncedCards, persistedLocalCards, c) === 'pending';
+        });
         if (pendingIds.length > 0 && !canAddCard) {
           toast({
             title: '저장 한도 초과',
@@ -860,66 +819,46 @@ const Index = () => {
           return;
         }
 
-        // 1. Snapshot for rollback
-        const previousCards = cards;
-        const previousScratchPad = scratchPadCards;
-        const previousPending = pendingLocalCards;
-
-        // Phase A: URGENT — 만다라 시각 즉시 업데이트
-        skipNextSyncRef.current = true;
-        setCards((prev) => {
-          const movedCards = multiCardIds
-            .map((id) => getCardById(id, syncedCards, persistedLocalCards, pendingLocalCards))
-            .filter((c): c is InsightCard => c !== null)
-            .map((c) => ({ ...c, cellIndex, levelId: currentLevelId }));
-          return [...prev.filter((c) => !multiCardIds.includes(c.id)), ...movedCards];
-        });
-
-        toast({
-          title: `${multiCardIds.length}개 카드 이동됨`,
-          description: `"${currentLevel.subjects[cellIndex]}"로 이동했습니다.`,
-        });
-
-        // Phase B: DEFERRED — 스크래치패드 정리 (non-urgent)
-        requestAnimationFrame(() => {
-          startTransition(() => {
-            setScratchPadCards((prev) => prev.filter((c) => !multiCardIds.includes(c.id)));
-            setPendingLocalCards((prev) => prev.filter((c) => !multiCardIds.includes(c.id)));
-          });
-        });
-
-        // Phase C: BACKGROUND — 네트워크 (fire-and-forget)
         const batchItems = multiCardIds
           .map((id) => {
-            const source = detectCardSource(id, syncedCards, persistedLocalCards);
             const card = getCardById(id, syncedCards, persistedLocalCards, pendingLocalCards);
             if (!card) return null;
+            const source = detectCardSource(id, syncedCards, persistedLocalCards, card);
             return { card, source, cellIndex, levelId: currentLevelId };
           })
           .filter((item): item is NonNullable<typeof item> => item !== null);
 
-        batchMoveCards.mutateAsync({ items: batchItems }).catch((error) => {
-          console.error('[handleCardDrop] Failed to move cards:', error);
-          setCards(previousCards);
-          setScratchPadCards(previousScratchPad);
-          setPendingLocalCards(previousPending);
-          toast({
-            title: '이동 실패',
-            description: `카드 이동에 실패했습니다: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            variant: 'destructive',
-          });
-        });
+        // Clean up pending cards from scratchpad
+        setPendingLocalCards((prev) => prev.filter((c) => !multiCardIds.includes(c.id)));
+
+        batchMoveCards.mutate(
+          { items: batchItems },
+          {
+            onSuccess: () => {
+              toast({
+                title: `${multiCardIds.length}개 카드 이동됨`,
+                description: `"${currentLevel.subjects[cellIndex]}"로 이동했습니다.`,
+              });
+            },
+            onError: (error) => {
+              console.error('[handleCardDrop] batch move failed:', error);
+              toast({
+                title: '이동 실패',
+                description: error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.',
+                variant: 'destructive',
+              });
+            },
+          }
+        );
         return;
       }
 
-      // Handle single card drop
+      // Handle single card drop — mutation.onMutate handles optimistic UI
       if (cardId) {
-        const source = detectCardSource(cardId, syncedCards, persistedLocalCards);
         const card = getCardById(cardId, syncedCards, persistedLocalCards, pendingLocalCards);
-
         if (!card) return;
+        const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
 
-        // Pending card quota check (must happen before optimistic update)
         if (source === 'pending' && !canAddCard) {
           toast({
             title: '저장 한도 초과',
@@ -929,83 +868,58 @@ const Index = () => {
           return;
         }
 
-        // 1. Snapshot for rollback
-        const previousCards = cards;
-        const previousScratchPad = scratchPadCards;
-        const previousPending = pendingLocalCards;
+        // Clean up pending from scratchpad
+        if (source === 'pending') {
+          setPendingLocalCards((prev) => prev.filter((c) => c.id !== cardId));
+        }
 
-        // Phase A: URGENT — 만다라 시각 즉시 업데이트
-        skipNextSyncRef.current = true;
-        setCards((prev) => {
-          const existing = prev.find((c) => c.id === cardId);
-          if (existing) {
-            return prev.map((c) =>
-              c.id === cardId ? { ...c, cellIndex, levelId: currentLevelId } : c
-            );
-          } else {
-            return [...prev, { ...card, cellIndex, levelId: currentLevelId }];
-          }
-        });
-
-        toast({
-          title: '카드 이동됨',
-          description: `"${currentLevel.subjects[cellIndex]}"로 이동했습니다.`,
-        });
-
-        // Phase B: DEFERRED — 스크래치패드 정리 (non-urgent)
-        requestAnimationFrame(() => {
-          startTransition(() => {
-            setScratchPadCards((prev) => prev.filter((c) => c.id !== cardId));
-            if (source === 'pending') {
-              setPendingLocalCards((prev) => prev.filter((c) => c.id !== cardId));
-            }
+        const successHandler = () => {
+          toast({
+            title: '카드 이동됨',
+            description: `"${currentLevel.subjects[cellIndex]}"로 이동했습니다.`,
           });
-        });
+        };
 
-        // Phase C: BACKGROUND — fire-and-forget (await 제거)
-        const networkCall =
-          source === 'synced'
-            ? updateVideoState.mutateAsync({
-                videoStateId: cardId,
-                updates: {
-                  is_in_ideation: false,
-                  cell_index: cellIndex,
-                  level_id: currentLevelId,
-                },
-              })
-            : source === 'local'
-              ? updateLocalCard({
-                  id: cardId,
-                  cell_index: cellIndex,
-                  level_id: currentLevelId,
-                })
-              : addLocalCard({
-                  url: card.videoUrl,
-                  title: card.title,
-                  thumbnail: card.thumbnail,
-                  link_type: card.linkType || 'other',
-                  user_note: card.userNote,
-                  cell_index: cellIndex,
-                  level_id: currentLevelId,
-                });
-
-        networkCall.catch((error) => {
-          console.error('[handleCardDrop] Failed to move card:', error);
-          setCards(previousCards);
-          setScratchPadCards(previousScratchPad);
-          setPendingLocalCards(previousPending);
+        const errorHandler = (error: unknown) => {
+          console.error('[handleCardDrop] single card move failed:', error);
           toast({
             title: '이동 실패',
-            description: `카드 이동에 실패했습니다: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            description: error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.',
             variant: 'destructive',
           });
-        });
+        };
+
+        if (source === 'synced') {
+          updateVideoState.mutate(
+            {
+              videoStateId: cardId,
+              updates: { is_in_ideation: false, cell_index: cellIndex, level_id: currentLevelId },
+            },
+            { onSuccess: successHandler, onError: errorHandler }
+          );
+        } else if (source === 'local') {
+          updateLocalCard({ id: cardId, cell_index: cellIndex, level_id: currentLevelId })
+            .then(successHandler)
+            .catch(errorHandler);
+        } else {
+          // Pending card → persist via addLocalCard
+          addLocalCard({
+            url: card.videoUrl,
+            title: card.title,
+            thumbnail: card.thumbnail,
+            link_type: card.linkType || 'other',
+            user_note: card.userNote,
+            cell_index: cellIndex,
+            level_id: currentLevelId,
+          })
+            .then(successHandler)
+            .catch(errorHandler);
+        }
         return;
       }
 
-      // Handle URL drop (new card)
+      // Handle URL drop (new card) — add as pending then persist
       if (url) {
-        // Require login for adding new content via URL drop
         if (!isLoggedIn) {
           toast({
             title: '로그인이 필요합니다',
@@ -1019,39 +933,61 @@ const Index = () => {
         if (isValidUrl(url)) {
           const linkType = detectLinkType(url);
           const newCard = createCardFromUrl(url, cellIndex, currentLevelId);
-          setCards((prev) => [...prev, newCard]);
+
+          // Add to pending for immediate UI feedback
+          setPendingLocalCards((prev) => [...prev, newCard]);
 
           toast({
             title: '인사이트 추가됨',
             description: `"${currentLevel.subjects[cellIndex]}"에 저장되었습니다.`,
           });
 
-          // Fetch title asynchronously and update card
-          fetchLinkTitle(url, linkType).then((title) => {
-            setCards((prev) =>
-              prev.map((card) => (card.id === newCard.id ? { ...card, title } : card))
-            );
-          });
+          // Persist to Supabase (fetch metadata first for non-YouTube links)
+          const persistCard = async () => {
+            let title = newCard.title;
+            let metadata = newCard.metadata;
 
-          // For non-YouTube links, also fetch full metadata
-          if (linkType !== 'youtube' && linkType !== 'youtube-shorts') {
-            fetchUrlMetadata(url).then((metadata) => {
-              if (metadata) {
-                setCards((prev) =>
-                  prev.map((card) =>
-                    card.id === newCard.id
-                      ? {
-                          ...card,
-                          title: metadata.title || card.title,
-                          thumbnail: metadata.image || card.thumbnail,
-                          metadata,
-                        }
-                      : card
-                  )
-                );
+            try {
+              title = await fetchLinkTitle(url, linkType);
+            } catch {
+              /* metadata fetch failures are non-critical */
+            }
+
+            if (linkType !== 'youtube' && linkType !== 'youtube-shorts') {
+              try {
+                const fetched = await fetchUrlMetadata(url);
+                if (fetched) {
+                  title = fetched.title || title;
+                  metadata = fetched;
+                }
+              } catch {
+                /* metadata fetch failures are non-critical */
               }
+            }
+
+            await addLocalCard({
+              url,
+              title,
+              thumbnail: metadata?.image || newCard.thumbnail,
+              link_type: linkType,
+              user_note: '',
+              metadata_title: metadata?.title,
+              metadata_description: metadata?.description,
+              metadata_image: metadata?.image,
+              cell_index: cellIndex,
+              level_id: currentLevelId,
             });
-          }
+            setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id));
+          };
+
+          persistCard().catch(() => {
+            setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id));
+            toast({
+              title: '저장 실패',
+              description: '카드를 저장하지 못했습니다.',
+              variant: 'destructive',
+            });
+          });
         } else {
           toast({
             title: '유효하지 않은 URL',
@@ -1063,7 +999,6 @@ const Index = () => {
     },
     [
       currentLevel.subjects,
-      scratchPadCards,
       syncedCards,
       persistedLocalCards,
       pendingLocalCards,
@@ -1077,9 +1012,6 @@ const Index = () => {
       canAddCard,
       subscription,
       addLocalCard,
-      setPendingLocalCards,
-      setCards,
-      setScratchPadCards,
       batchMoveCards,
     ]
   );
@@ -1135,7 +1067,9 @@ const Index = () => {
           // Fetch title
           try {
             title = await fetchLinkTitle(url, linkType);
-          } catch {}
+          } catch {
+            /* metadata fetch failures are non-critical */
+          }
 
           // For non-YouTube links, also fetch full metadata
           if (linkType !== 'youtube' && linkType !== 'youtube-shorts') {
@@ -1145,7 +1079,9 @@ const Index = () => {
                 title = fetchedMetadata.title || title;
                 metadata = fetchedMetadata;
               }
-            } catch {}
+            } catch {
+              /* metadata fetch failures are non-critical */
+            }
           }
 
           // Persist to Supabase
@@ -1197,84 +1133,76 @@ const Index = () => {
 
   const handleScratchPadCardDrop = useCallback(
     (cardId: string) => {
-      // Moving card from mandala back to ideation
-      const source = detectCardSource(cardId, syncedCards, persistedLocalCards);
-      const card = cards.find((c) => c.id === cardId);
-
+      // Moving card from mandala back to ideation — mutation.onMutate handles optimistic UI
+      const card = allMandalaCards.find((c) => c.id === cardId);
       if (!card) return;
+      const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
 
-      // Phase A: URGENT — 만다라에서 즉시 제거
-      const previousCards = cards;
-      skipNextSyncRef.current = true;
-      setCards((prev) => prev.filter((c) => c.id !== cardId));
-      toast({
-        title: '아이디에이션으로 이동됨',
-        description: '나중에 다시 분류할 수 있습니다.',
-      });
+      const successHandler = () => {
+        toast({
+          title: '아이디에이션으로 이동됨',
+          description: '나중에 다시 분류할 수 있습니다.',
+        });
+      };
 
-      // Phase C: BACKGROUND — fire-and-forget (Phase B 불필요)
-      const networkCall =
-        source === 'synced'
-          ? updateVideoState.mutateAsync({
-              videoStateId: cardId,
-              updates: {
-                is_in_ideation: true,
-                cell_index: -1,
-                level_id: 'scratchpad',
-              },
-            })
-          : updateLocalCard({
-              id: cardId,
-              cell_index: -1,
-              level_id: 'scratchpad',
-            });
-
-      networkCall.catch((error) => {
-        setCards(previousCards);
+      const errorHandler = (error: unknown) => {
+        console.error('[handleScratchPadCardDrop] move failed:', error);
         toast({
           title: '이동 실패',
-          description: `카드를 이동하지 못했습니다: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          description: error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.',
           variant: 'destructive',
         });
-      });
+      };
+
+      if (source === 'synced') {
+        updateVideoState.mutate(
+          {
+            videoStateId: cardId,
+            updates: { is_in_ideation: true, cell_index: -1, level_id: 'scratchpad' },
+          },
+          { onSuccess: successHandler, onError: errorHandler }
+        );
+      } else {
+        updateLocalCard({ id: cardId, cell_index: -1, level_id: 'scratchpad' })
+          .then(successHandler)
+          .catch(errorHandler);
+      }
     },
-    [cards, syncedCards, persistedLocalCards, updateVideoState, updateLocalCard, toast, setCards]
+    [allMandalaCards, syncedCards, persistedLocalCards, updateVideoState, updateLocalCard, toast]
   );
 
   const handleScratchPadMultiCardDrop = useCallback(
     (cardIds: string[]) => {
-      // 1. Snapshot for rollback
-      const previousCards = cards;
-      const movedCount = cards.filter((c) => cardIds.includes(c.id)).length;
-
-      // Phase A: URGENT — 만다라에서 즉시 제거
-      skipNextSyncRef.current = true;
-      setCards((prev) => prev.filter((c) => !cardIds.includes(c.id)));
-      toast({
-        title: `${movedCount}개 카드 이동됨`,
-        description: '아이디에이션으로 이동했습니다.',
-      });
-
-      // Phase C: BACKGROUND — fire-and-forget
       const batchItems = cardIds
         .map((cardId) => {
-          const source = detectCardSource(cardId, syncedCards, persistedLocalCards);
-          const card = previousCards.find((c) => c.id === cardId);
+          const card = allMandalaCards.find((c) => c.id === cardId);
           if (!card) return null;
+          const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
           return { card, source, cellIndex: -1, levelId: 'scratchpad' };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null);
 
-      batchMoveCards.mutateAsync({ items: batchItems }).catch(() => {
-        setCards(previousCards);
-        toast({
-          title: '이동 실패',
-          description: `일부 카드 이동에 실패했습니다.`,
-          variant: 'destructive',
-        });
-      });
+      batchMoveCards.mutate(
+        { items: batchItems },
+        {
+          onSuccess: () => {
+            toast({
+              title: `${batchItems.length}개 카드 이동됨`,
+              description: '아이디에이션으로 이동했습니다.',
+            });
+          },
+          onError: (error) => {
+            console.error('[handleScratchPadMultiCardDrop] batch move failed:', error);
+            toast({
+              title: '이동 실패',
+              description: error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.',
+              variant: 'destructive',
+            });
+          },
+        }
+      );
     },
-    [cards, syncedCards, persistedLocalCards, batchMoveCards, toast, setCards]
+    [allMandalaCards, syncedCards, persistedLocalCards, batchMoveCards, toast]
   );
 
   const handleCardClick = useCallback((card: InsightCard) => {
@@ -1289,36 +1217,23 @@ const Index = () => {
 
   const handleSaveNote = useCallback(
     async (id: string, note: string) => {
-      // Use detectCardSource for consistent card type detection
       const source = detectCardSource(id, syncedCards, persistedLocalCards);
-
-      console.log('[handleSaveNote] Card source detected:', { id: id.slice(0, 8), source });
 
       try {
         switch (source) {
           case 'synced':
-            // Update in Supabase via YouTube sync
             await updateVideoState.mutateAsync({ videoStateId: id, updates: { user_note: note } });
-            toast({
-              title: '메모 저장됨',
-              description: 'YouTube 동영상 메모가 동기화되었습니다.',
-            });
+            toast({ title: '메모 저장됨', description: 'YouTube 동영상 메모가 동기화되었습니다.' });
             break;
 
           case 'local':
-            // Update persisted local card in Supabase
             await updateLocalCard({ id, user_note: note });
-            toast({
-              title: '메모 저장됨',
-              description: '로컬 카드 메모가 동기화되었습니다.',
-            });
+            toast({ title: '메모 저장됨', description: '로컬 카드 메모가 동기화되었습니다.' });
             break;
 
-          case 'pending':
-            // Pending cards are not yet in DB - find the card and save it first
-            const pendingCard = [...scratchPadCards, ...cards].find((c) => c.id === id);
+          case 'pending': {
+            const pendingCard = [...scratchPadCards, ...allMandalaCards].find((c) => c.id === id);
             if (pendingCard) {
-              // First, persist the card with the note
               await addLocalCard({
                 url: pendingCard.videoUrl,
                 title: pendingCard.title,
@@ -1331,12 +1246,9 @@ const Index = () => {
                 cell_index: pendingCard.cellIndex ?? -1,
                 level_id: pendingCard.levelId ?? 'scratchpad',
               });
-              toast({
-                title: '카드 저장됨',
-                description: '카드와 메모가 저장되었습니다.',
-              });
+              setPendingLocalCards((prev) => prev.filter((c) => c.id !== id));
+              toast({ title: '카드 저장됨', description: '카드와 메모가 저장되었습니다.' });
             } else {
-              console.error('[handleSaveNote] Pending card not found:', id);
               toast({
                 title: '저장 실패',
                 description: '카드를 찾을 수 없습니다.',
@@ -1344,14 +1256,9 @@ const Index = () => {
               });
             }
             break;
+          }
         }
-
-        // Also update local state for immediate UI feedback
-        setCards((prev) =>
-          prev.map((card) => (card.id === id ? { ...card, userNote: note } : card))
-        );
       } catch (error) {
-        console.error('[handleSaveNote] Failed to save note:', error);
         toast({
           title: '저장 실패',
           description: error instanceof Error ? error.message : '메모를 저장하지 못했습니다.',
@@ -1363,7 +1270,7 @@ const Index = () => {
       syncedCards,
       persistedLocalCards,
       scratchPadCards,
-      cards,
+      allMandalaCards,
       updateVideoState,
       updateLocalCard,
       addLocalCard,
@@ -1394,18 +1301,22 @@ const Index = () => {
 
   const handleCardsReorder = useCallback(
     (reorderedCards: InsightCard[]) => {
-      setCards((prev) => {
-        // Update only the reordered cards (those with matching IDs)
-        const reorderedIds = new Set(reorderedCards.map((c) => c.id));
-        const unchangedCards = prev.filter((c) => !reorderedIds.has(c.id));
-        return [...unchangedCards, ...reorderedCards];
-      });
+      // Persist reordered positions via batch mutation
+      const batchItems = reorderedCards.map((card) => ({
+        card,
+        source: detectCardSource(card.id, syncedCards, persistedLocalCards, card),
+        cellIndex: card.cellIndex,
+        levelId: card.levelId,
+      }));
+      if (batchItems.length > 0) {
+        batchMoveCards.mutate({ items: batchItems });
+      }
       toast({
         title: '순서 변경됨',
         description: '카드 순서가 업데이트되었습니다.',
       });
     },
-    [toast]
+    [toast, syncedCards, persistedLocalCards, batchMoveCards]
   );
 
   const handleDeleteCards = useCallback(
@@ -1413,60 +1324,56 @@ const Index = () => {
       const syncedIds = new Set(syncedCards.map((c) => c.id));
       const persistedIds = new Set(persistedLocalCards.map((c) => c.id));
 
-      // Separate by type: synced YouTube videos, persisted local cards, mandala cards
       const syncedToDelete = cardIds.filter((id) => syncedIds.has(id));
       const persistedToDelete = cardIds.filter((id) => persistedIds.has(id));
-      const mandalaToDelete = cardIds.filter((id) => !syncedIds.has(id) && !persistedIds.has(id));
+      const pendingToDelete = cardIds.filter((id) => !syncedIds.has(id) && !persistedIds.has(id));
 
-      // Delete synced cards from Supabase (remove from ideation)
       if (syncedToDelete.length > 0) {
         Promise.all(
           syncedToDelete.map((id) =>
             updateVideoState.mutateAsync({ videoStateId: id, updates: { is_in_ideation: false } })
           )
         )
-          .then(() => {
+          .then(() =>
             toast({
               title: '삭제됨',
               description: `${syncedToDelete.length}개의 동영상이 아이디에이션에서 제거되었습니다.`,
-            });
-          })
-          .catch((error) => {
+            })
+          )
+          .catch((error) =>
             toast({
               title: '삭제 실패',
               description:
                 error instanceof Error ? error.message : '일부 동영상을 삭제하지 못했습니다.',
               variant: 'destructive',
-            });
-          });
+            })
+          );
       }
 
-      // Delete persisted local cards from Supabase
       if (persistedToDelete.length > 0) {
         Promise.all(persistedToDelete.map((id) => deleteLocalCard(id)))
-          .then(() => {
+          .then(() =>
             toast({
               title: '삭제됨',
               description: `${persistedToDelete.length}개의 로컬 카드가 삭제되었습니다.`,
-            });
-          })
-          .catch((error) => {
+            })
+          )
+          .catch((error) =>
             toast({
               title: '삭제 실패',
               description:
                 error instanceof Error ? error.message : '일부 카드를 삭제하지 못했습니다.',
               variant: 'destructive',
-            });
-          });
+            })
+          );
       }
 
-      // Delete mandala cards (local state only)
-      if (mandalaToDelete.length > 0) {
-        const mandalaIdSet = new Set(mandalaToDelete);
-        setCards((prev) => prev.filter((c) => !mandalaIdSet.has(c.id)));
+      // Remove pending cards from local state
+      if (pendingToDelete.length > 0) {
+        setPendingLocalCards((prev) => prev.filter((c) => !pendingToDelete.includes(c.id)));
         toast({
           title: '삭제됨',
-          description: `${mandalaToDelete.length}개의 카드가 삭제되었습니다.`,
+          description: `${pendingToDelete.length}개의 카드가 삭제되었습니다.`,
         });
       }
     },
@@ -1474,9 +1381,8 @@ const Index = () => {
   );
 
   // Get cards for selected cell or all cards in current level (including sub-levels)
-  const currentLevelCards = cards.filter((card) => {
+  const currentLevelCards = allMandalaCards.filter((card) => {
     if (card.levelId === currentLevelId) return true;
-    // Include cards from sub-levels
     return currentLevel.subjects.some((subject) => {
       const subLevelId = subject.toLowerCase().replace(/\s/g, '');
       return card.levelId === subLevelId;
@@ -1490,15 +1396,14 @@ const Index = () => {
       ? currentLevel.subjects[selectedCellIndex] || ''
       : currentLevel.centerGoal;
 
-  // Get the current card data from cards array (not stale selectedCard snapshot)
-  // ✅ Bug 1 Fix: useMemo로 감싸서 무한 리렌더링 방지
+  // Get the current card data from RQ-derived arrays (not stale selectedCard snapshot)
   const currentModalCard = useMemo(() => {
     if (!selectedCard?.id) return null;
     const foundCard =
-      cards.find((c) => c.id === selectedCard.id) ||
+      allMandalaCards.find((c) => c.id === selectedCard.id) ||
       scratchPadCards.find((c) => c.id === selectedCard.id);
     return foundCard ?? selectedCard;
-  }, [selectedCard?.id, selectedCard?.userNote, cards, scratchPadCards]);
+  }, [selectedCard?.id, selectedCard?.userNote, allMandalaCards, scratchPadCards]);
 
   return (
     <div className="h-screen flex flex-col bg-surface-base overflow-hidden">

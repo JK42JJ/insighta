@@ -5,18 +5,18 @@
  * - synced cards → batch-update-video-state
  * - local + pending cards → batch-move
  *
- * No onMutate — caller handles optimistic UI via setState.
- * onSuccess reconciles pending cards with server-assigned IDs.
+ * Optimistic updates via onMutate → RQ cache is the single source of truth.
+ * Rollback on error, invalidateQueries on settled for server reconciliation.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { getAuthHeaders, getEdgeFunctionUrl } from '@/lib/supabase-auth';
 import { localCardsKeys } from './useLocalCards';
 import { youtubeSyncKeys } from './useYouTubeSync';
 import type { InsightCard } from '@/types/mandala';
 import type { LocalCardsResponse } from '@/types/local-cards';
 import type { UserVideoStateWithVideo } from '@/types/youtube';
-import { detectCardSource, type CardSource } from '@/lib/cardUtils';
+import { type CardSource } from '@/lib/cardUtils';
 
 interface BatchMoveItem {
   card: InsightCard;
@@ -29,31 +29,23 @@ interface BatchMoveParams {
   items: BatchMoveItem[];
 }
 
-function getEdgeFunctionUrl(fn: string, action: string): string {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-  return `${supabaseUrl}/functions/v1/${fn}?action=${action}`;
-}
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('Not authenticated');
-  }
-  const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-  return {
-    Authorization: `Bearer ${session.access_token}`,
-    'Content-Type': 'application/json',
-    apikey: apiKey,
-  };
-}
-
 export function useBatchMoveCards() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ items }: BatchMoveParams) => {
+      if (import.meta.env.DEV) {
+        console.log('[batchMoveCards] mutationFn called with', items.length, 'items');
+        console.log(
+          '[batchMoveCards] items:',
+          items.map((i) => ({
+            id: i.card.id.slice(0, 8),
+            source: i.source,
+            cellIndex: i.cellIndex,
+            levelId: i.levelId,
+          }))
+        );
+      }
       const headers = await getAuthHeaders();
 
       const syncedItems = items.filter((i) => i.source === 'synced');
@@ -122,31 +114,48 @@ export function useBatchMoveCards() {
 
       await Promise.all(promises);
     },
-    onSuccess: (_data, { items }) => {
-      // 1. local-cards 캐시 직접 업데이트 (refetch 없이)
-      queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), (prev) => {
-        if (!prev) return prev;
-        const movedIds = new Set(items.filter((i) => i.source === 'local').map((i) => i.card.id));
-        return {
-          ...prev,
-          cards: prev.cards.map((card) => {
-            if (movedIds.has(card.id)) {
-              const item = items.find((i) => i.card.id === card.id)!;
-              return { ...card, cell_index: item.cellIndex, level_id: item.levelId };
-            }
-            return card;
-          }),
-        };
-      });
 
-      // 2. allVideoStates 캐시 즉시 업데이트 (synced 카드 위치 변경)
-      const movedSyncedItems = items.filter((i) => i.source === 'synced');
-      if (movedSyncedItems.length > 0) {
+    onMutate: async ({ items }) => {
+      // Cancel in-flight queries to prevent overwriting optimistic updates
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: localCardsKeys.list() }),
+        queryClient.cancelQueries({ queryKey: youtubeSyncKeys.allVideoStates }),
+      ]);
+
+      // Snapshot for rollback
+      const previousLocal = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list());
+      const previousVideo = queryClient.getQueryData<UserVideoStateWithVideo[]>(
+        youtubeSyncKeys.allVideoStates
+      );
+
+      // Optimistic: update local cards cache (position changes)
+      const localItems = items.filter((i) => i.source === 'local');
+      if (localItems.length > 0) {
+        queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), (prev) => {
+          if (!prev) return prev;
+          const movedIds = new Set(localItems.map((i) => i.card.id));
+          return {
+            ...prev,
+            cards: prev.cards.map((card) => {
+              if (movedIds.has(card.id)) {
+                const item = localItems.find((i) => i.card.id === card.id);
+                if (!item) return card;
+                return { ...card, cell_index: item.cellIndex, level_id: item.levelId };
+              }
+              return card;
+            }),
+          };
+        });
+      }
+
+      // Optimistic: update allVideoStates cache (synced card positions)
+      const syncedItems = items.filter((i) => i.source === 'synced');
+      if (syncedItems.length > 0) {
         queryClient.setQueryData<UserVideoStateWithVideo[]>(
           youtubeSyncKeys.allVideoStates,
           (prev) =>
             prev?.map((v) => {
-              const moved = movedSyncedItems.find((i) => i.card.id === v.id);
+              const moved = syncedItems.find((i) => i.card.id === v.id);
               if (moved) {
                 return {
                   ...v,
@@ -160,11 +169,53 @@ export function useBatchMoveCards() {
         );
       }
 
-      // 3. 5초 후 백그라운드 리프레시 (데이터 정합성 보장, 시각적 영향 없음)
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
-        queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
-      }, 5000);
+      // Optimistic: add pending cards to local cards cache (will be inserted by API)
+      const pendingItems = items.filter((i) => i.source === 'pending');
+      if (pendingItems.length > 0) {
+        queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), (prev) => {
+          if (!prev) return prev;
+          const newCards = pendingItems.map((item) => ({
+            id: item.card.id,
+            user_id: '',
+            url: item.card.videoUrl,
+            title: item.card.title,
+            thumbnail: item.card.thumbnail,
+            link_type: (item.card.linkType || 'other') as import('@/types/mandala').LinkType,
+            user_note: item.card.userNote || null,
+            metadata_title: item.card.metadata?.title || null,
+            metadata_description: item.card.metadata?.description || null,
+            metadata_image: item.card.metadata?.image || null,
+            cell_index: item.cellIndex,
+            level_id: item.levelId,
+            sort_order: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }));
+          return {
+            ...prev,
+            cards: [...prev.cards, ...newCards],
+          };
+        });
+      }
+
+      return { previousLocal, previousVideo };
+    },
+
+    onError: (err, _vars, context) => {
+      console.error('[batchMoveCards] mutation error:', err);
+      // Rollback to snapshots
+      if (context?.previousLocal) {
+        queryClient.setQueryData(localCardsKeys.list(), context.previousLocal);
+      }
+      if (context?.previousVideo) {
+        queryClient.setQueryData(youtubeSyncKeys.allVideoStates, context.previousVideo);
+      }
+    },
+
+    onSettled: () => {
+      // Server reconciliation — replace stale optimistic data with real server state
+      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
     },
   });
 }

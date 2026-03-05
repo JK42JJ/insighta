@@ -738,6 +738,11 @@ describe('VideoPlayerModal', () => {
       const closeButton = screen.getByRole('button', { name: /close/i });
       fireEvent.click(closeButton);
 
+      // onClose is wrapped in setTimeout(..., 0) in onOpenChange — flush it
+      await act(async () => {
+        vi.runAllTimers();
+      });
+
       expect(mockOnClose).toHaveBeenCalled();
     });
 

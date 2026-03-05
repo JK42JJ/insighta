@@ -6,7 +6,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { getAuthHeaders, getEdgeFunctionUrl } from '@/lib/supabase-auth';
 import type {
   LocalCard,
   LocalCardsResponse,
@@ -25,26 +25,9 @@ export const localCardsKeys = {
   subscription: () => [...localCardsKeys.all, 'subscription'] as const,
 };
 
-// Edge Function URL helper
-function getEdgeFunctionUrl(action: string): string {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-  return `${supabaseUrl}/functions/v1/local-cards?action=${action}`;
-}
-
-// Get auth headers (includes apikey for Kong API Gateway)
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('Not authenticated');
-  }
-  const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-  return {
-    Authorization: `Bearer ${session.access_token}`,
-    'Content-Type': 'application/json',
-    apikey: apiKey,
-  };
+// Shorthand for local-cards Edge Function URLs
+function localCardsUrl(action: string): string {
+  return getEdgeFunctionUrl('local-cards', action);
 }
 
 /**
@@ -67,7 +50,7 @@ export function useLocalCardsList() {
     queryKey: localCardsKeys.list(),
     queryFn: async (): Promise<LocalCardsResponse> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('list'), { headers });
+      const response = await fetch(localCardsUrl('list'), { headers });
 
       if (!response.ok) {
         throw new Error('Failed to get local cards');
@@ -102,7 +85,7 @@ export function useAddLocalCard() {
   return useMutation({
     mutationFn: async (payload: AddLocalCardPayload): Promise<LocalCard> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('add'), {
+      const response = await fetch(localCardsUrl('add'), {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
@@ -158,7 +141,7 @@ export function useUpdateLocalCard() {
   return useMutation({
     mutationFn: async (payload: UpdateLocalCardPayload): Promise<LocalCard> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('update'), {
+      const response = await fetch(localCardsUrl('update'), {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
@@ -176,9 +159,8 @@ export function useUpdateLocalCard() {
       await queryClient.cancelQueries({ queryKey: localCardsKeys.list() });
       const previous = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list());
 
-      // 위치 변경(cell_index/level_id)은 이미 optimistic setState로 처리됨
-      const isPositionChange = 'cell_index' in payload || 'level_id' in payload;
-      if (previous && !isPositionChange) {
+      // Optimistic update for ALL changes including position
+      if (previous) {
         queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), (prev) =>
           prev
             ? {
@@ -198,6 +180,9 @@ export function useUpdateLocalCard() {
         queryClient.setQueryData(localCardsKeys.list(), context.previous);
       }
     },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+    },
   });
 }
 
@@ -210,7 +195,7 @@ export function useDeleteLocalCard() {
   return useMutation({
     mutationFn: async (cardId: string): Promise<void> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('delete'), {
+      const response = await fetch(localCardsUrl('delete'), {
         method: 'POST',
         headers,
         body: JSON.stringify({ id: cardId }),
