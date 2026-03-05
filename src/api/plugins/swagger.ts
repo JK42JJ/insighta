@@ -20,8 +20,8 @@ export async function registerSwagger(fastify: FastifyInstance) {
           'REST API for personal knowledge management with YouTube playlist synchronization',
         version: '1.0.0',
         contact: {
-          name: 'API Support',
-          email: 'support@example.com',
+          name: 'Insighta Support',
+          email: 'jamesjk4242@gmail.com',
         },
         license: {
           name: 'MIT',
@@ -30,12 +30,12 @@ export async function registerSwagger(fastify: FastifyInstance) {
       },
       servers: [
         {
-          url: 'http://localhost:3000',
-          description: 'Development server',
+          url: 'https://insighta.one',
+          description: 'Production server',
         },
         {
-          url: 'https://api.yourdomain.com',
-          description: 'Production server',
+          url: 'http://localhost:3000',
+          description: 'Development server',
         },
       ],
       tags: [
@@ -64,8 +64,8 @@ export async function registerSwagger(fastify: FastifyInstance) {
         },
       },
       externalDocs: {
-        url: 'https://docs.yourdomain.com',
-        description: 'Full documentation',
+        url: 'https://insighta.one/api-reference',
+        description: 'Interactive API Reference (Scalar)',
       },
     },
   });
