@@ -33,15 +33,17 @@ function getEdgeFunctionUrl(action: string): string {
 
 // Get auth headers (includes apikey for Kong API Gateway)
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session?.access_token) {
     throw new Error('Not authenticated');
   }
   const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
   return {
-    'Authorization': `Bearer ${session.access_token}`,
+    Authorization: `Bearer ${session.access_token}`,
     'Content-Type': 'application/json',
-    'apikey': apiKey,
+    apikey: apiKey,
   };
 }
 
@@ -116,8 +118,16 @@ export function useAddLocalCard() {
       const data = await response.json();
       return data.card;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+    onSuccess: (newCard: LocalCard) => {
+      queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), (prev) =>
+        prev
+          ? {
+              ...prev,
+              cards: [...prev.cards, newCard],
+              subscription: { ...prev.subscription, used: prev.subscription.used + 1 },
+            }
+          : prev
+      );
     },
   });
 }
@@ -159,35 +169,33 @@ export function useUpdateLocalCard() {
       }
 
       const data = await response.json();
-
-      // ✨ 디버깅: 반환된 데이터 검증
-      console.log('[useUpdateLocalCard] Server response:', {
-        requestPayload: payload,
-        returnedCard: {
-          id: data.card.id,
-          cell_index: data.card.cell_index,
-          level_id: data.card.level_id,
-        },
-      });
-
-      // 업데이트가 실제로 반영되었는지 확인
-      if (payload.cell_index !== undefined && data.card.cell_index !== payload.cell_index) {
-        console.error('[useUpdateLocalCard] ⚠️ cell_index MISMATCH:', {
-          requested: payload.cell_index,
-          returned: data.card.cell_index,
-        });
-      }
-      if (payload.level_id !== undefined && data.card.level_id !== payload.level_id) {
-        console.error('[useUpdateLocalCard] ⚠️ level_id MISMATCH:', {
-          requested: payload.level_id,
-          returned: data.card.level_id,
-        });
-      }
-
       return data.card;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+    onMutate: async (payload: UpdateLocalCardPayload) => {
+      await queryClient.cancelQueries({ queryKey: localCardsKeys.list() });
+      const previous = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list());
+
+      // 위치 변경(cell_index/level_id)은 이미 optimistic setState로 처리됨
+      const isPositionChange = 'cell_index' in payload || 'level_id' in payload;
+      if (previous && !isPositionChange) {
+        queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), (prev) =>
+          prev
+            ? {
+                ...prev,
+                cards: prev.cards.map((card) =>
+                  card.id === payload.id ? { ...card, ...payload } : card
+                ),
+              }
+            : prev
+        );
+      }
+
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(localCardsKeys.list(), context.previous);
+      }
     },
   });
 }

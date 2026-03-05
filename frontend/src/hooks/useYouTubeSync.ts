@@ -7,11 +7,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type {
-  YouTubePlaylist,
-  SyncInterval,
-  UserVideoStateWithVideo,
-} from '@/types/youtube';
+import type { YouTubePlaylist, SyncInterval, UserVideoStateWithVideo } from '@/types/youtube';
 
 // Query Keys
 export const youtubeSyncKeys = {
@@ -28,15 +24,17 @@ function getEdgeFunctionUrl(action: string): string {
 
 // Get auth headers (includes apikey for Kong API Gateway)
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session?.access_token) {
     throw new Error('Not authenticated');
   }
   const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
   return {
-    'Authorization': `Bearer ${session.access_token}`,
+    Authorization: `Bearer ${session.access_token}`,
     'Content-Type': 'application/json',
-    'apikey': apiKey,
+    apikey: apiKey,
   };
 }
 
@@ -97,7 +95,9 @@ export function useSyncPlaylist() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (playlistId: string): Promise<{
+    mutationFn: async (
+      playlistId: string
+    ): Promise<{
       success: boolean;
       itemsAdded: number;
       itemsRemoved: number;
@@ -211,22 +211,21 @@ export function useIdeationVideos() {
 export function useUpdateVideoState() {
   const queryClient = useQueryClient();
 
+  type UpdateVideoStateVars = {
+    videoStateId: string;
+    updates: {
+      is_in_ideation?: boolean;
+      user_note?: string;
+      watch_position_seconds?: number;
+      is_watched?: boolean;
+      cell_index?: number;
+      level_id?: string;
+      sort_order?: number;
+    };
+  };
+
   return useMutation({
-    mutationFn: async ({
-      videoStateId,
-      updates,
-    }: {
-      videoStateId: string;
-      updates: {
-        is_in_ideation?: boolean;
-        user_note?: string;
-        watch_position_seconds?: number;
-        is_watched?: boolean;
-        cell_index?: number;
-        level_id?: string;
-        sort_order?: number;
-      };
-    }): Promise<void> => {
+    mutationFn: async ({ videoStateId, updates }: UpdateVideoStateVars): Promise<void> => {
       const headers = await getAuthHeaders();
       const response = await fetch(getEdgeFunctionUrl('update-video-state'), {
         method: 'POST',
@@ -239,8 +238,28 @@ export function useUpdateVideoState() {
         throw new Error(error.error || 'Failed to update video state');
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.ideationVideos });
+    onMutate: async ({ videoStateId, updates }: UpdateVideoStateVars) => {
+      await queryClient.cancelQueries({ queryKey: youtubeSyncKeys.ideationVideos });
+      const previous = queryClient.getQueryData<UserVideoStateWithVideo[]>(
+        youtubeSyncKeys.ideationVideos
+      );
+
+      // 위치 변경은 이미 optimistic setState로 처리됨 — 캐시 업데이트 스킵
+      const isPositionChange =
+        'cell_index' in updates || 'level_id' in updates || 'is_in_ideation' in updates;
+      if (previous && !isPositionChange) {
+        queryClient.setQueryData<UserVideoStateWithVideo[]>(
+          youtubeSyncKeys.ideationVideos,
+          (prev) => prev?.map((item) => (item.id === videoStateId ? { ...item, ...updates } : item))
+        );
+      }
+
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(youtubeSyncKeys.ideationVideos, context.previous);
+      }
     },
   });
 }
@@ -273,7 +292,9 @@ export function useSyncAllPlaylists() {
           synced++;
         } catch (error) {
           failed++;
-          errors.push(`${playlist.title}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          errors.push(
+            `${playlist.title}: ${error instanceof Error ? error.message : 'Unknown error'}`
+          );
         }
       }
 

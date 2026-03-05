@@ -1,19 +1,25 @@
-import { useState, useRef } from "react";
-import { cn } from "@/lib/utils";
-import { MandalaCell } from "./MandalaCell";
-import { MandalaDashboard } from "./MandalaDashboard";
-import { MandalaLevel, InsightCard } from "@/types/mandala";
-import { Sparkles, ChevronRight } from "lucide-react";
+import { useState, useRef, memo } from 'react';
+import { cn } from '@/lib/utils';
+import { MandalaCell } from './MandalaCell';
+import { MandalaDashboard } from './MandalaDashboard';
+import { MandalaLevel, InsightCard } from '@/types/mandala';
+import { Sparkles, ChevronRight } from 'lucide-react';
 
 interface MandalaGridProps {
   level: MandalaLevel;
   cardsByCell: Record<number, InsightCard[]>;
   selectedCellIndex: number | null;
   onCellClick: (cellIndex: number, subject: string) => void;
-  onCardDrop: (cellIndex: number, url?: string, cardId?: string, multiCardIds?: string[], files?: FileList) => void;
+  onCardDrop: (
+    cellIndex: number,
+    url?: string,
+    cardId?: string,
+    multiCardIds?: string[],
+    files?: FileList
+  ) => void;
   onCardClick: (card: InsightCard) => void;
   onCardDragStart: (card: InsightCard) => void;
-  onSubjectsReorder: (newSubjects: string[], swappedIndices?: {from: number, to: number}) => void;
+  onSubjectsReorder: (newSubjects: string[], swappedIndices?: { from: number; to: number }) => void;
   onCellDragging?: (isDragging: boolean) => void;
   isGridDropZone: boolean;
   hasSubLevel?: (subject: string) => boolean;
@@ -26,12 +32,12 @@ interface MandalaGridProps {
   isCompact?: boolean; // For floating mode - reduces size to 1/2
 }
 
-export function MandalaGrid({ 
-  level, 
+export const MandalaGrid = memo(function MandalaGrid({
+  level,
   cardsByCell,
   selectedCellIndex,
-  onCellClick, 
-  onCardDrop, 
+  onCellClick,
+  onCardDrop,
   onCardClick,
   onCardDragStart,
   onSubjectsReorder,
@@ -48,29 +54,34 @@ export function MandalaGrid({
 }: MandalaGridProps) {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionDirection, setTransitionDirection] = useState<'in' | 'out'>('in');
-  const [rippleOrigin, setRippleOrigin] = useState<{x: number, y: number} | null>(null);
+  const [rippleOrigin, setRippleOrigin] = useState<{ x: number; y: number } | null>(null);
   const [activeDropCell, setActiveDropCell] = useState<number | null>(null);
   const [activeCellSwapTarget, setActiveCellSwapTarget] = useState<number | null>(null);
   const [draggingCellIndex, setDraggingCellIndex] = useState<number | null>(null);
-  const [swappingCells, setSwappingCells] = useState<{from: number, to: number} | null>(null);
+  const [swappingCells, setSwappingCells] = useState<{ from: number; to: number } | null>(null);
   const [isFlipped, setIsFlipped] = useState(false);
   const swapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const gridToSubjectIndex: Record<number, number> = {
-    0: 0, 1: 1, 2: 2,
-    3: 3,       5: 4,
-    6: 5, 7: 6, 8: 7,
+    0: 0,
+    1: 1,
+    2: 2,
+    3: 3,
+    5: 4,
+    6: 5,
+    7: 6,
+    8: 7,
   };
 
   const getCellData = (gridIndex: number) => {
     if (gridIndex === 4) {
       return { label: level.centerGoal, isCenter: true, subjectIndex: -1 };
     }
-    
+
     const subjectIndex = gridToSubjectIndex[gridIndex];
     return {
-      label: level.subjects[subjectIndex] || "",
+      label: level.subjects[subjectIndex] || '',
       isCenter: false,
       subjectIndex,
     };
@@ -110,28 +121,30 @@ export function MandalaGrid({
     setActiveCellSwapTarget(null);
     setDraggingCellIndex(null);
     onCellDragging?.(false);
-    
+
     if (fromGridIndex === toGridIndex || fromGridIndex === 4 || toGridIndex === 4) return;
-    
+
     // Trigger swap animation
     setSwappingCells({ from: fromGridIndex, to: toGridIndex });
-    
+
     // Clear any existing timeout
     if (swapTimeoutRef.current) {
       clearTimeout(swapTimeoutRef.current);
     }
-    
+
     // Perform actual swap after animation starts
     swapTimeoutRef.current = setTimeout(() => {
       const fromSubjectIndex = gridToSubjectIndex[fromGridIndex];
       const toSubjectIndex = gridToSubjectIndex[toGridIndex];
-      
+
       const newSubjects = [...level.subjects];
-      [newSubjects[fromSubjectIndex], newSubjects[toSubjectIndex]] = 
-        [newSubjects[toSubjectIndex], newSubjects[fromSubjectIndex]];
-      
+      [newSubjects[fromSubjectIndex], newSubjects[toSubjectIndex]] = [
+        newSubjects[toSubjectIndex],
+        newSubjects[fromSubjectIndex],
+      ];
+
       onSubjectsReorder(newSubjects, { from: fromSubjectIndex, to: toSubjectIndex });
-      
+
       // Clear animation state after swap
       setTimeout(() => {
         setSwappingCells(null);
@@ -139,7 +152,13 @@ export function MandalaGrid({
     }, 50);
   };
 
-  const handleDrop = (index: number, url?: string, cardId?: string, multiCardIds?: string[], files?: FileList) => {
+  const handleDrop = (
+    index: number,
+    url?: string,
+    cardId?: string,
+    multiCardIds?: string[],
+    files?: FileList
+  ) => {
     setActiveDropCell(null);
     setActiveCellSwapTarget(null);
     setDraggingCellIndex(null);
@@ -157,7 +176,7 @@ export function MandalaGrid({
 
   // Get slide direction based on grid index (which arrow was clicked)
   const [slideDirection, setSlideDirection] = useState<string>('right');
-  
+
   const getSlideDirection = (gridIndex: number): string => {
     // Map grid index to slide direction (opposite of arrow direction for exit)
     const directions: Record<number, string> = {
@@ -174,8 +193,8 @@ export function MandalaGrid({
   };
 
   // Get ripple origin position based on grid index
-  const getRippleOrigin = (gridIndex: number): {x: number, y: number} => {
-    const positions: Record<number, {x: number, y: number}> = {
+  const getRippleOrigin = (gridIndex: number): { x: number; y: number } => {
+    const positions: Record<number, { x: number; y: number }> = {
       0: { x: 0, y: 0 },
       1: { x: 50, y: 0 },
       2: { x: 100, y: 0 },
@@ -192,7 +211,7 @@ export function MandalaGrid({
   const handleNavigateToSubLevel = (gridIndex: number) => {
     const cellData = getCellData(gridIndex);
     if (cellData.isCenter) return;
-    
+
     setSlideDirection(getSlideDirection(gridIndex));
     setRippleOrigin(getRippleOrigin(gridIndex));
     setTransitionDirection('out');
@@ -210,17 +229,17 @@ export function MandalaGrid({
   // Handle back navigation with slide animation (opposite direction)
   const handleNavigateBack = () => {
     if (!canGoBack || entryGridIndex === null) return;
-    
+
     // Get opposite direction for back navigation
     const entryDirection = getSlideDirection(entryGridIndex);
     const oppositeDirections: Record<string, string> = {
       'top-left': 'bottom-right',
-      'top': 'bottom',
+      top: 'bottom',
       'top-right': 'bottom-left',
-      'left': 'right',
-      'right': 'left',
+      left: 'right',
+      right: 'left',
       'bottom-left': 'top-right',
-      'bottom': 'top',
+      bottom: 'top',
       'bottom-right': 'top-left',
     };
     setSlideDirection(oppositeDirections[entryDirection] || 'left');
@@ -245,24 +264,24 @@ export function MandalaGrid({
 
   // Arrow positions for 8 directions - inside the grid corners/edges
   const arrowPositions = [
-    { gridIndex: 0, style: "top-2 left-2", rotation: -135, opposite: 8 },
-    { gridIndex: 1, style: "top-1 left-1/2 -translate-x-1/2", rotation: -90, opposite: 7 },
-    { gridIndex: 2, style: "top-2 right-2", rotation: -45, opposite: 6 },
-    { gridIndex: 3, style: "top-1/2 left-1 -translate-y-1/2", rotation: 180, opposite: 5 },
-    { gridIndex: 5, style: "top-1/2 right-1 -translate-y-1/2", rotation: 0, opposite: 3 },
-    { gridIndex: 6, style: "bottom-2 left-2", rotation: 135, opposite: 2 },
-    { gridIndex: 7, style: "bottom-1 left-1/2 -translate-x-1/2", rotation: 90, opposite: 1 },
-    { gridIndex: 8, style: "bottom-2 right-2", rotation: 45, opposite: 0 },
+    { gridIndex: 0, style: 'top-2 left-2', rotation: -135, opposite: 8 },
+    { gridIndex: 1, style: 'top-1 left-1/2 -translate-x-1/2', rotation: -90, opposite: 7 },
+    { gridIndex: 2, style: 'top-2 right-2', rotation: -45, opposite: 6 },
+    { gridIndex: 3, style: 'top-1/2 left-1 -translate-y-1/2', rotation: 180, opposite: 5 },
+    { gridIndex: 5, style: 'top-1/2 right-1 -translate-y-1/2', rotation: 0, opposite: 3 },
+    { gridIndex: 6, style: 'bottom-2 left-2', rotation: 135, opposite: 2 },
+    { gridIndex: 7, style: 'bottom-1 left-1/2 -translate-x-1/2', rotation: 90, opposite: 1 },
+    { gridIndex: 8, style: 'bottom-2 right-2', rotation: 45, opposite: 0 },
   ];
 
   // Get back arrow position based on entry direction
   const getBackArrowConfig = () => {
     if (!canGoBack || entryGridIndex === null) return null;
     // Find the arrow that is opposite to where user entered
-    const entryArrow = arrowPositions.find(a => a.gridIndex === entryGridIndex);
+    const entryArrow = arrowPositions.find((a) => a.gridIndex === entryGridIndex);
     if (!entryArrow) return null;
     // Return the opposite position with reversed rotation
-    return arrowPositions.find(a => a.gridIndex === entryArrow.opposite);
+    return arrowPositions.find((a) => a.gridIndex === entryArrow.opposite);
   };
 
   const backArrowConfig = getBackArrowConfig();
@@ -288,33 +307,33 @@ export function MandalaGrid({
           </div>
         </div>
       )}
-      
+
       {/* Grid Container - Square aspect ratio with navigation arrows and flip capability */}
-      <div className="relative p-4 overflow-visible" style={{ perspective: "1000px" }}>
+      <div className="relative p-4 overflow-visible" style={{ perspective: '1000px' }}>
         {/* Flip Container */}
         <div
           ref={gridRef}
           className={cn(
-            "relative w-full mx-auto transition-transform duration-700 ease-in-out",
-            isCompact ? "max-w-[400px]" : "max-w-[400px]"
+            'relative w-full mx-auto transition-transform duration-700 ease-in-out',
+            isCompact ? 'max-w-[400px]' : 'max-w-[400px]'
           )}
           style={{
-            transformStyle: "preserve-3d",
-            transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+            transformStyle: 'preserve-3d',
+            transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
           }}
         >
           {/* Ripple effect overlay */}
           {isTransitioning && rippleOrigin && (
-            <div 
+            <div
               className="absolute inset-0 z-50 pointer-events-none overflow-hidden rounded-2xl"
-              style={{ backfaceVisibility: "hidden" }}
+              style={{ backfaceVisibility: 'hidden' }}
             >
-              <div 
+              <div
                 className={cn(
-                  "absolute rounded-full bg-primary/20",
-                  transitionDirection === 'out' 
-                    ? "animate-[ripple-expand_700ms_ease-out_forwards]" 
-                    : "animate-[ripple-contract_700ms_ease-out_forwards]"
+                  'absolute rounded-full bg-primary/20',
+                  transitionDirection === 'out'
+                    ? 'animate-[ripple-expand_700ms_ease-out_forwards]'
+                    : 'animate-[ripple-contract_700ms_ease-out_forwards]'
                 )}
                 style={{
                   left: `${rippleOrigin.x}%`,
@@ -330,15 +349,15 @@ export function MandalaGrid({
           {/* Front - Grid */}
           <div
             className={cn(
-              "aspect-square w-full grid grid-cols-3 gap-2 md:gap-3 p-4 md:p-5 rounded-2xl relative",
-              "bg-surface-mid border border-border/30",
-              "transition-all duration-700 ease-in-out",
-              isGridDropZone && "ring-4 ring-primary/30 ring-offset-4 ring-offset-background"
+              'aspect-square w-full grid grid-cols-3 gap-2 md:gap-3 p-4 md:p-5 rounded-2xl relative',
+              'bg-surface-mid border border-border/30',
+              'transition-all duration-700 ease-in-out',
+              isGridDropZone && 'ring-4 ring-primary/30 ring-offset-4 ring-offset-background'
             )}
-            style={{ 
+            style={{
               boxShadow: isGridDropZone ? 'var(--shadow-xl)' : 'var(--shadow-md)',
-              backfaceVisibility: "hidden",
-              transform: isTransitioning 
+              backfaceVisibility: 'hidden',
+              transform: isTransitioning
                 ? transitionDirection === 'out'
                   ? 'scale(0.8)'
                   : 'scale(1.1)'
@@ -348,41 +367,44 @@ export function MandalaGrid({
             }}
           >
             {/* Navigation Arrows - inside grid */}
-            {!isFlipped && arrowPositions.map(({ gridIndex, style, rotation }) => {
-              const hasNav = cellHasSubLevel(gridIndex);
-              if (!hasNav) return null;
-              const cellData = getCellData(gridIndex);
-              
-              return (
-                <button
-                  key={`arrow-${gridIndex}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleNavigateToSubLevel(gridIndex);
-                  }}
-                  className={cn(
-                    "absolute z-40 group transition-all duration-300",
-                    "hover:scale-110 active:scale-95",
-                    style
-                  )}
-                >
-                  {/* Minimal indicator with hover expansion */}
-                  <div className="relative">
-                    {/* Default state: subtle dot */}
-                    <div className="w-2 h-2 rounded-full bg-primary/40 group-hover:bg-transparent transition-all duration-300 group-hover:scale-0 shadow-sm" />
-                    
-                    {/* Hover state: expanded pill with label */}
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-card/95 backdrop-blur-md border border-primary/40 shadow-md opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-300 whitespace-nowrap">
-                      <span className="text-[8px] font-medium text-primary max-w-[50px] truncate">{cellData.label}</span>
-                      <ChevronRight 
-                        className="w-2.5 h-2.5 text-primary flex-shrink-0" 
-                        style={{ transform: `rotate(${rotation}deg)` }}
-                      />
+            {!isFlipped &&
+              arrowPositions.map(({ gridIndex, style, rotation }) => {
+                const hasNav = cellHasSubLevel(gridIndex);
+                if (!hasNav) return null;
+                const cellData = getCellData(gridIndex);
+
+                return (
+                  <button
+                    key={`arrow-${gridIndex}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleNavigateToSubLevel(gridIndex);
+                    }}
+                    className={cn(
+                      'absolute z-40 group transition-all duration-300',
+                      'hover:scale-110 active:scale-95',
+                      style
+                    )}
+                  >
+                    {/* Minimal indicator with hover expansion */}
+                    <div className="relative">
+                      {/* Default state: subtle dot */}
+                      <div className="w-2 h-2 rounded-full bg-primary/40 group-hover:bg-transparent transition-all duration-300 group-hover:scale-0 shadow-sm" />
+
+                      {/* Hover state: expanded pill with label */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-card/95 backdrop-blur-md border border-primary/40 shadow-md opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-300 whitespace-nowrap">
+                        <span className="text-[8px] font-medium text-primary max-w-[50px] truncate">
+                          {cellData.label}
+                        </span>
+                        <ChevronRight
+                          className="w-2.5 h-2.5 text-primary flex-shrink-0"
+                          style={{ transform: `rotate(${rotation}deg)` }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
 
             {/* Back button - inside grid */}
             {backArrowConfig && !isFlipped && (
@@ -392,23 +414,25 @@ export function MandalaGrid({
                   handleNavigateBack();
                 }}
                 className={cn(
-                  "absolute z-40 group transition-all duration-300",
-                  "hover:scale-110 active:scale-95",
+                  'absolute z-40 group transition-all duration-300',
+                  'hover:scale-110 active:scale-95',
                   backArrowConfig.style
                 )}
               >
                 <div className="relative flex items-center gap-1 px-2 py-0.5 rounded-full bg-card/95 backdrop-blur-md border border-border/50 shadow-md hover:shadow-lg hover:border-primary/30 transition-all duration-300">
-                  <ChevronRight 
-                    className="w-2.5 h-2.5 text-muted-foreground group-hover:text-primary transition-colors" 
+                  <ChevronRight
+                    className="w-2.5 h-2.5 text-muted-foreground group-hover:text-primary transition-colors"
                     style={{ transform: `rotate(${backArrowConfig.rotation}deg)` }}
                   />
-                  <span className="text-[8px] font-medium text-muted-foreground group-hover:text-primary transition-colors">뒤로</span>
+                  <span className="text-[8px] font-medium text-muted-foreground group-hover:text-primary transition-colors">
+                    뒤로
+                  </span>
                 </div>
               </button>
             )}
             {Array.from({ length: 9 }).map((_, gridIndex) => {
               const cellData = getCellData(gridIndex);
-              const cellCards = cellData.isCenter ? [] : (cardsByCell[cellData.subjectIndex] || []);
+              const cellCards = cellData.isCenter ? [] : cardsByCell[cellData.subjectIndex] || [];
               const hasNav = cellHasSubLevel(gridIndex);
 
               return (
@@ -421,10 +445,16 @@ export function MandalaGrid({
                   isDropTarget={activeDropCell === gridIndex}
                   isCellSwapTarget={activeCellSwapTarget === gridIndex}
                   isSelected={selectedCellIndex === cellData.subjectIndex}
-                  isSwapping={swappingCells !== null && (swappingCells.from === gridIndex || swappingCells.to === gridIndex)}
+                  isSwapping={
+                    swappingCells !== null &&
+                    (swappingCells.from === gridIndex || swappingCells.to === gridIndex)
+                  }
                   swapDirection={
-                    swappingCells?.from === gridIndex ? 'from' : 
-                    swappingCells?.to === gridIndex ? 'to' : null
+                    swappingCells?.from === gridIndex
+                      ? 'from'
+                      : swappingCells?.to === gridIndex
+                        ? 'to'
+                        : null
                   }
                   onDrop={handleDrop}
                   onCellSwap={handleCellSwap}
@@ -447,13 +477,13 @@ export function MandalaGrid({
           {/* Back - Statistics Dashboard */}
           <div
             className={cn(
-              "aspect-square w-full absolute top-0 left-0 p-4 rounded-2xl",
-              "bg-gradient-to-br from-card/90 via-card to-card/80",
-              "border border-border/30 shadow-lg"
+              'aspect-square w-full absolute top-0 left-0 p-4 rounded-2xl',
+              'bg-gradient-to-br from-card/90 via-card to-card/80',
+              'border border-border/30 shadow-lg'
             )}
             style={{
-              backfaceVisibility: "hidden",
-              transform: "rotateY(180deg)",
+              backfaceVisibility: 'hidden',
+              transform: 'rotateY(180deg)',
             }}
           >
             <MandalaDashboard
@@ -465,13 +495,15 @@ export function MandalaGrid({
           </div>
         </div>
       </div>
-      
+
       {/* Hint */}
       {showHint && (
         <p className="text-[10px] text-center text-muted-foreground/60">
-          {isFlipped ? "되돌리기 버튼을 클릭하여 만다라 보기" : "중앙 셀을 더블클릭하여 통계 보기 · 셀을 드래그하여 우선순위 변경"}
+          {isFlipped
+            ? '되돌리기 버튼을 클릭하여 만다라 보기'
+            : '중앙 셀을 더블클릭하여 통계 보기 · 셀을 드래그하여 우선순위 변경'}
         </p>
       )}
     </div>
   );
-}
+});
