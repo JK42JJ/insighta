@@ -28,6 +28,7 @@
 18. [이슈 및 작업 관리](#18-이슈-및-작업-관리)
 19. [개발 환경 (Console IDE)](#19-개발-환경-console-ide)
 20. [연락처 및 참고 링크](#20-연락처-및-참고-링크)
+21. [코드베이스 관리 정책](#21-코드베이스-관리-정책)
 
 ---
 
@@ -1301,6 +1302,50 @@ git log -1 -p | delta
 | `.env.production.example` | 환경변수 템플릿 |
 | `.tmux.project.conf` | 프로젝트 tmux 설정 (Console IDE) |
 | `scripts/tmux-agents.sh` | tmux 세션 생성 스크립트 |
+
+---
+
+---
+
+## 21. 코드베이스 관리 정책
+
+### 21.1 GitHub 공개 파일 기준
+
+| 기준 | 정책 |
+|------|------|
+| **언어** | GitHub에 노출되는 파일(README, CHANGELOG, PR/Issue 템플릿, CONTRIBUTING)은 영문 |
+| **내부 문서** | `docs/` 하위 운영 문서는 한국어 허용 |
+| **커밋 메시지** | Conventional Commits, 영문 |
+| **Issue/PR** | 영문 |
+
+### 21.2 브랜딩
+
+- 프로젝트명: **Insighta** (구 TubeArchive)
+- `package.json` name: `insighta`
+- 도메인: `insighta.one`
+
+### 21.3 삭제 금지 파일
+
+| 경로 | 이유 |
+|------|------|
+| `prompt/*.md` | 사용자 개인 작업 파일 |
+| `.claude/` | Claude Code 설정 |
+| `.env*` | 환경변수 |
+
+### 21.4 정기 정리 항목
+
+- 사용하지 않는 레거시 설정 파일 제거 (예: `vercel.json`)
+- 보일러플레이트 디렉토리 제거 (예: `docs-site/`)
+- `docs-site/` → `.gitignore`에 추가 완료
+- package.json에서 미사용 스크립트 제거
+
+### 21.5 필수 GitHub 커뮤니티 파일
+
+- `LICENSE` (MIT)
+- `CONTRIBUTING.md`
+- `.github/PULL_REQUEST_TEMPLATE.md`
+- `.github/ISSUE_TEMPLATE/bug_report.md`
+- `.github/ISSUE_TEMPLATE/feature_request.md`
 
 ---
 

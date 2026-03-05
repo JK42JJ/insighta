@@ -1,6 +1,6 @@
 {
-  "name": "tubearchive",
-  "version": "0.2.0",
+  "name": "insighta",
+  "version": "0.3.0",
   "lint-staged": {
     "src/**/*.ts": [
       "prettier --write",
@@ -10,7 +10,7 @@
       "prettier --write"
     ]
   },
-  "description": "TubeArchive - YouTube playlist synchronization with frontend for personal knowledge management",
+  "description": "Insighta - Personal knowledge management platform powered by YouTube playlists",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -35,11 +35,6 @@
     "api:start": "node dist/api/server.js",
     "api:build": "tsc && npm run generate:openapi",
     "generate:openapi": "tsx scripts/generate-openapi.ts",
-    "generate:docs": "cd docs-site && npm run gen-api-docs",
-    "docs:dev": "cd docs-site && npm run start",
-    "docs:build": "cd docs-site && npm run build",
-    "docs:deploy": "cd docs-site && npm run deploy",
-    "docs:serve": "cd docs-site && npm run serve",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -76,7 +71,15 @@
     "openapi",
     "documentation"
   ],
-  "author": "",
+  "author": "JK42JJ",
+  "homepage": "https://insighta.one",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JK42JJ/insighta.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JK42JJ/insighta/issues"
+  },
   "license": "MIT",
   "dependencies": {
     "@fastify/cors": "^8.4.2",
