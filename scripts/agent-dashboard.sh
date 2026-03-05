@@ -1,8 +1,8 @@
 #!/bin/bash
 # =============================================================================
-# Insighta Agent Dashboard — Unified Team Agent Monitor
+# Insighta Agent Dashboard — Interactive Agent Monitor
 # =============================================================================
-# Combines subagent status, file activity, and git overview into one view.
+# Real-time agent status with animated spinners (Claude Code style).
 # Designed for a tmux side-pane. Robust: no set -e, all errors handled.
 #
 # Environment toggles:
@@ -25,29 +25,24 @@ for d in /private/tmp/claude-*/-Users-jeonhokim-cursor-sync-youtube-playlists/ta
   [ -d "$d" ] && TASK_DIR="$d" && break
 done
 
-# ── Colors & Symbols ──────────────────────────────────────────────────────────
-# Base colors
+# -- Colors & Symbols ---------------------------------------------------------
 R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; B='\033[0;34m'
 C='\033[0;36m'; M='\033[0;35m'; W='\033[0;37m'; D='\033[2m'
 BD='\033[1m'; UL='\033[4m'; NC='\033[0m'
-# Extended 256-color for unique agent colors (no duplicates)
 C_ORANGE='\033[38;5;208m'; C_LIME='\033[38;5;118m'; C_PINK='\033[38;5;213m'
 C_TEAL='\033[38;5;37m'; C_GOLD='\033[38;5;220m'; C_LAVENDER='\033[38;5;183m'
-# Background badges (unique per agent — no duplicates)
-BG_BLUE='\033[44;37m'       # backend-dev   (blue)
-BG_CYAN='\033[46;30m'       # frontend-dev  (cyan)
-BG_YELLOW='\033[43;30m'     # test-runner   (yellow)
-BG_MAGENTA='\033[45;37m'    # adapter-dev   (magenta)
-BG_RED='\033[41;37m'        # supabase-dev  (red)
-BG_GREEN='\033[42;30m'      # sync-dev      (green)
-BG_ORANGE='\033[48;5;208;30m' # architect   (orange)
-BG_PINK='\033[48;5;204;30m'   # security    (pink)
-BG_TEAL='\033[48;5;37;37m'    # ux-designer (teal)
-BG_LAVENDER='\033[48;5;183;30m' # ai-integ  (lavender)
-BG_GOLD='\033[48;5;220;30m'   # pm         (gold)
-BG_DIM='\033[48;5;240;37m'    # docs-writer (gray)
 
-# Agent color mapping — each agent has a UNIQUE foreground color
+# Background badges (unique per agent)
+BG_BLUE='\033[44;37m'; BG_CYAN='\033[46;30m'; BG_YELLOW='\033[43;30m'
+BG_MAGENTA='\033[45;37m'; BG_RED='\033[41;37m'; BG_GREEN='\033[42;30m'
+BG_ORANGE='\033[48;5;208;30m'; BG_PINK='\033[48;5;204;30m'
+BG_TEAL='\033[48;5;37;37m'; BG_LAVENDER='\033[48;5;183;30m'
+BG_GOLD='\033[48;5;220;30m'; BG_DIM='\033[48;5;240;37m'
+
+# Animated spinner frames (Claude Code style)
+SPINNER_FRAMES=("✽" "✶" "✢" "✦")
+SPINNER_LEN=${#SPINNER_FRAMES[@]}
+
 agent_color()  { case "$1" in
   pm)                 echo "$C_GOLD";;
   backend-dev)        echo "$B";;
@@ -64,7 +59,6 @@ agent_color()  { case "$1" in
   *)                  echo "$W";;
 esac; }
 
-# Agent badge — each agent has a UNIQUE background color
 agent_badge()  { case "$1" in
   pm)                 echo "${BG_GOLD} PM  ${NC}";;
   backend-dev)        echo "${BG_BLUE} API ${NC}";;
@@ -81,7 +75,6 @@ agent_badge()  { case "$1" in
   *)                  echo "${D} GEN ${NC}";;
 esac; }
 
-# File path → agent detection
 detect_agent() { case "$1" in
   */adapters/*) echo "adapter-dev";;
   */frontend/*|*/components/*|*/hooks/*) echo "frontend-dev";;
@@ -95,11 +88,11 @@ detect_agent() { case "$1" in
   *) echo "general";;
 esac; }
 
-# ── Subagent Status Parser ────────────────────────────────────────────────────
+# -- Subagent Status Parser ---------------------------------------------------
 parse_subagent() {
   local file="$1"
   python3 -c "
-import sys, json, os, time
+import sys, json, os, time, re
 
 file_path = '$file'
 mtime = os.path.getmtime(file_path)
@@ -164,7 +157,6 @@ with open(file_path, 'r') as f:
                 elif isinstance(content, str):
                     if len(all_text) < 1000: all_text += ' ' + content[:200]
             elif msg_type == 'user':
-                # Extract agent description and prompt from initial user message
                 content = msg.get('content', '')
                 if isinstance(content, str) and not description:
                     if not first_prompt:
@@ -190,12 +182,10 @@ with open(file_path, 'r') as f:
                                 first_prompt = t[:500]
         except: continue
 
-# Use all_text as fallback if first_prompt is empty
 if not first_prompt and all_text:
     first_prompt = all_text[:500]
 
 # --- Agent type detection (multi-strategy) ---
-# Strategy 1: Explicit agent type name in first prompt (highest priority)
 if agent_type == 'general' and first_prompt:
     fp_lower = first_prompt.lower()
     for et in ['pm','backend-dev','frontend-dev','adapter-dev','supabase-dev',
@@ -205,52 +195,29 @@ if agent_type == 'general' and first_prompt:
             agent_type = et
             break
 
-# Strategy 2: Extended keyword matching (Korean + English)
 if agent_type == 'general' and first_prompt:
     fp_lower = first_prompt.lower()
     keyword_map = [
-        # PM
         ('project manager', 'pm'), ('quality gate', 'pm'), ('final report', 'pm'),
-        ('최종 검증', 'pm'), ('성공 판정', 'pm'),
-        # Frontend
         ('frontend', 'frontend-dev'), ('react', 'frontend-dev'), ('component', 'frontend-dev'),
-        ('ui ', 'frontend-dev'), ('훅', 'frontend-dev'), ('컴포넌트', 'frontend-dev'),
-        ('tsx', 'frontend-dev'), ('jsx', 'frontend-dev'),
-        # Backend
+        ('ui ', 'frontend-dev'), ('tsx', 'frontend-dev'), ('jsx', 'frontend-dev'),
         ('backend', 'backend-dev'), ('api', 'backend-dev'), ('prisma', 'backend-dev'),
-        ('서버', 'backend-dev'), ('엔드포인트', 'backend-dev'),
-        # Test
         ('test', 'test-runner'), ('e2e', 'test-runner'), ('vitest', 'test-runner'),
-        ('playwright', 'test-runner'), ('테스트', 'test-runner'), ('검증', 'test-runner'),
-        ('jest', 'test-runner'), ('spec', 'test-runner'),
-        # Supabase
+        ('playwright', 'test-runner'), ('jest', 'test-runner'), ('spec', 'test-runner'),
         ('supabase', 'supabase-dev'), ('edge func', 'supabase-dev'), ('docker', 'supabase-dev'),
-        # Security
-        ('security', 'security-auditor'), ('보안', 'security-auditor'), ('vulnerability', 'security-auditor'),
-        # Architect
-        ('architect', 'architect'), ('아키텍처', 'architect'), ('설계', 'architect'),
-        # UX
-        ('ux', 'ux-designer'), ('accessibility', 'ux-designer'), ('접근성', 'ux-designer'),
-        ('wcag', 'ux-designer'), ('a11y', 'ux-designer'),
-        # AI
-        ('ai ', 'ai-integration-dev'), ('llm', 'ai-integration-dev'), ('요약', 'ai-integration-dev'),
-        ('summariz', 'ai-integration-dev'),
-        # Docs
-        ('document', 'docs-writer'), ('문서', 'docs-writer'),
-        # Sync
-        ('sync', 'sync-dev'), ('동기화', 'sync-dev'),
-        # Adapter
-        ('adapter', 'adapter-dev'), ('어댑터', 'adapter-dev'),
-        # Explore (maps to general but at least tried)
-        ('explore', 'general'), ('조사', 'general'), ('분석', 'general'),
-        ('debug', 'general'), ('review', 'general'),
+        ('security', 'security-auditor'), ('vulnerability', 'security-auditor'),
+        ('architect', 'architect'),
+        ('ux', 'ux-designer'), ('accessibility', 'ux-designer'), ('a11y', 'ux-designer'),
+        ('ai ', 'ai-integration-dev'), ('llm', 'ai-integration-dev'), ('summariz', 'ai-integration-dev'),
+        ('document', 'docs-writer'),
+        ('sync', 'sync-dev'),
+        ('adapter', 'adapter-dev'),
     ]
     for kw, at in keyword_map:
         if kw in fp_lower:
             agent_type = at
             break
 
-# Strategy 3: File path pattern detection (fallback)
 if agent_type == 'general' and files_touched:
     for fname in files_touched:
         fl = fname.lower()
@@ -265,31 +232,27 @@ if agent_type == 'general' and files_touched:
         elif fl.endswith('.md'):
             agent_type = 'docs-writer'; break
 
-import re
-ansi_strip = re.compile(r'\x1b\[[0-9;]*m|\\033\[[0-9;]*m')
+ansi_strip = re.compile(r'\x1b\[[0-9;]*m|\\\\033\[[0-9;]*m')
 def clean(s): return ansi_strip.sub('', s).replace('|', '/').replace('\n', ' ').strip()
 
 tools_str = ','.join(sorted(tools_used)[:5])
 files_str = ','.join(sorted(files_touched)[:5])
 detail = clean(last_tool if last_tool else last_text[:100])
 task_desc = clean(description if description else prompt_summary[:80])
-# Validate agent_type is a known value
 KNOWN_TYPES = {'pm','backend-dev','frontend-dev','adapter-dev','supabase-dev',
                'sync-dev','test-runner','docs-writer','architect',
                'security-auditor','ai-integration-dev','ux-designer','general'}
 if agent_type not in KNOWN_TYPES:
     agent_type = 'general'
 
-# Detect stale agents: RUNNING but file not modified in >5 minutes
 if status == 'RUNNING' and (time.time() - mtime) > 300:
     status = 'STALE'
 
-# FORMAT: status|agent_type|tool_count|elapsed|tools_str|detail|task_desc|files_str
 print(f'{status}|{agent_type}|{tool_count}|{elapsed_total}|{tools_str}|{detail}|{task_desc}|{files_str}')
 " 2>/dev/null || echo "UNKNOWN|general|0|0|||parse error|"
 }
 
-# ── Time Formatting ───────────────────────────────────────────────────────────
+# -- Time Formatting -----------------------------------------------------------
 fmt_elapsed() {
   local s="$1"
   if [ "$s" -ge 3600 ]; then echo "$((s/3600))h$((s%3600/60))m"
@@ -298,7 +261,7 @@ fmt_elapsed() {
   fi
 }
 
-# ── Progress Bar ──────────────────────────────────────────────────────────────
+# -- Progress Bar --------------------------------------------------------------
 progress_bar() {
   local width=$1 pct=$2
   local filled=$((width * pct / 100))
@@ -310,10 +273,20 @@ progress_bar() {
   printf "${NC}"
 }
 
-# ── Section Renderers ─────────────────────────────────────────────────────────
+# -- Section Renderers ---------------------------------------------------------
 
 render_header() {
-  echo -e "${BD}${B}  INSIGHTA AGENT DASHBOARD${NC}  ${D}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
+  local spin="${SPINNER_FRAMES[$SPIN_IDX]}"
+  local has_running=0
+  if [ -s "$PARSED_CACHE" ]; then
+    grep -q '|RUNNING|' "$PARSED_CACHE" 2>/dev/null && has_running=1
+  fi
+
+  if [ "$has_running" -eq 1 ]; then
+    echo -e "${BD}${C}  ${spin}${NC} ${BD}${B}INSIGHTA AGENT DASHBOARD${NC}  ${D}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
+  else
+    echo -e "${BD}${B}  INSIGHTA AGENT DASHBOARD${NC}  ${D}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
+  fi
 }
 
 render_project_status() {
@@ -330,7 +303,7 @@ render_team() {
   [ "$SHOW_TEAM" = "0" ] && return
   echo -e "  ${BD}TEAM${NC}  ${D}(agent roster)${NC}"
 
-  # Use cached parse results (populated by render_agents) for running agent types
+  # Collect running agent types from cache
   local running_agents=""
   if [ -n "$PARSED_CACHE" ] && [ -f "$PARSED_CACHE" ]; then
     running_agents=$(while IFS='|' read -r _file status agent_type _rest; do
@@ -338,7 +311,6 @@ render_team() {
     done < "$PARSED_CACHE" | sort -u)
   fi
 
-  # Agent roster: badge, name, role, blink indicator for running agents
   local agents=(
     "pm|Final verification, quality gate"
     "backend-dev|API, Prisma, services"
@@ -354,20 +326,19 @@ render_team() {
     "ux-designer|UX/a11y audit (read-only)"
   )
 
+  local spin="${SPINNER_FRAMES[$SPIN_IDX]}"
   for entry in "${agents[@]}"; do
     local name="${entry%%|*}"
     local role="${entry#*|}"
     local badge=$(agent_badge "$name")
-    local active_mark="  "
+    local color=$(agent_color "$name")
+
     if echo "$running_agents" | grep -q "^${name}$" 2>/dev/null; then
-      # Blink effect: toggle * on/off each cycle
-      if [ "$BLINK_TICK" -eq 0 ]; then
-        active_mark="${G}*${NC} "
-      else
-        active_mark="  "
-      fi
+      # Active agent: spinner + highlighted name
+      printf "  ${color}${spin}${NC} %b ${BD}${color}%-22s${NC} ${D}%s${NC}\n" "$badge" "$name" "$role"
+    else
+      printf "    %b %-22s ${D}%s${NC}\n" "$badge" "$name" "$role"
     fi
-    printf "  %b%b %-22s ${D}%s${NC}\n" "$active_mark" "$badge" "$name" "$role"
   done
 }
 
@@ -381,7 +352,6 @@ render_agents() {
 
   # Read from pre-populated cache
   if [ ! -s "$PARSED_CACHE" ]; then
-    # Fallback: check for older tasks if cache is empty
     local old_files=$(find -L "$TASK_DIR" -name "*.output" -type f 2>/dev/null | sort -r | head -5)
     if [ -z "$old_files" ]; then
       echo -e "  ${D}  No agent activity${NC}"
@@ -394,10 +364,13 @@ render_agents() {
     done
   fi
 
-  local running=0 done=0 total=0
+  local running=0 done=0 total=0 stale=0
+  local spin="${SPINNER_FRAMES[$SPIN_IDX]}"
+
   while IFS='|' read -r f status agent_type tool_count elapsed tools_str detail task_desc files_str; do
     local agent_id=$(basename "$f" .output 2>/dev/null) || continue
     local short_id="${agent_id:0:7}"
+    local color=$(agent_color "$agent_type")
 
     tool_count="${tool_count:-0}"
     elapsed="${elapsed:-0}"
@@ -411,18 +384,20 @@ render_agents() {
       echo -e "  ${G}✓${NC} ${badge} ${D}${short_id}${NC}  ${D}${time_str}${NC}  tools:${BD}${tool_count}${NC}  ${D}[${tools_str}]${NC}"
       [ -n "$task_desc" ] && echo -e "    ${D}└─ ${task_desc:0:60}${NC}"
     elif [ "$status" = "STALE" ]; then
-      done=$((done + 1))
+      stale=$((stale + 1))
       echo -e "  ${D}✗${NC} ${badge} ${D}${short_id}${NC}  ${D}${time_str}${NC}  tools:${BD}${tool_count}${NC}  ${R}(stale)${NC}"
     elif [ "$status" = "RUNNING" ]; then
       running=$((running + 1))
-      echo -e "  ${Y}●${NC} ${badge} ${D}${short_id}${NC}  ${Y}${time_str}${NC}  tools:${BD}${tool_count}${NC}  ${D}[${tools_str}]${NC}"
-      [ -n "$task_desc" ] && echo -e "    ${D}└─ ${task_desc:0:60}${NC}"
+      # Animated spinner + highlighted time + current action
+      echo -e "  ${color}${spin}${NC} ${badge} ${D}${short_id}${NC}  ${Y}${time_str}${NC}  tools:${BD}${tool_count}${NC}  ${D}[${tools_str}]${NC}"
+      [ -n "$task_desc" ] && echo -e "    ${C}├─${NC} ${task_desc:0:60}"
+      [ -n "$detail" ] && echo -e "    ${D}└─ ${detail:0:60}${NC}"
     else
       echo -e "  ${D}?${NC} ${badge} ${D}${short_id}${NC}  ${D}${time_str}${NC}"
     fi
   done < "$PARSED_CACHE"
 
-  echo -e "  ${D}──${NC} ${Y}●${NC} running:${BD}${running}${NC}  ${G}✓${NC} done:${BD}${done}${NC}  total:${D}${total}${NC}"
+  echo -e "  ${D}──${NC} ${Y}●${NC} running:${BD}${running}${NC}  ${G}✓${NC} done:${BD}${done}${NC}  ${R}✗${NC} stale:${BD}${stale}${NC}  total:${D}${total}${NC}"
 }
 
 render_delegation_stats() {
@@ -434,7 +409,6 @@ render_delegation_stats() {
     return
   fi
 
-  # Count tasks per agent type in last 24h
   local stats=$(find -L "$TASK_DIR" -name "*.output" -mmin -1440 -type f 2>/dev/null | while read -r f; do
     parse_subagent "$f" 2>/dev/null | cut -d'|' -f2
   done | sort | uniq -c | sort -rn)
@@ -444,11 +418,9 @@ render_delegation_stats() {
     return
   fi
 
-  # Find max count for bar scaling
   local max_count=$(echo "$stats" | head -1 | awk '{print $1}')
   [ "$max_count" -eq 0 ] 2>/dev/null && max_count=1
 
-  # Scale bar to available width (leave room for badge + name + count)
   local cols=$(tput cols 2>/dev/null || echo 80)
   local bar_width=$(( (cols - 30) > 5 ? (cols - 30) : 5 ))
   [ "$bar_width" -gt 30 ] && bar_width=30
@@ -470,7 +442,6 @@ render_delegation_stats() {
 render_file_activity() {
   echo -e "  ${BD}FILE CHANGES${NC}  ${D}(git working tree)${NC}"
 
-  # Collect all changed files into an array
   local files_list
   files_list=$({
     git diff --name-only 2>/dev/null
@@ -501,31 +472,26 @@ render_file_activity() {
 }
 
 render_footer() {
-  echo -e "${D}  refresh: 1.5s │ Ctrl+C: exit │ SHOW_TEAM=${SHOW_TEAM} SHOW_STATS=${SHOW_STATS} │ agents: $(basename "$TASK_DIR" 2>/dev/null || echo 'none')${NC}"
+  local spin="${SPINNER_FRAMES[$SPIN_IDX]}"
+  echo -e "${D}  ${spin} refresh: 0.5s │ Ctrl+C: exit │ SHOW_TEAM=${SHOW_TEAM} SHOW_STATS=${SHOW_STATS}${NC}"
 }
 
-# ── Terminal-safe output ──────────────────────────────────────────────────────
-# Strip ANSI codes and measure visible width, then truncate to terminal columns.
-# This prevents line-wrapping that breaks the tput-home redraw approach.
-
+# -- Terminal-safe output ------------------------------------------------------
 strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
 
-# Print buffer line-by-line, each truncated to $COLUMNS visible chars.
-# After content, fill remaining screen rows with blank lines to erase stale data.
 print_truncated() {
   local cols=$(tput cols 2>/dev/null || echo 80)
   local rows=$(tput lines 2>/dev/null || echo 40)
 
-  # Process buffer: truncate wide lines, clear EOL residual, limit to pane height
   python3 -u -c "
 import sys, re, os
 
 cols = $cols
 rows = $rows - 1
 ansi_re = re.compile(r'\x1b\[[0-9;]*m')
-EL = '\x1b[K'      # clear to end of line
+EL = '\x1b[K'
 RESET = '\x1b[0m'
-ED = '\x1b[J'       # clear to end of screen
+ED = '\x1b[J'
 line_num = 0
 
 for raw_line in sys.stdin:
@@ -562,12 +528,11 @@ for raw_line in sys.stdin:
         os.write(1, (line + RESET + EL + '\n').encode())
     line_num += 1
 
-# Clear all remaining lines below
 os.write(1, ED.encode())
 " < "$1"
 }
 
-# ── Main Loop (flicker-free) ──────────────────────────────────────────────────
+# -- Main Loop (flicker-free, animated) ----------------------------------------
 TMPBUF=$(mktemp /tmp/dash-buf.XXXXXX)
 PARSED_CACHE=$(mktemp /tmp/dash-parsed.XXXXXX)
 trap 'rm -f "$TMPBUF" "$PARSED_CACHE"; tput cnorm 2>/dev/null' EXIT
@@ -576,12 +541,12 @@ tput civis 2>/dev/null  # hide cursor
 
 prev_cols=0
 prev_rows=0
-BLINK_TICK=0
+SPIN_IDX=0
 
 while true; do
-  BLINK_TICK=$(( (BLINK_TICK + 1) % 2 ))
+  SPIN_IDX=$(( (SPIN_IDX + 1) % SPINNER_LEN ))
 
-  # Pre-populate parse cache (used by render_team and render_agents)
+  # Pre-populate parse cache
   : > "$PARSED_CACHE" 2>/dev/null
   if [ -n "$TASK_DIR" ] && [ -d "$TASK_DIR" ]; then
     find -L "$TASK_DIR" -name "*.output" -mmin -30 -type f 2>/dev/null | sort -r | while read -r f; do
@@ -600,7 +565,7 @@ while true; do
     render_footer
   } > "$TMPBUF" 2>/dev/null
 
-  # Detect terminal resize → full clear
+  # Detect terminal resize -> full clear
   local_cols=$(tput cols 2>/dev/null || echo 80)
   local_rows=$(tput lines 2>/dev/null || echo 40)
   if [ "$local_cols" != "$prev_cols" ] || [ "$local_rows" != "$prev_rows" ]; then
@@ -612,5 +577,5 @@ while true; do
   tput home 2>/dev/null
   print_truncated "$TMPBUF"
 
-  sleep 1.5
+  sleep 0.5
 done
