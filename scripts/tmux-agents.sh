@@ -1,29 +1,13 @@
 #!/bin/bash
 # =============================================================================
-# TubeArchive - Claude Code Multi-Agent tmux Environment
+# Insighta Console IDE - tmux Agent Environment
 # =============================================================================
-# Sets up a tmux session with panes for:
-#   - Main Claude Code orchestrator session
-#   - File change monitor (real-time agent activity)
-#   - Project dashboard (git status, agent domain stats)
-#   - Sub-agent pane (additional Claude Code session)
-#
-# Layout:
-# ┌────────────────────────────┬─────────────────────┐
-# │                            │  File Monitor       │
-# │  Main Claude Code          │  (real-time changes) │
-# │  (Orchestrator)            ├─────────────────────┤
-# │                            │  Dashboard          │
-# │                            │  (project stats)    │
-# ├────────────────────────────┴─────────────────────┤
-# │  Sub-Agent Pane (Claude Code / shell)            │
-# └──────────────────────────────────────────────────┘
-#
 # Usage:
-#   ./scripts/tmux-agents.sh          # Default 3-pane layout
-#   ./scripts/tmux-agents.sh full     # Full 4-pane layout
-#   ./scripts/tmux-agents.sh minimal  # Minimal 2-pane layout
-#   ./scripts/tmux-agents.sh kill     # Kill the session
+#   ./scripts/tmux-agents.sh          # Default: Claude + Dashboard
+#   ./scripts/tmux-agents.sh full     # Full: Claude + Dashboard + Shell
+#   ./scripts/tmux-agents.sh minimal  # Claude + bottom dashboard
+#   ./scripts/tmux-agents.sh solo     # Claude only (single pane)
+#   ./scripts/tmux-agents.sh kill     # Kill session
 # =============================================================================
 
 set -e
@@ -31,16 +15,29 @@ set -e
 SESSION_NAME="tubearchive"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LAYOUT="${1:-default}"
+CLAUDE_CMD="claude --dangerously-skip-permissions"
+# Dashboard auto-restarts on crash
+DASH_CMD="while true; do bash scripts/agent-dashboard.sh; echo 'Dashboard restarting...'; sleep 1; done"
+
+# Detect tmux base-index (0 or 1)
+WIN_BASE=$(tmux show-option -gv base-index 2>/dev/null || echo 0)
+PANE_BASE=$(tmux show-option -gv pane-base-index 2>/dev/null || echo 0)
+W="${WIN_BASE}"  # first window index
+P0="${PANE_BASE}"  # first pane
+P1=$((PANE_BASE + 1))
+P2=$((PANE_BASE + 2))
 
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m'
 
-# Kill existing session
+# Kill session
 if [ "$LAYOUT" = "kill" ]; then
   tmux kill-session -t "$SESSION_NAME" 2>/dev/null && \
     echo -e "${GREEN}Session '$SESSION_NAME' killed.${NC}" || \
@@ -48,7 +45,7 @@ if [ "$LAYOUT" = "kill" ]; then
   exit 0
 fi
 
-# Check if session already exists
+# Check existing session
 if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
   echo -e "${YELLOW}Session '$SESSION_NAME' already exists.${NC}"
   echo -e "  ${BOLD}Attach:${NC}  tmux attach -t $SESSION_NAME"
@@ -62,95 +59,83 @@ if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
 fi
 
 echo -e "${BLUE}${BOLD}================================================${NC}"
-echo -e "${BLUE}${BOLD}  TubeArchive Agent Environment Setup${NC}"
+echo -e "${BLUE}${BOLD}  Insighta Console IDE${NC}"
 echo -e "${BLUE}${BOLD}================================================${NC}"
 echo ""
 
 case "$LAYOUT" in
 
+  solo)
+    # Single pane: Claude only
+    echo -e "${GREEN}Creating solo layout (Claude only)...${NC}"
+    tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_ROOT" -x 220 -y 55
+    tmux send-keys -t "$SESSION_NAME:$W" "$CLAUDE_CMD" Enter
+    ;;
+
   minimal)
     # ┌──────────────────────────────────────────────┐
-    # │  Main Claude Code                            │
+    # │  Claude Code                                 │
     # ├──────────────────────────────────────────────┤
-    # │  File Monitor                                │
+    # │  Dashboard (25%)                             │
     # └──────────────────────────────────────────────┘
     echo -e "${GREEN}Creating minimal layout (2 panes)...${NC}"
+    tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_ROOT" -x 220 -y 55
 
-    tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_ROOT" -x 200 -y 50
+    tmux split-window -v -p 25 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
+    tmux send-keys -t "$SESSION_NAME:$W.$P1" "$DASH_CMD" Enter
 
-    # Main pane - Claude Code
-    tmux send-keys -t "$SESSION_NAME" "echo '=== Main Claude Code Session ==='; echo 'Run: claude' ; echo ''" Enter
-
-    # Bottom pane - File monitor
-    tmux split-window -v -p 30 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
-    tmux send-keys -t "$SESSION_NAME" "bash scripts/agent-monitor.sh watch" Enter
-
-    # Select main pane
-    tmux select-pane -t "$SESSION_NAME:0.0"
+    tmux select-pane -t "$SESSION_NAME:$W.$P0"
+    tmux send-keys -t "$SESSION_NAME:$W.$P0" "$CLAUDE_CMD" Enter
     ;;
 
   full)
     # ┌────────────────────────────┬─────────────────────┐
-    # │                            │  Subagent Monitor   │
-    # │  Main Claude Code          │  (real-time status) │
-    # │  (Orchestrator)            ├─────────────────────┤
-    # │                            │  File Monitor       │
+    # │                            │                     │
+    # │  Claude Code               │  Agent Dashboard    │
+    # │  (Orchestrator)            │  (unified monitor)  │
+    # │                            │                     │
     # ├────────────────────────────┴─────────────────────┤
-    # │  Dashboard (project stats + git)                 │
+    # │  Shell (project root)                            │
     # └──────────────────────────────────────────────────┘
-    echo -e "${GREEN}Creating full layout (4 panes)...${NC}"
+    echo -e "${GREEN}Creating full layout (3 panes)...${NC}"
+    tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_ROOT" -x 220 -y 55
 
-    tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_ROOT" -x 200 -y 50
+    # Right side - Unified Dashboard
+    tmux split-window -h -p 38 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
+    tmux send-keys -t "$SESSION_NAME:$W.$P1" "$DASH_CMD" Enter
 
-    # Pane 0: Main Claude Code (left, large)
-    tmux send-keys -t "$SESSION_NAME" "echo '=== Main Claude Code (Orchestrator) ==='; echo 'Run: claude'; echo ''" Enter
+    # Bottom shell
+    tmux select-pane -t "$SESSION_NAME:$W.$P0"
+    tmux split-window -v -p 18 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
 
-    # Pane 1: Right side - Subagent Monitor (top-right)
-    tmux split-window -h -p 40 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
-    tmux send-keys -t "$SESSION_NAME" "bash scripts/subagent-monitor.sh live" Enter
-
-    # Pane 2: File Monitor (bottom-right)
-    tmux split-window -v -p 50 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
-    tmux send-keys -t "$SESSION_NAME" "bash scripts/agent-monitor.sh watch" Enter
-
-    # Pane 3: Dashboard (bottom)
-    tmux select-pane -t "$SESSION_NAME:0.0"
-    tmux split-window -v -p 25 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
-    tmux send-keys -t "$SESSION_NAME" "bash scripts/agent-monitor.sh dashboard" Enter
-
-    # Select main pane
-    tmux select-pane -t "$SESSION_NAME:0.0"
+    # Launch claude in main pane
+    tmux select-pane -t "$SESSION_NAME:$W.$P0"
+    tmux send-keys -t "$SESSION_NAME:$W.$P0" "$CLAUDE_CMD" Enter
     ;;
 
   *)
-    # Default: 3-pane layout
+    # Default: 2-pane layout (Claude + Dashboard)
     # ┌──────────────────────────┬───────────────────────┐
-    # │                          │  Subagent Monitor     │
-    # │  Claude Code             │  (real-time status)   │
-    # │  (auto-launched)         ├───────────────────────┤
-    # │                          │  File Monitor         │
-    # │                          │  (file changes)       │
+    # │                          │                       │
+    # │  Claude Code             │  Agent Dashboard      │
+    # │  (--dangerously-skip-    │  (agents + files +    │
+    # │   permissions --resume)  │   git status)         │
+    # │                          │                       │
     # └──────────────────────────┴───────────────────────┘
-    echo -e "${GREEN}Creating default layout (3 panes)...${NC}"
-
+    echo -e "${GREEN}Creating default layout (2 panes)...${NC}"
     tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_ROOT" -x 220 -y 55
 
-    # Pane 0: Claude Code (left, large) - auto-launch claude
-    # Pane 1: Right top - Subagent Monitor
-    tmux split-window -h -p 35 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
-    tmux send-keys -t "$SESSION_NAME:0.1" "bash scripts/subagent-monitor.sh live" Enter
+    # Right side - Unified Dashboard
+    tmux split-window -h -p 38 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
+    tmux send-keys -t "$SESSION_NAME:$W.$P1" "$DASH_CMD" Enter
 
-    # Pane 2: Right bottom - File Monitor
-    tmux split-window -v -p 50 -t "$SESSION_NAME:0.1" -c "$PROJECT_ROOT"
-    tmux send-keys -t "$SESSION_NAME:0.2" "bash scripts/agent-monitor.sh watch" Enter
-
-    # Launch claude in Pane 0
-    tmux select-pane -t "$SESSION_NAME:0.0"
-    tmux send-keys -t "$SESSION_NAME:0.0" "claude --dangerously-skip-permissions --resume" Enter
+    # Launch claude in main pane
+    tmux select-pane -t "$SESSION_NAME:$W.$P0"
+    tmux send-keys -t "$SESSION_NAME:$W.$P0" "$CLAUDE_CMD" Enter
     ;;
 esac
 
-# Load project-specific tmux config if exists
+# Load project tmux config
 TMUX_CONF="$PROJECT_ROOT/.tmux.project.conf"
 if [ -f "$TMUX_CONF" ]; then
   tmux source-file "$TMUX_CONF"
@@ -159,16 +144,17 @@ fi
 echo ""
 echo -e "${GREEN}${BOLD}Session '$SESSION_NAME' created!${NC}"
 echo ""
+echo -e "${BOLD}Layout:${NC}  $LAYOUT"
+echo -e "${BOLD}Claude:${NC}  --dangerously-skip-permissions --resume"
+echo ""
 echo -e "${BOLD}Attach:${NC}  tmux attach -t $SESSION_NAME"
 echo ""
 echo -e "${BOLD}Keybindings:${NC}"
-echo -e "  ${CYAN}Ctrl+b →${NC}  Move to right pane"
-echo -e "  ${CYAN}Ctrl+b ←${NC}  Move to left pane"
-echo -e "  ${CYAN}Ctrl+b ↑${NC}  Move to upper pane"
-echo -e "  ${CYAN}Ctrl+b ↓${NC}  Move to lower pane"
-echo -e "  ${CYAN}Ctrl+b z${NC}  Zoom/unzoom current pane"
-echo -e "  ${CYAN}Ctrl+b d${NC}  Detach from session"
-echo -e "  ${CYAN}Ctrl+b [${NC}  Scroll mode (q to exit)"
+echo -e "  ${CYAN}prefix + g${NC}  lazygit        ${CYAN}prefix + f${NC}  yazi (files)"
+echo -e "  ${CYAN}prefix + /${NC}  fzf grep       ${CYAN}prefix + p${NC}  fzf file picker"
+echo -e "  ${CYAN}prefix + B${NC}  btop           ${CYAN}prefix + D${NC}  lazydocker"
+echo -e "  ${CYAN}prefix + S${NC}  shell popup    ${CYAN}Alt+z${NC}      zoom pane"
+echo -e "  ${CYAN}Alt+←→↑↓${NC}   pane nav       ${CYAN}Alt+1-9${NC}    window switch"
 echo ""
 
 # Auto-attach

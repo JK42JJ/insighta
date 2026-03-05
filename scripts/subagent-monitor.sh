@@ -6,10 +6,20 @@
 # Parses JSONL format to extract tool calls, progress, and results.
 # =============================================================================
 
-set -e
+set +e  # Do NOT use set -e: transient failures in the monitoring loop must not kill the script
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TASK_DIR="/private/tmp/claude-502/-Users-jeonhokim-cursor-sync-youtube-playlists/tasks"
+
+# Auto-detect task directory (Claude Code stores tasks in /private/tmp/claude-<uid>/)
+TASK_DIR_BASE="/private/tmp"
+TASK_DIR=""
+for d in "$TASK_DIR_BASE"/claude-*/-Users-jeonhokim-cursor-sync-youtube-playlists/tasks; do
+  if [ -d "$d" ]; then
+    TASK_DIR="$d"
+    break
+  fi
+done
+TASK_DIR="${TASK_DIR:-/private/tmp/claude-502/-Users-jeonhokim-cursor-sync-youtube-playlists/tasks}"
 
 # Colors
 RED='\033[0;31m'
@@ -181,9 +191,9 @@ case "$MODE" in
         if [ -n "$old_files" ]; then
           echo -e "${DIM}  Previous tasks:${NC}"
           for f in $old_files; do
-            agent_id=$(basename "$f" .output)
+            agent_id=$(basename "$f" .output 2>/dev/null) || continue
             short_id="${agent_id:0:8}"
-            agent_type=$(parse_agent_type "$f")
+            agent_type=$(parse_agent_type "$f" 2>/dev/null) || agent_type="general"
             color=$(agent_color "$agent_type")
             mod_time=$(stat -f "%Sm" -t "%H:%M" "$f" 2>/dev/null || echo "??:??")
             echo -e "  ${DIM}${mod_time}${NC} ${color}${agent_type}${NC} ${DIM}[${short_id}]${NC}"
@@ -197,20 +207,20 @@ case "$MODE" in
       done_count=0
 
       for f in $active_files; do
-        agent_id=$(basename "$f" .output)
+        agent_id=$(basename "$f" .output 2>/dev/null) || continue
         short_id="${agent_id:0:8}"
-        agent_type=$(parse_agent_type "$f")
+        agent_type=$(parse_agent_type "$f" 2>/dev/null) || agent_type="general"
         color=$(agent_color "$agent_type")
         mod_time=$(stat -f "%Sm" -t "%H:%M:%S" "$f" 2>/dev/null || echo "??:??:??")
 
-        status_info=$(extract_status "$f")
+        status_info=$(extract_status "$f" 2>/dev/null) || status_info="RUNNING|0|"
         IFS='|' read -r status tool_count detail <<< "$status_info"
+        tool_count="${tool_count:-0}"
 
         if [ "$status" = "DONE" ]; then
           done_count=$((done_count + 1))
           echo -e "  ${GREEN}[DONE]${NC} ${color}${BOLD}${agent_type}${NC} ${DIM}[${short_id}]${NC} tools:${tool_count}"
           if [ -n "$detail" ]; then
-            # Word wrap detail at terminal width
             echo -e "         ${DIM}${detail:0:120}${NC}"
           fi
         else

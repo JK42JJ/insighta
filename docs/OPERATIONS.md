@@ -1,6 +1,6 @@
 # Insighta 운영 매뉴얼
 
-> 최종 업데이트: 2026-03-04
+> 최종 업데이트: 2026-03-05
 > 프로젝트: Insighta (구 TubeArchive)
 > 도메인: https://insighta.one
 
@@ -26,7 +26,8 @@
 16. [CI/CD 상세](#16-cicd-상세)
 17. [트러블슈팅 가이드](#17-트러블슈팅-가이드)
 18. [이슈 및 작업 관리](#18-이슈-및-작업-관리)
-19. [연락처 및 참고 링크](#19-연락처-및-참고-링크)
+19. [개발 환경 (Console IDE)](#19-개발-환경-console-ide)
+20. [연락처 및 참고 링크](#20-연락처-및-참고-링크)
 
 ---
 
@@ -953,7 +954,249 @@ docker inspect --format='{{json .State.Health}}' tubearchive-api | python3 -m js
 
 ---
 
-## 19. 연락처 및 참고 링크
+## 19. 개발 환경 (Console IDE)
+
+Ghostty + tmux + Claude Code 기반 터미널 IDE 환경. Catppuccin Mocha 테마로 통일.
+
+### 구성 요소
+
+```
+[Ghostty Terminal]
+    │ JetBrainsMono Nerd Font, Catppuccin Mocha
+    │
+    └── [tmux session: tubearchive]
+          │
+          ├── Pane 0 (65%): Claude Code (--dangerously-skip-permissions --resume)
+          ├── Pane 1 (35% top): Subagent Monitor (실시간 에이전트 추적)
+          └── Pane 2 (35% bot): File Monitor (파일 변경 감지)
+          │
+          ├── Popup: lazygit (prefix+g)
+          ├── Popup: yazi (prefix+f)
+          ├── Popup: fzf grep (prefix+/)
+          ├── Popup: fzf files (prefix+p)
+          ├── Popup: btop (prefix+B)
+          ├── Popup: lazydocker (prefix+D)
+          └── Popup: shell (prefix+S)
+```
+
+### 설치된 도구
+
+| 도구 | 버전 확인 | 용도 |
+|------|-----------|------|
+| **fzf** | `fzf --version` | 퍼지 파인더 (파일, 히스토리, 디렉토리) |
+| **bat** | `bat --version` | 구문 강조 cat (Catppuccin Mocha 테마) |
+| **eza** | `eza --version` | 아이콘 지원 ls (git 상태 표시) |
+| **git-delta** | `delta --version` | Git diff 뷰어 (side-by-side, 라인 번호) |
+| **zoxide** | `zoxide --version` | 스마트 cd (사용 빈도 기반 디렉토리 이동) |
+| **lazygit** | `lazygit --version` | Git TUI (staging, diff, log, branch) |
+| **yazi** | `yazi --version` | 파일 매니저 TUI (미리보기 포함) |
+| **btop** | `btop --version` | 시스템 리소스 모니터 |
+| **lazydocker** | `lazydocker --version` | Docker 컨테이너/로그 TUI |
+| **ripgrep** | `rg --version` | 고속 코드 검색 |
+| **fd** | `fd --version` | 고속 파일 검색 |
+
+### 설정 파일 위치
+
+| 파일 | 용도 |
+|------|------|
+| `~/Library/Application Support/com.mitchellh.ghostty/config` | Ghostty 터미널 설정 |
+| `~/.tmux.conf` | tmux 글로벌 설정 (터미널, vi copy, 키바인딩) |
+| `.tmux.project.conf` | 프로젝트 tmux 설정 (상태바, 팝업, 테마) |
+| `scripts/tmux-agents.sh` | tmux 세션 생성 스크립트 |
+| `~/.zshrc` | 쉘 설정 (도구 초기화, alias, 함수) |
+| `~/.gitconfig` | Git 설정 (delta pager, side-by-side diff) |
+
+### tmux 키바인딩
+
+> **prefix** = `Ctrl+b` (기본값)
+
+#### 도구 팝업 (prefix + key)
+
+| 키 | 도구 | 설명 |
+|----|------|------|
+| `prefix + g` | lazygit | Git 전체 관리 (commit, push, branch, stash, rebase) |
+| `prefix + f` | yazi | 파일 매니저 (탐색, 미리보기, 삭제, 이동) |
+| `prefix + /` | fzf + rg | **코드 검색** (rg 결과를 fzf로 필터 + bat 미리보기) |
+| `prefix + p` | fzf + fd | **파일 찾기** (fd 결과를 fzf로 필터 + bat 미리보기) |
+| `prefix + B` | btop | CPU, 메모리, 네트워크 실시간 모니터링 |
+| `prefix + D` | lazydocker | Docker 컨테이너 상태, 로그, 볼륨 관리 |
+| `prefix + S` | zsh | 빠른 쉘 팝업 (일회성 명령 실행) |
+
+#### 윈도우/페인 관리
+
+| 키 | 동작 |
+|----|------|
+| `Alt + 1-9` | 윈도우 직접 전환 (prefix 불필요) |
+| `Alt + ←→↑↓` | 페인 이동 (prefix 불필요) |
+| `Alt + Shift + ←→↑↓` | 페인 크기 조절 |
+| `Alt + z` | 현재 페인 줌/언줌 토글 |
+| `prefix + \|` | 수평 분할 (현재 경로 유지) |
+| `prefix + -` | 수직 분할 (현재 경로 유지) |
+| `prefix + c` | 새 윈도우 (현재 경로 유지) |
+| `prefix + >` / `<` | 페인 위치 교환 |
+
+#### Vi Copy Mode
+
+| 키 | 동작 |
+|----|------|
+| `prefix + Enter` | Copy mode 진입 |
+| `v` | 선택 시작 (visual) |
+| `y` | 선택 복사 → 클립보드 (pbcopy) |
+| 마우스 드래그 | 선택 → 자동 클립보드 복사 |
+
+### 쉘 명령어 (alias & 함수)
+
+#### Claude Code
+
+```bash
+cc                # claude --dangerously-skip-permissions
+ccr               # claude --dangerously-skip-permissions --resume
+```
+
+#### 파일 탐색
+
+```bash
+ls                # eza --icons
+ll                # eza -la --icons --git --group-directories-first
+lt                # eza --tree --icons --level=2
+lta               # eza --tree --icons --level=3 -a
+cat <file>        # bat --paging=never (구문 강조)
+catp <file>       # bat (pager 포함)
+y                 # yazi (종료 시 해당 디렉토리로 cd)
+```
+
+#### 검색
+
+```bash
+rgf <pattern>     # rg + fzf 인터랙티브 검색 (bat 미리보기)
+fp                # fd + fzf 파일 찾기 (bat 미리보기)
+Ctrl+R            # fzf 명령어 히스토리 검색
+Ctrl+T            # fzf 파일 퍼지 검색 (현재 명령에 삽입)
+Alt+C             # fzf 디렉토리 퍼지 이동
+z <keyword>       # zoxide 스마트 cd (사용 빈도 기반)
+```
+
+#### Git (delta 통합)
+
+```bash
+git log           # delta로 렌더링 (side-by-side)
+git diff          # delta로 렌더링 (라인 번호, 구문 강조)
+git show          # delta로 렌더링
+```
+
+### tmux 세션 관리
+
+```bash
+# 세션 시작 (프로젝트 루트에서 실행)
+./scripts/tmux-agents.sh              # 기본 3-pane (Claude + 모니터 2개)
+./scripts/tmux-agents.sh full         # 4-pane (Claude + 모니터 + 쉘)
+./scripts/tmux-agents.sh minimal      # 2-pane (Claude + 모니터)
+./scripts/tmux-agents.sh solo         # 1-pane (Claude only)
+./scripts/tmux-agents.sh kill         # 세션 종료
+
+# 세션 연결
+tmux attach -t tubearchive            # 기존 세션에 연결
+tmux ls                               # 세션 목록
+```
+
+#### 레이아웃 비교
+
+| 모드 | 페인 | Claude | Subagent Monitor | File Monitor | Shell |
+|------|------|--------|-----------------|--------------|-------|
+| **default** | 3 | 65% left | 35% right-top | 35% right-bottom | - |
+| **full** | 4 | 55% left-top | 35% right-top | 35% right-bottom | 20% bottom |
+| **minimal** | 2 | 75% top | 25% bottom | - | - |
+| **solo** | 1 | 100% | - | - | - |
+
+### 워크플로우 예시
+
+#### 일반 개발
+
+```bash
+# 1. 세션 시작
+./scripts/tmux-agents.sh
+
+# 2. Claude가 자동 실행됨 (--dangerously-skip-permissions --resume)
+# 3. 작업 지시 → Claude가 코드 수정 → 우측 모니터에서 실시간 확인
+# 4. prefix+g → lazygit으로 변경사항 확인, commit, push
+# 5. prefix+/ → 코드 검색이 필요할 때
+```
+
+#### 디버깅
+
+```bash
+# prefix+/ → 에러 메시지로 코드 검색
+# prefix+g → lazygit에서 최근 변경사항 확인
+# prefix+B → btop으로 리소스 상태 확인
+# prefix+D → lazydocker로 컨테이너 로그 확인
+```
+
+#### EC2 서버 작업
+
+```bash
+# Ghostty에서 새 탭 (Cmd+T)으로 SSH 세션 열기
+ssh -i ~/Downloads/prx01-tubearchive.pem ubuntu@44.231.152.49
+# Alt+1-9로 로컬 탭과 SSH 탭 간 빠르게 전환
+```
+
+### Catppuccin Mocha 테마 적용 범위
+
+| 대상 | 상태 | 설정 위치 |
+|------|------|-----------|
+| Ghostty 터미널 | `theme = catppuccin-mocha` | Ghostty config |
+| tmux 상태바 | `bg=#1e1e2e, fg=#cdd6f4` | .tmux.project.conf |
+| tmux 페인 테두리 | `fg=#313244 / #89b4fa` | .tmux.project.conf |
+| fzf | `--color=bg+:#313244,...` | .zshrc FZF_DEFAULT_OPTS |
+| bat | `BAT_THEME="Catppuccin Mocha"` | .zshrc |
+| git-delta | `syntax-theme = Catppuccin Mocha` | .gitconfig |
+
+### 문제 해결
+
+#### Nerd Font 아이콘이 깨져 보일 때
+
+```bash
+# 폰트 설치 확인
+fc-list | grep -i "JetBrainsMono Nerd"
+
+# 재설치
+brew install --cask font-jetbrains-mono-nerd-font
+
+# Ghostty 재시작 필요
+```
+
+#### fzf Ctrl+R/Ctrl+T가 동작하지 않을 때
+
+```bash
+# .zshrc에서 fzf 초기화 확인
+source <(fzf --zsh)
+
+# 쉘 재로드
+source ~/.zshrc
+```
+
+#### tmux 팝업에서 도구가 실행되지 않을 때
+
+```bash
+# 도구 설치 확인
+which lazygit yazi btop lazydocker
+
+# 없으면 재설치
+brew install lazygit yazi btop lazydocker
+```
+
+#### delta가 적용되지 않을 때
+
+```bash
+# .gitconfig 확인
+git config --global core.pager   # → delta
+
+# 수동 테스트
+git log -1 -p | delta
+```
+
+---
+
+## 20. 연락처 및 참고 링크
 
 ### 주요 대시보드
 
@@ -986,6 +1229,8 @@ docker inspect --format='{{json .State.Health}}' tubearchive-api | python3 -m js
 | `prisma/schema.prisma` | DB 스키마 |
 | `prisma/migrations/rls_policies.sql` | RLS 정책 SQL |
 | `.env.production.example` | 환경변수 템플릿 |
+| `.tmux.project.conf` | 프로젝트 tmux 설정 (Console IDE) |
+| `scripts/tmux-agents.sh` | tmux 세션 생성 스크립트 |
 
 ---
 
