@@ -178,9 +178,7 @@ describe('YouTubeClient', () => {
       expect(authUrl).toContain('https://accounts.google.com');
       expect(mockGoogleAuth.generateAuthUrl).toHaveBeenCalledWith({
         access_type: 'offline',
-        scope: expect.arrayContaining([
-          'https://www.googleapis.com/auth/youtube.readonly',
-        ]),
+        scope: expect.arrayContaining(['https://www.googleapis.com/auth/youtube.readonly']),
       });
     });
   });
