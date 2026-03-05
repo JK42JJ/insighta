@@ -58,11 +58,14 @@ mtime = os.path.getmtime(file_path)
 elapsed_total = int(time.time() - os.path.getctime(file_path))
 
 agent_type = 'general'
+description = ''
+prompt_summary = ''
 status = 'RUNNING'
 tool_count = 0
 last_tool = ''
 last_text = ''
 tools_used = set()
+files_touched = set()
 
 with open(file_path, 'r') as f:
     for line in f:
@@ -76,7 +79,7 @@ with open(file_path, 'r') as f:
             if msg_type == 'result':
                 status = 'DONE'
                 r = msg.get('result', d.get('result', ''))
-                if isinstance(r, str): last_text = r[:120]
+                if isinstance(r, str): last_text = r[:200]
             elif msg_type == 'assistant':
                 content = msg.get('content', [])
                 if isinstance(content, list):
@@ -84,7 +87,7 @@ with open(file_path, 'r') as f:
                         if not isinstance(item, dict): continue
                         if item.get('type') == 'text':
                             t = item.get('text', '').strip()
-                            if t: last_text = t[:120]
+                            if t: last_text = t[:200]
                         elif item.get('type') == 'tool_use':
                             tool_count += 1
                             name = item.get('name', '')
@@ -94,13 +97,16 @@ with open(file_path, 'r') as f:
                                 last_tool = 'Bash: ' + inp.get('command', '')[:60]
                             elif name in ('Read','Write','Edit'):
                                 p = inp.get('file_path', '')
-                                last_tool = name + ': ' + p.split('/')[-1]
+                                fname = p.split('/')[-1]
+                                files_touched.add(fname)
+                                last_tool = name + ': ' + fname
                             elif name in ('Grep','Glob'):
                                 last_tool = name + ': ' + inp.get('pattern', '')[:40]
                             elif name == 'Agent':
                                 sub = inp.get('subagent_type', 'general')
-                                last_tool = 'Agent(' + sub + ')'
-                                agent_type = sub  # nested delegation
+                                desc = inp.get('description', '')
+                                last_tool = 'Agent(' + sub + '): ' + desc
+                                agent_type = sub
                             else:
                                 last_tool = name
                 elif isinstance(content, str):
@@ -110,6 +116,22 @@ with open(file_path, 'r') as f:
                                    ('backend','backend-dev'),('prisma','backend-dev'),
                                    ('test','test-runner'),('adapter','adapter-dev')]:
                         if kw in c: agent_type = at; break
+            elif msg_type == 'user':
+                # Extract agent description and prompt from initial user message
+                content = msg.get('content', '')
+                if isinstance(content, str) and not description:
+                    lines = content.strip().split('\\n')
+                    prompt_summary = lines[0][:120] if lines else ''
+                elif isinstance(content, list):
+                    for item in content:
+                        if isinstance(item, dict) and item.get('type') == 'tool_use':
+                            inp = item.get('input', {})
+                            if 'subagent_type' in inp:
+                                agent_type = inp['subagent_type']
+                            if 'description' in inp and not description:
+                                description = inp['description']
+                            if 'prompt' in inp and not prompt_summary:
+                                prompt_summary = inp['prompt'][:120]
         except: continue
 
 # Detect agent type from first line if still general
@@ -117,20 +139,24 @@ if agent_type == 'general':
     try:
         with open(file_path, 'r') as f:
             first = json.loads(f.readline())
-            c = str(first.get('message',{}).get('content','')).lower()
+            content = first.get('message',{}).get('content','')
+            c = str(content).lower()
             for kw, at in [('supabase','supabase-dev'),('edge func','supabase-dev'),
                            ('frontend','frontend-dev'),('react','frontend-dev'),
                            ('backend','backend-dev'),('prisma','backend-dev'),
                            ('test','test-runner'),('jest','test-runner'),
-                           ('adapter','adapter-dev'),('doc','docs-writer')]:
+                           ('adapter','adapter-dev'),('doc','docs-writer'),
+                           ('explore','explorer'),('security','security-auditor')]:
                 if kw in c: agent_type = at; break
     except: pass
 
 tools_str = ','.join(sorted(tools_used)[:5])
-detail = last_tool if last_tool else last_text[:80]
-# FORMAT: status|agent_type|tool_count|elapsed|tools_str|detail
-print(f'{status}|{agent_type}|{tool_count}|{elapsed_total}|{tools_str}|{detail}')
-" 2>/dev/null || echo "UNKNOWN|general|0|0||parse error"
+files_str = ','.join(sorted(files_touched)[:5])
+detail = last_tool if last_tool else last_text[:100]
+task_desc = description if description else prompt_summary[:80]
+# FORMAT: status|agent_type|tool_count|elapsed|tools_str|detail|task_desc|files_str
+print(f'{status}|{agent_type}|{tool_count}|{elapsed_total}|{tools_str}|{detail}|{task_desc}|{files_str}')
+" 2>/dev/null || echo "UNKNOWN|general|0|0|||parse error|"
 }
 
 # ── Time Formatting ───────────────────────────────────────────────────────────
@@ -206,7 +232,7 @@ render_agents() {
     local short_id="${agent_id:0:7}"
 
     local info=$(parse_subagent "$f")
-    IFS='|' read -r status agent_type tool_count elapsed tools_str detail <<< "$info"
+    IFS='|' read -r status agent_type tool_count elapsed tools_str detail task_desc files_str <<< "$info"
     tool_count="${tool_count:-0}"
     elapsed="${elapsed:-0}"
     total=$((total + 1))
@@ -217,10 +243,14 @@ render_agents() {
     if [ "$status" = "DONE" ]; then
       done=$((done + 1))
       echo -e "  ${G}✓${NC} ${badge} ${D}${short_id}${NC}  ${D}${time_str}${NC}  tools:${BD}${tool_count}${NC}  ${D}[${tools_str}]${NC}"
+      [ -n "$task_desc" ] && echo -e "    ${C}📋 ${task_desc:0:70}${NC}"
+      [ -n "$files_str" ] && echo -e "    ${D}📁 ${files_str:0:70}${NC}"
       [ -n "$detail" ] && echo -e "    ${D}└─ ${detail:0:80}${NC}"
     elif [ "$status" = "RUNNING" ]; then
       running=$((running + 1))
       echo -e "  ${Y}●${NC} ${badge} ${D}${short_id}${NC}  ${Y}${time_str}${NC}  tools:${BD}${tool_count}${NC}  ${D}[${tools_str}]${NC}"
+      [ -n "$task_desc" ] && echo -e "    ${C}📋 ${task_desc:0:70}${NC}"
+      [ -n "$files_str" ] && echo -e "    ${D}📁 ${files_str:0:70}${NC}"
       [ -n "$detail" ] && echo -e "    ${D}└─ ${detail:0:80}${NC}"
     else
       echo -e "  ${D}?${NC} ${badge} ${D}${short_id}${NC}  ${D}${time_str}${NC}"
