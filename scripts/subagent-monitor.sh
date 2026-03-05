@@ -234,7 +234,7 @@ case "$MODE" in
       done
 
       # Summary bar
-      echo -e "${BLUE}------------------------------------------------${NC}"
+      echo -e "${BLUE}------------------------------------------${NC}"
       echo -e "  Running: ${YELLOW}${BOLD}${running}${NC}  Done: ${GREEN}${BOLD}${done_count}${NC}  Total: $((running + done_count))"
       echo ""
       echo -e "${DIM}  Refreshing every 2s... (Ctrl+C to stop)${NC}"
@@ -260,7 +260,7 @@ case "$MODE" in
     color=$(agent_color "$agent_type")
 
     echo -e "${BOLD}Tailing: ${color}${agent_type}${NC} ${DIM}[${agent_id:0:8}]${NC}"
-    echo -e "${BLUE}------------------------------------------------${NC}"
+    echo -e "${BLUE}------------------------------------------${NC}"
 
     tail -f "$latest" | python3 -c "
 import sys, json
