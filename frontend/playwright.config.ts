@@ -43,27 +43,53 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
+    /* Auth setup — runs first when PLAYWRIGHT_AUTH=true */
+    {
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+    },
+
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: '.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
     {
       name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      use: {
+        ...devices['Desktop Firefox'],
+        storageState: '.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
     {
       name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      use: {
+        ...devices['Desktop Safari'],
+        storageState: '.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
 
     /* Test against mobile viewports */
     {
       name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
+      use: {
+        ...devices['Pixel 5'],
+        storageState: '.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
     {
       name: 'mobile-safari',
-      use: { ...devices['iPhone 12'] },
+      use: {
+        ...devices['iPhone 12'],
+        storageState: '.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
   ],
 
