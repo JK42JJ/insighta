@@ -1,8 +1,8 @@
-import { Archive, Loader2 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
+import { Archive, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -58,9 +58,7 @@ export default function Login() {
                   beta
                 </span>
               </div>
-              <p className="mt-2 text-muted-foreground">
-                만다라트 기반 YouTube 아카이브
-              </p>
+              <p className="mt-2 text-muted-foreground">만다라트 기반 YouTube 아카이브</p>
             </div>
           </div>
 
@@ -124,9 +122,19 @@ export default function Login() {
 
             <p className="text-center text-xs text-muted-foreground">
               로그인하면{' '}
-              <span className="text-foreground">서비스 이용약관</span>
-              {' '}및{' '}
-              <span className="text-foreground">개인정보처리방침</span>
+              <Link
+                to="/terms"
+                className="text-foreground underline hover:text-primary transition-colors"
+              >
+                서비스 이용약관
+              </Link>{' '}
+              및{' '}
+              <Link
+                to="/privacy"
+                className="text-foreground underline hover:text-primary transition-colors"
+              >
+                개인정보처리방침
+              </Link>
               에 동의하는 것으로 간주됩니다.
             </p>
           </div>
@@ -134,8 +142,17 @@ export default function Login() {
       </div>
 
       {/* Footer */}
-      <footer className="py-6 text-center text-sm text-muted-foreground">
-        <p>&copy; 2024 TubeArchive. All rights reserved.</p>
+      <footer className="py-6 text-center text-sm text-muted-foreground space-y-1">
+        <div className="flex items-center justify-center gap-3">
+          <Link to="/terms" className="hover:text-foreground transition-colors">
+            이용약관
+          </Link>
+          <span>·</span>
+          <Link to="/privacy" className="hover:text-foreground transition-colors">
+            개인정보처리방침
+          </Link>
+        </div>
+        <p>&copy; 2026 Insighta. All rights reserved.</p>
       </footer>
     </div>
   );

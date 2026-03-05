@@ -373,6 +373,76 @@ docker inspect --format='{{.State.Health.Status}}' tubearchive-api       # healt
 docker inspect --format='{{.State.Health.Status}}' tubearchive-frontend  # healthy
 ```
 
+### 6.5. 일일 서비스 점검
+
+#### 자동화 스크립트
+
+```bash
+# 전체 체크 (SSH 포함 — EC2 접근 가능 시)
+./scripts/daily-healthcheck.sh
+
+# 외부 체크만 (SSH 없이)
+./scripts/daily-healthcheck.sh --local-only
+
+# JSON 출력 (에이전트 파싱용)
+./scripts/daily-healthcheck.sh --json
+```
+
+**종료 코드**: `0` = 전체 통과, `1` = 경고 있음, `2` = 심각한 문제
+
+#### 체크 항목 (8개)
+
+| # | 카테고리 | 체크 내용 | 판정 기준 |
+|---|---------|----------|-----------|
+| 1 | **Site** | HTTPS 접근 가능 | HTTP 200 |
+| 2 | **API** | `/health` 응답 | 200 + JSON |
+| 3 | **Auth** | 인증 엔드포인트 | 401 = 정상 |
+| 4 | **SSL** | 인증서 만료일 | 30일 미만 경고 |
+| 5 | **Docker** | 컨테이너 상태 (SSH) | healthy/running |
+| 6 | **Disk** | 디스크 사용률 (SSH) | 80% 초과 경고 |
+| 7 | **Memory** | 메모리 사용률 (SSH) | 90% 초과 경고 |
+| 8 | **CI/CD** | 최근 배포 상태 | success/failure |
+
+> **참고**: SSH 접속 실패 시 Docker/Disk/Memory는 자동 SKIP 처리됩니다.
+
+#### Agent 위임
+
+Claude Code에서 데일리 체크를 자동으로 수행하려면:
+
+```bash
+# Agent tool로 위임
+Agent(subagent_type="general-purpose", prompt="Run ./scripts/daily-healthcheck.sh --json and report results")
+
+# 또는 직접 실행
+Bash("./scripts/daily-healthcheck.sh")
+```
+
+#### 수동 점검 체크리스트 (매일)
+
+- [ ] `https://insighta.one` 접속 확인
+- [ ] `https://insighta.one/health` 응답 확인
+- [ ] Google 로그인 테스트 (선택)
+- [ ] GitHub Actions 최근 실행 상태 확인
+
+#### 주간 추가 점검
+
+| 항목 | 명령어 | 주기 |
+|------|--------|------|
+| Docker 리소스 정리 | `docker system prune -f` (EC2) | 주 1회 |
+| 로그 크기 확인 | `docker system df` (EC2) | 주 1회 |
+| SSL 인증서 갱신 테스트 | `sudo certbot renew --dry-run` (EC2) | 주 1회 |
+| Supabase Dashboard 확인 | DB 크기, 연결 수, Auth 로그 | 주 1회 |
+
+#### 월간 추가 점검
+
+| 항목 | 설명 |
+|------|------|
+| DB 수동 백업 | `pg_dump` (섹션 15 참조) |
+| Docker 이미지 정리 | `docker image prune -a -f` |
+| Security Group 검토 | SSH 허용 IP 확인 |
+| SSL 인증서 만료일 확인 | `sudo certbot certificates` |
+| GitHub Secrets 만료 확인 | GHCR PAT, SSH Key 등 |
+
 ---
 
 ## 7. 장애 대응
