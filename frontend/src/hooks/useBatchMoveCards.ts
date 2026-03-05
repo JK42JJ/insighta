@@ -139,21 +139,31 @@ export function useBatchMoveCards() {
         };
       });
 
-      // 2. ideationVideos 캐시에서 이동된 synced 카드 즉시 제거
-      const movedSyncedIds = new Set(
-        items.filter((i) => i.source === 'synced').map((i) => i.card.id)
-      );
-      if (movedSyncedIds.size > 0) {
+      // 2. allVideoStates 캐시 즉시 업데이트 (synced 카드 위치 변경)
+      const movedSyncedItems = items.filter((i) => i.source === 'synced');
+      if (movedSyncedItems.length > 0) {
         queryClient.setQueryData<UserVideoStateWithVideo[]>(
-          youtubeSyncKeys.ideationVideos,
-          (prev) => prev?.filter((v) => !movedSyncedIds.has(v.id))
+          youtubeSyncKeys.allVideoStates,
+          (prev) =>
+            prev?.map((v) => {
+              const moved = movedSyncedItems.find((i) => i.card.id === v.id);
+              if (moved) {
+                return {
+                  ...v,
+                  is_in_ideation: moved.levelId === 'scratchpad',
+                  cell_index: moved.cellIndex,
+                  level_id: moved.levelId,
+                };
+              }
+              return v;
+            })
         );
       }
 
       // 3. 5초 후 백그라운드 리프레시 (데이터 정합성 보장, 시각적 영향 없음)
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
-        queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.ideationVideos });
+        queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
       }, 5000);
     },
   });

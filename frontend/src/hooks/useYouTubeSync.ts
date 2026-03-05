@@ -5,7 +5,7 @@
  * Provides CRUD operations for playlists and sync settings.
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { YouTubePlaylist, SyncInterval, UserVideoStateWithVideo } from '@/types/youtube';
 
@@ -14,6 +14,7 @@ export const youtubeSyncKeys = {
   playlists: ['youtube', 'playlists'] as const,
   playlist: (id: string) => ['youtube', 'playlist', id] as const,
   ideationVideos: ['youtube', 'ideation-videos'] as const,
+  allVideoStates: ['youtube', 'all-video-states'] as const,
 };
 
 // Edge Function URL helper
@@ -120,7 +121,7 @@ export function useSyncPlaylist() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.playlists });
-      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.ideationVideos });
+      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
     },
   });
 }
@@ -206,6 +207,30 @@ export function useIdeationVideos() {
 }
 
 /**
+ * Hook to get ALL video states (ideation + mandala)
+ * Returns all user_video_states regardless of is_in_ideation flag.
+ * Frontend splits into ideation vs mandala cards.
+ */
+export function useAllVideoStates() {
+  return useQuery({
+    queryKey: youtubeSyncKeys.allVideoStates,
+    queryFn: async (): Promise<UserVideoStateWithVideo[]> => {
+      const headers = await getAuthHeaders();
+      const response = await fetch(getEdgeFunctionUrl('get-all-video-states'), { headers });
+
+      if (!response.ok) {
+        throw new Error('Failed to get video states');
+      }
+
+      const data = await response.json();
+      return data.videos;
+    },
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
  * Hook to update video state (for ideation palette)
  */
 export function useUpdateVideoState() {
@@ -239,32 +264,24 @@ export function useUpdateVideoState() {
       }
     },
     onMutate: async ({ videoStateId, updates }: UpdateVideoStateVars) => {
-      await queryClient.cancelQueries({ queryKey: youtubeSyncKeys.ideationVideos });
-      const previous = queryClient.getQueryData<UserVideoStateWithVideo[]>(
-        youtubeSyncKeys.ideationVideos
+      await queryClient.cancelQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+      const previousAll = queryClient.getQueryData<UserVideoStateWithVideo[]>(
+        youtubeSyncKeys.allVideoStates
       );
 
-      if (previous) {
-        // 아이디에이션에서 만다라로 이동하는 경우: 캐시에서 즉시 제거
-        if (updates.is_in_ideation === false) {
-          queryClient.setQueryData<UserVideoStateWithVideo[]>(
-            youtubeSyncKeys.ideationVideos,
-            (prev) => prev?.filter((item) => item.id !== videoStateId)
-          );
-        } else {
-          queryClient.setQueryData<UserVideoStateWithVideo[]>(
-            youtubeSyncKeys.ideationVideos,
-            (prev) =>
-              prev?.map((item) => (item.id === videoStateId ? { ...item, ...updates } : item))
-          );
-        }
+      // Update allVideoStates cache (single source of truth)
+      if (previousAll) {
+        queryClient.setQueryData<UserVideoStateWithVideo[]>(
+          youtubeSyncKeys.allVideoStates,
+          (prev) => prev?.map((item) => (item.id === videoStateId ? { ...item, ...updates } : item))
+        );
       }
 
-      return { previous };
+      return { previousAll };
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(youtubeSyncKeys.ideationVideos, context.previous);
+      if (context?.previousAll) {
+        queryClient.setQueryData(youtubeSyncKeys.allVideoStates, context.previousAll);
       }
     },
   });
@@ -308,7 +325,7 @@ export function useSyncAllPlaylists() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.playlists });
-      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.ideationVideos });
+      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
     },
   });
 }

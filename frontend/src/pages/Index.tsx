@@ -25,7 +25,7 @@ import { MandalaPath, InsightCard, MandalaLevel } from '@/types/mandala';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useUIPreferences } from '@/hooks/useUIPreferences';
-import { useIdeationVideos, useUpdateVideoState } from '@/hooks/useYouTubeSync';
+import { useAllVideoStates, useUpdateVideoState } from '@/hooks/useYouTubeSync';
 import { useLocalCards, isLimitExceededError } from '@/hooks/useLocalCards';
 import { useBatchMoveCards } from '@/hooks/useBatchMoveCards';
 import { convertToInsightCards } from '@/lib/youtubeToInsightCard';
@@ -49,8 +49,8 @@ const Index = () => {
     setMandalaPosition,
   } = useUIPreferences();
 
-  // YouTube sync hooks
-  const { data: ideationVideos, isLoading: isLoadingVideos } = useIdeationVideos();
+  // YouTube sync hooks — fetch ALL video states, split on frontend
+  const { data: allVideoStates, isLoading: isLoadingVideos } = useAllVideoStates();
   const updateVideoState = useUpdateVideoState();
 
   // Local cards hook (for URL paste/D&D cards stored in Supabase)
@@ -69,11 +69,11 @@ const Index = () => {
   // Batch move hook for fire-and-forget multi-card operations
   const batchMoveCards = useBatchMoveCards();
 
-  // Convert synced videos to InsightCards
+  // Convert ALL video states to InsightCards (includes both ideation and mandala cards)
   const syncedCards = useMemo(() => {
-    if (!ideationVideos) return [];
-    return convertToInsightCards(ideationVideos);
-  }, [ideationVideos]);
+    if (!allVideoStates) return [];
+    return convertToInsightCards(allVideoStates);
+  }, [allVideoStates]);
 
   const [currentLevelId, setCurrentLevelId] = useState('root');
   const [path, setPath] = useState<MandalaPath[]>([]);

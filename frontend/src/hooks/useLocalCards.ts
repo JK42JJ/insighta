@@ -5,7 +5,7 @@
  * stored in Supabase separately from YouTube synced videos.
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type {
   LocalCard,
@@ -76,6 +76,7 @@ export function useLocalCardsList() {
       return response.json();
     },
     staleTime: 30 * 1000, // 30 seconds
+    placeholderData: keepPreviousData,
   });
 }
 
