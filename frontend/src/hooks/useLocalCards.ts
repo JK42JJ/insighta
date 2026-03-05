@@ -176,9 +176,8 @@ export function useUpdateLocalCard() {
       await queryClient.cancelQueries({ queryKey: localCardsKeys.list() });
       const previous = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list());
 
-      // 위치 변경(cell_index/level_id)은 이미 optimistic setState로 처리됨
-      const isPositionChange = 'cell_index' in payload || 'level_id' in payload;
-      if (previous && !isPositionChange) {
+      // Optimistic update for ALL changes including position
+      if (previous) {
         queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), (prev) =>
           prev
             ? {
@@ -197,6 +196,9 @@ export function useUpdateLocalCard() {
       if (context?.previous) {
         queryClient.setQueryData(localCardsKeys.list(), context.previous);
       }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
     },
   });
 }

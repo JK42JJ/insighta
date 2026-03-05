@@ -286,6 +286,9 @@ export function useUpdateVideoState() {
         queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
       }
     },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+    },
   });
 }
 
