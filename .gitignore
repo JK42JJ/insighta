@@ -93,5 +93,9 @@ CLAUDE.md
 # Personal work files
 prompt/
 
+# Generated OpenAPI spec files
+src/api/openapi.yaml
+src/api/openapi.json
+
 # Legacy docs site (removed)
 docs-site/
