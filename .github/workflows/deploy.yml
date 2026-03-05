@@ -20,6 +20,29 @@ jobs:
     uses: ./.github/workflows/ci.yml
     secrets: inherit
 
+  deploy-edge-functions:
+    name: Deploy Edge Functions
+    needs: ci
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy Edge Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          for fn in local-cards youtube-sync youtube-auth fetch-url-metadata; do
+            echo "Deploying $fn..."
+            supabase functions deploy "$fn" \
+              --project-ref rckkhhjanqgaopynhfgd \
+              --no-verify-jwt
+          done
+
   build-and-push:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
