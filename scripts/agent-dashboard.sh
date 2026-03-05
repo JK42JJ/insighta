@@ -4,12 +4,20 @@
 # =============================================================================
 # Combines subagent status, file activity, and git overview into one view.
 # Designed for a tmux side-pane. Robust: no set -e, all errors handled.
+#
+# Environment toggles:
+#   SHOW_TEAM=0|1   Show/hide TEAM roster section (default: 1)
+#   SHOW_STATS=0|1  Show/hide delegation stats section (default: 1)
 # =============================================================================
 
 set +e
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT" 2>/dev/null
+
+# Toggles (default on)
+SHOW_TEAM="${SHOW_TEAM:-1}"
+SHOW_STATS="${SHOW_STATS:-1}"
 
 # Auto-detect Claude Code task directory
 TASK_DIR=""
@@ -22,28 +30,44 @@ R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; B='\033[0;34m'
 C='\033[0;36m'; M='\033[0;35m'; W='\033[0;37m'; D='\033[2m'
 BD='\033[1m'; UL='\033[4m'; NC='\033[0m'
 BG_G='\033[42;30m'; BG_Y='\033[43;30m'; BG_R='\033[41;37m'; BG_B='\033[44;37m'
-BG_C='\033[46;30m'; BG_M='\033[45;37m'
+BG_C='\033[46;30m'; BG_M='\033[45;37m'; BG_W='\033[47;30m'
 
 # Agent color mapping
 agent_color()  { case "$1" in
-  backend-dev)  echo "$B";;  frontend-dev) echo "$C";;  test-runner) echo "$Y";;
-  adapter-dev)  echo "$M";;  supabase-dev) echo "$R";;  sync-dev)    echo "$G";;
-  docs-writer)  echo "$D";;  security*)    echo "$R";;  architect)   echo "$M";;
-  *)            echo "$W";;
+  backend-dev)        echo "$B";;  frontend-dev)       echo "$C";;
+  test-runner)        echo "$Y";;  adapter-dev)        echo "$M";;
+  supabase-dev)       echo "$R";;  sync-dev)           echo "$G";;
+  docs-writer)        echo "$D";;  security*)          echo "$R";;
+  architect)          echo "$M";;  ux-designer)        echo "$G";;
+  ai-integration-dev) echo "$C";;  *)                  echo "$W";;
 esac; }
+
 agent_badge()  { case "$1" in
-  backend-dev)  echo "${BG_B} API ${NC}";;  frontend-dev) echo "${BG_C} UI  ${NC}";;
-  test-runner)  echo "${BG_Y} TST ${NC}";;  adapter-dev)  echo "${BG_M} ADP ${NC}";;
-  supabase-dev) echo "${BG_R} SB  ${NC}";;  sync-dev)     echo "${BG_G} SYN ${NC}";;
-  docs-writer)  echo "${D} DOC ${NC}";;     *)            echo "${D} GEN ${NC}";;
+  backend-dev)        echo "${BG_B} API ${NC}";;
+  frontend-dev)       echo "${BG_C} UI  ${NC}";;
+  test-runner)        echo "${BG_Y} TST ${NC}";;
+  adapter-dev)        echo "${BG_M} ADP ${NC}";;
+  supabase-dev)       echo "${BG_R} SB  ${NC}";;
+  sync-dev)           echo "${BG_G} SYN ${NC}";;
+  docs-writer)        echo "${D} DOC ${NC}";;
+  architect)          echo "${BG_M} ARC ${NC}";;
+  security-auditor)   echo "${BG_R} SEC ${NC}";;
+  ux-designer)        echo "${BG_G} UXD ${NC}";;
+  ai-integration-dev) echo "${BG_C} AI  ${NC}";;
+  *)                  echo "${D} GEN ${NC}";;
 esac; }
 
 # File path → agent detection
 detect_agent() { case "$1" in
-  */adapters/*) echo "adapter-dev";;  */frontend/*|*/components/*|*/hooks/*) echo "frontend-dev";;
-  */api/*|*/routes/*) echo "backend-dev";;  */sync/*|*/scheduler/*) echo "sync-dev";;
-  *test*|*spec*) echo "test-runner";;  */docs/*|*.md) echo "docs-writer";;
-  */prisma/*) echo "backend-dev";;  */docker*|*.yml) echo "supabase-dev";;
+  */adapters/*) echo "adapter-dev";;
+  */frontend/*|*/components/*|*/hooks/*) echo "frontend-dev";;
+  */api/*|*/routes/*) echo "backend-dev";;
+  */sync/*|*/scheduler/*) echo "sync-dev";;
+  *test*|*spec*) echo "test-runner";;
+  */docs/*|*.md) echo "docs-writer";;
+  */prisma/*) echo "backend-dev";;
+  */docker*|*.yml) echo "supabase-dev";;
+  */ai/*|*/llm/*) echo "ai-integration-dev";;
   *) echo "general";;
 esac; }
 
@@ -114,7 +138,11 @@ with open(file_path, 'r') as f:
                     for kw, at in [('supabase','supabase-dev'),('edge func','supabase-dev'),
                                    ('frontend','frontend-dev'),('react','frontend-dev'),
                                    ('backend','backend-dev'),('prisma','backend-dev'),
-                                   ('test','test-runner'),('adapter','adapter-dev')]:
+                                   ('test','test-runner'),('adapter','adapter-dev'),
+                                   ('ux','ux-designer'),('accessibility','ux-designer'),
+                                   ('wcag','ux-designer'),('a11y','ux-designer'),
+                                   ('ai ','ai-integration-dev'),('llm','ai-integration-dev'),
+                                   ('summariz','ai-integration-dev')]:
                         if kw in c: agent_type = at; break
             elif msg_type == 'user':
                 # Extract agent description and prompt from initial user message
@@ -146,7 +174,12 @@ if agent_type == 'general':
                            ('backend','backend-dev'),('prisma','backend-dev'),
                            ('test','test-runner'),('jest','test-runner'),
                            ('adapter','adapter-dev'),('doc','docs-writer'),
-                           ('explore','explorer'),('security','security-auditor')]:
+                           ('explore','explorer'),('security','security-auditor'),
+                           ('ux','ux-designer'),('accessibility','ux-designer'),
+                           ('wcag','ux-designer'),('a11y','ux-designer'),
+                           ('ai ','ai-integration-dev'),('llm','ai-integration-dev'),
+                           ('summariz','ai-integration-dev'),
+                           ('architect','architect')]:
                 if kw in c: agent_type = at; break
     except: pass
 
@@ -200,6 +233,48 @@ render_project_status() {
   echo -e ""
   echo -e "  ${BD}PROJECT${NC}  ${D}branch:${NC}${Y}${branch}${NC}  ${D}mod:${NC}${Y}${modified}${NC}  ${D}staged:${NC}${G}${staged}${NC}  ${D}new:${NC}${D}${untracked}${NC}"
   echo -e "  ${D}latest: ${last_commit}${NC}"
+}
+
+render_team() {
+  [ "$SHOW_TEAM" = "0" ] && return
+
+  echo -e ""
+  echo -e "  ${BD}TEAM${NC}  ${D}(agent roster)${NC}"
+  echo ""
+
+  # Collect active agent types from recent tasks
+  local active_agents=""
+  if [ -n "$TASK_DIR" ] && [ -d "$TASK_DIR" ]; then
+    active_agents=$(find "$TASK_DIR" -name "*.output" -mmin -1440 -type f 2>/dev/null | while read -r f; do
+      parse_subagent "$f" 2>/dev/null | cut -d'|' -f2
+    done | sort -u)
+  fi
+
+  # Agent roster: badge, name, role, active indicator
+  local agents=(
+    "backend-dev|API, Prisma, services"
+    "frontend-dev|React, hooks, components"
+    "adapter-dev|OAuth, Feed, File adapters"
+    "supabase-dev|Edge Functions, Docker, Auth"
+    "sync-dev|Sync logic, scheduling"
+    "test-runner|Test writing & execution"
+    "docs-writer|Technical documentation"
+    "architect|System design, tech decisions"
+    "security-auditor|Security audit, vulnerability"
+    "ai-integration-dev|AI integration, summarization"
+    "ux-designer|UX/a11y audit (read-only)"
+  )
+
+  for entry in "${agents[@]}"; do
+    local name="${entry%%|*}"
+    local role="${entry#*|}"
+    local badge=$(agent_badge "$name")
+    local active_mark="  "
+    if echo "$active_agents" | grep -q "^${name}$" 2>/dev/null; then
+      active_mark="${G}*${NC} "
+    fi
+    printf "  %b%b %-22s ${D}%s${NC}\n" "$active_mark" "$badge" "$name" "$role"
+  done
 }
 
 render_agents() {
@@ -261,6 +336,48 @@ render_agents() {
   echo -e "  ${D}───${NC} ${Y}●${NC} running:${BD}${running}${NC}  ${G}✓${NC} done:${BD}${done}${NC}  total:${D}${total}${NC}"
 }
 
+render_delegation_stats() {
+  [ "$SHOW_STATS" = "0" ] && return
+
+  echo -e ""
+  echo -e "  ${BD}DELEGATION STATS${NC}  ${D}(last 24h)${NC}"
+  echo ""
+
+  if [ -z "$TASK_DIR" ] || [ ! -d "$TASK_DIR" ]; then
+    echo -e "  ${D}  No data available${NC}"
+    return
+  fi
+
+  # Count tasks per agent type in last 24h
+  local stats=$(find "$TASK_DIR" -name "*.output" -mmin -1440 -type f 2>/dev/null | while read -r f; do
+    parse_subagent "$f" 2>/dev/null | cut -d'|' -f2
+  done | sort | uniq -c | sort -rn)
+
+  if [ -z "$stats" ]; then
+    echo -e "  ${D}  No delegations in last 24h${NC}"
+    return
+  fi
+
+  # Find max count for bar scaling
+  local max_count=$(echo "$stats" | head -1 | awk '{print $1}')
+  [ "$max_count" -eq 0 ] 2>/dev/null && max_count=1
+
+  local bar_width=20
+
+  echo "$stats" | while read -r count agent_type; do
+    [ -z "$agent_type" ] && continue
+    local badge=$(agent_badge "$agent_type")
+    local bar_len=$((count * bar_width / max_count))
+    [ "$bar_len" -eq 0 ] && bar_len=1
+
+    local bar=""
+    for ((i=0; i<bar_len; i++)); do bar+="█"; done
+
+    local color=$(agent_color "$agent_type")
+    printf "  %b %-14s %b%b${NC} %d\n" "$badge" "$agent_type" "$color" "$bar" "$count"
+  done
+}
+
 render_file_activity() {
   echo -e ""
   echo -e "  ${BD}FILE CHANGES${NC}  ${D}(git working tree)${NC}"
@@ -296,32 +413,12 @@ render_file_activity() {
   done
 }
 
-render_live_feed() {
-  echo -e ""
-  echo -e "  ${BD}LIVE FEED${NC}  ${D}(fswatch, newest first)${NC}"
-  echo ""
-
-  # Show the 8 most recently modified tracked files
-  {
-    git diff --name-only 2>/dev/null
-    git ls-files --others --exclude-standard 2>/dev/null
-  } | while read -r f; do
-    [ -f "$PROJECT_ROOT/$f" ] && stat -f "%m %N" "$PROJECT_ROOT/$f" 2>/dev/null
-  done | sort -rn | head -8 | while read -r mtime fpath; do
-    local relpath="${fpath#$PROJECT_ROOT/}"
-    local agent=$(detect_agent "$relpath")
-    local color=$(agent_color "$agent")
-    local ts=$(date -r "$mtime" '+%H:%M:%S' 2>/dev/null || echo "??:??:??")
-    echo -e "  ${D}${ts}${NC} $(agent_badge "$agent") ${relpath}"
-  done
-}
-
 render_footer() {
   local cols=$(tput cols 2>/dev/null || echo 50)
   local line=$(printf '─%.0s' $(seq 1 $cols 2>/dev/null) 2>/dev/null)
   echo -e ""
   echo -e "${D}${line}${NC}"
-  echo -e "${D}  refresh: 3s │ Ctrl+C: exit │ agents: $(basename "$TASK_DIR" 2>/dev/null || echo 'none')${NC}"
+  echo -e "${D}  refresh: 3s │ Ctrl+C: exit │ SHOW_TEAM=${SHOW_TEAM} SHOW_STATS=${SHOW_STATS} │ agents: $(basename "$TASK_DIR" 2>/dev/null || echo 'none')${NC}"
 }
 
 # ── Main Loop ─────────────────────────────────────────────────────────────────
@@ -330,7 +427,9 @@ while true; do
   clear
   render_header
   render_project_status
+  render_team
   render_agents
+  render_delegation_stats
   render_file_activity
   render_footer
   sleep 3
