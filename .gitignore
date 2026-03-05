@@ -90,5 +90,8 @@ CLAUDE.md
 # Developer tool configs (personal environment)
 .tmux.project.conf
 
+# Personal work files
+prompt/
+
 # Legacy docs site (removed)
 docs-site/
