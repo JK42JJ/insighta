@@ -8,7 +8,7 @@
 
 ## Overview
 
-TubeArchive 프로젝트에 확장 가능한 플러그인 기반 어댑터 시스템을 구축했습니다. 이 시스템을 통해 YouTube 외에 다양한 데이터 소스 (Notion, Google Drive, RSS, Markdown, PDF 등)를 통합할 수 있는 아키텍처를 마련했습니다.
+Insighta 프로젝트에 확장 가능한 플러그인 기반 어댑터 시스템을 구축했습니다. 이 시스템을 통해 YouTube 외에 다양한 데이터 소스 (Notion, Google Drive, RSS, Markdown, PDF 등)를 통합할 수 있는 아키텍처를 마련했습니다.
 
 ### Goals
 
@@ -389,7 +389,7 @@ npm test -- --testPathPattern=adapters/feed/rss
 
 ## Conclusion
 
-확장 가능한 어댑터 시스템을 통해 TubeArchive는 YouTube 외에도 다양한 데이터 소스를 통합할 수 있는 기반을 마련했습니다. `adapter-dev` subagent와 자동화 도구를 통해 새 어댑터 개발이 효율적으로 이루어질 수 있습니다.
+확장 가능한 어댑터 시스템을 통해 Insighta는 YouTube 외에도 다양한 데이터 소스를 통합할 수 있는 기반을 마련했습니다. `adapter-dev` subagent와 자동화 도구를 통해 새 어댑터 개발이 효율적으로 이루어질 수 있습니다.
 
 ---
 

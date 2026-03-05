@@ -247,7 +247,7 @@
 
 ### Tools & Agents Used
 
-1. **Skill Tool**: `tubearchive-conventions`
+1. **Skill Tool**: `insighta-conventions`
    - Loaded project coding conventions
    - Ensured consistency with project standards
 

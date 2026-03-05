@@ -8,7 +8,7 @@
 
 ## 📋 Executive Summary
 
-YouTube Playlist Sync API 문서화를 위한 종합 전략 가이드. Docusaurus + Scalar + OpenAPI를 활용한 하이브리드 문서화 접근법을 정의하며, 개발자 경험(DX)과 유지보수성을 모두 고려합니다.
+Insighta API 문서화를 위한 종합 전략 가이드. Docusaurus + Scalar + OpenAPI를 활용한 하이브리드 문서화 접근법을 정의하며, 개발자 경험(DX)과 유지보수성을 모두 고려합니다.
 
 **핵심 원칙**:
 - **자동 생성 우선**: 코드에서 자동 생성 가능한 문서는 수동 작성 최소화
@@ -494,7 +494,7 @@ async function generateOpenAPI() {
     openapi: {
       openapi: '3.1.0',
       info: {
-        title: 'YouTube Playlist Sync API',
+        title: 'Insighta API',
         version: '1.0.0',
       },
     },

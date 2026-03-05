@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document summarizes the implementation of Phase 4.4 (Rate Limiting) and Phase 4.5 Foundation (Documentation) for the YouTube Playlist Sync API.
+This document summarizes the implementation of Phase 4.4 (Rate Limiting) and Phase 4.5 Foundation (Documentation) for the Insighta API.
 
 ## Phase 4.4: Rate Limiting
 

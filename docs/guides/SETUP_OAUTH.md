@@ -17,7 +17,7 @@ Quick start guide for setting up OAuth 2.0 authentication to access YouTube play
 ### 1.1 Create Project
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Click **"Select a project"** → **"New Project"**
-3. Enter project name (e.g., "YouTube Playlist Sync")
+3. Enter project name (e.g., "Insighta")
 4. Click **"Create"**
 
 ### 1.2 Enable YouTube Data API v3
@@ -34,7 +34,7 @@ Quick start guide for setting up OAuth 2.0 authentication to access YouTube play
 2. Click **"Create Credentials"** → **"OAuth client ID"**
 3. If prompted, configure OAuth consent screen:
    - User Type: **External** (for personal use)
-   - App name: "YouTube Playlist Sync"
+   - App name: "Insighta"
    - User support email: Your email
    - Developer contact: Your email
    - Click **"Save and Continue"** through all steps

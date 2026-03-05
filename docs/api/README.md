@@ -1,10 +1,10 @@
 # API Documentation
 
-Welcome to the YouTube Playlist Sync API documentation. This API provides comprehensive endpoints for managing YouTube playlists, videos, notes, and learning analytics.
+Welcome to the Insighta API documentation. This API provides comprehensive endpoints for managing YouTube playlists, videos, notes, and learning analytics.
 
 ## Overview
 
-The YouTube Playlist Sync API is a RESTful API that enables:
+The Insighta API is a RESTful API that enables:
 
 - **Playlist Management**: Import, sync, and manage YouTube playlists
 - **Video Operations**: Access video metadata, captions, and statistics

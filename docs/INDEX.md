@@ -1,6 +1,6 @@
 # 📚 Documentation Index
 
-YouTube Playlist Sync 프로젝트의 전체 문서 목록입니다.
+Insighta 프로젝트의 전체 문서 목록입니다.
 
 **Last Updated**: 2025-12-22
 **Current Phase**: Phase 5.2 Complete - Extensible Adapter System
@@ -119,7 +119,7 @@ Phase 4 (Advanced API Features) 구현 계획 및 상세 문서입니다.
 ## 🔌 어댑터 개발 가이드 ⭐ NEW
 
 ### 어댑터 시스템 개요
-TubeArchive의 확장 가능한 플러그인 기반 어댑터 시스템입니다.
+Insighta의 확장 가능한 플러그인 기반 어댑터 시스템입니다.
 
 | 카테고리 | Base 클래스 | 지원 서비스 |
 |---------|------------|-----------|
@@ -254,4 +254,4 @@ sync-youtube-playlists/
 
 **Last Updated**: 2025-12-22
 **Maintained by**: James Kim (jamesjk4242@gmail.com)
-**Project**: YouTube Playlist Sync (TubeArchive)
+**Project**: Insighta (Insighta)

@@ -1,4 +1,4 @@
-# Task Hierarchy - YouTube Playlist Sync Module
+# Task Hierarchy - Insighta
 # Project Management & Execution Plan
 
 **Strategy**: Systematic
@@ -8,7 +8,7 @@
 
 ---
 
-## Epic: YouTube Playlist Sync Module Development
+## Epic: Insighta Development
 
 **Goal**: Build a production-ready YouTube playlist synchronization module for personal knowledge management
 

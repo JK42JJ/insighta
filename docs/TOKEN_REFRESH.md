@@ -1,6 +1,6 @@
 # Automatic Token Refresh System
 
-This document describes the automatic token refresh implementation for the YouTube Playlist Sync project.
+This document describes the automatic token refresh implementation for the Insighta project.
 
 ## Overview
 

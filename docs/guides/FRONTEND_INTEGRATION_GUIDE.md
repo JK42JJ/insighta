@@ -1,6 +1,6 @@
 # Frontend Integration Guide
 
-> Insighta (TubeArchive) 프론트엔드 개발을 위한 완전한 API 연동 가이드
+> Insighta (Insighta) 프론트엔드 개발을 위한 완전한 API 연동 가이드
 
 **Version**: 2.0.0
 **Last Updated**: 2025-12-19
@@ -2939,7 +2939,7 @@ export function parseThumbnailUrl(
 
 - **작성일**: 2025-12-19
 - **작성자**: James Kim (jamesjk4242@gmail.com)
-- **프로젝트**: Insighta (TubeArchive)
+- **프로젝트**: Insighta (Insighta)
 - **버전**: 2.0.0
 - **API 버전**: v1
 - **총 API 엔드포인트**: 42개

@@ -1,5 +1,5 @@
 # Architecture Documentation
-# YouTube Playlist Sync Module
+# Insighta
 
 ## Table of Contents
 1. [System Overview](#system-overview)
@@ -74,7 +74,7 @@
        │ Manages playlists, views data
        │
 ┌──────▼────────────────────────────────────────────────┐
-│         YouTube Playlist Sync Module                  │
+│                    Insighta                           │
 │                                                        │
 │  Features:                                             │
 │  - Playlist import & sync                              │

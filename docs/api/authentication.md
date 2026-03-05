@@ -1,6 +1,6 @@
 # Authentication Guide
 
-The YouTube Playlist Sync API uses JWT (JSON Web Token) based authentication to secure endpoints and track user sessions.
+The Insighta API uses JWT (JSON Web Token) based authentication to secure endpoints and track user sessions.
 
 ## Overview
 

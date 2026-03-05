@@ -1,6 +1,6 @@
-# TubeArchive Deployment Guide
+# Insighta Deployment Guide
 
-This document covers the complete process for deploying TubeArchive to production on AWS EC2 with Supabase Cloud, GHCR, and GitHub Actions CI/CD.
+This document covers the complete process for deploying Insighta to production on AWS EC2 with Supabase Cloud, GHCR, and GitHub Actions CI/CD.
 
 ## Table of Contents
 
@@ -201,7 +201,7 @@ The script performs the following steps in order:
 5. Installs Certbot and the Nginx plugin for Let's Encrypt
 6. Creates a 2 GiB swap file at `/swapfile` (t2.micro has only 1 GiB RAM; swap is required for Docker builds)
 7. Sets `vm.swappiness=10` to minimize swap usage under normal conditions
-8. Creates `/home/ubuntu/tubearchive` and `/var/www/certbot`
+8. Creates `/home/ubuntu/insighta` and `/var/www/certbot`
 9. Configures UFW firewall to allow SSH and `Nginx Full` (ports 80 and 443)
 
 If a dialog appears during the upgrade asking about "Daemons using outdated libraries", press Tab to move to "Ok" and press Enter to continue.
@@ -211,10 +211,10 @@ If a dialog appears during the upgrade asking about "Daemons using outdated libr
 After the script completes, verify the application directory is owned by the `ubuntu` user:
 
 ```bash
-sudo chown ubuntu:ubuntu /opt/tubearchive
+sudo chown ubuntu:ubuntu /opt/insighta
 ```
 
-> Note: The setup script creates the directory at `/home/ubuntu/tubearchive`. Depending on your `docker-compose.prod.yml`, you may also use `/opt/tubearchive`. Confirm which path your compose file references and ensure that directory exists and has the correct ownership.
+> Note: The setup script creates the directory at `/home/ubuntu/insighta`. Depending on your `docker-compose.prod.yml`, you may also use `/opt/insighta`. Confirm which path your compose file references and ensure that directory exists and has the correct ownership.
 
 ---
 
@@ -236,22 +236,22 @@ Transfer the Nginx configuration from your local machine:
 
 ```bash
 scp -i ~/Downloads/your-key.pem \
-  /Users/jeonhokim/cursor/sync-youtube-playlists/deploy/nginx/tubearchive.conf \
+  /Users/jeonhokim/cursor/sync-youtube-playlists/deploy/nginx/insighta.conf \
   ubuntu@<ELASTIC_IP>:~/
 ```
 
 On EC2, install the configuration:
 
 ```bash
-sudo cp ~/tubearchive.conf /etc/nginx/sites-available/tubearchive
-sudo ln -s /etc/nginx/sites-available/tubearchive /etc/nginx/sites-enabled/tubearchive
+sudo cp ~/insighta.conf /etc/nginx/sites-available/insighta
+sudo ln -s /etc/nginx/sites-available/insighta /etc/nginx/sites-enabled/insighta
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 ```
 
 The `nginx -t` command validates the configuration syntax. If it reports errors, correct the configuration before continuing.
 
-The Nginx configuration (`deploy/nginx/tubearchive.conf`) handles:
+The Nginx configuration (`deploy/nginx/insighta.conf`) handles:
 
 - HTTP to HTTPS redirect (port 80 to 443)
 - Let's Encrypt ACME challenge at `/.well-known/acme-challenge/`
@@ -301,7 +301,7 @@ From your local machine:
 ```bash
 scp -i ~/Downloads/your-key.pem \
   /Users/jeonhokim/cursor/sync-youtube-playlists/docker-compose.prod.yml \
-  ubuntu@<ELASTIC_IP>:/opt/tubearchive/
+  ubuntu@<ELASTIC_IP>:/opt/insighta/
 ```
 
 The production compose file (`docker-compose.prod.yml`) runs two services:
@@ -309,14 +309,14 @@ The production compose file (`docker-compose.prod.yml`) runs two services:
 - **api**: The Fastify backend, image `ghcr.io/jk42jj/insighta-api:latest`, bound to `127.0.0.1:3000`. Memory limit 512 MiB.
 - **frontend**: The React/Vite app served by Nginx, image `ghcr.io/jk42jj/insighta-frontend:latest`, bound to `127.0.0.1:8081`. Memory limit 256 MiB.
 
-Both services use `restart: unless-stopped`, have healthchecks, and share a `tubearchive-network` bridge network.
+Both services use `restart: unless-stopped`, have healthchecks, and share a `insighta-network` bridge network.
 
 ### 4-2. Create .env File
 
 On EC2, create the environment file:
 
 ```bash
-nano /opt/tubearchive/.env
+nano /opt/insighta/.env
 ```
 
 Paste and fill in all values:
@@ -437,7 +437,7 @@ GitHub Actions runs four jobs in sequence:
 
 4. **Deploy to EC2** - After migration succeeds:
    - SSH into EC2 using `appleboy/ssh-action`
-   - `cd /opt/tubearchive`
+   - `cd /opt/insighta`
    - Logs in to GHCR
    - Pulls the latest images
    - Runs `docker compose -f docker-compose.prod.yml up -d --remove-orphans`
@@ -466,8 +466,8 @@ curl -vI https://insighta.one 2>&1 | grep "TLS"
 # Check containers on EC2
 ssh -i ~/Downloads/your-key.pem ubuntu@<ELASTIC_IP>
 docker ps
-docker logs tubearchive-api --tail 20
-docker logs tubearchive-frontend --tail 20
+docker logs insighta-api --tail 20
+docker logs insighta-frontend --tail 20
 ```
 
 Expected `docker ps` output shows two running containers:
@@ -547,7 +547,7 @@ Ensure the GitHub username and repository name in the image path are lowercase.
 Could not automatically find a matching server block for insighta.one
 ```
 
-This occurs when the Nginx `server_name` directive does not match the domain requested by Certbot. Verify that `sites-enabled/tubearchive` is symlinked and `sites-enabled/default` is removed, then retry:
+This occurs when the Nginx `server_name` directive does not match the domain requested by Certbot. Verify that `sites-enabled/insighta` is symlinked and `sites-enabled/default` is removed, then retry:
 
 ```bash
 sudo certbot install --cert-name insighta.one
@@ -576,13 +576,13 @@ Also confirm the connection string ends without `?pgbouncer=true` for `DIRECT_UR
 
 ### Frontend container does not start
 
-The `tubearchive-frontend` service depends on `tubearchive-api` with `condition: service_healthy`. If the API container fails its healthcheck, the frontend will not start. Investigate the API container logs first:
+The `insighta-frontend` service depends on `insighta-api` with `condition: service_healthy`. If the API container fails its healthcheck, the frontend will not start. Investigate the API container logs first:
 
 ```bash
-docker logs tubearchive-api --tail 50
+docker logs insighta-api --tail 50
 ```
 
-Common causes: missing or incorrect environment variables in `/opt/tubearchive/.env`.
+Common causes: missing or incorrect environment variables in `/opt/insighta/.env`.
 
 ### Out of memory on t2.micro
 
@@ -615,7 +615,7 @@ The rollback workflow SSH-es into EC2, pulls the specified image tag, and restar
 
 ```bash
 ssh -i ~/Downloads/your-key.pem ubuntu@<ELASTIC_IP>
-cd /opt/tubearchive
+cd /opt/insighta
 
 # Stop and restart with the currently pulled images
 docker compose -f docker-compose.prod.yml down
@@ -658,7 +658,7 @@ After the 12-month AWS Free Tier period ends, an EC2 t2.micro instance costs app
 | `.github/workflows/deploy.yml` | CD pipeline: build images, migrate DB, deploy to EC2 |
 | `.github/workflows/rollback.yml` | Manual rollback workflow |
 | `docker-compose.prod.yml` | Production Docker Compose (API + Frontend) |
-| `deploy/nginx/tubearchive.conf` | Nginx reverse proxy with SSL configuration |
+| `deploy/nginx/insighta.conf` | Nginx reverse proxy with SSL configuration |
 | `scripts/ec2-setup.sh` | EC2 instance initialization script |
 | `.env.production.example` | Environment variable template for production |
 | `prisma/schema.prisma` | Database schema (includes `directUrl` for migrations) |

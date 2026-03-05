@@ -1,6 +1,6 @@
 # Docker 배포 가이드
 
-YouTube Playlist Sync를 Docker로 배포하는 방법을 설명합니다.
+Insighta를 Docker로 배포하는 방법을 설명합니다.
 
 ## 목차
 

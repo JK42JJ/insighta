@@ -1,6 +1,6 @@
 # OpenAPI 3.1 명세 구조 설계
 
-**프로젝트**: YouTube Playlist Sync API
+**프로젝트**: Insighta API
 **OpenAPI 버전**: 3.1.0
 **마지막 업데이트**: 2025-12-16
 
@@ -108,7 +108,7 @@ src/
 ```yaml
 openapi: 3.1.0
 info:
-  title: YouTube Playlist Sync API
+  title: Insighta API
   version: 1.0.0
   description: |
     YouTube 플레이리스트 동기화 및 학습 관리 API
@@ -400,7 +400,7 @@ export default fp(async (fastify: FastifyInstance) => {
     openapi: {
       openapi: '3.1.0',
       info: {
-        title: 'YouTube Playlist Sync API',
+        title: 'Insighta API',
         description: 'YouTube 플레이리스트 동기화 및 학습 관리 API',
         version: '1.0.0',
         contact: {

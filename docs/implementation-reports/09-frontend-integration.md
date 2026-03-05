@@ -1,7 +1,7 @@
 # Frontend Integration Report
 
 ## Objective
-tube-mandala 프론트엔드를 TubeArchive 백엔드와 모노레포로 통합하여 풀스택 개발 환경 구축.
+tube-mandala 프론트엔드를 Insighta 백엔드와 모노레포로 통합하여 풀스택 개발 환경 구축.
 
 ## Summary
 
@@ -149,7 +149,7 @@ frontend:
     api:
       condition: service_healthy
   networks:
-    - tubearchive-network
+    - insighta-network
 ```
 
 ---
@@ -172,7 +172,7 @@ frontend:
 **`frontend/.env.example`**:
 ```env
 VITE_API_URL=http://localhost:3000
-VITE_APP_NAME=TubeArchive
+VITE_APP_NAME=Insighta
 VITE_APP_VERSION=1.0.0
 ```
 

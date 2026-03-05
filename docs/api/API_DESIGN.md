@@ -1,6 +1,6 @@
 # API 엔드포인트 설계
 
-**프로젝트**: YouTube Playlist Sync API
+**프로젝트**: Insighta API
 **버전**: v1
 **마지막 업데이트**: 2025-12-16
 

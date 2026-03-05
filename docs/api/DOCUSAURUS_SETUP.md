@@ -1,6 +1,6 @@
 # Docusaurus 프로젝트 설정 가이드
 
-**프로젝트**: YouTube Playlist Sync API 문서 사이트
+**프로젝트**: Insighta API 문서 사이트
 **Docusaurus 버전**: 3.6.0+
 **마지막 업데이트**: 2025-12-16
 
@@ -168,7 +168,7 @@ import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
-  title: 'YouTube Playlist Sync API',
+  title: 'Insighta API',
   tagline: 'YouTube 플레이리스트 동기화 및 학습 관리 API',
   favicon: 'img/favicon.ico',
 
@@ -231,7 +231,7 @@ const config: Config = {
   themeConfig: {
     image: 'img/social-card.png',
     navbar: {
-      title: 'YouTube Playlist Sync API',
+      title: 'Insighta API',
       logo: {
         alt: 'Logo',
         src: 'img/logo.svg',

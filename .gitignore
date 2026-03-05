@@ -83,5 +83,12 @@ docker-compose.override.yml
 # MCP Configuration (contains sensitive keys)
 .mcp.json
 
+# Claude Code (local dev tool config)
+.claude/
+CLAUDE.md
+
+# Developer tool configs (personal environment)
+.tmux.project.conf
+
 # Legacy docs site (removed)
 docs-site/

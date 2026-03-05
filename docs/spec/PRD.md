@@ -1,5 +1,5 @@
 # Product Requirements Document (PRD)
-# YouTube Playlist Sync Module
+# Insighta
 
 ## 1. Executive Summary
 

@@ -1,6 +1,6 @@
 # Auto-Sync Scheduler
 
-Production-ready automatic playlist synchronization scheduler for the YouTube Playlist Sync project.
+Production-ready automatic playlist synchronization scheduler for the Insighta project.
 
 ## Overview
 

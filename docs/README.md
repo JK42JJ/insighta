@@ -1,6 +1,6 @@
 # 📖 Documentation Home
 
-YouTube Playlist Sync 프로젝트의 문서 홈페이지입니다.
+Insighta 프로젝트의 문서 홈페이지입니다.
 
 **Version**: 2.0.0
 **Last Updated**: 2025-12-19
@@ -132,4 +132,4 @@ docs/
 ---
 
 **Maintained by**: James Kim (jamesjk4242@gmail.com)
-**Project**: YouTube Playlist Sync (TubeArchive)
+**Project**: Insighta (Insighta)

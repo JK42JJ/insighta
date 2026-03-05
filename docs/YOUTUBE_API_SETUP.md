@@ -6,7 +6,7 @@
 
 ## Overview
 
-This guide will walk you through setting up YouTube API access for the YouTube Playlist Sync application. You'll need:
+This guide will walk you through setting up YouTube API access for the Insighta application. You'll need:
 
 - Google account
 - 15-20 minutes
@@ -77,7 +77,7 @@ Visit: https://console.cloud.google.com/
 ### 3.3 Fill OAuth Consent Screen Details
 
 **App Information**:
-- **App name**: `YouTube Playlist Sync` (or your preferred name)
+- **App name**: `Insighta` (or your preferred name)
 - **User support email**: Your email address (select from dropdown)
 - **App logo**: (Optional) Upload a logo if you have one
 
@@ -139,7 +139,7 @@ Click **"Save and Continue"**
    - Desktop app is recommended for CLI applications
    - Alternatively, you can use "Web application" if you plan to add a web UI later
 
-2. **Name**: `YouTube Playlist Sync CLI` (or your preferred name)
+2. **Name**: `Insighta CLI` (or your preferred name)
 
 3. Click **"Create"**
 
@@ -549,7 +549,7 @@ Output:
 If you need to revoke application access:
 
 1. Go to: https://myaccount.google.com/permissions
-2. Find "YouTube Playlist Sync" application
+2. Find "Insighta" application
 3. Click "Remove Access"
 4. Delete tokens from `.env` file
 5. Re-authenticate if you want to use the app again
@@ -581,4 +581,4 @@ For more CLI commands, see: [CLI Documentation](./implementation-reports/03-cli-
 **Document Version**: 1.0
 **Last Updated**: 2025-12-17
 **Maintained by**: James Kim (jamesjk4242@gmail.com)
-**Project**: YouTube Playlist Sync
+**Project**: Insighta

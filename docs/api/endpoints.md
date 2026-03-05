@@ -1,6 +1,6 @@
 # API Endpoints Reference
 
-Comprehensive reference for all REST API endpoints in the YouTube Playlist Sync API.
+Comprehensive reference for all REST API endpoints in the Insighta API.
 
 ## Table of Contents
 

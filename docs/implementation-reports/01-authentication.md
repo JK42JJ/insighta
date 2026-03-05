@@ -1,7 +1,7 @@
 # Authentication System Implementation - Complete
 
 ## Overview
-Successfully implemented a complete JWT-based authentication system for the YouTube Playlist Sync REST API.
+Successfully implemented a complete JWT-based authentication system for the Insighta REST API.
 
 ## Implementation Summary
 

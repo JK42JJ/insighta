@@ -1,7 +1,7 @@
 # 📊 Current Project Status
 
 **Last Updated**: 2025-12-22
-**Project**: YouTube Playlist Sync Module (TubeArchive)
+**Project**: Insighta
 **Current Phase**: Phase 5.2 Complete ✅ - Extensible Adapter System
 
 ---

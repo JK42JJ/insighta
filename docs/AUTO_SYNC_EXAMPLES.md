@@ -269,7 +269,7 @@ pm2 save
 # Create service file
 sudo cat > /etc/systemd/system/yt-sync-scheduler.service << EOF
 [Unit]
-Description=YouTube Playlist Sync Scheduler
+Description=Insighta Scheduler
 After=network.target
 
 [Service]
