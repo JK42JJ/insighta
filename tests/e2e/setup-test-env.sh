@@ -80,10 +80,10 @@ if [ -f prisma/schema.prisma ]; then
   npx prisma generate
   echo "✅ Prisma client generated"
 
-  # Run migrations
-  echo "Running database migrations..."
-  npx prisma migrate dev --name init
-  echo "✅ Database migrations complete"
+  # Sync database schema
+  echo "Syncing database schema..."
+  npx prisma db push
+  echo "✅ Database schema synced"
 else
   echo "❌ Prisma schema not found"
   echo "Please ensure prisma/schema.prisma exists"

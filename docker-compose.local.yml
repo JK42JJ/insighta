@@ -31,8 +31,8 @@ services:
       - NODE_ENV=development
       - API_HOST=0.0.0.0
       - CORS_ORIGIN=http://localhost:${FRONTEND_PORT:-8081},http://frontend:8081
-      # Use db push for development instead of migrate deploy
-      - SKIP_MIGRATIONS=true
+      # Schema sync handled by 'npm run prisma:push' manually
+      # Set RUN_SCHEMA_SYNC=true to sync on container start
     volumes:
       - cache_data:/app/cache
       - logs_data:/app/logs
@@ -94,7 +94,7 @@ services:
   #     - .env.docker.local
   #   environment:
   #     - NODE_ENV=development
-  #     - SKIP_MIGRATIONS=true
+  #     - RUN_SCHEMA_SYNC=true
   #   volumes:
   #     - cache_data:/app/cache
   #     - logs_data:/app/logs

@@ -45,14 +45,8 @@ wait_for_db() {
 # Run database migrations
 # =============================================================================
 run_migrations() {
-    echo "Running database migrations..."
-    if [ "$NODE_ENV" = "development" ]; then
-        echo "Development mode: Using prisma db push..."
-        npx prisma db push --accept-data-loss
-    else
-        echo "Production mode: Using prisma migrate deploy..."
-        npx prisma migrate deploy
-    fi
+    echo "Running database schema sync (prisma db push)..."
+    npx prisma db push --skip-generate
     echo "Database schema updated successfully"
 }
 
@@ -63,8 +57,9 @@ run_migrations() {
 # Wait for database
 wait_for_db
 
-# Run migrations in production
-if [ "$NODE_ENV" = "production" ] && [ "$SKIP_MIGRATIONS" != "true" ]; then
+# Schema sync is handled by CI/CD pipeline (deploy.yml)
+# Only run at container start if explicitly requested
+if [ "$RUN_SCHEMA_SYNC" = "true" ]; then
     run_migrations
 fi
 

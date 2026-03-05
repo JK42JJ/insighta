@@ -81,7 +81,7 @@ services:
   #     - .env.docker
   #   environment:
   #     - NODE_ENV=production
-  #     - SKIP_MIGRATIONS=true
+  #     - RUN_SCHEMA_SYNC=true
   #   volumes:
   #     - cache_data:/app/cache
   #     - logs_data:/app/logs
