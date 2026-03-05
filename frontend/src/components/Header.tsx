@@ -10,6 +10,8 @@ import {
   CreditCard,
   LayoutGrid,
   Loader2,
+  FileText,
+  Shield,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -173,6 +175,21 @@ export function Header({ onNavigateHome }: HeaderProps) {
                 >
                   <Settings className="w-4 h-4" />
                   <span>설정</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-border/50" />
+                <DropdownMenuItem
+                  className="gap-2 cursor-pointer hover:bg-surface-light"
+                  onClick={() => navigate('/terms')}
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Terms of Service</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="gap-2 cursor-pointer hover:bg-surface-light"
+                  onClick={() => navigate('/privacy')}
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>Privacy Policy</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-border/50" />
                 <DropdownMenuItem

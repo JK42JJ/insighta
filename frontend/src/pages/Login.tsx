@@ -2,6 +2,7 @@ import { Archive, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Footer } from '@/components/Footer';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function Login() {
@@ -142,18 +143,7 @@ export default function Login() {
       </div>
 
       {/* Footer */}
-      <footer className="py-6 text-center text-sm text-muted-foreground space-y-1">
-        <div className="flex items-center justify-center gap-3">
-          <Link to="/terms" className="hover:text-foreground transition-colors">
-            이용약관
-          </Link>
-          <span>·</span>
-          <Link to="/privacy" className="hover:text-foreground transition-colors">
-            개인정보처리방침
-          </Link>
-        </div>
-        <p>&copy; 2026 Insighta. All rights reserved.</p>
-      </footer>
+      <Footer />
     </div>
   );
 }
