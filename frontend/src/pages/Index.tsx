@@ -221,7 +221,7 @@ const Index = () => {
 
   // YouTube 카드 중 아이디에이션에 있어야 할 것들 (is_in_ideation !== false)
   const ideationVideoCards = useMemo(() => {
-    return syncedCards.filter((c) => c.isInIdeation !== false);
+    return syncedCards.filter((c) => c.isInIdeation === true);
   }, [syncedCards]);
 
   // Merged scratchpad cards: ideation YouTube videos + scratchpad local cards + pending cards
@@ -234,29 +234,43 @@ const Index = () => {
     return [...ideationVideoCards, ...scratchpadLocalCards, ...filteredPending];
   }, [ideationVideoCards, scratchpadLocalCards, pendingLocalCards, persistedLocalCards]);
 
+  // Refs to avoid stale closure in setScratchPadCards
+  const syncedCardsRef = useRef(syncedCards);
+  const persistedLocalCardsRef = useRef(persistedLocalCards);
+  useEffect(() => {
+    syncedCardsRef.current = syncedCards;
+  }, [syncedCards]);
+  useEffect(() => {
+    persistedLocalCardsRef.current = persistedLocalCards;
+  }, [persistedLocalCards]);
+
   // Helper to update pending scratchpad cards (for optimistic UI)
   const setScratchPadCards = useCallback(
     (updater: InsightCard[] | ((prev: InsightCard[]) => InsightCard[])) => {
       if (typeof updater === 'function') {
         // For function updaters, only update pending cards
         setPendingLocalCards((prev) => {
-          const allCards = [...syncedCards, ...persistedLocalCards, ...prev];
+          const currentSynced = syncedCardsRef.current;
+          const currentPersisted = persistedLocalCardsRef.current;
+          const allCards = [...currentSynced, ...currentPersisted, ...prev];
           const updatedCards = updater(allCards);
           // Filter out synced and persisted cards to only keep pending changes
-          const syncedIds = new Set(syncedCards.map((c) => c.id));
-          const persistedIds = new Set(persistedLocalCards.map((c) => c.id));
+          const syncedIds = new Set(currentSynced.map((c) => c.id));
+          const persistedIds = new Set(currentPersisted.map((c) => c.id));
           return updatedCards.filter((c) => !syncedIds.has(c.id) && !persistedIds.has(c.id));
         });
       } else {
         // For direct value, only set pending cards (filter out synced and persisted)
-        const syncedIds = new Set(syncedCards.map((c) => c.id));
-        const persistedIds = new Set(persistedLocalCards.map((c) => c.id));
+        const currentSynced = syncedCardsRef.current;
+        const currentPersisted = persistedLocalCardsRef.current;
+        const syncedIds = new Set(currentSynced.map((c) => c.id));
+        const persistedIds = new Set(currentPersisted.map((c) => c.id));
         setPendingLocalCards(
           updater.filter((c) => !syncedIds.has(c.id) && !persistedIds.has(c.id))
         );
       }
     },
-    [syncedCards, persistedLocalCards]
+    []
   );
 
   // Guard ref: skip query-data sync when we already applied optimistic setState
@@ -900,6 +914,7 @@ const Index = () => {
 
         batchMoveCards.mutateAsync({ items: batchItems }).catch((error) => {
           console.error('[handleCardDrop] Failed to move cards:', error);
+          skipNextSyncRef.current = false;
           setCards(previousCards);
           setScratchPadCards(previousScratchPad);
           setPendingLocalCards(previousPending);
@@ -991,6 +1006,7 @@ const Index = () => {
 
         networkCall.catch((error) => {
           console.error('[handleCardDrop] Failed to move card:', error);
+          skipNextSyncRef.current = false;
           setCards(previousCards);
           setScratchPadCards(previousScratchPad);
           setPendingLocalCards(previousPending);
@@ -1230,6 +1246,7 @@ const Index = () => {
             });
 
       networkCall.catch((error) => {
+        skipNextSyncRef.current = false;
         setCards(previousCards);
         toast({
           title: '이동 실패',
@@ -1266,6 +1283,7 @@ const Index = () => {
         .filter((item): item is NonNullable<typeof item> => item !== null);
 
       batchMoveCards.mutateAsync({ items: batchItems }).catch(() => {
+        skipNextSyncRef.current = false;
         setCards(previousCards);
         toast({
           title: '이동 실패',

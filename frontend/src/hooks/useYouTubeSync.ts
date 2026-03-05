@@ -282,6 +282,8 @@ export function useUpdateVideoState() {
     onError: (_err, _vars, context) => {
       if (context?.previousAll) {
         queryClient.setQueryData(youtubeSyncKeys.allVideoStates, context.previousAll);
+      } else {
+        queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
       }
     },
   });
