@@ -46,7 +46,7 @@ jobs:
           FILENAME="backup_${DATE}.sql.gz"
 
           echo "Creating backup: $FILENAME"
-          pg_dump "$DIRECT_URL" \
+          /usr/lib/postgresql/17/bin/pg_dump "$DIRECT_URL" \
             --schema=public \
             --no-owner \
             --no-acl \
