@@ -113,6 +113,7 @@ export function useSyncPlaylist() {
       const response = await fetch(`/api/v1/playlists/${playlistId}/sync`, {
         method: 'POST',
         headers,
+        body: JSON.stringify({}),
       });
 
       if (!response.ok) {
