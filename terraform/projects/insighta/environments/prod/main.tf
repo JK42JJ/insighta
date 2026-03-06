@@ -73,3 +73,16 @@ module "compute" {
     Environment = "production"
   }
 }
+
+# --- Backup (S3) ---
+module "backup" {
+  source          = "../../../../modules/backup"
+  bucket_name     = "insighta-backups"
+  retention_days  = 30
+  transition_days = 7
+
+  tags = {
+    Project     = "insighta"
+    Environment = "production"
+  }
+}

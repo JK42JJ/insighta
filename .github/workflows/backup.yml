@@ -1,0 +1,126 @@
+name: DB Backup
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Daily at 03:00 UTC
+  workflow_dispatch:
+
+env:
+  BACKUP_BUCKET: insighta-backups
+  AWS_REGION: us-west-2
+
+jobs:
+  backup:
+    name: Database Backup
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create backup
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          DATE=$(date +%Y%m%d)
+          YEAR=$(date +%Y)
+          MONTH=$(date +%m)
+          FILENAME="backup_${DATE}.sql.gz"
+
+          echo "Creating backup: $FILENAME"
+          pg_dump "$DIRECT_URL" \
+            --schema=public \
+            --no-owner \
+            --no-acl \
+            | gzip > "$FILENAME"
+
+          # Validate backup
+          SIZE=$(stat -c%s "$FILENAME" 2>/dev/null || stat -f%z "$FILENAME" 2>/dev/null)
+          echo "Backup size: $SIZE bytes"
+
+          if [ "$SIZE" -lt 1024 ]; then
+            echo "::error::Backup file too small ($SIZE bytes). Possible empty or failed dump."
+            exit 1
+          fi
+
+          # Validate content (check for CREATE TABLE statements)
+          TABLE_COUNT=$(zcat "$FILENAME" | grep -c "CREATE TABLE" || true)
+          echo "Tables found: $TABLE_COUNT"
+
+          if [ "$TABLE_COUNT" -lt 5 ]; then
+            echo "::error::Backup contains only $TABLE_COUNT tables. Expected at least 5."
+            exit 1
+          fi
+
+          # Upload to S3
+          S3_PATH="s3://${BACKUP_BUCKET}/db/${YEAR}/${MONTH}/${FILENAME}"
+          echo "Uploading to $S3_PATH"
+          aws s3 cp "$FILENAME" "$S3_PATH"
+
+          echo "backup_path=$S3_PATH" >> "$GITHUB_ENV"
+          echo "backup_size=$SIZE" >> "$GITHUB_ENV"
+          echo "table_count=$TABLE_COUNT" >> "$GITHUB_ENV"
+
+      - name: Cleanup old backups (30+ days)
+        run: |
+          CUTOFF=$(date -d '30 days ago' +%Y%m%d 2>/dev/null || date -v-30d +%Y%m%d 2>/dev/null)
+          echo "Cleaning up backups older than $CUTOFF"
+          aws s3 ls "s3://${BACKUP_BUCKET}/db/" --recursive \
+            | awk '{print $4}' \
+            | grep -E 'backup_[0-9]{8}\.sql\.gz$' \
+            | while read -r key; do
+                file_date=$(echo "$key" | grep -oE '[0-9]{8}')
+                if [ -n "$file_date" ] && [ "$file_date" -lt "$CUTOFF" ]; then
+                  echo "Deleting old backup: $key"
+                  aws s3 rm "s3://${BACKUP_BUCKET}/$key"
+                fi
+              done
+
+      - name: Summary
+        run: |
+          echo "### DB Backup Complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Path**: \`${{ env.backup_path }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Size**: ${{ env.backup_size }} bytes" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Tables**: ${{ env.table_count }}" >> "$GITHUB_STEP_SUMMARY"
+
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: backup
+    if: failure()
+    steps:
+      - name: Create failure issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'backup-failure',
+              state: 'open',
+            });
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body: `Backup failed again on ${new Date().toISOString().split('T')[0]}.\n\n[Workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'DB Backup Failed',
+                body: `Automated database backup failed on ${new Date().toISOString().split('T')[0]}.\n\n[Workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n\nPlease investigate and run a manual backup.`,
+                labels: ['backup-failure', 'bug'],
+              });
+            }

@@ -721,37 +721,38 @@ Tables that are fully locked (no user access, server-only):
 
 ## 6. Backup and Recovery
 
-### 6.1 Database Backup (Supabase Cloud)
+### 6.1 Automated Database Backup
 
-Supabase Cloud Free tier does not include automated point-in-time recovery. The database has no automatic backup on the free plan.
+**Schedule**: Daily at 03:00 UTC via GitHub Actions (`.github/workflows/backup.yml`)
 
-**Current state**: No automated backup is configured. This is a known gap (GitHub Issue backlog item).
+**Pipeline**:
+1. `pg_dump` public schema → gzip compress
+2. Validate: file size ≥1KB, ≥5 CREATE TABLE statements
+3. Upload to `s3://insighta-backups/db/YYYY/MM/backup_YYYYMMDD.sql.gz`
+4. Cleanup backups older than 30 days
+5. On failure: auto-creates GitHub Issue with `backup-failure` label
 
-**Risk**: Data loss in the event of accidental deletion or data corruption is possible. A weekly manual backup is recommended until automated backups are in place.
+**Infrastructure** (Terraform `modules/backup`):
+- S3 bucket: `insighta-backups` (versioned, encrypted AES256, no public access)
+- Lifecycle: Standard → Standard-IA after 7 days, expire after 30 days
+- IAM: CI user has S3 read/write/delete on the backup bucket
+
+**Required GitHub Secrets**: `DIRECT_URL`, `TF_AWS_ACCESS_KEY_ID`, `TF_AWS_SECRET_ACCESS_KEY`
+
+**Manual trigger**: `gh workflow run backup.yml`
 
 ### 6.2 Manual Database Backup
 
 Run from any machine that has the `DIRECT_URL` available:
 
 ```bash
-# Full public schema dump (uncompressed)
-pg_dump "$DIRECT_URL" \
-  --schema=public \
-  --no-owner \
-  --no-acl \
-  > backup_$(date +%Y%m%d).sql
-
-# Compressed dump (recommended for storage)
+# Compressed dump (recommended)
 pg_dump "$DIRECT_URL" \
   --schema=public \
   --no-owner \
   --no-acl \
   | gzip > backup_$(date +%Y%m%d).sql.gz
 ```
-
-Store backup files in a location outside the EC2 instance (local machine, S3, or Google Drive).
-
-**Planned automation (Phase 2):** A weekly cron job on EC2 or a GitHub Actions scheduled workflow will run `pg_dump` and upload the result to an S3 bucket.
 
 ### 6.3 Database Recovery
 

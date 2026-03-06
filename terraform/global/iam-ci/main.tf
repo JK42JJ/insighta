@@ -87,6 +87,20 @@ resource "aws_iam_user_policy" "ci" {
         Resource = "*"
       },
       {
+        Sid    = "S3BackupAccess"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket",
+        ]
+        Resource = [
+          "arn:aws:s3:::insighta-backups",
+          "arn:aws:s3:::insighta-backups/*",
+        ]
+      },
+      {
         Sid    = "IAMReadOnly"
         Effect = "Allow"
         Action = [
