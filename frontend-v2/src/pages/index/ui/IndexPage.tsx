@@ -1,8 +1,11 @@
-import { cn } from '@/shared/lib/utils';
+import { useRef, useEffect } from 'react';
 import { Header } from '@/widgets/header/ui/Header';
 import { DropZoneOverlay } from '@/widgets/header/ui/DropZoneOverlay';
 import { CardList } from '@/widgets/card-list/ui/CardList';
 import { VideoPlayerModal } from '@/widgets/video-player/ui/VideoPlayerModal';
+import { FloatingScratchPad } from '@/widgets/scratch-pad/ui/FloatingScratchPad';
+import { FloatingMandala } from '@/widgets/floating-mandala/ui/FloatingMandala';
+import { MandalaGrid } from '@/widgets/mandala-grid/ui/MandalaGrid';
 
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
 import { useLayoutPreferences } from '../model/useLayoutPreferences';
@@ -22,31 +25,32 @@ const IndexPage = () => {
   // 2. Layout preferences
   const layout = useLayoutPreferences();
 
-  // 3. Mandala navigation (needs card orchestrator callbacks, wired below)
+  // 3. Refs to break circular dependency: navigation <-> card orchestrator
+  const moveCardsRef = useRef<(...args: any[]) => void>(() => {});
+  const swapCardsRef = useRef<(...args: any[]) => void>(() => {});
+
+  // 4. Mandala navigation (wired to card orchestrator via refs)
   const navigation = useMandalaNavigation({
+    onMoveCardsForSubLevel: (from, to, idx) => moveCardsRef.current(from, to, idx),
+    onSwapCardsForReorder: (swapped, levelId) => swapCardsRef.current(swapped, levelId),
     toast: (opts) => toast(opts),
     t: (key, opts) => t(key, opts as Record<string, string>),
   });
 
-  // 4. Card orchestrator (needs navigation state)
+  // 5. Card orchestrator (needs navigation state)
   const cards = useCardOrchestrator(
     {
       currentLevelId: navigation.currentLevelId,
       currentLevel: navigation.currentLevel,
     },
     navigation.selectedCellIndex,
-    // onCardClick -> opens modal
-    undefined, // will be wired after modal hook
   );
 
-  // Wire navigation callbacks to card orchestrator
-  // (useMandalaNavigation accepts these as deps)
-  navigation.handleNavigateToSubLevel;
-  // Note: The actual wiring happens via the onMoveCardsForSubLevel / onSwapCardsForReorder
-  // callbacks that are passed to useMandalaNavigation. Since hooks can't be conditionally
-  // created, we initialize navigation first then pass card methods as event handlers to JSX.
+  // Patch refs after orchestrator init
+  useEffect(() => { moveCardsRef.current = cards.moveCardsForSubLevel; }, [cards.moveCardsForSubLevel]);
+  useEffect(() => { swapCardsRef.current = cards.swapCardsForReorder; }, [cards.swapCardsForReorder]);
 
-  // 5. Video modal
+  // 6. Video modal
   const modal = useVideoModal(cards.allMandalaCards, cards.scratchPadCards);
 
   // Wire card click to open modal
@@ -54,9 +58,54 @@ const IndexPage = () => {
     modal.openModal(card);
   };
 
-  // 6. Global paste handler (side-effect only)
-  // Note: This is a simplified placeholder. The full paste logic is in useCardOrchestrator.
-  // useGlobalPaste is available for standalone use if needed.
+  // 7. Global paste handler
+  useGlobalPaste({
+    addPendingCard: cards.addPendingCard,
+    removePendingCard: cards.removePendingCard,
+  });
+
+  // Shared ScratchPad props factory
+  const scratchPadProps = (isFloating: boolean) => ({
+    cards: cards.scratchPadCards,
+    isDropTarget: dragDrop.isScratchPadDropTarget,
+    onDrop: cards.handleScratchPadDrop,
+    onCardDrop: cards.handleScratchPadCardDrop,
+    onMultiCardDrop: cards.handleScratchPadMultiCardDrop,
+    onCardClick: handleCardClick,
+    onDragOver: () => dragDrop.setIsScratchPadDropTarget(true),
+    onDragLeave: () => dragDrop.setIsScratchPadDropTarget(false),
+    onCardDragStart: dragDrop.handleCardDragStart,
+    onDeleteCards: cards.handleDeleteCards,
+    onFileDrop: cards.handleScratchPadFileDrop,
+    isFloating,
+    onToggleFloating: () => layout.handleSetScratchPadFloating(!layout.isScratchPadFloating),
+    dockPosition: layout.scratchPadDockPosition,
+    onDockPositionChange: layout.handleSetScratchPadDockPosition,
+  });
+
+  // Shared MandalaGrid element
+  const mandalaGridElement = (isCompact?: boolean) => (
+    <MandalaGrid
+      level={navigation.currentLevel}
+      cardsByCell={cards.cardsByCell}
+      selectedCellIndex={navigation.selectedCellIndex}
+      onCellClick={navigation.handleCellClick}
+      onCardDrop={cards.handleCardDrop}
+      onCardClick={handleCardClick}
+      onCardDragStart={dragDrop.handleCardDragStart}
+      onSubjectsReorder={navigation.handleSubjectsReorder}
+      onCellDragging={dragDrop.setIsDraggingCell}
+      isGridDropZone={dragDrop.isDraggingOver && !dragDrop.draggingCard && !dragDrop.isDraggingCell}
+      hasSubLevel={navigation.hasSubLevel}
+      onNavigateToSubLevel={navigation.handleNavigateToSubLevel}
+      onNavigateBack={navigation.handleNavigateBack}
+      canGoBack={navigation.path.length > 0}
+      entryGridIndex={navigation.entryGridIndex}
+      showHint={false}
+      hideHeader={true}
+      isCompact={isCompact}
+    />
+  );
 
   return (
     <div className="h-screen flex flex-col bg-surface-base overflow-hidden">
@@ -66,20 +115,72 @@ const IndexPage = () => {
         isVisible={dragDrop.isDraggingOver && !dragDrop.draggingCard && !dragDrop.isDraggingCell}
       />
 
-      {/* TODO: Render FloatingScratchPad in different dock positions */}
-      {/* Top docked */}
-      {/* {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'top' && (...)} */}
+      {/* Top docked ScratchPad */}
+      {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'top' && (
+        <div className="flex-shrink-0 relative z-30">
+          <FloatingScratchPad {...scratchPadProps(false)} />
+        </div>
+      )}
 
       {/* Floating ScratchPad */}
-      {/* {layout.isScratchPadFloating && (...)} */}
+      {layout.isScratchPadFloating && (
+        <FloatingScratchPad
+          {...scratchPadProps(true)}
+          initialPosition={
+            layout.prefScratchpadPosX !== undefined && layout.prefScratchpadPosY !== undefined
+              ? { x: layout.prefScratchpadPosX, y: layout.prefScratchpadPosY }
+              : undefined
+          }
+          onPositionChange={layout.setScratchPadPosition}
+        />
+      )}
 
       {/* Floating Mandala */}
-      {/* {(layout.isMandalaFloating || layout.isMandalaFloatingMode) && (...)} */}
+      {(layout.isMandalaFloating || layout.isMandalaFloatingMode) && (
+        <FloatingMandala
+          centerGoal={navigation.currentLevel.centerGoal}
+          totalCards={cards.totalCards}
+          isMinimized={layout.isMandalaMinimized}
+          onToggleMinimized={() => layout.handleSetMandalaMinimized(!layout.isMandalaMinimized)}
+          isFloating={true}
+          onToggleFloating={() => layout.handleSetMandalaFloating(false)}
+          dockPosition={layout.mandalaDockPosition}
+          onDockPositionChange={layout.handleSetMandalaDockPosition}
+          initialPosition={
+            layout.prefMandalaPosX !== undefined && layout.prefMandalaPosY !== undefined
+              ? { x: layout.prefMandalaPosX, y: layout.prefMandalaPosY }
+              : undefined
+          }
+          onPositionChange={layout.setMandalaPosition}
+        >
+          {mandalaGridElement(true)}
+        </FloatingMandala>
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-hidden flex">
-        {/* Left docked scratch pad */}
-        {/* Left docked mandala */}
+        {/* Left docked ScratchPad */}
+        {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'left' && (
+          <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-r border-border/30 relative z-30 h-full">
+            <FloatingScratchPad {...scratchPadProps(false)} />
+          </div>
+        )}
+
+        {/* Left docked Mandala */}
+        {!layout.isMandalaFloating && !layout.isMandalaFloatingMode && layout.mandalaDockPosition === 'left' && (
+          <FloatingMandala
+            centerGoal={navigation.currentLevel.centerGoal}
+            totalCards={cards.totalCards}
+            isMinimized={layout.isMandalaMinimized}
+            onToggleMinimized={() => layout.handleSetMandalaMinimized(!layout.isMandalaMinimized)}
+            isFloating={false}
+            onToggleFloating={() => layout.handleSetMandalaFloating(true)}
+            dockPosition={layout.mandalaDockPosition}
+            onDockPositionChange={layout.handleSetMandalaDockPosition}
+          >
+            {mandalaGridElement()}
+          </FloatingMandala>
+        )}
 
         <div className="flex-1 overflow-hidden">
           <div className="container mx-auto px-4 py-4 h-full">
@@ -101,11 +202,36 @@ const IndexPage = () => {
           </div>
         </div>
 
-        {/* Right docked mandala */}
-        {/* Right docked scratch pad */}
+        {/* Right docked Mandala */}
+        {!layout.isMandalaFloating && !layout.isMandalaFloatingMode && layout.mandalaDockPosition === 'right' && (
+          <FloatingMandala
+            centerGoal={navigation.currentLevel.centerGoal}
+            totalCards={cards.totalCards}
+            isMinimized={layout.isMandalaMinimized}
+            onToggleMinimized={() => layout.handleSetMandalaMinimized(!layout.isMandalaMinimized)}
+            isFloating={false}
+            onToggleFloating={() => layout.handleSetMandalaFloating(true)}
+            dockPosition={layout.mandalaDockPosition}
+            onDockPositionChange={layout.handleSetMandalaDockPosition}
+          >
+            {mandalaGridElement()}
+          </FloatingMandala>
+        )}
+
+        {/* Right docked ScratchPad */}
+        {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'right' && (
+          <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-l border-border/30 relative z-30 h-full">
+            <FloatingScratchPad {...scratchPadProps(false)} />
+          </div>
+        )}
       </main>
 
-      {/* Bottom docked scratch pad */}
+      {/* Bottom docked ScratchPad */}
+      {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'bottom' && (
+        <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-t border-border/30 relative z-30">
+          <FloatingScratchPad {...scratchPadProps(false)} />
+        </div>
+      )}
 
       <VideoPlayerModal
         card={modal.currentModalCard}

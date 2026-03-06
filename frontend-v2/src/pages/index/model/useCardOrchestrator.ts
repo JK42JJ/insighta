@@ -54,6 +54,9 @@ export interface UseCardOrchestratorReturn {
   handleSaveWatchPosition: (id: string, positionSeconds: number) => void;
   handleCardsReorder: (reorderedCards: InsightCard[]) => void;
   handleDeleteCards: (cardIds: string[]) => void;
+  // Pending card management (exposed for useGlobalPaste)
+  addPendingCard: (card: InsightCard) => void;
+  removePendingCard: (id: string) => void;
   // Card move helpers (exposed for navigation hooks)
   moveCardsForSubLevel: (
     fromLevelId: string,
@@ -898,6 +901,8 @@ export function useCardOrchestrator(
     syncedCards,
     persistedLocalCards,
     pendingLocalCards,
+    addPendingCard: (card: InsightCard) => setPendingLocalCards(prev => [...prev, card]),
+    removePendingCard: (id: string) => setPendingLocalCards(prev => prev.filter(c => c.id !== id)),
     handleCardClick,
     handleCardDrop,
     handleScratchPadDrop,
