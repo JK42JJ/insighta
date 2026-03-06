@@ -78,8 +78,8 @@ module "compute" {
 module "backup" {
   source          = "../../../../modules/backup"
   bucket_name     = "insighta-backups"
-  retention_days  = 30
-  transition_days = 7
+  retention_days  = 90
+  transition_days = 30
 
   tags = {
     Project     = "insighta"

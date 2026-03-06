@@ -50,6 +50,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
     id     = "backup-lifecycle"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = var.transition_days
       storage_class = "STANDARD_IA"

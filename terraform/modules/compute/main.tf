@@ -37,7 +37,7 @@ resource "aws_instance" "this" {
   })
 
   lifecycle {
-    ignore_changes = [user_data, ami]
+    ignore_changes = [user_data, ami, subnet_id, security_groups, root_block_device]
   }
 }
 
