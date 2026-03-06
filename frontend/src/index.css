@@ -486,6 +486,26 @@
   }
 }
 
+@layer components {
+  /* Legal page prose styling for dark mode contrast */
+  .legal-prose h2 {
+    @apply text-foreground;
+  }
+
+  .legal-prose p,
+  .legal-prose li {
+    @apply text-foreground/85;
+  }
+
+  .legal-prose a {
+    @apply text-primary hover:text-primary/80 underline-offset-2;
+  }
+
+  .legal-prose code {
+    @apply bg-muted text-foreground/80 px-1 py-0.5 rounded text-sm font-mono;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

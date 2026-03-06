@@ -83,7 +83,7 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
         <h3
           className={cn(
             'absolute bottom-1 left-1 right-1 font-medium text-primary-foreground line-clamp-2',
-            compact ? 'text-[10px] leading-tight' : 'text-xs'
+            compact ? 'text-xs leading-tight' : 'text-xs'
           )}
         >
           {card.title}
@@ -92,7 +92,7 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
 
       {!compact && card.userNote && (
         <div className="p-2">
-          <p className="text-[10px] text-muted-foreground line-clamp-1">{card.userNote}</p>
+          <p className="text-xs text-muted-foreground line-clamp-1">{card.userNote}</p>
         </div>
       )}
 
@@ -101,7 +101,7 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
         {/* Share to X */}
         <button
           onClick={handleShareToX}
-          className="bg-background/80 backdrop-blur-sm rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
+          className="bg-background/80 backdrop-blur-sm rounded p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
           title={t('draggableCard.shareOnX')}
         >
           <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
@@ -114,7 +114,7 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="bg-background/80 backdrop-blur-sm rounded p-1 text-primary hover:text-primary/80"
+          className="bg-background/80 backdrop-blur-sm rounded p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-primary hover:text-primary/80"
           title={t('draggableCard.viewOnYouTube')}
         >
           <ExternalLink className="w-3 h-3" />

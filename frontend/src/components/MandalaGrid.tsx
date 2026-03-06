@@ -382,6 +382,7 @@ export const MandalaGrid = memo(function MandalaGrid({
                       e.stopPropagation();
                       handleNavigateToSubLevel(gridIndex);
                     }}
+                    aria-label={`${t('mandala.navigateToSub', { subject: cellData.label })}`}
                     className={cn(
                       'absolute z-40 group transition-all duration-300',
                       'hover:scale-110 active:scale-95',
@@ -415,6 +416,7 @@ export const MandalaGrid = memo(function MandalaGrid({
                   e.stopPropagation();
                   handleNavigateBack();
                 }}
+                aria-label={t('mandala.back')}
                 className={cn(
                   'absolute z-40 group transition-all duration-300',
                   'hover:scale-110 active:scale-95',
@@ -500,7 +502,7 @@ export const MandalaGrid = memo(function MandalaGrid({
 
       {/* Hint */}
       {showHint && (
-        <p className="text-[10px] text-center text-muted-foreground/60">
+        <p className="text-xs text-center text-muted-foreground/60">
           {isFlipped ? t('mandala.hintFlipped') : t('mandala.hintDefault')}
         </p>
       )}
