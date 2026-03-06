@@ -409,7 +409,7 @@ export function InsightCardItem({
                   {t('insightCard.memoEdit')}
                 </span>
               </div>
-              <span className="text-[10px] text-muted-foreground flex items-center gap-1 bg-surface-sunken px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
+              <span className="text-xs text-muted-foreground flex items-center gap-1 bg-surface-sunken px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
                 <Clock className="w-2.5 h-2.5" />
                 {new Date(card.createdAt).toLocaleDateString('ko-KR')}
               </span>
@@ -532,7 +532,7 @@ export function InsightCardItem({
                   window.open(twitterUrl, '_blank', 'noopener,noreferrer,width=550,height=420');
                   toast.success(t('videoPlayer.xShareOpened'));
                 }}
-                className="h-7 w-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-mid transition-colors"
+                className="h-11 w-11 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-mid transition-colors"
                 title={t('videoPlayer.shareOnX')}
               >
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -542,7 +542,7 @@ export function InsightCardItem({
               <Button
                 size="sm"
                 onClick={handleSave}
-                className="h-7 w-7 p-0 rounded-lg"
+                className="h-11 w-11 p-0 rounded-lg"
                 style={{ boxShadow: 'var(--shadow-md)' }}
               >
                 <Save className="w-3.5 h-3.5" />

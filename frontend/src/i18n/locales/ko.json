@@ -18,7 +18,8 @@
     "home": "홈",
     "items": "{{count}}개",
     "cards": "{{count}}카드",
-    "selected": "{{count}}개 선택됨"
+    "selected": "{{count}}개 선택됨",
+    "backToTop": "맨 위로"
   },
   "header": {
     "subtitle": "만다라트 기반 YouTube 아카이브",
@@ -254,7 +255,8 @@
     "titleLoading": "제목 로딩중...",
     "collapse": "접기",
     "switchToFloating": "플로팅으로 전환",
-    "switchToDock": "도킹하기"
+    "switchToDock": "도킹하기",
+    "navigateToSub": "{{subject}}로 이동"
   },
   "scratchPad": {
     "title": "스크래치패드",
