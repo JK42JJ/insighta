@@ -84,7 +84,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
         }}
       />
       <div className="container mx-auto px-4 py-3 flex items-center justify-between relative">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <button
             onClick={onNavigateHome}
             aria-label={t('header.goHome')}
@@ -133,7 +133,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
           </Button>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {isLoading ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />

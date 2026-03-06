@@ -6,7 +6,7 @@ export function Footer() {
   const { t } = useTranslation();
 
   return (
-    <footer className="py-6 text-center text-sm text-muted-foreground">
+    <footer className="py-6 text-center text-sm text-muted-foreground border-t border-border/50 bg-surface-mid/50">
       <div className="container mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Archive className="w-4 h-4 text-primary" aria-hidden="true" />

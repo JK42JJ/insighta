@@ -18,7 +18,8 @@
     "home": "Home",
     "items": "{{count}}",
     "cards": "{{count}} cards",
-    "selected": "{{count}} selected"
+    "selected": "{{count}} selected",
+    "backToTop": "Back to top"
   },
   "header": {
     "subtitle": "Mandala-based YouTube Archive",
@@ -254,7 +255,8 @@
     "titleLoading": "Loading title...",
     "collapse": "Collapse",
     "switchToFloating": "Switch to floating",
-    "switchToDock": "Dock"
+    "switchToDock": "Dock",
+    "navigateToSub": "Navigate to {{subject}}"
   },
   "scratchPad": {
     "title": "Scratch Pad",

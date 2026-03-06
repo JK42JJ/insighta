@@ -274,7 +274,7 @@ export const MandalaCell = memo(
                 setIsExpanded(!isExpanded);
               }}
               className={cn(
-                'mt-1 flex items-center gap-0.5 text-[9px] text-primary font-bold',
+                'mt-1 flex items-center gap-0.5 text-xs text-primary font-bold',
                 'hover:underline transition-all duration-200',
                 !isExpanded && 'animate-[pulse_3s_ease-in-out_infinite]'
               )}
@@ -295,10 +295,24 @@ export const MandalaCell = memo(
       );
     };
 
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onClick();
+      }
+    };
+
     return (
       <div
+        role="button"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        aria-label={
+          isCenter ? label : `${label} (${cardCount} ${cardCount === 1 ? 'card' : 'cards'})`
+        }
         className={cn(
           'relative flex flex-col items-center justify-start p-2 md:p-3 rounded-xl cursor-pointer group/cell',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           'border bg-surface-light',
           'transition-all duration-200 ease-out',
           // Swap animation
@@ -369,7 +383,7 @@ export const MandalaCell = memo(
           <div
             className={cn(
               'absolute bottom-1.5 right-1.5 flex items-center justify-center',
-              'min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold',
+              'min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold',
               'bg-primary text-primary-foreground shadow-md',
               'transition-transform hover:scale-110'
             )}
@@ -386,7 +400,7 @@ export const MandalaCell = memo(
                 <div key={i} className="w-2 h-2 rounded-[1px] bg-muted-foreground/30" />
               ))}
             </div>
-            <span className="text-[9px]">{t('mandala.dragToAdd')}</span>
+            <span className="text-xs">{t('mandala.dragToAdd')}</span>
           </div>
         )}
 

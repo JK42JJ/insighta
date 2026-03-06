@@ -1,11 +1,15 @@
+import { ArrowUp } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { useTranslation } from 'react-i18next';
 
 const Privacy = () => {
+  const { t } = useTranslation();
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <Header />
-      <div className="flex-1 p-4 sm:p-8 max-w-3xl mx-auto w-full">
+      <div className="flex-1 p-4 sm:p-8 max-w-3xl mx-auto w-full legal-prose">
         <h1 className="text-3xl font-bold mb-6">Privacy Policy</h1>
         <p className="text-muted-foreground mb-4">Last updated: March 5, 2026</p>
 
@@ -28,7 +32,7 @@ const Privacy = () => {
             <li>
               <strong>YouTube Data</strong>: Playlist metadata, video titles, descriptions, and
               thumbnails from your YouTube playlists (read-only access via{' '}
-              <code className="bg-muted text-muted-foreground px-1 py-0.5 rounded text-sm font-mono">
+              <code className="bg-muted text-foreground/80 px-1 py-0.5 rounded text-sm font-mono">
                 youtube.readonly
               </code>{' '}
               scope).
@@ -81,7 +85,7 @@ const Privacy = () => {
           </p>
           <p className="mt-2">
             We request{' '}
-            <code className="bg-muted text-muted-foreground px-1 py-0.5 rounded text-sm font-mono">
+            <code className="bg-muted text-foreground/80 px-1 py-0.5 rounded text-sm font-mono">
               youtube.readonly
             </code>{' '}
             access to read your playlist and video metadata. We never modify or delete any YouTube
@@ -139,6 +143,15 @@ const Privacy = () => {
             </a>
           </p>
         </section>
+        <div className="flex justify-center mt-8">
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-surface-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          >
+            <ArrowUp className="w-4 h-4" aria-hidden="true" />
+            {t('common.backToTop')}
+          </button>
+        </div>
       </div>
       <Footer />
     </div>
