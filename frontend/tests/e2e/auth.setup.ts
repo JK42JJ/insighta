@@ -9,24 +9,65 @@
  */
 
 import { test as setup } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const AUTH_STATE_PATH = path.join(__dirname, '../../.auth/user.json');
 
+const isProduction = process.env.E2E_TARGET === 'production';
+
 setup('authenticate via Supabase token injection', async ({ page }) => {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || 'http://localhost:8000';
+  const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+  const storageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`;
+
+  // Production: real email/password login via Supabase SDK
+  if (isProduction) {
+    const email = process.env.E2E_TEST_EMAIL;
+    const password = process.env.E2E_TEST_PASSWORD;
+
+    if (!email || !password) {
+      console.warn('E2E_TEST_EMAIL/PASSWORD not set — skipping production auth');
+      await page.context().storageState({ path: AUTH_STATE_PATH });
+      return;
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error || !data.session) {
+      throw new Error(`Production auth failed: ${error?.message || 'no session'}`);
+    }
+
+    const sessionPayload = JSON.stringify({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      expires_in: data.session.expires_in,
+      expires_at: data.session.expires_at,
+      token_type: 'bearer',
+      user: data.session.user,
+    });
+
+    await page.goto('/');
+    await page.evaluate(
+      ({ key, value }) => localStorage.setItem(key, value),
+      { key: storageKey, value: sessionPayload }
+    );
+    await page.context().storageState({ path: AUTH_STATE_PATH });
+    return;
+  }
+
+  // Local: mock token injection (existing behavior)
   const authEnabled = process.env.PLAYWRIGHT_AUTH === 'true';
   const accessToken = process.env.SUPABASE_TEST_ACCESS_TOKEN;
   const refreshToken = process.env.SUPABASE_TEST_REFRESH_TOKEN || 'e2e-refresh-token';
 
   if (!authEnabled || !accessToken) {
-    // Save empty storage state so dependent projects don't fail
     await page.context().storageState({ path: AUTH_STATE_PATH });
     return;
   }
-
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || 'http://localhost:8000';
-  // Supabase stores auth in localStorage under this key pattern
-  const storageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`;
 
   const sessionPayload = JSON.stringify({
     access_token: accessToken,
@@ -45,15 +86,10 @@ setup('authenticate via Supabase token injection', async ({ page }) => {
     },
   });
 
-  // Navigate to app origin so localStorage is scoped correctly
   await page.goto('/');
   await page.evaluate(
-    ({ key, value }) => {
-      localStorage.setItem(key, value);
-    },
+    ({ key, value }) => localStorage.setItem(key, value),
     { key: storageKey, value: sessionPayload }
   );
-
-  // Persist authenticated state for reuse across test projects
   await page.context().storageState({ path: AUTH_STATE_PATH });
 });

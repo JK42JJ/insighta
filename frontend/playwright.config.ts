@@ -4,6 +4,8 @@ import { defineConfig, devices } from '@playwright/test';
  * Playwright E2E Test Configuration
  * @see https://playwright.dev/docs/test-configuration
  */
+const isProduction = process.env.E2E_TARGET === 'production';
+
 export default defineConfig({
   testDir: './tests/e2e',
 
@@ -29,7 +31,7 @@ export default defineConfig({
   /* Shared settings for all the projects below */
   use: {
     /* Base URL to use in actions like `await page.goto('/')` */
-    baseURL: 'http://localhost:8081',
+    baseURL: isProduction ? 'https://insighta.one' : 'http://localhost:8081',
 
     /* Collect trace when retrying the failed test */
     trace: 'on-first-retry',
@@ -93,11 +95,13 @@ export default defineConfig({
     },
   ],
 
-  /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:8081',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  /* Run your local dev server before starting the tests (skip for production) */
+  ...(isProduction ? {} : {
+    webServer: {
+      command: 'npm run dev',
+      url: 'http://localhost:8081',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120 * 1000,
+    },
+  }),
 });
