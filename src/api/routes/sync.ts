@@ -67,7 +67,9 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Getting all sync statuses', { userId: request.user.userId });
 
-      const { playlists } = await getManager().listPlaylists();
+      const { playlists } = await getManager().listPlaylists({
+        userId: request.user.userId,
+      });
 
       const statuses: SyncStatusResponse[] = playlists.map((playlist) => ({
         playlistId: playlist.id,
@@ -101,7 +103,7 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Getting playlist sync status', { playlistId, userId: request.user.userId });
 
-      const playlist = await getManager().getPlaylist(playlistId);
+      const playlist = await getManager().getPlaylist(playlistId, request.user.userId);
 
       const status: SyncStatusResponse = {
         playlistId: playlist.id,
@@ -134,8 +136,10 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Getting sync history', { userId: request.user.userId, query: validatedQuery });
 
-      // Build where clause
-      const where: any = {};
+      // Build where clause — only show history for user's own playlists
+      const where: any = {
+        youtube_playlists: { user_id: request.user.userId },
+      };
       if (validatedQuery.playlistId) {
         where.playlist_id = validatedQuery.playlistId;
       }
@@ -212,7 +216,7 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         },
       });
 
-      if (!syncHistory) {
+      if (!syncHistory || syncHistory.youtube_playlists.user_id !== request.user.userId) {
         return reply.code(404).send({
           error: {
             code: 'RESOURCE_NOT_FOUND',
@@ -300,8 +304,8 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         userId: request.user.userId,
       });
 
-      // Check if playlist exists
-      await getManager().getPlaylist(validatedData.playlistId);
+      // Check if playlist exists and belongs to user
+      await getManager().getPlaylist(validatedData.playlistId, request.user.userId);
 
       // Create schedule
       const schedule = await getScheduler().createSchedule({
