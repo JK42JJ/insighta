@@ -18,7 +18,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useYouTubeAuth } from '@/hooks/useYouTubeAuth';
 import { useYouTubeSync, useUpdateSyncSettings } from '@/hooks/useYouTubeSync';
-import { YouTubeConnectButton } from './YouTubeConnectButton';
+// YouTubeConnectButton removed — Google OAuth not yet configured (Issue #2)
+// Will be re-added when BYOK feature is implemented (Issue #47)
 import { PlaylistItem } from './PlaylistItem';
 import { Loader2, Plus, RefreshCw, Youtube, LogIn } from 'lucide-react';
 import type { SyncInterval } from '@/types/youtube';
@@ -240,15 +241,6 @@ export function YouTubeSyncCard() {
         <CardDescription>{t('youtube.syncDesc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Google Account Connection */}
-        <div className="space-y-2">
-          <Label>{t('youtube.googleAccount')}</Label>
-          <p className="text-sm text-muted-foreground">{t('youtube.googleAccountDesc')}</p>
-          <YouTubeConnectButton />
-        </div>
-
-        <Separator />
-
         {/* Add Playlist */}
         <div className="space-y-2">
           <Label htmlFor="playlist-url">{t('youtube.addPlaylist')}</Label>
