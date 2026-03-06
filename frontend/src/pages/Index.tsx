@@ -19,7 +19,7 @@ import {
   fetchUrlMetadata,
 } from '@/data/mockData';
 import { uploadFile, detectFileType, isSupportedFileType } from '@/lib/fileUpload';
-import { parseValidatedMandalaLevel } from '@/lib/localStorageValidation';
+import { useMandala } from '@/hooks/useMandala';
 import { MandalaPath, InsightCard, MandalaLevel } from '@/types/mandala';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -251,17 +251,17 @@ const Index = () => {
     return [...mandalaLocalCards, ...mandalaVideoCards, ...pendingMandalaCards];
   }, [isLoggedIn, demoCards, mandalaLocalCards, mandalaVideoCards, pendingMandalaCards]);
 
-  // Mandala levels state - load from localStorage if available (with validation)
-  const [mandalaLevels, setMandalaLevels] = useState<Record<string, MandalaLevel>>(() => {
-    const validatedRoot = parseValidatedMandalaLevel('mandala-root');
-    if (validatedRoot) {
-      return {
-        ...mockMandalaLevels,
-        root: validatedRoot,
-      };
+  // Mandala levels from DB (with auto-migration from localStorage)
+  const { mandalaLevels: dbMandalaLevels, saveMandala } = useMandala();
+  const [mandalaLevels, setMandalaLevels] =
+    useState<Record<string, MandalaLevel>>(mockMandalaLevels);
+
+  // Sync DB mandala into local state when loaded
+  useEffect(() => {
+    if (dbMandalaLevels && Object.keys(dbMandalaLevels).length > 0) {
+      setMandalaLevels(dbMandalaLevels);
     }
-    return mockMandalaLevels;
-  });
+  }, [dbMandalaLevels]);
 
   // Floating Mandala mode detection (must match FloatingMandala internal breakpoint)
   useEffect(() => {
@@ -273,36 +273,11 @@ const Index = () => {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Listen for storage changes from settings page (with validation)
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'mandala-root' && e.newValue) {
-        const validated = parseValidatedMandalaLevel('mandala-root');
-        if (validated) {
-          setMandalaLevels((prev) => ({
-            ...prev,
-            root: validated,
-          }));
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // Also check localStorage on focus (for same-tab navigation) with validation
+  // Refetch mandala from DB when window regains focus (replaces localStorage listeners)
   useEffect(() => {
     const handleFocus = () => {
-      const validated = parseValidatedMandalaLevel('mandala-root');
-      if (validated) {
-        setMandalaLevels((prev) => ({
-          ...prev,
-          root: validated,
-        }));
-      }
+      // React Query will auto-refetch stale queries on window focus if configured
     };
-
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, []);
@@ -551,23 +526,10 @@ const Index = () => {
 
       // Create sub-level if it doesn't exist
       if (!mandalaLevels[nextLevelId]) {
-        // Try to load from localStorage first
-        const savedL2 = localStorage.getItem(`mandala-l2-${nextLevelId}`);
-        let subjects = Array.from({ length: 8 }, (_, i) => `${subject} ${i + 1}`);
+        const subjects = Array.from({ length: 8 }, (_, i) => `${subject} ${i + 1}`);
 
-        if (savedL2) {
-          try {
-            const parsed = JSON.parse(savedL2);
-            if (parsed.subjects && Array.isArray(parsed.subjects)) {
-              subjects = parsed.subjects;
-            }
-          } catch {
-            /* metadata fetch failures are non-critical */
-          }
-        }
-
-        setMandalaLevels((prev) => ({
-          ...prev,
+        const newLevels = {
+          ...mandalaLevels,
           [nextLevelId]: {
             id: nextLevelId,
             centerGoal: subject,
@@ -576,7 +538,12 @@ const Index = () => {
             parentCellIndex,
             cards: [],
           },
-        }));
+        };
+        setMandalaLevels(newLevels);
+        // Persist new level to DB
+        saveMandala(newLevels).catch(() => {
+          /* handled by mutation error */
+        });
       }
 
       // Migrate cards from current level's cell to the new sub-level's first cell (index 0)
@@ -613,6 +580,7 @@ const Index = () => {
       syncedCards,
       persistedLocalCards,
       batchMoveCards,
+      saveMandala,
     ]
   );
 

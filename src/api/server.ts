@@ -12,6 +12,7 @@ import { noteRoutes } from './routes/notes';
 import { analyticsRoutes } from './routes/analytics';
 import { syncRoutes } from './routes/sync';
 import { quotaRoutes } from './routes/quota';
+import { mandalaRoutes } from './routes/mandalas';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { testDatabaseConnection, disconnectDatabase } from '../modules/database/client';
 
@@ -213,6 +214,9 @@ export async function buildServer() {
 
       // Register quota routes
       await instance.register(quotaRoutes, { prefix: '/quota' });
+
+      // Register mandala routes
+      await instance.register(mandalaRoutes, { prefix: '/mandalas' });
     },
     { prefix: '/api/v1' }
   );
