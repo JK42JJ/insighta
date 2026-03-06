@@ -18,6 +18,7 @@ LAYOUT="${1:-default}"
 CLAUDE_CMD="claude --dangerously-skip-permissions"
 # Dashboard auto-restarts on crash
 DASH_CMD="while true; do bash scripts/agent-dashboard.sh; echo 'Dashboard restarting...'; sleep 1; done"
+OPS_CMD="while true; do bash scripts/ops-dashboard.sh; echo 'Ops restarting...'; sleep 1; done"
 
 # Detect tmux base-index (0 or 1)
 WIN_BASE=$(tmux show-option -gv base-index 2>/dev/null || echo 0)
@@ -97,12 +98,16 @@ case "$LAYOUT" in
     # ├────────────────────────────┴─────────────────────┤
     # │  Shell (project root)                            │
     # └──────────────────────────────────────────────────┘
-    echo -e "${GREEN}Creating full layout (3 panes)...${NC}"
+    echo -e "${GREEN}Creating full layout (4 panes)...${NC}"
     tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_ROOT" -x 220 -y 55
 
-    # Right side - Unified Dashboard
+    # Right side - Agent Dashboard
     tmux split-window -h -p 38 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
     tmux send-keys -t "$SESSION_NAME:$W.$P1" "$DASH_CMD" Enter
+
+    # Split right pane - Ops Dashboard (compact bottom)
+    tmux split-window -v -p 35 -t "$SESSION_NAME:$W.$P1" -c "$PROJECT_ROOT"
+    tmux send-keys -t "$SESSION_NAME:$W.$P2" "$OPS_CMD" Enter
 
     # Bottom shell
     tmux select-pane -t "$SESSION_NAME:$W.$P0"
@@ -122,12 +127,16 @@ case "$LAYOUT" in
     # │   permissions --resume)  │   git status)         │
     # │                          │                       │
     # └──────────────────────────┴───────────────────────┘
-    echo -e "${GREEN}Creating default layout (2 panes)...${NC}"
+    echo -e "${GREEN}Creating default layout (3 panes)...${NC}"
     tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_ROOT" -x 220 -y 55
 
-    # Right side - Unified Dashboard
+    # Right side - Agent Dashboard
     tmux split-window -h -p 38 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
     tmux send-keys -t "$SESSION_NAME:$W.$P1" "$DASH_CMD" Enter
+
+    # Split right pane - Ops Dashboard (compact bottom)
+    tmux split-window -v -p 35 -t "$SESSION_NAME:$W.$P1" -c "$PROJECT_ROOT"
+    tmux send-keys -t "$SESSION_NAME:$W.$P2" "$OPS_CMD" Enter
 
     # Launch claude in main pane
     tmux select-pane -t "$SESSION_NAME:$W.$P0"
