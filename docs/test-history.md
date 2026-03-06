@@ -31,7 +31,22 @@
 | `ui-smoke.spec.ts` | Settings redirects to login when unauthenticated | UI | No |
 | `ui-smoke.spec.ts` | Navigation links are functional | UI | No |
 
-**Total: 11 tests** (2 health, 4 API, 1 lifecycle, 4 UI smoke)
+**Total: 11 E2E tests** (2 health, 4 API, 1 lifecycle, 4 UI smoke)
+
+### Manual Test Matrix — YouTube Sync Full Flow (Run #6)
+
+| # | Test Case | Method | Input | Expected | Status |
+|---|-----------|--------|-------|----------|--------|
+| TC-1 | Playlist import | `POST /api/v1/playlists/import` | `{ playlistUrl }` | 200 + playlist object | ✅ |
+| TC-2 | Playlist list (userId filter) | `GET /api/v1/playlists` | Bearer token | 200 + playlists[] | ✅ |
+| TC-3 | Playlist sync | `POST /api/v1/playlists/{id}/sync` | `{}` | 200 + sync result | ✅ |
+| TC-4 | video_states created after sync | PostgREST query | user_id filter | N rows, is_in_ideation=true | ✅ |
+| TC-5 | playlist_items created after sync | PostgREST query | playlist_id filter | N rows, removed_at=null | ✅ |
+| TC-6 | Edge Function video states | `GET youtube-sync?action=get-all-video-states` | Bearer + apikey | 200 + videos[] with nested video | ✅ |
+| TC-7 | Re-sync (no changes) | `POST /api/v1/playlists/{id}/sync` | same playlist | 200, 0 added/0 removed | ✅ |
+| TC-8 | Playlist delete | `DELETE /api/v1/playlists/{id}` | playlistId | 200 | ✅ |
+| TC-9 | UI: Mandala Design cards display | Browser screenshot | - | N video cards visible | ✅ |
+| TC-10 | Unauthenticated rejection | `GET /api/v1/playlists` (no token) | - | 401 | ✅ |
 
 ## Execution History
 
@@ -217,6 +232,105 @@
 - **패턴**: `listPlaylists()`가 userId 필터 없이 전체 플레이리스트 반환
 - **교훈**: 멀티테넌트 쿼리는 반드시 `user_id` 필터 포함. 코드 리뷰 시 DB 쿼리의 where 절 확인
 - **탐지**: 코드 리뷰에서 `findMany({ where: undefined })` 발견 → 모든 유저 데이터 노출 가능
+
+### Run #6 — 2026-03-06T09:00 (YouTube Sync Feature Verification Session)
+
+**Context**: Backlog 작업 — YouTube playlist sync 기능 검증/테스트, 버그픽스. 유저가 프론트엔드에서 플레이리스트 추가/동기화/카드 표시 전체 플로우를 테스트.
+
+#### 발견된 버그 (총 5개, 모두 해결)
+
+| # | 버그 | 발견 방법 | 근본 원인 | 수정 |
+|---|------|----------|----------|------|
+| 6-1 | YouTube API "No access, refresh token, API key or refresh handler callback is set" | EC2 로그 (`docker logs`) | `YouTubeClient.initializeClient()`에서 `clientId`/`clientSecret` 존재 시 OAuth-only 모드로 초기화 → `apiKey` 무시 | API Key 우선 초기화 (`232c183`) |
+| 6-2 | "Route POST /api/api/v1/playlists/import not found" (double /api) | 브라우저 스크린샷 | Production `VITE_API_URL=/api` + 코드 `/api/v1/...` = 이중 prefix | URL 정규화 + 상대경로 사용 (`e7742c2`) |
+| 6-3 | "YouTube account not connected or token expired" 동기화 실패 | 브라우저 스크린샷 | `useSyncPlaylist`가 Edge Function 호출 → YouTube OAuth 토큰 필요 → 프로덕션에 OAuth 미설정 | Edge Functions → Backend API 전환 (`ad4bba5`) |
+| 6-4 | "Body cannot be empty when content-type is set to 'application/json'" | 브라우저 스크린샷 | Fastify가 `Content-Type: application/json` + 빈 body 거부 | `body: JSON.stringify({})` 추가 (`a0fbc36`) |
+| 6-5 | 동기화 완료되나 Mandala Design에 카드 미표시 | 유저 직접 테스트 | Backend `SyncEngine`이 `user_video_states` 미생성 (Edge Function에만 있던 로직) | SyncEngine 트랜잭션 내 `user_video_states` 생성 추가 (`926e632`) |
+
+#### 진단 방법론 (서버 로그 + DB 직접 확인)
+
+| 단계 | 방법 | 확인 내용 |
+|------|------|----------|
+| 1 | `curl https://insighta.one/health` | 서버 상태 (UP/DOWN) |
+| 2 | `curl https://insighta.one/health/ready` | DB 연결 상태 |
+| 3 | JWT 생성 → `curl /api/v1/playlists` | API 응답 구조 확인 |
+| 4 | `curl /api/v1/playlists/{id}/sync` | Sync 결과 확인 |
+| 5 | PostgREST 직접 쿼리 `user_video_states` | DB 데이터 존재 확인 |
+| 6 | PostgREST 직접 쿼리 `youtube_playlist_items` | 동기화된 아이템 확인 |
+| 7 | Edge Function `?action=get-all-video-states` | 프론트엔드 데이터 소스 확인 |
+
+**교훈**: 프론트엔드 → API → DB → Edge Function 전체 체인을 API 레벨에서 각각 검증해야 문제 구간 특정 가능.
+
+#### 아키텍처 변경 사항
+
+| 변경 전 | 변경 후 | 이유 |
+|---------|---------|------|
+| Playlist CRUD: Edge Function (`youtube-sync`) | Backend API (`/api/v1/playlists/*`) | Edge Function은 YouTube OAuth 필요, Backend API는 서버 API Key 사용 |
+| YouTube init: OAuth-only (clientId 존재 시) | API Key 우선, OAuth 별도 | 공개 데이터는 API Key로 충분, OAuth는 사용자별 BYOK 때 (#47) |
+| Video states: Edge Function only | 생성: Backend SyncEngine + 조회: Edge Function | SyncEngine에서 ideation 카드 자동 생성 |
+| Google Account Connection UI | 제거 (Issue #47까지) | OAuth 미설정 상태에서 혼란 유발 |
+
+#### 테스트 매트릭스 — YouTube Sync 전체 플로우
+
+| # | 테스트 케이스 | 입력 | 기대 결과 | 검증 방법 | 상태 |
+|---|-------------|------|----------|----------|------|
+| TC-1 | 플레이리스트 추가 | YouTube URL | 200 + playlist 객체 | `POST /api/v1/playlists/import` | ✅ Pass |
+| TC-2 | 플레이리스트 목록 조회 | - | 200 + playlists[] (userId 필터) | `GET /api/v1/playlists` | ✅ Pass |
+| TC-3 | 플레이리스트 동기화 | playlistId | 200 + itemsAdded/Removed | `POST /api/v1/playlists/{id}/sync` | ✅ Pass |
+| TC-4 | 동기화 후 video states 생성 | - | user_video_states N개 (is_in_ideation=true) | PostgREST 직접 쿼리 | ✅ Pass (9개) |
+| TC-5 | 동기화 후 playlist_items 생성 | - | youtube_playlist_items N개 (removed_at=null) | PostgREST 직접 쿼리 | ✅ Pass (9개) |
+| TC-6 | Edge Function video states 조회 | ?action=get-all-video-states | 200 + videos[] (nested video 포함) | curl Edge Function | ✅ Pass (9개) |
+| TC-7 | 재동기화 (변경 없음) | 같은 playlistId | 200 + 0 added/0 removed | `POST /api/v1/playlists/{id}/sync` | ✅ Pass |
+| TC-8 | 플레이리스트 삭제 | playlistId | 200 | `DELETE /api/v1/playlists/{id}` | ✅ Pass |
+| TC-9 | Mandala Design 카드 표시 | - | 비디오 카드 N개 화면 표시 | 브라우저 UI 스크린샷 | ✅ Pass (6개 확인) |
+| TC-10 | 미인증 요청 거부 | No Authorization | 401 | `GET /api/v1/playlists` without token | ✅ Pass |
+
+#### 최종 결과
+
+| 항목 | 결과 |
+|------|------|
+| 버그 수 | 5개 발견, 5개 해결 |
+| PR | #44 ~ #51 (8개, 모두 merged) |
+| CI | 전체 통과 |
+| 프로덕션 | 정상 동작 확인 |
+| 테스트 매트릭스 | 10/10 pass |
+| DB 검증 | user_video_states 9개, playlist_items 9개 |
+| Edge Function | get-all-video-states 정상 반환 (9 videos) |
+
+---
+
+### Patterns & Lessons (continued)
+
+### P11: YouTube API 초기화 — API Key vs OAuth 우선순위
+- **패턴**: `clientId`/`clientSecret` 존재 시 OAuth-only 모드로 초기화되어 `apiKey` 무시
+- **증상**: "No access, refresh token, API key or refresh handler callback is set"
+- **교훈**: 공개 데이터 접근은 API Key로 충분. OAuth는 사용자별 개인 데이터용으로만 사용
+- **탐지**: EC2 컨테이너 로그에서 인증 에러 확인
+
+### P12: Production URL prefix 이중화 (VITE_API_URL)
+- **패턴**: `VITE_API_URL=/api` (Dockerfile ARG) + 코드 내 `/api/v1/...` = `/api/api/v1/...`
+- **증상**: "Route POST /api/api/v1/playlists/import not found" (404)
+- **교훈**: 빌드 시 주입되는 URL prefix와 코드 내 경로가 겹치지 않도록 정규화 필수
+- **탐지**: 브라우저 Network 탭에서 실제 요청 URL 확인
+
+### P13: Edge Function ↔ Backend API 기능 분리
+- **패턴**: playlist CRUD를 Edge Function에서 처리했으나, YouTube OAuth 토큰이 프로덕션에 없음
+- **증상**: "YouTube account not connected or token expired"
+- **교훈**: 서버 API Key로 처리 가능한 공개 데이터 작업은 Backend API로 이전. Edge Function은 사용자별 토큰이 필요한 작업에만 사용
+- **아키텍처 결정**: Approach A (서버 키 공유) → 향후 BYOK(#47)로 사용자별 키 지원
+
+### P14: Fastify 빈 body 거부
+- **패턴**: POST + `Content-Type: application/json` + 빈 body → 400
+- **증상**: "Body cannot be empty when content-type is set to 'application/json'"
+- **교훈**: POST 요청 시 body가 없어도 `JSON.stringify({})` 전송 필수
+- **탐지**: 브라우저 Network 탭에서 400 응답 확인
+
+### P15: 프론트엔드/백엔드 기능 누락 (user_video_states)
+- **패턴**: Edge Function에 있던 비즈니스 로직(video states 생성)이 Backend API 전환 시 누락
+- **증상**: 동기화 완료되나 Mandala Design에 카드 미표시
+- **교훈**: 기능 이전 시 원본 코드의 사이드이펙트(부수 효과)를 모두 식별하고 이전해야 함
+- **진단**: DB 직접 쿼리로 데이터 존재 여부 확인 → 문제 구간 특정
+- **필수 진단 프로세스**: 프론트엔드 오류 시 API → DB → Edge Function 순서로 각 레이어 개별 검증
 
 ## Ontology Prep (향후 구조화 방향)
 
