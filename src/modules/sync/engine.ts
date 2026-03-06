@@ -408,10 +408,11 @@ export class SyncEngine {
   }
 
   /**
-   * Sync all playlists
+   * Sync all playlists for a specific user.
+   * If userId is omitted (CLI/admin), syncs all playlists in the system.
    */
-  public async syncAll(): Promise<SyncResult[]> {
-    const { playlists } = await this.playlistManager.listPlaylists();
+  public async syncAll(userId?: string): Promise<SyncResult[]> {
+    const { playlists } = await this.playlistManager.listPlaylists(userId ? { userId } : {});
     return this.syncPlaylists(playlists.map((p) => p.id));
   }
 }

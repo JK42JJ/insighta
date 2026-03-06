@@ -14,6 +14,7 @@ const TEST_USER_ID = '660e8400-e29b-41d4-a716-446655440001';
 const mockPlaylistManager = {
   importPlaylist: jest.fn(),
   listPlaylists: jest.fn(),
+  getPlaylist: jest.fn(),
   getPlaylistWithItems: jest.fn(),
   deletePlaylist: jest.fn(),
 };
@@ -71,6 +72,13 @@ describe('Playlist Routes', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: getPlaylist returns a valid playlist (ownership check passes)
+    mockPlaylistManager.getPlaylist.mockResolvedValue({
+      id: TEST_PLAYLIST_ID,
+      user_id: TEST_USER_ID,
+      youtube_playlist_id: 'PLtest123',
+      title: 'Test Playlist',
+    });
   });
 
   describe('POST /import', () => {
