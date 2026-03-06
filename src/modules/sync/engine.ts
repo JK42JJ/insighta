@@ -194,6 +194,41 @@ export class SyncEngine {
               last_synced_at: new Date(),
             },
           });
+
+          // Create user_video_states for all playlist videos (ideation cards)
+          const allPlaylistItems = await tx.youtube_playlist_items.findMany({
+            where: { playlist_id: playlist.id, removed_at: null },
+            select: { video_id: true },
+          });
+          const allVideoIds = allPlaylistItems.map((item) => item.video_id);
+
+          if (allVideoIds.length > 0) {
+            const existingStates = await tx.userVideoState.findMany({
+              where: {
+                user_id: playlist.user_id,
+                videoId: { in: allVideoIds },
+              },
+              select: { videoId: true },
+            });
+            const existingVideoIds = new Set(existingStates.map((s) => s.videoId));
+
+            const newStates = allVideoIds
+              .filter((vid) => !existingVideoIds.has(vid))
+              .map((vid, idx) => ({
+                user_id: playlist.user_id,
+                videoId: vid,
+                is_in_ideation: true,
+                sort_order: idx,
+              }));
+
+            if (newStates.length > 0) {
+              await tx.userVideoState.createMany({ data: newStates });
+              logger.info('Created user_video_states', {
+                playlistId: playlist.id,
+                count: newStates.length,
+              });
+            }
+          }
         });
 
         // Update sync history
