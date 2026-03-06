@@ -39,6 +39,11 @@ jest.mock('../../../src/api/routes/quota', () => ({
   }),
 }));
 
+jest.mock('../../../src/modules/database/client', () => ({
+  testDatabaseConnection: jest.fn().mockResolvedValue(true),
+  disconnectDatabase: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../../../src/api/schemas/common.schema', () => ({
   createErrorResponse: jest.fn(
     (code: string, message: string, path: string, details?: unknown) => ({
@@ -57,6 +62,9 @@ jest.mock('../../../src/api/schemas/common.schema', () => ({
     INVALID_INPUT: 'INVALID_INPUT',
     RESOURCE_NOT_FOUND: 'RESOURCE_NOT_FOUND',
     RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+    DATABASE_ERROR: 'DATABASE_ERROR',
+    DUPLICATE_RESOURCE: 'DUPLICATE_RESOURCE',
+    SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   },
 }));
 
@@ -137,6 +145,7 @@ describe('API Server', () => {
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
       expect(body.status).toBe('ready');
+      expect(body.database).toBe('connected');
     });
   });
 
