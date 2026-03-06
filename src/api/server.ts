@@ -153,6 +153,14 @@ export async function buildServer() {
           type: 'object',
           properties: {
             status: { type: 'string', enum: ['ready'] },
+            database: { type: 'string' },
+          },
+        },
+        503: {
+          type: 'object',
+          properties: {
+            status: { type: 'string' },
+            database: { type: 'string' },
           },
         },
       },

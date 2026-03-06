@@ -266,7 +266,7 @@ describe('PlaylistManager', () => {
       const result = await manager.listPlaylists();
 
       expect(db.youtube_playlists.findMany).toHaveBeenCalledWith({
-        where: undefined,
+        where: {},
         orderBy: { created_at: 'desc' },
         take: undefined,
         skip: undefined,

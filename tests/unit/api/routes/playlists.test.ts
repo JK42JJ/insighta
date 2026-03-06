@@ -285,6 +285,7 @@ describe('Playlist Routes', () => {
       });
 
       expect(mockPlaylistManager.listPlaylists).toHaveBeenCalledWith({
+        userId: TEST_USER_ID,
         filter: 'test',
         sortBy: 'title',
         sortOrder: 'asc',
