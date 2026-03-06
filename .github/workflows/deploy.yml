@@ -138,6 +138,8 @@ jobs:
           aws-secret-access-key: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
 
+      - uses: actions/checkout@v4
+
       - name: Open SSH for runner IP
         run: |
           RUNNER_IP=$(curl -s ifconfig.me)
@@ -148,6 +150,16 @@ jobs:
             --cidr "$RUNNER_IP/32" \
             --tag-specifications "ResourceType=security-group-rule,Tags=[{Key=Purpose,Value=github-actions-deploy}]"
           echo "Opened SSH for $RUNNER_IP"
+
+      - name: Copy docker-compose.prod.yml to EC2
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker-compose.prod.yml"
+          target: "/opt/tubearchive/"
+          overwrite: true
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
