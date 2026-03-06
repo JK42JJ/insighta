@@ -185,12 +185,17 @@ describe('SyncEngine', () => {
       youtube_videos: {
         findUnique: jest.fn(),
       },
+      userVideoState: {
+        findMany: jest.fn().mockResolvedValue([]),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
     };
     // Assign mocks to the mocked db object
     (db as any).youtube_sync_history = mockDb.youtube_sync_history;
     (db as any).youtube_playlist_items = mockDb.youtube_playlist_items;
     (db as any).youtube_playlists = mockDb.youtube_playlists;
     (db as any).youtube_videos = mockDb.youtube_videos;
+    (db as any).userVideoState = mockDb.userVideoState;
 
     // Setup retry to execute immediately
     (retry as jest.Mock).mockImplementation((fn) => fn());
