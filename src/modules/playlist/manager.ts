@@ -101,10 +101,11 @@ export class PlaylistManager {
   }
 
   /**
-   * List all playlists
+   * List all playlists for a specific user
    */
   public async listPlaylists(
     options: {
+      userId?: string;
       filter?: string;
       sortBy?: 'title' | 'last_synced_at' | 'created_at';
       sortOrder?: 'asc' | 'desc';
@@ -112,19 +113,25 @@ export class PlaylistManager {
       offset?: number;
     } = {}
   ): Promise<{ playlists: youtube_playlists[]; total: number }> {
-    const where = options.filter
-      ? {
-          OR: [
-            { title: { contains: options.filter } },
-            { channel_title: { contains: options.filter } },
-          ],
-        }
-      : undefined;
+    const where: any = {};
+
+    if (options.userId) {
+      where.user_id = options.userId;
+    }
+
+    if (options.filter) {
+      where.OR = [
+        { title: { contains: options.filter } },
+        { channel_title: { contains: options.filter } },
+      ];
+    }
+
+    const orderBy = { [options.sortBy ?? 'created_at']: options.sortOrder ?? 'desc' };
 
     const [playlists, total] = await Promise.all([
       db.youtube_playlists.findMany({
         where,
-        orderBy: { [options.sortBy ?? 'created_at']: options.sortOrder ?? 'desc' },
+        orderBy,
         take: options.limit,
         skip: options.offset,
       }),

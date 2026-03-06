@@ -26,7 +26,10 @@ export function getPrismaClient(): PrismaClient {
             { emit: 'event', level: 'error' },
             { emit: 'event', level: 'warn' },
           ]
-        : [{ emit: 'event', level: 'error' }],
+        : [
+            { emit: 'event', level: 'error' },
+            { emit: 'event', level: 'warn' },
+          ],
     });
 
     // Log queries in development
@@ -52,6 +55,45 @@ export function getPrismaClient(): PrismaClient {
   }
 
   return prismaInstance;
+}
+
+/**
+ * Retry wrapper for transient database errors
+ * Handles PgBouncer connection issues and transient failures
+ */
+export async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 100
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      const isTransient =
+        error?.code === 'P2024' || // Timed out fetching a new connection from the connection pool
+        error?.code === 'P1017' || // Server has closed the connection
+        error?.code === 'P1001' || // Can't reach database server
+        error?.code === 'P1002' || // Database server reached but timed out
+        error?.message?.includes('prepared statement') ||
+        error?.message?.includes('server closed the connection');
+
+      if (!isTransient || attempt === maxRetries) {
+        throw error;
+      }
+
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      logger.warn('Transient DB error, retrying', {
+        attempt,
+        maxRetries,
+        code: error?.code,
+        message: error?.message?.substring(0, 100),
+        delayMs: delay,
+      });
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('Unreachable');
 }
 
 /**

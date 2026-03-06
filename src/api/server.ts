@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import dotenv from 'dotenv';
+import { Prisma } from '@prisma/client';
 import { registerAuth } from './plugins/auth';
 import { authRoutes } from './routes/auth';
 import { playlistRoutes } from './routes/playlists';
@@ -12,6 +13,7 @@ import { analyticsRoutes } from './routes/analytics';
 import { syncRoutes } from './routes/sync';
 import { quotaRoutes } from './routes/quota';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
+import { testDatabaseConnection, disconnectDatabase } from '../modules/database/client';
 
 // Load environment variables
 dotenv.config();
@@ -156,9 +158,11 @@ export async function buildServer() {
       },
     },
     handler: async (_request, reply) => {
-      // TODO: Add database connection check
-      // TODO: Add external API availability check
-      return reply.code(200).send({ status: 'ready' });
+      const dbOk = await testDatabaseConnection();
+      if (!dbOk) {
+        return reply.code(503).send({ status: 'not_ready', database: 'disconnected' });
+      }
+      return reply.code(200).send({ status: 'ready', database: 'connected' });
     },
   });
 
@@ -211,6 +215,70 @@ export async function buildServer() {
 
   // Custom error handler
   fastify.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
+    // Handle Prisma-specific errors
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      const prismaStatusMap: Record<string, { status: number; code: ErrorCode }> = {
+        P2025: { status: 404, code: ErrorCode.RESOURCE_NOT_FOUND },
+        P2002: { status: 409, code: ErrorCode.DUPLICATE_RESOURCE },
+        P2003: { status: 400, code: ErrorCode.INVALID_INPUT },
+        P2014: { status: 400, code: ErrorCode.INVALID_INPUT },
+      };
+      const mapped = prismaStatusMap[error.code];
+      if (mapped) {
+        fastify.log.warn(
+          { err: error, requestId: request.id, url: request.url },
+          `Prisma error ${error.code}`
+        );
+        return reply
+          .code(mapped.status)
+          .send(
+            createErrorResponse(mapped.code, error.message, request.url, { prismaCode: error.code })
+          );
+      }
+      // Unmapped Prisma errors → 500
+      fastify.log.error(
+        { err: error, requestId: request.id, url: request.url },
+        `Prisma error ${error.code}`
+      );
+      return reply
+        .code(500)
+        .send(
+          createErrorResponse(ErrorCode.DATABASE_ERROR, 'A database error occurred', request.url)
+        );
+    }
+
+    if (error instanceof Prisma.PrismaClientInitializationError) {
+      fastify.log.error(
+        { err: error, requestId: request.id, url: request.url },
+        'Prisma initialization error'
+      );
+      return reply
+        .code(503)
+        .send(
+          createErrorResponse(
+            ErrorCode.SERVICE_UNAVAILABLE,
+            'Database service unavailable',
+            request.url
+          )
+        );
+    }
+
+    if (error instanceof Prisma.PrismaClientRustPanicError) {
+      fastify.log.error(
+        { err: error, requestId: request.id, url: request.url },
+        'Prisma engine panic'
+      );
+      return reply
+        .code(500)
+        .send(
+          createErrorResponse(
+            ErrorCode.INTERNAL_SERVER_ERROR,
+            'An internal server error occurred',
+            request.url
+          )
+        );
+    }
+
     const statusCode = error.statusCode || 500;
 
     // Log error
@@ -290,6 +358,7 @@ export async function startServer() {
     const shutdown = async (signal: string) => {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
       await fastify.close();
+      await disconnectDatabase();
       process.exit(0);
     };
 
