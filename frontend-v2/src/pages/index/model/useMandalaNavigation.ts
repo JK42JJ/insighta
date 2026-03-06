@@ -1,0 +1,234 @@
+import { useState, useEffect, useCallback } from 'react';
+import type { MandalaLevel, MandalaPath } from '@/entities/card/model/types';
+import { mockMandalaLevels } from '@/shared/data/mockData';
+import { parseValidatedMandalaLevel } from '@/shared/lib/localStorageValidation';
+
+interface UseMandalaNavigationReturn {
+  currentLevelId: string;
+  path: MandalaPath[];
+  selectedCellIndex: number | null;
+  setSelectedCellIndex: (index: number | null) => void;
+  mandalaLevels: Record<string, MandalaLevel>;
+  setMandalaLevels: React.Dispatch<React.SetStateAction<Record<string, MandalaLevel>>>;
+  currentLevel: MandalaLevel;
+  entryGridIndex: number | null;
+  setEntryGridIndex: (index: number | null) => void;
+  // Handlers
+  handleCellClick: (cellIndex: number, subject: string) => void;
+  handleNavigate: (levelId: string) => void;
+  handleNavigateBack: () => void;
+  handleNavigateToSubLevel: (subject: string, gridIndex: number) => void;
+  handleSubjectsReorder: (
+    newSubjects: string[],
+    swappedIndices?: { from: number; to: number },
+  ) => void;
+  hasSubLevel: (subject: string) => boolean;
+}
+
+/**
+ * Manages mandala navigation state: current level, path/breadcrumb,
+ * selected cell, and mandala level data from localStorage.
+ *
+ * The onSubjectsReorder and onNavigateToSubLevel accept external callbacks
+ * to handle card movement side-effects (injected via init params).
+ */
+export function useMandalaNavigation(deps?: {
+  onMoveCardsForSubLevel?: (
+    currentLevelId: string,
+    nextLevelId: string,
+    parentCellIndex: number,
+  ) => void;
+  onSwapCardsForReorder?: (
+    swappedIndices: { from: number; to: number },
+    currentLevelId: string,
+  ) => void;
+  toast?: (opts: { title: string; description: string }) => void;
+  t?: (key: string, opts?: Record<string, unknown>) => string;
+}): UseMandalaNavigationReturn {
+  const { onMoveCardsForSubLevel, onSwapCardsForReorder, toast, t } = deps ?? {};
+
+  // Mandala levels state - load from localStorage if available
+  const [mandalaLevels, setMandalaLevels] = useState<Record<string, MandalaLevel>>(() => {
+    const validatedRoot = parseValidatedMandalaLevel('mandala-root');
+    if (validatedRoot) {
+      return { ...mockMandalaLevels, root: validatedRoot };
+    }
+    return mockMandalaLevels;
+  });
+
+  const [currentLevelId, setCurrentLevelId] = useState('root');
+  const [path, setPath] = useState<MandalaPath[]>([]);
+  const [selectedCellIndex, setSelectedCellIndex] = useState<number | null>(null);
+  const [entryGridIndex, setEntryGridIndex] = useState<number | null>(null);
+
+  const currentLevel: MandalaLevel = mandalaLevels[currentLevelId] || mandalaLevels['root'];
+
+  // Listen for storage changes from settings page
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'mandala-root' && e.newValue) {
+        const validated = parseValidatedMandalaLevel('mandala-root');
+        if (validated) {
+          setMandalaLevels((prev) => ({ ...prev, root: validated }));
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Also check localStorage on focus (for same-tab navigation)
+  useEffect(() => {
+    const handleFocus = () => {
+      const validated = parseValidatedMandalaLevel('mandala-root');
+      if (validated) {
+        setMandalaLevels((prev) => ({ ...prev, root: validated }));
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
+  const handleCellClick = useCallback((_cellIndex: number, _subject: string) => {
+    if (_cellIndex === -1) {
+      setSelectedCellIndex(null);
+      return;
+    }
+    setSelectedCellIndex(_cellIndex);
+  }, []);
+
+  const hasSubLevel = useCallback((_subject: string): boolean => {
+    return true; // All subjects can have sub-levels
+  }, []);
+
+  const handleNavigate = useCallback(
+    (levelId: string) => {
+      if (levelId === 'root') {
+        setPath([]);
+        setCurrentLevelId('root');
+      } else {
+        const index = path.findIndex((p) => p.id === levelId);
+        if (index >= 0) {
+          setPath(path.slice(0, index));
+          setCurrentLevelId(levelId);
+        }
+      }
+      setSelectedCellIndex(null);
+    },
+    [path],
+  );
+
+  const handleNavigateBack = useCallback(() => {
+    if (path.length > 0) {
+      const parentPath = path[path.length - 1];
+      setPath(path.slice(0, -1));
+      setCurrentLevelId(parentPath.id);
+      setSelectedCellIndex(null);
+      setEntryGridIndex(null);
+      toast?.({
+        title: t?.('index.navigatedToParent') ?? 'Navigated to parent',
+        description:
+          t?.('index.navigatedToParentDesc', { label: parentPath.label }) ?? parentPath.label,
+      });
+    }
+  }, [path, toast, t]);
+
+  const handleNavigateToSubLevel = useCallback(
+    (subject: string, gridIndex: number) => {
+      const nextLevelId = subject.toLowerCase().replace(/\s/g, '');
+      const parentCellIndex = currentLevel.subjects.indexOf(subject);
+
+      // Create sub-level if it doesn't exist
+      if (!mandalaLevels[nextLevelId]) {
+        const savedL2 = localStorage.getItem(`mandala-l2-${nextLevelId}`);
+        let subjects = Array.from({ length: 8 }, (_, i) => `${subject} ${i + 1}`);
+
+        if (savedL2) {
+          try {
+            const parsed = JSON.parse(savedL2);
+            if (parsed.subjects && Array.isArray(parsed.subjects)) {
+              subjects = parsed.subjects;
+            }
+          } catch {
+            /* non-critical */
+          }
+        }
+
+        setMandalaLevels((prev) => ({
+          ...prev,
+          [nextLevelId]: {
+            id: nextLevelId,
+            centerGoal: subject,
+            subjects,
+            parentId: currentLevelId,
+            parentCellIndex,
+            cards: [],
+          },
+        }));
+      }
+
+      // Delegate card migration to external callback
+      onMoveCardsForSubLevel?.(currentLevelId, nextLevelId, parentCellIndex);
+
+      setPath([...path, { id: currentLevelId, label: currentLevel.centerGoal }]);
+      setCurrentLevelId(nextLevelId);
+      setSelectedCellIndex(null);
+      setEntryGridIndex(gridIndex);
+
+      toast?.({
+        title: t?.('index.navigatedToLevel', { subject }) ?? `Navigated to ${subject}`,
+        description: t?.('index.navigatedToLevelDesc') ?? '',
+      });
+    },
+    [mandalaLevels, path, currentLevelId, currentLevel, toast, t, onMoveCardsForSubLevel],
+  );
+
+  const handleSubjectsReorder = useCallback(
+    (newSubjects: string[], swappedIndices?: { from: number; to: number }) => {
+      setMandalaLevels((prev) => ({
+        ...prev,
+        [currentLevelId]: {
+          ...prev[currentLevelId],
+          subjects: newSubjects,
+        },
+      }));
+
+      if (swappedIndices) {
+        onSwapCardsForReorder?.(swappedIndices, currentLevelId);
+
+        // If the selected cell was swapped, follow it
+        if (selectedCellIndex !== null) {
+          if (selectedCellIndex === swappedIndices.from) {
+            setSelectedCellIndex(swappedIndices.to);
+          } else if (selectedCellIndex === swappedIndices.to) {
+            setSelectedCellIndex(swappedIndices.from);
+          }
+        }
+      }
+
+      toast?.({
+        title: t?.('index.priorityChanged') ?? 'Priority changed',
+        description: t?.('index.priorityChangedDesc') ?? '',
+      });
+    },
+    [currentLevelId, selectedCellIndex, toast, t, onSwapCardsForReorder],
+  );
+
+  return {
+    currentLevelId,
+    path,
+    selectedCellIndex,
+    setSelectedCellIndex,
+    mandalaLevels,
+    setMandalaLevels,
+    currentLevel,
+    entryGridIndex,
+    setEntryGridIndex,
+    handleCellClick,
+    handleNavigate,
+    handleNavigateBack,
+    handleNavigateToSubLevel,
+    handleSubjectsReorder,
+    hasSubLevel,
+  };
+}
