@@ -116,6 +116,7 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
 
       const { playlists, total } = await getManager().listPlaylists({
+        userId: request.user.userId,
         filter: validatedQuery.filter,
         sortBy,
         sortOrder: validatedQuery.sortOrder,
