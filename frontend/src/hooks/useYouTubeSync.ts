@@ -52,8 +52,7 @@ export function useAddPlaylist() {
   return useMutation({
     mutationFn: async (playlistUrl: string): Promise<YouTubePlaylist> => {
       const headers = await getAuthHeaders();
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      const response = await fetch(`${apiUrl}/api/v1/playlists/import`, {
+      const response = await fetch(`/api/v1/playlists/import`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ playlistUrl }),
