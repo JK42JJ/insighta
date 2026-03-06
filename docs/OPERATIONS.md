@@ -1,6 +1,6 @@
 # Insighta 운영 매뉴얼
 
-> 최종 업데이트: 2026-03-05
+> 최종 업데이트: 2026-03-06
 > 프로젝트: Insighta
 > 도메인: https://insighta.one
 
@@ -23,12 +23,13 @@
 13. [환경변수 관리](#13-환경변수-관리)
 14. [로그 관리](#14-로그-관리)
 15. [백업 및 복구](#15-백업-및-복구)
-16. [CI/CD 상세](#16-cicd-상세)
-17. [트러블슈팅 가이드](#17-트러블슈팅-가이드)
-18. [이슈 및 작업 관리](#18-이슈-및-작업-관리)
-19. [개발 환경 (Console IDE)](#19-개발-환경-console-ide)
-20. [연락처 및 참고 링크](#20-연락처-및-참고-링크)
-21. [코드베이스 관리 정책](#21-코드베이스-관리-정책)
+16. [인프라 관리 (Terraform IaC)](#16-인프라-관리-terraform-iac)
+17. [CI/CD 상세](#17-cicd-상세)
+18. [트러블슈팅 가이드](#18-트러블슈팅-가이드)
+19. [이슈 및 작업 관리](#19-이슈-및-작업-관리)
+20. [개발 환경 (Console IDE)](#20-개발-환경-console-ide)
+21. [연락처 및 참고 링크](#21-연락처-및-참고-링크)
+22. [코드베이스 관리 정책](#22-코드베이스-관리-정책)
 
 ---
 
@@ -444,6 +445,58 @@ Bash("./scripts/daily-healthcheck.sh")
 | SSL 인증서 만료일 확인 | `sudo certbot certificates` |
 | GitHub Secrets 만료 확인 | GHCR PAT, SSH Key 등 |
 
+### 6.6. Production E2E 테스트
+
+프로덕션 환경에서 실제 API/UI 동작을 자동 검증하는 Playwright E2E 테스트.
+
+#### 테스트 구성
+
+| 파일 | 테스트 | 파괴적? |
+|------|--------|---------|
+| `health.spec.ts` | `/health` 200, SSL 확인 | No |
+| `auth-api.spec.ts` | `/auth/me`, `/playlists`, `/videos`, 401 | No |
+| `playlist-lifecycle.spec.ts` | import → verify → delete | Yes (cleanup) |
+| `ui-smoke.spec.ts` | 랜딩, 로그인, 설정 페이지 | No |
+
+총 11개 테스트, ~2분 이내 실행.
+
+#### 인증 방식
+
+Google OAuth는 Playwright에서 자동화 불가 (봇 차단). 대신:
+- Supabase에 `e2e-test@insighta.one` 유저 생성 (email/password, Auto Confirm)
+- `auth.setup.ts`에서 `signInWithPassword()`로 실제 JWT 획득
+- 유효한 토큰으로 API + UI 테스트 수행
+
+#### 로컬 실행
+
+```bash
+cd frontend
+E2E_TARGET=production \
+E2E_TEST_EMAIL=e2e-test@insighta.one \
+E2E_TEST_PASSWORD='비밀번호' \
+VITE_SUPABASE_URL=https://rckkhhjanqgaopynhfgd.supabase.co \
+VITE_SUPABASE_PUBLISHABLE_KEY='anon_key' \
+npx playwright test tests/e2e/production/ --project=chromium
+```
+
+#### CI 실행
+
+```bash
+# GitHub Actions → E2E Tests → Run workflow → environment: production
+gh workflow run e2e.yml -f environment=production
+```
+
+#### 필수 GitHub Secrets
+
+| Secret | 용도 |
+|--------|------|
+| `E2E_TEST_EMAIL` | 테스트 유저 이메일 |
+| `E2E_TEST_PASSWORD` | 테스트 유저 비밀번호 |
+| `SUPABASE_URL` | (기존) workflow에서 `VITE_SUPABASE_URL`로 매핑 |
+| `SUPABASE_ANON_KEY` | (기존) workflow에서 `VITE_SUPABASE_PUBLISHABLE_KEY`로 매핑 |
+
+> **주의**: 시크릿 이름과 코드 내 환경변수 이름이 다름. `e2e.yml`에서 매핑 처리됨.
+
 ---
 
 ## 7. 장애 대응
@@ -675,29 +728,44 @@ gh api /user/packages/container/insighta-api/versions --jq '.[].metadata.contain
 | SSL/TLS | ✅ TLS 1.2/1.3 | Let's Encrypt, 자동 갱신 |
 | HSTS | ✅ 활성화 | `max-age=63072000; includeSubDomains; preload` |
 | Security Headers | ✅ 설정됨 | X-Content-Type-Options, X-Frame-Options, XSS-Protection |
-| SSH 접근 제한 | ✅ My IP only | `115.143.184.132/32` |
+| SSH 접근 제한 | ✅ Admin IP only | Terraform 관리, `119.194.145.146/32` |
 | Docker 포트 | ✅ localhost only | `127.0.0.1:3000`, `127.0.0.1:8081` |
 | UFW 방화벽 | ✅ 활성화 | SSH(22), HTTP(80), HTTPS(443) |
 | RLS | ✅ 16개 테이블 | `prisma/migrations/rls_policies.sql` |
 | API Rate Limiting | ✅ 30 req/s | Nginx level, `/api/` 경로 |
 | 환경변수 암호화 | ✅ | `.env`는 EC2에만 존재, git 미포함 |
 | Pre-commit Hook | ✅ | husky + lint-staged (prettier + eslint) |
+| CloudWatch | ✅ 활성화 | CPU/메모리/디스크 메트릭 수집 |
 
 ### EC2 Security Group 규칙
 
+> SG는 Terraform으로 관리됩니다 (`terraform/modules/security/`).
+
 | 유형 | 포트 | 소스 | 용도 |
 |------|------|------|------|
-| SSH | 22 | 115.143.184.132/32 | 관리자 SSH |
+| SSH | 22 | `119.194.145.146/32` (admin IP) | 관리자 SSH |
 | HTTP | 80 | 0.0.0.0/0 | HTTPS 리다이렉트 |
 | HTTPS | 443 | 0.0.0.0/0 | 웹 서비스 |
 
+> **배포 시**: `deploy.yml`이 GitHub Actions Runner IP를 SG에 동적 추가/제거합니다.
+
 ### SSH IP 변경 시
 
+**방법 1: Terraform (권장)**
+```bash
+cd terraform/projects/insighta/environments/prod
+# main.tf의 admin_ssh_cidr 변경
+terraform plan
+terraform apply
+```
+
+**방법 2: AWS Console (긴급)**
 1. AWS Console > EC2 > Security Groups
-2. 해당 SG > Inbound rules > Edit
+2. `insighta-sg-*` > Inbound rules > Edit
 3. SSH(22) 규칙의 Source → My IP 선택
 4. Save rules
-5. 접속 테스트: `ssh -i ~/Downloads/prx01-insighta.pem ubuntu@44.231.152.49`
+
+> Console에서 변경한 경우, Terraform state와 drift가 발생합니다. 이후 `terraform plan`으로 확인 필요.
 
 ---
 
@@ -818,8 +886,22 @@ sudo tail -f /var/log/nginx/error.log
 
 ### 데이터베이스 백업
 
-Supabase Cloud는 자동 일일 백업을 제공합니다 (Pro 플랜).
-Free 플랜에서는 수동 백업이 필요합니다.
+#### 자동 백업 (GitHub Actions)
+
+**스케줄**: 매일 03:00 UTC (`.github/workflows/backup.yml`)
+
+**파이프라인**:
+1. `pg_dump` (public 스키마) → gzip 압축
+2. 검증: 파일 크기 ≥1KB, CREATE TABLE ≥5개
+3. S3 업로드: `s3://insighta-backups/db/YYYY/MM/backup_YYYYMMDD.sql.gz`
+4. 30일 이상 백업 정리
+5. 실패 시: `backup-failure` 라벨로 GitHub Issue 자동 생성
+
+**인프라** (Terraform `modules/backup`):
+- S3 버킷: `insighta-backups` (버전관리, AES256 암호화, 퍼블릭 액세스 차단)
+- Lifecycle: Standard → Standard-IA (7일), 만료 (30일)
+
+**수동 트리거**: `gh workflow run backup.yml`
 
 #### 수동 백업 (pg_dump)
 
@@ -847,7 +929,110 @@ docker run --rm -v insighta_logs_data:/data -v /tmp:/backup alpine tar czf /back
 
 ---
 
-## 16. CI/CD 상세
+## 16. 인프라 관리 (Terraform IaC)
+
+### 16.1 Terraform 구조
+
+```
+terraform/
+  modules/
+    networking/       # VPC, 서브넷 (기본 VPC 사용)
+    security/         # Security Group, 인바운드 규칙
+    compute/          # EC2 인스턴스, EIP, cloud-init
+    iam/              # IAM Role, Instance Profile (SSM, CloudWatch)
+    state-backend/    # S3 + DynamoDB (원격 상태 저장)
+  projects/
+    insighta/
+      environments/
+        prod/         # 프로덕션 환경 (main.tf, variables.tf, backend.tf)
+    _template/        # 새 프로젝트 템플릿
+  global/
+    state-backend/    # 부트스트랩: S3 + DynamoDB 생성 (1회)
+    iam-ci/           # GitHub Actions IAM 사용자 (최소 권한)
+```
+
+### 16.2 일반 인프라 변경 절차
+
+```
+1. terraform/projects/insighta/environments/prod/ 파일 수정
+2. PR 생성 → main 타겟
+3. GitHub Actions가 `terraform plan` 실행 → PR 코멘트로 결과 게시
+4. 리뷰 후 머지
+5. `production` 환경 승인 게이트에서 수동 승인
+6. `terraform apply` 자동 실행
+7. 결과 확인
+```
+
+### 16.3 SSH SG 동적 관리
+
+`deploy.yml`에서 GitHub Actions Runner IP를 자동으로 SG에 추가/제거합니다:
+
+```bash
+# 배포 전: Runner IP 허용
+MY_IP=$(curl -s https://checkip.amazonaws.com)
+aws ec2 authorize-security-group-ingress \
+  --group-id sg-079aa1ca6855e587b \
+  --protocol tcp --port 22 --cidr ${MY_IP}/32
+
+# 배포 후: Runner IP 제거 (cleanup step, always 실행)
+aws ec2 revoke-security-group-ingress ...
+```
+
+### 16.4 CloudWatch 모니터링
+
+**상태**: 활성화 (`enable_cloudwatch = true`)
+
+```bash
+# EC2에서 CloudWatch Agent 상태 확인
+sudo systemctl status amazon-cloudwatch-agent
+
+# 비활성화 (긴급 시)
+sudo systemctl stop amazon-cloudwatch-agent
+
+# Terraform에서 비활성화
+# terraform.tfvars: enable_cloudwatch = false → terraform apply
+```
+
+**수집 메트릭**: CPU, 메모리, 디스크 (Free Tier 3/10 커스텀 메트릭)
+
+### 16.5 인프라 비용 가드
+
+```bash
+# 비용 추정 확인
+./scripts/infra-cost-guard.sh check
+
+# 현재 상태 요약
+./scripts/infra-cost-guard.sh status
+
+# 변경 전 비용 영향 예측
+./scripts/infra-cost-guard.sh estimate
+```
+
+**종료 코드**: `0` = PASS, `1` = WARN, `2` = BLOCK
+
+### 16.6 Terraform 필수 GitHub Secrets
+
+| Secret | 용도 |
+|--------|------|
+| `TF_AWS_ACCESS_KEY_ID` | CI IAM 사용자 Access Key |
+| `TF_AWS_SECRET_ACCESS_KEY` | CI IAM 사용자 Secret Key |
+
+### 16.7 긴급 롤백 (인프라)
+
+```bash
+cd terraform/projects/insighta/environments/prod
+
+# 특정 리소스만 이전 상태로 복원
+terraform state show <resource_address>
+terraform apply -target=<resource_address>
+
+# 리소스 관리 해제 (Terraform에서 삭제하지 않고 분리)
+terraform state rm <resource_address>
+```
+
+---
+
+## 17. CI/CD 상세
 
 ### CI 워크플로우 (`.github/workflows/ci.yml`)
 
@@ -881,7 +1066,7 @@ docker run --rm -v insighta_logs_data:/data -v /tmp:/backup alpine tar czf /back
 
 ---
 
-## 17. 트러블슈팅 가이드
+## 18. 트러블슈팅 가이드
 
 ### 자주 발생하는 문제
 
@@ -940,7 +1125,7 @@ docker inspect --format='{{json .State.Health}}' insighta-api | python3 -m json.
 
 ---
 
-## 18. 이슈 및 작업 관리
+## 19. 이슈 및 작업 관리
 
 ### GitHub Issues 기반 관리 (권장)
 
@@ -1025,7 +1210,7 @@ docker inspect --format='{{json .State.Health}}' insighta-api | python3 -m json.
 
 ---
 
-## 19. 개발 환경 (Console IDE)
+## 20. 개발 환경 (Console IDE)
 
 Ghostty + tmux + Claude Code 기반 터미널 IDE 환경. Catppuccin Mocha 테마로 통일.
 
@@ -1267,7 +1452,7 @@ git log -1 -p | delta
 
 ---
 
-## 20. 연락처 및 참고 링크
+## 21. 연락처 및 참고 링크
 
 ### 주요 대시보드
 
@@ -1307,7 +1492,7 @@ git log -1 -p | delta
 
 ---
 
-## 21. 코드베이스 관리 정책
+## 22. 코드베이스 관리 정책
 
 ### 21.1 GitHub 공개 파일 기준
 
