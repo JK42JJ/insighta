@@ -16,20 +16,14 @@ import { Separator } from '@/shared/ui/separator';
 import { ScrollArea } from '@/shared/ui/scroll-area';
 import { useToast } from '@/shared/lib/use-toast';
 import { useAuth } from '@/features/auth/model/useAuth';
-// TODO: Migrate YouTube hooks to @/features/youtube/model/
-// import { useYouTubeAuth } from '@/features/youtube/model/useYouTubeAuth';
-// import { useYouTubeSync, useUpdateSyncSettings } from '@/features/youtube/model/useYouTubeSync';
+import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
+import { useYouTubeSync, useUpdateSyncSettings } from '@/features/youtube-sync/model/useYouTubeSync';
 import { PlaylistItem } from './PlaylistItem';
 import { Loader2, Plus, RefreshCw, Youtube, LogIn } from 'lucide-react';
-// TODO: Move SyncInterval type to @/shared/types/youtube when YouTube feature is migrated
-// import type { SyncInterval } from '@/shared/types/youtube';
-
-type SyncInterval = 'manual' | '1h' | '6h' | '12h' | '24h';
+import type { SyncInterval } from '@/entities/youtube/model/types';
 
 const SYNC_INTERVAL_KEYS: SyncInterval[] = ['manual', '1h', '6h', '12h', '24h'];
 
-// TODO: This component requires YouTube hooks migration (useYouTubeAuth, useYouTubeSync, useUpdateSyncSettings).
-// Currently using placeholder state. Wire up real hooks when YouTube feature layer is built.
 export function YouTubeSyncCard() {
   const { toast } = useToast();
   const { t } = useTranslation();
@@ -37,13 +31,16 @@ export function YouTubeSyncCard() {
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [isSigningIn, setIsSigningIn] = useState(false);
 
-  // Placeholder state until YouTube hooks are migrated
-  const syncInterval: SyncInterval = 'manual';
-  const autoSyncEnabled = false;
-  const playlists: never[] = [];
-  const isLoading = false;
-  const isAdding = false;
-  const isSyncingAll = false;
+  const youtubeAuth = useYouTubeAuth();
+  const ytSync = useYouTubeSync();
+  const updateSettings = useUpdateSyncSettings();
+
+  const syncInterval = (youtubeAuth.syncInterval as SyncInterval) || 'manual';
+  const autoSyncEnabled = youtubeAuth.autoSyncEnabled;
+  const playlists = ytSync.playlists;
+  const isLoading = ytSync.isLoading;
+  const isAdding = ytSync.isAdding;
+  const isSyncingAll = ytSync.isSyncingAll;
   const [syncingPlaylistId, setSyncingPlaylistId] = useState<string | null>(null);
   const [deletingPlaylistId, setDeletingPlaylistId] = useState<string | null>(null);
 
@@ -72,27 +69,104 @@ export function YouTubeSyncCard() {
       });
       return;
     }
-    // TODO: Wire up addPlaylist from useYouTubeSync
-    toast({
-      title: 'Not implemented',
-      description: 'YouTube sync hooks not yet migrated.',
-    });
+    try {
+      await ytSync.addPlaylist(playlistUrl.trim());
+      setPlaylistUrl('');
+      toast({
+        title: t('youtube.playlistAdded'),
+        description: t('youtube.playlistAddedDesc'),
+      });
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : t('youtube.addPlaylistFailed'),
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleSyncPlaylist = async (_playlistId: string) => {
-    // TODO: Wire up syncPlaylist from useYouTubeSync
+  const handleSyncPlaylist = async (playlistId: string) => {
+    setSyncingPlaylistId(playlistId);
+    try {
+      const result = await ytSync.syncPlaylist(playlistId);
+      toast({
+        title: t('youtube.syncComplete'),
+        description: t('youtube.syncCompleteDesc', {
+          added: String(result.itemsAdded),
+          removed: String(result.itemsRemoved),
+        }),
+      });
+    } catch (error) {
+      toast({
+        title: t('youtube.syncFailed'),
+        description: error instanceof Error ? error.message : t('youtube.syncFailedDesc'),
+        variant: 'destructive',
+      });
+    } finally {
+      setSyncingPlaylistId(null);
+    }
   };
 
-  const handleDeletePlaylist = async (_playlistId: string) => {
-    // TODO: Wire up deletePlaylist from useYouTubeSync
+  const handleDeletePlaylist = async (playlistId: string) => {
+    setDeletingPlaylistId(playlistId);
+    try {
+      await ytSync.deletePlaylist(playlistId);
+      toast({
+        title: t('youtube.playlistDeleted'),
+        description: t('youtube.playlistDeletedDesc'),
+      });
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : t('youtube.deletePlaylistFailed'),
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingPlaylistId(null);
+    }
   };
 
   const handleSyncAll = async () => {
-    // TODO: Wire up syncAll from useYouTubeSync
+    try {
+      const result = await ytSync.syncAll();
+      toast({
+        title: t('youtube.syncAllComplete'),
+        description: t('youtube.syncAllCompleteDesc', {
+          synced: String(result.synced),
+          failed: String(result.failed),
+        }),
+      });
+    } catch (error) {
+      toast({
+        title: t('youtube.syncFailed'),
+        description: error instanceof Error ? error.message : t('youtube.syncFailedDesc'),
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleSyncIntervalChange = async (_value: SyncInterval) => {
-    // TODO: Wire up updateSettings from useUpdateSyncSettings
+  const handleSyncIntervalChange = async (value: SyncInterval) => {
+    try {
+      await updateSettings.mutateAsync({ syncInterval: value });
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : t('youtube.settingsUpdateFailed'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleAutoSyncToggle = async (checked: boolean) => {
+    try {
+      await updateSettings.mutateAsync({ autoSyncEnabled: checked });
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : t('youtube.settingsUpdateFailed'),
+        variant: 'destructive',
+      });
+    }
   };
 
   if (isAuthLoading) {
@@ -220,14 +294,14 @@ export function YouTubeSyncCard() {
           ) : (
             <ScrollArea className="h-[300px]">
               <div className="space-y-2 pr-4">
-                {playlists.map((playlist: never) => (
+                {playlists.map((playlist) => (
                   <PlaylistItem
-                    key={(playlist as { id: string }).id}
+                    key={playlist.id}
                     playlist={playlist}
                     onSync={handleSyncPlaylist}
                     onDelete={handleDeletePlaylist}
-                    isSyncing={syncingPlaylistId === (playlist as { id: string }).id}
-                    isDeleting={deletingPlaylistId === (playlist as { id: string }).id}
+                    isSyncing={syncingPlaylistId === playlist.id}
+                    isDeleting={deletingPlaylistId === playlist.id}
                   />
                 ))}
               </div>
@@ -275,9 +349,7 @@ export function YouTubeSyncCard() {
             <Switch
               id="auto-sync"
               checked={autoSyncEnabled}
-              onCheckedChange={(_checked) => {
-                // TODO: Wire up updateSettings.mutate when YouTube hooks are migrated
-              }}
+              onCheckedChange={handleAutoSyncToggle}
             />
           </div>
         </div>

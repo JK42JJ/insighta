@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
-// TODO: Migrate useYouTubeAuth to @/features/youtube/model/useYouTubeAuth
-// import { useYouTubeAuth } from '@/features/youtube/model/useYouTubeAuth';
+import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
 import { Loader2, Youtube, Check, X, AlertCircle, RefreshCw } from 'lucide-react';
 import {
   AlertDialog,
@@ -44,20 +43,18 @@ function useErrorMessage(error: unknown): { message: string; isAuthError: boolea
   return { message: rawMessage, isAuthError: false };
 }
 
-// TODO: This component requires useYouTubeAuth hook migration.
-// Temporarily rendering a placeholder until the YouTube feature layer is built.
 export function YouTubeConnectButton() {
   const { t } = useTranslation();
-
-  // Placeholder state until useYouTubeAuth is migrated
-  const isConnected = false;
-  const isLoading = false;
-  const isConnecting = false;
-  const isDisconnecting = false;
-  const connect = () => {};
-  const disconnect = () => {};
-  const refetch = () => {};
-  const error: unknown = null;
+  const {
+    isConnected,
+    isLoading,
+    isConnecting,
+    isDisconnecting,
+    connect,
+    disconnect,
+    refetch,
+    error,
+  } = useYouTubeAuth();
 
   const { message: errorMessage, isAuthError } = useErrorMessage(error);
 
