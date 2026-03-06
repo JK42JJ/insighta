@@ -8,7 +8,10 @@
 
 import { supabase } from '../integrations/supabase/client';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// In production VITE_API_URL="/api", in dev "http://localhost:3000"
+const VITE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// Normalize: if base already ends with /api, don't double it in request()
+const API_BASE_URL = VITE_API_URL.endsWith('/api') ? VITE_API_URL.slice(0, -4) : VITE_API_URL;
 
 interface ApiError {
   message: string;
