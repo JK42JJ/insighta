@@ -67,23 +67,27 @@ export class YouTubeClient {
    * Initialize YouTube API client
    */
   private initializeClient(): void {
+    // Set up OAuth2 client if credentials are available (for private playlist access)
     if (config.youtube.clientId && config.youtube.clientSecret) {
-      // OAuth 2.0 setup
       this.oauth2Client = new google.auth.OAuth2(
         config.youtube.clientId,
         config.youtube.clientSecret,
         config.youtube.redirectUri
       );
+    }
 
-      this.youtube = google.youtube({
-        version: 'v3',
-        auth: this.oauth2Client,
-      });
-    } else if (config.youtube.apiKey) {
-      // API Key setup
+    // Initialize YouTube API with API Key (works for public data without OAuth)
+    // OAuth-authenticated calls switch auth via setCredentials + ensureValidToken
+    if (config.youtube.apiKey) {
       this.youtube = google.youtube({
         version: 'v3',
         auth: config.youtube.apiKey,
+      });
+    } else if (this.oauth2Client) {
+      // Fallback: OAuth-only mode (no API key)
+      this.youtube = google.youtube({
+        version: 'v3',
+        auth: this.oauth2Client,
       });
     } else {
       throw new AuthenticationError('YouTube API credentials not configured');
