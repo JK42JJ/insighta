@@ -90,6 +90,7 @@ CLAUDE.md
 # Developer tool configs (personal environment)
 .tmux.project.conf
 scripts/agent-dashboard.sh
+scripts/ops-dashboard.sh
 
 # Personal work files
 prompt/
@@ -100,3 +101,10 @@ src/api/openapi.json
 
 # Legacy docs site (removed)
 docs-site/
+
+# Terraform
+terraform/**/*.tfvars
+terraform/**/.terraform/
+terraform/**/*.tfstate
+terraform/**/*.tfstate.backup
+terraform/**/.terraform.lock.hcl
