@@ -28,7 +28,7 @@ module "security" {
   name_prefix = "insighta"
 
   ingress_rules = [
-    { port = 22, cidr = "0.0.0.0/0", desc = "SSH" },
+    { port = 22, cidr = "119.194.145.146/32", desc = "SSH - admin" },
     { port = 80, cidr = "0.0.0.0/0", desc = "HTTP" },
     { port = 443, cidr = "0.0.0.0/0", desc = "HTTPS" },
   ]
