@@ -9,14 +9,10 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { getAuthHeaders, getEdgeFunctionUrl } from '@/lib/supabase-auth';
 import type { YouTubePlaylist, SyncInterval, UserVideoStateWithVideo } from '@/types/youtube';
+import { queryKeys } from '@/lib/queryKeys';
 
-// Query Keys
-export const youtubeSyncKeys = {
-  playlists: ['youtube', 'playlists'] as const,
-  playlist: (id: string) => ['youtube', 'playlist', id] as const,
-  ideationVideos: ['youtube', 'ideation-videos'] as const,
-  allVideoStates: ['youtube', 'all-video-states'] as const,
-};
+// Re-export for backward compatibility
+export const youtubeSyncKeys = queryKeys.youtube;
 
 // Shorthand for youtube-sync Edge Function URLs (still used for video states)
 function ytSyncUrl(action: string): string {
@@ -48,7 +44,7 @@ function mapPlaylistResponse(p: any): YouTubePlaylist {
  */
 export function useYouTubePlaylists() {
   return useQuery({
-    queryKey: youtubeSyncKeys.playlists,
+    queryKey: queryKeys.youtube.playlists,
     queryFn: async (): Promise<YouTubePlaylist[]> => {
       const headers = await getAuthHeaders();
       const response = await fetch('/api/v1/playlists', { headers });
@@ -60,7 +56,6 @@ export function useYouTubePlaylists() {
       const data = await response.json();
       return (data.playlists ?? []).map(mapPlaylistResponse);
     },
-    staleTime: 30 * 1000, // 30 seconds
   });
 }
 
@@ -88,7 +83,7 @@ export function useAddPlaylist() {
       return mapPlaylistResponse(data.playlist);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.playlists });
+      queryClient.invalidateQueries({ queryKey: queryKeys.youtube.playlists });
     },
   });
 }
@@ -132,8 +127,8 @@ export function useSyncPlaylist() {
       };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.playlists });
-      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+      queryClient.invalidateQueries({ queryKey: queryKeys.youtube.playlists });
+      queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates });
     },
   });
 }
@@ -158,7 +153,7 @@ export function useDeletePlaylist() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.playlists });
+      queryClient.invalidateQueries({ queryKey: queryKeys.youtube.playlists });
     },
   });
 }
@@ -191,7 +186,7 @@ export function useUpdateSyncSettings() {
     },
     onSuccess: () => {
       // Invalidate auth status to refresh sync settings
-      queryClient.invalidateQueries({ queryKey: ['youtube', 'auth', 'status'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.youtube.authStatus });
     },
   });
 }
@@ -201,7 +196,7 @@ export function useUpdateSyncSettings() {
  */
 export function useIdeationVideos() {
   return useQuery({
-    queryKey: youtubeSyncKeys.ideationVideos,
+    queryKey: queryKeys.youtube.ideationVideos,
     queryFn: async (): Promise<UserVideoStateWithVideo[]> => {
       const headers = await getAuthHeaders();
       const response = await fetch(ytSyncUrl('get-ideation-videos'), { headers });
@@ -213,7 +208,6 @@ export function useIdeationVideos() {
       const data = await response.json();
       return data.videos;
     },
-    staleTime: 30 * 1000,
   });
 }
 
@@ -222,7 +216,7 @@ export function useIdeationVideos() {
  */
 export function useAllVideoStates() {
   return useQuery({
-    queryKey: youtubeSyncKeys.allVideoStates,
+    queryKey: queryKeys.youtube.allVideoStates,
     queryFn: async (): Promise<UserVideoStateWithVideo[]> => {
       const headers = await getAuthHeaders();
       const response = await fetch(ytSyncUrl('get-all-video-states'), { headers });
@@ -234,7 +228,6 @@ export function useAllVideoStates() {
       const data = await response.json();
       return data.videos;
     },
-    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
   });
 }
@@ -273,15 +266,15 @@ export function useUpdateVideoState() {
       }
     },
     onMutate: async ({ videoStateId, updates }: UpdateVideoStateVars) => {
-      await queryClient.cancelQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+      await queryClient.cancelQueries({ queryKey: queryKeys.youtube.allVideoStates });
       const previousAll = queryClient.getQueryData<UserVideoStateWithVideo[]>(
-        youtubeSyncKeys.allVideoStates
+        queryKeys.youtube.allVideoStates
       );
 
       // Update allVideoStates cache (single source of truth)
       if (previousAll) {
         queryClient.setQueryData<UserVideoStateWithVideo[]>(
-          youtubeSyncKeys.allVideoStates,
+          queryKeys.youtube.allVideoStates,
           (prev) => prev?.map((item) => (item.id === videoStateId ? { ...item, ...updates } : item))
         );
       }
@@ -290,13 +283,13 @@ export function useUpdateVideoState() {
     },
     onError: (_err, _vars, context) => {
       if (context?.previousAll) {
-        queryClient.setQueryData(youtubeSyncKeys.allVideoStates, context.previousAll);
+        queryClient.setQueryData(queryKeys.youtube.allVideoStates, context.previousAll);
       } else {
-        queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+        queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates });
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+      queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates });
     },
   });
 }
@@ -338,8 +331,8 @@ export function useSyncAllPlaylists() {
       return { synced, failed, errors };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.playlists });
-      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+      queryClient.invalidateQueries({ queryKey: queryKeys.youtube.playlists });
+      queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates });
     },
   });
 }
