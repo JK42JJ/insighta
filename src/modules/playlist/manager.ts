@@ -85,13 +85,17 @@ export class PlaylistManager {
 
   /**
    * Get playlist by ID or YouTube ID
+   * When userId is provided, enforces ownership check.
    */
-  public async getPlaylist(id: string): Promise<youtube_playlists> {
-    const playlist = await db.youtube_playlists.findFirst({
-      where: {
-        OR: [{ id }, { youtube_playlist_id: id }],
-      },
-    });
+  public async getPlaylist(id: string, userId?: string): Promise<youtube_playlists> {
+    const where: any = {
+      OR: [{ id }, { youtube_playlist_id: id }],
+    };
+    if (userId) {
+      where.user_id = userId;
+    }
+
+    const playlist = await db.youtube_playlists.findFirst({ where });
 
     if (!playlist) {
       throw new RecordNotFoundError('Playlist', id);
@@ -192,13 +196,17 @@ export class PlaylistManager {
 
   /**
    * Get playlist with items
+   * When userId is provided, enforces ownership check.
    */
-  public async getPlaylistWithItems(playlistId: string): Promise<
+  public async getPlaylistWithItems(
+    playlistId: string,
+    userId?: string
+  ): Promise<
     youtube_playlists & {
       youtube_playlist_items: (youtube_playlist_items & { youtube_videos: any })[];
     }
   > {
-    const playlist = await this.getPlaylist(playlistId);
+    const playlist = await this.getPlaylist(playlistId, userId);
 
     const playlistWithItems = await db.youtube_playlists.findUnique({
       where: { id: playlist.id },

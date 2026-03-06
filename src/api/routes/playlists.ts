@@ -170,7 +170,7 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Getting playlist details', { playlistId: id, userId: request.user.userId });
 
-      const playlist = await getManager().getPlaylistWithItems(id);
+      const playlist = await getManager().getPlaylistWithItems(id, request.user.userId);
 
       const response: PlaylistWithItemsResponse = {
         id: playlist.id,
@@ -229,6 +229,9 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Syncing playlist', { playlistId: id, userId: request.user.userId });
 
+      // Verify ownership before syncing
+      await getManager().getPlaylist(id, request.user.userId);
+
       const result = await getSync().syncPlaylist(id);
 
       const response: SyncResultResponse = {
@@ -267,6 +270,9 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const { id } = validatedParams;
 
       logger.info('Deleting playlist', { playlistId: id, userId: request.user.userId });
+
+      // Verify ownership before deleting
+      await getManager().getPlaylist(id, request.user.userId);
 
       await getManager().deletePlaylist(id);
 

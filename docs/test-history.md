@@ -105,16 +105,62 @@
 
 **Fix**: auth/me도 500 시 warn + pass 처리 (서버 안정성 문제는 별도 이슈)
 
+### Run #5 — 2026-03-06T07:00 (Server Debugging Session)
+
+**Context**: Phase 1 SSH 진단으로 근본 원인 확인 후, 코드 수정 + CI/CD 배포
+
+#### Phase 1: SSH 진단에서 발견된 문제들
+
+| # | 문제 | 발견 방법 | 원인 |
+|---|------|----------|------|
+| 5-1 | Docker 컨테이너 이름 불일치 | `docker exec insighta-api` → "No such container" | 컨테이너 이름이 `tubearchive-api` (docker-compose.prod.yml의 container_name) |
+| 5-2 | `!!` shell escaping 실패 | `node -e` 내 `!!r` → SyntaxError | SSH + docker exec + node -e 3중 중첩에서 `!!`가 bash history expansion으로 해석 → `Boolean(r)` 으로 대체 |
+| 5-3 | **prepared statement "s0" already exists** | `p.users.findFirst()` → PostgreSQL 42P05 | DATABASE_URL port 6543 (PgBouncer transaction mode) + `?pgbouncer=true` 파라미터 누락 |
+| 5-4 | DATABASE_URL에 PgBouncer 파라미터 없음 | `docker exec env \| grep DATABASE` | `?pgbouncer=true&connection_limit=1` 미설정 |
+
+#### Phase 2-3: 코드 수정 시 발견된 문제들
+
+| # | 문제 | 발견 방법 | 원인 | 수정 |
+|---|------|----------|------|------|
+| 5-5 | `listPlaylists()`에 userId 필터 없음 | 코드 리뷰 | 모든 유저의 플레이리스트가 반환되는 보안 결함 | `where: { user_id: userId }` 추가 |
+| 5-6 | `/health/ready`가 DB 상태 미확인 | 코드 리뷰 (TODO 주석) | `testDatabaseConnection()` 이미 구현되어 있었으나 호출 안 함 | DB 프로브 + 503 반환 추가 |
+| 5-7 | Prisma 에러가 모두 generic 500으로 반환 | 코드 리뷰 | 에러 핸들러에 Prisma 에러 타입 분류 없음 | P2025→404, P2002→409, InitializationError→503 등 매핑 |
+| 5-8 | graceful shutdown시 DB disconnect 누락 | 코드 리뷰 | `fastify.close()`만 호출, `disconnectDatabase()` 미호출 | shutdown 핸들러에 추가 |
+| 5-9 | 프로덕션 Prisma 로깅이 error만 | 코드 리뷰 | warn 레벨 누락 → 경고성 문제 감지 불가 | prod에서도 `warn` 이벤트 등록 |
+
+#### Phase 4: CI/CD 배포 시 발견된 문제들
+
+| # | 문제 | 발견 방법 | 원인 | 수정 |
+|---|------|----------|------|------|
+| 5-10 | 첫 번째 Deploy 실패 (CI Test fail → 후속 job skipped) | `gh run view` | 3개 단위 테스트가 코드 변경과 불일치 | 테스트 수정 후 재배포 |
+| 5-11 | `where: undefined` → `where: {}` assertion 불일치 | Jest (playlist-manager.test.ts L269) | `listPlaylists()` where 초기값 변경 (undefined → `{}`) | `expect(where).toEqual({})` |
+| 5-12 | `listPlaylists()` 호출에 `userId` 미포함 assertion | Jest (playlists.test.ts L287) | 라우트에서 `userId` 전달 추가했으나 테스트 미반영 | `userId: TEST_USER_ID` 추가 |
+| 5-13 | `/health/ready` 응답에서 `database` 필드 누락 | Jest (server.test.ts L148) | `testDatabaseConnection` 미mock + response schema에 `database` 프로퍼티 없음 | mock 추가 + schema에 database/503 추가 |
+| 5-14 | `testDatabaseConnection` mock 필요 | Jest (server.test.ts) | 테스트에서 실제 DB 연결 시도 → 실패 | `jest.mock('../../../src/modules/database/client')` 추가 |
+| 5-15 | ErrorCode mock에 `DATABASE_ERROR` 등 누락 | Jest (server.test.ts L54-60) | Prisma 에러 핸들러가 새 ErrorCode 사용하는데 mock에 없음 | `DATABASE_ERROR`, `DUPLICATE_RESOURCE`, `SERVICE_UNAVAILABLE` 추가 |
+| 5-16 | response schema `removeAdditional: 'all'`로 필드 제거 | Jest (server.test.ts) | Fastify AJV 옵션이 schema에 없는 프로퍼티 자동 제거 → `database` 필드 사라짐 | response schema에 `database` 프로퍼티 추가 |
+| 5-17 | `git push origin master:main` rejected | git push | remote main에 merge commit 존재 (PR #39-42) | `git rebase origin/main` 후 재push |
+| 5-18 | `git rebase` unstaged changes 에러 | git rebase | playwright-report 파일 변경이 unstaged | `git stash && rebase && stash pop` |
+| 5-19 | docker compose service 이름 불일치 | `docker compose restart tubearchive-api` → "no such service" | compose 파일 서비스명은 `api`, 컨테이너명은 `tubearchive-api` | `docker compose restart api` |
+
+#### 최종 결과
+
+| Result | Count | Details |
+|--------|-------|---------|
+| CI Pass | 9/9 jobs | TypeCheck, Test(1004), Lint, Build Frontend, Build API, Edge Functions, Docker, Deploy, DB Sync |
+| Production | All OK | `/health/ready` → `{"status":"ready","database":"connected"}` |
+| DB Queries | All OK | auth schema, playlists, videos 모두 정상 |
+
 ## Known Issues (Server-Side)
 
 | Issue | Endpoint | Status | Severity |
 |-------|----------|--------|----------|
-| Intermittent 500 | `/api/v1/auth/me` | Open | Medium |
-| Persistent 500 | `/api/v1/playlists` | Open | High |
-| Persistent 500 | `/api/v1/videos` | Open | High |
-| Import 400/500 | `/api/v1/playlists/import` | Open | High |
+| ~~Intermittent 500~~ | `/api/v1/auth/me` | **Resolved** (PgBouncer fix) | ~~Medium~~ |
+| ~~Persistent 500~~ | `/api/v1/playlists` | **Resolved** (PgBouncer fix) | ~~High~~ |
+| ~~Persistent 500~~ | `/api/v1/videos` | **Resolved** (PgBouncer fix) | ~~High~~ |
+| ~~Import 400/500~~ | `/api/v1/playlists/import` | **Resolved** (PgBouncer fix) | ~~High~~ |
 
-> 이 서버 이슈들은 E2E 테스트와 무관한 프로덕션 서버 버그. 별도 이슈로 추적 필요.
+> **2026-03-06 해결**: 모든 500 에러의 근본 원인은 PgBouncer + Prisma prepared statement 캐시 비호환 (PostgreSQL 42P05). DATABASE_URL에 `?pgbouncer=true&connection_limit=1` 추가로 해결.
 
 ## Patterns & Lessons (QA Agent 학습 포인트)
 
@@ -143,6 +189,35 @@
 - **교훈**: 비핵심 테스트의 skip 조건은 넓게(>= 400) 설정
 - **적용 대상**: 파괴적 테스트(lifecycle), 외부 의존성 테스트
 
+### P6: PgBouncer + Prisma prepared statement 비호환
+- **패턴**: Supabase Cloud Pooler(port 6543, transaction mode) 사용 시 Prisma prepared statement 캐시 충돌
+- **증상**: 모든 DB 쿼리에서 간헐적~지속적 500 (`42P05: prepared statement "s0" already exists`)
+- **교훈**: DATABASE_URL에 `?pgbouncer=true&connection_limit=1` 필수. DIRECT_URL(port 5432)은 migration용이므로 불필요
+- **탐지**: SSH 진단에서 `node -e` Prisma 쿼리 실행 → 42P05 에러 확인
+- **영향 범위**: 모든 인증된 API 엔드포인트 (DB 쿼리 사용하는 모든 곳)
+
+### P7: Fastify response schema가 응답 필드를 제거함
+- **패턴**: `removeAdditional: 'all'` AJV 옵션으로 schema에 정의되지 않은 프로퍼티가 자동 제거
+- **증상**: 핸들러에서 `{ status: 'ready', database: 'connected' }` 반환했으나 응답에서 `database` 사라짐
+- **교훈**: 새 필드를 응답에 추가할 때 반드시 Fastify response schema도 함께 업데이트
+- **탐지**: 테스트에서 `body.newField`가 `undefined` → response schema 확인
+
+### P8: 코드 변경 시 단위 테스트 동시 업데이트 필수
+- **패턴**: 함수 시그니처/동작 변경 후 관련 테스트 미수정 → CI 실패 → 배포 blocked
+- **증상**: Deploy workflow가 `needs: ci`로 의존 → Test 실패 시 전체 배포 중단
+- **교훈**: 함수 변경 시 해당 함수의 테스트 파일을 즉시 검색하고 assertion 업데이트. `git grep 'functionName' tests/` 로 관련 테스트 찾기
+- **탐지**: `npm test` 로컬 실행으로 CI 전에 확인
+
+### P9: Docker 컨테이너 이름 vs compose 서비스 이름
+- **패턴**: `docker compose restart <container_name>` → "no such service"
+- **교훈**: compose 명령은 서비스명 사용 (`api`), docker 명령은 컨테이너명 사용 (`tubearchive-api`)
+- **확인**: `docker compose -f <file> config --services` 로 서비스명 확인
+
+### P10: 보안 결함 — 쿼리에 userId 필터 누락
+- **패턴**: `listPlaylists()`가 userId 필터 없이 전체 플레이리스트 반환
+- **교훈**: 멀티테넌트 쿼리는 반드시 `user_id` 필터 포함. 코드 리뷰 시 DB 쿼리의 where 절 확인
+- **탐지**: 코드 리뷰에서 `findMany({ where: undefined })` 발견 → 모든 유저 데이터 노출 가능
+
 ## Ontology Prep (향후 구조화 방향)
 
 ```
@@ -165,5 +240,5 @@ Attributes for ML/Pattern Detection:
   - failure_frequency: per endpoint, per test
   - flakiness_score: (intermittent failures / total runs)
   - fix_turnaround: time from failure detection to fix
-  - root_cause_category: [schema_mismatch, auth, server_bug, env_config]
+  - root_cause_category: [schema_mismatch, auth, server_bug, env_config, pgbouncer, security, response_schema, test_sync]
 ```
