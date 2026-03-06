@@ -24,6 +24,12 @@ jest.mock('../../../src/api/routes/sync', () => ({
   syncRoutes: jest.fn(async () => {}),
 }));
 
+jest.mock('../../../src/api/routes/mandalas', () => ({
+  mandalaRoutes: jest.fn((_fastify: any, _opts: any, done: () => void) => {
+    done();
+  }),
+}));
+
 // Note: Do NOT mock quota routes here - we're testing the actual quota routes
 
 import { buildServer } from '../../../src/api/server';

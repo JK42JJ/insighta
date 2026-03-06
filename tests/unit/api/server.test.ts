@@ -39,6 +39,12 @@ jest.mock('../../../src/api/routes/quota', () => ({
   }),
 }));
 
+jest.mock('../../../src/api/routes/mandalas', () => ({
+  mandalaRoutes: jest.fn((_fastify: any, _opts: any, done: () => void) => {
+    done();
+  }),
+}));
+
 jest.mock('../../../src/modules/database/client', () => ({
   testDatabaseConnection: jest.fn().mockResolvedValue(true),
   disconnectDatabase: jest.fn().mockResolvedValue(undefined),
