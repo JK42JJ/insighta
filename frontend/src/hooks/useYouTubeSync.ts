@@ -44,7 +44,7 @@ export function useYouTubePlaylists() {
 }
 
 /**
- * Hook to add a new playlist
+ * Hook to add a new playlist via Backend API (uses YouTube API Key, no OAuth required)
  */
 export function useAddPlaylist() {
   const queryClient = useQueryClient();
@@ -52,7 +52,8 @@ export function useAddPlaylist() {
   return useMutation({
     mutationFn: async (playlistUrl: string): Promise<YouTubePlaylist> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(ytSyncUrl('add-playlist'), {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${apiUrl}/api/v1/playlists/import`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ playlistUrl }),
@@ -60,11 +61,28 @@ export function useAddPlaylist() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to add playlist');
+        throw new Error(error.error?.message || 'Failed to add playlist');
       }
 
       const data = await response.json();
-      return data.playlist;
+      const p = data.playlist;
+      // Map Backend API camelCase response to snake_case YouTubePlaylist
+      return {
+        id: p.id,
+        user_id: '',
+        youtube_playlist_id: p.youtubeId,
+        youtube_playlist_url: `https://www.youtube.com/playlist?list=${p.youtubeId}`,
+        title: p.title,
+        description: p.description ?? null,
+        thumbnail_url: p.thumbnailUrl ?? null,
+        channel_title: p.channelTitle ?? null,
+        item_count: p.itemCount ?? 0,
+        last_synced_at: p.lastSyncedAt ?? null,
+        sync_status: p.syncStatus ?? 'PENDING',
+        sync_error: null,
+        created_at: p.createdAt,
+        updated_at: p.updatedAt,
+      } as YouTubePlaylist;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.playlists });
