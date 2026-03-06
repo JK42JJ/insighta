@@ -111,7 +111,9 @@ class ApiClient {
    */
   private async getFreshToken(): Promise<string | null> {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session?.access_token) {
         this.accessToken = session.access_token;
         return session.access_token;
@@ -126,10 +128,7 @@ class ApiClient {
   // HTTP Request Wrapper
   // ========================================
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}/api/v1${endpoint}`;
     const token = await this.getFreshToken();
 
@@ -146,7 +145,9 @@ class ApiClient {
 
     // On 401, try refreshing session once
     if (response.status === 401) {
-      const { data: { session } } = await supabase.auth.refreshSession();
+      const {
+        data: { session },
+      } = await supabase.auth.refreshSession();
       if (session?.access_token) {
         this.accessToken = session.access_token;
         (headers as Record<string, string>)['Authorization'] = `Bearer ${session.access_token}`;
@@ -275,7 +276,7 @@ class ApiClient {
   async importPlaylist(youtubeUrl: string): Promise<Playlist> {
     return this.request<Playlist>('/playlists/import', {
       method: 'POST',
-      body: JSON.stringify({ url: youtubeUrl }),
+      body: JSON.stringify({ playlistUrl: youtubeUrl }),
     });
   }
 
@@ -377,11 +378,4 @@ export const apiClient = new ApiClient(API_BASE_URL);
 export default apiClient;
 
 // Export types for use in components
-export type {
-  User,
-  Playlist,
-  Video,
-  Note,
-  SyncStatus,
-  ApiError,
-};
+export type { User, Playlist, Video, Note, SyncStatus, ApiError };
