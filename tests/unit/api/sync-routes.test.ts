@@ -274,7 +274,10 @@ describe('Sync API Routes', () => {
 
       expect(response.statusCode).toBe(200);
       expect(mockSyncHistoryCount).toHaveBeenCalledWith({
-        where: { playlist_id: '550e8400-e29b-41d4-a716-446655440000' },
+        where: {
+          youtube_playlists: { user_id: 'test-user-id' },
+          playlist_id: '550e8400-e29b-41d4-a716-446655440000',
+        },
       });
     });
 
@@ -292,7 +295,10 @@ describe('Sync API Routes', () => {
 
       expect(response.statusCode).toBe(200);
       expect(mockSyncHistoryCount).toHaveBeenCalledWith({
-        where: { status: 'COMPLETED' },
+        where: {
+          youtube_playlists: { user_id: 'test-user-id' },
+          status: 'COMPLETED',
+        },
       });
     });
 
@@ -320,6 +326,7 @@ describe('Sync API Routes', () => {
         error_message: null,
         youtube_playlists: {
           title: 'Test Playlist',
+          user_id: 'test-user-id',
         },
       };
 
