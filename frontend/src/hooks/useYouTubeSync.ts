@@ -2,7 +2,8 @@
  * useYouTubeSync Hook
  *
  * Manages YouTube playlist synchronization operations.
- * Provides CRUD operations for playlists and sync settings.
+ * Uses Backend API (not Edge Functions) for all playlist CRUD.
+ * Edge Functions are still used for video state operations.
  */
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -17,27 +18,47 @@ export const youtubeSyncKeys = {
   allVideoStates: ['youtube', 'all-video-states'] as const,
 };
 
-// Shorthand for youtube-sync Edge Function URLs
+// Shorthand for youtube-sync Edge Function URLs (still used for video states)
 function ytSyncUrl(action: string): string {
   return getEdgeFunctionUrl('youtube-sync', action);
 }
 
+/** Map Backend API camelCase playlist to snake_case YouTubePlaylist */
+function mapPlaylistResponse(p: any): YouTubePlaylist {
+  return {
+    id: p.id,
+    user_id: '',
+    youtube_playlist_id: p.youtubeId,
+    youtube_playlist_url: `https://www.youtube.com/playlist?list=${p.youtubeId}`,
+    title: p.title,
+    description: p.description ?? null,
+    thumbnail_url: p.thumbnailUrl ?? null,
+    channel_title: p.channelTitle ?? null,
+    item_count: p.itemCount ?? 0,
+    last_synced_at: p.lastSyncedAt ?? null,
+    sync_status: p.syncStatus ?? 'PENDING',
+    sync_error: null,
+    created_at: p.createdAt,
+    updated_at: p.updatedAt,
+  } as YouTubePlaylist;
+}
+
 /**
- * Hook to list all user's playlists
+ * Hook to list all user's playlists via Backend API
  */
 export function useYouTubePlaylists() {
   return useQuery({
     queryKey: youtubeSyncKeys.playlists,
     queryFn: async (): Promise<YouTubePlaylist[]> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(ytSyncUrl('list-playlists'), { headers });
+      const response = await fetch('/api/v1/playlists', { headers });
 
       if (!response.ok) {
         throw new Error('Failed to get playlists');
       }
 
       const data = await response.json();
-      return data.playlists;
+      return (data.playlists ?? []).map(mapPlaylistResponse);
     },
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -52,7 +73,7 @@ export function useAddPlaylist() {
   return useMutation({
     mutationFn: async (playlistUrl: string): Promise<YouTubePlaylist> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(`/api/v1/playlists/import`, {
+      const response = await fetch('/api/v1/playlists/import', {
         method: 'POST',
         headers,
         body: JSON.stringify({ playlistUrl }),
@@ -64,24 +85,7 @@ export function useAddPlaylist() {
       }
 
       const data = await response.json();
-      const p = data.playlist;
-      // Map Backend API camelCase response to snake_case YouTubePlaylist
-      return {
-        id: p.id,
-        user_id: '',
-        youtube_playlist_id: p.youtubeId,
-        youtube_playlist_url: `https://www.youtube.com/playlist?list=${p.youtubeId}`,
-        title: p.title,
-        description: p.description ?? null,
-        thumbnail_url: p.thumbnailUrl ?? null,
-        channel_title: p.channelTitle ?? null,
-        item_count: p.itemCount ?? 0,
-        last_synced_at: p.lastSyncedAt ?? null,
-        sync_status: p.syncStatus ?? 'PENDING',
-        sync_error: null,
-        created_at: p.createdAt,
-        updated_at: p.updatedAt,
-      } as YouTubePlaylist;
+      return mapPlaylistResponse(data.playlist);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.playlists });
@@ -90,7 +94,7 @@ export function useAddPlaylist() {
 }
 
 /**
- * Hook to sync a playlist
+ * Hook to sync a playlist via Backend API
  */
 export function useSyncPlaylist() {
   const queryClient = useQueryClient();
@@ -106,18 +110,25 @@ export function useSyncPlaylist() {
       quotaUsed: number;
     }> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(ytSyncUrl('sync-playlist'), {
+      const response = await fetch(`/api/v1/playlists/${playlistId}/sync`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ playlistId }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to sync playlist');
+        throw new Error(error.error?.message || 'Failed to sync playlist');
       }
 
-      return response.json();
+      const data = await response.json();
+      const r = data.result;
+      return {
+        success: r.status === 'COMPLETED',
+        itemsAdded: r.itemsAdded ?? 0,
+        itemsRemoved: r.itemsRemoved ?? 0,
+        totalItems: (r.itemsAdded ?? 0) + (r.itemsRemoved ?? 0),
+        quotaUsed: r.quotaUsed ?? 0,
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.playlists });
@@ -127,7 +138,7 @@ export function useSyncPlaylist() {
 }
 
 /**
- * Hook to delete a playlist
+ * Hook to delete a playlist via Backend API
  */
 export function useDeletePlaylist() {
   const queryClient = useQueryClient();
@@ -135,15 +146,14 @@ export function useDeletePlaylist() {
   return useMutation({
     mutationFn: async (playlistId: string): Promise<void> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(ytSyncUrl('delete-playlist'), {
-        method: 'POST',
+      const response = await fetch(`/api/v1/playlists/${playlistId}`, {
+        method: 'DELETE',
         headers,
-        body: JSON.stringify({ playlistId }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to delete playlist');
+        throw new Error(error.error?.message || 'Failed to delete playlist');
       }
     },
     onSuccess: () => {
@@ -153,7 +163,7 @@ export function useDeletePlaylist() {
 }
 
 /**
- * Hook to update sync settings
+ * Hook to update sync settings (still via Edge Function — no Backend API equivalent yet)
  */
 export function useUpdateSyncSettings() {
   const queryClient = useQueryClient();
@@ -186,7 +196,7 @@ export function useUpdateSyncSettings() {
 }
 
 /**
- * Hook to get videos in ideation palette
+ * Hook to get videos in ideation palette (Edge Function)
  */
 export function useIdeationVideos() {
   return useQuery({
@@ -207,9 +217,7 @@ export function useIdeationVideos() {
 }
 
 /**
- * Hook to get ALL video states (ideation + mandala)
- * Returns all user_video_states regardless of is_in_ideation flag.
- * Frontend splits into ideation vs mandala cards.
+ * Hook to get ALL video states (ideation + mandala) (Edge Function)
  */
 export function useAllVideoStates() {
   return useQuery({
@@ -231,7 +239,7 @@ export function useAllVideoStates() {
 }
 
 /**
- * Hook to update video state (for ideation palette)
+ * Hook to update video state (for ideation palette) (Edge Function)
  */
 export function useUpdateVideoState() {
   const queryClient = useQueryClient();
