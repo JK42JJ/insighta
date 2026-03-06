@@ -102,6 +102,9 @@ src/api/openapi.json
 # Legacy docs site (removed)
 docs-site/
 
+# SSH Keys (NEVER commit)
+*.pem
+
 # Terraform
 terraform/**/*.tfvars
 terraform/**/.terraform/
