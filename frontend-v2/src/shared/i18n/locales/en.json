@@ -419,6 +419,18 @@
     "shareOnX": "Share on X",
     "viewOnYouTube": "View on YouTube"
   },
+  "view": {
+    "grid": "Grid",
+    "list": "List",
+    "listDetail": "List + Detail",
+    "switchView": "Switch view",
+    "noCardSelected": "No card selected",
+    "selectCardHint": "Select a card from the list to view details",
+    "noteEditor": "Note",
+    "preview": "Preview",
+    "edit": "Edit",
+    "saveNote": "Save note"
+  },
   "footer": {
     "brand": "Insighta",
     "termsOfService": "Terms of Service",
