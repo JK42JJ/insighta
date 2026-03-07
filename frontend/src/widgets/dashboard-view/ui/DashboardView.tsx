@@ -2,19 +2,73 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LayoutGrid, FileText, Tag, TrendingUp, LayoutDashboard } from 'lucide-react';
 import { InsightCard } from '@/types/mandala';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ListRowSkeletonGroup } from '@/components/skeletons';
 import { StatCard } from './StatCard';
 import { SubjectRadarChart } from './SubjectRadarChart';
 import { QualityBreakdown } from './QualityBreakdown';
 import { RecentCardsFeed } from './RecentCardsFeed';
+
+// ---------------------------------------------------------------------------
+// DashboardSkeleton — loading placeholder matching the real layout
+// ---------------------------------------------------------------------------
+
+function StatCardSkeleton() {
+  return (
+    <div className="rounded-xl border bg-card p-4 flex items-start gap-3">
+      <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-7 w-12" />
+      </div>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-4 p-1">
+      {/* Row 1: Stat Card placeholders */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <StatCardSkeleton key={i} />
+        ))}
+      </div>
+
+      {/* Row 2: Radar + Quality placeholders */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+      </div>
+
+      {/* Row 3: Recent Cards placeholder */}
+      <div className="rounded-xl border bg-card p-4 space-y-2">
+        <Skeleton className="h-5 w-32 mb-3" />
+        <ListRowSkeletonGroup count={5} />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DashboardView
+// ---------------------------------------------------------------------------
 
 interface DashboardViewProps {
   cards: InsightCard[];
   cardsByCell: Record<number, InsightCard[]>;
   subjects: string[];
   onCardClick?: (card: InsightCard) => void;
+  isLoading?: boolean;
 }
 
-export function DashboardView({ cards, cardsByCell, subjects, onCardClick }: DashboardViewProps) {
+export function DashboardView({
+  cards,
+  cardsByCell,
+  subjects,
+  onCardClick,
+  isLoading,
+}: DashboardViewProps) {
   const { t } = useTranslation();
 
   const stats = useMemo(() => {
@@ -30,6 +84,10 @@ export function DashboardView({ cards, cardsByCell, subjects, onCardClick }: Das
       recentWeek,
     };
   }, [cards]);
+
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
 
   if (cards.length === 0) {
     return (

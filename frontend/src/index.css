@@ -298,6 +298,13 @@
     }
   }
 
+  /* Border beam animation for center mandala cell */
+  @keyframes beam-rotate {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   /* Block stacking animation */
   @keyframes block-pop {
     0% {

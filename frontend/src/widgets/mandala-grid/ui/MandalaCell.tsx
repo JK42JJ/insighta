@@ -322,8 +322,9 @@ export const MandalaCell = memo(
           !isCenter &&
             !isSelected &&
             'border-border/40 hover:border-primary/40 hover:-translate-y-0.5',
-          // Center cell
-          isCenter && 'border-primary/50 bg-gradient-to-br from-primary/12 to-primary/5',
+          // Center cell - border handled by beam animation
+          isCenter &&
+            'border-transparent overflow-hidden bg-gradient-to-br from-primary/12 to-primary/5',
           // Selected state
           isSelected && !isCenter && 'border-primary bg-primary/8 scale-[1.02]',
           // Drop target
@@ -347,6 +348,24 @@ export const MandalaCell = memo(
         onClick={onClick}
         onDoubleClick={isCenter && onDoubleClick ? onDoubleClick : undefined}
       >
+        {/* Animated border beam for center cell */}
+        {isCenter && (
+          <div
+            className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none"
+            aria-hidden="true"
+          >
+            <div
+              className="absolute inset-[-2px] animate-[beam-rotate_4s_linear_infinite] motion-reduce:animate-none"
+              style={{
+                background:
+                  'conic-gradient(from 0deg, transparent 60%, hsl(var(--primary) / 0.5) 80%, hsl(var(--primary)) 100%)',
+                borderRadius: 'inherit',
+              }}
+            />
+            <div className="absolute inset-[2px] rounded-[10px] bg-gradient-to-br from-primary/12 to-primary/5 surface-light" />
+          </div>
+        )}
+
         {/* Cell Drag Handle */}
         {!isCenter && (
           <div
@@ -365,7 +384,7 @@ export const MandalaCell = memo(
         {/* Label */}
         <span
           className={cn(
-            'text-center font-medium leading-tight transition-colors',
+            'relative z-10 text-center font-medium leading-tight transition-colors',
             isCenter
               ? 'text-primary text-sm md:text-base font-semibold'
               : 'text-foreground/90 text-xs md:text-sm',
