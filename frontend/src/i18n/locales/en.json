@@ -416,7 +416,13 @@
     "qualityAnalysisDesc": "Quality and engagement level of learning",
     "totalCards": "Total Cards",
     "withMemo": "With Memo",
-    "withoutMemo": "Without Memo"
+    "withoutMemo": "Without Memo",
+    "recentCards": "Recent Cards",
+    "totalCardsLabel": "Total Cards",
+    "memoRate": "Memo Rate",
+    "cardTypes": "Card Types",
+    "recentWeek": "This Week",
+    "noCards": "No cards yet. Add cards to see dashboard."
   },
   "playlist": {
     "neverSynced": "Never synced",
@@ -485,5 +491,47 @@
     "termsOfService": "Terms of Service",
     "privacyPolicy": "Privacy Policy",
     "allRightsReserved": "All rights reserved."
+  },
+  "viewMode": {
+    "label": "View Mode",
+    "mandala": "Mandala",
+    "grid": "Card Grid",
+    "list": "List",
+    "dashboard": "Dashboard",
+    "comingSoon": "Coming soon in a future update."
+  },
+  "gridView": {
+    "searchPlaceholder": "Search cards...",
+    "sortBy": "Sort by",
+    "sortLatest": "Latest",
+    "sortName": "Name",
+    "sortType": "Type",
+    "filterSource": "Source",
+    "sourceAll": "All",
+    "sourceYouTube": "YouTube",
+    "sourceLocal": "Local",
+    "sourceUrl": "URL",
+    "noResults": "No cards match your filters.",
+    "noCards": "No cards yet. Add cards from the Mandala or ScratchPad."
+  },
+  "mobileNav": {
+    "home": "Home",
+    "views": "Views"
+  },
+  "listView": {
+    "selectCard": "Select a card to view details",
+    "noCards": "No cards yet...",
+    "noResults": "No cards match your filters.",
+    "noteLabel": "Notes",
+    "notePlaceholder": "Write a note...",
+    "openExternal": "Open link",
+    "deleteCard": "Delete",
+    "deleteConfirm": "Delete this card?",
+    "metadata": "Metadata",
+    "source": "Source",
+    "created": "Created"
+  },
+  "common": {
+    "cancel": "Cancel"
   }
 }

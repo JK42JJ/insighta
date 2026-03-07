@@ -852,6 +852,30 @@ GEMINI_API_KEY=<gemini-api-key>
 
 ---
 
+## 13.5 스크립트 환경 설정 (`.env.scripts`)
+
+모니터링/운영 스크립트의 하드코딩된 경로, 호스트, 키를 환경 파일로 외부화.
+
+| 변수 | 용도 | 예시 |
+|------|------|------|
+| PROJECT_ROOT | 프로젝트 루트 경로 | /Users/.../insighta |
+| CLAUDE_PROJECTS_DIR | Claude Code 메모리 경로 | ~/.claude/projects/... |
+| CLAUDE_TASK_GLOB | 태스크 디렉토리 glob | /private/tmp/claude-*/... |
+| DOMAIN | 프로덕션 도메인 | insighta.one |
+| EC2_HOST | EC2 IP | 44.231.152.49 |
+| EC2_USER | SSH 유저 | ubuntu |
+| SSH_HOST | SSH 접속 문자열 | ubuntu@44.231.152.49 |
+| GITHUB_REPO | GitHub 리포 | JK42JJ/insighta |
+| SUPABASE_PROJECT_REF | Supabase 프로젝트 | rckkhhjanqgaopynhfgd |
+
+설정 방법:
+1. `cp scripts/.env.scripts.example scripts/.env.scripts`
+2. 값 채우기
+3. `.env.scripts`는 .gitignore 처리 (로컬 전용)
+4. 모든 스크립트는 `${VAR:-fallback}` 패턴으로 env 없이도 동작
+
+---
+
 ## 14. 로그 관리
 
 ### 로그 위치 및 설정

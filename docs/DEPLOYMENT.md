@@ -181,7 +181,7 @@ Transfer the setup script from your local machine to the EC2 instance:
 
 ```bash
 scp -i ~/Downloads/your-key.pem \
-  /Users/jeonhokim/cursor/sync-youtube-playlists/scripts/ec2-setup.sh \
+  /Users/jeonhokim/cursor/insighta/scripts/ec2-setup.sh \
   ubuntu@<ELASTIC_IP>:~/
 ```
 
@@ -236,7 +236,7 @@ Transfer the Nginx configuration from your local machine:
 
 ```bash
 scp -i ~/Downloads/your-key.pem \
-  /Users/jeonhokim/cursor/sync-youtube-playlists/deploy/nginx/insighta.conf \
+  /Users/jeonhokim/cursor/insighta/deploy/nginx/insighta.conf \
   ubuntu@<ELASTIC_IP>:~/
 ```
 
@@ -300,7 +300,7 @@ From your local machine:
 
 ```bash
 scp -i ~/Downloads/your-key.pem \
-  /Users/jeonhokim/cursor/sync-youtube-playlists/docker-compose.prod.yml \
+  /Users/jeonhokim/cursor/insighta/docker-compose.prod.yml \
   ubuntu@<ELASTIC_IP>:/opt/insighta/
 ```
 

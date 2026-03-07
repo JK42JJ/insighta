@@ -86,7 +86,7 @@ export function YouTubeConnectButton() {
   if (isConnected) {
     return (
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+        <div className="flex items-center gap-2 text-sm text-success">
           <Check className="h-4 w-4" />
           <span>{t('youtube.connected')}</span>
         </div>
@@ -122,7 +122,7 @@ export function YouTubeConnectButton() {
         variant="default"
         onClick={connect}
         disabled={isConnecting}
-        className="bg-red-600 hover:bg-red-700 text-white"
+        className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
       >
         {isConnecting ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />

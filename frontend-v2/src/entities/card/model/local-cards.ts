@@ -88,6 +88,7 @@ export interface LimitExceededError {
   message: string;
   limit: number;
   used: number;
+  tier?: string;
 }
 
 /**
