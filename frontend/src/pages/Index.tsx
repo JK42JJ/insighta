@@ -20,6 +20,7 @@ import {
 } from '@/data/mockData';
 import { uploadFile, detectFileType, isSupportedFileType } from '@/lib/fileUpload';
 import { useMandala } from '@/hooks/useMandala';
+import { MigrationPrompt } from '@/features/migration';
 import { MandalaPath, InsightCard, MandalaLevel } from '@/types/mandala';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -1402,6 +1403,7 @@ const Index = () => {
     <div className="h-screen flex flex-col bg-surface-base overflow-hidden">
       <Header onNavigateHome={() => handleNavigate('root')} />
 
+      <MigrationPrompt />
       <DropZoneOverlay isVisible={isDraggingOver && !draggingCard && !isDraggingCell} />
 
       {/* Fixed Ideation Timeline - Top position */}

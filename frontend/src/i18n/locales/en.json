@@ -441,6 +441,45 @@
     "shareOnX": "Share on X",
     "viewOnYouTube": "View on YouTube"
   },
+  "upgrade": {
+    "title": "Upgrade Your Plan",
+    "description": "You've reached your mandala creation limit. Upgrade to unlock more.",
+    "quotaUsage": "{{used}} / {{limit}} mandalas used",
+    "tierFree": "Free",
+    "tierPro": "Pro",
+    "maybeLater": "Maybe later",
+    "viewPlans": "View Plans",
+    "limitedTime": "Best Value",
+    "pioneer": {
+      "name": "Pioneer LTD",
+      "price": "$99",
+      "period": "lifetime",
+      "features": ["Unlimited mandalas", "Priority support", "All future features"]
+    },
+    "proMonthly": {
+      "name": "Pro Monthly",
+      "price": "$9",
+      "period": "mo",
+      "features": ["Unlimited mandalas", "Cloud sync", "Premium templates"]
+    },
+    "proAnnual": {
+      "name": "Pro Annual",
+      "price": "$89",
+      "period": "yr",
+      "badge": "Save 18%",
+      "features": ["Unlimited mandalas", "Cloud sync", "Premium templates"]
+    }
+  },
+  "migration": {
+    "title": "Migrate Your Data",
+    "description": "We found mandala data stored locally in your browser. Would you like to migrate it to the cloud for safe keeping?",
+    "summary": "\"{{goal}}\" with {{levels}} levels",
+    "migrate": "Migrate Now",
+    "migrating": "Migrating...",
+    "retry": "Retry",
+    "dismiss": "Not Now",
+    "inProgress": "Transferring your data to the cloud..."
+  },
   "footer": {
     "brand": "Insighta",
     "termsOfService": "Terms of Service",
