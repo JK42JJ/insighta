@@ -2,7 +2,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Header } from '@/components/Header';
-import { Breadcrumb } from '@/components/Breadcrumb';
+import { ViewSwitcher, useViewMode } from '@/features/view-mode';
+import { CardGridView } from '@/widgets/card-grid-view';
+import { ListView } from '@/widgets/list-view';
+import { DashboardView } from '@/widgets/dashboard-view';
 import { MandalaGrid } from '@/components/MandalaGrid';
 import { CardList } from '@/components/CardList';
 import { VideoPlayerModal } from '@/components/VideoPlayerModal';
@@ -38,6 +41,7 @@ const Index = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { isLoggedIn } = useAuth();
+  const { viewMode, setViewMode } = useViewMode();
   const {
     preferences,
     isLoading: isLoadingPreferences,
@@ -1557,22 +1561,33 @@ const Index = () => {
         )}
 
         <div className="flex-1 overflow-hidden">
-          <div className="container mx-auto px-4 py-4 h-full">
-            <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 h-full">
-              {/* Card List - Scrollable */}
-              <div className="flex-1 min-w-0 overflow-y-auto relative z-10 scrollbar-pro">
-                <CardList
-                  cards={displayCards}
-                  title={displayTitle}
-                  onCardClick={handleCardClick}
-                  onCardDragStart={handleCardDragStart}
-                  onMultiCardDragStart={(cards) => setDraggingCard(cards[0])}
-                  onSaveNote={handleSaveNote}
-                  onCardsReorder={handleCardsReorder}
-                  onDeleteCards={handleDeleteCards}
-                />
-              </div>
+          <div className="container mx-auto px-4 py-4 h-full flex flex-col">
+            {/* View Switcher Bar */}
+            <div className="flex items-center justify-between mb-3 flex-shrink-0">
+              <h2 className="text-sm font-medium text-muted-foreground">{displayTitle}</h2>
+              <ViewSwitcher current={viewMode} onChange={setViewMode} />
             </div>
+
+            {/* View Content */}
+            {viewMode === 'mandala' && (
+              <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 flex-1 min-h-0">
+                <div className="flex-1 min-w-0 overflow-y-auto relative z-10 scrollbar-pro">
+                  <CardList
+                    cards={displayCards}
+                    title=""
+                    onCardClick={handleCardClick}
+                    onCardDragStart={handleCardDragStart}
+                    onMultiCardDragStart={(cards) => setDraggingCard(cards[0])}
+                    onSaveNote={handleSaveNote}
+                    onCardsReorder={handleCardsReorder}
+                    onDeleteCards={handleDeleteCards}
+                  />
+                </div>
+              </div>
+            )}
+            {viewMode === 'grid' && <CardGridView />}
+            {viewMode === 'list' && <ListView />}
+            {viewMode === 'dashboard' && <DashboardView />}
           </div>
         </div>
 

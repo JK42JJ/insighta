@@ -485,5 +485,13 @@
     "termsOfService": "서비스 이용약관",
     "privacyPolicy": "개인정보처리방침",
     "allRightsReserved": "All rights reserved."
+  },
+  "viewMode": {
+    "label": "보기 모드",
+    "mandala": "만다라트",
+    "grid": "카드 그리드",
+    "list": "리스트",
+    "dashboard": "대시보드",
+    "comingSoon": "향후 업데이트에서 제공됩니다."
   }
 }

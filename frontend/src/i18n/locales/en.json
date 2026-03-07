@@ -485,5 +485,13 @@
     "termsOfService": "Terms of Service",
     "privacyPolicy": "Privacy Policy",
     "allRightsReserved": "All rights reserved."
+  },
+  "viewMode": {
+    "label": "View Mode",
+    "mandala": "Mandala",
+    "grid": "Card Grid",
+    "list": "List",
+    "dashboard": "Dashboard",
+    "comingSoon": "Coming soon in a future update."
   }
 }
