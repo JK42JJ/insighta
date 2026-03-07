@@ -4,7 +4,6 @@ import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/hooks/useAuth';
 import type { MandalaLevel } from '@/types/mandala';
 import { mockMandalaLevels } from '@/data/mockData';
-import { parseValidatedMandalaLevel, parseValidatedSubLevel } from '@/lib/localStorageValidation';
 
 interface MandalaLevelApi {
   id: string;
@@ -90,48 +89,10 @@ function recordToApiLevels(levels: Record<string, MandalaLevel>): {
   };
 }
 
-function loadFromLocalStorage(): Record<string, MandalaLevel> | null {
-  const root = parseValidatedMandalaLevel('mandala-root');
-  if (!root) return null;
-
-  const result: Record<string, MandalaLevel> = { root };
-
-  const keys = Object.keys(localStorage);
-  for (const key of keys) {
-    if (key.startsWith('mandala-l2-')) {
-      const levelKey = key.replace('mandala-l2-', '');
-      const subjects = parseValidatedSubLevel(key);
-      if (subjects) {
-        const stored = localStorage.getItem(key);
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored) as MandalaLevel;
-            result[levelKey] = {
-              id: levelKey,
-              centerGoal: parsed.centerGoal || levelKey,
-              subjects,
-              parentId: parsed.parentId || 'root',
-              parentCellIndex: parsed.parentCellIndex ?? null,
-              cards: [],
-            };
-          } catch {
-            // Skip corrupted entries
-          }
-        }
-      }
-    }
-  }
-
-  return result;
-}
-
-function clearLocalStorage(): void {
+function clearMandalaLocalStorage(): void {
   localStorage.removeItem('mandala-root');
-  const keys = Object.keys(localStorage);
-  for (const key of keys) {
-    if (key.startsWith('mandala-l2-')) {
-      localStorage.removeItem(key);
-    }
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith('mandala-l2-')) localStorage.removeItem(key);
   }
 }
 
@@ -150,30 +111,7 @@ export function useMandala() {
       const response = await fetch('/api/v1/mandalas', { headers });
 
       if (response.status === 404) {
-        // No mandala in DB — check localStorage for migration
-        const localData = loadFromLocalStorage();
-        if (localData) {
-          // Migrate localStorage → DB
-          const payload = recordToApiLevels(localData);
-          const putResponse = await fetch('/api/v1/mandalas', {
-            method: 'PUT',
-            headers,
-            body: JSON.stringify(payload),
-          });
-
-          if (putResponse.ok) {
-            clearLocalStorage();
-            const data = await putResponse.json();
-            // Cards were linked to this mandala — invalidate card caches
-            if (data.linked) {
-              queryClient.invalidateQueries({ queryKey: queryKeys.localCards.all });
-              queryClient.invalidateQueries({ queryKey: ['youtube', 'all-video-states'] });
-            }
-            return apiLevelsToRecord(data.mandala);
-          }
-        }
-
-        // Return defaults if migration failed or no local data
+        // No mandala in DB — MigrationPrompt will handle localStorage migration
         return mockMandalaLevels;
       }
 
@@ -184,7 +122,7 @@ export function useMandala() {
       const data = await response.json();
       // If DB mandala exists but localStorage still has data, clean it up
       if (localStorage.getItem('mandala-root')) {
-        clearLocalStorage();
+        clearMandalaLocalStorage();
       }
       return apiLevelsToRecord(data.mandala);
     },

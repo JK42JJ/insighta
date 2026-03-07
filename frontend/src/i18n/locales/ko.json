@@ -470,6 +470,16 @@
       "features": ["무제한 만다라트", "클라우드 동기화", "프리미엄 템플릿"]
     }
   },
+  "migration": {
+    "title": "데이터 마이그레이션",
+    "description": "브라우저에 저장된 만다라트 데이터를 발견했습니다. 클라우드로 이전하시겠습니까?",
+    "summary": "\"{{goal}}\" ({{levels}}개 레벨)",
+    "migrate": "지금 이전",
+    "migrating": "이전 중...",
+    "retry": "재시도",
+    "dismiss": "나중에",
+    "inProgress": "데이터를 클라우드로 전송 중입니다..."
+  },
   "footer": {
     "brand": "Insighta",
     "termsOfService": "서비스 이용약관",
