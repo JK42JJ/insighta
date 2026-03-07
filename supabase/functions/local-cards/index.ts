@@ -88,14 +88,22 @@ Deno.serve(async (req) => {
   try {
     switch (action) {
       case 'list': {
+        const mandalaId = url.searchParams.get('mandala_id');
+
         // Parallel fetch: subscription + cards (was 3 sequential queries, now 2 parallel)
+        let cardsQuery = supabase
+          .from('user_local_cards')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('sort_order', { ascending: true });
+
+        if (mandalaId) {
+          cardsQuery = cardsQuery.eq('mandala_id', mandalaId);
+        }
+
         const [subscription, cardsResult] = await Promise.all([
           getOrCreateSubscription(supabase, user.id),
-          supabase
-            .from('user_local_cards')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('sort_order', { ascending: true }),
+          cardsQuery,
         ]);
 
         if (cardsResult.error) throw cardsResult.error;
@@ -152,7 +160,8 @@ Deno.serve(async (req) => {
             metadata_image: body.metadata_image || null,
             cell_index: body.cell_index ?? -1,
             level_id: body.level_id || 'scratchpad',
-            sort_order: body.sort_order ?? null
+            sort_order: body.sort_order ?? null,
+            mandala_id: body.mandala_id || null,
           })
           .select()
           .single();
@@ -187,7 +196,7 @@ Deno.serve(async (req) => {
         const allowedFields = [
           'title', 'thumbnail', 'user_note', 'metadata_title',
           'metadata_description', 'metadata_image', 'cell_index',
-          'level_id', 'sort_order'
+          'level_id', 'sort_order', 'mandala_id'
         ];
 
         const safeUpdates: Record<string, unknown> = {};
@@ -267,7 +276,7 @@ Deno.serve(async (req) => {
 
         // Process updates (existing cards position change)
         if (updates && updates.length > 0) {
-          const allowedFields = ['cell_index', 'level_id', 'sort_order'];
+          const allowedFields = ['cell_index', 'level_id', 'sort_order', 'mandala_id'];
           const updateResults = await Promise.all(updates.map(async (item: { id: string; cell_index?: number; level_id?: string; sort_order?: number }) => {
             const safeUpdates: Record<string, unknown> = {};
             for (const field of allowedFields) {
@@ -310,7 +319,7 @@ Deno.serve(async (req) => {
             );
           }
 
-          const rows = inserts.map((item: { url: string; title?: string; thumbnail?: string; link_type?: string; user_note?: string; cell_index?: number; level_id?: string; sort_order?: number }) => ({
+          const rows = inserts.map((item: { url: string; title?: string; thumbnail?: string; link_type?: string; user_note?: string; cell_index?: number; level_id?: string; sort_order?: number; mandala_id?: string }) => ({
             user_id: user.id,
             url: item.url,
             title: item.title || null,
@@ -320,6 +329,7 @@ Deno.serve(async (req) => {
             cell_index: item.cell_index ?? -1,
             level_id: item.level_id || 'scratchpad',
             sort_order: item.sort_order ?? null,
+            mandala_id: item.mandala_id || null,
           }));
 
           const { data: insertedCards, error: insertError } = await supabase

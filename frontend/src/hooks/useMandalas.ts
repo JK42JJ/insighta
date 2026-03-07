@@ -139,6 +139,9 @@ export function useMandalas() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.mandalas.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.mandala });
+      // Cards are moved to default mandala on delete, invalidate card caches
+      queryClient.invalidateQueries({ queryKey: ['youtube', 'all-video-states'] });
+      queryClient.invalidateQueries({ queryKey: ['local-cards', 'list'] });
     },
   });
 

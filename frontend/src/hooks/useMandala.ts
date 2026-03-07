@@ -167,7 +167,7 @@ export function useMandala() {
             // Cards were linked to this mandala — invalidate card caches
             if (data.linked) {
               queryClient.invalidateQueries({ queryKey: queryKeys.localCards.all });
-              queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates });
+              queryClient.invalidateQueries({ queryKey: ['youtube', 'all-video-states'] });
             }
             return apiLevelsToRecord(data.mandala);
           }

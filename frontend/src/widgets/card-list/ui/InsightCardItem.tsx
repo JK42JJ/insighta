@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef, DragEvent } from 'react';
 import { InsightCard } from '@/entities/card/model/types';
-import { ExternalLink, MessageSquare, GripVertical, Save, Clock, Play } from 'lucide-react';
+import {
+  ExternalLink,
+  MessageSquare,
+  GripVertical,
+  Save,
+  Clock,
+  Play,
+  ArrowRightLeft,
+} from 'lucide-react';
 import { Textarea } from '@/shared/ui/textarea';
 import { Button } from '@/shared/ui/button';
 import { toast } from 'sonner';
@@ -14,6 +22,7 @@ interface InsightCardItemProps {
   onDragStart?: (card: InsightCard) => void;
   onInternalDragStart?: (e: React.DragEvent) => void;
   onSave?: (id: string, note: string) => void;
+  onMoveToMandala?: (card: InsightCard) => void;
   isDraggable?: boolean; // Control whether card is draggable (default: true)
 }
 
@@ -24,6 +33,7 @@ export function InsightCardItem({
   onDragStart,
   onInternalDragStart,
   onSave,
+  onMoveToMandala,
   isDraggable = true,
 }: InsightCardItemProps) {
   const { t } = useTranslation();
@@ -369,16 +379,31 @@ export function InsightCardItem({
               <span className="text-xs text-muted-foreground font-medium">
                 {new Date(card.createdAt).toLocaleDateString('ko-KR')}
               </span>
-              <a
-                href={card.videoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary transition-colors duration-200"
-                style={{ boxShadow: 'var(--shadow-sm)' }}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+              <div className="flex items-center gap-1.5">
+                {onMoveToMandala && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMoveToMandala(card);
+                    }}
+                    className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary transition-colors duration-200"
+                    style={{ boxShadow: 'var(--shadow-sm)' }}
+                    title={t('insightCard.moveToMandala')}
+                  >
+                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <a
+                  href={card.videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary transition-colors duration-200"
+                  style={{ boxShadow: 'var(--shadow-sm)' }}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
             </div>
           </div>
         </div>

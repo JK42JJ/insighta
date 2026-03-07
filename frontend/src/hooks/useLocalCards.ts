@@ -22,7 +22,8 @@ import { queryKeys } from '@/lib/queryKeys';
 // Re-export for backward compatibility
 export const localCardsKeys = {
   all: queryKeys.localCards.all,
-  list: () => queryKeys.localCards.list,
+  list: (mandalaId?: string) => queryKeys.localCards.list(mandalaId),
+  listPrefix: ['local-cards', 'list'] as const,
   subscription: () => queryKeys.localCards.subscription,
 };
 
@@ -45,13 +46,18 @@ export function isLimitExceededError(error: unknown): error is LimitExceededErro
 
 /**
  * Hook to list all local cards with subscription info
+ * When mandalaId is provided, filters to only that mandala's cards.
  */
-export function useLocalCardsList() {
+export function useLocalCardsList(mandalaId?: string) {
   return useQuery({
-    queryKey: localCardsKeys.list(),
+    queryKey: localCardsKeys.list(mandalaId),
     queryFn: async (): Promise<LocalCardsResponse> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(localCardsUrl('list'), { headers });
+      let url = localCardsUrl('list');
+      if (mandalaId) {
+        url += `&mandala_id=${encodeURIComponent(mandalaId)}`;
+      }
+      const response = await fetch(url, { headers });
 
       if (!response.ok) {
         throw new Error('Failed to get local cards');
@@ -103,43 +109,50 @@ export function useAddLocalCard() {
       return data.card;
     },
     onMutate: async (payload: AddLocalCardPayload) => {
-      await queryClient.cancelQueries({ queryKey: localCardsKeys.list() });
-      const previous = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list());
-
-      if (previous) {
-        const tempCard: LocalCard = {
-          id: `temp-${Date.now()}`,
-          user_id: '',
-          url: payload.url,
-          title: payload.title ?? null,
-          thumbnail: payload.thumbnail ?? null,
-          link_type: payload.link_type,
-          user_note: payload.user_note ?? null,
-          metadata_title: payload.metadata_title ?? null,
-          metadata_description: payload.metadata_description ?? null,
-          metadata_image: payload.metadata_image ?? null,
-          cell_index: payload.cell_index ?? -1,
-          level_id: payload.level_id || 'scratchpad',
-          sort_order: payload.sort_order ?? null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), {
-          ...previous,
-          cards: [...previous.cards, tempCard],
-          subscription: { ...previous.subscription, used: previous.subscription.used + 1 },
+      await queryClient.cancelQueries({ queryKey: localCardsKeys.listPrefix });
+      const previousCaches = new Map<readonly unknown[], LocalCardsResponse | undefined>();
+      queryClient
+        .getQueriesData<LocalCardsResponse>({ queryKey: localCardsKeys.listPrefix })
+        .forEach(([key, data]) => {
+          previousCaches.set(key, data);
+          if (data) {
+            const tempCard: LocalCard = {
+              id: `temp-${Date.now()}`,
+              user_id: '',
+              url: payload.url,
+              title: payload.title ?? null,
+              thumbnail: payload.thumbnail ?? null,
+              link_type: payload.link_type,
+              user_note: payload.user_note ?? null,
+              metadata_title: payload.metadata_title ?? null,
+              metadata_description: payload.metadata_description ?? null,
+              metadata_image: payload.metadata_image ?? null,
+              cell_index: payload.cell_index ?? -1,
+              level_id: payload.level_id || 'scratchpad',
+              mandala_id: payload.mandala_id ?? null,
+              sort_order: payload.sort_order ?? null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            queryClient.setQueryData<LocalCardsResponse>(key, {
+              ...data,
+              cards: [...data.cards, tempCard],
+              subscription: { ...data.subscription, used: data.subscription.used + 1 },
+            });
+          }
         });
-      }
 
-      return { previous };
+      return { previousCaches };
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(localCardsKeys.list(), context.previous);
+      if (context?.previousCaches) {
+        context.previousCaches.forEach((data, key) => {
+          if (data) queryClient.setQueryData(key, data);
+        });
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+      queryClient.invalidateQueries({ queryKey: localCardsKeys.listPrefix });
     },
   });
 }
@@ -184,32 +197,33 @@ export function useUpdateLocalCard() {
       return data.card;
     },
     onMutate: async (payload: UpdateLocalCardPayload) => {
-      await queryClient.cancelQueries({ queryKey: localCardsKeys.list() });
-      const previous = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list());
+      await queryClient.cancelQueries({ queryKey: localCardsKeys.listPrefix });
+      const previousCaches = new Map<readonly unknown[], LocalCardsResponse | undefined>();
+      queryClient
+        .getQueriesData<LocalCardsResponse>({ queryKey: localCardsKeys.listPrefix })
+        .forEach(([key, data]) => {
+          previousCaches.set(key, data);
+          if (data) {
+            queryClient.setQueryData<LocalCardsResponse>(key, {
+              ...data,
+              cards: data.cards.map((card) =>
+                card.id === payload.id ? { ...card, ...payload } : card
+              ),
+            });
+          }
+        });
 
-      // Optimistic update for ALL changes including position
-      if (previous) {
-        queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), (prev) =>
-          prev
-            ? {
-                ...prev,
-                cards: prev.cards.map((card) =>
-                  card.id === payload.id ? { ...card, ...payload } : card
-                ),
-              }
-            : prev
-        );
-      }
-
-      return { previous };
+      return { previousCaches };
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(localCardsKeys.list(), context.previous);
+      if (context?.previousCaches) {
+        context.previousCaches.forEach((data, key) => {
+          if (data) queryClient.setQueryData(key, data);
+        });
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+      queryClient.invalidateQueries({ queryKey: localCardsKeys.listPrefix });
     },
   });
 }
@@ -235,29 +249,35 @@ export function useDeleteLocalCard() {
       }
     },
     onMutate: async (cardId: string) => {
-      await queryClient.cancelQueries({ queryKey: localCardsKeys.list() });
-      const previous = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list());
-
-      if (previous) {
-        queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), {
-          ...previous,
-          cards: previous.cards.filter((card) => card.id !== cardId),
-          subscription: {
-            ...previous.subscription,
-            used: Math.max(0, previous.subscription.used - 1),
-          },
+      await queryClient.cancelQueries({ queryKey: localCardsKeys.listPrefix });
+      const previousCaches = new Map<readonly unknown[], LocalCardsResponse | undefined>();
+      queryClient
+        .getQueriesData<LocalCardsResponse>({ queryKey: localCardsKeys.listPrefix })
+        .forEach(([key, data]) => {
+          previousCaches.set(key, data);
+          if (data) {
+            queryClient.setQueryData<LocalCardsResponse>(key, {
+              ...data,
+              cards: data.cards.filter((card) => card.id !== cardId),
+              subscription: {
+                ...data.subscription,
+                used: Math.max(0, data.subscription.used - 1),
+              },
+            });
+          }
         });
-      }
 
-      return { previous };
+      return { previousCaches };
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(localCardsKeys.list(), context.previous);
+      if (context?.previousCaches) {
+        context.previousCaches.forEach((data, key) => {
+          if (data) queryClient.setQueryData(key, data);
+        });
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+      queryClient.invalidateQueries({ queryKey: localCardsKeys.listPrefix });
     },
   });
 }
