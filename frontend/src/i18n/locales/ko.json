@@ -511,8 +511,12 @@
     "sourceYouTube": "YouTube",
     "sourceLocal": "로컬",
     "sourceUrl": "URL",
+    "sortWatchTime": "시청시간순",
     "noResults": "필터 조건에 맞는 카드가 없습니다.",
-    "noCards": "아직 카드가 없습니다. 만다라 또는 스크래치패드에서 카드를 추가하세요."
+    "noCards": "아직 카드가 없습니다. 만다라 또는 스크래치패드에서 카드를 추가하세요.",
+    "emptyTitle": "첫 번째 인사이트를 추가하세요",
+    "emptyDescription": "URL을 드래그하거나 붙여넣어 시작하세요.",
+    "resetFilters": "필터 초기화"
   },
   "mobileNav": {
     "home": "홈",
