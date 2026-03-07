@@ -33,6 +33,7 @@ export function convertToInsightCard(data: UserVideoStateWithVideo): InsightCard
     metadata: createVideoMetadata(video),
     lastWatchPosition: data.watch_position_seconds ?? undefined,
     isInIdeation: data.is_in_ideation,
+    mandalaId: data.mandala_id ?? null,
   };
 }
 
@@ -55,9 +56,7 @@ function createVideoMetadata(video: YouTubeVideo): UrlMetadata {
  * Filters out any null results from missing video data
  */
 export function convertToInsightCards(data: UserVideoStateWithVideo[]): InsightCard[] {
-  return data
-    .map(convertToInsightCard)
-    .filter((card): card is InsightCard => card !== null);
+  return data.map(convertToInsightCard).filter((card): card is InsightCard => card !== null);
 }
 
 /**

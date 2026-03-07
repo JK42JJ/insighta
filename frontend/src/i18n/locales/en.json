@@ -271,7 +271,7 @@
     "deleted": "Deleted {{title}} mandala.",
     "deleteFailed": "Failed to delete mandala.",
     "deleteTitle": "Delete Mandala",
-    "deleteDescription": "Delete {{title}} mandala? This action cannot be undone.",
+    "deleteDescription": "Delete {{title}} mandala? Cards will be moved to the default mandala's scratchpad.",
     "switched": "Switched to {{title}} mandala.",
     "switchFailed": "Failed to switch mandala.",
     "renamed": "Renamed to {{title}}.",
@@ -400,7 +400,9 @@
     "clickToPlayInApp": "Click to play in app",
     "memoEdit": "Edit Memo",
     "dragTimestamp": "Drag YouTube timestamps to add.",
-    "clickToWriteNote": "Click to write a note..."
+    "clickToWriteNote": "Click to write a note...",
+    "moveToMandala": "Move to mandala",
+    "movedToMandala": "Card moved to {{title}}."
   },
   "dashboard": {
     "focusMap": "Focus Map",

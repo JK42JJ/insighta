@@ -1,4 +1,13 @@
-export type LinkType = 'youtube' | 'youtube-shorts' | 'linkedin' | 'facebook' | 'notion' | 'txt' | 'md' | 'pdf' | 'other';
+export type LinkType =
+  | 'youtube'
+  | 'youtube-shorts'
+  | 'linkedin'
+  | 'facebook'
+  | 'notion'
+  | 'txt'
+  | 'md'
+  | 'pdf'
+  | 'other';
 
 export interface UrlMetadata {
   title: string;
@@ -23,6 +32,7 @@ export interface InsightCard {
   metadata?: UrlMetadata; // OG metadata for external links
   lastWatchPosition?: number; // Last playback position in seconds (for YouTube videos)
   isInIdeation?: boolean; // Whether the card is in ideation (scratchpad) or mandala grid
+  mandalaId?: string | null; // Which mandala this card belongs to
 }
 
 export interface MandalaLevel {

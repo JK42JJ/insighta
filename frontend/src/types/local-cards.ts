@@ -108,6 +108,7 @@ export function localCardToInsightCard(card: LocalCard): import('./mandala').Ins
     levelId: card.level_id,
     sortOrder: card.sort_order ?? undefined,
     linkType: card.link_type,
+    mandalaId: card.mandala_id ?? null,
     metadata: card.metadata_title
       ? {
           title: card.metadata_title,

@@ -576,7 +576,8 @@ Deno.serve(async (req) => {
       }
 
       case 'get-all-video-states': {
-        const { data, error } = await supabase
+        const mandalaId = url.searchParams.get('mandala_id');
+        let query = supabase
           .from('user_video_states')
           .select(`
             *,
@@ -584,6 +585,12 @@ Deno.serve(async (req) => {
           `)
           .eq('user_id', user.id)
           .order('added_to_ideation_at', { ascending: false });
+
+        if (mandalaId) {
+          query = query.eq('mandala_id', mandalaId);
+        }
+
+        const { data, error } = await query;
 
         if (error) {
           console.error('Failed to get all video states:', error);
@@ -612,7 +619,7 @@ Deno.serve(async (req) => {
 
         const allowedFields = [
           'is_in_ideation', 'user_note', 'watch_position_seconds',
-          'is_watched', 'cell_index', 'level_id', 'sort_order',
+          'is_watched', 'cell_index', 'level_id', 'sort_order', 'mandala_id',
         ];
 
         const safeUpdates: Record<string, unknown> = {
@@ -658,7 +665,7 @@ Deno.serve(async (req) => {
 
         const allowedFields = [
           'is_in_ideation', 'user_note', 'watch_position_seconds',
-          'is_watched', 'cell_index', 'level_id', 'sort_order',
+          'is_watched', 'cell_index', 'level_id', 'sort_order', 'mandala_id',
         ];
 
         let updatedCount = 0;
