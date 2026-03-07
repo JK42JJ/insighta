@@ -197,13 +197,18 @@ Notes:
 ### 2.1 Branch Flow
 
 ```
-feature/xxx  --->  master (development)  --->  main (production)
-fix/xxx      --->  master                --->  main
+story/xx-name  ─┐
+fix/xx-name    ─┼──>  main (production)
+feature/xx     ─┘
+                      master (legacy dev, kept as GitHub default)
 ```
 
-- **`master`** is the active development branch. All feature branches and hotfix branches target `master`.
-- **`main`** is the production branch. A push or merged PR to `main` triggers the deploy pipeline automatically.
-- Direct commits to `main` are not permitted. Changes flow through `master` via pull request.
+- **`main`** is the production branch. All story/feature/fix branches target `main` via PR. A merged PR to `main` triggers the deploy pipeline automatically.
+- **`master`** is the legacy development branch, retained as GitHub default. Historically used as dev target, now superseded by direct-to-main workflow.
+- **Story branches** follow the naming convention `story/<issue-number>-<short-name>` (e.g., `story/65-design-system`).
+- **Fix branches** use `fix/<issue-number>-<short-name>`.
+- Branches are deleted after PR merge (squash merge preferred).
+- Direct commits to `main` are not permitted.
 
 ### 2.2 Pull Request Rules
 
@@ -216,13 +221,15 @@ fix/xxx      --->  master                --->  main
 
 CI jobs that must pass: `typecheck`, `build-api`, `build-frontend`. The `lint` and `test` jobs run with `continue-on-error: true` and do not block merges.
 
-### 2.3 Promotion to Production
+### 2.3 Merging to Production
 
 ```bash
-# Create a PR from master to main via GitHub UI, or:
-gh pr create --base main --head master --title "Release: <description>"
+# Create a PR from story branch to main:
+gh pr create --base main --head story/65-design-system --title "feat: design system (#65)"
 
-# After CI passes and PR is approved, merge
+# After CI passes, squash merge and delete branch:
+gh pr merge <number> --squash --delete-branch
+
 # The deploy.yml pipeline triggers automatically on push to main
 ```
 
