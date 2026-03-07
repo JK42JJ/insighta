@@ -30,6 +30,7 @@ import { useBatchMoveCards } from '@/hooks/useBatchMoveCards';
 import { convertToInsightCards } from '@/lib/youtubeToInsightCard';
 import { detectCardSource, getCardById } from '@/lib/cardUtils';
 import { useTranslation } from 'react-i18next';
+import { useActiveMandala } from '@/hooks/useActiveMandala';
 
 const Index = () => {
   const { toast } = useToast();
@@ -49,8 +50,11 @@ const Index = () => {
     setMandalaPosition,
   } = useUIPreferences();
 
-  // YouTube sync hooks — fetch ALL video states, split on frontend
-  const { data: allVideoStates, isLoading: isLoadingVideos } = useAllVideoStates();
+  // Active mandala tracking (syncs with default mandala)
+  const { activeMandalaId } = useActiveMandala();
+
+  // YouTube sync hooks — fetch video states filtered by active mandala
+  const { data: allVideoStates, isLoading: isLoadingVideos } = useAllVideoStates(activeMandalaId);
   const updateVideoState = useUpdateVideoState();
 
   // Local cards hook (for URL paste/D&D cards stored in Supabase)

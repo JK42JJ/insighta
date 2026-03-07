@@ -128,7 +128,7 @@ export function useSyncPlaylist() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.youtube.playlists });
-      queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates });
+      queryClient.invalidateQueries({ queryKey: ['youtube', 'all-video-states'] });
     },
   });
 }
@@ -213,13 +213,18 @@ export function useIdeationVideos() {
 
 /**
  * Hook to get ALL video states (ideation + mandala) (Edge Function)
+ * When mandalaId is provided, filters to only that mandala's cards.
  */
-export function useAllVideoStates() {
+export function useAllVideoStates(mandalaId?: string) {
   return useQuery({
-    queryKey: queryKeys.youtube.allVideoStates,
+    queryKey: queryKeys.youtube.allVideoStates(mandalaId),
     queryFn: async (): Promise<UserVideoStateWithVideo[]> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(ytSyncUrl('get-all-video-states'), { headers });
+      let url = ytSyncUrl('get-all-video-states');
+      if (mandalaId) {
+        url += `&mandala_id=${encodeURIComponent(mandalaId)}`;
+      }
+      const response = await fetch(url, { headers });
 
       if (!response.ok) {
         throw new Error('Failed to get video states');
@@ -247,9 +252,12 @@ export function useUpdateVideoState() {
       is_watched?: boolean;
       cell_index?: number;
       level_id?: string;
+      mandala_id?: string;
       sort_order?: number;
     };
   };
+
+  const allVideoStatesPrefix = ['youtube', 'all-video-states'];
 
   return useMutation({
     mutationFn: async ({ videoStateId, updates }: UpdateVideoStateVars): Promise<void> => {
@@ -266,30 +274,34 @@ export function useUpdateVideoState() {
       }
     },
     onMutate: async ({ videoStateId, updates }: UpdateVideoStateVars) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.youtube.allVideoStates });
-      const previousAll = queryClient.getQueryData<UserVideoStateWithVideo[]>(
-        queryKeys.youtube.allVideoStates
-      );
+      await queryClient.cancelQueries({ queryKey: allVideoStatesPrefix });
 
-      // Update allVideoStates cache (single source of truth)
-      if (previousAll) {
-        queryClient.setQueryData<UserVideoStateWithVideo[]>(
-          queryKeys.youtube.allVideoStates,
-          (prev) => prev?.map((item) => (item.id === videoStateId ? { ...item, ...updates } : item))
-        );
-      }
+      // Snapshot all matching caches for rollback
+      const previousCaches = new Map<readonly unknown[], UserVideoStateWithVideo[] | undefined>();
+      queryClient
+        .getQueriesData<UserVideoStateWithVideo[]>({ queryKey: allVideoStatesPrefix })
+        .forEach(([key, data]) => {
+          previousCaches.set(key, data);
+          if (data) {
+            queryClient.setQueryData<UserVideoStateWithVideo[]>(
+              key,
+              data.map((item) => (item.id === videoStateId ? { ...item, ...updates } : item))
+            );
+          }
+        });
 
-      return { previousAll };
+      return { previousCaches };
     },
     onError: (_err, _vars, context) => {
-      if (context?.previousAll) {
-        queryClient.setQueryData(queryKeys.youtube.allVideoStates, context.previousAll);
-      } else {
-        queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates });
+      if (context?.previousCaches) {
+        context.previousCaches.forEach((data, key) => {
+          if (data) queryClient.setQueryData(key, data);
+        });
       }
+      queryClient.invalidateQueries({ queryKey: allVideoStatesPrefix });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates });
+      queryClient.invalidateQueries({ queryKey: allVideoStatesPrefix });
     },
   });
 }
@@ -332,7 +344,7 @@ export function useSyncAllPlaylists() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.youtube.playlists });
-      queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates });
+      queryClient.invalidateQueries({ queryKey: ['youtube', 'all-video-states'] });
     },
   });
 }

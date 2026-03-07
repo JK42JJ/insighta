@@ -12,7 +12,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAuthHeaders, getEdgeFunctionUrl } from '@/lib/supabase-auth';
 import { localCardsKeys } from './useLocalCards';
-import { youtubeSyncKeys } from './useYouTubeSync';
 import type { InsightCard } from '@/types/mandala';
 import type { LocalCardsResponse } from '@/types/local-cards';
 import type { UserVideoStateWithVideo } from '@/types/youtube';
@@ -104,44 +103,54 @@ export function useBatchMoveCards() {
     },
 
     onMutate: async ({ items }) => {
+      const videoPrefix = ['youtube', 'all-video-states'];
       // Cancel in-flight queries to prevent overwriting optimistic updates
       await Promise.all([
-        queryClient.cancelQueries({ queryKey: localCardsKeys.list() }),
-        queryClient.cancelQueries({ queryKey: youtubeSyncKeys.allVideoStates }),
+        queryClient.cancelQueries({ queryKey: localCardsKeys.listPrefix }),
+        queryClient.cancelQueries({ queryKey: videoPrefix }),
       ]);
 
-      // Snapshot for rollback
-      const previousLocal = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list());
-      const previousVideo = queryClient.getQueryData<UserVideoStateWithVideo[]>(
-        youtubeSyncKeys.allVideoStates
-      );
+      // Snapshot all matching caches for rollback
+      const previousLocalCaches = new Map<readonly unknown[], LocalCardsResponse | undefined>();
+      queryClient
+        .getQueriesData<LocalCardsResponse>({ queryKey: localCardsKeys.listPrefix })
+        .forEach(([key, data]) => previousLocalCaches.set(key, data));
 
-      // Optimistic: update local cards cache (position changes)
+      const previousVideoCaches = new Map<
+        readonly unknown[],
+        UserVideoStateWithVideo[] | undefined
+      >();
+      queryClient
+        .getQueriesData<UserVideoStateWithVideo[]>({ queryKey: videoPrefix })
+        .forEach(([key, data]) => previousVideoCaches.set(key, data));
+
+      // Optimistic: update local cards caches (position changes)
       const localItems = items.filter((i) => i.source === 'local');
       if (localItems.length > 0) {
-        queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), (prev) => {
-          if (!prev) return prev;
-          const movedIds = new Set(localItems.map((i) => i.card.id));
-          return {
-            ...prev,
-            cards: prev.cards.map((card) => {
-              if (movedIds.has(card.id)) {
-                const item = localItems.find((i) => i.card.id === card.id);
-                if (!item) return card;
-                return { ...card, cell_index: item.cellIndex, level_id: item.levelId };
-              }
-              return card;
-            }),
-          };
+        const movedIds = new Set(localItems.map((i) => i.card.id));
+        previousLocalCaches.forEach((_data, key) => {
+          queryClient.setQueryData<LocalCardsResponse>(key, (prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              cards: prev.cards.map((card) => {
+                if (movedIds.has(card.id)) {
+                  const item = localItems.find((i) => i.card.id === card.id);
+                  if (!item) return card;
+                  return { ...card, cell_index: item.cellIndex, level_id: item.levelId };
+                }
+                return card;
+              }),
+            };
+          });
         });
       }
 
-      // Optimistic: update allVideoStates cache (synced card positions)
+      // Optimistic: update allVideoStates caches (synced card positions)
       const syncedItems = items.filter((i) => i.source === 'synced');
       if (syncedItems.length > 0) {
-        queryClient.setQueryData<UserVideoStateWithVideo[]>(
-          youtubeSyncKeys.allVideoStates,
-          (prev) =>
+        previousVideoCaches.forEach((_data, key) => {
+          queryClient.setQueryData<UserVideoStateWithVideo[]>(key, (prev) =>
             prev?.map((v) => {
               const moved = syncedItems.find((i) => i.card.id === v.id);
               if (moved) {
@@ -154,56 +163,64 @@ export function useBatchMoveCards() {
               }
               return v;
             })
-        );
-      }
-
-      // Optimistic: add pending cards to local cards cache (will be inserted by API)
-      const pendingItems = items.filter((i) => i.source === 'pending');
-      if (pendingItems.length > 0) {
-        queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), (prev) => {
-          if (!prev) return prev;
-          const newCards = pendingItems.map((item) => ({
-            id: item.card.id,
-            user_id: '',
-            url: item.card.videoUrl,
-            title: item.card.title,
-            thumbnail: item.card.thumbnail,
-            link_type: (item.card.linkType || 'other') as import('@/types/mandala').LinkType,
-            user_note: item.card.userNote || null,
-            metadata_title: item.card.metadata?.title || null,
-            metadata_description: item.card.metadata?.description || null,
-            metadata_image: item.card.metadata?.image || null,
-            cell_index: item.cellIndex,
-            level_id: item.levelId,
-            sort_order: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }));
-          return {
-            ...prev,
-            cards: [...prev.cards, ...newCards],
-          };
+          );
         });
       }
 
-      return { previousLocal, previousVideo };
+      // Optimistic: add pending cards to local cards caches (will be inserted by API)
+      const pendingItems = items.filter((i) => i.source === 'pending');
+      if (pendingItems.length > 0) {
+        previousLocalCaches.forEach((_data, key) => {
+          queryClient.setQueryData<LocalCardsResponse>(key, (prev) => {
+            if (!prev) return prev;
+            const newCards = pendingItems.map((item) => ({
+              id: item.card.id,
+              user_id: '',
+              url: item.card.videoUrl,
+              title: item.card.title,
+              thumbnail: item.card.thumbnail,
+              link_type: (item.card.linkType || 'other') as import('@/types/mandala').LinkType,
+              user_note: item.card.userNote || null,
+              metadata_title: item.card.metadata?.title || null,
+              metadata_description: item.card.metadata?.description || null,
+              metadata_image: item.card.metadata?.image || null,
+              cell_index: item.cellIndex,
+              level_id: item.levelId,
+              mandala_id: null,
+              sort_order: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }));
+            return {
+              ...prev,
+              cards: [...prev.cards, ...newCards],
+            };
+          });
+        });
+      }
+
+      return { previousLocalCaches, previousVideoCaches };
     },
 
     onError: (err, _vars, context) => {
       console.error('[batchMoveCards] mutation error:', err);
       // Rollback to snapshots
-      if (context?.previousLocal) {
-        queryClient.setQueryData(localCardsKeys.list(), context.previousLocal);
+      if (context?.previousLocalCaches) {
+        context.previousLocalCaches.forEach((data, key) => {
+          if (data) queryClient.setQueryData(key, data);
+        });
       }
-      if (context?.previousVideo) {
-        queryClient.setQueryData(youtubeSyncKeys.allVideoStates, context.previousVideo);
+      if (context?.previousVideoCaches) {
+        context.previousVideoCaches.forEach((data, key) => {
+          if (data) queryClient.setQueryData(key, data);
+        });
       }
     },
 
     onSettled: () => {
       // Server reconciliation — replace stale optimistic data with real server state
-      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
-      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+      queryClient.invalidateQueries({ queryKey: localCardsKeys.listPrefix });
+      queryClient.invalidateQueries({ queryKey: ['youtube', 'all-video-states'] });
     },
   });
 }

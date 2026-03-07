@@ -8,7 +8,8 @@ export const queryKeys = {
     playlists: ['youtube', 'playlists'] as const,
     playlist: (id: string) => ['youtube', 'playlist', id] as const,
     ideationVideos: ['youtube', 'ideation-videos'] as const,
-    allVideoStates: ['youtube', 'all-video-states'] as const,
+    allVideoStates: (mandalaId?: string) =>
+      ['youtube', 'all-video-states', mandalaId ?? 'all'] as const,
     authStatus: ['youtube', 'auth', 'status'] as const,
   },
   videos: {
@@ -18,7 +19,7 @@ export const queryKeys = {
   },
   localCards: {
     all: ['local-cards'] as const,
-    list: ['local-cards', 'list'] as const,
+    list: (mandalaId?: string) => ['local-cards', 'list', mandalaId ?? 'all'] as const,
     subscription: ['local-cards', 'subscription'] as const,
   },
   mandala: ['mandala'] as const,
