@@ -2,6 +2,8 @@ import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { InsightCard } from '@/types/mandala';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
+import { duration, easing } from '@/lib/motion';
 
 interface ListRowItemProps {
   card: InsightCard;
@@ -26,15 +28,18 @@ function formatRelativeDate(date: Date): string {
 
 export function ListRowItem({ card, isSelected, onClick }: ListRowItemProps) {
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
       className={cn(
         'flex w-full items-center gap-3 px-3 py-2 text-left transition-colors',
-        'hover:bg-muted/50',
+        'hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1',
         isSelected && 'bg-primary/10 border-l-2 border-primary',
         !isSelected && 'border-l-2 border-transparent'
       )}
+      whileHover={{ x: 2 }}
+      whileTap={{ scale: 0.99 }}
+      transition={{ duration: duration.fast, ease: easing.enter }}
     >
       {card.thumbnail ? (
         <img src={card.thumbnail} alt="" className="h-9 w-12 shrink-0 rounded object-cover" />
@@ -55,6 +60,6 @@ export function ListRowItem({ card, isSelected, onClick }: ListRowItemProps) {
       <span className="shrink-0 text-xs text-muted-foreground">
         {formatRelativeDate(card.createdAt)}
       </span>
-    </button>
+    </motion.button>
   );
 }

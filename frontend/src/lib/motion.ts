@@ -55,3 +55,20 @@ export const staggerContainer: Variants = {
     },
   },
 };
+
+// Feed container with wider stagger (40-80ms range, using 0.05s)
+export const feedContainer: Variants = {
+  initial: {},
+  animate: {
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+};
+
+// Feed item: fade in + slide up
+export const feedItemVariants: Variants = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: 8 },
+};
