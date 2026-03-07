@@ -89,6 +89,7 @@ export interface UpdateLocalCardPayload {
 export interface LimitExceededError {
   error: 'LIMIT_EXCEEDED';
   message: string;
+  tier?: string;
   limit: number;
   used: number;
 }

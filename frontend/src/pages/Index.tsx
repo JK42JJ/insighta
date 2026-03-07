@@ -493,7 +493,10 @@ const Index = () => {
           if (isLimitExceededError(error)) {
             toast({
               title: t('index.storageLimitExceeded'),
-              description: error.message,
+              description: t('index.storageLimitDesc', {
+                tier: error.tier ?? 'free',
+                limit: error.limit,
+              }),
               variant: 'destructive',
             });
           } else {
@@ -1104,7 +1107,10 @@ const Index = () => {
             if (isLimitExceededError(error)) {
               toast({
                 title: t('index.storageLimitExceeded'),
-                description: error.message,
+                description: t('index.storageLimitDesc', {
+                  tier: error.tier ?? 'free',
+                  limit: error.limit,
+                }),
                 variant: 'destructive',
               });
             } else {

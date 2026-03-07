@@ -375,7 +375,10 @@ export function useCardOrchestrator(
         if (isLimitExceededError(error)) {
           toast({
             title: t('index.storageLimitExceeded'),
-            description: (error as unknown as Error).message,
+            description: t('index.storageLimitDesc', {
+              tier: error.tier ?? 'free',
+              limit: error.limit,
+            }),
             variant: 'destructive',
           });
         } else {
