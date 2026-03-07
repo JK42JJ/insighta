@@ -458,7 +458,7 @@ YouTube 플레이리스트 동기화 모듈 개발 프로젝트입니다. **Phas
 ## 📁 Project Structure
 
 ```
-sync-youtube-playlists/
+insighta/
 ├── src/                    # Backend source code
 │   ├── adapters/           # Universal Adapter System (YouTube only)
 │   ├── api/                # Fastify REST API

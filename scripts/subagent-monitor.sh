@@ -13,13 +13,13 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Auto-detect task directory (Claude Code stores tasks in /private/tmp/claude-<uid>/)
 TASK_DIR_BASE="/private/tmp"
 TASK_DIR=""
-for d in "$TASK_DIR_BASE"/claude-*/-Users-jeonhokim-cursor-sync-youtube-playlists/tasks; do
+for d in "$TASK_DIR_BASE"/claude-*/-Users-jeonhokim-cursor-insighta/tasks; do
   if [ -d "$d" ]; then
     TASK_DIR="$d"
     break
   fi
 done
-TASK_DIR="${TASK_DIR:-/private/tmp/claude-502/-Users-jeonhokim-cursor-sync-youtube-playlists/tasks}"
+TASK_DIR="${TASK_DIR:-/private/tmp/claude-502/-Users-jeonhokim-cursor-insighta/tasks}"
 
 # Colors
 RED='\033[0;31m'

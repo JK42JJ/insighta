@@ -73,7 +73,7 @@ print_header() {
   echo -e "${BOLD}${BLUE}================================================${NC}"
   echo -e "${BOLD}${BLUE}  Agent Activity Monitor  ${DIM}$(date '+%H:%M:%S')${NC}"
   echo -e "${BOLD}${BLUE}================================================${NC}"
-  echo -e "${DIM}  Project: sync-youtube-playlists${NC}"
+  echo -e "${DIM}  Project: insighta${NC}"
   echo -e "${DIM}  Branch:  $(git branch --show-current 2>/dev/null || echo 'unknown')${NC}"
   echo -e "${DIM}  Watching: src/ frontend/ prisma/ scripts/ docs/${NC}"
   echo -e "${BLUE}------------------------------------------------${NC}"
