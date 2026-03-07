@@ -17,12 +17,13 @@ import type {
 } from '@/types/local-cards';
 import type { InsightCard } from '@/types/mandala';
 import { localCardToInsightCard, insightCardToAddPayload } from '@/types/local-cards';
+import { queryKeys } from '@/lib/queryKeys';
 
-// Query Keys
+// Re-export for backward compatibility
 export const localCardsKeys = {
-  all: ['local-cards'] as const,
-  list: () => [...localCardsKeys.all, 'list'] as const,
-  subscription: () => [...localCardsKeys.all, 'subscription'] as const,
+  all: queryKeys.localCards.all,
+  list: () => queryKeys.localCards.list,
+  subscription: () => queryKeys.localCards.subscription,
 };
 
 // Shorthand for local-cards Edge Function URLs
@@ -58,7 +59,6 @@ export function useLocalCardsList() {
 
       return response.json();
     },
-    staleTime: 30 * 1000, // 30 seconds
     placeholderData: keepPreviousData,
   });
 }

@@ -19,7 +19,9 @@
     "items": "{{count}}개",
     "cards": "{{count}}카드",
     "selected": "{{count}}개 선택됨",
-    "backToTop": "맨 위로"
+    "backToTop": "맨 위로",
+    "create": "만들기",
+    "rename": "이름 변경"
   },
   "header": {
     "subtitle": "만다라트 기반 YouTube 아카이브",
@@ -257,6 +259,24 @@
     "switchToFloating": "플로팅으로 전환",
     "switchToDock": "도킹하기",
     "navigateToSub": "{{subject}}로 이동"
+  },
+  "mandalaSelector": {
+    "select": "만다라트 선택",
+    "create": "새 만다라트",
+    "createTitle": "새 만다라트 만들기",
+    "createDescription": "새로운 만다라트를 만들어 목표를 정리하세요.",
+    "titlePlaceholder": "만다라트 이름",
+    "created": "{{title}} 만다라트를 만들었습니다.",
+    "createFailed": "만다라트 생성에 실패했습니다.",
+    "deleted": "{{title}} 만다라트를 삭제했습니다.",
+    "deleteFailed": "만다라트 삭제에 실패했습니다.",
+    "deleteTitle": "만다라트 삭제",
+    "deleteDescription": "{{title}} 만다라트를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+    "switched": "{{title}} 만다라트로 전환했습니다.",
+    "switchFailed": "만다라트 전환에 실패했습니다.",
+    "renamed": "{{title}}(으)로 이름을 변경했습니다.",
+    "renameFailed": "이름 변경에 실패했습니다.",
+    "renameTitle": "만다라트 이름 변경"
   },
   "scratchPad": {
     "title": "스크래치패드",
