@@ -526,8 +526,12 @@
     "notePlaceholder": "Write a note...",
     "openExternal": "Open link",
     "deleteCard": "Delete",
+    "deleteConfirm": "Delete this card?",
     "metadata": "Metadata",
     "source": "Source",
     "created": "Created"
+  },
+  "common": {
+    "cancel": "Cancel"
   }
 }

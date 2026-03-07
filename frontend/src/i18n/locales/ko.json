@@ -526,8 +526,12 @@
     "notePlaceholder": "메모를 작성하세요...",
     "openExternal": "링크 열기",
     "deleteCard": "삭제",
+    "deleteConfirm": "이 카드를 삭제할까요?",
     "metadata": "메타데이터",
     "source": "소스",
     "created": "생성일"
+  },
+  "common": {
+    "cancel": "취소"
   }
 }

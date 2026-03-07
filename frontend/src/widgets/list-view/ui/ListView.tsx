@@ -10,6 +10,7 @@ import { useGridFilter } from '@/shared/lib/useGridFilter';
 import { GridFilterBar } from '@/shared/ui/GridFilterBar';
 import { useListSelection } from '../lib/useListSelection';
 import { ListRowItem } from './ListRowItem';
+import { SwipeableListRow } from './SwipeableListRow';
 import { DetailPanel } from './DetailPanel';
 
 interface ListViewProps {
@@ -104,11 +105,20 @@ export function ListView({ cards, onCardClick, onSaveNote, onDeleteCards }: List
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
                 >
-                  <ListRowItem
-                    card={card}
-                    isSelected={card.id === selectedId}
-                    onClick={() => handleRowClick(card)}
-                  />
+                  {isMobile ? (
+                    <SwipeableListRow
+                      card={card}
+                      isSelected={card.id === selectedId}
+                      onClick={() => handleRowClick(card)}
+                      onDelete={(id) => onDeleteCards?.([id])}
+                    />
+                  ) : (
+                    <ListRowItem
+                      card={card}
+                      isSelected={card.id === selectedId}
+                      onClick={() => handleRowClick(card)}
+                    />
+                  )}
                 </div>
               );
             })}
