@@ -4,10 +4,14 @@
 
 set +e  # 절대 non-zero exit 방지
 
-MEMORY_DIR="$HOME/.claude/projects/-Users-jeonhokim-cursor-insighta/memory"
+# Load environment from .env.scripts
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+[ -f "$SCRIPT_DIR/.env.scripts" ] && . "$SCRIPT_DIR/.env.scripts"
+
+MEMORY_DIR="${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects/-Users-jeonhokim-cursor-insighta}/memory"
 CHECKPOINT_FILE="$MEMORY_DIR/checkpoint.md"
 
-cd "/Users/jeonhokim/cursor/insighta" 2>/dev/null || exit 0
+cd "${PROJECT_ROOT:-/Users/jeonhokim/cursor/insighta}" 2>/dev/null || exit 0
 
 # 마지막 checkpoint의 커밋 해시 추출 (백틱으로 감싼 7자리 해시 중 마지막)
 LAST_HASH=""

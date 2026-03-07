@@ -10,10 +10,13 @@ set +e  # Do NOT use set -e: transient failures in the monitoring loop must not 
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# Load environment from .env.scripts
+[ -f "$PROJECT_ROOT/scripts/.env.scripts" ] && . "$PROJECT_ROOT/scripts/.env.scripts"
+
 # Auto-detect task directory (Claude Code stores tasks in /private/tmp/claude-<uid>/)
 TASK_DIR_BASE="/private/tmp"
 TASK_DIR=""
-for d in "$TASK_DIR_BASE"/claude-*/-Users-jeonhokim-cursor-insighta/tasks; do
+for d in ${CLAUDE_TASK_GLOB:-"$TASK_DIR_BASE"/claude-*/-Users-jeonhokim-cursor-insighta/tasks}; do
   if [ -d "$d" ]; then
     TASK_DIR="$d"
     break
