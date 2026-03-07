@@ -64,6 +64,7 @@ export function GridFilterBar({
             <SelectItem value="latest">{t('gridView.sortLatest')}</SelectItem>
             <SelectItem value="name">{t('gridView.sortName')}</SelectItem>
             <SelectItem value="type">{t('gridView.sortType')}</SelectItem>
+            <SelectItem value="watchTime">{t('gridView.sortWatchTime')}</SelectItem>
           </SelectContent>
         </Select>
 

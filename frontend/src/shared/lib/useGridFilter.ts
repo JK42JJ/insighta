@@ -1,7 +1,7 @@
 import { useMemo, useState, useDeferredValue } from 'react';
-import { InsightCard, LinkType } from '@/types/mandala';
+import { InsightCard } from '@/types/mandala';
 
-export type SortOption = 'latest' | 'name' | 'type';
+export type SortOption = 'latest' | 'name' | 'type' | 'watchTime';
 export type SourceFilter = 'all' | 'youtube' | 'local' | 'url';
 
 export function useGridFilter(cards: InsightCard[]) {
@@ -57,6 +57,8 @@ export function useGridFilter(cards: InsightCard[]) {
           return a.title.localeCompare(b.title);
         case 'type':
           return (a.linkType ?? '').localeCompare(b.linkType ?? '');
+        case 'watchTime':
+          return (b.lastWatchPosition ?? 0) - (a.lastWatchPosition ?? 0);
         default:
           return 0;
       }
@@ -64,6 +66,12 @@ export function useGridFilter(cards: InsightCard[]) {
 
     return result;
   }, [cards, deferredQuery, sortBy, sourceFilter]);
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setSortBy('latest');
+    setSourceFilter('all');
+  };
 
   return {
     searchQuery,
@@ -73,5 +81,6 @@ export function useGridFilter(cards: InsightCard[]) {
     sourceFilter,
     setSourceFilter,
     filteredCards,
+    resetFilters,
   };
 }
