@@ -508,6 +508,10 @@
     "noResults": "No cards match your filters.",
     "noCards": "No cards yet. Add cards from the Mandala or ScratchPad."
   },
+  "mobileNav": {
+    "home": "Home",
+    "views": "Views"
+  },
   "listView": {
     "selectCard": "Select a card to view details",
     "noCards": "No cards yet...",

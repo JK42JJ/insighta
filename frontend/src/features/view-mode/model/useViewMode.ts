@@ -9,6 +9,15 @@ function isValidViewMode(value: unknown): value is ViewMode {
   return value === 'mandala' || value === 'grid' || value === 'list' || value === 'dashboard';
 }
 
+const MOBILE_BREAKPOINT = 768;
+
+function getViewportDefault(): ViewMode {
+  if (typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT) {
+    return 'list';
+  }
+  return DEFAULT_VIEW_MODE;
+}
+
 function getInitialMode(searchParams: URLSearchParams): ViewMode {
   const urlView = searchParams.get('view');
   if (isValidViewMode(urlView)) return urlView;
@@ -20,7 +29,7 @@ function getInitialMode(searchParams: URLSearchParams): ViewMode {
     // localStorage unavailable
   }
 
-  return DEFAULT_VIEW_MODE;
+  return getViewportDefault();
 }
 
 export function useViewMode() {

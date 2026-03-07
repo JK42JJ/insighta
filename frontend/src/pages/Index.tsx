@@ -6,6 +6,8 @@ import { ViewSwitcher, useViewMode } from '@/features/view-mode';
 import { CardGridView } from '@/widgets/card-grid-view';
 import { ListView } from '@/widgets/list-view';
 import { DashboardView } from '@/widgets/dashboard-view';
+import { MobileBottomNav } from '@/widgets/mobile-nav';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { MandalaGrid } from '@/components/MandalaGrid';
 import { CardList } from '@/components/CardList';
 import { VideoPlayerModal } from '@/components/VideoPlayerModal';
@@ -42,6 +44,7 @@ const Index = () => {
   const { t } = useTranslation();
   const { isLoggedIn } = useAuth();
   const { viewMode, setViewMode } = useViewMode();
+  const isMobile = useIsMobile();
   const {
     preferences,
     isLoading: isLoadingPreferences,
@@ -1502,7 +1505,7 @@ const Index = () => {
       )}
 
       {/* Main Content Area with optional side docking */}
-      <main className="flex-1 overflow-hidden flex">
+      <main className={cn('flex-1 overflow-hidden flex', isMobile && 'pb-14')}>
         {/* Left Side Docked ScratchPad (Ideation first) */}
         {!isScratchPadFloating && scratchPadDockPosition === 'left' && (
           <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-r border-border/30 relative z-30 h-full">
@@ -1562,10 +1565,10 @@ const Index = () => {
 
         <div className="flex-1 overflow-hidden">
           <div className="container mx-auto px-4 py-4 h-full flex flex-col">
-            {/* View Switcher Bar */}
+            {/* View Switcher Bar — hidden on mobile (bottom nav replaces it) */}
             <div className="flex items-center justify-between mb-3 flex-shrink-0">
               <h2 className="text-sm font-medium text-muted-foreground">{displayTitle}</h2>
-              <ViewSwitcher current={viewMode} onChange={setViewMode} />
+              <ViewSwitcher current={viewMode} onChange={setViewMode} className="hidden md:flex" />
             </div>
 
             {/* View Content */}
@@ -1694,6 +1697,15 @@ const Index = () => {
         onSave={handleSaveNote}
         onSaveWatchPosition={handleSaveWatchPosition}
       />
+
+      {/* Mobile Bottom Navigation */}
+      {isMobile && (
+        <MobileBottomNav
+          currentView={viewMode}
+          onViewChange={setViewMode}
+          onNavigateHome={() => handleNavigate('root')}
+        />
+      )}
     </div>
   );
 };
