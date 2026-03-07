@@ -164,6 +164,11 @@ export function useMandala() {
           if (putResponse.ok) {
             clearLocalStorage();
             const data = await putResponse.json();
+            // Cards were linked to this mandala — invalidate card caches
+            if (data.linked) {
+              queryClient.invalidateQueries({ queryKey: queryKeys.localCards.all });
+              queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates });
+            }
             return apiLevelsToRecord(data.mandala);
           }
         }

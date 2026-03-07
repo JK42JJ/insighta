@@ -22,6 +22,12 @@ export const queryKeys = {
     subscription: ['local-cards', 'subscription'] as const,
   },
   mandala: ['mandala'] as const,
+  mandalas: {
+    all: ['mandalas'] as const,
+    list: ['mandalas', 'list'] as const,
+    detail: (id: string) => ['mandalas', id] as const,
+    quota: ['mandalas', 'quota'] as const,
+  },
   uiPreferences: (userId?: string) => ['ui-preferences', userId] as const,
   notes: (videoId: string) => ['notes', videoId] as const,
   auth: {
