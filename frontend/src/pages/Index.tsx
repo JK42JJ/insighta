@@ -1606,7 +1606,7 @@ const Index = () => {
             )}
             {viewMode === 'dashboard' && (
               <DashboardView
-                cards={scratchPadCards}
+                cards={[...scratchPadCards, ...allMandalaCards]}
                 cardsByCell={cardsByCell}
                 subjects={currentLevel.subjects}
                 onCardClick={handleCardClick}
