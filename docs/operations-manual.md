@@ -2,7 +2,7 @@
 
 **Project**: Insighta
 **Domain**: https://insighta.one
-**Last Updated**: 2026-03-07
+**Last Updated**: 2026-03-08
 
 ---
 
@@ -16,6 +16,8 @@
 6. [Backup and Recovery](#6-backup-and-recovery)
 7. [Long-Term Roadmap](#7-long-term-roadmap)
 8. [Agent Workflow & Quality Management](#8-agent-workflow--quality-management)
+9. [tmux Development Environment](#9-tmux-development-environment)
+10. [CLAUDE.md Architecture & Commands](#10-claudemd-architecture--commands)
 
 ---
 
@@ -1069,6 +1071,77 @@ Phase 7: Self-Evolving System ← 자율 정책 최적화 + 인간 승인
 
 ---
 
+## 9. tmux Development Environment
+
+### 9.1 Layout
+
+The local development environment uses a tmux session named `tubearchive` with three panes:
+
+```
+┌────────────────────────┬──────────────────────┐
+│                        │ Agent Dashboard      │ pane 1 (right-top, 62%)
+│ Claude Code            │ agent-dashboard.sh   │
+│ pane 0 (left)          ├──────────────────────┤
+│                        │ Ops Dashboard        │ pane 2 (right-bottom, 38%)
+│                        │ ops-dashboard.sh     │
+└────────────────────────┴──────────────────────┘
+```
+
+**Start**: `./scripts/tmux-agents.sh`
+**Stop**: `./scripts/tmux-agents.sh kill`
+
+Both dashboard scripts are local-only (`.gitignore`). **Never delete or overwrite them.**
+
+### 9.2 Version Terminology
+
+| Version | Environment | URL | Source |
+|---------|-------------|-----|--------|
+| **dev v1** | Local | `http://localhost:8081` | `frontend/` |
+| **dev v2** | Local | `http://localhost:8082/v2` | `frontend-v2/` (Epic #54 refactoring) |
+| **prod v1** | Production | `https://insighta.one` | Docker: `insighta-frontend` on EC2 :8081 |
+| **prod v2** | Production | (not yet deployed) | — |
+
+### 9.3 Agent Dashboard (pane 1)
+
+Displays real-time agent activity from Claude Code sessions.
+
+| Section | Data |
+|---------|------|
+| TEAM | Active agent roster and current tasks |
+| MAIN SESSION | Claude session status, model, token usage |
+| FILE CHANGES | Modified files count, recent changes |
+| AGENTS | Sub-agent spawn status and results |
+
+### 9.4 Ops Dashboard (pane 2)
+
+Displays infrastructure and project status with tiered caching.
+
+| Section | Data | Cache |
+|---------|------|-------|
+| HEALTH | Service status (dev v1 :8081, dev v2 :8082, prod) | 30s |
+| GIT | Branch, commits, diff stats | 30s |
+| DEPLOYS | Recent deploy status (prod v1/v2) | 30s |
+| CI/WORKFLOWS | GitHub Actions status | 30s |
+| PRs/ISSUES | Open PRs and issues | 30s |
+| SUPABASE | DB connections, Edge Functions status | 120s |
+| INFRA | EC2, Terraform state | 60s |
+
+### 9.5 Dashboard Content Capture
+
+The `/boot` command captures dashboard output to include in session context:
+
+```bash
+# Capture Agent Dashboard content (last 40 lines)
+tmux capture-pane -t tubearchive:0.1 -p -S -40
+
+# Capture Ops Dashboard content (last 40 lines)
+tmux capture-pane -t tubearchive:0.2 -p -S -40
+```
+
+This allows the boot sequence to report actual system status (health, deploys, CI, Supabase) without making separate API calls.
+
+---
+
 ## Reference: Key File Locations
 
 | File | Description |
@@ -1109,3 +1182,306 @@ Phase 7: Self-Evolving System ← 자율 정책 최적화 + 인간 승인
 | AWS EC2 console | https://us-west-2.console.aws.amazon.com/ec2 |
 | Google Cloud Console | https://console.cloud.google.com |
 | GoDaddy DNS | https://dcc.godaddy.com |
+
+---
+
+## 10. CLAUDE.md Architecture & Commands
+
+### 10.1 File Hierarchy
+
+```
+CLAUDE.md (프로젝트 루트 — 최상위 규칙)
+├── Session Boot Sequence
+│   ├── Phase 1: Core Context Load (memory 파일 4개)
+│   └── Phase 2: Domain-specific Load (작업 유형별 추가 파일)
+├── Canonical Sources (SSOT) 테이블
+├── 핵심 규칙
+│   ├── GitHub Secrets 매핑 규칙
+│   ├── 두 리포 관계 (insighta/ ↔ superbase/)
+│   ├── Memory 파일 경로
+│   ├── 작업 효율화 → work-efficiency.md 참조
+│   └── 삭제 금지 목록
+│
+├── .claude/                              ← 프로젝트 레벨 설정
+│   ├── agents/                           ← Agent 정의 (14개)
+│   │   ├── DELEGATION.md                 ← Agent 매트릭스/위임 규칙 (SSOT)
+│   │   ├── adapter-dev.md
+│   │   ├── ai-integration-dev.md
+│   │   ├── architect.md
+│   │   ├── backend-dev.md
+│   │   ├── docs-writer.md
+│   │   ├── frontend-dev.md
+│   │   ├── infra-dev.md
+│   │   ├── pm.md
+│   │   ├── security-auditor.md
+│   │   ├── supabase-dev.md
+│   │   ├── sync-dev.md
+│   │   ├── test-runner.md
+│   │   ├── ux-designer.md
+│   │   └── memory/                       ← Agent별 학습 기록
+│   │       ├── cross-agent.md
+│   │       ├── delegation-metrics.md
+│   │       ├── frontend-dev.md
+│   │       ├── test-runner.md
+│   │       └── ux-designer.md
+│   │
+│   ├── commands/                         ← Slash commands (8개)
+│   │   ├── boot.md                       ← /boot
+│   │   ├── checkpoint.md                 ← /checkpoint
+│   │   ├── deploy.md                     ← /deploy
+│   │   ├── issue.md                      ← /issue
+│   │   ├── retrospective.md             ← /retrospective
+│   │   ├── review.md                     ← /review
+│   │   ├── status.md                     ← /status
+│   │   ├── work.md                       ← /work
+│   │   └── story.md                      ← /story
+│   │
+│   └── skills/
+│       └── insighta-conventions/
+│           └── SKILL.md                  ← 코딩 컨벤션 (자동 로드)
+│
+├── memory/                               ← 프로젝트 메모리 (세션 간 영속)
+│   ├── MEMORY.md                         ← Quick Reference (200줄 제한, 자동 로드)
+│   ├── credentials.md                    ← 시크릿/키 매핑 (SSOT)
+│   ├── troubleshooting.md                ← 과거 문제 패턴
+│   ├── project-structure.md              ← 디렉토리/버전 구조
+│   ├── infrastructure.md                 ← EC2/Supabase/CI-CD
+│   ├── architecture.md                   ← 기술 스택/DB 스키마
+│   ├── work-efficiency.md                ← 작업 효율화 전략
+│   ├── ux-issues.md                      ← UX 버그 트래커
+│   ├── retrospective.md                  ← 회고/메트릭
+│   ├── deployment-progress.md            ← 배포 히스토리
+│   └── checkpoint.md                     ← 체크포인트 누적 기록
+│
+└── docs/
+    ├── operations-manual.md              ← 운영 매뉴얼 (이 문서, SSOT)
+    └── graph-rag-roadmap.md              ← GraphRAG 로드맵
+```
+
+### 10.2 `/boot` — Session Boot Command
+
+세션 시작 시 프로젝트 맥락을 완전히 복원하고, 이전 세션의 교훈을 적용하는 자동화 명령.
+
+**사용법**: `/boot [domain-hint?]` (예: `/boot frontend`, `/boot infra`)
+
+```
+/boot [domain-hint?]
+│
+├── Phase 1: Core Context Load (병렬 Read)
+│   ├── MEMORY.md
+│   ├── credentials.md
+│   ├── troubleshooting.md
+│   ├── project-structure.md
+│   └── operations-manual.md
+│
+├── Phase 2: Domain Detection & Load
+│   ├── $ARGUMENTS 또는 브랜치명에서 도메인 감지
+│   │   ├── frontend → ux-issues.md, architecture.md
+│   │   ├── backend → architecture.md, infrastructure.md
+│   │   ├── infra/supabase → infrastructure.md, project-structure.md
+│   │   ├── graphrag → architecture.md, graph-rag-roadmap.md
+│   │   └── general → 추가 로드 없음
+│   └── 도메인별 추가 파일 Read
+│
+├── Phase 3: Checkpoint Resume (Bash)
+│   └── tail -100 checkpoint.md
+│       ├── 마지막 Checkpoint 항목 파악
+│       └── Pending Work 확인
+│
+├── Phase 4: Status Dashboard (병렬 Bash)
+│   ├── git log / diff / status
+│   ├── gh issue list / pr list / run list
+│   └── tmux capture-pane (Agent Dashboard + Ops Dashboard)
+│
+├── Phase 5: Troubleshooting Awareness
+│   └── 도메인별 관련 경고 추출
+│
+├── Phase 6: Learning Review (자기개선 Read 단계)
+│   ├── 6a: 최근 교훈 적용 확인
+│   │   └── checkpoint.md 마지막 2-3개 항목의 `교훈` 필드 검토
+│   │       └── 이번 도메인 관련 교훈 → Warnings에 포함
+│   ├── 6b: Memory 품질 점검
+│   │   ├── MEMORY.md 줄 수 확인 (180+ → "WARN: approaching limit")
+│   │   ├── troubleshooting.md 미체크 항목 수
+│   │   └── 7일+ 미완료 Pending Work 경고
+│   └── 6c: Memory 개선 이력 확인
+│       └── retrospective.md 마지막 승격/진화 날짜
+│           └── 30일+ 미실행 → "NOTE: /retrospective 실행 권장"
+│
+└── Output: 세션 상태 요약 (+ Lessons + Memory Health)
+```
+
+**도메인 감지 규칙** (브랜치명 기반):
+
+| 브랜치 패턴 | 감지 도메인 |
+|-------------|------------|
+| `story/6[5-9]`, `design` | frontend |
+| `story/7[0-3]`, `animation\|motion\|dnd` | frontend |
+| `story/7[4-7]`, `dashboard\|widget` | frontend |
+| `graphrag\|rag\|knowledge` | graphrag |
+| `infra\|deploy\|ci\|terraform` | infra |
+| `supabase\|edge` | supabase |
+
+### 10.3 `/checkpoint` — Checkpoint Record Command
+
+세션 진행사항을 memory 파일에 자동 기록하고, 교훈을 추출하여 memory를 개선하는 명령.
+
+**사용법**: `/checkpoint [title?]` (title 생략 시 git log 기반 자동 생성)
+
+```
+/checkpoint [title?]
+│
+├── Step 1: 정보 수집 (병렬)
+│   ├── git log --oneline (마지막 checkpoint 이후)
+│   ├── git diff --stat
+│   ├── git status
+│   ├── Read: checkpoint.md (마지막 번호 파악)
+│   ├── Read: MEMORY.md
+│   └── 세션 중 수행한 모든 작업 회상
+│       ├── git 추적 파일
+│       └── .gitignore된 로컬 전용 파일 (memory, scripts 등)
+│
+├── Step 2: checkpoint.md 업데이트
+│   └── Checkpoint N: {title} (COMPLETED — {date})
+│       ├── 커밋: `{hash}` — `{message}`
+│       ├── 로컬 전용 변경: {목록}
+│       ├── 수정 파일: {전체 요약}
+│       ├── 변경 내용: {2-5줄}
+│       ├── 빌드: {결과}
+│       ├── 교훈: {이번 세션에서 배운 것}
+│       └── Pending Work (미커밋 변경 시)
+│
+├── Step 3: 교훈 추출 (Lessons Learned — 자기개선 Write 단계)
+│   ├── 3a: 에러 패턴 → troubleshooting.md
+│   │   └── 새 에러 패턴: 증상/원인/해결/교훈 형식 추가
+│   ├── 3b: 효율 패턴 → work-efficiency.md
+│   │   └── 새 작업 방식 발견 시 적절한 섹션에 추가
+│   ├── 3c: 아키텍처 결정 → architecture.md
+│   │   └── 구조 변경/기술 선택 시 관련 섹션 업데이트
+│   └── 3d: 규칙 위반/부족 → CLAUDE.md 개선 후보
+│       └── 같은 패턴 2회+ 반복 시 구체적 개선안 제시
+│
+├── Step 4: Memory 위생 점검 (Memory Hygiene)
+│   ├── "현재 알려진 이슈" 해결 항목 → [x] 체크
+│   ├── "GitHub Issues" 상태 변경 → 업데이트
+│   ├── Stale 정보 감지 → 수정
+│   └── MEMORY.md 200줄 제한 준수
+│
+├── Step 5: MEMORY.md 업데이트
+│   ├── "최근 작업" 섹션 교체
+│   ├── 200줄 제한 준수
+│   └── Issues/알려진 이슈 최신화
+│
+└── Step 6: 결과 요약 출력 (+ Lessons Applied + Memory Health)
+```
+
+**checkpoint.md 항목 포맷**:
+```
+### Checkpoint N: {title} (COMPLETED — YYYY-MM-DD)
+- **커밋**: `{hash}` — `{commit message}`
+- **로컬 전용 변경**: {git 추적 밖 파일 변경 목록}
+- **수정 파일**: {변경된 모든 파일 목록 요약}
+- **변경 내용**: {주요 변경사항 2-5줄}
+- **빌드**: {빌드/테스트 결과}
+- **교훈**: {이번 세션에서 배운 것}
+```
+
+**교훈 추출 판단 기준**:
+- 재현 가능 (같은 상황이 다시 올 수 있음)
+- 비자명 (이 프로젝트 특유의 교훈)
+- 행동 가능 ("다음에 X 하면 된다" 형태)
+- 검증됨 (이번 세션에서 실제 효과 확인)
+
+### 10.4 Self-Improvement Cycle & Session Eval
+
+`/boot`와 `/checkpoint`는 단순 기록/복원이 아니라, 반복할수록 memory 파일이 개선되는 **자기개선 피드백 루프**를 형성한다. Deep Learning의 epoch 학습과 동일 구조로, 매 사이클마다 정량 평가(Eval)를 수행한다.
+
+```
+/boot (Read)                          /checkpoint (Write + Eval)
+    │                                        │
+    ├── Phase 1-4: 맥락 복원                  ├── Step 1-2: 작업 기록
+    ├── Phase 5: 과거 실수 경고               ├── Step 3: 교훈 추출 → memory 개선
+    ├── Phase 6a-b: 최근 교훈 적용            ├── Step 4: memory 위생 점검
+    ├── Phase 6c: Eval 트렌드 로드            ├── Step 5: MEMORY.md 업데이트
+    │   └── 최약 Dimension → 집중 개선        ├── Step 6: Session Eval (D1-D5 채점)
+    └── Phase 6d: 개선 이력 확인              │   └── eval-scores.md Epoch 기록
+         │                                   └── Step 7: 결과 요약 + Eval 점수
+         │                                        │
+         └───────── 다음 세션 ──────────────────────┘
+              Eval 점수가 epoch마다 1.0에 수렴
+```
+
+**Session Eval — 5 Dimensions (각 0.0 ~ 1.0, Eval = 평균)**:
+
+| # | Dimension | 0.0 (worst) | 1.0 (best) |
+|---|-----------|-------------|------------|
+| D1 | Context Retention | 3회+ 정보 재탐색 | memory만으로 충분 |
+| D2 | Error Prevention | 기존 패턴 재발 | 모든 기존 패턴 회피 |
+| D3 | Lesson Yield | 교훈 없음 | 2+ 유효 교훈 추출 |
+| D4 | Memory Hygiene | 미점검 | 전체 점검, 0건 stale |
+| D5 | Work Efficiency | 비효율 다수 | 모든 규칙 준수 |
+
+- Eval 점수는 `eval-scores.md`에 Epoch Log로 누적
+- 5 epoch 이상 시 Trend Analysis (3-epoch 이동 평균)
+- Eval 0.8+ 안정 시 Dimension 추가/세분화 검토
+- 평가 체계 자체도 Meta 섹션에서 버전 관리 (Evolution Triggers)
+
+**개선 대상 memory 파일**:
+
+| 파일 | /checkpoint에서 개선 | /boot에서 활용 |
+|------|---------------------|---------------|
+| troubleshooting.md | 에러 패턴 추가 (3a) | 도메인별 경고 추출 (Phase 5) |
+| work-efficiency.md | 효율 패턴 추가 (3b) | 작업 효율화 규칙 적용 |
+| architecture.md | 아키텍처 결정 기록 (3c) | 도메인별 추가 로드 (Phase 2) |
+| MEMORY.md | 위생 점검 + 최신화 (4, 5) | 핵심 컨텍스트 로드 (Phase 1) |
+| checkpoint.md | 교훈 필드 기록 (2) | 최근 교훈 검토 (Phase 6a) |
+| eval-scores.md | Epoch 채점 기록 (6) | Eval 트렌드 + 최약점 로드 (Phase 6c) |
+| retrospective.md | — | 개선 이력 확인 (Phase 6d) |
+
+### 10.5 `/work` — Work Execution Command
+
+`/boot`에서 복원한 맥락을 바탕으로, 가장 효과적인 작업을 선정하고 계획을 세운 뒤 실행한다.
+
+**사용법**: `/work [target?]` — target: `#68` (story), `pending`, `eval:D2`, `fix:description`
+
+```
+/work [target?]
+│
+├── Phase 1: 작업 후보 수집 (병렬)
+│   ├── GitHub 오픈 스토리 (gh issue list)
+│   ├── Pending Work (checkpoint.md)
+│   ├── 미커밋 변경 (git status)
+│   └── Eval 최약 Dimension (eval-scores.md)
+│
+├── Phase 2: 우선순위 평가 (Priority Scoring)
+│   └── Score = Impact×0.35 + Urgency×0.25 + Readiness×0.25 + Eval×0.15
+│
+├── Phase 3: 작업 단위 결정
+│   ├── Too Large (>20 files) → 분할
+│   ├── Just Right (5-15 files) → 진행
+│   └── Too Small (<3 files) → 묶기
+│
+├── Phase 4: 실행 계획 생성 (Steps + Verification + Risks)
+│
+├── Phase 5: 유저 확인 (후보 3개 + 선정 근거 + 계획 출력)
+│
+├── Phase 6: 실행 (단계별 진행 + 검증 + Agent 위임)
+│
+└── Phase 7: 완료 보고 (Results + Next Steps)
+```
+
+### 10.6 Complete Session Cycle
+
+```
+/boot (Read)          /work (Execute)          /checkpoint (Write + Eval)
+    │                      │                          │
+    ├── 맥락 복원           ├── 후보 수집               ├── 작업 기록
+    ├── 교훈 로드           ├── 우선순위 평가            ├── 교훈 추출
+    ├── Eval 트렌드         ├── 계획 수립               ├── Memory 위생
+    └── 최약점 경고          ├── 유저 확인               ├── Session Eval
+         │                 ├── 실행                    └── Eval 기록
+         │                 └── 완료 보고                     │
+         │                      │                          │
+         └──────────────────────┘──────────────────────────┘
+                     Eval 점수가 epoch마다 1.0에 수렴
+```
