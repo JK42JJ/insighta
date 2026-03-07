@@ -36,7 +36,7 @@ export function UpgradeModal({ open, onOpenChange, currentUsed, currentLimit }: 
       <DialogContent className="bg-surface-mid max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-yellow-500" />
+            <Zap className="w-5 h-5 text-warning" />
             {t('upgrade.title')}
           </DialogTitle>
           <DialogDescription>{t('upgrade.description')}</DialogDescription>
