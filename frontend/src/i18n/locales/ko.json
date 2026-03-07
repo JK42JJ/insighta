@@ -441,6 +441,45 @@
     "shareOnX": "X에 공유",
     "viewOnYouTube": "YouTube에서 보기"
   },
+  "upgrade": {
+    "title": "플랜 업그레이드",
+    "description": "만다라트 생성 한도에 도달했습니다. 업그레이드하여 더 많은 만다라트를 만드세요.",
+    "quotaUsage": "{{used}} / {{limit}} 만다라트 사용 중",
+    "tierFree": "무료",
+    "tierPro": "프로",
+    "maybeLater": "나중에",
+    "viewPlans": "플랜 보기",
+    "limitedTime": "최고 가성비",
+    "pioneer": {
+      "name": "Pioneer LTD",
+      "price": "$99",
+      "period": "평생",
+      "features": ["무제한 만다라트", "우선 지원", "향후 모든 기능 포함"]
+    },
+    "proMonthly": {
+      "name": "Pro 월간",
+      "price": "$9",
+      "period": "월",
+      "features": ["무제한 만다라트", "클라우드 동기화", "프리미엄 템플릿"]
+    },
+    "proAnnual": {
+      "name": "Pro 연간",
+      "price": "$89",
+      "period": "년",
+      "badge": "18% 할인",
+      "features": ["무제한 만다라트", "클라우드 동기화", "프리미엄 템플릿"]
+    }
+  },
+  "migration": {
+    "title": "데이터 마이그레이션",
+    "description": "브라우저에 저장된 만다라트 데이터를 발견했습니다. 클라우드로 이전하시겠습니까?",
+    "summary": "\"{{goal}}\" ({{levels}}개 레벨)",
+    "migrate": "지금 이전",
+    "migrating": "이전 중...",
+    "retry": "재시도",
+    "dismiss": "나중에",
+    "inProgress": "데이터를 클라우드로 전송 중입니다..."
+  },
   "footer": {
     "brand": "Insighta",
     "termsOfService": "서비스 이용약관",
