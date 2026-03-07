@@ -9,8 +9,7 @@ import type {
   MandalaDockPosition,
 } from '@/types/ui-preferences';
 import { DEFAULT_UI_PREFERENCES } from '@/types/ui-preferences';
-
-const UI_PREFERENCES_QUERY_KEY = 'ui-preferences';
+import { queryKeys } from '@/lib/queryKeys';
 const DEBOUNCE_DELAY = 500; // ms
 
 interface UseUIPreferencesReturn {
@@ -53,7 +52,7 @@ export function useUIPreferences(): UseUIPreferencesReturn {
     isLoading,
     error: queryError,
   } = useQuery({
-    queryKey: [UI_PREFERENCES_QUERY_KEY, user?.id],
+    queryKey: queryKeys.uiPreferences(user?.id),
     queryFn: async (): Promise<UIPreferences> => {
       if (!user?.id) {
         return DEFAULT_UI_PREFERENCES;
@@ -85,7 +84,12 @@ export function useUIPreferences(): UseUIPreferencesReturn {
     gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
     // Prevent infinite retries on table not found or permission errors
     retry: (failureCount, error: any) => {
-      if (error?.code === '42P01' || error?.status === 404 || error?.status === 403 || error?.status === 406) {
+      if (
+        error?.code === '42P01' ||
+        error?.status === 404 ||
+        error?.status === 403 ||
+        error?.status === 406
+      ) {
         return false;
       }
       return failureCount < 2;
@@ -99,24 +103,27 @@ export function useUIPreferences(): UseUIPreferencesReturn {
         throw new Error('User not logged in');
       }
 
-      const { error } = await supabase
-        .from('user_ui_preferences')
-        .upsert(
-          {
-            user_id: user.id,
-            ...updates,
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: 'user_id',
-          }
-        );
+      const { error } = await supabase.from('user_ui_preferences').upsert(
+        {
+          user_id: user.id,
+          ...updates,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: 'user_id',
+        }
+      );
 
       if (error) throw error;
     },
     // Prevent infinite retries on table not found or permission errors
     retry: (failureCount, error: any) => {
-      if (error?.code === '42P01' || error?.status === 404 || error?.status === 403 || error?.status === 406) {
+      if (
+        error?.code === '42P01' ||
+        error?.status === 404 ||
+        error?.status === 403 ||
+        error?.status === 406
+      ) {
         return false;
       }
       return failureCount < 2;
@@ -127,7 +134,7 @@ export function useUIPreferences(): UseUIPreferencesReturn {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: [UI_PREFERENCES_QUERY_KEY, user?.id],
+        queryKey: queryKeys.uiPreferences(user?.id),
       });
     },
   });
@@ -154,7 +161,7 @@ export function useUIPreferences(): UseUIPreferencesReturn {
 
       // Optimistically update local state
       queryClient.setQueryData(
-        [UI_PREFERENCES_QUERY_KEY, user.id],
+        queryKeys.uiPreferences(user.id),
         (old: UIPreferences | undefined) => ({
           ...(old || DEFAULT_UI_PREFERENCES),
           ...updates,

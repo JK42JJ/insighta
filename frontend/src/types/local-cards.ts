@@ -37,6 +37,7 @@ export interface LocalCard {
   metadata_image: string | null;
   cell_index: number;
   level_id: string;
+  mandala_id: string | null;
   sort_order: number | null;
   created_at: string;
   updated_at: string;
@@ -64,6 +65,7 @@ export interface AddLocalCardPayload {
   metadata_image?: string;
   cell_index?: number;
   level_id?: string;
+  mandala_id?: string;
   sort_order?: number;
 }
 
@@ -75,6 +77,7 @@ export interface UpdateLocalCardPayload {
   user_note?: string;
   cell_index?: number;
   level_id?: string;
+  mandala_id?: string;
   sort_order?: number;
   title?: string;
   thumbnail?: string;
@@ -122,7 +125,7 @@ export function localCardToInsightCard(card: LocalCard): import('./mandala').Ins
  * Helper function to convert InsightCard to AddLocalCardPayload
  */
 export function insightCardToAddPayload(
-  card: import('./mandala').InsightCard,
+  card: import('./mandala').InsightCard
 ): AddLocalCardPayload {
   return {
     url: card.videoUrl,

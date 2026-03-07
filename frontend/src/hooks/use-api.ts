@@ -6,43 +6,25 @@
  */
 
 import { useQuery, useMutation, useQueryClient, UseQueryOptions } from '@tanstack/react-query';
-import { apiClient, type Playlist, type Video, type Note, type User, type SyncStatus } from '@/lib/api-client';
-
-// ========================================
-// Query Keys
-// ========================================
-
-export const queryKeys = {
-  // Auth
-  currentUser: ['currentUser'] as const,
-
-  // Playlists
-  playlists: ['playlists'] as const,
-  playlist: (id: string) => ['playlist', id] as const,
-  playlistVideos: (id: string) => ['playlist', id, 'videos'] as const,
-
-  // Videos
-  videos: (playlistId?: string) => ['videos', playlistId] as const,
-  video: (id: string) => ['video', id] as const,
-
-  // Notes
-  notes: (videoId: string) => ['notes', videoId] as const,
-
-  // Sync
-  syncStatus: (playlistId: string) => ['syncStatus', playlistId] as const,
-
-  // Analytics
-  analytics: ['analytics'] as const,
-  watchHistory: ['watchHistory'] as const,
-};
+import {
+  apiClient,
+  type Playlist,
+  type Video,
+  type Note,
+  type User,
+  type SyncStatus,
+} from '@/lib/api-client';
+import { queryKeys } from '@/lib/queryKeys';
 
 // ========================================
 // Auth Hooks
 // ========================================
 
-export function useCurrentUser(options?: Omit<UseQueryOptions<User, Error>, 'queryKey' | 'queryFn'>) {
+export function useCurrentUser(
+  options?: Omit<UseQueryOptions<User, Error>, 'queryKey' | 'queryFn'>
+) {
   return useQuery({
-    queryKey: queryKeys.currentUser,
+    queryKey: queryKeys.auth.currentUser,
     queryFn: () => apiClient.getCurrentUser(),
     enabled: apiClient.isAuthenticated(),
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -57,8 +39,8 @@ export function useLogin() {
     mutationFn: ({ email, password }: { email: string; password: string }) =>
       apiClient.login(email, password),
     onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.currentUser, data.user);
-      queryClient.invalidateQueries({ queryKey: queryKeys.playlists });
+      queryClient.setQueryData(queryKeys.auth.currentUser, data.user);
+      queryClient.invalidateQueries({ queryKey: queryKeys.playlists.all });
     },
   });
 }
@@ -85,18 +67,23 @@ export function useLogout() {
 // Playlist Hooks
 // ========================================
 
-export function usePlaylists(options?: Omit<UseQueryOptions<Playlist[], Error>, 'queryKey' | 'queryFn'>) {
+export function usePlaylists(
+  options?: Omit<UseQueryOptions<Playlist[], Error>, 'queryKey' | 'queryFn'>
+) {
   return useQuery({
-    queryKey: queryKeys.playlists,
+    queryKey: queryKeys.playlists.all,
     queryFn: () => apiClient.getPlaylists(),
     staleTime: 2 * 60 * 1000, // 2 minutes
     ...options,
   });
 }
 
-export function usePlaylist(id: string, options?: Omit<UseQueryOptions<Playlist, Error>, 'queryKey' | 'queryFn'>) {
+export function usePlaylist(
+  id: string,
+  options?: Omit<UseQueryOptions<Playlist, Error>, 'queryKey' | 'queryFn'>
+) {
   return useQuery({
-    queryKey: queryKeys.playlist(id),
+    queryKey: queryKeys.playlists.detail(id),
     queryFn: () => apiClient.getPlaylist(id),
     enabled: !!id,
     staleTime: 2 * 60 * 1000,
@@ -110,7 +97,7 @@ export function useImportPlaylist() {
   return useMutation({
     mutationFn: (url: string) => apiClient.importPlaylist(url),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.playlists });
+      queryClient.invalidateQueries({ queryKey: queryKeys.playlists.all });
     },
   });
 }
@@ -121,7 +108,7 @@ export function useDeletePlaylist() {
   return useMutation({
     mutationFn: (id: string) => apiClient.deletePlaylist(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.playlists });
+      queryClient.invalidateQueries({ queryKey: queryKeys.playlists.all });
     },
   });
 }
@@ -130,18 +117,24 @@ export function useDeletePlaylist() {
 // Video Hooks
 // ========================================
 
-export function useVideos(playlistId?: string, options?: Omit<UseQueryOptions<Video[], Error>, 'queryKey' | 'queryFn'>) {
+export function useVideos(
+  playlistId?: string,
+  options?: Omit<UseQueryOptions<Video[], Error>, 'queryKey' | 'queryFn'>
+) {
   return useQuery({
-    queryKey: queryKeys.videos(playlistId),
+    queryKey: queryKeys.videos.byPlaylist(playlistId),
     queryFn: () => apiClient.getVideos(playlistId),
     staleTime: 2 * 60 * 1000,
     ...options,
   });
 }
 
-export function usePlaylistVideos(playlistId: string, options?: Omit<UseQueryOptions<Video[], Error>, 'queryKey' | 'queryFn'>) {
+export function usePlaylistVideos(
+  playlistId: string,
+  options?: Omit<UseQueryOptions<Video[], Error>, 'queryKey' | 'queryFn'>
+) {
   return useQuery({
-    queryKey: queryKeys.playlistVideos(playlistId),
+    queryKey: queryKeys.playlists.videos(playlistId),
     queryFn: () => apiClient.getPlaylistVideos(playlistId),
     enabled: !!playlistId,
     staleTime: 2 * 60 * 1000,
@@ -149,9 +142,12 @@ export function usePlaylistVideos(playlistId: string, options?: Omit<UseQueryOpt
   });
 }
 
-export function useVideo(id: string, options?: Omit<UseQueryOptions<Video, Error>, 'queryKey' | 'queryFn'>) {
+export function useVideo(
+  id: string,
+  options?: Omit<UseQueryOptions<Video, Error>, 'queryKey' | 'queryFn'>
+) {
   return useQuery({
-    queryKey: queryKeys.video(id),
+    queryKey: queryKeys.videos.detail(id),
     queryFn: () => apiClient.getVideo(id),
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
@@ -163,12 +159,14 @@ export function useVideo(id: string, options?: Omit<UseQueryOptions<Video, Error
 // Notes Hooks
 // ========================================
 
-export function useNotes(videoId: string, options?: Omit<UseQueryOptions<Note[], Error>, 'queryKey' | 'queryFn'>) {
+export function useNotes(
+  videoId: string,
+  options?: Omit<UseQueryOptions<Note[], Error>, 'queryKey' | 'queryFn'>
+) {
   return useQuery({
     queryKey: queryKeys.notes(videoId),
     queryFn: () => apiClient.getNotes(videoId),
     enabled: !!videoId,
-    staleTime: 30 * 1000, // 30 seconds - notes change more frequently
     ...options,
   });
 }
@@ -213,9 +211,12 @@ export function useDeleteNote(videoId: string) {
 // Sync Hooks
 // ========================================
 
-export function useSyncStatus(playlistId: string, options?: Omit<UseQueryOptions<SyncStatus, Error>, 'queryKey' | 'queryFn'>) {
+export function useSyncStatus(
+  playlistId: string,
+  options?: Omit<UseQueryOptions<SyncStatus, Error>, 'queryKey' | 'queryFn'>
+) {
   return useQuery({
-    queryKey: queryKeys.syncStatus(playlistId),
+    queryKey: queryKeys.sync.status(playlistId),
     queryFn: () => apiClient.getSyncStatus(playlistId),
     enabled: !!playlistId,
     staleTime: 10 * 1000, // 10 seconds - sync status changes frequently
@@ -236,9 +237,9 @@ export function useSyncPlaylist() {
   return useMutation({
     mutationFn: (playlistId: string) => apiClient.syncPlaylist(playlistId),
     onSuccess: (_, playlistId) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.syncStatus(playlistId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.playlist(playlistId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.playlistVideos(playlistId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sync.status(playlistId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.playlists.detail(playlistId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.playlists.videos(playlistId) });
     },
   });
 }
@@ -249,7 +250,7 @@ export function useSyncAllPlaylists() {
   return useMutation({
     mutationFn: () => apiClient.syncAllPlaylists(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.playlists });
+      queryClient.invalidateQueries({ queryKey: queryKeys.playlists.all });
     },
   });
 }
@@ -258,7 +259,9 @@ export function useSyncAllPlaylists() {
 // Analytics Hooks
 // ========================================
 
-export function useAnalytics(options?: Omit<UseQueryOptions<Record<string, unknown>, Error>, 'queryKey' | 'queryFn'>) {
+export function useAnalytics(
+  options?: Omit<UseQueryOptions<Record<string, unknown>, Error>, 'queryKey' | 'queryFn'>
+) {
   return useQuery({
     queryKey: queryKeys.analytics,
     queryFn: () => apiClient.getAnalytics(),
@@ -267,7 +270,9 @@ export function useAnalytics(options?: Omit<UseQueryOptions<Record<string, unkno
   });
 }
 
-export function useWatchHistory(options?: Omit<UseQueryOptions<Record<string, unknown>[], Error>, 'queryKey' | 'queryFn'>) {
+export function useWatchHistory(
+  options?: Omit<UseQueryOptions<Record<string, unknown>[], Error>, 'queryKey' | 'queryFn'>
+) {
   return useQuery({
     queryKey: queryKeys.watchHistory,
     queryFn: () => apiClient.getWatchHistory(),
@@ -282,9 +287,8 @@ export function useWatchHistory(options?: Omit<UseQueryOptions<Record<string, un
 
 export function useHealthCheck() {
   return useQuery({
-    queryKey: ['health'],
+    queryKey: queryKeys.health,
     queryFn: () => apiClient.healthCheck(),
-    staleTime: 30 * 1000,
     refetchInterval: 60 * 1000, // Check every minute
   });
 }

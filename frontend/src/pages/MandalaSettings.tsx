@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { mandalaTemplates, MandalaTemplate } from '@/data/mandalaTemplates';
 import { MandalaLevel } from '@/types/mandala';
 import { mockMandalaLevels } from '@/data/mockData';
-import { parseValidatedMandalaLevel, parseValidatedSubLevel } from '@/lib/localStorageValidation';
+import { useMandala } from '@/hooks/useMandala';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,27 +38,40 @@ export default function MandalaSettings() {
   const { toast } = useToast();
   const { t } = useTranslation();
 
-  // Load from localStorage or use mock data (with validation)
-  const [mandalaData, setMandalaData] = useState<MandalaLevel>(() => {
-    const validated = parseValidatedMandalaLevel('mandala-root');
-    return validated || mockMandalaLevels['root'];
-  });
+  // Load mandala from DB via hook
+  const { mandalaLevels: dbLevels, saveMandala, isSaving } = useMandala();
+  const rootFromDb = dbLevels['root'] ?? mockMandalaLevels['root'];
 
-  // Load all L2 levels from localStorage (with validation)
+  const [mandalaData, setMandalaData] = useState<MandalaLevel>(rootFromDb);
+
+  // Build subLevels from DB data
   const [subLevels, setSubLevels] = useState<Record<string, string[]>>(() => {
     const levels: Record<string, string[]> = {};
-    // Check localStorage for existing sub-levels
-    const keys = Object.keys(localStorage);
-    keys.forEach((key) => {
-      if (key.startsWith('mandala-l2-')) {
-        const subjects = parseValidatedSubLevel(key);
-        if (subjects) {
-          levels[key.replace('mandala-l2-', '')] = subjects;
-        }
+    for (const [key, level] of Object.entries(dbLevels)) {
+      if (key !== 'root') {
+        levels[key] = level.subjects;
       }
-    });
+    }
     return levels;
   });
+
+  // Sync when DB data loads
+  useEffect(() => {
+    const root = dbLevels['root'];
+    if (root) {
+      setMandalaData(root);
+      setEditingCenterGoal(root.centerGoal);
+      setEditingSubjects([...root.subjects]);
+
+      const levels: Record<string, string[]> = {};
+      for (const [key, level] of Object.entries(dbLevels)) {
+        if (key !== 'root') {
+          levels[key] = level.subjects;
+        }
+      }
+      setSubLevels(levels);
+    }
+  }, [dbLevels]);
 
   const [editingCenterGoal, setEditingCenterGoal] = useState(mandalaData.centerGoal);
   const [editingSubjects, setEditingSubjects] = useState<string[]>([...mandalaData.subjects]);
@@ -172,33 +185,43 @@ export default function MandalaSettings() {
       subjects: editingSubjects.map((s) => s.trim() || ''),
     };
 
-    // Save to localStorage
-    localStorage.setItem('mandala-root', JSON.stringify(updatedMandala));
+    // Build full levels record for DB save
+    const allLevels: Record<string, MandalaLevel> = {
+      root: updatedMandala,
+    };
 
-    // Save all L2 levels
-    editingSubjects.forEach((subject) => {
+    editingSubjects.forEach((subject, idx) => {
       if (subject.trim()) {
         const key = subject.toLowerCase().replace(/\s/g, '');
         const subs = subLevels[key] || getSubSubjects(subject);
-        const l2Data: MandalaLevel = {
+        allLevels[key] = {
           id: key,
           centerGoal: subject,
           subjects: subs,
           parentId: 'root',
-          parentCellIndex: editingSubjects.indexOf(subject),
+          parentCellIndex: idx,
           cards: [],
         };
-        localStorage.setItem(`mandala-l2-${key}`, JSON.stringify(l2Data));
       }
     });
 
-    setMandalaData(updatedMandala);
-    setHasChanges(false);
-
-    toast({
-      title: t('mandalaSettings.saved'),
-      description: t('mandalaSettings.savedDesc'),
-    });
+    // Save to DB
+    saveMandala(allLevels)
+      .then(() => {
+        setMandalaData(updatedMandala);
+        setHasChanges(false);
+        toast({
+          title: t('mandalaSettings.saved'),
+          description: t('mandalaSettings.savedDesc'),
+        });
+      })
+      .catch(() => {
+        toast({
+          title: t('mandalaSettings.saveFailed'),
+          description: 'Failed to save to server',
+          variant: 'destructive',
+        });
+      });
   };
 
   const handleTemplateClick = (template: MandalaTemplate) => {

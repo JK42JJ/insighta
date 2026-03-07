@@ -19,7 +19,9 @@
     "items": "{{count}}",
     "cards": "{{count}} cards",
     "selected": "{{count}} selected",
-    "backToTop": "Back to top"
+    "backToTop": "Back to top",
+    "create": "Create",
+    "rename": "Rename"
   },
   "header": {
     "subtitle": "Mandala-based YouTube Archive",
@@ -257,6 +259,24 @@
     "switchToFloating": "Switch to floating",
     "switchToDock": "Dock",
     "navigateToSub": "Navigate to {{subject}}"
+  },
+  "mandalaSelector": {
+    "select": "Select Mandala",
+    "create": "New Mandala",
+    "createTitle": "Create New Mandala",
+    "createDescription": "Create a new mandala to organize your goals.",
+    "titlePlaceholder": "Mandala name",
+    "created": "Created {{title}} mandala.",
+    "createFailed": "Failed to create mandala.",
+    "deleted": "Deleted {{title}} mandala.",
+    "deleteFailed": "Failed to delete mandala.",
+    "deleteTitle": "Delete Mandala",
+    "deleteDescription": "Delete {{title}} mandala? This action cannot be undone.",
+    "switched": "Switched to {{title}} mandala.",
+    "switchFailed": "Failed to switch mandala.",
+    "renamed": "Renamed to {{title}}.",
+    "renameFailed": "Failed to rename.",
+    "renameTitle": "Rename Mandala"
   },
   "scratchPad": {
     "title": "Scratch Pad",
