@@ -416,7 +416,13 @@
     "qualityAnalysisDesc": "Quality and engagement level of learning",
     "totalCards": "Total Cards",
     "withMemo": "With Memo",
-    "withoutMemo": "Without Memo"
+    "withoutMemo": "Without Memo",
+    "recentCards": "Recent Cards",
+    "totalCardsLabel": "Total Cards",
+    "memoRate": "Memo Rate",
+    "cardTypes": "Card Types",
+    "recentWeek": "This Week",
+    "noCards": "No cards yet. Add cards to see dashboard."
   },
   "playlist": {
     "neverSynced": "Never synced",

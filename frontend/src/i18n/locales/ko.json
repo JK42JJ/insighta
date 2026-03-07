@@ -416,7 +416,13 @@
     "qualityAnalysisDesc": "학습의 질과 참여 수준",
     "totalCards": "총 카드",
     "withMemo": "메모 있음",
-    "withoutMemo": "메모 없음"
+    "withoutMemo": "메모 없음",
+    "recentCards": "최근 카드",
+    "totalCardsLabel": "전체 카드",
+    "memoRate": "메모 비율",
+    "cardTypes": "카드 종류",
+    "recentWeek": "이번 주",
+    "noCards": "아직 카드가 없습니다. 카드를 추가하면 대시보드가 표시됩니다."
   },
   "playlist": {
     "neverSynced": "동기화된 적 없음",

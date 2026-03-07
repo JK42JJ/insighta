@@ -1604,7 +1604,14 @@ const Index = () => {
                 onDeleteCards={handleDeleteCards}
               />
             )}
-            {viewMode === 'dashboard' && <DashboardView />}
+            {viewMode === 'dashboard' && (
+              <DashboardView
+                cards={scratchPadCards}
+                cardsByCell={cardsByCell}
+                subjects={currentLevel.subjects}
+                onCardClick={handleCardClick}
+              />
+            )}
           </div>
         </div>
 
