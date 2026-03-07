@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { viewVariants, transition } from '@/lib/motion';
 import { Header } from '@/components/Header';
 import { ViewSwitcher, useViewMode } from '@/features/view-mode';
 import { CardGridView } from '@/widgets/card-grid-view';
@@ -1578,46 +1580,83 @@ const Index = () => {
             </div>
 
             {/* View Content */}
-            {viewMode === 'mandala' && (
-              <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 flex-1 min-h-0">
-                <div className="flex-1 min-w-0 overflow-y-auto relative z-10 scrollbar-pro">
-                  <CardList
-                    cards={displayCards}
-                    title=""
+            <AnimatePresence mode="wait" initial={false}>
+              {viewMode === 'mandala' && (
+                <motion.div
+                  key="mandala"
+                  variants={viewVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={transition.layout}
+                  className="flex flex-col lg:flex-row gap-6 lg:gap-8 flex-1 min-h-0"
+                >
+                  <div className="flex-1 min-w-0 overflow-y-auto relative z-10 scrollbar-pro">
+                    <CardList
+                      cards={displayCards}
+                      title=""
+                      onCardClick={handleCardClick}
+                      onCardDragStart={handleCardDragStart}
+                      onMultiCardDragStart={(cards) => setDraggingCard(cards[0])}
+                      onSaveNote={handleSaveNote}
+                      onCardsReorder={handleCardsReorder}
+                      onDeleteCards={handleDeleteCards}
+                    />
+                  </div>
+                </motion.div>
+              )}
+              {viewMode === 'grid' && (
+                <motion.div
+                  key="grid"
+                  variants={viewVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={transition.layout}
+                >
+                  <CardGridView
+                    cards={scratchPadCards}
                     onCardClick={handleCardClick}
-                    onCardDragStart={handleCardDragStart}
-                    onMultiCardDragStart={(cards) => setDraggingCard(cards[0])}
                     onSaveNote={handleSaveNote}
-                    onCardsReorder={handleCardsReorder}
                     onDeleteCards={handleDeleteCards}
                   />
-                </div>
-              </div>
-            )}
-            {viewMode === 'grid' && (
-              <CardGridView
-                cards={scratchPadCards}
-                onCardClick={handleCardClick}
-                onSaveNote={handleSaveNote}
-                onDeleteCards={handleDeleteCards}
-              />
-            )}
-            {viewMode === 'list' && (
-              <ListView
-                cards={scratchPadCards}
-                onCardClick={handleCardClick}
-                onSaveNote={handleSaveNote}
-                onDeleteCards={handleDeleteCards}
-              />
-            )}
-            {viewMode === 'dashboard' && (
-              <DashboardView
-                cards={[...scratchPadCards, ...allMandalaCards]}
-                cardsByCell={cardsByCell}
-                subjects={currentLevel.subjects}
-                onCardClick={handleCardClick}
-              />
-            )}
+                </motion.div>
+              )}
+              {viewMode === 'list' && (
+                <motion.div
+                  key="list"
+                  variants={viewVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={transition.layout}
+                >
+                  <ListView
+                    cards={scratchPadCards}
+                    onCardClick={handleCardClick}
+                    onSaveNote={handleSaveNote}
+                    onDeleteCards={handleDeleteCards}
+                  />
+                </motion.div>
+              )}
+              {viewMode === 'dashboard' && (
+                <motion.div
+                  key="dashboard"
+                  variants={viewVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={transition.layout}
+                >
+                  <DashboardView
+                    cards={[...scratchPadCards, ...allMandalaCards]}
+                    cardsByCell={cardsByCell}
+                    subjects={currentLevel.subjects}
+                    onCardClick={handleCardClick}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
