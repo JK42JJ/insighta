@@ -23,14 +23,16 @@ interface MandalaGridProps {
   onSubjectsReorder: (newSubjects: string[], swappedIndices?: { from: number; to: number }) => void;
   onCellDragging?: (isDragging: boolean) => void;
   isGridDropZone: boolean;
+  activeDropCell?: number | null;
+  activeCellSwapTarget?: number | null;
   hasSubLevel?: (subject: string) => boolean;
   onNavigateToSubLevel?: (subject: string, entryGridIndex: number) => void;
   onNavigateBack?: () => void;
   canGoBack?: boolean;
-  entryGridIndex?: number | null; // Which grid index user entered from
+  entryGridIndex?: number | null;
   showHint?: boolean;
   hideHeader?: boolean;
-  isCompact?: boolean; // For floating mode - reduces size to 1/2
+  isCompact?: boolean;
 }
 
 export const MandalaGrid = memo(function MandalaGrid({
@@ -44,6 +46,8 @@ export const MandalaGrid = memo(function MandalaGrid({
   onSubjectsReorder,
   onCellDragging,
   isGridDropZone,
+  activeDropCell = null,
+  activeCellSwapTarget = null,
   hasSubLevel,
   onNavigateToSubLevel,
   onNavigateBack,
@@ -57,9 +61,6 @@ export const MandalaGrid = memo(function MandalaGrid({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionDirection, setTransitionDirection] = useState<'in' | 'out'>('in');
   const [rippleOrigin, setRippleOrigin] = useState<{ x: number; y: number } | null>(null);
-  const [activeDropCell, setActiveDropCell] = useState<number | null>(null);
-  const [activeCellSwapTarget, setActiveCellSwapTarget] = useState<number | null>(null);
-  const [draggingCellIndex, setDraggingCellIndex] = useState<number | null>(null);
   const [swappingCells, setSwappingCells] = useState<{ from: number; to: number } | null>(null);
   const [isFlipped, setIsFlipped] = useState(false);
   const swapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -80,7 +81,6 @@ export const MandalaGrid = memo(function MandalaGrid({
     if (gridIndex === 4) {
       return { label: level.centerGoal, isCenter: true, subjectIndex: -1 };
     }
-
     const subjectIndex = gridToSubjectIndex[gridIndex];
     return {
       label: level.subjects[subjectIndex] || '',
@@ -89,52 +89,17 @@ export const MandalaGrid = memo(function MandalaGrid({
     };
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    if (index !== 4) {
-      setActiveDropCell(index);
-    }
-  };
-
-  const handleCellDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    if (index !== 4 && draggingCellIndex !== null && draggingCellIndex !== index) {
-      setActiveCellSwapTarget(index);
-    }
-  };
-
-  const handleDragLeave = () => {
-    setActiveDropCell(null);
-    setActiveCellSwapTarget(null);
-  };
-
-  const handleCellDragStart = (gridIndex: number) => {
-    setDraggingCellIndex(gridIndex);
-    onCellDragging?.(true);
-  };
-
-  const handleCellDragEnd = () => {
-    setDraggingCellIndex(null);
-    setActiveCellSwapTarget(null);
-    onCellDragging?.(false);
-  };
-
   const handleCellSwap = (fromGridIndex: number, toGridIndex: number) => {
-    setActiveCellSwapTarget(null);
-    setDraggingCellIndex(null);
     onCellDragging?.(false);
 
     if (fromGridIndex === toGridIndex || fromGridIndex === 4 || toGridIndex === 4) return;
 
-    // Trigger swap animation
     setSwappingCells({ from: fromGridIndex, to: toGridIndex });
 
-    // Clear any existing timeout
     if (swapTimeoutRef.current) {
       clearTimeout(swapTimeoutRef.current);
     }
 
-    // Perform actual swap after animation starts
     swapTimeoutRef.current = setTimeout(() => {
       const fromSubjectIndex = gridToSubjectIndex[fromGridIndex];
       const toSubjectIndex = gridToSubjectIndex[toGridIndex];
@@ -147,7 +112,6 @@ export const MandalaGrid = memo(function MandalaGrid({
 
       onSubjectsReorder(newSubjects, { from: fromSubjectIndex, to: toSubjectIndex });
 
-      // Clear animation state after swap
       setTimeout(() => {
         setSwappingCells(null);
       }, 150);
@@ -161,9 +125,6 @@ export const MandalaGrid = memo(function MandalaGrid({
     multiCardIds?: string[],
     files?: FileList
   ) => {
-    setActiveDropCell(null);
-    setActiveCellSwapTarget(null);
-    setDraggingCellIndex(null);
     const cellData = getCellData(index);
     onCardDrop(cellData.subjectIndex, url, cardId, multiCardIds, files);
   };
@@ -173,14 +134,11 @@ export const MandalaGrid = memo(function MandalaGrid({
     onCellClick(cellData.subjectIndex, cellData.label);
   };
 
-  // Calculate total cards
   const totalCards = Object.values(cardsByCell).reduce((sum, cards) => sum + cards.length, 0);
 
-  // Get slide direction based on grid index (which arrow was clicked)
   const [slideDirection, setSlideDirection] = useState<string>('right');
 
   const getSlideDirection = (gridIndex: number): string => {
-    // Map grid index to slide direction (opposite of arrow direction for exit)
     const directions: Record<number, string> = {
       0: 'top-left',
       1: 'top',
@@ -194,7 +152,6 @@ export const MandalaGrid = memo(function MandalaGrid({
     return directions[gridIndex] || 'right';
   };
 
-  // Get ripple origin position based on grid index
   const getRippleOrigin = (gridIndex: number): { x: number; y: number } => {
     const positions: Record<number, { x: number; y: number }> = {
       0: { x: 0, y: 0 },
@@ -209,7 +166,6 @@ export const MandalaGrid = memo(function MandalaGrid({
     return positions[gridIndex] || { x: 50, y: 50 };
   };
 
-  // Handle navigation to sub-level with ripple animation
   const handleNavigateToSubLevel = (gridIndex: number) => {
     const cellData = getCellData(gridIndex);
     if (cellData.isCenter) return;
@@ -228,11 +184,9 @@ export const MandalaGrid = memo(function MandalaGrid({
     }, 700);
   };
 
-  // Handle back navigation with slide animation (opposite direction)
   const handleNavigateBack = () => {
     if (!canGoBack || entryGridIndex === null) return;
 
-    // Get opposite direction for back navigation
     const entryDirection = getSlideDirection(entryGridIndex);
     const oppositeDirections: Record<string, string> = {
       'top-left': 'bottom-right',
@@ -256,15 +210,12 @@ export const MandalaGrid = memo(function MandalaGrid({
     }, 700);
   };
 
-  // Check if a cell has sub-level navigation - only L1 has arrows (when canGoBack is false)
   const cellHasSubLevel = (gridIndex: number) => {
-    // L2 이상에서는 화살표 표시하지 않음 (L1으로만 복귀 가능)
     if (canGoBack) return false;
     const cellData = getCellData(gridIndex);
     return !cellData.isCenter;
   };
 
-  // Arrow positions for 8 directions - inside the grid corners/edges
   const arrowPositions = [
     { gridIndex: 0, style: 'top-2 left-2', rotation: -135, opposite: 8 },
     { gridIndex: 1, style: 'top-1 left-1/2 -translate-x-1/2', rotation: -90, opposite: 7 },
@@ -276,26 +227,21 @@ export const MandalaGrid = memo(function MandalaGrid({
     { gridIndex: 8, style: 'bottom-2 right-2', rotation: 45, opposite: 0 },
   ];
 
-  // Get back arrow position based on entry direction
   const getBackArrowConfig = () => {
     if (!canGoBack || entryGridIndex === null) return null;
-    // Find the arrow that is opposite to where user entered
     const entryArrow = arrowPositions.find((a) => a.gridIndex === entryGridIndex);
     if (!entryArrow) return null;
-    // Return the opposite position with reversed rotation
     return arrowPositions.find((a) => a.gridIndex === entryArrow.opposite);
   };
 
   const backArrowConfig = getBackArrowConfig();
 
-  // Handle center cell double-click to flip
   const handleCenterDoubleClick = () => {
     setIsFlipped(!isFlipped);
   };
 
   return (
     <div className="space-y-3">
-      {/* Header with stats - hidden in floating mode */}
       {!hideHeader && (
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-2">
@@ -310,9 +256,7 @@ export const MandalaGrid = memo(function MandalaGrid({
         </div>
       )}
 
-      {/* Grid Container - Square aspect ratio with navigation arrows and flip capability */}
       <div className="relative p-4 overflow-visible" style={{ perspective: '1000px' }}>
-        {/* Flip Container */}
         <div
           ref={gridRef}
           className={cn(
@@ -324,7 +268,6 @@ export const MandalaGrid = memo(function MandalaGrid({
             transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
           }}
         >
-          {/* Ripple effect overlay */}
           {isTransitioning && rippleOrigin && (
             <div
               className="absolute inset-0 z-50 pointer-events-none overflow-hidden rounded-2xl"
@@ -368,7 +311,7 @@ export const MandalaGrid = memo(function MandalaGrid({
               transformOrigin: rippleOrigin ? `${rippleOrigin.x}% ${rippleOrigin.y}%` : 'center',
             }}
           >
-            {/* Navigation Arrows - inside grid */}
+            {/* Navigation Arrows */}
             {!isFlipped &&
               arrowPositions.map(({ gridIndex, style, rotation }) => {
                 const hasNav = cellHasSubLevel(gridIndex);
@@ -389,12 +332,8 @@ export const MandalaGrid = memo(function MandalaGrid({
                       style
                     )}
                   >
-                    {/* Minimal indicator with hover expansion */}
                     <div className="relative">
-                      {/* Default state: subtle dot */}
                       <div className="w-2 h-2 rounded-full bg-primary/40 group-hover:bg-transparent transition-all duration-300 group-hover:scale-0 shadow-sm" />
-
-                      {/* Hover state: expanded pill with label */}
                       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-card/95 backdrop-blur-md border border-primary/40 shadow-md opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-300 whitespace-nowrap">
                         <span className="text-[8px] font-medium text-primary max-w-[50px] truncate">
                           {cellData.label}
@@ -409,7 +348,7 @@ export const MandalaGrid = memo(function MandalaGrid({
                 );
               })}
 
-            {/* Back button - inside grid */}
+            {/* Back button */}
             {backArrowConfig && !isFlipped && (
               <button
                 onClick={(e) => {
@@ -447,7 +386,10 @@ export const MandalaGrid = memo(function MandalaGrid({
                   isCenter={cellData.isCenter}
                   cards={cellCards}
                   isDropTarget={activeDropCell === gridIndex}
-                  isCellSwapTarget={activeCellSwapTarget === gridIndex}
+                  isCellSwapTarget={
+                    activeCellSwapTarget === gridIndex ||
+                    (swappingCells !== null && swappingCells.to === gridIndex)
+                  }
                   isSelected={selectedCellIndex === cellData.subjectIndex}
                   isSwapping={
                     swappingCells !== null &&
@@ -464,13 +406,8 @@ export const MandalaGrid = memo(function MandalaGrid({
                   onCellSwap={handleCellSwap}
                   onClick={() => handleCellClick(gridIndex)}
                   onDoubleClick={cellData.isCenter ? handleCenterDoubleClick : undefined}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
                   onCardClick={onCardClick}
                   onCardDragStart={onCardDragStart}
-                  onCellDragStart={handleCellDragStart}
-                  onCellDragEnd={handleCellDragEnd}
-                  onCellDragOver={handleCellDragOver}
                   hasSubLevel={hasNav}
                   onNavigateToSubLevel={() => handleNavigateToSubLevel(gridIndex)}
                 />
@@ -500,7 +437,6 @@ export const MandalaGrid = memo(function MandalaGrid({
         </div>
       </div>
 
-      {/* Hint */}
       {showHint && (
         <p className="text-xs text-center text-muted-foreground/60">
           {isFlipped ? t('mandala.hintFlipped') : t('mandala.hintDefault')}

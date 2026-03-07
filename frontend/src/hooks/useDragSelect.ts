@@ -78,7 +78,7 @@ export function useDragSelect({
 
       // If the mousedown started on a draggable card, let native drag happen
       const target = e.target as HTMLElement | null;
-      if (target && target.closest('[draggable="true"]')) {
+      if (target && target.closest('[data-card-item]')) {
         isPendingRef.current = false;
         return;
       }
@@ -109,9 +109,8 @@ export function useDragSelect({
             startClientRef.current.y
           ) as HTMLElement;
           const cardItem = target?.closest('[data-card-item]');
-          // Only block if the card itself has draggable=true (selected cards can be dragged)
-          const draggableElement = target?.closest('[draggable="true"]');
-          if (cardItem && draggableElement) {
+          // Block drag-select if mousedown started on a card item (dnd-kit handles card drag)
+          if (cardItem) {
             // This card is draggable (selected), don't start selection
             isPendingRef.current = false;
             return;

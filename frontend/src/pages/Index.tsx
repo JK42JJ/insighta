@@ -39,6 +39,7 @@ import { convertToInsightCards } from '@/lib/youtubeToInsightCard';
 import { detectCardSource, getCardById } from '@/lib/cardUtils';
 import { useTranslation } from 'react-i18next';
 import { useActiveMandala } from '@/hooks/useActiveMandala';
+import { DndProvider, type DragData } from '@/features/dnd';
 
 const Index = () => {
   const { toast } = useToast();
@@ -1414,119 +1415,82 @@ const Index = () => {
     return foundCard ?? selectedCard;
   }, [selectedCard?.id, selectedCard?.userNote, allMandalaCards, scratchPadCards]);
 
+  // dnd-kit event routing
+  const handleDndCardDropOnCell = useCallback(
+    (cardId: string, cellIndex: number) => {
+      handleCardDrop(cellIndex, undefined, cardId);
+    },
+    [handleCardDrop]
+  );
+
+  const handleDndMultiCardDropOnCell = useCallback(
+    (cardIds: string[], cellIndex: number) => {
+      handleCardDrop(cellIndex, undefined, undefined, cardIds);
+    },
+    [handleCardDrop]
+  );
+
+  const handleDndCardDropOnScratchPad = useCallback(
+    (cardId: string) => {
+      handleScratchPadCardDrop(cardId);
+    },
+    [handleScratchPadCardDrop]
+  );
+
+  const handleDndMultiCardDropOnScratchPad = useCallback(
+    (cardIds: string[]) => {
+      handleScratchPadMultiCardDrop(cardIds);
+    },
+    [handleScratchPadMultiCardDrop]
+  );
+
+  const handleDndCellSwap = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      const subjects = [...currentLevel.subjects];
+      [subjects[fromIndex], subjects[toIndex]] = [subjects[toIndex], subjects[fromIndex]];
+      handleSubjectsReorder(subjects, { from: fromIndex, to: toIndex });
+    },
+    [currentLevel.subjects, handleSubjectsReorder]
+  );
+
+  const handleDndDragStart = useCallback((data: DragData) => {
+    if (data.type === 'card') {
+      setDraggingCard(data.card);
+    } else if (data.type === 'multi-card') {
+      setDraggingCard(data.cards[0] ?? null);
+    }
+  }, []);
+
+  const handleDndDragEnd = useCallback(() => {
+    setDraggingCard(null);
+  }, []);
+
   return (
-    <div className="h-screen flex flex-col bg-surface-base overflow-hidden">
-      <Header onNavigateHome={() => handleNavigate('root')} />
+    <DndProvider
+      onCardDropOnCell={handleDndCardDropOnCell}
+      onMultiCardDropOnCell={handleDndMultiCardDropOnCell}
+      onCellSwap={handleDndCellSwap}
+      onCardDropOnScratchPad={handleDndCardDropOnScratchPad}
+      onMultiCardDropOnScratchPad={handleDndMultiCardDropOnScratchPad}
+      onDragStart={handleDndDragStart}
+      onDragEnd={handleDndDragEnd}
+    >
+      <div className="h-screen flex flex-col bg-surface-base overflow-hidden">
+        <Header onNavigateHome={() => handleNavigate('root')} />
 
-      <MigrationPrompt />
-      <DropZoneOverlay isVisible={isDraggingOver && !draggingCard && !isDraggingCell} />
+        <MigrationPrompt />
+        <DropZoneOverlay isVisible={isDraggingOver && !draggingCard && !isDraggingCell} />
 
-      {/* Fixed Ideation Timeline - Top position */}
-      {!isScratchPadFloating && scratchPadDockPosition === 'top' && (
-        <div className="flex-shrink-0 relative z-30">
-          <FloatingScratchPad
-            cards={scratchPadCards}
-            isDropTarget={isScratchPadDropTarget}
-            onDrop={handleScratchPadDrop}
-            onCardDrop={handleScratchPadCardDrop}
-            onMultiCardDrop={handleScratchPadMultiCardDrop}
-            onCardClick={handleCardClick}
-            onDragOver={() => setIsScratchPadDropTarget(true)}
-            onDragLeave={() => setIsScratchPadDropTarget(false)}
-            onCardDragStart={handleCardDragStart}
-            onDeleteCards={handleDeleteCards}
-            onFileDrop={handleScratchPadFileDrop}
-            isFloating={false}
-            onToggleFloating={() => handleSetScratchPadFloating(true)}
-            dockPosition={scratchPadDockPosition}
-            onDockPositionChange={handleSetScratchPadDockPosition}
-          />
-        </div>
-      )}
-
-      {/* Floating ScratchPad */}
-      {isScratchPadFloating && (
-        <FloatingScratchPad
-          cards={scratchPadCards}
-          isDropTarget={isScratchPadDropTarget}
-          onDrop={handleScratchPadDrop}
-          onCardDrop={handleScratchPadCardDrop}
-          onMultiCardDrop={handleScratchPadMultiCardDrop}
-          onCardClick={handleCardClick}
-          onDragOver={() => setIsScratchPadDropTarget(true)}
-          onDragLeave={() => setIsScratchPadDropTarget(false)}
-          onCardDragStart={handleCardDragStart}
-          onDeleteCards={handleDeleteCards}
-          onFileDrop={handleScratchPadFileDrop}
-          isFloating={true}
-          onToggleFloating={() => handleSetScratchPadFloating(false)}
-          dockPosition={scratchPadDockPosition}
-          onDockPositionChange={handleSetScratchPadDockPosition}
-          initialPosition={
-            prefScratchpadPosX !== undefined && prefScratchpadPosY !== undefined
-              ? { x: prefScratchpadPosX, y: prefScratchpadPosY }
-              : undefined
-          }
-          onPositionChange={setScratchPadPosition}
-        />
-      )}
-
-      {/* Floating Mandala - Rendered at root level for proper fixed positioning */}
-      {(isMandalaFloating || isMandalaFloatingMode) && (
-        <FloatingMandala
-          centerGoal={currentLevel.centerGoal}
-          totalCards={totalCards}
-          isMinimized={isMandalaMinimized}
-          onToggleMinimized={() => handleSetMandalaMinimized(!isMandalaMinimized)}
-          isFloating={true}
-          onToggleFloating={() => handleSetMandalaFloating(false)}
-          dockPosition={mandalaDockPosition}
-          onDockPositionChange={handleSetMandalaDockPosition}
-          initialPosition={
-            prefMandalaPosX !== undefined && prefMandalaPosY !== undefined
-              ? { x: prefMandalaPosX, y: prefMandalaPosY }
-              : undefined
-          }
-          onPositionChange={setMandalaPosition}
-        >
-          <MandalaGrid
-            level={currentLevel}
-            cardsByCell={cardsByCell}
-            selectedCellIndex={selectedCellIndex}
-            onCellClick={handleCellClick}
-            onCardDrop={handleCardDrop}
-            onCardClick={handleCardClick}
-            onCardDragStart={handleCardDragStart}
-            onSubjectsReorder={handleSubjectsReorder}
-            onCellDragging={setIsDraggingCell}
-            isGridDropZone={isDraggingOver && !draggingCard && !isDraggingCell}
-            hasSubLevel={hasSubLevel}
-            onNavigateToSubLevel={handleNavigateToSubLevel}
-            onNavigateBack={handleNavigateBack}
-            canGoBack={path.length > 0}
-            entryGridIndex={entryGridIndex}
-            showHint={false}
-            hideHeader={true}
-            isCompact={true}
-          />
-        </FloatingMandala>
-      )}
-
-      {/* Main Content Area with optional side docking */}
-      <main className={cn('flex-1 overflow-hidden flex', isMobile && 'pb-14')}>
-        {/* Left Side Docked ScratchPad (Ideation first) */}
-        {!isScratchPadFloating && scratchPadDockPosition === 'left' && (
-          <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-r border-border/30 relative z-30 h-full">
+        {/* Fixed Ideation Timeline - Top position */}
+        {!isScratchPadFloating && scratchPadDockPosition === 'top' && (
+          <div className="flex-shrink-0 relative z-30">
             <FloatingScratchPad
               cards={scratchPadCards}
               isDropTarget={isScratchPadDropTarget}
               onDrop={handleScratchPadDrop}
-              onCardDrop={handleScratchPadCardDrop}
-              onMultiCardDrop={handleScratchPadMultiCardDrop}
               onCardClick={handleCardClick}
               onDragOver={() => setIsScratchPadDropTarget(true)}
               onDragLeave={() => setIsScratchPadDropTarget(false)}
-              onCardDragStart={handleCardDragStart}
               onDeleteCards={handleDeleteCards}
               onFileDrop={handleScratchPadFileDrop}
               isFloating={false}
@@ -1537,17 +1501,47 @@ const Index = () => {
           </div>
         )}
 
-        {/* Left Side Docked Mandala (second) */}
-        {!isMandalaFloating && !isMandalaFloatingMode && mandalaDockPosition === 'left' && (
+        {/* Floating ScratchPad */}
+        {isScratchPadFloating && (
+          <FloatingScratchPad
+            cards={scratchPadCards}
+            isDropTarget={isScratchPadDropTarget}
+            onDrop={handleScratchPadDrop}
+            onCardClick={handleCardClick}
+            onDragOver={() => setIsScratchPadDropTarget(true)}
+            onDragLeave={() => setIsScratchPadDropTarget(false)}
+            onDeleteCards={handleDeleteCards}
+            onFileDrop={handleScratchPadFileDrop}
+            isFloating={true}
+            onToggleFloating={() => handleSetScratchPadFloating(false)}
+            dockPosition={scratchPadDockPosition}
+            onDockPositionChange={handleSetScratchPadDockPosition}
+            initialPosition={
+              prefScratchpadPosX !== undefined && prefScratchpadPosY !== undefined
+                ? { x: prefScratchpadPosX, y: prefScratchpadPosY }
+                : undefined
+            }
+            onPositionChange={setScratchPadPosition}
+          />
+        )}
+
+        {/* Floating Mandala - Rendered at root level for proper fixed positioning */}
+        {(isMandalaFloating || isMandalaFloatingMode) && (
           <FloatingMandala
             centerGoal={currentLevel.centerGoal}
             totalCards={totalCards}
             isMinimized={isMandalaMinimized}
             onToggleMinimized={() => handleSetMandalaMinimized(!isMandalaMinimized)}
-            isFloating={false}
-            onToggleFloating={() => handleSetMandalaFloating(true)}
+            isFloating={true}
+            onToggleFloating={() => handleSetMandalaFloating(false)}
             dockPosition={mandalaDockPosition}
             onDockPositionChange={handleSetMandalaDockPosition}
+            initialPosition={
+              prefMandalaPosX !== undefined && prefMandalaPosY !== undefined
+                ? { x: prefMandalaPosX, y: prefMandalaPosY }
+                : undefined
+            }
+            onPositionChange={setMandalaPosition}
           >
             <MandalaGrid
               level={currentLevel}
@@ -1567,146 +1561,225 @@ const Index = () => {
               entryGridIndex={entryGridIndex}
               showHint={false}
               hideHeader={true}
+              isCompact={true}
             />
           </FloatingMandala>
         )}
 
-        <div className="flex-1 overflow-hidden">
-          <div className="container mx-auto px-4 py-4 h-full flex flex-col">
-            {/* View Switcher Bar — hidden on mobile (bottom nav replaces it) */}
-            <div className="flex items-center justify-between mb-3 flex-shrink-0">
-              <h2 className="text-sm font-medium text-muted-foreground">{displayTitle}</h2>
-              <ViewSwitcher current={viewMode} onChange={setViewMode} className="hidden md:flex" />
+        {/* Main Content Area with optional side docking */}
+        <main className={cn('flex-1 overflow-hidden flex', isMobile && 'pb-14')}>
+          {/* Left Side Docked ScratchPad (Ideation first) */}
+          {!isScratchPadFloating && scratchPadDockPosition === 'left' && (
+            <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-r border-border/30 relative z-30 h-full">
+              <FloatingScratchPad
+                cards={scratchPadCards}
+                isDropTarget={isScratchPadDropTarget}
+                onDrop={handleScratchPadDrop}
+                onCardClick={handleCardClick}
+                onDragOver={() => setIsScratchPadDropTarget(true)}
+                onDragLeave={() => setIsScratchPadDropTarget(false)}
+                onDeleteCards={handleDeleteCards}
+                onFileDrop={handleScratchPadFileDrop}
+                isFloating={false}
+                onToggleFloating={() => handleSetScratchPadFloating(true)}
+                dockPosition={scratchPadDockPosition}
+                onDockPositionChange={handleSetScratchPadDockPosition}
+              />
             </div>
+          )}
 
-            {/* View Content */}
-            <AnimatePresence mode="wait" initial={false}>
-              {viewMode === 'mandala' && (
-                <motion.div
-                  key="mandala"
-                  variants={viewVariants}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  transition={transition.layout}
-                  className="flex flex-col lg:flex-row gap-6 lg:gap-8 flex-1 min-h-0"
-                >
-                  <div className="flex-1 min-w-0 overflow-y-auto relative z-10 scrollbar-pro">
-                    <CardList
-                      cards={displayCards}
-                      title=""
+          {/* Left Side Docked Mandala (second) */}
+          {!isMandalaFloating && !isMandalaFloatingMode && mandalaDockPosition === 'left' && (
+            <FloatingMandala
+              centerGoal={currentLevel.centerGoal}
+              totalCards={totalCards}
+              isMinimized={isMandalaMinimized}
+              onToggleMinimized={() => handleSetMandalaMinimized(!isMandalaMinimized)}
+              isFloating={false}
+              onToggleFloating={() => handleSetMandalaFloating(true)}
+              dockPosition={mandalaDockPosition}
+              onDockPositionChange={handleSetMandalaDockPosition}
+            >
+              <MandalaGrid
+                level={currentLevel}
+                cardsByCell={cardsByCell}
+                selectedCellIndex={selectedCellIndex}
+                onCellClick={handleCellClick}
+                onCardDrop={handleCardDrop}
+                onCardClick={handleCardClick}
+                onCardDragStart={handleCardDragStart}
+                onSubjectsReorder={handleSubjectsReorder}
+                onCellDragging={setIsDraggingCell}
+                isGridDropZone={isDraggingOver && !draggingCard && !isDraggingCell}
+                hasSubLevel={hasSubLevel}
+                onNavigateToSubLevel={handleNavigateToSubLevel}
+                onNavigateBack={handleNavigateBack}
+                canGoBack={path.length > 0}
+                entryGridIndex={entryGridIndex}
+                showHint={false}
+                hideHeader={true}
+              />
+            </FloatingMandala>
+          )}
+
+          <div className="flex-1 overflow-hidden">
+            <div className="container mx-auto px-4 py-4 h-full flex flex-col">
+              {/* View Switcher Bar — hidden on mobile (bottom nav replaces it) */}
+              <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                <h2 className="text-sm font-medium text-muted-foreground">{displayTitle}</h2>
+                <ViewSwitcher
+                  current={viewMode}
+                  onChange={setViewMode}
+                  className="hidden md:flex"
+                />
+              </div>
+
+              {/* View Content */}
+              <AnimatePresence mode="wait" initial={false}>
+                {viewMode === 'mandala' && (
+                  <motion.div
+                    key="mandala"
+                    variants={viewVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={transition.layout}
+                    className="flex flex-col lg:flex-row gap-6 lg:gap-8 flex-1 min-h-0"
+                  >
+                    <div className="flex-1 min-w-0 overflow-y-auto relative z-10 scrollbar-pro">
+                      <CardList
+                        cards={displayCards}
+                        title=""
+                        onCardClick={handleCardClick}
+                        onCardDragStart={handleCardDragStart}
+                        onMultiCardDragStart={(cards) => setDraggingCard(cards[0])}
+                        onSaveNote={handleSaveNote}
+                        onCardsReorder={handleCardsReorder}
+                        onDeleteCards={handleDeleteCards}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+                {viewMode === 'grid' && (
+                  <motion.div
+                    key="grid"
+                    variants={viewVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={transition.layout}
+                  >
+                    <CardGridView
+                      cards={scratchPadCards}
                       onCardClick={handleCardClick}
-                      onCardDragStart={handleCardDragStart}
-                      onMultiCardDragStart={(cards) => setDraggingCard(cards[0])}
                       onSaveNote={handleSaveNote}
-                      onCardsReorder={handleCardsReorder}
                       onDeleteCards={handleDeleteCards}
                     />
-                  </div>
-                </motion.div>
-              )}
-              {viewMode === 'grid' && (
-                <motion.div
-                  key="grid"
-                  variants={viewVariants}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  transition={transition.layout}
-                >
-                  <CardGridView
-                    cards={scratchPadCards}
-                    onCardClick={handleCardClick}
-                    onSaveNote={handleSaveNote}
-                    onDeleteCards={handleDeleteCards}
-                  />
-                </motion.div>
-              )}
-              {viewMode === 'list' && (
-                <motion.div
-                  key="list"
-                  variants={viewVariants}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  transition={transition.layout}
-                >
-                  <ListView
-                    cards={scratchPadCards}
-                    onCardClick={handleCardClick}
-                    onSaveNote={handleSaveNote}
-                    onDeleteCards={handleDeleteCards}
-                  />
-                </motion.div>
-              )}
-              {viewMode === 'dashboard' && (
-                <motion.div
-                  key="dashboard"
-                  variants={viewVariants}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  transition={transition.layout}
-                >
-                  <DashboardView
-                    cards={[...scratchPadCards, ...allMandalaCards]}
-                    cardsByCell={cardsByCell}
-                    subjects={currentLevel.subjects}
-                    onCardClick={handleCardClick}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  </motion.div>
+                )}
+                {viewMode === 'list' && (
+                  <motion.div
+                    key="list"
+                    variants={viewVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={transition.layout}
+                  >
+                    <ListView
+                      cards={scratchPadCards}
+                      onCardClick={handleCardClick}
+                      onSaveNote={handleSaveNote}
+                      onDeleteCards={handleDeleteCards}
+                    />
+                  </motion.div>
+                )}
+                {viewMode === 'dashboard' && (
+                  <motion.div
+                    key="dashboard"
+                    variants={viewVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={transition.layout}
+                  >
+                    <DashboardView
+                      cards={[...scratchPadCards, ...allMandalaCards]}
+                      cardsByCell={cardsByCell}
+                      subjects={currentLevel.subjects}
+                      onCardClick={handleCardClick}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
-        </div>
 
-        {/* Right Side Docked Mandala (first from inside) */}
-        {!isMandalaFloating && !isMandalaFloatingMode && mandalaDockPosition === 'right' && (
-          <FloatingMandala
-            centerGoal={currentLevel.centerGoal}
-            totalCards={totalCards}
-            isMinimized={isMandalaMinimized}
-            onToggleMinimized={() => handleSetMandalaMinimized(!isMandalaMinimized)}
-            isFloating={false}
-            onToggleFloating={() => handleSetMandalaFloating(true)}
-            dockPosition={mandalaDockPosition}
-            onDockPositionChange={handleSetMandalaDockPosition}
-          >
-            <MandalaGrid
-              level={currentLevel}
-              cardsByCell={cardsByCell}
-              selectedCellIndex={selectedCellIndex}
-              onCellClick={handleCellClick}
-              onCardDrop={handleCardDrop}
-              onCardClick={handleCardClick}
-              onCardDragStart={handleCardDragStart}
-              onSubjectsReorder={handleSubjectsReorder}
-              onCellDragging={setIsDraggingCell}
-              isGridDropZone={isDraggingOver && !draggingCard && !isDraggingCell}
-              hasSubLevel={hasSubLevel}
-              onNavigateToSubLevel={handleNavigateToSubLevel}
-              onNavigateBack={handleNavigateBack}
-              canGoBack={path.length > 0}
-              entryGridIndex={entryGridIndex}
-              showHint={false}
-              hideHeader={true}
-            />
-          </FloatingMandala>
-        )}
+          {/* Right Side Docked Mandala (first from inside) */}
+          {!isMandalaFloating && !isMandalaFloatingMode && mandalaDockPosition === 'right' && (
+            <FloatingMandala
+              centerGoal={currentLevel.centerGoal}
+              totalCards={totalCards}
+              isMinimized={isMandalaMinimized}
+              onToggleMinimized={() => handleSetMandalaMinimized(!isMandalaMinimized)}
+              isFloating={false}
+              onToggleFloating={() => handleSetMandalaFloating(true)}
+              dockPosition={mandalaDockPosition}
+              onDockPositionChange={handleSetMandalaDockPosition}
+            >
+              <MandalaGrid
+                level={currentLevel}
+                cardsByCell={cardsByCell}
+                selectedCellIndex={selectedCellIndex}
+                onCellClick={handleCellClick}
+                onCardDrop={handleCardDrop}
+                onCardClick={handleCardClick}
+                onCardDragStart={handleCardDragStart}
+                onSubjectsReorder={handleSubjectsReorder}
+                onCellDragging={setIsDraggingCell}
+                isGridDropZone={isDraggingOver && !draggingCard && !isDraggingCell}
+                hasSubLevel={hasSubLevel}
+                onNavigateToSubLevel={handleNavigateToSubLevel}
+                onNavigateBack={handleNavigateBack}
+                canGoBack={path.length > 0}
+                entryGridIndex={entryGridIndex}
+                showHint={false}
+                hideHeader={true}
+              />
+            </FloatingMandala>
+          )}
 
-        {/* Right Side Docked ScratchPad (Ideation on edge) */}
-        {!isScratchPadFloating && scratchPadDockPosition === 'right' && (
-          <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-l border-border/30 relative z-30 h-full">
+          {/* Right Side Docked ScratchPad (Ideation on edge) */}
+          {!isScratchPadFloating && scratchPadDockPosition === 'right' && (
+            <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-l border-border/30 relative z-30 h-full">
+              <FloatingScratchPad
+                cards={scratchPadCards}
+                isDropTarget={isScratchPadDropTarget}
+                onDrop={handleScratchPadDrop}
+                onCardClick={handleCardClick}
+                onDragOver={() => setIsScratchPadDropTarget(true)}
+                onDragLeave={() => setIsScratchPadDropTarget(false)}
+                onDeleteCards={handleDeleteCards}
+                onFileDrop={handleScratchPadFileDrop}
+                isFloating={false}
+                onToggleFloating={() => handleSetScratchPadFloating(true)}
+                dockPosition={scratchPadDockPosition}
+                onDockPositionChange={handleSetScratchPadDockPosition}
+              />
+            </div>
+          )}
+        </main>
+
+        {/* Fixed Ideation Timeline - Bottom position */}
+        {!isScratchPadFloating && scratchPadDockPosition === 'bottom' && (
+          <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-t border-border/30 relative z-30">
             <FloatingScratchPad
               cards={scratchPadCards}
               isDropTarget={isScratchPadDropTarget}
               onDrop={handleScratchPadDrop}
-              onCardDrop={handleScratchPadCardDrop}
-              onMultiCardDrop={handleScratchPadMultiCardDrop}
               onCardClick={handleCardClick}
               onDragOver={() => setIsScratchPadDropTarget(true)}
               onDragLeave={() => setIsScratchPadDropTarget(false)}
-              onCardDragStart={handleCardDragStart}
               onDeleteCards={handleDeleteCards}
               onFileDrop={handleScratchPadFileDrop}
               isFloating={false}
@@ -1716,49 +1789,26 @@ const Index = () => {
             />
           </div>
         )}
-      </main>
 
-      {/* Fixed Ideation Timeline - Bottom position */}
-      {!isScratchPadFloating && scratchPadDockPosition === 'bottom' && (
-        <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-t border-border/30 relative z-30">
-          <FloatingScratchPad
-            cards={scratchPadCards}
-            isDropTarget={isScratchPadDropTarget}
-            onDrop={handleScratchPadDrop}
-            onCardDrop={handleScratchPadCardDrop}
-            onMultiCardDrop={handleScratchPadMultiCardDrop}
-            onCardClick={handleCardClick}
-            onDragOver={() => setIsScratchPadDropTarget(true)}
-            onDragLeave={() => setIsScratchPadDropTarget(false)}
-            onCardDragStart={handleCardDragStart}
-            onDeleteCards={handleDeleteCards}
-            onFileDrop={handleScratchPadFileDrop}
-            isFloating={false}
-            onToggleFloating={() => handleSetScratchPadFloating(true)}
-            dockPosition={scratchPadDockPosition}
-            onDockPositionChange={handleSetScratchPadDockPosition}
-          />
-        </div>
-      )}
-
-      {/* Video Player Modal */}
-      <VideoPlayerModal
-        card={currentModalCard}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveNote}
-        onSaveWatchPosition={handleSaveWatchPosition}
-      />
-
-      {/* Mobile Bottom Navigation */}
-      {isMobile && (
-        <MobileBottomNav
-          currentView={viewMode}
-          onViewChange={setViewMode}
-          onNavigateHome={() => handleNavigate('root')}
+        {/* Video Player Modal */}
+        <VideoPlayerModal
+          card={currentModalCard}
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSave={handleSaveNote}
+          onSaveWatchPosition={handleSaveWatchPosition}
         />
-      )}
-    </div>
+
+        {/* Mobile Bottom Navigation */}
+        {isMobile && (
+          <MobileBottomNav
+            currentView={viewMode}
+            onViewChange={setViewMode}
+            onNavigateHome={() => handleNavigate('root')}
+          />
+        )}
+      </div>
+    </DndProvider>
   );
 };
 
