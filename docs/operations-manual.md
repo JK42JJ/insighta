@@ -2,7 +2,7 @@
 
 **Project**: Insighta
 **Domain**: https://insighta.one
-**Last Updated**: 2026-03-06
+**Last Updated**: 2026-03-07
 
 ---
 
@@ -15,6 +15,7 @@
 5. [Security](#5-security)
 6. [Backup and Recovery](#6-backup-and-recovery)
 7. [Long-Term Roadmap](#7-long-term-roadmap)
+8. [Agent Workflow & Quality Management](#8-agent-workflow--quality-management)
 
 ---
 
@@ -887,6 +888,177 @@ This cost is only justified when the application generates revenue or serves a u
 - ArgoCD installed and connected to the repository
 - Secrets managed via AWS Secrets Manager or External Secrets Operator
 - Existing CI/CD pipelines produce OCI-compliant images (already true)
+
+---
+
+## 8. Agent Workflow & Quality Management
+
+### 8.1 Role Separation
+
+| Role | Responsibility | Actions |
+|------|---------------|---------|
+| **Main (Orchestrator)** | "What & Why" — task analysis, agent selection, user communication | Issue analysis, agent dispatch, final reporting |
+| **PM (Quality Gate)** | "How Well" — quality judgment (read-only) | tsc/lint/regression check, APPROVED/REJECTED/CONDITIONS verdict |
+| **QA (test-runner)** | "Does it work" — functional verification | Test planning, execution, coverage reporting |
+
+**Workflow**:
+```
+User -> Main (analyze/dispatch) -> Agent(s) (implement) -> QA (test) -> PM (judge) -> Main (report) -> User
+```
+
+### 8.2 Token-Aware Delegation Policy (Tier System)
+
+| Tier | Criteria | Token Cost | QA | PM | Example |
+|------|----------|-----------|-----|-----|---------|
+| **1 Inline** | 1 file, <=10 lines | 0 extra | No | No | Typo fix, config change, i18n key |
+| **2 Single** | 1-3 files, single domain | ~30-50K | Optional | Optional | Component fix, hook addition |
+| **3 Multi** | 4+ files OR 2+ domains | ~100-200K | Required | Required | Story-level feature, architecture change |
+
+**Decision logic**:
+```
+1 file, <=10 lines        -> Tier 1 (Main handles directly)
+1-3 files, single domain  -> Tier 2 (single agent + memory preload)
+4+ files OR 2+ domains    -> Tier 3 (multi-agent pipeline)
+```
+
+**Token saving rules**:
+- Provide agents only necessary files, not full context
+- Include key information in issue body to reduce agent exploration
+- Reuse patterns from agent memory files
+
+### 8.3 Agent Memory System
+
+Persistent knowledge accumulation per agent, stored in `.claude/agents/memory/`:
+
+| File | Purpose |
+|------|---------|
+| `frontend-dev.md` | FSD structure, component patterns, motion tokens, view system |
+| `test-runner.md` | Test strategy, Vitest/Playwright config, MSW patterns |
+| `ux-designer.md` | A11y standards, responsive patterns, UX issue history |
+| `cross-agent.md` | Project-wide conventions (all agents must read) |
+| `delegation-metrics.md` | Daily token efficiency tracking |
+
+**Memory preload pattern** (every agent spawn):
+```
+Agent(subagent_type="frontend-dev", prompt="
+[PRE-LOAD] Read: .claude/agents/memory/frontend-dev.md, .claude/agents/memory/cross-agent.md
+[ISSUE] #71: dnd-kit migration
+[CONTEXT] {issue body or key summary}
+[TASK] {specific work instructions}
+")
+```
+
+**Update policy**:
+- **Who**: Main updates after agent work completes
+- **When**: Tier 2+ completion, new pattern discovery, mistake occurrence
+- **What**: New patterns, mistake/resolution, convention changes
+
+### 8.4 Rich Issue Template
+
+All issues should be self-contained so agents can work from the issue alone:
+
+```markdown
+## Context
+{Why this work is needed, which higher goal it serves}
+
+## Related Context Files
+- `memory/architecture.md` — architecture reference
+- `.claude/agents/memory/frontend-dev.md` — frontend patterns
+
+## Scope
+### Files to Modify
+- `frontend/src/widgets/xxx/ui/Component.tsx` — {change description}
+
+### Files to Reference (Read-only)
+- `frontend/src/types/mandala.ts` — InsightCard type reference
+
+## Requirements
+1. {Specific requirement}
+
+## Acceptance Criteria
+- [ ] `npx tsc --noEmit` passes
+- [ ] {Functional verification}
+- [ ] No regression in existing features
+
+## Agent Assignment
+- **Primary**: `agent:frontend-dev`
+- **Review**: `agent:ux-designer`
+- **QA**: `agent:test-runner`
+- **Tier**: 2 or 3
+```
+
+### 8.5 Continuous Improvement: Retrospective System
+
+**Daily (17:00)** — Record in `memory/retrospective.md`:
+- Work summary table (task, tier, agents, tokens, duration, result)
+- Quantified metrics: agent spawns, wasteful spawns, tier mismatches, PM rejections
+- Quality score (0-10): code quality, token efficiency, delegation accuracy, prompt clarity
+- Action items for next session
+- Prompt engineering notes (effective/ineffective patterns)
+
+**Weekly (every 7 days)** — Aggregate and compare:
+- Metrics delta table (this week vs last week)
+- Agent efficiency analysis (spawns, useful rate, token per spawn)
+- Policy adjustments with numerical justification
+- Update DELEGATION.md and agent memory files accordingly
+
+**Measurement targets (progressive improvement)**:
+
+| Metric | Month 1 | Month 2 | Month 3 |
+|--------|---------|---------|---------|
+| Wasteful spawn rate | <20% | <10% | <5% |
+| Token per task (avg) | baseline | -15% | -30% |
+| PM rejection rate | <20% | <10% | <5% |
+| Tier mismatch rate | <15% | <8% | <3% |
+| Avg quality score | 7/10 | 8/10 | 9/10 |
+
+### 8.7 North Star: Multi-Project GraphRAG
+
+현재 .md flat file 기반 시스템은 **GraphRAG의 Phase 0 (seed data)**에 해당한다.
+궁극 목표는 **프로젝트를 수행할수록 복리로 빨라지는 시스템**.
+
+**3-Layer Graph Architecture**:
+```
+Layer 3: Meta Graph      — cross-project 보편 지식 (무한 확장)
+Layer 2: Project Graph   — per-project 구체 지식
+Layer 1: Raw Data        — .md, source code, git history
+```
+
+**Evolution path**:
+```
+Phase 0: .md flat files (현재) ← Single Project
+Phase 1-5: Knowledge Graph → MCP Server ← Single Project, 자동화
+Phase 6: Multi-Project Meta Graph ← 프로젝트 간 지식 전이
+Phase 7: Self-Evolving System ← 자율 정책 최적화 + 인간 승인
+```
+
+**핵심 KPI**:
+- Project N의 소요 시간이 Project 1 대비 시간에 비례하여 감소
+- 목표: Project 5에서 50% 감소, Project 10에서 80% 감소
+- 신규 프로젝트 부트스트랩: 2-3일 → 30분
+
+**상세 로드맵**: [`docs/graph-rag-roadmap.md`](graph-rag-roadmap.md)
+
+### 8.6 Agent Roster (13 Agents)
+
+| Agent | Badge | Role | Trigger | Tools |
+|-------|-------|------|---------|-------|
+| `pm` | PM | Final quality judgment | Tier 3 completion | Read/Grep/Glob/Bash (read-only) |
+| `frontend-dev` | UI | React, hooks, components | `frontend/src/` changes | R/W/E/Bash |
+| `backend-dev` | API | API, Prisma, services | `src/api/`, `prisma/` changes | R/W/E/Bash |
+| `test-runner` | TST | Test + QA | Code changes (Tier 2+) | R/W/E/Bash |
+| `ux-designer` | UXD | UX/a11y audit (read-only) | UI work (with frontend trio) | Read/Grep/Glob |
+| `supabase-dev` | SB | Edge Functions, Docker | Supabase work | R/W/E/Bash |
+| `infra-dev` | INFRA | AWS, Terraform, CI/CD | `terraform/`, `.github/` | R/W/E/Bash |
+| `architect` | ARC | System design | Architecture changes | Read/Grep/Glob/Bash |
+| `security-auditor` | SEC | Security audit | Auth/security code | Read/Grep/Glob/Bash |
+| `docs-writer` | DOC | Technical docs | `docs/`, bulk `.md` | R/W/E |
+| `adapter-dev` | ADP | OAuth/Feed/File adapters | `src/adapters/` | R/W/E/Bash |
+| `sync-dev` | SYN | Sync logic, scheduling | `src/sync/` | R/W/E/Bash |
+| `ai-integration-dev` | AI | AI integration | AI/LLM work | R/W/E/Bash |
+
+**Required co-delegation (regression prevention)**:
+- **UI work trio**: `frontend-dev` + `ux-designer` + `test-runner` — always spawn together for `frontend/src/` changes (Tier 3)
 
 ---
 
