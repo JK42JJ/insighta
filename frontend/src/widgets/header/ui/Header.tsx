@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
 import { useAuth } from '@/features/auth/model/useAuth';
+import { MandalaSelector } from '@/widgets/mandala-selector';
 
 interface HeaderProps {
   onNavigateHome?: () => void;
@@ -119,6 +120,9 @@ export function Header({ onNavigateHome }: HeaderProps) {
             <span className="hidden sm:inline">{t('header.home')}</span>
             <span className="sr-only sm:hidden">{t('header.home')}</span>
           </Button>
+
+          {/* Mandala Selector (multi-mandala switching) */}
+          {isLoggedIn && <MandalaSelector />}
 
           {/* Mandala Settings Button */}
           <Button
