@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react';
 import { Header } from '@/widgets/header/ui/Header';
 import { DropZoneOverlay } from '@/widgets/header/ui/DropZoneOverlay';
-import { CardList } from '@/widgets/card-list/ui/CardList';
+import { CardListView } from '@/widgets/card-list-view';
 import { VideoPlayerModal } from '@/widgets/video-player/ui/VideoPlayerModal';
 import { FloatingScratchPad } from '@/widgets/scratch-pad/ui/FloatingScratchPad';
 import { FloatingMandala } from '@/widgets/floating-mandala/ui/FloatingMandala';
@@ -185,11 +185,15 @@ const IndexPage = () => {
         <div className="flex-1 overflow-hidden">
           <div className="container mx-auto px-4 py-4 h-full">
             <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 h-full">
-              {/* Card List */}
+              {/* Card List View (grid / list / list-detail) */}
               <div className="flex-1 min-w-0 overflow-y-auto relative z-10 scrollbar-pro">
-                <CardList
+                <CardListView
                   cards={cards.displayCards}
                   title={cards.displayTitle}
+                  viewMode={layout.viewMode}
+                  listPanelRatio={layout.listPanelRatio}
+                  onViewModeChange={layout.handleSetViewMode}
+                  onListPanelRatioChange={layout.handleSetListPanelRatio}
                   onCardClick={handleCardClick}
                   onCardDragStart={dragDrop.handleCardDragStart}
                   onMultiCardDragStart={dragDrop.handleMultiCardDragStart}

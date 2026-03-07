@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useUIPreferences } from '@/features/ui-preferences/model/useUIPreferences';
 import { useAuth } from '@/features/auth/model/useAuth';
 
+import type { ViewMode } from '@/entities/user/model/types';
+
 export type DockPosition = 'top' | 'bottom' | 'left' | 'right';
 export type MandalaDockPosition = 'left' | 'right';
 
@@ -28,6 +30,11 @@ interface UseLayoutPreferencesReturn {
   prefMandalaPosX: number | undefined;
   prefMandalaPosY: number | undefined;
   setMandalaPosition: (x: number, y: number) => void;
+  // View mode
+  viewMode: ViewMode;
+  listPanelRatio: number;
+  handleSetViewMode: (mode: ViewMode) => void;
+  handleSetListPanelRatio: (ratio: number) => void;
 }
 
 /**
@@ -48,6 +55,8 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
     setMandalaMinimized,
     setMandalaDockPosition: updateMandalaDockPosition,
     setMandalaPosition,
+    setViewMode,
+    setListPanelRatio,
   } = useUIPreferences();
 
   // Track if initial preferences have been loaded
@@ -60,6 +69,8 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
   const [isMandalaFloating, setIsMandalaFloatingLocal] = useState(false);
   const [isMandalaFloatingMode, setIsMandalaFloatingMode] = useState(false);
   const [mandalaDockPosition, setMandalaDockPositionLocal] = useState<MandalaDockPosition>('left');
+  const [viewMode, setViewModeLocal] = useState<ViewMode>('grid');
+  const [listPanelRatio, setListPanelRatioLocal] = useState(40);
 
   // Extract primitive values to avoid object reference issues in useEffect
   const prefScratchpadFloating = preferences?.scratchpad_is_floating;
@@ -71,6 +82,8 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
   const prefMandalaDock = preferences?.mandala_dock_position;
   const prefMandalaPosX = preferences?.mandala_position_x;
   const prefMandalaPosY = preferences?.mandala_position_y;
+  const prefViewMode = preferences?.view_mode;
+  const prefListPanelRatio = preferences?.list_panel_ratio;
 
   // Sync local state with preferences ONLY on initial load
   useEffect(() => {
@@ -80,6 +93,8 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
       setIsMandalaMinimizedLocal(prefMandalaMinimized ?? false);
       setIsMandalaFloatingLocal(prefMandalaFloating ?? false);
       setMandalaDockPositionLocal((prefMandalaDock as MandalaDockPosition) ?? 'left');
+      setViewModeLocal((prefViewMode as ViewMode) ?? 'grid');
+      setListPanelRatioLocal(prefListPanelRatio ?? 40);
       setHasInitializedPreferences(true);
     }
   }, [
@@ -89,6 +104,8 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
     prefMandalaFloating,
     prefMandalaMinimized,
     prefMandalaDock,
+    prefViewMode,
+    prefListPanelRatio,
     hasInitializedPreferences,
   ]);
 
@@ -143,6 +160,22 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
     [isLoggedIn, updateMandalaDockPosition],
   );
 
+  const handleSetViewMode = useCallback(
+    (mode: ViewMode) => {
+      setViewModeLocal(mode);
+      if (isLoggedIn) setViewMode(mode);
+    },
+    [isLoggedIn, setViewMode],
+  );
+
+  const handleSetListPanelRatio = useCallback(
+    (ratio: number) => {
+      setListPanelRatioLocal(ratio);
+      if (isLoggedIn) setListPanelRatio(ratio);
+    },
+    [isLoggedIn, setListPanelRatio],
+  );
+
   return {
     isScratchPadFloating,
     scratchPadDockPosition,
@@ -162,5 +195,9 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
     prefMandalaPosX,
     prefMandalaPosY,
     setMandalaPosition,
+    viewMode,
+    listPanelRatio,
+    handleSetViewMode,
+    handleSetListPanelRatio,
   };
 }

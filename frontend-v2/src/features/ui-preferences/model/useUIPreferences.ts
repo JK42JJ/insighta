@@ -7,6 +7,7 @@ import type {
   UIPreferencesUpdate,
   ScratchPadDockPosition,
   MandalaDockPosition,
+  ViewMode,
 } from '@/entities/user/model/types';
 import { DEFAULT_UI_PREFERENCES } from '@/entities/user/model/types';
 
@@ -28,6 +29,8 @@ interface UseUIPreferencesReturn {
   setMandalaMinimized: (isMinimized: boolean) => void;
   setMandalaDockPosition: (position: MandalaDockPosition) => void;
   setMandalaPosition: (x: number, y: number) => void;
+  setViewMode: (mode: ViewMode) => void;
+  setListPanelRatio: (ratio: number) => void;
 }
 
 /**
@@ -255,6 +258,20 @@ export function useUIPreferences(): UseUIPreferencesReturn {
     [updatePreferences]
   );
 
+  const setViewMode = useCallback(
+    (mode: ViewMode) => {
+      updatePreferences({ view_mode: mode });
+    },
+    [updatePreferences]
+  );
+
+  const setListPanelRatio = useCallback(
+    (ratio: number) => {
+      updatePreferences({ list_panel_ratio: ratio });
+    },
+    [updatePreferences]
+  );
+
   return {
     preferences: data || DEFAULT_UI_PREFERENCES,
     isLoading,
@@ -269,5 +286,7 @@ export function useUIPreferences(): UseUIPreferencesReturn {
     setMandalaMinimized,
     setMandalaDockPosition,
     setMandalaPosition,
+    setViewMode,
+    setListPanelRatio,
   };
 }
