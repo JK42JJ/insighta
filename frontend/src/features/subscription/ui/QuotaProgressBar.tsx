@@ -13,7 +13,7 @@ export function QuotaProgressBar({ used, limit, className }: QuotaProgressBarPro
   const percentage = limit > 0 ? Math.round((used / limit) * 100) : 0;
 
   const indicatorColor =
-    percentage >= 100 ? 'bg-destructive' : percentage >= 66 ? 'bg-yellow-500' : 'bg-emerald-500';
+    percentage >= 100 ? 'bg-destructive' : percentage >= 66 ? 'bg-warning' : 'bg-success';
 
   return (
     <div className={cn('space-y-1', className)}>

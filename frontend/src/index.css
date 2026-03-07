@@ -1,9 +1,6 @@
-@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:wght@400;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Source+Serif+Pro:wght@400;600;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -69,9 +66,9 @@
     --chart-5: 24 5% 44%;
 
     /* Typography */
-    --font-sans: 'Source Sans Pro', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
     --font-serif: 'Source Serif Pro', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
-    --font-mono: 'Source Code Pro', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
     
     --tracking-normal: 0em;
     --spacing: 0.25rem;
@@ -119,6 +116,14 @@
 
     /* Surface borders */
     --border-subtle: 0 0% 0% / 0.04;
+
+    /* Status semantic tokens */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
   }
 
   .dark {
@@ -218,6 +223,14 @@
 
     /* Surface borders */
     --border-subtle: 220 30% 100% / 0.06;
+
+    /* Status semantic tokens */
+    --success: 142 71% 45%;
+    --success-foreground: 225 40% 7%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 225 40% 7%;
+    --info: 217 91% 65%;
+    --info-foreground: 225 40% 7%;
   }
 }
 
@@ -282,6 +295,13 @@
     }
     100% {
       transform: translateX(200%);
+    }
+  }
+
+  /* Border beam animation for center mandala cell */
+  @keyframes beam-rotate {
+    to {
+      transform: rotate(360deg);
     }
   }
 
@@ -504,6 +524,11 @@
   .legal-prose code {
     @apply bg-muted text-foreground/80 px-1 py-0.5 rounded text-sm font-mono;
   }
+}
+
+/* Mobile bottom nav safe area */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 @media (prefers-reduced-motion: reduce) {

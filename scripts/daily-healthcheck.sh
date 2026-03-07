@@ -11,19 +11,23 @@
 
 set -euo pipefail
 
+# Load environment from .env.scripts
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+[ -f "$SCRIPT_DIR/.env.scripts" ] && . "$SCRIPT_DIR/.env.scripts"
+
 # ─── Configuration ────────────────────────────────────────
-DOMAIN="insighta.one"
+DOMAIN="${DOMAIN:-insighta.one}"
 SITE_URL="https://${DOMAIN}"
 HEALTH_URL="${SITE_URL}/health"
 AUTH_TEST_URL="${SITE_URL}/api/v1/playlists"
-EC2_HOST="44.231.152.49"
+EC2_HOST="${EC2_HOST:-44.231.152.49}"
 SSH_KEY="${HOME}/Downloads/prx01-tubearchive.pem"
-SSH_USER="ubuntu"
+SSH_USER="${EC2_USER:-ubuntu}"
 SSH_TIMEOUT=5
 CHECK_TIMEOUT=5
 DISK_WARN_THRESHOLD=80
 SSL_WARN_DAYS=30
-GITHUB_REPO="JK42JJ/insighta"
+GITHUB_REPO="${GITHUB_REPO:-JK42JJ/insighta}"
 
 # ─── Flags ────────────────────────────────────────────────
 JSON_OUTPUT=false

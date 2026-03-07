@@ -178,7 +178,7 @@ export function YouTubeSyncCard() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Youtube className="h-5 w-5 text-red-600" />
+            <Youtube className="h-5 w-5 text-destructive" />
             {t('youtube.syncTitle')}
           </CardTitle>
           <CardDescription>{t('youtube.syncDesc')}</CardDescription>
@@ -197,7 +197,7 @@ export function YouTubeSyncCard() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Youtube className="h-5 w-5 text-red-600" />
+            <Youtube className="h-5 w-5 text-destructive" />
             {t('youtube.syncTitle')}
           </CardTitle>
           <CardDescription>{t('youtube.syncDesc')}</CardDescription>
@@ -216,7 +216,7 @@ export function YouTubeSyncCard() {
             <Button
               onClick={handleSignIn}
               disabled={isSigningIn}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
             >
               {isSigningIn ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -235,7 +235,7 @@ export function YouTubeSyncCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Youtube className="h-5 w-5 text-red-600" />
+          <Youtube className="h-5 w-5 text-destructive" />
           {t('youtube.syncTitle')}
         </CardTitle>
         <CardDescription>{t('youtube.syncDesc')}</CardDescription>

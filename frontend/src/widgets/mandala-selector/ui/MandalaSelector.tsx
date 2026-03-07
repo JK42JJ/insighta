@@ -168,7 +168,7 @@ export function MandalaSelector({ onMandalaChange }: MandalaSelectorProps) {
               <Star
                 className={`w-3.5 h-3.5 shrink-0 ${
                   mandala.isDefault
-                    ? 'text-yellow-500 fill-yellow-500'
+                    ? 'text-warning fill-warning'
                     : 'text-muted-foreground opacity-0 group-hover:opacity-50'
                 }`}
               />

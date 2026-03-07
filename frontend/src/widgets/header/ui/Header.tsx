@@ -109,31 +109,29 @@ export function Header({ onNavigateHome }: HeaderProps) {
             </div>
           </button>
 
-          {/* Home Button */}
+          {/* Home Button — hidden on mobile (in bottom nav) */}
           <Button
             variant="ghost"
             size="sm"
             onClick={onNavigateHome}
-            className="rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
+            className="hidden md:flex rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
           >
             <Home className="w-4 h-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{t('header.home')}</span>
-            <span className="sr-only sm:hidden">{t('header.home')}</span>
+            <span>{t('header.home')}</span>
           </Button>
 
           {/* Mandala Selector (multi-mandala switching) */}
           {isLoggedIn && <MandalaSelector />}
 
-          {/* Mandala Settings Button */}
+          {/* Mandala Settings Button — hidden on mobile */}
           <Button
             variant="ghost"
             size="sm"
             onClick={() => navigate('/settings/mandala')}
-            className="rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
+            className="hidden md:flex rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
           >
             <LayoutGrid className="w-4 h-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{t('header.mandalaDesign')}</span>
-            <span className="sr-only sm:hidden">{t('header.mandalaDesign')}</span>
+            <span>{t('header.mandalaDesign')}</span>
           </Button>
         </div>
 

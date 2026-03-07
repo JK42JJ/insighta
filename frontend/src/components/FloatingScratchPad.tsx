@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, forwardRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/types/mandala';
 import {
   Lightbulb,
@@ -29,6 +30,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useDragSelect } from '@/hooks/useDragSelect';
 import { useTranslation } from 'react-i18next';
+import { createCardDragData, createMultiCardDragData } from '@/features/dnd';
 
 export type DockPosition = 'top' | 'bottom' | 'left' | 'right';
 
@@ -36,13 +38,9 @@ interface FloatingScratchPadProps {
   cards: InsightCard[];
   isDropTarget: boolean;
   onDrop: (url: string) => void;
-  onCardDrop: (cardId: string) => void;
-  onMultiCardDrop?: (cardIds: string[]) => void;
   onCardClick: (card: InsightCard) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
-  onCardDragStart: (card: InsightCard) => void;
-  onMultiCardDragStart?: (cards: InsightCard[]) => void;
   onDeleteCards?: (cardIds: string[]) => void;
   onFileDrop?: (files: FileList) => void;
   isFloating: boolean;
@@ -80,13 +78,9 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       cards,
       isDropTarget,
       onDrop,
-      onCardDrop,
-      onMultiCardDrop,
       onCardClick,
       onDragOver,
       onDragLeave,
-      onCardDragStart,
-      onMultiCardDragStart,
       onDeleteCards,
       onFileDrop,
       isFloating,
@@ -129,6 +123,12 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     const [canScrollDown, setCanScrollDown] = useState(false);
     const verticalScrollRef = useRef<HTMLDivElement | null>(null);
 
+    // dnd-kit droppable for internal card drops
+    const { setNodeRef: setDropNodeRef, isOver: isDndOver } = useDroppable({
+      id: `scratchpad-floating-${isFloating ? 'float' : dockPosition}`,
+      data: { type: 'scratchpad' },
+    });
+
     const setForwardedRef = useCallback(
       (node: HTMLDivElement | null) => {
         if (!forwardedRef) return;
@@ -141,17 +141,19 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     const setDockedElRef = useCallback(
       (node: HTMLDivElement | null) => {
         dockedRef.current = node;
+        setDropNodeRef(node);
         setForwardedRef(node);
       },
-      [setForwardedRef]
+      [setForwardedRef, setDropNodeRef]
     );
 
     const setFloatingElRef = useCallback(
       (node: HTMLDivElement | null) => {
         containerRef.current = node;
+        setDropNodeRef(node);
         setForwardedRef(node);
       },
-      [setForwardedRef]
+      [setForwardedRef, setDropNodeRef]
     );
 
     // Acceleration tracking for navigation buttons
@@ -184,6 +186,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       enabled: isFloating,
     });
 
+    const showDropIndicator = isDropTarget || isDndOver;
     const isHorizontalDock = dockPosition === 'top' || dockPosition === 'bottom';
     const isVerticalDock = dockPosition === 'left' || dockPosition === 'right';
 
@@ -381,37 +384,35 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       return () => document.removeEventListener('click', handleClickOutside);
     }, [isFloating]);
 
+    // HTML5 handlers — only for external URL/file drops (dnd-kit handles internal)
     const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-      onDragOver(e);
+      const types = e.dataTransfer.types;
+      const isExternal =
+        types.includes('text/uri-list') ||
+        types.includes('Files') ||
+        (types.includes('text/plain') && !types.includes('application/card-id'));
+      if (isExternal) {
+        e.preventDefault();
+        onDragOver(e);
+      }
     };
 
     const handleDrop = (e: React.DragEvent) => {
+      // Only handle external drops
+      const types = e.dataTransfer.types;
+      const hasInternalData =
+        types.includes('application/card-id') || types.includes('application/multi-card-ids');
+      if (hasInternalData) return;
+
       e.preventDefault();
 
-      // Check for file drops first
+      // File drops
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         onFileDrop?.(e.dataTransfer.files);
         return;
       }
 
-      const multiCardIdsData = e.dataTransfer.getData('application/multi-card-ids');
-      if (multiCardIdsData) {
-        try {
-          const multiCardIds = JSON.parse(multiCardIdsData) as string[];
-          onMultiCardDrop?.(multiCardIds);
-          return;
-        } catch (err) {
-          // Fall through
-        }
-      }
-
-      const cardId = e.dataTransfer.getData('application/card-id');
-      if (cardId) {
-        onCardDrop(cardId);
-        return;
-      }
-
+      // URL drops
       const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
       if (
         url &&
@@ -428,132 +429,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       }
     };
 
-    const handleCardDragStart = (e: React.DragEvent, card: InsightCard) => {
-      if (selectedCardIds.has(card.id) && selectedCardIds.size > 1) {
-        const selectedCards = cards.filter((c) => selectedCardIds.has(c.id));
-        const cardIds = selectedCards.map((c) => c.id);
-        e.dataTransfer.setData('application/multi-card-ids', JSON.stringify(cardIds));
-        e.dataTransfer.setData('application/card-id', card.id);
-        e.dataTransfer.setData('text/plain', selectedCards.map((c) => c.videoUrl).join('\n'));
-        e.dataTransfer.effectAllowed = 'move';
-
-        const dragImage = document.createElement('div');
-        dragImage.style.cssText = `position: absolute; left: -9999px; display: flex; align-items: center; justify-content: center; width: 120px; height: 90px;`;
-
-        const stackContainer = document.createElement('div');
-        stackContainer.style.cssText = `position: relative; width: 80px; height: 56px; transform-style: preserve-3d; perspective: 400px;`;
-
-        const maxThumbs = Math.min(selectedCards.length, 3);
-        for (let i = maxThumbs - 1; i >= 0; i--) {
-          const cardWrapper = document.createElement('div');
-          const offset = i * 5;
-          const rotation = (i - 1) * -3;
-          const scale = 1 - i * 0.02;
-
-          cardWrapper.style.cssText = `
-          position: absolute; left: ${offset}px; top: ${offset}px; width: 72px; height: 46px;
-          border-radius: 6px; overflow: hidden;
-          box-shadow: 0 ${3 + i * 2}px ${10 + i * 3}px rgba(0,0,0,${0.3 - i * 0.05});
-          transform: rotate(${rotation}deg) scale(${scale});
-          border: 2px solid rgba(255,255,255,0.15);
-          background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
-          z-index: ${maxThumbs - i};
-        `;
-
-          if (selectedCards[i]) {
-            const thumb = document.createElement('img');
-            thumb.src = selectedCards[i].thumbnail;
-            thumb.style.cssText = `width: 100%; height: 100%; object-fit: cover; filter: brightness(0.95);`;
-            cardWrapper.appendChild(thumb);
-          }
-
-          stackContainer.appendChild(cardWrapper);
-        }
-
-        const badge = document.createElement('div');
-        badge.style.cssText = `
-        position: absolute; right: -6px; top: -8px; min-width: 24px; height: 24px;
-        background: linear-gradient(135deg, #FF6B3D 0%, #FF8F6B 100%);
-        color: white; font-size: 11px; font-weight: 700;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        padding: 0 6px; border-radius: 12px;
-        display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 3px 10px rgba(255,107,61,0.4);
-        border: 2px solid rgba(255,255,255,0.2);
-        z-index: 100;
-      `;
-        badge.textContent = `${selectedCards.length}`;
-        stackContainer.appendChild(badge);
-
-        dragImage.appendChild(stackContainer);
-        document.body.appendChild(dragImage);
-        e.dataTransfer.setDragImage(dragImage, 50, 38);
-        setTimeout(() => document.body.removeChild(dragImage), 0);
-
-        onMultiCardDragStart?.(selectedCards);
-      } else {
-        if (!selectedCardIds.has(card.id)) {
-          setSelectedCardIds(new Set());
-        }
-        e.dataTransfer.setData('application/card-id', card.id);
-        e.dataTransfer.setData('text/plain', card.videoUrl);
-        e.dataTransfer.effectAllowed = 'move';
-
-        // Create single card drag image
-        const dragImage = document.createElement('div');
-        dragImage.style.cssText = `
-        position: absolute; 
-        left: -9999px; 
-        display: flex; 
-        align-items: center;
-        justify-content: center;
-        width: 100px;
-        height: 70px;
-      `;
-
-        const cardWrapper = document.createElement('div');
-        cardWrapper.style.cssText = `
-        width: 80px;
-        height: 52px;
-        border-radius: 6px;
-        overflow: hidden;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.35),
-                    0 3px 6px rgba(0,0,0,0.2),
-                    inset 0 1px 0 rgba(255,255,255,0.1);
-        border: 2px solid rgba(255,255,255,0.15);
-        background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
-        transform: rotate(-2deg);
-      `;
-
-        if (card.thumbnail) {
-          const thumb = document.createElement('img');
-          thumb.src = card.thumbnail;
-          thumb.style.cssText = `
-          width: 100%; 
-          height: 100%; 
-          object-fit: cover;
-          filter: brightness(0.95);
-        `;
-          cardWrapper.appendChild(thumb);
-
-          // Add subtle gradient overlay
-          const overlay = document.createElement('div');
-          overlay.style.cssText = `
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.4) 100%);
-        `;
-          cardWrapper.appendChild(overlay);
-        }
-
-        dragImage.appendChild(cardWrapper);
-        document.body.appendChild(dragImage);
-        e.dataTransfer.setDragImage(dragImage, 40, 26);
-        setTimeout(() => document.body.removeChild(dragImage), 0);
-
-        onCardDragStart(card);
-      }
-    };
+    // Card drag is now handled by dnd-kit via FSPDraggableCard component below
 
     const handleCardClick = (e: React.MouseEvent, card: InsightCard, cardIndex: number) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
@@ -777,70 +653,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       return createPortal(indicators, document.body);
     });
 
-    // Render card item
-    const renderCardItem = (card: InsightCard, idx: number, isCompact: boolean = false) => {
-      const isSelected = selectedCardIds.has(card.id);
-      const cardSize = isCompact ? 'w-14 h-8' : 'w-20 h-[45px]';
-      const timeSize = isCompact ? 'text-[6px]' : 'text-[8px]';
-      const checkSize = isCompact ? 'w-2 h-2' : 'w-2.5 h-2.5';
-
-      return (
-        <div
-          key={card.id}
-          data-card-item
-          draggable
-          onDragStart={(e) => handleCardDragStart(e, card)}
-          onClick={(e) => handleCardClick(e, card, idx)}
-          className="group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:-translate-y-0.5 rounded-sm"
-        >
-          <div
-            className={cn('relative overflow-hidden bg-muted rounded-sm', cardSize)}
-            style={{ boxShadow: 'var(--shadow-sm)' }}
-          >
-            <img
-              src={card.thumbnail}
-              alt={card.title}
-              className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-              loading="lazy"
-            />
-            <span
-              className={cn(
-                'absolute bottom-0 right-0 bg-background/90 text-foreground px-0.5 font-medium',
-                timeSize
-              )}
-            >
-              {getTimeLabel(new Date(card.createdAt), t)}
-            </span>
-            {isSelected && (
-              <div
-                className="absolute top-0.5 left-0.5 bg-primary rounded-full p-0.5 cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedCardIds((prev) => {
-                    const next = new Set(prev);
-                    next.delete(card.id);
-                    return next;
-                  });
-                }}
-              >
-                <Check className={checkSize} style={{ color: 'hsl(var(--primary-foreground))' }} />
-              </div>
-            )}
-            {!isCompact && (
-              <a
-                href={card.videoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="absolute top-0.5 right-0.5 z-10 bg-background/90 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity text-primary"
-              >
-                <ExternalLink className="w-2.5 h-2.5" />
-              </a>
-            )}
-          </div>
-        </div>
-      );
-    };
+    // renderCardItem delegates to FSPDraggableCard component below
 
     // Non-floating (docked) mode - Horizontal layout (top, bottom)
     if (!isFloating && isHorizontalDock) {
@@ -862,15 +675,15 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 'relative transition-all duration-300 w-full',
                 'bg-surface-mid/95 backdrop-blur-sm',
                 isTop ? 'border-b border-border/50' : 'border-t border-border/50',
-                isDropTarget && 'border-primary/60 bg-primary/5',
+                showDropIndicator && 'border-primary/60 bg-primary/5',
                 isDockedDragging && 'opacity-50'
               )}
-              style={{ boxShadow: isDropTarget ? 'var(--shadow-sm)' : 'none' }}
+              style={{ boxShadow: showDropIndicator ? 'var(--shadow-sm)' : 'none' }}
               onDragOver={handleDragOver}
               onDragLeave={onDragLeave}
               onDrop={handleDrop}
             >
-              {isDropTarget && (
+              {showDropIndicator && (
                 <div className="absolute inset-0 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] pointer-events-none z-10">
                   <span className="text-primary-foreground font-medium text-xs bg-primary/90 px-3 py-1 rounded-full">
                     {t('ideation.dropToAdd')}
@@ -924,7 +737,26 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                       <span className="text-xs">{t('ideation.emptyHint')}</span>
                     </div>
                   ) : (
-                    sortedCards.map((card, idx) => renderCardItem(card, idx, true))
+                    sortedCards.map((card, idx) => (
+                      <FSPDraggableCard
+                        key={card.id}
+                        card={card}
+                        idx={idx}
+                        isCompact
+                        isSelected={selectedCardIds.has(card.id)}
+                        onCardClick={handleCardClick}
+                        onDeselectCard={(cardId) =>
+                          setSelectedCardIds((prev) => {
+                            const next = new Set(prev);
+                            next.delete(cardId);
+                            return next;
+                          })
+                        }
+                        selectedCardIds={selectedCardIds}
+                        allCards={sortedCards}
+                        t={t}
+                      />
+                    ))
                   )}
                 </div>
 
@@ -970,19 +802,19 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               'relative transition-all duration-300 h-full',
               'bg-surface-light/80',
               dockPosition === 'left' ? 'border-r border-border/40' : 'border-l border-border/40',
-              isDropTarget && 'border-primary bg-primary/8',
+              showDropIndicator && 'border-primary bg-primary/8',
               isDockedDragging && 'opacity-50',
               isAnimating && 'animate-fade-in'
             )}
             style={{
-              boxShadow: isDropTarget ? 'var(--shadow-md)' : 'none',
+              boxShadow: showDropIndicator ? 'var(--shadow-md)' : 'none',
               width: '90px',
             }}
             onDragOver={handleDragOver}
             onDragLeave={onDragLeave}
             onDrop={handleDrop}
           >
-            {isDropTarget && (
+            {showDropIndicator && (
               <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] pointer-events-none z-10">
                 <span className="text-primary-foreground font-semibold text-[10px] bg-primary px-2 py-1 rounded-md whitespace-nowrap">
                   {t('ideation.dropToAdd')}
@@ -1042,52 +874,27 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                     </span>
                   </div>
                 ) : (
-                  sortedCards.map((card, idx) => {
-                    const isSelected = selectedCardIds.has(card.id);
-                    return (
-                      <div
-                        key={card.id}
-                        data-card-item
-                        draggable
-                        onDragStart={(e) => handleCardDragStart(e, card)}
-                        onClick={(e) => handleCardClick(e, card, idx)}
-                        className="group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:scale-[1.02]"
-                      >
-                        <div
-                          className="relative w-full aspect-video overflow-hidden bg-muted rounded"
-                          style={{ boxShadow: 'var(--shadow-xs)' }}
-                        >
-                          <img
-                            src={card.thumbnail}
-                            alt={card.title}
-                            className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-                            loading="lazy"
-                          />
-                          <span className="absolute bottom-0 right-0 text-[7px] bg-background/80 text-foreground px-0.5 font-medium rounded-tl">
-                            {getTimeLabel(new Date(card.createdAt), t)}
-                          </span>
-                          {isSelected && (
-                            <div
-                              className="absolute top-0 left-0 bg-primary rounded-br p-0.5 cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedCardIds((prev) => {
-                                  const next = new Set(prev);
-                                  next.delete(card.id);
-                                  return next;
-                                });
-                              }}
-                            >
-                              <Check
-                                className="w-2 h-2"
-                                style={{ color: 'hsl(var(--primary-foreground))' }}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
+                  sortedCards.map((card, idx) => (
+                    <FSPDraggableCard
+                      key={card.id}
+                      card={card}
+                      idx={idx}
+                      isCompact={false}
+                      isVertical
+                      isSelected={selectedCardIds.has(card.id)}
+                      onCardClick={handleCardClick}
+                      onDeselectCard={(cardId) =>
+                        setSelectedCardIds((prev) => {
+                          const next = new Set(prev);
+                          next.delete(cardId);
+                          return next;
+                        })
+                      }
+                      selectedCardIds={selectedCardIds}
+                      allCards={sortedCards}
+                      t={t}
+                    />
+                  ))
                 )}
               </div>
 
@@ -1120,7 +927,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           className={cn(
             'fixed rounded-xl transition-shadow duration-200',
             'bg-surface-mid/98 backdrop-blur-xl border border-border/60',
-            isDropTarget && 'border-primary bg-primary/8',
+            showDropIndicator && 'border-primary bg-primary/8',
             isDragging && 'cursor-grabbing',
             isResizing && 'cursor-se-resize'
           )}
@@ -1205,7 +1012,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           {/* Content */}
           {!isMinimized && (
             <div className="p-3 overflow-hidden" style={{ height: 'calc(100% - 44px)' }}>
-              {isDropTarget && (
+              {showDropIndicator && (
                 <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] rounded-xl pointer-events-none z-10">
                   <span className="text-primary-foreground font-semibold text-sm bg-primary px-4 py-2 rounded-lg">
                     {t('ideation.dropHere')}
@@ -1225,7 +1032,26 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   onClick={handleContainerClick}
                 >
                   {selectionStyle && <div style={selectionStyle} />}
-                  {sortedCards.map((card, idx) => renderCardItem(card, idx, false))}
+                  {sortedCards.map((card, idx) => (
+                    <FSPDraggableCard
+                      key={card.id}
+                      card={card}
+                      idx={idx}
+                      isCompact={false}
+                      isSelected={selectedCardIds.has(card.id)}
+                      onCardClick={handleCardClick}
+                      onDeselectCard={(cardId) =>
+                        setSelectedCardIds((prev) => {
+                          const next = new Set(prev);
+                          next.delete(cardId);
+                          return next;
+                        })
+                      }
+                      selectedCardIds={selectedCardIds}
+                      allCards={sortedCards}
+                      t={t}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -1253,3 +1079,142 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
 );
 
 FloatingScratchPad.displayName = 'FloatingScratchPad';
+
+function FSPDraggableCard({
+  card,
+  idx,
+  isCompact,
+  isVertical,
+  isSelected,
+  onCardClick,
+  onDeselectCard,
+  selectedCardIds,
+  allCards,
+  t,
+}: {
+  card: InsightCard;
+  idx: number;
+  isCompact: boolean;
+  isVertical?: boolean;
+  isSelected: boolean;
+  onCardClick: (e: React.MouseEvent, card: InsightCard, idx: number) => void;
+  onDeselectCard: (cardId: string) => void;
+  selectedCardIds: Set<string>;
+  allCards: InsightCard[];
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const dragData =
+    selectedCardIds.size > 1 && isSelected
+      ? createMultiCardDragData(
+          allCards.filter((c) => selectedCardIds.has(c.id)),
+          card.id
+        )
+      : createCardDragData(card);
+
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `fsp-card-${card.id}`,
+    data: dragData,
+  });
+
+  if (isVertical) {
+    return (
+      <div
+        ref={setNodeRef}
+        {...listeners}
+        {...attributes}
+        data-card-item
+        onClick={(e) => onCardClick(e, card, idx)}
+        className={cn(
+          'group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:scale-[1.02]',
+          isDragging && 'opacity-50'
+        )}
+      >
+        <div
+          className="relative w-full aspect-video overflow-hidden bg-muted rounded"
+          style={{ boxShadow: 'var(--shadow-xs)' }}
+        >
+          <img
+            src={card.thumbnail}
+            alt={card.title}
+            className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+            loading="lazy"
+          />
+          <span className="absolute bottom-0 right-0 text-[7px] bg-background/80 text-foreground px-0.5 font-medium rounded-tl">
+            {getTimeLabel(new Date(card.createdAt), t)}
+          </span>
+          {isSelected && (
+            <div
+              className="absolute top-0 left-0 bg-primary rounded-br p-0.5 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeselectCard(card.id);
+              }}
+            >
+              <Check className="w-2 h-2" style={{ color: 'hsl(var(--primary-foreground))' }} />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const cardSize = isCompact ? 'w-14 h-8' : 'w-20 h-[45px]';
+  const timeSize = isCompact ? 'text-[6px]' : 'text-[8px]';
+  const checkSize = isCompact ? 'w-2 h-2' : 'w-2.5 h-2.5';
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      data-card-item
+      onClick={(e) => onCardClick(e, card, idx)}
+      className={cn(
+        'group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:-translate-y-0.5 rounded-sm',
+        isDragging && 'opacity-50'
+      )}
+    >
+      <div
+        className={cn('relative overflow-hidden bg-muted rounded-sm', cardSize)}
+        style={{ boxShadow: 'var(--shadow-sm)' }}
+      >
+        <img
+          src={card.thumbnail}
+          alt={card.title}
+          className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+          loading="lazy"
+        />
+        <span
+          className={cn(
+            'absolute bottom-0 right-0 bg-background/90 text-foreground px-0.5 font-medium',
+            timeSize
+          )}
+        >
+          {getTimeLabel(new Date(card.createdAt), t)}
+        </span>
+        {isSelected && (
+          <div
+            className="absolute top-0.5 left-0.5 bg-primary rounded-full p-0.5 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeselectCard(card.id);
+            }}
+          >
+            <Check className={checkSize} style={{ color: 'hsl(var(--primary-foreground))' }} />
+          </div>
+        )}
+        {!isCompact && (
+          <a
+            href={card.videoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-0.5 right-0.5 z-10 bg-background/90 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity text-primary"
+          >
+            <ExternalLink className="w-2.5 h-2.5" />
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}

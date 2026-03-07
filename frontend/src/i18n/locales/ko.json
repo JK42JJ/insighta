@@ -416,7 +416,13 @@
     "qualityAnalysisDesc": "학습의 질과 참여 수준",
     "totalCards": "총 카드",
     "withMemo": "메모 있음",
-    "withoutMemo": "메모 없음"
+    "withoutMemo": "메모 없음",
+    "recentCards": "최근 카드",
+    "totalCardsLabel": "전체 카드",
+    "memoRate": "메모 비율",
+    "cardTypes": "카드 종류",
+    "recentWeek": "이번 주",
+    "noCards": "아직 카드가 없습니다. 카드를 추가하면 대시보드가 표시됩니다."
   },
   "playlist": {
     "neverSynced": "동기화된 적 없음",
@@ -485,5 +491,47 @@
     "termsOfService": "서비스 이용약관",
     "privacyPolicy": "개인정보처리방침",
     "allRightsReserved": "All rights reserved."
+  },
+  "viewMode": {
+    "label": "보기 모드",
+    "mandala": "만다라트",
+    "grid": "카드 그리드",
+    "list": "리스트",
+    "dashboard": "대시보드",
+    "comingSoon": "향후 업데이트에서 제공됩니다."
+  },
+  "gridView": {
+    "searchPlaceholder": "카드 검색...",
+    "sortBy": "정렬",
+    "sortLatest": "최신순",
+    "sortName": "이름순",
+    "sortType": "타입순",
+    "filterSource": "소스",
+    "sourceAll": "전체",
+    "sourceYouTube": "YouTube",
+    "sourceLocal": "로컬",
+    "sourceUrl": "URL",
+    "noResults": "필터 조건에 맞는 카드가 없습니다.",
+    "noCards": "아직 카드가 없습니다. 만다라 또는 스크래치패드에서 카드를 추가하세요."
+  },
+  "mobileNav": {
+    "home": "홈",
+    "views": "보기"
+  },
+  "listView": {
+    "selectCard": "카드를 선택하면 상세 정보가 표시됩니다",
+    "noCards": "아직 카드가 없습니다...",
+    "noResults": "필터 조건에 맞는 카드가 없습니다.",
+    "noteLabel": "메모",
+    "notePlaceholder": "메모를 작성하세요...",
+    "openExternal": "링크 열기",
+    "deleteCard": "삭제",
+    "deleteConfirm": "이 카드를 삭제할까요?",
+    "metadata": "메타데이터",
+    "source": "소스",
+    "created": "생성일"
+  },
+  "common": {
+    "cancel": "취소"
   }
 }
