@@ -1585,8 +1585,22 @@ const Index = () => {
                 </div>
               </div>
             )}
-            {viewMode === 'grid' && <CardGridView />}
-            {viewMode === 'list' && <ListView />}
+            {viewMode === 'grid' && (
+              <CardGridView
+                cards={scratchPadCards}
+                onCardClick={handleCardClick}
+                onSaveNote={handleSaveNote}
+                onDeleteCards={handleDeleteCards}
+              />
+            )}
+            {viewMode === 'list' && (
+              <ListView
+                cards={scratchPadCards}
+                onCardClick={handleCardClick}
+                onSaveNote={handleSaveNote}
+                onDeleteCards={handleDeleteCards}
+              />
+            )}
             {viewMode === 'dashboard' && <DashboardView />}
           </div>
         </div>

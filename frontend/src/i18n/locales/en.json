@@ -493,5 +493,31 @@
     "list": "List",
     "dashboard": "Dashboard",
     "comingSoon": "Coming soon in a future update."
+  },
+  "gridView": {
+    "searchPlaceholder": "Search cards...",
+    "sortBy": "Sort by",
+    "sortLatest": "Latest",
+    "sortName": "Name",
+    "sortType": "Type",
+    "filterSource": "Source",
+    "sourceAll": "All",
+    "sourceYouTube": "YouTube",
+    "sourceLocal": "Local",
+    "sourceUrl": "URL",
+    "noResults": "No cards match your filters.",
+    "noCards": "No cards yet. Add cards from the Mandala or ScratchPad."
+  },
+  "listView": {
+    "selectCard": "Select a card to view details",
+    "noCards": "No cards yet...",
+    "noResults": "No cards match your filters.",
+    "noteLabel": "Notes",
+    "notePlaceholder": "Write a note...",
+    "openExternal": "Open link",
+    "deleteCard": "Delete",
+    "metadata": "Metadata",
+    "source": "Source",
+    "created": "Created"
   }
 }

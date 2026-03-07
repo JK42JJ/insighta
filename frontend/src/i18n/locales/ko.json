@@ -493,5 +493,31 @@
     "list": "리스트",
     "dashboard": "대시보드",
     "comingSoon": "향후 업데이트에서 제공됩니다."
+  },
+  "gridView": {
+    "searchPlaceholder": "카드 검색...",
+    "sortBy": "정렬",
+    "sortLatest": "최신순",
+    "sortName": "이름순",
+    "sortType": "타입순",
+    "filterSource": "소스",
+    "sourceAll": "전체",
+    "sourceYouTube": "YouTube",
+    "sourceLocal": "로컬",
+    "sourceUrl": "URL",
+    "noResults": "필터 조건에 맞는 카드가 없습니다.",
+    "noCards": "아직 카드가 없습니다. 만다라 또는 스크래치패드에서 카드를 추가하세요."
+  },
+  "listView": {
+    "selectCard": "카드를 선택하면 상세 정보가 표시됩니다",
+    "noCards": "아직 카드가 없습니다...",
+    "noResults": "필터 조건에 맞는 카드가 없습니다.",
+    "noteLabel": "메모",
+    "notePlaceholder": "메모를 작성하세요...",
+    "openExternal": "링크 열기",
+    "deleteCard": "삭제",
+    "metadata": "메타데이터",
+    "source": "소스",
+    "created": "생성일"
   }
 }
