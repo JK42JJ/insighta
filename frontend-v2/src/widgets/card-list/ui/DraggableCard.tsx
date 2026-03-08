@@ -5,6 +5,7 @@ import { cn } from '@/shared/lib/utils';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
+import { linkTypeToSourceType } from '@/entities/content';
 
 interface DraggableCardProps {
   card: InsightCard;
@@ -122,7 +123,7 @@ export function DraggableCard({ card, onClick, compact = false }: DraggableCardP
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           className="bg-background/80 backdrop-blur-sm rounded p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-primary hover:text-primary/80"
-          title={t('draggableCard.viewOnYouTube')}
+          title={t(`draggableCard.viewSource.${linkTypeToSourceType(card.linkType ?? 'youtube')}`)}
         >
           <ExternalLink className="w-3 h-3" />
         </a>
