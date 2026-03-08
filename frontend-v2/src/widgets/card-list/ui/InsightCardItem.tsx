@@ -4,7 +4,8 @@ import { useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
-import { GripVertical, StickyNote, Tag, Play } from 'lucide-react';
+import { GripVertical, StickyNote, Play } from 'lucide-react';
+import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
 
 interface InsightCardItemProps {
@@ -183,15 +184,11 @@ export function InsightCardItem({
               </div>
             )}
 
-            {/* Link type badge */}
-            {card.linkType && card.linkType !== 'youtube' && (
-              <div className="flex items-center gap-1">
-                <Tag className="w-2.5 h-2.5 text-muted-foreground" aria-hidden="true" />
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                  {card.linkType}
-                </span>
-              </div>
-            )}
+            {/* Source type badge + meta */}
+            <div className="flex items-center gap-1.5">
+              {card.linkType && <SourceTypeBadge linkType={card.linkType} />}
+              <SourceMetaInfo card={card} view="grid" />
+            </div>
           </div>
         </div>
 

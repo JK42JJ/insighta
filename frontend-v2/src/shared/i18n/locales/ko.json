@@ -418,7 +418,13 @@
   },
   "draggableCard": {
     "shareOnX": "X에 공유",
-    "viewOnYouTube": "YouTube에서 보기"
+    "viewOnYouTube": "YouTube에서 보기",
+    "viewSource": {
+      "youtube": "YouTube에서 보기",
+      "article": "아티클 보기",
+      "podcast": "팟캐스트 듣기",
+      "book": "책 열기"
+    }
   },
   "view": {
     "grid": "그리드",

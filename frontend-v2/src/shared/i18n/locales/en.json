@@ -418,7 +418,13 @@
   },
   "draggableCard": {
     "shareOnX": "Share on X",
-    "viewOnYouTube": "View on YouTube"
+    "viewOnYouTube": "View on YouTube",
+    "viewSource": {
+      "youtube": "View on YouTube",
+      "article": "View Article",
+      "podcast": "Listen to Podcast",
+      "book": "Open Book"
+    }
   },
   "view": {
     "grid": "Grid",
