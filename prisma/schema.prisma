@@ -365,6 +365,7 @@ model users {
   sessions                    sessions[]
   user_local_cards            user_local_cards[]
   user_mandalas               user_mandalas[]
+  mandala_subscriptions       mandala_subscriptions[]
   user_subscriptions          user_subscriptions[]
   user_ui_preferences         user_ui_preferences[]
   UserVideoState              UserVideoState[]
@@ -383,15 +384,20 @@ model user_mandalas {
   user_id    String                @db.Uuid
   title      String                @default("My Mandala")
   is_default Boolean               @default(true)
+  is_public  Boolean               @default(false)
+  share_slug String?               @unique
   position   Int                   @default(0)
   created_at DateTime              @default(now()) @db.Timestamptz(6)
   updated_at DateTime              @default(now()) @db.Timestamptz(6)
-  users       users                 @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  levels      user_mandala_levels[]
-  videoStates UserVideoState[]
-  localCards  user_local_cards[]
+  users          users                      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  levels         user_mandala_levels[]
+  videoStates    UserVideoState[]
+  localCards     user_local_cards[]
+  subscriptions  mandala_subscriptions[]
+  activity_logs  mandala_activity_log[]
 
   @@index([user_id], map: "idx_user_mandalas_user_id")
+  @@index([is_public], map: "idx_user_mandalas_is_public")
   @@schema("public")
 }
 
@@ -414,6 +420,38 @@ model user_mandala_levels {
 
   @@unique([mandala_id, level_key])
   @@index([mandala_id], map: "idx_user_mandala_levels_mandala_id")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model mandala_subscriptions {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriber_id String        @db.Uuid
+  mandala_id    String        @db.Uuid
+  subscribed_at DateTime      @default(now()) @db.Timestamptz(6)
+  users         users         @relation(fields: [subscriber_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  mandala       user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([subscriber_id, mandala_id])
+  @@index([subscriber_id], map: "idx_mandala_subscriptions_subscriber_id")
+  @@index([mandala_id], map: "idx_mandala_subscriptions_mandala_id")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model mandala_activity_log {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mandala_id  String        @db.Uuid
+  user_id     String        @db.Uuid
+  action      String
+  entity_type String
+  entity_id   String?       @db.Uuid
+  metadata    Json?
+  created_at  DateTime      @default(now()) @db.Timestamptz(6)
+  mandala     user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([mandala_id, created_at(sort: Desc)], map: "idx_mandala_activity_log_mandala_created")
+  @@index([user_id], map: "idx_mandala_activity_log_user_id")
   @@schema("public")
 }
 

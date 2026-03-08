@@ -1,6 +1,7 @@
 import { getPrismaClient } from '../database/client';
 import { logger } from '../../utils/logger';
 import { user_mandalas } from '@prisma/client';
+import { nanoid } from 'nanoid';
 
 const MANDALA_QUOTA = {
   free: 3,
@@ -22,6 +23,8 @@ export interface MandalaWithLevels {
   userId: string;
   title: string;
   isDefault: boolean;
+  isPublic: boolean;
+  shareSlug: string | null;
   position: number;
   createdAt: Date;
   updatedAt: Date;
@@ -87,6 +90,8 @@ export class MandalaManager {
       userId: mandala.user_id,
       title: mandala.title,
       isDefault: mandala.is_default,
+      isPublic: mandala.is_public,
+      shareSlug: mandala.share_slug,
       position: mandala.position,
       createdAt: mandala.created_at,
       updatedAt: mandala.updated_at,
@@ -616,6 +621,113 @@ export class MandalaManager {
       logger.info(`Mandala upserted: userId=${userId}, mandalaId=${mandala.id}`);
       return result;
     });
+  }
+
+  /**
+   * Toggles the public visibility of a mandala.
+   * When making public, generates a unique share_slug via nanoid.
+   * When making private, clears the share_slug.
+   */
+  async togglePublic(
+    userId: string,
+    mandalaId: string,
+    isPublic: boolean
+  ): Promise<MandalaWithLevels> {
+    return await this.prisma.$transaction(async (tx) => {
+      await this.verifyOwnership(userId, mandalaId, tx as any);
+
+      const shareSlug = isPublic ? nanoid(12) : null;
+
+      await tx.user_mandalas.update({
+        where: { id: mandalaId },
+        data: {
+          is_public: isPublic,
+          share_slug: shareSlug,
+          updated_at: new Date(),
+        },
+      });
+
+      // If making private, remove all subscriptions
+      if (!isPublic) {
+        await tx.mandala_subscriptions.deleteMany({
+          where: { mandala_id: mandalaId },
+        });
+      }
+
+      logger.info(
+        `Mandala visibility changed: userId=${userId}, mandalaId=${mandalaId}, isPublic=${isPublic}`
+      );
+
+      const result = await tx.user_mandalas.findUnique({
+        where: { id: mandalaId },
+        include: {
+          levels: {
+            orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+          },
+        },
+      });
+
+      if (!result) {
+        throw new Error('Failed to update mandala');
+      }
+
+      return this.mapMandala(result);
+    });
+  }
+
+  /**
+   * Gets a public mandala by its share slug. No authentication required.
+   * Returns null if not found or not public.
+   */
+  async getPublicMandala(shareSlug: string): Promise<MandalaWithLevels | null> {
+    const mandala = await this.prisma.user_mandalas.findFirst({
+      where: { share_slug: shareSlug, is_public: true },
+      include: {
+        levels: {
+          orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+        },
+      },
+    });
+
+    if (!mandala) return null;
+
+    return this.mapMandala(mandala);
+  }
+
+  /**
+   * Lists public mandalas with pagination for the explore page.
+   */
+  async listPublicMandalas(options?: {
+    page?: number;
+    limit?: number;
+  }): Promise<{ mandalas: MandalaWithLevels[]; total: number; page: number; limit: number }> {
+    const page = options?.page ?? 1;
+    const limit = options?.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const [mandalas, total] = await Promise.all([
+      this.prisma.user_mandalas.findMany({
+        where: { is_public: true },
+        include: {
+          levels: {
+            orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+          },
+        },
+        orderBy: [{ updated_at: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      this.prisma.user_mandalas.count({
+        where: { is_public: true },
+      }),
+    ]);
+
+    return {
+      mandalas: mandalas.map((m) => this.mapMandala(m)),
+      total,
+      page,
+      limit,
+    };
   }
 
   /**
