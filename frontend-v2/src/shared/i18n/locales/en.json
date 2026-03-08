@@ -437,5 +437,13 @@
     "termsOfService": "Terms of Service",
     "privacyPolicy": "Privacy Policy",
     "allRightsReserved": "All rights reserved."
+  },
+  "offline": {
+    "banner": "You are offline. Changes will sync when reconnected."
+  },
+  "sw": {
+    "updateAvailable": "A new version is available.",
+    "reload": "Reload",
+    "dismiss": "Dismiss"
   }
 }
