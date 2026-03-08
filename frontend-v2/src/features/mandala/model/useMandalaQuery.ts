@@ -67,3 +67,76 @@ export function useMandalaQuery() {
     saveMandala: saveMutation.mutateAsync,
   };
 }
+
+export function useMandalaList() {
+  const { isLoggedIn } = useAuth();
+
+  return useQuery({
+    queryKey: queryKeys.mandala.list(),
+    queryFn: async () => {
+      const data = await apiClient.listMandalas();
+      return data;
+    },
+    enabled: isLoggedIn,
+    staleTime: 30_000,
+  });
+}
+
+export function useMandalaQuota() {
+  const { isLoggedIn } = useAuth();
+
+  return useQuery({
+    queryKey: queryKeys.mandala.quota(),
+    queryFn: () => apiClient.getMandalaQuota(),
+    enabled: isLoggedIn,
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateMandala() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (title: string) => apiClient.createMandala(title),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.quota() });
+    },
+  });
+}
+
+export function useDeleteMandala() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => apiClient.deleteMandala(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.quota() });
+    },
+  });
+}
+
+export function useRenameMandala() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      apiClient.updateMandala(id, { title }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.all });
+    },
+  });
+}
+
+export function useSwitchMandala() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => apiClient.updateMandala(id, { isDefault: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.all });
+    },
+  });
+}

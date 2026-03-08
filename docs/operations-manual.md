@@ -1416,8 +1416,8 @@ CLAUDE.md (프로젝트 루트 — 최상위 규칙)
 | # | Dimension | 0.0 (worst) | 1.0 (best) |
 |---|-----------|-------------|------------|
 | D1 | Context Retention | 3회+ 정보 재탐색 | memory만으로 충분 |
-| D2 | Error Prevention | 기존 패턴 재발 | 모든 기존 패턴 회피 |
-| D3 | Lesson Yield | 교훈 없음 | 2+ 유효 교훈 추출 |
+| D2 | Error Prevention | 기존 패턴 재발 (+ Regression Multiplier) | 모든 기존 패턴 회피 |
+| D3 | Improvement Action | 타겟 무시 | 타겟 적용 + 새 발견 + memory 반영 |
 | D4 | Memory Hygiene | 미점검 | 전체 점검, 0건 stale |
 | D5 | Work Efficiency | 비효율 다수 | 모든 규칙 준수 |
 
@@ -1437,6 +1437,52 @@ CLAUDE.md (프로젝트 루트 — 최상위 규칙)
 | checkpoint.md | 교훈 필드 기록 (2) | 최근 교훈 검토 (Phase 6a) |
 | eval-scores.md | Epoch 채점 기록 (6) | Eval 트렌드 + 최약점 로드 (Phase 6c) |
 | retrospective.md | — | 개선 이력 확인 (Phase 6d) |
+
+### 10.4.1 Regression Penalty — 행동 변화 유도 메커니즘 (v3)
+
+점수가 낮아도 같은 실수가 반복되는 문제를 해결하기 위한 **Detection → Escalation → Enforcement → Resolution** closed loop.
+
+**핵심 원리**: 기록(passive)에서 개입(active)으로 전환. `/boot`에서 체크리스트를 출력하고, `/checkpoint`에서 escalation을 판정한다.
+
+#### Regression Counter
+
+troubleshooting.md의 각 패턴에 `[LEVEL-N, recurrence: N]` 태그를 부착.
+- `/checkpoint` Step 3a에서 기존 패턴 재발 감지 시 `recurrence += 1`
+- 새 패턴은 `recurrence: 1`로 시작
+
+#### Graduated Enforcement (3단계 에스컬레이션)
+
+| Level | 조건 | 적용 위치 | 강제 행동 |
+|-------|------|----------|----------|
+| **LEVEL-1** | recurrence = 1 | troubleshooting.md | 기록만 |
+| **LEVEL-2** | recurrence = 2 | boot Phase 5 강화 | **Pre-flight Checklist**: 관련 작업 시작 전 체크리스트 출력, 각 항목 확인 선언 필수 |
+| **LEVEL-3** | recurrence >= 3 | CLAUDE.md hard rule | **Blocking Rule**: 해당 작업 시 유저 확인 후 진행 |
+
+#### D2 Regression Multiplier
+
+Eval D2(Error Prevention) 채점 시 base score에 multiplier 적용:
+- recurrence=1: × 1.0 (첫 발생, 감점 없음)
+- recurrence=2: base × 0.7
+- recurrence=3+: base × 0.5
+
+예시: 기존 패턴 재발(base 0.50) + recurrence=3 → 0.50 × 0.5 = **0.25**
+
+#### De-escalation (해제 조건)
+
+| 조건 | 행동 |
+|------|------|
+| D2 = 1.00 연속 5 epoch | LEVEL-3 → LEVEL-2 |
+| D2 = 1.00 연속 10 epoch | LEVEL-2 → LEVEL-1 |
+| LEVEL-1 + D2 = 1.00 연속 5 epoch | watchlist 해제 |
+
+#### 적용 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| checkpoint.md | Step 3a recurrence 카운터 + escalation, Step 6 Regression Multiplier |
+| boot.md | Phase 5 Pre-flight Checklist, Phase 6c LEVEL-2+ 경고 |
+| troubleshooting.md | 패턴 헤더에 LEVEL/recurrence 태그, Regression Watchlist 섹션 |
+| eval-scores.md | Scoring Guide v3 (D2 Regression Multiplier), Meta v3 행 |
 
 ### 10.5 `/work` — Work Execution Command
 
