@@ -230,6 +230,30 @@
     @apply bg-background text-foreground font-sans;
   }
 
+  /* Skip navigation link — visible on focus only */
+  .skip-nav {
+    @apply sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100];
+    @apply focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground;
+    @apply focus:rounded-lg focus:font-medium focus:text-sm focus:shadow-lg;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+  }
+
+  /* Global focus-visible styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Remove focus-visible from elements that already handle it */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [role="button"]:focus-visible,
+  [tabindex]:focus-visible {
+    @apply outline-none ring-2 ring-primary/50 ring-offset-1 ring-offset-background rounded-sm;
+  }
+
   /* Hide scrollbar but keep functionality */
   .scrollbar-none {
     -ms-overflow-style: none;

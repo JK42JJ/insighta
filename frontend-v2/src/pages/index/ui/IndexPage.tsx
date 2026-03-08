@@ -336,7 +336,7 @@ function AuthenticatedApp() {
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-hidden flex">
+        <main id="main-content" className="flex-1 overflow-hidden flex">
           {/* Left docked ScratchPad */}
           {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'left' && (
             <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-r border-border/30 relative z-30 h-full">

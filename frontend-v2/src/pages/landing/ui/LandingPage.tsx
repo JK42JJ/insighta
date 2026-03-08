@@ -20,10 +20,12 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
       <LandingHeader onLogin={handleLogin} />
+      <main id="main-content">
       <HeroSection onLogin={handleLogin} />
       <FeatureCards />
       <BentoSection onLogin={handleLogin} />
       <CTASection onLogin={handleLogin} />
+      </main>
       <FooterSection />
     </div>
   );
