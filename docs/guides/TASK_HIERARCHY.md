@@ -91,7 +91,7 @@ npm run format       # Code formatted correctly
 
 **Directory Structure**:
 ```
-sync-youtube-playlists/
+insighta/
 ├── src/
 │   ├── api/              # YouTube API client
 │   │   ├── youtube-client.ts

@@ -32,6 +32,7 @@ import {
 import { Input } from '@/shared/ui/input';
 import { useMandalas, type MandalaListItem } from '@/hooks/useMandalas';
 import { useToast } from '@/hooks/use-toast';
+import { QuotaProgressBar, TierBadge, UpgradeModal } from '@/features/subscription';
 
 interface MandalaSelectorProps {
   onMandalaChange?: (mandalaId: string) => void;
@@ -59,6 +60,7 @@ export function MandalaSelector({ onMandalaChange }: MandalaSelectorProps) {
   const [deleteTarget, setDeleteTarget] = useState<MandalaListItem | null>(null);
   const [renameTarget, setRenameTarget] = useState<MandalaListItem | null>(null);
   const [renameTitle, setRenameTitle] = useState('');
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
 
   const activeMandala = mandalas.find((m) => m.isDefault) ?? mandalas[0];
   const canCreate = quota ? quota.remaining > 0 : true;
@@ -151,6 +153,7 @@ export function MandalaSelector({ onMandalaChange }: MandalaSelectorProps) {
             <span className="truncate hidden sm:inline">
               {activeMandala?.title ?? t('mandalaSelector.select')}
             </span>
+            {quota && <TierBadge tier={quota.tier} className="hidden sm:inline-flex" />}
             <ChevronDown className="w-3 h-3 shrink-0 opacity-50" />
           </Button>
         </DropdownMenuTrigger>
@@ -165,7 +168,7 @@ export function MandalaSelector({ onMandalaChange }: MandalaSelectorProps) {
               <Star
                 className={`w-3.5 h-3.5 shrink-0 ${
                   mandala.isDefault
-                    ? 'text-yellow-500 fill-yellow-500'
+                    ? 'text-warning fill-warning'
                     : 'text-muted-foreground opacity-0 group-hover:opacity-50'
                 }`}
               />
@@ -200,12 +203,22 @@ export function MandalaSelector({ onMandalaChange }: MandalaSelectorProps) {
 
           <DropdownMenuSeparator className="bg-border/50" />
 
+          {quota && (
+            <div className="px-2 py-1.5">
+              <QuotaProgressBar used={quota.used} limit={quota.limit} />
+            </div>
+          )}
+
           <DropdownMenuItem
             className="gap-2 cursor-pointer hover:bg-surface-light"
-            disabled={!canCreate || isCreating}
+            disabled={isCreating}
             onClick={() => {
-              setNewTitle('');
-              setIsCreateOpen(true);
+              if (!canCreate) {
+                setIsUpgradeOpen(true);
+              } else {
+                setNewTitle('');
+                setIsCreateOpen(true);
+              }
             }}
           >
             {isCreating ? (
@@ -214,11 +227,6 @@ export function MandalaSelector({ onMandalaChange }: MandalaSelectorProps) {
               <Plus className="w-3.5 h-3.5" />
             )}
             <span className="text-sm">{t('mandalaSelector.create')}</span>
-            {quota && (
-              <span className="ml-auto text-xs text-muted-foreground">
-                {quota.used}/{quota.limit}
-              </span>
-            )}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -300,6 +308,16 @@ export function MandalaSelector({ onMandalaChange }: MandalaSelectorProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Upgrade Modal */}
+      {quota && (
+        <UpgradeModal
+          open={isUpgradeOpen}
+          onOpenChange={setIsUpgradeOpen}
+          currentUsed={quota.used}
+          currentLimit={quota.limit}
+        />
+      )}
     </>
   );
 }

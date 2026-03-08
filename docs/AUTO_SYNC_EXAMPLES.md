@@ -275,7 +275,7 @@ After=network.target
 [Service]
 Type=simple
 User=yourusername
-WorkingDirectory=/path/to/sync-youtube-playlists
+WorkingDirectory=/path/to/insighta
 Environment="NODE_ENV=production"
 Environment="DATABASE_URL=file:./prisma/prod.db"
 ExecStart=/usr/bin/node dist/cli/index.js scheduler start

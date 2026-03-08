@@ -13,7 +13,7 @@ export default function NotFoundPage() {
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
 
-      <main className="flex-1 flex items-center justify-center px-4">
+      <main id="main-content" className="flex-1 flex items-center justify-center px-4">
         <div className="text-center space-y-6">
           <h1 className="text-7xl font-bold text-primary">404</h1>
           <h2 className="text-2xl font-semibold text-foreground">

@@ -1,4 +1,6 @@
+import { useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
+import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import { Lightbulb, Plus, ExternalLink } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import {
@@ -18,7 +20,6 @@ interface ScratchPadProps {
   onCardClick: (card: InsightCard) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
-  onCardDragStart: (card: InsightCard) => void;
 }
 
 // Dynamic time label based on age
@@ -47,6 +48,27 @@ function getTimeLabel(
   }
 }
 
+function DraggableScratchCard({
+  card,
+  children,
+}: {
+  card: InsightCard;
+  children: (props: {
+    isDragging: boolean;
+    dragRef: (node: HTMLElement | null) => void;
+    dragListeners: ReturnType<typeof useDraggable>['listeners'];
+    dragAttributes: ReturnType<typeof useDraggable>['attributes'];
+  }) => React.ReactNode;
+}) {
+  const dragData: DragData = { type: 'card', card };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: cardDragId(card.id),
+    data: dragData,
+  });
+
+  return <>{children({ isDragging, dragRef: setNodeRef, dragListeners: listeners, dragAttributes: attributes })}</>;
+}
+
 // Get tick style based on time resolution
 function getTickStyle(date: Date): { height: string; opacity: string } {
   const now = new Date();
@@ -71,7 +93,6 @@ export function ScratchPad({
   onCardClick,
   onDragOver,
   onDragLeave,
-  onCardDragStart,
 }: ScratchPadProps) {
   const { t } = useTranslation();
 
@@ -95,12 +116,6 @@ export function ScratchPad({
     }
   };
 
-  const handleCardDragStart = (e: React.DragEvent, card: InsightCard) => {
-    e.dataTransfer.setData('application/card-id', card.id);
-    e.dataTransfer.setData('text/plain', card.videoUrl);
-    e.dataTransfer.effectAllowed = 'move';
-    onCardDragStart(card);
-  };
 
   const sortedCards = [...cards].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -217,43 +232,54 @@ export function ScratchPad({
           ) : (
             <div className="flex gap-2 overflow-x-auto scrollbar-none py-1">
               {sortedCards.map((card) => (
-                <div
-                  key={card.id}
-                  draggable
-                  onDragStart={(e) => handleCardDragStart(e, card)}
-                  onClick={() => onCardClick(card)}
-                  className="group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform duration-200 hover:-translate-y-0.5"
-                >
-                  <div
-                    className="relative w-[80px] h-[45px] overflow-hidden bg-muted"
-                    style={{ boxShadow: 'var(--shadow-sm)' }}
-                  >
-                    <img
-                      src={card.thumbnail}
-                      alt={card.title}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src =
-                          'https://via.placeholder.com/320x180?text=Thumbnail';
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                    <span className="absolute bottom-0.5 right-0.5 text-[8px] bg-background/90 text-foreground px-1 font-medium rounded-sm">
-                      {getTimeLabel(new Date(card.createdAt), t)}
-                    </span>
-
-                    <a
-                      href={card.videoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-0.5 right-0.5 z-10 bg-background/90 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity text-primary"
+                <DraggableScratchCard key={card.id} card={card}>
+                  {({ isDragging, dragRef, dragListeners, dragAttributes }) => (
+                    <div
+                      ref={dragRef}
+                      {...dragAttributes}
+                      onClick={() => onCardClick(card)}
+                      className={cn(
+                        'group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform duration-200 hover:-translate-y-0.5',
+                        isDragging && 'opacity-30'
+                      )}
                     >
-                      <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                  </div>
-                </div>
+                      {/* Drag handle */}
+                      <div
+                        {...dragListeners}
+                        className="absolute inset-0 z-[1]"
+                      />
+                      <div
+                        className="relative w-[80px] h-[45px] overflow-hidden bg-muted"
+                        style={{ boxShadow: 'var(--shadow-sm)' }}
+                      >
+                        <img
+                          src={card.thumbnail}
+                          alt={card.title}
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              'https://via.placeholder.com/320x180?text=Thumbnail';
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                        <span className="absolute bottom-0.5 right-0.5 text-[8px] bg-background/90 text-foreground px-1 font-medium rounded-sm">
+                          {getTimeLabel(new Date(card.createdAt), t)}
+                        </span>
+
+                        <a
+                          href={card.videoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute top-0.5 right-0.5 z-10 bg-background/90 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity text-primary"
+                        >
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </DraggableScratchCard>
               ))}
             </div>
           )}

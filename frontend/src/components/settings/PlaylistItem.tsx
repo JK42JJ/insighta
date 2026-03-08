@@ -47,7 +47,7 @@ export function PlaylistItem({
         return <Badge variant="secondary">{t('playlist.syncing')}</Badge>;
       case 'completed':
         return (
-          <Badge variant="default" className="bg-green-600">
+          <Badge variant="default" className="bg-success">
             {t('playlist.completed')}
           </Badge>
         );

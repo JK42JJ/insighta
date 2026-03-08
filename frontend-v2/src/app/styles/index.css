@@ -28,41 +28,41 @@
     --popover: 40 12% 97%;
     --popover-foreground: 24 9% 10%;
 
-    /* Accent color - warm orange for primary actions */
-    --primary: 20 90% 52%;
+    /* Accent color - warm orange for primary actions (AA compliant) */
+    --primary: 20 90% 38%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 24 5% 44%;
+    --secondary: 24 5% 38%;
     --secondary-foreground: 40 15% 99%;
 
     --muted: 35 8% 85%;
     --muted-foreground: 24 10% 30%;
 
     --accent: 35 30% 95%;
-    --accent-foreground: 20 90% 45%;
+    --accent-foreground: 20 90% 38%;
 
-    --destructive: 0 72% 50%;
-    --destructive-foreground: 0 85% 97%;
+    --destructive: 0 72% 44%;
+    --destructive-foreground: 0 0% 100%;
 
     --border: 35 10% 80%;
     --input: 35 10% 85%;
-    --ring: 20 90% 52%;
+    --ring: 20 90% 38%;
 
     --radius: 0.75rem;
 
     /* Sidebar */
     --sidebar-background: 40 12% 97%;
     --sidebar-foreground: 24 9% 10%;
-    --sidebar-primary: 20 90% 52%;
+    --sidebar-primary: 20 90% 38%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 35 30% 95%;
-    --sidebar-accent-foreground: 20 90% 45%;
+    --sidebar-accent-foreground: 20 90% 38%;
     --sidebar-border: 35 10% 80%;
-    --sidebar-ring: 20 90% 52%;
+    --sidebar-ring: 20 90% 38%;
     --sidebar: 40 12% 97%;
 
     /* Chart colors */
-    --chart-1: 20 90% 52%;
+    --chart-1: 20 90% 38%;
     --chart-2: 30 85% 55%;
     --chart-3: 35 90% 60%;
     --chart-4: 25 80% 50%;
@@ -142,7 +142,7 @@
     --primary: 18 85% 58%;
     --primary-foreground: 225 40% 7%;
 
-    --secondary: 220 15% 50%;
+    --secondary: 220 15% 45%;
     --secondary-foreground: 220 20% 97%;
 
     --muted: 225 25% 18%;
@@ -151,8 +151,9 @@
     --accent: 225 25% 18%;
     --accent-foreground: 18 85% 65%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 85% 97%;
+    /* AA 4.53:1 white-on-red at L=50%; bg-on-dark=4.24:1 passes AA-large (3:1) */
+    --destructive: 0 84% 50%;
+    --destructive-foreground: 0 0% 100%;
 
     --border: 225 20% 20%;
     --input: 225 20% 18%;
@@ -230,6 +231,30 @@
     @apply bg-background text-foreground font-sans;
   }
 
+  /* Skip navigation link — visible on focus only */
+  .skip-nav {
+    @apply sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100];
+    @apply focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground;
+    @apply focus:rounded-lg focus:font-medium focus:text-sm focus:shadow-lg;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+  }
+
+  /* Global focus-visible styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Remove focus-visible from elements that already handle it */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [role="button"]:focus-visible,
+  [tabindex]:focus-visible {
+    @apply outline-none ring-2 ring-primary/50 ring-offset-1 ring-offset-background rounded-sm;
+  }
+
   /* Hide scrollbar but keep functionality */
   .scrollbar-none {
     -ms-overflow-style: none;
@@ -299,6 +324,31 @@
       opacity: 1;
     }
   }
+
+  /* Stacked bar slide-in animation */
+  @keyframes bar-slide-in {
+    0% {
+      transform: scaleX(0);
+      opacity: 0;
+    }
+    100% {
+      transform: scaleX(1);
+      opacity: 1;
+    }
+  }
+
+  /* Card tile pop-in animation */
+  @keyframes card-pop-in {
+    0% {
+      transform: scale(0.5);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
 }
 
 @layer components {
@@ -460,6 +510,37 @@
     height: 60%;
     background: hsl(var(--primary));
     border-radius: 0 2px 2px 0;
+  }
+
+  /* Landing page animations */
+  @keyframes mandala-orbit {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  @keyframes mandala-glow-pulse {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.08); }
+  }
+
+  @keyframes mandala-dot-pulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.15); }
+  }
+
+  @keyframes fade-in-up {
+    0% { opacity: 0; transform: translateY(24px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fade-in {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+
+  @keyframes subtle-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
   }
 
   /* Ripple expand animation for mandala level transitions */

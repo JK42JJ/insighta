@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { VideoPlayerModal } from './VideoPlayerModal';
 import { useTranslation } from 'react-i18next';
+import { motion } from 'framer-motion';
+import { duration, easing } from '@/lib/motion';
 
 interface InsightCardItemProps {
   card: InsightCard;
@@ -234,24 +236,21 @@ export function InsightCardItem({
         }}
       >
         {/* Front Side */}
-        <div
-          className={`backface-hidden ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} group rounded-2xl overflow-hidden ${isFlipped ? 'invisible' : ''}`}
+        <motion.div
+          className={`backface-hidden ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} group rounded-2xl overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 ${isFlipped ? 'invisible' : ''}`}
+          tabIndex={0}
           style={{
             backfaceVisibility: 'hidden',
             background: 'hsl(var(--bg-light))',
             boxShadow: 'var(--shadow-sm)',
             border: '1px solid hsl(var(--border) / 0.4)',
-            transition: 'transform 0.18s ease, box-shadow 0.18s ease',
           }}
+          whileHover={{ scale: 1.02, boxShadow: 'var(--shadow-lg)' }}
+          whileTap={{ scale: 0.97 }}
+          transition={{ duration: duration.fast, ease: easing.enter }}
           onClick={handleFlip}
           draggable={isDraggable && !isFlipped}
           onDragStart={handleDragStart}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = 'var(--shadow-lg)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-          }}
         >
           {/* Drag Handle */}
           <div className="absolute top-2.5 left-2.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -276,6 +275,7 @@ export function InsightCardItem({
             <img
               src={card.thumbnail}
               alt={card.title}
+              loading="lazy"
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
               onError={(e) => {
                 (e.target as HTMLImageElement).src =
@@ -369,19 +369,21 @@ export function InsightCardItem({
               <span className="text-xs text-muted-foreground font-medium">
                 {new Date(card.createdAt).toLocaleDateString('ko-KR')}
               </span>
-              <a
+              <motion.a
                 href={card.videoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary transition-colors duration-200"
                 style={{ boxShadow: 'var(--shadow-sm)' }}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+              </motion.a>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Back Side (Memo Editor) */}
         <div

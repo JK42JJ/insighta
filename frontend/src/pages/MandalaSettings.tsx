@@ -392,7 +392,7 @@ export default function MandalaSettings() {
                               maxLength={30}
                             />
                             {subject.trim() && (
-                              <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                              <Check className="w-4 h-4 text-success flex-shrink-0" />
                             )}
                             {expandedSubject === idx ? (
                               <ChevronDown className="w-4 h-4 text-muted-foreground" />
@@ -493,7 +493,7 @@ export default function MandalaSettings() {
         <AlertDialogContent className="bg-surface-mid border-border/50">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              <AlertTriangle className="w-5 h-5 text-warning" />
               {t('mandalaSettings.overwriteTitle')}
             </AlertDialogTitle>
             <AlertDialogDescription>

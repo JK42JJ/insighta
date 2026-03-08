@@ -8,6 +8,7 @@
     "close": "Close",
     "confirm": "Confirm",
     "loading": "Loading...",
+    "skipToContent": "Skip to main content",
     "error": "Error",
     "success": "Success",
     "login": "Login",
@@ -419,10 +420,30 @@
     "shareOnX": "Share on X",
     "viewOnYouTube": "View on YouTube"
   },
+  "view": {
+    "grid": "Grid",
+    "list": "List",
+    "listDetail": "List + Detail",
+    "switchView": "Switch view",
+    "noCardSelected": "No card selected",
+    "selectCardHint": "Select a card from the list to view details",
+    "noteEditor": "Note",
+    "preview": "Preview",
+    "edit": "Edit",
+    "saveNote": "Save note"
+  },
   "footer": {
     "brand": "Insighta",
     "termsOfService": "Terms of Service",
     "privacyPolicy": "Privacy Policy",
     "allRightsReserved": "All rights reserved."
+  },
+  "offline": {
+    "banner": "You are offline. Changes will sync when reconnected."
+  },
+  "sw": {
+    "updateAvailable": "A new version is available.",
+    "reload": "Reload",
+    "dismiss": "Dismiss"
   }
 }
