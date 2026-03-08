@@ -1,8 +1,8 @@
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
-import { Badge } from '@/shared/ui/badge';
 import type { InsightCard } from '@/entities/card/model/types';
+import { SourceTypeBadge } from '@/entities/content';
 
 interface ListViewItemProps {
   card: InsightCard;
@@ -73,11 +73,7 @@ export const ListViewItem = memo(function ListViewItem({
 
       {/* Meta: date + badge */}
       <div className="flex-shrink-0 flex items-center gap-2">
-        {card.linkType && card.linkType !== 'youtube' && (
-          <Badge variant="outline" className="text-[10px] px-1 py-0">
-            {card.linkType}
-          </Badge>
-        )}
+        {card.linkType && <SourceTypeBadge linkType={card.linkType} />}
         <span className="text-xs text-muted-foreground whitespace-nowrap">
           {formatRelativeDate(card.createdAt)}
         </span>
