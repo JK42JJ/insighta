@@ -71,6 +71,28 @@ interface SyncStatus {
   error?: string;
 }
 
+interface MandalaResponse {
+  id: string;
+  userId: string;
+  title: string;
+  isDefault: boolean;
+  isPublic: boolean;
+  shareSlug: string | null;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+  levels: Array<{
+    id: string;
+    levelKey: string;
+    centerGoal: string;
+    subjects: string[];
+    position: number;
+    depth: number;
+    color: string | null;
+    parentLevelId: string | null;
+  }>;
+}
+
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
@@ -367,6 +389,97 @@ class ApiClient {
   }
 
   // ========================================
+  // Mandala Share & Subscribe
+  // ========================================
+
+  async toggleMandalaShare(
+    mandalaId: string,
+    isPublic: boolean,
+  ): Promise<{ mandala: MandalaResponse }> {
+    return this.request<{ mandala: MandalaResponse }>(`/mandalas/${mandalaId}/share`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublic }),
+    });
+  }
+
+  async getPublicMandala(slug: string): Promise<{ mandala: MandalaResponse }> {
+    return this.request<{ mandala: MandalaResponse }>(`/mandalas/public/${slug}`);
+  }
+
+  async listPublicMandalas(
+    page?: number,
+    limit?: number,
+  ): Promise<{
+    mandalas: MandalaResponse[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const params = new URLSearchParams();
+    if (page) params.set('page', String(page));
+    if (limit) params.set('limit', String(limit));
+    const query = params.toString() ? `?${params}` : '';
+    return this.request(`/mandalas/explore${query}`);
+  }
+
+  async subscribeMandala(mandalaId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/mandalas/${mandalaId}/subscribe`, {
+      method: 'POST',
+    });
+  }
+
+  async unsubscribeMandala(mandalaId: string): Promise<void> {
+    return this.request<void>(`/mandalas/${mandalaId}/subscribe`, {
+      method: 'DELETE',
+    });
+  }
+
+  async listSubscriptions(
+    page?: number,
+    limit?: number,
+  ): Promise<{
+    subscriptions: Array<{
+      id: string;
+      mandalaId: string;
+      title: string;
+      subscribedAt: string;
+    }>;
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const params = new URLSearchParams();
+    if (page) params.set('page', String(page));
+    if (limit) params.set('limit', String(limit));
+    const query = params.toString() ? `?${params}` : '';
+    return this.request(`/mandalas/subscriptions${query}`);
+  }
+
+  async getMandalaActivity(
+    mandalaId: string,
+    page?: number,
+    limit?: number,
+  ): Promise<{
+    activities: Array<{
+      id: string;
+      action: string;
+      entityType: string;
+      entityId: string | null;
+      metadata: unknown;
+      createdAt: string;
+    }>;
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const params = new URLSearchParams();
+    if (page) params.set('page', String(page));
+    if (limit) params.set('limit', String(limit));
+    const query = params.toString() ? `?${params}` : '';
+    return this.request(`/mandalas/${mandalaId}/activity${query}`);
+  }
+
+  // ========================================
   // Health Check
   // ========================================
 
@@ -381,4 +494,4 @@ export const apiClient = new ApiClient(API_BASE_URL);
 export default apiClient;
 
 // Export types for use in components
-export type { User, Playlist, Video, Note, SyncStatus, ApiError };
+export type { User, Playlist, Video, Note, SyncStatus, ApiError, MandalaResponse };
