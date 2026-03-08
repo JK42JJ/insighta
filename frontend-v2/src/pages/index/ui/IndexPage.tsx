@@ -260,7 +260,6 @@ function AuthenticatedApp() {
     onCardClick: handleCardClick,
     onDragOver: () => dragDrop.setIsScratchPadDropTarget(true),
     onDragLeave: () => dragDrop.setIsScratchPadDropTarget(false),
-    onCardDragStart: dragDrop.handleCardDragStart,
     onDeleteCards: cards.handleDeleteCards,
     onFileDrop: cards.handleScratchPadFileDrop,
     isFloating,
