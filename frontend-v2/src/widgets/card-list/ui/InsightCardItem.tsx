@@ -14,6 +14,7 @@ interface InsightCardItemProps {
   onSave?: (id: string, note: string) => void;
   isDraggable?: boolean;
   selectedCardIds?: Set<string>;
+  disableFlip?: boolean;
   className?: string;
 }
 
@@ -24,6 +25,7 @@ export function InsightCardItem({
   onSave,
   isDraggable: canDrag = false,
   selectedCardIds,
+  disableFlip = false,
   className,
 }: InsightCardItemProps) {
   const { t } = useTranslation();
@@ -31,7 +33,8 @@ export function InsightCardItem({
   const [noteValue, setNoteValue] = useState(card.userNote ?? '');
 
   // Build drag data — include selected card IDs for multi-select drag
-  const isMultiSelect = selectedCardIds && selectedCardIds.has(card.id) && selectedCardIds.size > 1;
+  const isSelected = selectedCardIds?.has(card.id) ?? false;
+  const isMultiSelect = isSelected && selectedCardIds && selectedCardIds.size > 1;
   const dragData: DragData = isMultiSelect
     ? { type: 'card', card, selectedCardIds: [...selectedCardIds!] }
     : { type: 'card-reorder', card };
@@ -41,6 +44,9 @@ export function InsightCardItem({
     data: dragData,
     disabled: !canDrag,
   });
+
+  // Selected cards: entire card is draggable. Unselected: only grip handle.
+  const cardListeners = isSelected ? listeners : undefined;
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -90,22 +96,30 @@ export function InsightCardItem({
   return (
     <Card
       ref={setNodeRef}
-      {...(canDrag ? { ...listeners, ...attributes } : {})}
+      {...(canDrag ? { ...attributes, ...cardListeners } : {})}
+      data-dnd-draggable={isSelected ? '' : undefined}
       onClick={handleClick}
       className={cn(
         'group relative cursor-pointer transition-all duration-200 [perspective:800px]',
         'border-0 shadow-none bg-transparent',
-        canDrag && 'cursor-grab active:cursor-grabbing',
+        isSelected && canDrag && 'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-30',
         className,
       )}
     >
-      <div className="[transform-style:preserve-3d] transition-transform duration-500 group-hover:[transform:rotateY(180deg)]">
+      <div className={cn(
+        '[transform-style:preserve-3d] transition-transform duration-500',
+        !disableFlip && 'group-hover:[transform:rotateY(180deg)]'
+      )}>
         {/* === Front face === */}
         <div className="[backface-visibility:hidden] bg-card rounded-xl border shadow-sm overflow-hidden">
-          {/* Drag handle */}
-          {canDrag && (
-            <div className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Drag handle — triggers dnd-kit drag when card is not selected */}
+          {canDrag && !isSelected && (
+            <div
+              {...listeners}
+              data-dnd-handle
+              className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+            >
               <div className="bg-background/80 backdrop-blur-sm rounded p-0.5">
                 <GripVertical className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
               </div>

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useDroppable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { InsightCardItem } from './InsightCardItem';
-import { FileVideo, Check, Trash2 } from 'lucide-react';
+import { FileVideo, Check } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDragSelect } from '@/features/drag-select/model/useDragSelect';
 import { cardSlotDropId } from '@/shared/lib/dnd';
@@ -17,6 +17,7 @@ interface CardListProps {
   onSaveNote?: (id: string, note: string) => void;
   onCardsReorder?: (reorderedCards: InsightCard[]) => void;
   onDeleteCards?: (cardIds: string[]) => void;
+  onSelectionChange?: (selectedIds: string[]) => void;
 }
 
 // Wrapper to make each card slot a droppable for reorder
@@ -53,6 +54,7 @@ export function CardList({
   onCardClick,
   onSaveNote,
   onDeleteCards,
+  onSelectionChange,
 }: CardListProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -83,6 +85,11 @@ export function CardList({
       return prev;
     });
   }, [cards]);
+
+  // Notify parent of selection changes
+  useEffect(() => {
+    onSelectionChange?.([...selectedCardIds]);
+  }, [selectedCardIds, onSelectionChange]);
 
   // ESC key to clear selection
   useEffect(() => {
@@ -123,7 +130,7 @@ export function CardList({
     [sortedCards]
   );
 
-  const { selectionStyle, justFinishedDrag } = useDragSelect({
+  const { selectionStyle, justFinishedDrag, isDragging: isDragSelecting } = useDragSelect({
     containerRef: gridRef,
     itemSelector: '[data-card-item]',
     onSelectionChange: handleDragSelectChange,
@@ -193,26 +200,7 @@ export function CardList({
   };
 
   return (
-    <div className="space-y-4 animate-fade-in" onClick={handleContainerClick} ref={containerRef}>
-      {selectedCardIds.size > 0 && (
-        <div className="flex items-center gap-3">
-          <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
-            {t('cards.selected', { count: selectedCardIds.size })}
-          </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDeleteCards?.([...selectedCardIds]);
-              setSelectedCardIds(new Set());
-              setLastSelectedIndex(null);
-            }}
-            className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
-            title={t('cards.deleteSelected')}
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+    <div className="animate-fade-in" onClick={handleContainerClick} ref={containerRef}>
       <div
         ref={gridRef}
         className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center"
@@ -246,7 +234,8 @@ export function CardList({
                 onCtrlClick={(e) => handleCardClick(e, card, idx)}
                 onSave={onSaveNote}
                 isDraggable={true}
-                selectedCardIds={selectedCardIds.size > 1 ? selectedCardIds : undefined}
+                selectedCardIds={selectedCardIds.size > 0 ? selectedCardIds : undefined}
+                disableFlip={isDragSelecting}
               />
             </CardSlot>
           );

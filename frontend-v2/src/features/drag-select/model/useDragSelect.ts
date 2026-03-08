@@ -1,12 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-/** Check if the target element (or an ancestor) is a dnd-kit draggable */
-function isDndDraggable(el: HTMLElement): boolean {
-  return !!(
-    el.closest('[aria-roledescription="draggable"]') ||
-    el.closest('[draggable="true"]') ||
-    el.closest('[data-dnd-draggable]')
-  );
+/** Check if the target element is a dnd-kit drag handle or a selected draggable card */
+function isDndActivator(el: HTMLElement): boolean {
+  return !!(el.closest('[data-dnd-handle]') || el.closest('[data-dnd-draggable]'));
 }
 
 interface SelectionBox {
@@ -35,15 +31,21 @@ export function useDragSelect({
   const startPosRef = useRef({ x: 0, y: 0 });
   const isPendingRef = useRef(false);
   const startClientRef = useRef({ x: 0, y: 0 });
-  const DRAG_THRESHOLD = 5; // Minimum pixels to move before starting drag selection
+  const isDraggingRef = useRef(false);
+  const DRAG_THRESHOLD = 5;
+
+  // Keep ref in sync with state for use in native event handlers
+  useEffect(() => {
+    isDraggingRef.current = isDragging;
+  }, [isDragging]);
 
   const getRelativePosition = useCallback(
-    (e: MouseEvent) => {
+    (clientX: number, clientY: number) => {
       if (!containerRef.current) return { x: 0, y: 0 };
       const rect = containerRef.current.getBoundingClientRect();
       return {
-        x: e.clientX - rect.left + containerRef.current.scrollLeft,
-        y: e.clientY - rect.top + containerRef.current.scrollTop,
+        x: clientX - rect.left + containerRef.current.scrollLeft,
+        y: clientY - rect.top + containerRef.current.scrollTop,
       };
     },
     [containerRef]
@@ -68,7 +70,6 @@ export function useDragSelect({
       const itemRight = itemX + itemRect.width;
       const itemBottom = itemY + itemRect.height;
 
-      // Check if item intersects with selection box
       if (itemX < maxX && itemRight > minX && itemY < maxY && itemBottom > minY) {
         selectedIndices.push(index);
       }
@@ -77,51 +78,51 @@ export function useDragSelect({
     return selectedIndices;
   }, [containerRef, itemSelector, selectionBox]);
 
-  const handleMouseDown = useCallback(
-    (e: MouseEvent) => {
-      if (!enabled) return;
-      // Only start drag selection on left click
+  // Use pointerdown on document (capture phase) to fire BEFORE dnd-kit's handlers
+  useEffect(() => {
+    if (!enabled) return;
+
+    const handlePointerDown = (e: PointerEvent) => {
       if (e.button !== 0) return;
-      // Don't start if Ctrl/Meta key is pressed (for individual selection)
       if (e.ctrlKey || e.metaKey) return;
 
-      // If the mousedown started on a dnd-kit draggable element, let dnd-kit handle it
-      const target = e.target as HTMLElement | null;
-      if (target && isDndDraggable(target)) {
-        isPendingRef.current = false;
-        return;
-      }
+      // Only handle events inside our container
+      const container = containerRef.current;
+      if (!container) return;
+      if (!container.contains(e.target as Node)) return;
 
-      // Store start position and mark as pending
-      const pos = getRelativePosition(e);
+      // Skip if started on dnd-kit drag handle
+      const target = e.target as HTMLElement;
+      if (isDndActivator(target)) return;
+
+      const pos = getRelativePosition(e.clientX, e.clientY);
       startPosRef.current = pos;
       startClientRef.current = { x: e.clientX, y: e.clientY };
       isPendingRef.current = true;
+    };
 
-      // Prevent text selection during drag-select
-      e.preventDefault();
-    },
-    [enabled, getRelativePosition]
-  );
-
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      // Check if we should start dragging (threshold check)
-      if (isPendingRef.current && !isDragging) {
+    const handlePointerMove = (e: PointerEvent) => {
+      // Threshold check: start drag-select after moving enough pixels
+      if (isPendingRef.current && !isDraggingRef.current) {
         const dx = Math.abs(e.clientX - startClientRef.current.x);
         const dy = Math.abs(e.clientY - startClientRef.current.y);
 
         if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
-          // Check if we started on a card that is actually draggable
-          const target = document.elementFromPoint(
+          // Final check: if the start element was a dnd handle, bail out
+          const startTarget = document.elementFromPoint(
             startClientRef.current.x,
             startClientRef.current.y
-          ) as HTMLElement;
-          const cardItem = target?.closest('[data-card-item]');
-          if (cardItem && target && isDndDraggable(target)) {
+          ) as HTMLElement | null;
+          if (startTarget && isDndActivator(startTarget)) {
             isPendingRef.current = false;
             return;
           }
+
+          isPendingRef.current = false;
+          isDraggingRef.current = true;
+
+          // Prevent text selection
+          document.body.style.userSelect = 'none';
 
           setSelectionBox({
             startX: startPosRef.current.x,
@@ -130,68 +131,54 @@ export function useDragSelect({
             endY: startPosRef.current.y,
           });
           setIsDragging(true);
-          isPendingRef.current = false;
         }
       }
 
-      if (!isDragging) return;
+      if (!isDraggingRef.current) return;
 
-      const pos = getRelativePosition(e);
+      const pos = getRelativePosition(e.clientX, e.clientY);
       setSelectionBox((prev) =>
         prev
-          ? {
-              ...prev,
-              endX: pos.x,
-              endY: pos.y,
-            }
+          ? { ...prev, endX: pos.x, endY: pos.y }
           : null
       );
-    },
-    [isDragging, getRelativePosition]
-  );
+    };
 
-  const handleMouseUp = useCallback(() => {
-    if (isDragging && selectionBox) {
+    const handlePointerUp = () => {
+      if (isDraggingRef.current) {
+        // Use a microtask to read the latest selectionBox state
+        setIsDragging(false);
+        setJustFinishedDrag(true);
+        setTimeout(() => setJustFinishedDrag(false), 100);
+      }
+      isPendingRef.current = false;
+      isDraggingRef.current = false;
+      document.body.style.userSelect = '';
+    };
+
+    // Capture phase ensures we fire BEFORE any child element handlers (including dnd-kit)
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+      document.body.style.userSelect = '';
+    };
+  }, [enabled, containerRef, getRelativePosition]);
+
+  // Finalize selection when isDragging transitions from true to false
+  const prevDraggingRef = useRef(false);
+  useEffect(() => {
+    if (prevDraggingRef.current && !isDragging && selectionBox) {
       const selectedIndices = getSelectedIndices();
       onSelectionChange(selectedIndices);
-      // Prevent click event from clearing selection
-      setJustFinishedDrag(true);
-      setTimeout(() => setJustFinishedDrag(false), 100);
+      setSelectionBox(null);
     }
-    setIsDragging(false);
-    setSelectionBox(null);
-    isPendingRef.current = false;
+    prevDraggingRef.current = isDragging;
   }, [isDragging, selectionBox, getSelectedIndices, onSelectionChange]);
-
-  // Prevent text selection during drag
-  useEffect(() => {
-    if (isDragging) {
-      document.body.style.userSelect = 'none';
-      document.body.style.webkitUserSelect = 'none';
-    } else {
-      document.body.style.userSelect = '';
-      document.body.style.webkitUserSelect = '';
-    }
-    return () => {
-      document.body.style.userSelect = '';
-      document.body.style.webkitUserSelect = '';
-    };
-  }, [isDragging]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container || !enabled) return;
-
-    container.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      container.removeEventListener('mousedown', handleMouseDown);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [containerRef, enabled, handleMouseDown, handleMouseMove, handleMouseUp]);
 
   const selectionStyle =
     selectionBox && isDragging

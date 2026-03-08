@@ -49,18 +49,21 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
   return (
     <div
       ref={setNodeRef}
-      {...listeners}
       {...attributes}
       onClick={onClick}
       className={cn(
-        'group relative overflow-hidden rounded-lg bg-card border border-border shadow-sm cursor-grab active:cursor-grabbing transition-all duration-200',
+        'group relative overflow-hidden rounded-lg bg-card border border-border shadow-sm transition-all duration-200',
         'hover:shadow-md hover:border-primary/30 hover:scale-[1.02]',
         isDragging && 'opacity-30',
         compact ? 'p-2' : ''
       )}
     >
-      {/* Drag Handle Indicator */}
-      <div className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Drag Handle — only this triggers dnd-kit drag */}
+      <div
+        {...listeners}
+        data-dnd-handle
+        className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+      >
         <div className="bg-background/80 backdrop-blur-sm rounded p-0.5">
           <GripVertical className="w-3 h-3 text-muted-foreground" />
         </div>

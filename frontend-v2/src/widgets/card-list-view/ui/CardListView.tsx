@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Clock, Move } from 'lucide-react';
+import { Clock, Move, Trash2 } from 'lucide-react';
 import type { InsightCard } from '@/entities/card/model/types';
 import type { ViewMode } from '@/entities/user/model/types';
 import { ViewSwitcher } from '@/features/view-mode';
@@ -41,6 +41,7 @@ export function CardListView({
   const { t } = useTranslation();
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
 
   // Mobile detection: auto-fallback list-detail to list
   useEffect(() => {
@@ -63,12 +64,38 @@ export function CardListView({
     [onListPanelRatioChange]
   );
 
+  const handleSelectionChange = useCallback((ids: string[]) => {
+    setSelectedCardIds(ids);
+  }, []);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedCardIds.length > 0) {
+      onDeleteCards?.(selectedCardIds);
+    }
+  }, [selectedCardIds, onDeleteCards]);
+
   // Header with title, sort info, and ViewSwitcher
   const headerElement = (
     <div className="flex items-center justify-between mb-4">
-      <h3 className="text-lg font-semibold">
-        {title} {t('cards.insights')}
-      </h3>
+      <div className="flex items-center gap-3">
+        <h3 className="text-lg font-semibold">
+          {title} {t('cards.insights')}
+        </h3>
+        {selectedCardIds.length > 0 && (
+          <div className="flex items-center gap-1.5 animate-fade-in">
+            <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+              {t('cards.selected', { count: selectedCardIds.length })}
+            </span>
+            <button
+              onClick={handleDeleteSelected}
+              className="p-1 rounded text-destructive hover:bg-destructive/10 transition-colors"
+              title={t('cards.deleteSelected')}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
       <div className="flex items-center gap-3">
         {effectiveViewMode === 'grid' && (
           <>
@@ -101,6 +128,7 @@ export function CardListView({
           onSaveNote={onSaveNote}
           onCardsReorder={onCardsReorder}
           onDeleteCards={onDeleteCards}
+          onSelectionChange={handleSelectionChange}
         />
       </div>
     );
