@@ -132,6 +132,7 @@ Deno.serve(async (req) => {
             JSON.stringify({
               error: 'LIMIT_EXCEEDED',
               message: `${limitInfo.tier} tier limit (${limitInfo.limit}) exceeded`,
+              tier: limitInfo.tier,
               limit: limitInfo.limit,
               used: limitInfo.used
             }),
@@ -312,6 +313,7 @@ Deno.serve(async (req) => {
               JSON.stringify({
                 error: 'LIMIT_EXCEEDED',
                 message: `${limitInfo.tier} tier limit (${limitInfo.limit}) would be exceeded`,
+                tier: limitInfo.tier,
                 limit: limitInfo.limit,
                 used: limitInfo.used
               }),

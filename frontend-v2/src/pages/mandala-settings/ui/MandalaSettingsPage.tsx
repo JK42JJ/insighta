@@ -246,7 +246,7 @@ export default function MandalaSettingsPage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main id="main-content" className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Left: Mandala Preview & Editor */}
           <div className="space-y-6">

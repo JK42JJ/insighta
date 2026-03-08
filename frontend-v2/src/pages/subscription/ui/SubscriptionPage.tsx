@@ -70,7 +70,7 @@ export default function SubscriptionPage() {
     <div className="min-h-screen bg-background">
       <Header onNavigateHome={() => navigate('/')} />
 
-      <main className="container mx-auto px-4 py-8">
+      <main id="main-content" className="container mx-auto px-4 py-8">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="mb-6 gap-2">
           <ArrowLeft className="w-4 h-4" />
           {t('common.back')}

@@ -2,7 +2,7 @@
 
 **Project**: Insighta
 **Domain**: https://insighta.one
-**Last Updated**: 2026-03-06
+**Last Updated**: 2026-03-08
 
 ---
 
@@ -15,6 +15,9 @@
 5. [Security](#5-security)
 6. [Backup and Recovery](#6-backup-and-recovery)
 7. [Long-Term Roadmap](#7-long-term-roadmap)
+8. [Agent Workflow & Quality Management](#8-agent-workflow--quality-management)
+9. [tmux Development Environment](#9-tmux-development-environment)
+10. [CLAUDE.md Architecture & Commands](#10-claudemd-architecture--commands)
 
 ---
 
@@ -196,13 +199,18 @@ Notes:
 ### 2.1 Branch Flow
 
 ```
-feature/xxx  --->  master (development)  --->  main (production)
-fix/xxx      --->  master                --->  main
+story/xx-name  ─┐
+fix/xx-name    ─┼──>  main (production)
+feature/xx     ─┘
+                      master (legacy dev, kept as GitHub default)
 ```
 
-- **`master`** is the active development branch. All feature branches and hotfix branches target `master`.
-- **`main`** is the production branch. A push or merged PR to `main` triggers the deploy pipeline automatically.
-- Direct commits to `main` are not permitted. Changes flow through `master` via pull request.
+- **`main`** is the production branch. All story/feature/fix branches target `main` via PR. A merged PR to `main` triggers the deploy pipeline automatically.
+- **`master`** is the legacy development branch, retained as GitHub default. Historically used as dev target, now superseded by direct-to-main workflow.
+- **Story branches** follow the naming convention `story/<issue-number>-<short-name>` (e.g., `story/65-design-system`).
+- **Fix branches** use `fix/<issue-number>-<short-name>`.
+- Branches are deleted after PR merge (squash merge preferred).
+- Direct commits to `main` are not permitted.
 
 ### 2.2 Pull Request Rules
 
@@ -215,13 +223,15 @@ fix/xxx      --->  master                --->  main
 
 CI jobs that must pass: `typecheck`, `build-api`, `build-frontend`. The `lint` and `test` jobs run with `continue-on-error: true` and do not block merges.
 
-### 2.3 Promotion to Production
+### 2.3 Merging to Production
 
 ```bash
-# Create a PR from master to main via GitHub UI, or:
-gh pr create --base main --head master --title "Release: <description>"
+# Create a PR from story branch to main:
+gh pr create --base main --head story/65-design-system --title "feat: design system (#65)"
 
-# After CI passes and PR is approved, merge
+# After CI passes, squash merge and delete branch:
+gh pr merge <number> --squash --delete-branch
+
 # The deploy.yml pipeline triggers automatically on push to main
 ```
 
@@ -890,6 +900,248 @@ This cost is only justified when the application generates revenue or serves a u
 
 ---
 
+## 8. Agent Workflow & Quality Management
+
+### 8.1 Role Separation
+
+| Role | Responsibility | Actions |
+|------|---------------|---------|
+| **Main (Orchestrator)** | "What & Why" — task analysis, agent selection, user communication | Issue analysis, agent dispatch, final reporting |
+| **PM (Quality Gate)** | "How Well" — quality judgment (read-only) | tsc/lint/regression check, APPROVED/REJECTED/CONDITIONS verdict |
+| **QA (test-runner)** | "Does it work" — functional verification | Test planning, execution, coverage reporting |
+
+**Workflow**:
+```
+User -> Main (analyze/dispatch) -> Agent(s) (implement) -> QA (test) -> PM (judge) -> Main (report) -> User
+```
+
+### 8.2 Token-Aware Delegation Policy (Tier System)
+
+| Tier | Criteria | Token Cost | QA | PM | Example |
+|------|----------|-----------|-----|-----|---------|
+| **1 Inline** | 1 file, <=10 lines | 0 extra | No | No | Typo fix, config change, i18n key |
+| **2 Single** | 1-3 files, single domain | ~30-50K | Optional | Optional | Component fix, hook addition |
+| **3 Multi** | 4+ files OR 2+ domains | ~100-200K | Required | Required | Story-level feature, architecture change |
+
+**Decision logic**:
+```
+1 file, <=10 lines        -> Tier 1 (Main handles directly)
+1-3 files, single domain  -> Tier 2 (single agent + memory preload)
+4+ files OR 2+ domains    -> Tier 3 (multi-agent pipeline)
+```
+
+**Token saving rules**:
+- Provide agents only necessary files, not full context
+- Include key information in issue body to reduce agent exploration
+- Reuse patterns from agent memory files
+
+### 8.3 Agent Memory System
+
+Persistent knowledge accumulation per agent, stored in `.claude/agents/memory/`:
+
+| File | Purpose |
+|------|---------|
+| `frontend-dev.md` | FSD structure, component patterns, motion tokens, view system |
+| `test-runner.md` | Test strategy, Vitest/Playwright config, MSW patterns |
+| `ux-designer.md` | A11y standards, responsive patterns, UX issue history |
+| `cross-agent.md` | Project-wide conventions (all agents must read) |
+| `delegation-metrics.md` | Daily token efficiency tracking |
+
+**Memory preload pattern** (every agent spawn):
+```
+Agent(subagent_type="frontend-dev", prompt="
+[PRE-LOAD] Read: .claude/agents/memory/frontend-dev.md, .claude/agents/memory/cross-agent.md
+[ISSUE] #71: dnd-kit migration
+[CONTEXT] {issue body or key summary}
+[TASK] {specific work instructions}
+")
+```
+
+**Update policy**:
+- **Who**: Main updates after agent work completes
+- **When**: Tier 2+ completion, new pattern discovery, mistake occurrence
+- **What**: New patterns, mistake/resolution, convention changes
+
+### 8.4 Rich Issue Template
+
+All issues should be self-contained so agents can work from the issue alone:
+
+```markdown
+## Context
+{Why this work is needed, which higher goal it serves}
+
+## Related Context Files
+- `memory/architecture.md` — architecture reference
+- `.claude/agents/memory/frontend-dev.md` — frontend patterns
+
+## Scope
+### Files to Modify
+- `frontend/src/widgets/xxx/ui/Component.tsx` — {change description}
+
+### Files to Reference (Read-only)
+- `frontend/src/types/mandala.ts` — InsightCard type reference
+
+## Requirements
+1. {Specific requirement}
+
+## Acceptance Criteria
+- [ ] `npx tsc --noEmit` passes
+- [ ] {Functional verification}
+- [ ] No regression in existing features
+
+## Agent Assignment
+- **Primary**: `agent:frontend-dev`
+- **Review**: `agent:ux-designer`
+- **QA**: `agent:test-runner`
+- **Tier**: 2 or 3
+```
+
+### 8.5 Continuous Improvement: Retrospective System
+
+**Daily (17:00)** — Record in `memory/retrospective.md`:
+- Work summary table (task, tier, agents, tokens, duration, result)
+- Quantified metrics: agent spawns, wasteful spawns, tier mismatches, PM rejections
+- Quality score (0-10): code quality, token efficiency, delegation accuracy, prompt clarity
+- Action items for next session
+- Prompt engineering notes (effective/ineffective patterns)
+
+**Weekly (every 7 days)** — Aggregate and compare:
+- Metrics delta table (this week vs last week)
+- Agent efficiency analysis (spawns, useful rate, token per spawn)
+- Policy adjustments with numerical justification
+- Update DELEGATION.md and agent memory files accordingly
+
+**Measurement targets (progressive improvement)**:
+
+| Metric | Month 1 | Month 2 | Month 3 |
+|--------|---------|---------|---------|
+| Wasteful spawn rate | <20% | <10% | <5% |
+| Token per task (avg) | baseline | -15% | -30% |
+| PM rejection rate | <20% | <10% | <5% |
+| Tier mismatch rate | <15% | <8% | <3% |
+| Avg quality score | 7/10 | 8/10 | 9/10 |
+
+### 8.7 North Star: Multi-Project GraphRAG
+
+현재 .md flat file 기반 시스템은 **GraphRAG의 Phase 0 (seed data)**에 해당한다.
+궁극 목표는 **프로젝트를 수행할수록 복리로 빨라지는 시스템**.
+
+**3-Layer Graph Architecture**:
+```
+Layer 3: Meta Graph      — cross-project 보편 지식 (무한 확장)
+Layer 2: Project Graph   — per-project 구체 지식
+Layer 1: Raw Data        — .md, source code, git history
+```
+
+**Evolution path**:
+```
+Phase 0: .md flat files (현재) ← Single Project
+Phase 1-5: Knowledge Graph → MCP Server ← Single Project, 자동화
+Phase 6: Multi-Project Meta Graph ← 프로젝트 간 지식 전이
+Phase 7: Self-Evolving System ← 자율 정책 최적화 + 인간 승인
+```
+
+**핵심 KPI**:
+- Project N의 소요 시간이 Project 1 대비 시간에 비례하여 감소
+- 목표: Project 5에서 50% 감소, Project 10에서 80% 감소
+- 신규 프로젝트 부트스트랩: 2-3일 → 30분
+
+**상세 로드맵**: [`docs/graph-rag-roadmap.md`](graph-rag-roadmap.md)
+
+### 8.6 Agent Roster (13 Agents)
+
+| Agent | Badge | Role | Trigger | Tools |
+|-------|-------|------|---------|-------|
+| `pm` | PM | Final quality judgment | Tier 3 completion | Read/Grep/Glob/Bash (read-only) |
+| `frontend-dev` | UI | React, hooks, components | `frontend/src/` changes | R/W/E/Bash |
+| `backend-dev` | API | API, Prisma, services | `src/api/`, `prisma/` changes | R/W/E/Bash |
+| `test-runner` | TST | Test + QA | Code changes (Tier 2+) | R/W/E/Bash |
+| `ux-designer` | UXD | UX/a11y audit (read-only) | UI work (with frontend trio) | Read/Grep/Glob |
+| `supabase-dev` | SB | Edge Functions, Docker | Supabase work | R/W/E/Bash |
+| `infra-dev` | INFRA | AWS, Terraform, CI/CD | `terraform/`, `.github/` | R/W/E/Bash |
+| `architect` | ARC | System design | Architecture changes | Read/Grep/Glob/Bash |
+| `security-auditor` | SEC | Security audit | Auth/security code | Read/Grep/Glob/Bash |
+| `docs-writer` | DOC | Technical docs | `docs/`, bulk `.md` | R/W/E |
+| `adapter-dev` | ADP | OAuth/Feed/File adapters | `src/adapters/` | R/W/E/Bash |
+| `sync-dev` | SYN | Sync logic, scheduling | `src/sync/` | R/W/E/Bash |
+| `ai-integration-dev` | AI | AI integration | AI/LLM work | R/W/E/Bash |
+
+**Required co-delegation (regression prevention)**:
+- **UI work trio**: `frontend-dev` + `ux-designer` + `test-runner` — always spawn together for `frontend/src/` changes (Tier 3)
+
+---
+
+## 9. tmux Development Environment
+
+### 9.1 Layout
+
+The local development environment uses a tmux session named `tubearchive` with three panes:
+
+```
+┌────────────────────────┬──────────────────────┐
+│                        │ Agent Dashboard      │ pane 1 (right-top, 62%)
+│ Claude Code            │ agent-dashboard.sh   │
+│ pane 0 (left)          ├──────────────────────┤
+│                        │ Ops Dashboard        │ pane 2 (right-bottom, 38%)
+│                        │ ops-dashboard.sh     │
+└────────────────────────┴──────────────────────┘
+```
+
+**Start**: `./scripts/tmux-agents.sh`
+**Stop**: `./scripts/tmux-agents.sh kill`
+
+Both dashboard scripts are local-only (`.gitignore`). **Never delete or overwrite them.**
+
+### 9.2 Version Terminology
+
+| Version | Environment | URL | Source |
+|---------|-------------|-----|--------|
+| **dev v1** | Local | `http://localhost:8081` | `frontend/` |
+| **dev v2** | Local | `http://localhost:8082/v2` | `frontend-v2/` (Epic #54 refactoring) |
+| **prod v1** | Production | `https://insighta.one` | Docker: `insighta-frontend` on EC2 :8081 |
+| **prod v2** | Production | (not yet deployed) | — |
+
+### 9.3 Agent Dashboard (pane 1)
+
+Displays real-time agent activity from Claude Code sessions.
+
+| Section | Data |
+|---------|------|
+| TEAM | Active agent roster and current tasks |
+| MAIN SESSION | Claude session status, model, token usage |
+| FILE CHANGES | Modified files count, recent changes |
+| AGENTS | Sub-agent spawn status and results |
+
+### 9.4 Ops Dashboard (pane 2)
+
+Displays infrastructure and project status with tiered caching.
+
+| Section | Data | Cache |
+|---------|------|-------|
+| HEALTH | Service status (dev v1 :8081, dev v2 :8082, prod) | 30s |
+| GIT | Branch, commits, diff stats | 30s |
+| DEPLOYS | Recent deploy status (prod v1/v2) | 30s |
+| CI/WORKFLOWS | GitHub Actions status | 30s |
+| PRs/ISSUES | Open PRs and issues | 30s |
+| SUPABASE | DB connections, Edge Functions status | 120s |
+| INFRA | EC2, Terraform state | 60s |
+
+### 9.5 Dashboard Content Capture
+
+The `/boot` command captures dashboard output to include in session context:
+
+```bash
+# Capture Agent Dashboard content (last 40 lines)
+tmux capture-pane -t tubearchive:0.1 -p -S -40
+
+# Capture Ops Dashboard content (last 40 lines)
+tmux capture-pane -t tubearchive:0.2 -p -S -40
+```
+
+This allows the boot sequence to report actual system status (health, deploys, CI, Supabase) without making separate API calls.
+
+---
+
 ## Reference: Key File Locations
 
 | File | Description |
@@ -930,3 +1182,306 @@ This cost is only justified when the application generates revenue or serves a u
 | AWS EC2 console | https://us-west-2.console.aws.amazon.com/ec2 |
 | Google Cloud Console | https://console.cloud.google.com |
 | GoDaddy DNS | https://dcc.godaddy.com |
+
+---
+
+## 10. CLAUDE.md Architecture & Commands
+
+### 10.1 File Hierarchy
+
+```
+CLAUDE.md (프로젝트 루트 — 최상위 규칙)
+├── Session Boot Sequence
+│   ├── Phase 1: Core Context Load (memory 파일 4개)
+│   └── Phase 2: Domain-specific Load (작업 유형별 추가 파일)
+├── Canonical Sources (SSOT) 테이블
+├── 핵심 규칙
+│   ├── GitHub Secrets 매핑 규칙
+│   ├── 두 리포 관계 (insighta/ ↔ superbase/)
+│   ├── Memory 파일 경로
+│   ├── 작업 효율화 → work-efficiency.md 참조
+│   └── 삭제 금지 목록
+│
+├── .claude/                              ← 프로젝트 레벨 설정
+│   ├── agents/                           ← Agent 정의 (14개)
+│   │   ├── DELEGATION.md                 ← Agent 매트릭스/위임 규칙 (SSOT)
+│   │   ├── adapter-dev.md
+│   │   ├── ai-integration-dev.md
+│   │   ├── architect.md
+│   │   ├── backend-dev.md
+│   │   ├── docs-writer.md
+│   │   ├── frontend-dev.md
+│   │   ├── infra-dev.md
+│   │   ├── pm.md
+│   │   ├── security-auditor.md
+│   │   ├── supabase-dev.md
+│   │   ├── sync-dev.md
+│   │   ├── test-runner.md
+│   │   ├── ux-designer.md
+│   │   └── memory/                       ← Agent별 학습 기록
+│   │       ├── cross-agent.md
+│   │       ├── delegation-metrics.md
+│   │       ├── frontend-dev.md
+│   │       ├── test-runner.md
+│   │       └── ux-designer.md
+│   │
+│   ├── commands/                         ← Slash commands (8개)
+│   │   ├── boot.md                       ← /boot
+│   │   ├── checkpoint.md                 ← /checkpoint
+│   │   ├── deploy.md                     ← /deploy
+│   │   ├── issue.md                      ← /issue
+│   │   ├── retrospective.md             ← /retrospective
+│   │   ├── review.md                     ← /review
+│   │   ├── status.md                     ← /status
+│   │   ├── work.md                       ← /work
+│   │   └── story.md                      ← /story
+│   │
+│   └── skills/
+│       └── insighta-conventions/
+│           └── SKILL.md                  ← 코딩 컨벤션 (자동 로드)
+│
+├── memory/                               ← 프로젝트 메모리 (세션 간 영속)
+│   ├── MEMORY.md                         ← Quick Reference (200줄 제한, 자동 로드)
+│   ├── credentials.md                    ← 시크릿/키 매핑 (SSOT)
+│   ├── troubleshooting.md                ← 과거 문제 패턴
+│   ├── project-structure.md              ← 디렉토리/버전 구조
+│   ├── infrastructure.md                 ← EC2/Supabase/CI-CD
+│   ├── architecture.md                   ← 기술 스택/DB 스키마
+│   ├── work-efficiency.md                ← 작업 효율화 전략
+│   ├── ux-issues.md                      ← UX 버그 트래커
+│   ├── retrospective.md                  ← 회고/메트릭
+│   ├── deployment-progress.md            ← 배포 히스토리
+│   └── checkpoint.md                     ← 체크포인트 누적 기록
+│
+└── docs/
+    ├── operations-manual.md              ← 운영 매뉴얼 (이 문서, SSOT)
+    └── graph-rag-roadmap.md              ← GraphRAG 로드맵
+```
+
+### 10.2 `/boot` — Session Boot Command
+
+세션 시작 시 프로젝트 맥락을 완전히 복원하고, 이전 세션의 교훈을 적용하는 자동화 명령.
+
+**사용법**: `/boot [domain-hint?]` (예: `/boot frontend`, `/boot infra`)
+
+```
+/boot [domain-hint?]
+│
+├── Phase 1: Core Context Load (병렬 Read)
+│   ├── MEMORY.md
+│   ├── credentials.md
+│   ├── troubleshooting.md
+│   ├── project-structure.md
+│   └── operations-manual.md
+│
+├── Phase 2: Domain Detection & Load
+│   ├── $ARGUMENTS 또는 브랜치명에서 도메인 감지
+│   │   ├── frontend → ux-issues.md, architecture.md
+│   │   ├── backend → architecture.md, infrastructure.md
+│   │   ├── infra/supabase → infrastructure.md, project-structure.md
+│   │   ├── graphrag → architecture.md, graph-rag-roadmap.md
+│   │   └── general → 추가 로드 없음
+│   └── 도메인별 추가 파일 Read
+│
+├── Phase 3: Checkpoint Resume (Bash)
+│   └── tail -100 checkpoint.md
+│       ├── 마지막 Checkpoint 항목 파악
+│       └── Pending Work 확인
+│
+├── Phase 4: Status Dashboard (병렬 Bash)
+│   ├── git log / diff / status
+│   ├── gh issue list / pr list / run list
+│   └── tmux capture-pane (Agent Dashboard + Ops Dashboard)
+│
+├── Phase 5: Troubleshooting Awareness
+│   └── 도메인별 관련 경고 추출
+│
+├── Phase 6: Learning Review (자기개선 Read 단계)
+│   ├── 6a: 최근 교훈 적용 확인
+│   │   └── checkpoint.md 마지막 2-3개 항목의 `교훈` 필드 검토
+│   │       └── 이번 도메인 관련 교훈 → Warnings에 포함
+│   ├── 6b: Memory 품질 점검
+│   │   ├── MEMORY.md 줄 수 확인 (180+ → "WARN: approaching limit")
+│   │   ├── troubleshooting.md 미체크 항목 수
+│   │   └── 7일+ 미완료 Pending Work 경고
+│   └── 6c: Memory 개선 이력 확인
+│       └── retrospective.md 마지막 승격/진화 날짜
+│           └── 30일+ 미실행 → "NOTE: /retrospective 실행 권장"
+│
+└── Output: 세션 상태 요약 (+ Lessons + Memory Health)
+```
+
+**도메인 감지 규칙** (브랜치명 기반):
+
+| 브랜치 패턴 | 감지 도메인 |
+|-------------|------------|
+| `story/6[5-9]`, `design` | frontend |
+| `story/7[0-3]`, `animation\|motion\|dnd` | frontend |
+| `story/7[4-7]`, `dashboard\|widget` | frontend |
+| `graphrag\|rag\|knowledge` | graphrag |
+| `infra\|deploy\|ci\|terraform` | infra |
+| `supabase\|edge` | supabase |
+
+### 10.3 `/checkpoint` — Checkpoint Record Command
+
+세션 진행사항을 memory 파일에 자동 기록하고, 교훈을 추출하여 memory를 개선하는 명령.
+
+**사용법**: `/checkpoint [title?]` (title 생략 시 git log 기반 자동 생성)
+
+```
+/checkpoint [title?]
+│
+├── Step 1: 정보 수집 (병렬)
+│   ├── git log --oneline (마지막 checkpoint 이후)
+│   ├── git diff --stat
+│   ├── git status
+│   ├── Read: checkpoint.md (마지막 번호 파악)
+│   ├── Read: MEMORY.md
+│   └── 세션 중 수행한 모든 작업 회상
+│       ├── git 추적 파일
+│       └── .gitignore된 로컬 전용 파일 (memory, scripts 등)
+│
+├── Step 2: checkpoint.md 업데이트
+│   └── Checkpoint N: {title} (COMPLETED — {date})
+│       ├── 커밋: `{hash}` — `{message}`
+│       ├── 로컬 전용 변경: {목록}
+│       ├── 수정 파일: {전체 요약}
+│       ├── 변경 내용: {2-5줄}
+│       ├── 빌드: {결과}
+│       ├── 교훈: {이번 세션에서 배운 것}
+│       └── Pending Work (미커밋 변경 시)
+│
+├── Step 3: 교훈 추출 (Lessons Learned — 자기개선 Write 단계)
+│   ├── 3a: 에러 패턴 → troubleshooting.md
+│   │   └── 새 에러 패턴: 증상/원인/해결/교훈 형식 추가
+│   ├── 3b: 효율 패턴 → work-efficiency.md
+│   │   └── 새 작업 방식 발견 시 적절한 섹션에 추가
+│   ├── 3c: 아키텍처 결정 → architecture.md
+│   │   └── 구조 변경/기술 선택 시 관련 섹션 업데이트
+│   └── 3d: 규칙 위반/부족 → CLAUDE.md 개선 후보
+│       └── 같은 패턴 2회+ 반복 시 구체적 개선안 제시
+│
+├── Step 4: Memory 위생 점검 (Memory Hygiene)
+│   ├── "현재 알려진 이슈" 해결 항목 → [x] 체크
+│   ├── "GitHub Issues" 상태 변경 → 업데이트
+│   ├── Stale 정보 감지 → 수정
+│   └── MEMORY.md 200줄 제한 준수
+│
+├── Step 5: MEMORY.md 업데이트
+│   ├── "최근 작업" 섹션 교체
+│   ├── 200줄 제한 준수
+│   └── Issues/알려진 이슈 최신화
+│
+└── Step 6: 결과 요약 출력 (+ Lessons Applied + Memory Health)
+```
+
+**checkpoint.md 항목 포맷**:
+```
+### Checkpoint N: {title} (COMPLETED — YYYY-MM-DD)
+- **커밋**: `{hash}` — `{commit message}`
+- **로컬 전용 변경**: {git 추적 밖 파일 변경 목록}
+- **수정 파일**: {변경된 모든 파일 목록 요약}
+- **변경 내용**: {주요 변경사항 2-5줄}
+- **빌드**: {빌드/테스트 결과}
+- **교훈**: {이번 세션에서 배운 것}
+```
+
+**교훈 추출 판단 기준**:
+- 재현 가능 (같은 상황이 다시 올 수 있음)
+- 비자명 (이 프로젝트 특유의 교훈)
+- 행동 가능 ("다음에 X 하면 된다" 형태)
+- 검증됨 (이번 세션에서 실제 효과 확인)
+
+### 10.4 Self-Improvement Cycle & Session Eval
+
+`/boot`와 `/checkpoint`는 단순 기록/복원이 아니라, 반복할수록 memory 파일이 개선되는 **자기개선 피드백 루프**를 형성한다. Deep Learning의 epoch 학습과 동일 구조로, 매 사이클마다 정량 평가(Eval)를 수행한다.
+
+```
+/boot (Read)                          /checkpoint (Write + Eval)
+    │                                        │
+    ├── Phase 1-4: 맥락 복원                  ├── Step 1-2: 작업 기록
+    ├── Phase 5: 과거 실수 경고               ├── Step 3: 교훈 추출 → memory 개선
+    ├── Phase 6a-b: 최근 교훈 적용            ├── Step 4: memory 위생 점검
+    ├── Phase 6c: Eval 트렌드 로드            ├── Step 5: MEMORY.md 업데이트
+    │   └── 최약 Dimension → 집중 개선        ├── Step 6: Session Eval (D1-D5 채점)
+    └── Phase 6d: 개선 이력 확인              │   └── eval-scores.md Epoch 기록
+         │                                   └── Step 7: 결과 요약 + Eval 점수
+         │                                        │
+         └───────── 다음 세션 ──────────────────────┘
+              Eval 점수가 epoch마다 1.0에 수렴
+```
+
+**Session Eval — 5 Dimensions (각 0.0 ~ 1.0, Eval = 평균)**:
+
+| # | Dimension | 0.0 (worst) | 1.0 (best) |
+|---|-----------|-------------|------------|
+| D1 | Context Retention | 3회+ 정보 재탐색 | memory만으로 충분 |
+| D2 | Error Prevention | 기존 패턴 재발 | 모든 기존 패턴 회피 |
+| D3 | Lesson Yield | 교훈 없음 | 2+ 유효 교훈 추출 |
+| D4 | Memory Hygiene | 미점검 | 전체 점검, 0건 stale |
+| D5 | Work Efficiency | 비효율 다수 | 모든 규칙 준수 |
+
+- Eval 점수는 `eval-scores.md`에 Epoch Log로 누적
+- 5 epoch 이상 시 Trend Analysis (3-epoch 이동 평균)
+- Eval 0.8+ 안정 시 Dimension 추가/세분화 검토
+- 평가 체계 자체도 Meta 섹션에서 버전 관리 (Evolution Triggers)
+
+**개선 대상 memory 파일**:
+
+| 파일 | /checkpoint에서 개선 | /boot에서 활용 |
+|------|---------------------|---------------|
+| troubleshooting.md | 에러 패턴 추가 (3a) | 도메인별 경고 추출 (Phase 5) |
+| work-efficiency.md | 효율 패턴 추가 (3b) | 작업 효율화 규칙 적용 |
+| architecture.md | 아키텍처 결정 기록 (3c) | 도메인별 추가 로드 (Phase 2) |
+| MEMORY.md | 위생 점검 + 최신화 (4, 5) | 핵심 컨텍스트 로드 (Phase 1) |
+| checkpoint.md | 교훈 필드 기록 (2) | 최근 교훈 검토 (Phase 6a) |
+| eval-scores.md | Epoch 채점 기록 (6) | Eval 트렌드 + 최약점 로드 (Phase 6c) |
+| retrospective.md | — | 개선 이력 확인 (Phase 6d) |
+
+### 10.5 `/work` — Work Execution Command
+
+`/boot`에서 복원한 맥락을 바탕으로, 가장 효과적인 작업을 선정하고 계획을 세운 뒤 실행한다.
+
+**사용법**: `/work [target?]` — target: `#68` (story), `pending`, `eval:D2`, `fix:description`
+
+```
+/work [target?]
+│
+├── Phase 1: 작업 후보 수집 (병렬)
+│   ├── GitHub 오픈 스토리 (gh issue list)
+│   ├── Pending Work (checkpoint.md)
+│   ├── 미커밋 변경 (git status)
+│   └── Eval 최약 Dimension (eval-scores.md)
+│
+├── Phase 2: 우선순위 평가 (Priority Scoring)
+│   └── Score = Impact×0.35 + Urgency×0.25 + Readiness×0.25 + Eval×0.15
+│
+├── Phase 3: 작업 단위 결정
+│   ├── Too Large (>20 files) → 분할
+│   ├── Just Right (5-15 files) → 진행
+│   └── Too Small (<3 files) → 묶기
+│
+├── Phase 4: 실행 계획 생성 (Steps + Verification + Risks)
+│
+├── Phase 5: 유저 확인 (후보 3개 + 선정 근거 + 계획 출력)
+│
+├── Phase 6: 실행 (단계별 진행 + 검증 + Agent 위임)
+│
+└── Phase 7: 완료 보고 (Results + Next Steps)
+```
+
+### 10.6 Complete Session Cycle
+
+```
+/boot (Read)          /work (Execute)          /checkpoint (Write + Eval)
+    │                      │                          │
+    ├── 맥락 복원           ├── 후보 수집               ├── 작업 기록
+    ├── 교훈 로드           ├── 우선순위 평가            ├── 교훈 추출
+    ├── Eval 트렌드         ├── 계획 수립               ├── Memory 위생
+    └── 최약점 경고          ├── 유저 확인               ├── Session Eval
+         │                 ├── 실행                    └── Eval 기록
+         │                 └── 완료 보고                     │
+         │                      │                          │
+         └──────────────────────┘──────────────────────────┘
+                     Eval 점수가 epoch마다 1.0에 수렴
+```

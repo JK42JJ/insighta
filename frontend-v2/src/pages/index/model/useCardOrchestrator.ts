@@ -375,7 +375,10 @@ export function useCardOrchestrator(
         if (isLimitExceededError(error)) {
           toast({
             title: t('index.storageLimitExceeded'),
-            description: (error as unknown as Error).message,
+            description: t('index.storageLimitDesc', {
+              tier: error.tier ?? 'free',
+              limit: error.limit,
+            }),
             variant: 'destructive',
           });
         } else {
@@ -797,12 +800,20 @@ export function useCardOrchestrator(
 
       if (syncedToDelete.length > 0) {
         Promise.all(
-          syncedToDelete.map((id) =>
-            updateVideoState.mutateAsync({
+          syncedToDelete.map((id) => {
+            const card = syncedCards.find((c) => c.id === id);
+            const isInMandala =
+              card &&
+              !card.isInIdeation &&
+              typeof card.cellIndex === 'number' &&
+              card.cellIndex >= 0;
+            return updateVideoState.mutateAsync({
               videoStateId: id,
-              updates: { is_in_ideation: false },
-            }),
-          ),
+              updates: isInMandala
+                ? { cell_index: -1, level_id: '', is_in_ideation: false }
+                : { is_in_ideation: false },
+            });
+          }),
         )
           .then(() =>
             toast({

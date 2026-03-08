@@ -91,6 +91,7 @@ CLAUDE.md
 .tmux.project.conf
 scripts/agent-dashboard.sh
 scripts/ops-dashboard.sh
+scripts/.env.scripts
 
 # Personal work files
 prompt/

@@ -9,6 +9,7 @@ export interface UrlMetadata {
   url: string;
 }
 
+/** @deprecated Use ContentEntity from '@/entities/content' instead. Will be removed after migration. */
 export interface InsightCard {
   id: string;
   videoUrl: string; // keeping name for backward compatibility, but represents any URL

@@ -1,8 +1,10 @@
 import { InsightCard } from '@/types/mandala';
+import { useDraggable } from '@dnd-kit/core';
 import { GripVertical, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+import { createCardDragData } from '@/features/dnd';
 
 interface DraggableCardProps {
   card: InsightCard;
@@ -13,12 +15,11 @@ interface DraggableCardProps {
 
 export function DraggableCard({ card, onClick, onDragStart, compact = false }: DraggableCardProps) {
   const { t } = useTranslation();
-  const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData('application/card-id', card.id);
-    e.dataTransfer.setData('text/plain', card.videoUrl);
-    e.dataTransfer.effectAllowed = 'move';
-    onDragStart();
-  };
+
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `card-${card.id}`,
+    data: createCardDragData(card),
+  });
 
   const handleShareToX = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -47,18 +48,22 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
 
   return (
     <div
-      draggable
-      onDragStart={handleDragStart}
+      ref={setNodeRef}
       onClick={onClick}
       className={cn(
         'group relative overflow-hidden rounded-lg bg-card border border-border shadow-sm cursor-grab active:cursor-grabbing transition-all duration-200',
         'hover:shadow-md hover:border-primary/30 hover:scale-[1.02]',
-        compact ? 'p-2' : ''
+        compact ? 'p-2' : '',
+        isDragging && 'opacity-50'
       )}
     >
       {/* Drag Handle Indicator */}
-      <div className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-        <div className="bg-background/80 backdrop-blur-sm rounded p-0.5">
+      <div
+        className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+        {...listeners}
+        {...attributes}
+      >
+        <div className="bg-background/80 backdrop-blur-sm rounded p-0.5 cursor-grab">
           <GripVertical className="w-3 h-3 text-muted-foreground" />
         </div>
       </div>
@@ -69,6 +74,8 @@ export function DraggableCard({ card, onClick, onDragStart, compact = false }: D
           'relative overflow-hidden',
           compact ? 'aspect-video rounded' : 'aspect-video'
         )}
+        {...listeners}
+        {...attributes}
       >
         <img
           src={card.thumbnail}

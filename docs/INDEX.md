@@ -197,7 +197,7 @@ npm run create:adapter -- --name markdown --category file
 ## 🗂️ 문서 구조
 
 ```
-sync-youtube-playlists/
+insighta/
 ├── README.md                    # 프로젝트 메인
 ├── CLAUDE.md                    # Claude Code 가이드
 ├── CHANGELOG.md                 # 버전별 변경 이력 ⭐ NEW

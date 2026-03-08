@@ -1,11 +1,13 @@
-import { useState, memo } from 'react';
+import { useState, memo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
+import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
 import { InsightCard } from '@/types/mandala';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslation } from 'react-i18next';
+import { createCardDragData, createCellDragData } from '@/features/dnd';
 
 export interface MandalaCellProps {
   index: number;
@@ -27,13 +29,8 @@ export interface MandalaCellProps {
   onCellSwap: (fromIndex: number, toIndex: number) => void;
   onClick: () => void;
   onDoubleClick?: () => void;
-  onDragOver: (e: React.DragEvent, index: number) => void;
-  onDragLeave: () => void;
   onCardClick: (card: InsightCard) => void;
   onCardDragStart: (card: InsightCard) => void;
-  onCellDragStart: (index: number) => void;
-  onCellDragEnd: () => void;
-  onCellDragOver: (e: React.DragEvent, index: number) => void;
   hasSubLevel?: boolean;
   onNavigateToSubLevel?: () => void;
 }
@@ -53,128 +50,105 @@ export const MandalaCell = memo(
     onCellSwap,
     onClick,
     onDoubleClick,
-    onDragOver,
-    onDragLeave,
     onCardClick,
     onCardDragStart,
-    onCellDragStart,
-    onCellDragEnd,
-    onCellDragOver,
     hasSubLevel,
     onNavigateToSubLevel,
   }: MandalaCellProps) {
     const { t } = useTranslation();
 
-    const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    // dnd-kit droppable for internal card/cell drops
+    const { setNodeRef: setDropRef, isOver } = useDroppable({
+      id: `cell-${index}`,
+      data: { type: 'cell', cellIndex: index, isCenter },
+      disabled: isCenter,
+    });
 
-      const cellIndex = e.dataTransfer.types.includes('application/cell-index');
-      if (cellIndex && !isCenter) {
-        onCellDragOver(e, index);
-        return;
-      }
+    // dnd-kit draggable for cell swap (on the grip handle)
+    const {
+      attributes: cellDragAttributes,
+      listeners: cellDragListeners,
+      setNodeRef: setCellDragRef,
+      isDragging: isCellDragging,
+    } = useDraggable({
+      id: `cell-drag-${index}`,
+      data: createCellDragData(index),
+      disabled: isCenter,
+    });
 
-      if (!isCenter) {
-        onDragOver(e, index);
-      }
-    };
+    // HTML5 drag handlers for external URL/file drops only
+    const handleExternalDragOver = useCallback(
+      (e: React.DragEvent) => {
+        // Only handle external drops (URLs, files)
+        const types = e.dataTransfer.types;
+        const isExternal =
+          types.includes('text/uri-list') ||
+          types.includes('Files') ||
+          (types.includes('text/plain') && !types.includes('application/card-id'));
 
-    const handleDrop = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (isCenter) return;
-
-      const fromCellIndex = e.dataTransfer.getData('application/cell-index');
-      if (fromCellIndex) {
-        onCellSwap(parseInt(fromCellIndex), index);
-        return;
-      }
-
-      // Check for file drops
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        onDrop(index, undefined, undefined, undefined, e.dataTransfer.files);
-        return;
-      }
-
-      // Check for multi-card drop first
-      const multiCardIdsData = e.dataTransfer.getData('application/multi-card-ids');
-      if (multiCardIdsData) {
-        try {
-          const multiCardIds = JSON.parse(multiCardIdsData) as string[];
-          onDrop(index, undefined, undefined, multiCardIds);
-          return;
-        } catch (err) {
-          // Fall through to single card handling
+        if (isExternal && !isCenter) {
+          e.preventDefault();
+          e.stopPropagation();
         }
-      }
+      },
+      [isCenter]
+    );
 
-      const cardId = e.dataTransfer.getData('application/card-id');
-      if (cardId) {
-        onDrop(index, undefined, cardId);
-        return;
-      }
+    const handleExternalDrop = useCallback(
+      (e: React.DragEvent) => {
+        // Only handle external drops
+        const types = e.dataTransfer.types;
+        const hasInternalData =
+          types.includes('application/card-id') ||
+          types.includes('application/cell-index') ||
+          types.includes('application/multi-card-ids');
 
-      const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
-      if (url) {
-        onDrop(index, url);
-      }
-    };
+        if (hasInternalData || isCenter) return;
 
-    const handleCellDragStart = (e: React.DragEvent) => {
-      if (isCenter) {
         e.preventDefault();
-        return;
-      }
-      e.dataTransfer.setData('application/cell-index', index.toString());
-      e.dataTransfer.effectAllowed = 'move';
-      onCellDragStart(index);
-    };
+        e.stopPropagation();
+
+        // File drops
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          onDrop(index, undefined, undefined, undefined, e.dataTransfer.files);
+          return;
+        }
+
+        // URL drops
+        const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+        if (url) {
+          onDrop(index, url);
+        }
+      },
+      [index, isCenter, onDrop]
+    );
 
     const [isExpanded, setIsExpanded] = useState(false);
     const cardCount = cards.length;
 
-    // Format date for tooltip
     const formatCardDate = (date: Date) => {
       return format(new Date(date), 'M/d HH:mm', { locale: ko });
     };
 
-    // Generate stacking block visualization with animation
     const renderStackingBlocks = () => {
       if (cardCount === 0) return null;
 
-      // For 1-2 cards, show mini thumbnails
       if (cardCount <= 2) {
         return (
           <div className="flex gap-1 mt-2">
             {cards.map((card, i) => (
-              <div
+              <MiniCardThumbnail
                 key={card.id}
-                className="w-10 aspect-video overflow-hidden rounded-md border border-border/30 cursor-grab 
-                         shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200
-                         animate-[scale-in_0.3s_ease-out_forwards]"
-                style={{ animationDelay: `${i * 100}ms` }}
-                draggable
-                onDragStart={(e) => {
-                  e.stopPropagation();
-                  e.dataTransfer.setData('application/card-id', card.id);
-                  e.dataTransfer.setData('text/plain', card.videoUrl);
-                  onCardDragStart(card);
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCardClick(card);
-                }}
-              >
-                <img src={card.thumbnail} alt={card.title} className="w-full h-full object-cover" />
-              </div>
+                card={card}
+                index={i}
+                onCardClick={onCardClick}
+                onCardDragStart={onCardDragStart}
+              />
             ))}
           </div>
         );
       }
 
-      // For 3+ cards, show stacking block visualization
       const baseMaxBlocks = 16;
       const maxBlocks = isExpanded ? cardCount : baseMaxBlocks;
       const filledBlocks = Math.min(cardCount, maxBlocks);
@@ -182,55 +156,54 @@ export const MandalaCell = memo(
       const rows = Math.ceil(filledBlocks / cols);
       const hasOverflow = cardCount > baseMaxBlocks;
 
-      // Get color intensity based on position (gradient effect)
       const getBlockColor = (blockIndex: number, totalRows: number, row: number) => {
-        // Create a gradient from darker at bottom to lighter at top
         const rowIntensity = 100 - (totalRows - 1 - row) * 10;
         return `hsl(var(--primary) / ${Math.max(50, rowIntensity)}%)`;
       };
 
-      // Create block with tooltip helper
       const renderBlock = (card: InsightCard, blockIndex: number, row: number) => {
-        const blockElement = (
-          <div
-            key={card.id}
-            className={cn(
-              'w-3 h-3 md:w-3.5 md:h-3.5 rounded-[2px] transition-all duration-300',
-              'bg-primary shadow-sm cursor-pointer hover:scale-125 hover:z-10 hover:shadow-primary/50 hover:shadow-lg',
-              'animate-[block-pop_0.4s_ease-out_forwards]'
-            )}
-            style={{
-              backgroundColor: getBlockColor(blockIndex, rows, row),
-              animationDelay: `${blockIndex * 40}ms`,
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onCardClick(card);
-            }}
-            draggable
-            onDragStart={(e) => {
-              e.stopPropagation();
-              e.dataTransfer.setData('application/card-id', card.id);
-              e.dataTransfer.setData('text/plain', card.videoUrl);
-              onCardDragStart(card);
-            }}
-          />
-        );
-
         const tooltipText = card.title
           ? `${card.title} (${formatCardDate(card.createdAt)})`
           : `${t('mandala.titleLoading')} (${formatCardDate(card.createdAt)})`;
 
         return (
-          <TooltipProvider key={card.id} delayDuration={200}>
+          <TooltipProvider key={card.id} delayDuration={100}>
             <Tooltip>
-              <TooltipTrigger asChild>{blockElement}</TooltipTrigger>
+              <TooltipTrigger asChild>
+                <CardBlock
+                  card={card}
+                  blockIndex={blockIndex}
+                  row={row}
+                  rows={rows}
+                  getBlockColor={getBlockColor}
+                  onCardClick={onCardClick}
+                  onCardDragStart={onCardDragStart}
+                />
+              </TooltipTrigger>
               <TooltipContent
                 side="top"
-                className="max-w-[250px] text-xs font-medium z-[100]"
-                sideOffset={5}
+                className="p-0 overflow-hidden rounded-lg z-[100] border-0"
+                sideOffset={8}
               >
-                <p className="line-clamp-2">{tooltipText}</p>
+                <div className="w-[160px]">
+                  <div className="relative aspect-video overflow-hidden bg-muted">
+                    <img
+                      src={card.thumbnail}
+                      alt={card.title}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 to-transparent" />
+                  </div>
+                  <div className="px-2 py-1.5 bg-popover">
+                    <p className="text-[10px] font-medium text-popover-foreground line-clamp-2 leading-tight">
+                      {card.title || t('mandala.titleLoading')}
+                    </p>
+                    <span className="text-[9px] text-muted-foreground">
+                      {formatCardDate(card.createdAt)}
+                    </span>
+                  </div>
+                </div>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -239,7 +212,6 @@ export const MandalaCell = memo(
 
       return (
         <div className="mt-2 flex flex-col items-center">
-          {/* Stacking blocks grid */}
           <div
             className={cn(
               'grid gap-[2px] p-1 bg-border/20 rounded-md transition-all duration-300',
@@ -266,7 +238,6 @@ export const MandalaCell = memo(
             )}
           </div>
 
-          {/* Overflow toggle button */}
           {hasOverflow && (
             <button
               onClick={(e) => {
@@ -302,8 +273,11 @@ export const MandalaCell = memo(
       }
     };
 
+    const showDropIndicator = isDropTarget || (isOver && !isCenter);
+
     return (
       <div
+        ref={setDropRef}
         role="button"
         tabIndex={0}
         onKeyDown={handleKeyDown}
@@ -315,44 +289,38 @@ export const MandalaCell = memo(
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           'border bg-surface-light',
           'transition-all duration-200 ease-out',
-          // Swap animation
           isSwapping && swapDirection === 'from' && 'animate-scale-out',
           isSwapping && swapDirection === 'to' && 'animate-scale-in',
-          // Default state
           !isCenter &&
             !isSelected &&
             'border-border/40 hover:border-primary/40 hover:-translate-y-0.5',
-          // Center cell
           isCenter && 'border-primary/50 bg-gradient-to-br from-primary/12 to-primary/5',
-          // Selected state
           isSelected && !isCenter && 'border-primary bg-primary/8 scale-[1.02]',
-          // Drop target
-          isDropTarget && !isCenter && 'border-primary border-dashed bg-primary/10 scale-105',
-          // Cell swap target
+          showDropIndicator && !isCenter && 'border-primary border-dashed bg-primary/10 scale-105',
           isCellSwapTarget &&
             !isCenter &&
-            'ring-2 ring-accent-foreground ring-offset-2 ring-offset-background scale-105'
+            'ring-2 ring-accent-foreground ring-offset-2 ring-offset-background scale-105',
+          isCellDragging && 'opacity-50'
         )}
         style={{
           boxShadow:
-            isSelected || isDropTarget
+            isSelected || showDropIndicator
               ? 'var(--shadow-lg)'
               : isCenter
                 ? 'var(--shadow-inset-raised)'
                 : 'var(--shadow-sm)',
         }}
-        onDragOver={handleDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={handleDrop}
+        onDragOver={handleExternalDragOver}
+        onDrop={handleExternalDrop}
         onClick={onClick}
         onDoubleClick={isCenter && onDoubleClick ? onDoubleClick : undefined}
       >
-        {/* Cell Drag Handle */}
+        {/* Cell Drag Handle — dnd-kit draggable */}
         {!isCenter && (
           <div
-            draggable
-            onDragStart={handleCellDragStart}
-            onDragEnd={onCellDragEnd}
+            ref={setCellDragRef}
+            {...cellDragListeners}
+            {...cellDragAttributes}
             className="absolute top-1.5 right-1.5 z-10 opacity-0 group-hover/cell:opacity-100 hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
             onClick={(e) => e.stopPropagation()}
           >
@@ -405,7 +373,7 @@ export const MandalaCell = memo(
         )}
 
         {/* Drop indicator overlay */}
-        {isDropTarget && !isCenter && !isCellSwapTarget && (
+        {showDropIndicator && !isCenter && !isCellSwapTarget && (
           <div className="absolute inset-0 flex items-center justify-center bg-primary/30 backdrop-blur-[1px] rounded-xl pointer-events-none">
             <span className="text-primary-foreground font-semibold text-sm bg-primary/90 px-3 py-1.5 rounded-lg shadow-lg">
               {t('mandala.dropHere')}
@@ -425,7 +393,6 @@ export const MandalaCell = memo(
     );
   },
   (prev, next) => {
-    // Custom comparator: only re-render when data props change (skip callback refs)
     if (prev.index !== next.index) return false;
     if (prev.label !== next.label) return false;
     if (prev.isCenter !== next.isCenter) return false;
@@ -436,7 +403,6 @@ export const MandalaCell = memo(
     if (prev.swapDirection !== next.swapDirection) return false;
     if (prev.hasSubLevel !== next.hasSubLevel) return false;
 
-    // cards array: id-based comparison
     const pc = prev.cards,
       nc = next.cards;
     if (pc.length !== nc.length) return false;
@@ -446,3 +412,88 @@ export const MandalaCell = memo(
     return true;
   }
 );
+
+// Sub-components for card blocks inside cells (using dnd-kit draggable)
+
+function MiniCardThumbnail({
+  card,
+  index: i,
+  onCardClick,
+  onCardDragStart,
+}: {
+  card: InsightCard;
+  index: number;
+  onCardClick: (card: InsightCard) => void;
+  onCardDragStart: (card: InsightCard) => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `mini-card-${card.id}`,
+    data: createCardDragData(card),
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={cn(
+        'w-10 aspect-video overflow-hidden rounded-md border border-border/30 cursor-grab',
+        'shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200',
+        'animate-[scale-in_0.3s_ease-out_forwards]',
+        isDragging && 'opacity-50'
+      )}
+      style={{ animationDelay: `${i * 100}ms` }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onCardClick(card);
+      }}
+    >
+      <img src={card.thumbnail} alt={card.title} className="w-full h-full object-cover" />
+    </div>
+  );
+}
+
+function CardBlock({
+  card,
+  blockIndex,
+  row,
+  rows,
+  getBlockColor,
+  onCardClick,
+  onCardDragStart,
+}: {
+  card: InsightCard;
+  blockIndex: number;
+  row: number;
+  rows: number;
+  getBlockColor: (blockIndex: number, totalRows: number, row: number) => string;
+  onCardClick: (card: InsightCard) => void;
+  onCardDragStart: (card: InsightCard) => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `block-card-${card.id}`,
+    data: createCardDragData(card),
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={cn(
+        'w-3 h-3 md:w-3.5 md:h-3.5 rounded-[2px] transition-all duration-300',
+        'bg-primary shadow-sm cursor-pointer hover:scale-125 hover:z-10 hover:shadow-primary/50 hover:shadow-lg',
+        'animate-[block-pop_0.4s_ease-out_forwards]',
+        isDragging && 'opacity-50'
+      )}
+      style={{
+        backgroundColor: getBlockColor(blockIndex, rows, row),
+        animationDelay: `${blockIndex * 40}ms`,
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onCardClick(card);
+      }}
+    />
+  );
+}

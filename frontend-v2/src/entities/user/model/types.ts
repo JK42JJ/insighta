@@ -7,6 +7,7 @@
 
 export type ScratchPadDockPosition = 'top' | 'bottom' | 'left' | 'right';
 export type MandalaDockPosition = 'left' | 'right';
+export type ViewMode = 'grid' | 'list' | 'list-detail';
 
 /**
  * User UI Preferences stored in Supabase
@@ -29,6 +30,11 @@ export interface UIPreferences {
   mandala_dock_position: MandalaDockPosition;
   mandala_position_x: number;
   mandala_position_y: number;
+  mandala_panel_ratio: number;
+
+  // View mode preferences
+  view_mode: ViewMode;
+  list_panel_ratio: number;
 
   created_at?: string;
   updated_at?: string;
@@ -52,6 +58,11 @@ export const DEFAULT_UI_PREFERENCES: UIPreferences = {
   mandala_dock_position: 'left',
   mandala_position_x: 100,
   mandala_position_y: 80,
+  mandala_panel_ratio: 30,
+
+  // View mode defaults
+  view_mode: 'grid',
+  list_panel_ratio: 40,
 };
 
 /**

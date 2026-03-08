@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback, forwardRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
+import { type DragData, type DropData, cardDragId } from '@/shared/lib/dnd';
 import {
   Lightbulb,
   Plus,
@@ -41,8 +43,6 @@ interface FloatingScratchPadProps {
   onCardClick: (card: InsightCard) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
-  onCardDragStart: (card: InsightCard) => void;
-  onMultiCardDragStart?: (cards: InsightCard[]) => void;
   onDeleteCards?: (cardIds: string[]) => void;
   onFileDrop?: (files: FileList) => void;
   isFloating: boolean;
@@ -71,6 +71,26 @@ function getTimeLabel(
   return format(date, 'yy.MM');
 }
 
+function DraggableScratchCard({
+  card,
+  selectedCardIds,
+  children,
+}: {
+  card: InsightCard;
+  selectedCardIds: Set<string>;
+  children: (props: { isDragging: boolean; dragRef: (node: HTMLElement | null) => void; dragListeners: ReturnType<typeof useDraggable>['listeners']; dragAttributes: ReturnType<typeof useDraggable>['attributes'] }) => React.ReactNode;
+}) {
+  const multiIds = selectedCardIds.has(card.id) && selectedCardIds.size > 1
+    ? Array.from(selectedCardIds)
+    : undefined;
+  const dragData: DragData = { type: 'card', card, selectedCardIds: multiIds };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: cardDragId(card.id),
+    data: dragData,
+  });
+  return <>{children({ isDragging, dragRef: setNodeRef, dragListeners: listeners, dragAttributes: attributes })}</>;
+}
+
 const DOCK_THRESHOLD = 80;
 const SIDE_DOCK_THRESHOLD = 100;
 
@@ -85,8 +105,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       onCardClick,
       onDragOver,
       onDragLeave,
-      onCardDragStart,
-      onMultiCardDragStart,
       onDeleteCards,
       onFileDrop,
       isFloating,
@@ -128,6 +146,13 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     const [canScrollDown, setCanScrollDown] = useState(false);
     const verticalScrollRef = useRef<HTMLDivElement | null>(null);
 
+    // dnd-kit droppable for receiving cards from CardList/MandalaGrid
+    const scratchpadDropData: DropData = { type: 'scratchpad' };
+    const { setNodeRef: setDndDropRef, isOver: isDndDropOver } = useDroppable({
+      id: 'drop-scratchpad',
+      data: scratchpadDropData,
+    });
+
     const setForwardedRef = useCallback(
       (node: HTMLDivElement | null) => {
         if (!forwardedRef) return;
@@ -141,16 +166,18 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       (node: HTMLDivElement | null) => {
         dockedRef.current = node;
         setForwardedRef(node);
+        setDndDropRef(node);
       },
-      [setForwardedRef]
+      [setForwardedRef, setDndDropRef]
     );
 
     const setFloatingElRef = useCallback(
       (node: HTMLDivElement | null) => {
         containerRef.current = node;
         setForwardedRef(node);
+        setDndDropRef(node);
       },
-      [setForwardedRef]
+      [setForwardedRef, setDndDropRef]
     );
 
     const lastScrollTimeRef = useRef<number>(0);
@@ -184,6 +211,9 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
 
     const isHorizontalDock = dockPosition === 'top' || dockPosition === 'bottom';
     const isVerticalDock = dockPosition === 'left' || dockPosition === 'right';
+
+    // Combine HTML5 isDropTarget with dnd-kit isOver for visual feedback
+    const isActiveDropTarget = isDropTarget || isDndDropOver;
 
     const detectDockPosition = useCallback(
       (clientX: number, clientY: number): DockPosition | null => {
@@ -360,71 +390,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       }
     };
 
-    const handleCardDragStart = (e: React.DragEvent, card: InsightCard) => {
-      if (selectedCardIds.has(card.id) && selectedCardIds.size > 1) {
-        const selectedCards = cards.filter((c) => selectedCardIds.has(c.id));
-        const cardIds = selectedCards.map((c) => c.id);
-        e.dataTransfer.setData('application/multi-card-ids', JSON.stringify(cardIds));
-        e.dataTransfer.setData('application/card-id', card.id);
-        e.dataTransfer.setData('text/plain', selectedCards.map((c) => c.videoUrl).join('\n'));
-        e.dataTransfer.effectAllowed = 'move';
-
-        const dragImage = document.createElement('div');
-        dragImage.style.cssText = `position: absolute; left: -9999px; display: flex; align-items: center; justify-content: center; width: 120px; height: 90px;`;
-        const stackContainer = document.createElement('div');
-        stackContainer.style.cssText = `position: relative; width: 80px; height: 56px; transform-style: preserve-3d; perspective: 400px;`;
-        const maxThumbs = Math.min(selectedCards.length, 3);
-        for (let i = maxThumbs - 1; i >= 0; i--) {
-          const cardWrapper = document.createElement('div');
-          const offset = i * 5;
-          const rotation = (i - 1) * -3;
-          const scale = 1 - i * 0.02;
-          cardWrapper.style.cssText = `position: absolute; left: ${offset}px; top: ${offset}px; width: 72px; height: 46px; border-radius: 6px; overflow: hidden; box-shadow: 0 ${3 + i * 2}px ${10 + i * 3}px rgba(0,0,0,${0.3 - i * 0.05}); transform: rotate(${rotation}deg) scale(${scale}); border: 2px solid rgba(255,255,255,0.15); background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%); z-index: ${maxThumbs - i};`;
-          if (selectedCards[i]) {
-            const thumb = document.createElement('img');
-            thumb.src = selectedCards[i].thumbnail;
-            thumb.style.cssText = `width: 100%; height: 100%; object-fit: cover; filter: brightness(0.95);`;
-            cardWrapper.appendChild(thumb);
-          }
-          stackContainer.appendChild(cardWrapper);
-        }
-        const badge = document.createElement('div');
-        badge.style.cssText = `position: absolute; right: -6px; top: -8px; min-width: 24px; height: 24px; background: linear-gradient(135deg, #FF6B3D 0%, #FF8F6B 100%); color: white; font-size: 11px; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 0 6px; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 10px rgba(255,107,61,0.4); border: 2px solid rgba(255,255,255,0.2); z-index: 100;`;
-        badge.textContent = `${selectedCards.length}`;
-        stackContainer.appendChild(badge);
-        dragImage.appendChild(stackContainer);
-        document.body.appendChild(dragImage);
-        e.dataTransfer.setDragImage(dragImage, 50, 38);
-        setTimeout(() => document.body.removeChild(dragImage), 0);
-        onMultiCardDragStart?.(selectedCards);
-      } else {
-        if (!selectedCardIds.has(card.id)) {
-          setSelectedCardIds(new Set());
-        }
-        e.dataTransfer.setData('application/card-id', card.id);
-        e.dataTransfer.setData('text/plain', card.videoUrl);
-        e.dataTransfer.effectAllowed = 'move';
-        const dragImage = document.createElement('div');
-        dragImage.style.cssText = `position: absolute; left: -9999px; display: flex; align-items: center; justify-content: center; width: 100px; height: 70px;`;
-        const cardWrapper = document.createElement('div');
-        cardWrapper.style.cssText = `width: 80px; height: 52px; border-radius: 6px; overflow: hidden; box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 3px 6px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.15); background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%); transform: rotate(-2deg);`;
-        if (card.thumbnail) {
-          const thumb = document.createElement('img');
-          thumb.src = card.thumbnail;
-          thumb.style.cssText = `width: 100%; height: 100%; object-fit: cover; filter: brightness(0.95);`;
-          cardWrapper.appendChild(thumb);
-          const overlay = document.createElement('div');
-          overlay.style.cssText = `position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.4) 100%);`;
-          cardWrapper.appendChild(overlay);
-        }
-        dragImage.appendChild(cardWrapper);
-        document.body.appendChild(dragImage);
-        e.dataTransfer.setDragImage(dragImage, 40, 26);
-        setTimeout(() => document.body.removeChild(dragImage), 0);
-        onCardDragStart(card);
-      }
-    };
-
     const handleCardClick = (e: React.MouseEvent, card: InsightCard, cardIndex: number) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
         e.preventDefault();
@@ -565,13 +530,15 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       const checkSize = isCompact ? 'w-2 h-2' : 'w-2.5 h-2.5';
 
       return (
+        <DraggableScratchCard key={card.id} card={card} selectedCardIds={selectedCardIds}>
+          {({ isDragging: isDragActive, dragRef, dragListeners, dragAttributes }) => (
         <div
-          key={card.id}
+          ref={dragRef}
+          {...dragAttributes}
+          {...dragListeners}
           data-card-item
-          draggable
-          onDragStart={(e) => handleCardDragStart(e, card)}
           onClick={(e) => handleCardClick(e, card, idx)}
-          className="group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:-translate-y-0.5 rounded-sm"
+          className={cn("group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:-translate-y-0.5 rounded-sm", isDragActive && "opacity-30")}
         >
           <div className={cn('relative overflow-hidden bg-muted rounded-sm', cardSize)} style={{ boxShadow: 'var(--shadow-sm)' }}>
             <img src={card.thumbnail} alt={card.title} className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" loading="lazy" />
@@ -590,6 +557,8 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
             )}
           </div>
         </div>
+          )}
+        </DraggableScratchCard>
       );
     };
 
@@ -602,13 +571,13 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           <div className={cn('flex w-full transition-all duration-300 justify-center', isAnimating && 'animate-fade-in')}>
             <div
               ref={setDockedElRef}
-              className={cn('relative transition-all duration-300 w-full', 'bg-surface-mid/95 backdrop-blur-sm', isTop ? 'border-b border-border/50' : 'border-t border-border/50', isDropTarget && 'border-primary/60 bg-primary/5', isDockedDragging && 'opacity-50')}
-              style={{ boxShadow: isDropTarget ? 'var(--shadow-sm)' : 'none' }}
+              className={cn('relative transition-all duration-300 w-full', 'bg-surface-mid/95 backdrop-blur-sm', isTop ? 'border-b border-border/50' : 'border-t border-border/50', isActiveDropTarget && 'border-primary/60 bg-primary/5', isDockedDragging && 'opacity-50')}
+              style={{ boxShadow: isActiveDropTarget ? 'var(--shadow-sm)' : 'none' }}
               onDragOver={handleDragOver}
               onDragLeave={onDragLeave}
               onDrop={handleDrop}
             >
-              {isDropTarget && (
+              {isActiveDropTarget && (
                 <div className="absolute inset-0 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] pointer-events-none z-10">
                   <span className="text-primary-foreground font-medium text-xs bg-primary/90 px-3 py-1 rounded-full">{t('ideation.dropToAdd')}</span>
                 </div>
@@ -656,13 +625,13 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           {isDockedDragging && <DockZoneIndicators />}
           <div
             ref={setDockedElRef}
-            className={cn('relative transition-all duration-300 h-full', 'bg-surface-light/80', dockPosition === 'left' ? 'border-r border-border/40' : 'border-l border-border/40', isDropTarget && 'border-primary bg-primary/8', isDockedDragging && 'opacity-50', isAnimating && 'animate-fade-in')}
-            style={{ boxShadow: isDropTarget ? 'var(--shadow-md)' : 'none', width: '90px' }}
+            className={cn('relative transition-all duration-300 h-full', 'bg-surface-light/80', dockPosition === 'left' ? 'border-r border-border/40' : 'border-l border-border/40', isActiveDropTarget && 'border-primary bg-primary/8', isDockedDragging && 'opacity-50', isAnimating && 'animate-fade-in')}
+            style={{ boxShadow: isActiveDropTarget ? 'var(--shadow-md)' : 'none', width: '90px' }}
             onDragOver={handleDragOver}
             onDragLeave={onDragLeave}
             onDrop={handleDrop}
           >
-            {isDropTarget && (
+            {isActiveDropTarget && (
               <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] pointer-events-none z-10">
                 <span className="text-primary-foreground font-semibold text-[10px] bg-primary px-2 py-1 rounded-md whitespace-nowrap">{t('ideation.dropToAdd')}</span>
               </div>
@@ -691,17 +660,21 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   sortedCards.map((card, idx) => {
                     const isSelected = selectedCardIds.has(card.id);
                     return (
-                      <div key={card.id} data-card-item draggable onDragStart={(e) => handleCardDragStart(e, card)} onClick={(e) => handleCardClick(e, card, idx)} className="group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:scale-[1.02]">
-                        <div className="relative w-full aspect-video overflow-hidden bg-muted rounded" style={{ boxShadow: 'var(--shadow-xs)' }}>
-                          <img src={card.thumbnail} alt={card.title} className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" loading="lazy" />
-                          <span className="absolute bottom-0 right-0 text-[7px] bg-background/80 text-foreground px-0.5 font-medium rounded-tl">{getTimeLabel(new Date(card.createdAt), t)}</span>
-                          {isSelected && (
-                            <div className="absolute top-0 left-0 bg-primary rounded-br p-0.5 cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedCardIds((prev) => { const next = new Set(prev); next.delete(card.id); return next; }); }}>
-                              <Check className="w-2 h-2" style={{ color: 'hsl(var(--primary-foreground))' }} />
-                            </div>
-                          )}
+                      <DraggableScratchCard key={card.id} card={card} selectedCardIds={selectedCardIds}>
+                        {({ isDragging: isDragActive, dragRef, dragListeners, dragAttributes }) => (
+                        <div ref={dragRef} {...dragAttributes} {...dragListeners} data-card-item onClick={(e) => handleCardClick(e, card, idx)} className={cn("group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:scale-[1.02]", isDragActive && "opacity-30")}>
+                          <div className="relative w-full aspect-video overflow-hidden bg-muted rounded" style={{ boxShadow: 'var(--shadow-xs)' }}>
+                            <img src={card.thumbnail} alt={card.title} className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" loading="lazy" />
+                            <span className="absolute bottom-0 right-0 text-[7px] bg-background/80 text-foreground px-0.5 font-medium rounded-tl">{getTimeLabel(new Date(card.createdAt), t)}</span>
+                            {isSelected && (
+                              <div className="absolute top-0 left-0 bg-primary rounded-br p-0.5 cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedCardIds((prev) => { const next = new Set(prev); next.delete(card.id); return next; }); }}>
+                                <Check className="w-2 h-2" style={{ color: 'hsl(var(--primary-foreground))' }} />
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                        )}
+                      </DraggableScratchCard>
                     );
                   })
                 )}
@@ -721,7 +694,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
         {isDragging && <DockZoneIndicators />}
         <div
           ref={setFloatingElRef}
-          className={cn('fixed rounded-xl transition-shadow duration-200', 'bg-surface-mid/98 backdrop-blur-xl border border-border/60', isDropTarget && 'border-primary bg-primary/8', isDragging && 'cursor-grabbing', isResizing && 'cursor-se-resize')}
+          className={cn('fixed rounded-xl transition-shadow duration-200', 'bg-surface-mid/98 backdrop-blur-xl border border-border/60', isActiveDropTarget && 'border-primary bg-primary/8', isDragging && 'cursor-grabbing', isResizing && 'cursor-se-resize')}
           style={{ left: position.x, top: position.y, width: size.width, height: isMinimized ? 44 : size.height, zIndex: 1000, boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.4), 0 8px 16px -8px rgba(0, 0, 0, 0.3)' }}
           onDragOver={handleDragOver}
           onDragLeave={onDragLeave}
@@ -755,7 +728,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           </div>
           {!isMinimized && (
             <div className="p-3 overflow-hidden" style={{ height: 'calc(100% - 44px)' }}>
-              {isDropTarget && (
+              {isActiveDropTarget && (
                 <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] rounded-xl pointer-events-none z-10">
                   <span className="text-primary-foreground font-semibold text-sm bg-primary px-4 py-2 rounded-lg">{t('ideation.dropHere')}</span>
                 </div>
