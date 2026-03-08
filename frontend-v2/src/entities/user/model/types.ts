@@ -30,6 +30,7 @@ export interface UIPreferences {
   mandala_dock_position: MandalaDockPosition;
   mandala_position_x: number;
   mandala_position_y: number;
+  mandala_panel_ratio: number;
 
   // View mode preferences
   view_mode: ViewMode;
@@ -57,6 +58,7 @@ export const DEFAULT_UI_PREFERENCES: UIPreferences = {
   mandala_dock_position: 'left',
   mandala_position_x: 100,
   mandala_position_y: 80,
+  mandala_panel_ratio: 30,
 
   // View mode defaults
   view_mode: 'grid',

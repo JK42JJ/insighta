@@ -1,48 +1,52 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
 import { GripVertical, StickyNote, Tag, Play } from 'lucide-react';
+import { type DragData, cardDragId } from '@/shared/lib/dnd';
 
 interface InsightCardItemProps {
   card: InsightCard;
-  onClick?: () => void;
+  onCardClick?: () => void;
   onCtrlClick?: (e: React.MouseEvent) => void;
-  onDragStart?: () => void;
-  onInternalDragStart?: (e: React.DragEvent) => void;
   onSave?: (id: string, note: string) => void;
   isDraggable?: boolean;
+  selectedCardIds?: Set<string>;
+  disableFlip?: boolean;
   className?: string;
 }
 
 export function InsightCardItem({
   card,
-  onClick,
+  onCardClick,
   onCtrlClick,
-  onDragStart,
-  onInternalDragStart,
   onSave,
-  isDraggable = false,
+  isDraggable: canDrag = false,
+  selectedCardIds,
+  disableFlip = false,
   className,
 }: InsightCardItemProps) {
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [noteValue, setNoteValue] = useState(card.userNote ?? '');
 
-  const handleDragStart = useCallback(
-    (e: React.DragEvent) => {
-      if (onInternalDragStart) {
-        onInternalDragStart(e);
-      } else if (onDragStart) {
-        e.dataTransfer.setData('application/card-id', card.id);
-        e.dataTransfer.setData('text/plain', card.videoUrl);
-        e.dataTransfer.effectAllowed = 'move';
-        onDragStart();
-      }
-    },
-    [card.id, card.videoUrl, onDragStart, onInternalDragStart],
-  );
+  // Build drag data — include selected card IDs for multi-select drag
+  const isSelected = selectedCardIds?.has(card.id) ?? false;
+  const isMultiSelect = isSelected && selectedCardIds && selectedCardIds.size > 1;
+  const dragData: DragData = isMultiSelect
+    ? { type: 'card', card, selectedCardIds: [...selectedCardIds!] }
+    : { type: 'card-reorder', card };
+
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: cardDragId(card.id),
+    data: dragData,
+    disabled: !canDrag,
+  });
+
+  // Selected cards: entire card is draggable. Unselected: only grip handle.
+  const cardListeners = isSelected ? listeners : undefined;
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -51,9 +55,9 @@ export function InsightCardItem({
         onCtrlClick(e);
         return;
       }
-      onClick?.();
+      onCardClick?.();
     },
-    [isEditing, onClick, onCtrlClick],
+    [isEditing, onCardClick, onCtrlClick],
   );
 
   const handleNoteSave = useCallback(() => {
@@ -91,91 +95,128 @@ export function InsightCardItem({
 
   return (
     <Card
-      draggable={isDraggable}
-      onDragStart={handleDragStart}
+      ref={setNodeRef}
+      {...(canDrag ? { ...attributes, ...cardListeners } : {})}
+      data-dnd-draggable={isSelected ? '' : undefined}
       onClick={handleClick}
       className={cn(
-        'group relative overflow-hidden cursor-pointer transition-all duration-200',
-        'hover:shadow-md hover:border-primary/30 hover:scale-[1.02]',
-        isDraggable && 'cursor-grab active:cursor-grabbing',
+        'group relative cursor-pointer transition-all duration-200 [perspective:800px]',
+        'border-0 shadow-none bg-transparent',
+        isSelected && canDrag && 'cursor-grab active:cursor-grabbing',
+        isDragging && 'opacity-30',
         className,
       )}
     >
-      {/* Drag handle */}
-      {isDraggable && (
-        <div className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="bg-background/80 backdrop-blur-sm rounded p-0.5">
-            <GripVertical className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
+      <div className={cn(
+        '[transform-style:preserve-3d] transition-transform duration-500',
+        !disableFlip && 'group-hover:[transform:rotateY(180deg)]'
+      )}>
+        {/* === Front face === */}
+        <div className="[backface-visibility:hidden] bg-card rounded-xl border shadow-sm overflow-hidden">
+          {/* Drag handle — triggers dnd-kit drag when card is not selected */}
+          {canDrag && !isSelected && (
+            <div
+              {...listeners}
+              data-dnd-handle
+              className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+            >
+              <div className="bg-background/80 backdrop-blur-sm rounded p-0.5">
+                <GripVertical className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
+              </div>
+            </div>
+          )}
+
+          {/* Thumbnail */}
+          <div className="relative aspect-video overflow-hidden rounded-t-xl">
+            <img
+              src={card.thumbnail}
+              alt={card.title}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src =
+                  'https://via.placeholder.com/320x180?text=Thumbnail';
+              }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 to-transparent" />
+
+            {/* Title overlay */}
+            <h4 className="absolute bottom-1 left-1.5 right-1.5 text-xs font-medium text-primary-foreground line-clamp-2 leading-tight">
+              {card.title}
+            </h4>
+
+            {/* Watch position badge */}
+            {watchPos && (
+              <div className="absolute top-1 right-1 flex items-center gap-0.5 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">
+                <Play className="w-2.5 h-2.5" aria-hidden="true" />
+                {watchPos}
+              </div>
+            )}
+          </div>
+
+          {/* Note preview — fixed height area */}
+          <div className="p-2 space-y-1 h-[72px] overflow-hidden">
+            {isEditing ? (
+              <textarea
+                autoFocus
+                value={noteValue}
+                onChange={(e) => setNoteValue(e.target.value)}
+                onBlur={handleNoteSave}
+                onKeyDown={handleNoteKeyDown}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full text-xs bg-muted/50 border border-input rounded px-1.5 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                rows={2}
+                placeholder={t('cards.addNote')}
+              />
+            ) : (
+              <div onDoubleClick={handleNoteDoubleClick}>
+                {card.userNote ? (
+                  <p className="text-xs text-muted-foreground line-clamp-3 flex items-start gap-1">
+                    <StickyNote className="w-3 h-3 mt-0.5 shrink-0 text-primary/60" aria-hidden="true" />
+                    <span>{card.userNote}</span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground/50 italic">
+                    {t('cards.doubleClickToNote')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Link type badge */}
+            {card.linkType && card.linkType !== 'youtube' && (
+              <div className="flex items-center gap-1">
+                <Tag className="w-2.5 h-2.5 text-muted-foreground" aria-hidden="true" />
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  {card.linkType}
+                </span>
+              </div>
+            )}
           </div>
         </div>
-      )}
 
-      {/* Thumbnail */}
-      <div className="relative aspect-video overflow-hidden">
-        <img
-          src={card.thumbnail}
-          alt={card.title}
-          className="w-full h-full object-cover"
-          loading="lazy"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              'https://via.placeholder.com/320x180?text=Thumbnail';
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 to-transparent" />
-
-        {/* Title overlay */}
-        <h4 className="absolute bottom-1 left-1.5 right-1.5 text-xs font-medium text-primary-foreground line-clamp-2 leading-tight">
-          {card.title}
-        </h4>
-
-        {/* Watch position badge */}
-        {watchPos && (
-          <div className="absolute top-1 right-1 flex items-center gap-0.5 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">
-            <Play className="w-2.5 h-2.5" aria-hidden="true" />
-            {watchPos}
-          </div>
-        )}
-      </div>
-
-      {/* Note preview */}
-      <div className="p-2 space-y-1">
-        {isEditing ? (
-          <textarea
-            autoFocus
-            value={noteValue}
-            onChange={(e) => setNoteValue(e.target.value)}
-            onBlur={handleNoteSave}
-            onKeyDown={handleNoteKeyDown}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full text-xs bg-muted/50 border border-input rounded px-1.5 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-            rows={2}
-            placeholder={t('cards.addNote')}
-          />
-        ) : (
-          <div onDoubleClick={handleNoteDoubleClick}>
-            {card.userNote ? (
-              <p className="text-xs text-muted-foreground line-clamp-2 flex items-start gap-1">
-                <StickyNote className="w-3 h-3 mt-0.5 shrink-0 text-primary/60" aria-hidden="true" />
-                <span>{card.userNote}</span>
-              </p>
+        {/* === Back face (note/memo view) === */}
+        <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-xl border p-3 flex flex-col">
+          <h4 className="text-xs font-semibold line-clamp-1 mb-1">{card.title}</h4>
+          <div className="flex-1 overflow-y-auto" onDoubleClick={handleNoteDoubleClick}>
+            {isEditing ? (
+              <textarea
+                autoFocus
+                value={noteValue}
+                onChange={(e) => setNoteValue(e.target.value)}
+                onBlur={handleNoteSave}
+                onKeyDown={handleNoteKeyDown}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full h-full text-xs bg-muted/50 border border-input rounded px-1.5 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                placeholder={t('cards.addNote')}
+              />
             ) : (
-              <p className="text-xs text-muted-foreground/50 italic">
-                {t('cards.doubleClickToNote')}
+              <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                {card.userNote || t('cards.doubleClickToNote')}
               </p>
             )}
           </div>
-        )}
-
-        {/* Link type badge */}
-        {card.linkType && card.linkType !== 'youtube' && (
-          <div className="flex items-center gap-1">
-            <Tag className="w-2.5 h-2.5 text-muted-foreground" aria-hidden="true" />
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
-              {card.linkType}
-            </span>
-          </div>
-        )}
+        </div>
       </div>
     </Card>
   );

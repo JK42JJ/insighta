@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback, forwardRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useDroppable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
+import { type DropData } from '@/shared/lib/dnd';
 import {
   Lightbulb,
   Plus,
@@ -128,6 +130,13 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     const [canScrollDown, setCanScrollDown] = useState(false);
     const verticalScrollRef = useRef<HTMLDivElement | null>(null);
 
+    // dnd-kit droppable for receiving cards from CardList/MandalaGrid
+    const scratchpadDropData: DropData = { type: 'scratchpad' };
+    const { setNodeRef: setDndDropRef, isOver: isDndDropOver } = useDroppable({
+      id: 'drop-scratchpad',
+      data: scratchpadDropData,
+    });
+
     const setForwardedRef = useCallback(
       (node: HTMLDivElement | null) => {
         if (!forwardedRef) return;
@@ -141,16 +150,18 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       (node: HTMLDivElement | null) => {
         dockedRef.current = node;
         setForwardedRef(node);
+        setDndDropRef(node);
       },
-      [setForwardedRef]
+      [setForwardedRef, setDndDropRef]
     );
 
     const setFloatingElRef = useCallback(
       (node: HTMLDivElement | null) => {
         containerRef.current = node;
         setForwardedRef(node);
+        setDndDropRef(node);
       },
-      [setForwardedRef]
+      [setForwardedRef, setDndDropRef]
     );
 
     const lastScrollTimeRef = useRef<number>(0);
@@ -184,6 +195,9 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
 
     const isHorizontalDock = dockPosition === 'top' || dockPosition === 'bottom';
     const isVerticalDock = dockPosition === 'left' || dockPosition === 'right';
+
+    // Combine HTML5 isDropTarget with dnd-kit isOver for visual feedback
+    const isActiveDropTarget = isDropTarget || isDndDropOver;
 
     const detectDockPosition = useCallback(
       (clientX: number, clientY: number): DockPosition | null => {
@@ -602,13 +616,13 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           <div className={cn('flex w-full transition-all duration-300 justify-center', isAnimating && 'animate-fade-in')}>
             <div
               ref={setDockedElRef}
-              className={cn('relative transition-all duration-300 w-full', 'bg-surface-mid/95 backdrop-blur-sm', isTop ? 'border-b border-border/50' : 'border-t border-border/50', isDropTarget && 'border-primary/60 bg-primary/5', isDockedDragging && 'opacity-50')}
-              style={{ boxShadow: isDropTarget ? 'var(--shadow-sm)' : 'none' }}
+              className={cn('relative transition-all duration-300 w-full', 'bg-surface-mid/95 backdrop-blur-sm', isTop ? 'border-b border-border/50' : 'border-t border-border/50', isActiveDropTarget && 'border-primary/60 bg-primary/5', isDockedDragging && 'opacity-50')}
+              style={{ boxShadow: isActiveDropTarget ? 'var(--shadow-sm)' : 'none' }}
               onDragOver={handleDragOver}
               onDragLeave={onDragLeave}
               onDrop={handleDrop}
             >
-              {isDropTarget && (
+              {isActiveDropTarget && (
                 <div className="absolute inset-0 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] pointer-events-none z-10">
                   <span className="text-primary-foreground font-medium text-xs bg-primary/90 px-3 py-1 rounded-full">{t('ideation.dropToAdd')}</span>
                 </div>
@@ -656,13 +670,13 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           {isDockedDragging && <DockZoneIndicators />}
           <div
             ref={setDockedElRef}
-            className={cn('relative transition-all duration-300 h-full', 'bg-surface-light/80', dockPosition === 'left' ? 'border-r border-border/40' : 'border-l border-border/40', isDropTarget && 'border-primary bg-primary/8', isDockedDragging && 'opacity-50', isAnimating && 'animate-fade-in')}
-            style={{ boxShadow: isDropTarget ? 'var(--shadow-md)' : 'none', width: '90px' }}
+            className={cn('relative transition-all duration-300 h-full', 'bg-surface-light/80', dockPosition === 'left' ? 'border-r border-border/40' : 'border-l border-border/40', isActiveDropTarget && 'border-primary bg-primary/8', isDockedDragging && 'opacity-50', isAnimating && 'animate-fade-in')}
+            style={{ boxShadow: isActiveDropTarget ? 'var(--shadow-md)' : 'none', width: '90px' }}
             onDragOver={handleDragOver}
             onDragLeave={onDragLeave}
             onDrop={handleDrop}
           >
-            {isDropTarget && (
+            {isActiveDropTarget && (
               <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] pointer-events-none z-10">
                 <span className="text-primary-foreground font-semibold text-[10px] bg-primary px-2 py-1 rounded-md whitespace-nowrap">{t('ideation.dropToAdd')}</span>
               </div>
@@ -721,7 +735,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
         {isDragging && <DockZoneIndicators />}
         <div
           ref={setFloatingElRef}
-          className={cn('fixed rounded-xl transition-shadow duration-200', 'bg-surface-mid/98 backdrop-blur-xl border border-border/60', isDropTarget && 'border-primary bg-primary/8', isDragging && 'cursor-grabbing', isResizing && 'cursor-se-resize')}
+          className={cn('fixed rounded-xl transition-shadow duration-200', 'bg-surface-mid/98 backdrop-blur-xl border border-border/60', isActiveDropTarget && 'border-primary bg-primary/8', isDragging && 'cursor-grabbing', isResizing && 'cursor-se-resize')}
           style={{ left: position.x, top: position.y, width: size.width, height: isMinimized ? 44 : size.height, zIndex: 1000, boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.4), 0 8px 16px -8px rgba(0, 0, 0, 0.3)' }}
           onDragOver={handleDragOver}
           onDragLeave={onDragLeave}
@@ -755,7 +769,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           </div>
           {!isMinimized && (
             <div className="p-3 overflow-hidden" style={{ height: 'calc(100% - 44px)' }}>
-              {isDropTarget && (
+              {isActiveDropTarget && (
                 <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] rounded-xl pointer-events-none z-10">
                   <span className="text-primary-foreground font-semibold text-sm bg-primary px-4 py-2 rounded-lg">{t('ideation.dropHere')}</span>
                 </div>
