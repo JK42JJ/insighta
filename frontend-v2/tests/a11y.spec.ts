@@ -15,7 +15,7 @@ test.describe('Accessibility - Landing Page', () => {
         id: v.id,
         impact: v.impact,
         description: v.description,
-        nodes: v.nodes.length,
+        nodes: v.nodes.map((n) => ({ html: n.html, target: n.target, message: n.failureSummary })),
         help: v.helpUrl,
       }));
       console.log('Accessibility violations:\n', JSON.stringify(summary, null, 2));
