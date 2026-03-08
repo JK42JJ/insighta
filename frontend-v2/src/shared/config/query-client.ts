@@ -21,6 +21,10 @@ export const queryKeys = {
     all: ['local-cards'] as const,
     list: () => [...queryKeys.localCards.all, 'list'] as const,
   },
+  mandala: {
+    all: ['mandala'] as const,
+    default: () => [...queryKeys.mandala.all, 'default'] as const,
+  },
   uiPreferences: {
     all: ['ui-preferences'] as const,
   },
