@@ -19,7 +19,7 @@ import { useToast } from '@/shared/lib/use-toast';
 import { mandalaTemplates, MandalaTemplate } from '@/shared/data/mandalaTemplates';
 import { MandalaLevel } from '@/entities/card/model/types';
 import { mockMandalaLevels } from '@/shared/data/mockData';
-import { useMandalaQuery } from '@/features/mandala';
+import { useMandalaQuery, MandalaSelector } from '@/features/mandala';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -257,7 +257,10 @@ export default function MandalaSettingsPage() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold text-foreground">{t('mandalaSettings.title')}</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl font-bold text-foreground">{t('mandalaSettings.title')}</h1>
+                <MandalaSelector />
+              </div>
               <p className="text-sm text-muted-foreground">{t('mandalaSettings.subtitle')}</p>
             </div>
           </div>

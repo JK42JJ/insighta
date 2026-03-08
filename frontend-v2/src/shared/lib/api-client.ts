@@ -429,6 +429,74 @@ class ApiClient {
   }
 
   // ========================================
+  // Mandala List & Multi-Mandala CRUD
+  // ========================================
+
+  async listMandalas(
+    page?: number,
+    limit?: number,
+  ): Promise<{
+    mandalas: MandalaResponse[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const params = new URLSearchParams();
+    if (page) params.set('page', String(page));
+    if (limit) params.set('limit', String(limit));
+    const query = params.toString() ? `?${params}` : '';
+    return this.request(`/mandalas/list${query}`);
+  }
+
+  async createMandala(
+    title: string,
+    levels?: MandalaLevelBody[],
+  ): Promise<{ mandala: MandalaResponse }> {
+    return this.request('/mandalas/create', {
+      method: 'POST',
+      body: JSON.stringify({ title, levels }),
+    });
+  }
+
+  async getMandalaById(id: string): Promise<{ mandala: MandalaResponse }> {
+    return this.request<{ mandala: MandalaResponse }>(`/mandalas/${id}`);
+  }
+
+  async updateMandala(
+    id: string,
+    data: { title?: string; isDefault?: boolean; position?: number },
+  ): Promise<{ mandala: MandalaResponse }> {
+    return this.request(`/mandalas/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateMandalaLevels(
+    id: string,
+    levels: MandalaLevelBody[],
+  ): Promise<{ mandala: MandalaResponse }> {
+    return this.request(`/mandalas/${id}/levels`, {
+      method: 'PUT',
+      body: JSON.stringify({ levels }),
+    });
+  }
+
+  async deleteMandala(id: string): Promise<void> {
+    return this.request<void>(`/mandalas/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getMandalaQuota(): Promise<{
+    used: number;
+    limit: number;
+    plan: string;
+  }> {
+    return this.request('/mandalas/quota');
+  }
+
+  // ========================================
   // Mandala Share & Subscribe
   // ========================================
 
