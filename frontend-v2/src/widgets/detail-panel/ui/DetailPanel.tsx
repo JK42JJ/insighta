@@ -1,10 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { X, ExternalLink } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
-import { Badge } from '@/shared/ui/badge';
 import { ScrollArea } from '@/shared/ui/scroll-area';
 import { Separator } from '@/shared/ui/separator';
 import type { InsightCard } from '@/entities/card/model/types';
+import { SourceTypeBadge } from '@/entities/content';
 import { NoteEditor } from './NoteEditor';
 
 interface DetailPanelProps {
@@ -41,11 +41,7 @@ export function DetailPanel({ card, onSaveNote, onCardClick, onClose }: DetailPa
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          {card.linkType && (
-            <Badge variant="outline" className="text-[10px] flex-shrink-0">
-              {card.linkType}
-            </Badge>
-          )}
+          {card.linkType && <SourceTypeBadge linkType={card.linkType} />}
           <span className="text-xs text-muted-foreground truncate">
             {formatDate(card.createdAt)}
           </span>
