@@ -46,11 +46,9 @@ export const MandalaGrid = memo(function MandalaGrid({
   onCardClick,
   onCardDragStart,
   onSubjectsReorder,
-  onCellDragging,
   isGridDropZone,
   activeDragCellIndex = null,
   activeDragOverCellIndex = null,
-  hasSubLevel,
   onNavigateToSubLevel,
   onNavigateBack,
   canGoBack = false,
@@ -70,14 +68,12 @@ export const MandalaGrid = memo(function MandalaGrid({
   const [sizeMode, setSizeMode] = useState<MandalaSizeMode>('standard');
 
   // Detect container size and derive sizeMode based on grid size (min dimension)
-  const [gridSize, setGridSize] = useState(0);
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       const { width, height } = entries[0]?.contentRect ?? { width: 0, height: 0 };
       const minDim = Math.min(width, height);
-      setGridSize(minDim);
       if (minDim < 280) setSizeMode('compact');
       else if (minDim > 420) setSizeMode('spacious');
       else setSizeMode('standard');
@@ -156,22 +152,6 @@ export const MandalaGrid = memo(function MandalaGrid({
 
   const totalCards = Object.values(cardsByCell).reduce((sum, cards) => sum + cards.length, 0);
 
-  const [slideDirection, setSlideDirection] = useState<string>('right');
-
-  const getSlideDirection = (gridIndex: number): string => {
-    const directions: Record<number, string> = {
-      0: 'top-left',
-      1: 'top',
-      2: 'top-right',
-      3: 'left',
-      5: 'right',
-      6: 'bottom-left',
-      7: 'bottom',
-      8: 'bottom-right',
-    };
-    return directions[gridIndex] || 'right';
-  };
-
   const getRippleOrigin = (gridIndex: number): { x: number; y: number } => {
     const positions: Record<number, { x: number; y: number }> = {
       0: { x: 0, y: 0 },
@@ -190,7 +170,6 @@ export const MandalaGrid = memo(function MandalaGrid({
     const cellData = getCellData(gridIndex);
     if (cellData.isCenter) return;
 
-    setSlideDirection(getSlideDirection(gridIndex));
     setRippleOrigin(getRippleOrigin(gridIndex));
     setTransitionDirection('out');
     setIsTransitioning(true);
@@ -207,18 +186,6 @@ export const MandalaGrid = memo(function MandalaGrid({
   const handleNavigateBack = () => {
     if (!canGoBack || entryGridIndex === null) return;
 
-    const entryDirection = getSlideDirection(entryGridIndex);
-    const oppositeDirections: Record<string, string> = {
-      'top-left': 'bottom-right',
-      top: 'bottom',
-      'top-right': 'bottom-left',
-      left: 'right',
-      right: 'left',
-      'bottom-left': 'top-right',
-      bottom: 'top',
-      'bottom-right': 'top-left',
-    };
-    setSlideDirection(oppositeDirections[entryDirection] || 'left');
     setTransitionDirection('out');
     setIsTransitioning(true);
     setTimeout(() => {
