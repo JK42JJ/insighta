@@ -13,7 +13,7 @@ interface DraggableCardProps {
   compact?: boolean;
 }
 
-export function DraggableCard({ card, onClick, onDragStart, compact = false }: DraggableCardProps) {
+export function DraggableCard({ card, onClick, compact = false }: DraggableCardProps) {
   const { t } = useTranslation();
 
   const dragData: DragData = { type: 'card', card };
