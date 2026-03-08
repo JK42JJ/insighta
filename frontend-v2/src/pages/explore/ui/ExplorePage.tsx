@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Globe, Users, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { apiClient } from '@/shared/lib/api-client';
+import { PublicMandalaView } from './PublicMandalaView';
 
 interface PublicMandala {
   id: string;
@@ -25,8 +26,13 @@ interface PublicMandala {
 }
 
 export default function ExplorePage() {
+  const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
+
+  if (slug) {
+    return <PublicMandalaView slug={slug} />;
+  }
   const [mandalas, setMandalas] = useState<PublicMandala[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);

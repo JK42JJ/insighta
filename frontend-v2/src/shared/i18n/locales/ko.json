@@ -26,7 +26,14 @@
   "explore": {
     "title": "만다라트 탐색",
     "empty": "아직 공개된 만다라트가 없습니다",
-    "emptyDesc": "사용자들이 만다라트를 공유하면 여기에 표시됩니다."
+    "emptyDesc": "사용자들이 만다라트를 공유하면 여기에 표시됩니다.",
+    "notFound": "만다라트를 찾을 수 없습니다",
+    "backToExplore": "탐색으로 돌아가기",
+    "readOnly": "읽기 전용",
+    "subscribe": "구독",
+    "unsubscribe": "구독 해제",
+    "recentActivity": "최근 활동",
+    "noActivity": "아직 활동이 없습니다"
   },
   "share": {
     "toggleLabel": "공개 공유",

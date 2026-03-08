@@ -26,7 +26,14 @@
   "explore": {
     "title": "Explore Mandalas",
     "empty": "No public mandalas yet",
-    "emptyDesc": "When users share their mandalas, they'll appear here."
+    "emptyDesc": "When users share their mandalas, they'll appear here.",
+    "notFound": "Mandala not found",
+    "backToExplore": "Back to Explore",
+    "readOnly": "Read-only view",
+    "subscribe": "Subscribe",
+    "unsubscribe": "Unsubscribe",
+    "recentActivity": "Recent Activity",
+    "noActivity": "No activity yet"
   },
   "share": {
     "toggleLabel": "Public sharing",
