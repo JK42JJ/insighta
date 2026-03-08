@@ -1,5 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
+/** Check if the target element (or an ancestor) is a dnd-kit draggable */
+function isDndDraggable(el: HTMLElement): boolean {
+  return !!(
+    el.closest('[aria-roledescription="draggable"]') ||
+    el.closest('[draggable="true"]') ||
+    el.closest('[data-dnd-draggable]')
+  );
+}
+
 interface SelectionBox {
   startX: number;
   startY: number;
@@ -76,9 +85,9 @@ export function useDragSelect({
       // Don't start if Ctrl/Meta key is pressed (for individual selection)
       if (e.ctrlKey || e.metaKey) return;
 
-      // If the mousedown started on a draggable card, let native drag happen
+      // If the mousedown started on a dnd-kit draggable element, let dnd-kit handle it
       const target = e.target as HTMLElement | null;
-      if (target && target.closest('[draggable="true"]')) {
+      if (target && isDndDraggable(target)) {
         isPendingRef.current = false;
         return;
       }
@@ -103,16 +112,13 @@ export function useDragSelect({
         const dy = Math.abs(e.clientY - startClientRef.current.y);
 
         if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
-          // Check if we started on a card that is actually draggable (selected cards)
+          // Check if we started on a card that is actually draggable
           const target = document.elementFromPoint(
             startClientRef.current.x,
             startClientRef.current.y
           ) as HTMLElement;
           const cardItem = target?.closest('[data-card-item]');
-          // Only block if the card itself has draggable=true (selected cards can be dragged)
-          const draggableElement = target?.closest('[draggable="true"]');
-          if (cardItem && draggableElement) {
-            // This card is draggable (selected), don't start selection
+          if (cardItem && target && isDndDraggable(target)) {
             isPendingRef.current = false;
             return;
           }

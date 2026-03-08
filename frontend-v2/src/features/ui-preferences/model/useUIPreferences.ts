@@ -31,6 +31,7 @@ interface UseUIPreferencesReturn {
   setMandalaPosition: (x: number, y: number) => void;
   setViewMode: (mode: ViewMode) => void;
   setListPanelRatio: (ratio: number) => void;
+  setMandalaPanelRatio: (ratio: number) => void;
 }
 
 /**
@@ -272,6 +273,13 @@ export function useUIPreferences(): UseUIPreferencesReturn {
     [updatePreferences]
   );
 
+  const setMandalaPanelRatio = useCallback(
+    (ratio: number) => {
+      updatePreferences({ mandala_panel_ratio: ratio });
+    },
+    [updatePreferences]
+  );
+
   return {
     preferences: data || DEFAULT_UI_PREFERENCES,
     isLoading,
@@ -288,5 +296,6 @@ export function useUIPreferences(): UseUIPreferencesReturn {
     setMandalaPosition,
     setViewMode,
     setListPanelRatio,
+    setMandalaPanelRatio,
   };
 }
