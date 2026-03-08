@@ -756,4 +756,164 @@ export class MandalaManager {
       },
     });
   }
+
+  // ─── Subscription methods (Story #85-B) ───
+
+  async subscribe(subscriberId: string, mandalaId: string): Promise<void> {
+    const mandala = await this.prisma.user_mandalas.findUnique({
+      where: { id: mandalaId },
+    });
+
+    if (!mandala || !mandala.is_public) {
+      throw new Error('Mandala not found or not public');
+    }
+
+    if (mandala.user_id === subscriberId) {
+      throw new Error('Cannot subscribe to own mandala');
+    }
+
+    await this.prisma.mandala_subscriptions.create({
+      data: {
+        subscriber_id: subscriberId,
+        mandala_id: mandalaId,
+      },
+    });
+
+    logger.info(`Subscription created: subscriber=${subscriberId}, mandala=${mandalaId}`);
+  }
+
+  async unsubscribe(subscriberId: string, mandalaId: string): Promise<void> {
+    const result = await this.prisma.mandala_subscriptions.deleteMany({
+      where: {
+        subscriber_id: subscriberId,
+        mandala_id: mandalaId,
+      },
+    });
+
+    if (result.count === 0) {
+      throw new Error('Subscription not found');
+    }
+
+    logger.info(`Subscription removed: subscriber=${subscriberId}, mandala=${mandalaId}`);
+  }
+
+  async listSubscriptions(
+    subscriberId: string,
+    options?: { page?: number; limit?: number }
+  ): Promise<{
+    subscriptions: Array<{ id: string; mandalaId: string; title: string; subscribedAt: Date }>;
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const page = options?.page ?? 1;
+    const limit = options?.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const [subs, total] = await Promise.all([
+      this.prisma.mandala_subscriptions.findMany({
+        where: { subscriber_id: subscriberId },
+        include: { mandala: { select: { id: true, title: true, is_public: true } } },
+        orderBy: { subscribed_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.mandala_subscriptions.count({
+        where: { subscriber_id: subscriberId },
+      }),
+    ]);
+
+    return {
+      subscriptions: subs
+        .filter((s) => s.mandala.is_public)
+        .map((s) => ({
+          id: s.id,
+          mandalaId: s.mandala_id,
+          title: s.mandala.title,
+          subscribedAt: s.subscribed_at,
+        })),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  // ─── Activity Log methods (Story #85-B) ───
+
+  async logActivity(
+    mandalaId: string,
+    userId: string,
+    action: string,
+    entityType: string,
+    entityId?: string,
+    metadata?: Record<string, unknown>
+  ): Promise<void> {
+    await this.prisma.mandala_activity_log.create({
+      data: {
+        mandala_id: mandalaId,
+        user_id: userId,
+        action,
+        entity_type: entityType,
+        entity_id: entityId,
+        metadata: (metadata as any) ?? undefined,
+      },
+    });
+  }
+
+  async getActivityLog(
+    mandalaId: string,
+    options?: { page?: number; limit?: number }
+  ): Promise<{
+    activities: Array<{
+      id: string;
+      action: string;
+      entityType: string;
+      entityId: string | null;
+      metadata: unknown;
+      createdAt: Date;
+    }>;
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const page = options?.page ?? 1;
+    const limit = options?.limit ?? 50;
+    const skip = (page - 1) * limit;
+
+    // Only allow access to public mandalas' activity
+    const mandala = await this.prisma.user_mandalas.findUnique({
+      where: { id: mandalaId },
+      select: { is_public: true },
+    });
+
+    if (!mandala || !mandala.is_public) {
+      throw new Error('Mandala not found or not public');
+    }
+
+    const [activities, total] = await Promise.all([
+      this.prisma.mandala_activity_log.findMany({
+        where: { mandala_id: mandalaId },
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.mandala_activity_log.count({
+        where: { mandala_id: mandalaId },
+      }),
+    ]);
+
+    return {
+      activities: activities.map((a) => ({
+        id: a.id,
+        action: a.action,
+        entityType: a.entity_type,
+        entityId: a.entity_id,
+        metadata: a.metadata,
+        createdAt: a.created_at,
+      })),
+      total,
+      page,
+      limit,
+    };
+  }
 }
