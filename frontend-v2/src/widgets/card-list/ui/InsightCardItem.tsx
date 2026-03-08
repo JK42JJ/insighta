@@ -5,7 +5,7 @@ import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
 import { GripVertical, StickyNote, Play } from 'lucide-react';
-import { SourceTypeBadge } from '@/entities/content';
+import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
 
 interface InsightCardItemProps {
@@ -184,8 +184,11 @@ export function InsightCardItem({
               </div>
             )}
 
-            {/* Source type badge */}
-            {card.linkType && <SourceTypeBadge linkType={card.linkType} />}
+            {/* Source type badge + meta */}
+            <div className="flex items-center gap-1.5">
+              {card.linkType && <SourceTypeBadge linkType={card.linkType} />}
+              <SourceMetaInfo card={card} view="grid" />
+            </div>
           </div>
         </div>
 

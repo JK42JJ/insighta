@@ -4,7 +4,7 @@ import { Button } from '@/shared/ui/button';
 import { ScrollArea } from '@/shared/ui/scroll-area';
 import { Separator } from '@/shared/ui/separator';
 import type { InsightCard } from '@/entities/card/model/types';
-import { SourceTypeBadge } from '@/entities/content';
+import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 import { NoteEditor } from './NoteEditor';
 
 interface DetailPanelProps {
@@ -85,6 +85,9 @@ export function DetailPanel({ card, onSaveNote, onCardClick, onClose }: DetailPa
 
           {/* Title */}
           <h3 className="text-base font-semibold leading-tight">{card.title || 'Untitled'}</h3>
+
+          {/* Source-specific metadata */}
+          <SourceMetaInfo card={card} view="detail" />
 
           <Separator />
 

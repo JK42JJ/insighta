@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
 import type { InsightCard } from '@/entities/card/model/types';
-import { SourceTypeBadge } from '@/entities/content';
+import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 
 interface ListViewItemProps {
   card: InsightCard;
@@ -69,6 +69,7 @@ export const ListViewItem = memo(function ListViewItem({
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{card.title || 'Untitled'}</p>
         <p className="text-xs text-muted-foreground truncate">{notePreview}</p>
+        <SourceMetaInfo card={card} view="list" />
       </div>
 
       {/* Meta: date + badge */}
