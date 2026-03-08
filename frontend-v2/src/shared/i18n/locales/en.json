@@ -19,7 +19,24 @@
     "items": "{{count}}",
     "cards": "{{count}} cards",
     "selected": "{{count}} selected",
-    "backToTop": "Back to top"
+    "backToTop": "Back to top",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "explore": {
+    "title": "Explore Mandalas",
+    "empty": "No public mandalas yet",
+    "emptyDesc": "When users share their mandalas, they'll appear here."
+  },
+  "share": {
+    "toggleLabel": "Public sharing",
+    "toggleDesc": "Anyone with the link can view this mandala",
+    "enabled": "Sharing enabled",
+    "enabledDesc": "Your mandala is now publicly accessible",
+    "disabled": "Sharing disabled",
+    "disabledDesc": "Your mandala is now private",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied"
   },
   "header": {
     "subtitle": "Mandala-based YouTube Archive",
