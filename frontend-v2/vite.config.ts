@@ -70,6 +70,7 @@ export default defineConfig(({ mode }) => {
             'supabase-vendor': ['@supabase/supabase-js'],
             'i18n-vendor': ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
             'dnd-vendor': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+            'motion-vendor': ['framer-motion'],
             'utils-vendor': ['date-fns', 'class-variance-authority', 'clsx', 'tailwind-merge', 'zod'],
           },
         },

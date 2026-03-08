@@ -9,6 +9,7 @@ import { VideoPlayerModal } from '@/widgets/video-player/ui/VideoPlayerModal';
 import { FloatingScratchPad } from '@/widgets/scratch-pad/ui/FloatingScratchPad';
 import { FloatingMandala } from '@/widgets/floating-mandala/ui/FloatingMandala';
 import { MandalaGrid } from '@/widgets/mandala-grid/ui/MandalaGrid';
+import { MobileBottomNav } from '@/widgets/mobile-nav';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
 
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
@@ -300,9 +301,30 @@ function AuthenticatedApp() {
     }
   }, [layout.handleSetMandalaPanelRatio]);
 
+  const announcements = useMemo(() => ({
+    onDragStart({ active }) {
+      const data = active.data.current as DragData | undefined;
+      if (data?.type === 'cell') return t('dnd.dragStartCell', 'Picked up cell');
+      if (data?.type === 'card' || data?.type === 'card-reorder') return t('dnd.dragStartCard', 'Picked up card');
+      return t('dnd.dragStart', 'Dragging');
+    },
+    onDragOver({ over }) {
+      if (over) return t('dnd.dragOver', 'Over drop zone');
+      return t('dnd.dragOutside', 'Outside drop zone');
+    },
+    onDragEnd({ over }) {
+      if (over) return t('dnd.dropped', 'Dropped');
+      return t('dnd.dragCancel', 'Drag cancelled');
+    },
+    onDragCancel() {
+      return t('dnd.dragCancel', 'Drag cancelled');
+    },
+  }), [t]);
+
   return (
     <DndContext
       sensors={sensors}
+      accessibility={{ announcements }}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
@@ -395,6 +417,12 @@ function AuthenticatedApp() {
           onClose={modal.closeModal}
           onSave={cards.handleSaveNote}
           onSaveWatchPosition={cards.handleSaveWatchPosition}
+        />
+
+        <MobileBottomNav
+          currentView={layout.viewMode}
+          onViewChange={layout.handleSetViewMode}
+          onNavigateHome={() => navigation.handleNavigate('root')}
         />
       </div>
 
