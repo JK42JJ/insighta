@@ -3,11 +3,13 @@ import { cn } from '@/shared/lib/utils';
 
 interface LazyImageProps extends ImgHTMLAttributes<HTMLImageElement> {
   fallback?: string;
+  srcSet?: string;
+  sizes?: string;
 }
 
 const FALLBACK_SRC = 'https://via.placeholder.com/320x180?text=Thumbnail';
 
-export function LazyImage({ className, fallback = FALLBACK_SRC, alt, onError, ...props }: LazyImageProps) {
+export function LazyImage({ className, fallback = FALLBACK_SRC, alt, srcSet, sizes, onError, ...props }: LazyImageProps) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
 
@@ -21,6 +23,8 @@ export function LazyImage({ className, fallback = FALLBACK_SRC, alt, onError, ..
         {...props}
         alt={alt}
         loading="lazy"
+        srcSet={srcSet}
+        sizes={sizes}
         className={cn(
           'w-full h-full object-cover transition-opacity duration-300',
           loaded ? 'opacity-100' : 'opacity-0',
@@ -29,7 +33,9 @@ export function LazyImage({ className, fallback = FALLBACK_SRC, alt, onError, ..
         onError={(e) => {
           setError(true);
           setLoaded(true);
-          (e.target as HTMLImageElement).src = fallback;
+          const img = e.target as HTMLImageElement;
+          img.srcset = '';
+          img.src = fallback;
           onError?.(e);
         }}
       />

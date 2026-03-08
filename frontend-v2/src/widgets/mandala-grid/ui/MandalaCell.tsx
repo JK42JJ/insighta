@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react';
 import { cn } from '@/shared/lib/utils';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { GripVertical, Plus, Play, FileText, Link as LinkIcon } from 'lucide-react';
+import { generateProxySrc } from '@/shared/lib/image-utils';
 import { InsightCard } from '@/entities/card/model/types';
 import { useTranslation } from 'react-i18next';
 import {
@@ -83,7 +84,7 @@ function TileTooltipContent({
       {/* Thumbnail — vertical layout */}
       {card.thumbnail ? (
         <div className="relative">
-          <img src={card.thumbnail} alt="" className="w-full aspect-video object-cover" loading="lazy" />
+          <img src={generateProxySrc(card.thumbnail, 180) ?? card.thumbnail} alt="" className="w-full aspect-video object-cover" loading="lazy" />
           {/* Bottom gradient fade */}
           <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/40 to-transparent" />
         </div>
@@ -148,7 +149,7 @@ function MiniThumbnail({
           }}
         >
           {card.thumbnail ? (
-            <img src={card.thumbnail} alt="" className="w-full h-full object-cover" loading="lazy" />
+            <img src={generateProxySrc(card.thumbnail, 120) ?? card.thumbnail} alt="" className="w-full h-full object-cover" loading="lazy" />
           ) : (
             <div
               className="w-full h-full flex items-center justify-center"
