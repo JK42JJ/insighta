@@ -13,6 +13,7 @@ import { analyticsRoutes } from './routes/analytics';
 import { syncRoutes } from './routes/sync';
 import { quotaRoutes } from './routes/quota';
 import { mandalaRoutes } from './routes/mandalas';
+import { imageRoutes } from './routes/images';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { testDatabaseConnection, disconnectDatabase } from '../modules/database/client';
 
@@ -217,6 +218,9 @@ export async function buildServer() {
 
       // Register mandala routes
       await instance.register(mandalaRoutes, { prefix: '/mandalas' });
+
+      // Register image proxy routes
+      await instance.register(imageRoutes, { prefix: '/images' });
     },
     { prefix: '/api/v1' }
   );

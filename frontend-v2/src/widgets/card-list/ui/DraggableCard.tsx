@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import { linkTypeToSourceType } from '@/entities/content';
+import { LazyImage } from '@/shared/ui/lazy-image';
+import { generateThumbnailSrcSet, DEFAULT_SIZES } from '@/shared/lib/image-utils';
 
 interface DraggableCardProps {
   card: InsightCard;
@@ -77,15 +79,11 @@ export function DraggableCard({ card, onClick, compact = false }: DraggableCardP
           compact ? 'aspect-video rounded' : 'aspect-video'
         )}
       >
-        <img
+        <LazyImage
           src={card.thumbnail}
           alt={card.title}
-          className="w-full h-full object-cover"
-          loading="lazy"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              'https://via.placeholder.com/320x180?text=Thumbnail';
-          }}
+          srcSet={generateThumbnailSrcSet(card.thumbnail)}
+          sizes={DEFAULT_SIZES}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 to-transparent" />
         <h3

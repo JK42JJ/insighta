@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
 import type { InsightCard } from '@/entities/card/model/types';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
+import { generateProxySrc } from '@/shared/lib/image-utils';
 
 interface ListViewItemProps {
   card: InsightCard;
@@ -53,7 +54,7 @@ export const ListViewItem = memo(function ListViewItem({
       <div className="flex-shrink-0 w-12 h-9 rounded overflow-hidden bg-muted">
         {card.thumbnail ? (
           <img
-            src={card.thumbnail}
+            src={generateProxySrc(card.thumbnail, 120) ?? card.thumbnail}
             alt=""
             className="w-full h-full object-cover"
             loading="lazy"
