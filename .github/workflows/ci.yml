@@ -88,3 +88,43 @@ jobs:
           VITE_API_URL: /api
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: placeholder
+
+  build-frontend-v2:
+    name: Build Frontend v2
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend-v2/package-lock.json
+      - run: cd frontend-v2 && npm ci
+      - run: cd frontend-v2 && npx tsc --noEmit
+      - run: cd frontend-v2 && npm run build
+        env:
+          VITE_API_URL: /api
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: placeholder
+
+  a11y:
+    name: Accessibility Check
+    runs-on: ubuntu-latest
+    needs: [build-frontend-v2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend-v2/package-lock.json
+      - run: cd frontend-v2 && npm ci
+      - run: cd frontend-v2 && npx playwright install --with-deps chromium
+      - run: cd frontend-v2 && npm run build
+        env:
+          VITE_API_URL: /api
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: placeholder
+      - name: Run axe accessibility tests
+        run: cd frontend-v2 && npx playwright test tests/a11y.spec.ts
