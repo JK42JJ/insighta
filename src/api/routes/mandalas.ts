@@ -106,6 +106,61 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     }
   );
 
+  // ─── Share & Public endpoints (Story #85) ───
+  // These must be registered BEFORE /:id to avoid path conflicts
+
+  /**
+   * GET /api/v1/mandalas/public/:slug - Get a public mandala by share slug (no auth)
+   */
+  fastify.get<{ Params: { slug: string } }>('/public/:slug', async (request, reply) => {
+    const mandala = await getMandalaManager().getPublicMandala(request.params.slug);
+
+    if (!mandala) {
+      return reply.code(404).send({ error: 'Mandala not found' });
+    }
+
+    return reply.send({ mandala });
+  });
+
+  /**
+   * GET /api/v1/mandalas/explore - List public mandalas for explore page (no auth)
+   */
+  fastify.get<{ Querystring: { page?: string; limit?: string } }>(
+    '/explore',
+    async (request, reply) => {
+      const page = request.query.page ? parseInt(request.query.page, 10) : undefined;
+      const limit = request.query.limit ? parseInt(request.query.limit, 10) : undefined;
+
+      if (
+        (page !== undefined && (isNaN(page) || page < 1)) ||
+        (limit !== undefined && (isNaN(limit) || limit < 1 || limit > 100))
+      ) {
+        return reply.code(400).send({ error: 'Invalid pagination parameters' });
+      }
+
+      const result = await getMandalaManager().listPublicMandalas({ page, limit });
+      return reply.send(result);
+    }
+  );
+
+  /**
+   * GET /api/v1/mandalas/subscriptions - List user's subscriptions
+   */
+  fastify.get<{ Querystring: { page?: string; limit?: string } }>(
+    '/subscriptions',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const page = request.query.page ? parseInt(request.query.page, 10) : undefined;
+      const limit = request.query.limit ? parseInt(request.query.limit, 10) : undefined;
+
+      const result = await getMandalaManager().listSubscriptions(userId, { page, limit });
+      return reply.send(result);
+    }
+  );
+
   // ─── Multi-Mandala CRUD endpoints (Story #60) ───
 
   /**
@@ -295,6 +350,114 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       } catch (err: any) {
         if (err.message === 'Mandala not found') {
           return reply.code(404).send({ error: 'Mandala not found' });
+        }
+        throw err;
+      }
+    }
+  );
+
+  /**
+   * PATCH /api/v1/mandalas/:id/share - Toggle mandala public visibility
+   */
+  fastify.patch<{ Params: { id: string }; Body: { isPublic: boolean } }>(
+    '/:id/share',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const { isPublic } = request.body;
+
+      if (typeof isPublic !== 'boolean') {
+        return reply.code(400).send({ error: 'isPublic (boolean) is required' });
+      }
+
+      try {
+        const manager = getMandalaManager();
+        const mandala = await manager.togglePublic(userId, request.params.id, isPublic);
+
+        await manager.logActivity(
+          request.params.id,
+          userId,
+          isPublic ? 'share_enabled' : 'share_disabled',
+          'mandala'
+        );
+
+        return reply.send({ mandala });
+      } catch (err: any) {
+        if (err.message === 'Mandala not found') {
+          return reply.code(404).send({ error: 'Mandala not found' });
+        }
+        throw err;
+      }
+    }
+  );
+
+  /**
+   * POST /api/v1/mandalas/:id/subscribe - Subscribe to a public mandala
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/:id/subscribe',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      try {
+        await getMandalaManager().subscribe(userId, request.params.id);
+        return reply.code(201).send({ success: true });
+      } catch (err: any) {
+        if (err.message === 'Mandala not found or not public') {
+          return reply.code(404).send({ error: 'Mandala not found or not public' });
+        }
+        if (err.message === 'Cannot subscribe to own mandala') {
+          return reply.code(400).send({ error: 'Cannot subscribe to own mandala' });
+        }
+        if (err.code === 'P2002') {
+          return reply.code(409).send({ error: 'Already subscribed' });
+        }
+        throw err;
+      }
+    }
+  );
+
+  /**
+   * DELETE /api/v1/mandalas/:id/subscribe - Unsubscribe from a mandala
+   */
+  fastify.delete<{ Params: { id: string } }>(
+    '/:id/subscribe',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      try {
+        await getMandalaManager().unsubscribe(userId, request.params.id);
+        return reply.code(204).send();
+      } catch (err: any) {
+        if (err.message === 'Subscription not found') {
+          return reply.code(404).send({ error: 'Subscription not found' });
+        }
+        throw err;
+      }
+    }
+  );
+
+  /**
+   * GET /api/v1/mandalas/:id/activity - Get activity log for a public mandala
+   */
+  fastify.get<{ Params: { id: string }; Querystring: { page?: string; limit?: string } }>(
+    '/:id/activity',
+    async (request, reply) => {
+      const page = request.query.page ? parseInt(request.query.page, 10) : undefined;
+      const limit = request.query.limit ? parseInt(request.query.limit, 10) : undefined;
+
+      try {
+        const result = await getMandalaManager().getActivityLog(request.params.id, { page, limit });
+        return reply.send(result);
+      } catch (err: any) {
+        if (err.message === 'Mandala not found or not public') {
+          return reply.code(404).send({ error: 'Mandala not found or not public' });
         }
         throw err;
       }

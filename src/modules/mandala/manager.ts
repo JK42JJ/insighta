@@ -1,6 +1,7 @@
 import { getPrismaClient } from '../database/client';
 import { logger } from '../../utils/logger';
 import { user_mandalas } from '@prisma/client';
+import { nanoid } from 'nanoid';
 
 const MANDALA_QUOTA = {
   free: 3,
@@ -22,6 +23,8 @@ export interface MandalaWithLevels {
   userId: string;
   title: string;
   isDefault: boolean;
+  isPublic: boolean;
+  shareSlug: string | null;
   position: number;
   createdAt: Date;
   updatedAt: Date;
@@ -87,6 +90,8 @@ export class MandalaManager {
       userId: mandala.user_id,
       title: mandala.title,
       isDefault: mandala.is_default,
+      isPublic: mandala.is_public,
+      shareSlug: mandala.share_slug,
       position: mandala.position,
       createdAt: mandala.created_at,
       updatedAt: mandala.updated_at,
@@ -619,6 +624,113 @@ export class MandalaManager {
   }
 
   /**
+   * Toggles the public visibility of a mandala.
+   * When making public, generates a unique share_slug via nanoid.
+   * When making private, clears the share_slug.
+   */
+  async togglePublic(
+    userId: string,
+    mandalaId: string,
+    isPublic: boolean
+  ): Promise<MandalaWithLevels> {
+    return await this.prisma.$transaction(async (tx) => {
+      await this.verifyOwnership(userId, mandalaId, tx as any);
+
+      const shareSlug = isPublic ? nanoid(12) : null;
+
+      await tx.user_mandalas.update({
+        where: { id: mandalaId },
+        data: {
+          is_public: isPublic,
+          share_slug: shareSlug,
+          updated_at: new Date(),
+        },
+      });
+
+      // If making private, remove all subscriptions
+      if (!isPublic) {
+        await tx.mandala_subscriptions.deleteMany({
+          where: { mandala_id: mandalaId },
+        });
+      }
+
+      logger.info(
+        `Mandala visibility changed: userId=${userId}, mandalaId=${mandalaId}, isPublic=${isPublic}`
+      );
+
+      const result = await tx.user_mandalas.findUnique({
+        where: { id: mandalaId },
+        include: {
+          levels: {
+            orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+          },
+        },
+      });
+
+      if (!result) {
+        throw new Error('Failed to update mandala');
+      }
+
+      return this.mapMandala(result);
+    });
+  }
+
+  /**
+   * Gets a public mandala by its share slug. No authentication required.
+   * Returns null if not found or not public.
+   */
+  async getPublicMandala(shareSlug: string): Promise<MandalaWithLevels | null> {
+    const mandala = await this.prisma.user_mandalas.findFirst({
+      where: { share_slug: shareSlug, is_public: true },
+      include: {
+        levels: {
+          orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+        },
+      },
+    });
+
+    if (!mandala) return null;
+
+    return this.mapMandala(mandala);
+  }
+
+  /**
+   * Lists public mandalas with pagination for the explore page.
+   */
+  async listPublicMandalas(options?: {
+    page?: number;
+    limit?: number;
+  }): Promise<{ mandalas: MandalaWithLevels[]; total: number; page: number; limit: number }> {
+    const page = options?.page ?? 1;
+    const limit = options?.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const [mandalas, total] = await Promise.all([
+      this.prisma.user_mandalas.findMany({
+        where: { is_public: true },
+        include: {
+          levels: {
+            orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+          },
+        },
+        orderBy: [{ updated_at: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      this.prisma.user_mandalas.count({
+        where: { is_public: true },
+      }),
+    ]);
+
+    return {
+      mandalas: mandalas.map((m) => this.mapMandala(m)),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  /**
    * Updates a single level on the default mandala for a user. Backward-compatible.
    */
   async updateLevel(
@@ -643,5 +755,165 @@ export class MandalaManager {
         updated_at: new Date(),
       },
     });
+  }
+
+  // ─── Subscription methods (Story #85-B) ───
+
+  async subscribe(subscriberId: string, mandalaId: string): Promise<void> {
+    const mandala = await this.prisma.user_mandalas.findUnique({
+      where: { id: mandalaId },
+    });
+
+    if (!mandala || !mandala.is_public) {
+      throw new Error('Mandala not found or not public');
+    }
+
+    if (mandala.user_id === subscriberId) {
+      throw new Error('Cannot subscribe to own mandala');
+    }
+
+    await this.prisma.mandala_subscriptions.create({
+      data: {
+        subscriber_id: subscriberId,
+        mandala_id: mandalaId,
+      },
+    });
+
+    logger.info(`Subscription created: subscriber=${subscriberId}, mandala=${mandalaId}`);
+  }
+
+  async unsubscribe(subscriberId: string, mandalaId: string): Promise<void> {
+    const result = await this.prisma.mandala_subscriptions.deleteMany({
+      where: {
+        subscriber_id: subscriberId,
+        mandala_id: mandalaId,
+      },
+    });
+
+    if (result.count === 0) {
+      throw new Error('Subscription not found');
+    }
+
+    logger.info(`Subscription removed: subscriber=${subscriberId}, mandala=${mandalaId}`);
+  }
+
+  async listSubscriptions(
+    subscriberId: string,
+    options?: { page?: number; limit?: number }
+  ): Promise<{
+    subscriptions: Array<{ id: string; mandalaId: string; title: string; subscribedAt: Date }>;
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const page = options?.page ?? 1;
+    const limit = options?.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const [subs, total] = await Promise.all([
+      this.prisma.mandala_subscriptions.findMany({
+        where: { subscriber_id: subscriberId },
+        include: { mandala: { select: { id: true, title: true, is_public: true } } },
+        orderBy: { subscribed_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.mandala_subscriptions.count({
+        where: { subscriber_id: subscriberId },
+      }),
+    ]);
+
+    return {
+      subscriptions: subs
+        .filter((s) => s.mandala.is_public)
+        .map((s) => ({
+          id: s.id,
+          mandalaId: s.mandala_id,
+          title: s.mandala.title,
+          subscribedAt: s.subscribed_at,
+        })),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  // ─── Activity Log methods (Story #85-B) ───
+
+  async logActivity(
+    mandalaId: string,
+    userId: string,
+    action: string,
+    entityType: string,
+    entityId?: string,
+    metadata?: Record<string, unknown>
+  ): Promise<void> {
+    await this.prisma.mandala_activity_log.create({
+      data: {
+        mandala_id: mandalaId,
+        user_id: userId,
+        action,
+        entity_type: entityType,
+        entity_id: entityId,
+        metadata: (metadata as any) ?? undefined,
+      },
+    });
+  }
+
+  async getActivityLog(
+    mandalaId: string,
+    options?: { page?: number; limit?: number }
+  ): Promise<{
+    activities: Array<{
+      id: string;
+      action: string;
+      entityType: string;
+      entityId: string | null;
+      metadata: unknown;
+      createdAt: Date;
+    }>;
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const page = options?.page ?? 1;
+    const limit = options?.limit ?? 50;
+    const skip = (page - 1) * limit;
+
+    // Only allow access to public mandalas' activity
+    const mandala = await this.prisma.user_mandalas.findUnique({
+      where: { id: mandalaId },
+      select: { is_public: true },
+    });
+
+    if (!mandala || !mandala.is_public) {
+      throw new Error('Mandala not found or not public');
+    }
+
+    const [activities, total] = await Promise.all([
+      this.prisma.mandala_activity_log.findMany({
+        where: { mandala_id: mandalaId },
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.mandala_activity_log.count({
+        where: { mandala_id: mandalaId },
+      }),
+    ]);
+
+    return {
+      activities: activities.map((a) => ({
+        id: a.id,
+        action: a.action,
+        entityType: a.entity_type,
+        entityId: a.entity_id,
+        metadata: a.metadata,
+        createdAt: a.created_at,
+      })),
+      total,
+      page,
+      limit,
+    };
   }
 }

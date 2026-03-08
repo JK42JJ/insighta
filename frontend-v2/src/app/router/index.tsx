@@ -10,6 +10,7 @@ const SubscriptionPage = lazy(() => import('@/pages/subscription'));
 const SettingsPage = lazy(() => import('@/pages/settings'));
 const PrivacyPage = lazy(() => import('@/pages/privacy'));
 const TermsPage = lazy(() => import('@/pages/terms'));
+const ExplorePage = lazy(() => import('@/pages/explore'));
 const NotFoundPage = lazy(() => import('@/pages/not-found'));
 
 export function AppRouter() {
@@ -24,6 +25,8 @@ export function AppRouter() {
         <Route path="/subscription" element={<SubscriptionPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
+        <Route path="/explore" element={<ExplorePage />} />
+        <Route path="/explore/:slug" element={<ExplorePage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>
