@@ -80,6 +80,7 @@ export function DraggableCard({ card, onClick, compact = false }: DraggableCardP
           src={card.thumbnail}
           alt={card.title}
           className="w-full h-full object-cover"
+          loading="lazy"
           onError={(e) => {
             (e.target as HTMLImageElement).src =
               'https://via.placeholder.com/320x180?text=Thumbnail';

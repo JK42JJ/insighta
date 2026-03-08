@@ -83,7 +83,7 @@ function TileTooltipContent({
       {/* Thumbnail — vertical layout */}
       {card.thumbnail ? (
         <div className="relative">
-          <img src={card.thumbnail} alt="" className="w-full aspect-video object-cover" />
+          <img src={card.thumbnail} alt="" className="w-full aspect-video object-cover" loading="lazy" />
           {/* Bottom gradient fade */}
           <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/40 to-transparent" />
         </div>
