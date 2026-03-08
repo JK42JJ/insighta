@@ -93,6 +93,15 @@ interface MandalaResponse {
   }>;
 }
 
+interface MandalaLevelBody {
+  levelKey: string;
+  centerGoal: string;
+  subjects: string[];
+  position: number;
+  depth: number;
+  parentLevelKey?: string | null;
+}
+
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
@@ -386,6 +395,37 @@ class ApiClient {
 
   async getWatchHistory(): Promise<Record<string, unknown>[]> {
     return this.request<Record<string, unknown>[]>('/analytics/history');
+  }
+
+  // ========================================
+  // Mandala CRUD
+  // ========================================
+
+  async getDefaultMandala(): Promise<{ mandala: MandalaResponse }> {
+    return this.request<{ mandala: MandalaResponse }>('/mandalas');
+  }
+
+  async upsertMandala(
+    title: string,
+    levels: MandalaLevelBody[],
+  ): Promise<{
+    mandala: MandalaResponse;
+    linked: { videoStates: number; localCards: number };
+  }> {
+    return this.request('/mandalas', {
+      method: 'PUT',
+      body: JSON.stringify({ title, levels }),
+    });
+  }
+
+  async updateMandalaLevel(
+    levelKey: string,
+    data: { centerGoal?: string; subjects?: string[]; color?: string | null },
+  ): Promise<{ success: boolean }> {
+    return this.request(`/mandalas/levels/${levelKey}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
   }
 
   // ========================================

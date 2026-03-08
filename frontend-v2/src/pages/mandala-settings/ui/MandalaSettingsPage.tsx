@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Check,
   GripVertical,
+  Loader2,
   Save,
   AlertTriangle,
   Sparkles,
@@ -18,7 +19,7 @@ import { useToast } from '@/shared/lib/use-toast';
 import { mandalaTemplates, MandalaTemplate } from '@/shared/data/mandalaTemplates';
 import { MandalaLevel } from '@/entities/card/model/types';
 import { mockMandalaLevels } from '@/shared/data/mockData';
-import { parseValidatedMandalaLevel, parseValidatedSubLevel } from '@/shared/lib/localStorageValidation';
+import { useMandalaQuery } from '@/features/mandala';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,25 +38,20 @@ export default function MandalaSettingsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useTranslation();
+  const { mandalaLevels: queryLevels, isLoading, isSaving, saveMandala } = useMandalaQuery();
 
-  // Load from localStorage or use mock data (with validation)
+  // Derive mandala data from query
   const [mandalaData, setMandalaData] = useState<MandalaLevel>(() => {
-    const validated = parseValidatedMandalaLevel('mandala-root');
-    return validated || mockMandalaLevels['root'];
+    return queryLevels['root'] || mockMandalaLevels['root'];
   });
 
-  // Load all L2 levels from localStorage (with validation)
+  // Derive L2 sub-levels from query
   const [subLevels, setSubLevels] = useState<Record<string, string[]>>(() => {
     const levels: Record<string, string[]> = {};
-    const keys = Object.keys(localStorage);
-    keys.forEach((key) => {
-      if (key.startsWith('mandala-l2-')) {
-        const subjects = parseValidatedSubLevel(key);
-        if (subjects) {
-          levels[key.replace('mandala-l2-', '')] = subjects;
-        }
-      }
-    });
+    for (const [key, level] of Object.entries(queryLevels)) {
+      if (key === 'root') continue;
+      levels[key] = level.subjects;
+    }
     return levels;
   });
 
@@ -66,6 +62,22 @@ export default function MandalaSettingsPage() {
   const [showTemplateConfirm, setShowTemplateConfirm] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<MandalaTemplate | null>(null);
   const [expandedSubject, setExpandedSubject] = useState<number | null>(null);
+
+  // Sync query data changes to local state
+  useEffect(() => {
+    const root = queryLevels['root'];
+    if (root && !hasChanges) {
+      setMandalaData(root);
+      setEditingCenterGoal(root.centerGoal);
+      setEditingSubjects([...root.subjects]);
+      const levels: Record<string, string[]> = {};
+      for (const [key, level] of Object.entries(queryLevels)) {
+        if (key === 'root') continue;
+        levels[key] = level.subjects;
+      }
+      setSubLevels(levels);
+    }
+  }, [queryLevels]);
 
   const getSubSubjects = (subject: string): string[] => {
     const key = subject.toLowerCase().replace(/\s/g, '');
@@ -139,7 +151,7 @@ export default function MandalaSettingsPage() {
     setDraggedIndex(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editingCenterGoal.trim()) {
       toast({
         title: t('mandalaSettings.saveFailed'),
@@ -165,31 +177,41 @@ export default function MandalaSettingsPage() {
       subjects: editingSubjects.map((s) => s.trim() || ''),
     };
 
-    localStorage.setItem('mandala-root', JSON.stringify(updatedMandala));
+    // Build full levels record for API save
+    const updatedLevels: Record<string, MandalaLevel> = {
+      root: updatedMandala,
+    };
 
-    editingSubjects.forEach((subject) => {
+    editingSubjects.forEach((subject, idx) => {
       if (subject.trim()) {
         const key = subject.toLowerCase().replace(/\s/g, '');
         const subs = subLevels[key] || getSubSubjects(subject);
-        const l2Data: MandalaLevel = {
+        updatedLevels[key] = {
           id: key,
           centerGoal: subject,
           subjects: subs,
           parentId: 'root',
-          parentCellIndex: editingSubjects.indexOf(subject),
+          parentCellIndex: idx,
           cards: [],
         };
-        localStorage.setItem(`mandala-l2-${key}`, JSON.stringify(l2Data));
       }
     });
 
-    setMandalaData(updatedMandala);
-    setHasChanges(false);
-
-    toast({
-      title: t('mandalaSettings.saved'),
-      description: t('mandalaSettings.savedDesc'),
-    });
+    try {
+      await saveMandala(updatedLevels);
+      setMandalaData(updatedMandala);
+      setHasChanges(false);
+      toast({
+        title: t('mandalaSettings.saved'),
+        description: t('mandalaSettings.savedDesc'),
+      });
+    } catch {
+      toast({
+        title: t('mandalaSettings.saveFailed'),
+        description: t('mandalaSettings.saveFailedGeneric', { defaultValue: 'Failed to save. Please try again.' }),
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleTemplateClick = (template: MandalaTemplate) => {
@@ -239,8 +261,8 @@ export default function MandalaSettingsPage() {
               <p className="text-sm text-muted-foreground">{t('mandalaSettings.subtitle')}</p>
             </div>
           </div>
-          <Button onClick={handleSave} disabled={!hasChanges} className="gap-2">
-            <Save className="w-4 h-4" />
+          <Button onClick={handleSave} disabled={!hasChanges || isSaving} className="gap-2">
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {t('common.save')}
           </Button>
         </div>

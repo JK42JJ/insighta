@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { MandalaLevel, MandalaPath } from '@/entities/card/model/types';
 import { mockMandalaLevels } from '@/shared/data/mockData';
-import { parseValidatedMandalaLevel } from '@/shared/lib/localStorageValidation';
 
 interface UseMandalaNavigationReturn {
   currentLevelId: string;
@@ -33,6 +32,7 @@ interface UseMandalaNavigationReturn {
  * to handle card movement side-effects (injected via init params).
  */
 export function useMandalaNavigation(deps?: {
+  initialLevels?: Record<string, MandalaLevel>;
   onMoveCardsForSubLevel?: (
     currentLevelId: string,
     nextLevelId: string,
@@ -45,16 +45,12 @@ export function useMandalaNavigation(deps?: {
   toast?: (opts: { title: string; description: string }) => void;
   t?: (key: string, opts?: Record<string, unknown>) => string;
 }): UseMandalaNavigationReturn {
-  const { onMoveCardsForSubLevel, onSwapCardsForReorder, toast, t } = deps ?? {};
+  const { initialLevels, onMoveCardsForSubLevel, onSwapCardsForReorder, toast, t } = deps ?? {};
 
-  // Mandala levels state - load from localStorage if available
-  const [mandalaLevels, setMandalaLevels] = useState<Record<string, MandalaLevel>>(() => {
-    const validatedRoot = parseValidatedMandalaLevel('mandala-root');
-    if (validatedRoot) {
-      return { ...mockMandalaLevels, root: validatedRoot };
-    }
-    return mockMandalaLevels;
-  });
+  // Mandala levels state - initialized from query data
+  const [mandalaLevels, setMandalaLevels] = useState<Record<string, MandalaLevel>>(
+    () => initialLevels ?? mockMandalaLevels,
+  );
 
   const [currentLevelId, setCurrentLevelId] = useState('root');
   const [path, setPath] = useState<MandalaPath[]>([]);
@@ -63,31 +59,19 @@ export function useMandalaNavigation(deps?: {
 
   const currentLevel: MandalaLevel = mandalaLevels[currentLevelId] || mandalaLevels['root'];
 
-  // Listen for storage changes from settings page
+  // Sync when initialLevels change (e.g., after query refetch or settings save)
   useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'mandala-root' && e.newValue) {
-        const validated = parseValidatedMandalaLevel('mandala-root');
-        if (validated) {
-          setMandalaLevels((prev) => ({ ...prev, root: validated }));
+    if (initialLevels) {
+      setMandalaLevels((prev) => {
+        // Merge: keep locally-created sub-levels that aren't in initialLevels
+        const merged = { ...prev };
+        for (const [key, level] of Object.entries(initialLevels)) {
+          merged[key] = level;
         }
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // Also check localStorage on focus (for same-tab navigation)
-  useEffect(() => {
-    const handleFocus = () => {
-      const validated = parseValidatedMandalaLevel('mandala-root');
-      if (validated) {
-        setMandalaLevels((prev) => ({ ...prev, root: validated }));
-      }
-    };
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, []);
+        return merged;
+      });
+    }
+  }, [initialLevels]);
 
   const handleCellClick = useCallback((_cellIndex: number, _subject: string) => {
     if (_cellIndex === -1) {
@@ -140,19 +124,9 @@ export function useMandalaNavigation(deps?: {
 
       // Create sub-level if it doesn't exist
       if (!mandalaLevels[nextLevelId]) {
-        const savedL2 = localStorage.getItem(`mandala-l2-${nextLevelId}`);
-        let subjects = Array.from({ length: 8 }, (_, i) => `${subject} ${i + 1}`);
-
-        if (savedL2) {
-          try {
-            const parsed = JSON.parse(savedL2);
-            if (parsed.subjects && Array.isArray(parsed.subjects)) {
-              subjects = parsed.subjects;
-            }
-          } catch {
-            /* non-critical */
-          }
-        }
+        // Check initialLevels (from DB) first, then fall back to defaults
+        const dbLevel = initialLevels?.[nextLevelId];
+        const subjects = dbLevel?.subjects ?? Array.from({ length: 8 }, (_, i) => `${subject} ${i + 1}`);
 
         setMandalaLevels((prev) => ({
           ...prev,
@@ -180,7 +154,7 @@ export function useMandalaNavigation(deps?: {
         description: t?.('index.navigatedToLevelDesc') ?? '',
       });
     },
-    [mandalaLevels, path, currentLevelId, currentLevel, toast, t, onMoveCardsForSubLevel],
+    [mandalaLevels, initialLevels, path, currentLevelId, currentLevel, toast, t, onMoveCardsForSubLevel],
   );
 
   const handleSubjectsReorder = useCallback(

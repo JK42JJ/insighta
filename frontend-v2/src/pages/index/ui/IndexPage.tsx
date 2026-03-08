@@ -12,6 +12,7 @@ import { MandalaGrid } from '@/widgets/mandala-grid/ui/MandalaGrid';
 import { MobileBottomNav } from '@/widgets/mobile-nav';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
 
+import { useMandalaQuery } from '@/features/mandala';
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
 import { useLayoutPreferences } from '../model/useLayoutPreferences';
 import { useCardOrchestrator } from '../model/useCardOrchestrator';
@@ -62,12 +63,16 @@ function AuthenticatedApp() {
   // 2. Layout preferences
   const layout = useLayoutPreferences();
 
-  // 3. Refs to break circular dependency: navigation <-> card orchestrator
+  // 3. Mandala data from DB
+  const { mandalaLevels: queryMandalaLevels } = useMandalaQuery();
+
+  // 4. Refs to break circular dependency: navigation <-> card orchestrator
   const moveCardsRef = useRef<(...args: any[]) => void>(() => {});
   const swapCardsRef = useRef<(...args: any[]) => void>(() => {});
 
-  // 4. Mandala navigation (wired to card orchestrator via refs)
+  // 5. Mandala navigation (wired to card orchestrator via refs)
   const navigation = useMandalaNavigation({
+    initialLevels: queryMandalaLevels,
     onMoveCardsForSubLevel: (from, to, idx) => moveCardsRef.current(from, to, idx),
     onSwapCardsForReorder: (swapped, levelId) => swapCardsRef.current(swapped, levelId),
     toast: (opts) => toast(opts),
