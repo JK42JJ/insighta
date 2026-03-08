@@ -53,7 +53,6 @@ export function CardList({
   cards,
   onCardClick,
   onSaveNote,
-  onDeleteCards,
   onSelectionChange,
 }: CardListProps) {
   const { t } = useTranslation();
