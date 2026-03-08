@@ -1,11 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { injectAxe, getViolations } from 'axe-playwright';
 
-const BASE_URL = 'http://localhost:8082';
-
 test.describe('Accessibility - Landing Page', () => {
   test('should have no WCAG 2.1 AA violations', async ({ page }) => {
-    await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'networkidle' });
     await injectAxe(page);
 
     const violations = await getViolations(page, undefined, {
@@ -27,7 +25,7 @@ test.describe('Accessibility - Landing Page', () => {
   });
 
   test('should have a skip-nav link pointing to #main-content', async ({ page }) => {
-    await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     const skipLink = page.locator('a[href="#main-content"]');
     await expect(skipLink).toBeAttached();
