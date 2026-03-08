@@ -437,5 +437,13 @@
     "termsOfService": "서비스 이용약관",
     "privacyPolicy": "개인정보처리방침",
     "allRightsReserved": "All rights reserved."
+  },
+  "offline": {
+    "banner": "오프라인 상태입니다. 재연결 시 변경사항이 동기화됩니다."
+  },
+  "sw": {
+    "updateAvailable": "새 버전이 있습니다.",
+    "reload": "새로고침",
+    "dismiss": "닫기"
   }
 }

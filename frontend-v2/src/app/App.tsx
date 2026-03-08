@@ -4,6 +4,7 @@ import { QueryProvider } from './providers/QueryProvider';
 import { ThemeProvider } from './providers/ThemeProvider';
 import { AuthProvider } from '@/features/auth/model/AuthContext';
 import { Toaster } from '@/shared/ui/sonner';
+import { OfflineBanner, SwUpdatePrompt } from '@/widgets/offline-banner';
 import { AppRouter } from './router';
 import '@/shared/i18n/config';
 import './styles/index.css';
@@ -19,8 +20,10 @@ function App() {
             <a href="#main-content" className="skip-nav">
               {t('common.skipToContent', 'Skip to main content')}
             </a>
+            <OfflineBanner />
             <AppRouter />
             <Toaster />
+            <SwUpdatePrompt />
           </AuthProvider>
         </ThemeProvider>
       </QueryProvider>
