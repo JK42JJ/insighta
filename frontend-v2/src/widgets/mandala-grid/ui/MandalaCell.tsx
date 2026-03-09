@@ -456,7 +456,7 @@ export const MandalaCell = memo(
           // Center cell
           isCenter && [
             'border-primary/30',
-            'bg-gradient-to-br from-primary/10 via-card to-primary/5',
+            'bg-[hsl(var(--primary)/0.08)]',
           ],
           // Selected
           isSelected && !isCenter && [

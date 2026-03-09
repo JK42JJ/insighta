@@ -97,9 +97,8 @@ export function Header({ onNavigateHome }: HeaderProps) {
             <div className="text-left">
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-foreground tracking-tight">Insighta</h1>
-                <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-gradient-to-r from-primary/20 to-primary/10 text-primary border border-primary/30 rounded-md shadow-sm relative overflow-hidden">
-                  <span className="relative z-10">beta</span>
-                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent animate-[shimmer_2s_ease-in-out_infinite] -translate-x-full" />
+                <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/30 rounded-md">
+                  beta
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">{t('header.subtitle')}</p>

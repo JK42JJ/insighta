@@ -531,6 +531,9 @@
     "testimonial3Name": "Mina C.",
     "testimonial3Role": "Content Creator",
     "testimonial3Quote": "The drag-and-drop from YouTube is magical. I organize hours of content into clear categories in minutes.",
+    "heroLabel": "Mandala-based Knowledge OS",
+    "ctaGuarantee": "30-day money-back guarantee",
+    "ctaSecure": "Secure payment",
     "ctaTitle": "Start organizing your mind today",
     "ctaSubtitle": "Join pioneers who are already transforming how they capture and connect knowledge.",
     "ctaButton": "Get Lifetime Access - $99",
@@ -562,7 +565,12 @@
     "faq2a": "AI-powered content summaries, key takeaway extraction, and cross-reference suggestions. 500 uses per month.",
     "faq3q": "Can I get a refund?",
     "faq3a": "Yes, we offer a 30-day money-back guarantee. No questions asked.",
-    "socialProof": "{{count}} pioneers have already joined"
+    "socialProof": "{{count}} pioneers have already joined",
+    "saveLabel": "Save 58%",
+    "monthlyComparison": "vs $238/yr on monthly",
+    "trustGuarantee": "30-day refund",
+    "trustSecure": "Secure checkout",
+    "trustUpdates": "Lifetime updates"
   },
   "templates": {
     "title": "Template Gallery",

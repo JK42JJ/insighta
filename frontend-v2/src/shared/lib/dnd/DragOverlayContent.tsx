@@ -44,8 +44,8 @@ export function DragOverlayContent({ dragData, allCards, cellLabels }: DragOverl
           <div
             className="absolute -top-2 -right-1 min-w-[28px] h-7 px-2 rounded-full flex items-center justify-center text-[13px] font-bold text-white z-50"
             style={{
-              background: 'linear-gradient(135deg, #FF6B3D 0%, #FF8F6B 100%)',
-              boxShadow: '0 4px 12px rgba(255,107,61,0.4)',
+              background: 'hsl(var(--primary))',
+              boxShadow: '0 4px 12px hsl(var(--primary) / 0.4)',
             }}
           >
             {ids.length}
@@ -57,7 +57,7 @@ export function DragOverlayContent({ dragData, allCards, cellLabels }: DragOverl
     return (
       <div
         className="w-[100px] h-[64px] rounded-lg overflow-hidden border-2 border-white/15 shadow-xl -rotate-2"
-        style={{ background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)' }}
+        style={{ background: 'hsl(var(--bg-light))' }}
       >
         {card.thumbnail && (
           <img src={card.thumbnail} alt={card.title} className="w-full h-full object-cover brightness-95" />

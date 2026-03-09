@@ -531,6 +531,9 @@
     "testimonial3Name": "최민아",
     "testimonial3Role": "콘텐츠 크리에이터",
     "testimonial3Quote": "YouTube에서 드래그 앤 드롭하는 게 마법 같아요. 몇 시간 분량의 콘텐츠를 몇 분 만에 깔끔하게 정리합니다.",
+    "heroLabel": "만다라 기반 지식 관리 OS",
+    "ctaGuarantee": "30일 환불 보장",
+    "ctaSecure": "안전한 결제",
     "ctaTitle": "오늘부터 사고를 정리하세요",
     "ctaSubtitle": "지식을 캡처하고 연결하는 방식을 혁신하고 있는 Pioneer들과 함께하세요.",
     "ctaButton": "평생 이용권 구매 - $99",
@@ -562,7 +565,12 @@
     "faq2a": "AI 기반 콘텐츠 요약, 핵심 내용 추출, 교차 참조 제안이 포함됩니다. 월 500회 사용 가능합니다.",
     "faq3q": "환불이 가능한가요?",
     "faq3a": "네, 30일 환불 보장을 제공합니다. 이유를 묻지 않습니다.",
-    "socialProof": "이미 {{count}}명의 Pioneer가 함께합니다"
+    "socialProof": "이미 {{count}}명의 Pioneer가 함께합니다",
+    "saveLabel": "58% 절약",
+    "monthlyComparison": "월구독 대비 $238/yr 절약",
+    "trustGuarantee": "30일 환불",
+    "trustSecure": "안전한 결제",
+    "trustUpdates": "평생 업데이트"
   },
   "templates": {
     "title": "템플릿 갤러리",
