@@ -1,6 +1,0 @@
-# Copy to terraform.tfvars and fill in values
-project_name  = "my-project"
-ami_id        = "ami-XXXXXXXXXXXXXXXXX"
-key_name      = "my-key-pair"
-domain        = "example.com"
-instance_type = "t2.micro"

@@ -12,12 +12,19 @@ build/
 .env
 .env.local
 .env.*.local
+.env.production
+.env.docker.local
+.env.docker
 
 # Database
 data/*.db
 data/*.db-journal
 *.sqlite
 *.sqlite3
+prisma/dev.db
+prisma/data/
+prisma/migrations/
+!prisma/migrations/.gitkeep
 
 # Logs
 logs/
@@ -44,6 +51,7 @@ coverage/
 *.swo
 *~
 .DS_Store
+Thumbs.db
 
 # Temporary files
 temp/
@@ -53,14 +61,6 @@ tmp/
 # OAuth credentials (sensitive)
 credentials.json
 token.json
-
-# OS
-Thumbs.db
-.DS_Store
-
-# Prisma
-prisma/migrations/
-!prisma/migrations/.gitkeep
 
 # Husky
 .husky/_
@@ -74,11 +74,9 @@ frontend/.env.*.local
 # Docker
 *.tar
 docker-compose.override.yml
-.env.docker.local
-.env.docker
 
-# Production environment (NEVER commit)
-.env.production
+# SSH Keys (NEVER commit)
+*.pem
 
 # MCP Configuration (contains sensitive keys)
 .mcp.json
@@ -87,28 +85,32 @@ docker-compose.override.yml
 .claude/
 CLAUDE.md
 
-# Developer tool configs (personal environment)
-.tmux.project.conf
-scripts/agent-dashboard.sh
-scripts/ops-dashboard.sh
-scripts/.env.scripts
+# ============================================
+# Internal / Non-public (local only)
+# ============================================
 
-# Personal work files
+# Infrastructure
+terraform/
+supabase/
+deploy/
+docker/
+docker-compose*.yml
+
+# CI/CD workflows
+.github/workflows/
+
+# Internal docs & scripts
+docs/
+scripts/
+tests/
 prompt/
+
+# Developer tool configs
+.tmux.project.conf
 
 # Generated OpenAPI spec files
 src/api/openapi.yaml
 src/api/openapi.json
 
-# Legacy docs site (removed)
+# Legacy
 docs-site/
-
-# SSH Keys (NEVER commit)
-*.pem
-
-# Terraform
-terraform/**/*.tfvars
-terraform/**/.terraform/
-terraform/**/*.tfstate
-terraform/**/*.tfstate.backup
-terraform/**/.terraform.lock.hcl
