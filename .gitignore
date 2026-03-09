@@ -108,7 +108,6 @@ prompt/
 
 # Dev tool configs
 .tmux.project.conf
-tsconfig.eslint.json
 CHANGELOG.md
 
 # Generated OpenAPI spec files
