@@ -612,14 +612,22 @@ export class MandalaManager {
         levelIdMap.set(level.levelKey, created.id);
       }
 
-      // Fetch the complete result
-      const result = await this.getMandala(userId);
-      if (!result) {
+      // Fetch the complete result using tx (inside transaction)
+      const fullMandala = await tx.user_mandalas.findFirst({
+        where: { id: mandala.id, user_id: userId },
+        include: {
+          levels: {
+            orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+          },
+        },
+      });
+
+      if (!fullMandala) {
         throw new Error('Failed to create mandala');
       }
 
       logger.info(`Mandala upserted: userId=${userId}, mandalaId=${mandala.id}`);
-      return result;
+      return this.mapMandala(fullMandala);
     });
   }
 
@@ -801,7 +809,13 @@ export class MandalaManager {
     subscriberId: string,
     options?: { page?: number; limit?: number }
   ): Promise<{
-    subscriptions: Array<{ id: string; mandalaId: string; title: string; subscribedAt: Date }>;
+    subscriptions: Array<{
+      id: string;
+      mandalaId: string;
+      title: string;
+      shareSlug: string | null;
+      subscribedAt: Date;
+    }>;
     total: number;
     page: number;
     limit: number;
@@ -813,7 +827,9 @@ export class MandalaManager {
     const [subs, total] = await Promise.all([
       this.prisma.mandala_subscriptions.findMany({
         where: { subscriber_id: subscriberId },
-        include: { mandala: { select: { id: true, title: true, is_public: true } } },
+        include: {
+          mandala: { select: { id: true, title: true, is_public: true, share_slug: true } },
+        },
         orderBy: { subscribed_at: 'desc' },
         skip,
         take: limit,
@@ -830,6 +846,7 @@ export class MandalaManager {
           id: s.id,
           mandalaId: s.mandala_id,
           title: s.mandala.title,
+          shareSlug: s.mandala.share_slug,
           subscribedAt: s.subscribed_at,
         })),
       total,
