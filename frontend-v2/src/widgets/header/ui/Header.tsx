@@ -1,5 +1,4 @@
 import {
-  Archive,
   Home,
   Moon,
   Sun,
@@ -90,12 +89,11 @@ export function Header({ onNavigateHome }: HeaderProps) {
             aria-label={t('header.goHome')}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-xl"
           >
-            <div
-              className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center"
-              style={{ boxShadow: 'var(--shadow-md)' }}
-            >
-              <Archive className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Insighta"
+              className="w-10 h-10 rounded-xl dark:invert"
+            />
             <div className="text-left">
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-foreground tracking-tight">Insighta</h1>

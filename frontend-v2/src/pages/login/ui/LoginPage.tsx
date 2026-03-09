@@ -1,4 +1,4 @@
-import { Archive, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -44,12 +44,11 @@ export default function LoginPage() {
           {/* Logo & Branding */}
           <div className="text-center space-y-4">
             <div className="flex justify-center">
-              <div
-                className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center"
-                style={{ boxShadow: 'var(--shadow-lg)' }}
-              >
-                <Archive className="w-10 h-10 text-primary-foreground" />
-              </div>
+              <img
+                src="/logo.png"
+                alt="Insighta"
+                className="w-16 h-16 rounded-2xl dark:invert"
+              />
             </div>
             <div>
               <div className="flex items-center justify-center gap-2">
