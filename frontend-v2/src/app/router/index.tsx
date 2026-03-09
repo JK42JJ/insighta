@@ -11,7 +11,10 @@ const SettingsPage = lazy(() => import('@/pages/settings'));
 const PrivacyPage = lazy(() => import('@/pages/privacy'));
 const TermsPage = lazy(() => import('@/pages/terms'));
 const ExplorePage = lazy(() => import('@/pages/explore'));
+const PricingPage = lazy(() => import('@/pages/pricing'));
+const TemplatesPage = lazy(() => import('@/pages/templates'));
 const NotFoundPage = lazy(() => import('@/pages/not-found'));
+const LandingPage = lazy(() => import('@/pages/landing'));
 
 export function AppRouter() {
   return (
@@ -19,6 +22,10 @@ export function AppRouter() {
       <Routes>
         <Route path="/" element={<IndexPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/landing" element={<LandingPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/templates" element={<TemplatesPage />} />
+        <Route path="/templates/:templateId" element={<TemplatesPage />} />
         <Route path="/mandala-settings" element={<MandalaSettingsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />

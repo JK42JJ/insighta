@@ -5,7 +5,10 @@ export interface MandalaTemplate {
   icon: string;
   centerGoal: string;
   subjects: string[];
+  category?: 'productivity' | 'learning' | 'business' | 'personal';
 }
+
+export { mandalaTemplates as MANDALA_TEMPLATES };
 
 export const mandalaTemplates: MandalaTemplate[] = [
   {

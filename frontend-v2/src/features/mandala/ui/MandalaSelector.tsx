@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, Plus, Pencil, Trash2, Check, Loader2 } from 'lucide-react';
+import { ChevronDown, Plus, Pencil, Trash2, Check, Loader2, Globe, Eye } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import {
@@ -35,13 +36,16 @@ import {
   useDeleteMandala,
   useRenameMandala,
   useSwitchMandala,
+  useSubscriptions,
 } from '../model/useMandalaQuery';
 
 export function MandalaSelector() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const { data: listData, isLoading } = useMandalaList();
+  const { data: subsData } = useSubscriptions();
   const createMutation = useCreateMandala();
   const deleteMutation = useDeleteMandala();
   const renameMutation = useRenameMandala();
@@ -57,6 +61,7 @@ export function MandalaSelector() {
   const [deleteTitle, setDeleteTitle] = useState('');
 
   const mandalas = listData?.mandalas ?? [];
+  const subscriptions = subsData?.subscriptions ?? [];
   const currentMandala = mandalas.find((m) => m.isDefault) ?? mandalas[0];
 
   const handleCreate = async () => {
@@ -180,6 +185,25 @@ export function MandalaSelector() {
             <Plus className="w-3.5 h-3.5 mr-2" />
             {t('mandalaSettings.createNew')}
           </DropdownMenuItem>
+          {subscriptions.length > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                {t('mandalaSettings.subscribed')}
+              </div>
+              {subscriptions.map((sub) => (
+                <DropdownMenuItem
+                  key={sub.id}
+                  className="flex items-center gap-2"
+                  onSelect={() => sub.shareSlug && navigate(`/explore/${sub.shareSlug}`)}
+                >
+                  <Eye className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  <span className="truncate">{sub.title}</span>
+                  <Globe className="w-3 h-3 text-muted-foreground/50 ml-auto flex-shrink-0" />
+                </DropdownMenuItem>
+              ))}
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

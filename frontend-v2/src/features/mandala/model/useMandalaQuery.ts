@@ -140,3 +140,49 @@ export function useSwitchMandala() {
     },
   });
 }
+
+export function useToggleMandalaShare() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, isPublic }: { id: string; isPublic: boolean }) =>
+      apiClient.toggleMandalaShare(id, isPublic),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.all });
+    },
+  });
+}
+
+export function useSubscriptions() {
+  const { isLoggedIn } = useAuth();
+
+  return useQuery({
+    queryKey: queryKeys.mandala.subscriptions(),
+    queryFn: () => apiClient.listSubscriptions(1, 100),
+    enabled: isLoggedIn,
+    staleTime: 30_000,
+  });
+}
+
+export function useSubscribeMandala() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (mandalaId: string) => apiClient.subscribeMandala(mandalaId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.subscriptions() });
+    },
+  });
+}
+
+export function useUnsubscribeMandala() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (mandalaId: string) => apiClient.unsubscribeMandala(mandalaId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.subscriptions() });
+    },
+  });
+}

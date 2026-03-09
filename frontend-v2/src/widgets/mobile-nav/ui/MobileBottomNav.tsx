@@ -7,7 +7,7 @@ import {
   useSpring,
   type MotionValue,
 } from 'framer-motion';
-import { Home, LayoutGrid, List, Columns2 } from 'lucide-react';
+import { Home, LayoutGrid, List, Columns2, Grid3X3 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import type { ViewMode } from '@/entities/user/model/types';
 
@@ -15,6 +15,7 @@ interface MobileBottomNavProps {
   currentView: ViewMode;
   onViewChange: (mode: ViewMode) => void;
   onNavigateHome?: () => void;
+  onOpenMandala?: () => void;
 }
 
 const NAV_ITEMS: { mode: ViewMode; icon: typeof LayoutGrid; labelKey: string }[] = [
@@ -105,6 +106,7 @@ export function MobileBottomNav({
   currentView,
   onViewChange,
   onNavigateHome,
+  onOpenMandala,
 }: MobileBottomNavProps) {
   const { t } = useTranslation();
   const reducedMotion = useReducedMotion();
@@ -143,6 +145,17 @@ export function MobileBottomNav({
           mouseX={mouseX}
           reducedMotion={reducedMotion}
           ariaLabel={t('header.goHome')}
+        />
+
+        {/* Mandala button */}
+        <DockItem
+          icon={Grid3X3}
+          label={t('sidebar.mandala', 'Mandala')}
+          isActive={false}
+          onClick={() => onOpenMandala?.()}
+          mouseX={mouseX}
+          reducedMotion={reducedMotion}
+          ariaLabel={t('sidebar.mandala', 'Mandala')}
         />
 
         {/* View mode items */}

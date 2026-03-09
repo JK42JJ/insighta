@@ -10,6 +10,9 @@ import {
   Sparkles,
   ChevronDown,
   ChevronRight,
+  Globe,
+  Copy,
+  Link,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
@@ -19,7 +22,9 @@ import { useToast } from '@/shared/lib/use-toast';
 import { mandalaTemplates, MandalaTemplate } from '@/shared/data/mandalaTemplates';
 import { MandalaLevel } from '@/entities/card/model/types';
 import { mockMandalaLevels } from '@/shared/data/mockData';
-import { useMandalaQuery, MandalaSelector } from '@/features/mandala';
+import { useMandalaQuery, useMandalaList, useToggleMandalaShare, MandalaSelector } from '@/features/mandala';
+import { Switch } from '@/shared/ui/switch';
+import { Label } from '@/shared/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,7 +43,9 @@ export default function MandalaSettingsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useTranslation();
-  const { mandalaLevels: queryLevels, isLoading, isSaving, saveMandala } = useMandalaQuery();
+  const { mandalaLevels: queryLevels, isSaving, saveMandala } = useMandalaQuery();
+  const { data: listData } = useMandalaList();
+  const toggleShare = useToggleMandalaShare();
 
   // Derive mandala data from query
   const [mandalaData, setMandalaData] = useState<MandalaLevel>(() => {
@@ -459,6 +466,74 @@ export default function MandalaSettingsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Share Settings */}
+            {(() => {
+              const currentMandala = listData?.mandalas?.find((m) => m.isDefault) ?? listData?.mandalas?.[0];
+              if (!currentMandala) return null;
+              const shareUrl = currentMandala.shareSlug
+                ? `${window.location.origin}/explore/${currentMandala.shareSlug}`
+                : null;
+              return (
+                <Card className="bg-surface-mid border-border/50">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-5 h-5 text-primary" />
+                      <CardTitle className="text-lg">{t('share.toggleLabel')}</CardTitle>
+                    </div>
+                    <CardDescription>{t('share.toggleDesc')}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="share-toggle" className="text-sm font-medium">
+                        {t('share.toggleLabel')}
+                      </Label>
+                      <Switch
+                        id="share-toggle"
+                        checked={currentMandala.isPublic}
+                        disabled={toggleShare.isPending}
+                        onCheckedChange={(checked) => {
+                          toggleShare.mutate(
+                            { id: currentMandala.id, isPublic: checked },
+                            {
+                              onSuccess: () => {
+                                toast({
+                                  title: checked ? t('share.enabled') : t('share.disabled'),
+                                  description: checked
+                                    ? t('share.enabledDesc')
+                                    : t('share.disabledDesc'),
+                                });
+                              },
+                            },
+                          );
+                        }}
+                      />
+                    </div>
+                    {currentMandala.isPublic && shareUrl && (
+                      <div className="flex items-center gap-2 p-3 bg-surface-light rounded-lg">
+                        <Link className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                        <span className="text-sm text-muted-foreground truncate flex-1">
+                          {shareUrl}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(shareUrl);
+                            toast({
+                              title: t('share.linkCopied'),
+                            });
+                          }}
+                          className="flex-shrink-0"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* Tips */}
             <Card className="bg-surface-mid border-border/50">

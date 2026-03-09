@@ -1,31 +1,50 @@
 import { Archive } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 
 export function LandingHeader({ onLogin }: { onLogin: () => void }) {
-  return (
-    <div className="absolute top-0 left-0 z-20 flex h-12 w-full items-center justify-center px-6 sm:h-14 sm:px-8 md:h-16 md:px-12 lg:px-0">
-      <div className="border-muted absolute top-6 left-0 h-0 w-full border-t sm:top-7 md:top-8" />
+  const { t } = useTranslation();
 
-      <div className="bg-muted relative z-30 flex h-10 w-full max-w-[calc(100%-32px)] items-center justify-between overflow-hidden rounded-md border px-3 py-1.5 pr-2 backdrop-blur-sm sm:h-11 sm:max-w-[calc(100%-48px)] sm:px-4 sm:py-2 sm:pr-3 md:h-12 md:max-w-[calc(100%-64px)] md:px-2 lg:w-[700px] lg:max-w-[700px]">
-        <div className="flex items-center justify-center">
-          <div className="flex items-center justify-start gap-2 pl-2">
-            <Archive className="w-4 h-4 text-primary" />
-            <span className="text-sm leading-5 font-medium sm:text-base">
-              Insighta
-            </span>
+  return (
+    <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border/30">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 h-14 flex items-center justify-between">
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+            <Archive className="w-4 h-4 text-primary-foreground" />
           </div>
-          <div className="flex flex-row items-start justify-start gap-2 pl-3 sm:gap-3 sm:pl-4 md:gap-4 md:pl-5">
-            <Link to="/terms" className="text-muted-foreground text-xs font-medium hover:text-foreground transition-colors md:text-[13px]">
-              Terms
-            </Link>
-            <Link to="/privacy" className="text-muted-foreground text-xs font-medium hover:text-foreground transition-colors md:text-[13px]">
-              Privacy
-            </Link>
-          </div>
+          <span className="text-lg font-bold tracking-tight">Insighta</span>
+        </Link>
+
+        {/* Nav links */}
+        <nav className="hidden md:flex items-center gap-6">
+          <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            {t('landing.navFeatures')}
+          </a>
+          <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            {t('landing.navPricing')}
+          </Link>
+          <Link to="/templates" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            {t('landing.navTemplates')}
+          </Link>
+        </nav>
+
+        {/* CTA */}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={onLogin}>
+            {t('common.login')}
+          </Button>
+          <Link to="/pricing">
+            <Button
+              size="sm"
+              className="rounded-full px-5 bg-[#EC4D74] hover:bg-[#FF3668] text-white border-0"
+            >
+              {t('landing.getStarted')}
+            </Button>
+          </Link>
         </div>
-        <Button size="sm" onClick={onLogin}>Log in</Button>
       </div>
-    </div>
+    </header>
   );
 }
