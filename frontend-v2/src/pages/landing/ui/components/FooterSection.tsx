@@ -1,4 +1,3 @@
-import { Archive } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -12,9 +11,7 @@ export function FooterSection() {
           {/* Brand */}
           <div className="max-w-sm">
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <Archive className="w-4 h-4 text-primary-foreground" />
-              </div>
+              <img src="/logo.png" alt="Insighta" className="w-8 h-8 rounded-lg dark:invert" />
               <span className="text-lg font-bold">Insighta</span>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">

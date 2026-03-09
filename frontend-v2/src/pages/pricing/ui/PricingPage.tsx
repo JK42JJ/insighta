@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Archive, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { useState } from 'react';
 
@@ -13,9 +13,7 @@ export default function PricingPage() {
       <header className="border-b border-border/30 bg-background/95 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-4 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Archive className="w-4 h-4 text-primary-foreground" />
-            </div>
+            <img src="/logo.png" alt="Insighta" className="w-8 h-8 rounded-lg dark:invert" />
             <span className="text-lg font-bold tracking-tight">Insighta</span>
           </Link>
           <Link to="/">

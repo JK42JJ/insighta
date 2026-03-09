@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from 'next-themes';
 import {
-  Archive,
   Moon,
   Sun,
   LogIn,
@@ -69,12 +68,11 @@ export function AppHeader({ onMobileMenuOpen }: AppHeaderProps) {
             to="/"
             className="flex items-center gap-2.5 hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-lg"
           >
-            <div
-              className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center"
-              style={{ boxShadow: 'var(--shadow-sm)' }}
-            >
-              <Archive className="w-4 h-4 text-primary-foreground" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Insighta"
+              className="w-8 h-8 rounded-lg dark:invert"
+            />
             <span className="text-lg font-bold text-foreground tracking-tight hidden sm:inline">
               Insighta
             </span>

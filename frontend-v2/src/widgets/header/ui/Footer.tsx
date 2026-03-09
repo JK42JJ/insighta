@@ -1,4 +1,3 @@
-import { Archive } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -9,7 +8,7 @@ export function Footer() {
     <footer className="py-6 text-center text-sm text-muted-foreground border-t border-border/50 bg-surface-mid/50">
       <div className="container mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Archive className="w-4 h-4 text-primary" aria-hidden="true" />
+          <img src="/logo.png" alt="" className="w-5 h-5 dark:invert" aria-hidden="true" />
           <span className="font-medium text-foreground">{t('footer.brand')}</span>
         </div>
         <div className="flex items-center gap-3">
