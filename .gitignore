@@ -15,6 +15,8 @@ build/
 .env.production
 .env.docker.local
 .env.docker
+.env.example
+.env.production.example
 
 # Database
 data/*.db
@@ -43,6 +45,7 @@ cache/
 coverage/
 .nyc_output/
 *.lcov
+jest.config.js
 
 # IDE
 .vscode/
@@ -63,7 +66,7 @@ credentials.json
 token.json
 
 # Husky
-.husky/_
+.husky/
 
 # Frontend
 frontend/node_modules/
@@ -73,7 +76,10 @@ frontend/.env.*.local
 
 # Docker
 *.tar
-docker-compose.override.yml
+Dockerfile
+.dockerignore
+docker-compose*.yml
+docker/
 
 # SSH Keys (NEVER commit)
 *.pem
@@ -93,11 +99,6 @@ CLAUDE.md
 terraform/
 supabase/
 deploy/
-docker/
-docker-compose*.yml
-
-# CI/CD workflows
-.github/workflows/
 
 # Internal docs & scripts
 docs/
@@ -105,8 +106,10 @@ scripts/
 tests/
 prompt/
 
-# Developer tool configs
+# Dev tool configs
 .tmux.project.conf
+tsconfig.eslint.json
+CHANGELOG.md
 
 # Generated OpenAPI spec files
 src/api/openapi.yaml
