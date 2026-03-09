@@ -51,6 +51,7 @@
     --radius: 0.75rem;
 
     /* Sidebar */
+    --sidebar-width: 20rem;
     --sidebar-background: 220 14% 96%;
     --sidebar-foreground: 220 15% 10%;
     --sidebar-primary: 234 65% 50%;
@@ -159,6 +160,7 @@
     --ring: 234 60% 72%;
 
     /* Sidebar */
+    --sidebar-width: 20rem;
     --sidebar-background: 220 13% 13%;
     --sidebar-foreground: 220 10% 95%;
     --sidebar-primary: 234 60% 72%;

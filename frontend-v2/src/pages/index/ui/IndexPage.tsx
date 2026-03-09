@@ -77,16 +77,18 @@ function AuthenticatedApp() {
   const [expandedMandalaId, setExpandedMandalaId] = useState<string | null>(null);
   const [isFloatingPanelOpen, setIsFloatingPanelOpen] = useState(false);
 
-  // Auto-expand default mandala in sidebar
+  // Auto-expand default mandala in sidebar (only on initial load)
   const { data: mandalaListData } = useMandalaList();
+  const hasAutoExpanded = useRef(false);
   useEffect(() => {
-    if (expandedMandalaId === null && mandalaListData?.mandalas) {
+    if (!hasAutoExpanded.current && mandalaListData?.mandalas) {
       const defaultMandala = mandalaListData.mandalas.find((m) => m.isDefault);
       if (defaultMandala) {
         setExpandedMandalaId(defaultMandala.id);
+        hasAutoExpanded.current = true;
       }
     }
-  }, [mandalaListData, expandedMandalaId]);
+  }, [mandalaListData]);
 
   // 3. Mandala data from DB
   const { mandalaLevels: queryMandalaLevels } = useMandalaQuery();

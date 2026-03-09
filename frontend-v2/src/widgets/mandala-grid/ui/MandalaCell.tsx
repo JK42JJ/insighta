@@ -354,6 +354,7 @@ export const MandalaCell = memo(
     onDoubleClick,
     onCardClick,
     sizeMode = 'standard',
+    hasSubLevel = false,
   }: MandalaCellProps) {
     const { t } = useTranslation();
     const cardCount = cards.length;
@@ -487,8 +488,36 @@ export const MandalaCell = memo(
         onDragOver={handleExternalDragOver}
         onDrop={handleExternalDrop}
         onClick={onClick}
-        onDoubleClick={isCenter && onDoubleClick ? onDoubleClick : undefined}
+        onDoubleClick={onDoubleClick}
       >
+        {/* Edge glow — L2 sub-level indicator */}
+        {hasSubLevel && (() => {
+          const OUTER_EDGES: Record<number, ('top' | 'right' | 'bottom' | 'left')[]> = {
+            0: ['top', 'left'],    1: ['top'],       2: ['top', 'right'],
+            3: ['left'],                              5: ['right'],
+            6: ['bottom', 'left'], 7: ['bottom'],    8: ['bottom', 'right'],
+          };
+          const edges = OUTER_EDGES[index] ?? [];
+          const edgeStyles: Record<string, string> = {
+            top: 'inset-x-0 top-0 h-[2px] bg-gradient-to-b',
+            right: 'inset-y-0 right-0 w-[2px] bg-gradient-to-l',
+            bottom: 'inset-x-0 bottom-0 h-[2px] bg-gradient-to-t',
+            left: 'inset-y-0 left-0 w-[2px] bg-gradient-to-r',
+          };
+          return edges.map((edge) => (
+            <div
+              key={edge}
+              className={cn(
+                'absolute pointer-events-none rounded-[inherit] z-[1]',
+                'from-primary/20 to-transparent',
+                'group-hover/cell:from-primary/40',
+                'transition-all duration-300',
+                edgeStyles[edge],
+              )}
+            />
+          ));
+        })()}
+
         {/* Cell Drag Handle */}
         <CellDragHandle gridIndex={index} isCenter={isCenter} />
 
