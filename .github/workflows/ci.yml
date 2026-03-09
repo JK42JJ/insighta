@@ -127,4 +127,4 @@ jobs:
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: placeholder
       - name: Run axe accessibility tests
-        run: cd frontend-v2 && npx playwright test tests/a11y.spec.ts
+        run: cd frontend-v2 && npx playwright test tests/a11y.spec.ts --project=no-auth
