@@ -10,7 +10,7 @@ export function LandingHeader({ onLogin }: { onLogin: () => void }) {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 h-14 flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2.5">
-          <img src="/logo.png" alt="Insighta" className="w-8 h-8 rounded-lg dark:invert" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Insighta" className="w-8 h-8 rounded-lg dark:invert" />
           <span className="text-lg font-bold tracking-tight">Insighta</span>
         </Link>
 

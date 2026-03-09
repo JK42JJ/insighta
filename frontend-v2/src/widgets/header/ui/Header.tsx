@@ -90,7 +90,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
             className="flex items-center gap-3 hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-xl"
           >
             <img
-              src="/logo.png"
+              src={`${import.meta.env.BASE_URL}logo.png`}
               alt="Insighta"
               className="w-10 h-10 rounded-xl dark:invert"
             />
