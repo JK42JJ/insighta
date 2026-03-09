@@ -45,7 +45,7 @@ export default function LoginPage() {
           <div className="text-center space-y-4">
             <div className="flex justify-center">
               <img
-                src="/logo.png"
+                src={`${import.meta.env.BASE_URL}logo.png`}
                 alt="Insighta"
                 className="w-16 h-16 rounded-2xl dark:invert"
               />

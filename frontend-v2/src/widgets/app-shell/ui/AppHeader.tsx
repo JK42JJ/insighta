@@ -69,7 +69,7 @@ export function AppHeader({ onMobileMenuOpen }: AppHeaderProps) {
             className="flex items-center gap-2.5 hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-lg"
           >
             <img
-              src="/logo.png"
+              src={`${import.meta.env.BASE_URL}logo.png`}
               alt="Insighta"
               className="w-8 h-8 rounded-lg dark:invert"
             />

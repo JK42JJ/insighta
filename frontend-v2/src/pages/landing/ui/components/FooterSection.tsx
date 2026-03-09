@@ -11,7 +11,7 @@ export function FooterSection() {
           {/* Brand */}
           <div className="max-w-sm">
             <div className="flex items-center gap-2.5 mb-4">
-              <img src="/logo.png" alt="Insighta" className="w-8 h-8 rounded-lg dark:invert" />
+              <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Insighta" className="w-8 h-8 rounded-lg dark:invert" />
               <span className="text-lg font-bold">Insighta</span>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
