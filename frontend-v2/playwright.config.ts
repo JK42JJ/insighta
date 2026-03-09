@@ -52,9 +52,9 @@ export default defineConfig({
   webServer: {
     // CI: use preview server (serves production build with base: '/v2/')
     // Local: use dev server (base: '/', but BrowserRouter handles /v2/ routing)
-    command: isCI ? 'npx vite preview --port 8082' : 'npm run dev',
-    url: 'http://localhost:8082/v2',
+    command: isCI ? 'npx vite preview --port 8082 --host' : 'npm run dev',
+    url: 'http://localhost:8082/v2/',
     reuseExistingServer: !isCI,
-    timeout: isCI ? 30_000 : 10_000,
+    timeout: isCI ? 60_000 : 10_000,
   },
 });
