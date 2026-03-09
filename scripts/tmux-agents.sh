@@ -20,13 +20,14 @@ CLAUDE_CMD="claude --dangerously-skip-permissions"
 DASH_CMD="while true; do bash scripts/agent-dashboard.sh; echo 'Dashboard restarting...'; sleep 1; done"
 OPS_CMD="while true; do bash scripts/ops-dashboard.sh; echo 'Ops restarting...'; sleep 1; done"
 
-# Detect tmux base-index (0 or 1)
-WIN_BASE=$(tmux show-option -gv base-index 2>/dev/null || echo 0)
-PANE_BASE=$(tmux show-option -gv pane-base-index 2>/dev/null || echo 0)
-W="${WIN_BASE}"  # first window index
-P0="${PANE_BASE}"  # first pane
-P1=$((PANE_BASE + 1))
-P2=$((PANE_BASE + 2))
+# Detect tmux base-index AFTER session creation (server must be running)
+detect_indices() {
+  W=$(tmux show-option -gv base-index 2>/dev/null || echo 0)
+  local pane_base=$(tmux show-option -gv pane-base-index 2>/dev/null || echo 0)
+  P0="${pane_base}"
+  P1=$((pane_base + 1))
+  P2=$((pane_base + 2))
+}
 
 # Colors
 RED='\033[0;31m'
@@ -70,6 +71,7 @@ case "$LAYOUT" in
     # Single pane: Claude only
     echo -e "${GREEN}Creating solo layout (Claude only)...${NC}"
     tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_ROOT" -x 220 -y 55
+    detect_indices
     tmux send-keys -t "$SESSION_NAME:$W" "$CLAUDE_CMD" Enter
     ;;
 
@@ -81,6 +83,7 @@ case "$LAYOUT" in
     # └──────────────────────────────────────────────┘
     echo -e "${GREEN}Creating minimal layout (2 panes)...${NC}"
     tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_ROOT" -x 220 -y 55
+    detect_indices
 
     tmux split-window -v -p 25 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
     tmux send-keys -t "$SESSION_NAME:$W.$P1" "$DASH_CMD" Enter
@@ -100,6 +103,7 @@ case "$LAYOUT" in
     # └──────────────────────────────────────────────────┘
     echo -e "${GREEN}Creating full layout (4 panes)...${NC}"
     tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_ROOT" -x 220 -y 55
+    detect_indices
 
     # Right side - Agent Dashboard
     tmux split-window -h -p 38 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
@@ -129,6 +133,7 @@ case "$LAYOUT" in
     # └──────────────────────────┴───────────────────────┘
     echo -e "${GREEN}Creating default layout (3 panes)...${NC}"
     tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_ROOT" -x 220 -y 55
+    detect_indices
 
     # Right side - Agent Dashboard
     tmux split-window -h -p 38 -t "$SESSION_NAME" -c "$PROJECT_ROOT"
@@ -143,6 +148,9 @@ case "$LAYOUT" in
     tmux send-keys -t "$SESSION_NAME:$W.$P0" "$CLAUDE_CMD" Enter
     ;;
 esac
+
+# Enable mouse scrolling (scroll = copy-mode, click = pane select)
+tmux set-option -t "$SESSION_NAME" -g mouse on
 
 # Load project tmux config
 TMUX_CONF="$PROJECT_ROOT/.tmux.project.conf"
