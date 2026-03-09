@@ -38,7 +38,7 @@ export function LandingHeader({ onLogin }: { onLogin: () => void }) {
           <Link to="/pricing">
             <Button
               size="sm"
-              className="rounded-full px-5 bg-[#EC4D74] hover:bg-[#FF3668] text-white border-0"
+              className="rounded-full px-5 bg-[#D6336C] hover:bg-[#C2255C] text-white border-0"
             >
               {t('landing.getStarted')}
             </Button>

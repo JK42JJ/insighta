@@ -31,7 +31,7 @@ export function HeroSection({ onLogin }: { onLogin: () => void }) {
           <Link to="/pricing">
             <Button
               size="lg"
-              className="rounded-full px-8 py-6 text-base bg-[#EC4D74] hover:bg-[#FF3668] text-white border-0 shadow-lg hover:shadow-xl transition-all"
+              className="rounded-full px-8 py-6 text-base bg-[#D6336C] hover:bg-[#C2255C] text-white border-0 shadow-lg hover:shadow-xl transition-all"
             >
               {t('landing.heroCta')}
             </Button>

@@ -42,7 +42,7 @@ export default function PricingPage() {
           >
             {/* Badge */}
             <div className="absolute top-4 right-4">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-[#EC4D74] text-white">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-[#D6336C] text-white">
                 {t('pricing.badge')}
               </span>
             </div>
@@ -71,7 +71,7 @@ export default function PricingPage() {
             {/* CTA */}
             <Button
               size="lg"
-              className="w-full rounded-full py-6 text-base bg-[#EC4D74] hover:bg-[#FF3668] text-white border-0"
+              className="w-full rounded-full py-6 text-base bg-[#D6336C] hover:bg-[#C2255C] text-white border-0"
             >
               {t('pricing.ctaButton')}
             </Button>

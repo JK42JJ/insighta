@@ -12,14 +12,14 @@ export function LTDBanner() {
   return (
     <div className="relative z-50 bg-[#1E2437] text-white">
       <div className="mx-auto max-w-7xl px-4 py-2.5 flex items-center justify-center gap-3 text-sm">
-        <Flame className="w-4 h-4 text-[#EC4D74] shrink-0" aria-hidden="true" />
+        <Flame className="w-4 h-4 text-[#D6336C] shrink-0" aria-hidden="true" />
         <p className="font-medium">
           <span className="hidden sm:inline">{t('landing.ltdBanner')}</span>
           <span className="sm:hidden">{t('landing.ltdBannerShort')}</span>
         </p>
         <Link
           to="/pricing"
-          className="inline-flex items-center px-3 py-1 rounded-full bg-[#EC4D74] text-white text-xs font-semibold hover:bg-[#FF3668] transition-colors whitespace-nowrap"
+          className="inline-flex items-center px-3 py-1 rounded-full bg-[#D6336C] text-white text-xs font-semibold hover:bg-[#C2255C] transition-colors whitespace-nowrap"
         >
           {t('landing.ltdBannerCta')}
         </Link>
