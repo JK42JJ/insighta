@@ -26,6 +26,8 @@ test.describe('Accessibility - Landing Page', () => {
 
   test('should have a skip-nav link pointing to #main-content', async ({ page }) => {
     await page.goto('/', { waitUntil: 'networkidle' });
+    // Wait for React to hydrate — skip-nav is in App.tsx root
+    await page.waitForSelector('#main-content', { timeout: 10_000 });
 
     const skipLink = page.locator('a[href="#main-content"]');
     await expect(skipLink).toBeAttached();

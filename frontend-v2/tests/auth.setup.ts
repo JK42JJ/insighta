@@ -8,6 +8,19 @@ const __dirname = path.dirname(__filename);
 const authFile = path.join(__dirname, '.auth/user.json');
 
 setup('authenticate', async () => {
+  // CI cannot perform manual OAuth login — skip and create empty auth state
+  if (process.env.CI) {
+    console.log('CI environment detected — skipping manual OAuth setup.');
+    const authDir = path.dirname(authFile);
+    if (!fs.existsSync(authDir)) {
+      fs.mkdirSync(authDir, { recursive: true });
+    }
+    if (!fs.existsSync(authFile)) {
+      fs.writeFileSync(authFile, JSON.stringify({ cookies: [], origins: [] }));
+    }
+    return;
+  }
+
   // Skip if auth file already exists and is recent (less than 24h old)
   if (fs.existsSync(authFile)) {
     const stat = fs.statSync(authFile);
