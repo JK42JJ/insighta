@@ -2,17 +2,16 @@ import { useRef, useEffect, useState, useMemo, useCallback, lazy, Suspense } fro
 import { DndContext, DragOverlay, type DragStartEvent, type DragOverEvent, type DragEndEvent } from '@dnd-kit/core';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
-import { Header } from '@/widgets/header/ui/Header';
+import { AppShell } from '@/widgets/app-shell';
 import { DropZoneOverlay } from '@/widgets/header/ui/DropZoneOverlay';
 import { CardListView } from '@/widgets/card-list-view';
 import { VideoPlayerModal } from '@/widgets/video-player/ui/VideoPlayerModal';
 import { FloatingScratchPad } from '@/widgets/scratch-pad/ui/FloatingScratchPad';
-import { FloatingMandala } from '@/widgets/floating-mandala/ui/FloatingMandala';
+import { MandalaPanel } from '@/widgets/mandala-panel';
 import { MandalaGrid } from '@/widgets/mandala-grid/ui/MandalaGrid';
 import { MobileBottomNav } from '@/widgets/mobile-nav';
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
 
-import { useMandalaQuery } from '@/features/mandala';
+import { useMandalaQuery, useMandalaList } from '@/features/mandala';
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
 import { useLayoutPreferences } from '../model/useLayoutPreferences';
 import { useCardOrchestrator } from '../model/useCardOrchestrator';
@@ -62,6 +61,32 @@ function AuthenticatedApp() {
 
   // 2. Layout preferences
   const layout = useLayoutPreferences();
+
+  // 2b. Mobile detection for floating panel
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  // Sidebar mandala accordion state
+  const [expandedMandalaId, setExpandedMandalaId] = useState<string | null>(null);
+  const [isFloatingPanelOpen, setIsFloatingPanelOpen] = useState(false);
+
+  // Auto-expand default mandala in sidebar
+  const { data: mandalaListData } = useMandalaList();
+  useEffect(() => {
+    if (expandedMandalaId === null && mandalaListData?.mandalas) {
+      const defaultMandala = mandalaListData.mandalas.find((m) => m.isDefault);
+      if (defaultMandala) {
+        setExpandedMandalaId(defaultMandala.id);
+      }
+    }
+  }, [mandalaListData, expandedMandalaId]);
 
   // 3. Mandala data from DB
   const { mandalaLevels: queryMandalaLevels } = useMandalaQuery();
@@ -299,13 +324,6 @@ function AuthenticatedApp() {
     />
   );
 
-  // Handle mandala panel resize
-  const handleMandalaPanelResize = useCallback((sizes: number[]) => {
-    if (sizes[0] !== undefined) {
-      layout.handleSetMandalaPanelRatio(sizes[0]);
-    }
-  }, [layout.handleSetMandalaPanelRatio]);
-
   const announcements = useMemo(() => ({
     onDragStart({ active }) {
       const data = active.data.current as DragData | undefined;
@@ -335,101 +353,107 @@ function AuthenticatedApp() {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className="h-screen flex flex-col bg-surface-base overflow-hidden">
-        <Header onNavigateHome={() => navigation.handleNavigate('root')} />
-
-        <DropZoneOverlay
-          isVisible={dragDrop.isDraggingOver && !dragDrop.draggingCard && !dragDrop.isDraggingCell}
-        />
-
-        {/* Top docked ScratchPad */}
-        {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'top' && (
-          <div className="flex-shrink-0 relative z-30">
-            <FloatingScratchPad {...scratchPadProps(false)} />
-          </div>
-        )}
-
-        {/* Floating ScratchPad */}
-        {layout.isScratchPadFloating && (
-          <FloatingScratchPad
-            {...scratchPadProps(true)}
-            initialPosition={
-              layout.prefScratchpadPosX !== undefined && layout.prefScratchpadPosY !== undefined
-                ? { x: layout.prefScratchpadPosX, y: layout.prefScratchpadPosY }
-                : undefined
-            }
-            onPositionChange={layout.setScratchPadPosition}
+      <AppShell
+        onNavigateHome={() => navigation.handleNavigate('root')}
+        mandalaGridElement={mandalaGridElement()}
+        expandedMandalaId={expandedMandalaId}
+        onExpandedMandalaChange={setExpandedMandalaId}
+      >
+        <div className="h-full flex flex-col overflow-hidden">
+          <DropZoneOverlay
+            isVisible={dragDrop.isDraggingOver && !dragDrop.draggingCard && !dragDrop.isDraggingCell}
           />
-        )}
 
-        {/* Main Content Area */}
-        <main id="main-content" className="flex-1 overflow-hidden flex">
-          {/* Left docked ScratchPad */}
-          {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'left' && (
-            <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-r border-border/30 relative z-30 h-full">
+          {/* Top docked ScratchPad */}
+          {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'top' && (
+            <div className="flex-shrink-0 relative z-30">
               <FloatingScratchPad {...scratchPadProps(false)} />
             </div>
           )}
 
-          <ResizablePanelGroup direction="horizontal" onLayout={handleMandalaPanelResize}>
-            <ResizablePanel defaultSize={layout.mandalaPanelRatio} minSize={20} maxSize={45}>
-              <FloatingMandala
-                centerGoal={navigation.currentLevel.centerGoal}
-                totalCards={cards.totalCards}
-              >
-                {mandalaGridElement()}
-              </FloatingMandala>
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={100 - layout.mandalaPanelRatio} minSize={40}>
-              <div className="h-full overflow-y-auto px-4 py-4">
-                <CardListView
-                  cards={cards.displayCards}
-                  title={cards.displayTitle}
-                  viewMode={layout.viewMode}
-                  listPanelRatio={layout.listPanelRatio}
-                  onViewModeChange={layout.handleSetViewMode}
-                  onListPanelRatioChange={layout.handleSetListPanelRatio}
-                  onCardClick={handleCardClick}
-                  onCardDragStart={dragDrop.handleCardDragStart}
-                  onMultiCardDragStart={dragDrop.handleMultiCardDragStart}
-                  onSaveNote={cards.handleSaveNote}
-                  onCardsReorder={cards.handleCardsReorder}
-                  onDeleteCards={cards.handleDeleteCards}
-                />
+          {/* Floating ScratchPad */}
+          {layout.isScratchPadFloating && (
+            <FloatingScratchPad
+              {...scratchPadProps(true)}
+              initialPosition={
+                layout.prefScratchpadPosX !== undefined && layout.prefScratchpadPosY !== undefined
+                  ? { x: layout.prefScratchpadPosX, y: layout.prefScratchpadPosY }
+                  : undefined
+              }
+              onPositionChange={layout.setScratchPadPosition}
+            />
+          )}
+
+          {/* Main Content Area — CardListView always full width */}
+          <div className="flex-1 overflow-hidden flex">
+            {/* Left docked ScratchPad */}
+            {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'left' && (
+              <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-r border-border/30 relative z-30 h-full">
+                <FloatingScratchPad {...scratchPadProps(false)} />
               </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
+            )}
 
-          {/* Right docked ScratchPad */}
-          {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'right' && (
-            <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-l border-border/30 relative z-30 h-full">
+            <div className="flex-1 h-full overflow-y-auto px-4 py-4">
+              <CardListView
+                cards={cards.displayCards}
+                title={cards.displayTitle}
+                viewMode={layout.viewMode}
+                listPanelRatio={layout.listPanelRatio}
+                onViewModeChange={layout.handleSetViewMode}
+                onListPanelRatioChange={layout.handleSetListPanelRatio}
+                onCardClick={handleCardClick}
+                onCardDragStart={dragDrop.handleCardDragStart}
+                onMultiCardDragStart={dragDrop.handleMultiCardDragStart}
+                onSaveNote={cards.handleSaveNote}
+                onCardsReorder={cards.handleCardsReorder}
+                onDeleteCards={cards.handleDeleteCards}
+              />
+            </div>
+
+            {/* Right docked ScratchPad */}
+            {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'right' && (
+              <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-l border-border/30 relative z-30 h-full">
+                <FloatingScratchPad {...scratchPadProps(false)} />
+              </div>
+            )}
+          </div>
+
+          {/* Bottom docked ScratchPad */}
+          {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'bottom' && (
+            <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-t border-border/30 relative z-30">
               <FloatingScratchPad {...scratchPadProps(false)} />
             </div>
           )}
-        </main>
 
-        {/* Bottom docked ScratchPad */}
-        {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'bottom' && (
-          <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-t border-border/30 relative z-30">
-            <FloatingScratchPad {...scratchPadProps(false)} />
-          </div>
-        )}
+          <VideoPlayerModal
+            card={modal.currentModalCard}
+            isOpen={modal.isModalOpen}
+            onClose={modal.closeModal}
+            onSave={cards.handleSaveNote}
+            onSaveWatchPosition={cards.handleSaveWatchPosition}
+          />
 
-        <VideoPlayerModal
-          card={modal.currentModalCard}
-          isOpen={modal.isModalOpen}
-          onClose={modal.closeModal}
-          onSave={cards.handleSaveNote}
-          onSaveWatchPosition={cards.handleSaveWatchPosition}
-        />
+          {/* Mobile-only floating MandalaPanel */}
+          {isMobile && (
+            <MandalaPanel
+              mode="floating"
+              totalCards={cards.totalCards}
+              onToggleMode={() => {}}
+              isOpen={isFloatingPanelOpen}
+              onOpenChange={setIsFloatingPanelOpen}
+            >
+              {mandalaGridElement()}
+            </MandalaPanel>
+          )}
 
-        <MobileBottomNav
-          currentView={layout.viewMode}
-          onViewChange={layout.handleSetViewMode}
-          onNavigateHome={() => navigation.handleNavigate('root')}
-        />
-      </div>
+          <MobileBottomNav
+            currentView={layout.viewMode}
+            onViewChange={layout.handleSetViewMode}
+            onNavigateHome={() => navigation.handleNavigate('root')}
+            onOpenMandala={() => setIsFloatingPanelOpen(true)}
+          />
+        </div>
+      </AppShell>
 
       <DragOverlay dropAnimation={null} modifiers={[snapToCursor]}>
         <DragOverlayContent

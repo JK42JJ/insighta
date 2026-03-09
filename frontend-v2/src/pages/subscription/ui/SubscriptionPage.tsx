@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Header } from '@/widgets/header/ui/Header';
+import { AppShell } from '@/widgets/app-shell';
+import { useAuth } from '@/features/auth/model/useAuth';
 import { Button } from '@/shared/ui/button';
 import {
   Card,
@@ -9,22 +8,20 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
-import { Check, ArrowLeft, Crown, Zap, Star } from 'lucide-react';
+import { Check, Crown, Zap, Star } from 'lucide-react';
 import { toast } from '@/shared/lib/use-toast';
 
 export default function SubscriptionPage() {
-  const navigate = useNavigate();
   const { t } = useTranslation();
-  const [selectedPlan, setSelectedPlan] = useState('free');
+  const { userName } = useAuth();
 
   const plans = [
     {
       id: 'free',
       name: t('subscription.free.name'),
-      price: '\u20A90',
+      price: '$0',
       period: t('subscription.monthly'),
       description: t('subscription.free.description'),
       icon: Star,
@@ -33,33 +30,42 @@ export default function SubscriptionPage() {
       current: true,
     },
     {
-      id: 'pro',
-      name: t('subscription.pro.name'),
-      price: '\u20A99,900',
-      period: t('subscription.monthly'),
-      description: t('subscription.pro.description'),
-      icon: Zap,
+      id: 'ltd',
+      name: t('subscription.ltd.name', 'Pioneer Lifetime'),
+      price: '$99',
+      originalPrice: '$299',
+      description: t('subscription.ltd.description', 'One-time payment, lifetime access'),
+      icon: Crown,
       popular: true,
-      features: t('subscription.pro.features', { returnObjects: true }) as string[],
-      buttonText: t('subscription.upgrade'),
+      features: t('subscription.ltd.features', {
+        returnObjects: true,
+        defaultValue: [
+          'Unlimited mandalas',
+          'AI summaries (500/mo)',
+          'Playlist sync',
+          'Lifetime updates',
+          'Priority support',
+        ],
+      }) as string[],
+      buttonText: t('subscription.ltd.buy', 'Get Lifetime Access'),
       current: false,
     },
     {
-      id: 'enterprise',
-      name: t('subscription.enterprise.name'),
-      price: '\u20A929,900',
+      id: 'pro',
+      name: t('subscription.pro.name'),
+      price: '$19.90',
       period: t('subscription.monthly'),
-      description: t('subscription.enterprise.description'),
-      icon: Crown,
-      features: t('subscription.enterprise.features', { returnObjects: true }) as string[],
-      buttonText: t('subscription.contactSales'),
+      description: t('subscription.pro.description'),
+      icon: Zap,
+      features: t('subscription.pro.features', { returnObjects: true }) as string[],
+      buttonText: t('subscription.comingSoon', 'Coming Soon'),
       current: false,
+      disabled: true,
     },
   ];
 
   const handleSelectPlan = (planId: string) => {
     if (planId === 'free') return;
-
     toast({
       title: 'Coming Soon',
       description: 'Payment feature will be available soon.',
@@ -67,21 +73,19 @@ export default function SubscriptionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header onNavigateHome={() => navigate('/')} />
-
-      <main id="main-content" className="container mx-auto px-4 py-8">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="mb-6 gap-2">
-          <ArrowLeft className="w-4 h-4" />
-          {t('common.back')}
-        </Button>
-
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-foreground mb-2">{t('subscription.title')}</h1>
+    <AppShell>
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold text-foreground mb-2">{t('subscription.title')}</h1>
           <p className="text-muted-foreground">{t('subscription.subtitle')}</p>
+          {userName && (
+            <p className="text-sm text-muted-foreground mt-1">
+              {t('subscription.currentUser', { name: userName, defaultValue: 'Logged in as {{name}}' })}
+            </p>
+          )}
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <div className="grid md:grid-cols-3 gap-6">
           {plans.map((plan) => (
             <Card
               key={plan.id}
@@ -91,7 +95,7 @@ export default function SubscriptionPage() {
             >
               {plan.popular && (
                 <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
-                  {t('subscription.pro.popular')}
+                  {t('subscription.recommended', 'Recommended')}
                 </Badge>
               )}
               <CardHeader className="text-center pb-2">
@@ -103,10 +107,22 @@ export default function SubscriptionPage() {
               </CardHeader>
               <CardContent className="text-center">
                 <div className="mb-6">
+                  {plan.originalPrice && (
+                    <span className="text-lg text-muted-foreground line-through mr-2">
+                      {plan.originalPrice}
+                    </span>
+                  )}
                   <span className="text-4xl font-bold text-foreground">{plan.price}</span>
-                  <span className="text-muted-foreground">/{plan.period}</span>
+                  {plan.period && (
+                    <span className="text-muted-foreground">/{plan.period}</span>
+                  )}
+                  {plan.id === 'ltd' && (
+                    <p className="text-xs text-primary mt-1 font-medium">
+                      {t('subscription.ltd.oneTime', 'One-time payment')}
+                    </p>
+                  )}
                 </div>
-                <ul className="space-y-3 text-left">
+                <ul className="space-y-3 text-left mb-6">
                   {plan.features.map((feature, index) => (
                     <li key={index} className="flex items-center gap-2 text-sm">
                       <Check className="w-4 h-4 text-primary flex-shrink-0" />
@@ -114,34 +130,24 @@ export default function SubscriptionPage() {
                     </li>
                   ))}
                 </ul>
-              </CardContent>
-              <CardFooter>
                 <Button
                   className="w-full"
                   variant={plan.current ? 'outline' : 'default'}
-                  disabled={plan.current}
+                  disabled={plan.current || plan.disabled}
                   onClick={() => handleSelectPlan(plan.id)}
                 >
                   {plan.buttonText}
                 </Button>
-              </CardFooter>
+              </CardContent>
             </Card>
           ))}
         </div>
 
-        {/* Current Plan Info */}
-        <Card className="mt-10 max-w-2xl mx-auto bg-surface-mid border-border/50">
-          <CardHeader>
-            <CardTitle className="text-lg">{t('subscription.currentPlan')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">{t('subscription.currentPlan')}</span>
-              <Badge variant="outline">{t('subscription.free.name')}</Badge>
-            </div>
-          </CardContent>
-        </Card>
-      </main>
-    </div>
+        {/* Urgency note */}
+        <p className="text-center text-sm text-muted-foreground mt-6">
+          {t('subscription.urgency', 'Pioneer pricing will transition to monthly subscription soon.')}
+        </p>
+      </div>
+    </AppShell>
   );
 }

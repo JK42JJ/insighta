@@ -550,6 +550,7 @@ class ApiClient {
       id: string;
       mandalaId: string;
       title: string;
+      shareSlug: string | null;
       subscribedAt: string;
     }>;
     total: number;

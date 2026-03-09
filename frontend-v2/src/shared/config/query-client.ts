@@ -27,6 +27,7 @@ export const queryKeys = {
     list: () => [...queryKeys.mandala.all, 'list'] as const,
     detail: (id: string) => [...queryKeys.mandala.all, 'detail', id] as const,
     quota: () => [...queryKeys.mandala.all, 'quota'] as const,
+    subscriptions: () => [...queryKeys.mandala.all, 'subscriptions'] as const,
   },
   uiPreferences: {
     all: ['ui-preferences'] as const,
