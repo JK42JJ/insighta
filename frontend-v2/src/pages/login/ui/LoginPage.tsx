@@ -53,7 +53,7 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-center gap-2">
                 <h1 className="text-3xl font-bold text-foreground tracking-tight">Insighta</h1>
-                <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-primary/20 to-primary/10 text-primary border border-primary/30 rounded-md">
+                <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/30 rounded-md">
                   beta
                 </span>
               </div>

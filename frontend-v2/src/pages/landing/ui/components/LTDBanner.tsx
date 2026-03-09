@@ -10,16 +10,16 @@ export function LTDBanner() {
   if (dismissed) return null;
 
   return (
-    <div className="relative z-50 bg-[#1E2437] text-white">
+    <div className="relative z-50 bg-foreground text-background">
       <div className="mx-auto max-w-7xl px-4 py-2.5 flex items-center justify-center gap-3 text-sm">
-        <Flame className="w-4 h-4 text-[#D6336C] shrink-0" aria-hidden="true" />
+        <Flame className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
         <p className="font-medium">
           <span className="hidden sm:inline">{t('landing.ltdBanner')}</span>
           <span className="sm:hidden">{t('landing.ltdBannerShort')}</span>
         </p>
         <Link
           to="/pricing"
-          className="inline-flex items-center px-3 py-1 rounded-full bg-[#D6336C] text-white text-xs font-semibold hover:bg-[#C2255C] transition-colors whitespace-nowrap"
+          className="inline-flex items-center px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
         >
           {t('landing.ltdBannerCta')}
         </Link>

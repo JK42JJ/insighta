@@ -12,61 +12,61 @@
 
 @layer base {
   :root {
-    /* Base background layers - Light mode warm tones */
-    --bg-base: 40 10% 94%;
-    --bg-mid: 40 12% 97%;
-    --bg-light: 40 15% 99%;
-    --bg-sunken: 40 8% 90%;
-    
+    /* Base background layers - Pure white / cool gray */
+    --bg-base: 0 0% 100%;
+    --bg-mid: 220 14% 96%;
+    --bg-light: 0 0% 100%;
+    --bg-sunken: 220 13% 91%;
+
     /* Core semantic tokens */
-    --background: 40 10% 94%;
-    --foreground: 24 9% 10%;
+    --background: 0 0% 100%;
+    --foreground: 220 15% 10%;
 
-    --card: 40 15% 99%;
-    --card-foreground: 24 9% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 10%;
 
-    --popover: 40 12% 97%;
-    --popover-foreground: 24 9% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 10%;
 
-    /* Accent color - warm orange for primary actions (AA compliant) */
-    --primary: 20 90% 38%;
+    /* Accent color - Muted indigo (AA compliant, ~5.5:1 on white) */
+    --primary: 234 65% 50%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 24 5% 38%;
-    --secondary-foreground: 40 15% 99%;
+    --secondary: 220 13% 46%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 35 8% 85%;
-    --muted-foreground: 24 10% 30%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
 
-    --accent: 35 30% 95%;
-    --accent-foreground: 20 90% 38%;
+    --accent: 234 40% 96%;
+    --accent-foreground: 234 65% 50%;
 
-    --destructive: 0 72% 44%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 35 10% 80%;
-    --input: 35 10% 85%;
-    --ring: 20 90% 38%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 234 65% 50%;
 
     --radius: 0.75rem;
 
     /* Sidebar */
-    --sidebar-background: 40 12% 97%;
-    --sidebar-foreground: 24 9% 10%;
-    --sidebar-primary: 20 90% 38%;
+    --sidebar-background: 220 14% 96%;
+    --sidebar-foreground: 220 15% 10%;
+    --sidebar-primary: 234 65% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 35 30% 95%;
-    --sidebar-accent-foreground: 20 90% 38%;
-    --sidebar-border: 35 10% 80%;
-    --sidebar-ring: 20 90% 38%;
-    --sidebar: 40 12% 97%;
+    --sidebar-accent: 234 40% 96%;
+    --sidebar-accent-foreground: 234 65% 50%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 234 65% 50%;
+    --sidebar: 220 14% 96%;
 
     /* Chart colors */
-    --chart-1: 20 90% 38%;
-    --chart-2: 30 85% 55%;
-    --chart-3: 35 90% 60%;
-    --chart-4: 25 80% 50%;
-    --chart-5: 24 5% 44%;
+    --chart-1: 234 65% 50%;
+    --chart-2: 234 50% 65%;
+    --chart-3: 250 45% 58%;
+    --chart-4: 220 45% 48%;
+    --chart-5: 220 13% 46%;
 
     /* Typography */
     --font-sans: 'Source Sans Pro', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
@@ -122,60 +122,59 @@
   }
 
   .dark {
-    /* Base background layers - Dark navy theme */
-    --bg-base: 225 40% 7%;
-    --bg-mid: 225 35% 10%;
-    --bg-light: 225 30% 14%;
-    --bg-sunken: 225 45% 4%;
-    
+    /* Base background layers - Cool dark */
+    --bg-base: 220 15% 10%;
+    --bg-mid: 220 13% 13%;
+    --bg-light: 220 12% 17%;
+    --bg-sunken: 220 16% 7%;
+
     /* Core semantic tokens */
-    --background: 225 40% 7%;
-    --foreground: 220 20% 97%;
+    --background: 220 15% 10%;
+    --foreground: 220 10% 95%;
 
-    --card: 225 30% 14%;
-    --card-foreground: 220 20% 97%;
+    --card: 220 12% 17%;
+    --card-foreground: 220 10% 95%;
 
-    --popover: 225 35% 10%;
-    --popover-foreground: 220 20% 97%;
+    --popover: 220 13% 13%;
+    --popover-foreground: 220 10% 95%;
 
-    /* Accent color - warm coral for dark mode */
-    --primary: 18 85% 58%;
-    --primary-foreground: 225 40% 7%;
+    /* Accent color - Muted light indigo for dark mode (AA ~5.2:1) */
+    --primary: 234 60% 68%;
+    --primary-foreground: 220 15% 10%;
 
-    --secondary: 220 15% 45%;
-    --secondary-foreground: 220 20% 97%;
+    --secondary: 220 12% 40%;
+    --secondary-foreground: 220 10% 95%;
 
-    --muted: 225 25% 18%;
-    --muted-foreground: 220 15% 65%;
+    --muted: 220 12% 22%;
+    --muted-foreground: 220 10% 60%;
 
-    --accent: 225 25% 18%;
-    --accent-foreground: 18 85% 65%;
+    --accent: 220 12% 22%;
+    --accent-foreground: 234 60% 72%;
 
-    /* AA 4.53:1 white-on-red at L=50%; bg-on-dark=4.24:1 passes AA-large (3:1) */
-    --destructive: 0 84% 50%;
+    --destructive: 0 80% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 225 20% 20%;
-    --input: 225 20% 18%;
-    --ring: 18 85% 58%;
+    --border: 220 12% 22%;
+    --input: 220 12% 20%;
+    --ring: 234 60% 68%;
 
     /* Sidebar */
-    --sidebar-background: 225 35% 10%;
-    --sidebar-foreground: 220 20% 97%;
-    --sidebar-primary: 18 85% 58%;
-    --sidebar-primary-foreground: 225 40% 7%;
-    --sidebar-accent: 225 25% 18%;
-    --sidebar-accent-foreground: 18 85% 65%;
-    --sidebar-border: 225 20% 20%;
-    --sidebar-ring: 18 85% 58%;
-    --sidebar: 225 30% 14%;
+    --sidebar-background: 220 13% 13%;
+    --sidebar-foreground: 220 10% 95%;
+    --sidebar-primary: 234 60% 68%;
+    --sidebar-primary-foreground: 220 15% 10%;
+    --sidebar-accent: 220 12% 22%;
+    --sidebar-accent-foreground: 234 60% 72%;
+    --sidebar-border: 220 12% 22%;
+    --sidebar-ring: 234 60% 68%;
+    --sidebar: 220 12% 17%;
 
     /* Chart colors */
-    --chart-1: 18 85% 58%;
-    --chart-2: 28 80% 60%;
-    --chart-3: 35 85% 65%;
-    --chart-4: 15 75% 55%;
-    --chart-5: 225 20% 20%;
+    --chart-1: 234 60% 68%;
+    --chart-2: 234 50% 72%;
+    --chart-3: 250 45% 65%;
+    --chart-4: 220 45% 58%;
+    --chart-5: 220 12% 30%;
 
     /* Depth System - Dark mode shadows */
     --shadow-sm: 
@@ -404,7 +403,7 @@
 
   .mandala-cell-center {
     @apply font-semibold;
-    background: linear-gradient(135deg, hsl(var(--primary) / 0.12), hsl(var(--primary) / 0.05));
+    background: hsl(var(--primary) / 0.08);
     border-color: hsl(var(--primary) / 0.4);
     box-shadow: var(--shadow-inset-raised);
   }
@@ -429,19 +428,6 @@
     border: 1px solid hsl(var(--glass-border));
     box-shadow: var(--glass-shadow-diffuse), var(--glass-shadow-sharp);
     transition: transform 0.18s ease, box-shadow 0.18s ease;
-  }
-
-  .insight-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 50%;
-    background: linear-gradient(180deg, hsl(var(--glass-highlight)) 0%, transparent 100%);
-    pointer-events: none;
-    border-radius: inherit;
-    opacity: 0.5;
   }
 
   .insight-card:hover {
@@ -496,7 +482,7 @@
   
   .nav-item--active {
     @apply text-foreground font-medium;
-    background: linear-gradient(135deg, hsl(0 0% 100% / 0.08), transparent);
+    background: hsl(var(--accent));
     box-shadow: var(--shadow-inset-raised);
   }
   
@@ -586,6 +572,22 @@
     @apply bg-muted text-foreground/80 px-1 py-0.5 rounded text-sm font-mono;
   }
 }
+
+/* Scroll reveal animations */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
 
 @media (prefers-reduced-motion: reduce) {
   *,

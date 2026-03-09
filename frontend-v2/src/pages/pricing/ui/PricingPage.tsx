@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Shield, Lock, RefreshCw } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 export default function PricingPage() {
   const { t } = useTranslation();
@@ -32,58 +32,95 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* LTD Card */}
+        {/* LTD Card with gradient border */}
         <div className="mx-auto max-w-lg px-4 mt-12">
-          <div
-            className="rounded-2xl border-2 border-primary/30 bg-card p-8 md:p-10 relative overflow-hidden"
-            style={{ boxShadow: 'var(--shadow-lg)' }}
-          >
-            {/* Badge */}
-            <div className="absolute top-4 right-4">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-[#D6336C] text-white">
-                {t('pricing.badge')}
-              </span>
-            </div>
-
-            {/* Price */}
-            <div className="mb-8">
-              <div className="flex items-baseline gap-3">
-                <span className="text-5xl md:text-6xl font-bold tracking-tight">{t('pricing.price')}</span>
-                <span className="text-xl text-muted-foreground line-through">{t('pricing.originalPrice')}</span>
+          <div className="rounded-2xl bg-gradient-to-br from-primary/30 to-primary/10 p-[2px]">
+            <div className="rounded-[calc(1rem-2px)] bg-card p-8 md:p-10 relative overflow-hidden">
+              {/* Badge */}
+              <div className="absolute top-4 right-4">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-primary text-primary-foreground">
+                  {t('pricing.badge')}
+                </span>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {t('pricing.urgency')}
+
+              {/* Price */}
+              <div className="mb-8">
+                <div className="flex items-baseline gap-3">
+                  <span className="text-5xl md:text-6xl font-bold tracking-tight">{t('pricing.price')}</span>
+                  <span className="text-xl text-muted-foreground line-through">{t('pricing.originalPrice')}</span>
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/10 text-green-600 dark:text-green-400">
+                    {t('pricing.saveLabel')}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {t('pricing.monthlyComparison')}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {t('pricing.urgency')}
+                </p>
+              </div>
+
+              {/* Features */}
+              <ul className="space-y-3 mb-8">
+                {(t('pricing.features', { returnObjects: true }) as string[]).map((feature, i) => (
+                  <li key={i} className="flex items-center gap-3">
+                    <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <Check className="w-3 h-3 text-primary" />
+                    </span>
+                    <span className="text-sm">{feature}</span>
+                  </li>
+                ))}
+              </ul>
+
+              {/* CTA */}
+              <Button
+                size="lg"
+                className="w-full rounded-full py-6 text-base bg-primary hover:bg-primary/90 text-primary-foreground border-0"
+              >
+                {t('pricing.ctaButton')}
+              </Button>
+
+              {/* Spots remaining */}
+              <p className="mt-4 text-center text-sm text-muted-foreground">
+                {t('pricing.spotsLeft', { count: 47 })}
               </p>
             </div>
-
-            {/* Features */}
-            <ul className="space-y-3 mb-8">
-              {(t('pricing.features', { returnObjects: true }) as string[]).map((feature, i) => (
-                <li key={i} className="flex items-center gap-3">
-                  <Check className="w-5 h-5 text-primary shrink-0" />
-                  <span className="text-sm">{feature}</span>
-                </li>
-              ))}
-            </ul>
-
-            {/* CTA */}
-            <Button
-              size="lg"
-              className="w-full rounded-full py-6 text-base bg-[#D6336C] hover:bg-[#C2255C] text-white border-0"
-            >
-              {t('pricing.ctaButton')}
-            </Button>
-
-            {/* Spots remaining */}
-            <p className="mt-4 text-center text-sm text-muted-foreground">
-              {t('pricing.spotsLeft', { count: 47 })}
-            </p>
           </div>
 
-          {/* Social proof */}
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            {t('pricing.socialProof', { count: 42 })}
-          </p>
+          {/* Trust signals row */}
+          <div className="mt-6 flex items-center justify-center gap-6 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5" />
+              {t('pricing.trustGuarantee')}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5" />
+              {t('pricing.trustSecure')}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <RefreshCw className="w-3.5 h-3.5" />
+              {t('pricing.trustUpdates')}
+            </span>
+          </div>
+
+          {/* Social proof with avatar stack */}
+          <div className="mt-6 flex items-center justify-center gap-2">
+            <div className="flex -space-x-2">
+              {['SK', 'JL', 'MC'].map((initials, i) => (
+                <div
+                  key={i}
+                  className="w-7 h-7 rounded-full bg-primary/10 border-2 border-background flex items-center justify-center text-[10px] font-semibold text-primary"
+                >
+                  {initials}
+                </div>
+              ))}
+            </div>
+            <span className="text-sm text-muted-foreground">
+              {t('pricing.socialProof', { count: 42 })}
+            </span>
+          </div>
         </div>
 
         {/* FAQ */}
@@ -104,6 +141,7 @@ export default function PricingPage() {
 
 function FAQItem({ question, answer }: { question: string; answer: string }) {
   const [open, setOpen] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   return (
     <div className="border border-border/50 rounded-xl overflow-hidden">
@@ -118,11 +156,17 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
           <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
         )}
       </button>
-      {open && (
+      <div
+        ref={contentRef}
+        className="overflow-hidden transition-all duration-300 ease-in-out"
+        style={{
+          maxHeight: open ? contentRef.current?.scrollHeight ?? 200 : 0,
+        }}
+      >
         <div className="px-5 pb-4 text-sm text-muted-foreground leading-relaxed">
           {answer}
         </div>
-      )}
+      </div>
     </div>
   );
 }

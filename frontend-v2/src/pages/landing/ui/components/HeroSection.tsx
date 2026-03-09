@@ -8,30 +8,30 @@ export function HeroSection({ onLogin }: { onLogin: () => void }) {
 
   return (
     <section className="relative pt-20 pb-16 md:pt-28 md:pb-24 overflow-hidden">
-      {/* Background gradient */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(ellipse at 50% 0%, hsl(var(--primary) / 0.06) 0%, transparent 70%)',
-        }}
-      />
-
       <div className="relative mx-auto max-w-4xl px-4 text-center">
-        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.1] tracking-tight">
+        {/* Hero label pill */}
+        <span
+          className="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-6 animate-[fade-in_0.5s_ease]"
+        >
+          {t('landing.heroLabel')}
+        </span>
+
+        <h1
+          className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.1] tracking-tight font-serif animate-[fade-in-up_0.6s_ease]"
+        >
           {t('landing.heroTitle')}
         </h1>
 
-        <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+        <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed animate-[fade-in-up_0.6s_ease_0.15s_both]">
           {t('landing.heroSubtitle')}
         </p>
 
         {/* CTA buttons */}
-        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 animate-[fade-in-up_0.6s_ease_0.3s_both]">
           <Link to="/pricing">
             <Button
               size="lg"
-              className="rounded-full px-8 py-6 text-base bg-[#D6336C] hover:bg-[#C2255C] text-white border-0 shadow-lg hover:shadow-xl transition-all"
+              className="rounded-full px-8 py-6 text-base bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-lg hover:shadow-xl transition-all"
             >
               {t('landing.heroCta')}
             </Button>
@@ -47,20 +47,33 @@ export function HeroSection({ onLogin }: { onLogin: () => void }) {
           </Button>
         </div>
 
-        {/* Social proof */}
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-primary" />
-            {t('landing.socialProof1')}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-primary" />
-            {t('landing.socialProof2')}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-primary" />
-            {t('landing.socialProof3')}
-          </span>
+        {/* Product mockup: 3x3 CSS grid */}
+        <div className="mt-14 mx-auto max-w-xs animate-[fade-in-up_0.6s_ease_0.45s_both]">
+          <div className="grid grid-cols-3 gap-2">
+            {Array.from({ length: 9 }).map((_, i) => (
+              <div
+                key={i}
+                className={`aspect-square rounded-xl ${
+                  i === 4
+                    ? 'bg-primary/20 border-2 border-primary/40'
+                    : 'bg-muted/50 border border-border/30'
+                } transition-colors`}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Social proof — pill bar style */}
+        <div className="mt-10 inline-flex flex-wrap items-center justify-center gap-3 animate-[fade-in_0.6s_ease_0.6s_both]">
+          {(['socialProof1', 'socialProof2', 'socialProof3'] as const).map((key) => (
+            <span
+              key={key}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
+              {t(`landing.${key}`)}
+            </span>
+          ))}
         </div>
       </div>
     </section>
