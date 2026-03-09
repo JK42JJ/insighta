@@ -126,7 +126,7 @@ jobs:
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
-    needs: [build-and-push]
+    needs: [migrate]
     environment: production
     env:
       SG_ID: sg-079aa1ca6855e587b
