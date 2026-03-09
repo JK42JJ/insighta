@@ -9,6 +9,13 @@
     <meta name="description" content="Insighta — Organize, annotate, and gain insights from your saved content with AI-powered knowledge management." />
     <meta name="theme-color" content="#09090b" />
     <title>Insighta</title>
+    <script>
+      try {
+        if (localStorage.getItem('theme') !== 'light') {
+          document.documentElement.classList.add('dark');
+        }
+      } catch(e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
