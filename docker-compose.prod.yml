@@ -1,0 +1,125 @@
+# =============================================================================
+# Insighta - Production Docker Compose
+# =============================================================================
+# Uses pre-built images from GHCR (GitHub Container Registry).
+# EC2 host Nginx handles SSL termination.
+# Database: Supabase Cloud PostgreSQL.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # API Server (Backend)
+  # ---------------------------------------------------------------------------
+  api:
+    image: ${API_IMAGE:-ghcr.io/jk42jj/insighta-api:latest}
+    container_name: insighta-api
+    restart: unless-stopped
+    command: ["api"]
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - API_HOST=0.0.0.0
+      - API_PORT=3000
+    volumes:
+      - cache_data:/app/cache
+      - logs_data:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - insighta-network
+
+  # ---------------------------------------------------------------------------
+  # Frontend (React/Vite with Nginx)
+  # ---------------------------------------------------------------------------
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/jk42jj/insighta-frontend:latest}
+    container_name: insighta-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:8081"
+    environment:
+      - API_URL=http://api:3000
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - insighta-network
+
+  # ---------------------------------------------------------------------------
+  # Frontend V2 (FSD Architecture - React/Vite with Nginx)
+  # ---------------------------------------------------------------------------
+  frontend-v2:
+    image: ${FRONTEND_V2_IMAGE:-ghcr.io/jk42jj/insighta-frontend-v2:latest}
+    container_name: insighta-frontend-v2
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:8082"
+    environment:
+      - API_URL=http://api:3000
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/v2/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - insighta-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  cache_data:
+    driver: local
+  logs_data:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  insighta-network:
+    driver: bridge
