@@ -68,7 +68,7 @@ export function HeroSection({ onLogin }: { onLogin: () => void }) {
           {(['socialProof1', 'socialProof2', 'socialProof3'] as const).map((key) => (
             <span
               key={key}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-sm text-muted-foreground"
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
               {t(`landing.${key}`)}

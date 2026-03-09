@@ -138,40 +138,40 @@
     --popover: 220 13% 13%;
     --popover-foreground: 220 10% 95%;
 
-    /* Accent color - Muted light indigo for dark mode (AA ~5.2:1) */
-    --primary: 234 60% 68%;
+    /* Accent color - Muted light indigo for dark mode (AA ~5.5:1) */
+    --primary: 234 60% 72%;
     --primary-foreground: 220 15% 10%;
 
     --secondary: 220 12% 40%;
     --secondary-foreground: 220 10% 95%;
 
     --muted: 220 12% 22%;
-    --muted-foreground: 220 10% 60%;
+    --muted-foreground: 220 10% 72%;
 
     --accent: 220 12% 22%;
-    --accent-foreground: 234 60% 72%;
+    --accent-foreground: 234 60% 75%;
 
     --destructive: 0 80% 55%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 220 12% 22%;
     --input: 220 12% 20%;
-    --ring: 234 60% 68%;
+    --ring: 234 60% 72%;
 
     /* Sidebar */
     --sidebar-background: 220 13% 13%;
     --sidebar-foreground: 220 10% 95%;
-    --sidebar-primary: 234 60% 68%;
+    --sidebar-primary: 234 60% 72%;
     --sidebar-primary-foreground: 220 15% 10%;
     --sidebar-accent: 220 12% 22%;
-    --sidebar-accent-foreground: 234 60% 72%;
+    --sidebar-accent-foreground: 234 60% 75%;
     --sidebar-border: 220 12% 22%;
-    --sidebar-ring: 234 60% 68%;
+    --sidebar-ring: 234 60% 72%;
     --sidebar: 220 12% 17%;
 
     /* Chart colors */
-    --chart-1: 234 60% 68%;
-    --chart-2: 234 50% 72%;
+    --chart-1: 234 60% 72%;
+    --chart-2: 234 50% 75%;
     --chart-3: 250 45% 65%;
     --chart-4: 220 45% 58%;
     --chart-5: 220 12% 30%;
