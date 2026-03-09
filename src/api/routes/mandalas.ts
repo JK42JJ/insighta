@@ -81,12 +81,26 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
 
       const manager = getMandalaManager();
-      const mandala = await manager.upsertMandala(userId, title, levels);
+      try {
+        const mandala = await manager.upsertMandala(userId, title, levels);
 
-      // Link unlinked cards to this mandala (migration from localStorage)
-      const linked = await manager.linkCardsToMandala(userId, mandala.id);
+        // Link unlinked cards to this mandala (migration from localStorage)
+        // Non-fatal: mandala_id columns may not exist yet in video_states/local_cards
+        let linked = { videoStates: 0, localCards: 0 };
+        try {
+          linked = await manager.linkCardsToMandala(userId, mandala.id);
+        } catch (linkErr: any) {
+          fastify.log.warn(
+            { err: linkErr, userId },
+            'linkCardsToMandala skipped (column may not exist)'
+          );
+        }
 
-      return reply.send({ mandala, linked });
+        return reply.send({ mandala, linked });
+      } catch (err: any) {
+        fastify.log.error({ err, userId }, 'upsertMandala failed');
+        return reply.code(500).send({ error: err.message });
+      }
     }
   );
 
@@ -225,9 +239,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         const manager = getMandalaManager();
         const mandala = await manager.createMandala(userId, title.trim(), levels ?? []);
 
-        // If this is the first (default) mandala, link unlinked cards
+        // If this is the first (default) mandala, link unlinked cards (non-fatal)
         if (mandala.isDefault) {
-          await manager.linkCardsToMandala(userId, mandala.id);
+          try {
+            await manager.linkCardsToMandala(userId, mandala.id);
+          } catch {
+            // mandala_id columns may not exist yet
+          }
         }
 
         return reply.code(201).send({ mandala });

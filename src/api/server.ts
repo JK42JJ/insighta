@@ -231,6 +231,14 @@ export async function buildServer() {
 
   // Custom error handler
   fastify.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
+    // DEBUG: log all errors to stdout
+    console.error(
+      `\n=== ERROR HANDLER === ${request.method} ${request.url}\n`,
+      error.message,
+      '\n',
+      error.stack?.substring(0, 500),
+      '\n===\n'
+    );
     // Handle Prisma-specific errors
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       const prismaStatusMap: Record<string, { status: number; code: ErrorCode }> = {
