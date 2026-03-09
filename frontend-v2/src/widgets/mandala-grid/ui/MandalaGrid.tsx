@@ -304,43 +304,6 @@ export const MandalaGrid = memo(function MandalaGrid({
               transformOrigin: rippleOrigin ? `${rippleOrigin.x}% ${rippleOrigin.y}%` : 'center',
             }}
           >
-            {/* Navigation Arrows - inside grid */}
-            {!isFlipped &&
-              arrowPositions.map(({ gridIndex, style, rotation }) => {
-                const hasNav = cellHasSubLevel(gridIndex);
-                if (!hasNav) return null;
-                const cellData = getCellData(gridIndex);
-
-                return (
-                  <button
-                    key={`arrow-${gridIndex}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleNavigateToSubLevel(gridIndex);
-                    }}
-                    aria-label={`${t('mandala.navigateToSub', { subject: cellData.label })}`}
-                    className={cn(
-                      'absolute z-40 group transition-all duration-300',
-                      'hover:scale-110 active:scale-95',
-                      style
-                    )}
-                  >
-                    <div className="relative">
-                      <div className="w-2 h-2 rounded-full bg-primary/40 group-hover:bg-transparent transition-all duration-300 group-hover:scale-0 shadow-sm" />
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-card/95 backdrop-blur-md border border-primary/40 shadow-md opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-300 whitespace-nowrap">
-                        <span className="text-[8px] font-medium text-primary max-w-[50px] truncate">
-                          {cellData.label}
-                        </span>
-                        <ChevronRight
-                          className="w-2.5 h-2.5 text-primary flex-shrink-0"
-                          style={{ transform: `rotate(${rotation}deg)` }}
-                        />
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-
             {/* Back button - inside grid */}
             {backArrowConfig && !isFlipped && (
               <button
@@ -400,7 +363,7 @@ export const MandalaGrid = memo(function MandalaGrid({
                   onDrop={handleDrop}
                   onCellSwap={handleCellSwap}
                   onClick={() => handleCellClick(gridIndex)}
-                  onDoubleClick={cellData.isCenter ? handleCenterDoubleClick : undefined}
+                  onDoubleClick={cellData.isCenter ? handleCenterDoubleClick : hasNav ? () => handleNavigateToSubLevel(gridIndex) : undefined}
                   onCardClick={onCardClick}
                   onCardDragStart={onCardDragStart}
                   hasSubLevel={hasNav}

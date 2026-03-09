@@ -107,7 +107,7 @@ export function Sidebar({ collapsed, onToggleCollapse, onNavigateHome, mandalaGr
     <aside
       className={cn(
         'hidden md:flex flex-col h-full bg-sidebar border-r border-sidebar-border transition-[width] duration-200 ease-in-out',
-        collapsed ? 'w-16' : expandedMandalaId ? 'w-80' : 'w-56',
+        collapsed ? 'w-16' : 'w-[var(--sidebar-width)]',
       )}
       aria-label={t('sidebar.navigation')}
     >
