@@ -25,7 +25,7 @@ export function DragOverlayContent({ dragData, allCards, cellLabels }: DragOverl
             return (
               <div
                 key={id}
-                className="absolute rounded-lg overflow-hidden border-2 border-white/15 shadow-lg"
+                className="absolute rounded-lg overflow-hidden border-2 border-border/30 shadow-lg"
                 style={{
                   width: 88,
                   height: 56,
@@ -56,7 +56,7 @@ export function DragOverlayContent({ dragData, allCards, cellLabels }: DragOverl
 
     return (
       <div
-        className="w-[100px] h-[64px] rounded-lg overflow-hidden border-2 border-white/15 shadow-xl -rotate-2"
+        className="w-[100px] h-[64px] rounded-lg overflow-hidden border-2 border-border/30 shadow-xl -rotate-2"
         style={{ background: 'hsl(var(--bg-light))' }}
       >
         {card.thumbnail && (

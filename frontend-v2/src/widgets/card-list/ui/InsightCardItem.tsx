@@ -139,10 +139,10 @@ export function InsightCardItem({
                   'https://via.placeholder.com/320x180?text=Thumbnail';
               }}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
 
             {/* Title overlay */}
-            <h4 className="absolute bottom-1 left-1.5 right-1.5 text-xs font-medium text-primary-foreground line-clamp-2 leading-tight">
+            <h4 className="absolute bottom-1 left-1.5 right-1.5 text-xs font-medium text-white line-clamp-2 leading-tight">
               {card.title}
             </h4>
 
