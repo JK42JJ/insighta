@@ -1,6 +1,7 @@
 import { useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
+import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 import { Lightbulb, Plus, ExternalLink } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import {
@@ -110,8 +111,14 @@ export function ScratchPad({
       return;
     }
 
-    const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
-    if (url && url.includes('youtube')) {
+    const rawUrl = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+    let url = rawUrl ? extractUrlFromDragData(rawUrl) : null;
+    // Fallback: text/html에서 href 추출
+    if (!url) {
+      const html = e.dataTransfer.getData('text/html');
+      if (html) url = extractUrlFromHtml(html);
+    }
+    if (url) {
       onDrop(url);
     }
   };
