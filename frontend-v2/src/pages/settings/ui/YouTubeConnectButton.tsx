@@ -121,7 +121,7 @@ export function YouTubeConnectButton() {
         variant="default"
         onClick={connect}
         disabled={isConnecting}
-        className="bg-red-600 hover:bg-red-700 text-white"
+        className="bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 text-white"
       >
         {isConnecting ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
