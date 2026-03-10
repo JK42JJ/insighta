@@ -71,7 +71,7 @@ export function AppHeader({ onMobileMenuOpen }: AppHeaderProps) {
             <img
               src={`${import.meta.env.BASE_URL}logo.png`}
               alt="Insighta"
-              className="w-8 h-8 rounded-lg dark:invert"
+              className="w-7 h-7 rounded-lg dark:invert"
             />
             <span className="text-lg font-bold text-foreground tracking-tight hidden sm:inline">
               Insighta

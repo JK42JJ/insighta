@@ -92,7 +92,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
             <img
               src={`${import.meta.env.BASE_URL}logo.png`}
               alt="Insighta"
-              className="w-10 h-10 rounded-xl dark:invert"
+              className="w-9 h-9 rounded-xl dark:invert"
             />
             <div className="text-left">
               <div className="flex items-center gap-2">

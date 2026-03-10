@@ -47,7 +47,7 @@ export default function LoginPage() {
               <img
                 src={`${import.meta.env.BASE_URL}logo.png`}
                 alt="Insighta"
-                className="w-16 h-16 rounded-2xl dark:invert"
+                className="w-14 h-14 rounded-2xl dark:invert"
               />
             </div>
             <div>

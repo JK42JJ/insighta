@@ -373,13 +373,10 @@ export const MandalaCell = memo(
     });
 
     // --- External drop (HTML5) ---
+    // Accept any drag on non-center cells (same as ScratchPad).
+    // Drop handler validates data; dragover just needs to allow the drop.
     const handleExternalDragOver = (e: React.DragEvent) => {
-      const hasExternalData =
-        e.dataTransfer.types.includes('text/uri-list') ||
-        e.dataTransfer.types.includes('text/plain') ||
-        e.dataTransfer.types.includes('Files') ||
-        e.dataTransfer.types.includes('application/card-id');
-      if (hasExternalData && !isCenter) {
+      if (!isCenter) {
         e.preventDefault();
         e.stopPropagation();
       }
