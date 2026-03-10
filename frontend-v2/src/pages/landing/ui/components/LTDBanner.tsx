@@ -25,7 +25,7 @@ export function LTDBanner() {
         </Link>
         <button
           onClick={() => setDismissed(true)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-white/10 transition-colors"
+          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-background/10 transition-colors"
           aria-label={t('common.close')}
         >
           <X className="w-3.5 h-3.5" />

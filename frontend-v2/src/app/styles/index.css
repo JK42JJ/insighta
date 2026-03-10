@@ -1,9 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:wght@400;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Source+Serif+Pro:wght@400;600;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&family=Source+Serif+Pro:wght@400;600;700&family=Source+Code+Pro:wght@400;700&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -74,7 +69,25 @@
     --font-serif: 'Source Serif Pro', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
     --font-mono: 'Source Code Pro', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
     
+    /* Type scale — modular (1.250 ratio, base 16px) */
+    --text-xs: 0.75rem;       /* 12px — captions, badges */
+    --text-sm: 0.875rem;      /* 14px — body small, meta */
+    --text-base: 1rem;        /* 16px — body */
+    --text-lg: 1.125rem;      /* 18px — body large, emphasis */
+    --text-xl: 1.25rem;       /* 20px — subheading */
+    --text-2xl: 1.5rem;       /* 24px — heading small */
+    --text-3xl: 1.875rem;     /* 30px — heading */
+    --text-4xl: 2.25rem;      /* 36px — display small */
+    --text-5xl: 3rem;         /* 48px — display */
+    --text-6xl: 3.75rem;      /* 60px — display large */
+
+    --leading-tight: 1.15;
+    --leading-snug: 1.3;
+    --leading-normal: 1.5;
+    --leading-relaxed: 1.625;
+
     --tracking-normal: 0em;
+    --tracking-tight: -0.015em;
     --spacing: 0.25rem;
 
     /* Depth System - Two-part shadow strategy */

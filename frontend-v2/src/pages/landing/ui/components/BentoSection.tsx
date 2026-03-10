@@ -8,7 +8,7 @@ export function BentoSection({ onLogin }: { onLogin: () => void }) {
       <div className="flex items-center justify-center gap-6 self-stretch px-4 py-8 sm:px-6 md:px-24 md:py-16">
         <div className="flex w-full max-w-4xl flex-col items-center justify-start gap-3 overflow-hidden">
           <Badge variant="outline">How It Works</Badge>
-          <div className="flex w-full max-w-xl flex-col justify-center text-center text-xl leading-tight font-semibold tracking-tight sm:text-2xl md:text-3xl lg:text-5xl">
+          <div className="flex w-full max-w-xl flex-col justify-center text-center text-xl leading-tight font-semibold tracking-tight sm:text-2xl md:text-3xl lg:text-4xl">
             From chaos to clarity
           </div>
           <div className="text-muted-foreground self-stretch text-center text-sm leading-6">
@@ -25,14 +25,14 @@ export function BentoSection({ onLogin }: { onLogin: () => void }) {
           {/* Hero card */}
           <div className="col-span-2 row-span-2 bg-background relative flex flex-col justify-between p-8">
             {/* Grid pattern background */}
-            <div className="absolute inset-0 opacity-[0.03]"
+            <div className="absolute inset-0 opacity-[0.04]"
               style={{
-                backgroundImage: 'radial-gradient(circle, hsl(var(--foreground)) 1px, transparent 1px)',
+                backgroundImage: 'radial-gradient(circle, hsl(var(--muted-foreground)) 1px, transparent 1px)',
                 backgroundSize: '24px 24px',
               }}
             />
             <div className="relative z-10">
-              <h2 className="text-3xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
+              <h2 className="text-3xl font-semibold tracking-tight md:text-4xl lg:text-5xl">
                 Crafted for
                 <br />
                 Deep Thinking.
