@@ -17,7 +17,7 @@ export function HeroSection({ onLogin }: { onLogin: () => void }) {
         </span>
 
         <h1
-          className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.1] tracking-tight font-serif animate-[fade-in-up_0.6s_ease]"
+          className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight tracking-tight font-serif animate-[fade-in-up_0.6s_ease]"
         >
           {t('landing.heroTitle')}
         </h1>
