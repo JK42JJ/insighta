@@ -376,9 +376,9 @@ export const MandalaCell = memo(
     const handleExternalDragOver = (e: React.DragEvent) => {
       const hasExternalData =
         e.dataTransfer.types.includes('text/uri-list') ||
+        e.dataTransfer.types.includes('text/plain') ||
         e.dataTransfer.types.includes('Files') ||
-        e.dataTransfer.types.includes('application/card-id') ||
-        (e.dataTransfer.types.includes('text/plain') && e.dataTransfer.types.length === 1);
+        e.dataTransfer.types.includes('application/card-id');
       if (hasExternalData && !isCenter) {
         e.preventDefault();
         e.stopPropagation();
