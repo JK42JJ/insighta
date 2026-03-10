@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+
 import { Check, ChevronDown, ChevronUp, Shield, Lock, RefreshCw, X, Sparkles } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { GradientBackground } from '@/pages/landing/ui/components/GradientBackground';
+import { LandingHeader } from '@/pages/landing/ui/components/LandingHeader';
 
 const TOTAL_SPOTS = 100;
 const SPOTS_REMAINING = 47;
@@ -12,26 +13,11 @@ const SPOTS_TAKEN_PERCENT = ((TOTAL_SPOTS - SPOTS_REMAINING) / TOTAL_SPOTS) * 10
 export default function PricingPage() {
   const { t } = useTranslation();
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
   return (
     <div className="relative min-h-screen bg-background">
       <GradientBackground variant="F" />
       <div className="relative z-10">
-        {/* Header */}
-        <header className="border-b border-border/30 bg-background/80 backdrop-blur-md">
-          <div className="mx-auto max-w-7xl px-4 h-14 flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-2.5">
-              <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Insighta" className="w-7 h-7 rounded-lg dark:invert" />
-              <span className="text-lg font-bold tracking-tight">Insighta</span>
-            </Link>
-            <Link to="/">
-              <Button variant="ghost" size="sm">{t('common.home')}</Button>
-            </Link>
-          </div>
-        </header>
+        <LandingHeader />
 
         <main className="py-10 md:py-16">
           {/* Title */}

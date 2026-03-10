@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Grid3X3, ArrowLeft, Check } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { MANDALA_TEMPLATES, type MandalaTemplate } from '@/shared/data/mandalaTemplates';
+import { GradientBackground } from '@/pages/landing/ui/components/GradientBackground';
+import { LandingHeader } from '@/pages/landing/ui/components/LandingHeader';
 
 const CATEGORIES = ['all', 'productivity', 'learning', 'business', 'personal'] as const;
 
@@ -23,7 +25,6 @@ export default function TemplatesPage() {
 
 function TemplateListView() {
   const { t } = useTranslation();
-  const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState<string>('all');
 
@@ -31,56 +32,52 @@ function TemplateListView() {
     ? MANDALA_TEMPLATES
     : MANDALA_TEMPLATES.filter((tpl) => tpl.category === activeCategory);
 
-  const handleApply = (template: MandalaTemplate) => {
-    if (!isLoggedIn) {
-      navigate('/pricing');
-      return;
-    }
-    navigate('/mandala-settings', { state: { templateId: template.id } });
-  };
-
   return (
-    <div className="min-h-screen bg-background">
-      <TemplateHeader />
+    <div className="relative min-h-screen bg-background">
+      <GradientBackground variant="F" />
 
-      <main className="py-12 md:py-20">
-        <div className="mx-auto max-w-6xl px-4">
-          <div className="text-center mb-10">
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-              {t('templates.title')}
-            </h1>
-            <p className="mt-3 text-muted-foreground">
-              {t('templates.subtitle')}
-            </p>
-          </div>
+      <div className="relative z-10">
+        <LandingHeader />
 
-          <div className="flex justify-center gap-2 mb-10 flex-wrap">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                  activeCategory === cat
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-surface-light text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {t(`templates.categories.${cat}`)}
-              </button>
-            ))}
-          </div>
+        <main className="py-12 md:py-20">
+          <div className="mx-auto max-w-6xl px-4">
+            <div className="text-center mb-10">
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+                {t('templates.title')}
+              </h1>
+              <p className="mt-3 text-muted-foreground">
+                {t('templates.subtitle')}
+              </p>
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredTemplates.map((template) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                onApply={() => handleApply(template)}
-              />
-            ))}
+            <div className="flex justify-center gap-2 mb-10 flex-wrap">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                    activeCategory === cat
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-surface-light text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {t(`templates.categories.${cat}`)}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredTemplates.map((template) => (
+                <TemplateCard
+                  key={template.id}
+                  template={template}
+                  onApply={() => navigate(`/templates/${template.id}`)}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
@@ -99,112 +96,98 @@ function TemplateDetailView({ template }: { template: MandalaTemplate }) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <TemplateHeader />
+    <div className="relative min-h-screen bg-background">
+      <GradientBackground variant="F" />
 
-      <main className="py-12 md:py-20">
-        <div className="mx-auto max-w-4xl px-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/templates')}
-            className="mb-6 gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            {t('common.back')}
-          </Button>
+      <div className="relative z-10">
+        <LandingHeader />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Left: 3x3 preview */}
-            <div className="rounded-xl border border-border/50 bg-card p-6">
-              <div className="grid grid-cols-3 gap-1.5 p-4 rounded-lg bg-surface-base">
-                {Array.from({ length: 9 }).map((_, i) => {
-                  const isCenter = i === 4;
-                  const subjectIndex = i < 4 ? i : i > 4 ? i - 1 : -1;
-                  const label = isCenter
-                    ? template.centerGoal
-                    : template.subjects[subjectIndex] || '';
+        <main className="py-12 md:py-20">
+          <div className="mx-auto max-w-4xl px-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/templates')}
+              className="mb-6 gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              {t('common.back')}
+            </Button>
 
-                  return (
-                    <div
-                      key={i}
-                      className={`aspect-square rounded-md flex items-center justify-center p-2 text-xs leading-tight text-center ${
-                        isCenter
-                          ? 'bg-primary/15 text-primary font-semibold border border-primary/30'
-                          : label
-                            ? 'bg-card text-foreground/70 border border-border/30'
-                            : 'bg-surface-light'
-                      }`}
-                    >
-                      <span className="line-clamp-2">{label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Left: 3x3 preview */}
+              <div className="rounded-xl border border-border/50 bg-card p-6">
+                <div className="grid grid-cols-3 gap-1.5 p-4 rounded-lg bg-surface-base">
+                  {Array.from({ length: 9 }).map((_, i) => {
+                    const isCenter = i === 4;
+                    const subjectIndex = i < 4 ? i : i > 4 ? i - 1 : -1;
+                    const label = isCenter
+                      ? template.centerGoal
+                      : template.subjects[subjectIndex] || '';
 
-            {/* Right: Info + Apply */}
-            <div className="flex flex-col gap-6">
-              <div>
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-3xl">{template.icon}</span>
-                  <h1 className="text-2xl font-bold">{template.name}</h1>
+                    return (
+                      <div
+                        key={i}
+                        className={`aspect-square rounded-md flex items-center justify-center p-2 text-xs leading-tight text-center ${
+                          isCenter
+                            ? 'bg-primary/15 text-primary font-semibold border border-primary/30'
+                            : label
+                              ? 'bg-card text-foreground/70 border border-border/30'
+                              : 'bg-surface-light'
+                        }`}
+                      >
+                        <span className="line-clamp-2">{label}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-                <p className="text-muted-foreground">{template.description}</p>
               </div>
 
-              <div>
-                <h3 className="text-sm font-medium mb-3 text-foreground">
-                  {t('templates.subjects', 'Subjects')}
-                </h3>
-                <ul className="space-y-2">
-                  {template.subjects.map((subject, i) => (
-                    <li key={i} className="flex items-center gap-2 text-sm">
-                      <Check className="w-4 h-4 text-primary flex-shrink-0" />
-                      <span className="text-muted-foreground">{subject}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {template.category && (
+              {/* Right: Info + Apply */}
+              <div className="flex flex-col gap-6">
                 <div>
-                  <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                    {t(`templates.categories.${template.category}`)}
-                  </span>
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-3xl">{template.icon}</span>
+                    <h1 className="text-2xl font-bold">{template.name}</h1>
+                  </div>
+                  <p className="text-muted-foreground">{template.description}</p>
                 </div>
-              )}
 
-              <Button
-                size="lg"
-                className="w-full rounded-full mt-auto"
-                onClick={handleApply}
-              >
-                {t('templates.applyButton')}
-              </Button>
+                <div>
+                  <h3 className="text-sm font-medium mb-3 text-foreground">
+                    {t('templates.subjects', 'Subjects')}
+                  </h3>
+                  <ul className="space-y-2">
+                    {template.subjects.map((subject, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm">
+                        <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                        <span className="text-muted-foreground">{subject}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {template.category && (
+                  <div>
+                    <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                      {t(`templates.categories.${template.category}`)}
+                    </span>
+                  </div>
+                )}
+
+                <Button
+                  size="lg"
+                  className="w-full rounded-full mt-auto"
+                  onClick={handleApply}
+                >
+                  {t('templates.applyButton')}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </main>
-    </div>
-  );
-}
-
-function TemplateHeader() {
-  const { t } = useTranslation();
-
-  return (
-    <header className="border-b border-border/30 bg-background/95 backdrop-blur-md">
-      <div className="mx-auto max-w-7xl px-4 h-14 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2.5">
-          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Insighta" className="w-7 h-7 rounded-lg dark:invert" />
-          <span className="text-lg font-bold tracking-tight">Insighta</span>
-        </Link>
-        <Link to="/">
-          <Button variant="ghost" size="sm">{t('common.home')}</Button>
-        </Link>
+        </main>
       </div>
-    </header>
+    </div>
   );
 }
 
