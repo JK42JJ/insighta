@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { type DragData, type DropData, cardDragId } from '@/shared/lib/dnd';
+import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 import {
   Lightbulb,
   Plus,
@@ -374,18 +375,14 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
         onCardDrop(cardId);
         return;
       }
-      const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
-      if (
-        url &&
-        (url.includes('youtube') ||
-          url.includes('youtu.be') ||
-          url.includes('linkedin.com') ||
-          url.includes('notion.so') ||
-          url.includes('notion.site') ||
-          url.endsWith('.txt') ||
-          url.endsWith('.md') ||
-          url.endsWith('.pdf'))
-      ) {
+      const rawUrl = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+      let url = rawUrl ? extractUrlFromDragData(rawUrl) : null;
+      // Fallback: text/html에서 href 추출
+      if (!url) {
+        const html = e.dataTransfer.getData('text/html');
+        if (html) url = extractUrlFromHtml(html);
+      }
+      if (url) {
         onDrop(url);
       }
     };

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { InsightCard, LinkType } from '@/entities/card/model/types';
 import { useAuth } from '@/features/auth/model/useAuth';
-import { useLocalCards, isLimitExceededError } from '@/features/card-management/model/useLocalCards';
+import { useLocalCards, isLimitExceededError, localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import { useBatchMoveCards } from '@/features/card-management/model/useBatchMoveCards';
 import { useAllVideoStates, useUpdateVideoState } from '@/features/youtube-sync/model/useYouTubeSync';
 import { convertToInsightCards } from '@/features/card-management/lib/youtubeToInsightCard';
@@ -14,9 +14,12 @@ import {
   isValidUrl,
   fetchLinkTitle,
   detectLinkType,
+  extractYouTubePlaylistId,
   fetchUrlMetadata,
 } from '@/shared/data/mockData';
 import { uploadFile, detectFileType, isSupportedFileType } from '@/shared/lib/fileUpload';
+import { getAuthHeaders, getEdgeFunctionUrl } from '@/shared/lib/supabase-auth';
+import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/shared/lib/use-toast';
 
 interface UseCardOrchestratorDeps {
@@ -85,6 +88,7 @@ export function useCardOrchestrator(
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { isLoggedIn } = useAuth();
+  const queryClient = useQueryClient();
 
   // YouTube sync
   const { data: allVideoStates } = useAllVideoStates();
@@ -393,6 +397,87 @@ export function useCardOrchestrator(
     [addLocalCard, toast, t],
   );
 
+  // Playlist drop handler
+  const handlePlaylistDrop = useCallback(
+    async (url: string, cellIndex: number, levelId: string) => {
+      const playlistId = extractYouTubePlaylistId(url);
+      if (!playlistId) {
+        toast({
+          title: t('index.invalidUrl'),
+          description: t('index.invalidUrlDesc'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      toast({ title: t('playlist.importing') });
+
+      try {
+        const headers = await getAuthHeaders();
+        const edgeUrl = getEdgeFunctionUrl('local-cards', 'import-playlist');
+        const response = await fetch(edgeUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ playlistUrl: url, cellIndex, levelId }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (data.error === 'PRIVATE_PLAYLIST_NO_AUTH') {
+            toast({
+              title: t('playlist.privateNoAuth'),
+              variant: 'destructive',
+            });
+          } else if (data.error === 'PRIVATE_PLAYLIST_NOT_OWNER') {
+            toast({
+              title: t('playlist.privateNotOwner'),
+              variant: 'destructive',
+            });
+          } else if (data.error === 'LIMIT_EXCEEDED') {
+            toast({
+              title: t('index.storageLimitExceeded'),
+              description: t('playlist.limitExceeded', {
+                used: data.used,
+                limit: data.limit,
+                available: Math.max(0, data.limit - data.used),
+              }),
+              variant: 'destructive',
+            });
+          } else if (data.error === 'ALREADY_REGISTERED') {
+            toast({
+              title: t('playlist.alreadyRegistered'),
+              variant: 'destructive',
+            });
+          } else {
+            toast({
+              title: t('common.error'),
+              description: data.error || data.message,
+              variant: 'destructive',
+            });
+          }
+          return;
+        }
+
+        // Success
+        const count = data.cardsCreated || 0;
+        toast({
+          title: t('playlist.imported', { count }),
+        });
+
+        // Invalidate local cards query to refresh UI
+        queryClient.invalidateQueries({ queryKey: localCardsKeys.all });
+      } catch (error) {
+        toast({
+          title: t('common.error'),
+          description: error instanceof Error ? error.message : t('index.saveFailedDesc'),
+          variant: 'destructive',
+        });
+      }
+    },
+    [toast, t, queryClient],
+  );
+
   // Card drop on mandala cell
   const handleCardDrop = useCallback(
     (
@@ -532,6 +617,13 @@ export function useCardOrchestrator(
 
         if (isValidUrl(url)) {
           const linkType = detectLinkType(url);
+
+          // Playlist → delegate to handlePlaylistDrop
+          if (linkType === 'youtube-playlist') {
+            handlePlaylistDrop(url, cellIndex, currentLevelId);
+            return;
+          }
+
           const newCard = createCardFromUrl(url, cellIndex, currentLevelId);
           setPendingLocalCards((prev) => [...prev, newCard]);
           toast({
@@ -568,6 +660,7 @@ export function useCardOrchestrator(
       batchMoveCards,
       t,
       persistUrlCard,
+      handlePlaylistDrop,
     ],
   );
 
@@ -586,6 +679,12 @@ export function useCardOrchestrator(
 
       if (isValidUrl(url)) {
         const linkType = detectLinkType(url);
+
+        // Playlist → delegate to handlePlaylistDrop (scratchpad = cellIndex -1)
+        if (linkType === 'youtube-playlist') {
+          handlePlaylistDrop(url, -1, 'scratchpad');
+          return;
+        }
         if (linkType === 'other') {
           toast({
             title: t('index.unsupportedLink'),
@@ -618,7 +717,7 @@ export function useCardOrchestrator(
         });
       }
     },
-    [isLoggedIn, navigate, toast, canAddCard, subscription, t, persistUrlCard],
+    [isLoggedIn, navigate, toast, canAddCard, subscription, t, persistUrlCard, handlePlaylistDrop],
   );
 
   // Move card from mandala back to scratchpad

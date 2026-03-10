@@ -13,7 +13,6 @@ import {
 } from '@/shared/ui/select';
 import { Switch } from '@/shared/ui/switch';
 import { Separator } from '@/shared/ui/separator';
-import { ScrollArea } from '@/shared/ui/scroll-area';
 import { useToast } from '@/shared/lib/use-toast';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
@@ -292,20 +291,18 @@ export function YouTubeSyncCard() {
               <p className="text-sm">{t('youtube.noPlaylistsHint')}</p>
             </div>
           ) : (
-            <ScrollArea className="h-[300px]">
-              <div className="space-y-2 pr-4">
-                {playlists.map((playlist) => (
-                  <PlaylistItem
-                    key={playlist.id}
-                    playlist={playlist}
-                    onSync={handleSyncPlaylist}
-                    onDelete={handleDeletePlaylist}
-                    isSyncing={syncingPlaylistId === playlist.id}
-                    isDeleting={deletingPlaylistId === playlist.id}
-                  />
-                ))}
-              </div>
-            </ScrollArea>
+            <div className="max-h-[480px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+              {playlists.map((playlist) => (
+                <PlaylistItem
+                  key={playlist.id}
+                  playlist={playlist}
+                  onSync={handleSyncPlaylist}
+                  onDelete={handleDeletePlaylist}
+                  isSyncing={syncingPlaylistId === playlist.id}
+                  isDeleting={deletingPlaylistId === playlist.id}
+                />
+              ))}
+            </div>
           )}
         </div>
 

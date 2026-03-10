@@ -1,4 +1,4 @@
-export type LinkType = 'youtube' | 'youtube-shorts' | 'linkedin' | 'facebook' | 'notion' | 'txt' | 'md' | 'pdf' | 'other';
+export type LinkType = 'youtube' | 'youtube-shorts' | 'youtube-playlist' | 'linkedin' | 'facebook' | 'notion' | 'txt' | 'md' | 'pdf' | 'other';
 
 export interface UrlMetadata {
   title: string;

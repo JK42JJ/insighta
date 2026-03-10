@@ -449,6 +449,13 @@
     "withoutMemo": "메모 없음"
   },
   "playlist": {
+    "importing": "플레이리스트 가져오는 중...",
+    "imported": "플레이리스트에서 {{count}}개 카드 추가됨",
+    "large": "{{count}}개 영상 — 약 {{minutes}}분 소요 예상",
+    "limitExceeded": "카드 한도 초과 ({{used}}/{{limit}}). {{available}}개 추가 가능합니다.",
+    "privateNoAuth": "비공개 플레이리스트를 가져오려면 Settings에서 YouTube를 연결하세요",
+    "privateNotOwner": "다른 계정의 비공개 플레이리스트는 가져올 수 없습니다",
+    "alreadyRegistered": "이미 등록된 플레이리스트입니다",
     "neverSynced": "동기화된 적 없음",
     "syncing": "동기화 중...",
     "completed": "완료",

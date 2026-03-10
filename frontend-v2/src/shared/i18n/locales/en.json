@@ -449,6 +449,13 @@
     "withoutMemo": "Without Memo"
   },
   "playlist": {
+    "importing": "Importing playlist...",
+    "imported": "{{count}} cards added from playlist",
+    "large": "{{count}} videos — may take about {{minutes}} min",
+    "limitExceeded": "Card limit exceeded ({{used}}/{{limit}}). {{available}} cards can be added.",
+    "privateNoAuth": "Connect YouTube in Settings to import private playlists",
+    "privateNotOwner": "Only public playlists from other accounts can be imported",
+    "alreadyRegistered": "This playlist is already registered",
     "neverSynced": "Never synced",
     "syncing": "Syncing...",
     "completed": "Completed",

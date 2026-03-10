@@ -4,6 +4,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { GripVertical, Plus, Play, FileText, Link as LinkIcon } from 'lucide-react';
 import { generateProxySrc } from '@/shared/lib/image-utils';
 import { InsightCard } from '@/entities/card/model/types';
+import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 import { useTranslation } from 'react-i18next';
 import {
   Tooltip,
@@ -407,7 +408,13 @@ export const MandalaCell = memo(
         onDrop(index, undefined, cardId);
         return;
       }
-      const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+      const rawUrl = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+      let url = rawUrl ? extractUrlFromDragData(rawUrl) : null;
+      // Fallback: text/html에서 href 추출
+      if (!url) {
+        const html = e.dataTransfer.getData('text/html');
+        if (html) url = extractUrlFromHtml(html);
+      }
       if (url) {
         e.preventDefault();
         e.stopPropagation();

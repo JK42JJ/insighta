@@ -105,9 +105,45 @@ export const mockMandalaLevels: Record<string, MandalaLevel> = {
   },
 };
 
+/** Parse text/uri-list format: extract first valid URL, skip # comments, trim whitespace (RFC 2483) */
+export const extractUrlFromDragData = (raw: string): string | null => {
+  const lines = raw.split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      return trimmed;
+    }
+  }
+  return null;
+};
+
+/** Extract URL from HTML drag data (text/html fallback) */
+export const extractUrlFromHtml = (html: string): string | null => {
+  const match = html.match(/href=["']([^"']+)["']/i);
+  return match ? match[1] : null;
+};
+
+// Extract YouTube playlist ID from URL
+export const extractYouTubePlaylistId = (url: string): string | null => {
+  try {
+    const parsed = new URL(url);
+    return parsed.searchParams.get('list');
+  } catch {
+    return null;
+  }
+};
+
 // Detect link type from URL
 export const detectLinkType = (url: string): LinkType => {
   const lowerUrl = url.toLowerCase();
+
+  // YouTube Playlist (must check before regular youtube)
+  // - /playlist?list=PLxxx (standard playlist URL)
+  // - /watch?v=xxx&list=PLxxx (video within playlist context)
+  if ((lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be'))
+      && extractYouTubePlaylistId(url)) {
+    return 'youtube-playlist';
+  }
 
   // YouTube Shorts
   if (lowerUrl.includes('youtube.com/shorts/') || lowerUrl.includes('youtu.be/shorts/')) {
