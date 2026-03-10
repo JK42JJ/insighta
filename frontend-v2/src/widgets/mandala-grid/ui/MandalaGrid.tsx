@@ -285,14 +285,14 @@ export const MandalaGrid = memo(function MandalaGrid({
               'grid grid-cols-3 rounded-2xl relative mx-auto',
               'bg-[hsl(var(--bg-sunken))] border border-border/20',
               'transition-[box-shadow,opacity] duration-300 ease-out',
-              sizeMode === 'compact' && 'gap-[1.5%] p-[2%]',
-              sizeMode === 'standard' && 'gap-[2%] p-[2.5%]',
-              sizeMode === 'spacious' && 'gap-[2.5%] p-[3%]',
+              sizeMode === 'compact' && 'gap-[1%] p-[1.5%]',
+              sizeMode === 'standard' && 'gap-[1.5%] p-[2%]',
+              sizeMode === 'spacious' && 'gap-[2%] p-[2.5%]',
               isGridDropZone && 'ring-2 ring-primary/20'
             )}
             style={{
-              width: '95cqmin',
-              height: '95cqmin',
+              width: '98cqmin',
+              height: '98cqmin',
               boxShadow: isGridDropZone ? 'var(--shadow-xl)' : 'var(--shadow-inset-sunken)',
               backfaceVisibility: 'hidden',
               transform: isTransitioning
@@ -381,8 +381,8 @@ export const MandalaGrid = memo(function MandalaGrid({
               'border border-border/20 shadow-lg'
             )}
             style={{
-              width: '95cqmin',
-              height: '95cqmin',
+              width: '98cqmin',
+              height: '98cqmin',
               backfaceVisibility: 'hidden',
               transform: 'rotateY(180deg)',
             }}

@@ -140,10 +140,10 @@ export function SidebarMandalaSection({
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div
-                className="mt-1 mx-1 rounded-lg overflow-hidden bg-surface-base/50 border border-border/20"
+                className="mt-1 rounded-lg overflow-hidden bg-surface-base/50 border border-border/20"
                 style={{ containerType: 'inline-size' }}
               >
-                <div className="w-full aspect-square flex items-center justify-center p-2">
+                <div className="w-full aspect-square flex items-center justify-center p-1">
                   {mandalaGridElement}
                 </div>
               </div>
