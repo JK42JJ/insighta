@@ -471,10 +471,9 @@ export const MandalaCell = memo(
             'border-primary/60 bg-primary/5',
             'shadow-[0_0_0_1px_hsl(var(--primary)/0.15),0_4px_12px_-2px_hsl(var(--primary)/0.1)]',
           ],
-          // Drop target — enhanced glow effect
+          // Drop target — enhanced glow effect with pulse
           showDropIndicator && [
             'border-2 border-primary border-dashed bg-primary/10',
-            'shadow-[0_0_24px_-4px_hsl(var(--primary)/0.4),0_0_8px_-2px_hsl(var(--primary)/0.2)]',
             'scale-[1.02]',
           ],
           // Cell swap target
@@ -491,6 +490,7 @@ export const MandalaCell = memo(
             : isCenter
               ? 'var(--shadow-inset-raised)'
               : 'var(--shadow-sm)',
+          animation: showDropIndicator ? 'drop-target-pulse 1.2s ease-in-out infinite' : undefined,
         }}
         onDragOver={handleExternalDragOver}
         onDrop={handleExternalDrop}

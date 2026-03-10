@@ -324,6 +324,16 @@
     }
   }
 
+  /* Drop target pulse — subtle border glow cycle */
+  @keyframes drop-target-pulse {
+    0%, 100% {
+      box-shadow: 0 0 12px -2px hsl(var(--primary) / 0.2), 0 0 4px -1px hsl(var(--primary) / 0.1);
+    }
+    50% {
+      box-shadow: 0 0 24px -2px hsl(var(--primary) / 0.4), 0 0 8px -1px hsl(var(--primary) / 0.25);
+    }
+  }
+
   /* Block stacking animation */
   @keyframes block-pop {
     0% {
