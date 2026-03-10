@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { LTDBanner } from './components/LTDBanner';
 import { LandingHeader } from './components/LandingHeader';
@@ -11,6 +13,19 @@ import { GradientBackground } from './components/GradientBackground';
 
 export default function LandingPage() {
   const { signInWithGoogle } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    const scrollTo = (location.state as { scrollTo?: string })?.scrollTo;
+    if (scrollTo) {
+      // Small delay to ensure DOM is rendered
+      setTimeout(() => {
+        document.getElementById(scrollTo)?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+      // Clear the state so it doesn't re-scroll on re-render
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
 
   const handleLogin = async () => {
     try {
