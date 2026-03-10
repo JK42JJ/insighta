@@ -7,6 +7,7 @@ import { HowItWorks } from './components/HowItWorks';
 import { TestimonialsSection } from './components/TestimonialsSection';
 import { CTASection } from './components/CTASection';
 import { FooterSection } from './components/FooterSection';
+import { GradientBackground } from './components/GradientBackground';
 
 export default function LandingPage() {
   const { signInWithGoogle } = useAuth();
@@ -20,17 +21,20 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <LTDBanner />
-      <LandingHeader onLogin={handleLogin} />
-      <main id="main-content">
-        <HeroSection onLogin={handleLogin} />
-        <FeatureCards />
-        <HowItWorks />
-        <TestimonialsSection />
-        <CTASection />
-      </main>
-      <FooterSection />
+    <div className="relative min-h-screen bg-background">
+      <GradientBackground variant="F" />
+      <div className="relative z-10">
+        <LTDBanner />
+        <LandingHeader onLogin={handleLogin} />
+        <main id="main-content">
+          <HeroSection onLogin={handleLogin} />
+          <FeatureCards />
+          <HowItWorks />
+          <TestimonialsSection />
+          <CTASection />
+        </main>
+        <FooterSection />
+      </div>
     </div>
   );
 }
