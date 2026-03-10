@@ -33,6 +33,8 @@ interface MandalaGridProps {
   entryGridIndex?: number | null;
   showHint?: boolean;
   hideHeader?: boolean;
+  /** True when any card is being dragged (internal dnd-kit) */
+  isCardDragActive?: boolean;
 }
 
 export type MandalaSizeMode = 'compact' | 'standard' | 'spacious';
@@ -55,6 +57,7 @@ export const MandalaGrid = memo(function MandalaGrid({
   entryGridIndex = null,
   showHint = true,
   hideHeader = false,
+  isCardDragActive = false,
 }: MandalaGridProps) {
   const { t } = useTranslation();
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -290,10 +293,15 @@ export const MandalaGrid = memo(function MandalaGrid({
               sizeMode === 'compact' && 'gap-[1%] p-[1.5%]',
               sizeMode === 'standard' && 'gap-[1.5%] p-[2%]',
               sizeMode === 'spacious' && 'gap-[2%] p-[2.5%]',
-              isGridDropZone && 'ring-2 ring-primary/20'
+              isGridDropZone && 'ring-2 ring-primary/20',
+              isCardDragActive && !isGridDropZone && 'ring-1 ring-primary/30 shadow-[0_0_20px_-4px_hsl(var(--primary)/0.15)]',
             )}
             style={{
-              boxShadow: isGridDropZone ? 'var(--shadow-xl)' : 'var(--shadow-inset-sunken)',
+              boxShadow: isGridDropZone
+                ? 'var(--shadow-xl)'
+                : isCardDragActive
+                  ? '0 0 24px -4px hsl(var(--primary) / 0.2), var(--shadow-inset-sunken)'
+                  : 'var(--shadow-inset-sunken)',
               backfaceVisibility: 'hidden',
               transform: isTransitioning
                 ? transitionDirection === 'out'

@@ -323,6 +323,7 @@ function AuthenticatedApp() {
       entryGridIndex={navigation.entryGridIndex}
       showHint={false}
       hideHeader={true}
+      isCardDragActive={activeDragData !== null && (activeDragData.type === 'card' || activeDragData.type === 'card-reorder')}
     />
   );
 
@@ -362,8 +363,14 @@ function AuthenticatedApp() {
         onExpandedMandalaChange={setExpandedMandalaId}
       >
         <div className="h-full flex flex-col overflow-hidden">
+          {/* External drag overlay (full dimming + dashed border) */}
           <DropZoneOverlay
             isVisible={dragDrop.isDraggingOver && !dragDrop.draggingCard && !dragDrop.isDraggingCell}
+          />
+          {/* Internal drag overlay (subtle dimming only) */}
+          <DropZoneOverlay
+            isVisible={activeDragData !== null && (activeDragData.type === 'card' || activeDragData.type === 'card-reorder')}
+            isInternalDrag
           />
 
           {/* Top docked ScratchPad */}
