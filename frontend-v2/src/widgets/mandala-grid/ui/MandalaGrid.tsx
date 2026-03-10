@@ -251,6 +251,8 @@ export const MandalaGrid = memo(function MandalaGrid({
           ref={gridRef}
           className="relative mx-auto transition-transform duration-700 ease-in-out"
           style={{
+            width: '98cqmin',
+            height: '98cqmin',
             transformStyle: 'preserve-3d',
             transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
           }}
@@ -282,7 +284,7 @@ export const MandalaGrid = memo(function MandalaGrid({
           {/* Front - Grid */}
           <div
             className={cn(
-              'grid grid-cols-3 rounded-2xl relative mx-auto',
+              'grid grid-cols-3 rounded-2xl relative w-full h-full',
               'bg-[hsl(var(--bg-sunken))] border border-border/20',
               'transition-[box-shadow,opacity] duration-300 ease-out',
               sizeMode === 'compact' && 'gap-[1%] p-[1.5%]',
@@ -291,8 +293,6 @@ export const MandalaGrid = memo(function MandalaGrid({
               isGridDropZone && 'ring-2 ring-primary/20'
             )}
             style={{
-              width: '98cqmin',
-              height: '98cqmin',
               boxShadow: isGridDropZone ? 'var(--shadow-xl)' : 'var(--shadow-inset-sunken)',
               backfaceVisibility: 'hidden',
               transform: isTransitioning
@@ -376,13 +376,11 @@ export const MandalaGrid = memo(function MandalaGrid({
           {/* Back - Statistics Dashboard */}
           <div
             className={cn(
-              'absolute top-0 left-1/2 -translate-x-1/2 p-4 rounded-2xl',
+              'absolute inset-0 p-4 rounded-2xl',
               'bg-gradient-to-br from-card/90 via-card to-card/80',
               'border border-border/20 shadow-lg'
             )}
             style={{
-              width: '98cqmin',
-              height: '98cqmin',
               backfaceVisibility: 'hidden',
               transform: 'rotateY(180deg)',
             }}

@@ -123,11 +123,16 @@ export function useSyncPlaylist() {
 
       const data = await response.json();
       const r = data.result;
+
+      if (r.status !== 'COMPLETED') {
+        throw new Error(r.error || `Sync failed with status: ${r.status}`);
+      }
+
       return {
-        success: r.status === 'COMPLETED',
+        success: true,
         itemsAdded: r.itemsAdded ?? 0,
         itemsRemoved: r.itemsRemoved ?? 0,
-        totalItems: (r.itemsAdded ?? 0) + (r.itemsRemoved ?? 0),
+        totalItems: r.totalItems ?? (r.itemsAdded ?? 0) + (r.itemsRemoved ?? 0),
         quotaUsed: r.quotaUsed ?? 0,
       };
     },
@@ -316,7 +321,7 @@ export function useSyncAllPlaylists() {
       errors: string[];
     }> => {
       if (!playlists || playlists.length === 0) {
-        return { synced: 0, failed: 0, errors: [] };
+        throw new Error('No playlists to sync');
       }
 
       let synced = 0;
