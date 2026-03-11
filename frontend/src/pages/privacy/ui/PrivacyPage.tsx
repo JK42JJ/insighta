@@ -70,8 +70,8 @@ const PrivacyPage = () => {
             >
               YouTube Terms of Service
               <span className="sr-only"> (opens in new tab)</span>
-            </a>{' '}
-            and the{' '}
+            </a>
+            , the{' '}
             <a
               href="https://policies.google.com/privacy"
               target="_blank"
@@ -79,6 +79,16 @@ const PrivacyPage = () => {
               className="text-primary underline"
             >
               Google Privacy Policy
+              <span className="sr-only"> (opens in new tab)</span>
+            </a>
+            , and the{' '}
+            <a
+              href="https://developers.google.com/terms/api-services-user-data-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline"
+            >
+              Google API Services User Data Policy
               <span className="sr-only"> (opens in new tab)</span>
             </a>
             .
@@ -90,6 +100,19 @@ const PrivacyPage = () => {
             </code>{' '}
             access to read your playlist and video metadata. We never modify or delete any YouTube
             content.
+          </p>
+          <p className="mt-2">
+            Insighta&apos;s use and transfer of information received from Google APIs adheres to the{' '}
+            <a
+              href="https://developers.google.com/terms/api-services-user-data-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline"
+            >
+              Google API Services User Data Policy
+              <span className="sr-only"> (opens in new tab)</span>
+            </a>
+            , including the Limited Use requirements.
           </p>
         </section>
 
@@ -105,9 +128,15 @@ const PrivacyPage = () => {
         <section className="mb-6">
           <h2 className="text-xl font-semibold mb-2">6. Data Retention &amp; Deletion</h2>
           <p>
+            We retain your data only for as long as your account is active. YouTube playlist
+            metadata is refreshed on each sync and not stored beyond what is displayed in the app.
+            OAuth tokens are retained only while your YouTube account is connected.
+          </p>
+          <p className="mt-2">
             You can disconnect your YouTube account at any time from the Settings page, which
-            revokes our access and deletes stored tokens. To request full account deletion, contact
-            us at the email below.
+            immediately revokes our access and deletes stored OAuth tokens. To request full account
+            and data deletion, contact us at the email below. We will process deletion requests
+            within 30 days.
           </p>
         </section>
 

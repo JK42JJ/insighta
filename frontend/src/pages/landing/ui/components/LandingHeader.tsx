@@ -1,24 +1,12 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
-import { useAuth } from '@/features/auth/model/useAuth';
 
-export function LandingHeader({ onLogin }: { onLogin?: () => void }) {
+export function LandingHeader() {
   const { t } = useTranslation();
-  const { signInWithGoogle } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const isLanding = location.pathname === '/' || location.pathname === '';
-
-  const handleLogin =
-    onLogin ??
-    (async () => {
-      try {
-        await signInWithGoogle();
-      } catch (error) {
-        console.error('Login failed:', error);
-      }
-    });
 
   const handleFeaturesClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -75,7 +63,7 @@ export function LandingHeader({ onLogin }: { onLogin?: () => void }) {
 
         {/* CTA */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={handleLogin}>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/login')}>
             {t('common.login')}
           </Button>
           <Link to="/pricing">

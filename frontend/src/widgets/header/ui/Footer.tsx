@@ -11,7 +11,7 @@ export function Footer() {
           <img
             src={`${import.meta.env.BASE_URL}logo.png`}
             alt=""
-            className="w-[18px] h-[18px] dark:invert"
+            className="w-[18px] h-[18px] rounded dark:invert"
             aria-hidden="true"
           />
           <span className="font-medium text-foreground">{t('footer.brand')}</span>
