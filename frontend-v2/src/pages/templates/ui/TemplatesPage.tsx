@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Grid3X3, ArrowLeft, Check } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { useAuth } from '@/features/auth/model/useAuth';
-import { MANDALA_TEMPLATES, type MandalaTemplate } from '@/shared/data/mandalaTemplates';
+import { MANDALA_TEMPLATES, type MandalaTemplate, getTemplateTranslation } from '@/shared/data/mandalaTemplates';
 import { GradientBackground } from '@/pages/landing/ui/components/GradientBackground';
 import { LandingHeader } from '@/pages/landing/ui/components/LandingHeader';
 
@@ -83,9 +83,10 @@ function TemplateListView() {
 }
 
 function TemplateDetailView({ template }: { template: MandalaTemplate }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
+  const tpl = getTemplateTranslation(template, i18n.language);
 
   const handleApply = () => {
     if (!isLoggedIn) {
@@ -122,8 +123,8 @@ function TemplateDetailView({ template }: { template: MandalaTemplate }) {
                     const isCenter = i === 4;
                     const subjectIndex = i < 4 ? i : i > 4 ? i - 1 : -1;
                     const label = isCenter
-                      ? template.centerGoal
-                      : template.subjects[subjectIndex] || '';
+                      ? tpl.centerGoal
+                      : tpl.subjects[subjectIndex] || '';
 
                     return (
                       <div
@@ -148,17 +149,17 @@ function TemplateDetailView({ template }: { template: MandalaTemplate }) {
                 <div>
                   <div className="flex items-center gap-3 mb-3">
                     <span className="text-3xl">{template.icon}</span>
-                    <h1 className="text-2xl font-bold">{template.name}</h1>
+                    <h1 className="text-2xl font-bold">{tpl.name}</h1>
                   </div>
-                  <p className="text-muted-foreground">{template.description}</p>
+                  <p className="text-muted-foreground">{tpl.description}</p>
                 </div>
 
                 <div>
                   <h3 className="text-sm font-medium mb-3 text-foreground">
-                    {t('templates.subjects', 'Subjects')}
+                    {t('templates.subjects')}
                   </h3>
                   <ul className="space-y-2">
-                    {template.subjects.map((subject, i) => (
+                    {tpl.subjects.map((subject: string, i: number) => (
                       <li key={i} className="flex items-center gap-2 text-sm">
                         <Check className="w-4 h-4 text-primary flex-shrink-0" />
                         <span className="text-muted-foreground">{subject}</span>
@@ -198,8 +199,9 @@ function TemplateCard({
   template: MandalaTemplate;
   onApply: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const tpl = getTemplateTranslation(template, i18n.language);
 
   return (
     <div
@@ -213,8 +215,8 @@ function TemplateCard({
           const isCenter = i === 4;
           const subjectIndex = i < 4 ? i : i > 4 ? i - 1 : -1;
           const label = isCenter
-            ? template.centerGoal
-            : template.subjects[subjectIndex] || '';
+            ? tpl.centerGoal
+            : tpl.subjects[subjectIndex] || '';
 
           return (
             <div
@@ -237,10 +239,10 @@ function TemplateCard({
       <div className="flex-1">
         <div className="flex items-center gap-2 mb-1">
           <Grid3X3 className="w-4 h-4 text-primary" />
-          <h3 className="font-semibold text-sm">{template.name}</h3>
+          <h3 className="font-semibold text-sm">{tpl.name}</h3>
         </div>
         <p className="text-xs text-muted-foreground line-clamp-2">
-          {template.description}
+          {tpl.description}
         </p>
       </div>
 

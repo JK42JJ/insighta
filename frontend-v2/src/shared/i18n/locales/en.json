@@ -9,6 +9,7 @@
     "confirm": "Confirm",
     "loading": "Loading...",
     "skipToContent": "Skip to main content",
+    "beta": "beta",
     "error": "Error",
     "success": "Success",
     "login": "Login",
@@ -60,7 +61,9 @@
     "goHome": "Go to home page",
     "openUserMenu": "Open user menu",
     "switchToLight": "Switch to light mode",
-    "switchToDark": "Switch to dark mode"
+    "switchToDark": "Switch to dark mode",
+    "switchToEnglish": "Switch to English",
+    "switchToKorean": "Switch to Korean"
   },
   "login": {
     "subtitle": "Mandala-based YouTube Archive",
@@ -104,6 +107,7 @@
     "deleteConfirmTitle": "Are you sure?",
     "deleteConfirmDesc": "This action cannot be undone. All mandalas, cards, and settings will be permanently deleted.",
     "general": "General",
+    "integrations": "Integrations",
     "youtube": "YouTube",
     "saveSettings": "Save Settings",
     "settingsSaved": "Saved",
@@ -232,11 +236,26 @@
     "noInsights": "No saved insights yet",
     "dragToAdd": "Drag a YouTube link to add",
     "insights": "Insights",
+    "untitled": "Untitled",
+    "defaultShareText": "Check out this video!",
+    "addNote": "Add a note...",
+    "doubleClickToNote": "Double-click to add a note",
     "selected": "{{count}} selected",
     "deleteSelected": "Delete selected cards",
     "deselectCard": "Deselect",
     "latestFirst": "Latest",
     "dragToMove": "Drag to move"
+  },
+  "linkTypes": {
+    "youtube": "YouTube Video",
+    "youtube-shorts": "YouTube Video",
+    "linkedin": "LinkedIn Post",
+    "facebook": "Facebook Post",
+    "notion": "Notion Page",
+    "txt": "Text File",
+    "md": "Markdown File",
+    "pdf": "PDF Document",
+    "other": "Link"
   },
   "videoPlayer": {
     "clickToWriteNote": "Click to write a note...",
@@ -620,7 +639,8 @@
       "learning": "Learning",
       "business": "Business",
       "personal": "Personal"
-    }
+    },
+    "centerGoal": "Center Goal"
   },
   "sidebar": {
     "navigation": "Navigation",

@@ -5,9 +5,9 @@ export const createMockCards = (): InsightCard[] => [
   {
     id: "card-1",
     videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    title: "프로그래밍 기초 - 변수와 자료형",
+    title: "Programming Basics - Variables and Types",
     thumbnail: "https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
-    userNote: "변수 선언 방법과 기본 자료형에 대해 배움. 02:30 부분 참고",
+    userNote: "Learned variable declaration and basic data types. Refer to 02:30",
     createdAt: new Date("2024-01-15"),
     cellIndex: 0,
     levelId: "root",
@@ -16,9 +16,9 @@ export const createMockCards = (): InsightCard[] => [
   {
     id: "card-2",
     videoUrl: "https://www.youtube.com/watch?v=jNQXAC9IVRw",
-    title: "건강한 아침 루틴 만들기",
+    title: "Building a Healthy Morning Routine",
     thumbnail: "https://img.youtube.com/vi/jNQXAC9IVRw/mqdefault.jpg",
-    userNote: "5시 기상, 명상 10분, 운동 30분 루틴 정리",
+    userNote: "5am wake up, 10min meditation, 30min exercise routine",
     createdAt: new Date("2024-01-16"),
     cellIndex: 1,
     levelId: "root",
@@ -27,9 +27,9 @@ export const createMockCards = (): InsightCard[] => [
   {
     id: "card-3",
     videoUrl: "https://www.youtube.com/watch?v=9bZkp7q19f0",
-    title: "영어 발음 마스터하기",
+    title: "Mastering English Pronunciation",
     thumbnail: "https://img.youtube.com/vi/9bZkp7q19f0/mqdefault.jpg",
-    userNote: "TH 발음과 R/L 발음 구분 연습법 정리",
+    userNote: "TH pronunciation and R/L distinction practice notes",
     createdAt: new Date("2024-01-17"),
     cellIndex: 3,
     levelId: "root",
@@ -41,7 +41,7 @@ export const createScratchPadCards = (): InsightCard[] => [
   {
     id: "scratch-1",
     videoUrl: "https://www.youtube.com/watch?v=fJ9rUzIMcZQ",
-    title: "아직 분류하지 않은 영상",
+    title: "Uncategorized video",
     thumbnail: "https://img.youtube.com/vi/fJ9rUzIMcZQ/mqdefault.jpg",
     userNote: "",
     createdAt: new Date("2024-01-18"),
@@ -54,16 +54,16 @@ export const createScratchPadCards = (): InsightCard[] => [
 export const mockMandalaLevels: Record<string, MandalaLevel> = {
   "root": {
     id: "root",
-    centerGoal: "2024년 목표",
+    centerGoal: "2024 Goals",
     subjects: [
-      "프로그래밍",
-      "건강 관리",
-      "독서",
-      "영어 학습",
-      "재테크",
-      "인간관계",
-      "취미 생활",
-      "자기계발",
+      "Programming",
+      "Health",
+      "Reading",
+      "English",
+      "Finance",
+      "Relationships",
+      "Hobbies",
+      "Self-Development",
     ],
     parentId: null,
     parentCellIndex: null,
@@ -71,16 +71,16 @@ export const mockMandalaLevels: Record<string, MandalaLevel> = {
   },
   "programming": {
     id: "programming",
-    centerGoal: "프로그래밍",
+    centerGoal: "Programming",
     subjects: [
       "React",
       "TypeScript",
       "Node.js",
-      "데이터베이스",
-      "알고리즘",
-      "프로젝트",
+      "Database",
+      "Algorithms",
+      "Projects",
       "DevOps",
-      "테스트",
+      "Testing",
     ],
     parentId: "root",
     parentCellIndex: 0,
@@ -88,16 +88,16 @@ export const mockMandalaLevels: Record<string, MandalaLevel> = {
   },
   "health": {
     id: "health",
-    centerGoal: "건강 관리",
+    centerGoal: "Health",
     subjects: [
-      "운동",
-      "식단",
-      "수면",
-      "명상",
-      "체중 관리",
-      "정기 검진",
-      "스트레스",
-      "자세 교정",
+      "Exercise",
+      "Diet",
+      "Sleep",
+      "Meditation",
+      "Weight Management",
+      "Regular Checkups",
+      "Stress",
+      "Posture",
     ],
     parentId: "root",
     parentCellIndex: 1,
@@ -252,26 +252,26 @@ export const createCardFromUrl = (url: string, cellIndex: number, levelId: strin
   };
 };
 
-// Get default title for link type
+// Get default title for link type (English fallback for non-i18n contexts)
 const getDefaultTitleForLinkType = (linkType: LinkType): string => {
   switch (linkType) {
     case 'youtube':
     case 'youtube-shorts':
-      return "YouTube 영상";
+      return "YouTube Video";
     case 'linkedin':
-      return "LinkedIn 게시물";
+      return "LinkedIn Post";
     case 'facebook':
-      return "Facebook 게시물";
+      return "Facebook Post";
     case 'notion':
-      return "Notion 페이지";
+      return "Notion Page";
     case 'txt':
-      return "텍스트 파일";
+      return "Text File";
     case 'md':
-      return "마크다운 파일";
+      return "Markdown File";
     case 'pdf':
-      return "PDF 문서";
+      return "PDF Document";
     default:
-      return "링크";
+      return "Link";
   }
 };
 
@@ -285,24 +285,24 @@ export const fetchLinkTitle = async (url: string, linkType: LinkType): Promise<s
         const response = await fetch(oEmbedUrl);
         if (response.ok) {
           const data = await response.json();
-          return data.title || "YouTube 영상";
+          return data.title || "YouTube Video";
         }
-        return "YouTube 영상";
+        return "YouTube Video";
       }
       case 'linkedin':
-        return "LinkedIn 게시물";
+        return "LinkedIn Post";
       case 'facebook':
-        return "Facebook 게시물";
+        return "Facebook Post";
       case 'notion':
-        return "Notion 페이지";
+        return "Notion Page";
       case 'txt':
-        return decodeURIComponent(url.split('/').pop() || "텍스트 파일");
+        return decodeURIComponent(url.split('/').pop() || "Text File");
       case 'md':
-        return decodeURIComponent(url.split('/').pop() || "마크다운 파일");
+        return decodeURIComponent(url.split('/').pop() || "Markdown File");
       case 'pdf':
-        return decodeURIComponent(url.split('/').pop() || "PDF 문서");
+        return decodeURIComponent(url.split('/').pop() || "PDF Document");
       default:
-        return "링크";
+        return "Link";
     }
   } catch (error) {
     console.error("Failed to fetch link title:", error);
