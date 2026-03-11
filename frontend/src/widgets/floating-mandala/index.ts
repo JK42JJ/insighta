@@ -1,2 +1,1 @@
-// widgets/floating-mandala barrel file
-export * from './ui';
+export { FloatingMandala } from './ui';

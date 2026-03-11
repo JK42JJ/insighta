@@ -1,4 +1,3 @@
-// features/card-management/model barrel file
 export {
   localCardsKeys,
   isLimitExceededError,
@@ -10,4 +9,5 @@ export {
   useDeleteLocalCard,
   useLocalCards,
 } from './useLocalCards';
+
 export { useBatchMoveCards } from './useBatchMoveCards';

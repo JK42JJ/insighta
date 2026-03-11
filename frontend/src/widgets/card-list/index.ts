@@ -1,2 +1,1 @@
-// widgets/card-list barrel file
-export * from './ui';
+export { CardList, InsightCardItem, DraggableCard } from './ui';

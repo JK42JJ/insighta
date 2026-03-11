@@ -1,7 +1,7 @@
 # =============================================================================
-# TubeArchive Frontend - Multi-stage Docker Build
+# Insighta Frontend - Multi-stage Docker Build
 # =============================================================================
-# Stage 1: Build the React application
+# Stage 1: Build the React application (FSD architecture)
 # Stage 2: Serve with nginx
 # =============================================================================
 
@@ -25,8 +25,8 @@ COPY . .
 ARG VITE_API_URL=/api
 ARG VITE_SUPABASE_URL=http://localhost:8000
 ARG VITE_SUPABASE_PUBLISHABLE_KEY=
-ARG VITE_APP_NAME=TubeArchive
-ARG VITE_APP_VERSION=1.0.0
+ARG VITE_APP_NAME=Insighta
+ARG VITE_APP_VERSION=2.0.0
 
 ENV VITE_API_URL=${VITE_API_URL}
 ENV VITE_SUPABASE_URL=${VITE_SUPABASE_URL}

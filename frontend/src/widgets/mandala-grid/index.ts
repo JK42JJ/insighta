@@ -1,2 +1,2 @@
-// widgets/mandala-grid barrel file
-export * from './ui';
+export { MandalaGrid, MandalaCell, MandalaDashboard } from './ui';
+export type { MandalaCellProps } from './ui';

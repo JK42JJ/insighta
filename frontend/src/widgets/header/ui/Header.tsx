@@ -1,5 +1,4 @@
 import {
-  Archive,
   Home,
   Moon,
   Sun,
@@ -28,7 +27,6 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
 import { useAuth } from '@/features/auth/model/useAuth';
-import { MandalaSelector } from '@/widgets/mandala-selector';
 
 interface HeaderProps {
   onNavigateHome?: () => void;
@@ -91,47 +89,44 @@ export function Header({ onNavigateHome }: HeaderProps) {
             aria-label={t('header.goHome')}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-xl"
           >
-            <div
-              className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center"
-              style={{ boxShadow: 'var(--shadow-md)' }}
-            >
-              <Archive className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <img
+              src={`${import.meta.env.BASE_URL}logo.png`}
+              alt="Insighta"
+              className="w-9 h-9 rounded-xl dark:invert"
+            />
             <div className="text-left">
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-foreground tracking-tight">Insighta</h1>
-                <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-gradient-to-r from-primary/20 to-primary/10 text-primary border border-primary/30 rounded-md shadow-sm relative overflow-hidden">
-                  <span className="relative z-10">beta</span>
-                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent animate-[shimmer_2s_ease-in-out_infinite] -translate-x-full" />
+                <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/30 rounded-md">
+                  {t('common.beta')}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">{t('header.subtitle')}</p>
             </div>
           </button>
 
-          {/* Home Button — hidden on mobile (in bottom nav) */}
+          {/* Home Button */}
           <Button
             variant="ghost"
             size="sm"
             onClick={onNavigateHome}
-            className="hidden md:flex rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
+            className="rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
           >
             <Home className="w-4 h-4" aria-hidden="true" />
-            <span>{t('header.home')}</span>
+            <span className="hidden sm:inline">{t('header.home')}</span>
+            <span className="sr-only sm:hidden">{t('header.home')}</span>
           </Button>
 
-          {/* Mandala Selector (multi-mandala switching) */}
-          {isLoggedIn && <MandalaSelector />}
-
-          {/* Mandala Settings Button — hidden on mobile */}
+          {/* Mandala Settings Button */}
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate('/settings/mandala')}
-            className="hidden md:flex rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
+            onClick={() => navigate('/mandala-settings')}
+            className="rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
           >
             <LayoutGrid className="w-4 h-4" aria-hidden="true" />
-            <span>{t('header.mandalaDesign')}</span>
+            <span className="hidden sm:inline">{t('header.mandalaDesign')}</span>
+            <span className="sr-only sm:hidden">{t('header.mandalaDesign')}</span>
           </Button>
         </div>
 
@@ -252,7 +247,9 @@ export function Header({ onNavigateHome }: HeaderProps) {
             variant="ghost"
             size="sm"
             onClick={toggleLanguage}
-            aria-label={i18n.language === 'ko' ? 'Switch to English' : '한국어로 전환'}
+            aria-label={
+              i18n.language === 'ko' ? t('header.switchToEnglish') : t('header.switchToKorean')
+            }
             className="rounded-xl hover:bg-surface-light transition-all duration-200 text-xs font-medium px-2"
           >
             {i18n.language === 'ko' ? 'EN' : 'KO'}

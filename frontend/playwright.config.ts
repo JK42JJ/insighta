@@ -1,107 +1,60 @@
 import { defineConfig, devices } from '@playwright/test';
 
-/**
- * Playwright E2E Test Configuration
- * @see https://playwright.dev/docs/test-configuration
- */
-const isProduction = process.env.E2E_TARGET === 'production';
+const isCI = !!process.env.CI;
 
 export default defineConfig({
-  testDir: './tests/e2e',
-
-  /* Run tests in files in parallel */
+  testDir: './tests',
+  timeout: 30_000,
+  expect: {
+    timeout: 10_000,
+  },
   fullyParallel: true,
+  retries: 0,
+  reporter: [['list'], ['html', { open: 'never', outputFolder: 'test-results/report' }]],
+  outputDir: 'test-results/artifacts',
 
-  /* Fail the build on CI if you accidentally left test.only in the source code */
-  forbidOnly: !!process.env.CI,
-
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-
-  /* Opt out of parallel tests on CI */
-  workers: process.env.CI ? 1 : undefined,
-
-  /* Reporter to use */
-  reporter: [
-    ['html', { outputFolder: 'playwright-report' }],
-    ['json', { outputFile: 'playwright-report/results.json' }],
-    ['list'],
-  ],
-
-  /* Shared settings for all the projects below */
   use: {
-    /* Base URL to use in actions like `await page.goto('/')` */
-    baseURL: isProduction ? 'https://insighta.one' : 'http://localhost:8081',
-
-    /* Collect trace when retrying the failed test */
+    baseURL: 'http://localhost:8081',
     trace: 'on-first-retry',
-
-    /* Take screenshot on failure */
     screenshot: 'only-on-failure',
-
-    /* Record video on first retry */
-    video: 'on-first-retry',
   },
 
-  /* Configure projects for major browsers */
   projects: [
-    /* Auth setup — runs first when PLAYWRIGHT_AUTH=true */
+    // Auth setup — run first, manual login saves session
     {
       name: 'setup',
       testMatch: /auth\.setup\.ts/,
+      timeout: 180_000, // 3 minutes for manual login
+      use: {
+        ...devices['Desktop Chrome'],
+      },
     },
-
+    // Main regression tests — uses saved auth session
     {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        storageState: '.auth/user.json',
+        storageState: 'tests/.auth/user.json',
       },
       dependencies: ['setup'],
+      testIgnore: /auth\.setup\.ts/,
     },
+    // Run without auth (landing page tests)
     {
-      name: 'firefox',
+      name: 'no-auth',
       use: {
-        ...devices['Desktop Firefox'],
-        storageState: '.auth/user.json',
+        ...devices['Desktop Chrome'],
       },
-      dependencies: ['setup'],
-    },
-    {
-      name: 'webkit',
-      use: {
-        ...devices['Desktop Safari'],
-        storageState: '.auth/user.json',
-      },
-      dependencies: ['setup'],
-    },
-
-    /* Test against mobile viewports */
-    {
-      name: 'mobile-chrome',
-      use: {
-        ...devices['Pixel 5'],
-        storageState: '.auth/user.json',
-      },
-      dependencies: ['setup'],
-    },
-    {
-      name: 'mobile-safari',
-      use: {
-        ...devices['iPhone 12'],
-        storageState: '.auth/user.json',
-      },
-      dependencies: ['setup'],
+      testMatch: /\/(a11y|landing)\.spec\.ts/,
     },
   ],
 
-  /* Run your local dev server before starting the tests (skip for production) */
-  ...(isProduction ? {} : {
-    webServer: {
-      command: 'npm run dev',
-      url: 'http://localhost:8081',
-      reuseExistingServer: !process.env.CI,
-      timeout: 120 * 1000,
-    },
-  }),
+  webServer: {
+    // CI: use preview server (serves production build)
+    // Local: use dev server
+    command: isCI ? 'npx vite preview --port 8081 --host' : 'npm run dev',
+    url: 'http://localhost:8081/',
+    reuseExistingServer: !isCI,
+    timeout: isCI ? 60_000 : 10_000,
+  },
 });

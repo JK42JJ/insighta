@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect, useCallback, forwardRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
+import { type DragData, type DropData, cardDragId } from '@/shared/lib/dnd';
+import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 import {
   Lightbulb,
   Plus,
@@ -41,8 +44,6 @@ interface FloatingScratchPadProps {
   onCardClick: (card: InsightCard) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
-  onCardDragStart: (card: InsightCard) => void;
-  onMultiCardDragStart?: (cards: InsightCard[]) => void;
   onDeleteCards?: (cardIds: string[]) => void;
   onFileDrop?: (files: FileList) => void;
   isFloating: boolean;
@@ -71,6 +72,41 @@ function getTimeLabel(
   return format(date, 'yy.MM');
 }
 
+function DraggableScratchCard({
+  card,
+  selectedCardIds,
+  children,
+}: {
+  card: InsightCard;
+  selectedCardIds: Set<string>;
+  children: (props: {
+    isDragging: boolean;
+    dragRef: (node: HTMLElement | null) => void;
+    dragListeners: ReturnType<typeof useDraggable>['listeners'];
+    dragAttributes: ReturnType<typeof useDraggable>['attributes'];
+  }) => React.ReactNode;
+}) {
+  const multiIds =
+    selectedCardIds.has(card.id) && selectedCardIds.size > 1
+      ? Array.from(selectedCardIds)
+      : undefined;
+  const dragData: DragData = { type: 'card', card, selectedCardIds: multiIds };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: cardDragId(card.id),
+    data: dragData,
+  });
+  return (
+    <>
+      {children({
+        isDragging,
+        dragRef: setNodeRef,
+        dragListeners: listeners,
+        dragAttributes: attributes,
+      })}
+    </>
+  );
+}
+
 const DOCK_THRESHOLD = 80;
 const SIDE_DOCK_THRESHOLD = 100;
 
@@ -85,8 +121,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       onCardClick,
       onDragOver,
       onDragLeave,
-      onCardDragStart,
-      onMultiCardDragStart,
       onDeleteCards,
       onFileDrop,
       isFloating,
@@ -100,7 +134,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
   ) {
     const { t } = useTranslation();
     const [position, setPosition] = useState(() => initialPosition ?? { x: 100, y: 100 });
-    // Sync position when initialPosition arrives from async Supabase fetch
     useEffect(() => {
       if (initialPosition && !isDragging) {
         setPosition(initialPosition);
@@ -129,6 +162,13 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     const [canScrollDown, setCanScrollDown] = useState(false);
     const verticalScrollRef = useRef<HTMLDivElement | null>(null);
 
+    // dnd-kit droppable for receiving cards from CardList/MandalaGrid
+    const scratchpadDropData: DropData = { type: 'scratchpad' };
+    const { setNodeRef: setDndDropRef, isOver: isDndDropOver } = useDroppable({
+      id: 'drop-scratchpad',
+      data: scratchpadDropData,
+    });
+
     const setForwardedRef = useCallback(
       (node: HTMLDivElement | null) => {
         if (!forwardedRef) return;
@@ -142,23 +182,24 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       (node: HTMLDivElement | null) => {
         dockedRef.current = node;
         setForwardedRef(node);
+        setDndDropRef(node);
       },
-      [setForwardedRef]
+      [setForwardedRef, setDndDropRef]
     );
 
     const setFloatingElRef = useCallback(
       (node: HTMLDivElement | null) => {
         containerRef.current = node;
         setForwardedRef(node);
+        setDndDropRef(node);
       },
-      [setForwardedRef]
+      [setForwardedRef, setDndDropRef]
     );
 
-    // Acceleration tracking for navigation buttons
     const lastScrollTimeRef = useRef<number>(0);
     const consecutiveClicksRef = useRef<number>(0);
-    const CLICK_TIMEOUT = 400; // ms - time window for consecutive clicks
-    const MAX_ACCELERATION = 3; // maximum multiplier
+    const CLICK_TIMEOUT = 400;
+    const MAX_ACCELERATION = 3;
 
     const sortedCards = [...cards].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -187,65 +228,46 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     const isHorizontalDock = dockPosition === 'top' || dockPosition === 'bottom';
     const isVerticalDock = dockPosition === 'left' || dockPosition === 'right';
 
+    // Combine HTML5 isDropTarget with dnd-kit isOver for visual feedback
+    const isActiveDropTarget = isDropTarget || isDndDropOver;
+
     const detectDockPosition = useCallback(
       (clientX: number, clientY: number): DockPosition | null => {
         const windowWidth = window.innerWidth;
         const windowHeight = window.innerHeight;
 
-        // Check left edge first (priority for side docking)
-        if (clientX < SIDE_DOCK_THRESHOLD) {
-          return 'left';
-        }
-
-        // Check right edge
-        if (clientX > windowWidth - SIDE_DOCK_THRESHOLD) {
-          return 'right';
-        }
-
-        // Check top edge (only center area, not corners)
-        if (clientY < DOCK_THRESHOLD) {
-          return 'top';
-        }
-
-        // Check bottom edge
-        if (clientY > windowHeight - DOCK_THRESHOLD) {
-          return 'bottom';
-        }
-
+        if (clientX < SIDE_DOCK_THRESHOLD) return 'left';
+        if (clientX > windowWidth - SIDE_DOCK_THRESHOLD) return 'right';
+        if (clientY < DOCK_THRESHOLD) return 'top';
+        if (clientY > windowHeight - DOCK_THRESHOLD) return 'bottom';
         return null;
       },
       []
     );
 
-    // Handle drag (floating mode) with RAF optimization
     const handleDragMouseDown = (e: React.MouseEvent) => {
       if (!isFloating) return;
       e.preventDefault();
       e.stopPropagation();
-
       dragStartRef.current = { x: e.clientX, y: e.clientY };
       initialPosRef.current = { ...position };
       setIsDragging(true);
       setPendingDock(null);
     };
 
-    // Handle drag from docked mode
     const handleDockedDragMouseDown = (e: React.MouseEvent) => {
       if (isFloating) return;
       e.preventDefault();
       e.stopPropagation();
-
       dragStartRef.current = { x: e.clientX, y: e.clientY };
       setIsDockedDragging(true);
       setPendingDock(null);
     };
 
-    // Handle resize
     const handleResizeMouseDown = (e: React.MouseEvent) => {
       if (!isFloating) return;
       e.preventDefault();
       e.stopPropagation();
-
       dragStartRef.current = { x: e.clientX, y: e.clientY };
       initialSizeRef.current = { ...size };
       setIsResizing(true);
@@ -255,10 +277,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       if (!isDragging && !isResizing) return;
 
       const handleMouseMove = (e: MouseEvent) => {
-        if (rafRef.current) {
-          cancelAnimationFrame(rafRef.current);
-        }
-
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
         rafRef.current = requestAnimationFrame(() => {
           if (isDragging) {
             const dx = e.clientX - dragStartRef.current.x;
@@ -272,11 +291,9 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               Math.min(window.innerHeight - 50, initialPosRef.current.y + dy)
             );
             setPosition({ x: newX, y: newY });
-
             const dock = detectDockPosition(e.clientX, e.clientY);
             setPendingDock(dock);
           }
-
           if (isResizing) {
             const dx = e.clientX - dragStartRef.current.x;
             const dy = e.clientY - dragStartRef.current.y;
@@ -288,16 +305,13 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       };
 
       const handleMouseUp = () => {
-        if (rafRef.current) {
-          cancelAnimationFrame(rafRef.current);
-        }
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
         if (isDragging && pendingDock) {
           setIsAnimating(true);
           onDockPositionChange?.(pendingDock);
           onToggleFloating();
           setTimeout(() => setIsAnimating(false), 300);
         } else if (isDragging) {
-          // 플로팅 상태로 드래그 종료 - 위치 저장
           onPositionChange?.(position.x, position.y);
         }
         setIsDragging(false);
@@ -307,11 +321,8 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
 
       document.addEventListener('mousemove', handleMouseMove, { passive: true });
       document.addEventListener('mouseup', handleMouseUp);
-
       return () => {
-        if (rafRef.current) {
-          cancelAnimationFrame(rafRef.current);
-        }
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
       };
@@ -327,25 +338,17 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       onPositionChange,
     ]);
 
-    // Handle docked dragging with RAF optimization
     useEffect(() => {
       if (!isDockedDragging) return;
-
       const handleMouseMove = (e: MouseEvent) => {
-        if (rafRef.current) {
-          cancelAnimationFrame(rafRef.current);
-        }
-
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
         rafRef.current = requestAnimationFrame(() => {
           const dock = detectDockPosition(e.clientX, e.clientY);
           setPendingDock(dock);
         });
       };
-
       const handleMouseUp = () => {
-        if (rafRef.current) {
-          cancelAnimationFrame(rafRef.current);
-        }
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
         if (pendingDock && pendingDock !== dockPosition) {
           setIsAnimating(true);
           onDockPositionChange?.(pendingDock);
@@ -354,14 +357,10 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
         setIsDockedDragging(false);
         setPendingDock(null);
       };
-
       document.addEventListener('mousemove', handleMouseMove, { passive: true });
       document.addEventListener('mouseup', handleMouseUp);
-
       return () => {
-        if (rafRef.current) {
-          cancelAnimationFrame(rafRef.current);
-        }
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
       };
@@ -388,13 +387,10 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
 
     const handleDrop = (e: React.DragEvent) => {
       e.preventDefault();
-
-      // Check for file drops first
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         onFileDrop?.(e.dataTransfer.files);
         return;
       }
-
       const multiCardIdsData = e.dataTransfer.getData('application/multi-card-ids');
       if (multiCardIdsData) {
         try {
@@ -405,153 +401,21 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           // Fall through
         }
       }
-
       const cardId = e.dataTransfer.getData('application/card-id');
       if (cardId) {
         onCardDrop(cardId);
         return;
       }
-
-      const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
-      if (
-        url &&
-        (url.includes('youtube') ||
-          url.includes('youtu.be') ||
-          url.includes('linkedin.com') ||
-          url.includes('notion.so') ||
-          url.includes('notion.site') ||
-          url.endsWith('.txt') ||
-          url.endsWith('.md') ||
-          url.endsWith('.pdf'))
-      ) {
-        onDrop(url);
+      const rawUrl =
+        e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+      let url = rawUrl ? extractUrlFromDragData(rawUrl) : null;
+      // Fallback: text/html에서 href 추출
+      if (!url) {
+        const html = e.dataTransfer.getData('text/html');
+        if (html) url = extractUrlFromHtml(html);
       }
-    };
-
-    const handleCardDragStart = (e: React.DragEvent, card: InsightCard) => {
-      if (selectedCardIds.has(card.id) && selectedCardIds.size > 1) {
-        const selectedCards = cards.filter((c) => selectedCardIds.has(c.id));
-        const cardIds = selectedCards.map((c) => c.id);
-        e.dataTransfer.setData('application/multi-card-ids', JSON.stringify(cardIds));
-        e.dataTransfer.setData('application/card-id', card.id);
-        e.dataTransfer.setData('text/plain', selectedCards.map((c) => c.videoUrl).join('\n'));
-        e.dataTransfer.effectAllowed = 'move';
-
-        const dragImage = document.createElement('div');
-        dragImage.style.cssText = `position: absolute; left: -9999px; display: flex; align-items: center; justify-content: center; width: 120px; height: 90px;`;
-
-        const stackContainer = document.createElement('div');
-        stackContainer.style.cssText = `position: relative; width: 80px; height: 56px; transform-style: preserve-3d; perspective: 400px;`;
-
-        const maxThumbs = Math.min(selectedCards.length, 3);
-        for (let i = maxThumbs - 1; i >= 0; i--) {
-          const cardWrapper = document.createElement('div');
-          const offset = i * 5;
-          const rotation = (i - 1) * -3;
-          const scale = 1 - i * 0.02;
-
-          cardWrapper.style.cssText = `
-          position: absolute; left: ${offset}px; top: ${offset}px; width: 72px; height: 46px;
-          border-radius: 6px; overflow: hidden;
-          box-shadow: 0 ${3 + i * 2}px ${10 + i * 3}px rgba(0,0,0,${0.3 - i * 0.05});
-          transform: rotate(${rotation}deg) scale(${scale});
-          border: 2px solid rgba(255,255,255,0.15);
-          background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
-          z-index: ${maxThumbs - i};
-        `;
-
-          if (selectedCards[i]) {
-            const thumb = document.createElement('img');
-            thumb.src = selectedCards[i].thumbnail;
-            thumb.style.cssText = `width: 100%; height: 100%; object-fit: cover; filter: brightness(0.95);`;
-            cardWrapper.appendChild(thumb);
-          }
-
-          stackContainer.appendChild(cardWrapper);
-        }
-
-        const badge = document.createElement('div');
-        badge.style.cssText = `
-        position: absolute; right: -6px; top: -8px; min-width: 24px; height: 24px;
-        background: linear-gradient(135deg, #FF6B3D 0%, #FF8F6B 100%);
-        color: white; font-size: 11px; font-weight: 700;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        padding: 0 6px; border-radius: 12px;
-        display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 3px 10px rgba(255,107,61,0.4);
-        border: 2px solid rgba(255,255,255,0.2);
-        z-index: 100;
-      `;
-        badge.textContent = `${selectedCards.length}`;
-        stackContainer.appendChild(badge);
-
-        dragImage.appendChild(stackContainer);
-        document.body.appendChild(dragImage);
-        e.dataTransfer.setDragImage(dragImage, 50, 38);
-        setTimeout(() => document.body.removeChild(dragImage), 0);
-
-        onMultiCardDragStart?.(selectedCards);
-      } else {
-        if (!selectedCardIds.has(card.id)) {
-          setSelectedCardIds(new Set());
-        }
-        e.dataTransfer.setData('application/card-id', card.id);
-        e.dataTransfer.setData('text/plain', card.videoUrl);
-        e.dataTransfer.effectAllowed = 'move';
-
-        // Create single card drag image
-        const dragImage = document.createElement('div');
-        dragImage.style.cssText = `
-        position: absolute; 
-        left: -9999px; 
-        display: flex; 
-        align-items: center;
-        justify-content: center;
-        width: 100px;
-        height: 70px;
-      `;
-
-        const cardWrapper = document.createElement('div');
-        cardWrapper.style.cssText = `
-        width: 80px;
-        height: 52px;
-        border-radius: 6px;
-        overflow: hidden;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.35),
-                    0 3px 6px rgba(0,0,0,0.2),
-                    inset 0 1px 0 rgba(255,255,255,0.1);
-        border: 2px solid rgba(255,255,255,0.15);
-        background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
-        transform: rotate(-2deg);
-      `;
-
-        if (card.thumbnail) {
-          const thumb = document.createElement('img');
-          thumb.src = card.thumbnail;
-          thumb.style.cssText = `
-          width: 100%; 
-          height: 100%; 
-          object-fit: cover;
-          filter: brightness(0.95);
-        `;
-          cardWrapper.appendChild(thumb);
-
-          // Add subtle gradient overlay
-          const overlay = document.createElement('div');
-          overlay.style.cssText = `
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.4) 100%);
-        `;
-          cardWrapper.appendChild(overlay);
-        }
-
-        dragImage.appendChild(cardWrapper);
-        document.body.appendChild(dragImage);
-        e.dataTransfer.setDragImage(dragImage, 40, 26);
-        setTimeout(() => document.body.removeChild(dragImage), 0);
-
-        onCardDragStart(card);
+      if (url) {
+        onDrop(url);
       }
     };
 
@@ -559,12 +423,10 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
-
         if (lastSelectedIndex !== null) {
           const start = Math.min(lastSelectedIndex, cardIndex);
           const end = Math.max(lastSelectedIndex, cardIndex);
           const rangeCardIds = sortedCards.slice(start, end + 1).map((c) => c.id);
-
           setSelectedCardIds((prev) => {
             const next = new Set(prev);
             rangeCardIds.forEach((id) => next.add(id));
@@ -579,11 +441,8 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
         e.stopPropagation();
         setSelectedCardIds((prev) => {
           const next = new Set(prev);
-          if (next.has(card.id)) {
-            next.delete(card.id);
-          } else {
-            next.add(card.id);
-          }
+          if (next.has(card.id)) next.delete(card.id);
+          else next.add(card.id);
           return next;
         });
         setLastSelectedIndex(cardIndex);
@@ -600,51 +459,41 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       }
     };
 
-    // Check scroll position for navigation arrows (horizontal)
     const checkScrollPosition = useCallback(() => {
       const container = scrollContainerRef.current;
       if (!container) return;
-
       const { scrollLeft, scrollWidth, clientWidth } = container;
       setCanScrollLeft(scrollLeft > 0);
       setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1);
     }, []);
 
-    // Check scroll position for navigation arrows (vertical)
     const checkVerticalScrollPosition = useCallback(() => {
       const container = verticalScrollRef.current;
       if (!container) return;
-
       const { scrollTop, scrollHeight, clientHeight } = container;
       setCanScrollUp(scrollTop > 0);
       setCanScrollDown(scrollTop < scrollHeight - clientHeight - 1);
     }, []);
 
-    // Calculate acceleration multiplier based on consecutive clicks
     const getAccelerationMultiplier = useCallback(() => {
       const now = Date.now();
       const timeSinceLastClick = now - lastScrollTimeRef.current;
-
       if (timeSinceLastClick < CLICK_TIMEOUT) {
         consecutiveClicksRef.current = Math.min(consecutiveClicksRef.current + 1, MAX_ACCELERATION);
       } else {
         consecutiveClicksRef.current = 1;
       }
-
       lastScrollTimeRef.current = now;
       return consecutiveClicksRef.current;
     }, []);
 
-    // Scroll by 1/3 of container width (horizontal) with acceleration
     const scrollByAmount = useCallback(
       (direction: 'left' | 'right') => {
         const container = scrollContainerRef.current;
         if (!container) return;
-
         const multiplier = getAccelerationMultiplier();
         const baseScrollAmount = container.clientWidth / 3;
         const scrollAmount = baseScrollAmount * multiplier;
-
         container.scrollBy({
           left: direction === 'left' ? -scrollAmount : scrollAmount,
           behavior: 'smooth',
@@ -653,16 +502,13 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       [getAccelerationMultiplier]
     );
 
-    // Scroll by 1/3 of container height (vertical) with acceleration
     const scrollVerticalByAmount = useCallback(
       (direction: 'up' | 'down') => {
         const container = verticalScrollRef.current;
         if (!container) return;
-
         const multiplier = getAccelerationMultiplier();
         const baseScrollAmount = container.clientHeight / 3;
         const scrollAmount = baseScrollAmount * multiplier;
-
         container.scrollBy({
           top: direction === 'up' ? -scrollAmount : scrollAmount,
           behavior: 'smooth',
@@ -671,7 +517,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       [getAccelerationMultiplier]
     );
 
-    // Update scroll state when cards change or container mounts (horizontal)
     useEffect(() => {
       checkScrollPosition();
       const container = scrollContainerRef.current;
@@ -681,7 +526,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       }
     }, [cards.length, checkScrollPosition, isFloating, dockPosition]);
 
-    // Update scroll state when cards change or container mounts (vertical)
     useEffect(() => {
       checkVerticalScrollPosition();
       const container = verticalScrollRef.current;
@@ -691,20 +535,16 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       }
     }, [cards.length, checkVerticalScrollPosition, isFloating, dockPosition]);
 
-    // Dock zone indicators - rendered via portal to body for proper z-index stacking
-    // Indicators appear at actual docking positions (header bottom for top, etc.)
-    const HEADER_HEIGHT = 72; // Header height in pixels (py-3 padding + content)
+    const HEADER_HEIGHT = 72;
 
     const DockZoneIndicators = forwardRef<HTMLDivElement>(function DockZoneIndicators(_props, ref) {
       if (!pendingDock) return null;
-
       const indicators = (
         <div
           ref={ref}
           className="dock-zone-indicators"
           style={{ position: 'fixed', inset: 0, zIndex: 99999, pointerEvents: 'none' }}
         >
-          {/* Top zone - appears exactly at header bottom boundary */}
           <div
             className={cn(
               'absolute left-0 right-0 transition-all duration-300 ease-out',
@@ -720,8 +560,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               }}
             />
           </div>
-
-          {/* Bottom zone */}
           <div
             className={cn(
               'absolute bottom-0 left-0 right-0 transition-all duration-300 ease-out',
@@ -737,8 +575,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               }}
             />
           </div>
-
-          {/* Left zone - starts from header bottom */}
           <div
             className={cn(
               'absolute left-0 transition-all duration-300 ease-out',
@@ -754,8 +590,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               }}
             />
           </div>
-
-          {/* Right zone - starts from header bottom */}
           <div
             className={cn(
               'absolute right-0 transition-all duration-300 ease-out',
@@ -773,11 +607,9 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           </div>
         </div>
       );
-
       return createPortal(indicators, document.body);
     });
 
-    // Render card item
     const renderCardItem = (card: InsightCard, idx: number, isCompact: boolean = false) => {
       const isSelected = selectedCardIds.has(card.id);
       const cardSize = isCompact ? 'w-14 h-8' : 'w-20 h-[45px]';
@@ -785,71 +617,79 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       const checkSize = isCompact ? 'w-2 h-2' : 'w-2.5 h-2.5';
 
       return (
-        <div
-          key={card.id}
-          data-card-item
-          draggable
-          onDragStart={(e) => handleCardDragStart(e, card)}
-          onClick={(e) => handleCardClick(e, card, idx)}
-          className="group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:-translate-y-0.5 rounded-sm"
-        >
-          <div
-            className={cn('relative overflow-hidden bg-muted rounded-sm', cardSize)}
-            style={{ boxShadow: 'var(--shadow-sm)' }}
-          >
-            <img
-              src={card.thumbnail}
-              alt={card.title}
-              className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-              loading="lazy"
-            />
-            <span
+        <DraggableScratchCard key={card.id} card={card} selectedCardIds={selectedCardIds}>
+          {({ isDragging: isDragActive, dragRef, dragListeners, dragAttributes }) => (
+            <div
+              ref={dragRef}
+              {...dragAttributes}
+              {...dragListeners}
+              data-card-item
+              onClick={(e) => handleCardClick(e, card, idx)}
               className={cn(
-                'absolute bottom-0 right-0 bg-background/90 text-foreground px-0.5 font-medium',
-                timeSize
+                'group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:-translate-y-0.5 rounded-sm',
+                isDragActive && 'opacity-30'
               )}
             >
-              {getTimeLabel(new Date(card.createdAt), t)}
-            </span>
-            {isSelected && (
               <div
-                className="absolute top-0.5 left-0.5 bg-primary rounded-full p-0.5 cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedCardIds((prev) => {
-                    const next = new Set(prev);
-                    next.delete(card.id);
-                    return next;
-                  });
-                }}
+                className={cn('relative overflow-hidden bg-muted rounded-sm', cardSize)}
+                style={{ boxShadow: 'var(--shadow-sm)' }}
               >
-                <Check className={checkSize} style={{ color: 'hsl(var(--primary-foreground))' }} />
+                <img
+                  src={card.thumbnail}
+                  alt={card.title}
+                  className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                  loading="lazy"
+                />
+                <span
+                  className={cn(
+                    'absolute bottom-0 right-0 bg-background/90 text-foreground px-0.5 font-medium',
+                    timeSize
+                  )}
+                >
+                  {getTimeLabel(new Date(card.createdAt), t)}
+                </span>
+                {isSelected && (
+                  <div
+                    className="absolute top-0.5 left-0.5 bg-primary rounded-full p-0.5 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCardIds((prev) => {
+                        const next = new Set(prev);
+                        next.delete(card.id);
+                        return next;
+                      });
+                    }}
+                  >
+                    <Check
+                      className={checkSize}
+                      style={{ color: 'hsl(var(--primary-foreground))' }}
+                    />
+                  </div>
+                )}
+                {!isCompact && (
+                  <a
+                    href={card.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-0.5 right-0.5 z-10 bg-background/90 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity text-primary"
+                  >
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                )}
               </div>
-            )}
-            {!isCompact && (
-              <a
-                href={card.videoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="absolute top-0.5 right-0.5 z-10 bg-background/90 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity text-primary"
-              >
-                <ExternalLink className="w-2.5 h-2.5" />
-              </a>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
+        </DraggableScratchCard>
       );
     };
 
     // Non-floating (docked) mode - Horizontal layout (top, bottom)
     if (!isFloating && isHorizontalDock) {
       const isTop = dockPosition === 'top';
-
       return (
         <>
           {isDockedDragging && <DockZoneIndicators />}
-
           <div
             className={cn(
               'flex w-full transition-all duration-300 justify-center',
@@ -862,22 +702,21 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 'relative transition-all duration-300 w-full',
                 'bg-surface-mid/95 backdrop-blur-sm',
                 isTop ? 'border-b border-border/50' : 'border-t border-border/50',
-                isDropTarget && 'border-primary/60 bg-primary/5',
+                isActiveDropTarget && 'border-primary/60 bg-primary/5',
                 isDockedDragging && 'opacity-50'
               )}
-              style={{ boxShadow: isDropTarget ? 'var(--shadow-sm)' : 'none' }}
+              style={{ boxShadow: isActiveDropTarget ? 'var(--shadow-sm)' : 'none' }}
               onDragOver={handleDragOver}
               onDragLeave={onDragLeave}
               onDrop={handleDrop}
             >
-              {isDropTarget && (
+              {isActiveDropTarget && (
                 <div className="absolute inset-0 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] pointer-events-none z-10">
                   <span className="text-primary-foreground font-medium text-xs bg-primary/90 px-3 py-1 rounded-full">
                     {t('ideation.dropToAdd')}
                   </span>
                 </div>
               )}
-
               <div className="flex items-center gap-3 px-3 py-1.5">
                 <div
                   className="flex items-center gap-2 flex-shrink-0 cursor-grab active:cursor-grabbing select-none"
@@ -896,10 +735,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                     )}
                   </div>
                 </div>
-
                 <div className="h-4 w-px bg-border/40 flex-shrink-0" />
-
-                {/* Left Navigation Arrow */}
                 <button
                   onClick={() => scrollByAmount('left')}
                   className={cn(
@@ -912,7 +748,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-
                 <div
                   ref={scrollContainerRef}
                   className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 scroll-smooth"
@@ -927,8 +762,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                     sortedCards.map((card, idx) => renderCardItem(card, idx, true))
                   )}
                 </div>
-
-                {/* Right Navigation Arrow */}
                 <button
                   onClick={() => scrollByAmount('right')}
                   className={cn(
@@ -941,7 +774,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
-
                 <Button
                   variant="ghost"
                   size="icon"
@@ -963,35 +795,29 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       return (
         <>
           {isDockedDragging && <DockZoneIndicators />}
-
           <div
             ref={setDockedElRef}
             className={cn(
               'relative transition-all duration-300 h-full',
               'bg-surface-light/80',
               dockPosition === 'left' ? 'border-r border-border/40' : 'border-l border-border/40',
-              isDropTarget && 'border-primary bg-primary/8',
+              isActiveDropTarget && 'border-primary bg-primary/8',
               isDockedDragging && 'opacity-50',
               isAnimating && 'animate-fade-in'
             )}
-            style={{
-              boxShadow: isDropTarget ? 'var(--shadow-md)' : 'none',
-              width: '90px',
-            }}
+            style={{ boxShadow: isActiveDropTarget ? 'var(--shadow-md)' : 'none', width: '90px' }}
             onDragOver={handleDragOver}
             onDragLeave={onDragLeave}
             onDrop={handleDrop}
           >
-            {isDropTarget && (
+            {isActiveDropTarget && (
               <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] pointer-events-none z-10">
                 <span className="text-primary-foreground font-semibold text-[10px] bg-primary px-2 py-1 rounded-md whitespace-nowrap">
                   {t('ideation.dropToAdd')}
                 </span>
               </div>
             )}
-
             <div className="flex flex-col h-full py-1.5 px-1.5 gap-1.5">
-              {/* Header */}
               <div
                 className="flex items-center justify-center gap-1 flex-shrink-0 cursor-grab active:cursor-grabbing select-none py-1"
                 onMouseDown={handleDockedDragMouseDown}
@@ -1013,8 +839,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   <Move className="w-2.5 h-2.5" />
                 </Button>
               </div>
-
-              {/* Up Navigation Arrow */}
               <button
                 onClick={() => scrollVerticalByAmount('up')}
                 className={cn(
@@ -1027,8 +851,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               >
                 <ChevronUp className="w-3.5 h-3.5" />
               </button>
-
-              {/* Cards - single column, compact */}
               <div
                 ref={verticalScrollRef}
                 className="flex-1 flex flex-col gap-1 overflow-y-auto scrollbar-none scroll-smooth"
@@ -1045,53 +867,62 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   sortedCards.map((card, idx) => {
                     const isSelected = selectedCardIds.has(card.id);
                     return (
-                      <div
+                      <DraggableScratchCard
                         key={card.id}
-                        data-card-item
-                        draggable
-                        onDragStart={(e) => handleCardDragStart(e, card)}
-                        onClick={(e) => handleCardClick(e, card, idx)}
-                        className="group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:scale-[1.02]"
+                        card={card}
+                        selectedCardIds={selectedCardIds}
                       >
-                        <div
-                          className="relative w-full aspect-video overflow-hidden bg-muted rounded"
-                          style={{ boxShadow: 'var(--shadow-xs)' }}
-                        >
-                          <img
-                            src={card.thumbnail}
-                            alt={card.title}
-                            className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-                            loading="lazy"
-                          />
-                          <span className="absolute bottom-0 right-0 text-[7px] bg-background/80 text-foreground px-0.5 font-medium rounded-tl">
-                            {getTimeLabel(new Date(card.createdAt), t)}
-                          </span>
-                          {isSelected && (
+                        {({ isDragging: isDragActive, dragRef, dragListeners, dragAttributes }) => (
+                          <div
+                            ref={dragRef}
+                            {...dragAttributes}
+                            {...dragListeners}
+                            data-card-item
+                            onClick={(e) => handleCardClick(e, card, idx)}
+                            className={cn(
+                              'group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:scale-[1.02]',
+                              isDragActive && 'opacity-30'
+                            )}
+                          >
                             <div
-                              className="absolute top-0 left-0 bg-primary rounded-br p-0.5 cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedCardIds((prev) => {
-                                  const next = new Set(prev);
-                                  next.delete(card.id);
-                                  return next;
-                                });
-                              }}
+                              className="relative w-full aspect-video overflow-hidden bg-muted rounded"
+                              style={{ boxShadow: 'var(--shadow-xs)' }}
                             >
-                              <Check
-                                className="w-2 h-2"
-                                style={{ color: 'hsl(var(--primary-foreground))' }}
+                              <img
+                                src={card.thumbnail}
+                                alt={card.title}
+                                className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                                loading="lazy"
                               />
+                              <span className="absolute bottom-0 right-0 text-[7px] bg-background/80 text-foreground px-0.5 font-medium rounded-tl">
+                                {getTimeLabel(new Date(card.createdAt), t)}
+                              </span>
+                              {isSelected && (
+                                <div
+                                  className="absolute top-0 left-0 bg-primary rounded-br p-0.5 cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedCardIds((prev) => {
+                                      const next = new Set(prev);
+                                      next.delete(card.id);
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  <Check
+                                    className="w-2 h-2"
+                                    style={{ color: 'hsl(var(--primary-foreground))' }}
+                                  />
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </div>
+                          </div>
+                        )}
+                      </DraggableScratchCard>
                     );
                   })
                 )}
               </div>
-
-              {/* Down Navigation Arrow */}
               <button
                 onClick={() => scrollVerticalByAmount('down')}
                 className={cn(
@@ -1114,13 +945,12 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     return (
       <>
         {isDragging && <DockZoneIndicators />}
-
         <div
           ref={setFloatingElRef}
           className={cn(
             'fixed rounded-xl transition-shadow duration-200',
             'bg-surface-mid/98 backdrop-blur-xl border border-border/60',
-            isDropTarget && 'border-primary bg-primary/8',
+            isActiveDropTarget && 'border-primary bg-primary/8',
             isDragging && 'cursor-grabbing',
             isResizing && 'cursor-se-resize'
           )}
@@ -1136,7 +966,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           onDragLeave={onDragLeave}
           onDrop={handleDrop}
         >
-          {/* Header Bar */}
           <div
             className={cn(
               'flex items-center justify-between px-3 py-2 border-b border-border/30 cursor-grab select-none',
@@ -1176,7 +1005,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 </>
               )}
             </div>
-
             <div className="flex items-center gap-0.5" onMouseDown={(e) => e.stopPropagation()}>
               <Button
                 variant="ghost"
@@ -1201,18 +1029,15 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               </Button>
             </div>
           </div>
-
-          {/* Content */}
           {!isMinimized && (
             <div className="p-3 overflow-hidden" style={{ height: 'calc(100% - 44px)' }}>
-              {isDropTarget && (
+              {isActiveDropTarget && (
                 <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] rounded-xl pointer-events-none z-10">
                   <span className="text-primary-foreground font-semibold text-sm bg-primary px-4 py-2 rounded-lg">
                     {t('ideation.dropHere')}
                   </span>
                 </div>
               )}
-
               {cards.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <Plus className="w-4 h-4 mr-2 opacity-50" />
@@ -1230,8 +1055,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               )}
             </div>
           )}
-
-          {/* Resize Handle */}
           {!isMinimized && (
             <div
               className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize flex items-center justify-center"

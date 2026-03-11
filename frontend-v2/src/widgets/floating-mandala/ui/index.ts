@@ -1,1 +1,0 @@
-export { FloatingMandala } from './FloatingMandala';
