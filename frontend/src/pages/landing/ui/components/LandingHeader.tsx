@@ -36,6 +36,9 @@ export function LandingHeader() {
             className="w-7 h-7 rounded-lg dark:invert"
           />
           <span className="text-lg font-bold tracking-tight">Insighta</span>
+          <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/30 rounded-md">
+            {t('common.beta')}
+          </span>
         </Link>
 
         {/* Nav links */}
