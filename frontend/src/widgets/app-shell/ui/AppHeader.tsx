@@ -57,6 +57,9 @@ export function AppHeader({ onMobileMenuOpen }: AppHeaderProps) {
             <span className="text-lg font-bold text-foreground tracking-tight hidden sm:inline">
               Insighta
             </span>
+            <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/30 rounded-md">
+              {t('common.beta')}
+            </span>
           </Link>
         </div>
 
