@@ -5,10 +5,17 @@
  */
 
 export enum SyncStatus {
-  PENDING = 'PENDING',
-  IN_PROGRESS = 'IN_PROGRESS',
-  COMPLETED = 'COMPLETED',
-  FAILED = 'FAILED',
+  PENDING = 'pending',
+  IN_PROGRESS = 'syncing', // DB CHECK constraint uses 'syncing', not 'in_progress'
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+}
+
+/** Status for youtube_sync_history table (DB CHECK: 'started', 'completed', 'failed') */
+export enum SyncHistoryStatus {
+  STARTED = 'started',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
 }
 
 export enum WatchStatus {
@@ -18,4 +25,5 @@ export enum WatchStatus {
 }
 
 export type SyncStatusValue = `${SyncStatus}`;
+export type SyncHistoryStatusValue = `${SyncHistoryStatus}`;
 export type WatchStatusValue = `${WatchStatus}`;

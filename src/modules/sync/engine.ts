@@ -8,7 +8,7 @@
  * - Handle errors and retries
  */
 
-import { SyncStatus } from '../../types/enums';
+import { SyncStatus, SyncHistoryStatus } from '../../types/enums';
 import { db } from '../database/client';
 import { getPlaylistManager } from '../playlist/manager';
 import { getVideoManager } from '../video/manager';
@@ -108,7 +108,7 @@ export class SyncEngine {
       const syncHistory = await db.youtube_sync_history.create({
         data: {
           playlist_id: playlist.id,
-          status: SyncStatus.IN_PROGRESS,
+          status: SyncHistoryStatus.STARTED,
           started_at: new Date(),
         },
       });
@@ -236,7 +236,7 @@ export class SyncEngine {
         await db.youtube_sync_history.update({
           where: { id: syncHistory.id },
           data: {
-            status: SyncStatus.COMPLETED,
+            status: SyncHistoryStatus.COMPLETED,
             completed_at: new Date(),
             items_added: itemsAdded,
             items_removed: itemsRemoved,
@@ -268,7 +268,7 @@ export class SyncEngine {
         await db.youtube_sync_history.update({
           where: { id: syncHistory.id },
           data: {
-            status: SyncStatus.FAILED,
+            status: SyncHistoryStatus.FAILED,
             completed_at: new Date(),
             error_message: error instanceof Error ? error.message : String(error),
           },
