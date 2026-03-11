@@ -251,7 +251,13 @@ export class PlaylistManager {
     const playlist = await this.getPlaylist(playlistId);
 
     if (playlist.sync_status === SyncStatus.IN_PROGRESS) {
-      throw new ConcurrentSyncError(playlistId);
+      const staleMs = 10 * 60 * 1000; // 10 minutes
+      const isStale = Date.now() - new Date(playlist.updated_at).getTime() > staleMs;
+      if (isStale) {
+        await this.releaseSyncLock(playlist.id, SyncStatus.FAILED);
+      } else {
+        throw new ConcurrentSyncError(playlistId);
+      }
     }
 
     await this.setSyncStatus(playlist.id, SyncStatus.IN_PROGRESS);
