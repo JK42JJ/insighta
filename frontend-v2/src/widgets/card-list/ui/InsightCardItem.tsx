@@ -7,6 +7,7 @@ import { cn } from '@/shared/lib/utils';
 import { GripVertical, StickyNote, Play } from 'lucide-react';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
+import { upgradeYouTubeThumbnail, handleThumbnailError } from '@/shared/lib/image-utils';
 
 interface InsightCardItemProps {
   card: InsightCard;
@@ -130,14 +131,11 @@ export function InsightCardItem({
           {/* Thumbnail */}
           <div className="relative aspect-video overflow-hidden rounded-t-xl">
             <img
-              src={card.thumbnail}
+              src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
               alt={card.title}
               className="w-full h-full object-cover"
               loading="lazy"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src =
-                  'https://via.placeholder.com/320x180?text=Thumbnail';
-              }}
+              onError={handleThumbnailError}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
 

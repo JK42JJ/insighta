@@ -51,7 +51,7 @@ export function AppShell({ children, onNavigateHome, mandalaGridElement, expande
           onExpandedMandalaChange={onExpandedMandalaChange ?? (() => {})}
         />
 
-        <main id="main-content" className="flex-1 overflow-hidden">
+        <main id="main-content" className="flex-1 overflow-y-auto">
           {children}
         </main>
       </div>

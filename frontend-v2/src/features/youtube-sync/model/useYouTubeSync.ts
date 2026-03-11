@@ -23,6 +23,21 @@ function ytSyncUrl(action: string): string {
   return getEdgeFunctionUrl('youtube-sync', action);
 }
 
+/** Normalize backend UPPER_CASE status to frontend lowercase */
+function normalizeStatus(status: string | undefined): string {
+  const map: Record<string, string> = {
+    'PENDING': 'pending',
+    'IN_PROGRESS': 'syncing',
+    'COMPLETED': 'completed',
+    'FAILED': 'failed',
+    'pending': 'pending',
+    'syncing': 'syncing',
+    'completed': 'completed',
+    'failed': 'failed',
+  };
+  return map[status ?? 'pending'] ?? 'pending';
+}
+
 /** Map Backend API camelCase playlist to snake_case YouTubePlaylist */
 function mapPlaylistResponse(p: any): YouTubePlaylist {
   return {
@@ -36,7 +51,7 @@ function mapPlaylistResponse(p: any): YouTubePlaylist {
     channel_title: p.channelTitle ?? null,
     item_count: p.itemCount ?? 0,
     last_synced_at: p.lastSyncedAt ?? null,
-    sync_status: p.syncStatus ?? 'PENDING',
+    sync_status: normalizeStatus(p.syncStatus),
     sync_error: null,
     created_at: p.createdAt,
     updated_at: p.updatedAt,
@@ -124,7 +139,7 @@ export function useSyncPlaylist() {
       const data = await response.json();
       const r = data.result;
 
-      if (r.status !== 'COMPLETED') {
+      if (r.status !== 'completed') {
         throw new Error(r.error || `Sync failed with status: ${r.status}`);
       }
 
@@ -152,9 +167,10 @@ export function useDeletePlaylist() {
   return useMutation({
     mutationFn: async (playlistId: string): Promise<void> => {
       const headers = await getAuthHeaders();
+      const { 'Content-Type': _, ...headersWithoutCT } = headers;
       const response = await fetch(`/api/v1/playlists/${playlistId}`, {
         method: 'DELETE',
-        headers,
+        headers: headersWithoutCT,
       });
 
       if (!response.ok) {

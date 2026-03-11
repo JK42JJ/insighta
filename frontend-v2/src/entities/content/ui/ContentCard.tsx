@@ -1,6 +1,8 @@
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
 import type { InsightCard } from '@/entities/card/model/types';
+import { upgradeYouTubeThumbnail, handleThumbnailError } from '@/shared/lib/image-utils';
 import { linkTypeToSourceType } from '../model/converters';
 import { SourceTypeBadge } from './SourceTypeBadge';
 import { cardRendererRegistry, type CardView, type CardRendererProps } from './CardRendererRegistry';
@@ -31,6 +33,7 @@ export const ContentCard = memo(function ContentCard({
   onClick,
   className,
 }: ContentCardProps) {
+  const { t } = useTranslation();
   const rendererCard = toRendererCard(card);
   const sourceType = rendererCard.sourceType;
   const Renderer = cardRendererRegistry.get(sourceType);
@@ -48,10 +51,11 @@ export const ContentCard = memo(function ContentCard({
         <div className="flex-shrink-0 w-12 h-9 rounded overflow-hidden bg-muted">
           {card.thumbnail ? (
             <img
-              src={card.thumbnail}
+              src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
               alt=""
               className="w-full h-full object-cover"
               loading="lazy"
+              onError={handleThumbnailError}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
@@ -62,7 +66,7 @@ export const ContentCard = memo(function ContentCard({
 
         {/* Title + source meta */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{card.title || 'Untitled'}</p>
+          <p className="text-sm font-medium truncate">{card.title || t('cards.untitled')}</p>
           {Renderer && <Renderer card={rendererCard} view={view} />}
         </div>
 
@@ -85,10 +89,11 @@ export const ContentCard = memo(function ContentCard({
       >
         <div className="relative aspect-video overflow-hidden">
           <img
-            src={card.thumbnail}
+            src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
             alt={card.title}
             className="w-full h-full object-cover"
             loading="lazy"
+            onError={handleThumbnailError}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 to-transparent" />
           <h3 className="absolute bottom-1 left-1 right-1 text-xs font-medium text-primary-foreground line-clamp-2 leading-tight">
@@ -112,15 +117,16 @@ export const ContentCard = memo(function ContentCard({
             onClick={onClick}
           >
             <img
-              src={card.thumbnail}
+              src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
               alt={card.title}
               className="w-full h-full object-cover hover:scale-105 transition-transform"
+              onError={handleThumbnailError}
             />
           </div>
         )}
 
         {/* Title */}
-        <h3 className="text-base font-semibold leading-tight">{card.title || 'Untitled'}</h3>
+        <h3 className="text-base font-semibold leading-tight">{card.title || t('cards.untitled')}</h3>
 
         {/* Source meta + badge */}
         <div className="flex items-center gap-2">
@@ -143,14 +149,11 @@ export const ContentCard = memo(function ContentCard({
       {/* Thumbnail */}
       <div className="relative aspect-video overflow-hidden rounded-t-xl">
         <img
-          src={card.thumbnail}
+          src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
           alt={card.title}
           className="w-full h-full object-cover"
           loading="lazy"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              'https://via.placeholder.com/320x180?text=Thumbnail';
-          }}
+          onError={handleThumbnailError}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 to-transparent" />
         <h4 className="absolute bottom-1 left-1.5 right-1.5 text-xs font-medium text-primary-foreground line-clamp-2 leading-tight">

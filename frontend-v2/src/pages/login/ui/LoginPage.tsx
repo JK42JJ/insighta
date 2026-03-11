@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { Footer } from '@/widgets/header/ui/Footer';
@@ -10,15 +10,20 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { isLoggedIn, isLoading, signInWithGoogle } = useAuth();
+  const [searchParams] = useSearchParams();
   const [isSigningIn, setIsSigningIn] = useState(false);
 
   useEffect(() => {
     if (!isLoading && isLoggedIn) {
-      navigate('/', { replace: true });
+      const returnTo = searchParams.get('returnTo');
+      const safeReturnTo = returnTo && returnTo.startsWith('/') && returnTo !== '/login' ? returnTo : '/';
+      navigate(safeReturnTo, { replace: true });
     }
-  }, [isLoggedIn, isLoading, navigate]);
+  }, [isLoggedIn, isLoading, navigate, searchParams]);
 
   const handleLogin = async () => {
+    const returnTo = searchParams.get('returnTo');
+    if (returnTo) sessionStorage.setItem('auth-return-to', returnTo);
     setIsSigningIn(true);
     try {
       await signInWithGoogle();
@@ -54,7 +59,7 @@ export default function LoginPage() {
               <div className="flex items-center justify-center gap-2">
                 <h1 className="text-3xl font-bold text-foreground tracking-tight">Insighta</h1>
                 <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/30 rounded-md">
-                  beta
+                  {t('common.beta')}
                 </span>
               </div>
               <p className="mt-2 text-muted-foreground">{t('login.subtitle')}</p>
