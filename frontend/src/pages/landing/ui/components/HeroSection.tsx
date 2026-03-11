@@ -5,7 +5,8 @@ import { CheckCircle2, Play } from 'lucide-react';
 
 export function HeroSection() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isKo = i18n.language === 'ko';
 
   return (
     <section className="relative pt-20 pb-16 md:pt-28 md:pb-24 overflow-hidden">
@@ -15,11 +16,20 @@ export function HeroSection() {
           {t('landing.heroLabel')}
         </span>
 
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight tracking-tight font-serif animate-[fade-in-up_0.6s_ease]">
-          {t('landing.heroTitle')}
+        <h1
+          className={`font-bold tracking-tight font-serif animate-[fade-in-up_0.6s_ease] text-balance break-keep-all ${isKo ? 'text-3xl sm:text-4xl md:text-5xl' : 'text-4xl sm:text-5xl md:text-6xl leading-tight'}`}
+        >
+          {isKo ? (
+            <>
+              <span className="block">9칸의 제약이</span>
+              <span className="block mt-3">사고를 더 선명하게 만듭니다</span>
+            </>
+          ) : (
+            t('landing.heroTitle')
+          )}
         </h1>
 
-        <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed animate-[fade-in-up_0.6s_ease_0.15s_both]">
+        <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed md:whitespace-pre-line animate-[fade-in-up_0.6s_ease_0.15s_both]">
           {t('landing.heroSubtitle')}
         </p>
 
