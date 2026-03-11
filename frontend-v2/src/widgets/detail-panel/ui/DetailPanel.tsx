@@ -5,6 +5,7 @@ import { ScrollArea } from '@/shared/ui/scroll-area';
 import { Separator } from '@/shared/ui/separator';
 import type { InsightCard } from '@/entities/card/model/types';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
+import { upgradeYouTubeThumbnail, handleThumbnailError } from '@/shared/lib/image-utils';
 import { NoteEditor } from './NoteEditor';
 
 interface DetailPanelProps {
@@ -76,15 +77,16 @@ export function DetailPanel({ card, onSaveNote, onCardClick, onClose }: DetailPa
               onClick={() => onCardClick?.(card)}
             >
               <img
-                src={card.thumbnail}
+                src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
                 alt={card.title}
                 className="w-full h-full object-cover hover:scale-105 transition-transform"
+                onError={handleThumbnailError}
               />
             </div>
           )}
 
           {/* Title */}
-          <h3 className="text-base font-semibold leading-tight">{card.title || 'Untitled'}</h3>
+          <h3 className="text-base font-semibold leading-tight">{card.title || t('cards.untitled')}</h3>
 
           {/* Source-specific metadata */}
           <SourceMetaInfo card={card} view="detail" />

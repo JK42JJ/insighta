@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import { linkTypeToSourceType } from '@/entities/content';
 import { LazyImage } from '@/shared/ui/lazy-image';
-import { generateThumbnailSrcSet, DEFAULT_SIZES } from '@/shared/lib/image-utils';
+import { upgradeYouTubeThumbnail, handleThumbnailError } from '@/shared/lib/image-utils';
 
 interface DraggableCardProps {
   card: InsightCard;
@@ -40,7 +40,7 @@ export function DraggableCard({ card, onClick, compact = false }: DraggableCardP
       shareText = memoWithoutLink ? `${linkLabel} ${memoWithoutLink}` : linkLabel;
       shareUrl = linkUrl;
     } else {
-      shareText = card.title || 'Check out this video!';
+      shareText = card.title || t('cards.defaultShareText');
       shareUrl = card.videoUrl;
     }
 
@@ -80,10 +80,9 @@ export function DraggableCard({ card, onClick, compact = false }: DraggableCardP
         )}
       >
         <LazyImage
-          src={card.thumbnail}
+          src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
           alt={card.title}
-          srcSet={generateThumbnailSrcSet(card.thumbnail)}
-          sizes={DEFAULT_SIZES}
+          onError={handleThumbnailError}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 to-transparent" />
         <h3

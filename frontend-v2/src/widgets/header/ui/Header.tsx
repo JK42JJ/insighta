@@ -98,7 +98,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-foreground tracking-tight">Insighta</h1>
                 <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/30 rounded-md">
-                  beta
+                  {t('common.beta')}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">{t('header.subtitle')}</p>
@@ -247,7 +247,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
             variant="ghost"
             size="sm"
             onClick={toggleLanguage}
-            aria-label={i18n.language === 'ko' ? 'Switch to English' : 'Switch to Korean'}
+            aria-label={i18n.language === 'ko' ? t('header.switchToEnglish') : t('header.switchToKorean')}
             className="rounded-xl hover:bg-surface-light transition-all duration-200 text-xs font-medium px-2"
           >
             {i18n.language === 'ko' ? 'EN' : 'KO'}

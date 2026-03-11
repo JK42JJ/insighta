@@ -1,8 +1,8 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState, useCallback } from 'react';
 import { cn } from '@/shared/lib/utils';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { GripVertical, Plus, Play, FileText, Link as LinkIcon } from 'lucide-react';
-import { generateProxySrc } from '@/shared/lib/image-utils';
+import { generateProxySrc, handleThumbnailError } from '@/shared/lib/image-utils';
 import { InsightCard } from '@/entities/card/model/types';
 import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 import { useTranslation } from 'react-i18next';
@@ -85,7 +85,7 @@ function TileTooltipContent({
       {/* Thumbnail — vertical layout */}
       {card.thumbnail ? (
         <div className="relative">
-          <img src={generateProxySrc(card.thumbnail, 180) ?? card.thumbnail} alt="" className="w-full aspect-video object-cover" loading="lazy" />
+          <img src={generateProxySrc(card.thumbnail, 180) ?? card.thumbnail} alt="" className="w-full aspect-video object-cover" loading="lazy" onError={handleThumbnailError} />
           {/* Bottom gradient fade */}
           <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/40 to-transparent" />
         </div>
@@ -150,7 +150,7 @@ function MiniThumbnail({
           }}
         >
           {card.thumbnail ? (
-            <img src={generateProxySrc(card.thumbnail, 120) ?? card.thumbnail} alt="" className="w-full h-full object-cover" loading="lazy" />
+            <img src={generateProxySrc(card.thumbnail, 120) ?? card.thumbnail} alt="" className="w-full h-full object-cover" loading="lazy" onError={handleThumbnailError} />
           ) : (
             <div
               className="w-full h-full flex items-center justify-center"
@@ -374,26 +374,38 @@ export const MandalaCell = memo(
 
     // --- External drop (HTML5) ---
     // Accept any drag on non-center cells (same as ScratchPad).
-    // Drop handler validates data; dragover just needs to allow the drop.
-    const handleExternalDragOver = (e: React.DragEvent) => {
+    // Track external drag-over state for visual feedback (dnd-kit doesn't detect HTML5 drags).
+    const [isExternalDragOver, setIsExternalDragOver] = useState(false);
+
+    const handleExternalDragOver = useCallback((e: React.DragEvent) => {
       if (!isCenter) {
         e.preventDefault();
-        e.stopPropagation();
+        setIsExternalDragOver(true);
       }
-    };
+    }, [isCenter]);
+
+    const handleExternalDragLeave = useCallback((e: React.DragEvent) => {
+      // Only reset when leaving the cell itself (not child elements)
+      if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) {
+        setIsExternalDragOver(false);
+      }
+    }, []);
 
     const handleExternalDrop = (e: React.DragEvent) => {
       if (isCenter) return;
+      setIsExternalDragOver(false);
+      // NOTE: Do NOT call stopPropagation() here — the document-level drop
+      // handler (useCardDragDrop) must fire to reset isDraggingOver state.
+      // Without this, external drags (YouTube etc.) leave the overlay stuck
+      // because dragend only fires in the source window.
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         e.preventDefault();
-        e.stopPropagation();
         onDrop(index, undefined, undefined, undefined, e.dataTransfer.files);
         return;
       }
       const cardId = e.dataTransfer.getData('application/card-id');
       if (cardId) {
         e.preventDefault();
-        e.stopPropagation();
         const multiCardIdsStr = e.dataTransfer.getData('application/multi-card-ids');
         if (multiCardIdsStr) {
           try {
@@ -407,14 +419,12 @@ export const MandalaCell = memo(
       }
       const rawUrl = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
       let url = rawUrl ? extractUrlFromDragData(rawUrl) : null;
-      // Fallback: text/html에서 href 추출
       if (!url) {
         const html = e.dataTransfer.getData('text/html');
         if (html) url = extractUrlFromHtml(html);
       }
       if (url) {
         e.preventDefault();
-        e.stopPropagation();
         onDrop(index, url);
       }
     };
@@ -435,7 +445,7 @@ export const MandalaCell = memo(
       }
     };
 
-    const showDropIndicator = (isDropTarget || isOver) && !isCenter && !isCellSwapTarget;
+    const showDropIndicator = (isDropTarget || isOver || isExternalDragOver) && !isCenter && !isCellSwapTarget;
 
     return (
       <div
@@ -490,6 +500,7 @@ export const MandalaCell = memo(
           animation: showDropIndicator ? 'drop-target-pulse 1.2s ease-in-out infinite' : undefined,
         }}
         onDragOver={handleExternalDragOver}
+        onDragLeave={handleExternalDragLeave}
         onDrop={handleExternalDrop}
         onClick={onClick}
         onDoubleClick={onDoubleClick}

@@ -19,7 +19,7 @@ import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 import { useToast } from '@/shared/lib/use-toast';
-import { mandalaTemplates, MandalaTemplate } from '@/shared/data/mandalaTemplates';
+import { mandalaTemplates, type MandalaTemplate, getTemplateTranslation } from '@/shared/data/mandalaTemplates';
 import { MandalaLevel } from '@/entities/card/model/types';
 import { mockMandalaLevels } from '@/shared/data/mockData';
 import { useMandalaQuery, useMandalaList, useToggleMandalaShare, MandalaSelector } from '@/features/mandala';
@@ -42,7 +42,7 @@ const GRID_ORDER = [0, 1, 2, 3, -1, 4, 5, 6, 7]; // -1 is center
 export default function MandalaSettingsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { mandalaLevels: queryLevels, isSaving, saveMandala } = useMandalaQuery();
   const { data: listData } = useMandalaList();
   const toggleShare = useToggleMandalaShare();
@@ -223,7 +223,7 @@ export default function MandalaSettingsPage() {
 
   const handleTemplateClick = (template: MandalaTemplate) => {
     const hasContent =
-      mandalaData.centerGoal !== '2024\uB144 \uBAA9\uD45C' ||
+      mandalaData.centerGoal !== '2024 Goals' ||
       mandalaData.subjects.some(
         (s) => s !== mockMandalaLevels['root'].subjects[mandalaData.subjects.indexOf(s)]
       );
@@ -237,14 +237,15 @@ export default function MandalaSettingsPage() {
   };
 
   const applyTemplate = (template: MandalaTemplate) => {
-    setEditingCenterGoal(template.centerGoal);
-    setEditingSubjects([...template.subjects]);
+    const tpl = getTemplateTranslation(template, i18n.language);
+    setEditingCenterGoal(tpl.centerGoal);
+    setEditingSubjects([...tpl.subjects]);
     setShowTemplateConfirm(false);
     setSelectedTemplate(null);
 
     toast({
       title: t('mandalaSettings.templateApplied'),
-      description: t('mandalaSettings.templateAppliedDesc', { name: template.name }),
+      description: t('mandalaSettings.templateAppliedDesc', { name: tpl.name }),
     });
   };
 
@@ -444,25 +445,28 @@ export default function MandalaSettingsPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid sm:grid-cols-2 gap-3">
-                  {mandalaTemplates.map((template) => (
-                    <button
-                      key={template.id}
-                      onClick={() => handleTemplateClick(template)}
-                      className="text-left p-4 rounded-xl bg-surface-light border border-border/30 hover:border-primary/50 hover:bg-surface-light/80 transition-all duration-200 group"
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl">{template.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                            {template.name}
-                          </h3>
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                            {template.description}
-                          </p>
+                  {mandalaTemplates.map((template) => {
+                    const tpl = getTemplateTranslation(template, i18n.language);
+                    return (
+                      <button
+                        key={template.id}
+                        onClick={() => handleTemplateClick(template)}
+                        className="text-left p-4 rounded-xl bg-surface-light border border-border/30 hover:border-primary/50 hover:bg-surface-light/80 transition-all duration-200 group"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="text-2xl">{template.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                              {tpl.name}
+                            </h3>
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                              {tpl.description}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -560,7 +564,7 @@ export default function MandalaSettingsPage() {
               {t('mandalaSettings.overwriteTitle')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t('mandalaSettings.overwriteDesc', { name: selectedTemplate?.name })}
+              {t('mandalaSettings.overwriteDesc', { name: selectedTemplate ? getTemplateTranslation(selectedTemplate, i18n.language).name : '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

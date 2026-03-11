@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/shared/ui/select';
 import { Separator } from '@/shared/ui/separator';
-import { Bell, Globe, Palette, Shield, Trash2, Play, Settings } from 'lucide-react';
+import { Bell, Globe, Palette, Shield, Trash2, Plug, Settings } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { toast } from '@/shared/lib/use-toast';
 import { YouTubeSyncCard } from './YouTubeSyncCard';
@@ -30,13 +30,13 @@ import {
   AlertDialogTrigger,
 } from '@/shared/ui/alert-dialog';
 
-type SettingsCategory = 'general' | 'appearance' | 'notifications' | 'youtube' | 'data';
+type SettingsCategory = 'general' | 'appearance' | 'notifications' | 'integrations' | 'data';
 
 const CATEGORIES: { id: SettingsCategory; icon: typeof Settings; labelKey: string }[] = [
   { id: 'general', icon: Globe, labelKey: 'settings.general' },
   { id: 'appearance', icon: Palette, labelKey: 'settings.appearance' },
   { id: 'notifications', icon: Bell, labelKey: 'settings.notifications' },
-  { id: 'youtube', icon: Play, labelKey: 'settings.youtube' },
+  { id: 'integrations', icon: Plug, labelKey: 'settings.integrations' },
   { id: 'data', icon: Shield, labelKey: 'settings.dataPrivacy' },
 ];
 
@@ -220,8 +220,14 @@ export default function SettingsPage() {
               </Card>
             )}
 
-            {/* YouTube */}
-            {activeCategory === 'youtube' && <YouTubeSyncCard />}
+            {/* Integrations */}
+            {activeCategory === 'integrations' && (
+              <div className="space-y-6">
+                <YouTubeSyncCard />
+                {/* Future: <NotionSyncCard /> */}
+                {/* Future: <InstagramSyncCard /> */}
+              </div>
+            )}
 
             {/* Data & Privacy */}
             {activeCategory === 'data' && (

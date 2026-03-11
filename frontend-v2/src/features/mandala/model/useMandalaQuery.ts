@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { apiClient } from '@/shared/lib/api-client';
 import { queryKeys } from '@/shared/config/query-client';
 import { useAuth } from '@/features/auth/model/useAuth';
@@ -79,6 +79,7 @@ export function useMandalaList() {
     },
     enabled: isLoggedIn,
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -135,8 +136,11 @@ export function useSwitchMandala() {
 
   return useMutation({
     mutationFn: (id: string) => apiClient.updateMandala(id, { isDefault: true }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.all });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.mandala.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() }),
+      ]);
     },
   });
 }

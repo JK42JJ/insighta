@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DndContext, DragOverlay, type DragStartEvent, type DragOverEvent, type DragEndEvent } from '@dnd-kit/core';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
@@ -52,9 +53,19 @@ const IndexPage = () => {
 };
 
 function AuthenticatedApp() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useTranslation();
   const sensors = useDndSensors();
+
+  // OAuth callback: consume returnTo from sessionStorage
+  useEffect(() => {
+    const returnTo = sessionStorage.getItem('auth-return-to');
+    if (returnTo && returnTo.startsWith('/')) {
+      sessionStorage.removeItem('auth-return-to');
+      navigate(returnTo, { replace: true });
+    }
+  }, [navigate]);
 
   // 1. Drag & drop state (independent of other hooks)
   const dragDrop = useCardDragDrop();

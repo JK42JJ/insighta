@@ -7,6 +7,7 @@
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { getAuthHeaders, getEdgeFunctionUrl } from '@/shared/lib/supabase-auth';
+import { queryKeys } from '@/shared/config/query-client';
 import type {
   LocalCard,
   LocalCardsResponse,
@@ -256,6 +257,7 @@ export function useDeleteLocalCard() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.all });
     },
   });
 }

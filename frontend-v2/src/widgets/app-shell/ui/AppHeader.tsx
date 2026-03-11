@@ -49,7 +49,7 @@ export function AppHeader({ onMobileMenuOpen }: AppHeaderProps) {
 
   return (
     <header className="sticky top-0 z-40 h-14 bg-surface-mid/95 backdrop-blur-md border-b border-border/50">
-      <div className="h-full px-4 flex items-center justify-between">
+      <div className="h-full mx-auto max-w-7xl px-4 sm:px-6 flex items-center justify-between">
         {/* Left: Mobile menu + Logo */}
         <div className="flex items-center gap-3">
           {/* Mobile hamburger */}
@@ -99,7 +99,7 @@ export function AppHeader({ onMobileMenuOpen }: AppHeaderProps) {
             variant="ghost"
             size="sm"
             onClick={toggleLanguage}
-            aria-label={i18n.language === 'ko' ? 'Switch to English' : 'Switch to Korean'}
+            aria-label={i18n.language === 'ko' ? t('header.switchToEnglish') : t('header.switchToKorean')}
             className="rounded-lg text-xs font-medium px-2 hover:bg-surface-light"
           >
             {i18n.language === 'ko' ? 'EN' : 'KO'}

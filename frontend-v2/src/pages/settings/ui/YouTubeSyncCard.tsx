@@ -18,7 +18,9 @@ import { useAuth } from '@/features/auth/model/useAuth';
 import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
 import { useYouTubeSync, useUpdateSyncSettings } from '@/features/youtube-sync/model/useYouTubeSync';
 import { PlaylistItem } from './PlaylistItem';
-import { Loader2, Plus, RefreshCw, Youtube, LogIn } from 'lucide-react';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/shared/ui/collapsible';
+import { cn } from '@/shared/lib/utils';
+import { Loader2, Plus, RefreshCw, Youtube, LogIn, ChevronDown } from 'lucide-react';
 import type { SyncInterval } from '@/entities/youtube/model/types';
 
 const SYNC_INTERVAL_KEYS: SyncInterval[] = ['manual', '1h', '6h', '12h', '24h'];
@@ -27,6 +29,7 @@ export function YouTubeSyncCard() {
   const { toast } = useToast();
   const { t } = useTranslation();
   const { isLoggedIn, isLoading: isAuthLoading, signInWithGoogle } = useAuth();
+  const [isOpen, setIsOpen] = useState(true);
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [isSigningIn, setIsSigningIn] = useState(false);
 
@@ -227,130 +230,149 @@ export function YouTubeSyncCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Youtube className="h-5 w-5 text-red-600" />
-          {t('youtube.syncTitle')}
-        </CardTitle>
-        <CardDescription>{t('youtube.syncDesc')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Add Playlist */}
-        <div className="space-y-2">
-          <Label htmlFor="playlist-url">{t('youtube.addPlaylist')}</Label>
-          <div className="flex gap-2">
-            <Input
-              id="playlist-url"
-              placeholder={t('youtube.playlistUrlPlaceholder')}
-              value={playlistUrl}
-              onChange={(e) => setPlaylistUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isAdding) {
-                  handleAddPlaylist();
-                }
-              }}
-            />
-            <Button onClick={handleAddPlaylist} disabled={isAdding || !playlistUrl.trim()}>
-              {isAdding ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-              <span className="ml-2 hidden sm:inline">{t('common.add')}</span>
-            </Button>
-          </div>
-        </div>
-
-        {/* Registered Playlists */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>
-              {t('youtube.registeredPlaylists')} ({playlists.length})
-            </Label>
-            {playlists.length > 0 && (
-              <Button variant="outline" size="sm" onClick={handleSyncAll} disabled={isSyncingAll}>
-                {isSyncingAll ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-2 h-4 w-4" />
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <Card>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer select-none">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Youtube className="h-5 w-5 text-red-600" />
+                {t('youtube.syncTitle')}
+              </CardTitle>
+              <div className="flex items-center gap-3">
+                {!isOpen && playlists.length > 0 && (
+                  <span className="text-sm text-muted-foreground">
+                    {playlists.length} playlists
+                  </span>
                 )}
-                {t('youtube.syncAll')}
-              </Button>
-            )}
-          </div>
-
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <ChevronDown className={cn(
+                  "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                  isOpen && "rotate-180"
+                )} />
+              </div>
             </div>
-          ) : playlists.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Youtube className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>{t('youtube.noPlaylists')}</p>
-              <p className="text-sm">{t('youtube.noPlaylistsHint')}</p>
-            </div>
-          ) : (
-            <div className="max-h-[480px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-              {playlists.map((playlist) => (
-                <PlaylistItem
-                  key={playlist.id}
-                  playlist={playlist}
-                  onSync={handleSyncPlaylist}
-                  onDelete={handleDeletePlaylist}
-                  isSyncing={syncingPlaylistId === playlist.id}
-                  isDeleting={deletingPlaylistId === playlist.id}
+            <CardDescription>{t('youtube.syncDesc')}</CardDescription>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="space-y-6">
+            {/* Add Playlist */}
+            <div className="space-y-2">
+              <Label htmlFor="playlist-url">{t('youtube.addPlaylist')}</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="playlist-url"
+                  placeholder={t('youtube.playlistUrlPlaceholder')}
+                  value={playlistUrl}
+                  onChange={(e) => setPlaylistUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isAdding) {
+                      handleAddPlaylist();
+                    }
+                  }}
                 />
-              ))}
+                <Button onClick={handleAddPlaylist} disabled={isAdding || !playlistUrl.trim()}>
+                  {isAdding ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  <span className="ml-2 hidden sm:inline">{t('common.add')}</span>
+                </Button>
+              </div>
             </div>
-          )}
-        </div>
 
-        <Separator />
+            {/* Registered Playlists */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>
+                  {t('youtube.registeredPlaylists')} ({playlists.length})
+                </Label>
+                {playlists.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={handleSyncAll} disabled={isSyncingAll}>
+                    {isSyncingAll ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    {t('youtube.syncAll')}
+                  </Button>
+                )}
+              </div>
 
-        {/* Sync Settings */}
-        <div className="space-y-4">
-          <Label>{t('youtube.syncSettings')}</Label>
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="sync-interval" className="text-sm font-normal">
-                {t('youtube.autoSyncInterval')}
-              </Label>
-              <p className="text-xs text-muted-foreground">{t('youtube.autoSyncIntervalDesc')}</p>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : playlists.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Youtube className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>{t('youtube.noPlaylists')}</p>
+                  <p className="text-sm">{t('youtube.noPlaylistsHint')}</p>
+                </div>
+              ) : (
+                <div className="max-h-[480px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                  {playlists.map((playlist) => (
+                    <PlaylistItem
+                      key={playlist.id}
+                      playlist={playlist}
+                      onSync={handleSyncPlaylist}
+                      onDelete={handleDeletePlaylist}
+                      isSyncing={syncingPlaylistId === playlist.id}
+                      isDeleting={deletingPlaylistId === playlist.id}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-            <Select
-              value={syncInterval}
-              onValueChange={(value) => handleSyncIntervalChange(value as SyncInterval)}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SYNC_INTERVAL_KEYS.map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {t(`youtube.syncInterval.${key}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
 
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="auto-sync" className="text-sm font-normal">
-                {t('youtube.backgroundSync')}
-              </Label>
-              <p className="text-xs text-muted-foreground">{t('youtube.backgroundSyncDesc')}</p>
+            <Separator />
+
+            {/* Sync Settings */}
+            <div className="space-y-4">
+              <Label>{t('youtube.syncSettings')}</Label>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="sync-interval" className="text-sm font-normal">
+                    {t('youtube.autoSyncInterval')}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">{t('youtube.autoSyncIntervalDesc')}</p>
+                </div>
+                <Select
+                  value={syncInterval}
+                  onValueChange={(value) => handleSyncIntervalChange(value as SyncInterval)}
+                >
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SYNC_INTERVAL_KEYS.map((key) => (
+                      <SelectItem key={key} value={key}>
+                        {t(`youtube.syncInterval.${key}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="auto-sync" className="text-sm font-normal">
+                    {t('youtube.backgroundSync')}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">{t('youtube.backgroundSyncDesc')}</p>
+                </div>
+                <Switch
+                  id="auto-sync"
+                  checked={autoSyncEnabled}
+                  onCheckedChange={handleAutoSyncToggle}
+                />
+              </div>
             </div>
-            <Switch
-              id="auto-sync"
-              checked={autoSyncEnabled}
-              onCheckedChange={handleAutoSyncToggle}
-            />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }

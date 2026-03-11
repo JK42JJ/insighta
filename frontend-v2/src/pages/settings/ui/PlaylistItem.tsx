@@ -41,13 +41,22 @@ export function PlaylistItem({
       })
     : t('playlist.neverSynced');
 
+  // Detect stale sync: status is 'syncing' but updated_at is older than 5 minutes
+  const isStaleSyncing =
+    playlist.sync_status === 'syncing' &&
+    playlist.updated_at &&
+    Date.now() - new Date(playlist.updated_at).getTime() > 5 * 60 * 1000;
+
   const statusBadge = () => {
+    if (isStaleSyncing) {
+      return <Badge variant="destructive">{t('playlist.syncStale', { defaultValue: 'Sync stale' })}</Badge>;
+    }
     switch (playlist.sync_status) {
       case 'syncing':
         return <Badge variant="secondary">{t('playlist.syncing')}</Badge>;
       case 'completed':
         return (
-          <Badge variant="default" className="bg-green-600">
+          <Badge variant="default" className="bg-green-600/80 dark:bg-green-700/80">
             {t('playlist.completed')}
           </Badge>
         );
@@ -113,10 +122,10 @@ export function PlaylistItem({
           variant="ghost"
           size="icon"
           onClick={() => onSync(playlist.id)}
-          disabled={isSyncing || playlist.sync_status === 'syncing'}
-          title={t('playlist.sync')}
+          disabled={isSyncing || (playlist.sync_status === 'syncing' && !isStaleSyncing)}
+          title={isStaleSyncing ? t('playlist.retrySyncStale', { defaultValue: 'Retry stale sync' }) : t('playlist.sync')}
         >
-          {isSyncing || playlist.sync_status === 'syncing' ? (
+          {isSyncing || (playlist.sync_status === 'syncing' && !isStaleSyncing) ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <RefreshCw className="h-4 w-4" />

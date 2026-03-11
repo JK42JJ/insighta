@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
 import type { InsightCard } from '@/entities/card/model/types';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
-import { generateProxySrc } from '@/shared/lib/image-utils';
+import { generateProxySrc, handleThumbnailError } from '@/shared/lib/image-utils';
 
 interface ListViewItemProps {
   card: InsightCard;
@@ -58,6 +58,7 @@ export const ListViewItem = memo(function ListViewItem({
             alt=""
             className="w-full h-full object-cover"
             loading="lazy"
+            onError={handleThumbnailError}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
@@ -68,7 +69,7 @@ export const ListViewItem = memo(function ListViewItem({
 
       {/* Title + Note preview */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{card.title || 'Untitled'}</p>
+        <p className="text-sm font-medium truncate">{card.title || t('cards.untitled')}</p>
         <p className="text-xs text-muted-foreground truncate">{notePreview}</p>
         <SourceMetaInfo card={card} view="list" />
       </div>
