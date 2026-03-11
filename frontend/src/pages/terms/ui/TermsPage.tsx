@@ -52,6 +52,16 @@ const TermsPage = () => {
             >
               YouTube Terms of Service
               <span className="sr-only"> (opens in new tab)</span>
+            </a>{' '}
+            and the{' '}
+            <a
+              href="https://developers.google.com/terms/api-services-user-data-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline"
+            >
+              Google API Services User Data Policy
+              <span className="sr-only"> (opens in new tab)</span>
             </a>
             .
           </p>

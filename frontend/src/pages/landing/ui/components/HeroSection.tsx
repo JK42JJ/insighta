@@ -1,9 +1,10 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { CheckCircle2, Play } from 'lucide-react';
 
-export function HeroSection({ onLogin }: { onLogin: () => void }) {
+export function HeroSection() {
+  const navigate = useNavigate();
   const { t } = useTranslation();
 
   return (
@@ -36,7 +37,7 @@ export function HeroSection({ onLogin }: { onLogin: () => void }) {
             variant="outline"
             size="lg"
             className="rounded-full px-8 py-6 text-base gap-2"
-            onClick={onLogin}
+            onClick={() => navigate('/login')}
           >
             <Play className="w-4 h-4" />
             {t('landing.heroSecondary')}

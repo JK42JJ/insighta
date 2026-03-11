@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useAuth } from '@/features/auth/model/useAuth';
 import { LTDBanner } from './components/LTDBanner';
 import { LandingHeader } from './components/LandingHeader';
 import { HeroSection } from './components/HeroSection';
@@ -12,7 +11,6 @@ import { FooterSection } from './components/FooterSection';
 import { GradientBackground } from './components/GradientBackground';
 
 export default function LandingPage() {
-  const { signInWithGoogle } = useAuth();
   const location = useLocation();
 
   useEffect(() => {
@@ -27,22 +25,14 @@ export default function LandingPage() {
     }
   }, [location.state]);
 
-  const handleLogin = async () => {
-    try {
-      await signInWithGoogle();
-    } catch (error) {
-      console.error('Login failed:', error);
-    }
-  };
-
   return (
     <div className="relative min-h-screen bg-background">
       <GradientBackground variant="F" />
       <div className="relative z-10">
         <LTDBanner />
-        <LandingHeader onLogin={handleLogin} />
+        <LandingHeader />
         <main id="main-content">
-          <HeroSection onLogin={handleLogin} />
+          <HeroSection />
           <FeatureCards />
           <HowItWorks />
           <TestimonialsSection />

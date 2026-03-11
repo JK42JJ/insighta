@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from 'next-themes';
 import { Moon, Sun, LogIn, Loader2, Menu, Search } from 'lucide-react';
@@ -21,21 +20,10 @@ interface AppHeaderProps {
 
 export function AppHeader({ onMobileMenuOpen }: AppHeaderProps) {
   const { t, i18n } = useTranslation();
-  const { isLoggedIn, isLoading, userName, userEmail, userAvatar, signInWithGoogle } = useAuth();
+  const { isLoggedIn, isLoading, userName, userEmail, userAvatar } = useAuth();
   const { theme, setTheme } = useTheme();
   const isDark = theme === 'dark';
-  const [isSigningIn, setIsSigningIn] = useState(false);
-
-  const handleLogin = async () => {
-    setIsSigningIn(true);
-    try {
-      await signInWithGoogle();
-    } catch (error) {
-      console.error('Login failed:', error);
-    } finally {
-      setIsSigningIn(false);
-    }
-  };
+  const navigate = useNavigate();
 
   const toggleTheme = () => setTheme(isDark ? 'light' : 'dark');
   const toggleLanguage = () => i18n.changeLanguage(i18n.language === 'ko' ? 'en' : 'ko');
@@ -156,14 +144,9 @@ export function AppHeader({ onMobileMenuOpen }: AppHeaderProps) {
               variant="outline"
               size="sm"
               className="rounded-lg gap-1.5"
-              onClick={handleLogin}
-              disabled={isSigningIn}
+              onClick={() => navigate('/login')}
             >
-              {isSigningIn ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <LogIn className="w-4 h-4" />
-              )}
+              <LogIn className="w-4 h-4" />
               <span>{t('common.login')}</span>
             </Button>
           )}
