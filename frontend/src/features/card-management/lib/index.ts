@@ -1,6 +1,4 @@
-// features/card-management/lib barrel file
 export {
-  type CardSource,
   detectCardSource,
   buildCardIdSets,
   detectCardSourceFast,
@@ -8,6 +6,8 @@ export {
   isCardInIdeation,
   isCardInMandala,
 } from './cardUtils';
+export type { CardSource } from './cardUtils';
+
 export {
   convertToInsightCard,
   convertToInsightCards,

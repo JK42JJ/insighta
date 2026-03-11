@@ -1,26 +1,22 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Insighta - 만다라트 기반 YouTube 아카이브</title>
-    <meta name="description" content="YouTube 시청을 목표 기반 지식 만다라로 구조화하고 자산화하는 아카이브 플랫폼" />
-    <meta name="author" content="Insighta" />
-    <meta name="keywords" content="유튜브, 아카이브, 만다라트, 지식관리, 콘텐츠 큐레이션, 드래그앤드롭" />
-
-    <meta property="og:title" content="Insighta - 만다라트 기반 YouTube 아카이브" />
-    <meta property="og:description" content="YouTube 시청을 목표 기반 지식 만다라로 구조화하고 자산화하는 아카이브 플랫폼" />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://insighta.one" />
-    <meta property="og:image" content="https://insighta.one/og-image.svg" />
-
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Insighta - 만다라트 기반 YouTube 아카이브" />
-    <meta name="twitter:image" content="https://insighta.one/og-image.svg" />
-
-    <link rel="canonical" href="https://insighta.one" />
+    <meta name="description" content="Insighta — Organize, annotate, and gain insights from your saved content with AI-powered knowledge management." />
+    <meta name="theme-color" content="#09090b" />
+    <title>Insighta</title>
+    <script>
+      try {
+        if (localStorage.getItem('theme') !== 'light') {
+          document.documentElement.classList.add('dark');
+        }
+      } catch(e) {}
+    </script>
   </head>
-
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

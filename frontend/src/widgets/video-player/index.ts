@@ -1,2 +1,1 @@
-// widgets/video-player barrel file
-export * from './ui';
+export { VideoPlayerModal } from './ui';

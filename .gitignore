@@ -120,3 +120,6 @@ src/api/openapi.json
 
 # Legacy
 docs-site/
+
+# Archived frontend v1
+frontend-old/

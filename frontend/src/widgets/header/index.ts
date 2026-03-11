@@ -1,2 +1,1 @@
-// widgets/header barrel file
-export * from './ui';
+export { Header, Breadcrumb, DropZoneOverlay, Footer, NavLink } from './ui';

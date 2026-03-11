@@ -13,7 +13,6 @@ env:
   REGISTRY: ghcr.io
   API_IMAGE: ghcr.io/jk42jj/insighta-api
   FRONTEND_IMAGE: ghcr.io/jk42jj/insighta-frontend
-  FRONTEND_V2_IMAGE: ghcr.io/jk42jj/insighta-frontend-v2
 
 jobs:
   ci:
@@ -83,21 +82,6 @@ jobs:
           tags: |
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          build-args: |
-            VITE_API_URL=/api
-            VITE_SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-            VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build & push Frontend V2 image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend-v2
-          push: true
-          tags: |
-            ${{ env.FRONTEND_V2_IMAGE }}:latest
-            ${{ env.FRONTEND_V2_IMAGE }}:${{ github.sha }}
           build-args: |
             VITE_API_URL=/api
             VITE_SUPABASE_URL=${{ secrets.SUPABASE_URL }}

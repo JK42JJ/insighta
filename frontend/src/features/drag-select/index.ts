@@ -1,2 +1,1 @@
-// features/drag-select barrel file
-export * from './model';
+export { useDragSelect } from './model';

@@ -1,4 +1,3 @@
-// widgets/header/ui barrel file
 export { Header } from './Header';
 export { Breadcrumb } from './Breadcrumb';
 export { DropZoneOverlay } from './DropZoneOverlay';

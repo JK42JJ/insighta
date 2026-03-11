@@ -1,4 +1,3 @@
-// features/youtube-sync/model barrel file
 export {
   youtubeSyncKeys,
   useYouTubePlaylists,
@@ -12,6 +11,7 @@ export {
   useSyncAllPlaylists,
   useYouTubeSync,
 } from './useYouTubeSync';
+
 export {
   youtubeAuthKeys,
   useYouTubeAuthStatus,

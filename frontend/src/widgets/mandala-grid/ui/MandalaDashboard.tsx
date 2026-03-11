@@ -22,7 +22,6 @@ export function MandalaDashboard({
 
   const totalCards = Object.values(cardsByCell).reduce((sum, cards) => sum + cards.length, 0);
 
-  // Calculate card counts per category for heatmap
   const categoryCounts = subjects.map((subject, index) => ({
     subject,
     count: cardsByCell[index]?.length || 0,
@@ -30,7 +29,6 @@ export function MandalaDashboard({
 
   const maxCount = Math.max(...categoryCounts.map((c) => c.count), 1);
 
-  // Mock monthly data (in real app, this would come from card timestamps)
   const monthlyData = [
     { month: 'Jan', count: 40 },
     { month: 'Feb', count: 42 },
@@ -42,7 +40,6 @@ export function MandalaDashboard({
 
   const maxMonthlyCount = Math.max(...monthlyData.map((m) => m.count));
 
-  // Quality distribution (mock data based on memo presence)
   const cardsWithMemo = Object.values(cardsByCell)
     .flat()
     .filter((c) => c.userNote && c.userNote.trim().length > 0).length;
@@ -99,11 +96,10 @@ export function MandalaDashboard({
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-foreground">{pages[0].title}</h3>
               <span className="text-[10px] text-muted-foreground">
-                R2 6개월 B2. 64 insights/web
+                R2 6 months B2. 64 insights/web
               </span>
             </div>
 
-            {/* Heatmap Grid */}
             <div className="flex-1 flex gap-3">
               <div className="flex-1 grid grid-cols-4 gap-1 auto-rows-fr">
                 {categoryCounts.map((cat, idx) => {
@@ -126,7 +122,6 @@ export function MandalaDashboard({
                 })}
               </div>
 
-              {/* Legend */}
               <div className="w-24 flex flex-col gap-1 text-[8px] text-muted-foreground">
                 {categoryCounts.slice(0, 6).map((cat, idx) => (
                   <div key={idx} className="flex items-center gap-1">
@@ -159,13 +154,11 @@ export function MandalaDashboard({
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-foreground">{pages[1].title}</h3>
               <span className="text-[10px] text-muted-foreground">
-                R2 6개월 B2. 64 insights/month
+                R2 6 months B2. 64 insights/month
               </span>
             </div>
 
-            {/* Bar Chart */}
             <div className="flex-1 flex items-end gap-2 pb-6 relative">
-              {/* Y-axis labels */}
               <div className="absolute left-0 top-0 bottom-6 flex flex-col justify-between text-[8px] text-muted-foreground w-6">
                 <span>100</span>
                 <span>80</span>
@@ -175,7 +168,6 @@ export function MandalaDashboard({
                 <span>0</span>
               </div>
 
-              {/* Bars */}
               <div className="flex-1 flex items-end gap-2 pl-8">
                 {monthlyData.map((data, idx) => (
                   <div key={idx} className="flex-1 flex flex-col items-center gap-1">
@@ -207,11 +199,9 @@ export function MandalaDashboard({
             <h3 className="text-sm font-semibold text-foreground mb-3">{pages[2].title}</h3>
 
             <div className="flex-1 flex gap-4">
-              {/* Donut Chart */}
               <div className="flex-1 flex items-center justify-center">
                 <div className="relative w-32 h-32">
                   <svg viewBox="0 0 100 100" className="transform -rotate-90">
-                    {/* Background circle */}
                     <circle
                       cx="50"
                       cy="50"
@@ -220,7 +210,6 @@ export function MandalaDashboard({
                       stroke="hsl(var(--muted))"
                       strokeWidth="16"
                     />
-                    {/* Segments */}
                     {totalCards > 0 && (
                       <>
                         <circle
@@ -255,7 +244,6 @@ export function MandalaDashboard({
                 </div>
               </div>
 
-              {/* Legend */}
               <div className="w-28 flex flex-col justify-center gap-2 text-[9px]">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-sm bg-primary" />

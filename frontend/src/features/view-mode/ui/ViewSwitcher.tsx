@@ -1,54 +1,46 @@
 import { useTranslation } from 'react-i18next';
-import { LayoutGrid, List, LayoutDashboard, Grid3X3 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { VIEW_MODES } from '../model/types';
-import type { ViewMode } from '../model/types';
-
-const VIEW_ICONS: Record<ViewMode, typeof LayoutGrid> = {
-  mandala: Grid3X3,
-  grid: LayoutGrid,
-  list: List,
-  dashboard: LayoutDashboard,
-};
+import { LayoutGrid, List, Columns2 } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
+import type { ViewMode } from '@/entities/user/model/types';
 
 interface ViewSwitcherProps {
-  current: ViewMode;
+  value: ViewMode;
   onChange: (mode: ViewMode) => void;
-  className?: string;
 }
 
-export function ViewSwitcher({ current, onChange, className }: ViewSwitcherProps) {
+const VIEW_OPTIONS = [
+  { value: 'grid' as const, icon: LayoutGrid, labelKey: 'view.grid' },
+  { value: 'list' as const, icon: List, labelKey: 'view.list' },
+  { value: 'list-detail' as const, icon: Columns2, labelKey: 'view.listDetail' },
+];
+
+export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {
   const { t } = useTranslation();
 
   return (
-    <div
-      className={cn('flex items-center rounded-lg bg-muted p-1 gap-0.5', className)}
-      role="tablist"
-      aria-label={t('viewMode.label')}
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(v) => {
+        if (v) onChange(v as ViewMode);
+      }}
+      aria-label={t('view.switchView')}
     >
-      {VIEW_MODES.map(({ mode, labelKey }) => {
-        const Icon = VIEW_ICONS[mode];
-        const isActive = current === mode;
-        return (
-          <button
-            key={mode}
-            role="tab"
-            aria-selected={isActive}
-            aria-label={t(labelKey)}
-            title={t(labelKey)}
-            onClick={() => onChange(mode)}
-            className={cn(
-              'flex items-center justify-center rounded-md p-1.5 transition-all duration-150',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              isActive
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-            )}
-          >
-            <Icon className="h-4 w-4" />
-          </button>
-        );
-      })}
-    </div>
+      {VIEW_OPTIONS.map(({ value: v, icon: Icon, labelKey }) => (
+        <TooltipProvider key={v} delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ToggleGroupItem value={v} aria-label={t(labelKey)} className="px-1.5 py-1">
+                <Icon className="h-4 w-4" />
+              </ToggleGroupItem>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              {t(labelKey)}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ))}
+    </ToggleGroup>
   );
 }
