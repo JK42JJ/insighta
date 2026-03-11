@@ -7,7 +7,7 @@ interface LazyImageProps extends ImgHTMLAttributes<HTMLImageElement> {
   sizes?: string;
 }
 
-const FALLBACK_SRC = 'https://via.placeholder.com/320x180?text=Thumbnail';
+const FALLBACK_SRC = '/placeholder.svg';
 
 export function LazyImage({ className, fallback = FALLBACK_SRC, alt, srcSet, sizes, onError, ...props }: LazyImageProps) {
   const [loaded, setLoaded] = useState(false);
