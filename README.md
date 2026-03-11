@@ -2,32 +2,23 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-20.x-green.svg)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 
-**Personal knowledge management platform powered by YouTube playlists.** Sync playlists, extract captions, generate AI summaries, take timestamped notes, and track your learning progress.
+> Personal knowledge management platform — sync YouTube playlists, take notes, and manage your learning.
 
 **Live**: [insighta.one](https://insighta.one)
-
-## Features
-
-- **Playlist Sync** — Import YouTube playlists and keep them in sync automatically
-- **AI Summaries** — Generate multi-level summaries from video captions (Gemini)
-- **Timestamped Notes** — Take markdown notes tied to specific video timestamps
-- **Learning Analytics** — Track watch progress, completion rates, and study streaks
-- **REST API** — Full-featured Fastify API with JWT auth, OpenAPI docs, and rate limiting
-- **React Frontend** — Modern UI with shadcn/ui, React Query, and drag-and-drop
-- **CLI** — Command-line interface for all operations
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Node.js, Fastify, TypeScript |
-| Frontend | React 18, Vite, Tailwind CSS, shadcn/ui |
-| Database | SQLite (dev) / PostgreSQL (prod), Prisma ORM |
-| AI | Google Gemini, OpenAI GPT-4 |
-| Auth | JWT (access + refresh tokens), Google OAuth 2.0 |
-| Infra | EC2, Docker, Nginx, Supabase Edge Functions |
+| Frontend | React 18.3, Vite, Tailwind CSS, Radix UI, dnd-kit |
+| Backend | Node.js 20, Fastify, TypeScript |
+| Database | PostgreSQL (Supabase Cloud), Prisma ORM |
+| Auth | Supabase Auth (Google OAuth 2.0) |
+| AI | Google Gemini |
+| Edge Functions | Supabase Edge Functions (Deno) |
+| Infra | AWS EC2, Docker, Nginx, GitHub Actions CI/CD |
 
 ## Quick Start
 
@@ -35,7 +26,6 @@
 
 - Node.js 20.x
 - npm >= 9.0.0
-- YouTube Data API v3 credentials ([setup guide](./docs/guides/SETUP_OAUTH.md))
 
 ### Installation
 
@@ -68,105 +58,111 @@ npm run api:dev
 npm run dev:frontend
 ```
 
-### Build & Deploy
+| Service | Dev URL |
+|---------|---------|
+| API | http://localhost:3000 |
+| Frontend | http://localhost:5173 |
+| API Docs (Scalar) | http://localhost:3000/api-reference |
+| API Docs (Swagger) | http://localhost:3000/documentation |
 
-```bash
-# Build everything
-npm run build:all
+### Environment Variables
 
-# Docker
-npm run docker:build
-npm run docker:up
-```
+Copy `.env.example` and fill in the required values:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | Supabase Transaction Pooler URL (port 6543) |
+| `DIRECT_URL` | Yes | Supabase Session Pooler URL (port 5432) |
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_ANON_KEY` | Yes | Supabase anon public key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service_role key |
+| `SUPABASE_JWT_SECRET` | Yes | Supabase JWT Secret (HS256) |
+| `YOUTUBE_API_KEY` | Yes | YouTube Data API v3 key |
+| `YOUTUBE_CLIENT_ID` | Yes | Google OAuth 2.0 Client ID |
+| `YOUTUBE_CLIENT_SECRET` | Yes | Google OAuth 2.0 Client Secret |
+| `ENCRYPTION_SECRET` | Yes | 64-character hex string |
+| `GEMINI_API_KEY` | No | For AI summary generation |
 
 ## Project Structure
 
 ```
 insighta/
-├── src/                  # Backend source
-│   ├── api/              # Fastify REST API
-│   ├── adapters/         # Data source adapters
-│   ├── modules/          # Business logic
-│   │   ├── playlist/     # Playlist management
-│   │   ├── video/        # Video metadata
-│   │   ├── sync/         # Sync engine
-│   │   ├── caption/      # Caption extraction
-│   │   ├── summarization/# AI summaries
-│   │   ├── note/         # Timestamped notes
-│   │   └── analytics/    # Learning analytics
-│   ├── cli/              # CLI interface
-│   └── config/           # Configuration
-├── frontend/             # React frontend
+├── src/                    # Backend (Fastify API)
+│   ├── api/                #   REST API routes
+│   ├── adapters/           #   Data source adapters
+│   ├── modules/            #   Business logic
+│   ├── cli/                #   CLI interface
+│   └── config/             #   Configuration
+├── frontend/               # React frontend (FSD architecture)
 │   └── src/
-│       ├── components/   # UI components
-│       ├── hooks/        # React Query hooks
-│       ├── pages/        # Page components
-│       └── lib/          # API client
-├── prisma/               # Database schema
-├── tests/                # Test suites
-├── docs/                 # Documentation
-└── scripts/              # Dev scripts
+│       ├── app/            #   App shell, providers, router
+│       ├── entities/       #   Domain entities
+│       ├── features/       #   Feature modules
+│       ├── pages/          #   Page components
+│       ├── shared/         #   Shared UI, utils, hooks
+│       └── widgets/        #   Composite UI blocks
+├── frontend-old/           # Archived v1 frontend (do not modify)
+├── prisma/                 # Database schema & migrations
+├── supabase/               # Edge Functions
+│   └── functions/
+│       ├── fetch-url-metadata/
+│       ├── local-cards/
+│       ├── youtube-auth/
+│       └── youtube-sync/
+├── deploy/                 # Nginx config, deployment files
+├── docker/                 # Dockerfiles
+├── terraform/              # Infrastructure as Code
+├── tests/                  # Test suites
+├── scripts/                # Dev & ops scripts
+└── docs/                   # Documentation
 ```
 
-## API Reference
+## Deployment
 
-When running locally, API docs are available at:
-- **Scalar UI**: http://localhost:3000/api-reference
-- **Swagger UI**: http://localhost:3000/documentation
+Deployment is fully automated via GitHub Actions.
 
-### Key Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/auth/register` | Register user |
-| POST | `/api/v1/auth/login` | Login |
-| POST | `/api/v1/playlists/import` | Import playlist |
-| GET | `/api/v1/playlists` | List playlists |
-| POST | `/api/v1/playlists/:id/sync` | Sync playlist |
-| GET | `/api/v1/videos` | List videos |
-| POST | `/api/v1/videos/:id/summary` | Generate summary |
-
-## CLI Usage
-
-```bash
-# Auth
-npm run cli -- user-login
-npm run cli -- auth           # YouTube OAuth
-
-# Playlists
-npm run cli -- sync <playlist-url>
-npm run cli -- list
-
-# Captions & Summaries
-npm run cli -- caption-download <video-id> -l ko
-npm run cli -- summarize <video-id> -l medium
-
-# Notes
-npm run cli -- note-add <video-id> 150 "Important concept" -t "tag1,tag2"
-
-# Analytics
-npm run cli -- analytics-dashboard
+```
+git push origin master:main
 ```
 
-## Testing
+This triggers the CI/CD pipeline:
 
-```bash
-npm test                # All tests
-npm run test:unit       # Unit tests
-npm run test:integration # Integration tests
-npm run test:cov        # Coverage report
+1. **CI** — lint, typecheck, test, build (parallel)
+2. **Docker Build** — build & push images to GHCR
+3. **DB Migration** — `prisma migrate deploy`
+4. **Deploy** — SSH into EC2, pull images, restart containers
+
+### Production Architecture
+
 ```
+[insighta.one] → [EC2 t2.micro]
+                      ├── Nginx (SSL, :443/:80)
+                      ├── Docker: API (Fastify, :3000)
+                      └── Docker: Frontend (Nginx, :8081)
+                              ↓
+                      [Supabase Cloud]
+                        ├── PostgreSQL
+                        ├── Auth (Google OAuth)
+                        └── Edge Functions
+```
+
+### GitHub Actions Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `ci.yml` | Push to any branch | Lint, typecheck, test, build |
+| `deploy.yml` | Push to `main` | Build images, migrate DB, deploy to EC2 |
+| `rollback.yml` | Manual | Rollback to previous or specific version |
+| `backup.yml` | Schedule / Manual | Database backup |
+| `e2e.yml` | Manual | End-to-end tests (Playwright) |
+| `terraform.yml` | Manual | Infrastructure provisioning |
 
 ## Documentation
 
-- [OAuth Setup Guide](./docs/guides/SETUP_OAUTH.md)
-- [Operations Manual](./docs/OPERATIONS.md)
+- [Deployment Guide](./docs/DEPLOYMENT.md)
+- [Operations Manual](./docs/operations-manual.md)
 - [Architecture](./docs/spec/ARCHITECTURE.md)
-- [Changelog](./CHANGELOG.md)
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+- [OAuth Setup Guide](./docs/guides/SETUP_OAUTH.md)
 
 ## License
 
