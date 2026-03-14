@@ -23,7 +23,9 @@
     "selected": "{{count}} selected",
     "backToTop": "Back to top",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "loadFailed": "Couldn't load. Tap to retry.",
+    "retry": "Retry"
   },
   "explore": {
     "title": "Explore Mandalas",
@@ -109,6 +111,10 @@
     "general": "General",
     "integrations": "Integrations",
     "youtube": "YouTube",
+    "mandala": "Mandalas",
+    "mandalaDesc": "Manage and edit your mandalas",
+    "openEditor": "Open Mandala Editor",
+    "openEditorDesc": "Edit center goal, subjects, and L2 sub-items",
     "saveSettings": "Save Settings",
     "settingsSaved": "Saved",
     "settingsSavedDesc": "Settings have been saved.",
@@ -244,7 +250,9 @@
     "deleteSelected": "Delete selected cards",
     "deselectCard": "Deselect",
     "latestFirst": "Latest",
-    "dragToMove": "Drag to move"
+    "dragToMove": "Drag to move",
+    "addCard": "Add Card",
+    "addCardPlaceholder": "Paste a URL..."
   },
   "linkTypes": {
     "youtube": "YouTube Video",

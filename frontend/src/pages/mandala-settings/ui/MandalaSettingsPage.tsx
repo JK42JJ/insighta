@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -52,8 +52,9 @@ export default function MandalaSettingsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t, i18n } = useTranslation();
-  const { mandalaLevels: queryLevels, isSaving, saveMandala } = useMandalaQuery();
   const { data: listData } = useMandalaList();
+  const currentMandalaId = listData?.mandalas?.find((m) => m.isDefault)?.id ?? null;
+  const { mandalaLevels: queryLevels, isSaving, saveMandala } = useMandalaQuery(currentMandalaId);
   const toggleShare = useToggleMandalaShare();
 
   // Derive mandala data from query
@@ -78,6 +79,15 @@ export default function MandalaSettingsPage() {
   const [showTemplateConfirm, setShowTemplateConfirm] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<MandalaTemplate | null>(null);
   const [expandedSubject, setExpandedSubject] = useState<number | null>(null);
+
+  // Reset hasChanges when mandala switches via dropdown
+  const prevMandalaIdRef = useRef(currentMandalaId);
+  useEffect(() => {
+    if (currentMandalaId !== prevMandalaIdRef.current) {
+      prevMandalaIdRef.current = currentMandalaId;
+      setHasChanges(false);
+    }
+  }, [currentMandalaId]);
 
   // Sync query data changes to local state
   useEffect(() => {

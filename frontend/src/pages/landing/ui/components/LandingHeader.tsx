@@ -69,7 +69,7 @@ export function LandingHeader() {
           <Button variant="ghost" size="sm" onClick={() => navigate('/login')}>
             {t('common.login')}
           </Button>
-          <Link to="/pricing">
+          <Link to="/login">
             <Button
               size="sm"
               className="rounded-full px-5 bg-primary hover:bg-primary/90 text-primary-foreground border-0"

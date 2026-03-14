@@ -37,6 +37,7 @@ export interface LocalCard {
   metadata_image: string | null;
   cell_index: number;
   level_id: string;
+  mandala_id: string | null;
   sort_order: number | null;
   created_at: string;
   updated_at: string;
@@ -64,6 +65,7 @@ export interface AddLocalCardPayload {
   metadata_image?: string;
   cell_index?: number;
   level_id?: string;
+  mandala_id?: string | null;
   sort_order?: number;
 }
 
@@ -75,6 +77,7 @@ export interface UpdateLocalCardPayload {
   user_note?: string;
   cell_index?: number;
   level_id?: string;
+  mandala_id?: string | null;
   sort_order?: number;
   title?: string;
   thumbnail?: string;
@@ -104,6 +107,7 @@ export function localCardToInsightCard(card: LocalCard): InsightCard {
     createdAt: new Date(card.created_at),
     cellIndex: card.cell_index,
     levelId: card.level_id,
+    mandalaId: card.mandala_id,
     sortOrder: card.sort_order ?? undefined,
     linkType: card.link_type,
     metadata: card.metadata_title
@@ -134,6 +138,7 @@ export function insightCardToAddPayload(card: InsightCard): AddLocalCardPayload 
     metadata_image: card.metadata?.image,
     cell_index: card.cellIndex,
     level_id: card.levelId,
+    mandala_id: card.mandalaId,
     sort_order: card.sortOrder,
   };
 }

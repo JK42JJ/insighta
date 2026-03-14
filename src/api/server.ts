@@ -73,6 +73,7 @@ export async function buildServer() {
   await fastify.register(rateLimit, {
     max: parseInt(process.env['RATE_LIMIT_MAX'] || '100', 10),
     timeWindow: process.env['RATE_LIMIT_WINDOW'] || '15 minutes',
+    allowList: (req) => req.url.startsWith('/health'),
     errorResponseBuilder: (_request, context) => {
       return createErrorResponse(
         ErrorCode.RATE_LIMIT_EXCEEDED,

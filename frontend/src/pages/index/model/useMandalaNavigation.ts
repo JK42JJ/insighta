@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { MandalaLevel, MandalaPath } from '@/entities/card/model/types';
 import { mockMandalaLevels } from '@/shared/data/mockData';
 
@@ -33,6 +33,7 @@ interface UseMandalaNavigationReturn {
  */
 export function useMandalaNavigation(deps?: {
   initialLevels?: Record<string, MandalaLevel>;
+  mandalaId?: string | null;
   onMoveCardsForSubLevel?: (
     currentLevelId: string,
     nextLevelId: string,
@@ -45,7 +46,8 @@ export function useMandalaNavigation(deps?: {
   toast?: (opts: { title: string; description: string }) => void;
   t?: (key: string, opts?: Record<string, unknown>) => string;
 }): UseMandalaNavigationReturn {
-  const { initialLevels, onMoveCardsForSubLevel, onSwapCardsForReorder, toast, t } = deps ?? {};
+  const { initialLevels, mandalaId, onMoveCardsForSubLevel, onSwapCardsForReorder, toast, t } =
+    deps ?? {};
 
   // Mandala levels state - initialized from query data
   const [mandalaLevels, setMandalaLevels] = useState<Record<string, MandalaLevel>>(
@@ -59,19 +61,34 @@ export function useMandalaNavigation(deps?: {
 
   const currentLevel: MandalaLevel = mandalaLevels[currentLevelId] || mandalaLevels['root'];
 
+  // Track previous mandalaId for REPLACE vs MERGE decision
+  const prevMandalaIdRef = useRef(mandalaId);
+
   // Sync when initialLevels change (e.g., after query refetch or settings save)
   useEffect(() => {
+    const mandalaChanged = mandalaId !== prevMandalaIdRef.current;
+    prevMandalaIdRef.current = mandalaId;
+
     if (initialLevels) {
-      setMandalaLevels((prev) => {
-        // Merge: keep locally-created sub-levels that aren't in initialLevels
-        const merged = { ...prev };
-        for (const [key, level] of Object.entries(initialLevels)) {
-          merged[key] = level;
-        }
-        return merged;
-      });
+      if (mandalaChanged) {
+        // Mandala switched: full REPLACE + navigation reset
+        setMandalaLevels(initialLevels);
+        setCurrentLevelId('root');
+        setPath([]);
+        setSelectedCellIndex(null);
+        setEntryGridIndex(null);
+      } else {
+        // Same mandala refetch (e.g., after save): MERGE to preserve local sub-levels
+        setMandalaLevels((prev) => {
+          const merged = { ...prev };
+          for (const [key, level] of Object.entries(initialLevels)) {
+            merged[key] = level;
+          }
+          return merged;
+        });
+      }
     }
-  }, [initialLevels]);
+  }, [initialLevels, mandalaId]);
 
   const handleCellClick = useCallback((_cellIndex: number, _subject: string) => {
     if (_cellIndex === -1) {

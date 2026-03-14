@@ -68,12 +68,13 @@ export function CardList({ cards, onCardClick, onSaveNote, onSelectionChange }: 
     });
   }, [cards]);
 
-  // Clear selection when cards change (e.g., after moving cards)
+  // Filter out selection IDs that no longer exist in cards (e.g., after moving cards)
   useEffect(() => {
     setSelectedCardIds((prev) => {
       const cardIdSet = new Set(cards.map((c) => c.id));
       const filtered = new Set([...prev].filter((id) => cardIdSet.has(id)));
       if (filtered.size !== prev.size) {
+        setLastSelectedIndex(null);
         return filtered;
       }
       return prev;
@@ -116,10 +117,7 @@ export function CardList({ cards, onCardClick, onSaveNote, onSelectionChange }: 
       const newSelectedIds = new Set(
         selectedIndices.map((idx) => sortedCards[idx]?.id).filter(Boolean)
       );
-      setSelectedCardIds((prev) => {
-        const combined = new Set([...prev, ...newSelectedIds]);
-        return combined;
-      });
+      setSelectedCardIds(newSelectedIds);
     },
     [sortedCards]
   );
@@ -201,7 +199,7 @@ export function CardList({ cards, onCardClick, onSaveNote, onSelectionChange }: 
     <div className="animate-fade-in" onClick={handleContainerClick} ref={containerRef}>
       <div
         ref={gridRef}
-        className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center"
+        className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center"
         style={{ minHeight: 'calc(100vh - 200px)' }}
         onClick={handleContainerClick}
       >

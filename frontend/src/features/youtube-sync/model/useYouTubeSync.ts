@@ -280,6 +280,7 @@ export function useUpdateVideoState() {
       cell_index?: number;
       level_id?: string;
       sort_order?: number;
+      mandala_id?: string | null;
     };
   };
 

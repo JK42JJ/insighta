@@ -32,6 +32,7 @@ import { useToast } from '@/shared/lib/use-toast';
 interface UseCardOrchestratorDeps {
   currentLevelId: string;
   currentLevel: { subjects: string[]; centerGoal: string };
+  mandalaId: string | null;
 }
 
 export interface UseCardOrchestratorReturn {
@@ -80,7 +81,7 @@ export interface UseCardOrchestratorReturn {
  * manipulation handlers.
  */
 export function useCardOrchestrator(
-  { currentLevelId, currentLevel }: UseCardOrchestratorDeps,
+  { currentLevelId, currentLevel, mandalaId }: UseCardOrchestratorDeps,
   selectedCellIndex: number | null,
   onCardClickExternal?: (card: InsightCard) => void
 ): UseCardOrchestratorReturn {
@@ -127,9 +128,11 @@ export function useCardOrchestrator(
           typeof c.cellIndex === 'number' &&
           c.cellIndex >= 0 &&
           c.levelId &&
-          c.levelId !== 'scratchpad'
+          c.levelId !== 'scratchpad' &&
+          // Only show cards belonging to the current mandala
+          (!mandalaId || c.mandalaId === mandalaId)
       ),
-    [persistedLocalCards]
+    [persistedLocalCards, mandalaId]
   );
 
   const scratchpadLocalCards = useMemo(
@@ -152,9 +155,11 @@ export function useCardOrchestrator(
           typeof c.cellIndex === 'number' &&
           c.cellIndex >= 0 &&
           c.levelId &&
-          c.levelId !== 'scratchpad'
+          c.levelId !== 'scratchpad' &&
+          // Only show cards belonging to the current mandala
+          (!mandalaId || c.mandalaId === mandalaId)
       ),
-    [syncedCards]
+    [syncedCards, mandalaId]
   );
 
   const ideationVideoCards = useMemo(
@@ -215,16 +220,27 @@ export function useCardOrchestrator(
   );
 
   // Display cards for selected cell or all
-  const currentLevelCards = allMandalaCards.filter((card) => {
-    if (card.levelId === currentLevelId) return true;
-    return currentLevel.subjects.some((subject) => {
-      const subLevelId = subject.toLowerCase().replace(/\s/g, '');
-      return card.levelId === subLevelId;
-    });
-  });
+  const currentLevelCards = useMemo(
+    () =>
+      allMandalaCards.filter((card) => {
+        if (card.levelId === currentLevelId) return true;
+        return currentLevel.subjects.some((subject) => {
+          const subLevelId = subject.toLowerCase().replace(/\s/g, '');
+          return card.levelId === subLevelId;
+        });
+      }),
+    [allMandalaCards, currentLevelId, currentLevel.subjects]
+  );
 
-  const displayCards =
-    selectedCellIndex !== null ? cardsByCell[selectedCellIndex] || [] : currentLevelCards;
+  const EMPTY_CARDS: InsightCard[] = useMemo(() => [], []);
+
+  const displayCards = useMemo(
+    () =>
+      selectedCellIndex !== null
+        ? (cardsByCell[selectedCellIndex] ?? EMPTY_CARDS)
+        : currentLevelCards,
+    [selectedCellIndex, cardsByCell, currentLevelCards, EMPTY_CARDS]
+  );
   const displayTitle =
     selectedCellIndex !== null
       ? currentLevel.subjects[selectedCellIndex] || ''
@@ -293,6 +309,7 @@ export function useCardOrchestrator(
             user_note: '',
             cell_index: cellIndex,
             level_id: currentLevelId,
+            mandala_id: mandalaId,
           })
             .then(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)))
             .catch(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)));
@@ -303,7 +320,7 @@ export function useCardOrchestrator(
         }
       }
     },
-    [handleFileUpload, currentLevelId, currentLevel.subjects, toast, addLocalCard, t]
+    [handleFileUpload, currentLevelId, currentLevel.subjects, toast, addLocalCard, t, mandalaId]
   );
 
   // File drop for scratchpad
@@ -321,6 +338,7 @@ export function useCardOrchestrator(
             user_note: '',
             cell_index: -1,
             level_id: 'scratchpad',
+            mandala_id: null,
           })
             .then(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)))
             .catch(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)));
@@ -372,6 +390,7 @@ export function useCardOrchestrator(
           metadata_image: metadata?.image,
           cell_index: cellIndex,
           level_id: levelId,
+          mandala_id: levelId === 'scratchpad' ? null : mandalaId,
         });
         setPendingLocalCards((prev) => prev.filter((c) => c.id !== tempCard.id));
       } catch (error) {
@@ -394,7 +413,7 @@ export function useCardOrchestrator(
         }
       }
     },
-    [addLocalCard, toast, t]
+    [addLocalCard, toast, t, mandalaId]
   );
 
   // Playlist drop handler
@@ -418,7 +437,7 @@ export function useCardOrchestrator(
         const response = await fetch(edgeUrl, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ playlistUrl: url, cellIndex, levelId }),
+          body: JSON.stringify({ playlistUrl: url, cellIndex, levelId, mandala_id: mandalaId }),
         });
 
         const data = await response.json();
@@ -475,7 +494,7 @@ export function useCardOrchestrator(
         });
       }
     },
-    [toast, t, queryClient]
+    [toast, t, queryClient, mandalaId]
   );
 
   // Card drop on mandala cell
@@ -513,7 +532,7 @@ export function useCardOrchestrator(
             const card = getCardById(id, syncedCards, persistedLocalCards, pendingLocalCards);
             if (!card) return null;
             const source = detectCardSource(id, syncedCards, persistedLocalCards, card);
-            return { card, source, cellIndex, levelId: currentLevelId };
+            return { card, source, cellIndex, levelId: currentLevelId, mandalaId };
           })
           .filter((item): item is NonNullable<typeof item> => item !== null);
 
@@ -579,12 +598,22 @@ export function useCardOrchestrator(
           updateVideoState.mutate(
             {
               videoStateId: cardId,
-              updates: { is_in_ideation: false, cell_index: cellIndex, level_id: currentLevelId },
+              updates: {
+                is_in_ideation: false,
+                cell_index: cellIndex,
+                level_id: currentLevelId,
+                mandala_id: mandalaId,
+              },
             },
             { onSuccess, onError }
           );
         } else if (source === 'local') {
-          updateLocalCard({ id: cardId, cell_index: cellIndex, level_id: currentLevelId })
+          updateLocalCard({
+            id: cardId,
+            cell_index: cellIndex,
+            level_id: currentLevelId,
+            mandala_id: mandalaId,
+          })
             .then(onSuccess)
             .catch(onError);
         } else {
@@ -596,6 +625,7 @@ export function useCardOrchestrator(
             user_note: card.userNote,
             cell_index: cellIndex,
             level_id: currentLevelId,
+            mandala_id: mandalaId,
           })
             .then(onSuccess)
             .catch(onError);
@@ -661,6 +691,7 @@ export function useCardOrchestrator(
       t,
       persistUrlCard,
       handlePlaylistDrop,
+      mandalaId,
     ]
   );
 
@@ -726,7 +757,7 @@ export function useCardOrchestrator(
   // Move card from mandala back to scratchpad
   const handleScratchPadCardDrop = useCallback(
     (cardId: string) => {
-      const card = allMandalaCards.find((c) => c.id === cardId);
+      const card = getCardById(cardId, syncedCards, persistedLocalCards, pendingLocalCards);
       if (!card) return;
       const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
 
@@ -745,17 +776,30 @@ export function useCardOrchestrator(
         updateVideoState.mutate(
           {
             videoStateId: cardId,
-            updates: { is_in_ideation: true, cell_index: -1, level_id: 'scratchpad' },
+            updates: {
+              is_in_ideation: true,
+              cell_index: -1,
+              level_id: 'scratchpad',
+              mandala_id: null,
+            },
           },
           { onSuccess, onError }
         );
       } else {
-        updateLocalCard({ id: cardId, cell_index: -1, level_id: 'scratchpad' })
+        updateLocalCard({ id: cardId, cell_index: -1, level_id: 'scratchpad', mandala_id: null })
           .then(onSuccess)
           .catch(onError);
       }
     },
-    [allMandalaCards, syncedCards, persistedLocalCards, updateVideoState, updateLocalCard, toast, t]
+    [
+      syncedCards,
+      persistedLocalCards,
+      pendingLocalCards,
+      updateVideoState,
+      updateLocalCard,
+      toast,
+      t,
+    ]
   );
 
   // Multi-card drop to scratchpad
@@ -763,10 +807,10 @@ export function useCardOrchestrator(
     (cardIds: string[]) => {
       const batchItems = cardIds
         .map((cardId) => {
-          const card = allMandalaCards.find((c) => c.id === cardId);
+          const card = getCardById(cardId, syncedCards, persistedLocalCards, pendingLocalCards);
           if (!card) return null;
           const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
-          return { card, source, cellIndex: -1, levelId: 'scratchpad' };
+          return { card, source, cellIndex: -1, levelId: 'scratchpad', mandalaId: null };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null);
 
@@ -789,7 +833,7 @@ export function useCardOrchestrator(
         }
       );
     },
-    [allMandalaCards, syncedCards, persistedLocalCards, batchMoveCards, toast, t]
+    [syncedCards, persistedLocalCards, pendingLocalCards, batchMoveCards, toast, t]
   );
 
   // Save note
@@ -823,6 +867,7 @@ export function useCardOrchestrator(
                 metadata_image: pendingCard.metadata?.image,
                 cell_index: pendingCard.cellIndex ?? -1,
                 level_id: pendingCard.levelId ?? 'scratchpad',
+                mandala_id: pendingCard.mandalaId ?? mandalaId,
               });
               setPendingLocalCards((prev) => prev.filter((c) => c.id !== id));
               toast({ title: t('index.cardSaved'), description: t('index.cardSavedDesc') });
@@ -854,6 +899,7 @@ export function useCardOrchestrator(
       addLocalCard,
       toast,
       t,
+      mandalaId,
     ]
   );
 
@@ -879,13 +925,14 @@ export function useCardOrchestrator(
         source: detectCardSource(card.id, syncedCards, persistedLocalCards, card),
         cellIndex: card.cellIndex,
         levelId: card.levelId,
+        mandalaId: card.mandalaId ?? mandalaId,
       }));
       if (batchItems.length > 0) {
         batchMoveCards.mutate({ items: batchItems });
       }
       toast({ title: t('index.orderChanged'), description: t('index.orderChangedDesc') });
     },
-    [toast, syncedCards, persistedLocalCards, batchMoveCards, t]
+    [toast, syncedCards, persistedLocalCards, batchMoveCards, t, mandalaId]
   );
 
   // Delete cards
@@ -910,7 +957,7 @@ export function useCardOrchestrator(
             return updateVideoState.mutateAsync({
               videoStateId: id,
               updates: isInMandala
-                ? { cell_index: -1, level_id: '', is_in_ideation: false }
+                ? { cell_index: -1, level_id: '', mandala_id: null, is_in_ideation: false }
                 : { is_in_ideation: false },
             });
           })
@@ -972,11 +1019,12 @@ export function useCardOrchestrator(
           source: detectCardSource(card.id, syncedCards, persistedLocalCards, card),
           cellIndex: 0,
           levelId: toLevelId,
+          mandalaId,
         }));
         batchMoveCards.mutate({ items: batchItems });
       }
     },
-    [allMandalaCards, syncedCards, persistedLocalCards, batchMoveCards]
+    [allMandalaCards, syncedCards, persistedLocalCards, batchMoveCards, mandalaId]
   );
 
   // Exposed for reorder card swapping
@@ -994,11 +1042,12 @@ export function useCardOrchestrator(
           cellIndex:
             card.cellIndex === swappedIndices.from ? swappedIndices.to : swappedIndices.from,
           levelId,
+          mandalaId,
         }));
         batchMoveCards.mutate({ items: batchItems });
       }
     },
-    [allMandalaCards, syncedCards, persistedLocalCards, batchMoveCards]
+    [allMandalaCards, syncedCards, persistedLocalCards, batchMoveCards, mandalaId]
   );
 
   return {

@@ -103,6 +103,16 @@ function AuthenticatedApp() {
   // Auto-expand default mandala in sidebar (only on initial load)
   const { data: mandalaListData } = useMandalaList();
   const hasAutoExpanded = useRef(false);
+
+  // Selected mandala — local state, initialized from isDefault
+  const [selectedMandalaId, setSelectedMandalaId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!selectedMandalaId && mandalaListData?.mandalas) {
+      const defaultMandala = mandalaListData.mandalas.find((m) => m.isDefault);
+      if (defaultMandala) setSelectedMandalaId(defaultMandala.id);
+    }
+  }, [mandalaListData, selectedMandalaId]);
+
   useEffect(() => {
     if (!hasAutoExpanded.current && mandalaListData?.mandalas) {
       const defaultMandala = mandalaListData.mandalas.find((m) => m.isDefault);
@@ -113,8 +123,8 @@ function AuthenticatedApp() {
     }
   }, [mandalaListData]);
 
-  // 3. Mandala data from DB
-  const { mandalaLevels: queryMandalaLevels } = useMandalaQuery();
+  // 3. Mandala data from DB (by selected mandala ID)
+  const { mandalaLevels: queryMandalaLevels } = useMandalaQuery(selectedMandalaId);
 
   // 4. Refs to break circular dependency: navigation <-> card orchestrator
   const moveCardsRef = useRef<(...args: any[]) => void>(() => {});
@@ -123,6 +133,7 @@ function AuthenticatedApp() {
   // 5. Mandala navigation (wired to card orchestrator via refs)
   const navigation = useMandalaNavigation({
     initialLevels: queryMandalaLevels,
+    mandalaId: selectedMandalaId,
     onMoveCardsForSubLevel: (from, to, idx) => moveCardsRef.current(from, to, idx),
     onSwapCardsForReorder: (swapped, levelId) => swapCardsRef.current(swapped, levelId),
     toast: (opts) => toast(opts),
@@ -134,6 +145,7 @@ function AuthenticatedApp() {
     {
       currentLevelId: navigation.currentLevelId,
       currentLevel: navigation.currentLevel,
+      mandalaId: selectedMandalaId,
     },
     navigation.selectedCellIndex
   );
@@ -153,6 +165,15 @@ function AuthenticatedApp() {
   const handleCardClick = (card: Parameters<typeof modal.openModal>[0]) => {
     modal.openModal(card);
   };
+
+  // 7a. Add card via URL (reuses handleCardDrop)
+  const handleAddCard = useCallback(
+    (url: string) => {
+      if (navigation.selectedCellIndex == null) return;
+      cards.handleCardDrop(navigation.selectedCellIndex, url);
+    },
+    [navigation.selectedCellIndex, cards]
+  );
 
   // 7. Global paste handler
   useGlobalPaste({
@@ -441,6 +462,8 @@ function AuthenticatedApp() {
         mandalaGridElement={mandalaGridElement()}
         expandedMandalaId={expandedMandalaId}
         onExpandedMandalaChange={setExpandedMandalaId}
+        selectedMandalaId={selectedMandalaId}
+        onMandalaSelect={setSelectedMandalaId}
       >
         <div className="h-full flex flex-col overflow-hidden">
           {/* External drag overlay (full dimming + dashed border) */}
@@ -501,6 +524,7 @@ function AuthenticatedApp() {
                 onSaveNote={cards.handleSaveNote}
                 onCardsReorder={cards.handleCardsReorder}
                 onDeleteCards={cards.handleDeleteCards}
+                onAddCard={navigation.selectedCellIndex != null ? handleAddCard : undefined}
               />
             </div>
 
