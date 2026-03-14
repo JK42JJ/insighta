@@ -514,6 +514,7 @@ function AuthenticatedApp() {
             <div className="flex-1 h-full overflow-y-auto px-4 py-4">
               <CardListView
                 cards={cards.displayCards}
+                isLoading={cards.isLoading}
                 title={cards.displayTitle}
                 viewMode={layout.viewMode}
                 listPanelRatio={layout.listPanelRatio}

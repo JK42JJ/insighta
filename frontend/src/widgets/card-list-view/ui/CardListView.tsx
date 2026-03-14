@@ -13,6 +13,7 @@ import { Input } from '@/shared/ui/input';
 
 interface CardListViewProps {
   cards: InsightCard[];
+  isLoading?: boolean;
   title: string;
   viewMode: ViewMode;
   listPanelRatio: number;
@@ -29,6 +30,7 @@ interface CardListViewProps {
 
 export function CardListView({
   cards,
+  isLoading,
   title,
   viewMode,
   listPanelRatio,
@@ -175,6 +177,7 @@ export function CardListView({
         {headerElement}
         <CardList
           cards={cards}
+          isLoading={isLoading}
           title={title}
           onCardClick={onCardClick}
           onCardDragStart={onCardDragStart}
