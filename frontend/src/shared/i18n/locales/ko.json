@@ -23,7 +23,9 @@
     "selected": "{{count}}개 선택됨",
     "backToTop": "맨 위로",
     "previous": "이전",
-    "next": "다음"
+    "next": "다음",
+    "loadFailed": "불러오지 못했습니다. 탭하여 재시도.",
+    "retry": "다시 시도"
   },
   "explore": {
     "title": "만다라트 탐색",
@@ -109,6 +111,10 @@
     "general": "일반",
     "integrations": "연동 설정",
     "youtube": "YouTube",
+    "mandala": "만다라트",
+    "mandalaDesc": "만다라트를 관리하고 편집합니다",
+    "openEditor": "만다라트 설계 편집기 열기",
+    "openEditorDesc": "중앙 목표, 주제, L2 하위 항목을 편집합니다",
     "saveSettings": "설정 저장",
     "settingsSaved": "저장 완료",
     "settingsSavedDesc": "설정이 저장되었습니다.",
@@ -244,7 +250,9 @@
     "deleteSelected": "선택된 카드 삭제",
     "deselectCard": "선택 해제",
     "latestFirst": "최신순",
-    "dragToMove": "드래그하여 이동"
+    "dragToMove": "드래그하여 이동",
+    "addCard": "카드 추가",
+    "addCardPlaceholder": "URL을 붙여넣으세요..."
   },
   "linkTypes": {
     "youtube": "YouTube 영상",

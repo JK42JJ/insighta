@@ -102,6 +102,18 @@ interface MandalaLevelBody {
   parentLevelKey?: string | null;
 }
 
+export class ApiHttpError extends Error {
+  public readonly statusCode: number;
+  public readonly isTransient: boolean;
+
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.name = 'ApiHttpError';
+    this.statusCode = statusCode;
+    this.isTransient = statusCode === 429 || statusCode >= 500;
+  }
+}
+
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
@@ -204,7 +216,10 @@ class ApiClient {
           statusCode: response.status,
         };
       }
-      throw new Error(error.message || `HTTP Error: ${response.status}`);
+      throw new ApiHttpError(
+        error.message || `HTTP Error: ${response.status}`,
+        error.statusCode || response.status
+      );
     }
 
     if (response.status === 204) {

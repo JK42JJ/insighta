@@ -29,6 +29,7 @@ export interface InsightCard {
   createdAt: Date;
   cellIndex: number;
   levelId: string; // Which mandala level this card belongs to
+  mandalaId?: string | null; // Which mandala this card belongs to
   sortOrder?: number;
   linkType?: LinkType;
   metadata?: UrlMetadata; // OG metadata for external links

@@ -399,7 +399,7 @@ Deno.serve(async (req) => {
 
       case 'import-playlist': {
         const body = await req.json();
-        const { playlistUrl, cellIndex = -1, levelId = 'scratchpad' } = body;
+        const { playlistUrl, cellIndex = -1, levelId = 'scratchpad', mandala_id = null } = body;
 
         if (!playlistUrl) {
           return new Response(
@@ -536,6 +536,7 @@ Deno.serve(async (req) => {
               user_note: '',
               cell_index: cellIndex,
               level_id: levelId,
+              mandala_id: mandala_id,
               sort_order: idx,
             };
           })

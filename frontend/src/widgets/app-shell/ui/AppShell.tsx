@@ -9,6 +9,8 @@ interface AppShellProps {
   mandalaGridElement?: React.ReactNode;
   expandedMandalaId?: string | null;
   onExpandedMandalaChange?: (id: string | null) => void;
+  selectedMandalaId: string | null;
+  onMandalaSelect: (id: string) => void;
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'insighta-sidebar-collapsed';
@@ -27,6 +29,8 @@ export function AppShell({
   mandalaGridElement,
   expandedMandalaId,
   onExpandedMandalaChange,
+  selectedMandalaId,
+  onMandalaSelect,
 }: AppShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialCollapsed);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -55,6 +59,8 @@ export function AppShell({
           mandalaGridElement={mandalaGridElement}
           expandedMandalaId={expandedMandalaId ?? null}
           onExpandedMandalaChange={onExpandedMandalaChange ?? (() => {})}
+          selectedMandalaId={selectedMandalaId}
+          onMandalaSelect={onMandalaSelect}
         />
 
         <main id="main-content" className="flex-1 overflow-y-auto">

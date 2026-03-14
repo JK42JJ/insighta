@@ -430,13 +430,55 @@ export class MandalaManager {
    * promotes the next one (lowest position) to default.
    */
   async deleteMandala(userId: string, mandalaId: string): Promise<void> {
+    // Step 1: Verify ownership outside transaction (read-only)
+    const mandala = await this.verifyOwnership(userId, mandalaId);
+
+    // Step 2: Move orphaned cards outside transaction (non-fatal pre-step)
+    // If this fails, FK onDelete: SetNull will set mandala_id to NULL anyway
+    try {
+      const defaultMandala = mandala.is_default
+        ? null
+        : await this.prisma.user_mandalas.findFirst({
+            where: { user_id: userId, is_default: true },
+          });
+
+      const next = mandala.is_default
+        ? await this.prisma.user_mandalas.findFirst({
+            where: { user_id: userId, id: { not: mandalaId } },
+            orderBy: [{ position: 'asc' }, { created_at: 'asc' }],
+          })
+        : null;
+
+      const targetMandalaId = mandala.is_default
+        ? (next?.id ?? null)
+        : (defaultMandala?.id ?? null);
+
+      await Promise.all([
+        this.prisma.userVideoState.updateMany({
+          where: { user_id: userId, mandala_id: mandalaId },
+          data: { mandala_id: targetMandalaId, cell_index: -1, level_id: 'scratchpad' },
+        }),
+        this.prisma.user_local_cards.updateMany({
+          where: { user_id: userId, mandala_id: mandalaId },
+          data: { mandala_id: targetMandalaId, cell_index: -1, level_id: 'scratchpad' },
+        }),
+      ]);
+    } catch (cardErr: any) {
+      logger.warn('Move orphaned cards skipped — FK onDelete:SetNull will handle cleanup', {
+        error: cardErr?.message,
+        userId,
+        mandalaId,
+      });
+    }
+
+    // Step 3: Delete mandala in a clean transaction
     await this.prisma.$transaction(async (tx) => {
-      const mandala = await this.verifyOwnership(userId, mandalaId, tx as any);
+      // Re-verify ownership inside transaction
+      const current = await this.verifyOwnership(userId, mandalaId, tx as any);
 
       // If deleting the default mandala, promote the next candidate
-      let next: { id: string } | null = null;
-      if (mandala.is_default) {
-        next = await tx.user_mandalas.findFirst({
+      if (current.is_default) {
+        const next = await tx.user_mandalas.findFirst({
           where: { user_id: userId, id: { not: mandalaId } },
           orderBy: [{ position: 'asc' }, { created_at: 'asc' }],
         });
@@ -449,35 +491,13 @@ export class MandalaManager {
         }
       }
 
-      // Move orphaned cards to the target mandala's scratchpad before deletion
-      const defaultMandala = mandala.is_default
-        ? null
-        : await tx.user_mandalas.findFirst({
-            where: { user_id: userId, is_default: true },
-          });
-
-      const targetMandalaId = mandala.is_default
-        ? (next?.id ?? null)
-        : (defaultMandala?.id ?? null);
-
-      await Promise.all([
-        tx.userVideoState.updateMany({
-          where: { user_id: userId, mandala_id: mandalaId },
-          data: { mandala_id: targetMandalaId, cell_index: -1, level_id: 'scratchpad' },
-        }),
-        tx.user_local_cards.updateMany({
-          where: { user_id: userId, mandala_id: mandalaId },
-          data: { mandala_id: targetMandalaId, cell_index: -1, level_id: 'scratchpad' },
-        }),
-      ]);
-
       // Cascade deletes levels via Prisma relation onDelete: Cascade
       await tx.user_mandalas.delete({
         where: { id: mandalaId },
       });
-
-      logger.info(`Mandala deleted: userId=${userId}, mandalaId=${mandalaId}`);
     });
+
+    logger.info(`Mandala deleted: userId=${userId}, mandalaId=${mandalaId}`);
   }
 
   /**

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const APP_URL = 'http://localhost:8082/v2/';
+const APP_URL = '/';
 
 test('diagnose: check auth state and API from page context', async ({ page }) => {
   const apiCalls: { url: string; status: number; body?: string }[] = [];
@@ -41,7 +41,7 @@ test('diagnose: check auth state and API from page context', async ({ page }) =>
       if (!accessToken) return { error: 'No access_token in auth data' };
 
       // Call the mandalas/list API directly
-      const resp = await fetch('http://localhost:8081/api/v1/mandalas/list', {
+      const resp = await fetch(`${window.location.origin}/api/v1/mandalas/list`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const body = await resp.json();

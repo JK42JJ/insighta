@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, forwardRef } from 'react';
+import { useState, useRef, useEffect, useCallback, forwardRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
@@ -201,8 +201,12 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     const CLICK_TIMEOUT = 400;
     const MAX_ACCELERATION = 3;
 
-    const sortedCards = [...cards].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    const sortedCards = useMemo(
+      () =>
+        [...cards].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ),
+      [cards]
     );
 
     const handleDragSelectChange = useCallback(
@@ -210,10 +214,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
         const newSelectedIds = new Set(
           selectedIndices.map((idx) => sortedCards[idx]?.id).filter(Boolean)
         );
-        setSelectedCardIds((prev) => {
-          const combined = new Set([...prev, ...newSelectedIds]);
-          return combined;
-        });
+        setSelectedCardIds(newSelectedIds);
       },
       [sortedCards]
     );

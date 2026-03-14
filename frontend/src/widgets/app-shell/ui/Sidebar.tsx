@@ -24,6 +24,8 @@ interface SidebarProps {
   mandalaGridElement?: React.ReactNode;
   expandedMandalaId: string | null;
   onExpandedMandalaChange: (id: string | null) => void;
+  selectedMandalaId: string | null;
+  onMandalaSelect: (id: string) => void;
 }
 
 interface NavItem {
@@ -51,6 +53,8 @@ export function Sidebar({
   mandalaGridElement,
   expandedMandalaId,
   onExpandedMandalaChange,
+  selectedMandalaId,
+  onMandalaSelect,
 }: SidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -132,6 +136,8 @@ export function Sidebar({
           expandedMandalaId={expandedMandalaId}
           onExpandedChange={onExpandedMandalaChange}
           mandalaGridElement={mandalaGridElement}
+          selectedMandalaId={selectedMandalaId}
+          onMandalaSelect={onMandalaSelect}
         />
 
         <div className="my-3 mx-2">

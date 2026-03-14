@@ -7,7 +7,7 @@
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { getAuthHeaders, getEdgeFunctionUrl } from '@/shared/lib/supabase-auth';
-import { queryKeys } from '@/shared/config/query-client';
+
 import type {
   LocalCard,
   LocalCardsResponse,
@@ -121,6 +121,7 @@ export function useAddLocalCard() {
           metadata_image: payload.metadata_image ?? null,
           cell_index: payload.cell_index ?? -1,
           level_id: payload.level_id || 'scratchpad',
+          mandala_id: payload.mandala_id ?? null,
           sort_order: payload.sort_order ?? null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -257,7 +258,6 @@ export function useDeleteLocalCard() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.all });
     },
   });
 }

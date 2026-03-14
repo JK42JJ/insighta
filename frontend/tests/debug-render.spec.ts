@@ -8,7 +8,7 @@ test('debug: page loads and renders content', async ({ page }) => {
   page.on('pageerror', (err) => consoleLogs.push(`[PAGE_ERROR] ${err.message}`));
 
   // Navigate
-  await page.goto('http://localhost:8082/v2/', { waitUntil: 'domcontentloaded' });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
 
   // Wait a bit for React to render
   await page.waitForTimeout(3000);

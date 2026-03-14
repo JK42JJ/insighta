@@ -69,6 +69,7 @@ export interface UserVideoState {
   is_watched: boolean;
   cell_index: number;
   level_id: string;
+  mandala_id: string | null;
   sort_order: number | null;
   added_to_ideation_at: string;
   created_at: string;
@@ -117,6 +118,7 @@ export interface UpdateVideoStateInput {
   is_watched?: boolean;
   cell_index?: number;
   level_id?: string;
+  mandala_id?: string | null;
   sort_order?: number;
 }
 

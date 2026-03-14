@@ -23,6 +23,7 @@ interface BatchMoveItem {
   source: CardSource;
   cellIndex: number;
   levelId: string;
+  mandalaId?: string | null;
 }
 
 interface BatchMoveParams {
@@ -55,6 +56,7 @@ export function useBatchMoveCards() {
                   is_in_ideation: item.levelId === 'scratchpad',
                   cell_index: item.cellIndex,
                   level_id: item.levelId,
+                  mandala_id: item.mandalaId ?? null,
                 },
               })),
             }),
@@ -79,6 +81,7 @@ export function useBatchMoveCards() {
                 id: item.card.id,
                 cell_index: item.cellIndex,
                 level_id: item.levelId,
+                mandala_id: item.mandalaId ?? null,
               })),
               inserts: pendingItems.map((item) => ({
                 url: item.card.videoUrl,
@@ -88,6 +91,7 @@ export function useBatchMoveCards() {
                 user_note: item.card.userNote,
                 cell_index: item.cellIndex,
                 level_id: item.levelId,
+                mandala_id: item.mandalaId ?? null,
               })),
             }),
           }).then(async (res) => {
@@ -128,7 +132,12 @@ export function useBatchMoveCards() {
               if (movedIds.has(card.id)) {
                 const item = localItems.find((i) => i.card.id === card.id);
                 if (!item) return card;
-                return { ...card, cell_index: item.cellIndex, level_id: item.levelId };
+                return {
+                  ...card,
+                  cell_index: item.cellIndex,
+                  level_id: item.levelId,
+                  mandala_id: item.mandalaId ?? null,
+                };
               }
               return card;
             }),
@@ -150,6 +159,7 @@ export function useBatchMoveCards() {
                   is_in_ideation: moved.levelId === 'scratchpad',
                   cell_index: moved.cellIndex,
                   level_id: moved.levelId,
+                  mandala_id: moved.mandalaId ?? null,
                 };
               }
               return v;
@@ -175,6 +185,7 @@ export function useBatchMoveCards() {
             metadata_image: item.card.metadata?.image || null,
             cell_index: item.cellIndex,
             level_id: item.levelId,
+            mandala_id: item.mandalaId ?? null,
             sort_order: null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),

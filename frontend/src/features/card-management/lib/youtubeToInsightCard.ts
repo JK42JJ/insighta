@@ -28,6 +28,7 @@ export function convertToInsightCard(data: UserVideoStateWithVideo): InsightCard
     createdAt: new Date(data.added_to_ideation_at),
     cellIndex: data.cell_index,
     levelId: data.level_id,
+    mandalaId: data.mandala_id,
     sortOrder: data.sort_order ?? undefined,
     linkType: 'youtube',
     metadata: createVideoMetadata(video),

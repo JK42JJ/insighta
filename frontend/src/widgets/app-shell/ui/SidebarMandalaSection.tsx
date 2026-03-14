@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronDown, LayoutGrid, Plus, RefreshCw } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { Collapsible, CollapsibleContent } from '@/shared/ui/collapsible';
-import { useMandalaList, useSwitchMandala } from '@/features/mandala';
-import { useToast } from '@/shared/lib/use-toast';
+import { useMandalaList } from '@/features/mandala';
 
 interface SidebarMandalaSectionProps {
   collapsed: boolean;
   expandedMandalaId: string | null;
   onExpandedChange: (id: string | null) => void;
   mandalaGridElement?: React.ReactNode;
+  selectedMandalaId: string | null;
+  onMandalaSelect: (id: string) => void;
 }
 
 export function SidebarMandalaSection({
@@ -18,34 +19,28 @@ export function SidebarMandalaSection({
   expandedMandalaId,
   onExpandedChange,
   mandalaGridElement,
+  selectedMandalaId,
+  onMandalaSelect,
 }: SidebarMandalaSectionProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
   const navigate = useNavigate();
-  const { data: listData, isLoading, isError, refetch } = useMandalaList();
-  const switchMutation = useSwitchMandala();
+  const { data: listData, isLoading, isError, error, refetch } = useMandalaList();
 
   const mandalas = listData?.mandalas ?? [];
 
-  const handleClick = async (mandala: { id: string; isDefault: boolean }) => {
-    // Switch current if not already default
-    if (!mandala.isDefault) {
-      try {
-        await switchMutation.mutateAsync(mandala.id);
-        toast({ title: t('mandalaSettings.switched') });
-      } catch {
-        toast({ title: t('common.error'), variant: 'destructive' });
-        return;
-      }
-    }
-
-    // Navigate to home with this mandala selected
+  const handleClick = (mandala: { id: string }) => {
+    onMandalaSelect(mandala.id);
     navigate('/');
   };
 
   const handleChevronToggle = (e: React.MouseEvent, mandalaId: string) => {
     e.stopPropagation();
-    onExpandedChange(expandedMandalaId === mandalaId ? null : mandalaId);
+    if (expandedMandalaId === mandalaId) {
+      onExpandedChange(null);
+    } else {
+      onExpandedChange(mandalaId);
+      onMandalaSelect(mandalaId);
+    }
   };
 
   // When sidebar is collapsed, show only the grid icon — navigate to home
@@ -79,8 +74,10 @@ export function SidebarMandalaSection({
     );
   }
 
-  // Error state — retry UI instead of showing empty list
+  // Error state — user-friendly message with retry (technical details go to console)
   if (isError) {
+    if (error) console.warn('[SidebarMandalaSection] Failed to load mandalas:', error);
+
     return (
       <div className="px-2 space-y-0.5">
         <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
@@ -91,7 +88,7 @@ export function SidebarMandalaSection({
           className="w-full flex items-center gap-2 px-3 py-2 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          {t('common.retry', 'Retry')}
+          {t('common.loadFailed')}
         </button>
       </div>
     );
@@ -137,7 +134,7 @@ export function SidebarMandalaSection({
             >
               <LayoutGrid className="w-4 h-4 shrink-0" />
               <span className="flex-1 text-left truncate">{mandala.title}</span>
-              {mandala.isDefault && (
+              {mandala.id === selectedMandalaId && (
                 <span className="text-[9px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full shrink-0">
                   {t('mandalaSettings.current')}
                 </span>

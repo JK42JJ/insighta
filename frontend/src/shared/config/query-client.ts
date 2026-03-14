@@ -1,11 +1,23 @@
 import { QueryClient } from '@tanstack/react-query';
+import { ApiHttpError } from '@/shared/lib/api-client';
+
+function shouldRetry(failureCount: number, error: unknown): boolean {
+  if (failureCount >= 3) return false;
+  if (error instanceof ApiHttpError) return error.isTransient;
+  return true; // network errors etc.
+}
+
+function retryDelay(attempt: number): number {
+  return Math.min(1000 * Math.pow(2, attempt), 10_000);
+}
 
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
       gcTime: 5 * 60_000,
-      retry: 2,
+      retry: shouldRetry,
+      retryDelay,
       refetchOnWindowFocus: false,
     },
   },

@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Clock, Move, Trash2 } from 'lucide-react';
+import { Clock, Move, Trash2, Plus } from 'lucide-react';
 import type { InsightCard } from '@/entities/card/model/types';
 import type { ViewMode } from '@/entities/user/model/types';
 import { ViewSwitcher } from '@/features/view-mode';
@@ -8,6 +8,8 @@ import { CardList } from '@/widgets/card-list/ui/CardList';
 import { ListView } from '@/widgets/list-view';
 import { DetailPanel } from '@/widgets/detail-panel';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
+import { Popover, PopoverTrigger, PopoverContent } from '@/shared/ui/popover';
+import { Input } from '@/shared/ui/input';
 
 interface CardListViewProps {
   cards: InsightCard[];
@@ -22,6 +24,7 @@ interface CardListViewProps {
   onSaveNote?: (id: string, note: string) => void;
   onCardsReorder?: (reorderedCards: InsightCard[]) => void;
   onDeleteCards?: (cardIds: string[]) => void;
+  onAddCard?: (url: string) => void;
 }
 
 export function CardListView({
@@ -37,6 +40,7 @@ export function CardListView({
   onSaveNote,
   onCardsReorder,
   onDeleteCards,
+  onAddCard,
 }: CardListViewProps) {
   const { t } = useTranslation();
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
@@ -74,6 +78,19 @@ export function CardListView({
     }
   }, [selectedCardIds, onDeleteCards]);
 
+  // Add card popover state
+  const [addCardUrl, setAddCardUrl] = useState('');
+  const [isAddCardOpen, setIsAddCardOpen] = useState(false);
+  const addCardInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAddCardSubmit = useCallback(() => {
+    const trimmed = addCardUrl.trim();
+    if (!trimmed || !onAddCard) return;
+    onAddCard(trimmed);
+    setAddCardUrl('');
+    setIsAddCardOpen(false);
+  }, [addCardUrl, onAddCard]);
+
   // Header with title, sort info, and ViewSwitcher
   const headerElement = (
     <div className="flex items-center justify-between mb-4">
@@ -108,6 +125,43 @@ export function CardListView({
               <span>{t('cards.dragToMove')}</span>
             </div>
           </>
+        )}
+        {onAddCard && (
+          <Popover open={isAddCardOpen} onOpenChange={setIsAddCardOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className="p-1.5 rounded-md hover:bg-accent transition-colors"
+                title={t('cards.addCard')}
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-3">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddCardSubmit();
+                }}
+                className="flex gap-2"
+              >
+                <Input
+                  ref={addCardInputRef}
+                  value={addCardUrl}
+                  onChange={(e) => setAddCardUrl(e.target.value)}
+                  placeholder={t('cards.addCardPlaceholder')}
+                  className="h-8 text-sm"
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={!addCardUrl.trim()}
+                  className="shrink-0 h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                >
+                  {t('cards.addCard')}
+                </button>
+              </form>
+            </PopoverContent>
+          </Popover>
         )}
         <ViewSwitcher value={viewMode} onChange={onViewModeChange} />
       </div>

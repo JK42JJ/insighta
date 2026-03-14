@@ -44,30 +44,29 @@ setup('authenticate', async () => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await context.newPage();
 
-  // Navigate to v2 landing
-  await page.goto('http://localhost:8082/v2/');
+  // Navigate to app landing
+  await page.goto('http://localhost:8081/');
   await page.waitForLoadState('networkidle');
 
   console.log('\n========================================');
   console.log('  Chromium 창에서 로그인하세요.');
   console.log('  (Google OAuth → 로그인 완료 후');
-  console.log('   자동으로 v2 페이지로 이동합니다)');
+  console.log('   자동으로 페이지로 이동합니다)');
   console.log('  (5분 타임아웃)');
   console.log('========================================\n');
 
-  // Poll: after OAuth redirect (may go to /#), navigate back to /v2/
-  // and check for authenticated state
+  // Poll: after OAuth redirect, navigate back and check for authenticated state
   const startTime = Date.now();
   const timeout = 300_000; // 5 minutes
 
   while (Date.now() - startTime < timeout) {
     const url = page.url();
 
-    // OAuth redirected away from /v2/ — user might have logged in
-    if (!url.includes('/v2/') && url.includes('localhost:8082')) {
+    // OAuth redirected away — user might have logged in
+    if (url.includes('localhost:8081') && url.includes('#')) {
       console.log('OAuth redirect detected:', url);
-      // Auth tokens should be in localStorage now, navigate to v2
-      await page.goto('http://localhost:8082/v2/');
+      // Auth tokens should be in localStorage now, navigate back
+      await page.goto('http://localhost:8081/');
       await page.waitForLoadState('networkidle');
     }
 
