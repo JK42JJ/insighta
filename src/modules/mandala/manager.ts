@@ -3,11 +3,6 @@ import { logger } from '../../utils/logger';
 import { user_mandalas } from '@prisma/client';
 import { nanoid } from 'nanoid';
 
-const MANDALA_QUOTA = {
-  free: 3,
-  premium: 50,
-} as const;
-
 interface MandalaLevelData {
   levelKey: string;
   centerGoal: string;
@@ -271,10 +266,10 @@ export class MandalaManager {
       // Resolve user tier
       const subscription = await tx.user_subscriptions.findUnique({
         where: { user_id: userId },
-        select: { tier: true },
+        select: { tier: true, mandala_limit: true },
       });
-      const tier = (subscription?.tier ?? 'free') as keyof typeof MANDALA_QUOTA;
-      const limit = MANDALA_QUOTA[tier] ?? MANDALA_QUOTA.free;
+      const tier = subscription?.tier ?? 'free';
+      const limit = subscription?.mandala_limit ?? 3;
 
       // Count existing mandalas (quota check inside transaction for atomicity)
       const count = await tx.user_mandalas.count({
@@ -507,15 +502,15 @@ export class MandalaManager {
     const [subscription, used] = await Promise.all([
       this.prisma.user_subscriptions.findUnique({
         where: { user_id: userId },
-        select: { tier: true },
+        select: { tier: true, mandala_limit: true },
       }),
       this.prisma.user_mandalas.count({
         where: { user_id: userId },
       }),
     ]);
 
-    const tier = (subscription?.tier ?? 'free') as keyof typeof MANDALA_QUOTA;
-    const limit = MANDALA_QUOTA[tier] ?? MANDALA_QUOTA.free;
+    const tier = subscription?.tier ?? 'free';
+    const limit = subscription?.mandala_limit ?? 3;
 
     return {
       tier,

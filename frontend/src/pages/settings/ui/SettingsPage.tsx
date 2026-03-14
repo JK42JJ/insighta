@@ -8,11 +8,12 @@ import { Label } from '@/shared/ui/label';
 import { Switch } from '@/shared/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { Separator } from '@/shared/ui/separator';
-import { Bell, Globe, LayoutGrid, Palette, Shield, Trash2, Plug, Settings } from 'lucide-react';
+import { Bell, CreditCard, Globe, LayoutGrid, Palette, Shield, Trash2, Plug, Settings } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { toast } from '@/shared/lib/use-toast';
 import { YouTubeSyncCard } from './YouTubeSyncCard';
 import { MandalaSettingsTab } from './MandalaSettingsTab';
+import { SubscriptionSettingsTab } from './SubscriptionSettingsTab';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +32,7 @@ type SettingsCategory =
   | 'notifications'
   | 'integrations'
   | 'mandala'
+  | 'subscription'
   | 'data';
 
 const CATEGORIES: { id: SettingsCategory; icon: typeof Settings; labelKey: string }[] = [
@@ -39,6 +41,7 @@ const CATEGORIES: { id: SettingsCategory; icon: typeof Settings; labelKey: strin
   { id: 'notifications', icon: Bell, labelKey: 'settings.notifications' },
   { id: 'integrations', icon: Plug, labelKey: 'settings.integrations' },
   { id: 'mandala', icon: LayoutGrid, labelKey: 'settings.mandala' },
+  { id: 'subscription', icon: CreditCard, labelKey: 'settings.subscription' },
   { id: 'data', icon: Shield, labelKey: 'settings.dataPrivacy' },
 ];
 
@@ -231,6 +234,9 @@ export default function SettingsPage() {
 
             {/* Mandala */}
             {activeCategory === 'mandala' && <MandalaSettingsTab />}
+
+            {/* Subscription */}
+            {activeCategory === 'subscription' && <SubscriptionSettingsTab />}
 
             {/* Data & Privacy */}
             {activeCategory === 'data' && (
