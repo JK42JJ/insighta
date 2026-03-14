@@ -98,17 +98,21 @@ export function CardList({ cards, onCardClick, onSaveNote, onSelectionChange }: 
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Click anywhere outside the list to clear selection
+  // Ref to track justFinishedDrag without stale closure
+  const justFinishedDragRef = useRef(false);
+
+  // Click anywhere outside card content to clear selection
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (!containerRef.current) return;
-      if (!containerRef.current.contains(e.target as Node)) {
-        setSelectedCardIds(new Set());
-        setLastSelectedIndex(null);
-      }
+    const handleClickAnywhere = (e: MouseEvent) => {
+      if (justFinishedDragRef.current) return;
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-card-content]')) return;
+      if (target.closest('[data-card-deselect]')) return;
+      setSelectedCardIds(new Set());
+      setLastSelectedIndex(null);
     };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
+    document.addEventListener('click', handleClickAnywhere);
+    return () => document.removeEventListener('click', handleClickAnywhere);
   }, []);
 
   // Drag select hook
@@ -132,6 +136,11 @@ export function CardList({ cards, onCardClick, onSaveNote, onSelectionChange }: 
     onSelectionChange: handleDragSelectChange,
     enabled: true,
   });
+
+  // Keep ref in sync for document click handler (avoids stale closure)
+  useEffect(() => {
+    justFinishedDragRef.current = justFinishedDrag;
+  }, [justFinishedDrag]);
 
   const handleCardClick = useCallback(
     (e: React.MouseEvent, card: InsightCard, cardIndex: number) => {
@@ -185,23 +194,12 @@ export function CardList({ cards, onCardClick, onSaveNote, onSelectionChange }: 
     );
   }
 
-  const handleContainerClick = (e: React.MouseEvent) => {
-    if (justFinishedDrag) return;
-    const target = e.target as HTMLElement;
-    const isCard = target.closest('[data-card-item]');
-    if (!isCard) {
-      setSelectedCardIds(new Set());
-      setLastSelectedIndex(null);
-    }
-  };
-
   return (
-    <div className="animate-fade-in" onClick={handleContainerClick} ref={containerRef}>
+    <div className="animate-fade-in" ref={containerRef}>
       <div
         ref={gridRef}
         className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center"
         style={{ minHeight: 'calc(100vh - 200px)' }}
-        onClick={handleContainerClick}
       >
         {selectionStyle && <div style={selectionStyle} />}
         {sortedCards.map((card, idx) => {
@@ -211,6 +209,7 @@ export function CardList({ cards, onCardClick, onSaveNote, onSelectionChange }: 
               {isSelected && (
                 <div
                   className="absolute top-2 left-2 z-20 bg-primary rounded-full p-1 cursor-pointer hover:bg-primary/80 transition-colors"
+                  data-card-deselect
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedCardIds((prev) => {

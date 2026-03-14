@@ -97,17 +97,14 @@ CLAUDE.md
 # Internal / Non-public (local only)
 # ============================================
 
-# Infrastructure
-terraform/
+# Infrastructure (local only)
 supabase/
 !supabase/functions/
 !supabase/config.toml
 deploy/
 
-# Internal docs & scripts
-docs/
+# Local dev tools & prompts
 scripts/
-tests/
 prompt/
 
 # Dev tool configs
