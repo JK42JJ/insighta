@@ -209,9 +209,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         return reply.code(400).send({ error: 'Invalid pagination parameters' });
       }
 
-      const result = await getMandalaManager().listMandalas(userId, { page, limit });
-
-      return reply.send(result);
+      try {
+        const result = await getMandalaManager().listMandalas(userId, { page, limit });
+        return reply.send(result);
+      } catch (err: any) {
+        request.log.error({ err, userId }, 'Failed to list mandalas');
+        return reply.code(500).send({ error: 'Failed to load mandalas' });
+      }
     }
   );
 

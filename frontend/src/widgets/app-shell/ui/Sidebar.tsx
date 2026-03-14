@@ -22,8 +22,6 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   onNavigateHome?: () => void;
   mandalaGridElement?: React.ReactNode;
-  expandedMandalaId: string | null;
-  onExpandedMandalaChange: (id: string | null) => void;
   selectedMandalaId: string | null;
   onMandalaSelect: (id: string) => void;
 }
@@ -51,8 +49,6 @@ export function Sidebar({
   onToggleCollapse,
   onNavigateHome,
   mandalaGridElement,
-  expandedMandalaId,
-  onExpandedMandalaChange,
   selectedMandalaId,
   onMandalaSelect,
 }: SidebarProps) {
@@ -133,8 +129,6 @@ export function Sidebar({
         {/* Mandala accordion section */}
         <SidebarMandalaSection
           collapsed={collapsed}
-          expandedMandalaId={expandedMandalaId}
-          onExpandedChange={onExpandedMandalaChange}
           mandalaGridElement={mandalaGridElement}
           selectedMandalaId={selectedMandalaId}
           onMandalaSelect={onMandalaSelect}

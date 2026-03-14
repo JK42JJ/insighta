@@ -7,8 +7,6 @@ interface AppShellProps {
   children: React.ReactNode;
   onNavigateHome?: () => void;
   mandalaGridElement?: React.ReactNode;
-  expandedMandalaId?: string | null;
-  onExpandedMandalaChange?: (id: string | null) => void;
   selectedMandalaId: string | null;
   onMandalaSelect: (id: string) => void;
 }
@@ -27,8 +25,6 @@ export function AppShell({
   children,
   onNavigateHome,
   mandalaGridElement,
-  expandedMandalaId,
-  onExpandedMandalaChange,
   selectedMandalaId,
   onMandalaSelect,
 }: AppShellProps) {
@@ -57,8 +53,6 @@ export function AppShell({
           onToggleCollapse={handleToggleCollapse}
           onNavigateHome={onNavigateHome}
           mandalaGridElement={mandalaGridElement}
-          expandedMandalaId={expandedMandalaId ?? null}
-          onExpandedMandalaChange={onExpandedMandalaChange ?? (() => {})}
           selectedMandalaId={selectedMandalaId}
           onMandalaSelect={onMandalaSelect}
         />
