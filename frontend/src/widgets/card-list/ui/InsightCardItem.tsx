@@ -100,6 +100,7 @@ export function InsightCardItem({
       ref={setNodeRef}
       {...(canDrag ? { ...attributes, ...cardListeners } : {})}
       data-dnd-draggable={isSelected ? '' : undefined}
+      data-card-content
       onClick={handleClick}
       className={cn(
         'group relative cursor-pointer transition-all duration-200 [perspective:800px]',

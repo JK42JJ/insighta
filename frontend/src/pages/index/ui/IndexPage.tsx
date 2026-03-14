@@ -18,7 +18,7 @@ import { MandalaPanel } from '@/widgets/mandala-panel';
 import { MandalaGrid } from '@/widgets/mandala-grid/ui/MandalaGrid';
 import { MobileBottomNav } from '@/widgets/mobile-nav';
 
-import { useMandalaQuery, useMandalaList } from '@/features/mandala';
+import { useMandalaQuery, useMandalaList, useSwitchMandala } from '@/features/mandala';
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
 import { useLayoutPreferences } from '../model/useLayoutPreferences';
 import { useCardOrchestrator } from '../model/useCardOrchestrator';
@@ -96,32 +96,27 @@ function AuthenticatedApp() {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  // Sidebar mandala accordion state
-  const [expandedMandalaId, setExpandedMandalaId] = useState<string | null>(null);
   const [isFloatingPanelOpen, setIsFloatingPanelOpen] = useState(false);
 
-  // Auto-expand default mandala in sidebar (only on initial load)
   const { data: mandalaListData } = useMandalaList();
-  const hasAutoExpanded = useRef(false);
+  const switchMandala = useSwitchMandala();
 
   // Selected mandala — local state, initialized from isDefault
   const [selectedMandalaId, setSelectedMandalaId] = useState<string | null>(null);
+  const switchTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const handleMandalaSelect = useCallback((id: string) => {
+    setSelectedMandalaId(id);
+    clearTimeout(switchTimerRef.current);
+    switchTimerRef.current = setTimeout(() => {
+      switchMandala.mutate(id);
+    }, 300);
+  }, [switchMandala]);
   useEffect(() => {
     if (!selectedMandalaId && mandalaListData?.mandalas) {
       const defaultMandala = mandalaListData.mandalas.find((m) => m.isDefault);
       if (defaultMandala) setSelectedMandalaId(defaultMandala.id);
     }
   }, [mandalaListData, selectedMandalaId]);
-
-  useEffect(() => {
-    if (!hasAutoExpanded.current && mandalaListData?.mandalas) {
-      const defaultMandala = mandalaListData.mandalas.find((m) => m.isDefault);
-      if (defaultMandala) {
-        setExpandedMandalaId(defaultMandala.id);
-        hasAutoExpanded.current = true;
-      }
-    }
-  }, [mandalaListData]);
 
   // 3. Mandala data from DB (by selected mandala ID)
   const { mandalaLevels: queryMandalaLevels } = useMandalaQuery(selectedMandalaId);
@@ -186,6 +181,9 @@ function AuthenticatedApp() {
   const [activeDragCellIndex, setActiveDragCellIndex] = useState<number | null>(null);
   const [activeDragOverCellIndex, setActiveDragOverCellIndex] = useState<number | null>(null);
 
+  // 드래그 시작 시점의 selectedCardIds 스냅샷 — 드래그 중 selection 변경에 영향받지 않도록
+  const dragSelectedIdsRef = useRef<string[] | null>(null);
+
   // Build a card lookup for DragOverlay
   const allCardsMap = useMemo(() => {
     const map = new Map<string, { thumbnail: string; title: string }>();
@@ -219,6 +217,13 @@ function AuthenticatedApp() {
       const data = event.active.data.current as DragData;
       setActiveDragData(data);
 
+      // 멀티 선택 스냅샷 캡처 — 드래그 중 selection 변경에 영향받지 않도록
+      if (data.type === 'card' && data.selectedCardIds && data.selectedCardIds.length > 1) {
+        dragSelectedIdsRef.current = [...data.selectedCardIds];
+      } else {
+        dragSelectedIdsRef.current = null;
+      }
+
       if (data.type === 'cell') {
         setActiveDragCellIndex(data.gridIndex);
         dragDrop.setIsDraggingCell(true);
@@ -247,6 +252,10 @@ function AuthenticatedApp() {
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
+
+      // 스냅샷 캡처 후 ref 정리 (state reset 전에 읽어둠)
+      const multiCardIds = dragSelectedIdsRef.current;
+      dragSelectedIdsRef.current = null;
 
       // Reset all drag state
       setActiveDragData(null);
@@ -281,12 +290,8 @@ function AuthenticatedApp() {
         const subjectIndex = gridToSubject[dropData.gridIndex];
         if (subjectIndex === undefined) return;
 
-        if (
-          dragData.type === 'card' &&
-          dragData.selectedCardIds &&
-          dragData.selectedCardIds.length > 1
-        ) {
-          cards.handleCardDrop(subjectIndex, undefined, undefined, dragData.selectedCardIds);
+        if (multiCardIds && multiCardIds.length > 1) {
+          cards.handleCardDrop(subjectIndex, undefined, undefined, multiCardIds);
         } else {
           cards.handleCardDrop(subjectIndex, undefined, dragData.card.id);
         }
@@ -354,12 +359,8 @@ function AuthenticatedApp() {
         (dragData.type === 'card' || dragData.type === 'card-reorder') &&
         dropData.type === 'scratchpad'
       ) {
-        if (
-          dragData.type === 'card' &&
-          dragData.selectedCardIds &&
-          dragData.selectedCardIds.length > 1
-        ) {
-          cards.handleScratchPadMultiCardDrop?.(dragData.selectedCardIds);
+        if (multiCardIds && multiCardIds.length > 1) {
+          cards.handleScratchPadMultiCardDrop?.(multiCardIds);
         } else {
           cards.handleScratchPadCardDrop(dragData.card.id);
         }
@@ -369,6 +370,8 @@ function AuthenticatedApp() {
   );
 
   const handleDragCancel = useCallback(() => {
+    dragSelectedIdsRef.current = null;
+
     setActiveDragData(null);
     setActiveDragCellIndex(null);
     setActiveDragOverCellIndex(null);
@@ -460,10 +463,8 @@ function AuthenticatedApp() {
       <AppShell
         onNavigateHome={() => navigation.handleNavigate('root')}
         mandalaGridElement={mandalaGridElement()}
-        expandedMandalaId={expandedMandalaId}
-        onExpandedMandalaChange={setExpandedMandalaId}
         selectedMandalaId={selectedMandalaId}
-        onMandalaSelect={setSelectedMandalaId}
+        onMandalaSelect={handleMandalaSelect}
       >
         <div className="h-full flex flex-col overflow-hidden">
           {/* External drag overlay (full dimming + dashed border) */}
