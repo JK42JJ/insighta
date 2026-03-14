@@ -16,7 +16,7 @@ async function getOrCreateSubscription(supabase: ReturnType<typeof createClient>
   if (error && error.code === 'PGRST116') {
     const { data: newSub, error: insertError } = await supabase
       .from('user_subscriptions')
-      .insert({ user_id: userId, tier: 'free', local_cards_limit: 10 })
+      .insert({ user_id: userId, tier: 'free', local_cards_limit: 100 })
       .select()
       .single();
 
