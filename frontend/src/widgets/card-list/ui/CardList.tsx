@@ -7,9 +7,11 @@ import { FileVideo, Check } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDragSelect } from '@/features/drag-select/model/useDragSelect';
 import { cardSlotDropId } from '@/shared/lib/dnd';
+import { CardSkeleton } from './CardSkeleton';
 
 interface CardListProps {
   cards: InsightCard[];
+  isLoading?: boolean;
   title: string;
   onCardClick?: (card: InsightCard) => void;
   onCardDragStart?: (card: InsightCard) => void;
@@ -49,7 +51,7 @@ function CardSlot({
   );
 }
 
-export function CardList({ cards, onCardClick, onSaveNote, onSelectionChange }: CardListProps) {
+export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectionChange }: CardListProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -183,6 +185,10 @@ export function CardList({ cards, onCardClick, onSaveNote, onSelectionChange }: 
     },
     [lastSelectedIndex, sortedCards, onCardClick]
   );
+
+  if (isLoading && cards.length === 0) {
+    return <CardSkeleton />;
+  }
 
   if (cards.length === 0) {
     return (

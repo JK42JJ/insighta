@@ -48,6 +48,8 @@ export interface UseCardOrchestratorReturn {
   syncedCards: InsightCard[];
   persistedLocalCards: InsightCard[];
   pendingLocalCards: InsightCard[];
+  // Loading state
+  isLoading: boolean;
   // Card actions
   handleCardClick: (card: InsightCard) => void;
   handleCardDrop: (
@@ -99,6 +101,7 @@ export function useCardOrchestrator(
   const {
     cards: persistedLocalCards,
     subscription,
+    isLoading: isLocalCardsLoading,
     addCard: addLocalCard,
     updateCard: updateLocalCard,
     deleteCard: deleteLocalCard,
@@ -1058,6 +1061,7 @@ export function useCardOrchestrator(
     totalCards,
     displayCards,
     displayTitle,
+    isLoading: isLocalCardsLoading,
     syncedCards,
     persistedLocalCards,
     pendingLocalCards,

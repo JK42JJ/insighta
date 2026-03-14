@@ -18,6 +18,7 @@ import type {
 } from '@/entities/card/model/local-cards';
 import type { InsightCard } from '@/entities/card/model/types';
 import { localCardToInsightCard, insightCardToAddPayload } from '@/entities/card/model/local-cards';
+import { DEFAULT_CARD_LIMIT } from '@/shared/config/subscription-tiers';
 
 // Query Keys
 export const localCardsKeys = {
@@ -73,7 +74,7 @@ export function useLocalCardsAsInsight() {
   return {
     ...query,
     cards: query.data?.cards.map(localCardToInsightCard) ?? [],
-    subscription: query.data?.subscription ?? { tier: 'free', limit: 10, used: 0 },
+    subscription: query.data?.subscription ?? { tier: 'free', limit: DEFAULT_CARD_LIMIT, used: 0 },
   };
 }
 
@@ -102,43 +103,6 @@ export function useAddLocalCard() {
 
       const data = await response.json();
       return data.card;
-    },
-    onMutate: async (payload: AddLocalCardPayload) => {
-      await queryClient.cancelQueries({ queryKey: localCardsKeys.list() });
-      const previous = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list());
-
-      if (previous) {
-        const tempCard: LocalCard = {
-          id: `temp-${Date.now()}`,
-          user_id: '',
-          url: payload.url,
-          title: payload.title ?? null,
-          thumbnail: payload.thumbnail ?? null,
-          link_type: payload.link_type,
-          user_note: payload.user_note ?? null,
-          metadata_title: payload.metadata_title ?? null,
-          metadata_description: payload.metadata_description ?? null,
-          metadata_image: payload.metadata_image ?? null,
-          cell_index: payload.cell_index ?? -1,
-          level_id: payload.level_id || 'scratchpad',
-          mandala_id: payload.mandala_id ?? null,
-          sort_order: payload.sort_order ?? null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), {
-          ...previous,
-          cards: [...previous.cards, tempCard],
-          subscription: { ...previous.subscription, used: previous.subscription.used + 1 },
-        });
-      }
-
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(localCardsKeys.list(), context.previous);
-      }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
