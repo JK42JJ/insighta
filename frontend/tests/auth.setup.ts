@@ -45,7 +45,8 @@ setup('authenticate', async () => {
   const page = await context.newPage();
 
   // Navigate to app landing
-  await page.goto('http://localhost:8081/');
+  const baseURL = process.env.BASE_URL || 'http://localhost:8081';
+  await page.goto(`${baseURL}/`);
   await page.waitForLoadState('networkidle');
 
   console.log('\n========================================');
@@ -63,10 +64,10 @@ setup('authenticate', async () => {
     const url = page.url();
 
     // OAuth redirected away — user might have logged in
-    if (url.includes('localhost:8081') && url.includes('#')) {
+    if ((url.includes('localhost:8081') || url.includes('insighta.one')) && url.includes('#')) {
       console.log('OAuth redirect detected:', url);
       // Auth tokens should be in localStorage now, navigate back
-      await page.goto('http://localhost:8081/');
+      await page.goto(`${baseURL}/`);
       await page.waitForLoadState('networkidle');
     }
 

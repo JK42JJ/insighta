@@ -271,14 +271,28 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       logger.info('Deleting playlist', { playlistId: id, userId: request.user.userId });
 
-      // Verify ownership before deleting
-      await getManager().getPlaylist(id, request.user.userId);
+      try {
+        // Verify ownership before deleting
+        await getManager().getPlaylist(id, request.user.userId);
 
-      await getManager().deletePlaylist(id);
+        await getManager().deletePlaylist(id);
 
-      logger.info('Playlist deleted successfully', { playlistId: id });
+        logger.info('Playlist deleted successfully', { playlistId: id });
 
-      return reply.code(200).send({ message: 'Playlist deleted successfully' });
+        return reply.code(200).send({ message: 'Playlist deleted successfully' });
+      } catch (error) {
+        logger.error('Failed to delete playlist', {
+          playlistId: id,
+          userId: request.user.userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        if (error instanceof Error && error.message.includes('not found')) {
+          return reply.code(404).send({ message: 'Playlist not found' });
+        }
+
+        throw error;
+      }
     }
   );
 
