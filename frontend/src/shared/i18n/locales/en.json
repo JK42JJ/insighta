@@ -273,12 +273,13 @@
   "videoPlayer": {
     "clickToWriteNote": "Click to write a note...",
     "memo": "Memo",
-    "notePlaceholder": "Write a note... (Enter to save, Shift+Enter for new line)",
+    "notePlaceholder": "Write a note... (Cmd+S to save, / to insert)",
     "playerNotReady": "Player is not ready",
     "timestampAdded": "{{timestamp}} timestamp added",
     "timestampFailed": "Could not get timestamp",
     "timestampLinkAdded": "Timestamp link added",
     "noteSaved": "Note saved",
+    "autoSaved": "Auto-saved",
     "viewOriginal": "View Original",
     "contentSummary": "Content Summary",
     "pasteFromOriginal": "Copy and paste text from the original page",
@@ -288,6 +289,12 @@
     "shareOnX": "Share on X",
     "addTimestamp": "Add current playback time to note",
     "secondsUnit": "s",
+    "slashHint": "Type / to insert...",
+    "insertTimestamp": "Timestamp",
+    "insertCapture": "Screen Capture",
+    "insertLink": "Link",
+    "insertInsight": "Insight",
+    "comingSoon": "Soon",
     "pastePlaceholder": "Copy and paste important content from the original page.\n\nMy Insights:\n- Key takeaways\n- Action items\n- Ideas to reference\n\n(Ctrl+Enter to save)"
   },
   "mandala": {

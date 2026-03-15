@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import type { InsightCard } from '@/entities/card/model/types';
 
 interface UseVideoModalReturn {
@@ -7,11 +7,15 @@ interface UseVideoModalReturn {
   currentModalCard: InsightCard | null;
   openModal: (card: InsightCard) => void;
   closeModal: () => void;
+  /** Session-level watch position cache (survives modal close/reopen) */
+  watchPositionCache: Map<string, number>;
 }
 
 /**
  * Manages video player modal state.
  * Derives currentModalCard from live RQ-derived arrays to avoid stale data.
+ * Maintains a session-level watch position cache so reopening a video
+ * resumes from where the user left off (even for local cards without DB persistence).
  */
 export function useVideoModal(
   allMandalaCards: InsightCard[],
@@ -19,6 +23,9 @@ export function useVideoModal(
 ): UseVideoModalReturn {
   const [selectedCard, setSelectedCard] = useState<InsightCard | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Session-level watch position cache — persists across modal open/close within a session
+  const watchPositionCacheRef = useRef(new Map<string, number>());
 
   const openModal = useCallback((card: InsightCard) => {
     setSelectedCard(card);
@@ -44,5 +51,6 @@ export function useVideoModal(
     currentModalCard,
     openModal,
     closeModal,
+    watchPositionCache: watchPositionCacheRef.current,
   };
 }
