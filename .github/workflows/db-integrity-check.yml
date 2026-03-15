@@ -1,0 +1,165 @@
+name: DB Integrity Check
+
+on:
+  schedule:
+    - cron: '0 4 * * *'  # Daily at 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  integrity-check:
+    name: Database Integrity Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Run integrity checks
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          ISSUES_FOUND=0
+          REPORT=""
+
+          # Check 1: NULL mandala_id on non-scratchpad local cards
+          NULL_MANDALA=$(psql "$DIRECT_URL" -t -A -c "
+            SELECT count(*) FROM public.user_local_cards
+            WHERE mandala_id IS NULL
+              AND level_id != 'scratchpad'
+              AND cell_index >= 0;
+          ")
+          echo "NULL mandala_id (non-scratchpad local cards): $NULL_MANDALA"
+          if [ "$NULL_MANDALA" -gt 0 ]; then
+            REPORT="${REPORT}\n### NULL mandala_id (local cards)\n- **Count**: $NULL_MANDALA non-scratchpad cards with NULL mandala_id\n- **Auto-healed**: Yes\n"
+            psql "$DIRECT_URL" -c "
+              UPDATE public.user_local_cards c
+              SET mandala_id = m.id
+              FROM public.user_mandalas m
+              WHERE c.user_id = m.user_id
+                AND m.is_default = true
+                AND c.mandala_id IS NULL
+                AND c.level_id != 'scratchpad'
+                AND c.cell_index >= 0;
+            "
+            ISSUES_FOUND=$((ISSUES_FOUND + 1))
+          fi
+
+          # Check 2: NULL mandala_id on non-scratchpad video states
+          NULL_VS_MANDALA=$(psql "$DIRECT_URL" -t -A -c "
+            SELECT count(*) FROM public.user_video_states
+            WHERE mandala_id IS NULL
+              AND level_id IS NOT NULL
+              AND level_id != 'scratchpad'
+              AND level_id != ''
+              AND cell_index >= 0;
+          ")
+          echo "NULL mandala_id (non-scratchpad video states): $NULL_VS_MANDALA"
+          if [ "$NULL_VS_MANDALA" -gt 0 ]; then
+            REPORT="${REPORT}\n### NULL mandala_id (video states)\n- **Count**: $NULL_VS_MANDALA non-scratchpad video states with NULL mandala_id\n- **Auto-healed**: Yes\n"
+            psql "$DIRECT_URL" -c "
+              UPDATE public.user_video_states vs
+              SET mandala_id = m.id
+              FROM public.user_mandalas m
+              WHERE vs.user_id = m.user_id
+                AND m.is_default = true
+                AND vs.mandala_id IS NULL
+                AND vs.level_id IS NOT NULL
+                AND vs.level_id != 'scratchpad'
+                AND vs.level_id != ''
+                AND vs.cell_index >= 0;
+            "
+            ISSUES_FOUND=$((ISSUES_FOUND + 1))
+          fi
+
+          # Check 3: Orphan cards (deleted users)
+          ORPHAN_CARDS=$(psql "$DIRECT_URL" -t -A -c "
+            SELECT count(*) FROM public.user_local_cards c
+            LEFT JOIN auth.users u ON c.user_id = u.id::text
+            WHERE u.id IS NULL;
+          ")
+          echo "Orphan local cards: $ORPHAN_CARDS"
+          if [ "$ORPHAN_CARDS" -gt 0 ]; then
+            REPORT="${REPORT}\n### Orphan local cards\n- **Count**: $ORPHAN_CARDS cards belonging to deleted users\n- **Action needed**: Manual review\n"
+            ISSUES_FOUND=$((ISSUES_FOUND + 1))
+          fi
+
+          # Check 4: Duplicate URL cards per user
+          DUPLICATE_URLS=$(psql "$DIRECT_URL" -t -A -c "
+            SELECT count(*) FROM (
+              SELECT user_id, url, count(*) as cnt
+              FROM public.user_local_cards
+              GROUP BY user_id, url
+              HAVING count(*) > 1
+            ) dupes;
+          ")
+          echo "Duplicate URL card groups: $DUPLICATE_URLS"
+          if [ "$DUPLICATE_URLS" -gt 0 ]; then
+            REPORT="${REPORT}\n### Duplicate URL cards\n- **Count**: $DUPLICATE_URLS user-url pairs with duplicates\n- **Action needed**: Manual review\n"
+            ISSUES_FOUND=$((ISSUES_FOUND + 1))
+          fi
+
+          echo "issues_found=$ISSUES_FOUND" >> "$GITHUB_ENV"
+          {
+            echo "report<<REPORTEOF"
+            echo -e "$REPORT"
+            echo "REPORTEOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Summary
+        env:
+          ISSUES_COUNT: ${{ env.issues_found }}
+          REPORT_TEXT: ${{ env.report }}
+        run: |
+          echo "### DB Integrity Check" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Date**: $(date -u +%Y-%m-%d)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Issues found**: $ISSUES_COUNT" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ISSUES_COUNT" -gt 0 ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "$REPORT_TEXT" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- **Status**: All checks passed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Create issue if problems found
+        if: env.issues_found != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'db-integrity',
+              state: 'open',
+            });
+            const date = new Date().toISOString().split('T')[0];
+            const issuesFound = process.env.issues_found;
+            const report = process.env.report;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `## DB Integrity Check — ${date}\n\n**Issues found**: ${issuesFound}\n\n${report}\n\n[Workflow run](${runUrl})`;
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'DB Integrity Check: Issues Found',
+                body,
+                labels: ['db-integrity', 'bug'],
+              });
+            }

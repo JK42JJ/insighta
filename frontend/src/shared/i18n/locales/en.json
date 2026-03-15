@@ -390,6 +390,7 @@
     "cardMoved": "Card moved",
     "insightAdded": "Insight added",
     "insightAddedToCell": "Saved to \"{{subject}}\".",
+    "mandalaNotReady": "Mandala is still loading. Please try again.",
     "invalidUrl": "Invalid URL",
     "invalidUrlDesc": "You can add YouTube, LinkedIn, Notion links, or txt, md, pdf files.",
     "invalidUrlLinkDesc": "Only YouTube, LinkedIn, Facebook, Notion links can be added.",
