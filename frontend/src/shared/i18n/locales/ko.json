@@ -273,12 +273,13 @@
   "videoPlayer": {
     "clickToWriteNote": "클릭하여 메모 작성...",
     "memo": "메모",
-    "notePlaceholder": "메모 입력... (Enter 저장, Shift+Enter 줄바꿈)",
+    "notePlaceholder": "메모 입력... (Cmd+S 저장, / 슬래시 커맨드)",
     "playerNotReady": "플레이어가 준비되지 않았습니다",
     "timestampAdded": "{{timestamp}} 타임스탬프 추가됨",
     "timestampFailed": "타임스탬프를 가져올 수 없습니다",
     "timestampLinkAdded": "타임스탬프 링크가 추가되었습니다",
     "noteSaved": "메모가 저장되었습니다",
+    "autoSaved": "자동 저장됨",
     "viewOriginal": "원본 보기",
     "contentSummary": "콘텐츠 요약",
     "pasteFromOriginal": "원본 페이지에서 텍스트를 복사하여 붙여넣으세요",
@@ -288,6 +289,12 @@
     "shareOnX": "X에 공유",
     "addTimestamp": "현재 재생 시점을 메모에 추가",
     "secondsUnit": "초",
+    "slashHint": "/ 입력하여 삽입...",
+    "insertTimestamp": "타임스탬프",
+    "insertCapture": "화면 캡처",
+    "insertLink": "링크",
+    "insertInsight": "인사이트",
+    "comingSoon": "준비중",
     "pastePlaceholder": "원본 페이지에서 중요한 내용을 복사해서 붙여넣으세요.\n\n나의 인사이트:\n- 핵심 내용 요약\n- 적용할 점\n- 참고할 아이디어\n\n(Ctrl+Enter로 저장)"
   },
   "mandala": {
