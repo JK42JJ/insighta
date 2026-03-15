@@ -598,12 +598,22 @@ export const MandalaCell = memo(
           </div>
         )}
 
-        {/* Drop overlay */}
+        {/* Drop overlay — card silhouette */}
         {showDropIndicator && (
-          <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-primary/20 backdrop-blur-[2px] pointer-events-none">
-            <div className="bg-primary/90 text-primary-foreground text-[10px] font-semibold px-2 py-1 rounded-md shadow-lg">
-              {t('mandala.dropHere')}
+          <div className="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-primary/20 backdrop-blur-[2px] pointer-events-none gap-1.5">
+            <div
+              className="rounded-lg border border-dashed border-primary/40 bg-primary/10 flex items-center justify-center shadow-sm"
+              style={{
+                width: 'clamp(48px, 50%, 80px)',
+                aspectRatio: '16/9',
+                animation: 'card-silhouette-pulse 1.5s ease-in-out infinite',
+              }}
+            >
+              <Play className="text-primary/40" style={{ width: 'clamp(12px, 3cqi, 20px)', height: 'clamp(12px, 3cqi, 20px)' }} />
             </div>
+            <span className="text-primary-foreground/80 font-medium" style={{ fontSize: 'clamp(7px, 2cqi, 10px)' }}>
+              {t('mandala.dropHere')}
+            </span>
           </div>
         )}
 

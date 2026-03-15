@@ -334,6 +334,12 @@
     }
   }
 
+  /* Card silhouette pulse — drop target hint */
+  @keyframes card-silhouette-pulse {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+  }
+
   /* Block stacking animation */
   @keyframes block-pop {
     0% {
