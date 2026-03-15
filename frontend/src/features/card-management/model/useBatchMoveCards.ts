@@ -13,7 +13,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAuthHeaders, getEdgeFunctionUrl } from '@/shared/lib/supabase-auth';
 import { localCardsKeys } from './useLocalCards';
 import { youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
-import type { InsightCard, LinkType } from '@/entities/card/model/types';
+import type { InsightCard } from '@/entities/card/model/types';
 import type { LocalCardsResponse } from '@/entities/card/model/local-cards';
 import type { UserVideoStateWithVideo } from '@/entities/youtube/model/types';
 import { type CardSource } from '../lib/cardUtils';
@@ -165,36 +165,6 @@ export function useBatchMoveCards() {
               return v;
             })
         );
-      }
-
-      // Optimistic: add pending cards to local cards cache (will be inserted by API)
-      const pendingItems = items.filter((i) => i.source === 'pending');
-      if (pendingItems.length > 0) {
-        queryClient.setQueryData<LocalCardsResponse>(localCardsKeys.list(), (prev) => {
-          if (!prev) return prev;
-          const newCards = pendingItems.map((item) => ({
-            id: item.card.id,
-            user_id: '',
-            url: item.card.videoUrl,
-            title: item.card.title,
-            thumbnail: item.card.thumbnail,
-            link_type: (item.card.linkType || 'other') as LinkType,
-            user_note: item.card.userNote || null,
-            metadata_title: item.card.metadata?.title || null,
-            metadata_description: item.card.metadata?.description || null,
-            metadata_image: item.card.metadata?.image || null,
-            cell_index: item.cellIndex,
-            level_id: item.levelId,
-            mandala_id: item.mandalaId ?? null,
-            sort_order: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }));
-          return {
-            ...prev,
-            cards: [...prev.cards, ...newCards],
-          };
-        });
       }
 
       return { previousLocal, previousVideo };
