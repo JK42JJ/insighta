@@ -118,8 +118,18 @@ function AuthenticatedApp() {
     }
   }, [mandalaListData, selectedMandalaId]);
 
+  // Effective mandalaId: resolves immediately from cached data even before useEffect fires
+  const effectiveMandalaId = useMemo(() => {
+    if (selectedMandalaId) return selectedMandalaId;
+    if (mandalaListData?.mandalas) {
+      const defaultMandala = mandalaListData.mandalas.find((m) => m.isDefault);
+      if (defaultMandala) return defaultMandala.id;
+    }
+    return null;
+  }, [selectedMandalaId, mandalaListData]);
+
   // 3. Mandala data from DB (by selected mandala ID)
-  const { mandalaLevels: queryMandalaLevels } = useMandalaQuery(selectedMandalaId);
+  const { mandalaLevels: queryMandalaLevels } = useMandalaQuery(effectiveMandalaId);
 
   // 4. Refs to break circular dependency: navigation <-> card orchestrator
   const moveCardsRef = useRef<(...args: any[]) => void>(() => {});
@@ -128,7 +138,7 @@ function AuthenticatedApp() {
   // 5. Mandala navigation (wired to card orchestrator via refs)
   const navigation = useMandalaNavigation({
     initialLevels: queryMandalaLevels,
-    mandalaId: selectedMandalaId,
+    mandalaId: effectiveMandalaId,
     onMoveCardsForSubLevel: (from, to, idx) => moveCardsRef.current(from, to, idx),
     onSwapCardsForReorder: (swapped, levelId) => swapCardsRef.current(swapped, levelId),
     toast: (opts) => toast(opts),
@@ -140,7 +150,7 @@ function AuthenticatedApp() {
     {
       currentLevelId: navigation.currentLevelId,
       currentLevel: navigation.currentLevel,
-      mandalaId: selectedMandalaId,
+      mandalaId: effectiveMandalaId,
     },
     navigation.selectedCellIndex
   );
