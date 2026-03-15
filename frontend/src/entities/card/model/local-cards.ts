@@ -18,6 +18,7 @@ export type SubscriptionTier = 'free' | 'premium' | 'admin';
 export interface UserSubscription {
   tier: SubscriptionTier;
   limit: number;
+  mandalaLimit: number;
   used: number;
 }
 

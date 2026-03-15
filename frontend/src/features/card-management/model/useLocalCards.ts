@@ -18,7 +18,7 @@ import type {
 } from '@/entities/card/model/local-cards';
 import type { InsightCard } from '@/entities/card/model/types';
 import { localCardToInsightCard, insightCardToAddPayload } from '@/entities/card/model/local-cards';
-import { DEFAULT_CARD_LIMIT } from '@/shared/config/subscription-tiers';
+import { DEFAULT_CARD_LIMIT, DEFAULT_MANDALA_LIMIT } from '@/shared/config/subscription-tiers';
 
 // Query Keys
 export const localCardsKeys = {
@@ -74,7 +74,7 @@ export function useLocalCardsAsInsight() {
   return {
     ...query,
     cards: query.data?.cards.map(localCardToInsightCard) ?? [],
-    subscription: query.data?.subscription ?? { tier: 'free', limit: DEFAULT_CARD_LIMIT, used: 0 },
+    subscription: query.data?.subscription ?? { tier: 'free', limit: DEFAULT_CARD_LIMIT, mandalaLimit: DEFAULT_MANDALA_LIMIT, used: 0 },
   };
 }
 

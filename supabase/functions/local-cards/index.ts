@@ -16,7 +16,7 @@ async function getOrCreateSubscription(supabase: ReturnType<typeof createClient>
   if (error && error.code === 'PGRST116') {
     const { data: newSub, error: insertError } = await supabase
       .from('user_subscriptions')
-      .insert({ user_id: userId, tier: 'free', local_cards_limit: 100 })
+      .insert({ user_id: userId, tier: 'free', local_cards_limit: 100, mandala_limit: 3 })
       .select()
       .single();
 
@@ -161,6 +161,7 @@ Deno.serve(async (req) => {
             subscription: {
               tier: subscription.tier,
               limit: subscription.local_cards_limit,
+              mandalaLimit: subscription.mandala_limit,
               used: cards.length
             }
           }),
