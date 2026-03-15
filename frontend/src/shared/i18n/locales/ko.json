@@ -390,6 +390,7 @@
     "cardMoved": "카드 이동됨",
     "insightAdded": "인사이트 추가됨",
     "insightAddedToCell": "\"{{subject}}\"에 저장되었습니다.",
+    "mandalaNotReady": "만다라가 아직 로딩 중입니다. 잠시 후 다시 시도해주세요.",
     "invalidUrl": "유효하지 않은 URL",
     "invalidUrlDesc": "YouTube, LinkedIn, Notion, txt, md, pdf 파일을 추가할 수 있습니다.",
     "invalidUrlLinkDesc": "YouTube, LinkedIn, Facebook, Notion 링크만 추가할 수 있습니다.",
