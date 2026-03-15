@@ -383,8 +383,8 @@ export const MandalaCell = memo(
 
     const handleExternalDragOver = useCallback(
       (e: React.DragEvent) => {
+        e.preventDefault();
         if (!isCenter) {
-          e.preventDefault();
           setIsExternalDragOver(true);
         }
       },
@@ -399,20 +399,19 @@ export const MandalaCell = memo(
     }, []);
 
     const handleExternalDrop = (e: React.DragEvent) => {
-      if (isCenter) return;
+      e.preventDefault();
       setIsExternalDragOver(false);
+      if (isCenter) return;
       // NOTE: Do NOT call stopPropagation() here — the document-level drop
       // handler (useCardDragDrop) must fire to reset isDraggingOver state.
       // Without this, external drags (YouTube etc.) leave the overlay stuck
       // because dragend only fires in the source window.
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        e.preventDefault();
         onDrop(index, undefined, undefined, undefined, e.dataTransfer.files);
         return;
       }
       const cardId = e.dataTransfer.getData('application/card-id');
       if (cardId) {
-        e.preventDefault();
         const multiCardIdsStr = e.dataTransfer.getData('application/multi-card-ids');
         if (multiCardIdsStr) {
           try {
@@ -434,7 +433,6 @@ export const MandalaCell = memo(
         if (html) url = extractUrlFromHtml(html);
       }
       if (url) {
-        e.preventDefault();
         onDrop(index, url);
       }
     };

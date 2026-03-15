@@ -8,6 +8,9 @@ import { cn } from '@/shared/lib/utils';
 import { useDragSelect } from '@/features/drag-select/model/useDragSelect';
 import { cardSlotDropId } from '@/shared/lib/dnd';
 import { CardSkeleton } from './CardSkeleton';
+import { useQueryClient } from '@tanstack/react-query';
+import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
+import type { LocalCardsResponse } from '@/entities/card/model/local-cards';
 
 interface CardListProps {
   cards: InsightCard[];
@@ -53,6 +56,8 @@ function CardSlot({
 
 export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectionChange }: CardListProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const cachedCardCount = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list())?.cards.length;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
@@ -187,7 +192,7 @@ export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectio
   );
 
   if (isLoading && cards.length === 0) {
-    return <CardSkeleton />;
+    return <CardSkeleton count={cachedCardCount ?? 6} />;
   }
 
   if (cards.length === 0) {

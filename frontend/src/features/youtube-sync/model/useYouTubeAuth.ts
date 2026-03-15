@@ -65,7 +65,6 @@ export function useYouTubeAuthStatus() {
       return response.json();
     },
     staleTime: 60 * 1000, // 1 minute
-    refetchOnWindowFocus: true,
   });
 }
 
