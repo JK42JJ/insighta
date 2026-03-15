@@ -561,6 +561,7 @@ function AuthenticatedApp() {
             onClose={modal.closeModal}
             onSave={cards.handleSaveNote}
             onSaveWatchPosition={cards.handleSaveWatchPosition}
+            watchPositionCache={modal.watchPositionCache}
           />
 
           {/* Mobile-only floating MandalaPanel */}
