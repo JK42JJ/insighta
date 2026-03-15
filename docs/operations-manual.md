@@ -1180,10 +1180,10 @@ The `/boot` command captures dashboard output to include in session context:
 
 ```bash
 # Capture Agent Dashboard content (last 40 lines)
-tmux capture-pane -t tubearchive:0.1 -p -S -40
+tmux capture-pane -t tubearchive:1.2 -p -S -40
 
 # Capture Ops Dashboard content (last 40 lines)
-tmux capture-pane -t tubearchive:0.2 -p -S -40
+tmux capture-pane -t tubearchive:1.3 -p -S -40
 ```
 
 This allows the boot sequence to report actual system status (health, deploys, CI, Supabase) without making separate API calls.
