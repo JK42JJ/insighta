@@ -517,6 +517,16 @@ export function useCardOrchestrator(
 
       // Multi-card drop
       if (multiCardIds && multiCardIds.length > 0) {
+        if (!mandalaId) {
+          console.warn('[CardOrchestrator] mandalaId is null during multi-card drop — waiting for mandala selection');
+          toast({
+            title: t('common.error'),
+            description: t('index.mandalaNotReady'),
+            variant: 'destructive',
+          });
+          return;
+        }
+
         const pendingIds = multiCardIds.filter((id) => {
           const c = getCardById(id, syncedCards, persistedLocalCards, pendingLocalCards);
           return detectCardSource(id, syncedCards, persistedLocalCards, c) === 'pending';
@@ -566,6 +576,16 @@ export function useCardOrchestrator(
 
       // Single card drop
       if (cardId) {
+        if (!mandalaId) {
+          console.warn('[CardOrchestrator] mandalaId is null during single card drop — waiting for mandala selection');
+          toast({
+            title: t('common.error'),
+            description: t('index.mandalaNotReady'),
+            variant: 'destructive',
+          });
+          return;
+        }
+
         const card = getCardById(cardId, syncedCards, persistedLocalCards, pendingLocalCards);
         if (!card) return;
         const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
@@ -645,6 +665,17 @@ export function useCardOrchestrator(
             variant: 'destructive',
           });
           navigate('/login');
+          return;
+        }
+
+        // Guard: mandalaId must be set before adding cards to mandala cells
+        if (!mandalaId) {
+          console.warn('[CardOrchestrator] mandalaId is null during card drop — waiting for mandala selection');
+          toast({
+            title: t('common.error'),
+            description: t('index.mandalaNotReady'),
+            variant: 'destructive',
+          });
           return;
         }
 

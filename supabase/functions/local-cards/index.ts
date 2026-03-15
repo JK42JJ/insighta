@@ -193,22 +193,39 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Resolve mandala_id: use provided value, or fall back to user's default mandala
+        // for non-scratchpad cards (prevents NULL when frontend sends during init race)
+        let resolvedMandalaId = body.mandala_id ?? null;
+        const isNonScratchpad = (body.cell_index ?? -1) >= 0 && body.level_id && body.level_id !== 'scratchpad';
+        if (!resolvedMandalaId && isNonScratchpad) {
+          const { data: defaultMandala } = await supabase
+            .from('user_mandalas')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('is_default', true)
+            .single();
+          if (defaultMandala) {
+            resolvedMandalaId = defaultMandala.id;
+            console.log('[local-cards] add: mandala_id was null for non-scratchpad card, resolved to default:', resolvedMandalaId);
+          }
+        }
+
         const { data: card, error: upsertError } = await supabase
           .from('user_local_cards')
           .upsert({
             user_id: user.id,
             url: body.url,
-            title: body.title || null,
-            thumbnail: body.thumbnail || null,
+            title: body.title ?? null,
+            thumbnail: body.thumbnail ?? null,
             link_type: body.link_type,
-            user_note: body.user_note || '',
-            metadata_title: body.metadata_title || null,
-            metadata_description: body.metadata_description || null,
-            metadata_image: body.metadata_image || null,
+            user_note: body.user_note ?? '',
+            metadata_title: body.metadata_title ?? null,
+            metadata_description: body.metadata_description ?? null,
+            metadata_image: body.metadata_image ?? null,
             cell_index: body.cell_index ?? -1,
-            level_id: body.level_id || 'scratchpad',
+            level_id: body.level_id ?? 'scratchpad',
             sort_order: body.sort_order ?? null,
-            mandala_id: body.mandala_id || null,
+            mandala_id: resolvedMandalaId,
           }, { onConflict: 'user_id,url' })
           .select()
           .single();
@@ -364,14 +381,14 @@ Deno.serve(async (req) => {
           const rows = inserts.map((item: { url: string; title?: string; thumbnail?: string; link_type?: string; user_note?: string; cell_index?: number; level_id?: string; sort_order?: number; mandala_id?: string }) => ({
             user_id: user.id,
             url: item.url,
-            title: item.title || null,
-            thumbnail: item.thumbnail || null,
-            link_type: item.link_type || 'other',
-            user_note: item.user_note || '',
+            title: item.title ?? null,
+            thumbnail: item.thumbnail ?? null,
+            link_type: item.link_type ?? 'other',
+            user_note: item.user_note ?? '',
             cell_index: item.cell_index ?? -1,
-            level_id: item.level_id || 'scratchpad',
+            level_id: item.level_id ?? 'scratchpad',
             sort_order: item.sort_order ?? null,
-            mandala_id: item.mandala_id || null,
+            mandala_id: item.mandala_id ?? null,
           }));
 
           const { data: insertedCards, error: insertError } = await supabase
@@ -394,7 +411,22 @@ Deno.serve(async (req) => {
 
       case 'import-playlist': {
         const body = await req.json();
-        const { playlistUrl, cellIndex = -1, levelId = 'scratchpad', mandala_id = null } = body;
+        let { playlistUrl, cellIndex = -1, levelId = 'scratchpad', mandala_id = null } = body;
+
+        // Resolve mandala_id for non-scratchpad cards (same fallback as 'add' action)
+        const isPlaylistNonScratchpad = cellIndex >= 0 && levelId && levelId !== 'scratchpad';
+        if (!mandala_id && isPlaylistNonScratchpad) {
+          const { data: defaultMandala } = await supabase
+            .from('user_mandalas')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('is_default', true)
+            .single();
+          if (defaultMandala) {
+            mandala_id = defaultMandala.id;
+            console.log('[local-cards] import-playlist: mandala_id was null for non-scratchpad, resolved to default:', mandala_id);
+          }
+        }
 
         if (!playlistUrl) {
           return new Response(
