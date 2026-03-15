@@ -2,7 +2,7 @@
 
 **Project**: Insighta
 **Domain**: https://insighta.one
-**Last Updated**: 2026-03-08
+**Last Updated**: 2026-03-15
 
 ---
 
@@ -1273,15 +1273,20 @@ CLAUDE.md (프로젝트 루트 — 최상위 규칙)
 │   │       ├── test-runner.md
 │   │       └── ux-designer.md
 │   │
-│   ├── commands/                         ← Slash commands (8개)
-│   │   ├── boot.md                       ← /boot
-│   │   ├── checkpoint.md                 ← /checkpoint
-│   │   ├── deploy.md                     ← /deploy
+│   ├── commands/                         ← Slash commands (v2.0)
+│   │   ├── init.md                       ← /init (v2, was /boot)
+│   │   ├── work.md                       ← /work
+│   │   ├── save.md                       ← /save (v2, was /checkpoint)
+│   │   ├── tidy.md                       ← /tidy
+│   │   ├── check.md                      ← /check (NEW — 품질 게이트)
+│   │   ├── retro.md                      ← /retro (v2, was /retrospective)
+│   │   ├── boot.md                       ← deprecated → /init
+│   │   ├── checkpoint.md                 ← deprecated → /save
+│   │   ├── retrospective.md              ← deprecated → /retro
+│   │   ├── deploy.md                     ← deprecated → /ship
 │   │   ├── issue.md                      ← /issue
-│   │   ├── retrospective.md             ← /retrospective
 │   │   ├── review.md                     ← /review
 │   │   ├── status.md                     ← /status
-│   │   ├── work.md                       ← /work
 │   │   └── story.md                      ← /story
 │   │
 │   └── skills/
@@ -1306,14 +1311,75 @@ CLAUDE.md (프로젝트 루트 — 최상위 규칙)
     └── graph-rag-roadmap.md              ← GraphRAG 로드맵
 ```
 
-### 10.2 `/boot` — Session Boot Command
+### 10.2 CLI Command Pipeline v2.0
+
+v2.0에서 기존 6단계 워크플로우에 CLI-Anything Agent-Native 원칙을 병합하고, 커맨드 이름을 짧은 동사형으로 통일했다.
+
+**7단계 파이프라인**:
+```
+/init → /work → /save → /tidy → /check → /ship → /retro
+```
+
+**네이밍 변경 매핑**:
+
+| v1 | v2 | 변경 사유 |
+|----|-----|----------|
+| `/boot` | `/init` | 짧은 동사형 통일 |
+| `/work` | `/work` | (유지) |
+| `/checkpoint` | `/save` | 짧은 동사형 통일 |
+| `/tidy` | `/tidy` | (유지) |
+| (신규) | `/check` | /ship 전 품질 게이트 |
+| `/ship` | `/ship` | (유지) |
+| `/retrospective` | `/retro` | 짧은 동사형 통일 |
+
+기존 `/boot`, `/checkpoint`, `/retrospective`는 deprecated redirect로 유지 (새 이름으로 안내).
+
+**CLI-Anything 8대 Framework ↔ Insighta 커맨드 매핑**:
+
+| # | CLI-Anything Framework | Insighta 적용 커맨드 | 핵심 반영 |
+|---|------------------------|-------------------|----------|
+| 1 | 7-phase pipeline | /init~/retro 전체 | 7커맨드 매핑 |
+| 2 | Agent-native JSON output | /work, /check | API/Edge Function 응답 표준화 체크 |
+| 3 | Structured errors | /work, /check | 구조화된 에러 코드 + Fail Loudly |
+| 4 | Self-describing help | /init | Introspection 엔드포인트 점검 |
+| 5 | Multi-layer testing | /save, /check | TEST.md + unit/e2e 검증 |
+| 6 | Iterative refinement (HARNESS) | /retro → /init | 교훈 → 검증 규칙 승격 루프 |
+| 7 | Real backend verification | /work, /check | DB/API 실제 호출, Rendering Gap |
+| 8 | CI quality gate | /check → /ship | Hard Gate + Soft Gate 분리 |
+
+**갭 분석 (G1-G8)**:
+
+| # | 원칙 | 적용 커맨드 |
+|---|------|-----------|
+| G1 | Real Software — mock 최소화 | /work, /check |
+| G2 | Rendering Gap — 무음 누락 감지 | /work, /check |
+| G3 | Output Verification — exit 0 ≠ correct | /check |
+| G4 | Introspection — /health, /status 점검 | /init |
+| G5 | Idempotency — 2회 실행 안전성 | /check |
+| G6 | Fail Loudly — 구조화된 에러 반환 | /work, /check |
+| G7 | HARNESS 교훈 축적 | /retro |
+| G8 | Subprocess 테스트 — E2E 검증 | /check |
+
+**각 커맨드 역할 (1줄 설명)**:
+
+| 커맨드 | 역할 |
+|--------|------|
+| `/init` | 세션 시작 — 맥락 복원 + Agent-Native 상태 스캔 + 교훈 적용 |
+| `/work` | 최적 작업 선정 → 계획 → 실행 (Agent-Native 코딩 체크리스트 포함) |
+| `/save` | 작업 기록 + 교훈 추출 + TEST.md 갱신 + Session Eval |
+| `/tidy` | GitHub Issues/Board 동기화 + Agent-Native 갭 이슈 제안 |
+| `/check` | /ship 전 품질 게이트 (Hard Gate: 빌드, Soft Gate: API/테스트/백엔드/문서) |
+| `/ship` | 커밋 → 푸시 → PR → 머지 → 배포 검증 (/check 전제조건) |
+| `/retro` | session-log 분석 → 패턴 발견 → 개선 제안 + Agent-Native 진행 현황 |
+
+### 10.3 `/init` — Session Boot Command (v2, formerly /boot)
 
 세션 시작 시 프로젝트 맥락을 완전히 복원하고, 이전 세션의 교훈을 적용하는 자동화 명령.
 
-**사용법**: `/boot [domain-hint?]` (예: `/boot frontend`, `/boot infra`)
+**사용법**: `/init [domain-hint?]` (예: `/init frontend`, `/init infra`)
 
 ```
-/boot [domain-hint?]
+/init [domain-hint?]
 │
 ├── Phase 1: Core Context Load (병렬 Read)
 │   ├── MEMORY.md
@@ -1370,14 +1436,14 @@ CLAUDE.md (프로젝트 루트 — 최상위 규칙)
 | `infra\|deploy\|ci\|terraform` | infra |
 | `supabase\|edge` | supabase |
 
-### 10.3 `/checkpoint` — Checkpoint Record Command
+### 10.4 `/save` — Checkpoint Record Command (v2, formerly /checkpoint)
 
 세션 진행사항을 memory 파일에 자동 기록하고, 교훈을 추출하여 memory를 개선하는 명령.
 
-**사용법**: `/checkpoint [title?]` (title 생략 시 git log 기반 자동 생성)
+**사용법**: `/save [title?]` (title 생략 시 git log 기반 자동 생성)
 
 ```
-/checkpoint [title?]
+/save [title?]
 │
 ├── Step 1: 정보 수집 (병렬)
 │   ├── git log --oneline (마지막 checkpoint 이후)
@@ -1440,12 +1506,12 @@ CLAUDE.md (프로젝트 루트 — 최상위 규칙)
 - 행동 가능 ("다음에 X 하면 된다" 형태)
 - 검증됨 (이번 세션에서 실제 효과 확인)
 
-### 10.4 Self-Improvement Cycle & Session Eval
+### 10.5 Self-Improvement Cycle & Session Eval
 
-`/boot`와 `/checkpoint`는 단순 기록/복원이 아니라, 반복할수록 memory 파일이 개선되는 **자기개선 피드백 루프**를 형성한다. Deep Learning의 epoch 학습과 동일 구조로, 매 사이클마다 정량 평가(Eval)를 수행한다.
+`/init`와 `/save`는 단순 기록/복원이 아니라, 반복할수록 memory 파일이 개선되는 **자기개선 피드백 루프**를 형성한다. Deep Learning의 epoch 학습과 동일 구조로, 매 사이클마다 정량 평가(Eval)를 수행한다.
 
 ```
-/boot (Read)                          /checkpoint (Write + Eval)
+/init (Read)                          /save (Write + Eval)
     │                                        │
     ├── Phase 1-4: 맥락 복원                  ├── Step 1-2: 작업 기록
     ├── Phase 5: 과거 실수 경고               ├── Step 3: 교훈 추출 → memory 개선
@@ -1485,8 +1551,9 @@ CLAUDE.md (프로젝트 루트 — 최상위 규칙)
 | checkpoint.md | 교훈 필드 기록 (2) | 최근 교훈 검토 (Phase 6a) |
 | eval-scores.md | Epoch 채점 기록 (6) | Eval 트렌드 + 최약점 로드 (Phase 6c) |
 | retrospective.md | — | 개선 이력 확인 (Phase 6d) |
+| tests/TEST.md | 테스트 결과 갱신 (2c) | Agent-Native 상태 확인 (Phase 2.5) |
 
-### 10.4.1 Regression Penalty — 행동 변화 유도 메커니즘 (v3)
+### 10.5.1 Regression Penalty — 행동 변화 유도 메커니즘 (v3)
 
 점수가 낮아도 같은 실수가 반복되는 문제를 해결하기 위한 **Detection → Escalation → Enforcement → Resolution** closed loop.
 
@@ -1495,7 +1562,7 @@ CLAUDE.md (프로젝트 루트 — 최상위 규칙)
 #### Regression Counter
 
 troubleshooting.md의 각 패턴에 `[LEVEL-N, recurrence: N]` 태그를 부착.
-- `/checkpoint` Step 3a에서 기존 패턴 재발 감지 시 `recurrence += 1`
+- `/save` Step 3a에서 기존 패턴 재발 감지 시 `recurrence += 1`
 - 새 패턴은 `recurrence: 1`로 시작
 
 #### Graduated Enforcement (3단계 에스컬레이션)
@@ -1527,16 +1594,16 @@ Eval D2(Error Prevention) 채점 시 base score에 multiplier 적용:
 
 | 파일 | 변경 내용 |
 |------|----------|
-| checkpoint.md | Step 3a recurrence 카운터 + escalation, Step 6 Regression Multiplier |
-| boot.md | Phase 5 Pre-flight Checklist, Phase 6c LEVEL-2+ 경고 |
+| save.md | Step 3a recurrence 카운터 + escalation, Step 6 Regression Multiplier |
+| init.md | Phase 5 Pre-flight Checklist, Phase 6c LEVEL-2+ 경고 |
 | troubleshooting.md | 패턴 헤더에 LEVEL/recurrence 태그, Regression Watchlist 섹션 |
 | eval-scores.md | Scoring Guide v3 (D2 Regression Multiplier), Meta v3 행 |
 
-### 10.5 `/work` — Work Execution Command
+### 10.6 `/work` — Work Execution Command
 
-`/boot`에서 복원한 맥락을 바탕으로, 가장 효과적인 작업을 선정하고 계획을 세운 뒤 실행한다.
+`/init`에서 복원한 맥락을 바탕으로, 가장 효과적인 작업을 선정하고 계획을 세운 뒤 실행한다.
 
-**사용법**: `/work [target?]` — target: `#68` (story), `pending`, `eval:D2`, `fix:description`
+**사용법**: `/work [target?]` — target: `#68` (story), `pending`, `eval:D2`, `fix:description`, `api`, `test`
 
 ```
 /work [target?]
@@ -1564,18 +1631,19 @@ Eval D2(Error Prevention) 채점 시 base score에 multiplier 적용:
 └── Phase 7: 완료 보고 (Results + Next Steps)
 ```
 
-### 10.6 Complete Session Cycle
+### 10.7 Complete Session Cycle (v2)
 
 ```
-/boot (Read)          /work (Execute)          /checkpoint (Write + Eval)
-    │                      │                          │
-    ├── 맥락 복원           ├── 후보 수집               ├── 작업 기록
-    ├── 교훈 로드           ├── 우선순위 평가            ├── 교훈 추출
-    ├── Eval 트렌드         ├── 계획 수립               ├── Memory 위생
-    └── 최약점 경고          ├── 유저 확인               ├── Session Eval
-         │                 ├── 실행                    └── Eval 기록
-         │                 └── 완료 보고                     │
-         │                      │                          │
-         └──────────────────────┘──────────────────────────┘
-                     Eval 점수가 epoch마다 1.0에 수렴
+/init (Read)    /work (Execute)    /save (Write+Eval)   /tidy   /check   /ship   /retro
+    │                │                    │                │       │        │        │
+    ├── 맥락 복원     ├── 후보 수집         ├── 작업 기록      ├── 동기화  ├── 품질    ├── 배포   ├── 분석
+    ├── Agent-Native ├── 우선순위 평가      ├── 교훈 추출      ├── 갭 분석 ├── Gate   ├── PR    ├── 개선
+    ├── 교훈 로드     ├── 계획 수립         ├── TEST.md       │         │        ├── 검증   ├── 승격
+    ├── Eval 트렌드   ├── 유저 확인         ├── Memory 위생    │         │        │        │
+    └── 최약점 경고    ├── 실행             ├── Session Eval   │         │        │        │
+         │           └── 완료 보고          └── Eval 기록      │         │        │        │
+         │                │                    │              │         │        │        │
+         └────────────────┘────────────────────┘──────────────┘─────────┘────────┘────────┘
+                                   Eval 점수가 epoch마다 1.0에 수렴
+                                   교훈 → /check 규칙 승격 → 자동 검증 피드백 루프
 ```
