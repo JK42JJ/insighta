@@ -14,7 +14,7 @@ export default defineConfig({
   outputDir: 'test-results/artifacts',
 
   use: {
-    baseURL: 'http://localhost:8081',
+    baseURL: process.env.BASE_URL || 'http://localhost:8081',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
