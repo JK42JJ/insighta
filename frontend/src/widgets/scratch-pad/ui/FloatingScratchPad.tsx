@@ -20,6 +20,7 @@ import {
   ChevronRight,
   ChevronUp,
   ChevronDown,
+  Play,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import {
@@ -712,8 +713,14 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               onDrop={handleDrop}
             >
               {isActiveDropTarget && (
-                <div className="absolute inset-0 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] pointer-events-none z-10">
-                  <span className="text-primary-foreground font-medium text-xs bg-primary/90 px-3 py-1 rounded-full">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-primary/10 backdrop-blur-[1px] pointer-events-none z-10 gap-1">
+                  <div
+                    className="rounded-md border border-dashed border-primary/40 bg-primary/10 flex items-center justify-center"
+                    style={{ width: '52px', aspectRatio: '16/9', animation: 'card-silhouette-pulse 1.5s ease-in-out infinite' }}
+                  >
+                    <Play className="w-3 h-3 text-primary/40" />
+                  </div>
+                  <span className="text-primary-foreground/80 font-medium text-[9px]">
                     {t('ideation.dropToAdd')}
                   </span>
                 </div>
@@ -812,8 +819,14 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
             onDrop={handleDrop}
           >
             {isActiveDropTarget && (
-              <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] pointer-events-none z-10">
-                <span className="text-primary-foreground font-semibold text-[10px] bg-primary px-2 py-1 rounded-md whitespace-nowrap">
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-primary/15 backdrop-blur-[2px] pointer-events-none z-10 gap-1">
+                <div
+                  className="rounded-md border border-dashed border-primary/40 bg-primary/10 flex items-center justify-center"
+                  style={{ width: '40px', aspectRatio: '16/9', animation: 'card-silhouette-pulse 1.5s ease-in-out infinite' }}
+                >
+                  <Play className="w-2.5 h-2.5 text-primary/40" />
+                </div>
+                <span className="text-primary-foreground/80 font-medium text-[8px]">
                   {t('ideation.dropToAdd')}
                 </span>
               </div>
@@ -1033,8 +1046,14 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           {!isMinimized && (
             <div className="p-3 overflow-hidden" style={{ height: 'calc(100% - 44px)' }}>
               {isActiveDropTarget && (
-                <div className="absolute inset-0 flex items-center justify-center bg-primary/15 backdrop-blur-[2px] rounded-xl pointer-events-none z-10">
-                  <span className="text-primary-foreground font-semibold text-sm bg-primary px-4 py-2 rounded-lg">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-primary/15 backdrop-blur-[2px] rounded-xl pointer-events-none z-10 gap-2">
+                  <div
+                    className="rounded-lg border border-dashed border-primary/40 bg-primary/10 flex items-center justify-center shadow-sm"
+                    style={{ width: '72px', aspectRatio: '16/9', animation: 'card-silhouette-pulse 1.5s ease-in-out infinite' }}
+                  >
+                    <Play className="w-4 h-4 text-primary/40" />
+                  </div>
+                  <span className="text-primary-foreground/80 font-medium text-xs">
                     {t('ideation.dropHere')}
                   </span>
                 </div>
