@@ -177,17 +177,17 @@ export function useCardOrchestrator(
     return [...ideationVideoCards, ...scratchpadLocalCards, ...filteredPending];
   }, [ideationVideoCards, scratchpadLocalCards, pendingLocalCards, persistedLocalCards]);
 
-  const pendingMandalaCards = useMemo(
-    () =>
-      pendingLocalCards.filter(
-        (c) =>
-          typeof c.cellIndex === 'number' &&
-          c.cellIndex >= 0 &&
-          c.levelId &&
-          c.levelId !== 'scratchpad'
-      ),
-    [pendingLocalCards]
-  );
+  const pendingMandalaCards = useMemo(() => {
+    const persistedUrls = new Set(mandalaLocalCards.map((c) => c.videoUrl));
+    return pendingLocalCards.filter(
+      (c) =>
+        typeof c.cellIndex === 'number' &&
+        c.cellIndex >= 0 &&
+        c.levelId &&
+        c.levelId !== 'scratchpad' &&
+        !persistedUrls.has(c.videoUrl)
+    );
+  }, [pendingLocalCards, mandalaLocalCards]);
 
   // All mandala cards
   const allMandalaCards = useMemo(() => {
@@ -314,6 +314,7 @@ export function useCardOrchestrator(
             level_id: currentLevelId,
             mandala_id: mandalaId,
           })
+            .then(() => queryClient.invalidateQueries({ queryKey: localCardsKeys.list() }))
             .then(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)))
             .catch(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)));
           toast({
@@ -323,7 +324,7 @@ export function useCardOrchestrator(
         }
       }
     },
-    [handleFileUpload, currentLevelId, currentLevel.subjects, toast, addLocalCard, t, mandalaId]
+    [handleFileUpload, currentLevelId, currentLevel.subjects, toast, addLocalCard, queryClient, t, mandalaId]
   );
 
   // File drop for scratchpad
@@ -343,13 +344,14 @@ export function useCardOrchestrator(
             level_id: 'scratchpad',
             mandala_id: null,
           })
+            .then(() => queryClient.invalidateQueries({ queryKey: localCardsKeys.list() }))
             .then(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)))
             .catch(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)));
           toast({ title: t('index.fileAddedToIdeation'), description: file.name });
         }
       }
     },
-    [handleFileUpload, toast, addLocalCard, t]
+    [handleFileUpload, toast, addLocalCard, queryClient, t]
   );
 
   // URL card creation helper (shared logic)
@@ -395,6 +397,9 @@ export function useCardOrchestrator(
           level_id: levelId,
           mandala_id: levelId === 'scratchpad' ? null : mandalaId,
         });
+        // Wait for cache to reflect the new card before removing from pending
+        // to prevent flicker (card disappears then reappears after refetch)
+        await queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
         setPendingLocalCards((prev) => prev.filter((c) => c.id !== tempCard.id));
       } catch (error) {
         setPendingLocalCards((prev) => prev.filter((c) => c.id !== tempCard.id));
@@ -416,7 +421,7 @@ export function useCardOrchestrator(
         }
       }
     },
-    [addLocalCard, toast, t, mandalaId]
+    [addLocalCard, queryClient, toast, t, mandalaId]
   );
 
   // Playlist drop handler

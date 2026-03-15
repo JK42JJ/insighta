@@ -138,13 +138,20 @@ export const detectLinkType = (url: string): LinkType => {
   const lowerUrl = url.toLowerCase();
 
   // YouTube Playlist (must check before regular youtube)
-  // - /playlist?list=PLxxx (standard playlist URL)
-  // - /watch?v=xxx&list=PLxxx (video within playlist context)
+  // - /playlist?list=PLxxx → playlist import
+  // - /watch?v=xxx&list=PLxxx → single video (video ID takes priority)
   if (
     (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) &&
     extractYouTubePlaylistId(url)
   ) {
-    return 'youtube-playlist';
+    try {
+      const parsed = new URL(url);
+      if (!parsed.searchParams.get('v') && !lowerUrl.includes('/shorts/')) {
+        return 'youtube-playlist';
+      }
+    } catch {
+      return 'youtube-playlist';
+    }
   }
 
   // YouTube Shorts
