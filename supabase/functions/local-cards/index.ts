@@ -193,9 +193,9 @@ Deno.serve(async (req) => {
           );
         }
 
-        const { data: card, error: insertError } = await supabase
+        const { data: card, error: upsertError } = await supabase
           .from('user_local_cards')
-          .insert({
+          .upsert({
             user_id: user.id,
             url: body.url,
             title: body.title || null,
@@ -209,18 +209,12 @@ Deno.serve(async (req) => {
             level_id: body.level_id || 'scratchpad',
             sort_order: body.sort_order ?? null,
             mandala_id: body.mandala_id || null,
-          })
+          }, { onConflict: 'user_id,url' })
           .select()
           .single();
 
-        if (insertError) {
-          if (insertError.code === '23505') {
-            return new Response(
-              JSON.stringify({ error: 'Card with this URL already exists' }),
-              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-          throw insertError;
+        if (upsertError) {
+          throw upsertError;
         }
 
         return new Response(

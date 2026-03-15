@@ -488,7 +488,7 @@ export function useCardOrchestrator(
         });
 
         // Invalidate local cards query to refresh UI
-        queryClient.invalidateQueries({ queryKey: localCardsKeys.all });
+        queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
       } catch (error) {
         toast({
           title: t('common.error'),
