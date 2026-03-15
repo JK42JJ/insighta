@@ -7,6 +7,7 @@
  */
 
 import { supabase } from '@/shared/integrations/supabase/client';
+import { subscribeAuth } from './auth-event-bus';
 
 // In production VITE_API_URL="/api", in dev "http://localhost:3000"
 const VITE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -125,7 +126,7 @@ class ApiClient {
 
   /**
    * Listen to Supabase auth state changes and cache the access token.
-   * This keeps isAuthenticated() synchronous for component usage.
+   * Uses auth-event-bus to prevent multiple independent listeners.
    */
   private setupAuthListener(): void {
     // Load initial session
@@ -133,8 +134,8 @@ class ApiClient {
       this.accessToken = session?.access_token || null;
     });
 
-    // Listen for auth state changes (login, logout, token refresh)
-    supabase.auth.onAuthStateChange((_event, session) => {
+    // Listen for auth state changes via event bus (single listener)
+    subscribeAuth((_event, session) => {
       this.accessToken = session?.access_token || null;
     });
   }
@@ -174,6 +175,8 @@ class ApiClient {
   // HTTP Request Wrapper
   // ========================================
 
+  private isRefreshing = false;
+
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}/api/v1${endpoint}`;
     const token = await this.getFreshToken();
@@ -187,18 +190,32 @@ class ApiClient {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(url, { ...options, headers });
+    let response: Response;
+    try {
+      response = await fetch(url, { ...options, headers });
+    } catch (err) {
+      // Network error (Failed to fetch, QUIC timeout, etc.)
+      throw new ApiHttpError(
+        err instanceof Error ? err.message : 'Network error',
+        0
+      );
+    }
 
-    // On 401, try refreshing session once
-    if (response.status === 401) {
-      const {
-        data: { session },
-      } = await supabase.auth.refreshSession();
-      if (session?.access_token) {
-        this.accessToken = session.access_token;
-        (headers as Record<string, string>)['Authorization'] = `Bearer ${session.access_token}`;
-        const retryResponse = await fetch(url, { ...options, headers });
-        return this.handleResponse<T>(retryResponse);
+    // On 401, try refreshing session once (skip if already refreshing)
+    if (response.status === 401 && !this.isRefreshing) {
+      this.isRefreshing = true;
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.refreshSession();
+        if (session?.access_token) {
+          this.accessToken = session.access_token;
+          (headers as Record<string, string>)['Authorization'] = `Bearer ${session.access_token}`;
+          const retryResponse = await fetch(url, { ...options, headers });
+          return this.handleResponse<T>(retryResponse);
+        }
+      } finally {
+        this.isRefreshing = false;
       }
     }
 

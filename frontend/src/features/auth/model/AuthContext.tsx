@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '@/shared/integrations/supabase/client';
+import { subscribeAuth } from '@/shared/lib/auth-event-bus';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -47,17 +48,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     getInitialSession();
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Listen for auth changes via event bus (single Supabase listener)
+    const unsubscribe = subscribeAuth((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       setError(null);
     });
 
     return () => {
-      subscription.unsubscribe();
+      unsubscribe();
     };
   }, []);
 
