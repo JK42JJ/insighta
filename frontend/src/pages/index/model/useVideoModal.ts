@@ -1,6 +1,11 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import type { InsightCard } from '@/entities/card/model/types';
 
+/** Default video panel ratio (%) — video:memo = 73:27 ≈ 16:9 fit + memo 5 rows */
+export const DEFAULT_VIDEO_PANEL_RATIO = 73;
+/** Default detail panel ratio (%) — content:memo = 75:25 */
+export const DEFAULT_DETAIL_PANEL_RATIO = 75;
+
 interface UseVideoModalReturn {
   selectedCard: InsightCard | null;
   isModalOpen: boolean;
