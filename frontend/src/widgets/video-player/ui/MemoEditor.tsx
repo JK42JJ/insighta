@@ -76,7 +76,6 @@ export function MemoEditor({
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     onSave(cardId, note);
     toast.success(t('videoPlayer.noteSaved'));
-    setIsEditing(false);
   }, [cardId, note, onSave, t]);
 
   // Insert text at cursor position (or at end)
@@ -202,28 +201,30 @@ export function MemoEditor({
     (value: string) => {
       handleNoteChange(value);
 
-      // Detect slash for slash menu using selectionStart
-      const textarea = textareaRef.current;
-      if (!textarea) return;
+      // Use requestAnimationFrame to read selectionStart after DOM update
+      requestAnimationFrame(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
 
-      const cursorPos = textarea.selectionStart;
-      const textBeforeCursor = value.slice(0, cursorPos);
-      const lastNewline = textBeforeCursor.lastIndexOf('\n');
-      const currentLine = textBeforeCursor.slice(lastNewline + 1);
+        const cursorPos = textarea.selectionStart;
+        const textBeforeCursor = value.slice(0, cursorPos);
+        const lastNewline = textBeforeCursor.lastIndexOf('\n');
+        const currentLine = textBeforeCursor.slice(lastNewline + 1);
 
-      if (currentLine.trim() === '/') {
-        slashPosRef.current = cursorPos - 1;
-        if (containerRef.current) {
-          const rect = containerRef.current.getBoundingClientRect();
-          setSlashMenu({
-            bottom: window.innerHeight - rect.top + 4,
-            left: rect.left,
-          });
+        if (currentLine.trim() === '/') {
+          slashPosRef.current = cursorPos - 1;
+          if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setSlashMenu({
+              bottom: window.innerHeight - rect.top + 4,
+              left: rect.left,
+            });
+          }
+        } else if (slashMenu && !currentLine.startsWith('/')) {
+          setSlashMenu(null);
+          slashPosRef.current = null;
         }
-      } else if (slashMenu && !currentLine.startsWith('/')) {
-        setSlashMenu(null);
-        slashPosRef.current = null;
-      }
+      });
     },
     [handleNoteChange, slashMenu]
   );
