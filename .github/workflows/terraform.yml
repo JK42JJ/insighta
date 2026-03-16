@@ -4,11 +4,13 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'terraform/**'
+      - 'terraform/**/*.tf'
+      - 'terraform/**/*.tfvars'
   push:
     branches: [main]
     paths:
-      - 'terraform/**'
+      - 'terraform/**/*.tf'
+      - 'terraform/**/*.tfvars'
 
 permissions:
   contents: read
@@ -29,15 +31,29 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      - name: Check for .tf files
+        id: check-tf
+        run: |
+          if find . -name '*.tf' -maxdepth 1 | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No .tf files found in ${{ env.WORKING_DIR }} — skipping validation"
+          fi
+        working-directory: ${{ env.WORKING_DIR }}
+
       - name: Terraform fmt check
+        if: steps.check-tf.outputs.found == 'true'
         run: terraform fmt -check -recursive
         working-directory: terraform
 
       - name: Terraform init (validate only)
+        if: steps.check-tf.outputs.found == 'true'
         run: terraform init -backend=false
         working-directory: ${{ env.WORKING_DIR }}
 
       - name: Terraform validate
+        if: steps.check-tf.outputs.found == 'true'
         run: terraform validate
         working-directory: ${{ env.WORKING_DIR }}
 
