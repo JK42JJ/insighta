@@ -8,6 +8,7 @@
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { getAuthHeaders, getEdgeFunctionUrl } from '@/shared/lib/supabase-auth';
+import { useAuth } from '@/features/auth/model/useAuth';
 import type {
   YouTubePlaylist,
   SyncInterval,
@@ -246,6 +247,8 @@ export function useIdeationVideos() {
  * Hook to get ALL video states (ideation + mandala) (Edge Function)
  */
 export function useAllVideoStates() {
+  const { isLoggedIn, isTokenReady } = useAuth();
+
   return useQuery({
     queryKey: youtubeSyncKeys.allVideoStates,
     queryFn: async (): Promise<UserVideoStateWithVideo[]> => {
@@ -259,6 +262,7 @@ export function useAllVideoStates() {
       const data = await response.json();
       return data.videos;
     },
+    enabled: isLoggedIn && isTokenReady,
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
   });

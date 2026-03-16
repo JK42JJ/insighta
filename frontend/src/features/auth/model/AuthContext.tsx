@@ -1,12 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '@/shared/integrations/supabase/client';
 import { subscribeAuth } from '@/shared/lib/auth-event-bus';
+import { apiClient } from '@/shared/lib/api-client';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
+  isTokenReady: boolean;
   error: AuthError | null;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -22,6 +24,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isTokenReady, setIsTokenReady] = useState(false);
   const [error, setError] = useState<AuthError | null>(null);
 
   useEffect(() => {
@@ -43,6 +46,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.error('Unexpected error getting session:', err);
       } finally {
         setIsLoading(false);
+        // Wait for apiClient to have the token cached before allowing queries
+        apiClient.tokenReady.then(() => setIsTokenReady(true));
       }
     };
 
@@ -107,6 +112,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         user,
         session,
         isLoading,
+        isTokenReady,
         error,
         signInWithGoogle,
         signOut,

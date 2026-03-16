@@ -11,6 +11,7 @@ export function useAuth() {
     ...context,
     // Computed properties
     isLoggedIn: !!context.user,
+    isTokenReady: context.isTokenReady,
     userEmail: context.user?.email ?? null,
     userName: context.user?.user_metadata?.full_name ?? context.user?.email?.split('@')[0] ?? null,
     userAvatar: context.user?.user_metadata?.avatar_url ?? null,

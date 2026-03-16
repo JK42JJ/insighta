@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { MessageSquare, Timer, Camera } from 'lucide-react';
@@ -11,6 +11,72 @@ import { SlashMenu } from './SlashMenu';
 import { NotePreview } from './NotePreview';
 
 const AUTO_SAVE_DELAY_MS = 3_000;
+const IMAGE_MD_REGEX = /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
+
+interface CaptureImage {
+  alt: string;
+  url: string;
+  seconds: number | null;
+}
+
+function parseCaptures(text: string): CaptureImage[] {
+  const captures: CaptureImage[] = [];
+  let match: RegExpExecArray | null;
+  const regex = new RegExp(IMAGE_MD_REGEX.source, 'g');
+  while ((match = regex.exec(text)) !== null) {
+    const url = match[2];
+    const tMatch = url.match(/#t=(\d+)s/);
+    captures.push({
+      alt: match[1],
+      url: url.replace(/#t=\d+s$/, ''),
+      seconds: tMatch ? parseInt(tMatch[1], 10) : null,
+    });
+  }
+  return captures;
+}
+
+function CaptureGallery({
+  captures,
+  playerRef,
+  playerReady,
+}: {
+  captures: CaptureImage[];
+  playerRef: React.MutableRefObject<YTPlayer | null>;
+  playerReady: boolean;
+}) {
+  if (captures.length === 0) return null;
+
+  return (
+    <div className="px-3 py-1.5 flex-shrink-0 overflow-x-auto scrollbar-thin">
+      <div className="flex gap-2">
+        {captures.map((cap, i) => (
+          <button
+            key={`${cap.url}-${i}`}
+            onClick={() => {
+              if (cap.seconds !== null && playerRef.current && playerReady) {
+                playerRef.current.seekTo(cap.seconds, true);
+              }
+            }}
+            className="relative flex-shrink-0 rounded-md overflow-hidden border border-border/20 hover:border-primary/40 transition-colors group"
+            title={cap.alt}
+          >
+            <img
+              src={cap.url}
+              alt={cap.alt}
+              className="h-12 w-auto object-cover"
+              loading="lazy"
+            />
+            {cap.seconds !== null && (
+              <span className="absolute bottom-0.5 right-0.5 text-[9px] bg-black/70 text-white px-1 rounded">
+                {formatTime(cap.seconds)}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface MemoEditorProps {
   note: string;
@@ -35,6 +101,7 @@ export function MemoEditor({
   const [note, setNote] = useState(initialNote);
   const [isEditing, setIsEditing] = useState(!initialNote);
   const [slashMenu, setSlashMenu] = useState<{ bottom?: number; top?: number; left: number } | null>(null);
+  const captures = useMemo(() => parseCaptures(note), [note]);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slashPosRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,10 +128,9 @@ export function MemoEditor({
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
       autoSaveTimerRef.current = setTimeout(() => {
         onSave(cardId, newNote);
-        toast.success(t('videoPlayer.autoSaved'));
       }, AUTO_SAVE_DELAY_MS);
     },
-    [cardId, onSave, t]
+    [cardId, onSave]
   );
 
   // Cleanup auto-save timer
@@ -138,7 +204,7 @@ export function MemoEditor({
     }
   }, [videoId, playerRef, insertTextAtCursor, t]);
 
-  // Insert capture bookmark at cursor
+  // Insert capture bookmark with thumbnail image markdown
   const insertCapture = useCallback((overrideNote?: string) => {
     if (!playerRef.current || !videoId) {
       toast.error(t('videoPlayer.playerNotReady'));
@@ -148,7 +214,7 @@ export function MemoEditor({
     try {
       const currentTime = Math.floor(playerRef.current.getCurrentTime());
       const timestamp = formatTime(currentTime);
-      const link = `[📸 ${timestamp}](https://www.youtube.com/watch?v=${videoId}&t=${currentTime}s)`;
+      const link = `![📸 ${timestamp}](https://img.youtube.com/vi/${videoId}/mqdefault.jpg#t=${currentTime}s)`;
 
       insertTextAtCursor(link, overrideNote);
       toast.success(t('videoPlayer.timestampAdded', { timestamp }));
@@ -206,15 +272,21 @@ export function MemoEditor({
     [slashMenu, handleImmediateSave]
   );
 
-  // Textarea change handler with slash detection (value-based, no rAF timing issues)
+  // Textarea change handler with slash detection using selectionStart for cursor-accurate detection
   const handleTextareaChange = useCallback(
     (value: string) => {
       handleNoteChange(value);
 
-      const lastLine = value.split('\n').pop() ?? '';
+      const textarea = textareaRef.current;
+      if (!textarea) return;
 
-      if (lastLine.trim() === '/') {
-        slashPosRef.current = value.length - 1;
+      const cursorPos = textarea.selectionStart;
+      const textBeforeCursor = value.slice(0, cursorPos);
+      const lastNewline = textBeforeCursor.lastIndexOf('\n');
+      const currentLine = textBeforeCursor.slice(lastNewline + 1);
+
+      if (currentLine.trim() === '/') {
+        slashPosRef.current = lastNewline + 1 + currentLine.indexOf('/');
         if (containerRef.current) {
           const rect = containerRef.current.getBoundingClientRect();
           setSlashMenu({
@@ -222,7 +294,7 @@ export function MemoEditor({
             left: rect.left,
           });
         }
-      } else if (slashMenu && !lastLine.startsWith('/')) {
+      } else if (slashMenu && !currentLine.startsWith('/')) {
         setSlashMenu(null);
         slashPosRef.current = null;
       }
@@ -281,6 +353,9 @@ export function MemoEditor({
             </span>
           )}
         </div>
+
+        {/* Capture Gallery — horizontal thumbnail strip */}
+        <CaptureGallery captures={captures} playerRef={playerRef} playerReady={playerReady} />
 
         {/* Content — fills remaining height from parent */}
         <div className="px-3 pb-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin">

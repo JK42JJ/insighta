@@ -57,12 +57,12 @@ export function NotePreview({
     >
       <div className="space-y-0.5 text-foreground/60">
         {note.split('\n').map((line, lineIdx) => {
-          const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g;
+          const combinedRegex = /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)|\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
           const parts: React.ReactNode[] = [];
           let lastIndex = 0;
           let match: RegExpExecArray | null;
 
-          while ((match = linkRegex.exec(line)) !== null) {
+          while ((match = combinedRegex.exec(line)) !== null) {
             if (match.index > lastIndex) {
               parts.push(
                 <span key={`t-${lineIdx}-${lastIndex}`}>
@@ -71,37 +71,66 @@ export function NotePreview({
               );
             }
 
-            const url = match[2];
-            const label = match[1];
-            const isYT = url.includes('youtube.com') || url.includes('youtu.be');
-            const seconds = isYT ? extractTimestampSeconds(url) : null;
-            const isTimestamp = isYT && seconds !== null;
+            const isImage = match[0].startsWith('!');
 
-            parts.push(
-              isTimestamp ? (
+            if (isImage) {
+              const imgAlt = match[1];
+              const imgUrl = match[2].replace(/#t=\d+s$/, '');
+              const tMatch = match[2].match(/#t=(\d+)s/);
+              const imgSeconds = tMatch ? parseInt(tMatch[1], 10) : null;
+
+              parts.push(
                 <button
-                  key={`l-${lineIdx}-${match.index}`}
+                  key={`img-${lineIdx}-${match.index}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleTimestampClick(url, e);
+                    if (imgSeconds !== null && playerRef.current && playerReady) {
+                      playerRef.current.seekTo(imgSeconds, true);
+                    }
                   }}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                  className="block my-1"
                 >
-                  {label}
-                  <Play className="w-2.5 h-2.5" />
+                  <img
+                    src={imgUrl}
+                    alt={imgAlt}
+                    className="max-h-20 rounded-md border border-border/20 hover:border-primary/40 transition-colors"
+                    loading="lazy"
+                  />
                 </button>
-              ) : (
-                <a
-                  key={`l-${lineIdx}-${match.index}`}
-                  href={url}
-                  onClick={(e) => handleTimestampClick(url, e)}
-                  className="text-primary hover:underline inline-flex items-center gap-0.5"
-                >
-                  {label}
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              )
-            );
+              );
+            } else {
+              const url = match[4];
+              const label = match[3];
+              const isYT = url.includes('youtube.com') || url.includes('youtu.be');
+              const seconds = isYT ? extractTimestampSeconds(url) : null;
+              const isTimestamp = isYT && seconds !== null;
+
+              parts.push(
+                isTimestamp ? (
+                  <button
+                    key={`l-${lineIdx}-${match.index}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTimestampClick(url, e);
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                  >
+                    {label}
+                    <Play className="w-2.5 h-2.5" />
+                  </button>
+                ) : (
+                  <a
+                    key={`l-${lineIdx}-${match.index}`}
+                    href={url}
+                    onClick={(e) => handleTimestampClick(url, e)}
+                    className="text-primary hover:underline inline-flex items-center gap-0.5"
+                  >
+                    {label}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )
+              );
+            }
             lastIndex = match.index + match[0].length;
           }
 

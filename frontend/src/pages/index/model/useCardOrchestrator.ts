@@ -26,6 +26,7 @@ import {
 } from '@/shared/data/mockData';
 import { uploadFile, detectFileType, isSupportedFileType } from '@/shared/lib/fileUpload';
 import { getAuthHeaders, getEdgeFunctionUrl } from '@/shared/lib/supabase-auth';
+import { normalizeUrl } from '@/shared/lib/url-normalize';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/shared/lib/use-toast';
 
@@ -170,29 +171,43 @@ export function useCardOrchestrator(
     [syncedCards]
   );
 
-  // Merged scratchpad
+  // Merged scratchpad (deduplicate by normalized URL)
   const scratchPadCards = useMemo(() => {
-    const persistedUrls = new Set(persistedLocalCards.map((c) => c.videoUrl));
-    const filteredPending = pendingLocalCards.filter((c) => !persistedUrls.has(c.videoUrl));
-    return [...ideationVideoCards, ...scratchpadLocalCards, ...filteredPending];
+    const persistedUrls = new Set(persistedLocalCards.map((c) => normalizeUrl(c.videoUrl)));
+    const filteredPending = pendingLocalCards.filter((c) => !persistedUrls.has(normalizeUrl(c.videoUrl)));
+    const merged = [...ideationVideoCards, ...scratchpadLocalCards, ...filteredPending];
+    const seen = new Set<string>();
+    return merged.filter((card) => {
+      const key = normalizeUrl(card.videoUrl);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }, [ideationVideoCards, scratchpadLocalCards, pendingLocalCards, persistedLocalCards]);
 
   const pendingMandalaCards = useMemo(() => {
-    const persistedUrls = new Set(mandalaLocalCards.map((c) => c.videoUrl));
+    const persistedUrls = new Set(mandalaLocalCards.map((c) => normalizeUrl(c.videoUrl)));
     return pendingLocalCards.filter(
       (c) =>
         typeof c.cellIndex === 'number' &&
         c.cellIndex >= 0 &&
         c.levelId &&
         c.levelId !== 'scratchpad' &&
-        !persistedUrls.has(c.videoUrl)
+        !persistedUrls.has(normalizeUrl(c.videoUrl))
     );
   }, [pendingLocalCards, mandalaLocalCards]);
 
-  // All mandala cards
+  // All mandala cards (deduplicate by normalized URL)
   const allMandalaCards = useMemo(() => {
     if (!isLoggedIn) return demoCards;
-    return [...mandalaLocalCards, ...mandalaVideoCards, ...pendingMandalaCards];
+    const merged = [...mandalaLocalCards, ...mandalaVideoCards, ...pendingMandalaCards];
+    const seen = new Set<string>();
+    return merged.filter((card) => {
+      const key = normalizeUrl(card.videoUrl);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }, [isLoggedIn, demoCards, mandalaLocalCards, mandalaVideoCards, pendingMandalaCards]);
 
   // Cards grouped by cell index
@@ -363,17 +378,19 @@ export function useCardOrchestrator(
       cellIndex: number,
       levelId: string
     ) => {
+      // Normalize URL before persisting to prevent duplicates
+      const normalizedUrl = normalizeUrl(url);
       let title = tempCard.title;
       let metadata = tempCard.metadata;
 
       try {
-        title = await fetchLinkTitle(url, linkType);
+        title = await fetchLinkTitle(normalizedUrl, linkType);
       } catch {
         /* non-critical */
       }
       if (linkType !== 'youtube' && linkType !== 'youtube-shorts') {
         try {
-          const fetched = await fetchUrlMetadata(url);
+          const fetched = await fetchUrlMetadata(normalizedUrl);
           if (fetched) {
             title = fetched.title || title;
             metadata = fetched;
@@ -385,7 +402,7 @@ export function useCardOrchestrator(
 
       try {
         await addLocalCard({
-          url,
+          url: normalizedUrl,
           title,
           thumbnail: metadata?.image || tempCard.thumbnail,
           link_type: linkType,
@@ -673,6 +690,19 @@ export function useCardOrchestrator(
             return;
           }
 
+          // Duplicate check: normalized URL already exists in persisted or pending cards
+          const normalized = normalizeUrl(url);
+          const isDuplicate =
+            persistedLocalCards.some((c) => normalizeUrl(c.videoUrl) === normalized) ||
+            pendingLocalCards.some((c) => normalizeUrl(c.videoUrl) === normalized);
+          if (isDuplicate) {
+            toast({
+              title: t('index.duplicateCard'),
+              description: t('index.duplicateCardDesc'),
+            });
+            return;
+          }
+
           const newCard = createCardFromUrl(url, cellIndex, currentLevelId);
           setPendingLocalCards((prev) => [...prev, newCard]);
           toast({
@@ -755,6 +785,19 @@ export function useCardOrchestrator(
           return;
         }
 
+        // Duplicate check (Twin Fix with handleCardDrop)
+        const normalized = normalizeUrl(url);
+        const isDuplicate =
+          persistedLocalCards.some((c) => normalizeUrl(c.videoUrl) === normalized) ||
+          pendingLocalCards.some((c) => normalizeUrl(c.videoUrl) === normalized);
+        if (isDuplicate) {
+          toast({
+            title: t('index.duplicateCard'),
+            description: t('index.duplicateCardDesc'),
+          });
+          return;
+        }
+
         const newCard = createCardFromUrl(url, -1, 'scratchpad');
         setPendingLocalCards((prev) => [...prev, newCard]);
         toast({
@@ -770,7 +813,7 @@ export function useCardOrchestrator(
         });
       }
     },
-    [isLoggedIn, navigate, toast, canAddCard, subscription, t, persistUrlCard, handlePlaylistDrop]
+    [isLoggedIn, navigate, toast, canAddCard, subscription, t, persistUrlCard, handlePlaylistDrop, persistedLocalCards, pendingLocalCards]
   );
 
   // Move card from mandala back to scratchpad

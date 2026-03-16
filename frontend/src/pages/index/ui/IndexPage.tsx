@@ -184,6 +184,8 @@ function AuthenticatedApp() {
   useGlobalPaste({
     addPendingCard: cards.addPendingCard,
     removePendingCard: cards.removePendingCard,
+    persistedLocalCards: cards.persistedLocalCards,
+    pendingLocalCards: cards.pendingLocalCards,
   });
 
   // --- dnd-kit state ---
