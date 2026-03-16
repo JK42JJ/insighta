@@ -43,7 +43,9 @@ export function YouTubePlayer({
   } | null>(null);
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
 
-  const embedUrl = `https://www.youtube.com/embed/${videoId}?start=${Math.floor(startTime)}&autoplay=1&rel=0&modestbranding=1&enablejsapi=1`;
+  // Capture initial startTime so embedUrl never changes on re-renders (prevents iframe reload/flicker)
+  const initialStartTimeRef = useRef(startTime);
+  const embedUrl = `https://www.youtube.com/embed/${videoId}?start=${Math.floor(initialStartTimeRef.current)}&autoplay=1&rel=0&modestbranding=1&enablejsapi=1`;
 
   // Initialize YT Player
   useEffect(() => {
