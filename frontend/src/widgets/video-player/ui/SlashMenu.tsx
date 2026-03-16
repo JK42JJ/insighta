@@ -10,7 +10,7 @@ interface SlashMenuItem {
 
 const SLASH_ITEMS: SlashMenuItem[] = [
   { id: 'timestamp', icon: '⏱', labelKey: 'videoPlayer.insertTimestamp', enabled: true },
-  { id: 'capture', icon: '📸', labelKey: 'videoPlayer.insertCapture', enabled: false },
+  { id: 'capture', icon: '📸', labelKey: 'videoPlayer.insertCapture', enabled: true },
   { id: 'link', icon: '🔗', labelKey: 'videoPlayer.insertLink', enabled: false },
   { id: 'insight', icon: '💡', labelKey: 'videoPlayer.insertInsight', enabled: false },
 ];

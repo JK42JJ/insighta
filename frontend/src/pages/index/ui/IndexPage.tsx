@@ -184,6 +184,8 @@ function AuthenticatedApp() {
   useGlobalPaste({
     addPendingCard: cards.addPendingCard,
     removePendingCard: cards.removePendingCard,
+    persistedLocalCards: cards.persistedLocalCards,
+    pendingLocalCards: cards.pendingLocalCards,
   });
 
   // --- dnd-kit state ---
@@ -562,6 +564,7 @@ function AuthenticatedApp() {
             onSave={cards.handleSaveNote}
             onSaveWatchPosition={cards.handleSaveWatchPosition}
             watchPositionCache={modal.watchPositionCache}
+            panelSizeCache={modal.panelSizeCache}
           />
 
           {/* Mobile-only floating MandalaPanel */}

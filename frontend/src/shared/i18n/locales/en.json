@@ -369,6 +369,8 @@
     "loginRequiredAddMandala": "Please log in to add to mandala.",
     "unsupportedLink": "Unsupported link",
     "unsupportedLinkDesc": "Only YouTube, LinkedIn, Facebook, Notion links can be added.",
+    "duplicateCard": "Already added",
+    "duplicateCardDesc": "This link is already in your collection.",
     "storageLimitExceeded": "Storage limit exceeded",
     "storageLimitDesc": "You've reached the {{tier}} plan storage limit ({{limit}} items).",
     "storageLimitMaxDesc": "Maximum {{limit}} items can be saved.",

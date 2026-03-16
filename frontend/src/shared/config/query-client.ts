@@ -2,9 +2,13 @@ import { QueryClient } from '@tanstack/react-query';
 import { ApiHttpError } from '@/shared/lib/api-client';
 
 function shouldRetry(failureCount: number, error: unknown): boolean {
-  if (failureCount >= 3) return false;
-  if (error instanceof ApiHttpError) return error.isTransient;
-  return true; // network errors etc.
+  if (error instanceof ApiHttpError) {
+    // Allow 1 retry on 401 to handle auth race condition (token not yet cached)
+    if (error.statusCode === 401) return failureCount < 1;
+    if (failureCount >= 3) return false;
+    return error.isTransient;
+  }
+  return failureCount < 3; // network errors etc.
 }
 
 function retryDelay(attempt: number): number {
