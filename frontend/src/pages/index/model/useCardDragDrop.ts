@@ -9,11 +9,11 @@ import {
 } from '@/features/card-management/model/useLocalCards';
 import {
   createCardFromUrl,
-  isValidUrl,
   fetchLinkTitle,
   detectLinkType,
   fetchUrlMetadata,
 } from '@/shared/data/mockData';
+import { normalizeUrl } from '@/shared/lib/url-normalize';
 import { useToast } from '@/shared/lib/use-toast';
 
 interface UseCardDragDropDeps {
@@ -127,6 +127,8 @@ export function useCardDragDrop(): UseCardDragDropReturn {
 export function useGlobalPaste(deps: {
   addPendingCard: (card: InsightCard) => void;
   removePendingCard: (id: string) => void;
+  persistedLocalCards: InsightCard[];
+  pendingLocalCards: InsightCard[];
 }) {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -184,6 +186,19 @@ export function useGlobalPaste(deps: {
         return;
       }
 
+      // Duplicate check
+      const normalized = normalizeUrl(text);
+      const isDuplicate =
+        deps.persistedLocalCards.some((c) => normalizeUrl(c.videoUrl) === normalized) ||
+        deps.pendingLocalCards.some((c) => normalizeUrl(c.videoUrl) === normalized);
+      if (isDuplicate) {
+        toast({
+          title: t('index.duplicateCard'),
+          description: t('index.duplicateCardDesc'),
+        });
+        return;
+      }
+
       const newCard = createCardFromUrl(text, -1, 'scratchpad');
       deps.addPendingCard(newCard);
 
@@ -223,7 +238,7 @@ export function useGlobalPaste(deps: {
 
       try {
         await addLocalCard({
-          url: text,
+          url: normalized,
           title,
           thumbnail: metadata?.image || newCard.thumbnail,
           link_type: linkType,
@@ -258,7 +273,7 @@ export function useGlobalPaste(deps: {
 
     document.addEventListener('paste', handlePaste);
     return () => document.removeEventListener('paste', handlePaste);
-  }, [toast, isLoggedIn, navigate, canAddCard, subscription, addLocalCard, t, deps]);
+  }, [toast, isLoggedIn, navigate, canAddCard, subscription, addLocalCard, t, deps.addPendingCard, deps.removePendingCard, deps.persistedLocalCards, deps.pendingLocalCards]);
 
   // No return value -- side-effect only
 }

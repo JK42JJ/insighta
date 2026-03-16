@@ -93,6 +93,50 @@ function parseDuration(duration: string): number {
   return parseInt(match[1] || '0', 10) * 3600 + parseInt(match[2] || '0', 10) * 60 + parseInt(match[3] || '0', 10);
 }
 
+// URL normalization for duplicate prevention
+const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be']);
+const GENERIC_TRACKING = new Set([
+  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+  'fbclid', 'gclid', 'ref', 'source', 'mc_cid', 'mc_eid',
+]);
+const YT_TRACKING = new Set(['list', 'index', 't', 'si', 'feature', 'pp', 'ab_channel', 'app', 'src_vid']);
+
+function normalizeUrl(rawUrl: string): string {
+  let parsed: URL;
+  try { parsed = new URL(rawUrl); } catch { return rawUrl; }
+
+  const host = parsed.hostname.replace(/^www\./, '');
+  const isYT = YOUTUBE_HOSTS.has(parsed.hostname) || YOUTUBE_HOSTS.has(host) || host === 'youtu.be';
+
+  if (isYT) {
+    let videoId: string | null = null;
+    if (host === 'youtu.be') {
+      videoId = parsed.pathname.slice(1).split('/')[0] || null;
+    } else {
+      const shortsMatch = parsed.pathname.match(/^\/shorts\/([^/?#]+)/);
+      if (shortsMatch) return `https://www.youtube.com/shorts/${shortsMatch[1]}`;
+      videoId = parsed.searchParams.get('v');
+      if (!videoId) {
+        const embedMatch = parsed.pathname.match(/^\/embed\/([^/?#]+)/);
+        if (embedMatch) videoId = embedMatch[1];
+      }
+    }
+    if (videoId) return `https://www.youtube.com/watch?v=${videoId}`;
+    return rawUrl;
+  }
+
+  // Generic normalization
+  parsed.hostname = parsed.hostname.toLowerCase();
+  for (const p of GENERIC_TRACKING) parsed.searchParams.delete(p);
+  for (const p of YT_TRACKING) parsed.searchParams.delete(p);
+  parsed.searchParams.sort();
+  if (parsed.pathname.endsWith('/') && parsed.pathname.length > 1) {
+    parsed.pathname = parsed.pathname.slice(0, -1);
+  }
+  parsed.hash = '';
+  return parsed.toString();
+}
+
 console.log("local-cards Edge Function loaded");
 
 Deno.serve(async (req) => {
@@ -171,6 +215,8 @@ Deno.serve(async (req) => {
 
       case 'add': {
         const body = await req.json();
+        // Normalize URL before limit check and upsert to prevent duplicates from URL variants
+        if (body.url) body.url = normalizeUrl(body.url);
         const limitInfo = await checkCardLimit(supabase, user.id);
 
         if (!limitInfo.canAdd) {
@@ -380,7 +426,7 @@ Deno.serve(async (req) => {
 
           const rows = inserts.map((item: { url: string; title?: string; thumbnail?: string; link_type?: string; user_note?: string; cell_index?: number; level_id?: string; sort_order?: number; mandala_id?: string }) => ({
             user_id: user.id,
-            url: item.url,
+            url: normalizeUrl(item.url),
             title: item.title ?? null,
             thumbnail: item.thumbnail ?? null,
             link_type: item.link_type ?? 'other',

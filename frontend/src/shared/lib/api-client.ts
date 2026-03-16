@@ -118,9 +118,14 @@ export class ApiHttpError extends Error {
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
+  private tokenReadyResolve!: () => void;
+  public readonly tokenReady: Promise<void>;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
+    this.tokenReady = new Promise<void>((resolve) => {
+      this.tokenReadyResolve = resolve;
+    });
     this.setupAuthListener();
   }
 
@@ -132,6 +137,7 @@ class ApiClient {
     // Load initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       this.accessToken = session?.access_token || null;
+      this.tokenReadyResolve();
     });
 
     // Listen for auth state changes via event bus (single listener)
@@ -181,6 +187,10 @@ class ApiClient {
     const url = `${this.baseUrl}/api/v1${endpoint}`;
     const token = await this.getFreshToken();
 
+    if (import.meta.env.DEV) {
+      console.log(`[apiClient] ${options.method || 'GET'} ${endpoint} token:${token ? 'yes' : 'no'}`);
+    }
+
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -190,15 +200,28 @@ class ApiClient {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
 
+    // 15s timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15_000);
+
     let response: Response;
     try {
-      response = await fetch(url, { ...options, headers });
+      response = await fetch(url, { ...options, headers, signal: controller.signal });
     } catch (err) {
+      clearTimeout(timeoutId);
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new ApiHttpError('Request timeout (15s)', 408);
+      }
       // Network error (Failed to fetch, QUIC timeout, etc.)
       throw new ApiHttpError(
         err instanceof Error ? err.message : 'Network error',
         0
       );
+    }
+    clearTimeout(timeoutId);
+
+    if (import.meta.env.DEV) {
+      console.log(`[apiClient] Response: ${response.status} ${endpoint}`);
     }
 
     // On 401, try refreshing session once (skip if already refreshing)
