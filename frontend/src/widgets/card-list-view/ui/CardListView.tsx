@@ -26,6 +26,9 @@ interface CardListViewProps {
   onCardsReorder?: (reorderedCards: InsightCard[]) => void;
   onDeleteCards?: (cardIds: string[]) => void;
   onAddCard?: (url: string) => void;
+  onSaveWatchPosition?: (id: string, positionSeconds: number) => void;
+  watchPositionCache?: Map<string, number>;
+  panelSizeCache?: Map<string, number>;
 }
 
 export function CardListView({
@@ -43,6 +46,9 @@ export function CardListView({
   onCardsReorder,
   onDeleteCards,
   onAddCard,
+  onSaveWatchPosition,
+  watchPositionCache,
+  panelSizeCache,
 }: CardListViewProps) {
   const { t } = useTranslation();
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
@@ -227,7 +233,9 @@ export function CardListView({
             <DetailPanel
               card={activeCard}
               onSaveNote={onSaveNote}
-              onCardClick={onCardClick}
+              onSaveWatchPosition={onSaveWatchPosition}
+              watchPositionCache={watchPositionCache}
+              panelSizeCache={panelSizeCache}
               onClose={() => setActiveCard(null)}
             />
           </ResizablePanel>

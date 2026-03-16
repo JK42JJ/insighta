@@ -14,6 +14,12 @@ export const SLASH_COMMAND_REGISTRY: SlashCommand[] = [
   { id: 'insight', icon: '💡', labelKey: 'videoPlayer.insertInsight', enabled: false, requiresPlayer: false, category: 'ai' },
 ];
 
+export const CATEGORY_LABELS: Record<string, string> = {
+  media: 'Insert media',
+  content: 'Insert content',
+  ai: 'AI tools',
+};
+
 export function getAvailableCommands(hasPlayer: boolean): SlashCommand[] {
   if (hasPlayer) return SLASH_COMMAND_REGISTRY;
   return SLASH_COMMAND_REGISTRY.filter((cmd) => !cmd.requiresPlayer);
