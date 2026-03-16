@@ -4,11 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { MessageSquare, Timer } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/shared/ui/button';
+import { Textarea } from '@/shared/ui/textarea';
 import type { YTPlayer } from '../model/youtube-api';
 import { formatTime } from '../model/youtube-api';
 import { SlashMenu } from './SlashMenu';
 import { NotePreview } from './NotePreview';
-import { RichTextarea } from './RichTextarea';
 
 const AUTO_SAVE_DELAY_MS = 3_000;
 
@@ -38,6 +38,7 @@ export function MemoEditor({
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slashPosRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Sync with external note changes (e.g., when card changes)
   useEffect(() => {
@@ -78,7 +79,38 @@ export function MemoEditor({
     setIsEditing(false);
   }, [cardId, note, onSave, t]);
 
-  // Insert timestamp at end of note (or replace overrideNote)
+  // Insert text at cursor position (or at end)
+  const insertTextAtCursor = useCallback(
+    (text: string, overrideNote?: string) => {
+      const currentNote = overrideNote ?? note;
+      const textarea = textareaRef.current;
+      const cursorPos = textarea?.selectionStart ?? currentNote.length;
+
+      const before = currentNote.slice(0, cursorPos);
+      const after = currentNote.slice(cursorPos);
+      const separator = before.length > 0 && !before.endsWith('\n') ? '\n' : '';
+      const newNote = before + separator + text + ' ' + after;
+
+      setNote(newNote);
+      scheduleAutoSave(newNote);
+      setIsEditing(true);
+
+      // Restore cursor position after the inserted text
+      const newCursorPos = before.length + separator.length + text.length + 1;
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.selectionStart = newCursorPos;
+          textareaRef.current.selectionEnd = newCursorPos;
+          textareaRef.current.focus();
+        }
+      });
+
+      return newNote;
+    },
+    [note, scheduleAutoSave]
+  );
+
+  // Insert timestamp at cursor
   const insertTimestamp = useCallback((overrideNote?: string) => {
     if (!playerRef.current || !videoId) {
       toast.error(t('videoPlayer.playerNotReady'));
@@ -86,23 +118,35 @@ export function MemoEditor({
     }
 
     try {
-      const currentNote = overrideNote ?? note;
       const currentTime = Math.floor(playerRef.current.getCurrentTime());
       const timestamp = formatTime(currentTime);
       const link = `[⏱ ${timestamp}](https://www.youtube.com/watch?v=${videoId}&t=${currentTime}s)`;
 
-      const separator = currentNote.length > 0 && !currentNote.endsWith('\n') ? '\n' : '';
-      const newNote = currentNote + separator + link + ' ';
-
-      setNote(newNote);
-      scheduleAutoSave(newNote);
-      setIsEditing(true);
-
+      insertTextAtCursor(link, overrideNote);
       toast.success(t('videoPlayer.timestampAdded', { timestamp }));
     } catch {
       toast.error(t('videoPlayer.timestampFailed'));
     }
-  }, [note, videoId, playerRef, scheduleAutoSave, t]);
+  }, [videoId, playerRef, insertTextAtCursor, t]);
+
+  // Insert capture bookmark at cursor
+  const insertCapture = useCallback((overrideNote?: string) => {
+    if (!playerRef.current || !videoId) {
+      toast.error(t('videoPlayer.playerNotReady'));
+      return;
+    }
+
+    try {
+      const currentTime = Math.floor(playerRef.current.getCurrentTime());
+      const timestamp = formatTime(currentTime);
+      const link = `[📸 ${timestamp}](https://www.youtube.com/watch?v=${videoId}&t=${currentTime}s)`;
+
+      insertTextAtCursor(link, overrideNote);
+      toast.success(t('videoPlayer.timestampAdded', { timestamp }));
+    } catch {
+      toast.error(t('videoPlayer.timestampFailed'));
+    }
+  }, [videoId, playerRef, insertTextAtCursor, t]);
 
   // Handle slash menu selection
   const handleSlashSelect = useCallback(
@@ -122,11 +166,13 @@ export function MemoEditor({
 
       if (itemId === 'timestamp') {
         insertTimestamp(cleanedNote);
+      } else if (itemId === 'capture') {
+        insertCapture(cleanedNote);
       } else {
         setNote(cleanedNote);
       }
     },
-    [note, insertTimestamp]
+    [note, insertTimestamp, insertCapture]
   );
 
   const handleSlashClose = useCallback(() => {
@@ -151,16 +197,22 @@ export function MemoEditor({
     [slashMenu, handleImmediateSave]
   );
 
-  // RichTextarea change handler with slash detection
-  const handleRichTextareaChange = useCallback(
+  // Textarea change handler with slash detection
+  const handleTextareaChange = useCallback(
     (value: string) => {
       handleNoteChange(value);
 
-      // Detect slash at end of value for slash menu
-      // (simplified: check if the last char typed was '/')
-      const lastLine = value.split('\n').pop() ?? '';
-      if (lastLine.trim() === '/') {
-        slashPosRef.current = value.length - 1;
+      // Detect slash for slash menu using selectionStart
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+
+      const cursorPos = textarea.selectionStart;
+      const textBeforeCursor = value.slice(0, cursorPos);
+      const lastNewline = textBeforeCursor.lastIndexOf('\n');
+      const currentLine = textBeforeCursor.slice(lastNewline + 1);
+
+      if (currentLine.trim() === '/') {
+        slashPosRef.current = cursorPos - 1;
         if (containerRef.current) {
           const rect = containerRef.current.getBoundingClientRect();
           setSlashMenu({
@@ -168,25 +220,12 @@ export function MemoEditor({
             left: rect.left,
           });
         }
-      } else if (slashMenu && !lastLine.startsWith('/')) {
+      } else if (slashMenu && !currentLine.startsWith('/')) {
         setSlashMenu(null);
         slashPosRef.current = null;
       }
     },
     [handleNoteChange, slashMenu]
-  );
-
-  // Seek to timestamp when clicking a chip in the RichTextarea
-  const handleTimestampSeek = useCallback(
-    (url: string) => {
-      if (!playerRef.current || !playerReady) return;
-      const tMatch = url.match(/[?&]t=(\d+)/);
-      if (tMatch) {
-        const seconds = parseInt(tMatch[1], 10);
-        playerRef.current.seekTo(seconds, true);
-      }
-    },
-    [playerRef, playerReady]
   );
 
   return (
@@ -201,7 +240,7 @@ export function MemoEditor({
     >
       <div className="flex flex-col flex-1 min-h-0">
         {/* Header */}
-        <div className="px-3 py-2 flex items-center justify-between">
+        <div className="px-3 py-2 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             {isYouTube && (
               <Button
@@ -232,9 +271,10 @@ export function MemoEditor({
         {/* Content — fills remaining height from parent */}
         <div className="px-3 pb-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
           {isEditing ? (
-            <RichTextarea
+            <Textarea
+              ref={textareaRef}
               value={note}
-              onChange={handleRichTextareaChange}
+              onChange={(e) => handleTextareaChange(e.target.value)}
               onKeyDown={handleKeyDown}
               onBlur={() => {
                 if (!slashMenu) {
@@ -245,8 +285,10 @@ export function MemoEditor({
               }}
               autoFocus
               placeholder={t('videoPlayer.notePlaceholder')}
-              className="w-full h-full cursor-text"
-              onTimestampClick={handleTimestampSeek}
+              className="w-full h-full resize-none border-0 bg-transparent
+                focus-visible:ring-0 focus-visible:ring-offset-0
+                text-sm text-foreground/60 scrollbar-thin min-h-0"
+              style={{ caretColor: 'hsl(var(--primary))' }}
             />
           ) : (
             <NotePreview

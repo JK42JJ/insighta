@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useReducer } from 'react';
+import { cn } from '@/shared/lib/utils';
 import type { YTPlayer } from '../model/youtube-api';
 import { loadYouTubeAPI } from '../model/youtube-api';
 import { SeekIndicator } from './SeekIndicator';
@@ -14,6 +15,7 @@ interface YouTubePlayerProps {
   onPlayerReady: () => void;
   onSaveWatchPosition?: (positionSeconds: number) => void;
   playerRef: React.MutableRefObject<YTPlayer | null>;
+  className?: string;
 }
 
 export function YouTubePlayer({
@@ -22,6 +24,7 @@ export function YouTubePlayer({
   onPlayerReady,
   onSaveWatchPosition,
   playerRef,
+  className,
 }: YouTubePlayerProps) {
   const iframeIdRef = useRef(`yt-player-${videoId}-${Date.now()}`);
   const iframeId = iframeIdRef.current;
@@ -188,7 +191,7 @@ export function YouTubePlayer({
   }, []);
 
   return (
-    <div className="relative w-full aspect-video" style={{ background: 'hsl(var(--bg-base))' }}>
+    <div className={cn("relative w-full", className ?? "aspect-video")} style={{ background: 'hsl(var(--bg-base))' }}>
       <iframe
         id={iframeId}
         src={embedUrl}

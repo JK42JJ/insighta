@@ -4,20 +4,18 @@ import { InsightCard } from '@/entities/card/model/types';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
 } from '@/shared/ui/dialog';
-import { GripHorizontal } from 'lucide-react';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from '@/shared/ui/resizable';
 import { getYouTubeVideoId } from '../model/youtube-api';
 import type { YTPlayer } from '../model/youtube-api';
 import { YouTubePlayer } from './YouTubePlayer';
 import { MemoEditor } from './MemoEditor';
 import { ExternalLinkView } from './ExternalLinkView';
-
-const MEMO_MIN_HEIGHT = 120; // ~5 lines
-const MEMO_MAX_HEIGHT = 320;
-const MEMO_DEFAULT_HEIGHT = 160;
 
 interface VideoPlayerModalProps {
   card: InsightCard | null;
@@ -39,10 +37,6 @@ export function VideoPlayerModal({
   const { t } = useTranslation();
   const playerRef = useRef<YTPlayer | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
-  const [memoHeight, setMemoHeight] = useState(MEMO_DEFAULT_HEIGHT);
-  const resizingRef = useRef(false);
-  const startYRef = useRef(0);
-  const startHeightRef = useRef(MEMO_DEFAULT_HEIGHT);
 
   useEffect(() => {
     setPlayerReady(false);
@@ -86,30 +80,6 @@ export function VideoPlayerModal({
     [card, onClose, onSaveWatchPosition, watchPositionCache, playerReady]
   );
 
-  // Resize handle: drag to adjust memo height (video stays aspect-ratio)
-  const handleResizeStart = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault();
-      resizingRef.current = true;
-      startYRef.current = e.clientY;
-      startHeightRef.current = memoHeight;
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    },
-    [memoHeight]
-  );
-
-  const handleResizeMove = useCallback((e: React.PointerEvent) => {
-    if (!resizingRef.current) return;
-    // Dragging up = increasing memo height, dragging down = decreasing
-    const delta = startYRef.current - e.clientY;
-    const newHeight = Math.min(MEMO_MAX_HEIGHT, Math.max(MEMO_MIN_HEIGHT, startHeightRef.current + delta));
-    setMemoHeight(newHeight);
-  }, []);
-
-  const handleResizeEnd = useCallback(() => {
-    resizingRef.current = false;
-  }, []);
-
   if (!card) return null;
 
   const videoId = getYouTubeVideoId(card.videoUrl);
@@ -123,49 +93,46 @@ export function VideoPlayerModal({
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-w-3xl w-[95vw] max-h-[90vh] overflow-hidden p-0 flex flex-col"
+        className="max-w-3xl w-[95vw] h-[85vh] overflow-hidden p-0 flex flex-col"
         aria-describedby="video-player-description"
       >
-        <DialogHeader className="px-4 pt-4 pb-0 flex-shrink-0">
-          <DialogTitle className="text-base font-semibold line-clamp-2 pr-8">
-            {card.title}
-          </DialogTitle>
-          <DialogDescription id="video-player-description" className="sr-only">
-            {t('videoPlayer.memo')}
-          </DialogDescription>
-          {channelName && (
-            <p className="text-xs text-muted-foreground">{channelName}</p>
-          )}
-        </DialogHeader>
+        <DialogDescription id="video-player-description" className="sr-only">
+          {t('videoPlayer.memo')}
+        </DialogDescription>
 
         {isYouTube && videoId ? (
-          <>
-            {/* YouTube Video — aspect-ratio preserved, never changes */}
-            <div className="px-4 flex-shrink-0">
-              <div className="rounded-lg overflow-hidden">
-                <YouTubePlayer
-                  videoId={videoId}
-                  startTime={startTime}
-                  onPlayerReady={handlePlayerReady}
-                  onSaveWatchPosition={handleSaveWatchPosition}
-                  playerRef={playerRef}
-                />
+          <ResizablePanelGroup direction="vertical" className="flex-1 min-h-0">
+            {/* Video Panel */}
+            <ResizablePanel defaultSize={65} minSize={30}>
+              <div className="flex flex-col h-full">
+                {/* Title bar inside video panel */}
+                <div className="px-4 pt-3 pb-1 flex-shrink-0">
+                  <h2 className="text-base font-semibold line-clamp-2 pr-8">
+                    {card.title}
+                  </h2>
+                  {channelName && (
+                    <p className="text-xs text-muted-foreground">{channelName}</p>
+                  )}
+                </div>
+                {/* Video fills remaining space */}
+                <div className="flex-1 min-h-0 px-4 pb-1">
+                  <YouTubePlayer
+                    videoId={videoId}
+                    startTime={startTime}
+                    onPlayerReady={handlePlayerReady}
+                    onSaveWatchPosition={handleSaveWatchPosition}
+                    playerRef={playerRef}
+                    className="h-full rounded-lg overflow-hidden"
+                  />
+                </div>
               </div>
-            </div>
+            </ResizablePanel>
 
             {/* Resize Handle */}
-            <div
-              className="flex-shrink-0 flex items-center justify-center cursor-row-resize select-none py-0.5 group"
-              onPointerDown={handleResizeStart}
-              onPointerMove={handleResizeMove}
-              onPointerUp={handleResizeEnd}
-              onPointerCancel={handleResizeEnd}
-            >
-              <GripHorizontal className="w-5 h-3 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors" />
-            </div>
+            <ResizableHandle withHandle />
 
-            {/* Memo Editor — resizable height */}
-            <div className="flex-shrink-0 overflow-hidden" style={{ height: memoHeight }}>
+            {/* Memo Panel */}
+            <ResizablePanel defaultSize={35} minSize={15}>
               <MemoEditor
                 note={card.userNote ?? ''}
                 cardId={card.id}
@@ -175,8 +142,8 @@ export function VideoPlayerModal({
                 onSave={handleSave}
                 isYouTube
               />
-            </div>
-          </>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         ) : (
           <div className="flex-1 min-h-0 overflow-y-auto">
             <ExternalLinkView card={card} onSave={handleSave} />
