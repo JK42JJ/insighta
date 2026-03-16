@@ -11,7 +11,7 @@ import {
 } from './mandala-converters';
 
 export function useMandalaQuery(mandalaId?: string | null) {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, isTokenReady } = useAuth();
   const queryClient = useQueryClient();
 
   const {
@@ -38,7 +38,7 @@ export function useMandalaQuery(mandalaId?: string | null) {
         throw err;
       }
     },
-    enabled: isLoggedIn,
+    enabled: isLoggedIn && isTokenReady,
     staleTime: 5 * 60_000,
     gcTime: 10 * 60_000,
   });
@@ -77,7 +77,7 @@ export function useMandalaQuery(mandalaId?: string | null) {
 }
 
 export function useMandalaList() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, isTokenReady } = useAuth();
 
   return useQuery({
     queryKey: queryKeys.mandala.list(),
@@ -85,19 +85,19 @@ export function useMandalaList() {
       const data = await apiClient.listMandalas();
       return data;
     },
-    enabled: isLoggedIn,
+    enabled: isLoggedIn && isTokenReady,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
   });
 }
 
 export function useMandalaQuota() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, isTokenReady } = useAuth();
 
   return useQuery({
     queryKey: queryKeys.mandala.quota(),
     queryFn: () => apiClient.getMandalaQuota(),
-    enabled: isLoggedIn,
+    enabled: isLoggedIn && isTokenReady,
     staleTime: 60_000,
   });
 }
@@ -167,12 +167,12 @@ export function useToggleMandalaShare() {
 }
 
 export function useSubscriptions() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, isTokenReady } = useAuth();
 
   return useQuery({
     queryKey: queryKeys.mandala.subscriptions(),
     queryFn: () => apiClient.listSubscriptions(1, 100),
-    enabled: isLoggedIn,
+    enabled: isLoggedIn && isTokenReady,
     staleTime: 30_000,
   });
 }

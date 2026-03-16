@@ -29,7 +29,18 @@ export function SidebarMandalaSection({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('recent');
+  const [loadingTooLong, setLoadingTooLong] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 10s loading timeout — show retry instead of infinite skeleton
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingTooLong(false);
+      return;
+    }
+    const timer = setTimeout(() => setLoadingTooLong(true), 10_000);
+    return () => clearTimeout(timer);
+  }, [isLoading]);
 
   const mandalas = listData?.mandalas ?? [];
 
@@ -77,16 +88,26 @@ export function SidebarMandalaSection({
     );
   }
 
-  // Loading state
+  // Loading state (with 10s timeout → retry)
   if (isLoading) {
     return (
       <div className="px-2 space-y-0.5">
         <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
           {t('sidebar.mandalas')}
         </div>
-        <div className="px-3 py-2 animate-pulse">
-          <div className="h-4 bg-sidebar-accent/30 rounded w-3/4" />
-        </div>
+        {loadingTooLong ? (
+          <button
+            onClick={() => refetch()}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            {t('common.loadFailed')}
+          </button>
+        ) : (
+          <div className="px-3 py-2 animate-pulse">
+            <div className="h-4 bg-sidebar-accent/30 rounded w-3/4" />
+          </div>
+        )}
       </div>
     );
   }

@@ -7,6 +7,7 @@
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { getAuthHeaders, getEdgeFunctionUrl } from '@/shared/lib/supabase-auth';
+import { useAuth } from '@/features/auth/model/useAuth';
 
 import type {
   LocalCard,
@@ -47,6 +48,8 @@ export function isLimitExceededError(error: unknown): error is LimitExceededErro
  * Hook to list all local cards with subscription info
  */
 export function useLocalCardsList() {
+  const { isLoggedIn, isTokenReady } = useAuth();
+
   return useQuery({
     queryKey: localCardsKeys.list(),
     queryFn: async (): Promise<LocalCardsResponse> => {
@@ -59,6 +62,7 @@ export function useLocalCardsList() {
 
       return response.json();
     },
+    enabled: isLoggedIn && isTokenReady,
     staleTime: 30 * 1000, // 30 seconds
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
