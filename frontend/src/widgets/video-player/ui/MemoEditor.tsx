@@ -8,6 +8,7 @@ import { Textarea } from '@/shared/ui/textarea';
 import type { YTPlayer } from '../model/youtube-api';
 import { formatTime } from '../model/youtube-api';
 import { SlashMenu } from '@/shared/ui/SlashMenu';
+import { getCaretCoordinates } from '@/shared/lib/get-caret-coordinates';
 import { NotePreview } from './NotePreview';
 
 const AUTO_SAVE_DELAY_MS = 3_000;
@@ -47,8 +48,8 @@ function CaptureGallery({
   if (captures.length === 0) return null;
 
   return (
-    <div className="px-3 py-1.5 flex-shrink-0 overflow-x-auto scrollbar-thin">
-      <div className="flex gap-2">
+    <div className="flex-1 min-w-0 overflow-x-auto scrollbar-thin">
+      <div className="flex gap-1.5 flex-nowrap">
         {captures.map((cap, i) => (
           <button
             key={`${cap.url}-${i}`}
@@ -57,17 +58,17 @@ function CaptureGallery({
                 playerRef.current.seekTo(cap.seconds, true);
               }
             }}
-            className="relative flex-shrink-0 rounded-md overflow-hidden border border-border/20 hover:border-primary/40 transition-colors group"
+            className="relative flex-shrink-0 rounded overflow-hidden border border-border/20 hover:border-primary/40 transition-colors group"
             title={cap.alt}
           >
             <img
               src={cap.url}
               alt={cap.alt}
-              className="h-12 w-auto object-cover"
+              className="h-8 w-auto object-cover"
               loading="lazy"
             />
             {cap.seconds !== null && (
-              <span className="absolute bottom-0.5 right-0.5 text-[9px] bg-black/70 text-white px-1 rounded">
+              <span className="absolute bottom-0 right-0 text-[8px] bg-black/70 text-white px-0.5 rounded-tl">
                 {formatTime(cap.seconds)}
               </span>
             )}
@@ -100,11 +101,11 @@ export function MemoEditor({
   const { t } = useTranslation();
   const [note, setNote] = useState(initialNote);
   const [isEditing, setIsEditing] = useState(!initialNote);
-  const [slashMenu, setSlashMenu] = useState<{ bottom?: number; top?: number; left: number } | null>(null);
+  const [slashMenu, setSlashMenu] = useState<boolean>(false);
+  const [caretCoords, setCaretCoords] = useState<{ top: number; left: number } | null>(null);
   const captures = useMemo(() => parseCaptures(note), [note]);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slashPosRef = useRef<number | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Sync with external note changes (e.g., when card changes) — avoid unnecessary setState
@@ -236,8 +237,9 @@ export function MemoEditor({
         cleanedNote = beforeSlash + afterSlash.slice(filterEnd);
       }
 
-      setSlashMenu(null);
+      setSlashMenu(false);
       slashPosRef.current = null;
+      setCaretCoords(null);
 
       if (itemId === 'timestamp') {
         insertTimestamp(cleanedNote);
@@ -251,8 +253,9 @@ export function MemoEditor({
   );
 
   const handleSlashClose = useCallback(() => {
-    setSlashMenu(null);
+    setSlashMenu(false);
     slashPosRef.current = null;
+    setCaretCoords(null);
   }, []);
 
   // Keyboard shortcuts in textarea
@@ -283,18 +286,32 @@ export function MemoEditor({
       const lastNewline = textBeforeCursor.lastIndexOf('\n');
       const currentLine = textBeforeCursor.slice(lastNewline + 1);
 
-      if (currentLine.trim() === '/') {
-        slashPosRef.current = lastNewline + 1 + currentLine.indexOf('/');
-        if (containerRef.current) {
-          const rect = containerRef.current.getBoundingClientRect();
-          setSlashMenu({
-            bottom: window.innerHeight - rect.top + 4,
-            left: rect.left,
+      if (currentLine.trimStart() === '/') {
+        const slashPos = lastNewline + 1 + currentLine.indexOf('/');
+        slashPosRef.current = slashPos;
+
+        const textarea = textareaRef.current;
+        if (textarea) {
+          const coords = getCaretCoordinates(textarea, slashPos);
+          const textareaRect = textarea.getBoundingClientRect();
+          const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 20;
+
+          const MENU_WIDTH = 208; // w-52 = 13rem = 208px
+
+          const caretTop = textareaRect.top + coords.top - textarea.scrollTop;
+          const caretLeft = textareaRect.left + coords.left;
+
+          setCaretCoords({
+            top: caretTop + lineHeight,
+            left: Math.max(0, Math.min(caretLeft, window.innerWidth - MENU_WIDTH)),
           });
         }
-      } else if (slashMenu && !currentLine.startsWith('/')) {
-        setSlashMenu(null);
+
+        setSlashMenu(true);
+      } else if (slashMenu && currentLine.trimStart() !== '/') {
+        setSlashMenu(false);
         slashPosRef.current = null;
+        setCaretCoords(null);
       }
     },
     [handleNoteChange, slashMenu]
@@ -302,7 +319,6 @@ export function MemoEditor({
 
   return (
     <div
-      ref={containerRef}
       className="relative h-full flex flex-col"
       style={{
         background: 'hsl(var(--bg-sunken) / 0.85)',
@@ -311,9 +327,9 @@ export function MemoEditor({
       }}
     >
       <div className="flex flex-col flex-1 min-h-0">
-        {/* Header */}
-        <div className="px-3 py-2 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
+        {/* Header — buttons + inline capture gallery + hint */}
+        <div className="px-3 py-2.5 flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-shrink-0">
             {isYouTube && (
               <>
                 <Button
@@ -345,15 +361,16 @@ export function MemoEditor({
               </span>
             </div>
           </div>
+
+          {/* Inline capture gallery */}
+          <CaptureGallery captures={captures} playerRef={playerRef} playerReady={playerReady} />
+
           {isEditing && (
-            <span className="text-[10px] text-muted-foreground/50">
+            <span className="text-[10px] text-muted-foreground/50 flex-shrink-0 whitespace-nowrap">
               {t('videoPlayer.slashHint')}
             </span>
           )}
         </div>
-
-        {/* Capture Gallery — horizontal thumbnail strip */}
-        <CaptureGallery captures={captures} playerRef={playerRef} playerReady={playerReady} />
 
         {/* Content — fills remaining height from parent */}
         <div className="px-3 pb-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
@@ -388,13 +405,11 @@ export function MemoEditor({
         </div>
       </div>
 
-      {/* Slash Menu — portal to document.body to escape backdrop-filter/transform containing block */}
-      {slashMenu && createPortal(
-        <SlashMenu
-          position={slashMenu}
-          onSelect={handleSlashSelect}
-          onClose={handleSlashClose}
-        />,
+      {/* SlashMenu — Portal to document.body to bypass overflow clip */}
+      {slashMenu && caretCoords && createPortal(
+        <div className="fixed z-[9999]" style={{ top: caretCoords.top, left: caretCoords.left }}>
+          <SlashMenu onSelect={handleSlashSelect} onClose={handleSlashClose} />
+        </div>,
         document.body
       )}
     </div>

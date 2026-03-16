@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogDescription,
 } from '@/shared/ui/dialog';
+import { DEFAULT_VIDEO_PANEL_RATIO } from '@/pages/index/model/useVideoModal';
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -39,6 +40,7 @@ export function VideoPlayerModal({
   const { t } = useTranslation();
   const playerRef = useRef<YTPlayer | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
+
 
   useEffect(() => {
     setPlayerReady(false);
@@ -96,14 +98,18 @@ export function VideoPlayerModal({
 
   const cachedPosition = watchPositionCache?.get(card.id);
   const startTime = cachedPosition ?? (card.lastWatchPosition ? Math.floor(card.lastWatchPosition) : 0);
-  const cachedPanelSize = panelSizeCache?.get(card.id) ?? 65;
+  const cachedPanelSize = panelSizeCache?.get(card.id) ?? DEFAULT_VIDEO_PANEL_RATIO;
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-w-3xl w-[95vw] h-[85vh] overflow-hidden p-0 flex flex-col outline-none border-0 focus:ring-0 focus:ring-offset-0 [&>button]:z-20 [&>button]:bg-black/60 [&>button]:text-white [&>button]:rounded-full [&>button]:p-1.5 [&>button]:opacity-90 [&>button]:hover:opacity-100 [&>button]:hover:bg-black/80 [&>button]:focus:ring-0 [&>button]:focus:ring-offset-0 [&>button]:right-2 [&>button]:top-2"
+        className="max-w-3xl w-[95vw] overflow-hidden p-0 flex flex-col outline-none border-0 focus:ring-0 focus:ring-offset-0 [&>button]:z-20 [&>button]:bg-black/60 [&>button]:text-white [&>button]:rounded-full [&>button]:p-1.5 [&>button]:opacity-90 [&>button]:hover:opacity-100 [&>button]:hover:bg-black/80 [&>button]:focus:ring-0 [&>button]:focus:ring-offset-0 [&>button]:right-2 [&>button]:top-2"
         aria-describedby="video-player-description"
-        style={{ border: 'none' }}
+        style={{
+          border: 'none',
+          height: 'calc(min(53.4375vw, 27rem) + 10rem)',
+          maxHeight: '90vh',
+        }}
       >
         <DialogDescription id="video-player-description" className="sr-only">
           {t('videoPlayer.memo')}
@@ -124,7 +130,10 @@ export function VideoPlayerModal({
             </ResizablePanel>
 
             {/* Resize Handle */}
-            <ResizableHandle withHandle />
+            <ResizableHandle
+              withHandle
+              className="opacity-0 hover:opacity-100 [&[data-resize-handle-state=drag]]:opacity-100 transition-opacity duration-200"
+            />
 
             {/* Memo Panel */}
             <ResizablePanel defaultSize={100 - cachedPanelSize} minSize={15}>
