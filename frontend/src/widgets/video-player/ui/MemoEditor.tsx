@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, Timer } from 'lucide-react';
+import { MessageSquare, Timer, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/shared/ui/button';
 import { Textarea } from '@/shared/ui/textarea';
@@ -40,10 +40,20 @@ export function MemoEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Sync with external note changes (e.g., when card changes)
+  // Sync with external note changes (e.g., when card changes) — avoid unnecessary setState
   useEffect(() => {
-    setNote(initialNote);
+    setNote(prev => prev === initialNote ? prev : initialNote);
   }, [initialNote]);
+
+  // Focus cursor at end of text when entering edit mode
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      const textarea = textareaRef.current;
+      textarea.focus();
+      textarea.selectionStart = textarea.value.length;
+      textarea.selectionEnd = textarea.value.length;
+    }
+  }, [isEditing]);
 
   // Auto-save debounce
   const scheduleAutoSave = useCallback(
@@ -196,35 +206,26 @@ export function MemoEditor({
     [slashMenu, handleImmediateSave]
   );
 
-  // Textarea change handler with slash detection
+  // Textarea change handler with slash detection (value-based, no rAF timing issues)
   const handleTextareaChange = useCallback(
     (value: string) => {
       handleNoteChange(value);
 
-      // Use requestAnimationFrame to read selectionStart after DOM update
-      requestAnimationFrame(() => {
-        const textarea = textareaRef.current;
-        if (!textarea) return;
+      const lastLine = value.split('\n').pop() ?? '';
 
-        const cursorPos = textarea.selectionStart;
-        const textBeforeCursor = value.slice(0, cursorPos);
-        const lastNewline = textBeforeCursor.lastIndexOf('\n');
-        const currentLine = textBeforeCursor.slice(lastNewline + 1);
-
-        if (currentLine.trim() === '/') {
-          slashPosRef.current = cursorPos - 1;
-          if (containerRef.current) {
-            const rect = containerRef.current.getBoundingClientRect();
-            setSlashMenu({
-              bottom: window.innerHeight - rect.top + 4,
-              left: rect.left,
-            });
-          }
-        } else if (slashMenu && !currentLine.startsWith('/')) {
-          setSlashMenu(null);
-          slashPosRef.current = null;
+      if (lastLine.trim() === '/') {
+        slashPosRef.current = value.length - 1;
+        if (containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect();
+          setSlashMenu({
+            bottom: window.innerHeight - rect.top + 4,
+            left: rect.left,
+          });
         }
-      });
+      } else if (slashMenu && !lastLine.startsWith('/')) {
+        setSlashMenu(null);
+        slashPosRef.current = null;
+      }
     },
     [handleNoteChange, slashMenu]
   );
@@ -244,16 +245,28 @@ export function MemoEditor({
         <div className="px-3 py-2 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             {isYouTube && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => insertTimestamp()}
-                disabled={!playerReady}
-                className="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-40"
-                title={t('videoPlayer.addTimestamp')}
-              >
-                <Timer className="w-3.5 h-3.5" />
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => insertTimestamp()}
+                  disabled={!playerReady}
+                  className="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-40"
+                  title={t('videoPlayer.addTimestamp')}
+                >
+                  <Timer className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => insertCapture()}
+                  disabled={!playerReady}
+                  className="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-40"
+                  title={t('videoPlayer.insertCapture')}
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                </Button>
+              </>
             )}
             <div className="flex items-center gap-2">
               <MessageSquare className="w-3.5 h-3.5 text-foreground/60" />
@@ -284,7 +297,6 @@ export function MemoEditor({
                   }, 200);
                 }
               }}
-              autoFocus
               placeholder={t('videoPlayer.notePlaceholder')}
               className="w-full h-full resize-none border-0 bg-transparent
                 focus-visible:ring-0 focus-visible:ring-offset-0

@@ -9,6 +9,8 @@ interface UseVideoModalReturn {
   closeModal: () => void;
   /** Session-level watch position cache (survives modal close/reopen) */
   watchPositionCache: Map<string, number>;
+  /** Session-level panel size cache (survives modal close/reopen) */
+  panelSizeCache: Map<string, number>;
 }
 
 /**
@@ -26,6 +28,8 @@ export function useVideoModal(
 
   // Session-level watch position cache — persists across modal open/close within a session
   const watchPositionCacheRef = useRef(new Map<string, number>());
+  // Session-level panel size cache — persists across modal open/close within a session
+  const panelSizeCacheRef = useRef(new Map<string, number>());
 
   const openModal = useCallback((card: InsightCard) => {
     setSelectedCard(card);
@@ -52,5 +56,6 @@ export function useVideoModal(
     openModal,
     closeModal,
     watchPositionCache: watchPositionCacheRef.current,
+    panelSizeCache: panelSizeCacheRef.current,
   };
 }

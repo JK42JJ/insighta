@@ -24,6 +24,7 @@ interface VideoPlayerModalProps {
   onSave?: (id: string, note: string) => void;
   onSaveWatchPosition?: (id: string, position: number) => void;
   watchPositionCache?: Map<string, number>;
+  panelSizeCache?: Map<string, number>;
 }
 
 export function VideoPlayerModal({
@@ -33,6 +34,7 @@ export function VideoPlayerModal({
   onSave,
   onSaveWatchPosition,
   watchPositionCache,
+  panelSizeCache,
 }: VideoPlayerModalProps) {
   const { t } = useTranslation();
   const playerRef = useRef<YTPlayer | null>(null);
@@ -80,6 +82,13 @@ export function VideoPlayerModal({
     [card, onClose, onSaveWatchPosition, watchPositionCache, playerReady]
   );
 
+  const handleLayout = useCallback(
+    (sizes: number[]) => {
+      if (card) panelSizeCache?.set(card.id, sizes[0]);
+    },
+    [card, panelSizeCache]
+  );
+
   if (!card) return null;
 
   const videoId = getYouTubeVideoId(card.videoUrl);
@@ -87,11 +96,12 @@ export function VideoPlayerModal({
 
   const cachedPosition = watchPositionCache?.get(card.id);
   const startTime = cachedPosition ?? (card.lastWatchPosition ? Math.floor(card.lastWatchPosition) : 0);
+  const cachedPanelSize = panelSizeCache?.get(card.id) ?? 65;
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-w-3xl w-[95vw] h-[85vh] overflow-hidden p-0 flex flex-col outline-none border-0 [&>button]:z-20 [&>button]:bg-black/60 [&>button]:text-white [&>button]:rounded-full [&>button]:p-1.5 [&>button]:opacity-90 [&>button]:hover:opacity-100 [&>button]:hover:bg-black/80 [&>button]:right-2 [&>button]:top-2"
+        className="max-w-3xl w-[95vw] h-[85vh] overflow-hidden p-0 flex flex-col outline-none border-0 focus:ring-0 focus:ring-offset-0 [&>button]:z-20 [&>button]:bg-black/60 [&>button]:text-white [&>button]:rounded-full [&>button]:p-1.5 [&>button]:opacity-90 [&>button]:hover:opacity-100 [&>button]:hover:bg-black/80 [&>button]:focus:ring-0 [&>button]:focus:ring-offset-0 [&>button]:right-2 [&>button]:top-2"
         aria-describedby="video-player-description"
         style={{ border: 'none' }}
       >
@@ -100,9 +110,9 @@ export function VideoPlayerModal({
         </DialogDescription>
 
         {isYouTube && videoId ? (
-          <ResizablePanelGroup direction="vertical" className="flex-1 min-h-0">
+          <ResizablePanelGroup direction="vertical" className="flex-1 min-h-0" onLayout={handleLayout}>
             {/* Video Panel */}
-            <ResizablePanel defaultSize={65} minSize={30}>
+            <ResizablePanel defaultSize={cachedPanelSize} minSize={30}>
               <YouTubePlayer
                 videoId={videoId}
                 startTime={startTime}
@@ -117,7 +127,7 @@ export function VideoPlayerModal({
             <ResizableHandle withHandle />
 
             {/* Memo Panel */}
-            <ResizablePanel defaultSize={35} minSize={15}>
+            <ResizablePanel defaultSize={100 - cachedPanelSize} minSize={15}>
               <MemoEditor
                 note={card.userNote ?? ''}
                 cardId={card.id}
