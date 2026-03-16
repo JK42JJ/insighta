@@ -1,17 +1,26 @@
 import { useEffect, useRef, useCallback, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getAvailableCommands, type SlashCommand } from '@/shared/lib/slash-commands';
+import { getAvailableCommands, CATEGORY_LABELS, type SlashCommand } from '@/shared/lib/slash-commands';
 
 interface SlashMenuProps {
-  position: { top?: number; bottom?: number; left: number };
   onSelect: (itemId: string) => void;
   onClose: () => void;
   hasPlayer?: boolean;
 }
 
-export function SlashMenu({ position, onSelect, onClose, hasPlayer = true }: SlashMenuProps) {
+function groupByCategory(items: SlashCommand[]): Record<string, SlashCommand[]> {
+  const grouped: Record<string, SlashCommand[]> = {};
+  for (const item of items) {
+    if (!grouped[item.category]) grouped[item.category] = [];
+    grouped[item.category].push(item);
+  }
+  return grouped;
+}
+
+export function SlashMenu({ onSelect, onClose, hasPlayer = true }: SlashMenuProps) {
   const { t } = useTranslation();
   const items = getAvailableCommands(hasPlayer);
+  const grouped = groupByCategory(items);
   const selectedIndexRef = useRef(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
@@ -58,41 +67,56 @@ export function SlashMenu({ position, onSelect, onClose, hasPlayer = true }: Sla
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [onClose]);
 
+  // Build flat index for keyboard navigation across category groups
+  let flatIndex = 0;
+
   return (
     <div
       ref={menuRef}
-      className="fixed z-[1200] w-52 rounded-lg border shadow-lg overflow-hidden"
+      className="w-52 rounded-lg border shadow-lg overflow-hidden"
       style={{
-        ...(position.bottom != null ? { bottom: position.bottom } : { top: position.top }),
-        left: position.left,
         background: 'hsl(var(--bg-mid))',
         borderColor: 'hsl(var(--border) / 0.3)',
       }}
     >
-      {items.map((item: SlashCommand, idx: number) => (
-        <button
-          key={item.id}
-          className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
-            idx === selectedIndexRef.current ? 'bg-primary/10' : ''
-          } ${item.enabled ? 'cursor-pointer hover:bg-primary/5' : 'opacity-50 cursor-default'}`}
-          onClick={() => {
-            if (item.enabled) onSelect(item.id);
-          }}
-          onMouseEnter={() => {
-            selectedIndexRef.current = idx;
-            forceUpdate();
-          }}
-        >
-          <span className="text-base">{item.icon}</span>
-          <span className={item.enabled ? 'text-foreground' : 'text-muted-foreground'}>
-            {t(item.labelKey)}
-          </span>
-          {!item.enabled && (
-            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
-              {t('videoPlayer.comingSoon')}
-            </span>
-          )}
-        </button>
+      {Object.entries(grouped).map(([category, categoryItems], groupIdx) => (
+        <div key={category}>
+          <div
+            className={`px-3 py-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider ${
+              groupIdx > 0 ? 'border-t border-border/10' : ''
+            }`}
+          >
+            {CATEGORY_LABELS[category] ?? category}
+          </div>
+          {categoryItems.map((item: SlashCommand) => {
+            const currentFlatIndex = flatIndex++;
+            return (
+              <button
+                key={item.id}
+                className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 transition-colors ${
+                  currentFlatIndex === selectedIndexRef.current ? 'bg-primary/10' : ''
+                } ${item.enabled ? 'cursor-pointer hover:bg-primary/5' : 'opacity-50 cursor-default'}`}
+                onClick={() => {
+                  if (item.enabled) onSelect(item.id);
+                }}
+                onMouseEnter={() => {
+                  selectedIndexRef.current = currentFlatIndex;
+                  forceUpdate();
+                }}
+              >
+                <span className="text-sm">{item.icon}</span>
+                <span className={item.enabled ? 'text-foreground' : 'text-muted-foreground'}>
+                  {t(item.labelKey)}
+                </span>
+                {!item.enabled && (
+                  <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                    {t('videoPlayer.comingSoon')}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       ))}
     </div>
   );

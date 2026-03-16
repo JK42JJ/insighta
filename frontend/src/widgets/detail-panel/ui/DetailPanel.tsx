@@ -1,17 +1,27 @@
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, ExternalLink } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
-import { ScrollArea } from '@/shared/ui/scroll-area';
-import { Separator } from '@/shared/ui/separator';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from '@/shared/ui/resizable';
 import type { InsightCard } from '@/entities/card/model/types';
-import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
-import { upgradeYouTubeThumbnail, handleThumbnailError } from '@/shared/lib/image-utils';
-import { NoteEditor } from './NoteEditor';
+import { SourceTypeBadge } from '@/entities/content';
+import { YouTubePlayer } from '@/widgets/video-player/ui/YouTubePlayer';
+import { MemoEditor } from '@/widgets/video-player/ui/MemoEditor';
+import { ExternalLinkView } from '@/widgets/video-player/ui/ExternalLinkView';
+import { getYouTubeVideoId } from '@/widgets/video-player/model/youtube-api';
+import { DEFAULT_DETAIL_PANEL_RATIO } from '@/pages/index/model/useVideoModal';
+import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
 
 interface DetailPanelProps {
   card: InsightCard | null;
   onSaveNote?: (id: string, note: string) => void;
-  onCardClick?: (card: InsightCard) => void;
+  onSaveWatchPosition?: (id: string, positionSeconds: number) => void;
+  watchPositionCache?: Map<string, number>;
+  panelSizeCache?: Map<string, number>;
   onClose?: () => void;
 }
 
@@ -23,8 +33,61 @@ function formatDate(date: Date): string {
   });
 }
 
-export function DetailPanel({ card, onSaveNote, onCardClick, onClose }: DetailPanelProps) {
+export function DetailPanel({ card, onSaveNote, onSaveWatchPosition, watchPositionCache, panelSizeCache, onClose }: DetailPanelProps) {
   const { t } = useTranslation();
+  const playerRef = useRef<YTPlayer | null>(null);
+  const cardIdRef = useRef<string | null>(null);
+  const [playerReady, setPlayerReady] = useState(false);
+
+  const handlePlayerReady = useCallback(() => {
+    setPlayerReady(true);
+  }, []);
+
+  // Reset playerReady on card change
+  useEffect(() => {
+    setPlayerReady(false);
+  }, [card?.id]);
+
+  // Save watch position on card switch or unmount
+  useEffect(() => {
+    const prevId = cardIdRef.current;
+    cardIdRef.current = card?.id ?? null;
+
+    return () => {
+      if (playerRef.current && prevId) {
+        try {
+          const t = Math.floor(playerRef.current.getCurrentTime());
+          onSaveWatchPosition?.(prevId, t);
+          watchPositionCache?.set(prevId, t);
+        } catch {
+          // player already destroyed
+        }
+      }
+    };
+  }, [card?.id]);
+
+  const handleSaveWatchPosition = useCallback(
+    (positionSeconds: number) => {
+      if (!card) return;
+      onSaveWatchPosition?.(card.id, positionSeconds);
+      watchPositionCache?.set(card.id, positionSeconds);
+    },
+    [card, onSaveWatchPosition, watchPositionCache]
+  );
+
+  const handleSave = useCallback(
+    (id: string, note: string) => {
+      onSaveNote?.(id, note);
+    },
+    [onSaveNote]
+  );
+
+  const handleLayout = useCallback(
+    (sizes: number[]) => {
+      if (card) panelSizeCache?.set(card.id, sizes[0]);
+    },
+    [card, panelSizeCache]
+  );
 
   if (!card) {
     return (
@@ -36,6 +99,12 @@ export function DetailPanel({ card, onSaveNote, onCardClick, onClose }: DetailPa
       </div>
     );
   }
+
+  const videoId = card.videoUrl ? getYouTubeVideoId(card.videoUrl) : null;
+  const isYouTube = videoId !== null;
+  const cachedPosition = watchPositionCache?.get(card.id);
+  const startTime = cachedPosition ?? (card.lastWatchPosition ? Math.floor(card.lastWatchPosition) : 0);
+  const cachedPanelSize = panelSizeCache?.get(card.id) ?? DEFAULT_DETAIL_PANEL_RATIO;
 
   return (
     <div className="h-full flex flex-col">
@@ -53,7 +122,7 @@ export function DetailPanel({ card, onSaveNote, onCardClick, onClose }: DetailPa
               variant="ghost"
               size="sm"
               className="h-7 w-7 p-0"
-              onClick={() => onCardClick?.(card)}
+              onClick={() => window.open(card.videoUrl, '_blank', 'noopener,noreferrer')}
               title={t('videoPlayer.viewOriginal')}
             >
               <ExternalLink className="h-3.5 w-3.5" />
@@ -67,38 +136,38 @@ export function DetailPanel({ card, onSaveNote, onCardClick, onClose }: DetailPa
         </div>
       </div>
 
-      {/* Body */}
-      <ScrollArea className="flex-1">
-        <div className="p-4 space-y-4">
-          {/* Thumbnail */}
-          {card.thumbnail && (
-            <div
-              className="w-full aspect-video rounded-lg overflow-hidden bg-muted cursor-pointer"
-              onClick={() => onCardClick?.(card)}
-            >
-              <img
-                src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
-                alt={card.title}
-                className="w-full h-full object-cover hover:scale-105 transition-transform"
-                onError={handleThumbnailError}
-              />
-            </div>
-          )}
-
-          {/* Title */}
-          <h3 className="text-base font-semibold leading-tight">
-            {card.title || t('cards.untitled')}
-          </h3>
-
-          {/* Source-specific metadata */}
-          <SourceMetaInfo card={card} view="detail" />
-
-          <Separator />
-
-          {/* Note Editor */}
-          <NoteEditor value={card.userNote || ''} onSave={(note) => onSaveNote?.(card.id, note)} />
+      {/* Content */}
+      {isYouTube && videoId ? (
+        <ResizablePanelGroup direction="vertical" className="flex-1 min-h-0" onLayout={handleLayout}>
+          <ResizablePanel defaultSize={cachedPanelSize} minSize={25}>
+            <YouTubePlayer
+              key={card.id}
+              videoId={videoId}
+              startTime={startTime}
+              onPlayerReady={handlePlayerReady}
+              onSaveWatchPosition={handleSaveWatchPosition}
+              playerRef={playerRef}
+              className="h-full"
+            />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={100 - cachedPanelSize} minSize={15}>
+            <MemoEditor
+              note={card.userNote ?? ''}
+              cardId={card.id}
+              videoId={videoId}
+              playerRef={playerRef}
+              playerReady={playerReady}
+              onSave={handleSave}
+              isYouTube
+            />
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      ) : (
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <ExternalLinkView card={card} onSave={handleSave} />
         </div>
-      </ScrollArea>
+      )}
     </div>
   );
 }

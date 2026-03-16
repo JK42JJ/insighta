@@ -539,6 +539,9 @@ function AuthenticatedApp() {
                 onCardsReorder={cards.handleCardsReorder}
                 onDeleteCards={cards.handleDeleteCards}
                 onAddCard={navigation.selectedCellIndex != null ? handleAddCard : undefined}
+                onSaveWatchPosition={cards.handleSaveWatchPosition}
+                watchPositionCache={modal.watchPositionCache}
+                panelSizeCache={modal.panelSizeCache}
               />
             </div>
 
