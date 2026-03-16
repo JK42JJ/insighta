@@ -1,28 +1,17 @@
 import { useEffect, useRef, useCallback, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
-
-interface SlashMenuItem {
-  id: string;
-  icon: string;
-  labelKey: string;
-  enabled: boolean;
-}
-
-const SLASH_ITEMS: SlashMenuItem[] = [
-  { id: 'timestamp', icon: '⏱', labelKey: 'videoPlayer.insertTimestamp', enabled: true },
-  { id: 'capture', icon: '📸', labelKey: 'videoPlayer.insertCapture', enabled: true },
-  { id: 'link', icon: '🔗', labelKey: 'videoPlayer.insertLink', enabled: false },
-  { id: 'insight', icon: '💡', labelKey: 'videoPlayer.insertInsight', enabled: false },
-];
+import { getAvailableCommands, type SlashCommand } from '@/shared/lib/slash-commands';
 
 interface SlashMenuProps {
   position: { top?: number; bottom?: number; left: number };
   onSelect: (itemId: string) => void;
   onClose: () => void;
+  hasPlayer?: boolean;
 }
 
-export function SlashMenu({ position, onSelect, onClose }: SlashMenuProps) {
+export function SlashMenu({ position, onSelect, onClose, hasPlayer = true }: SlashMenuProps) {
   const { t } = useTranslation();
+  const items = getAvailableCommands(hasPlayer);
   const selectedIndexRef = useRef(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
@@ -32,7 +21,7 @@ export function SlashMenu({ position, onSelect, onClose }: SlashMenuProps) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         e.stopPropagation();
-        selectedIndexRef.current = Math.min(selectedIndexRef.current + 1, SLASH_ITEMS.length - 1);
+        selectedIndexRef.current = Math.min(selectedIndexRef.current + 1, items.length - 1);
         forceUpdate();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
@@ -42,7 +31,7 @@ export function SlashMenu({ position, onSelect, onClose }: SlashMenuProps) {
       } else if (e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation();
-        const item = SLASH_ITEMS[selectedIndexRef.current];
+        const item = items[selectedIndexRef.current];
         if (item.enabled) {
           onSelect(item.id);
         }
@@ -51,7 +40,7 @@ export function SlashMenu({ position, onSelect, onClose }: SlashMenuProps) {
         onClose();
       }
     },
-    [onSelect, onClose]
+    [items, onSelect, onClose]
   );
 
   useEffect(() => {
@@ -72,7 +61,7 @@ export function SlashMenu({ position, onSelect, onClose }: SlashMenuProps) {
   return (
     <div
       ref={menuRef}
-      className="fixed z-[100] w-52 rounded-lg border shadow-lg overflow-hidden"
+      className="fixed z-[1200] w-52 rounded-lg border shadow-lg overflow-hidden"
       style={{
         ...(position.bottom != null ? { bottom: position.bottom } : { top: position.top }),
         left: position.left,
@@ -80,7 +69,7 @@ export function SlashMenu({ position, onSelect, onClose }: SlashMenuProps) {
         borderColor: 'hsl(var(--border) / 0.3)',
       }}
     >
-      {SLASH_ITEMS.map((item, idx) => (
+      {items.map((item: SlashCommand, idx: number) => (
         <button
           key={item.id}
           className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors ${

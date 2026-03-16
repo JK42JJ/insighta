@@ -4,6 +4,7 @@ import { cn } from '@/shared/lib/utils';
 import type { InsightCard } from '@/entities/card/model/types';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 import { generateProxySrc, handleThumbnailError } from '@/shared/lib/image-utils';
+import { CompactNotePreview } from '@/shared/ui/CompactNotePreview';
 
 interface ListViewItemProps {
   card: InsightCard;
@@ -34,10 +35,6 @@ export const ListViewItem = memo(function ListViewItem({
   style,
 }: ListViewItemProps) {
   const { t } = useTranslation();
-  const notePreview = card.userNote
-    ? card.userNote.replace(/\n/g, ' ').slice(0, 80)
-    : t('insightCard.noMemo');
-
   return (
     <div
       style={style}
@@ -70,7 +67,11 @@ export const ListViewItem = memo(function ListViewItem({
       {/* Title + Note preview */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{card.title || t('cards.untitled')}</p>
-        <p className="text-xs text-muted-foreground truncate">{notePreview}</p>
+        {card.userNote ? (
+          <CompactNotePreview note={card.userNote} maxLines={1} className="truncate" />
+        ) : (
+          <p className="text-xs text-muted-foreground truncate">{t('insightCard.noMemo')}</p>
+        )}
         <SourceMetaInfo card={card} view="list" />
       </div>
 
