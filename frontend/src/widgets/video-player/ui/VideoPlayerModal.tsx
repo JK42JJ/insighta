@@ -88,13 +88,12 @@ export function VideoPlayerModal({
   const cachedPosition = watchPositionCache?.get(card.id);
   const startTime = cachedPosition ?? (card.lastWatchPosition ? Math.floor(card.lastWatchPosition) : 0);
 
-  const channelName = card.metadata?.author || card.metadata?.siteName || '';
-
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-w-3xl w-[95vw] h-[85vh] overflow-hidden p-0 flex flex-col"
+        className="max-w-3xl w-[95vw] h-[85vh] overflow-hidden p-0 flex flex-col outline-none border-0 [&>button]:z-20 [&>button]:bg-black/60 [&>button]:text-white [&>button]:rounded-full [&>button]:p-1.5 [&>button]:opacity-90 [&>button]:hover:opacity-100 [&>button]:hover:bg-black/80 [&>button]:right-2 [&>button]:top-2"
         aria-describedby="video-player-description"
+        style={{ border: 'none' }}
       >
         <DialogDescription id="video-player-description" className="sr-only">
           {t('videoPlayer.memo')}
@@ -104,28 +103,14 @@ export function VideoPlayerModal({
           <ResizablePanelGroup direction="vertical" className="flex-1 min-h-0">
             {/* Video Panel */}
             <ResizablePanel defaultSize={65} minSize={30}>
-              <div className="flex flex-col h-full">
-                {/* Title bar inside video panel */}
-                <div className="px-4 pt-3 pb-1 flex-shrink-0">
-                  <h2 className="text-base font-semibold line-clamp-2 pr-8">
-                    {card.title}
-                  </h2>
-                  {channelName && (
-                    <p className="text-xs text-muted-foreground">{channelName}</p>
-                  )}
-                </div>
-                {/* Video fills remaining space */}
-                <div className="flex-1 min-h-0 px-4 pb-1">
-                  <YouTubePlayer
-                    videoId={videoId}
-                    startTime={startTime}
-                    onPlayerReady={handlePlayerReady}
-                    onSaveWatchPosition={handleSaveWatchPosition}
-                    playerRef={playerRef}
-                    className="h-full rounded-lg overflow-hidden"
-                  />
-                </div>
-              </div>
+              <YouTubePlayer
+                videoId={videoId}
+                startTime={startTime}
+                onPlayerReady={handlePlayerReady}
+                onSaveWatchPosition={handleSaveWatchPosition}
+                playerRef={playerRef}
+                className="h-full"
+              />
             </ResizablePanel>
 
             {/* Resize Handle */}
