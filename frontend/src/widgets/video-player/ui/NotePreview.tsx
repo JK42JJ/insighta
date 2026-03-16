@@ -1,7 +1,8 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Play, ExternalLink } from 'lucide-react';
 import type { YTPlayer } from '../model/youtube-api';
+import { parseNoteMarkdown, extractTimestampSeconds, type ParsedSegment } from '@/shared/lib/note-markdown';
 
 interface NotePreviewProps {
   note: string;
@@ -18,11 +19,7 @@ export function NotePreview({
   onEditClick,
 }: NotePreviewProps) {
   const { t } = useTranslation();
-
-  const extractTimestampSeconds = useCallback((url: string): number | null => {
-    const tMatch = url.match(/[?&]t=(\d+)/);
-    return tMatch ? parseInt(tMatch[1], 10) : null;
-  }, []);
+  const parsedLines = useMemo(() => parseNoteMarkdown(note), [note]);
 
   const handleTimestampClick = useCallback(
     (url: string, e: React.MouseEvent) => {
@@ -37,7 +34,7 @@ export function NotePreview({
         window.open(url, '_blank', 'noopener,noreferrer');
       }
     },
-    [playerRef, playerReady, extractTimestampSeconds]
+    [playerRef, playerReady]
   );
 
   if (!note) {
@@ -50,106 +47,81 @@ export function NotePreview({
     );
   }
 
+  const renderSegment = (segment: ParsedSegment, lineIdx: number, segIdx: number) => {
+    const key = `${lineIdx}-${segIdx}`;
+
+    if (segment.type === 'image') {
+      return (
+        <button
+          key={key}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (segment.seconds !== null && segment.seconds !== undefined && playerRef.current && playerReady) {
+              playerRef.current.seekTo(segment.seconds, true);
+            }
+          }}
+          className="block my-1"
+        >
+          <img
+            src={segment.imageUrl}
+            alt={segment.content}
+            className="max-h-20 rounded-md border border-border/20 hover:border-primary/40 transition-colors"
+            loading="lazy"
+          />
+        </button>
+      );
+    }
+
+    if (segment.type === 'timestamp') {
+      return (
+        <button
+          key={key}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (segment.url) handleTimestampClick(segment.url, e);
+          }}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+        >
+          {segment.content}
+          <Play className="w-2.5 h-2.5" />
+        </button>
+      );
+    }
+
+    if (segment.type === 'link') {
+      return (
+        <a
+          key={key}
+          href={segment.url}
+          onClick={(e) => {
+            if (segment.url) handleTimestampClick(segment.url, e);
+          }}
+          className="text-primary hover:underline inline-flex items-center gap-0.5"
+        >
+          {segment.content}
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      );
+    }
+
+    return <span key={key}>{segment.content}</span>;
+  };
+
   return (
     <div
       className="text-sm h-full overflow-y-auto cursor-text py-1 scrollbar-thin"
       onClick={onEditClick}
     >
       <div className="space-y-0.5 text-foreground/60">
-        {note.split('\n').map((line, lineIdx) => {
-          const combinedRegex = /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)|\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
-          const parts: React.ReactNode[] = [];
-          let lastIndex = 0;
-          let match: RegExpExecArray | null;
-
-          while ((match = combinedRegex.exec(line)) !== null) {
-            if (match.index > lastIndex) {
-              parts.push(
-                <span key={`t-${lineIdx}-${lastIndex}`}>
-                  {line.slice(lastIndex, match.index)}
-                </span>
-              );
-            }
-
-            const isImage = match[0].startsWith('!');
-
-            if (isImage) {
-              const imgAlt = match[1];
-              const imgUrl = match[2].replace(/#t=\d+s$/, '');
-              const tMatch = match[2].match(/#t=(\d+)s/);
-              const imgSeconds = tMatch ? parseInt(tMatch[1], 10) : null;
-
-              parts.push(
-                <button
-                  key={`img-${lineIdx}-${match.index}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (imgSeconds !== null && playerRef.current && playerReady) {
-                      playerRef.current.seekTo(imgSeconds, true);
-                    }
-                  }}
-                  className="block my-1"
-                >
-                  <img
-                    src={imgUrl}
-                    alt={imgAlt}
-                    className="max-h-20 rounded-md border border-border/20 hover:border-primary/40 transition-colors"
-                    loading="lazy"
-                  />
-                </button>
-              );
-            } else {
-              const url = match[4];
-              const label = match[3];
-              const isYT = url.includes('youtube.com') || url.includes('youtu.be');
-              const seconds = isYT ? extractTimestampSeconds(url) : null;
-              const isTimestamp = isYT && seconds !== null;
-
-              parts.push(
-                isTimestamp ? (
-                  <button
-                    key={`l-${lineIdx}-${match.index}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleTimestampClick(url, e);
-                    }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                  >
-                    {label}
-                    <Play className="w-2.5 h-2.5" />
-                  </button>
-                ) : (
-                  <a
-                    key={`l-${lineIdx}-${match.index}`}
-                    href={url}
-                    onClick={(e) => handleTimestampClick(url, e)}
-                    className="text-primary hover:underline inline-flex items-center gap-0.5"
-                  >
-                    {label}
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )
-              );
-            }
-            lastIndex = match.index + match[0].length;
-          }
-
-          if (lastIndex < line.length) {
-            parts.push(<span key={`t-${lineIdx}-end`}>{line.slice(lastIndex)}</span>);
-          }
-
-          if (parts.length === 0 && line) {
-            parts.push(<span key={`line-${lineIdx}`}>{line}</span>);
-          }
-
-          return parts.length > 0 ? (
+        {parsedLines.map((line, lineIdx) =>
+          line.segments.length > 0 ? (
             <div key={lineIdx} className="whitespace-pre-wrap">
-              {parts}
+              {line.segments.map((seg, segIdx) => renderSegment(seg, lineIdx, segIdx))}
             </div>
           ) : (
             <div key={lineIdx}>&nbsp;</div>
-          );
-        })}
+          )
+        )}
       </div>
     </div>
   );
