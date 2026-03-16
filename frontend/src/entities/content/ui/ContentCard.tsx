@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
 import type { InsightCard } from '@/entities/card/model/types';
 import { upgradeYouTubeThumbnail, handleThumbnailError } from '@/shared/lib/image-utils';
+import { CompactNotePreview } from '@/shared/ui/CompactNotePreview';
 import { linkTypeToSourceType } from '../model/converters';
 import { SourceTypeBadge } from './SourceTypeBadge';
 import {
@@ -163,17 +164,20 @@ export const ContentCard = memo(function ContentCard({
         <h4 className="absolute bottom-1 left-1.5 right-1.5 text-xs font-medium text-primary-foreground line-clamp-2 leading-tight">
           {card.title}
         </h4>
+        {/* Source type badge overlay */}
+        {card.linkType && (
+          <div className="absolute top-1 right-1">
+            <SourceTypeBadge linkType={card.linkType} variant="overlay" />
+          </div>
+        )}
       </div>
 
       {/* Meta area */}
       <div className="p-2 space-y-1">
         {Renderer && <Renderer card={rendererCard} view={view} />}
-        <div className="flex items-center gap-1.5">
-          {card.linkType && <SourceTypeBadge linkType={card.linkType} />}
-          {card.userNote && (
-            <p className="text-xs text-muted-foreground line-clamp-1 flex-1">{card.userNote}</p>
-          )}
-        </div>
+        {card.userNote && (
+          <CompactNotePreview note={card.userNote} maxLines={1} />
+        )}
       </div>
     </div>
   );

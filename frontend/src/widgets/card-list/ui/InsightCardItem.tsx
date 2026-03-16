@@ -5,6 +5,7 @@ import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
 import { GripVertical, StickyNote, Play } from 'lucide-react';
+import { CompactNotePreview } from '@/shared/ui/CompactNotePreview';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import { upgradeYouTubeThumbnail, handleThumbnailError } from '@/shared/lib/image-utils';
@@ -147,13 +148,16 @@ export function InsightCardItem({
               {card.title}
             </h4>
 
-            {/* Watch position badge */}
-            {watchPos && (
-              <div className="absolute top-1 right-1 flex items-center gap-0.5 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">
-                <Play className="w-2.5 h-2.5" aria-hidden="true" />
-                {watchPos}
-              </div>
-            )}
+            {/* Top-right badge stack: source type + watch position */}
+            <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5">
+              {card.linkType && <SourceTypeBadge linkType={card.linkType} variant="overlay" />}
+              {watchPos && (
+                <div className="flex items-center gap-0.5 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">
+                  <Play className="w-2.5 h-2.5" aria-hidden="true" />
+                  {watchPos}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Note preview — fixed height area */}
@@ -173,13 +177,13 @@ export function InsightCardItem({
             ) : (
               <div onDoubleClick={handleNoteDoubleClick}>
                 {card.userNote ? (
-                  <p className="text-xs text-muted-foreground line-clamp-3 flex items-start gap-1">
+                  <div className="flex items-start gap-1">
                     <StickyNote
                       className="w-3 h-3 mt-0.5 shrink-0 text-primary/60"
                       aria-hidden="true"
                     />
-                    <span>{card.userNote}</span>
-                  </p>
+                    <CompactNotePreview note={card.userNote} maxLines={3} />
+                  </div>
                 ) : (
                   <p className="text-xs text-muted-foreground/50 italic">
                     {t('cards.doubleClickToNote')}
@@ -188,9 +192,8 @@ export function InsightCardItem({
               </div>
             )}
 
-            {/* Source type badge + meta */}
+            {/* Source meta info */}
             <div className="flex items-center gap-1.5">
-              {card.linkType && <SourceTypeBadge linkType={card.linkType} />}
               <SourceMetaInfo card={card} view="grid" />
             </div>
           </div>
@@ -211,9 +214,11 @@ export function InsightCardItem({
                 className="w-full h-full text-xs bg-muted/50 border border-input rounded px-1.5 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
                 placeholder={t('cards.addNote')}
               />
+            ) : card.userNote ? (
+              <CompactNotePreview note={card.userNote} />
             ) : (
-              <p className="text-xs text-muted-foreground whitespace-pre-wrap">
-                {card.userNote || t('cards.doubleClickToNote')}
+              <p className="text-xs text-muted-foreground/50 italic">
+                {t('cards.doubleClickToNote')}
               </p>
             )}
           </div>

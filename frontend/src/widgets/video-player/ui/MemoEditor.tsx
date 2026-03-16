@@ -7,7 +7,7 @@ import { Button } from '@/shared/ui/button';
 import { Textarea } from '@/shared/ui/textarea';
 import type { YTPlayer } from '../model/youtube-api';
 import { formatTime } from '../model/youtube-api';
-import { SlashMenu } from './SlashMenu';
+import { SlashMenu } from '@/shared/ui/SlashMenu';
 import { NotePreview } from './NotePreview';
 
 const AUTO_SAVE_DELAY_MS = 3_000;
@@ -272,15 +272,13 @@ export function MemoEditor({
     [slashMenu, handleImmediateSave]
   );
 
-  // Textarea change handler with slash detection using selectionStart for cursor-accurate detection
+  // Textarea change handler with slash detection
+  // Capture selectionStart from the event target BEFORE any state update to avoid
+  // React 18 batching / controlled-input DOM-sync issues.
   const handleTextareaChange = useCallback(
-    (value: string) => {
+    (value: string, cursorPos: number) => {
       handleNoteChange(value);
 
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-
-      const cursorPos = textarea.selectionStart;
       const textBeforeCursor = value.slice(0, cursorPos);
       const lastNewline = textBeforeCursor.lastIndexOf('\n');
       const currentLine = textBeforeCursor.slice(lastNewline + 1);
@@ -363,7 +361,7 @@ export function MemoEditor({
             <Textarea
               ref={textareaRef}
               value={note}
-              onChange={(e) => handleTextareaChange(e.target.value)}
+              onChange={(e) => handleTextareaChange(e.target.value, e.target.selectionStart)}
               onKeyDown={handleKeyDown}
               onBlur={() => {
                 if (!slashMenu) {
