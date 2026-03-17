@@ -27,6 +27,7 @@ prisma/dev.db
 prisma/data/
 prisma/migrations/
 !prisma/migrations/.gitkeep
+!prisma/migrations/ontology/
 
 # Logs
 logs/
