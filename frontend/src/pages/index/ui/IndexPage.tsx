@@ -19,6 +19,7 @@ import { MandalaGrid } from '@/widgets/mandala-grid/ui/MandalaGrid';
 import { MobileBottomNav } from '@/widgets/mobile-nav';
 
 import { useMandalaQuery, useMandalaList, useSwitchMandala } from '@/features/mandala';
+import { useSearchCards, SearchBar } from '@/features/search';
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
 import { useLayoutPreferences } from '../model/useLayoutPreferences';
 import { useCardOrchestrator } from '../model/useCardOrchestrator';
@@ -162,6 +163,23 @@ function AuthenticatedApp() {
   useEffect(() => {
     swapCardsRef.current = cards.swapCardsForReorder;
   }, [cards.swapCardsForReorder]);
+
+  // 5b. Search
+  const search = useSearchCards();
+
+  // 5c. Scroll highlighted search result into view
+  const highlightedCard = search.getHighlightedCard();
+  useEffect(() => {
+    if (!highlightedCard) return;
+    const el = document.querySelector(`[data-card-id="${highlightedCard.id}"]`);
+    if (el) {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      el.classList.add('ring-2', 'ring-primary', 'ring-offset-1');
+      return () => {
+        el.classList.remove('ring-2', 'ring-primary', 'ring-offset-1');
+      };
+    }
+  }, [highlightedCard]);
 
   // 6. Video modal
   const modal = useVideoModal(cards.allMandalaCards, cards.scratchPadCards);
@@ -477,6 +495,25 @@ function AuthenticatedApp() {
         mandalaGridElement={mandalaGridElement()}
         selectedMandalaId={selectedMandalaId}
         onMandalaSelect={handleMandalaSelect}
+        searchBarElement={
+          <SearchBar
+            value={search.searchTerm}
+            onChange={search.setSearchTerm}
+            onClear={search.clearSearch}
+            isLoading={search.isLoading}
+            resultCount={search.total}
+            filteredCount={search.filteredCount}
+            isSearchActive={search.isSearchActive}
+            sourceFilter={search.sourceFilter}
+            onSourceFilterChange={search.setSourceFilter}
+            onArrowDown={() => search.moveHighlight('down')}
+            onArrowUp={() => search.moveHighlight('up')}
+            onEnter={() => {
+              const card = search.getHighlightedCard();
+              if (card) handleCardClick(card);
+            }}
+          />
+        }
       >
         <div className="h-full flex flex-col overflow-hidden">
           {/* External drag overlay (full dimming + dashed border) */}
@@ -524,10 +561,30 @@ function AuthenticatedApp() {
             )}
 
             <div className="flex-1 h-full overflow-y-auto px-4 py-4">
+              {/* Mobile search bar (hidden on md+, shown in header instead) */}
+              <div className="md:hidden mb-3">
+                <SearchBar
+                  value={search.searchTerm}
+                  onChange={search.setSearchTerm}
+                  onClear={search.clearSearch}
+                  isLoading={search.isLoading}
+                  resultCount={search.total}
+                  filteredCount={search.filteredCount}
+                  isSearchActive={search.isSearchActive}
+                  sourceFilter={search.sourceFilter}
+                  onSourceFilterChange={search.setSourceFilter}
+                  onArrowDown={() => search.moveHighlight('down')}
+                  onArrowUp={() => search.moveHighlight('up')}
+                  onEnter={() => {
+                    const card = search.getHighlightedCard();
+                    if (card) handleCardClick(card);
+                  }}
+                />
+              </div>
               <CardListView
-                cards={cards.displayCards}
-                isLoading={cards.isLoading}
-                title={cards.displayTitle}
+                cards={search.isSearchActive ? search.results : cards.displayCards}
+                isLoading={search.isSearchActive ? search.isLoading : cards.isLoading}
+                title={search.isSearchActive ? t('search.results', 'Search Results') : cards.displayTitle}
                 viewMode={layout.viewMode}
                 listPanelRatio={layout.listPanelRatio}
                 onViewModeChange={layout.handleSetViewMode}

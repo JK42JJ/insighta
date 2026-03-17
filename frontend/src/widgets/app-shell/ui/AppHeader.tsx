@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from 'next-themes';
-import { Moon, Sun, LogIn, Loader2, Menu, Search } from 'lucide-react';
+import { Moon, Sun, LogIn, Loader2, Menu } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import {
@@ -16,9 +16,10 @@ import { useAuth } from '@/features/auth/model/useAuth';
 
 interface AppHeaderProps {
   onMobileMenuOpen?: () => void;
+  searchBarElement?: React.ReactNode;
 }
 
-export function AppHeader({ onMobileMenuOpen }: AppHeaderProps) {
+export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps) {
   const { t, i18n } = useTranslation();
   const { isLoggedIn, isLoading, userName, userEmail, userAvatar } = useAuth();
   const { theme, setTheme } = useTheme();
@@ -63,18 +64,12 @@ export function AppHeader({ onMobileMenuOpen }: AppHeaderProps) {
           </Link>
         </div>
 
-        {/* Center: Search (placeholder for future) */}
-        <div className="hidden md:flex items-center flex-1 max-w-md mx-4">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder={t('sidebar.searchPlaceholder')}
-              className="w-full h-9 pl-9 pr-4 rounded-lg bg-surface-base border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
-              disabled
-            />
+        {/* Center: Search */}
+        {searchBarElement && (
+          <div className="hidden md:flex items-center flex-1 max-w-md mx-4">
+            {searchBarElement}
           </div>
-        </div>
+        )}
 
         {/* Right: Actions */}
         <div className="flex items-center gap-2">

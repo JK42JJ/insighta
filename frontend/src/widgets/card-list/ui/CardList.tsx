@@ -44,6 +44,7 @@ function CardSlot({
     <div
       ref={setNodeRef}
       data-card-item
+      data-card-id={card.id}
       className={cn(
         'w-full transition-all duration-200 rounded-2xl relative',
         isOver && 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-[1.02]'
