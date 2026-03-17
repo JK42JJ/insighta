@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
-import { Search, X, Loader2 } from 'lucide-react';
+import { Search, X, Loader2, Youtube, Link2, FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import type { SourceFilter } from '../model/useSearchCards';
 
 interface SearchBarProps {
   value: string;
@@ -8,8 +9,20 @@ interface SearchBarProps {
   onClear: () => void;
   isLoading: boolean;
   resultCount: number;
+  filteredCount: number;
   isSearchActive: boolean;
+  sourceFilter: SourceFilter;
+  onSourceFilterChange: (filter: SourceFilter) => void;
+  onArrowDown: () => void;
+  onArrowUp: () => void;
+  onEnter: () => void;
 }
+
+const SOURCE_FILTERS: { value: SourceFilter; icon: typeof Youtube; labelKey: string }[] = [
+  { value: 'youtube', icon: Youtube, labelKey: 'search.filterYouTube' },
+  { value: 'link', icon: Link2, labelKey: 'search.filterLink' },
+  { value: 'file', icon: FileText, labelKey: 'search.filterFile' },
+];
 
 export function SearchBar({
   value,
@@ -17,19 +30,39 @@ export function SearchBar({
   onClear,
   isLoading,
   resultCount,
+  filteredCount,
   isSearchActive,
+  sourceFilter,
+  onSourceFilterChange,
+  onArrowDown,
+  onArrowUp,
+  onEnter,
 }: SearchBarProps) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClear();
-        inputRef.current?.blur();
+      switch (e.key) {
+        case 'Escape':
+          onClear();
+          inputRef.current?.blur();
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          onArrowDown();
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          onArrowUp();
+          break;
+        case 'Enter':
+          e.preventDefault();
+          onEnter();
+          break;
       }
     },
-    [onClear]
+    [onClear, onArrowDown, onArrowUp, onEnter]
   );
 
   // Cmd/Ctrl+K to focus search
@@ -44,6 +77,13 @@ export function SearchBar({
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
+  const handleFilterClick = useCallback(
+    (filter: SourceFilter) => {
+      onSourceFilterChange(sourceFilter === filter ? 'all' : filter);
+    },
+    [sourceFilter, onSourceFilterChange]
+  );
+
   return (
     <div className="relative w-full max-w-md">
       <div className="relative flex items-center">
@@ -54,8 +94,11 @@ export function SearchBar({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={t('search.placeholder', 'Search cards...')}
+          placeholder={t('search.placeholder', 'Search cards... (⌘K)')}
           className="w-full h-9 pl-9 pr-9 rounded-lg border border-border/50 bg-surface-mid/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-colors"
+          role="combobox"
+          aria-expanded={isSearchActive}
+          aria-haspopup="listbox"
         />
         {isLoading && (
           <Loader2 className="absolute right-3 w-4 h-4 text-muted-foreground animate-spin" />
@@ -70,11 +113,36 @@ export function SearchBar({
           </button>
         )}
       </div>
-      {isSearchActive && !isLoading && (
-        <div className="absolute right-0 top-full mt-1 text-xs text-muted-foreground">
-          {resultCount === 0
-            ? t('search.noResults', 'No results')
-            : t('search.resultCount', '{{count}} results', { count: resultCount })}
+
+      {/* Source type filter chips */}
+      {isSearchActive && (
+        <div className="flex items-center gap-1.5 mt-2">
+          {SOURCE_FILTERS.map(({ value: filterValue, icon: Icon, labelKey }) => {
+            const isActive = sourceFilter === filterValue;
+            return (
+              <button
+                key={filterValue}
+                onClick={() => handleFilterClick(filterValue)}
+                className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-colors ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-surface-mid/80 text-muted-foreground hover:text-foreground hover:bg-surface-mid'
+                }`}
+                aria-pressed={isActive}
+              >
+                <Icon className="w-3 h-3" />
+                {t(labelKey)}
+              </button>
+            );
+          })}
+          <span className="ml-auto text-xs text-muted-foreground">
+            {filteredCount === resultCount
+              ? t('search.resultCount', '{{count}} results', { count: resultCount })
+              : t('search.filteredCount', '{{filtered}} of {{total}}', {
+                  filtered: filteredCount,
+                  total: resultCount,
+                })}
+          </span>
         </div>
       )}
     </div>

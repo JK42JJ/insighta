@@ -264,7 +264,11 @@
     "clear": "Clear search",
     "noResults": "No results found",
     "resultCount": "{{count}} results",
-    "results": "Search Results"
+    "filteredCount": "{{filtered}} of {{total}}",
+    "results": "Search Results",
+    "filterYouTube": "YouTube",
+    "filterLink": "Links",
+    "filterFile": "Files"
   },
   "linkTypes": {
     "youtube": "YouTube Video",

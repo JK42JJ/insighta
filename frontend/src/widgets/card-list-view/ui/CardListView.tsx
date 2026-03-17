@@ -29,6 +29,7 @@ interface CardListViewProps {
   onSaveWatchPosition?: (id: string, positionSeconds: number) => void;
   watchPositionCache?: Map<string, number>;
   panelSizeCache?: Map<string, number>;
+  highlightedCardId?: string | null;
 }
 
 export function CardListView({
@@ -49,6 +50,7 @@ export function CardListView({
   onSaveWatchPosition,
   watchPositionCache,
   panelSizeCache,
+  highlightedCardId,
 }: CardListViewProps) {
   const { t } = useTranslation();
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
