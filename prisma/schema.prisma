@@ -483,6 +483,7 @@ model user_local_cards {
   @@index([level_id], map: "idx_user_local_cards_level_id")
   @@index([user_id], map: "idx_user_local_cards_user_id")
   @@index([mandala_id], map: "idx_user_local_cards_mandala_id")
+  @@index([user_id, mandala_id], map: "idx_user_local_cards_user_mandala")
   @@schema("public")
 }
 

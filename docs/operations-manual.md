@@ -660,6 +660,44 @@ When the application grows beyond a single administrator's manual oversight capa
 - Slack webhook for critical incidents
 - PagerDuty or equivalent for on-call rotation (when team grows)
 
+### 4.4 Dev Environment Runbook
+
+#### 필수 프로세스 (3개)
+
+| # | 프로세스 | 포트 | 시작 명령 | 확인 명령 |
+|---|---------|------|----------|----------|
+| 1 | Supabase local (Docker) | 8000, 54321, 54322 | `supabase start` | `supabase status` |
+| 2 | Fastify API server | 3000 | `npm run api:dev` | `curl localhost:3000/health` |
+| 3 | Vite dev server | 8081 | `cd frontend && npm run dev` | `curl -s -o /dev/null -w "%{http_code}" localhost:8081` |
+| ALL | API + Frontend 동시 | 3000, 8081 | `npm run dev:all` | 위 2+3 확인 |
+
+#### 장애 케이스별 대응
+
+**Case 1: "Failed to fetch" / ECONNREFUSED on API calls**
+- 증상: 사이드바 "Couldn't load. Tap to retry.", 콘솔에 ApiHttpError
+- 진단: `lsof -i :3000` → 프로세스 없으면 API 서버 미실행
+- 조치: `npm run api:dev`
+- 검증: `curl localhost:3000/health` → 200
+
+**Case 2: Vite 중복 실행 (504 / port conflict)**
+- 증상: 504 Gateway Timeout 또는 EADDRINUSE
+- 진단: `lsof -i :8081` → 여러 PID 확인
+- 조치: `kill <중복 PIDs>` → `npm run dev:all` (전체 재시작)
+- 주의: kill 후 반드시 API 서버 상태도 확인
+
+**Case 3: Supabase local 미실행**
+- 증상: auth 실패, DB 쿼리 타임아웃
+- 진단: `supabase status` 또는 `docker ps | grep supabase`
+- 조치: `supabase start`
+- 검증: `curl localhost:54321/rest/v1/` → 응답 확인
+
+**Case 4: 전체 환경 초기화**
+- 조치 순서: `supabase start` → `npm run dev:all`
+- 전체 검증: `lsof -i :8000,3000,8081` → 3개 모두 리스닝 확인
+
+#### 관련 인시던트
+- [INC-2026-03-17: Dev 만다라트 로딩 불가](https://github.com/JK42JJ/insighta/issues/214) — Fastify API 서버 미실행으로 사이드바 로딩 실패
+
 ---
 
 ## 5. Security
