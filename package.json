@@ -37,6 +37,7 @@
     "generate:openapi": "tsx scripts/generate-openapi.ts",
     "extract-entities": "tsx scripts/ontology/extract-entities.ts",
     "extract-entities:dry": "tsx scripts/ontology/extract-entities.ts --dry-run",
+    "generate-embeddings": "tsx scripts/ontology/generate-embeddings.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
