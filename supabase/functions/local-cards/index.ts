@@ -290,6 +290,16 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Check if card with same URL already exists (detect update vs create)
+        const { data: existingCard } = await supabase
+          .from('user_local_cards')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('url', body.url)
+          .maybeSingle();
+
+        const isUpdate = !!existingCard;
+
         const { data: card, error: upsertError } = await supabase
           .from('user_local_cards')
           .upsert({
@@ -332,8 +342,8 @@ Deno.serve(async (req) => {
         }
 
         return new Response(
-          JSON.stringify({ card }),
-          { status: 201, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          JSON.stringify({ card, isUpdate }),
+          { status: isUpdate ? 200 : 201, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 

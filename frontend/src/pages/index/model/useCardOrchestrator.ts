@@ -415,7 +415,7 @@ export function useCardOrchestrator(
       }
 
       try {
-        await addLocalCard({
+        const result = await addLocalCard({
           url: normalizedUrl,
           title,
           thumbnail: metadata?.image || tempCard.thumbnail,
@@ -432,6 +432,14 @@ export function useCardOrchestrator(
         // to prevent flicker (card disappears then reappears after refetch)
         await queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
         setPendingLocalCards((prev) => prev.filter((c) => c.id !== tempCard.id));
+
+        // Notify user if card was updated (duplicate URL)
+        if ('_isUpdate' in result && result._isUpdate) {
+          toast({
+            title: t('index.cardUpdated', 'Card updated'),
+            description: t('index.cardUpdatedDesc', 'This URL already existed. Card position updated.'),
+          });
+        }
       } catch (error) {
         setPendingLocalCards((prev) => prev.filter((c) => c.id !== tempCard.id));
         if (isLimitExceededError(error)) {
