@@ -16,6 +16,31 @@ function getCorsHeaders(req: Request) {
   };
 }
 
+// HMAC helpers for OAuth state parameter CSRF protection
+async function signState(nonce: string, userId: string, secret: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(`${nonce}:${userId}`));
+  const sig = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/=+$/, '');
+  return `${nonce}:${userId}:${sig}`;
+}
+
+async function verifyState(state: string, secret: string): Promise<{ valid: boolean; userId?: string }> {
+  const parts = state.split(':');
+  if (parts.length < 3) return { valid: false };
+  const [nonce, userId, sig] = [parts[0], parts[1], parts.slice(2).join(':')];
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+  );
+  // Reconstruct signature bytes from base64
+  const sigBytes = Uint8Array.from(atob(sig), c => c.charCodeAt(0));
+  const valid = await crypto.subtle.verify('HMAC', key, sigBytes, encoder.encode(`${nonce}:${userId}`));
+  return { valid, userId: valid ? userId : undefined };
+}
+
 // YouTube OAuth 2.0 endpoints
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -91,7 +116,8 @@ Deno.serve(async (req) => {
         authUrl.searchParams.set('scope', SCOPES.join(' '));
         authUrl.searchParams.set('access_type', 'offline');
         authUrl.searchParams.set('prompt', 'consent');
-        authUrl.searchParams.set('state', `${state}:${user.id}`);
+        const signedState = await signState(state, user.id, supabaseServiceKey);
+        authUrl.searchParams.set('state', signedState);
 
         return new Response(
           JSON.stringify({ authUrl: authUrl.toString() }),
@@ -120,11 +146,11 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Extract user ID from state
-        const [, userId] = state.split(':');
-        if (!userId) {
+        // Verify HMAC-signed state to prevent CSRF
+        const { valid, userId } = await verifyState(state, supabaseServiceKey);
+        if (!valid || !userId) {
           return new Response(
-            JSON.stringify({ error: 'Invalid state parameter' }),
+            JSON.stringify({ error: 'Invalid or tampered state parameter' }),
             { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
