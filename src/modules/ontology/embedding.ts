@@ -1,11 +1,11 @@
 import { getPrismaClient } from '../database/client';
 import * as crypto from 'crypto';
 // ============================================================================
-// Ontology Embedding Service — Gemini text-embedding-004 (768d)
-// ADR-4: Gemini API for embeddings (free tier: 1500 req/day)
+// Ontology Embedding Service — Gemini gemini-embedding-001 (768d via outputDimensionality)
+// ADR-4: Gemini API for embeddings (free tier)
 // ============================================================================
 
-const GEMINI_MODEL = 'text-embedding-004';
+const GEMINI_MODEL = 'gemini-embedding-001';
 const EMBEDDING_DIMENSION = 768;
 const GEMINI_EMBED_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:embedContent`;
 
@@ -25,6 +25,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     body: JSON.stringify({
       model: `models/${GEMINI_MODEL}`,
       content: { parts: [{ text }] },
+      outputDimensionality: EMBEDDING_DIMENSION,
     }),
   });
 
