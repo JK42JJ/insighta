@@ -1,9 +1,20 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const ALLOWED_ORIGINS = [
+  'https://insighta.one',
+  'https://www.insighta.one',
+  'http://localhost:8081',
+  'http://localhost:5173',
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('origin') ?? '';
+  return {
+    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Vary': 'Origin',
+  };
+}
 
 // Helper: Get or create subscription record
 async function getOrCreateSubscription(supabase: ReturnType<typeof createClient>, userId: string) {
@@ -142,7 +153,7 @@ console.log("local-cards Edge Function loaded");
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -155,7 +166,7 @@ Deno.serve(async (req) => {
   if (!authHeader) {
     return new Response(
       JSON.stringify({ error: 'Authorization required' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -167,7 +178,7 @@ Deno.serve(async (req) => {
     console.error('[local-cards] Auth failed:', userError?.message);
     return new Response(
       JSON.stringify({ error: 'Invalid user token' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -209,7 +220,7 @@ Deno.serve(async (req) => {
               used: cards.length
             }
           }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
@@ -228,14 +239,14 @@ Deno.serve(async (req) => {
               limit: limitInfo.limit,
               used: limitInfo.used
             }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 403, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
         if (!body.url || !body.link_type) {
           return new Response(
             JSON.stringify({ error: 'url and link_type are required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -282,7 +293,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ card }),
-          { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 201, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
@@ -293,7 +304,7 @@ Deno.serve(async (req) => {
         if (!id) {
           return new Response(
             JSON.stringify({ error: 'Card id is required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -313,7 +324,7 @@ Deno.serve(async (req) => {
         if (Object.keys(safeUpdates).length === 0) {
           return new Response(
             JSON.stringify({ error: 'No valid fields to update' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -330,13 +341,13 @@ Deno.serve(async (req) => {
         if (!card) {
           return new Response(
             JSON.stringify({ error: 'Card not found' }),
-            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 404, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
         return new Response(
           JSON.stringify({ card }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
@@ -347,7 +358,7 @@ Deno.serve(async (req) => {
         if (!id) {
           return new Response(
             JSON.stringify({ error: 'Card id is required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -361,7 +372,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
@@ -372,7 +383,7 @@ Deno.serve(async (req) => {
         if (!Array.isArray(updates) && !Array.isArray(inserts)) {
           return new Response(
             JSON.stringify({ error: 'updates or inserts array is required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -420,7 +431,7 @@ Deno.serve(async (req) => {
                 limit: limitInfo.limit,
                 used: limitInfo.used
               }),
-              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              { status: 403, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
             );
           }
 
@@ -451,7 +462,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify(result),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
@@ -477,7 +488,7 @@ Deno.serve(async (req) => {
         if (!playlistUrl) {
           return new Response(
             JSON.stringify({ error: 'playlistUrl is required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -485,7 +496,7 @@ Deno.serve(async (req) => {
         if (!playlistId) {
           return new Response(
             JSON.stringify({ error: 'Invalid playlist URL' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -496,7 +507,7 @@ Deno.serve(async (req) => {
         if (!accessToken && !apiKey) {
           return new Response(
             JSON.stringify({ error: 'No YouTube credentials available' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -509,7 +520,7 @@ Deno.serve(async (req) => {
           if (status === 403 || status === 404) {
             return new Response(
               JSON.stringify({ error: accessToken ? 'PRIVATE_PLAYLIST_NOT_OWNER' : 'PRIVATE_PLAYLIST_NO_AUTH' }),
-              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              { status: 403, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
             );
           }
           throw new Error(`YouTube API error: ${status}`);
@@ -519,7 +530,7 @@ Deno.serve(async (req) => {
         if (!plMetaData.items || plMetaData.items.length === 0) {
           return new Response(
             JSON.stringify({ error: accessToken ? 'PRIVATE_PLAYLIST_NOT_OWNER' : 'PRIVATE_PLAYLIST_NO_AUTH' }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 403, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -541,7 +552,7 @@ Deno.serve(async (req) => {
               used: limitInfo.used,
               available,
             }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 403, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -662,14 +673,14 @@ Deno.serve(async (req) => {
               remaining: limitInfo.limit - limitInfo.used - cardsCreated,
             },
           }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
       default:
         return new Response(
           JSON.stringify({ error: 'Invalid action. Use: list, add, update, delete, batch-move, import-playlist' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
     }
   } catch (error: unknown) {
@@ -677,7 +688,7 @@ Deno.serve(async (req) => {
     console.error('[local-cards] Error:', errorMessage);
     return new Response(
       JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
     );
   }
 });
