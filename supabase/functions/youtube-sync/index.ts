@@ -326,6 +326,7 @@ Deno.serve(async (req) => {
           .update({ sync_status: 'syncing' })
           .eq('id', playlistId);
 
+        const syncSteps: string[] = [];
         try {
           const playlistItems = await fetchPlaylistItems(accessToken, playlist.youtube_playlist_id);
           const videoIds = playlistItems.map(item => item.videoId);
@@ -387,16 +388,21 @@ Deno.serve(async (req) => {
           }
 
           let itemsAdded = 0;
+
           if (newItems.length > 0) {
             const { error: itemsError } = await supabase
               .from('youtube_playlist_items')
               .upsert(newItems, { onConflict: 'playlist_id,video_id' });
 
-            if (!itemsError) {
-              itemsAdded = newItems.length;
+            if (itemsError) {
+              console.error('[youtube-sync] playlist_items upsert error:', itemsError);
+              throw new Error(`playlist_items upsert failed: ${itemsError.message}`);
             }
+            itemsAdded = newItems.length;
+            syncSteps.push(`items_added:${itemsAdded}`);
           }
 
+          // Add videos to ideation (user_video_states)
           const videoIdsToAddToIdeation: string[] = [];
           for (const item of playlistItems) {
             const videoDbId = existingVideoMap.get(item.videoId);
@@ -426,26 +432,44 @@ Deno.serve(async (req) => {
               }));
 
             if (newVideoStates.length > 0) {
-              await supabase
+              const { error: statesError } = await supabase
                 .from('user_video_states')
                 .insert(newVideoStates);
+
+              if (statesError) {
+                console.error('[youtube-sync] video_states insert error:', statesError);
+                throw new Error(`video_states insert failed: ${statesError.message}`);
+              }
+              syncSteps.push(`states_added:${newVideoStates.length}`);
             }
           }
 
-          for (const item of playlistItems) {
-            const videoDbId = existingVideoMap.get(item.videoId);
-            if (videoDbId) {
-              await supabase
-                .from('youtube_playlist_items')
-                .update({ position: item.position })
-                .eq('playlist_id', playlistId)
-                .eq('video_id', videoDbId);
+          // Batch position update (replaces N+1 individual updates)
+          const positionUpdates = playlistItems
+            .map(item => {
+              const videoDbId = existingVideoMap.get(item.videoId);
+              return videoDbId ? { playlist_id: playlistId, video_id: videoDbId, position: item.position } : null;
+            })
+            .filter((u): u is { playlist_id: string; video_id: string; position: number } => u !== null);
+
+          if (positionUpdates.length > 0) {
+            const { error: posError } = await supabase
+              .from('youtube_playlist_items')
+              .upsert(positionUpdates, { onConflict: 'playlist_id,video_id' });
+
+            if (posError) {
+              console.error('[youtube-sync] position update error:', posError);
+              throw new Error(`position update failed: ${posError.message}`);
             }
+            syncSteps.push(`positions_updated:${positionUpdates.length}`);
           }
 
+          // Mark removed items (soft delete)
           const currentYouTubeVideoIds = new Set(playlistItems.map(item => item.videoId));
           let itemsRemoved = 0;
 
+          // Build removal list first, then batch update
+          const itemsToRemove: string[] = [];
           for (const item of currentItems || []) {
             const { data: video } = await supabase
               .from('youtube_videos')
@@ -454,15 +478,26 @@ Deno.serve(async (req) => {
               .single();
 
             if (video && !currentYouTubeVideoIds.has(video.youtube_video_id)) {
-              await supabase
-                .from('youtube_playlist_items')
-                .update({ removed_at: new Date().toISOString() })
-                .eq('id', item.id);
-              itemsRemoved++;
+              itemsToRemove.push(item.id);
             }
           }
 
-          await supabase
+          if (itemsToRemove.length > 0) {
+            const { error: removeError } = await supabase
+              .from('youtube_playlist_items')
+              .update({ removed_at: new Date().toISOString() })
+              .in('id', itemsToRemove);
+
+            if (removeError) {
+              console.error('[youtube-sync] items removal error:', removeError);
+              throw new Error(`items removal failed: ${removeError.message}`);
+            }
+            itemsRemoved = itemsToRemove.length;
+            syncSteps.push(`items_removed:${itemsRemoved}`);
+          }
+
+          // Final status update
+          const { error: statusError } = await supabase
             .from('youtube_playlists')
             .update({
               sync_status: 'completed',
@@ -471,6 +506,11 @@ Deno.serve(async (req) => {
               sync_error: null,
             })
             .eq('id', playlistId);
+
+          if (statusError) {
+            console.error('[youtube-sync] status update error:', statusError);
+            throw new Error(`status update failed: ${statusError.message}`);
+          }
 
           return new Response(
             JSON.stringify({
@@ -483,12 +523,14 @@ Deno.serve(async (req) => {
             { headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         } catch (syncError) {
-          console.error('Sync error:', syncError);
+          console.error('[youtube-sync] Sync failed at steps:', syncSteps.join(' → '), 'error:', syncError);
           await supabase
             .from('youtube_playlists')
             .update({
               sync_status: 'failed',
-              sync_error: syncError instanceof Error ? syncError.message : 'Unknown sync error',
+              sync_error: syncError instanceof Error
+                ? `${syncError.message} [completed: ${syncSteps.join(', ')}]`
+                : `Unknown sync error [completed: ${syncSteps.join(', ')}]`,
             })
             .eq('id', playlistId);
 
