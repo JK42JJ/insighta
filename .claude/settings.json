@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "insighta-ontology": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["mcp-server/dist/index.js"],
+      "cwd": "/Users/jeonhokim/cursor/insighta",
+      "env": {
+        "DATABASE_URL": "postgresql://postgres:j1sMYPQxTQZ7QLlFd6wpNbV30Y5P47fo@127.0.0.1:5432/postgres"
+      }
+    }
+  }
+}

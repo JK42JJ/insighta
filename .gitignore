@@ -27,6 +27,7 @@ prisma/dev.db
 prisma/data/
 prisma/migrations/
 !prisma/migrations/.gitkeep
+!prisma/migrations/ontology/
 
 # Logs
 logs/
@@ -105,6 +106,7 @@ deploy/
 
 # Local dev tools & prompts
 scripts/
+!scripts/ontology/
 prompt/
 
 # Dev tool configs
