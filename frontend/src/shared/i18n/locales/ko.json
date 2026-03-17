@@ -264,7 +264,11 @@
     "clear": "검색 지우기",
     "noResults": "결과 없음",
     "resultCount": "{{count}}건",
-    "results": "검색 결과"
+    "filteredCount": "{{total}}건 중 {{filtered}}건",
+    "results": "검색 결과",
+    "filterYouTube": "YouTube",
+    "filterLink": "링크",
+    "filterFile": "파일"
   },
   "linkTypes": {
     "youtube": "YouTube 영상",

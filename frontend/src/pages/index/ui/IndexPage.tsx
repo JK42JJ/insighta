@@ -167,6 +167,20 @@ function AuthenticatedApp() {
   // 5b. Search
   const search = useSearchCards();
 
+  // 5c. Scroll highlighted search result into view
+  const highlightedCard = search.getHighlightedCard();
+  useEffect(() => {
+    if (!highlightedCard) return;
+    const el = document.querySelector(`[data-card-id="${highlightedCard.id}"]`);
+    if (el) {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      el.classList.add('ring-2', 'ring-primary', 'ring-offset-1');
+      return () => {
+        el.classList.remove('ring-2', 'ring-primary', 'ring-offset-1');
+      };
+    }
+  }, [highlightedCard]);
+
   // 6. Video modal
   const modal = useVideoModal(cards.allMandalaCards, cards.scratchPadCards);
 
@@ -535,7 +549,16 @@ function AuthenticatedApp() {
                   onClear={search.clearSearch}
                   isLoading={search.isLoading}
                   resultCount={search.total}
+                  filteredCount={search.filteredCount}
                   isSearchActive={search.isSearchActive}
+                  sourceFilter={search.sourceFilter}
+                  onSourceFilterChange={search.setSourceFilter}
+                  onArrowDown={() => search.moveHighlight('down')}
+                  onArrowUp={() => search.moveHighlight('up')}
+                  onEnter={() => {
+                    const card = search.getHighlightedCard();
+                    if (card) handleCardClick(card);
+                  }}
                 />
               </div>
               <CardListView
