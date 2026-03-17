@@ -495,6 +495,25 @@ function AuthenticatedApp() {
         mandalaGridElement={mandalaGridElement()}
         selectedMandalaId={selectedMandalaId}
         onMandalaSelect={handleMandalaSelect}
+        searchBarElement={
+          <SearchBar
+            value={search.searchTerm}
+            onChange={search.setSearchTerm}
+            onClear={search.clearSearch}
+            isLoading={search.isLoading}
+            resultCount={search.total}
+            filteredCount={search.filteredCount}
+            isSearchActive={search.isSearchActive}
+            sourceFilter={search.sourceFilter}
+            onSourceFilterChange={search.setSourceFilter}
+            onArrowDown={() => search.moveHighlight('down')}
+            onArrowUp={() => search.moveHighlight('up')}
+            onEnter={() => {
+              const card = search.getHighlightedCard();
+              if (card) handleCardClick(card);
+            }}
+          />
+        }
       >
         <div className="h-full flex flex-col overflow-hidden">
           {/* External drag overlay (full dimming + dashed border) */}
@@ -542,7 +561,8 @@ function AuthenticatedApp() {
             )}
 
             <div className="flex-1 h-full overflow-y-auto px-4 py-4">
-              <div className="mb-4">
+              {/* Mobile search bar (hidden on md+, shown in header instead) */}
+              <div className="md:hidden mb-3">
                 <SearchBar
                   value={search.searchTerm}
                   onChange={search.setSearchTerm}
