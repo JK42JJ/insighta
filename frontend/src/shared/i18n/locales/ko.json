@@ -259,6 +259,13 @@
     "addCard": "카드 추가",
     "addCardPlaceholder": "URL을 붙여넣으세요..."
   },
+  "search": {
+    "placeholder": "카드 검색... (⌘K)",
+    "clear": "검색 지우기",
+    "noResults": "결과 없음",
+    "resultCount": "{{count}}건",
+    "results": "검색 결과"
+  },
   "linkTypes": {
     "youtube": "YouTube 영상",
     "youtube-shorts": "YouTube 영상",

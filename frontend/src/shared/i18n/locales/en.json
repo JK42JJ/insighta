@@ -259,6 +259,13 @@
     "addCard": "Add Card",
     "addCardPlaceholder": "Paste a URL..."
   },
+  "search": {
+    "placeholder": "Search cards... (⌘K)",
+    "clear": "Clear search",
+    "noResults": "No results found",
+    "resultCount": "{{count}} results",
+    "results": "Search Results"
+  },
   "linkTypes": {
     "youtube": "YouTube Video",
     "youtube-shorts": "YouTube Video",

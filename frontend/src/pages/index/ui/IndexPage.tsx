@@ -19,6 +19,7 @@ import { MandalaGrid } from '@/widgets/mandala-grid/ui/MandalaGrid';
 import { MobileBottomNav } from '@/widgets/mobile-nav';
 
 import { useMandalaQuery, useMandalaList, useSwitchMandala } from '@/features/mandala';
+import { useSearchCards, SearchBar } from '@/features/search';
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
 import { useLayoutPreferences } from '../model/useLayoutPreferences';
 import { useCardOrchestrator } from '../model/useCardOrchestrator';
@@ -162,6 +163,9 @@ function AuthenticatedApp() {
   useEffect(() => {
     swapCardsRef.current = cards.swapCardsForReorder;
   }, [cards.swapCardsForReorder]);
+
+  // 5b. Search
+  const search = useSearchCards();
 
   // 6. Video modal
   const modal = useVideoModal(cards.allMandalaCards, cards.scratchPadCards);
@@ -524,10 +528,20 @@ function AuthenticatedApp() {
             )}
 
             <div className="flex-1 h-full overflow-y-auto px-4 py-4">
+              <div className="mb-4">
+                <SearchBar
+                  value={search.searchTerm}
+                  onChange={search.setSearchTerm}
+                  onClear={search.clearSearch}
+                  isLoading={search.isLoading}
+                  resultCount={search.total}
+                  isSearchActive={search.isSearchActive}
+                />
+              </div>
               <CardListView
-                cards={cards.displayCards}
-                isLoading={cards.isLoading}
-                title={cards.displayTitle}
+                cards={search.isSearchActive ? search.results : cards.displayCards}
+                isLoading={search.isSearchActive ? search.isLoading : cards.isLoading}
+                title={search.isSearchActive ? t('search.results', 'Search Results') : cards.displayTitle}
                 viewMode={layout.viewMode}
                 listPanelRatio={layout.listPanelRatio}
                 onViewModeChange={layout.handleSetViewMode}

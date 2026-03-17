@@ -745,9 +745,45 @@ Deno.serve(async (req) => {
         );
       }
 
+      case 'search': {
+        const query = url.searchParams.get('q')?.trim();
+        if (!query || query.length === 0) {
+          return new Response(
+            JSON.stringify({ cards: [], total: 0 }),
+            { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const limit = Math.min(parseInt(url.searchParams.get('limit') || '30', 10), 50);
+        const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+        // ILIKE search across title, user_note, url, metadata_title, metadata_description
+        const searchPattern = `%${query}%`;
+        const { data: searchResults, error: searchError, count: totalCount } = await supabase
+          .from('user_local_cards')
+          .select('*', { count: 'exact' })
+          .eq('user_id', user.id)
+          .or(
+            `title.ilike.${searchPattern},` +
+            `user_note.ilike.${searchPattern},` +
+            `url.ilike.${searchPattern},` +
+            `metadata_title.ilike.${searchPattern},` +
+            `metadata_description.ilike.${searchPattern}`
+          )
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (searchError) throw searchError;
+
+        return new Response(
+          JSON.stringify({ cards: searchResults || [], total: totalCount || 0 }),
+          { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
-          JSON.stringify({ error: 'Invalid action. Use: list, add, update, delete, batch-move, import-playlist' }),
+          JSON.stringify({ error: 'Invalid action. Use: list, add, update, delete, batch-move, import-playlist, search' }),
           { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
     }
