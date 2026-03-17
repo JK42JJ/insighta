@@ -1,9 +1,20 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const ALLOWED_ORIGINS = [
+  'https://insighta.one',
+  'https://www.insighta.one',
+  'http://localhost:8081',
+  'http://localhost:5173',
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('origin') ?? '';
+  return {
+    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Vary': 'Origin',
+  };
+}
 
 // YouTube OAuth 2.0 endpoints
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -27,7 +38,7 @@ console.log("youtube-auth Edge Function loaded");
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -40,7 +51,7 @@ Deno.serve(async (req) => {
     console.error('Missing YouTube OAuth configuration');
     return new Response(
       JSON.stringify({ error: 'YouTube OAuth is not configured' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -59,7 +70,7 @@ Deno.serve(async (req) => {
         if (!authHeader) {
           return new Response(
             JSON.stringify({ error: 'Authorization required' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -69,7 +80,7 @@ Deno.serve(async (req) => {
         if (userError || !user) {
           return new Response(
             JSON.stringify({ error: 'Invalid user token' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -84,7 +95,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ authUrl: authUrl.toString() }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
@@ -98,14 +109,14 @@ Deno.serve(async (req) => {
           console.error('OAuth error:', error);
           return new Response(
             JSON.stringify({ error: `OAuth error: ${error}` }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
         if (!code || !state) {
           return new Response(
             JSON.stringify({ error: 'Missing code or state parameter' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -114,7 +125,7 @@ Deno.serve(async (req) => {
         if (!userId) {
           return new Response(
             JSON.stringify({ error: 'Invalid state parameter' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -138,7 +149,7 @@ Deno.serve(async (req) => {
           console.error('Token exchange failed:', errorText);
           return new Response(
             JSON.stringify({ error: 'Failed to exchange code for tokens' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -162,7 +173,7 @@ Deno.serve(async (req) => {
           console.error('Failed to save tokens:', upsertError);
           return new Response(
             JSON.stringify({ error: 'Failed to save authentication' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -189,7 +200,7 @@ Deno.serve(async (req) => {
         `;
 
         return new Response(html, {
-          headers: { ...corsHeaders, 'Content-Type': 'text/html' },
+          headers: { ...getCorsHeaders(req), 'Content-Type': 'text/html' },
         });
       }
 
@@ -199,7 +210,7 @@ Deno.serve(async (req) => {
         if (!authHeader) {
           return new Response(
             JSON.stringify({ error: 'Authorization required' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -209,7 +220,7 @@ Deno.serve(async (req) => {
         if (userError || !user) {
           return new Response(
             JSON.stringify({ error: 'Invalid user token' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -223,7 +234,7 @@ Deno.serve(async (req) => {
         if (settingsError || !settings?.youtube_refresh_token) {
           return new Response(
             JSON.stringify({ error: 'No refresh token available' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -246,7 +257,7 @@ Deno.serve(async (req) => {
           console.error('Token refresh failed:', errorText);
           return new Response(
             JSON.stringify({ error: 'Failed to refresh token' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -267,13 +278,13 @@ Deno.serve(async (req) => {
           console.error('Failed to update tokens:', updateError);
           return new Response(
             JSON.stringify({ error: 'Failed to save refreshed token' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
         return new Response(
           JSON.stringify({ success: true, expiresAt }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
@@ -283,7 +294,7 @@ Deno.serve(async (req) => {
         if (!authHeader) {
           return new Response(
             JSON.stringify({ error: 'Authorization required' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -293,7 +304,7 @@ Deno.serve(async (req) => {
         if (userError || !user) {
           return new Response(
             JSON.stringify({ error: 'Invalid user token' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -312,13 +323,13 @@ Deno.serve(async (req) => {
           console.error('Failed to disconnect:', updateError);
           return new Response(
             JSON.stringify({ error: 'Failed to disconnect YouTube account' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
         return new Response(
           JSON.stringify({ success: true }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
@@ -328,7 +339,7 @@ Deno.serve(async (req) => {
         if (!authHeader) {
           return new Response(
             JSON.stringify({ error: 'Authorization required' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -338,7 +349,7 @@ Deno.serve(async (req) => {
         if (userError || !user) {
           return new Response(
             JSON.stringify({ error: 'Invalid user token' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -361,14 +372,14 @@ Deno.serve(async (req) => {
             syncInterval: settings?.sync_interval || 'manual',
             autoSyncEnabled: settings?.auto_sync_enabled || false,
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
       default:
         return new Response(
           JSON.stringify({ error: 'Invalid action. Use: auth-url, callback, refresh, disconnect, status' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
     }
   } catch (error: unknown) {
@@ -376,7 +387,7 @@ Deno.serve(async (req) => {
     console.error('YouTube auth error:', errorMessage);
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
     );
   }
 });
