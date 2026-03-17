@@ -85,7 +85,7 @@ jobs:
           # Check 3: Orphan cards (deleted users)
           ORPHAN_CARDS=$(psql "$DIRECT_URL" -t -A -c "
             SELECT count(*) FROM public.user_local_cards c
-            LEFT JOIN auth.users u ON c.user_id = u.id::text
+            LEFT JOIN auth.users u ON c.user_id::uuid = u.id
             WHERE u.id IS NULL;
           ")
           echo "Orphan local cards: $ORPHAN_CARDS"

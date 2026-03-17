@@ -89,6 +89,9 @@ export default defineConfig(({ mode }) => {
         "@shared": path.resolve(__dirname, "./src/shared"),
       },
     },
+    optimizeDeps: {
+      include: ['react-error-boundary'],
+    },
     build: {
       outDir: 'dist',
       sourcemap: mode !== 'production',
