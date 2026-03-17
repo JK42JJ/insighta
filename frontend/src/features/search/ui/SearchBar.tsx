@@ -114,9 +114,9 @@ export function SearchBar({
         )}
       </div>
 
-      {/* Source type filter chips */}
+      {/* Source type filter chips — absolute to avoid pushing header height */}
       {isSearchActive && (
-        <div className="flex items-center gap-1.5 mt-2">
+        <div className="absolute left-0 top-full mt-1 z-50 flex items-center gap-1.5 bg-surface-mid/95 backdrop-blur-sm rounded-lg px-2 py-1.5 border border-border/30 shadow-lg">
           {SOURCE_FILTERS.map(({ value: filterValue, icon: Icon, labelKey }) => {
             const isActive = sourceFilter === filterValue;
             return (
