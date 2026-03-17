@@ -1,5 +1,5 @@
 export const SUBSCRIPTION_TIERS = {
-  free: { cardLimit: 100, mandalaLimit: 3 },
+  free: { cardLimit: 150, mandalaLimit: 3 },
   premium: { cardLimit: 1000, mandalaLimit: 50 },
   admin: { cardLimit: 10000, mandalaLimit: 200 },
 } as const;
