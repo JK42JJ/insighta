@@ -13,7 +13,7 @@ import { PrismaClient } from '@prisma/client';
 import { batchEmbedNodes } from '../../src/modules/ontology/embedding';
 import dotenv from 'dotenv';
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const USER_ID = '0192fedf-85f4-47ab-a652-7fdd116e2b39';
 
