@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Grid3X3, ArrowLeft, Check } from 'lucide-react';
@@ -12,8 +12,31 @@ import {
 import { GradientBackground } from '@/pages/landing/ui/components/GradientBackground';
 import { LandingHeader } from '@/pages/landing/ui/components/LandingHeader';
 import { AppShell } from '@/widgets/app-shell';
+import { PageLoader } from '@/shared/ui/PageLoader';
 
 const CATEGORIES = ['all', 'productivity', 'learning', 'business', 'personal'] as const;
+
+function TemplateLayout({ children }: { children: ReactNode }) {
+  const { isLoggedIn, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <PageLoader />;
+  }
+
+  if (isLoggedIn) {
+    return <AppShell selectedMandalaId={null} onMandalaSelect={() => {}}>{children}</AppShell>;
+  }
+
+  return (
+    <div className="relative min-h-screen bg-background">
+      <GradientBackground variant="F" />
+      <div className="relative z-10">
+        <LandingHeader />
+        <main>{children}</main>
+      </div>
+    </div>
+  );
+}
 
 export default function TemplatesPage() {
   const { templateId } = useParams<{ templateId?: string }>();
@@ -29,7 +52,6 @@ export default function TemplatesPage() {
 function TemplateListView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { isLoggedIn } = useAuth();
   const [activeCategory, setActiveCategory] = useState<string>('all');
 
   const filteredTemplates =
@@ -37,55 +59,43 @@ function TemplateListView() {
       ? MANDALA_TEMPLATES
       : MANDALA_TEMPLATES.filter((tpl) => tpl.category === activeCategory);
 
-  const content = (
-    <div className="mx-auto max-w-6xl px-4 py-12 md:py-20">
-      <div className="text-center mb-10">
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-          {t('templates.title')}
-        </h1>
-        <p className="mt-3 text-muted-foreground">{t('templates.subtitle')}</p>
-      </div>
-
-      <div className="flex justify-center gap-2 mb-10 flex-wrap">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              activeCategory === cat
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-surface-light text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {t(`templates.categories.${cat}`)}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredTemplates.map((template) => (
-          <TemplateCard
-            key={template.id}
-            template={template}
-            onApply={() => navigate(`/templates/${template.id}`)}
-          />
-        ))}
-      </div>
-    </div>
-  );
-
-  if (isLoggedIn) {
-    return <AppShell selectedMandalaId={null} onMandalaSelect={() => {}}>{content}</AppShell>;
-  }
-
   return (
-    <div className="relative min-h-screen bg-background">
-      <GradientBackground variant="F" />
-      <div className="relative z-10">
-        <LandingHeader />
-        <main>{content}</main>
+    <TemplateLayout>
+      <div className="mx-auto max-w-6xl px-4 py-12 md:py-20">
+        <div className="text-center mb-10">
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+            {t('templates.title')}
+          </h1>
+          <p className="mt-3 text-muted-foreground">{t('templates.subtitle')}</p>
+        </div>
+
+        <div className="flex justify-center gap-2 mb-10 flex-wrap">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                activeCategory === cat
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-surface-light text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t(`templates.categories.${cat}`)}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTemplates.map((template) => (
+            <TemplateCard
+              key={template.id}
+              template={template}
+              onApply={() => navigate(`/templates/${template.id}`)}
+            />
+          ))}
+        </div>
       </div>
-    </div>
+    </TemplateLayout>
   );
 }
 
@@ -103,97 +113,85 @@ function TemplateDetailView({ template }: { template: MandalaTemplate }) {
     navigate('/mandala-settings', { state: { templateId: template.id } });
   };
 
-  const content = (
-    <div className="mx-auto max-w-4xl px-4 py-12 md:py-20">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => navigate('/templates')}
-        className="mb-6 gap-2"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        {t('common.back')}
-      </Button>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Left: 3x3 preview */}
-        <div className="rounded-xl border border-border/50 bg-card p-6">
-          <div className="grid grid-cols-3 gap-1.5 p-4 rounded-lg bg-surface-base">
-            {Array.from({ length: 9 }).map((_, i) => {
-              const isCenter = i === 4;
-              const subjectIndex = i < 4 ? i : i > 4 ? i - 1 : -1;
-              const label = isCenter ? tpl.centerGoal : tpl.subjects[subjectIndex] || '';
-
-              return (
-                <div
-                  key={i}
-                  className={`aspect-square rounded-md flex items-center justify-center p-2 text-xs leading-tight text-center ${
-                    isCenter
-                      ? 'bg-primary/15 text-primary font-semibold border border-primary/30'
-                      : label
-                        ? 'bg-card text-foreground/70 border border-border/30'
-                        : 'bg-surface-light'
-                  }`}
-                >
-                  <span className="line-clamp-2">{label}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Right: Info + Apply */}
-        <div className="flex flex-col gap-6">
-          <div>
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-3xl">{template.icon}</span>
-              <h1 className="text-2xl font-bold">{tpl.name}</h1>
-            </div>
-            <p className="text-muted-foreground">{tpl.description}</p>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-medium mb-3 text-foreground">
-              {t('templates.subjects')}
-            </h3>
-            <ul className="space-y-2">
-              {tpl.subjects.map((subject: string, i: number) => (
-                <li key={i} className="flex items-center gap-2 text-sm">
-                  <Check className="w-4 h-4 text-primary flex-shrink-0" />
-                  <span className="text-muted-foreground">{subject}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {template.category && (
-            <div>
-              <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                {t(`templates.categories.${template.category}`)}
-              </span>
-            </div>
-          )}
-
-          <Button size="lg" className="w-full rounded-full mt-auto" onClick={handleApply}>
-            {t('templates.applyButton')}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-
-  if (isLoggedIn) {
-    return <AppShell selectedMandalaId={null} onMandalaSelect={() => {}}>{content}</AppShell>;
-  }
-
   return (
-    <div className="relative min-h-screen bg-background">
-      <GradientBackground variant="F" />
-      <div className="relative z-10">
-        <LandingHeader />
-        <main>{content}</main>
+    <TemplateLayout>
+      <div className="mx-auto max-w-4xl px-4 py-12 md:py-20">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/templates')}
+          className="mb-6 gap-2"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {t('common.back')}
+        </Button>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Left: 3x3 preview */}
+          <div className="rounded-xl border border-border/50 bg-card p-6">
+            <div className="grid grid-cols-3 gap-1.5 p-4 rounded-lg bg-surface-base">
+              {Array.from({ length: 9 }).map((_, i) => {
+                const isCenter = i === 4;
+                const subjectIndex = i < 4 ? i : i > 4 ? i - 1 : -1;
+                const label = isCenter ? tpl.centerGoal : tpl.subjects[subjectIndex] || '';
+
+                return (
+                  <div
+                    key={i}
+                    className={`aspect-square rounded-md flex items-center justify-center p-2 text-xs leading-tight text-center ${
+                      isCenter
+                        ? 'bg-primary/15 text-primary font-semibold border border-primary/30'
+                        : label
+                          ? 'bg-card text-foreground/70 border border-border/30'
+                          : 'bg-surface-light'
+                    }`}
+                  >
+                    <span className="line-clamp-2">{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right: Info + Apply */}
+          <div className="flex flex-col gap-6">
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-3xl">{template.icon}</span>
+                <h1 className="text-2xl font-bold">{tpl.name}</h1>
+              </div>
+              <p className="text-muted-foreground">{tpl.description}</p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium mb-3 text-foreground">
+                {t('templates.subjects')}
+              </h3>
+              <ul className="space-y-2">
+                {tpl.subjects.map((subject: string, i: number) => (
+                  <li key={i} className="flex items-center gap-2 text-sm">
+                    <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                    <span className="text-muted-foreground">{subject}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {template.category && (
+              <div>
+                <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                  {t(`templates.categories.${template.category}`)}
+                </span>
+              </div>
+            )}
+
+            <Button size="lg" className="w-full rounded-full mt-auto" onClick={handleApply}>
+              {t('templates.applyButton')}
+            </Button>
+          </div>
+        </div>
       </div>
-    </div>
+    </TemplateLayout>
   );
 }
 
