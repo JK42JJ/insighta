@@ -14,6 +14,7 @@ import { syncRoutes } from './routes/sync';
 import { quotaRoutes } from './routes/quota';
 import { mandalaRoutes } from './routes/mandalas';
 import { imageRoutes } from './routes/images';
+import { ontologyRoutes } from './routes/ontology';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { testDatabaseConnection, disconnectDatabase } from '../modules/database/client';
 
@@ -222,6 +223,9 @@ export async function buildServer() {
 
       // Register image proxy routes
       await instance.register(imageRoutes, { prefix: '/images' });
+
+      // Register ontology routes (GraphRAG knowledge graph)
+      await instance.register(ontologyRoutes, { prefix: '/ontology' });
     },
     { prefix: '/api/v1' }
   );
