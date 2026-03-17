@@ -331,7 +331,14 @@ export function useCardOrchestrator(
           })
             .then(() => queryClient.invalidateQueries({ queryKey: localCardsKeys.list() }))
             .then(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)))
-            .catch(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)));
+            .catch((err) => {
+              setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id));
+              toast({
+                title: t('index.fileDropFailed', 'File upload failed'),
+                description: err?.message || file.name,
+                variant: 'destructive',
+              });
+            });
           toast({
             title: t('index.fileAdded'),
             description: t('index.fileAddedToCell', { subject: currentLevel.subjects[cellIndex] }),
@@ -361,7 +368,14 @@ export function useCardOrchestrator(
           })
             .then(() => queryClient.invalidateQueries({ queryKey: localCardsKeys.list() }))
             .then(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)))
-            .catch(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)));
+            .catch((err) => {
+              setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id));
+              toast({
+                title: t('index.fileDropFailed', 'File upload failed'),
+                description: err?.message || file.name,
+                variant: 'destructive',
+              });
+            });
           toast({ title: t('index.fileAddedToIdeation'), description: file.name });
         }
       }

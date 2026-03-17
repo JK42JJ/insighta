@@ -59,6 +59,29 @@ async function checkCardLimit(supabase: ReturnType<typeof createClient>, userId:
   };
 }
 
+// Helper: Post-insert verification — rollback if quota exceeded (prevents TOCTOU race)
+async function verifyCardLimitAfterInsert(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  insertedCardIds: string[]
+): Promise<{ exceeded: boolean; limitInfo?: { tier: string; limit: number; used: number } }> {
+  const limitInfo = await checkCardLimit(supabase, userId);
+  if (limitInfo.used <= limitInfo.limit) {
+    return { exceeded: false };
+  }
+
+  // Over limit — delete the just-inserted cards to compensate
+  if (insertedCardIds.length > 0) {
+    await supabase
+      .from('user_local_cards')
+      .delete()
+      .in('id', insertedCardIds)
+      .eq('user_id', userId);
+  }
+
+  return { exceeded: true, limitInfo };
+}
+
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
 // Helper: Get YouTube access token (OAuth) for a user
@@ -291,6 +314,23 @@ Deno.serve(async (req) => {
           throw upsertError;
         }
 
+        // Post-insert verification: rollback if quota race occurred
+        if (card?.id) {
+          const verification = await verifyCardLimitAfterInsert(supabase, user.id, [card.id]);
+          if (verification.exceeded && verification.limitInfo) {
+            return new Response(
+              JSON.stringify({
+                error: 'LIMIT_EXCEEDED',
+                message: `${verification.limitInfo.tier} tier limit (${verification.limitInfo.limit}) exceeded`,
+                tier: verification.limitInfo.tier,
+                limit: verification.limitInfo.limit,
+                used: verification.limitInfo.used
+              }),
+              { status: 403, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+
         return new Response(
           JSON.stringify({ card }),
           { status: 201, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
@@ -458,6 +498,24 @@ Deno.serve(async (req) => {
             throw insertError;
           }
           result.inserted = insertedCards || [];
+
+          // Post-insert verification: rollback if quota race occurred
+          const insertedIds = (insertedCards || []).map((c: { id: string }) => c.id);
+          if (insertedIds.length > 0) {
+            const verification = await verifyCardLimitAfterInsert(supabase, user.id, insertedIds);
+            if (verification.exceeded && verification.limitInfo) {
+              return new Response(
+                JSON.stringify({
+                  error: 'LIMIT_EXCEEDED',
+                  message: `${verification.limitInfo.tier} tier limit (${verification.limitInfo.limit}) exceeded (rolled back)`,
+                  tier: verification.limitInfo.tier,
+                  limit: verification.limitInfo.limit,
+                  used: verification.limitInfo.used
+                }),
+                { status: 403, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+              );
+            }
+          }
         }
 
         return new Response(
