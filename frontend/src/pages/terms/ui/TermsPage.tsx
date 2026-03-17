@@ -2,6 +2,7 @@ import { ArrowUp } from 'lucide-react';
 import { Header } from '@/widgets/header/ui/Header';
 import { Footer } from '@/widgets/header/ui/Footer';
 import { useTranslation } from 'react-i18next';
+import { SUPPORT_EMAIL } from '@/shared/config/constants';
 
 const TermsPage = () => {
   const { t } = useTranslation();
@@ -221,8 +222,8 @@ const TermsPage = () => {
           <h2 className="text-xl font-semibold mb-2">16. Contact</h2>
           <p>
             For questions about these Terms, contact:{' '}
-            <a href="mailto:jamesjk4242@gmail.com" className="text-primary underline">
-              jamesjk4242@gmail.com
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="text-primary underline">
+              {SUPPORT_EMAIL}
               <span className="sr-only"> (opens email client)</span>
             </a>
           </p>
