@@ -270,6 +270,28 @@
     "filterLink": "Links",
     "filterFile": "Files"
   },
+  "help": {
+    "title": "Help & Support",
+    "subtitle": "Find answers to common questions or get in touch with our team.",
+    "faqTitle": "Frequently Asked Questions",
+    "contactTitle": "Contact Us",
+    "emailSupport": "Email Support",
+    "suggestFeature": "Suggest a Feature",
+    "faq": {
+      "q1": "What is Insighta?",
+      "a1": "Insighta is a personal knowledge management platform that helps you organize YouTube videos, articles, and other web content into mandala-based visual maps with notes and insights.",
+      "q2": "How do I add a card?",
+      "a2": "Drag and drop a YouTube link or any URL onto a mandala cell or the Ideation bar. You can also paste a URL using Cmd+V when a cell is selected.",
+      "q3": "What is a mandala?",
+      "a3": "A mandala is a 3x3 grid where the center represents your main goal and surrounding cells represent related topics. You can create sub-levels for deeper organization.",
+      "q4": "How does search work?",
+      "a4": "Use the search bar (Cmd+K) to find cards by title, notes, URL, or metadata. You can filter results by source type (YouTube, Links, Files).",
+      "q5": "Is my data private?",
+      "a5": "Yes. Your data is stored securely and only accessible to you. We use Supabase with row-level security to ensure data isolation between users.",
+      "q6": "How do I report a bug?",
+      "a6": "You can email us at support@insighta.one or create an issue on our GitHub repository. We appreciate your feedback."
+    }
+  },
   "linkTypes": {
     "youtube": "YouTube Video",
     "youtube-shorts": "YouTube Video",
