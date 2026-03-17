@@ -331,7 +331,14 @@ export function useCardOrchestrator(
           })
             .then(() => queryClient.invalidateQueries({ queryKey: localCardsKeys.list() }))
             .then(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)))
-            .catch(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)));
+            .catch((err) => {
+              setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id));
+              toast({
+                title: t('index.fileDropFailed', 'File upload failed'),
+                description: err?.message || file.name,
+                variant: 'destructive',
+              });
+            });
           toast({
             title: t('index.fileAdded'),
             description: t('index.fileAddedToCell', { subject: currentLevel.subjects[cellIndex] }),
@@ -361,7 +368,14 @@ export function useCardOrchestrator(
           })
             .then(() => queryClient.invalidateQueries({ queryKey: localCardsKeys.list() }))
             .then(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)))
-            .catch(() => setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id)));
+            .catch((err) => {
+              setPendingLocalCards((prev) => prev.filter((c) => c.id !== newCard.id));
+              toast({
+                title: t('index.fileDropFailed', 'File upload failed'),
+                description: err?.message || file.name,
+                variant: 'destructive',
+              });
+            });
           toast({ title: t('index.fileAddedToIdeation'), description: file.name });
         }
       }
@@ -401,7 +415,7 @@ export function useCardOrchestrator(
       }
 
       try {
-        await addLocalCard({
+        const result = await addLocalCard({
           url: normalizedUrl,
           title,
           thumbnail: metadata?.image || tempCard.thumbnail,
@@ -418,6 +432,14 @@ export function useCardOrchestrator(
         // to prevent flicker (card disappears then reappears after refetch)
         await queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
         setPendingLocalCards((prev) => prev.filter((c) => c.id !== tempCard.id));
+
+        // Notify user if card was updated (duplicate URL)
+        if ('_isUpdate' in result && result._isUpdate) {
+          toast({
+            title: t('index.cardUpdated', 'Card updated'),
+            description: t('index.cardUpdatedDesc', 'This URL already existed. Card position updated.'),
+          });
+        }
       } catch (error) {
         setPendingLocalCards((prev) => prev.filter((c) => c.id !== tempCard.id));
         if (isLimitExceededError(error)) {

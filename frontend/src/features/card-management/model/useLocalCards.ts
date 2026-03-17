@@ -106,7 +106,11 @@ export function useAddLocalCard() {
       }
 
       const data = await response.json();
-      return data.card;
+      const card = data.card as LocalCard;
+      if (data.isUpdate) {
+        (card as LocalCard & { _isUpdate?: boolean })._isUpdate = true;
+      }
+      return card;
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
