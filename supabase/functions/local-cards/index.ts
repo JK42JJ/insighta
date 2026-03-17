@@ -273,6 +273,15 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Validate cell_index range (matches DB CHECK constraint)
+        const cellIndex = body.cell_index ?? -1;
+        if (cellIndex < -1 || cellIndex >= 9) {
+          return new Response(
+            JSON.stringify({ error: 'INVALID_CELL_INDEX', message: `cell_index must be >= -1 and < 9, got ${cellIndex}` }),
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          );
+        }
+
         // Resolve mandala_id: use provided value, or fall back to user's default mandala
         // for non-scratchpad cards (prevents NULL when frontend sends during init race)
         let resolvedMandalaId = body.mandala_id ?? null;
@@ -363,6 +372,14 @@ Deno.serve(async (req) => {
           'metadata_description', 'metadata_image', 'cell_index',
           'level_id', 'sort_order', 'mandala_id'
         ];
+
+        // Validate cell_index if provided
+        if (updates.cell_index !== undefined && (updates.cell_index < -1 || updates.cell_index >= 9)) {
+          return new Response(
+            JSON.stringify({ error: 'INVALID_CELL_INDEX', message: `cell_index must be >= -1 and < 9, got ${updates.cell_index}` }),
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          );
+        }
 
         const safeUpdates: Record<string, unknown> = {};
         for (const field of allowedFields) {
