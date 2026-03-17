@@ -273,6 +273,15 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Validate cell_index range (matches DB CHECK constraint)
+        const cellIndex = body.cell_index ?? -1;
+        if (cellIndex < -1 || cellIndex >= 9) {
+          return new Response(
+            JSON.stringify({ error: 'INVALID_CELL_INDEX', message: `cell_index must be >= -1 and < 9, got ${cellIndex}` }),
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          );
+        }
+
         // Resolve mandala_id: use provided value, or fall back to user's default mandala
         // for non-scratchpad cards (prevents NULL when frontend sends during init race)
         let resolvedMandalaId = body.mandala_id ?? null;
@@ -363,6 +372,14 @@ Deno.serve(async (req) => {
           'metadata_description', 'metadata_image', 'cell_index',
           'level_id', 'sort_order', 'mandala_id'
         ];
+
+        // Validate cell_index if provided
+        if (updates.cell_index !== undefined && (updates.cell_index < -1 || updates.cell_index >= 9)) {
+          return new Response(
+            JSON.stringify({ error: 'INVALID_CELL_INDEX', message: `cell_index must be >= -1 and < 9, got ${updates.cell_index}` }),
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          );
+        }
 
         const safeUpdates: Record<string, unknown> = {};
         for (const field of allowedFields) {
@@ -745,9 +762,45 @@ Deno.serve(async (req) => {
         );
       }
 
+      case 'search': {
+        const query = url.searchParams.get('q')?.trim();
+        if (!query || query.length === 0) {
+          return new Response(
+            JSON.stringify({ cards: [], total: 0 }),
+            { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const limit = Math.min(parseInt(url.searchParams.get('limit') || '30', 10), 50);
+        const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+        // ILIKE search across title, user_note, url, metadata_title, metadata_description
+        const searchPattern = `%${query}%`;
+        const { data: searchResults, error: searchError, count: totalCount } = await supabase
+          .from('user_local_cards')
+          .select('*', { count: 'exact' })
+          .eq('user_id', user.id)
+          .or(
+            `title.ilike.${searchPattern},` +
+            `user_note.ilike.${searchPattern},` +
+            `url.ilike.${searchPattern},` +
+            `metadata_title.ilike.${searchPattern},` +
+            `metadata_description.ilike.${searchPattern}`
+          )
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (searchError) throw searchError;
+
+        return new Response(
+          JSON.stringify({ cards: searchResults || [], total: totalCount || 0 }),
+          { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
-          JSON.stringify({ error: 'Invalid action. Use: list, add, update, delete, batch-move, import-playlist' }),
+          JSON.stringify({ error: 'Invalid action. Use: list, add, update, delete, batch-move, import-playlist, search' }),
           { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
     }

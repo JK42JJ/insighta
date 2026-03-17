@@ -9,6 +9,7 @@ interface AppShellProps {
   mandalaGridElement?: React.ReactNode;
   selectedMandalaId: string | null;
   onMandalaSelect: (id: string) => void;
+  searchBarElement?: React.ReactNode;
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'insighta-sidebar-collapsed';
@@ -27,6 +28,7 @@ export function AppShell({
   mandalaGridElement,
   selectedMandalaId,
   onMandalaSelect,
+  searchBarElement,
 }: AppShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialCollapsed);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -45,7 +47,7 @@ export function AppShell({
 
   return (
     <div className="h-screen flex flex-col bg-surface-base overflow-hidden">
-      <AppHeader onMobileMenuOpen={() => setMobileDrawerOpen(true)} />
+      <AppHeader onMobileMenuOpen={() => setMobileDrawerOpen(true)} searchBarElement={searchBarElement} />
 
       <div className="flex-1 flex overflow-hidden">
         <Sidebar

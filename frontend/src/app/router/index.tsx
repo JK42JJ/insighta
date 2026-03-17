@@ -14,6 +14,7 @@ const TermsPage = lazy(() => import('@/pages/terms'));
 const ExplorePage = lazy(() => import('@/pages/explore'));
 const PricingPage = lazy(() => import('@/pages/pricing'));
 const TemplatesPage = lazy(() => import('@/pages/templates'));
+const HelpPage = lazy(() => import('@/pages/help'));
 const NotFoundPage = lazy(() => import('@/pages/not-found'));
 const LandingPage = lazy(() => import('@/pages/landing'));
 
@@ -68,6 +69,7 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         />
+        <Route path="/help" element={<HelpPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/explore" element={<ExplorePage />} />

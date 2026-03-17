@@ -150,10 +150,13 @@ export function Sidebar({
         </ul>
 
         {/* Help */}
-        <button
+        <Link
+          to="/help"
           className={cn(
             'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-            'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+            location.pathname === '/help'
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+              : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
             collapsed && 'justify-center px-2'
           )}
           title={collapsed ? t('sidebar.help') : undefined}
@@ -163,7 +166,7 @@ export function Sidebar({
             aria-hidden="true"
           />
           {!collapsed && <span>{t('sidebar.help')}</span>}
-        </button>
+        </Link>
 
         {/* Logout */}
         <button
