@@ -2,6 +2,10 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { PageLoader } from '@/shared/ui/PageLoader';
 import { ProtectedRoute } from './ProtectedRoute';
+import { AdminRoute } from './AdminRoute';
+import { AdminLayout } from '@/pages/admin/ui/AdminLayout';
+import { AdminDashboard } from '@/pages/admin/ui/AdminDashboard';
+import { AdminUsers } from '@/pages/admin/ui/AdminUsers';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -87,6 +91,19 @@ export function AppRouter() {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/explore/:slug" element={<ExplorePage />} />
+        {/* Admin Routes */}
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminLayout />
+            </AdminRoute>
+          }
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<AdminUsers />} />
+        </Route>
+
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>

@@ -15,6 +15,7 @@ import { quotaRoutes } from './routes/quota';
 import { mandalaRoutes } from './routes/mandalas';
 import { imageRoutes } from './routes/images';
 import { ontologyRoutes } from './routes/ontology';
+import { adminRoutes } from './routes/admin';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { testDatabaseConnection, disconnectDatabase } from '../modules/database/client';
 
@@ -226,6 +227,9 @@ export async function buildServer() {
 
       // Register ontology routes (GraphRAG knowledge graph)
       await instance.register(ontologyRoutes, { prefix: '/ontology' });
+
+      // Register admin routes (requires is_super_admin)
+      await instance.register(adminRoutes, { prefix: '/admin' });
     },
     { prefix: '/api/v1' }
   );

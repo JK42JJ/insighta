@@ -644,6 +644,75 @@ class ApiClient {
   }
 
   // ========================================
+  // Admin Endpoints
+  // ========================================
+
+  async checkAdminAccess(): Promise<{ isAdmin: boolean }> {
+    return this.request<{ isAdmin: boolean }>('/admin/check');
+  }
+
+  async getAdminStats(): Promise<{
+    success: boolean;
+    data: {
+      users: { total: number; active: number };
+      tiers: Array<{ tier: string; count: number }>;
+      recentSignups: Array<{ date: string; count: number }>;
+      content: { totalCards: number; totalMandalas: number };
+    };
+  }> {
+    return this.request('/admin/stats/overview');
+  }
+
+  async getAdminUsers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    tier?: string;
+  }): Promise<{
+    items: Array<Record<string, unknown>>;
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
+  }> {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.search) query.set('search', params.search);
+    if (params?.tier) query.set('tier', params.tier);
+    const qs = query.toString() ? `?${query}` : '';
+    return this.request(`/admin/users${qs}`);
+  }
+
+  async getAdminUser(id: string): Promise<{ success: boolean; data: Record<string, unknown> }> {
+    return this.request(`/admin/users/${id}`);
+  }
+
+  async updateUserSubscription(
+    id: string,
+    data: { tier?: string; localCardsLimit?: number; mandalaLimit?: number }
+  ): Promise<{ success: boolean; data: Record<string, unknown> }> {
+    return this.request(`/admin/users/${id}/subscription`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateUserStatus(
+    id: string,
+    data: { banned: boolean; banReason?: string }
+  ): Promise<{ success: boolean; data: Record<string, unknown> }> {
+    return this.request(`/admin/users/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ========================================
   // Health Check
   // ========================================
 
