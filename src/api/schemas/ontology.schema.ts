@@ -6,7 +6,10 @@ import { z } from 'zod';
 
 // -- Request Schemas --
 
+export const DomainEnum = z.enum(['service', 'system']);
+
 export const ListNodesQuerySchema = z.object({
+  domain: DomainEnum.optional(),
   type: z.string().optional(),
   created_after: z.string().datetime().optional(),
   created_before: z.string().datetime().optional(),
@@ -62,11 +65,13 @@ export const VectorSearchBodySchema = z.object({
   limit: z.number().int().min(1).max(50).default(10),
   threshold: z.number().min(0).max(1).default(0.3),
   type_filter: z.string().optional(),
+  domain: DomainEnum.optional(),
 });
 
 export const TextSearchQuerySchema = z.object({
   q: z.string().min(1),
   type: z.string().optional(),
+  domain: DomainEnum.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 

@@ -44,7 +44,9 @@ export async function contextForTask(
               1 - (e.embedding <=> $1::vector) AS similarity
        FROM ontology.embeddings e
        JOIN ontology.nodes n ON n.id = e.node_id
+       JOIN ontology.object_types ot ON n.type = ot.code
        WHERE n.user_id = $2::uuid
+         AND ot.domain = 'system'
        ORDER BY e.embedding <=> $1::vector
        LIMIT $3`,
       [embStr, DEFAULT_USER_ID, limit]
@@ -52,11 +54,13 @@ export async function contextForTask(
   } else {
     // Fallback: full-text search on title
     nodes = await query<NodeRow>(
-      `SELECT id, type, title, properties, source_ref, created_at,
-              ts_rank(to_tsvector('english', title), plainto_tsquery('english', $1)) AS similarity
-       FROM ontology.nodes
-       WHERE user_id = $2::uuid
-         AND to_tsvector('english', title) @@ plainto_tsquery('english', $1)
+      `SELECT n.id, n.type, n.title, n.properties, n.source_ref, n.created_at,
+              ts_rank(to_tsvector('english', n.title), plainto_tsquery('english', $1)) AS similarity
+       FROM ontology.nodes n
+       JOIN ontology.object_types ot ON n.type = ot.code
+       WHERE n.user_id = $2::uuid
+         AND ot.domain = 'system'
+         AND to_tsvector('english', n.title) @@ plainto_tsquery('english', $1)
        ORDER BY similarity DESC
        LIMIT $3`,
       [taskDescription, DEFAULT_USER_ID, limit]
@@ -65,8 +69,8 @@ export async function contextForTask(
 
   const [stats] = await query<{ total_nodes: string; total_embeddings: string }>(
     `SELECT
-       (SELECT count(*) FROM ontology.nodes WHERE user_id = $1::uuid) AS total_nodes,
-       (SELECT count(*) FROM ontology.embeddings e JOIN ontology.nodes n ON n.id = e.node_id WHERE n.user_id = $1::uuid) AS total_embeddings`,
+       (SELECT count(*) FROM ontology.nodes n JOIN ontology.object_types ot ON n.type = ot.code WHERE n.user_id = $1::uuid AND ot.domain = 'system') AS total_nodes,
+       (SELECT count(*) FROM ontology.embeddings e JOIN ontology.nodes n ON n.id = e.node_id JOIN ontology.object_types ot ON n.type = ot.code WHERE n.user_id = $1::uuid AND ot.domain = 'system') AS total_embeddings`,
     [DEFAULT_USER_ID]
   );
 
@@ -93,7 +97,8 @@ export async function similarProblems(
               1 - (e.embedding <=> $1::vector) AS similarity
        FROM ontology.embeddings e
        JOIN ontology.nodes n ON n.id = e.node_id
-       WHERE n.user_id = $2::uuid AND n.type IN ('problem', 'pattern')
+       JOIN ontology.object_types ot ON n.type = ot.code
+       WHERE n.user_id = $2::uuid AND n.type IN ('problem', 'pattern') AND ot.domain = 'system'
        ORDER BY e.embedding <=> $1::vector
        LIMIT $3`,
       [embStr, DEFAULT_USER_ID, limit]
@@ -102,12 +107,13 @@ export async function similarProblems(
 
   // Fallback: text search filtered to problem/pattern types
   return query<NodeRow>(
-    `SELECT id, type, title, properties, source_ref, created_at,
-            ts_rank(to_tsvector('english', title), plainto_tsquery('english', $1)) AS similarity
-     FROM ontology.nodes
-     WHERE user_id = $2::uuid
-       AND type IN ('problem', 'pattern')
-       AND to_tsvector('english', title) @@ plainto_tsquery('english', $1)
+    `SELECT n.id, n.type, n.title, n.properties, n.source_ref, n.created_at,
+            ts_rank(to_tsvector('english', n.title), plainto_tsquery('english', $1)) AS similarity
+     FROM ontology.nodes n
+     JOIN ontology.object_types ot ON n.type = ot.code
+     WHERE n.user_id = $2::uuid
+       AND n.type IN ('problem', 'pattern') AND ot.domain = 'system'
+       AND to_tsvector('english', n.title) @@ plainto_tsquery('english', $1)
      ORDER BY similarity DESC
      LIMIT $3`,
     [problemDescription, DEFAULT_USER_ID, limit]
@@ -141,23 +147,27 @@ export async function recentNodes(
 ): Promise<NodeRow[]> {
   if (type) {
     return query<NodeRow>(
-      `SELECT id, type, title, properties, source_ref, created_at
-       FROM ontology.nodes
-       WHERE user_id = $1::uuid
-         AND type = $2
-         AND created_at >= now() - ($3 || ' days')::interval
-       ORDER BY created_at DESC
+      `SELECT n.id, n.type, n.title, n.properties, n.source_ref, n.created_at
+       FROM ontology.nodes n
+       JOIN ontology.object_types ot ON n.type = ot.code
+       WHERE n.user_id = $1::uuid
+         AND n.type = $2
+         AND ot.domain = 'system'
+         AND n.created_at >= now() - ($3 || ' days')::interval
+       ORDER BY n.created_at DESC
        LIMIT $4`,
       [DEFAULT_USER_ID, type, days.toString(), limit]
     );
   }
 
   return query<NodeRow>(
-    `SELECT id, type, title, properties, source_ref, created_at
-     FROM ontology.nodes
-     WHERE user_id = $1::uuid
-       AND created_at >= now() - ($2 || ' days')::interval
-     ORDER BY created_at DESC
+    `SELECT n.id, n.type, n.title, n.properties, n.source_ref, n.created_at
+     FROM ontology.nodes n
+     JOIN ontology.object_types ot ON n.type = ot.code
+     WHERE n.user_id = $1::uuid
+       AND ot.domain = 'system'
+       AND n.created_at >= now() - ($2 || ' days')::interval
+     ORDER BY n.created_at DESC
      LIMIT $3`,
     [DEFAULT_USER_ID, days.toString(), limit]
   );
@@ -176,20 +186,29 @@ export async function graphStats(): Promise<{
   embedding_coverage: string;
 }> {
   const nodesByType = await query<{ type: string; count: string }>(
-    `SELECT type, count(*)::text FROM ontology.nodes WHERE user_id = $1::uuid GROUP BY type ORDER BY count DESC`,
+    `SELECT n.type, count(*)::text
+     FROM ontology.nodes n
+     JOIN ontology.object_types ot ON n.type = ot.code
+     WHERE n.user_id = $1::uuid AND ot.domain = 'system'
+     GROUP BY n.type ORDER BY count DESC`,
     [DEFAULT_USER_ID]
   );
 
   const edgesByRelation = await query<{ relation: string; count: string }>(
-    `SELECT relation, count(*)::text FROM ontology.edges WHERE user_id = $1::uuid GROUP BY relation ORDER BY count DESC`,
+    `SELECT e.relation, count(*)::text
+     FROM ontology.edges e
+     JOIN ontology.nodes s ON e.source_id = s.id
+     JOIN ontology.object_types ot ON s.type = ot.code
+     WHERE e.user_id = $1::uuid AND ot.domain = 'system'
+     GROUP BY e.relation ORDER BY count DESC`,
     [DEFAULT_USER_ID]
   );
 
   const [counts] = await query<{ total_nodes: string; total_edges: string; total_embeddings: string }>(
     `SELECT
-       (SELECT count(*) FROM ontology.nodes WHERE user_id = $1::uuid)::text AS total_nodes,
-       (SELECT count(*) FROM ontology.edges WHERE user_id = $1::uuid)::text AS total_edges,
-       (SELECT count(*) FROM ontology.embeddings e JOIN ontology.nodes n ON n.id = e.node_id WHERE n.user_id = $1::uuid)::text AS total_embeddings`,
+       (SELECT count(*) FROM ontology.nodes n JOIN ontology.object_types ot ON n.type = ot.code WHERE n.user_id = $1::uuid AND ot.domain = 'system')::text AS total_nodes,
+       (SELECT count(*) FROM ontology.edges e JOIN ontology.nodes s ON e.source_id = s.id JOIN ontology.object_types ot ON s.type = ot.code WHERE e.user_id = $1::uuid AND ot.domain = 'system')::text AS total_edges,
+       (SELECT count(*) FROM ontology.embeddings em JOIN ontology.nodes n ON n.id = em.node_id JOIN ontology.object_types ot ON n.type = ot.code WHERE n.user_id = $1::uuid AND ot.domain = 'system')::text AS total_embeddings`,
     [DEFAULT_USER_ID]
   );
 

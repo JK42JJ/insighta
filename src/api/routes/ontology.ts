@@ -142,6 +142,9 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const edge = await manager.createEdge(userId, body);
       return reply.code(201).send({ status: 'ok', data: edge });
     } catch (err: any) {
+      if (err.message === 'CROSS_DOMAIN_EDGE') {
+        return reply.code(400).send({ status: 'error', code: 'CROSS_DOMAIN_EDGE', message: 'Cannot create edge between nodes of different domains' });
+      }
       if (err.message?.includes('violates foreign key')) {
         return reply.code(400).send({ status: 'error', code: 'INVALID_INPUT', message: 'Source or target node not found' });
       }
@@ -184,6 +187,7 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       limit: body.limit,
       threshold: body.threshold,
       type_filter: body.type_filter,
+      domain: body.domain,
     });
     return reply.send({ status: 'ok', data: results });
   });
@@ -197,6 +201,7 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const results = await searchByText(userId, query.q, {
       limit: query.limit,
       type_filter: query.type,
+      domain: query.domain,
     });
     return reply.send({ status: 'ok', data: results });
   });
