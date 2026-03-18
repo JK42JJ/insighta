@@ -1,13 +1,15 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Users, ArrowLeft, Gift, ScrollText, BarChart3, CreditCard } from 'lucide-react';
+import { LayoutDashboard, Users, ArrowLeft, Gift, ScrollText, BarChart3, CreditCard, Shield, HeartPulse } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
 const NAV_ITEMS = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/admin/users', icon: Users, label: 'Users' },
   { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
+  { to: '/admin/moderation', icon: Shield, label: 'Moderation' },
   { to: '/admin/promotions', icon: Gift, label: 'Promotions' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
+  { to: '/admin/health', icon: HeartPulse, label: 'Health' },
   { to: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },
 ] as const;
 

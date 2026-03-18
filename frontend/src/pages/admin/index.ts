@@ -5,3 +5,5 @@ export { AdminPromotions } from './ui/AdminPromotions';
 export { AdminAuditLog } from './ui/AdminAuditLog';
 export { AdminAnalytics } from './ui/AdminAnalytics';
 export { AdminPayments } from './ui/AdminPayments';
+export { AdminModeration } from './ui/AdminModeration';
+export { AdminHealth } from './ui/AdminHealth';
