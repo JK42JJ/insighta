@@ -7,6 +7,7 @@ import { ViewSwitcher } from '@/features/view-mode';
 import { CardList } from '@/widgets/card-list/ui/CardList';
 import { ListView } from '@/widgets/list-view';
 import { DetailPanel } from '@/widgets/detail-panel';
+import { GraphView } from '@/components/graph/GraphView';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
 import { Popover, PopoverTrigger, PopoverContent } from '@/shared/ui/popover';
 import { Input } from '@/shared/ui/input';
@@ -177,6 +178,16 @@ export function CardListView({
       </div>
     </div>
   );
+
+  // Graph mode: render knowledge graph
+  if (effectiveViewMode === 'graph') {
+    return (
+      <div className="h-full flex flex-col animate-fade-in">
+        {headerElement}
+        <GraphView />
+      </div>
+    );
+  }
 
   // Grid mode: render existing CardList
   if (effectiveViewMode === 'grid') {
