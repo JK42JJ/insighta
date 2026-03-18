@@ -1,11 +1,16 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { PageLoader } from '@/shared/ui/PageLoader';
 import { ProtectedRoute } from './ProtectedRoute';
+import { AdminRoute } from './AdminRoute';
+import { AdminLayout } from '@/pages/admin/ui/AdminLayout';
+import { AdminDashboard } from '@/pages/admin/ui/AdminDashboard';
+import { AdminUsers } from '@/pages/admin/ui/AdminUsers';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
 const MandalaSettingsPage = lazy(() => import('@/pages/mandala-settings'));
+const MandalasPage = lazy(() => import('@/pages/mandalas'));
 const ProfilePage = lazy(() => import('@/pages/profile'));
 const SubscriptionPage = lazy(() => import('@/pages/subscription'));
 const SettingsPage = lazy(() => import('@/pages/settings'));
@@ -38,12 +43,24 @@ export function AppRouter() {
         <Route path="/templates" element={<TemplatesPage />} />
         <Route path="/templates/:templateId" element={<TemplatesPage />} />
         <Route
-          path="/mandala-settings"
+          path="/mandalas"
+          element={
+            <ProtectedRoute>
+              <MandalasPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/mandalas/:id/edit"
           element={
             <ProtectedRoute>
               <MandalaSettingsPage />
             </ProtectedRoute>
           }
+        />
+        <Route
+          path="/mandala-settings"
+          element={<Navigate to="/mandalas" replace />}
         />
         <Route
           path="/profile"
@@ -74,6 +91,19 @@ export function AppRouter() {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/explore/:slug" element={<ExplorePage />} />
+        {/* Admin Routes */}
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminLayout />
+            </AdminRoute>
+          }
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<AdminUsers />} />
+        </Route>
+
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>

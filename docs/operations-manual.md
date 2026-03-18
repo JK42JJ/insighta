@@ -695,6 +695,14 @@ When the application grows beyond a single administrator's manual oversight capa
 - 조치 순서: `supabase start` → `npm run dev:all`
 - 전체 검증: `lsof -i :8000,3000,8081` → 3개 모두 리스닝 확인
 
+**Case 5: 새 API 라우트/플러그인 추가 후 반영 안 됨**
+- 증상: 프론트엔드에서 새 API 엔드포인트 호출 시 404 → 기존 페이지로 리다이렉트
+- 원인: Fastify API 서버가 코드 변경 전에 시작된 상태. 새 라우트 파일이 런타임에 반영되지 않음
+- 진단: `curl localhost:3000/api/v1/<new-route>` → 404 확인
+- 조치: **API 서버 재시작 필수** — `kill $(lsof -ti:3000)` → `npm run api:dev`
+- 검증: `curl localhost:3000/api/v1/<new-route>` → 401/403 (인증 필요 응답 = 라우트 등록 성공)
+- **순서 규칙**: 백엔드 코드 변경 → API 서버 재시작 → 프론트엔드 확인. Vite(HMR)와 달리 Fastify는 자동 리로드되지 않음
+
 #### 관련 인시던트
 - [INC-2026-03-17: Dev 만다라트 로딩 불가](https://github.com/JK42JJ/insighta/issues/214) — Fastify API 서버 미실행으로 사이드바 로딩 실패
 
