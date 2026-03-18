@@ -6,6 +6,8 @@ import { adminStatsRoutes } from './stats';
 import { adminPromotionRoutes } from './promotions';
 import { adminAuditRoutes } from './audit';
 import { adminRedemptionRoutes, adminBulkRoutes } from './redemption';
+import { adminPaymentRoutes, stripeWebhookRoutes } from './payments';
+import { adminAnalyticsRoutes } from './analytics';
 
 /**
  * Admin routes plugin.
@@ -23,4 +25,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminRedemptionRoutes, { prefix: '/promotions' });
   await fastify.register(adminBulkRoutes, { prefix: '/users/bulk' });
   await fastify.register(adminAuditRoutes, { prefix: '/audit-log' });
+  await fastify.register(adminAnalyticsRoutes, { prefix: '/analytics' });
+  await fastify.register(adminPaymentRoutes, { prefix: '/payments' });
+  await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }
