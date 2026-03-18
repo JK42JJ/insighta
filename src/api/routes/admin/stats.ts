@@ -42,7 +42,7 @@ export async function adminStatsRoutes(fastify: FastifyInstance) {
       Array<{ total_cards: number; total_mandalas: number }>
     >`
       SELECT
-        (SELECT COUNT(*)::int FROM public.local_cards) as total_cards,
+        (SELECT COUNT(*)::int FROM public.user_local_cards) as total_cards,
         (SELECT COUNT(*)::int FROM public.user_mandalas) as total_mandalas
     `;
 
