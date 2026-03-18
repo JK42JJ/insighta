@@ -789,6 +789,26 @@ class ApiClient {
   }
 
   // ========================================
+  // Admin Analytics
+  // ========================================
+
+  async getAdminAnalyticsUsers(days: number = 30): Promise<{ success: boolean; data: { dau: Array<{ date: string; count: number }>; wau: Array<{ week: string; count: number }>; mau: Array<{ month: string; count: number }> } }> {
+    return this.request(`/admin/analytics/users?days=${days}`);
+  }
+
+  async getAdminAnalyticsGrowth(days: number = 30): Promise<{ success: boolean; data: { signups: Array<{ date: string; count: number }>; totalUsers: number } }> {
+    return this.request(`/admin/analytics/growth?days=${days}`);
+  }
+
+  async getAdminAnalyticsRevenue(): Promise<{ success: boolean; data: { mrr: number; subscribers: number; monthlyBreakdown: Array<Record<string, unknown>> } }> {
+    return this.request('/admin/analytics/revenue');
+  }
+
+  async getAdminTransactions(): Promise<{ success: boolean; data: { transactions: Array<Record<string, unknown>> } }> {
+    return this.request('/admin/payments/transactions');
+  }
+
+  // ========================================
   // Health Check
   // ========================================
 
