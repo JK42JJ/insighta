@@ -16,19 +16,8 @@ const NAV_ITEMS = [
 function AdminBackground() {
   return (
     <div aria-hidden="true" className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-      {/* Mesh gradient — static (no animation) */}
-      <div
-        className="absolute inset-0 opacity-[0.07] dark:opacity-[0.12]"
-        style={{
-          background: `
-            radial-gradient(ellipse 80% 60% at 20% 30%, hsl(var(--primary)) 0%, transparent 60%),
-            radial-gradient(ellipse 60% 80% at 75% 70%, hsl(270 50% 60%) 0%, transparent 60%),
-            radial-gradient(ellipse 70% 50% at 50% 50%, hsl(210 60% 55%) 0%, transparent 50%)
-          `,
-        }}
-      />
-      {/* Grain noise overlay */}
-      <svg className="absolute inset-0 w-full h-full opacity-[0.3] dark:opacity-[0.15] mix-blend-overlay">
+      {/* Grain texture only — no color gradients, no animation */}
+      <svg className="absolute inset-0 w-full h-full opacity-[0.3] dark:opacity-[0.15]">
         <filter id="admin-grain">
           <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
           <feColorMatrix type="saturate" values="0" />
