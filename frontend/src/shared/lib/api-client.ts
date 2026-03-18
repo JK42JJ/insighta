@@ -713,6 +713,82 @@ class ApiClient {
   }
 
   // ========================================
+  // Admin Promotions
+  // ========================================
+
+  async getAdminPromotions(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+  }): Promise<{
+    items: Array<Record<string, unknown>>;
+    pagination: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
+  }> {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.status) query.set('status', params.status);
+    const qs = query.toString() ? `?${query}` : '';
+    return this.request(`/admin/promotions${qs}`);
+  }
+
+  async createAdminPromotion(data: {
+    code: string;
+    type: string;
+    value: Record<string, unknown>;
+    startsAt?: string;
+    endsAt?: string;
+    maxRedemptions?: number;
+  }): Promise<{ success: boolean; data: Record<string, unknown> }> {
+    return this.request('/admin/promotions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAdminPromotion(
+    id: string,
+    data: Record<string, unknown>
+  ): Promise<{ success: boolean; data: Record<string, unknown> }> {
+    return this.request(`/admin/promotions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAdminPromotion(id: string): Promise<{ success: boolean; data: Record<string, unknown> }> {
+    return this.request(`/admin/promotions/${id}`, { method: 'DELETE' });
+  }
+
+  async getAdminAuditLog(params?: {
+    page?: number;
+    limit?: number;
+    action?: string;
+    targetType?: string;
+  }): Promise<{
+    items: Array<Record<string, unknown>>;
+    pagination: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
+  }> {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.action) query.set('action', params.action);
+    if (params?.targetType) query.set('targetType', params.targetType);
+    const qs = query.toString() ? `?${query}` : '';
+    return this.request(`/admin/audit-log${qs}`);
+  }
+
+  async bulkUpdateUsers(
+    userIds: string[],
+    changes: { tier?: string; localCardsLimit?: number; mandalaLimit?: number }
+  ): Promise<{ success: boolean; data: { updated: number; total: number } }> {
+    return this.request('/admin/users/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ userIds, changes }),
+    });
+  }
+
+  // ========================================
   // Health Check
   // ========================================
 

@@ -6,6 +6,8 @@ import { AdminRoute } from './AdminRoute';
 import { AdminLayout } from '@/pages/admin/ui/AdminLayout';
 import { AdminDashboard } from '@/pages/admin/ui/AdminDashboard';
 import { AdminUsers } from '@/pages/admin/ui/AdminUsers';
+import { AdminPromotions } from '@/pages/admin/ui/AdminPromotions';
+import { AdminAuditLog } from '@/pages/admin/ui/AdminAuditLog';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -102,6 +104,8 @@ export function AppRouter() {
         >
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<AdminUsers />} />
+          <Route path="promotions" element={<AdminPromotions />} />
+          <Route path="audit-log" element={<AdminAuditLog />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
