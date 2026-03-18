@@ -50,8 +50,8 @@ export function AdminLayout() {
                 cn(
                   'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-200',
                   isActive
-                    ? 'bg-primary/15 text-primary font-medium shadow-sm shadow-primary/10 border border-primary/20'
-                    : 'text-muted-foreground hover:bg-white/[0.06] hover:text-foreground border border-transparent'
+                    ? 'bg-primary/10 text-primary font-medium'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 )
               }
             >
