@@ -3,6 +3,8 @@ import { registerAdminAuth } from '../../plugins/admin-auth';
 import { adminCheckRoute } from './check';
 import { adminUserRoutes } from './users';
 import { adminStatsRoutes } from './stats';
+import { adminPromotionRoutes } from './promotions';
+import { adminAuditRoutes } from './audit';
 
 /**
  * Admin routes plugin.
@@ -16,4 +18,6 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminCheckRoute, { prefix: '/check' });
   await fastify.register(adminUserRoutes, { prefix: '/users' });
   await fastify.register(adminStatsRoutes, { prefix: '/stats' });
+  await fastify.register(adminPromotionRoutes, { prefix: '/promotions' });
+  await fastify.register(adminAuditRoutes, { prefix: '/audit-log' });
 }
