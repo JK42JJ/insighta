@@ -95,7 +95,7 @@ export function AdminModeration() {
             ))}
           </div>
 
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="admin-glass overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
@@ -183,7 +183,7 @@ export function AdminModeration() {
             className="px-3 py-2 rounded-md border border-border bg-background text-sm w-72 mb-4"
           />
 
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="admin-glass overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/30">

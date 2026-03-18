@@ -39,25 +39,25 @@ export function AdminPayments() {
 
       {/* Revenue KPIs */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-card border border-border rounded-lg p-4">
+        <div className="admin-glass p-4">
           <div className="flex items-center gap-2 mb-2">
             <CreditCard className="h-4 w-4 text-muted-foreground" />
             <p className="text-xs text-muted-foreground">MRR</p>
           </div>
           <p className="text-2xl font-bold">${(mrr / 100).toFixed(2)}</p>
         </div>
-        <div className="bg-card border border-border rounded-lg p-4">
+        <div className="admin-glass p-4">
           <p className="text-xs text-muted-foreground mb-2">Active Subscribers</p>
           <p className="text-2xl font-bold">{subscribers}</p>
         </div>
-        <div className="bg-card border border-border rounded-lg p-4">
+        <div className="admin-glass p-4">
           <p className="text-xs text-muted-foreground mb-2">Total Transactions</p>
           <p className="text-2xl font-bold">{transactions.length}</p>
         </div>
       </div>
 
       {/* Transactions Table */}
-      <div className="bg-card border border-border rounded-lg overflow-hidden">
+      <div className="admin-glass overflow-hidden">
         <div className="px-4 py-3 border-b border-border">
           <h2 className="text-sm font-medium">Recent Transactions</h2>
         </div>
