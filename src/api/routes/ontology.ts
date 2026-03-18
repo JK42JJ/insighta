@@ -20,7 +20,9 @@ import {
 
 function getUserId(request: any, reply: any): string | null {
   if (!request.user || !('userId' in request.user)) {
-    reply.code(401).send({ status: 'error', code: 'UNAUTHORIZED', message: 'Authentication required' });
+    reply
+      .code(401)
+      .send({ status: 'error', code: 'UNAUTHORIZED', message: 'Authentication required' });
     return null;
   }
   return request.user.userId;
@@ -52,7 +54,9 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.code(201).send({ status: 'ok', data: node });
     } catch (err: any) {
       if (err.message?.includes('Invalid properties')) {
-        return reply.code(400).send({ status: 'error', code: 'VALIDATION_ERROR', message: err.message });
+        return reply
+          .code(400)
+          .send({ status: 'error', code: 'VALIDATION_ERROR', message: err.message });
       }
       throw err;
     }
@@ -66,7 +70,9 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const { id } = request.params as { id: string };
     const node = await manager.getNode(userId, id);
     if (!node) {
-      return reply.code(404).send({ status: 'error', code: 'NODE_NOT_FOUND', message: 'Node not found' });
+      return reply
+        .code(404)
+        .send({ status: 'error', code: 'NODE_NOT_FOUND', message: 'Node not found' });
     }
     return reply.send({ status: 'ok', data: node });
   });
@@ -83,10 +89,14 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.send({ status: 'ok', data: node });
     } catch (err: any) {
       if (err.message === 'NODE_NOT_FOUND') {
-        return reply.code(404).send({ status: 'error', code: 'NODE_NOT_FOUND', message: 'Node not found' });
+        return reply
+          .code(404)
+          .send({ status: 'error', code: 'NODE_NOT_FOUND', message: 'Node not found' });
       }
       if (err.message?.includes('Invalid properties')) {
-        return reply.code(400).send({ status: 'error', code: 'VALIDATION_ERROR', message: err.message });
+        return reply
+          .code(400)
+          .send({ status: 'error', code: 'VALIDATION_ERROR', message: err.message });
       }
       throw err;
     }
@@ -103,33 +113,43 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.send({ status: 'ok', data: { deleted: true } });
     } catch (err: any) {
       if (err.message === 'NODE_NOT_FOUND') {
-        return reply.code(404).send({ status: 'error', code: 'NODE_NOT_FOUND', message: 'Node not found' });
+        return reply
+          .code(404)
+          .send({ status: 'error', code: 'NODE_NOT_FOUND', message: 'Node not found' });
       }
       throw err;
     }
   });
 
   // GET /nodes/:id/neighbors — graph traversal
-  fastify.get('/nodes/:id/neighbors', { onRequest: [fastify.authenticate] }, async (request, reply) => {
-    const userId = getUserId(request, reply);
-    if (!userId) return;
+  fastify.get(
+    '/nodes/:id/neighbors',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
 
-    const { id } = request.params as { id: string };
-    const query = NeighborsQuerySchema.parse(request.query);
-    const neighbors = await getNeighbors(id, userId, query.relation, query.depth);
-    return reply.send({ status: 'ok', data: neighbors });
-  });
+      const { id } = request.params as { id: string };
+      const query = NeighborsQuerySchema.parse(request.query);
+      const neighbors = await getNeighbors(id, userId, query.relation, query.depth);
+      return reply.send({ status: 'ok', data: neighbors });
+    }
+  );
 
   // GET /nodes/:id/history — action_log
-  fastify.get('/nodes/:id/history', { onRequest: [fastify.authenticate] }, async (request, reply) => {
-    const userId = getUserId(request, reply);
-    if (!userId) return;
+  fastify.get(
+    '/nodes/:id/history',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
 
-    const { id } = request.params as { id: string };
-    const query = HistoryQuerySchema.parse(request.query);
-    const history = await manager.getNodeHistory(userId, id, query.limit);
-    return reply.send({ status: 'ok', data: history });
-  });
+      const { id } = request.params as { id: string };
+      const query = HistoryQuerySchema.parse(request.query);
+      const history = await manager.getNodeHistory(userId, id, query.limit);
+      return reply.send({ status: 'ok', data: history });
+    }
+  );
 
   // ─── Edges ───
 
@@ -154,16 +174,30 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.code(201).send({ status: 'ok', data: edge });
     } catch (err: any) {
       if (err.message === 'CROSS_DOMAIN_EDGE') {
-        return reply.code(400).send({ status: 'error', code: 'CROSS_DOMAIN_EDGE', message: 'Cannot create edge between nodes of different domains' });
+        return reply.code(400).send({
+          status: 'error',
+          code: 'CROSS_DOMAIN_EDGE',
+          message: 'Cannot create edge between nodes of different domains',
+        });
       }
       if (err.message?.includes('violates foreign key')) {
-        return reply.code(400).send({ status: 'error', code: 'INVALID_INPUT', message: 'Source or target node not found' });
+        return reply.code(400).send({
+          status: 'error',
+          code: 'INVALID_INPUT',
+          message: 'Source or target node not found',
+        });
       }
       if (err.message?.includes('no_self_edge')) {
-        return reply.code(400).send({ status: 'error', code: 'INVALID_INPUT', message: 'Self-referencing edges are not allowed' });
+        return reply.code(400).send({
+          status: 'error',
+          code: 'INVALID_INPUT',
+          message: 'Self-referencing edges are not allowed',
+        });
       }
       if (err.message?.includes('unique_edge')) {
-        return reply.code(409).send({ status: 'error', code: 'DUPLICATE_RESOURCE', message: 'Edge already exists' });
+        return reply
+          .code(409)
+          .send({ status: 'error', code: 'DUPLICATE_RESOURCE', message: 'Edge already exists' });
       }
       throw err;
     }
@@ -180,7 +214,9 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.send({ status: 'ok', data: { deleted: true } });
     } catch (err: any) {
       if (err.message === 'EDGE_NOT_FOUND') {
-        return reply.code(404).send({ status: 'error', code: 'EDGE_NOT_FOUND', message: 'Edge not found' });
+        return reply
+          .code(404)
+          .send({ status: 'error', code: 'EDGE_NOT_FOUND', message: 'Edge not found' });
       }
       throw err;
     }

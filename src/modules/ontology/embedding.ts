@@ -135,11 +135,7 @@ export async function batchEmbedNodes(
 
   for (const node of nodes) {
     try {
-      const wasEmbedded = await embedNode(
-        node.id,
-        node.title,
-        node.properties as Record<string, unknown>
-      );
+      const wasEmbedded = await embedNode(node.id, node.title, node.properties);
       if (wasEmbedded) {
         embedded++;
       } else {
