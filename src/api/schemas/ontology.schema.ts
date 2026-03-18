@@ -6,11 +6,14 @@ import { z } from 'zod';
 
 // -- Request Schemas --
 
+export const DomainEnum = z.enum(['service', 'system']);
+
 export const ListNodesQuerySchema = z.object({
+  domain: DomainEnum.optional(),
   type: z.string().optional(),
   created_after: z.string().datetime().optional(),
   created_before: z.string().datetime().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  limit: z.coerce.number().int().min(1).max(1000).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
 
@@ -53,6 +56,13 @@ export const CreateEdgeBodySchema = z.object({
   properties: z.record(z.unknown()).default({}),
 });
 
+export const ListEdgesQuerySchema = z.object({
+  relation: z.string().optional(),
+  domain: DomainEnum.optional(),
+  limit: z.coerce.number().int().min(1).max(1000).default(200),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 export const EdgeIdParamSchema = z.object({
   id: z.string().uuid(),
 });
@@ -62,11 +72,13 @@ export const VectorSearchBodySchema = z.object({
   limit: z.number().int().min(1).max(50).default(10),
   threshold: z.number().min(0).max(1).default(0.3),
   type_filter: z.string().optional(),
+  domain: DomainEnum.optional(),
 });
 
 export const TextSearchQuerySchema = z.object({
   q: z.string().min(1),
   type: z.string().optional(),
+  domain: DomainEnum.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
@@ -77,4 +89,5 @@ export type CreateNodeBody = z.infer<typeof CreateNodeBodySchema>;
 export type UpdateNodeBody = z.infer<typeof UpdateNodeBodySchema>;
 export type CreateEdgeBody = z.infer<typeof CreateEdgeBodySchema>;
 export type VectorSearchBody = z.infer<typeof VectorSearchBodySchema>;
+export type ListEdgesQuery = z.infer<typeof ListEdgesQuerySchema>;
 export type TextSearchQuery = z.infer<typeof TextSearchQuerySchema>;

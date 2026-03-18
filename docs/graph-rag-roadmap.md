@@ -2,10 +2,56 @@
 
 **Owner**: JK (jamesjk4242@gmail.com)
 **Project**: Insighta (https://insighta.one) — GitHub: JK42JJ/insighta
-**Goal**: .md flat files → Knowledge Graph → Multi-Project Meta Graph → Self-Improving Live Service
-**North Star**: 서비스가 운영되면서 새로운 요구에 즉시 반응하여 스스로 개선되는 시스템.
-프로젝트 "완료"는 끝이 아니라, **자율 개선 모드의 시작**.
-**핵심 데이터 소스**: Daily/Weekly Retrospective — 회고 데이터가 GraphRAG의 최우선 입력이며, 모든 패턴/메트릭/정책 개선의 근거가 된다.
+**Goal**: 사용자의 만다라트 목표를 중심으로 모든 콘텐츠가 Knowledge Graph로 연결되는 지능형 지식 관리 플랫폼
+**North Star**: 사용자가 만다라트에 설정한 목표를 향해 지속적으로 성장하도록 돕는 지능형 지식 관리 플랫폼.
+모든 콘텐츠가 Knowledge Graph로 연결되어 Single Source of Truth가 되고,
+AI Agent가 맞춤형 안내와 실행 지원을 제공한다.
+개발 과정에서는 같은 인프라를 활용해 에이전트의 작업 품질도 개선한다(시스템 레벨).
+**핵심 원칙**: **서비스 ≠ 시스템** — Ontology GraphDB는 사용자를 위한 서비스 기능이 설계의 출발점. 시스템(Dev)은 같은 인프라를 활용하되 `domain` 컬럼으로 namespace 격리.
+**핵심 데이터 소스 (서비스)**: 사용자 만다라트, 카드, 메모, YouTube 콘텐츠 — 사용자 지식 그래프의 입력
+**핵심 데이터 소스 (시스템)**: Daily/Weekly Retrospective — 회고 데이터가 시스템 레벨 GraphRAG의 최우선 입력이며, 모든 패턴/메트릭/정책 개선의 근거가 된다.
+
+---
+
+## Service vs System — Ontology Namespace Separation (2026-03-18)
+
+Ontology GraphDB의 두 가지 용도를 명확히 구분한다. 같은 인프라를 공유하되 `domain` 컬럼으로 격리.
+
+### Service (domain='service') — 사용자 지식 관리
+
+| object_type | 설명 |
+|-------------|------|
+| mandala, mandala_sector, goal, topic | 만다라트 구조 |
+| resource, note, insight | 사용자 지식 |
+| source, source_segment | 콘텐츠 소스 |
+
+- **Graph 소비자**: Insighta 최종 사용자 (브라우저)
+- **핵심 가치**: 만다라트 목표 → 콘텐츠 축적 → AI Agent 맞춤형 학습 관리
+- **Temporal 용도**: 사용자 성장 독려, 콘텐츠 자동 처리, 학습 경로 실행
+
+### System (domain='system') — 개발 에이전트
+
+| object_type | 설명 |
+|-------------|------|
+| pattern | 트러블슈팅/재발 패턴 |
+| decision | 아키텍처 결정 |
+| problem | 식별된 문제 |
+
+- **Graph 소비자**: Claude Code (MCP Server)
+- **핵심 가치**: 서비스를 잘 만들기 위한 일관된 작업 수행
+- **Temporal 용도**: Dev workflow automation (부차적)
+
+### Shared (domain='shared')
+
+- `RELATED_TO` relation — 양쪽 모두 사용 가능한 범용 관계
+- action_log — 인프라 레벨
+
+### 분리 규칙
+
+1. 서비스와 시스템을 섞지 않는다 — cross-domain edge 금지
+2. 설계 시 항상 **서비스 요구사항이 우선**
+3. GitHub 라벨: `service-ontology` / `system-ontology`
+4. Migration: `007_ontology_namespace_separation.sql`
 
 ---
 

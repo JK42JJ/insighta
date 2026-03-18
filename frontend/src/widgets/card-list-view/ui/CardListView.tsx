@@ -7,6 +7,7 @@ import { ViewSwitcher } from '@/features/view-mode';
 import { CardList } from '@/widgets/card-list/ui/CardList';
 import { ListView } from '@/widgets/list-view';
 import { DetailPanel } from '@/widgets/detail-panel';
+import { GraphView } from '@/components/graph/GraphView';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
 import { Popover, PopoverTrigger, PopoverContent } from '@/shared/ui/popover';
 import { Input } from '@/shared/ui/input';
@@ -17,6 +18,7 @@ interface CardListViewProps {
   title: string;
   viewMode: ViewMode;
   listPanelRatio: number;
+  mandalaId?: string | null;
   onViewModeChange: (mode: ViewMode) => void;
   onListPanelRatioChange: (ratio: number) => void;
   onCardClick?: (card: InsightCard) => void;
@@ -38,6 +40,7 @@ export function CardListView({
   title,
   viewMode,
   listPanelRatio,
+  mandalaId,
   onViewModeChange,
   onListPanelRatioChange,
   onCardClick,
@@ -177,6 +180,23 @@ export function CardListView({
       </div>
     </div>
   );
+
+  // Graph mode: render knowledge graph (minimal header, full area for canvas)
+  if (effectiveViewMode === 'graph') {
+    return (
+      <div className="h-full flex flex-col animate-fade-in">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-lg font-semibold">
+            {title} {t('cards.insights')}
+          </h3>
+          <ViewSwitcher value={viewMode} onChange={onViewModeChange} />
+        </div>
+        <div className="flex-1 min-h-0 relative">
+          <GraphView mandalaId={mandalaId} />
+        </div>
+      </div>
+    );
+  }
 
   // Grid mode: render existing CardList
   if (effectiveViewMode === 'grid') {
