@@ -712,7 +712,11 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "openMenu": "Open menu",
-    "searchPlaceholder": "Search..."
+    "searchPlaceholder": "Search...",
+    "searchMandalas": "Search mandalas...",
+    "sortRecent": "Recently added",
+    "noResults": "No results",
+    "selectMandala": "Select mandala"
   },
   "footer": {
     "brand": "Insighta",
@@ -727,6 +731,33 @@
     "updateAvailable": "A new version is available.",
     "reload": "Reload",
     "dismiss": "Dismiss"
+  },
+  "mandalas": {
+    "title": "My Mandalas",
+    "subtitle": "Manage and organize your mandalas",
+    "newMandala": "New Mandala",
+    "quickCreate": "Quick Create",
+    "quickCreatePlaceholder": "Enter mandala title...",
+    "fromTemplate": "From Template",
+    "manageAll": "Manage All Mandalas",
+    "tabMyMandalas": "My Mandalas",
+    "tabTemplates": "Templates",
+    "cardCount": "{{count}} cards",
+    "public": "Public",
+    "private": "Private",
+    "edit": "Edit",
+    "duplicate": "Duplicate",
+    "setDefault": "Set as default",
+    "isDefault": "Default",
+    "shareToggle": "Share",
+    "duplicated": "Mandala duplicated",
+    "duplicatedDesc": "\"{{title}}\" has been duplicated.",
+    "defaultSet": "Default mandala changed",
+    "defaultSetDesc": "\"{{title}}\" is now your default mandala.",
+    "noMandalas": "No mandalas yet",
+    "noMandalasDesc": "Create your first mandala to get started.",
+    "useTemplate": "Use This Template",
+    "creatingFromTemplate": "Creating mandala from template..."
   },
   "graph": {
     "empty": "No knowledge nodes yet.",

@@ -121,7 +121,7 @@ export function Header({ onNavigateHome }: HeaderProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate('/mandala-settings')}
+            onClick={() => navigate('/mandalas')}
             className="rounded-lg hover:bg-surface-light transition-all duration-200 gap-1.5"
           >
             <LayoutGrid className="w-4 h-4" aria-hidden="true" />

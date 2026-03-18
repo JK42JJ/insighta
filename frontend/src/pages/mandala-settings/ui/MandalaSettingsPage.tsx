@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Check,
@@ -30,7 +30,6 @@ import {
   useMandalaQuery,
   useMandalaList,
   useToggleMandalaShare,
-  MandalaSelector,
 } from '@/features/mandala';
 import { Switch } from '@/shared/ui/switch';
 import { Label } from '@/shared/ui/label';
@@ -52,10 +51,16 @@ export default function MandalaSettingsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t, i18n } = useTranslation();
+  const { id: urlMandalaId } = useParams<{ id?: string }>();
+  const location = useLocation();
   const { data: listData } = useMandalaList();
-  const currentMandalaId = listData?.mandalas?.find((m) => m.isDefault)?.id ?? null;
-  const { mandalaLevels: queryLevels, isSaving, saveMandala } = useMandalaQuery(currentMandalaId);
+  // Use URL param ID if available, otherwise fall back to default mandala
+  const mandalaId = urlMandalaId ?? listData?.mandalas?.find((m) => m.isDefault)?.id ?? null;
+  const { mandalaLevels: queryLevels, isSaving, saveMandala } = useMandalaQuery(mandalaId);
   const toggleShare = useToggleMandalaShare();
+
+  // Check for templateId from navigation state (from TemplatesTab "Use This Template")
+  const templateIdFromState = (location.state as { templateId?: string } | null)?.templateId;
 
   // Derive mandala data from query
   const [mandalaData, setMandalaData] = useState<MandalaLevel>(() => {
@@ -81,13 +86,25 @@ export default function MandalaSettingsPage() {
   const [expandedSubject, setExpandedSubject] = useState<number | null>(null);
 
   // Reset hasChanges when mandala switches via dropdown
-  const prevMandalaIdRef = useRef(currentMandalaId);
+  const prevMandalaIdRef = useRef(mandalaId);
   useEffect(() => {
-    if (currentMandalaId !== prevMandalaIdRef.current) {
-      prevMandalaIdRef.current = currentMandalaId;
+    if (mandalaId !== prevMandalaIdRef.current) {
+      prevMandalaIdRef.current = mandalaId;
       setHasChanges(false);
     }
-  }, [currentMandalaId]);
+  }, [mandalaId]);
+
+  // Apply template from navigation state (from /mandalas?tab=templates → "Use This Template")
+  useEffect(() => {
+    if (templateIdFromState) {
+      const template = mandalaTemplates.find((t) => t.id === templateIdFromState);
+      if (template) {
+        applyTemplate(template);
+      }
+      // Clear the state to prevent re-application on re-render
+      window.history.replaceState({}, document.title);
+    }
+  }, [templateIdFromState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync query data changes to local state
   useEffect(() => {
@@ -279,7 +296,7 @@ export default function MandalaSettingsPage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/mandalas')}
               className="rounded-lg"
               aria-label={t('common.back')}
             >
@@ -288,7 +305,6 @@ export default function MandalaSettingsPage() {
             <div>
               <div className="flex items-center gap-3">
                 <h1 className="text-xl font-bold text-foreground">{t('mandalaSettings.title')}</h1>
-                <MandalaSelector />
               </div>
               <p className="text-sm text-muted-foreground">{t('mandalaSettings.subtitle')}</p>
             </div>
