@@ -789,6 +789,79 @@ class ApiClient {
   }
 
   // ========================================
+  // Admin Content Moderation
+  // ========================================
+
+  async getAdminContent(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<{
+    items: Array<Record<string, unknown>>;
+    pagination: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
+  }> {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.search) query.set('search', params.search);
+    const qs = query.toString() ? `?${query}` : '';
+    return this.request(`/admin/content/mandalas${qs}`);
+  }
+
+  async moderateAdminContent(
+    id: string,
+    data: { hidden?: boolean }
+  ): Promise<{ success: boolean; data: Record<string, unknown> }> {
+    return this.request(`/admin/content/mandalas/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAdminContent(id: string): Promise<{ success: boolean; data: Record<string, unknown> }> {
+    return this.request(`/admin/content/mandalas/${id}`, { method: 'DELETE' });
+  }
+
+  async getAdminReports(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    targetType?: string;
+  }): Promise<{
+    items: Array<Record<string, unknown>>;
+    pagination: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
+  }> {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.status) query.set('status', params.status);
+    if (params?.targetType) query.set('targetType', params.targetType);
+    const qs = query.toString() ? `?${query}` : '';
+    return this.request(`/admin/reports${qs}`);
+  }
+
+  async resolveAdminReport(
+    id: string,
+    data: { status: string; resolutionNote?: string }
+  ): Promise<{ success: boolean; data: Record<string, unknown> }> {
+    return this.request(`/admin/reports/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getAdminHealth(): Promise<{
+    success: boolean;
+    data: {
+      api: { status: string; uptime: number; responseTimeMs: number; memory: { heapUsedMB: number; heapTotalMB: number; rssMB: number } };
+      database: { status: string; latencyMs: number; activeConnections: number; tableSizes: Array<Record<string, unknown>> };
+      environment: { nodeVersion: string; platform: string };
+    };
+  }> {
+    return this.request('/admin/health');
+  }
+
+  // ========================================
   // Admin Analytics
   // ========================================
 
