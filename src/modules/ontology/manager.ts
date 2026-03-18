@@ -58,6 +58,13 @@ export interface ListNodesFilter {
   offset?: number;
 }
 
+export interface ListEdgesFilter {
+  relation?: string;
+  domain?: 'service' | 'system';
+  limit?: number;
+  offset?: number;
+}
+
 class OntologyManager {
   private prisma: PrismaClient;
 
@@ -97,7 +104,7 @@ class OntologyManager {
   // ==========================================================================
 
   async listNodes(userId: string, filter: ListNodesFilter = {}): Promise<{ nodes: OntologyNode[]; total: number }> {
-    const limit = Math.min(filter.limit ?? 50, 100);
+    const limit = Math.min(filter.limit ?? 50, 1000);
     const offset = filter.offset ?? 0;
 
     const conditions: Prisma.Sql[] = [Prisma.sql`n.user_id = ${userId}::uuid`];
@@ -261,6 +268,41 @@ class OntologyManager {
     const edge = rows[0]!;
     await this.logAction(userId, 'ADD_EDGE', 'edge', edge.id, null, edge);
     return edge;
+  }
+
+  async listEdges(userId: string, filter: ListEdgesFilter = {}): Promise<{ edges: OntologyEdge[]; total: number }> {
+    const limit = Math.min(filter.limit ?? 200, 1000);
+    const offset = filter.offset ?? 0;
+
+    const conditions: Prisma.Sql[] = [Prisma.sql`e.user_id = ${userId}::uuid`];
+
+    if (filter.relation) {
+      conditions.push(Prisma.sql`e.relation = ${filter.relation}`);
+    }
+
+    if (filter.domain) {
+      conditions.push(Prisma.sql`
+        e.source_id IN (SELECT n.id FROM ontology.nodes n JOIN ontology.object_types ot ON n.type = ot.code WHERE ot.domain = ${filter.domain})
+        AND e.target_id IN (SELECT n.id FROM ontology.nodes n JOIN ontology.object_types ot ON n.type = ot.code WHERE ot.domain = ${filter.domain})
+      `);
+    }
+
+    const where = Prisma.join(conditions, ' AND ');
+
+    const edges = await this.prisma.$queryRaw<OntologyEdge[]>`
+      SELECT e.id, e.user_id, e.source_id, e.target_id, e.relation, e.weight, e.properties, e.created_at
+      FROM ontology.edges e
+      WHERE ${where}
+      ORDER BY e.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+
+    const countResult = await this.prisma.$queryRaw<[{ count: bigint }]>`
+      SELECT count(*) FROM ontology.edges e WHERE ${where}
+    `;
+    const total = Number(countResult[0]?.count ?? 0);
+
+    return { edges, total };
   }
 
   async deleteEdge(userId: string, edgeId: string): Promise<void> {

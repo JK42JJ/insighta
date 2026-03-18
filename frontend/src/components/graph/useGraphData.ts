@@ -3,6 +3,7 @@
 // Fetches ontology nodes/edges and converts to graph format.
 // ============================================================================
 
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/shared/lib/api-client';
 import type { OntologyNode, OntologyEdge, OntologyStats, GraphData } from './types';
@@ -43,16 +44,19 @@ async function fetchWithAuth(endpoint: string): Promise<unknown> {
   return response.json();
 }
 
-async function fetchServiceNodes(limit: number = 100): Promise<OntologyNode[]> {
+async function fetchServiceNodes(limit: number = 1000): Promise<OntologyNode[]> {
   const data = (await fetchWithAuth(`/nodes?domain=service&limit=${limit}`)) as ListNodesResponse;
   return data.data.nodes;
 }
 
+interface ListEdgesResponse {
+  status: string;
+  data: { edges: OntologyEdge[]; total: number };
+}
+
 async function fetchEdges(): Promise<OntologyEdge[]> {
-  // Edges endpoint doesn't have a list-all; we use stats to check if edges exist
-  // For now, return empty — edges will be populated as the graph grows
-  // TODO: Add GET /edges list endpoint when needed
-  return [];
+  const data = (await fetchWithAuth('/edges?domain=service&limit=1000')) as ListEdgesResponse;
+  return data.data.edges;
 }
 
 async function fetchStats(): Promise<OntologyStats> {
@@ -89,8 +93,9 @@ export function useOntologyStats() {
   });
 }
 
-export function useGraphData(): {
+export function useGraphData(mandalaId?: string | null): {
   data: GraphData | undefined;
+  mandalaNodeIds: Set<string>;
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
@@ -111,5 +116,30 @@ export function useGraphData(): {
       ? buildGraphData(nodesQuery.data, edgesQuery.data)
       : undefined;
 
-  return { data, isLoading, isError, error };
+  // Compute node IDs belonging to the selected mandala's structure subtree
+  const mandalaNodeIds = useMemo(() => {
+    if (!mandalaId || !nodesQuery.data || !edgesQuery.data) return new Set<string>();
+
+    // Find the mandala root node by source_ref
+    const mandalaNode = nodesQuery.data.find(
+      (n) => n.source_ref?.table === 'user_mandalas' && n.source_ref.id === mandalaId
+    );
+    if (!mandalaNode) return new Set<string>();
+
+    // BFS: traverse CONTAINS edges from mandala root to find all structure nodes
+    const ids = new Set<string>([mandalaNode.id]);
+    const queue = [mandalaNode.id];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (const edge of edgesQuery.data) {
+        if (edge.source_id === current && edge.relation === 'CONTAINS' && !ids.has(edge.target_id)) {
+          ids.add(edge.target_id);
+          queue.push(edge.target_id);
+        }
+      }
+    }
+    return ids;
+  }, [mandalaId, nodesQuery.data, edgesQuery.data]);
+
+  return { data, mandalaNodeIds, isLoading, isError, error };
 }

@@ -18,17 +18,30 @@ const CATEGORY_LABELS: Record<NodeCategory, string> = {
   derived: 'Derived',
 };
 
-export function GraphView() {
+interface GraphViewProps {
+  mandalaId?: string | null;
+}
+
+export function GraphView({ mandalaId }: GraphViewProps) {
   const { t } = useTranslation();
-  const { data, isLoading, isError } = useGraphData();
+  const { data, mandalaNodeIds, isLoading, isError } = useGraphData(mandalaId);
   const store = useGraphViewStore();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
-  // Resize observer for canvas dimensions
+  // Resize observer for canvas dimensions — rAF delays until flex layout completes
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+
+    // rAF ensures measurement happens after layout is complete (Bug #7 fix)
+    const raf = requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setDimensions({ width: rect.width, height: rect.height });
+      }
+    });
+
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (entry) {
@@ -39,7 +52,10 @@ export function GraphView() {
       }
     });
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
   }, []);
 
   // ESC to deselect
@@ -88,9 +104,24 @@ export function GraphView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
-      {/* Filter chips */}
-      <div className="flex items-center gap-2 px-1 py-2">
+    <div ref={containerRef} className="absolute inset-0">
+      {/* Canvas fills entire area */}
+      {dimensions.width > 0 && dimensions.height > 0 && (
+        <GraphCanvas
+          data={data}
+          selectedNodeId={store.selectedNodeId}
+          hoveredNodeId={store.hoveredNodeId}
+          categoryFilter={store.categoryFilter}
+          mandalaNodeIds={mandalaNodeIds}
+          onNodeClick={store.selectNode}
+          onNodeHover={store.hoverNode}
+          width={dimensions.width}
+          height={dimensions.height}
+        />
+      )}
+
+      {/* Filter chips overlay */}
+      <div className="absolute top-2 left-2 right-2 flex items-center gap-2 pointer-events-none">
         {(Object.entries(CATEGORY_LABELS) as [NodeCategory, string][]).map(([cat, label]) => {
           const active = store.categoryFilter.has(cat);
           const count = data.nodes.filter((n) => n.category === cat).length;
@@ -99,61 +130,96 @@ export function GraphView() {
               key={cat}
               onClick={() => store.toggleCategory(cat)}
               className={cn(
-                'px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+                'px-2.5 py-1 rounded-full text-xs font-medium transition-colors pointer-events-auto backdrop-blur-sm',
                 active
                   ? 'bg-primary/15 text-primary'
-                  : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted'
               )}
             >
               {label} ({count})
             </button>
           );
         })}
-        <span className="text-xs text-muted-foreground ml-auto">
+        <span className="text-xs text-muted-foreground ml-auto bg-surface-base/70 backdrop-blur-sm px-2 py-1 rounded-full pointer-events-auto">
           {data.nodes.length} nodes, {data.links.length} edges
         </span>
       </div>
 
-      {/* Canvas */}
-      <div ref={containerRef} className="flex-1 min-h-0 relative">
-        {dimensions.width > 0 && (
-          <GraphCanvas
-            data={data}
-            selectedNodeId={store.selectedNodeId}
-            hoveredNodeId={store.hoveredNodeId}
-            categoryFilter={store.categoryFilter}
-            onNodeClick={store.selectNode}
-            onNodeHover={store.hoverNode}
-            width={dimensions.width}
-            height={dimensions.height}
-          />
-        )}
-
-        {/* Detail panel overlay */}
-        {selectedNode && (
-          <NodeDetailOverlay node={selectedNode} onClose={() => store.selectNode(null)} />
-        )}
-      </div>
+      {/* Detail panel overlay */}
+      {selectedNode && (
+        <NodeDetailOverlay
+          node={selectedNode}
+          linkCount={data.links.filter(
+            (l) => l.source === selectedNode.id || l.target === selectedNode.id
+          ).length}
+          onClose={() => store.selectNode(null)}
+        />
+      )}
     </div>
   );
 }
 
 // -- Inline detail overlay --
 
-function NodeDetailOverlay({ node, onClose }: { node: GraphNode; onClose: () => void }) {
+function NodeDetailOverlay({
+  node,
+  linkCount,
+  onClose,
+}: {
+  node: GraphNode;
+  linkCount: number;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const url = typeof node.properties.url === 'string' ? node.properties.url : null;
+  const thumbnail = typeof node.properties.thumbnail === 'string' ? node.properties.thumbnail : null;
+
   return (
     <div className="absolute bottom-4 left-4 right-4 bg-surface-base/95 backdrop-blur-sm border rounded-lg shadow-lg p-4 animate-fade-in max-w-md">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{node.label}</p>
-          <div className="flex items-center gap-2 mt-1">
+        <div className="min-w-0 flex-1">
+          {/* Full title — no truncation */}
+          <p className="text-sm font-medium break-words">{node.fullTitle}</p>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wider">
               {node.type}
             </span>
             <span className="text-[10px] text-muted-foreground">
               {node.category}
             </span>
+            <span className="text-[10px] text-muted-foreground">
+              {linkCount} {t('graph.connections', 'connections')}
+            </span>
           </div>
+
+          {/* Type-specific details */}
+          {url && (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline mt-2 block truncate"
+            >
+              {url}
+            </a>
+          )}
+          {thumbnail && (
+            <img
+              src={thumbnail}
+              alt=""
+              className="mt-2 rounded h-16 object-cover"
+            />
+          )}
+          {node.type === 'goal' && node.properties.level_key && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Level: {String(node.properties.level_key)}
+            </p>
+          )}
+          {node.type === 'mandala_sector' && node.properties.center_goal && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Goal: {String(node.properties.center_goal)}
+            </p>
+          )}
         </div>
         <button
           onClick={onClose}

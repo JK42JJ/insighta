@@ -50,9 +50,11 @@ export interface OntologyStats {
 export interface GraphNode {
   id: string;
   label: string;
+  fullTitle: string;
   type: OntologyNodeType;
   category: NodeCategory;
   val: number;
+  properties: Record<string, unknown>;
 }
 
 export interface GraphLink {

@@ -16,7 +16,10 @@ export function useGraphViewStore() {
   );
 
   const selectNode = useCallback((id: string | null) => setSelectedNodeId(id), []);
-  const hoverNode = useCallback((id: string | null) => setHoveredNodeId(id), []);
+  const hoverNode = useCallback(
+    (id: string | null) => setHoveredNodeId((prev) => (prev === id ? prev : id)),
+    []
+  );
 
   const toggleCategory = useCallback((category: NodeCategory) => {
     setCategoryFilter((prev) => {
