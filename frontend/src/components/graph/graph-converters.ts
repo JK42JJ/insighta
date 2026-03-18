@@ -27,9 +27,11 @@ export function convertNode(
   return {
     id: node.id,
     label: truncateLabel(node.title),
+    fullTitle: node.title,
     type: node.type,
     category: getNodeCategory(node.type),
     val: Math.max(1, Math.min(edgeCount + 1, 10)),
+    properties: node.properties,
   };
 }
 

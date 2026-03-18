@@ -8,6 +8,7 @@ import {
   UpdateNodeBodySchema,
   NeighborsQuerySchema,
   HistoryQuerySchema,
+  ListEdgesQuerySchema,
   CreateEdgeBodySchema,
   VectorSearchBodySchema,
   TextSearchQuerySchema,
@@ -131,6 +132,16 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   });
 
   // ─── Edges ───
+
+  // GET /edges — list/filter
+  fastify.get('/edges', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const query = ListEdgesQuerySchema.parse(request.query);
+    const result = await manager.listEdges(userId, query);
+    return reply.send({ status: 'ok', data: result });
+  });
 
   // POST /edges — create
   fastify.post('/edges', { onRequest: [fastify.authenticate] }, async (request, reply) => {

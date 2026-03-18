@@ -587,6 +587,7 @@ function AuthenticatedApp() {
                 title={search.isSearchActive ? t('search.results', 'Search Results') : cards.displayTitle}
                 viewMode={layout.viewMode}
                 listPanelRatio={layout.listPanelRatio}
+                mandalaId={effectiveMandalaId}
                 onViewModeChange={layout.handleSetViewMode}
                 onListPanelRatioChange={layout.handleSetListPanelRatio}
                 onCardClick={handleCardClick}

@@ -3,7 +3,7 @@
 // Renders the knowledge graph with category-based coloring.
 // ============================================================================
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useMemo } from 'react';
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d';
 import type { GraphData, GraphNode, NodeCategory } from './types';
 import { STRUCTURAL_RELATIONS } from './types';
@@ -13,6 +13,7 @@ interface GraphCanvasProps {
   selectedNodeId: string | null;
   hoveredNodeId: string | null;
   categoryFilter: Set<NodeCategory>;
+  mandalaNodeIds: Set<string>;
   onNodeClick: (id: string | null) => void;
   onNodeHover: (id: string | null) => void;
   width: number;
@@ -36,54 +37,79 @@ export function GraphCanvas({
   selectedNodeId,
   hoveredNodeId,
   categoryFilter,
+  mandalaNodeIds,
   onNodeClick,
   onNodeHover,
   width,
   height,
 }: GraphCanvasProps) {
   const fgRef = useRef<ForceGraphMethods<GraphNode>>(null);
-  const isDark = document.documentElement.classList.contains('dark');
 
-  // Filter nodes by category
-  const filteredNodeIds = new Set(
-    data.nodes.filter((n) => categoryFilter.has(n.category)).map((n) => n.id)
-  );
+  // Filter nodes by category (stabilized with useMemo)
+  const filteredData = useMemo<GraphData>(() => {
+    const filteredNodeIds = new Set(
+      data.nodes.filter((n) => categoryFilter.has(n.category)).map((n) => n.id)
+    );
+    return {
+      nodes: data.nodes.filter((n) => filteredNodeIds.has(n.id)),
+      links: data.links.filter(
+        (l) => filteredNodeIds.has(l.source as string) && filteredNodeIds.has(l.target as string)
+      ),
+    };
+  }, [data, categoryFilter]);
 
-  const filteredData: GraphData = {
-    nodes: data.nodes.filter((n) => filteredNodeIds.has(n.id)),
-    links: data.links.filter(
-      (l) => filteredNodeIds.has(l.source as string) && filteredNodeIds.has(l.target as string)
-    ),
-  };
-
-  // Connected nodes for hover highlight
-  const connectedNodes = new Set<string>();
-  if (hoveredNodeId || selectedNodeId) {
-    const targetId = hoveredNodeId ?? selectedNodeId;
-    connectedNodes.add(targetId!);
-    for (const link of data.links) {
-      const src = typeof link.source === 'string' ? link.source : (link.source as unknown as GraphNode).id;
-      const tgt = typeof link.target === 'string' ? link.target : (link.target as unknown as GraphNode).id;
-      if (src === targetId) connectedNodes.add(tgt);
-      if (tgt === targetId) connectedNodes.add(src);
+  // Connected nodes for hover highlight (stabilized with useMemo)
+  const connectedNodes = useMemo(() => {
+    const set = new Set<string>();
+    if (hoveredNodeId || selectedNodeId) {
+      const targetId = hoveredNodeId ?? selectedNodeId;
+      set.add(targetId!);
+      for (const link of data.links) {
+        const src = typeof link.source === 'string' ? link.source : (link.source as unknown as GraphNode).id;
+        const tgt = typeof link.target === 'string' ? link.target : (link.target as unknown as GraphNode).id;
+        if (src === targetId) set.add(tgt);
+        if (tgt === targetId) set.add(src);
+      }
     }
-  }
+    return set;
+  }, [hoveredNodeId, selectedNodeId, data.links]);
 
   const hasHighlight = hoveredNodeId !== null || selectedNodeId !== null;
 
-  // Node rendering
+  const hasMandalaHighlight = mandalaNodeIds.size > 0;
+
+  // Ref pattern: stable callback functions read changing state via ref
+  const stateRef = useRef({ connectedNodes, hasHighlight, selectedNodeId, mandalaNodeIds, hasMandalaHighlight, isDark: false });
+  stateRef.current = {
+    connectedNodes,
+    hasHighlight,
+    selectedNodeId,
+    mandalaNodeIds,
+    hasMandalaHighlight,
+    isDark: document.documentElement.classList.contains('dark'),
+  };
+
+  // Node rendering (stable — empty deps, reads state via ref)
   const nodeCanvasObject = useCallback(
     (node: GraphNode, ctx: CanvasRenderingContext2D) => {
+      const s = stateRef.current;
       const x = (node as unknown as { x: number }).x;
       const y = (node as unknown as { y: number }).y;
       const radius = Math.sqrt(node.val) * 3 + 2;
 
-      const isSelected = node.id === selectedNodeId;
-      const isConnected = connectedNodes.has(node.id);
-      const dimmed = hasHighlight && !isConnected;
+      const isSelected = node.id === s.selectedNodeId;
+      const isConnected = s.connectedNodes.has(node.id);
+      const isMandalaNode = s.mandalaNodeIds.has(node.id);
 
-      const baseColor = getCategoryColor(node.category, isDark);
-      const alpha = dimmed ? 0.15 : 1;
+      // Priority: hover/select highlight > mandala highlight > default
+      let alpha = 1;
+      if (s.hasHighlight) {
+        alpha = isConnected ? 1 : 0.15;
+      } else if (s.hasMandalaHighlight) {
+        alpha = isMandalaNode ? 1 : 0.35;
+      }
+
+      const baseColor = getCategoryColor(node.category, s.isDark);
 
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, 2 * Math.PI);
@@ -93,7 +119,7 @@ export function GraphCanvas({
 
       // Selection ring
       if (isSelected) {
-        ctx.strokeStyle = getCategoryColor('structure', isDark);
+        ctx.strokeStyle = getCategoryColor('structure', s.isDark);
         ctx.lineWidth = 2;
         ctx.globalAlpha = 1;
         ctx.stroke();
@@ -101,8 +127,8 @@ export function GraphCanvas({
 
       // Label for larger/selected nodes
       if (radius > 4 || isSelected) {
-        ctx.globalAlpha = dimmed ? 0.1 : 0.8;
-        ctx.fillStyle = isDark ? '#e0e0e0' : '#333';
+        ctx.globalAlpha = alpha < 1 ? alpha * 0.5 : 0.8;
+        ctx.fillStyle = s.isDark ? '#e0e0e0' : '#333';
         ctx.font = `${isSelected ? 'bold ' : ''}${Math.max(10, radius)}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
@@ -111,22 +137,26 @@ export function GraphCanvas({
 
       ctx.globalAlpha = 1;
     },
-    [selectedNodeId, connectedNodes, hasHighlight, isDark]
+    [] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  // Link rendering
+  // Link rendering (stable — empty deps, reads state via ref)
   const linkColor = useCallback(
     (link: { source: unknown; target: unknown; relation: string }) => {
+      const s = stateRef.current;
       const src = typeof link.source === 'string' ? link.source : (link.source as GraphNode).id;
       const tgt = typeof link.target === 'string' ? link.target : (link.target as GraphNode).id;
-      const isConnected = connectedNodes.has(src) && connectedNodes.has(tgt);
+      const isConnected = s.connectedNodes.has(src) && s.connectedNodes.has(tgt);
       const isStructural = STRUCTURAL_RELATIONS.has(link.relation);
+      const isMandalaEdge = s.mandalaNodeIds.has(src) && s.mandalaNodeIds.has(tgt);
 
-      if (hasHighlight && !isConnected) return isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)';
-      if (isStructural) return isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)';
-      return isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+      // Priority: hover/select > mandala highlight > default
+      if (s.hasHighlight && !isConnected) return s.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)';
+      if (s.hasMandalaHighlight && !isMandalaEdge) return s.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+      if (isStructural) return s.isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)';
+      return s.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
     },
-    [connectedNodes, hasHighlight, isDark]
+    [] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Zoom to fit on data change
@@ -138,9 +168,9 @@ export function GraphCanvas({
 
   const handleClick = useCallback(
     (node: GraphNode) => {
-      onNodeClick(node.id === selectedNodeId ? null : node.id);
+      onNodeClick(node.id === stateRef.current.selectedNodeId ? null : node.id);
     },
-    [onNodeClick, selectedNodeId]
+    [onNodeClick]
   );
 
   const handleHover = useCallback(
@@ -150,6 +180,32 @@ export function GraphCanvas({
     [onNodeHover]
   );
 
+  // Stable callbacks — prevent ForceGraph2D re-initialization on every render
+  const nodePointerAreaPaint = useCallback(
+    (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
+      const x = (node as unknown as { x: number }).x;
+      const y = (node as unknown as { y: number }).y;
+      const radius = Math.sqrt(node.val) * 3 + 4;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+    },
+    []
+  );
+
+  const handleLinkWidth = useCallback(
+    (link: { relation: string }) => (STRUCTURAL_RELATIONS.has(link.relation) ? 1.5 : 0.5),
+    []
+  );
+
+  const handleLinkLineDash = useCallback(
+    (link: { relation: string }) => (STRUCTURAL_RELATIONS.has(link.relation) ? [] : [4, 2]),
+    []
+  );
+
+  const handleBackgroundClick = useCallback(() => onNodeClick(null), [onNodeClick]);
+
   return (
     <ForceGraph2D
       ref={fgRef}
@@ -157,22 +213,15 @@ export function GraphCanvas({
       width={width}
       height={height}
       nodeCanvasObject={nodeCanvasObject}
-      nodePointerAreaPaint={(node, color, ctx) => {
-        const x = (node as unknown as { x: number }).x;
-        const y = (node as unknown as { y: number }).y;
-        const radius = Math.sqrt(node.val) * 3 + 4;
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, 2 * Math.PI);
-        ctx.fillStyle = color;
-        ctx.fill();
-      }}
+      nodePointerAreaPaint={nodePointerAreaPaint}
       linkColor={linkColor}
-      linkWidth={(link) => (STRUCTURAL_RELATIONS.has(link.relation) ? 1.5 : 0.5)}
-      linkLineDash={(link) => (STRUCTURAL_RELATIONS.has(link.relation) ? [] : [4, 2])}
+      linkWidth={handleLinkWidth}
+      linkLineDash={handleLinkLineDash}
       onNodeClick={handleClick}
       onNodeHover={handleHover}
-      onBackgroundClick={() => onNodeClick(null)}
-      cooldownTicks={100}
+      onBackgroundClick={handleBackgroundClick}
+      warmupTicks={30}
+      cooldownTicks={50}
       d3AlphaDecay={0.04}
       d3VelocityDecay={0.3}
       enableNodeDrag={false}
