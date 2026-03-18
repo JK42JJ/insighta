@@ -125,7 +125,7 @@ export function AdminPromotions() {
 
       {/* Create/Edit form */}
       {(showCreate || editId) && (
-        <div className="admin-glass p-4 mb-4 space-y-3">
+        <div className="bg-card border border-border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-medium text-sm">{editId ? 'Edit Promotion' : 'Create Promotion'}</h3>
           <div className="grid grid-cols-2 gap-3">
             <input
@@ -188,7 +188,7 @@ export function AdminPromotions() {
       )}
 
       {/* Table */}
-      <div className="admin-glass overflow-hidden">
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border bg-muted/30">

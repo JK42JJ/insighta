@@ -58,7 +58,7 @@ export function AdminAuditLog() {
       </div>
 
       {/* Table */}
-      <div className="admin-glass overflow-hidden">
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border bg-muted/30">

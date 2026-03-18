@@ -46,7 +46,7 @@ export function AdminHealth() {
         <>
           {/* Status Cards */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="admin-glass p-4">
+            <div className="bg-card border border-border rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Server className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">API Server</span>
@@ -62,7 +62,7 @@ export function AdminHealth() {
               </div>
             </div>
 
-            <div className="admin-glass p-4">
+            <div className="bg-card border border-border rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Database className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Database</span>
@@ -76,7 +76,7 @@ export function AdminHealth() {
               </div>
             </div>
 
-            <div className="admin-glass p-4">
+            <div className="bg-card border border-border rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Activity className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Environment</span>
@@ -89,7 +89,7 @@ export function AdminHealth() {
           </div>
 
           {/* Table Sizes */}
-          <div className="admin-glass overflow-hidden">
+          <div className="bg-card border border-border rounded-lg overflow-hidden">
             <div className="px-4 py-3 border-b border-border">
               <h2 className="text-sm font-medium">Table Row Counts</h2>
             </div>

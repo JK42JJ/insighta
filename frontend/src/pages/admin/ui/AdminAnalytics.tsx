@@ -58,22 +58,22 @@ export function AdminAnalytics() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="admin-glass p-4">
+        <div className="bg-card border border-border rounded-lg p-4">
           <p className="text-xs text-muted-foreground">Total Users</p>
           <p className="text-2xl font-bold mt-1">{totalUsers}</p>
         </div>
-        <div className="admin-glass p-4">
+        <div className="bg-card border border-border rounded-lg p-4">
           <p className="text-xs text-muted-foreground">MRR</p>
           <p className="text-2xl font-bold mt-1">${(mrr / 100).toFixed(2)}</p>
         </div>
-        <div className="admin-glass p-4">
+        <div className="bg-card border border-border rounded-lg p-4">
           <p className="text-xs text-muted-foreground">Active Subscribers</p>
           <p className="text-2xl font-bold mt-1">{subscribers}</p>
         </div>
       </div>
 
       {/* DAU Chart */}
-      <div className="admin-glass p-4">
+      <div className="bg-card border border-border rounded-lg p-4">
         <h2 className="text-sm font-medium mb-4">Daily Active Users</h2>
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={dau}>
@@ -90,7 +90,7 @@ export function AdminAnalytics() {
       </div>
 
       {/* Signups Chart */}
-      <div className="admin-glass p-4">
+      <div className="bg-card border border-border rounded-lg p-4">
         <h2 className="text-sm font-medium mb-4">New Signups</h2>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={signups}>
