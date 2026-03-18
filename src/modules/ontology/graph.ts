@@ -60,7 +60,7 @@ export async function getSubgraph(
 
   // Get all reachable node IDs via neighbors
   const neighbors = await getNeighbors(nodeId, userId, undefined, maxDepth);
-  const nodeIds = [nodeId, ...neighbors.map(n => n.node_id)];
+  const nodeIds = [nodeId, ...neighbors.map((n) => n.node_id)];
 
   if (nodeIds.length === 0) {
     return { nodes: [], edges: [] };

@@ -103,7 +103,10 @@ class OntologyManager {
   // Node CRUD
   // ==========================================================================
 
-  async listNodes(userId: string, filter: ListNodesFilter = {}): Promise<{ nodes: OntologyNode[]; total: number }> {
+  async listNodes(
+    userId: string,
+    filter: ListNodesFilter = {}
+  ): Promise<{ nodes: OntologyNode[]; total: number }> {
     const limit = Math.min(filter.limit ?? 50, 1000);
     const offset = filter.offset ?? 0;
 
@@ -158,7 +161,9 @@ class OntologyManager {
     const props = input.properties ?? {};
     const validation = validateProperties(input.type, props);
     if (!validation.success) {
-      throw new Error(`Invalid properties for type '${input.type}': ${JSON.stringify(validation.error.issues)}`);
+      throw new Error(
+        `Invalid properties for type '${input.type}': ${JSON.stringify(validation.error.issues)}`
+      );
     }
 
     const sourceRefJson = input.source_ref ? JSON.stringify(input.source_ref) : null;
@@ -192,7 +197,9 @@ class OntologyManager {
     if (input.properties) {
       const validation = validateProperties(existing.type, newProps);
       if (!validation.success) {
-        throw new Error(`Invalid properties for type '${existing.type}': ${JSON.stringify(validation.error.issues)}`);
+        throw new Error(
+          `Invalid properties for type '${existing.type}': ${JSON.stringify(validation.error.issues)}`
+        );
       }
     }
 
@@ -232,7 +239,9 @@ class OntologyManager {
     const props = input.properties ?? {};
 
     // Cross-domain validation: prevent edges between service and system nodes
-    const domainCheck = await this.prisma.$queryRaw<{ source_domain: string; target_domain: string }[]>`
+    const domainCheck = await this.prisma.$queryRaw<
+      { source_domain: string; target_domain: string }[]
+    >`
       SELECT
         (SELECT ot.domain FROM ontology.object_types ot WHERE ot.code = s.type) AS source_domain,
         (SELECT ot.domain FROM ontology.object_types ot WHERE ot.code = t.type) AS target_domain
@@ -244,8 +253,10 @@ class OntologyManager {
     if (domainCheck.length > 0) {
       const { source_domain, target_domain } = domainCheck[0]!;
       if (
-        source_domain && target_domain &&
-        source_domain !== 'shared' && target_domain !== 'shared' &&
+        source_domain &&
+        target_domain &&
+        source_domain !== 'shared' &&
+        target_domain !== 'shared' &&
         source_domain !== target_domain
       ) {
         throw new Error('CROSS_DOMAIN_EDGE');
@@ -270,7 +281,10 @@ class OntologyManager {
     return edge;
   }
 
-  async listEdges(userId: string, filter: ListEdgesFilter = {}): Promise<{ edges: OntologyEdge[]; total: number }> {
+  async listEdges(
+    userId: string,
+    filter: ListEdgesFilter = {}
+  ): Promise<{ edges: OntologyEdge[]; total: number }> {
     const limit = Math.min(filter.limit ?? 200, 1000);
     const offset = filter.offset ?? 0;
 
@@ -356,8 +370,11 @@ class OntologyManager {
     `;
 
     return {
-      nodes_by_type: nodesByType.map(r => ({ type: r.type, count: Number(r.count) })),
-      edges_by_relation: edgesByRelation.map(r => ({ relation: r.relation, count: Number(r.count) })),
+      nodes_by_type: nodesByType.map((r) => ({ type: r.type, count: Number(r.count) })),
+      edges_by_relation: edgesByRelation.map((r) => ({
+        relation: r.relation,
+        count: Number(r.count),
+      })),
       total_nodes: nodesByType.reduce((sum, r) => sum + Number(r.count), 0),
       total_edges: edgesByRelation.reduce((sum, r) => sum + Number(r.count), 0),
     };

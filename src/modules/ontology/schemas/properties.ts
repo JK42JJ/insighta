@@ -89,7 +89,10 @@ export const PROPERTIES_BY_TYPE: Record<string, z.ZodSchema> = {
   problem: PROBLEM_PROPERTIES,
 };
 
-export function validateProperties(type: string, properties: unknown): z.SafeParseReturnType<unknown, unknown> {
+export function validateProperties(
+  type: string,
+  properties: unknown
+): z.SafeParseReturnType<unknown, unknown> {
   const schema = PROPERTIES_BY_TYPE[type] ?? GENERIC_PROPERTIES;
   return schema.safeParse(properties);
 }
