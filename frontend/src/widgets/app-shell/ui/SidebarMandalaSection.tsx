@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Search, Check, ChevronsUpDown, LayoutGrid, Plus, RefreshCw } from 'lucide-react';
+import { Search, Check, ChevronsUpDown, LayoutGrid, Plus, RefreshCw, Sparkles, ArrowRight, Loader2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { Popover, PopoverTrigger, PopoverContent } from '@/shared/ui/popover';
 import { ScrollArea } from '@/shared/ui/scroll-area';
-import { useMandalaList } from '@/features/mandala';
+import { useMandalaList, useCreateMandala, useSwitchMandala } from '@/features/mandala';
+import { toast } from '@/shared/lib/use-toast';
 
 interface SidebarMandalaSectionProps {
   collapsed: boolean;
@@ -26,11 +27,18 @@ export function SidebarMandalaSection({
   const navigate = useNavigate();
   const { data: listData, isLoading, isError, error, refetch } = useMandalaList();
 
+  const createMandala = useCreateMandala();
+  const switchMandala = useSwitchMandala();
+
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [loadingTooLong, setLoadingTooLong] = useState(false);
+  const [quickCreateMode, setQuickCreateMode] = useState(false);
+  const [quickCreateTitle, setQuickCreateTitle] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const quickCreateRef = useRef<HTMLInputElement>(null);
 
   // 10s loading timeout — show retry instead of infinite skeleton
   useEffect(() => {
@@ -72,6 +80,33 @@ export function SidebarMandalaSection({
     setOpen(false);
     setSearch('');
   };
+
+  const handleQuickCreate = async () => {
+    const title = quickCreateTitle.trim();
+    if (!title || isCreating) return;
+    setIsCreating(true);
+    try {
+      const result = await createMandala.mutateAsync(title);
+      const newId = result?.mandala?.id;
+      if (newId) {
+        await switchMandala.mutateAsync(newId);
+        onMandalaSelect(newId);
+      }
+      toast({ title: t('mandalaSettings.created') });
+      setQuickCreateMode(false);
+      setQuickCreateTitle('');
+      setOpen(false);
+    } catch {
+      toast({ title: t('mandalaSettings.quotaExceeded'), variant: 'destructive' });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  // Auto-focus quick create input
+  useEffect(() => {
+    if (quickCreateMode) setTimeout(() => quickCreateRef.current?.focus(), 0);
+  }, [quickCreateMode]);
 
   // Collapsed sidebar: icon button only
   if (collapsed) {
@@ -140,7 +175,7 @@ export function SidebarMandalaSection({
           {t('sidebar.mandalas')}
         </div>
         <button
-          onClick={() => navigate('/mandala-settings')}
+          onClick={() => navigate('/mandalas')}
           className="w-full flex items-center gap-2 px-3 py-2 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -248,17 +283,58 @@ export function SidebarMandalaSection({
             </div>
           </ScrollArea>
 
-          {/* Create New Mandala */}
+          {/* Quick Create / Actions */}
+          <div className="border-t border-border/30">
+            {quickCreateMode ? (
+              <div className="flex items-center gap-1.5 px-3 py-2">
+                <input
+                  ref={quickCreateRef}
+                  type="text"
+                  placeholder={t('mandalas.quickCreatePlaceholder')}
+                  value={quickCreateTitle}
+                  onChange={(e) => setQuickCreateTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleQuickCreate();
+                    if (e.key === 'Escape') {
+                      setQuickCreateMode(false);
+                      setQuickCreateTitle('');
+                    }
+                  }}
+                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+                  disabled={isCreating}
+                />
+                {isCreating && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+              </div>
+            ) : (
+              <button
+                onClick={() => setQuickCreateMode(true)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+                {t('mandalas.quickCreate')}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate('/mandalas?tab=templates');
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              {t('mandalas.fromTemplate')}
+            </button>
+          </div>
           <div className="border-t border-border/30">
             <button
               onClick={() => {
                 setOpen(false);
-                navigate('/mandala-settings');
+                navigate('/mandalas');
               }}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
             >
-              <Plus className="w-3.5 h-3.5 shrink-0" />
-              {t('mandalaSettings.createNew')}
+              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+              {t('mandalas.manageAll')}
             </button>
           </div>
         </PopoverContent>

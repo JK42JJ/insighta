@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Grid3X3, ArrowLeft, Check } from 'lucide-react';
@@ -11,22 +11,18 @@ import {
 } from '@/shared/data/mandalaTemplates';
 import { GradientBackground } from '@/pages/landing/ui/components/GradientBackground';
 import { LandingHeader } from '@/pages/landing/ui/components/LandingHeader';
-import { AppShell } from '@/widgets/app-shell';
 import { PageLoader } from '@/shared/ui/PageLoader';
 
 const CATEGORIES = ['all', 'productivity', 'learning', 'business', 'personal'] as const;
 
 function TemplateLayout({ children }: { children: ReactNode }) {
-  const { isLoggedIn, isLoading } = useAuth();
+  const { isLoading } = useAuth();
 
   if (isLoading) {
     return <PageLoader />;
   }
 
-  if (isLoggedIn) {
-    return <AppShell selectedMandalaId={null} onMandalaSelect={() => {}}>{children}</AppShell>;
-  }
-
+  // Guests only — logged-in users are redirected before reaching this
   return (
     <div className="relative min-h-screen bg-background">
       <GradientBackground variant="F" />
@@ -40,7 +36,20 @@ function TemplateLayout({ children }: { children: ReactNode }) {
 
 export default function TemplatesPage() {
   const { templateId } = useParams<{ templateId?: string }>();
+  const { isLoggedIn, isLoading } = useAuth();
+  const navigate = useNavigate();
   const selectedTemplate = templateId ? MANDALA_TEMPLATES.find((t) => t.id === templateId) : null;
+
+  // Redirect logged-in users to /mandalas?tab=templates
+  useEffect(() => {
+    if (!isLoading && isLoggedIn) {
+      navigate('/mandalas?tab=templates', { replace: true });
+    }
+  }, [isLoggedIn, isLoading, navigate]);
+
+  if (isLoading || isLoggedIn) {
+    return <PageLoader />;
+  }
 
   if (selectedTemplate) {
     return <TemplateDetailView template={selectedTemplate} />;
@@ -110,7 +119,7 @@ function TemplateDetailView({ template }: { template: MandalaTemplate }) {
       navigate('/pricing');
       return;
     }
-    navigate('/mandala-settings', { state: { templateId: template.id } });
+    navigate('/mandalas?tab=templates');
   };
 
   return (
