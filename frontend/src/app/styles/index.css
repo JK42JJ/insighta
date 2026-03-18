@@ -467,6 +467,27 @@
     border-color: hsl(var(--primary) / 0.3);
   }
 
+  /* Admin glass panel — professional glassmorphism for backoffice */
+  .admin-glass {
+    @apply rounded-lg overflow-hidden;
+    background: hsl(var(--glass-bg));
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid hsl(var(--glass-border));
+    box-shadow: var(--glass-shadow-diffuse);
+  }
+
+  .admin-glass-sidebar {
+    background: hsl(var(--glass-bg));
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-right: 1px solid hsl(var(--glass-border));
+  }
+
+  .admin-glass-divider {
+    border-color: hsl(var(--glass-border));
+  }
+
   /* Navigation/Filter bar */
   .filter-bar {
     @apply bg-[hsl(var(--bg-light))] rounded-xl px-4 py-2;
