@@ -7,7 +7,7 @@
 
 export type ScratchPadDockPosition = 'top' | 'bottom' | 'left' | 'right';
 export type MandalaDockPosition = 'left' | 'right';
-export type ViewMode = 'grid' | 'list' | 'list-detail';
+export type ViewMode = 'grid' | 'list' | 'list-detail' | 'graph';
 
 /**
  * User UI Preferences stored in Supabase

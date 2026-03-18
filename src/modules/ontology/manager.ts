@@ -50,9 +50,17 @@ export interface CreateEdgeInput {
 }
 
 export interface ListNodesFilter {
+  domain?: 'service' | 'system';
   type?: string;
   created_after?: string;
   created_before?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListEdgesFilter {
+  relation?: string;
+  domain?: 'service' | 'system';
   limit?: number;
   offset?: number;
 }
@@ -96,33 +104,41 @@ class OntologyManager {
   // ==========================================================================
 
   async listNodes(userId: string, filter: ListNodesFilter = {}): Promise<{ nodes: OntologyNode[]; total: number }> {
-    const limit = Math.min(filter.limit ?? 50, 100);
+    const limit = Math.min(filter.limit ?? 50, 1000);
     const offset = filter.offset ?? 0;
 
-    const conditions: Prisma.Sql[] = [Prisma.sql`user_id = ${userId}::uuid`];
+    const conditions: Prisma.Sql[] = [Prisma.sql`n.user_id = ${userId}::uuid`];
 
     if (filter.type) {
-      conditions.push(Prisma.sql`type = ${filter.type}`);
+      conditions.push(Prisma.sql`n.type = ${filter.type}`);
     }
     if (filter.created_after) {
-      conditions.push(Prisma.sql`created_at >= ${filter.created_after}::timestamptz`);
+      conditions.push(Prisma.sql`n.created_at >= ${filter.created_after}::timestamptz`);
     }
     if (filter.created_before) {
-      conditions.push(Prisma.sql`created_at <= ${filter.created_before}::timestamptz`);
+      conditions.push(Prisma.sql`n.created_at <= ${filter.created_before}::timestamptz`);
+    }
+    if (filter.domain) {
+      conditions.push(Prisma.sql`ot.domain = ${filter.domain}`);
     }
 
     const where = Prisma.join(conditions, ' AND ');
+    const needsJoin = !!filter.domain;
+
+    const fromClause = needsJoin
+      ? Prisma.sql`ontology.nodes n JOIN ontology.object_types ot ON n.type = ot.code`
+      : Prisma.sql`ontology.nodes n`;
 
     const nodes = await this.prisma.$queryRaw<OntologyNode[]>`
-      SELECT id, user_id, type, title, properties, source_ref, created_at, updated_at
-      FROM ontology.nodes
+      SELECT n.id, n.user_id, n.type, n.title, n.properties, n.source_ref, n.created_at, n.updated_at
+      FROM ${fromClause}
       WHERE ${where}
-      ORDER BY created_at DESC
+      ORDER BY n.created_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
 
     const countResult = await this.prisma.$queryRaw<[{ count: bigint }]>`
-      SELECT count(*) FROM ontology.nodes WHERE ${where}
+      SELECT count(*) FROM ${fromClause} WHERE ${where}
     `;
     const total = Number(countResult[0]?.count ?? 0);
 
@@ -215,6 +231,27 @@ class OntologyManager {
     const weight = input.weight ?? 1.0;
     const props = input.properties ?? {};
 
+    // Cross-domain validation: prevent edges between service and system nodes
+    const domainCheck = await this.prisma.$queryRaw<{ source_domain: string; target_domain: string }[]>`
+      SELECT
+        (SELECT ot.domain FROM ontology.object_types ot WHERE ot.code = s.type) AS source_domain,
+        (SELECT ot.domain FROM ontology.object_types ot WHERE ot.code = t.type) AS target_domain
+      FROM ontology.nodes s, ontology.nodes t
+      WHERE s.id = ${input.source_id}::uuid AND s.user_id = ${userId}::uuid
+        AND t.id = ${input.target_id}::uuid AND t.user_id = ${userId}::uuid
+    `;
+
+    if (domainCheck.length > 0) {
+      const { source_domain, target_domain } = domainCheck[0]!;
+      if (
+        source_domain && target_domain &&
+        source_domain !== 'shared' && target_domain !== 'shared' &&
+        source_domain !== target_domain
+      ) {
+        throw new Error('CROSS_DOMAIN_EDGE');
+      }
+    }
+
     const rows = await this.prisma.$queryRaw<OntologyEdge[]>`
       INSERT INTO ontology.edges (user_id, source_id, target_id, relation, weight, properties)
       VALUES (
@@ -231,6 +268,41 @@ class OntologyManager {
     const edge = rows[0]!;
     await this.logAction(userId, 'ADD_EDGE', 'edge', edge.id, null, edge);
     return edge;
+  }
+
+  async listEdges(userId: string, filter: ListEdgesFilter = {}): Promise<{ edges: OntologyEdge[]; total: number }> {
+    const limit = Math.min(filter.limit ?? 200, 1000);
+    const offset = filter.offset ?? 0;
+
+    const conditions: Prisma.Sql[] = [Prisma.sql`e.user_id = ${userId}::uuid`];
+
+    if (filter.relation) {
+      conditions.push(Prisma.sql`e.relation = ${filter.relation}`);
+    }
+
+    if (filter.domain) {
+      conditions.push(Prisma.sql`
+        e.source_id IN (SELECT n.id FROM ontology.nodes n JOIN ontology.object_types ot ON n.type = ot.code WHERE ot.domain = ${filter.domain})
+        AND e.target_id IN (SELECT n.id FROM ontology.nodes n JOIN ontology.object_types ot ON n.type = ot.code WHERE ot.domain = ${filter.domain})
+      `);
+    }
+
+    const where = Prisma.join(conditions, ' AND ');
+
+    const edges = await this.prisma.$queryRaw<OntologyEdge[]>`
+      SELECT e.id, e.user_id, e.source_id, e.target_id, e.relation, e.weight, e.properties, e.created_at
+      FROM ontology.edges e
+      WHERE ${where}
+      ORDER BY e.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+
+    const countResult = await this.prisma.$queryRaw<[{ count: bigint }]>`
+      SELECT count(*) FROM ontology.edges e WHERE ${where}
+    `;
+    const total = Number(countResult[0]?.count ?? 0);
+
+    return { edges, total };
   }
 
   async deleteEdge(userId: string, edgeId: string): Promise<void> {

@@ -563,6 +563,7 @@
     "grid": "Grid",
     "list": "List",
     "listDetail": "List + Detail",
+    "graph": "Knowledge Graph",
     "switchView": "Switch view",
     "noCardSelected": "No card selected",
     "selectCardHint": "Select a card from the list to view details",
@@ -726,5 +727,9 @@
     "updateAvailable": "A new version is available.",
     "reload": "Reload",
     "dismiss": "Dismiss"
+  },
+  "graph": {
+    "empty": "No knowledge nodes yet.",
+    "emptyHint": "Save cards and create mandalas to build your knowledge graph."
   }
 }
