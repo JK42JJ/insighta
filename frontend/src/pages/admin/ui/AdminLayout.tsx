@@ -13,34 +13,17 @@ const NAV_ITEMS = [
   { to: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },
 ] as const;
 
-function AdminBackground() {
-  return (
-    <div aria-hidden="true" className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-      {/* Grain texture only — no color gradients, no animation */}
-      <svg className="absolute inset-0 w-full h-full opacity-[0.3] dark:opacity-[0.15]">
-        <filter id="admin-grain">
-          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
-          <feColorMatrix type="saturate" values="0" />
-        </filter>
-        <rect width="100%" height="100%" filter="url(#admin-grain)" />
-      </svg>
-    </div>
-  );
-}
-
 export function AdminLayout() {
   return (
-    <div className="flex h-screen relative">
-      <AdminBackground />
-
-      {/* Glass Sidebar */}
-      <aside className="w-56 flex flex-col relative z-10 admin-glass-sidebar">
-        <div className="p-4 border-b admin-glass-divider">
+    <div className="flex h-screen bg-background">
+      {/* Sidebar */}
+      <aside className="w-56 border-r border-border bg-card flex flex-col">
+        <div className="p-4 border-b border-border">
           <h1 className="text-lg font-semibold text-foreground">Admin</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Insighta Backoffice</p>
         </div>
 
-        <nav className="flex-1 p-2 space-y-0.5">
+        <nav className="flex-1 p-2 space-y-1">
           {NAV_ITEMS.map(({ to, icon: Icon, label, ...rest }) => (
             <NavLink
               key={to}
@@ -48,7 +31,7 @@ export function AdminLayout() {
               end={'end' in rest}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-200',
+                  'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
                   isActive
                     ? 'bg-primary/10 text-primary font-medium'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground'
@@ -61,10 +44,10 @@ export function AdminLayout() {
           ))}
         </nav>
 
-        <div className="p-2 border-t admin-glass-divider">
+        <div className="p-2 border-t border-border">
           <NavLink
             to="/"
-            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-white/[0.06] hover:text-foreground transition-all duration-200"
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to App
@@ -72,8 +55,8 @@ export function AdminLayout() {
         </div>
       </aside>
 
-      {/* Glass Main Content */}
-      <main className="flex-1 overflow-auto relative z-10">
+      {/* Main Content */}
+      <main className="flex-1 overflow-auto">
         <Outlet />
       </main>
     </div>

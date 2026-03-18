@@ -15,7 +15,7 @@ export function AdminDashboard() {
         <h2 className="text-2xl font-bold mb-6">Dashboard</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-28 admin-glass animate-pulse" />
+            <div key={i} className="h-28 bg-card border border-border rounded-lg animate-pulse" />
           ))}
         </div>
       </div>
@@ -69,7 +69,7 @@ export function AdminDashboard() {
         {cards.map((card) => (
           <div
             key={card.label}
-            className="admin-glass p-4 flex items-start gap-3"
+            className="bg-card border border-border rounded-lg p-4 flex items-start gap-3"
           >
             <div className="p-2 rounded-md bg-primary/10">
               <card.icon className="h-5 w-5 text-primary" />
@@ -86,7 +86,7 @@ export function AdminDashboard() {
       </div>
 
       {/* Tier Distribution */}
-      <div className="admin-glass p-4 mb-8">
+      <div className="bg-card border border-border rounded-lg p-4 mb-8">
         <h3 className="font-semibold mb-3">Tier Distribution</h3>
         <div className="flex gap-6">
           {stats.tiers.map((t) => (
@@ -100,7 +100,7 @@ export function AdminDashboard() {
 
       {/* Recent Signups */}
       {stats.recentSignups.length > 0 && (
-        <div className="admin-glass p-4">
+        <div className="bg-card border border-border rounded-lg p-4">
           <h3 className="font-semibold mb-3">Recent Signups (Last 7 Days)</h3>
           <div className="space-y-1">
             {stats.recentSignups.map((d) => (
