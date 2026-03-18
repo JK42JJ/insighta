@@ -76,7 +76,7 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         COALESCE(s.tier, 'free') as tier,
         COALESCE(s.local_cards_limit, 150) as local_cards_limit,
         COALESCE(s.mandala_limit, 3) as mandala_limit,
-        (SELECT COUNT(*)::int FROM public.local_cards lc WHERE lc.user_id = u.id) as card_count,
+        (SELECT COUNT(*)::int FROM public.user_local_cards lc WHERE lc.user_id = u.id) as card_count,
         (SELECT COUNT(*)::int FROM public.user_mandalas um WHERE um.user_id = u.id) as mandala_count
       FROM auth.users u
       LEFT JOIN public.user_subscriptions s ON s.user_id = u.id
@@ -112,7 +112,7 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         COALESCE(s.tier, 'free') as tier,
         COALESCE(s.local_cards_limit, 150) as local_cards_limit,
         COALESCE(s.mandala_limit, 3) as mandala_limit,
-        (SELECT COUNT(*)::int FROM public.local_cards lc WHERE lc.user_id = u.id) as card_count,
+        (SELECT COUNT(*)::int FROM public.user_local_cards lc WHERE lc.user_id = u.id) as card_count,
         (SELECT COUNT(*)::int FROM public.user_mandalas um WHERE um.user_id = u.id) as mandala_count
       FROM auth.users u
       LEFT JOIN public.user_subscriptions s ON s.user_id = u.id
