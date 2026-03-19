@@ -217,9 +217,9 @@ export function InsightCardItem({
             </div>
           </div>
 
-          {/* Enriching spinner (bottom-left) */}
+          {/* Enriching spinner (bottom-left, inside front face) */}
           {isEnriching && (
-            <div className="absolute bottom-2 left-2 z-10">
+            <div className="absolute bottom-2 left-2 z-[5] pointer-events-none">
               <div className="flex items-center gap-1 bg-blue-500/90 text-white text-[10px] px-1.5 py-0.5 rounded-full">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 <span>AI</span>
