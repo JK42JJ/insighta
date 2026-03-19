@@ -157,8 +157,7 @@ export function MemoEditor({
   const handleImmediateSave = useCallback(() => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     onSave(cardId, note);
-    toast.success(t('videoPlayer.noteSaved'));
-  }, [cardId, note, onSave, t]);
+  }, [cardId, note, onSave]);
 
   // Insert text at cursor position (or at end)
   const insertTextAtCursor = useCallback(
