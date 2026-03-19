@@ -31,6 +31,7 @@ import {
   useDndSensors,
   DragOverlayContent,
   snapToCursor,
+  pointerWithinThenClosest,
   type DragData,
   type DropData,
 } from '@/shared/lib/dnd';
@@ -484,6 +485,7 @@ function AuthenticatedApp() {
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={pointerWithinThenClosest}
       accessibility={{ announcements }}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}

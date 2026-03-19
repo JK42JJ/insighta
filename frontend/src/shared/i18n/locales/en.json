@@ -454,6 +454,8 @@
     "cardSavedDesc": "Card and memo have been saved.",
     "saveFailedCardNotFound": "Card not found.",
     "memoSaveFailed": "Failed to save memo.",
+    "cardUpdated": "Card updated",
+    "cardUpdatedDesc": "This URL already existed. Card position updated.",
     "orderChanged": "Order changed",
     "orderChangedDesc": "Card order has been updated.",
     "deleted": "Deleted",
