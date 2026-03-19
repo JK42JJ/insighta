@@ -402,6 +402,7 @@ export const MandalaGrid = memo(function MandalaGrid({
             style={{
               backfaceVisibility: 'hidden',
               transform: 'rotateY(180deg)',
+              pointerEvents: isFlipped ? 'auto' : 'none',
             }}
           >
             <MandalaDashboard

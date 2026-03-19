@@ -1,6 +1,7 @@
 export { useDndSensors } from './sensors';
 export { DragOverlayContent } from './DragOverlayContent';
 export { snapToCursor } from './modifiers';
+export { pointerWithinThenClosest } from './collisionDetection';
 export {
   type DragData,
   type DropData,
