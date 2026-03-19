@@ -1,0 +1,24 @@
+/**
+ * LLM Provider Interfaces
+ *
+ * Abstraction layer for embedding and generation providers.
+ * Supports Gemini (cloud) and Ollama (local) backends.
+ * Issue: #251 (MA-2: GraphDB Service Layer)
+ */
+
+export interface EmbeddingProvider {
+  embed(text: string): Promise<number[]>;
+  readonly dimension: number;
+  readonly name: string;
+}
+
+export interface GenerateOptions {
+  temperature?: number;
+  maxTokens?: number;
+  format?: 'json' | 'text';
+}
+
+export interface GenerationProvider {
+  generate(prompt: string, options?: GenerateOptions): Promise<string>;
+  readonly name: string;
+}

@@ -199,15 +199,17 @@ export function useUpdateSyncSettings() {
     mutationFn: async ({
       syncInterval,
       autoSyncEnabled,
+      autoSummaryEnabled,
     }: {
       syncInterval?: SyncInterval;
       autoSyncEnabled?: boolean;
+      autoSummaryEnabled?: boolean;
     }): Promise<void> => {
       const headers = await getAuthHeaders();
       const response = await fetch(ytSyncUrl('update-settings'), {
         method: 'POST',
         headers,
-        body: JSON.stringify({ syncInterval, autoSyncEnabled }),
+        body: JSON.stringify({ syncInterval, autoSyncEnabled, autoSummaryEnabled }),
       });
 
       if (!response.ok) {

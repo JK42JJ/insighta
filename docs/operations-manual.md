@@ -2,7 +2,7 @@
 
 **Project**: Insighta
 **Domain**: https://insighta.one
-**Last Updated**: 2026-03-15
+**Last Updated**: 2026-03-19
 
 ---
 
@@ -991,6 +991,87 @@ This cost is only justified when the application generates revenue or serves a u
 - ArgoCD installed and connected to the repository
 - Secrets managed via AWS Secrets Manager or External Secrets Operator
 - Existing CI/CD pipelines produce OCI-compliant images (already true)
+
+### Phase 4: Local LLM Service Layer (MA-2)
+
+**Goal**: GraphDB-powered AI services (chatbot, summarization, reports) with local/cloud LLM fallback.
+
+**Added**: 2026-03-19 (Research #250)
+
+**Components:**
+
+| Component | Technology | Status |
+|-----------|-----------|--------|
+| Embedding (local) | Ollama + nomic-embed-text (768d) | Available |
+| Embedding (cloud) | Gemini gemini-embedding-001 (768d) | In use |
+| Generation (cloud) | Gemini gemini-2.0-flash | In use |
+| Generation (local) | Ollama + qwen3.5:9b | Available (limited) |
+| Intent Router | FunctionGemma 270M-it (288MB) | Downloaded |
+
+**Ollama Management:**
+
+```bash
+# Start Ollama (macOS — runs as background service)
+ollama serve
+
+# Check status
+curl -s http://localhost:11434/api/tags | jq '.models[].name'
+
+# Available models
+ollama list
+
+# Pull new model
+ollama pull nomic-embed-text
+ollama pull qwen3.5:9b
+
+# Test embedding
+curl -s http://localhost:11434/api/embed \
+  -d '{"model":"nomic-embed-text","input":"test text"}' | jq '.embeddings[0] | length'
+
+# Test generation
+curl -s http://localhost:11434/api/generate \
+  -d '{"model":"qwen3.5:9b","prompt":"hello","stream":false}' | jq '.response'
+```
+
+**Environment Variables (planned, #251):**
+
+```bash
+# .env
+OLLAMA_URL=http://localhost:11434
+OLLAMA_EMBED_MODEL=nomic-embed-text
+OLLAMA_GENERATE_MODEL=qwen3.5:9b
+LLM_PROVIDER=auto  # auto | gemini | ollama
+```
+
+**FunctionGemma (planned, #255):**
+
+```bash
+# Model location
+ls ~/cursor/functiongemma/functiongemma-270m-it/model.safetensors  # 536MB
+
+# Inference server (when implemented)
+cd ~/cursor/functiongemma/services/api/
+python main.py  # FastAPI on port 8000
+```
+
+**Known Limitations:**
+- qwen3.5:9b returns empty response on prompts >500 chars
+- qwen3.5:9b latency: 8-42s per request (Apple Silicon, no GPU)
+- nomic-embed-text has poor semantic clustering vs Gemini (spread 0.00 vs 0.34)
+- Cannot mix embedding providers in same pgvector table — re-embed required on switch
+- Ollama not available on EC2 (t2.micro, no GPU) — local dev only for now
+
+**Roadmap:**
+
+| Story | Issue | Priority | Depends On |
+|-------|-------|----------|-----------|
+| LLM Provider Abstraction | #251 | P1 | — |
+| Context Builder | #252 | P1 | — |
+| GraphRAG Chatbot MVP | #253 | P1 | #251, #252 |
+| Weekly Summary Report | #254 | P1 | #251, #252 |
+| FunctionGemma Router | #255 | P2 | #251, #253, #254 |
+
+→ [Benchmark details: docs/research/local-llm-integration.md]
 
 ---
 

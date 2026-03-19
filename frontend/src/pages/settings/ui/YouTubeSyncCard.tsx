@@ -36,6 +36,7 @@ export function YouTubeSyncCard() {
 
   const syncInterval = (youtubeAuth.syncInterval as SyncInterval) || 'manual';
   const autoSyncEnabled = youtubeAuth.autoSyncEnabled;
+  const autoSummaryEnabled = youtubeAuth.autoSummaryEnabled;
   const playlists = ytSync.playlists;
   const isLoading = ytSync.isLoading;
   const isAdding = ytSync.isAdding;
@@ -159,6 +160,18 @@ export function YouTubeSyncCard() {
   const handleAutoSyncToggle = async (checked: boolean) => {
     try {
       await updateSettings.mutateAsync({ autoSyncEnabled: checked });
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : t('youtube.settingsUpdateFailed'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleAutoSummaryToggle = async (checked: boolean) => {
+    try {
+      await updateSettings.mutateAsync({ autoSummaryEnabled: checked });
     } catch (error) {
       toast({
         title: t('common.error'),
@@ -373,6 +386,20 @@ export function YouTubeSyncCard() {
                   id="auto-sync"
                   checked={autoSyncEnabled}
                   onCheckedChange={handleAutoSyncToggle}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="auto-summary" className="text-sm font-normal">
+                    {t('youtube.autoSummary')}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">{t('youtube.autoSummaryDesc')}</p>
+                </div>
+                <Switch
+                  id="auto-summary"
+                  checked={autoSummaryEnabled}
+                  onCheckedChange={handleAutoSummaryToggle}
                 />
               </div>
             </div>
