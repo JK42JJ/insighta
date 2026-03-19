@@ -10,7 +10,11 @@
  * may be returned to the client for local caching only.
  */
 
-import { fetchTranscript } from 'youtube-transcript';
+// Dynamic import: youtube-transcript is ESM-only, CJS require() fails in production
+async function loadFetchTranscript() {
+  const mod = await import('youtube-transcript');
+  return mod.fetchTranscript;
+}
 import { execFile } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
@@ -83,7 +87,7 @@ export class CaptionExtractor {
 
         // Primary: youtube-transcript
         try {
-          const transcript = await fetchTranscript(youtubeId, { lang });
+          const transcript = await (await loadFetchTranscript())(youtubeId, { lang });
           if (transcript && transcript.length > 0) {
             segments = transcript.map((item) => ({
               text: item.text,
@@ -214,7 +218,7 @@ export class CaptionExtractor {
 
       for (const lang of commonLanguages) {
         try {
-          const result = await fetchTranscript(videoId, { lang });
+          const result = await (await loadFetchTranscript())(videoId, { lang });
           if (result && result.length > 0) {
             available.push(lang);
           }
