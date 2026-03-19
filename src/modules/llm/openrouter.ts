@@ -14,6 +14,7 @@ const DEFAULT_MAX_TOKENS = 1024;
 
 export class OpenRouterGenerationProvider implements GenerationProvider {
   readonly name = 'openrouter';
+  get model(): string { return `openrouter/${config.openrouter.model}`; }
 
   async generate(prompt: string, options?: GenerateOptions): Promise<string> {
     const apiKey = config.openrouter.apiKey;
