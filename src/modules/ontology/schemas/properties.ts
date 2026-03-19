@@ -18,6 +18,7 @@ export const RESOURCE_PROPERTIES = z.object({
   summary_created_at: z.string().optional(),
   summary_rating: z.union([z.literal(1), z.literal(-1)]).nullable().optional(),
   summary_rated_at: z.string().optional(),
+  summary_dismissed: z.boolean().optional(),
 });
 
 export const INSIGHT_PROPERTIES = z.object({

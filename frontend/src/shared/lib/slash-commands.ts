@@ -11,6 +11,7 @@ export const SLASH_COMMAND_REGISTRY: SlashCommand[] = [
   { id: 'timestamp', icon: '⏱', labelKey: 'videoPlayer.insertTimestamp', enabled: true, requiresPlayer: true, category: 'media' },
   { id: 'capture', icon: '📸', labelKey: 'videoPlayer.insertCapture', enabled: true, requiresPlayer: true, category: 'media' },
   { id: 'link', icon: '🔗', labelKey: 'videoPlayer.insertLink', enabled: false, requiresPlayer: false, category: 'content' },
+  { id: 'ai-summary', icon: '🤖', labelKey: 'videoPlayer.aiSummary', enabled: true, requiresPlayer: false, category: 'ai' },
   { id: 'insight', icon: '💡', labelKey: 'videoPlayer.insertInsight', enabled: false, requiresPlayer: false, category: 'ai' },
 ];
 

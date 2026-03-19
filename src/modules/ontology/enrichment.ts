@@ -420,7 +420,8 @@ export async function enrichResourceNode(
 export async function enrichBySourceRef(
   userId: string,
   sourceTable: string,
-  sourceId: string
+  sourceId: string,
+  options?: { force?: boolean }
 ): Promise<EnrichResult | null> {
   const prisma = getPrismaClient();
 
@@ -470,7 +471,26 @@ export async function enrichBySourceRef(
     return null;
   }
 
-  return enrichResourceNode(nodes[0]!.id, userId);
+  const nodeId = nodes[0]!.id;
+
+  // Check summary_dismissed flag (skip auto-enrich, allow manual re-generation)
+  if (!options?.force) {
+    const nodeData = await prisma.$queryRaw<{ properties: Record<string, unknown> }[]>`
+      SELECT properties FROM ontology.nodes WHERE id = ${nodeId}::uuid AND user_id = ${userId}::uuid
+    `;
+    if (nodeData[0]?.properties?.['summary_dismissed'] === true) {
+      return null;
+    }
+  } else {
+    // Manual re-generation: clear dismissed flag
+    await prisma.$executeRaw`
+      UPDATE ontology.nodes
+      SET properties = properties - 'summary_dismissed', updated_at = now()
+      WHERE id = ${nodeId}::uuid AND user_id = ${userId}::uuid
+    `;
+  }
+
+  return enrichResourceNode(nodeId, userId);
 }
 
 // ============================================================================

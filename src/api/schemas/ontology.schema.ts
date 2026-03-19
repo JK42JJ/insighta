@@ -102,6 +102,7 @@ export const BatchEnrichBodySchema = z.object({
 export const AutoEnrichBodySchema = z.object({
   source_table: z.string().min(1),
   source_id: z.string().min(1),
+  force: z.boolean().optional(),
 });
 
 export const RateSummaryBodySchema = z.object({

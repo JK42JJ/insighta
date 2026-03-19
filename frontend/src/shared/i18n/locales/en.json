@@ -330,6 +330,10 @@
     "insertTimestamp": "Timestamp",
     "insertCapture": "Screen Capture",
     "insertLink": "Link",
+    "aiSummary": "AI Summary",
+    "aiSummaryGenerating": "Generating AI summary...",
+    "aiSummarySuccess": "AI summary generated",
+    "aiSummaryFailed": "Failed to generate AI summary",
     "insertInsight": "Insight",
     "comingSoon": "Soon",
     "pastePlaceholder": "Copy and paste important content from the original page.\n\nMy Insights:\n- Key takeaways\n- Action items\n- Ideas to reference\n\n(Ctrl+Enter to save)"
