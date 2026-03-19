@@ -25,6 +25,7 @@ interface CardListProps {
   onCardsReorder?: (reorderedCards: InsightCard[]) => void;
   onDeleteCards?: (cardIds: string[]) => void;
   onSelectionChange?: (selectedIds: string[]) => void;
+  enrichingCardIds?: Set<string>;
 }
 
 // Wrapper to make each card slot a droppable for reorder
@@ -57,7 +58,7 @@ function CardSlot({
   );
 }
 
-export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectionChange }: CardListProps) {
+export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectionChange, enrichingCardIds }: CardListProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data: summaryRatings } = useSummaryRatings();
@@ -256,6 +257,7 @@ export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectio
                 disableFlip={isDragSelecting}
                 summaryRating={summaryRatings?.[card.id] as SummaryRating | undefined}
                 onRate={handleRate}
+                isEnriching={enrichingCardIds?.has(card.id)}
               />
             </CardSlot>
           );
