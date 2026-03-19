@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { createErrorResponse, ErrorCode } from '../schemas/common.schema';
+import { DEFAULT_TIER, getRateLimitMax, type Tier } from '@/config/quota';
 
 /**
  * Rate Limit Plugin Configuration
@@ -22,10 +23,13 @@ import { createErrorResponse, ErrorCode } from '../schemas/common.schema';
 
 /**
  * Rate limit configurations for different endpoint categories
+ *
+ * Global max is now per-tier (see TIER_RATE_LIMITS in quota.ts).
+ * The value below is the fallback for unauthenticated / unknown-tier requests.
  */
 export const RATE_LIMIT_CONFIG = {
   global: {
-    max: parseInt(process.env['RATE_LIMIT_MAX'] || '100', 10),
+    max: getRateLimitMax(DEFAULT_TIER),
     timeWindow: process.env['RATE_LIMIT_WINDOW'] || '1 minute',
   },
   auth: {
@@ -55,7 +59,14 @@ export const RATE_LIMIT_CONFIG = {
 export async function registerRateLimit(fastify: FastifyInstance) {
   await fastify.register(rateLimit, {
     global: true,
-    max: RATE_LIMIT_CONFIG.global.max,
+    // Per-tier dynamic max: reads user tier from request context
+    max: (request, _key) => {
+      const user = request.user as { userId?: string; tier?: string } | undefined;
+      const tier = (user?.tier ?? DEFAULT_TIER) as Tier;
+      const tierMax = getRateLimitMax(tier);
+      // tierMax === 0 means unlimited → use a very high number
+      return tierMax === 0 ? 100_000 : tierMax;
+    },
     timeWindow: RATE_LIMIT_CONFIG.global.timeWindow,
     cache: 10000, // Cache size for tracking IPs
     allowList: (process.env['RATE_LIMIT_WHITELIST'] || '').split(',').filter(Boolean),

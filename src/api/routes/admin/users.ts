@@ -8,6 +8,7 @@ import {
   ErrorCode,
   PaginationQuerySchema,
 } from '../../schemas/common.schema';
+import { DEFAULT_TIER, TIER_LIMITS } from '@/config/quota';
 
 const UserListQuerySchema = PaginationQuerySchema.extend({
   search: z.string().optional(),
@@ -73,9 +74,9 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         u.last_sign_in_at,
         u.is_super_admin,
         u.banned_until,
-        COALESCE(s.tier, 'free') as tier,
-        COALESCE(s.local_cards_limit, 150) as local_cards_limit,
-        COALESCE(s.mandala_limit, 3) as mandala_limit,
+        COALESCE(s.tier, '${DEFAULT_TIER}') as tier,
+        COALESCE(s.local_cards_limit, ${TIER_LIMITS.free.cards}) as local_cards_limit,
+        COALESCE(s.mandala_limit, ${TIER_LIMITS.free.mandalas}) as mandala_limit,
         (SELECT COUNT(*)::int FROM public.user_local_cards lc WHERE lc.user_id = u.id) as card_count,
         (SELECT COUNT(*)::int FROM public.user_mandalas um WHERE um.user_id = u.id) as mandala_count
       FROM auth.users u
@@ -109,9 +110,9 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         u.last_sign_in_at,
         u.is_super_admin,
         u.banned_until,
-        COALESCE(s.tier, 'free') as tier,
-        COALESCE(s.local_cards_limit, 150) as local_cards_limit,
-        COALESCE(s.mandala_limit, 3) as mandala_limit,
+        COALESCE(s.tier, '${DEFAULT_TIER}') as tier,
+        COALESCE(s.local_cards_limit, ${TIER_LIMITS.free.cards}) as local_cards_limit,
+        COALESCE(s.mandala_limit, ${TIER_LIMITS.free.mandalas}) as mandala_limit,
         (SELECT COUNT(*)::int FROM public.user_local_cards lc WHERE lc.user_id = u.id) as card_count,
         (SELECT COUNT(*)::int FROM public.user_mandalas um WHERE um.user_id = u.id) as mandala_count
       FROM auth.users u
