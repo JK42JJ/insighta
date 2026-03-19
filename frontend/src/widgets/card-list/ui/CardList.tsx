@@ -11,6 +11,8 @@ import { CardSkeleton } from './CardSkeleton';
 import { useQueryClient } from '@tanstack/react-query';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import type { LocalCardsResponse } from '@/entities/card/model/local-cards';
+import { useSummaryRatings, useRateSummary } from '@/features/card-management/model/useSummaryRating';
+import type { SummaryRating } from '@/features/card-management/model/useSummaryRating';
 
 interface CardListProps {
   cards: InsightCard[];
@@ -58,6 +60,15 @@ function CardSlot({
 export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectionChange }: CardListProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { data: summaryRatings } = useSummaryRatings();
+  const rateSummary = useRateSummary();
+
+  const handleRate = useCallback(
+    (cardId: string, rating: SummaryRating) => {
+      rateSummary.mutate({ cardId, rating });
+    },
+    [rateSummary]
+  );
   const cachedCardCount = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list())?.cards.length;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -243,6 +254,8 @@ export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectio
                 isDraggable={true}
                 selectedCardIds={selectedCardIds.size > 0 ? selectedCardIds : undefined}
                 disableFlip={isDragSelecting}
+                summaryRating={summaryRatings?.[card.id] as SummaryRating | undefined}
+                onRate={handleRate}
               />
             </CardSlot>
           );
