@@ -9,6 +9,7 @@ import { CompactNotePreview } from '@/shared/ui/CompactNotePreview';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import { upgradeYouTubeThumbnail, handleThumbnailError } from '@/shared/lib/image-utils';
+import type { SummaryRating } from '@/features/card-management/model/useSummaryRating';
 
 interface InsightCardItemProps {
   card: InsightCard;
@@ -19,6 +20,8 @@ interface InsightCardItemProps {
   selectedCardIds?: Set<string>;
   disableFlip?: boolean;
   className?: string;
+  summaryRating?: SummaryRating;
+  onRate?: (cardId: string, rating: SummaryRating) => void;
 }
 
 export function InsightCardItem({
@@ -30,6 +33,8 @@ export function InsightCardItem({
   selectedCardIds,
   disableFlip = false,
   className,
+  summaryRating,
+  onRate,
 }: InsightCardItemProps) {
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
@@ -182,7 +187,13 @@ export function InsightCardItem({
                       className="w-3 h-3 mt-0.5 shrink-0 text-primary/60"
                       aria-hidden="true"
                     />
-                    <CompactNotePreview note={card.userNote} maxLines={3} />
+                    <CompactNotePreview
+                      note={card.userNote}
+                      maxLines={3}
+                      cardId={card.id}
+                      summaryRating={summaryRating}
+                      onRate={onRate}
+                    />
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground/50 italic">
@@ -215,7 +226,12 @@ export function InsightCardItem({
                 placeholder={t('cards.addNote')}
               />
             ) : card.userNote ? (
-              <CompactNotePreview note={card.userNote} />
+              <CompactNotePreview
+                note={card.userNote}
+                cardId={card.id}
+                summaryRating={summaryRating}
+                onRate={onRate}
+              />
             ) : (
               <p className="text-xs text-muted-foreground/50 italic">
                 {t('cards.doubleClickToNote')}

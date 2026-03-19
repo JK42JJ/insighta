@@ -11,7 +11,13 @@ export const RESOURCE_PROPERTIES = z.object({
   thumbnail: z.string().optional(),
   user_note: z.string().optional(),
   summary: z.string().optional(),
+  summary_en: z.string().optional(),
+  summary_ko: z.string().optional(),
   summary_tags: z.array(z.string()).optional(),
+  summary_model: z.string().optional(),
+  summary_created_at: z.string().optional(),
+  summary_rating: z.union([z.literal(1), z.literal(-1)]).nullable().optional(),
+  summary_rated_at: z.string().optional(),
 });
 
 export const INSIGHT_PROPERTIES = z.object({

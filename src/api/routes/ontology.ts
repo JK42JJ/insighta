@@ -1,5 +1,6 @@
 import { FastifyPluginCallback } from 'fastify';
 import { getOntologyManager } from '../../modules/ontology';
+import { getPrismaClient } from '../../modules/database/client';
 import { getNeighbors } from '../../modules/ontology/graph';
 import { searchByVector, searchByText } from '../../modules/ontology/search';
 import { generateEmbedding } from '../../modules/ontology/embedding';
@@ -17,6 +18,7 @@ import {
   EnrichBodySchema,
   BatchEnrichBodySchema,
   AutoEnrichBodySchema,
+  RateSummaryBodySchema,
 } from '../schemas/ontology.schema';
 import { enrichResourceNode, batchEnrichResources, enrichBySourceRef } from '../../modules/ontology/enrichment';
 
@@ -343,6 +345,73 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       delayMs: body.delay_ms,
     });
     return reply.send({ status: 'ok', data: result });
+  });
+
+  // ─── Summary Rating ───
+
+  // POST /rate-summary — rate an AI summary by card ID
+  fastify.post('/rate-summary', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const { card_id, rating } = RateSummaryBodySchema.parse(request.body);
+    const prisma = getPrismaClient();
+
+    // Find the resource node linked to this card
+    const nodes = await prisma.$queryRaw<{ id: string; properties: Record<string, unknown> }[]>`
+      SELECT id, properties
+      FROM ontology.nodes
+      WHERE user_id = ${userId}::uuid
+        AND source_ref->>'table' = 'user_local_cards'
+        AND source_ref->>'id' = ${card_id}
+      LIMIT 1
+    `;
+
+    if (nodes.length === 0) {
+      return reply.code(404).send({
+        status: 'error',
+        code: 'NODE_NOT_FOUND',
+        message: 'No ontology node found for this card',
+      });
+    }
+
+    const node = nodes[0]!;
+    const updatedProps = {
+      ...node.properties,
+      summary_rating: rating,
+      summary_rated_at: rating !== null ? new Date().toISOString() : null,
+    };
+
+    await prisma.$executeRaw`
+      UPDATE ontology.nodes
+      SET properties = ${JSON.stringify(updatedProps)}::jsonb, updated_at = now()
+      WHERE id = ${node.id}::uuid AND user_id = ${userId}::uuid
+    `;
+
+    return reply.send({ status: 'ok', data: { node_id: node.id, card_id, rating } });
+  });
+
+  // GET /summary-ratings — get all summary ratings for user's cards
+  fastify.get('/summary-ratings', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const prisma = getPrismaClient();
+    const rows = await prisma.$queryRaw<{ card_id: string; rating: number }[]>`
+      SELECT source_ref->>'id' AS card_id,
+             (properties->>'summary_rating')::int AS rating
+      FROM ontology.nodes
+      WHERE user_id = ${userId}::uuid
+        AND source_ref->>'table' = 'user_local_cards'
+        AND properties->>'summary_rating' IS NOT NULL
+    `;
+
+    const ratings: Record<string, number> = {};
+    for (const row of rows) {
+      ratings[row.card_id] = row.rating;
+    }
+
+    return reply.send({ status: 'ok', data: { ratings } });
   });
 
   // ─── Stats ───
