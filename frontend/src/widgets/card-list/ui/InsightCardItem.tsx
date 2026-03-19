@@ -4,7 +4,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
-import { GripVertical, StickyNote, Play } from 'lucide-react';
+import { GripVertical, StickyNote, Play, Loader2 } from 'lucide-react';
 import { CompactNotePreview } from '@/shared/ui/CompactNotePreview';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
@@ -23,6 +23,7 @@ interface InsightCardItemProps {
   className?: string;
   summaryRating?: SummaryRating;
   onRate?: (cardId: string, rating: SummaryRating) => void;
+  isEnriching?: boolean;
 }
 
 export function InsightCardItem({
@@ -36,6 +37,7 @@ export function InsightCardItem({
   className,
   summaryRating,
   onRate,
+  isEnriching = false,
 }: InsightCardItemProps) {
   const { t } = useTranslation();
   const cardFlipEnabled = useCardFlipSetting();
@@ -214,6 +216,16 @@ export function InsightCardItem({
               <SourceMetaInfo card={card} view="grid" />
             </div>
           </div>
+
+          {/* Enriching spinner (bottom-left) */}
+          {isEnriching && (
+            <div className="absolute bottom-2 left-2 z-10">
+              <div className="flex items-center gap-1 bg-blue-500/90 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>AI</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* === Back face (note/memo view) === */}
