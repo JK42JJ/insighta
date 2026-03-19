@@ -229,7 +229,11 @@ export function InsightCardItem({
         </div>
 
         {/* === Back face (note/memo view) === */}
-        <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-xl border p-3 flex flex-col">
+        <div className={cn(
+          'absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-xl border p-3 flex flex-col',
+          'pointer-events-none',
+          !shouldDisableFlip && 'group-hover:pointer-events-auto'
+        )}>
           <h4 className="text-xs font-semibold line-clamp-1 mb-1">{card.title}</h4>
           <div className="flex-1 overflow-y-auto" onDoubleClick={handleNoteDoubleClick}>
             {isEditing ? (
