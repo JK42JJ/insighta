@@ -144,12 +144,12 @@ function packChunks(paragraphs: string[], maxSize: number): string[] {
 }
 
 function buildChunkSummaryPrompt(chunk: string): string {
-  return `Summarize in 1 sentence:\n${chunk}`;
+  return `Summarize in 1 sentence. Do NOT start with "This video" or "The video":\n${chunk}`;
 }
 
 function buildMergePrompt(partials: string[], title: string): string {
   const list = partials.map((p) => `- ${p}`).join('\n');
-  return `Video: ${title}\nSummaries:\n${list}\nCombine into JSON: {"summary":"2-3 sentence summary","tags":["keyword1","keyword2"]}\nRespond in English.`;
+  return `Video: ${title}\nSummaries:\n${list}\nCombine into JSON: {"summary":"2-3 sentence summary","tags":["keyword1","keyword2"]}\nRespond in English. Do NOT start summary with "This video" or "The video".`;
 }
 
 const MAX_REDUCE_DEPTH = 5;
@@ -266,7 +266,7 @@ Video title: ${title}
 Transcript: ${truncated}
 
 Respond in JSON: {"summary": "...", "tags": ["...", ...]}
-Important: Respond in English.`;
+Important: Respond in English. Do NOT start summary with "This video" or "The video".`;
 }
 
 export async function enrichResourceNode(
