@@ -53,6 +53,12 @@ const envSchema = z.object({
   // YouTube API Quota
   DAILY_QUOTA_LIMIT: z.coerce.number().default(10000),
   QUOTA_WARNING_THRESHOLD: z.coerce.number().default(9000),
+
+  // LLM Provider
+  OLLAMA_URL: z.string().default('http://localhost:11434'),
+  OLLAMA_EMBED_MODEL: z.string().default('nomic-embed-text'),
+  OLLAMA_GENERATE_MODEL: z.string().default('qwen3.5:9b'),
+  LLM_PROVIDER: z.enum(['gemini', 'ollama', 'auto']).default('auto'),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -135,6 +141,18 @@ export const config = {
   quota: {
     dailyLimit: env.DAILY_QUOTA_LIMIT,
     warningThreshold: env.QUOTA_WARNING_THRESHOLD,
+  },
+
+  // LLM Provider
+  llm: {
+    provider: env.LLM_PROVIDER,
+  },
+
+  // Ollama (local inference)
+  ollama: {
+    url: env.OLLAMA_URL,
+    embedModel: env.OLLAMA_EMBED_MODEL,
+    generateModel: env.OLLAMA_GENERATE_MODEL,
   },
 
   // YouTube API costs (in quota units)

@@ -1,12 +1,20 @@
 /**
  * Caption Extractor
  *
- * Extracts captions/subtitles from YouTube videos
- * Supports multiple languages and automatic caption detection
+ * Extracts captions/subtitles from YouTube videos (in-memory only).
+ * Primary: youtube-transcript npm (Innertube API + web scraping)
+ * Fallback: yt-dlp CLI (requires system install)
+ *
+ * LEGAL: Transcripts are NOT persisted on the server.
+ * Only LLM-generated summaries are stored. Raw transcripts
+ * may be returned to the client for local caching only.
  */
 
-import { getSubtitles } from 'youtube-caption-extractor';
-import { getPrismaClient } from '../database';
+import { fetchTranscript } from 'youtube-transcript';
+import { execFile } from 'node:child_process';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { logger } from '../../utils/logger';
 import type {
   CaptionSegment,
@@ -15,309 +23,217 @@ import type {
   AvailableLanguages,
 } from './types';
 
-/**
- * Caption Extractor Service
- */
-export class CaptionExtractor {
-  private db = getPrismaClient();
+const YT_DLP_TIMEOUT_MS = 30_000;
 
+// --------------------------------------------------------------------------
+// JSON3 parser (for yt-dlp output)
+// --------------------------------------------------------------------------
+
+interface Json3Event {
+  tStartMs?: number;
+  dDurationMs?: number;
+  segs?: { utf8?: string }[];
+}
+
+function parseJson3(body: string): CaptionSegment[] {
+  const data: { events?: Json3Event[] } = JSON.parse(body);
+  if (!data.events) return [];
+
+  const segments: CaptionSegment[] = [];
+  for (const ev of data.events) {
+    if (!ev.segs) continue;
+    const text = ev.segs
+      .map((s) => s.utf8 ?? '')
+      .join('')
+      .trim();
+    if (!text) continue;
+    segments.push({
+      text,
+      start: (ev.tStartMs ?? 0) / 1000,
+      duration: (ev.dDurationMs ?? 0) / 1000,
+    });
+  }
+  return segments;
+}
+
+// --------------------------------------------------------------------------
+// Caption Extractor Service (in-memory only, no DB persistence)
+// --------------------------------------------------------------------------
+
+export class CaptionExtractor {
   /**
-   * Extract captions for a video
+   * Extract captions for a video (in-memory only).
+   * Returns transcript data without persisting to server DB.
    */
   public async extractCaptions(
     youtubeId: string,
     language?: string
   ): Promise<CaptionExtractionResult> {
+    // Language priority: explicit → en → ko → any available
+    const LANG_PRIORITY = language ? [language] : ['en', 'ko'];
+
     try {
-      logger.info('Extracting captions', { videoId: youtubeId, language });
+      let segments: CaptionSegment[] = [];
+      let source = '';
+      let resolvedLang = LANG_PRIORITY[0]!;
 
-      // Get or create video record
-      let video = await this.db.youtube_videos.findUnique({
-        where: { youtube_video_id: youtubeId },
+      // Try each language in priority order
+      for (const lang of LANG_PRIORITY) {
+        logger.info('Extracting captions (in-memory)', { videoId: youtubeId, language: lang });
+
+        // Primary: youtube-transcript
+        try {
+          const transcript = await fetchTranscript(youtubeId, { lang });
+          if (transcript && transcript.length > 0) {
+            segments = transcript.map((item) => ({
+              text: item.text,
+              start: item.offset / 1000,
+              duration: item.duration / 1000,
+            }));
+            source = 'youtube-transcript';
+            resolvedLang = lang;
+            break;
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.warn('youtube-transcript failed', { youtubeId, lang, error: errMsg });
+        }
+
+        // Fallback: yt-dlp CLI
+        try {
+          logger.info('Falling back to yt-dlp', { youtubeId, lang });
+          const dlpSegments = await this.extractWithYtDlp(youtubeId, lang);
+          if (dlpSegments.length > 0) {
+            segments = dlpSegments;
+            source = 'yt-dlp';
+            resolvedLang = lang;
+            break;
+          }
+        } catch (err) {
+          logger.warn('yt-dlp failed', {
+            youtubeId, lang,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      if (segments.length === 0) {
+        throw new Error('No captions found (youtube-transcript + yt-dlp both failed)');
+      }
+
+      logger.info('Captions fetched (in-memory only)', {
+        youtubeId,
+        segments: segments.length,
+        source,
+        language: resolvedLang,
       });
-
-      if (!video) {
-        // Video not in database yet, create a minimal record
-        video = await this.db.youtube_videos.create({
-          data: {
-            youtube_video_id: youtubeId,
-            title: `Video ${youtubeId}`,
-            channel_title: 'Unknown',
-            published_at: new Date(),
-            duration_seconds: 0,
-            thumbnail_url: null,
-          },
-        });
-        logger.info('Created video record', { youtubeId, videoId: video.id });
-      }
-
-      // Check if caption already exists in database
-      const existing = await this.db.video_captions.findUnique({
-        where: {
-          video_id_language: {
-            video_id: video.id,
-            language: language || 'en',
-          },
-        },
-      });
-
-      if (existing) {
-        logger.info('Caption already exists in database', { youtubeId, language });
-        return {
-          success: true,
-          videoId: youtubeId,
-          language: language || 'en',
-          caption: {
-            videoId: youtubeId,
-            language: existing.language,
-            fullText: existing.text,
-            segments: JSON.parse(existing.segments),
-          },
-        };
-      }
-
-      // Fetch captions from YouTube using youtube-caption-extractor
-      const captionOptions = {
-        videoID: youtubeId,
-        lang: language || 'en',
-      };
-      logger.info('Fetching captions from YouTube', { youtubeId, options: captionOptions });
-
-      const captionData = await getSubtitles(captionOptions);
-
-      if (!captionData || captionData.length === 0) {
-        throw new Error('No captions found for this video');
-      }
-
-      logger.info('Captions fetched successfully', { youtubeId, segments: captionData.length });
-
-      // Convert to our format (ensure numeric types for start/duration)
-      const segments: CaptionSegment[] = captionData.map((item: any) => ({
-        text: item.text,
-        start: parseFloat(item.start) || 0, // Convert to number
-        duration: parseFloat(item.dur) || 0, // Convert to number
-      }));
 
       const fullText = segments.map((s) => s.text).join(' ');
-
       const caption: CaptionMetadata = {
         videoId: youtubeId,
-        language: language || 'en',
+        language: resolvedLang,
         fullText,
         segments,
       };
 
-      // Save to database
-      await this.db.video_captions.create({
-        data: {
-          video_id: video.id,
-          language: language || 'en',
-          text: fullText,
-          segments: JSON.stringify(segments),
-        },
-      });
-
-      logger.info('Caption extracted and saved', {
-        youtubeId,
-        videoId: video.id,
-        language: language || 'en',
-        segmentCount: segments.length,
-      });
-
-      return {
-        success: true,
-        videoId: youtubeId,
-        language: language || 'en',
-        caption,
-      };
+      return { success: true, videoId: youtubeId, language: resolvedLang, caption };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error ? error.stack : undefined;
       logger.error('Failed to extract captions', {
         videoId: youtubeId,
-        language,
-        errorMessage,
-        errorStack,
-        error,
-      });
-      return {
-        success: false,
-        videoId: youtubeId,
-        language: language || 'en',
+        language: LANG_PRIORITY.join(','),
         error: errorMessage,
-      };
+      });
+      return { success: false, videoId: youtubeId, language: LANG_PRIORITY[0]!, error: errorMessage };
     }
   }
 
-  /**
-   * Get available caption languages for a video
-   */
+  // --------------------------------------------------------------------------
+  // yt-dlp CLI fallback
+  // --------------------------------------------------------------------------
+
+  private async extractWithYtDlp(
+    videoId: string,
+    language: string
+  ): Promise<CaptionSegment[]> {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ytdlp-'));
+    const outputTemplate = path.join(tmpDir, '%(id)s');
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        execFile(
+          'yt-dlp',
+          [
+            '--write-sub',
+            '--write-auto-sub',
+            '--sub-lang', language,
+            '--sub-format', 'json3',
+            '--skip-download',
+            '-o', outputTemplate,
+            url,
+          ],
+          { timeout: YT_DLP_TIMEOUT_MS },
+          (error) => {
+            if (error) {
+              if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                reject(new Error(
+                  'yt-dlp not found. Install: brew install yt-dlp (macOS) or pip install yt-dlp (Linux)'
+                ));
+              } else {
+                reject(error);
+              }
+            } else {
+              resolve();
+            }
+          }
+        );
+      });
+
+      const files = await fs.readdir(tmpDir);
+      const subFile = files.find((f) => f.endsWith('.json3') && f.includes(videoId));
+      if (!subFile) {
+        throw new Error('yt-dlp produced no subtitle file');
+      }
+
+      const content = await fs.readFile(path.join(tmpDir, subFile), 'utf-8');
+      return parseJson3(content);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Language detection
+  // --------------------------------------------------------------------------
+
   public async getAvailableLanguages(videoId: string): Promise<AvailableLanguages> {
     try {
-      // Note: youtube-caption-extractor doesn't provide a direct way to list languages
-      // We try common languages and see which ones work
       const commonLanguages = ['en', 'ko', 'ja', 'es', 'fr', 'de', 'zh'];
-      const availableLanguages: string[] = [];
+      const available: string[] = [];
 
       for (const lang of commonLanguages) {
         try {
-          const result = await getSubtitles({ videoID: videoId, lang });
+          const result = await fetchTranscript(videoId, { lang });
           if (result && result.length > 0) {
-            availableLanguages.push(lang);
+            available.push(lang);
           }
         } catch {
-          // Language not available, skip
+          // Language not available
         }
       }
 
-      logger.info('Available languages detected', { videoId, languages: availableLanguages });
-
-      return {
-        videoId,
-        languages: availableLanguages,
-      };
+      logger.info('Available languages detected', { videoId, languages: available });
+      return { videoId, languages: available };
     } catch (error) {
       logger.error('Failed to get available languages', { videoId, error });
-      return {
-        videoId,
-        languages: [],
-      };
-    }
-  }
-
-  /**
-   * Get caption from database
-   */
-  public async getCaption(
-    youtubeId: string,
-    language: string = 'en'
-  ): Promise<CaptionMetadata | null> {
-    try {
-      // Find video by YouTube ID
-      const video = await this.db.youtube_videos.findUnique({
-        where: { youtube_video_id: youtubeId },
-      });
-
-      if (!video) {
-        return null;
-      }
-
-      const caption = await this.db.video_captions.findUnique({
-        where: {
-          video_id_language: {
-            video_id: video.id,
-            language,
-          },
-        },
-      });
-
-      if (!caption) {
-        return null;
-      }
-
-      return {
-        videoId: youtubeId,
-        language: caption.language,
-        fullText: caption.text,
-        segments: JSON.parse(caption.segments),
-      };
-    } catch (error) {
-      logger.error('Failed to get caption from database', { videoId: youtubeId, language, error });
-      return null;
-    }
-  }
-
-  /**
-   * Delete caption from database
-   */
-  public async deleteCaption(youtubeId: string, language: string): Promise<boolean> {
-    try {
-      // Find video by YouTube ID
-      const video = await this.db.youtube_videos.findUnique({
-        where: { youtube_video_id: youtubeId },
-      });
-
-      if (!video) {
-        logger.warn('Video not found for caption deletion', { youtubeId });
-        return false;
-      }
-
-      await this.db.video_captions.delete({
-        where: {
-          video_id_language: {
-            video_id: video.id,
-            language,
-          },
-        },
-      });
-
-      logger.info('Caption deleted', { youtubeId, language });
-      return true;
-    } catch (error) {
-      logger.error('Failed to delete caption', { videoId: youtubeId, language, error });
-      return false;
-    }
-  }
-
-  /**
-   * Extract captions for all videos in a playlist
-   */
-  public async extractPlaylistCaptions(
-    playlistId: string,
-    language?: string
-  ): Promise<CaptionExtractionResult[]> {
-    try {
-      logger.info('Extracting captions for playlist', { playlistId, language });
-
-      // Get all videos in playlist
-      const playlistItems = await this.db.youtube_playlist_items.findMany({
-        where: {
-          playlist_id: playlistId,
-          removed_at: null,
-        },
-        include: {
-          youtube_videos: true,
-        },
-        orderBy: {
-          position: 'asc',
-        },
-      });
-
-      const results: CaptionExtractionResult[] = [];
-
-      // Extract captions for each video
-      for (const item of playlistItems) {
-        const result = await this.extractCaptions(item.youtube_videos.youtube_video_id, language);
-        results.push(result);
-
-        // Add a small delay to avoid rate limiting
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-
-      const successCount = results.filter((r) => r.success).length;
-      logger.info('Playlist caption extraction completed', {
-        playlistId,
-        total: results.length,
-        successful: successCount,
-        failed: results.length - successCount,
-      });
-
-      return results;
-    } catch (error) {
-      logger.error('Failed to extract playlist captions', { playlistId, error });
-      throw error;
+      return { videoId, languages: [] };
     }
   }
 }
 
-/**
- * Singleton instance
- */
 let extractorInstance: CaptionExtractor | null = null;
 
-/**
- * Get caption extractor instance
- */
 export function getCaptionExtractor(): CaptionExtractor {
   if (!extractorInstance) {
     extractorInstance = new CaptionExtractor();

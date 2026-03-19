@@ -241,7 +241,9 @@
     "connectFailed": "YouTube 연결 실패",
     "connectError": "YouTube 계정 연결 중 오류가 발생했습니다.",
     "disconnected": "연결 해제됨",
-    "disconnectedDesc": "YouTube 계정 연결이 해제되었습니다."
+    "disconnectedDesc": "YouTube 계정 연결이 해제되었습니다.",
+    "autoSummary": "AI 요약 자동 삽입",
+    "autoSummaryDesc": "유튜브 영상 추가 시 자막 기반 AI 요약을 메모에 자동 삽입"
   },
   "cards": {
     "noInsights": "아직 저장된 인사이트가 없습니다",

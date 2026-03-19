@@ -12,14 +12,50 @@ interface NotePreviewProps {
   onEditClick: () => void;
 }
 
+const AI_SUMMARY_PREFIX_EN = '🤖 AI Summary:\n';
+const AI_SUMMARY_PREFIX_KO = '🤖 AI 요약:\n';
+
+/**
+ * Filter bilingual AI summary to show only the locale-matching version.
+ */
+function filterNoteByLocale(note: string, locale: string): string {
+  if (!note.includes(AI_SUMMARY_PREFIX_EN) && !note.includes(AI_SUMMARY_PREFIX_KO)) {
+    return note;
+  }
+
+  const lines = note.split('\n');
+  const result: string[] = [];
+  let skipBlock = false;
+  const targetPrefix = locale === 'ko' ? AI_SUMMARY_PREFIX_EN : AI_SUMMARY_PREFIX_KO;
+
+  for (const line of lines) {
+    // Start skipping the non-target language block
+    if (line.startsWith(targetPrefix.trim())) {
+      skipBlock = true;
+      continue;
+    }
+    // End of skipped block: empty line after skipped content
+    if (skipBlock && line.trim() === '') {
+      skipBlock = false;
+      continue;
+    }
+    if (!skipBlock) {
+      result.push(line);
+    }
+  }
+
+  return result.join('\n').trim();
+}
+
 export function NotePreview({
   note,
   playerRef,
   playerReady,
   onEditClick,
 }: NotePreviewProps) {
-  const { t } = useTranslation();
-  const parsedLines = useMemo(() => parseNoteMarkdown(note), [note]);
+  const { t, i18n } = useTranslation();
+  const filteredNote = useMemo(() => filterNoteByLocale(note, i18n.language), [note, i18n.language]);
+  const parsedLines = useMemo(() => parseNoteMarkdown(filteredNote), [filteredNote]);
 
   const handleTimestampClick = useCallback(
     (url: string, e: React.MouseEvent) => {
@@ -37,7 +73,7 @@ export function NotePreview({
     [playerRef, playerReady]
   );
 
-  if (!note) {
+  if (!filteredNote) {
     return (
       <div className="text-sm h-full cursor-text py-1" onClick={onEditClick}>
         <span className="text-muted-foreground/60 text-xs">

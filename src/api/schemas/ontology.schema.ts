@@ -82,6 +82,28 @@ export const TextSearchQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+export const SemanticSearchBodySchema = z.object({
+  query: z.string().min(1).max(2000),
+  limit: z.number().int().min(1).max(50).default(10),
+  threshold: z.number().min(0).max(1).default(0.3),
+  type_filter: z.string().optional(),
+  domain: DomainEnum.optional(),
+});
+
+export const EnrichBodySchema = z.object({
+  node_id: z.string().uuid(),
+});
+
+export const BatchEnrichBodySchema = z.object({
+  limit: z.number().int().min(0).max(500).default(10),
+  delay_ms: z.number().int().min(0).max(10000).default(2000),
+});
+
+export const AutoEnrichBodySchema = z.object({
+  source_table: z.string().min(1),
+  source_id: z.string().min(1),
+});
+
 // -- Type exports --
 
 export type ListNodesQuery = z.infer<typeof ListNodesQuerySchema>;
@@ -91,3 +113,4 @@ export type CreateEdgeBody = z.infer<typeof CreateEdgeBodySchema>;
 export type VectorSearchBody = z.infer<typeof VectorSearchBodySchema>;
 export type ListEdgesQuery = z.infer<typeof ListEdgesQuerySchema>;
 export type TextSearchQuery = z.infer<typeof TextSearchQuerySchema>;
+export type SemanticSearchBody = z.infer<typeof SemanticSearchBodySchema>;

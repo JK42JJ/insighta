@@ -112,6 +112,23 @@ export function useCardOrchestrator(
   // Batch move
   const batchMoveCards = useBatchMoveCards();
 
+  // Fire-and-forget auto-enrichment for YouTube cards
+  const triggerAutoEnrich = useCallback(
+    async (cardId: string) => {
+      try {
+        const headers = await getAuthHeaders();
+        await fetch('/api/v1/ontology/enrich/auto', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ source_table: 'user_local_cards', source_id: cardId }),
+        });
+      } catch {
+        // non-critical: enrichment failure should not affect card UX
+      }
+    },
+    [],
+  );
+
   // Convert video states to InsightCards
   const syncedCards = useMemo(() => {
     if (!allVideoStates) return [];
@@ -439,6 +456,11 @@ export function useCardOrchestrator(
             title: t('index.cardUpdated', 'Card updated'),
             description: t('index.cardUpdatedDesc', 'This URL already existed. Card position updated.'),
           });
+        }
+
+        // Fire-and-forget: trigger AI enrichment for YouTube cards
+        if (linkType === 'youtube' || linkType === 'youtube-shorts') {
+          triggerAutoEnrich(result.id).catch(() => {/* non-critical */});
         }
       } catch (error) {
         setPendingLocalCards((prev) => prev.filter((c) => c.id !== tempCard.id));

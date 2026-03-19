@@ -15,6 +15,7 @@ interface YouTubeAuthStatus {
   expiresAt: string | null;
   syncInterval: string;
   autoSyncEnabled: boolean;
+  autoSummaryEnabled: boolean;
 }
 
 interface AuthUrlResponse {
@@ -222,6 +223,7 @@ export function useYouTubeAuth() {
     expiresAt: status.data?.expiresAt ? new Date(status.data.expiresAt) : null,
     syncInterval: status.data?.syncInterval ?? 'manual',
     autoSyncEnabled: status.data?.autoSyncEnabled ?? false,
+    autoSummaryEnabled: status.data?.autoSummaryEnabled ?? true,
 
     // Loading states
     isLoading: status.isLoading,
