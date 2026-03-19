@@ -381,7 +381,7 @@ Deno.serve(async (req) => {
 
         const { data: settings } = await supabase
           .from('youtube_sync_settings')
-          .select('youtube_access_token, youtube_token_expires_at, sync_interval, auto_sync_enabled')
+          .select('youtube_access_token, youtube_token_expires_at, sync_interval, auto_sync_enabled, auto_summary_enabled')
           .eq('user_id', user.id)
           .single();
 
@@ -397,6 +397,7 @@ Deno.serve(async (req) => {
             expiresAt: settings?.youtube_token_expires_at || null,
             syncInterval: settings?.sync_interval || 'manual',
             autoSyncEnabled: settings?.auto_sync_enabled || false,
+            autoSummaryEnabled: settings?.auto_summary_enabled ?? true,
           }),
           { headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );

@@ -63,15 +63,12 @@ export class SummaryGenerator {
         throw new Error('Gemini API key not configured');
       }
 
-      // Get or extract captions
-      let caption = await this.captionExtractor.getCaption(videoId, language);
-      if (!caption) {
-        const extractResult = await this.captionExtractor.extractCaptions(videoId, language);
-        if (!extractResult.success || !extractResult.caption) {
-          throw new Error(extractResult.error || 'Failed to extract captions');
-        }
-        caption = extractResult.caption;
+      // Extract captions in-memory (not persisted on server — legal compliance)
+      const extractResult = await this.captionExtractor.extractCaptions(videoId, language);
+      if (!extractResult.success || !extractResult.caption) {
+        throw new Error(extractResult.error || 'Failed to extract captions');
       }
+      const caption = extractResult.caption;
 
       // Get video details for context
       const video = await this.db.youtube_videos.findUnique({

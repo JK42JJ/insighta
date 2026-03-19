@@ -29,6 +29,7 @@ import { getYouTubeClient } from '../api';
 import { registerAuthCommands } from './commands/auth';
 import { registerPlaylistCommands } from './commands/playlists';
 import { registerSchedulerCommands } from './commands/scheduler';
+import { registerEnrichCommands } from './commands/enrich';
 
 const program = new Command();
 
@@ -1406,5 +1407,8 @@ registerPlaylistCommands(program);
 
 // Register scheduler commands
 registerSchedulerCommands(program);
+
+// Register enrich commands
+registerEnrichCommands(program);
 
 program.parse();

@@ -10,6 +10,8 @@ export const RESOURCE_PROPERTIES = z.object({
   link_type: z.string().optional(),
   thumbnail: z.string().optional(),
   user_note: z.string().optional(),
+  summary: z.string().optional(),
+  summary_tags: z.array(z.string()).optional(),
 });
 
 export const INSIGHT_PROPERTIES = z.object({
