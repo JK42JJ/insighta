@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { MessageSquare, Timer, Camera } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { Textarea } from '@/shared/ui/textarea';
 import type { YTPlayer } from '../model/youtube-api';
@@ -228,11 +229,15 @@ export function MemoEditor({
     }
   }, [videoId, playerRef, insertTextAtCursor, t]);
 
-  // Trigger AI summary generation for this card
+  // Trigger AI summary generation for this card — inline animation at cursor
+  const GENERATING_PLACEHOLDER = '⏳ Generating AI summary...';
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
   const triggerAiSummary = useCallback(
     async (cleanedNote: string) => {
-      setNote(cleanedNote);
-      toast.loading(t('videoPlayer.aiSummaryGenerating'), { id: 'ai-summary' });
+      // Insert placeholder at cursor position
+      insertTextAtCursor(GENERATING_PLACEHOLDER, cleanedNote);
+      setIsGeneratingSummary(true);
       try {
         const headers = await getAuthHeaders();
         const res = await fetch('/api/v1/ontology/enrich/auto', {
@@ -243,16 +248,21 @@ export function MemoEditor({
         const data = await res.json();
         if (res.ok && data.data?.enriched !== false) {
           toast.success(t('videoPlayer.aiSummarySuccess'), { id: 'ai-summary' });
-          // Refresh cards to pick up new summary in user_note
+          // Remove placeholder — cards refresh will bring the actual summary
+          setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
           queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
         } else {
           toast.error(t('videoPlayer.aiSummaryFailed'), { id: 'ai-summary' });
+          setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
         }
       } catch {
         toast.error(t('videoPlayer.aiSummaryFailed'), { id: 'ai-summary' });
+        setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
+      } finally {
+        setIsGeneratingSummary(false);
       }
     },
-    [cardId, queryClient, t]
+    [cardId, queryClient, t, insertTextAtCursor]
   );
 
   // Handle slash menu selection
@@ -420,10 +430,14 @@ export function MemoEditor({
                   }, 200);
                 }
               }}
+              readOnly={isGeneratingSummary}
               placeholder={t('videoPlayer.notePlaceholder')}
-              className="w-full h-full resize-none border-0 bg-transparent
-                focus-visible:ring-0 focus-visible:ring-offset-0
-                text-sm text-foreground/60 scrollbar-thin min-h-0"
+              className={cn(
+                'w-full h-full resize-none border-0 bg-transparent',
+                'focus-visible:ring-0 focus-visible:ring-offset-0',
+                'text-sm text-foreground/60 scrollbar-thin min-h-0',
+                isGeneratingSummary && 'opacity-70 cursor-wait'
+              )}
               style={{ caretColor: 'hsl(var(--primary))' }}
             />
           ) : (
