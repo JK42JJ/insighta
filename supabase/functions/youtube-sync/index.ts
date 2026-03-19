@@ -583,6 +583,9 @@ Deno.serve(async (req) => {
         if (autoSyncEnabled !== undefined) {
           updates.auto_sync_enabled = autoSyncEnabled;
         }
+        if (body.autoSummaryEnabled !== undefined) {
+          updates.auto_summary_enabled = body.autoSummaryEnabled;
+        }
 
         const { error } = await supabase
           .from('youtube_sync_settings')
@@ -750,6 +753,364 @@ Deno.serve(async (req) => {
           JSON.stringify({ success: true, updatedCount }),
           { headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
+      }
+
+      case 'list-subscriptions': {
+        const accessToken = await getYouTubeAccessToken(supabase, user.id);
+        if (!accessToken) {
+          return new Response(
+            JSON.stringify({ error: 'YouTube account not connected or token expired' }),
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const allSubs: Array<{
+          channelId: string; title: string; description: string;
+          thumbnailUrl: string; subscribedAt: string;
+        }> = [];
+        let pageToken: string | undefined;
+
+        do {
+          const subUrl = new URL(`${YOUTUBE_API_BASE}/subscriptions`);
+          subUrl.searchParams.set('part', 'snippet');
+          subUrl.searchParams.set('mine', 'true');
+          subUrl.searchParams.set('maxResults', '50');
+          if (pageToken) subUrl.searchParams.set('pageToken', pageToken);
+
+          const response = await fetch(subUrl.toString(), {
+            headers: { 'Authorization': `Bearer ${accessToken}` },
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[youtube-sync] subscriptions.list error:', errorText);
+            throw new Error('Failed to fetch subscriptions from YouTube');
+          }
+
+          const data = await response.json();
+          for (const item of data.items || []) {
+            const snippet = item.snippet;
+            allSubs.push({
+              channelId: snippet.resourceId?.channelId || '',
+              title: snippet.title || '',
+              description: snippet.description || '',
+              thumbnailUrl: snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || '',
+              subscribedAt: snippet.publishedAt || new Date().toISOString(),
+            });
+          }
+          pageToken = data.nextPageToken;
+        } while (pageToken);
+
+        // Fetch channel details for subscriber/video counts
+        const channelIds = allSubs.map(s => s.channelId).filter(Boolean);
+        const channelDetailsMap = new Map<string, { subscriberCount: number; videoCount: number; customUrl: string }>();
+
+        for (let i = 0; i < channelIds.length; i += 50) {
+          const batch = channelIds.slice(i, i + 50);
+          const chUrl = new URL(`${YOUTUBE_API_BASE}/channels`);
+          chUrl.searchParams.set('part', 'statistics,snippet');
+          chUrl.searchParams.set('id', batch.join(','));
+
+          const chResp = await fetch(chUrl.toString(), {
+            headers: { 'Authorization': `Bearer ${accessToken}` },
+          });
+
+          if (chResp.ok) {
+            const chData = await chResp.json();
+            for (const ch of chData.items || []) {
+              channelDetailsMap.set(ch.id, {
+                subscriberCount: parseInt(ch.statistics?.subscriberCount || '0', 10),
+                videoCount: parseInt(ch.statistics?.videoCount || '0', 10),
+                customUrl: ch.snippet?.customUrl || '',
+              });
+            }
+          }
+        }
+
+        // Upsert channels into DB
+        let upsertedCount = 0;
+        for (const sub of allSubs) {
+          if (!sub.channelId) continue;
+          const details = channelDetailsMap.get(sub.channelId);
+
+          const { error: chErr } = await supabase
+            .from('youtube_channels')
+            .upsert({
+              user_id: user.id,
+              youtube_channel_id: sub.channelId,
+              title: sub.title,
+              description: sub.description,
+              thumbnail_url: sub.thumbnailUrl,
+              subscriber_count: details?.subscriberCount ?? null,
+              video_count: details?.videoCount ?? null,
+              custom_url: details?.customUrl ?? null,
+              subscribed_at: sub.subscribedAt,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id,youtube_channel_id' });
+
+          if (chErr) {
+            console.error('[youtube-sync] channel upsert error:', chErr);
+          } else {
+            upsertedCount++;
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, totalSubscriptions: allSubs.length, upsertedChannels: upsertedCount }),
+          { headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'sync-subscriptions': {
+        const accessToken = await getYouTubeAccessToken(supabase, user.id);
+        if (!accessToken) {
+          return new Response(
+            JSON.stringify({ error: 'YouTube account not connected or token expired' }),
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Fetch current YouTube subscriptions
+        const currentSubs: string[] = [];
+        let syncPageToken: string | undefined;
+
+        do {
+          const subUrl = new URL(`${YOUTUBE_API_BASE}/subscriptions`);
+          subUrl.searchParams.set('part', 'snippet');
+          subUrl.searchParams.set('mine', 'true');
+          subUrl.searchParams.set('maxResults', '50');
+          if (syncPageToken) subUrl.searchParams.set('pageToken', syncPageToken);
+
+          const response = await fetch(subUrl.toString(), {
+            headers: { 'Authorization': `Bearer ${accessToken}` },
+          });
+
+          if (!response.ok) throw new Error('Failed to fetch subscriptions');
+          const data = await response.json();
+          for (const item of data.items || []) {
+            const channelId = item.snippet?.resourceId?.channelId;
+            if (channelId) currentSubs.push(channelId);
+          }
+          syncPageToken = data.nextPageToken;
+        } while (syncPageToken);
+
+        // Get existing DB channels for this user
+        const { data: dbChannels } = await supabase
+          .from('youtube_channels')
+          .select('id, youtube_channel_id')
+          .eq('user_id', user.id);
+
+        const dbChannelMap = new Map((dbChannels || []).map(c => [c.youtube_channel_id, c.id]));
+        const currentSubSet = new Set(currentSubs);
+
+        // Create subscriptions for channels that exist in DB
+        let added = 0;
+        let deactivated = 0;
+
+        for (const ytChannelId of currentSubs) {
+          const channelDbId = dbChannelMap.get(ytChannelId);
+          if (!channelDbId) continue;
+
+          const { error: subErr } = await supabase
+            .from('youtube_subscriptions')
+            .upsert({
+              user_id: user.id,
+              channel_id: channelDbId,
+              is_active: true,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id,channel_id' });
+
+          if (!subErr) added++;
+        }
+
+        // Deactivate subscriptions for channels no longer subscribed
+        const { data: activeSubs } = await supabase
+          .from('youtube_subscriptions')
+          .select('id, channel_id')
+          .eq('user_id', user.id)
+          .eq('is_active', true);
+
+        for (const sub of activeSubs || []) {
+          const channel = dbChannels?.find(c => c.id === sub.channel_id);
+          if (channel && !currentSubSet.has(channel.youtube_channel_id)) {
+            await supabase
+              .from('youtube_subscriptions')
+              .update({ is_active: false, updated_at: new Date().toISOString() })
+              .eq('id', sub.id);
+            deactivated++;
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, added, deactivated, totalCurrent: currentSubs.length }),
+          { headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'import-watch-history': {
+        const body = await req.json();
+        const { sourceType, data: importData } = body;
+
+        if (!sourceType) {
+          return new Response(
+            JSON.stringify({ error: 'sourceType is required (google_takeout or liked_videos)' }),
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Create import record
+        const { data: importRecord, error: importErr } = await supabase
+          .from('youtube_watch_history_imports')
+          .insert({
+            user_id: user.id,
+            source_type: sourceType,
+            file_name: body.fileName || null,
+            status: 'processing',
+          })
+          .select()
+          .single();
+
+        if (importErr || !importRecord) {
+          console.error('[youtube-sync] import record creation error:', importErr);
+          return new Response(
+            JSON.stringify({ error: 'Failed to create import record' }),
+            { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          );
+        }
+
+        let totalCount = 0;
+        let importedCount = 0;
+        let skippedCount = 0;
+
+        try {
+          if (sourceType === 'google_takeout') {
+            // Parse Takeout JSON array: [{titleUrl, time, header, ...}]
+            const entries = Array.isArray(importData) ? importData : [];
+            totalCount = entries.length;
+
+            for (const entry of entries) {
+              const titleUrl = entry.titleUrl || '';
+              const watchedAt = entry.time || null;
+
+              // Extract video ID from YouTube URL
+              const videoIdMatch = titleUrl.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+              if (!videoIdMatch || !watchedAt) {
+                skippedCount++;
+                continue;
+              }
+
+              const ytVideoId = videoIdMatch[1];
+
+              // Find or skip video in DB
+              const { data: video } = await supabase
+                .from('youtube_videos')
+                .select('id')
+                .eq('youtube_video_id', ytVideoId)
+                .single();
+
+              if (!video) {
+                skippedCount++;
+                continue;
+              }
+
+              // Insert watch history (skip on conflict)
+              const { error: whErr } = await supabase
+                .from('youtube_watch_history')
+                .upsert({
+                  user_id: user.id,
+                  video_id: video.id,
+                  watched_at: watchedAt,
+                  source: 'takeout',
+                  import_id: importRecord.id,
+                }, { onConflict: 'user_id,video_id,watched_at', ignoreDuplicates: true });
+
+              if (whErr) {
+                console.error('[youtube-sync] watch history insert error:', whErr);
+                skippedCount++;
+              } else {
+                importedCount++;
+              }
+            }
+          } else if (sourceType === 'liked_videos') {
+            // Fetch liked videos playlist (special playlist ID "LL")
+            const accessToken = await getYouTubeAccessToken(supabase, user.id);
+            if (!accessToken) {
+              throw new Error('YouTube account not connected or token expired');
+            }
+
+            const likedItems = await fetchPlaylistItems(accessToken, 'LL');
+            totalCount = likedItems.length;
+
+            for (const item of likedItems) {
+              const { data: video } = await supabase
+                .from('youtube_videos')
+                .select('id')
+                .eq('youtube_video_id', item.videoId)
+                .single();
+
+              if (!video) {
+                skippedCount++;
+                continue;
+              }
+
+              const { error: whErr } = await supabase
+                .from('youtube_watch_history')
+                .upsert({
+                  user_id: user.id,
+                  video_id: video.id,
+                  watched_at: new Date().toISOString(),
+                  source: 'liked',
+                  import_id: importRecord.id,
+                }, { onConflict: 'user_id,video_id,watched_at', ignoreDuplicates: true });
+
+              if (whErr) {
+                skippedCount++;
+              } else {
+                importedCount++;
+              }
+            }
+          } else {
+            throw new Error(`Unsupported source type: ${sourceType}`);
+          }
+
+          // Update import record with results
+          await supabase
+            .from('youtube_watch_history_imports')
+            .update({
+              total_count: totalCount,
+              imported_count: importedCount,
+              skipped_count: skippedCount,
+              status: 'completed',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', importRecord.id);
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              importId: importRecord.id,
+              totalCount,
+              importedCount,
+              skippedCount,
+            }),
+            { headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          );
+        } catch (importError) {
+          const errMsg = importError instanceof Error ? importError.message : 'Unknown import error';
+          await supabase
+            .from('youtube_watch_history_imports')
+            .update({
+              total_count: totalCount,
+              imported_count: importedCount,
+              skipped_count: skippedCount,
+              status: 'failed',
+              error_message: errMsg,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', importRecord.id);
+
+          throw importError;
+        }
       }
 
       default:

@@ -241,7 +241,9 @@
     "connectFailed": "YouTube Connection Failed",
     "connectError": "An error occurred while connecting YouTube account.",
     "disconnected": "Disconnected",
-    "disconnectedDesc": "YouTube account has been disconnected."
+    "disconnectedDesc": "YouTube account has been disconnected.",
+    "autoSummary": "Auto AI Summary",
+    "autoSummaryDesc": "Automatically insert AI summary into card memo when adding YouTube videos"
   },
   "cards": {
     "noInsights": "No saved insights yet",

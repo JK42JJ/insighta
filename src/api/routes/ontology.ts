@@ -2,6 +2,7 @@ import { FastifyPluginCallback } from 'fastify';
 import { getOntologyManager } from '../../modules/ontology';
 import { getNeighbors } from '../../modules/ontology/graph';
 import { searchByVector, searchByText } from '../../modules/ontology/search';
+import { generateEmbedding } from '../../modules/ontology/embedding';
 import {
   ListNodesQuerySchema,
   CreateNodeBodySchema,
@@ -12,7 +13,12 @@ import {
   CreateEdgeBodySchema,
   VectorSearchBodySchema,
   TextSearchQuerySchema,
+  SemanticSearchBodySchema,
+  EnrichBodySchema,
+  BatchEnrichBodySchema,
+  AutoEnrichBodySchema,
 } from '../schemas/ontology.schema';
+import { enrichResourceNode, batchEnrichResources, enrichBySourceRef } from '../../modules/ontology/enrichment';
 
 // ============================================================================
 // Ontology Routes — 12 endpoints
@@ -251,6 +257,92 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       domain: query.domain,
     });
     return reply.send({ status: 'ok', data: results });
+  });
+
+  // POST /search/semantic — text query → embed → vector search
+  fastify.post(
+    '/search/semantic',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const body = SemanticSearchBodySchema.parse(request.body);
+      const embedding = await generateEmbedding(body.query);
+      const results = await searchByVector(userId, embedding, {
+        limit: body.limit,
+        threshold: body.threshold,
+        type_filter: body.type_filter,
+        domain: body.domain,
+      });
+      return reply.send({
+        status: 'ok',
+        data: { results, query: body.query, embedding_dimension: embedding.length },
+      });
+    }
+  );
+
+  // ─── Enrichment ───
+
+  // POST /enrich — enrich single resource node with YouTube transcript summary
+  fastify.post('/enrich', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const body = EnrichBodySchema.parse(request.body);
+    try {
+      const result = await enrichResourceNode(body.node_id, userId);
+      return reply.send({ status: 'ok', data: result });
+    } catch (err: any) {
+      if (err.message === 'NODE_NOT_FOUND') {
+        return reply
+          .code(404)
+          .send({ status: 'error', code: 'NODE_NOT_FOUND', message: 'Node not found' });
+      }
+      if (err.message === 'MISSING_URL' || err.message === 'NOT_YOUTUBE_URL') {
+        return reply
+          .code(400)
+          .send({ status: 'error', code: err.message, message: 'Node is not a YouTube resource' });
+      }
+      if (err.message?.startsWith('CAPTION_FAILED')) {
+        return reply
+          .code(422)
+          .send({ status: 'error', code: 'CAPTION_FAILED', message: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // POST /enrich/auto — auto-enrich by source_ref (fire-and-forget from frontend after card add)
+  fastify.post('/enrich/auto', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const body = AutoEnrichBodySchema.parse(request.body);
+    try {
+      const result = await enrichBySourceRef(userId, body.source_table, body.source_id);
+      if (!result) {
+        return reply.send({ status: 'ok', data: { enriched: false, reason: 'node_not_found_or_not_youtube' } });
+      }
+      return reply.send({ status: 'ok', data: result });
+    } catch (err: any) {
+      // Non-fatal for auto-enrich: log and return graceful response
+      const code = err.message?.split(':')[0] || 'ENRICH_FAILED';
+      return reply.send({ status: 'ok', data: { enriched: false, reason: code } });
+    }
+  });
+
+  // POST /enrich/batch — batch enrich YouTube resource nodes without summary (limit=0 for all)
+  fastify.post('/enrich/batch', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const body = BatchEnrichBodySchema.parse(request.body);
+    const result = await batchEnrichResources(userId, {
+      limit: body.limit,
+      delayMs: body.delay_ms,
+    });
+    return reply.send({ status: 'ok', data: result });
   });
 
   // ─── Stats ───
