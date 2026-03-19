@@ -51,6 +51,7 @@ export class GeminiEmbeddingProvider implements EmbeddingProvider {
 
 export class GeminiGenerationProvider implements GenerationProvider {
   readonly name = 'gemini';
+  readonly model = `gemini/${GEMINI_GENERATE_MODEL}`;
 
   async generate(prompt: string, options?: GenerateOptions): Promise<string> {
     const apiKey = getApiKey();

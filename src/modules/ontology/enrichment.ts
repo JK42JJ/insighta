@@ -347,13 +347,15 @@ export async function enrichResourceNode(
 
   logger.info('Bilingual summary generated', { nodeId, en: summaryEn.length, ko: summaryKo.length });
 
-  // 5. Update node properties (bilingual summary + tags)
+  // 5. Update node properties (bilingual summary + tags + provenance)
   const updatedProperties = {
     ...node.properties,
     summary,
     summary_en: summaryEn,
     summary_ko: summaryKo,
     summary_tags: tags,
+    summary_model: generationProvider.model,
+    summary_created_at: new Date().toISOString(),
   };
 
   await prisma.$executeRaw`

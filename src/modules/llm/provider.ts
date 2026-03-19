@@ -21,4 +21,6 @@ export interface GenerateOptions {
 export interface GenerationProvider {
   generate(prompt: string, options?: GenerateOptions): Promise<string>;
   readonly name: string;
+  /** Full model identifier for provenance tracking (e.g., "ollama/qwen3.5:9b") */
+  readonly model: string;
 }
