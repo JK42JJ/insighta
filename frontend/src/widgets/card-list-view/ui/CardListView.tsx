@@ -32,6 +32,7 @@ interface CardListViewProps {
   watchPositionCache?: Map<string, number>;
   panelSizeCache?: Map<string, number>;
   highlightedCardId?: string | null;
+  enrichingCardIds?: Set<string>;
 }
 
 export function CardListView({
@@ -54,6 +55,7 @@ export function CardListView({
   watchPositionCache,
   panelSizeCache,
   highlightedCardId,
+  enrichingCardIds,
 }: CardListViewProps) {
   const { t } = useTranslation();
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
@@ -214,6 +216,7 @@ export function CardListView({
           onCardsReorder={onCardsReorder}
           onDeleteCards={onDeleteCards}
           onSelectionChange={handleSelectionChange}
+          enrichingCardIds={enrichingCardIds}
         />
       </div>
     );

@@ -76,6 +76,8 @@ export interface UseCardOrchestratorReturn {
   swapCardsForReorder: (swappedIndices: { from: number; to: number }, levelId: string) => void;
   // Internal callback ref for modal
   onCardClick: (card: InsightCard) => void;
+  // Enrichment status
+  enrichingCardIds: Set<string>;
 }
 
 /**
@@ -112,9 +114,13 @@ export function useCardOrchestrator(
   // Batch move
   const batchMoveCards = useBatchMoveCards();
 
-  // Fire-and-forget auto-enrichment for YouTube cards
+  // Track cards currently being enriched (for spinner UI)
+  const [enrichingCardIds, setEnrichingCardIds] = useState<Set<string>>(new Set());
+
+  // Auto-enrichment for YouTube cards — tracks enriching state
   const triggerAutoEnrich = useCallback(
     async (cardId: string) => {
+      setEnrichingCardIds((prev) => new Set(prev).add(cardId));
       try {
         const headers = await getAuthHeaders();
         await fetch('/api/v1/ontology/enrich/auto', {
@@ -122,11 +128,19 @@ export function useCardOrchestrator(
           headers,
           body: JSON.stringify({ source_table: 'user_local_cards', source_id: cardId }),
         });
+        // Refresh cards to pick up new AI summary in user_note
+        queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
       } catch {
         // non-critical: enrichment failure should not affect card UX
+      } finally {
+        setEnrichingCardIds((prev) => {
+          const next = new Set(prev);
+          next.delete(cardId);
+          return next;
+        });
       }
     },
-    [],
+    [queryClient],
   );
 
   // Convert video states to InsightCards
@@ -1204,5 +1218,6 @@ export function useCardOrchestrator(
     moveCardsForSubLevel,
     swapCardsForReorder,
     onCardClick: handleCardClick,
+    enrichingCardIds,
   };
 }

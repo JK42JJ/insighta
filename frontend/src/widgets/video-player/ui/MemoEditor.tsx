@@ -3,12 +3,16 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { MessageSquare, Timer, Camera } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { Textarea } from '@/shared/ui/textarea';
 import type { YTPlayer } from '../model/youtube-api';
 import { formatTime } from '../model/youtube-api';
 import { SlashMenu } from '@/shared/ui/SlashMenu';
 import { getCaretCoordinates } from '@/shared/lib/get-caret-coordinates';
+import { getAuthHeaders } from '@/shared/lib/supabase-auth';
+import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
+import { useQueryClient } from '@tanstack/react-query';
 import { NotePreview } from './NotePreview';
 
 const AUTO_SAVE_DELAY_MS = 3_000;
@@ -99,6 +103,7 @@ export function MemoEditor({
   isYouTube,
 }: MemoEditorProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [note, setNote] = useState(initialNote);
   const [isEditing, setIsEditing] = useState(!initialNote);
   const [slashMenu, setSlashMenu] = useState<boolean>(false);
@@ -152,8 +157,7 @@ export function MemoEditor({
   const handleImmediateSave = useCallback(() => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     onSave(cardId, note);
-    toast.success(t('videoPlayer.noteSaved'));
-  }, [cardId, note, onSave, t]);
+  }, [cardId, note, onSave]);
 
   // Insert text at cursor position (or at end)
   const insertTextAtCursor = useCallback(
@@ -224,6 +228,42 @@ export function MemoEditor({
     }
   }, [videoId, playerRef, insertTextAtCursor, t]);
 
+  // Trigger AI summary generation for this card — inline animation at cursor
+  const GENERATING_PLACEHOLDER = '⏳ Generating AI summary...';
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
+  const triggerAiSummary = useCallback(
+    async (cleanedNote: string) => {
+      // Insert placeholder at cursor position
+      insertTextAtCursor(GENERATING_PLACEHOLDER, cleanedNote);
+      setIsGeneratingSummary(true);
+      try {
+        const headers = await getAuthHeaders();
+        const res = await fetch('/api/v1/ontology/enrich/auto', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ source_table: 'user_local_cards', source_id: cardId, force: true }),
+        });
+        const data = await res.json();
+        if (res.ok && data.data?.enriched !== false) {
+          toast.success(t('videoPlayer.aiSummarySuccess'), { id: 'ai-summary' });
+          // Remove placeholder — cards refresh will bring the actual summary
+          setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
+          queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+        } else {
+          toast.error(t('videoPlayer.aiSummaryFailed'), { id: 'ai-summary' });
+          setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
+        }
+      } catch {
+        toast.error(t('videoPlayer.aiSummaryFailed'), { id: 'ai-summary' });
+        setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
+      } finally {
+        setIsGeneratingSummary(false);
+      }
+    },
+    [cardId, queryClient, t, insertTextAtCursor]
+  );
+
   // Handle slash menu selection
   const handleSlashSelect = useCallback(
     (itemId: string) => {
@@ -245,11 +285,13 @@ export function MemoEditor({
         insertTimestamp(cleanedNote);
       } else if (itemId === 'capture') {
         insertCapture(cleanedNote);
+      } else if (itemId === 'ai-summary') {
+        triggerAiSummary(cleanedNote);
       } else {
         setNote(cleanedNote);
       }
     },
-    [note, insertTimestamp, insertCapture]
+    [note, insertTimestamp, insertCapture, triggerAiSummary]
   );
 
   const handleSlashClose = useCallback(() => {
@@ -387,10 +429,14 @@ export function MemoEditor({
                   }, 200);
                 }
               }}
+              readOnly={isGeneratingSummary}
               placeholder={t('videoPlayer.notePlaceholder')}
-              className="w-full h-full resize-none border-0 bg-transparent
-                focus-visible:ring-0 focus-visible:ring-offset-0
-                text-sm text-foreground/60 scrollbar-thin min-h-0"
+              className={cn(
+                'w-full h-full resize-none border-0 bg-transparent',
+                'focus-visible:ring-0 focus-visible:ring-offset-0',
+                'text-sm text-foreground/60 scrollbar-thin min-h-0',
+                isGeneratingSummary && 'opacity-70 cursor-wait'
+              )}
               style={{ caretColor: 'hsl(var(--primary))' }}
             />
           ) : (

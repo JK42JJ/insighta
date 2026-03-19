@@ -12,6 +12,7 @@
 import type { EmbeddingProvider, GenerationProvider } from './provider';
 import { GeminiEmbeddingProvider, GeminiGenerationProvider } from './gemini';
 import { OllamaEmbeddingProvider, OllamaGenerationProvider, isOllamaAvailable } from './ollama';
+import { OpenRouterGenerationProvider } from './openrouter';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 
@@ -78,15 +79,27 @@ export async function createGenerationProvider(): Promise<GenerationProvider> {
     return cachedGenerationProvider;
   }
 
-  // auto: try Ollama first
+  if (provider === 'openrouter') {
+    cachedGenerationProvider = new OpenRouterGenerationProvider();
+    logger.info('Generation provider: OpenRouter (explicit)', { model: config.openrouter.model });
+    return cachedGenerationProvider;
+  }
+
+  // auto: try Ollama first → OpenRouter (if key exists) → Gemini
   if (await isOllamaAvailable()) {
     cachedGenerationProvider = new OllamaGenerationProvider();
     logger.info('Generation provider: Ollama (auto-detected)');
     return cachedGenerationProvider;
   }
 
+  if (config.openrouter.apiKey) {
+    cachedGenerationProvider = new OpenRouterGenerationProvider();
+    logger.info('Generation provider: OpenRouter (Ollama unavailable, fallback)', { model: config.openrouter.model });
+    return cachedGenerationProvider;
+  }
+
   cachedGenerationProvider = new GeminiGenerationProvider();
-  logger.info('Generation provider: Gemini (Ollama unavailable, fallback)');
+  logger.info('Generation provider: Gemini (Ollama+OpenRouter unavailable, fallback)');
   return cachedGenerationProvider;
 }
 

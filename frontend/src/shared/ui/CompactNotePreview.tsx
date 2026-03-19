@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
-import { Play, ExternalLink, Bot } from 'lucide-react';
+import { useMemo, useCallback } from 'react';
+import { Play, ExternalLink, Bot, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { parseNoteMarkdown, type ParsedSegment } from '@/shared/lib/note-markdown';
 import { useTranslation } from 'react-i18next';
+import type { SummaryRating } from '@/features/card-management/model/useSummaryRating';
 
 const AI_SUMMARY_PREFIX_EN = '🤖 AI Summary:\n';
 const AI_SUMMARY_PREFIX_KO = '🤖 AI 요약:\n';
@@ -11,6 +12,12 @@ interface CompactNotePreviewProps {
   note: string;
   maxLines?: number;
   className?: string;
+  /** Card ID for summary rating (optional — enables rating buttons on AI summaries) */
+  cardId?: string;
+  /** Current summary rating */
+  summaryRating?: SummaryRating;
+  /** Callback when user rates the summary */
+  onRate?: (cardId: string, rating: SummaryRating) => void;
 }
 
 function SegmentRenderer({ segment }: { segment: ParsedSegment }) {
@@ -46,8 +53,28 @@ function SegmentRenderer({ segment }: { segment: ParsedSegment }) {
   return <span>{segment.content}</span>;
 }
 
-function AiSummaryPreview({ body, label, maxLines, className }: { body: string; label?: string; maxLines?: number; className?: string }) {
+interface AiSummaryPreviewProps {
+  body: string;
+  label?: string;
+  maxLines?: number;
+  className?: string;
+  cardId?: string;
+  summaryRating?: SummaryRating;
+  onRate?: (cardId: string, rating: SummaryRating) => void;
+}
+
+function AiSummaryPreview({ body, label, maxLines, className, cardId, summaryRating, onRate }: AiSummaryPreviewProps) {
   const parsedLines = useMemo(() => parseNoteMarkdown(body), [body]);
+
+  const handleRate = useCallback(
+    (e: React.MouseEvent, newRating: 1 | -1) => {
+      e.stopPropagation();
+      if (!cardId || !onRate) return;
+      // Toggle: clicking same rating again clears it
+      onRate(cardId, summaryRating === newRating ? null : newRating);
+    },
+    [cardId, summaryRating, onRate]
+  );
 
   const clampClass = maxLines === 1
     ? 'line-clamp-1'
@@ -65,10 +92,38 @@ function AiSummaryPreview({ body, label, maxLines, className }: { body: string; 
         className,
       )}
     >
-      <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400 mb-0.5">
-        <Bot className="w-3 h-3" />
-        {label || 'AI Summary'}
-      </span>
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+          <Bot className="w-3 h-3" />
+          {label || 'AI Summary'}
+        </span>
+        {cardId && onRate && (
+          <span className="inline-flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={(e) => handleRate(e, 1)}
+              className={cn(
+                'p-0.5 rounded hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors',
+                summaryRating === 1 && 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50'
+              )}
+              aria-label="Like summary"
+            >
+              <ThumbsUp className={cn('w-3 h-3', summaryRating === 1 ? 'fill-current' : '')} />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => handleRate(e, -1)}
+              className={cn(
+                'p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors',
+                summaryRating === -1 && 'text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/50'
+              )}
+              aria-label="Dislike summary"
+            >
+              <ThumbsDown className={cn('w-3 h-3', summaryRating === -1 ? 'fill-current' : '')} />
+            </button>
+          </span>
+        )}
+      </div>
       {parsedLines.map((line, lineIdx) =>
         line.segments.length > 0 ? (
           <div key={lineIdx} className="whitespace-pre-wrap">
@@ -117,14 +172,24 @@ function extractLocaleSummary(note: string, locale: string): { body: string; lab
   return null;
 }
 
-export function CompactNotePreview({ note, maxLines, className }: CompactNotePreviewProps) {
+export function CompactNotePreview({ note, maxLines, className, cardId, summaryRating, onRate }: CompactNotePreviewProps) {
   const { i18n } = useTranslation();
   if (!note) return null;
 
   // Detect bilingual or single AI Summary and render locale-appropriate version
   const localeSummary = extractLocaleSummary(note, i18n.language);
   if (localeSummary) {
-    return <AiSummaryPreview body={localeSummary.body} label={localeSummary.label} maxLines={maxLines} className={className} />;
+    return (
+      <AiSummaryPreview
+        body={localeSummary.body}
+        label={localeSummary.label}
+        maxLines={maxLines}
+        className={className}
+        cardId={cardId}
+        summaryRating={summaryRating}
+        onRate={onRate}
+      />
+    );
   }
 
   const parsedLines = parseNoteMarkdown(note);

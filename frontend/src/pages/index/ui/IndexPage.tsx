@@ -600,6 +600,7 @@ function AuthenticatedApp() {
                 onSaveWatchPosition={cards.handleSaveWatchPosition}
                 watchPositionCache={modal.watchPositionCache}
                 panelSizeCache={modal.panelSizeCache}
+                enrichingCardIds={cards.enrichingCardIds}
               />
             </div>
 

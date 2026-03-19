@@ -102,6 +102,12 @@ export const BatchEnrichBodySchema = z.object({
 export const AutoEnrichBodySchema = z.object({
   source_table: z.string().min(1),
   source_id: z.string().min(1),
+  force: z.boolean().optional(),
+});
+
+export const RateSummaryBodySchema = z.object({
+  card_id: z.string().uuid(),
+  rating: z.union([z.literal(1), z.literal(-1)]).nullable(),
 });
 
 // -- Type exports --
