@@ -16,6 +16,8 @@ import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { Button } from '@/shared/ui/button';
 import { SidebarMandalaSection } from './SidebarMandalaSection';
+import { ErrorBoundary } from 'react-error-boundary';
+import { RefreshCw } from 'lucide-react';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -126,13 +128,30 @@ export function Sidebar({
           <div className="h-px bg-sidebar-border" />
         </div>
 
-        {/* Mandala accordion section */}
-        <SidebarMandalaSection
-          collapsed={collapsed}
-          mandalaGridElement={mandalaGridElement}
-          selectedMandalaId={selectedMandalaId}
-          onMandalaSelect={onMandalaSelect}
-        />
+        {/* Mandala accordion section — error boundary prevents sidebar crash */}
+        <ErrorBoundary
+          fallbackRender={({ resetErrorBoundary }) => (
+            <div className="px-2 space-y-0.5">
+              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                Mandalas
+              </div>
+              <button
+                onClick={resetErrorBoundary}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Load failed. Tap to retry.
+              </button>
+            </div>
+          )}
+        >
+          <SidebarMandalaSection
+            collapsed={collapsed}
+            mandalaGridElement={mandalaGridElement}
+            selectedMandalaId={selectedMandalaId}
+            onMandalaSelect={onMandalaSelect}
+          />
+        </ErrorBoundary>
 
         <div className="my-3 mx-2">
           <div className="h-px bg-sidebar-border" />

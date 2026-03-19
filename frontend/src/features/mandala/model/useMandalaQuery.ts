@@ -88,6 +88,16 @@ export function useMandalaList() {
     enabled: isLoggedIn && isTokenReady,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
+    // P0 hardening: mandala list is service-critical — more aggressive retry
+    retry: (failureCount, error) => {
+      // Never retry auth errors beyond 1
+      if (error instanceof Error && 'statusCode' in error && (error as any).statusCode === 401) {
+        return failureCount < 1;
+      }
+      // Retry up to 5 times for this critical query (vs default 3)
+      return failureCount < 5;
+    },
+    retryDelay: (attempt) => Math.min(1000 * Math.pow(2, attempt), 15_000),
   });
 }
 
