@@ -58,7 +58,11 @@ const envSchema = z.object({
   OLLAMA_URL: z.string().default('http://localhost:11434'),
   OLLAMA_EMBED_MODEL: z.string().default('nomic-embed-text'),
   OLLAMA_GENERATE_MODEL: z.string().default('qwen3.5:9b'),
-  LLM_PROVIDER: z.enum(['gemini', 'ollama', 'auto']).default('auto'),
+  LLM_PROVIDER: z.enum(['gemini', 'ollama', 'openrouter', 'auto']).default('auto'),
+
+  // OpenRouter
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_MODEL: z.string().default('qwen/qwen3-30b-a3b'),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -153,6 +157,12 @@ export const config = {
     url: env.OLLAMA_URL,
     embedModel: env.OLLAMA_EMBED_MODEL,
     generateModel: env.OLLAMA_GENERATE_MODEL,
+  },
+
+  // OpenRouter (cloud inference)
+  openrouter: {
+    apiKey: env.OPENROUTER_API_KEY,
+    model: env.OPENROUTER_MODEL,
   },
 
   // YouTube API costs (in quota units)

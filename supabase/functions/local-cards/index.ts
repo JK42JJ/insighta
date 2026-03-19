@@ -27,6 +27,7 @@ async function getOrCreateSubscription(supabase: ReturnType<typeof createClient>
   if (error && error.code === 'PGRST116') {
     const { data: newSub, error: insertError } = await supabase
       .from('user_subscriptions')
+      // SSOT: docs/policies/quota-policy.md § Tier Definitions & Resource Limits
       .insert({ user_id: userId, tier: 'free', local_cards_limit: 150, mandala_limit: 3 })
       .select()
       .single();

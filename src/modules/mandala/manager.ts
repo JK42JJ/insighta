@@ -2,6 +2,7 @@ import { getPrismaClient } from '../database/client';
 import { logger } from '../../utils/logger';
 import { user_mandalas } from '@prisma/client';
 import { nanoid } from 'nanoid';
+import { DEFAULT_TIER, getMandalaLimit, type Tier } from '@/config/quota';
 
 interface MandalaLevelData {
   levelKey: string;
@@ -268,8 +269,8 @@ export class MandalaManager {
         where: { user_id: userId },
         select: { tier: true, mandala_limit: true },
       });
-      const tier = subscription?.tier ?? 'free';
-      const limit = subscription?.mandala_limit ?? 3;
+      const tier = (subscription?.tier ?? DEFAULT_TIER) as Tier;
+      const limit = subscription?.mandala_limit ?? getMandalaLimit(tier);
 
       // Count existing mandalas (quota check inside transaction for atomicity)
       const count = await tx.user_mandalas.count({
@@ -509,8 +510,8 @@ export class MandalaManager {
       }),
     ]);
 
-    const tier = subscription?.tier ?? 'free';
-    const limit = subscription?.mandala_limit ?? 3;
+    const tier = (subscription?.tier ?? DEFAULT_TIER) as Tier;
+    const limit = subscription?.mandala_limit ?? getMandalaLimit(tier);
 
     return {
       tier,
