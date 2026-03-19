@@ -9,6 +9,7 @@ import { CompactNotePreview } from '@/shared/ui/CompactNotePreview';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import { upgradeYouTubeThumbnail, handleThumbnailError } from '@/shared/lib/image-utils';
+import { useCardFlipSetting } from '@/shared/lib/useCardFlipSetting';
 import type { SummaryRating } from '@/features/card-management/model/useSummaryRating';
 
 interface InsightCardItemProps {
@@ -37,8 +38,13 @@ export function InsightCardItem({
   onRate,
 }: InsightCardItemProps) {
   const { t } = useTranslation();
+  const cardFlipEnabled = useCardFlipSetting();
   const [isEditing, setIsEditing] = useState(false);
   const [noteValue, setNoteValue] = useState(card.userNote ?? '');
+
+  // Flip is disabled when: explicitly disabled, setting off, or memo is empty
+  const hasContent = !!card.userNote?.trim();
+  const shouldDisableFlip = disableFlip || !cardFlipEnabled || !hasContent;
 
   // Build drag data — include selected card IDs for multi-select drag
   const isSelected = selectedCardIds?.has(card.id) ?? false;
@@ -119,7 +125,7 @@ export function InsightCardItem({
       <div
         className={cn(
           '[transform-style:preserve-3d] transition-transform duration-500',
-          !disableFlip && 'group-hover:[transform:rotateY(180deg)]'
+          !shouldDisableFlip && 'group-hover:[transform:rotateY(180deg)]'
         )}
       >
         {/* === Front face === */}

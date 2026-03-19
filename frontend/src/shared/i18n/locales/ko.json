@@ -96,6 +96,8 @@
     "themeLight": "라이트",
     "themeDark": "다크",
     "themeSystem": "시스템",
+    "cardFlipOnHover": "카드 호버 시 회전",
+    "cardFlipOnHoverDesc": "마우스를 올리면 카드를 뒤집어 메모를 표시합니다 (빈 메모는 회전하지 않음)",
     "language": "언어",
     "languageDesc": "앱의 언어를 설정합니다",
     "languageSelect": "언어 선택",

@@ -46,16 +46,22 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>('general');
-  const [settings, setSettings] = useState({
-    notifications: true,
-    emailUpdates: false,
-    autoSave: true,
-    language: i18n.language,
-    theme: 'dark',
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem('app-settings');
+    const parsed = saved ? JSON.parse(saved) : {};
+    return {
+      notifications: parsed.notifications ?? true,
+      emailUpdates: parsed.emailUpdates ?? false,
+      autoSave: parsed.autoSave ?? true,
+      language: i18n.language,
+      theme: parsed.theme ?? 'dark',
+      cardFlipOnHover: parsed.cardFlipOnHover ?? true,
+    };
   });
 
   const handleSave = () => {
     localStorage.setItem('app-settings', JSON.stringify(settings));
+    window.dispatchEvent(new Event('app-settings-changed'));
     toast({
       title: t('settings.settingsSaved'),
       description: t('settings.settingsSavedDesc'),
@@ -155,7 +161,7 @@ export default function SettingsPage() {
                   <CardTitle className="text-lg">{t('settings.appearance')}</CardTitle>
                   <CardDescription>{t('settings.appearanceDesc')}</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="theme">{t('settings.theme')}</Label>
@@ -174,6 +180,18 @@ export default function SettingsPage() {
                         <SelectItem value="system">{t('settings.themeSystem')}</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <Separator className="bg-border/50" />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="cardFlipOnHover">{t('settings.cardFlipOnHover')}</Label>
+                      <p className="text-sm text-muted-foreground">{t('settings.cardFlipOnHoverDesc')}</p>
+                    </div>
+                    <Switch
+                      id="cardFlipOnHover"
+                      checked={settings.cardFlipOnHover}
+                      onCheckedChange={(checked) => setSettings({ ...settings, cardFlipOnHover: checked })}
+                    />
                   </div>
                 </CardContent>
               </Card>
