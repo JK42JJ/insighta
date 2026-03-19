@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../../modules/database/client';
 import { createErrorResponse, createSuccessResponse, ErrorCode } from '../../schemas/common.schema';
+import { TIER_LIMITS } from '@/config/quota';
 
 const RedeemCodeSchema = z.object({
   code: z.string().min(1),
@@ -80,8 +81,8 @@ export async function adminRedemptionRoutes(fastify: FastifyInstance) {
             `INSERT INTO public.user_subscriptions (user_id, local_cards_limit, mandala_limit)
              VALUES ($1::uuid, $2, $3)
              ON CONFLICT (user_id) DO UPDATE SET
-               local_cards_limit = COALESCE(user_subscriptions.local_cards_limit, 150) + $2,
-               mandala_limit = COALESCE(user_subscriptions.mandala_limit, 3) + $3,
+               local_cards_limit = COALESCE(user_subscriptions.local_cards_limit, ${TIER_LIMITS.free.cards}) + $2,
+               mandala_limit = COALESCE(user_subscriptions.mandala_limit, ${TIER_LIMITS.free.mandalas}) + $3,
                updated_at = NOW()`,
             userId, limitIncrease, mandalaIncrease
           );

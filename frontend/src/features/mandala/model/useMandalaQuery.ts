@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { apiClient, ApiHttpError } from '@/shared/lib/api-client';
+import { apiClient, ApiHttpError, type MandalaResponse } from '@/shared/lib/api-client';
 import { queryKeys } from '@/shared/config/query-client';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { mockMandalaLevels } from '@/shared/data/mockData';
@@ -88,6 +88,16 @@ export function useMandalaList() {
     enabled: isLoggedIn && isTokenReady,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
+    // P0 hardening: mandala list is service-critical — more aggressive retry
+    retry: (failureCount, error) => {
+      // Never retry auth errors beyond 1
+      if (error instanceof Error && 'statusCode' in error && (error as any).statusCode === 401) {
+        return failureCount < 1;
+      }
+      // Retry up to 5 times for this critical query (vs default 3)
+      return failureCount < 5;
+    },
+    retryDelay: (attempt) => Math.min(1000 * Math.pow(2, attempt), 15_000),
   });
 }
 
@@ -107,7 +117,25 @@ export function useCreateMandala() {
 
   return useMutation({
     mutationFn: (title: string) => apiClient.createMandala(title),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Immediately append new mandala to cached list so UI updates without waiting for refetch
+      const newMandala = data?.mandala;
+      if (newMandala) {
+        queryClient.setQueryData(
+          queryKeys.mandala.list(),
+          (old: { mandalas: MandalaResponse[]; total: number; page: number; limit: number } | undefined) => {
+            if (!old) return old;
+            return {
+              ...old,
+              mandalas: [...old.mandalas, newMandala],
+              total: old.total + 1,
+            };
+          }
+        );
+      }
+    },
+    onSettled: () => {
+      // Always refetch for consistency (even on error)
       queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
       queryClient.invalidateQueries({ queryKey: queryKeys.mandala.quota() });
     },
@@ -119,7 +147,28 @@ export function useDeleteMandala() {
 
   return useMutation({
     mutationFn: (id: string) => apiClient.deleteMandala(id),
-    onSuccess: () => {
+    onMutate: async (deletedId) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.mandala.list() });
+      const previous = queryClient.getQueryData(queryKeys.mandala.list());
+      queryClient.setQueryData(
+        queryKeys.mandala.list(),
+        (old: { mandalas: MandalaResponse[]; total: number; page: number; limit: number } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            mandalas: old.mandalas.filter((m) => m.id !== deletedId),
+            total: Math.max(0, old.total - 1),
+          };
+        }
+      );
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.mandala.list(), context.previous);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
       queryClient.invalidateQueries({ queryKey: queryKeys.mandala.quota() });
     },

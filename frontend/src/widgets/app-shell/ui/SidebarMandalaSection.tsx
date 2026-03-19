@@ -40,13 +40,15 @@ export function SidebarMandalaSection({
   const inputRef = useRef<HTMLInputElement>(null);
   const quickCreateRef = useRef<HTMLInputElement>(null);
 
-  // 10s loading timeout — show retry instead of infinite skeleton
+  // 16s loading timeout — harmonized: DB 12s < HTTP 14s < UI 16s
+  // Shows retry instead of infinite skeleton after all retries exhausted
+  const LOADING_TIMEOUT_MS = 16_000;
   useEffect(() => {
     if (!isLoading) {
       setLoadingTooLong(false);
       return;
     }
-    const timer = setTimeout(() => setLoadingTooLong(true), 10_000);
+    const timer = setTimeout(() => setLoadingTooLong(true), LOADING_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [isLoading]);
 

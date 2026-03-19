@@ -144,12 +144,12 @@ function packChunks(paragraphs: string[], maxSize: number): string[] {
 }
 
 function buildChunkSummaryPrompt(chunk: string): string {
-  return `Summarize in 1 sentence:\n${chunk}`;
+  return `Summarize in 1 sentence. Do NOT start with "This video" or "The video":\n${chunk}`;
 }
 
 function buildMergePrompt(partials: string[], title: string): string {
   const list = partials.map((p) => `- ${p}`).join('\n');
-  return `Video: ${title}\nSummaries:\n${list}\nCombine into JSON: {"summary":"2-3 sentence summary","tags":["keyword1","keyword2"]}`;
+  return `Video: ${title}\nSummaries:\n${list}\nCombine into JSON: {"summary":"2-3 sentence summary","tags":["keyword1","keyword2"]}\nRespond in English. Do NOT start summary with "This video" or "The video".`;
 }
 
 const MAX_REDUCE_DEPTH = 5;
@@ -266,7 +266,7 @@ Video title: ${title}
 Transcript: ${truncated}
 
 Respond in JSON: {"summary": "...", "tags": ["...", ...]}
-Important: Respond in the same language as the transcript.`;
+Important: Respond in English. Do NOT start summary with "This video" or "The video".`;
 }
 
 export async function enrichResourceNode(
@@ -327,35 +327,18 @@ export async function enrichResourceNode(
     primarySummary = parseSummaryResponse(rawResponse);
   }
 
-  // 4b. Generate translation to the other language
-  const isKoreanTranscript = transcriptLang === 'ko';
-  let summaryEn: string;
+  // 4b. EN-first strategy: primary summary is always English → translate to Korean
+  const summaryEn = primarySummary.summary;
   let summaryKo: string;
 
-  if (isKoreanTranscript) {
-    summaryKo = primarySummary.summary;
-    // Translate ko → en
-    try {
-      const translated = await generate(
-        `Translate to English in 2-3 sentences:\n${summaryKo}`,
-        { temperature: 0.3 }
-      );
-      summaryEn = translated.trim();
-    } catch {
-      summaryEn = primarySummary.summary; // fallback: same as ko
-    }
-  } else {
-    summaryEn = primarySummary.summary;
-    // Translate en → ko
-    try {
-      const translated = await generate(
-        `Translate to Korean in 2-3 sentences:\n${summaryEn}`,
-        { temperature: 0.3 }
-      );
-      summaryKo = translated.trim();
-    } catch {
-      summaryKo = primarySummary.summary; // fallback: same as en
-    }
+  try {
+    const translated = await generate(
+      `Translate to natural Korean in 2-3 sentences:\n${summaryEn}`,
+      { temperature: 0.3 }
+    );
+    summaryKo = translated.trim();
+  } catch {
+    summaryKo = summaryEn; // fallback: same as en
   }
 
   const tags = primarySummary.tags;
@@ -364,13 +347,15 @@ export async function enrichResourceNode(
 
   logger.info('Bilingual summary generated', { nodeId, en: summaryEn.length, ko: summaryKo.length });
 
-  // 5. Update node properties (bilingual summary + tags)
+  // 5. Update node properties (bilingual summary + tags + provenance)
   const updatedProperties = {
     ...node.properties,
     summary,
     summary_en: summaryEn,
     summary_ko: summaryKo,
     summary_tags: tags,
+    summary_model: generationProvider.model,
+    summary_created_at: new Date().toISOString(),
   };
 
   await prisma.$executeRaw`
@@ -435,7 +420,8 @@ export async function enrichResourceNode(
 export async function enrichBySourceRef(
   userId: string,
   sourceTable: string,
-  sourceId: string
+  sourceId: string,
+  options?: { force?: boolean }
 ): Promise<EnrichResult | null> {
   const prisma = getPrismaClient();
 
@@ -485,7 +471,26 @@ export async function enrichBySourceRef(
     return null;
   }
 
-  return enrichResourceNode(nodes[0]!.id, userId);
+  const nodeId = nodes[0]!.id;
+
+  // Check summary_dismissed flag (skip auto-enrich, allow manual re-generation)
+  if (!options?.force) {
+    const nodeData = await prisma.$queryRaw<{ properties: Record<string, unknown> }[]>`
+      SELECT properties FROM ontology.nodes WHERE id = ${nodeId}::uuid AND user_id = ${userId}::uuid
+    `;
+    if (nodeData[0]?.properties?.['summary_dismissed'] === true) {
+      return null;
+    }
+  } else {
+    // Manual re-generation: clear dismissed flag
+    await prisma.$executeRaw`
+      UPDATE ontology.nodes
+      SET properties = properties - 'summary_dismissed', updated_at = now()
+      WHERE id = ${nodeId}::uuid AND user_id = ${userId}::uuid
+    `;
+  }
+
+  return enrichResourceNode(nodeId, userId);
 }
 
 // ============================================================================
