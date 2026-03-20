@@ -90,8 +90,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      include: ['react-error-boundary'],
-      exclude: ['@rive-app/react-canvas'],
+      include: ['react-error-boundary', '@rive-app/react-canvas'],
     },
     build: {
       outDir: 'dist',
