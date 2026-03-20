@@ -262,8 +262,8 @@ const LazyRiveAvatar = lazy(() =>
       }, [mood, moodInput]);
 
       return (
-        <div className={className} style={{ width: '80%', maxHeight: '80%' }}>
-          <RiveComponent />
+        <div className={className} style={{ width: '80%', aspectRatio: '1', maxHeight: '80%' }}>
+          <RiveComponent style={{ width: '100%', height: '100%' }} />
         </div>
       );
     },
