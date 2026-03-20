@@ -19,6 +19,7 @@ import { llmRoutes } from './routes/llm';
 import { adminRoutes } from './routes/admin';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { testDatabaseConnection, disconnectDatabase } from '../modules/database/client';
+import { getClawbot } from '../modules/scheduler/clawbot';
 
 // Load environment variables
 dotenv.config();
@@ -391,9 +392,18 @@ export async function startServer() {
     fastify.log.info(`Swagger UI available at http://${host}:${port}/documentation`);
     fastify.log.info(`Scalar API Reference available at http://${host}:${port}/api-reference`);
 
+    // Start Clawbot summary agent
+    try {
+      await getClawbot().start();
+      fastify.log.info('Clawbot summary agent started');
+    } catch (err) {
+      fastify.log.warn({ err }, 'Clawbot start failed (non-fatal)');
+    }
+
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
+      try { await getClawbot().stop(); } catch { /* ignore */ }
       await fastify.close();
       await disconnectDatabase();
       process.exit(0);
