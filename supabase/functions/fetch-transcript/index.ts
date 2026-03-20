@@ -29,8 +29,8 @@ function getCorsHeaders(req: Request) {
 }
 
 const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
-const INNERTUBE_CLIENT_VERSION = '2.20241126.01.00';
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const INNERTUBE_CLIENT_VERSION = '20.10.38';
+const USER_AGENT = `com.google.android.youtube/${INNERTUBE_CLIENT_VERSION} (Linux; U; Android 14)`;
 
 interface TranscriptSegment {
   text: string;
@@ -93,7 +93,7 @@ async function fetchTranscript(videoId: string, lang: string = 'en'): Promise<Tr
     body: JSON.stringify({
       context: {
         client: {
-          clientName: 'WEB',
+          clientName: 'ANDROID',
           clientVersion: INNERTUBE_CLIENT_VERSION,
         },
       },
@@ -133,26 +133,57 @@ async function fetchTranscript(videoId: string, lang: string = 'en'): Promise<Tr
     track = captionTracks[0];
   }
 
-  // Step 3: Fetch caption XML (via proxy)
+  // Step 3: Fetch caption data (via proxy)
+  // baseUrl may return srv3 (default for ANDROID) or legacy XML format
   const captionResponse = await proxyFetch(track.baseUrl);
   if (!captionResponse.ok) {
     throw new Error(`Failed to fetch captions: ${captionResponse.status}`);
   }
 
-  const captionXml = await captionResponse.text();
+  const captionData = await captionResponse.text();
 
-  // Step 4: Parse XML
+  // Step 4: Parse — handle both SRV3 (<p t="..." d="..."><s>text</s></p>) and legacy (<text>)
   const segments: TranscriptSegment[] = [];
-  const regex = /<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g;
+
+  // Try SRV3 format first (ANDROID client default: fmt=srv3)
+  const srv3Regex = /<p t="(\d+)" d="(\d+)"[^>]*>([\s\S]*?)<\/p>/g;
   let match;
-  while ((match = regex.exec(captionXml)) !== null) {
-    const text = decodeHtmlEntities(match[3]!);
-    if (text) {
+  while ((match = srv3Regex.exec(captionData)) !== null) {
+    // Extract text from <s> tags within <p>
+    const innerHtml = match[3]!;
+    const textParts: string[] = [];
+    const sRegex = /<s[^>]*>([^<]*)<\/s>/g;
+    let sMatch;
+    while ((sMatch = sRegex.exec(innerHtml)) !== null) {
+      const t = decodeHtmlEntities(sMatch[1]!);
+      if (t) textParts.push(t);
+    }
+    // If no <s> tags, use raw text content
+    const text = textParts.length > 0
+      ? textParts.join(' ')
+      : decodeHtmlEntities(innerHtml.replace(/<[^>]*>/g, ''));
+
+    if (text.trim()) {
       segments.push({
-        text,
-        offset: Math.round(parseFloat(match[1]!) * 1000),
-        duration: Math.round(parseFloat(match[2]!) * 1000),
+        text: text.trim(),
+        offset: parseInt(match[1]!),
+        duration: parseInt(match[2]!),
       });
+    }
+  }
+
+  // Fallback: legacy XML format (<text start="..." dur="...">)
+  if (segments.length === 0) {
+    const legacyRegex = /<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g;
+    while ((match = legacyRegex.exec(captionData)) !== null) {
+      const text = decodeHtmlEntities(match[3]!);
+      if (text) {
+        segments.push({
+          text,
+          offset: Math.round(parseFloat(match[1]!) * 1000),
+          duration: Math.round(parseFloat(match[2]!) * 1000),
+        });
+      }
     }
   }
 
