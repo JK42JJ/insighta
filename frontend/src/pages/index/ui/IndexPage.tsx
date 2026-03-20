@@ -604,6 +604,8 @@ function AuthenticatedApp() {
                 watchPositionCache={modal.watchPositionCache}
                 panelSizeCache={modal.panelSizeCache}
                 enrichingCardIds={cards.enrichingCardIds}
+                failedEnrichCardIds={cards.failedEnrichCardIds}
+                onRetryEnrich={cards.retryEnrich}
               />
             </div>
 
