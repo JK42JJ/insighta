@@ -313,8 +313,8 @@ export class SyncEngine {
         });
         await this.quotaManager.reserveQuota('playlist.items', quotaCost);
 
-        // Fetch items
-        const items = await this.youtubeClient.getPlaylistItems(playlistId);
+        const MAX_PLAYLIST_ITEMS = 500;
+        const items = await this.youtubeClient.getPlaylistItems(playlistId, MAX_PLAYLIST_ITEMS);
 
         logger.debug('Fetched playlist items', {
           playlistId,

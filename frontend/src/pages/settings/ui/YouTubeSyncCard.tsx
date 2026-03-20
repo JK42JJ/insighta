@@ -13,26 +13,39 @@ import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
 import {
   useYouTubeSync,
   useUpdateSyncSettings,
+  useYouTubeSearch,
 } from '@/features/youtube-sync/model/useYouTubeSync';
+import type { YouTubeSearchResult } from '@/features/youtube-sync/model/useYouTubeSync';
+import { useAddLocalCard } from '@/features/card-management/model/useLocalCards';
 import { PlaylistItem } from './PlaylistItem';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/shared/ui/collapsible';
 import { cn } from '@/shared/lib/utils';
-import { Loader2, Plus, RefreshCw, Youtube, LogIn, ChevronDown } from 'lucide-react';
+import { Loader2, Plus, RefreshCw, Youtube, LogIn, ChevronDown, Tv, History, Hash, Search, ExternalLink, Check } from 'lucide-react';
+import { Badge } from '@/shared/ui/badge';
 import type { SyncInterval } from '@/entities/youtube/model/types';
 
 const SYNC_INTERVAL_KEYS: SyncInterval[] = ['manual', '1h', '6h', '12h', '24h'];
+
+type SyncTab = 'playlists' | 'channels' | 'history' | 'hashtags';
 
 export function YouTubeSyncCard() {
   const { toast } = useToast();
   const { t } = useTranslation();
   const { isLoggedIn, isLoading: isAuthLoading, signInWithGoogle } = useAuth();
   const [isOpen, setIsOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState<SyncTab>('playlists');
   const [playlistUrl, setPlaylistUrl] = useState('');
+  const [channelUrl, setChannelUrl] = useState('');
+  const [hashtagQuery, setHashtagQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<YouTubeSearchResult[]>([]);
+  const [addedVideoIds, setAddedVideoIds] = useState<Set<string>>(new Set());
   const [isSigningIn, setIsSigningIn] = useState(false);
 
   const youtubeAuth = useYouTubeAuth();
   const ytSync = useYouTubeSync();
   const updateSettings = useUpdateSyncSettings();
+  const youtubeSearch = useYouTubeSearch();
+  const addLocalCard = useAddLocalCard();
 
   const syncInterval = (youtubeAuth.syncInterval as SyncInterval) || 'manual';
   const autoSyncEnabled = youtubeAuth.autoSyncEnabled;
@@ -43,6 +56,70 @@ export function YouTubeSyncCard() {
   const isSyncingAll = ytSync.isSyncingAll;
   const [syncingPlaylistId, setSyncingPlaylistId] = useState<string | null>(null);
   const [deletingPlaylistId, setDeletingPlaylistId] = useState<string | null>(null);
+
+  const handleAddChannel = async () => {
+    if (!channelUrl.trim()) {
+      toast({
+        title: t('common.error'),
+        description: 'Please enter a YouTube channel URL.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      await ytSync.addPlaylist(channelUrl.trim());
+      setChannelUrl('');
+      toast({
+        title: 'Channel Added',
+        description: 'Channel uploads playlist has been imported.',
+      });
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : 'Failed to add channel.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleHashtagSearch = async () => {
+    if (!hashtagQuery.trim()) return;
+    try {
+      const results = await youtubeSearch.mutateAsync({ query: hashtagQuery.trim(), maxResults: 20 });
+      setSearchResults(results);
+      setAddedVideoIds(new Set());
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : 'Search failed.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleAddSearchResult = async (video: YouTubeSearchResult) => {
+    try {
+      const url = `https://www.youtube.com/watch?v=${video.videoId}`;
+      await addLocalCard.mutateAsync({
+        url,
+        title: video.title,
+        link_type: 'youtube',
+        metadata_image: video.thumbnail,
+        cell_index: -1,
+      });
+      setAddedVideoIds((prev) => new Set([...prev, video.videoId]));
+      toast({
+        title: 'Card Added',
+        description: `"${video.title}" added to scratchpad.`,
+      });
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : 'Failed to add video.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleSignIn = async () => {
     setIsSigningIn(true);
@@ -268,80 +345,278 @@ export function YouTubeSyncCard() {
         </CollapsibleTrigger>
         <CollapsibleContent>
           <CardContent className="space-y-6">
-            {/* Add Playlist */}
-            <div className="space-y-2">
-              <Label htmlFor="playlist-url">{t('youtube.addPlaylist')}</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="playlist-url"
-                  placeholder={t('youtube.playlistUrlPlaceholder')}
-                  value={playlistUrl}
-                  onChange={(e) => setPlaylistUrl(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !isAdding) {
-                      handleAddPlaylist();
-                    }
-                  }}
-                />
-                <Button onClick={handleAddPlaylist} disabled={isAdding || !playlistUrl.trim()}>
-                  {isAdding ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Plus className="h-4 w-4" />
+            {/* Source Type Tabs */}
+            <div className="flex gap-1 p-1 rounded-lg bg-surface-light/50 border border-border/30">
+              {([
+                { id: 'playlists' as SyncTab, icon: Youtube, label: 'Playlists' },
+                { id: 'channels' as SyncTab, icon: Tv, label: 'Channels' },
+                { id: 'history' as SyncTab, icon: History, label: 'History' },
+                { id: 'hashtags' as SyncTab, icon: Hash, label: 'Hashtags' },
+              ]).map(({ id, icon: Icon, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex-1 justify-center',
+                    activeTab === id
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   )}
-                  <span className="ml-2 hidden sm:inline">{t('common.add')}</span>
-                </Button>
-              </div>
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">{label}</span>
+                  {id === 'history' && (
+                    <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0 h-4 border-muted-foreground/30 text-muted-foreground">
+                      Soon
+                    </Badge>
+                  )}
+                </button>
+              ))}
             </div>
 
-            {/* Registered Playlists */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>
-                  {t('youtube.registeredPlaylists')} ({playlists.length})
-                </Label>
-                {playlists.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSyncAll}
-                    disabled={isSyncingAll}
-                  >
-                    {isSyncingAll ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <RefreshCw className="mr-2 h-4 w-4" />
+            {/* Playlists Tab */}
+            {activeTab === 'playlists' && (
+              <>
+                {/* Add Playlist */}
+                <div className="space-y-2">
+                  <Label htmlFor="playlist-url">{t('youtube.addPlaylist')}</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="playlist-url"
+                      placeholder={t('youtube.playlistUrlPlaceholder')}
+                      value={playlistUrl}
+                      onChange={(e) => setPlaylistUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !isAdding) {
+                          handleAddPlaylist();
+                        }
+                      }}
+                    />
+                    <Button onClick={handleAddPlaylist} disabled={isAdding || !playlistUrl.trim()}>
+                      {isAdding ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="h-4 w-4" />
+                      )}
+                      <span className="ml-2 hidden sm:inline">{t('common.add')}</span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Registered Playlists */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>
+                      {t('youtube.registeredPlaylists')} ({playlists.length})
+                    </Label>
+                    {playlists.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSyncAll}
+                        disabled={isSyncingAll}
+                      >
+                        {isSyncingAll ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                        )}
+                        {t('youtube.syncAll')}
+                      </Button>
                     )}
-                    {t('youtube.syncAll')}
-                  </Button>
+                  </div>
+
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : playlists.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Youtube className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p>{t('youtube.noPlaylists')}</p>
+                      <p className="text-sm">{t('youtube.noPlaylistsHint')}</p>
+                    </div>
+                  ) : (
+                    <div className="max-h-[480px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                      {playlists.map((playlist) => (
+                        <PlaylistItem
+                          key={playlist.id}
+                          playlist={playlist}
+                          onSync={handleSyncPlaylist}
+                          onDelete={handleDeletePlaylist}
+                          isSyncing={syncingPlaylistId === playlist.id}
+                          isDeleting={deletingPlaylistId === playlist.id}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Channels Tab */}
+            {activeTab === 'channels' && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="channel-url">Add Channel</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Paste a YouTube channel URL to import all uploaded videos as a playlist.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      id="channel-url"
+                      placeholder="https://www.youtube.com/@channelname"
+                      value={channelUrl}
+                      onChange={(e) => setChannelUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !isAdding) {
+                          handleAddChannel();
+                        }
+                      }}
+                    />
+                    <Button onClick={handleAddChannel} disabled={isAdding || !channelUrl.trim()}>
+                      {isAdding ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="h-4 w-4" />
+                      )}
+                      <span className="ml-2 hidden sm:inline">{t('common.add')}</span>
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Supported formats: youtube.com/@handle, youtube.com/channel/UCxxxx, youtube.com/c/Name
+                  </p>
+                </div>
+
+                {playlists.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Imported Channels ({playlists.filter(p => p.youtube_playlist_id.startsWith('UU')).length})</Label>
+                    <div className="max-h-[320px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                      {playlists
+                        .filter(p => p.youtube_playlist_id.startsWith('UU'))
+                        .map((playlist) => (
+                          <PlaylistItem
+                            key={playlist.id}
+                            playlist={playlist}
+                            onSync={handleSyncPlaylist}
+                            onDelete={handleDeletePlaylist}
+                            isSyncing={syncingPlaylistId === playlist.id}
+                            isDeleting={deletingPlaylistId === playlist.id}
+                          />
+                        ))}
+                    </div>
+                  </div>
                 )}
               </div>
+            )}
 
-              {isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            {/* History Tab — OAuth Required */}
+            {activeTab === 'history' && (
+              <div className="text-center py-12 text-muted-foreground space-y-4">
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto">
+                  <History className="h-8 w-8 text-muted-foreground" />
                 </div>
-              ) : playlists.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Youtube className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>{t('youtube.noPlaylists')}</p>
-                  <p className="text-sm">{t('youtube.noPlaylistsHint')}</p>
+                <div>
+                  <p className="font-medium">Watch History Import</p>
+                  <p className="text-sm mt-1 max-w-md mx-auto">
+                    Importing watch history requires YouTube OAuth with extended permissions.
+                    This feature will be available in a future update.
+                  </p>
                 </div>
-              ) : (
-                <div className="max-h-[480px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-                  {playlists.map((playlist) => (
-                    <PlaylistItem
-                      key={playlist.id}
-                      playlist={playlist}
-                      onSync={handleSyncPlaylist}
-                      onDelete={handleDeletePlaylist}
-                      isSyncing={syncingPlaylistId === playlist.id}
-                      isDeleting={deletingPlaylistId === playlist.id}
+                <Badge variant="outline" className="text-xs">Requires OAuth Scope Extension</Badge>
+              </div>
+            )}
+
+            {/* Hashtags Tab — YouTube Search */}
+            {activeTab === 'hashtags' && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="hashtag-search">Search Videos</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Search YouTube by keyword or hashtag and add videos to your scratchpad.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      id="hashtag-search"
+                      placeholder="e.g. #machinelearning, React tutorial"
+                      value={hashtagQuery}
+                      onChange={(e) => setHashtagQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !youtubeSearch.isPending) {
+                          handleHashtagSearch();
+                        }
+                      }}
                     />
-                  ))}
+                    <Button onClick={handleHashtagSearch} disabled={youtubeSearch.isPending || !hashtagQuery.trim()}>
+                      {youtubeSearch.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Search className="h-4 w-4" />
+                      )}
+                      <span className="ml-2 hidden sm:inline">Search</span>
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </div>
+
+                {searchResults.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Results ({searchResults.length})</Label>
+                    <div className="max-h-[400px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                      {searchResults.map((video) => {
+                        const isAdded = addedVideoIds.has(video.videoId);
+                        return (
+                          <div
+                            key={video.videoId}
+                            className="flex items-center gap-3 p-2 rounded-md border border-border/50 hover:bg-muted/30 transition-colors"
+                          >
+                            {video.thumbnail && (
+                              <img
+                                src={video.thumbnail}
+                                alt={video.title}
+                                className="w-24 h-14 object-cover rounded flex-shrink-0"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{video.title}</p>
+                              <p className="text-xs text-muted-foreground truncate">{video.channelTitle}</p>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                asChild
+                                className="h-8 w-8 p-0"
+                              >
+                                <a
+                                  href={`https://www.youtube.com/watch?v=${video.videoId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                              </Button>
+                              <Button
+                                variant={isAdded ? 'ghost' : 'outline'}
+                                size="sm"
+                                onClick={() => handleAddSearchResult(video)}
+                                disabled={isAdded || addLocalCard.isPending}
+                                className="h-8"
+                              >
+                                {isAdded ? (
+                                  <Check className="h-3.5 w-3.5 text-green-500" />
+                                ) : (
+                                  <Plus className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <Separator />
 

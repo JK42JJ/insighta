@@ -99,6 +99,12 @@ export interface YouTubePlaylistItemWithVideo extends YouTubePlaylistItem {
 
 export interface UserVideoStateWithVideo extends UserVideoState {
   video?: YouTubeVideo;
+  video_summary?: {
+    summary_en: string;
+    summary_ko: string;
+    tags: string[];
+    model: string;
+  };
 }
 
 // Input types for mutations

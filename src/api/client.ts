@@ -440,6 +440,109 @@ export class YouTubeClient {
   }
 
   /**
+   * Search YouTube videos
+   */
+  public async searchVideos(
+    query: string,
+    maxResults: number = 20
+  ): Promise<youtube_v3.Schema$SearchResult[]> {
+    await this.ensureValidToken();
+
+    const results = await retry(async () => {
+      try {
+        if (!this.youtube) {
+          throw new AuthenticationError('YouTube client not initialized');
+        }
+
+        const response = await this.youtube.search.list({
+          part: ['snippet'],
+          q: query,
+          type: ['video'],
+          maxResults: Math.min(maxResults, 50),
+        });
+
+        return response.data.items ?? [];
+      } catch (error) {
+        if (this.isAuthError(error)) {
+          await this.tokenManager.refreshToken();
+          throw error;
+        }
+        this.handleApiError(error);
+        throw error;
+      }
+    });
+
+    return results;
+  }
+
+  /**
+   * Resolve a channel URL/handle to the uploads playlist ID
+   */
+  public async resolveChannelToUploadsPlaylist(channelInput: string): Promise<string> {
+    await this.ensureValidToken();
+
+    if (!this.youtube) {
+      throw new AuthenticationError('YouTube client not initialized');
+    }
+
+    let channelId: string | undefined;
+
+    // Pattern: youtube.com/channel/UCxxxx — direct channel ID extraction
+    const channelIdMatch = channelInput.match(/youtube\.com\/channel\/(UC[A-Za-z0-9_-]+)/);
+    if (channelIdMatch) {
+      channelId = channelIdMatch[1];
+    }
+
+    // Pattern: youtube.com/@handle — use search API to find channel
+    const handleMatch = channelInput.match(/youtube\.com\/@([A-Za-z0-9_.-]+)/);
+    if (!channelId && handleMatch) {
+      const response = await retry(async () => {
+        const res = await this.youtube!.search.list({
+          part: ['snippet'],
+          q: handleMatch[1],
+          type: ['channel'],
+          maxResults: 1,
+        });
+        return res.data;
+      });
+
+      channelId = response.items?.[0]?.snippet?.channelId ?? undefined;
+    }
+
+    // Pattern: youtube.com/c/Name or youtube.com/user/Name
+    const usernameMatch = channelInput.match(/youtube\.com\/(?:c|user)\/([A-Za-z0-9_.-]+)/);
+    if (!channelId && usernameMatch) {
+      const response = await retry(async () => {
+        const res = await this.youtube!.channels.list({
+          part: ['contentDetails'],
+          forUsername: usernameMatch[1],
+        });
+        return res.data;
+      });
+
+      const uploadsPlaylistId = response.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+      if (uploadsPlaylistId) return uploadsPlaylistId;
+      channelId = response.items?.[0]?.id ?? undefined;
+    }
+
+    // Fetch uploads playlist from channel ID
+    if (channelId) {
+      const response = await retry(async () => {
+        const res = await this.youtube!.channels.list({
+          part: ['contentDetails'],
+          id: [channelId!],
+        });
+        return res.data;
+      });
+
+      const uploadsPlaylistId = response.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+      if (uploadsPlaylistId) return uploadsPlaylistId;
+    }
+
+    throw new YouTubeAPIError(`Could not resolve channel: ${channelInput}`, 404);
+  }
+
+  /**
    * Get videos in batches
    */
   public async getVideosBatch(videoIds: string[]): Promise<youtube_v3.Schema$Video[]> {
