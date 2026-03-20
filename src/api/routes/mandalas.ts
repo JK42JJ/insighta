@@ -1,5 +1,6 @@
 import { FastifyPluginCallback } from 'fastify';
 import { getMandalaManager } from '../../modules/mandala';
+import { getMood } from '../../modules/mandala/mood';
 
 interface MandalaLevelBody {
   levelKey: string;
@@ -462,6 +463,21 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         }
         throw err;
       }
+    }
+  );
+
+  /**
+   * GET /api/v1/mandalas/:id/mood - Get mood state for a mandala
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/mood',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const result = await getMood(request.params.id, userId);
+      return reply.send(result);
     }
   );
 

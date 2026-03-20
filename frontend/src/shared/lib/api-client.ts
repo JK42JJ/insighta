@@ -652,6 +652,22 @@ class ApiClient {
     return this.request(`/mandalas/subscriptions${query}`);
   }
 
+  async getMandalaMood(
+    mandalaId: string,
+  ): Promise<{
+    state: number;
+    signals: {
+      weeklySessionCount: number;
+      entertainmentRatio: number;
+      newTopicCount: number;
+      daysSinceLastActivity: number;
+      totalCards: number;
+    };
+    updatedAt: string;
+  }> {
+    return this.request(`/mandalas/${mandalaId}/mood`);
+  }
+
   async getMandalaActivity(
     mandalaId: string,
     page?: number,

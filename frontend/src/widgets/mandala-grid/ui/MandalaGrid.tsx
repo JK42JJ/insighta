@@ -359,6 +359,7 @@ export const MandalaGrid = memo(function MandalaGrid({
                   sizeMode={sizeMode}
                   totalCards={totalCards}
                   avatarSeed={mandalaId || level.id}
+                  mandalaId={mandalaId ?? undefined}
                   isDropTarget={activeDragOverCellIndex === gridIndex}
                   isCellSwapTarget={
                     activeDragCellIndex !== null &&
