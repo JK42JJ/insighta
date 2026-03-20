@@ -62,7 +62,7 @@ const envSchema = z.object({
 
   // OpenRouter
   OPENROUTER_API_KEY: z.string().optional(),
-  OPENROUTER_MODEL: z.string().default('qwen/qwen3-30b-a3b'),
+  OPENROUTER_MODEL: z.string().default('qwen/qwen3.5-9b'),
 });
 
 type Env = z.infer<typeof envSchema>;

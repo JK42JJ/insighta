@@ -28,7 +28,8 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       temperature: options?.temperature ?? 0.3,
       max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
       // Disable thinking/reasoning for Qwen3 models (consumes max_tokens budget)
-      reasoning: { effort: 'none' },
+      // OpenRouter unified param for non-OpenAI models
+      reasoning: { enabled: false },
     };
 
     const response = await fetch(OPENROUTER_API_URL, {
@@ -48,10 +49,11 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
     }
 
     const data = (await response.json()) as {
-      choices?: Array<{ message?: { content: string } }>;
+      choices?: Array<{ message?: { content: string; reasoning?: string } }>;
     };
 
-    const content = data.choices?.[0]?.message?.content;
+    const message = data.choices?.[0]?.message;
+    const content = message?.content || message?.reasoning;
     if (!content) {
       throw new Error('OpenRouter returned empty response');
     }
