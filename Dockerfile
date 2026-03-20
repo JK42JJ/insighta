@@ -44,8 +44,9 @@ RUN npm ci --omit=dev --ignore-scripts
 # =============================================================================
 FROM node:20-alpine AS runner
 
-# Install runtime dependencies including OpenSSL 3.x
-RUN apk add --no-cache libc6-compat curl openssl
+# Install runtime dependencies including OpenSSL 3.x + yt-dlp (caption fallback)
+RUN apk add --no-cache libc6-compat curl openssl python3 py3-pip && \
+    pip3 install --no-cache-dir --break-system-packages yt-dlp
 
 # Security: Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
