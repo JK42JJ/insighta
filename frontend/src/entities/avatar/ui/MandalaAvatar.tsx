@@ -1,8 +1,7 @@
 import { memo, useMemo, useState, useEffect, useRef } from 'react';
 import { createAvatar } from '@dicebear/core';
 import { adventurer } from '@dicebear/collection';
-import { useMoodDetection } from '../model/useMoodDetection';
-import { MoodState, type MandalaAvatarProps } from '../model/types';
+import type { MandalaAvatarProps } from '../model/types';
 
 // --- Theme presets: keyword-based avatar appearance mapping ---
 
@@ -186,19 +185,13 @@ const DiceBearFallback = memo(function DiceBearFallback({
   );
 });
 
-function moodToRiveInput(mood: MoodState): number {
-  return mood;
-}
-
 export const MandalaAvatar = memo(function MandalaAvatar({
-  mandalaId,
   seed,
   totalCards,
   centerGoal,
   riveUrl,
   className,
 }: MandalaAvatarProps) {
-  const { data: moodResult } = useMoodDetection(mandalaId);
   const [riveError, setRiveError] = useState(false);
 
   // Phase 1b: Rive rendering when riveUrl is available
@@ -206,7 +199,7 @@ export const MandalaAvatar = memo(function MandalaAvatar({
     return (
       <RiveFallbackWrapper
         riveUrl={riveUrl}
-        mood={moodResult?.state ?? MoodState.COMFORTABLE}
+        seed={seed}
         onError={() => setRiveError(true)}
         className={className}
       />
@@ -221,45 +214,43 @@ export const MandalaAvatar = memo(function MandalaAvatar({
 // Uses React.lazy + dynamic import to avoid bundling Rive WASM when not needed.
 import React, { lazy, Suspense } from 'react';
 
-const RIVE_STATE_MACHINE = 'State Machine 1';
+// avatar-pack.riv has 3 artboards: "Avatar 1", "Avatar 2", "Avatar 3"
+// Each has an "idlePreview" animation (no state machine)
+const RIVE_ARTBOARDS = ['Avatar 1', 'Avatar 2', 'Avatar 3'] as const;
+
+function pickArtboard(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+  }
+  return RIVE_ARTBOARDS[Math.abs(hash) % RIVE_ARTBOARDS.length]!;
+}
 
 const LazyRiveAvatar = lazy(() =>
   import('@rive-app/react-canvas').then((mod) => ({
     default: function RiveAvatar({
       riveUrl,
-      mood,
+      seed,
       onError,
       className,
     }: {
       riveUrl: string;
-      mood: MoodState;
+      seed: string;
       onError: () => void;
       className?: string;
     }) {
-      const { rive, RiveComponent } = mod.useRive({
+      const artboard = useMemo(() => pickArtboard(seed), [seed]);
+
+      const { RiveComponent } = mod.useRive({
         src: riveUrl,
-        stateMachines: RIVE_STATE_MACHINE,
+        artboard,
+        animations: 'idlePreview',
         autoplay: true,
         onLoadError: (e: unknown) => {
           console.warn('[MandalaAvatar] Rive load error, falling back to DiceBear', e);
           onError();
         },
-        onLoad: () => {
-          if (import.meta.env.DEV && rive) {
-            console.log('[MandalaAvatar] Rive loaded', {
-              stateMachineNames: rive.stateMachineNames,
-            });
-          }
-        },
       });
-
-      const moodInput = mod.useStateMachineInput(rive, RIVE_STATE_MACHINE, 'mood');
-
-      useEffect(() => {
-        if (moodInput) {
-          moodInput.value = moodToRiveInput(mood);
-        }
-      }, [mood, moodInput]);
 
       return (
         <div className={className} style={{ width: '80%', aspectRatio: '1', maxHeight: '80%' }}>
@@ -282,19 +273,19 @@ class RiveErrorBoundary extends React.Component<
 
 function RiveFallbackWrapper({
   riveUrl,
-  mood,
+  seed,
   onError,
   className,
 }: {
   riveUrl: string;
-  mood: MoodState;
+  seed: string;
   onError: () => void;
   className?: string;
 }) {
   return (
     <RiveErrorBoundary onError={onError}>
       <Suspense fallback={null}>
-        <LazyRiveAvatar riveUrl={riveUrl} mood={mood} onError={onError} className={className} />
+        <LazyRiveAvatar riveUrl={riveUrl} seed={seed} onError={onError} className={className} />
       </Suspense>
     </RiveErrorBoundary>
   );
