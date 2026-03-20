@@ -175,8 +175,8 @@ export const ContentCard = memo(function ContentCard({
       {/* Meta area */}
       <div className="p-2 space-y-1">
         {Renderer && <Renderer card={rendererCard} view={view} />}
-        {card.userNote && (
-          <CompactNotePreview note={card.userNote} maxLines={1} />
+        {(card.userNote || card.videoSummary) && (
+          <CompactNotePreview note={card.userNote} maxLines={1} videoSummary={card.videoSummary} />
         )}
       </div>
     </div>
