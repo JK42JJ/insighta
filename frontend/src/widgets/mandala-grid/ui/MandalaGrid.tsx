@@ -355,6 +355,7 @@ export const MandalaGrid = memo(function MandalaGrid({
                   isCenter={cellData.isCenter}
                   cards={cellCards}
                   sizeMode={sizeMode}
+                  totalCards={totalCards}
                   isDropTarget={activeDragOverCellIndex === gridIndex}
                   isCellSwapTarget={
                     activeDragCellIndex !== null &&
