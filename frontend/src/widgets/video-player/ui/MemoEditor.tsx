@@ -238,11 +238,31 @@ export function MemoEditor({
       insertTextAtCursor(GENERATING_PLACEHOLDER, cleanedNote);
       setIsGeneratingSummary(true);
       try {
+        // Try to fetch transcript via Edge Function (Deno Deploy, bypasses EC2 bot detection)
+        let transcript: string | undefined;
+        if (videoId) {
+          try {
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const transcriptRes = await fetch(
+              `${supabaseUrl}/functions/v1/fetch-transcript?video_id=${encodeURIComponent(videoId)}`,
+              { headers: await getAuthHeaders() },
+            );
+            if (transcriptRes.ok) {
+              const tData = await transcriptRes.json();
+              if (tData.full_text && tData.segments > 0) {
+                transcript = tData.full_text;
+              }
+            }
+          } catch {
+            // non-critical: server will try its own extraction
+          }
+        }
+
         const headers = await getAuthHeaders();
         const res = await fetch('/api/v1/ontology/enrich/auto', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ source_table: 'user_local_cards', source_id: cardId, force: true }),
+          body: JSON.stringify({ source_table: 'user_local_cards', source_id: cardId, force: true, ...(transcript ? { transcript } : {}) }),
         });
         const data = await res.json();
         if (res.ok && data.data?.enriched !== false) {
