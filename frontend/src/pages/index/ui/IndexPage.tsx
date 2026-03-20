@@ -432,6 +432,7 @@ function AuthenticatedApp() {
   // Shared MandalaGrid element
   const mandalaGridElement = () => (
     <MandalaGrid
+      mandalaId={effectiveMandalaId}
       level={navigation.currentLevel}
       cardsByCell={cards.cardsByCell}
       selectedCellIndex={navigation.selectedCellIndex}
