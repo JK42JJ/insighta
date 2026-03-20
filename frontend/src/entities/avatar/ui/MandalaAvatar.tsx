@@ -219,7 +219,7 @@ export const MandalaAvatar = memo(function MandalaAvatar({
 
 // Phase 1b: Lazy-loaded Rive component (activated when .riv file is available)
 // Uses React.lazy + dynamic import to avoid bundling Rive WASM when not needed.
-import { lazy, Suspense } from 'react';
+import React, { lazy, Suspense } from 'react';
 
 const RIVE_STATE_MACHINE = 'State Machine 1';
 
@@ -270,6 +270,16 @@ const LazyRiveAvatar = lazy(() =>
   })),
 );
 
+class RiveErrorBoundary extends React.Component<
+  { onError: () => void; children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch() { this.props.onError(); }
+  render() { return this.state.hasError ? null : this.props.children; }
+}
+
 function RiveFallbackWrapper({
   riveUrl,
   mood,
@@ -282,8 +292,10 @@ function RiveFallbackWrapper({
   className?: string;
 }) {
   return (
-    <Suspense fallback={null}>
-      <LazyRiveAvatar riveUrl={riveUrl} mood={mood} onError={onError} className={className} />
-    </Suspense>
+    <RiveErrorBoundary onError={onError}>
+      <Suspense fallback={null}>
+        <LazyRiveAvatar riveUrl={riveUrl} mood={mood} onError={onError} className={className} />
+      </Suspense>
+    </RiveErrorBoundary>
   );
 }
