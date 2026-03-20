@@ -404,8 +404,16 @@ export async function enrichResourceNode(
     `;
   }
 
-  // 6. Re-embed with enriched content
-  const embedded = await embedNode(nodeId, node.title, updatedProperties);
+  // 6. Re-embed with enriched content (non-fatal: summary already saved in step 5)
+  let embedded = false;
+  try {
+    embedded = await embedNode(nodeId, node.title, updatedProperties);
+  } catch (err) {
+    logger.warn('Embedding failed (non-fatal)', {
+      nodeId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   logger.info('Resource node enriched', { nodeId, videoId, tagsCount: tags.length, embedded });
 
