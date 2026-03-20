@@ -27,6 +27,8 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       messages: [{ role: 'user', content: prompt }],
       temperature: options?.temperature ?? 0.3,
       max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
+      // Disable thinking/reasoning for Qwen3 models (consumes max_tokens budget)
+      reasoning: { effort: 'none' },
     };
 
     const response = await fetch(OPENROUTER_API_URL, {
