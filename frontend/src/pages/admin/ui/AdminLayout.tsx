@@ -19,7 +19,14 @@ export function AdminLayout() {
       {/* Sidebar */}
       <aside className="w-56 border-r border-border bg-card flex flex-col">
         <div className="p-4 border-b border-border">
-          <h1 className="text-lg font-semibold text-foreground">Admin</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-foreground">Admin</h1>
+            {import.meta.env.DEV && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold leading-none bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                DEV
+              </span>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground mt-0.5">Insighta Backoffice</p>
         </div>
 
