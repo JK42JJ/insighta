@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/lib/api-client';
-import { Activity, Database, Server, Bot, Check, Loader2 } from 'lucide-react';
+import { Activity, Database, Server, Bot, Check, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -159,6 +159,79 @@ function LlmSettingsCard() {
   );
 }
 
+function BatchEnrichCard() {
+  const [limit, setLimit] = useState(50);
+  const [result, setResult] = useState<{
+    total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[];
+  } | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: () => apiClient.runBatchEnrich({ limit, delay_ms: 3000 }),
+    onSuccess: (data) => setResult(data.data),
+  });
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <Sparkles className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium">Batch AI Summary</span>
+        <span className="text-xs text-muted-foreground ml-auto">Enrich YouTube cards without summaries</span>
+      </div>
+
+      <div className="flex items-center gap-3 mb-4">
+        <label className="text-xs text-muted-foreground">Limit:</label>
+        <input
+          type="number"
+          value={limit}
+          onChange={(e) => setLimit(Math.max(1, Math.min(500, Number(e.target.value))))}
+          className="w-20 px-2 py-1 rounded-md border border-border bg-background text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <button
+          onClick={() => mutation.mutate()}
+          disabled={mutation.isPending}
+          className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+        >
+          {mutation.isPending ? (
+            <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running...</>
+          ) : (
+            <><Sparkles className="h-3.5 w-3.5" /> Run Batch</>
+          )}
+        </button>
+      </div>
+
+      {result && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="bg-muted/30 rounded p-2 text-center">
+              <div className="text-lg font-mono font-bold text-foreground">{result.total}</div>
+              <div className="text-muted-foreground">Found</div>
+            </div>
+            <div className="bg-green-500/10 rounded p-2 text-center">
+              <div className="text-lg font-mono font-bold text-green-400">{result.enriched}</div>
+              <div className="text-muted-foreground">Enriched</div>
+            </div>
+            <div className="bg-red-500/10 rounded p-2 text-center">
+              <div className="text-lg font-mono font-bold text-red-400">{result.errors.length}</div>
+              <div className="text-muted-foreground">Errors</div>
+            </div>
+          </div>
+          {result.errors.length > 0 && (
+            <div className="text-xs text-red-400 space-y-1 max-h-32 overflow-y-auto">
+              {result.errors.map((e, i) => (
+                <div key={i} className="font-mono">{e.videoId}: {e.error}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {mutation.isError && (
+        <p className="text-xs text-red-400 mt-2">Failed: {(mutation.error as Error).message}</p>
+      )}
+    </div>
+  );
+}
+
 export function AdminHealth() {
   const { data, isLoading, dataUpdatedAt } = useQuery({
     queryKey: ['admin', 'health'],
@@ -240,6 +313,9 @@ export function AdminHealth() {
 
           {/* LLM Settings */}
           <LlmSettingsCard />
+
+          {/* Batch Enrichment */}
+          <BatchEnrichCard />
 
           {/* Table Sizes */}
           <div className="bg-card border border-border rounded-lg overflow-hidden">
