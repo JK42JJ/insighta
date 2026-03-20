@@ -38,6 +38,7 @@ export interface MandalaCellProps {
   hasSubLevel?: boolean;
   onNavigateToSubLevel?: () => void;
   totalCards?: number;
+  avatarSeed?: string;
 }
 
 // --- Diagonal tooltip placement based on tile position in grid ---
@@ -427,6 +428,7 @@ export const MandalaCell = memo(
     sizeMode = 'standard',
     hasSubLevel = false,
     totalCards = 0,
+    avatarSeed,
   }: MandalaCellProps) {
     const { t } = useTranslation();
     const cardCount = cards.length;
@@ -622,8 +624,8 @@ export const MandalaCell = memo(
         <CellDragHandle gridIndex={index} isCenter={isCenter} />
 
         {/* Center avatar — DiceBear adventurer (fills cell, expression by activity) */}
-        {isCenter && label && (
-          <CenterAvatar seed={label} totalCards={totalCards} />
+        {isCenter && (avatarSeed || label) && (
+          <CenterAvatar seed={avatarSeed || label} totalCards={totalCards} />
         )}
 
         {/* Label — fluid typography (hidden for center cell — title shown in L1 header) */}
