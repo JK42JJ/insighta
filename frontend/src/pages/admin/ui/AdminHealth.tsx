@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/lib/api-client';
-import { Activity, Database, Server, Bot, Check, Loader2, Sparkles } from 'lucide-react';
+import { Activity, Database, Server, Bot, Check, Loader2, Sparkles, ChevronDown, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -159,15 +159,61 @@ function LlmSettingsCard() {
   );
 }
 
+type EnrichJobStatus = 'running' | 'completed' | 'failed';
+
+interface EnrichJobData {
+  id: string;
+  status: EnrichJobStatus;
+  limit: number;
+  startedAt: string;
+  completedAt: string | null;
+  result: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] } | null;
+  error: string | null;
+}
+
+const JOB_POLL_INTERVAL_MS = 5_000;
+
+function formatDuration(start: string, end: string | null): string {
+  const ms = (end ? new Date(end).getTime() : Date.now()) - new Date(start).getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m ${s % 60}s`;
+}
+
+function JobStatusIcon({ status }: { status: EnrichJobStatus }) {
+  if (status === 'running') return <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />;
+  if (status === 'completed') return <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />;
+  return <AlertCircle className="h-3.5 w-3.5 text-red-400" />;
+}
+
 function BatchEnrichCard() {
+  const queryClient = useQueryClient();
   const [limit, setLimit] = useState(50);
-  const [result, setResult] = useState<{
-    total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[];
-  } | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+
+  // Poll job history — auto-refresh while any job is running
+  const { data: jobsData } = useQuery({
+    queryKey: ['admin', 'enrichment', 'jobs'],
+    queryFn: () => apiClient.getEnrichJobs(20),
+    refetchInterval: (query) => {
+      const jobs = query.state.data?.data?.jobs;
+      const hasRunning = jobs?.some((j) => j.status === 'running');
+      return hasRunning ? JOB_POLL_INTERVAL_MS : false;
+    },
+    staleTime: 3_000,
+  });
+
+  const jobsList: EnrichJobData[] = jobsData?.data?.jobs ?? [];
+  const hasRunning = jobsList.some((j) => j.status === 'running');
+  const latestJob = jobsList[0] ?? null;
 
   const mutation = useMutation({
     mutationFn: () => apiClient.runBatchEnrich({ limit, delay_ms: 3000 }),
-    onSuccess: (data) => setResult(data.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'enrichment', 'jobs'] });
+    },
   });
 
   return (
@@ -178,6 +224,7 @@ function BatchEnrichCard() {
         <span className="text-xs text-muted-foreground ml-auto">Enrich YouTube cards without summaries</span>
       </div>
 
+      {/* Controls */}
       <div className="flex items-center gap-3 mb-4">
         <label className="text-xs text-muted-foreground">Limit:</label>
         <input
@@ -188,10 +235,10 @@ function BatchEnrichCard() {
         />
         <button
           onClick={() => mutation.mutate()}
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || hasRunning}
           className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
-          {mutation.isPending ? (
+          {hasRunning ? (
             <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running...</>
           ) : (
             <><Sparkles className="h-3.5 w-3.5" /> Run Batch</>
@@ -199,34 +246,114 @@ function BatchEnrichCard() {
         </button>
       </div>
 
-      {result && (
-        <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            <div className="bg-muted/30 rounded p-2 text-center">
-              <div className="text-lg font-mono font-bold text-foreground">{result.total}</div>
-              <div className="text-muted-foreground">Found</div>
-            </div>
-            <div className="bg-green-500/10 rounded p-2 text-center">
-              <div className="text-lg font-mono font-bold text-green-400">{result.enriched}</div>
-              <div className="text-muted-foreground">Enriched</div>
-            </div>
-            <div className="bg-red-500/10 rounded p-2 text-center">
-              <div className="text-lg font-mono font-bold text-red-400">{result.errors.length}</div>
-              <div className="text-muted-foreground">Errors</div>
-            </div>
+      {/* Latest job result */}
+      {latestJob?.status === 'running' && (
+        <div className="flex items-center gap-2 mb-3 text-xs text-blue-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>Running... ({formatDuration(latestJob.startedAt, null)} elapsed)</span>
+        </div>
+      )}
+
+      {latestJob?.result && latestJob.status === 'completed' && (
+        <div className="grid grid-cols-3 gap-2 text-xs mb-3">
+          <div className="bg-muted/30 rounded p-2 text-center">
+            <div className="text-lg font-mono font-bold text-foreground">{latestJob.result.total}</div>
+            <div className="text-muted-foreground">Found</div>
           </div>
-          {result.errors.length > 0 && (
-            <div className="text-xs text-red-400 space-y-1 max-h-32 overflow-y-auto">
-              {result.errors.map((e, i) => (
-                <div key={i} className="font-mono">{e.videoId}: {e.error}</div>
+          <div className="bg-green-500/10 rounded p-2 text-center">
+            <div className="text-lg font-mono font-bold text-green-400">{latestJob.result.enriched}</div>
+            <div className="text-muted-foreground">Enriched</div>
+          </div>
+          <div className="bg-red-500/10 rounded p-2 text-center">
+            <div className="text-lg font-mono font-bold text-red-400">{latestJob.result.errors.length}</div>
+            <div className="text-muted-foreground">Errors</div>
+          </div>
+        </div>
+      )}
+
+      {latestJob?.status === 'failed' && (
+        <p className="text-xs text-red-400 mb-3">Failed: {latestJob.error}</p>
+      )}
+
+      {mutation.isError && (
+        <p className="text-xs text-red-400 mb-3">{(mutation.error as Error).message}</p>
+      )}
+
+      {/* Job History (collapsible) */}
+      {jobsList.length > 0 && (
+        <div className="border-t border-border/50 pt-3">
+          <button
+            onClick={() => setHistoryOpen(!historyOpen)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+          >
+            <Clock className="h-3 w-3" />
+            <span>History ({jobsList.length})</span>
+            <ChevronDown className={cn('h-3 w-3 ml-auto transition-transform', historyOpen && 'rotate-180')} />
+          </button>
+
+          {historyOpen && (
+            <div className="mt-2 space-y-1 max-h-[300px] overflow-y-auto scrollbar-thin">
+              {jobsList.map((job) => (
+                <div key={job.id} className="rounded border border-border/30 bg-muted/10">
+                  <button
+                    onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
+                    className="flex items-center gap-2 w-full px-2.5 py-1.5 text-xs hover:bg-muted/20 transition-colors"
+                  >
+                    <JobStatusIcon status={job.status} />
+                    <span className="font-mono text-muted-foreground">
+                      {new Date(job.startedAt).toLocaleString()}
+                    </span>
+                    <span className="text-muted-foreground">
+                      limit={job.limit}
+                    </span>
+                    {job.result && (
+                      <span className="ml-auto text-muted-foreground">
+                        {job.result.enriched}/{job.result.total}
+                        {job.result.errors.length > 0 && (
+                          <span className="text-red-400 ml-1">({job.result.errors.length} err)</span>
+                        )}
+                      </span>
+                    )}
+                    {job.status === 'running' && (
+                      <span className="ml-auto text-blue-400">{formatDuration(job.startedAt, null)}</span>
+                    )}
+                    {job.completedAt && (
+                      <span className="text-muted-foreground/60 ml-1">
+                        {formatDuration(job.startedAt, job.completedAt)}
+                      </span>
+                    )}
+                    <ChevronDown className={cn('h-3 w-3 transition-transform', expandedJobId === job.id && 'rotate-180')} />
+                  </button>
+
+                  {expandedJobId === job.id && (
+                    <div className="px-2.5 pb-2 text-xs space-y-1">
+                      {job.error && (
+                        <div className="text-red-400 font-mono">{job.error}</div>
+                      )}
+                      {job.result && (
+                        <>
+                          <div className="grid grid-cols-4 gap-1">
+                            <div className="text-muted-foreground">Total: <span className="text-foreground font-mono">{job.result.total}</span></div>
+                            <div className="text-muted-foreground">Enriched: <span className="text-green-400 font-mono">{job.result.enriched}</span></div>
+                            <div className="text-muted-foreground">Skipped: <span className="text-foreground font-mono">{job.result.skipped}</span></div>
+                            <div className="text-muted-foreground">Errors: <span className="text-red-400 font-mono">{job.result.errors.length}</span></div>
+                          </div>
+                          {job.result.errors.length > 0 && (
+                            <div className="mt-1 space-y-0.5 max-h-24 overflow-y-auto text-red-400/80 font-mono">
+                              {job.result.errors.map((e, i) => (
+                                <div key={i}>{e.videoId}: {e.error}</div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           )}
         </div>
-      )}
-
-      {mutation.isError && (
-        <p className="text-xs text-red-400 mt-2">Failed: {(mutation.error as Error).message}</p>
       )}
     </div>
   );

@@ -12,11 +12,11 @@ import { DEFAULT_TIER, TIER_LIMITS } from '@/config/quota';
 
 const UserListQuerySchema = PaginationQuerySchema.extend({
   search: z.string().optional(),
-  tier: z.enum(['free', 'premium', 'admin']).optional(),
+  tier: z.enum(['free', 'pro', 'lifetime', 'admin']).optional(),
 });
 
 const SubscriptionUpdateSchema = z.object({
-  tier: z.enum(['free', 'premium', 'admin']).optional(),
+  tier: z.enum(['free', 'pro', 'lifetime', 'admin']).optional(),
   localCardsLimit: z.number().int().min(0).optional(),
   mandalaLimit: z.number().int().min(0).optional(),
 });
