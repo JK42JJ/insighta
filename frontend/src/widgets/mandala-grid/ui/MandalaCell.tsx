@@ -37,6 +37,7 @@ export interface MandalaCellProps {
   sizeMode?: MandalaSizeMode;
   hasSubLevel?: boolean;
   onNavigateToSubLevel?: () => void;
+  totalCards?: number;
 }
 
 // --- Diagonal tooltip placement based on tile position in grid ---
@@ -315,12 +316,57 @@ function CardBlock({
 }
 
 // --- Cell drag handle ---
-// --- DiceBear avatar for center cell (fills the cell) ---
-const CenterAvatar = memo(function CenterAvatar({ seed }: { seed: string }) {
+// --- DiceBear avatar for center cell (expression changes by activity level) ---
+
+// 5 activity levels: sad → worried → neutral → smile → joy
+// Thresholds: 0, 1-4, 5-14, 15-29, 30+
+const ACTIVITY_LEVELS = [0, 1, 5, 15, 30] as const;
+
+interface ExpressionPreset {
+  eyes: string[];
+  eyebrows: string[];
+  mouth: string[];
+}
+
+// Manually curated expressions from sad to joyful
+const EXPRESSION_PRESETS = [
+  // Level 1: Sad (0 cards)
+  { eyes: ['variant26' as const], eyebrows: ['variant06' as const], mouth: ['variant17' as const] },
+  // Level 2: Worried (1-4 cards)
+  { eyes: ['variant20' as const], eyebrows: ['variant09' as const], mouth: ['variant07' as const] },
+  // Level 3: Neutral (5-14 cards)
+  { eyes: ['variant01' as const], eyebrows: ['variant01' as const], mouth: ['variant01' as const] },
+  // Level 4: Smile (15-29 cards)
+  { eyes: ['variant12' as const], eyebrows: ['variant13' as const], mouth: ['variant22' as const] },
+  // Level 5: Joy (30+ cards)
+  { eyes: ['variant17' as const], eyebrows: ['variant15' as const], mouth: ['variant30' as const] },
+] satisfies ExpressionPreset[];
+
+function getActivityLevel(totalCards: number): number {
+  for (let i = ACTIVITY_LEVELS.length - 1; i >= 0; i--) {
+    if (totalCards >= ACTIVITY_LEVELS[i]!) return i;
+  }
+  return 0;
+}
+
+const CenterAvatar = memo(function CenterAvatar({
+  seed,
+  totalCards,
+}: {
+  seed: string;
+  totalCards: number;
+}) {
   const svgDataUri = useMemo(() => {
-    const avatar = createAvatar(adventurer, { seed });
+    const level = getActivityLevel(totalCards);
+    const preset = EXPRESSION_PRESETS[level]!;
+    const avatar = createAvatar(adventurer, {
+      seed,
+      eyes: preset.eyes,
+      eyebrows: preset.eyebrows,
+      mouth: preset.mouth,
+    });
     return avatar.toDataUri();
-  }, [seed]);
+  }, [seed, totalCards]);
 
   return (
     <img
@@ -380,6 +426,7 @@ export const MandalaCell = memo(
     onCardClick,
     sizeMode = 'standard',
     hasSubLevel = false,
+    totalCards = 0,
   }: MandalaCellProps) {
     const { t } = useTranslation();
     const cardCount = cards.length;
@@ -574,9 +621,9 @@ export const MandalaCell = memo(
         {/* Cell Drag Handle */}
         <CellDragHandle gridIndex={index} isCenter={isCenter} />
 
-        {/* Center avatar — DiceBear adventurer (fills cell) */}
+        {/* Center avatar — DiceBear adventurer (fills cell, expression by activity) */}
         {isCenter && label && (
-          <CenterAvatar seed={label} />
+          <CenterAvatar seed={label} totalCards={totalCards} />
         )}
 
         {/* Label — fluid typography (hidden for center cell — title shown in L1 header) */}
