@@ -322,7 +322,7 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
     const body = AutoEnrichBodySchema.parse(request.body);
     try {
-      const result = await enrichBySourceRef(userId, body.source_table, body.source_id, { force: body.force });
+      const result = await enrichBySourceRef(userId, body.source_table, body.source_id, { force: body.force, transcript: body.transcript });
       if (!result) {
         return reply.send({ status: 'ok', data: { enriched: false, reason: 'node_not_found_or_not_youtube' } });
       }
