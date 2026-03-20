@@ -61,6 +61,42 @@ export function getPrismaClient(): PrismaClient {
  * Retry wrapper for transient database errors
  * Handles PgBouncer connection issues and transient failures
  */
+/**
+ * Check if a Prisma error indicates a stale/broken connection pool
+ */
+function isConnectionError(error: any): boolean {
+  return (
+    error?.code === 'P2024' || // Timed out fetching a new connection from the connection pool
+    error?.code === 'P1017' || // Server has closed the connection
+    error?.code === 'P1001' || // Can't reach database server
+    error?.code === 'P1002' || // Database server reached but timed out
+    error?.message?.includes('prepared statement') ||
+    error?.message?.includes('server closed the connection') ||
+    error?.message?.includes('Connection refused') ||
+    error?.message?.includes('connection pool')
+  );
+}
+
+/**
+ * Force-reset the Prisma client (disconnect + destroy singleton).
+ * Next call to getPrismaClient() creates a fresh instance with a new pool.
+ */
+export async function resetConnectionPool(): Promise<void> {
+  return resetPrismaClient();
+}
+
+async function resetPrismaClient(): Promise<void> {
+  if (prismaInstance) {
+    logger.warn('Resetting Prisma client — creating fresh connection pool');
+    try {
+      await prismaInstance.$disconnect();
+    } catch {
+      // ignore disconnect errors during reset
+    }
+    prismaInstance = null;
+  }
+}
+
 export async function withRetry<T>(
   operation: () => Promise<T>,
   maxRetries: number = 3,
@@ -70,20 +106,15 @@ export async function withRetry<T>(
     try {
       return await operation();
     } catch (error: any) {
-      const isTransient =
-        error?.code === 'P2024' || // Timed out fetching a new connection from the connection pool
-        error?.code === 'P1017' || // Server has closed the connection
-        error?.code === 'P1001' || // Can't reach database server
-        error?.code === 'P1002' || // Database server reached but timed out
-        error?.message?.includes('prepared statement') ||
-        error?.message?.includes('server closed the connection');
-
-      if (!isTransient || attempt === maxRetries) {
+      if (!isConnectionError(error) || attempt === maxRetries) {
         throw error;
       }
 
+      // On connection errors, reset the pool before retrying
+      await resetPrismaClient();
+
       const delay = baseDelayMs * Math.pow(2, attempt - 1);
-      logger.warn('Transient DB error, retrying', {
+      logger.warn('Transient DB error, retrying with fresh pool', {
         attempt,
         maxRetries,
         code: error?.code,

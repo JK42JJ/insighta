@@ -77,7 +77,8 @@ export function AdminUsers() {
         >
           <option value="">All tiers</option>
           <option value="free">Free</option>
-          <option value="premium">Premium</option>
+          <option value="pro">Pro</option>
+          <option value="lifetime">Lifetime</option>
           <option value="admin">Admin</option>
         </select>
       </div>
@@ -151,7 +152,8 @@ export function AdminUsers() {
                         className={cn(
                           'text-xs px-2 py-0.5 rounded-full',
                           user.tier === 'admin' && 'bg-primary/10 text-primary',
-                          user.tier === 'premium' && 'bg-amber-500/10 text-amber-500',
+                          user.tier === 'pro' && 'bg-amber-500/10 text-amber-500',
+                          user.tier === 'lifetime' && 'bg-emerald-500/10 text-emerald-500',
                           user.tier === 'free' && 'bg-muted text-muted-foreground'
                         )}
                       >
@@ -173,7 +175,8 @@ export function AdminUsers() {
                           className="text-xs px-1.5 py-1 rounded border border-border bg-background"
                         >
                           <option value="free">Free</option>
-                          <option value="premium">Premium</option>
+                          <option value="pro">Pro</option>
+                          <option value="lifetime">Lifetime</option>
                           <option value="admin">Admin</option>
                         </select>
                         <button

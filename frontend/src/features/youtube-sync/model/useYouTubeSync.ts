@@ -377,6 +377,40 @@ export function useSyncAllPlaylists() {
 }
 
 /**
+ * YouTube search result type
+ */
+export interface YouTubeSearchResult {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  thumbnail: string;
+  publishedAt: string;
+}
+
+/**
+ * Hook to search YouTube videos by keyword
+ */
+export function useYouTubeSearch() {
+  return useMutation({
+    mutationFn: async ({ query, maxResults }: { query: string; maxResults?: number }): Promise<YouTubeSearchResult[]> => {
+      const headers = await getAuthHeaders();
+      const params = new URLSearchParams({ q: query });
+      if (maxResults) params.set('maxResults', String(maxResults));
+
+      const response = await fetch(`/api/v1/videos/search?${params}`, { headers });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || error.error || 'Search failed');
+      }
+
+      const data = await response.json();
+      return data.videos ?? [];
+    },
+  });
+}
+
+/**
  * Combined hook for common YouTube sync operations
  */
 export function useYouTubeSync() {

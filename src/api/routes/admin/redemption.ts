@@ -11,7 +11,7 @@ const RedeemCodeSchema = z.object({
 const BulkUpdateSchema = z.object({
   userIds: z.array(z.string().uuid()).min(1).max(100),
   changes: z.object({
-    tier: z.enum(['free', 'premium', 'admin']).optional(),
+    tier: z.enum(['free', 'pro', 'lifetime', 'admin']).optional(),
     localCardsLimit: z.number().int().min(0).optional(),
     mandalaLimit: z.number().int().min(0).optional(),
   }),

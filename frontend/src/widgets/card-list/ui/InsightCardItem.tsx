@@ -4,7 +4,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
-import { GripVertical, StickyNote, Play, Loader2 } from 'lucide-react';
+import { GripVertical, StickyNote, Play, Loader2, RotateCw } from 'lucide-react';
 import { CompactNotePreview } from '@/shared/ui/CompactNotePreview';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
@@ -24,6 +24,8 @@ interface InsightCardItemProps {
   summaryRating?: SummaryRating;
   onRate?: (cardId: string, rating: SummaryRating) => void;
   isEnriching?: boolean;
+  isEnrichFailed?: boolean;
+  onRetryEnrich?: (cardId: string, videoUrl?: string) => void;
 }
 
 export function InsightCardItem({
@@ -38,6 +40,8 @@ export function InsightCardItem({
   summaryRating,
   onRate,
   isEnriching = false,
+  isEnrichFailed = false,
+  onRetryEnrich,
 }: InsightCardItemProps) {
   const { t } = useTranslation();
   const cardFlipEnabled = useCardFlipSetting();
@@ -225,6 +229,24 @@ export function InsightCardItem({
                 <Loader2 className="w-3 h-3 animate-spin" />
                 <span>AI</span>
               </div>
+            </div>
+          )}
+
+          {/* Enrichment failed indicator (bottom-left, with retry button) */}
+          {isEnrichFailed && !isEnriching && (
+            <div className="absolute bottom-2 left-2 z-[5]">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRetryEnrich?.(card.id, card.videoUrl);
+                }}
+                className="flex items-center gap-1 bg-destructive/90 hover:bg-destructive text-white text-[10px] px-1.5 py-0.5 rounded-full transition-colors cursor-pointer"
+                title={t('cards.retryAiSummary', 'Retry AI Summary')}
+              >
+                <RotateCw className="w-3 h-3" />
+                <span>{t('cards.retryAi', 'Retry AI')}</span>
+              </button>
             </div>
           )}
         </div>

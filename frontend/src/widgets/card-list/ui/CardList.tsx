@@ -26,6 +26,8 @@ interface CardListProps {
   onDeleteCards?: (cardIds: string[]) => void;
   onSelectionChange?: (selectedIds: string[]) => void;
   enrichingCardIds?: Set<string>;
+  failedEnrichCardIds?: Set<string>;
+  onRetryEnrich?: (cardId: string, videoUrl?: string) => void;
 }
 
 // Wrapper to make each card slot a droppable for reorder
@@ -58,7 +60,7 @@ function CardSlot({
   );
 }
 
-export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectionChange, enrichingCardIds }: CardListProps) {
+export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectionChange, enrichingCardIds, failedEnrichCardIds, onRetryEnrich }: CardListProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data: summaryRatings } = useSummaryRatings();
@@ -258,6 +260,8 @@ export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectio
                 summaryRating={summaryRatings?.[card.id] as SummaryRating | undefined}
                 onRate={handleRate}
                 isEnriching={enrichingCardIds?.has(card.id)}
+                isEnrichFailed={failedEnrichCardIds?.has(card.id)}
+                onRetryEnrich={onRetryEnrich}
               />
             </CardSlot>
           );

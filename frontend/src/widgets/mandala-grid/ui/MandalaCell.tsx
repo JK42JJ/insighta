@@ -8,6 +8,7 @@ import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockDa
 import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
 import { type DragData, type DropData, cardDragId, cellDragId, cellDropId } from '@/shared/lib/dnd';
+import { MandalaAvatar } from '@/entities/avatar';
 import type { MandalaSizeMode } from './MandalaGrid';
 
 export interface MandalaCellProps {
@@ -35,6 +36,9 @@ export interface MandalaCellProps {
   sizeMode?: MandalaSizeMode;
   hasSubLevel?: boolean;
   onNavigateToSubLevel?: () => void;
+  totalCards?: number;
+  avatarSeed?: string;
+  mandalaId?: string;
 }
 
 // --- Diagonal tooltip placement based on tile position in grid ---
@@ -360,6 +364,9 @@ export const MandalaCell = memo(
     onCardClick,
     sizeMode = 'standard',
     hasSubLevel = false,
+    totalCards = 0,
+    avatarSeed,
+    mandalaId,
   }: MandalaCellProps) {
     const { t } = useTranslation();
     const cardCount = cards.length;
@@ -554,21 +561,33 @@ export const MandalaCell = memo(
         {/* Cell Drag Handle */}
         <CellDragHandle gridIndex={index} isCenter={isCenter} />
 
-        {/* Label — fluid typography */}
-        <span
-          className={cn(
-            'text-center font-medium leading-tight transition-colors w-full shrink-0',
-            sizeMode === 'compact' ? 'line-clamp-1' : 'line-clamp-2',
-            isCenter && 'text-primary font-semibold',
-            !isCenter && 'text-foreground/80',
-            isSelected && !isCenter && 'text-primary'
-          )}
-          style={{
-            fontSize: isCenter ? 'clamp(10px, 3cqi, 16px)' : 'clamp(8px, 2.5cqi, 14px)',
-          }}
-        >
-          {label}
-        </span>
+        {/* Center avatar — MandalaAvatar (Rive + DiceBear fallback) */}
+        {isCenter && (avatarSeed || label) && (
+          <MandalaAvatar
+            mandalaId={mandalaId}
+            seed={avatarSeed || label}
+            totalCards={totalCards}
+            centerGoal={label}
+            riveUrl="/avatars/interactive-avatar.riv"
+          />
+        )}
+
+        {/* Label — fluid typography (hidden for center cell — title shown in L1 header) */}
+        {!isCenter && (
+          <span
+            className={cn(
+              'text-center font-medium leading-tight transition-colors w-full shrink-0',
+              sizeMode === 'compact' ? 'line-clamp-1' : 'line-clamp-2',
+              'text-foreground/80',
+              isSelected && 'text-primary'
+            )}
+            style={{
+              fontSize: 'clamp(8px, 2.5cqi, 14px)',
+            }}
+          >
+            {label}
+          </span>
+        )}
 
         {/* Card visualization — fills remaining space */}
         {!isCenter && renderCards}
@@ -639,6 +658,7 @@ export const MandalaCell = memo(
     if (prev.swapDirection !== next.swapDirection) return false;
     if (prev.hasSubLevel !== next.hasSubLevel) return false;
     if (prev.sizeMode !== next.sizeMode) return false;
+    if (prev.mandalaId !== next.mandalaId) return false;
 
     const pc = prev.cards,
       nc = next.cards;

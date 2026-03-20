@@ -432,6 +432,7 @@ function AuthenticatedApp() {
   // Shared MandalaGrid element
   const mandalaGridElement = () => (
     <MandalaGrid
+      mandalaId={effectiveMandalaId}
       level={navigation.currentLevel}
       cardsByCell={cards.cardsByCell}
       selectedCellIndex={navigation.selectedCellIndex}
@@ -603,6 +604,8 @@ function AuthenticatedApp() {
                 watchPositionCache={modal.watchPositionCache}
                 panelSizeCache={modal.panelSizeCache}
                 enrichingCardIds={cards.enrichingCardIds}
+                failedEnrichCardIds={cards.failedEnrichCardIds}
+                onRetryEnrich={cards.retryEnrich}
               />
             </div>
 

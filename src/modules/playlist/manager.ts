@@ -34,10 +34,23 @@ export class PlaylistManager {
   }
 
   /**
-   * Import playlist from YouTube
+   * Check if input is a YouTube channel URL
+   */
+  private isChannelUrl(input: string): boolean {
+    return /youtube\.com\/(@[A-Za-z0-9_.-]+|channel\/UC|c\/|user\/)/.test(input);
+  }
+
+  /**
+   * Import playlist from YouTube (supports playlist URLs and channel URLs)
    */
   public async importPlaylist(playlistIdOrUrl: string, userId: string): Promise<youtube_playlists> {
-    const playlistId = this.extractPlaylistId(playlistIdOrUrl);
+    let playlistId: string;
+
+    if (this.isChannelUrl(playlistIdOrUrl)) {
+      playlistId = await this.youtubeClient.resolveChannelToUploadsPlaylist(playlistIdOrUrl);
+    } else {
+      playlistId = this.extractPlaylistId(playlistIdOrUrl);
+    }
 
     // Check if already exists
     const existing = await db.youtube_playlists.findFirst({

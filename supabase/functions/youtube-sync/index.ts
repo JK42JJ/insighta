@@ -656,8 +656,35 @@ Deno.serve(async (req) => {
           );
         }
 
+        // video_summaries manual JOIN
+        const videos = data || [];
+        const ytVideoIds = videos
+          .map((v: any) => v.video?.youtube_video_id)
+          .filter(Boolean);
+
+        let enrichedVideos = videos;
+        if (ytVideoIds.length > 0) {
+          const { data: summaries } = await supabase
+            .from('video_summaries')
+            .select('video_id, summary_en, summary_ko, tags, model')
+            .in('video_id', ytVideoIds);
+
+          if (summaries && summaries.length > 0) {
+            const summaryMap: Record<string, any> = {};
+            for (const s of summaries) summaryMap[s.video_id] = s;
+
+            enrichedVideos = videos.map((v: any) => {
+              const ytId = v.video?.youtube_video_id;
+              const s = ytId ? summaryMap[ytId] : undefined;
+              return s
+                ? { ...v, video_summary: { summary_en: s.summary_en, summary_ko: s.summary_ko, tags: s.tags, model: s.model } }
+                : v;
+            });
+          }
+        }
+
         return new Response(
-          JSON.stringify({ videos: data || [] }),
+          JSON.stringify({ videos: enrichedVideos }),
           { headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
