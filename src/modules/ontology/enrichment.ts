@@ -271,7 +271,8 @@ Important: Respond in English. Do NOT start summary with "This video" or "The vi
 
 export async function enrichResourceNode(
   nodeId: string,
-  userId: string
+  userId: string,
+  options?: { transcript?: string }
 ): Promise<EnrichResult> {
   const prisma = getPrismaClient();
 
@@ -300,14 +301,22 @@ export async function enrichResourceNode(
     throw new Error('NOT_YOUTUBE_URL');
   }
 
-  // 3. Get transcript (auto-detect language: en → ko fallback)
-  const captionExtractor = getCaptionExtractor();
-  const captionResult = await captionExtractor.extractCaptions(videoId);
-  if (!captionResult.success || !captionResult.caption) {
-    throw new Error(`CAPTION_FAILED: ${captionResult.error || 'unknown'}`);
+  // 3. Get transcript: use client-provided transcript if available, else server-side extraction
+  let transcript: string;
+  let transcriptLang = 'en';
+
+  if (options?.transcript) {
+    transcript = options.transcript;
+    logger.info('Using client-provided transcript', { nodeId, length: transcript.length });
+  } else {
+    const captionExtractor = getCaptionExtractor();
+    const captionResult = await captionExtractor.extractCaptions(videoId);
+    if (!captionResult.success || !captionResult.caption) {
+      throw new Error(`CAPTION_FAILED: ${captionResult.error || 'unknown'}`);
+    }
+    transcript = captionResult.caption.fullText;
+    transcriptLang = captionResult.caption.language;
   }
-  const transcript = captionResult.caption.fullText;
-  const transcriptLang = captionResult.caption.language;
 
   // 4. Generate bilingual summary (en + ko)
   const generationProvider = await createGenerationProvider();
@@ -429,7 +438,7 @@ export async function enrichBySourceRef(
   userId: string,
   sourceTable: string,
   sourceId: string,
-  options?: { force?: boolean }
+  options?: { force?: boolean; transcript?: string }
 ): Promise<EnrichResult | null> {
   const prisma = getPrismaClient();
 
@@ -498,7 +507,7 @@ export async function enrichBySourceRef(
     `;
   }
 
-  return enrichResourceNode(nodeId, userId);
+  return enrichResourceNode(nodeId, userId, { transcript: options?.transcript });
 }
 
 // ============================================================================
