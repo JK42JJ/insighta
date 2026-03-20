@@ -183,7 +183,7 @@ class ApiClient {
 
   private isRefreshing = false;
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
     const url = `${this.baseUrl}/api/v1${endpoint}`;
     const token = await this.getFreshToken();
 
@@ -191,26 +191,30 @@ class ApiClient {
       console.log(`[apiClient] ${options.method || 'GET'} ${endpoint} token:${token ? 'yes' : 'no'}`);
     }
 
+    const { timeoutMs, ...fetchOptions } = options;
+
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...fetchOptions.headers,
     };
 
     if (token) {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
 
-    // 15s timeout to prevent hanging requests
+    const DEFAULT_TIMEOUT_MS = 15_000;
+    const effectiveTimeout = timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15_000);
+    const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
 
     let response: Response;
     try {
-      response = await fetch(url, { ...options, headers, signal: controller.signal });
+      response = await fetch(url, { ...fetchOptions, headers, signal: controller.signal });
     } catch (err) {
       clearTimeout(timeoutId);
       if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new ApiHttpError('Request timeout (15s)', 408);
+        const secs = Math.round(effectiveTimeout / 1000);
+        throw new ApiHttpError(`Request timeout (${secs}s)`, 408);
       }
       // Network error (Failed to fetch, QUIC timeout, etc.)
       throw new ApiHttpError(
@@ -890,9 +894,42 @@ class ApiClient {
 
   async runBatchEnrich(body: { limit?: number; delay_ms?: number } = {}): Promise<{
     success: boolean;
-    data: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] };
+    data: { jobId: string; status: string };
   }> {
     return this.request('/admin/enrichment/batch-all', { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  async getEnrichJobs(limit: number = 20): Promise<{
+    success: boolean;
+    data: {
+      jobs: Array<{
+        id: string;
+        status: 'running' | 'completed' | 'failed';
+        limit: number;
+        startedAt: string;
+        completedAt: string | null;
+        result: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] } | null;
+        error: string | null;
+      }>;
+      total: number;
+    };
+  }> {
+    return this.request(`/admin/enrichment/jobs?limit=${limit}`);
+  }
+
+  async getEnrichJob(id: string): Promise<{
+    success: boolean;
+    data: {
+      id: string;
+      status: 'running' | 'completed' | 'failed';
+      limit: number;
+      startedAt: string;
+      completedAt: string | null;
+      result: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] } | null;
+      error: string | null;
+    };
+  }> {
+    return this.request(`/admin/enrichment/jobs/${id}`);
   }
 
   // ========================================
