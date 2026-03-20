@@ -885,6 +885,17 @@ class ApiClient {
   }
 
   // ========================================
+  // Admin Enrichment
+  // ========================================
+
+  async runBatchEnrich(body: { limit?: number; delay_ms?: number } = {}): Promise<{
+    success: boolean;
+    data: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] };
+  }> {
+    return this.request('/admin/enrichment/batch-all', { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  // ========================================
   // Admin Analytics
   // ========================================
 
