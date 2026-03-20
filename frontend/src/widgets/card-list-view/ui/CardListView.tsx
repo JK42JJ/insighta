@@ -33,6 +33,8 @@ interface CardListViewProps {
   panelSizeCache?: Map<string, number>;
   highlightedCardId?: string | null;
   enrichingCardIds?: Set<string>;
+  failedEnrichCardIds?: Set<string>;
+  onRetryEnrich?: (cardId: string, videoUrl?: string) => void;
 }
 
 export function CardListView({
@@ -56,6 +58,8 @@ export function CardListView({
   panelSizeCache,
   highlightedCardId,
   enrichingCardIds,
+  failedEnrichCardIds,
+  onRetryEnrich,
 }: CardListViewProps) {
   const { t } = useTranslation();
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
@@ -217,6 +221,8 @@ export function CardListView({
           onDeleteCards={onDeleteCards}
           onSelectionChange={handleSelectionChange}
           enrichingCardIds={enrichingCardIds}
+          failedEnrichCardIds={failedEnrichCardIds}
+          onRetryEnrich={onRetryEnrich}
         />
       </div>
     );

@@ -705,18 +705,28 @@ export async function systemBatchEnrich(
   const limit = Math.min(options.limit ?? 100, MAX_BATCH_LIMIT);
   const delayMs = options.delayMs ?? SYSTEM_BATCH_DELAY_MS;
 
-  // Find YouTube cards whose video_id is NOT yet in video_summaries
+  // Find YouTube videos (local cards + synced) not yet in video_summaries
   const cards = await prisma.$queryRaw<
-    { url: string; title: string }[]
+    { vid: string; title: string }[]
   >`
-    SELECT DISTINCT ON (c.url) c.url, COALESCE(c.title, c.metadata_title, 'Untitled') as title
-    FROM public.user_local_cards c
-    WHERE c.link_type IN ('youtube', 'youtube-shorts')
+    SELECT vid, title FROM (
+      SELECT DISTINCT ON (c.url)
+        substring(c.url from 'v=([^&]+)') as vid,
+        COALESCE(c.title, c.metadata_title, 'Untitled') as title
+      FROM public.user_local_cards c
+      WHERE c.link_type IN ('youtube', 'youtube-shorts')
+
+      UNION ALL
+
+      SELECT DISTINCT ON (yv.youtube_video_id)
+        yv.youtube_video_id as vid,
+        yv.title
+      FROM public.youtube_videos yv
+    ) combined
+    WHERE vid IS NOT NULL
       AND NOT EXISTS (
-        SELECT 1 FROM public.video_summaries vs
-        WHERE vs.url = c.url
+        SELECT 1 FROM public.video_summaries vs WHERE vs.video_id = combined.vid
       )
-    ORDER BY c.url, c.created_at ASC
     LIMIT ${limit}
   `;
 
@@ -729,7 +739,7 @@ export async function systemBatchEnrich(
 
   for (let i = 0; i < cards.length; i++) {
     const card = cards[i]!;
-    const videoId = extractYouTubeVideoId(card.url);
+    const videoId = card.vid;
 
     if (!videoId) {
       result.skipped++;
@@ -737,7 +747,8 @@ export async function systemBatchEnrich(
     }
 
     try {
-      await enrichVideo(videoId, { title: card.title, url: card.url });
+      const url = `https://www.youtube.com/watch?v=${videoId}`;
+      await enrichVideo(videoId, { title: card.title, url });
       result.enriched++;
       logger.info('System batch enriched', { videoId, progress: `${i + 1}/${cards.length}` });
     } catch (err) {

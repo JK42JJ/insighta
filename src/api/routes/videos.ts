@@ -8,6 +8,7 @@ import { FastifyPluginCallback } from 'fastify';
 import { getVideoManager } from '../../modules/video';
 import { getCaptionExtractor } from '../../modules/caption/extractor';
 import { getPrismaClient } from '../../modules/database';
+import { getYouTubeClient } from '../client';
 import {
   ListVideosQuerySchema,
   GetVideoParamsSchema,
@@ -44,6 +45,55 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   const getVideo = () => getVideoManager();
   const getCaption = () => getCaptionExtractor();
   const getDb = () => getPrismaClient();
+
+  /**
+   * GET /api/v1/videos/search - Search YouTube videos by keyword
+   */
+  fastify.get<{
+    Querystring: { q: string; maxResults?: number };
+    Reply: {
+      videos: Array<{
+        videoId: string;
+        title: string;
+        channelTitle: string;
+        thumbnail: string;
+        publishedAt: string;
+      }>;
+    };
+  }>(
+    '/search',
+    {
+      onRequest: [fastify.authenticate],
+    },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        throw new Error('Unauthorized');
+      }
+
+      const { q, maxResults } = request.query;
+      if (!q || q.trim().length === 0) {
+        return reply.code(400).send({ error: 'Query parameter "q" is required' } as any);
+      }
+
+      const limit = Math.min(maxResults ?? 20, 50);
+      logger.info('Searching YouTube videos', { query: q, maxResults: limit, userId: request.user.userId });
+
+      const ytClient = getYouTubeClient();
+      const results = await ytClient.searchVideos(q.trim(), limit);
+
+      const videos = results
+        .filter((r) => r.id?.videoId)
+        .map((r) => ({
+          videoId: r.id!.videoId!,
+          title: r.snippet?.title ?? '',
+          channelTitle: r.snippet?.channelTitle ?? '',
+          thumbnail: r.snippet?.thumbnails?.medium?.url ?? r.snippet?.thumbnails?.default?.url ?? '',
+          publishedAt: r.snippet?.publishedAt ?? '',
+        }));
+
+      return reply.code(200).send({ videos });
+    }
+  );
 
   /**
    * GET /api/v1/videos - List videos

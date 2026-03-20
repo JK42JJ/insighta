@@ -65,6 +65,35 @@ interface Note {
   updatedAt: string;
 }
 
+interface ClawbotConfig {
+  cronExpression: string;
+  threshold: number;
+  batchLimit: number;
+  delayMs: number;
+  autoStart: boolean;
+}
+
+interface ClawbotRunRecord {
+  id: string;
+  trigger: 'cron' | 'manual' | 'startup';
+  status: 'running' | 'completed' | 'failed' | 'skipped';
+  startedAt: string;
+  completedAt: string | null;
+  unsummarizedCount: number;
+  result: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] } | null;
+  error: string | null;
+}
+
+interface ClawbotStatus {
+  enabled: boolean;
+  running: boolean;
+  config: ClawbotConfig;
+  currentRun: ClawbotRunRecord | null;
+  lastRun: ClawbotRunRecord | null;
+  nextRunEstimate: string | null;
+  stats: { totalRuns: number; totalEnriched: number; totalErrors: number; totalSkipped: number };
+}
+
 interface SyncStatus {
   playlistId: string;
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
@@ -183,7 +212,7 @@ class ApiClient {
 
   private isRefreshing = false;
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
     const url = `${this.baseUrl}/api/v1${endpoint}`;
     const token = await this.getFreshToken();
 
@@ -191,26 +220,30 @@ class ApiClient {
       console.log(`[apiClient] ${options.method || 'GET'} ${endpoint} token:${token ? 'yes' : 'no'}`);
     }
 
+    const { timeoutMs, ...fetchOptions } = options;
+
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...fetchOptions.headers,
     };
 
     if (token) {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
 
-    // 15s timeout to prevent hanging requests
+    const DEFAULT_TIMEOUT_MS = 15_000;
+    const effectiveTimeout = timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15_000);
+    const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
 
     let response: Response;
     try {
-      response = await fetch(url, { ...options, headers, signal: controller.signal });
+      response = await fetch(url, { ...fetchOptions, headers, signal: controller.signal });
     } catch (err) {
       clearTimeout(timeoutId);
       if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new ApiHttpError('Request timeout (15s)', 408);
+        const secs = Math.round(effectiveTimeout / 1000);
+        throw new ApiHttpError(`Request timeout (${secs}s)`, 408);
       }
       // Network error (Failed to fetch, QUIC timeout, etc.)
       throw new ApiHttpError(
@@ -619,6 +652,22 @@ class ApiClient {
     return this.request(`/mandalas/subscriptions${query}`);
   }
 
+  async getMandalaMood(
+    mandalaId: string,
+  ): Promise<{
+    state: number;
+    signals: {
+      weeklySessionCount: number;
+      entertainmentRatio: number;
+      newTopicCount: number;
+      daysSinceLastActivity: number;
+      totalCards: number;
+    };
+    updatedAt: string;
+  }> {
+    return this.request(`/mandalas/${mandalaId}/mood`);
+  }
+
   async getMandalaActivity(
     mandalaId: string,
     page?: number,
@@ -658,9 +707,37 @@ class ApiClient {
       tiers: Array<{ tier: string; count: number }>;
       recentSignups: Array<{ date: string; count: number }>;
       content: { totalCards: number; totalMandalas: number };
+      kpi: {
+        totalNotes: number;
+        totalSummaries: number;
+        totalSyncedCards: number;
+        totalSyncedPlaylists: number;
+        summariesToday: number;
+        summariesWeek: number;
+      };
     };
   }> {
     return this.request('/admin/stats/overview');
+  }
+
+  async getAdminActivity(params: {
+    from: string;
+    to: string;
+    userId?: string;
+  }): Promise<{
+    success: boolean;
+    data: Array<{
+      date: string;
+      logins: number;
+      cardsCreated: number;
+      notesWritten: number;
+      aiSummaries: number;
+      mandalaActions: number;
+    }>;
+  }> {
+    const query = new URLSearchParams({ from: params.from, to: params.to });
+    if (params.userId) query.set('user_id', params.userId);
+    return this.request(`/admin/stats/activity?${query}`);
   }
 
   async getAdminUsers(params?: {
@@ -870,7 +947,11 @@ class ApiClient {
     data: {
       config: { provider: string; openrouter_model: string; ollama_url: string; ollama_generate_model: string; ollama_embed_model: string };
       active: { embedding: { provider: string; dimension: number }; generation: { provider: string; model: string } };
-      health: { ollama: boolean; gemini: boolean; openrouter: boolean };
+      health: {
+        ollama: boolean;
+        gemini: boolean;
+        openrouter: boolean | { available: boolean; latencyMs: number; credits?: string; error?: string };
+      };
       auto_priority: string[];
     };
   }> {
@@ -890,9 +971,70 @@ class ApiClient {
 
   async runBatchEnrich(body: { limit?: number; delay_ms?: number } = {}): Promise<{
     success: boolean;
-    data: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] };
+    data: { jobId: string; status: string };
   }> {
     return this.request('/admin/enrichment/batch-all', { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  async getEnrichJobs(limit: number = 20): Promise<{
+    success: boolean;
+    data: {
+      jobs: Array<{
+        id: string;
+        status: 'running' | 'completed' | 'failed';
+        limit: number;
+        startedAt: string;
+        completedAt: string | null;
+        result: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] } | null;
+        error: string | null;
+      }>;
+      total: number;
+    };
+  }> {
+    return this.request(`/admin/enrichment/jobs?limit=${limit}`);
+  }
+
+  async getEnrichJob(id: string): Promise<{
+    success: boolean;
+    data: {
+      id: string;
+      status: 'running' | 'completed' | 'failed';
+      limit: number;
+      startedAt: string;
+      completedAt: string | null;
+      result: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] } | null;
+      error: string | null;
+    };
+  }> {
+    return this.request(`/admin/enrichment/jobs/${id}`);
+  }
+
+  // ========================================
+  // Admin Clawbot
+  // ========================================
+
+  async getClawbotStatus(): Promise<{ success: boolean; data: ClawbotStatus }> {
+    return this.request('/admin/clawbot/status');
+  }
+
+  async triggerClawbot(): Promise<{ success: boolean; data: { message: string } }> {
+    return this.request('/admin/clawbot/trigger', { method: 'POST' });
+  }
+
+  async updateClawbotConfig(body: Partial<ClawbotConfig>): Promise<{ success: boolean; data: { config: ClawbotConfig } }> {
+    return this.request('/admin/clawbot/config', { method: 'PUT', body: JSON.stringify(body) });
+  }
+
+  async startClawbot(): Promise<{ success: boolean; data: { message: string } }> {
+    return this.request('/admin/clawbot/start', { method: 'POST' });
+  }
+
+  async stopClawbot(): Promise<{ success: boolean; data: { message: string } }> {
+    return this.request('/admin/clawbot/stop', { method: 'POST' });
+  }
+
+  async getClawbotHistory(limit: number = 20): Promise<{ success: boolean; data: { runs: ClawbotRunRecord[]; total: number } }> {
+    return this.request(`/admin/clawbot/history?limit=${limit}`);
   }
 
   // ========================================

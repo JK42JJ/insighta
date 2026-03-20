@@ -79,6 +79,8 @@ export interface UseCardOrchestratorReturn {
   onCardClick: (card: InsightCard) => void;
   // Enrichment status
   enrichingCardIds: Set<string>;
+  failedEnrichCardIds: Set<string>;
+  retryEnrich: (cardId: string, videoUrl?: string) => void;
 }
 
 /**
@@ -118,12 +120,12 @@ export function useCardOrchestrator(
 
   // Track cards currently being enriched (for spinner UI)
   const [enrichingCardIds, setEnrichingCardIds] = useState<Set<string>>(new Set());
+  // Track cards where enrichment failed (for retry UI)
+  const [failedEnrichCardIds, setFailedEnrichCardIds] = useState<Set<string>>(new Set());
 
-  // Auto-enrichment for YouTube cards — respects autoSummaryEnabled setting
-  const triggerAutoEnrich = useCallback(
-    async (cardId: string, videoUrl?: string) => {
-      if (!autoSummaryEnabled) return;
-      setEnrichingCardIds((prev) => new Set(prev).add(cardId));
+  // Core enrichment call — returns true on success, false on failure
+  const executeEnrich = useCallback(
+    async (cardId: string, videoUrl?: string): Promise<boolean> => {
       try {
         // Step 1: Try to fetch transcript via Edge Function (Deno Deploy, not EC2)
         let transcript: string | undefined;
@@ -147,7 +149,7 @@ export function useCardOrchestrator(
 
         // Step 2: Enrich with transcript (or without — server will try its own extraction)
         const headers = await getAuthHeaders();
-        await fetch('/api/v1/ontology/enrich/auto', {
+        const res = await fetch('/api/v1/ontology/enrich/auto', {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -156,19 +158,56 @@ export function useCardOrchestrator(
             ...(transcript ? { transcript } : {}),
           }),
         });
-        // Refresh cards to pick up new AI summary in user_note
+        if (!res.ok) return false;
+        // Refresh cards to pick up new AI summary
         queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+        return true;
       } catch {
-        // non-critical: enrichment failure should not affect card UX
-      } finally {
-        setEnrichingCardIds((prev) => {
-          const next = new Set(prev);
-          next.delete(cardId);
-          return next;
-        });
+        return false;
       }
     },
-    [queryClient, autoSummaryEnabled],
+    [queryClient],
+  );
+
+  // Auto-enrichment for YouTube cards — respects autoSummaryEnabled setting
+  // Retries once on failure before marking as failed
+  const triggerAutoEnrich = useCallback(
+    async (cardId: string, videoUrl?: string) => {
+      if (!autoSummaryEnabled) return;
+      setEnrichingCardIds((prev) => new Set(prev).add(cardId));
+      setFailedEnrichCardIds((prev) => {
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      });
+
+      let success = await executeEnrich(cardId, videoUrl);
+
+      // Auto-retry once after 3s delay
+      if (!success) {
+        await new Promise((r) => setTimeout(r, 3000));
+        success = await executeEnrich(cardId, videoUrl);
+      }
+
+      if (!success) {
+        setFailedEnrichCardIds((prev) => new Set(prev).add(cardId));
+      }
+
+      setEnrichingCardIds((prev) => {
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      });
+    },
+    [autoSummaryEnabled, executeEnrich],
+  );
+
+  // Manual retry for failed enrichment
+  const retryEnrich = useCallback(
+    (cardId: string, videoUrl?: string) => {
+      triggerAutoEnrich(cardId, videoUrl).catch(() => {/* handled internally */});
+    },
+    [triggerAutoEnrich],
   );
 
   // Convert video states to InsightCards
@@ -1253,5 +1292,7 @@ export function useCardOrchestrator(
     swapCardsForReorder,
     onCardClick: handleCardClick,
     enrichingCardIds,
+    failedEnrichCardIds,
+    retryEnrich,
   };
 }
