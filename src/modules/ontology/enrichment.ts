@@ -5,17 +5,28 @@ import { embedNode } from './embedding';
 import { logger } from '../../utils/logger';
 
 // ============================================================================
-// Resource Node Enrichment — YouTube transcript → LLM summary → re-embed
+// Video Enrichment — YouTube transcript → LLM summary → video_summaries table
 // ============================================================================
 
 const MAX_TRANSCRIPT_CHARS = 10000;
-const AI_SUMMARY_PREFIX = '🤖 AI Summary:\n';
-const AI_SUMMARY_PREFIX_KO = '🤖 AI 요약:\n';
 
 // Chunked summarization constants (qwen3.5:9b limitation: >500 chars → empty response)
 const CHUNK_THRESHOLD = 500;
 const MAX_CHUNK_SIZE = 300;
 const MAX_MERGE_INPUT = 400;
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface VideoSummaryResult {
+  videoId: string;
+  summaryEn: string;
+  summaryKo: string;
+  tags: string[];
+  model: string;
+  cached: boolean;
+}
 
 interface EnrichResult {
   nodeId: string;
@@ -28,10 +39,19 @@ interface BatchEnrichResult {
   total: number;
   enriched: number;
   skipped: number;
-  errors: { nodeId: string; error: string }[];
+  errors: { videoId: string; error: string }[];
 }
 
-function extractYouTubeVideoId(url: string): string | null {
+interface SummaryResponse {
+  summary: string;
+  tags: string[];
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+export function extractYouTubeVideoId(url: string): string | null {
   try {
     const parsed = new URL(url);
     if (parsed.hostname === 'youtu.be') {
@@ -50,13 +70,7 @@ function extractYouTubeVideoId(url: string): string | null {
   }
 }
 
-interface SummaryResponse {
-  summary: string;
-  tags: string[];
-}
-
 function parseSummaryResponse(raw: string): SummaryResponse {
-  // Try to extract JSON from the response (may have markdown fences)
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error('No JSON found in LLM response');
@@ -75,9 +89,6 @@ function parseSummaryResponse(raw: string): SummaryResponse {
 // Chunked Summarization — split long transcripts for small LLMs
 // ============================================================================
 
-/**
- * Split text into paragraphs by double newlines or consecutive newlines.
- */
 function splitIntoParagraphs(text: string): string[] {
   return text
     .split(/\n{2,}/)
@@ -85,9 +96,6 @@ function splitIntoParagraphs(text: string): string[] {
     .filter((p) => p.length > 0);
 }
 
-/**
- * Split a single long paragraph by sentence boundaries (. ! ?).
- */
 function splitBySentences(text: string, maxSize: number): string[] {
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
   const chunks: string[] = [];
@@ -109,22 +117,16 @@ function splitBySentences(text: string, maxSize: number): string[] {
   return chunks;
 }
 
-/**
- * Pack paragraphs into chunks of maxSize characters, preserving paragraph boundaries.
- * If a single paragraph exceeds maxSize, split it by sentence boundaries.
- */
 function packChunks(paragraphs: string[], maxSize: number): string[] {
   const chunks: string[] = [];
   let current = '';
 
   for (const para of paragraphs) {
     if (para.length > maxSize) {
-      // Flush current buffer first
       if (current.trim()) {
         chunks.push(current.trim());
         current = '';
       }
-      // Split oversized paragraph by sentences
       chunks.push(...splitBySentences(para, maxSize));
       continue;
     }
@@ -154,11 +156,6 @@ function buildMergePrompt(partials: string[], title: string): string {
 
 const MAX_REDUCE_DEPTH = 5;
 
-/**
- * Hierarchically reduce partial summaries if they exceed merge budget.
- * Groups partials into batches that fit within MAX_MERGE_INPUT,
- * summarizes each batch, then recurses if needed (up to MAX_REDUCE_DEPTH).
- */
 async function reducePartials(
   partials: string[],
   generate: (prompt: string) => Promise<string>,
@@ -169,7 +166,6 @@ async function reducePartials(
     return partials;
   }
 
-  // Safety: if max depth reached, force-truncate to fit
   if (depth >= MAX_REDUCE_DEPTH) {
     logger.warn('reducePartials max depth reached, truncating', { depth, partials: partials.length });
     const truncated: string[] = [];
@@ -183,18 +179,15 @@ async function reducePartials(
     return truncated.length > 0 ? truncated : [partials[0]!.slice(0, 100)];
   }
 
-  // Group partials into batches of 3-5 items each (not by size alone)
   const BATCH_SIZE = 4;
   const batches: string[][] = [];
   for (let i = 0; i < partials.length; i += BATCH_SIZE) {
     batches.push(partials.slice(i, i + BATCH_SIZE));
   }
 
-  // Summarize each batch into 1 sentence
   const reduced: string[] = [];
   for (const group of batches) {
     if (group.length === 1) {
-      // Single item: shorten it via LLM
       const prompt = `Shorten to 1 sentence:\n${group[0]}`;
       const result = await generate(prompt);
       reduced.push(result.trim().slice(0, 120));
@@ -205,7 +198,6 @@ async function reducePartials(
     reduced.push(result.trim().slice(0, 120));
   }
 
-  // Recurse if still too large
   const reducedSize = reduced.reduce((sum, p) => sum + p.length + 3, 0);
   if (reducedSize > MAX_MERGE_INPUT && reduced.length > 1) {
     return reducePartials(reduced, generate, depth + 1);
@@ -214,10 +206,6 @@ async function reducePartials(
   return reduced;
 }
 
-/**
- * Chunked summarization strategy for long transcripts.
- * Splits transcript → chunk summaries (plain text) → merge (JSON).
- */
 async function chunkedSummarize(
   title: string,
   transcript: string,
@@ -229,7 +217,6 @@ async function chunkedSummarize(
 
   logger.info('Chunked summarization', { chunks: chunks.length, totalChars: truncated.length });
 
-  // Phase 1: Summarize each chunk (plain text, no JSON)
   const partials: string[] = [];
   for (const chunk of chunks) {
     const prompt = buildChunkSummaryPrompt(chunk);
@@ -244,11 +231,9 @@ async function chunkedSummarize(
     throw new Error('All chunk summaries returned empty');
   }
 
-  // Phase 2: Reduce partials if too many for merge prompt
   const plainGenerate = (p: string) => generate(p, { temperature: 0.3 });
   const reducedPartials = await reducePartials(partials, plainGenerate);
 
-  // Phase 3: Merge into final JSON response
   const mergePrompt = buildMergePrompt(reducedPartials, title);
   logger.info('Merge prompt size', { chars: mergePrompt.length, partials: reducedPartials.length });
 
@@ -269,6 +254,130 @@ Respond in JSON: {"summary": "...", "tags": ["...", ...]}
 Important: Respond in English. Do NOT start summary with "This video" or "The video".`;
 }
 
+// ============================================================================
+// Core: enrichVideo — video_id based, UPSERT to video_summaries
+// ============================================================================
+
+/**
+ * Generate or retrieve summary for a YouTube video.
+ * Results are stored in video_summaries table (1 row per video_id).
+ * No user_note writes. No user_id dependency.
+ */
+export async function enrichVideo(
+  videoId: string,
+  options?: { transcript?: string; force?: boolean; title?: string; url?: string }
+): Promise<VideoSummaryResult> {
+  const prisma = getPrismaClient();
+
+  // 1. Check if summary already exists (skip unless force)
+  if (!options?.force) {
+    const existing = await prisma.$queryRaw<
+      { video_id: string; summary_en: string | null; summary_ko: string | null; tags: string[]; model: string | null }[]
+    >`
+      SELECT video_id, summary_en, summary_ko, tags, model
+      FROM public.video_summaries
+      WHERE video_id = ${videoId}
+    `;
+
+    if (existing.length > 0 && existing[0]!.summary_en) {
+      logger.info('Video summary cache hit', { videoId });
+      return {
+        videoId,
+        summaryEn: existing[0]!.summary_en!,
+        summaryKo: existing[0]!.summary_ko || existing[0]!.summary_en!,
+        tags: existing[0]!.tags || [],
+        model: existing[0]!.model || '',
+        cached: true,
+      };
+    }
+  }
+
+  // 2. Get transcript
+  let transcript: string;
+  let transcriptSegments = 0;
+
+  if (options?.transcript) {
+    transcript = options.transcript;
+    logger.info('Using client-provided transcript', { videoId, length: transcript.length });
+  } else {
+    const captionExtractor = getCaptionExtractor();
+    const captionResult = await captionExtractor.extractCaptions(videoId);
+    if (!captionResult.success || !captionResult.caption) {
+      throw new Error(`CAPTION_FAILED: ${captionResult.error || 'unknown'}`);
+    }
+    transcript = captionResult.caption.fullText;
+    transcriptSegments = captionResult.caption.segments?.length ?? 0;
+  }
+
+  // 3. Generate bilingual summary
+  const title = options?.title || videoId;
+  const generationProvider = await createGenerationProvider();
+  const generate = (prompt: string, opts?: { format?: 'json' | 'text'; temperature?: number }) =>
+    generationProvider.generate(prompt, opts);
+
+  let primarySummary: SummaryResponse;
+  if (transcript.length > CHUNK_THRESHOLD) {
+    logger.info('Using chunked summarization', { videoId, transcriptLength: transcript.length });
+    primarySummary = await chunkedSummarize(title, transcript, generate);
+  } else {
+    const rawResponse = await generate(
+      buildSummaryPrompt(title, transcript),
+      { format: 'json', temperature: 0.3 }
+    );
+    primarySummary = parseSummaryResponse(rawResponse);
+  }
+
+  const summaryEn = primarySummary.summary;
+  let summaryKo: string;
+
+  try {
+    const translated = await generate(
+      `Translate to natural Korean in 2-3 sentences:\n${summaryEn}`,
+      { temperature: 0.3 }
+    );
+    summaryKo = translated.trim();
+  } catch {
+    summaryKo = summaryEn;
+  }
+
+  const tags = primarySummary.tags;
+  const modelName = generationProvider.model;
+
+  logger.info('Bilingual summary generated', { videoId, en: summaryEn.length, ko: summaryKo.length });
+
+  // 4. UPSERT to video_summaries
+  const url = options?.url || `https://www.youtube.com/watch?v=${videoId}`;
+  const tagsArray = `{${tags.map((t) => `"${t.replace(/"/g, '\\"')}"`).join(',')}}`;
+
+  await prisma.$executeRaw`
+    INSERT INTO public.video_summaries (video_id, url, title, summary_en, summary_ko, tags, model, transcript_segments, created_at, updated_at)
+    VALUES (${videoId}, ${url}, ${title}, ${summaryEn}, ${summaryKo}, ${tagsArray}::text[], ${modelName}, ${transcriptSegments}, now(), now())
+    ON CONFLICT (video_id) DO UPDATE SET
+      summary_en = EXCLUDED.summary_en,
+      summary_ko = EXCLUDED.summary_ko,
+      tags = EXCLUDED.tags,
+      model = EXCLUDED.model,
+      transcript_segments = EXCLUDED.transcript_segments,
+      title = COALESCE(EXCLUDED.title, public.video_summaries.title),
+      updated_at = now()
+  `;
+
+  logger.info('Video summary saved', { videoId, tagsCount: tags.length, model: modelName });
+
+  return {
+    videoId,
+    summaryEn,
+    summaryKo,
+    tags,
+    model: modelName,
+    cached: false,
+  };
+}
+
+// ============================================================================
+// Legacy adapter: enrichResourceNode — wraps enrichVideo + updates ontology.nodes
+// ============================================================================
+
 export async function enrichResourceNode(
   nodeId: string,
   userId: string,
@@ -278,12 +387,11 @@ export async function enrichResourceNode(
 
   // 1. Get resource node
   const nodes = await prisma.$queryRaw<
-    { id: string; title: string; properties: Record<string, unknown>; source_ref: { table?: string; id?: string } | null }[]
+    { id: string; title: string; properties: Record<string, unknown> }[]
   >`
-    SELECT id, title, properties, source_ref
+    SELECT id, title, properties
     FROM ontology.nodes
     WHERE id = ${nodeId}::uuid AND user_id = ${userId}::uuid
-      -- TODO: add "AND domain = 'service'" after domain column migration
   `;
 
   if (nodes.length === 0) {
@@ -301,69 +409,21 @@ export async function enrichResourceNode(
     throw new Error('NOT_YOUTUBE_URL');
   }
 
-  // 3. Get transcript: use client-provided transcript if available, else server-side extraction
-  let transcript: string;
-  let transcriptLang = 'en';
+  // 3. Delegate to enrichVideo (central summary)
+  const result = await enrichVideo(videoId, {
+    transcript: options?.transcript,
+    title: node.title,
+    url,
+  });
 
-  if (options?.transcript) {
-    transcript = options.transcript;
-    logger.info('Using client-provided transcript', { nodeId, length: transcript.length });
-  } else {
-    const captionExtractor = getCaptionExtractor();
-    const captionResult = await captionExtractor.extractCaptions(videoId);
-    if (!captionResult.success || !captionResult.caption) {
-      throw new Error(`CAPTION_FAILED: ${captionResult.error || 'unknown'}`);
-    }
-    transcript = captionResult.caption.fullText;
-    transcriptLang = captionResult.caption.language;
-  }
-
-  // 4. Generate bilingual summary (en + ko)
-  const generationProvider = await createGenerationProvider();
-  const generate = (prompt: string, opts?: { format?: 'json' | 'text'; temperature?: number }) =>
-    generationProvider.generate(prompt, opts);
-
-  // 4a. Generate primary summary (in transcript's language)
-  let primarySummary: SummaryResponse;
-  if (transcript.length > CHUNK_THRESHOLD) {
-    logger.info('Using chunked summarization', { transcriptLength: transcript.length, lang: transcriptLang });
-    primarySummary = await chunkedSummarize(node.title, transcript, generate);
-  } else {
-    const rawResponse = await generate(
-      buildSummaryPrompt(node.title, transcript),
-      { format: 'json', temperature: 0.3 }
-    );
-    primarySummary = parseSummaryResponse(rawResponse);
-  }
-
-  // 4b. EN-first strategy: primary summary is always English → translate to Korean
-  const summaryEn = primarySummary.summary;
-  let summaryKo: string;
-
-  try {
-    const translated = await generate(
-      `Translate to natural Korean in 2-3 sentences:\n${summaryEn}`,
-      { temperature: 0.3 }
-    );
-    summaryKo = translated.trim();
-  } catch {
-    summaryKo = summaryEn; // fallback: same as en
-  }
-
-  const tags = primarySummary.tags;
-  // Default summary for backward compatibility (English)
-  const summary = summaryEn;
-
-  logger.info('Bilingual summary generated', { nodeId, en: summaryEn.length, ko: summaryKo.length });
-
-  // 5. Update node properties (bilingual summary + tags + provenance)
+  // 4. Update ontology.nodes properties (graph usage)
   const updatedProperties = {
     ...node.properties,
-    summary,
-    summary_en: summaryEn,
-    summary_ko: summaryKo,
-    summary_tags: tags,
-    summary_model: generationProvider.model,
+    summary: result.summaryEn,
+    summary_en: result.summaryEn,
+    summary_ko: result.summaryKo,
+    summary_tags: result.tags,
+    summary_model: result.model,
     summary_created_at: new Date().toISOString(),
   };
 
@@ -374,46 +434,7 @@ export async function enrichResourceNode(
     WHERE id = ${nodeId}::uuid AND user_id = ${userId}::uuid
   `;
 
-  // 5b. Write bilingual AI Summary to user_local_cards.user_note
-  const sourceRef = node.source_ref as { table?: string; id?: string } | null;
-  if (sourceRef?.table === 'user_local_cards' && sourceRef?.id) {
-    const bilingualNote = `${AI_SUMMARY_PREFIX}${summaryEn}\n\n${AI_SUMMARY_PREFIX_KO}${summaryKo}`;
-
-    // Get existing note to prepend/replace
-    const existingRows = await prisma.$queryRaw<{ user_note: string | null }[]>`
-      SELECT user_note FROM public.user_local_cards
-      WHERE id = ${sourceRef.id}::uuid
-    `;
-    const existingNote = existingRows[0]?.user_note ?? '';
-
-    let newNote: string;
-    if (!existingNote) {
-      newNote = bilingualNote;
-    } else if (existingNote.startsWith(AI_SUMMARY_PREFIX)) {
-      // Already has AI Summary: replace everything before user content
-      // Find user content after the last AI Summary block
-      const lastPrefixIdx = existingNote.lastIndexOf(AI_SUMMARY_PREFIX_KO);
-      let userContent = '';
-      if (lastPrefixIdx >= 0) {
-        const afterKo = existingNote.indexOf('\n\n', lastPrefixIdx + AI_SUMMARY_PREFIX_KO.length);
-        userContent = afterKo >= 0 ? existingNote.slice(afterKo) : '';
-      } else {
-        const afterEn = existingNote.indexOf('\n\n', AI_SUMMARY_PREFIX.length);
-        userContent = afterEn >= 0 ? existingNote.slice(afterEn) : '';
-      }
-      newNote = bilingualNote + userContent;
-    } else {
-      newNote = bilingualNote + '\n\n' + existingNote;
-    }
-
-    await prisma.$executeRaw`
-      UPDATE public.user_local_cards
-      SET user_note = ${newNote}, updated_at = now()
-      WHERE id = ${sourceRef.id}::uuid
-    `;
-  }
-
-  // 6. Re-embed with enriched content (non-fatal: summary already saved in step 5)
+  // 5. Re-embed (non-fatal)
   let embedded = false;
   try {
     embedded = await embedNode(nodeId, node.title, updatedProperties);
@@ -424,16 +445,15 @@ export async function enrichResourceNode(
     });
   }
 
-  logger.info('Resource node enriched', { nodeId, videoId, tagsCount: tags.length, embedded });
+  logger.info('Resource node enriched', { nodeId, videoId, tagsCount: result.tags.length, embedded });
 
-  return { nodeId, summary, tags, embedded };
+  return { nodeId, summary: result.summaryEn, tags: result.tags, embedded };
 }
 
-/**
- * Find resource node by source_ref (e.g., local_card ID) and enrich it.
- * If no resource node exists, auto-create one from the card data, then enrich.
- * Used for auto-enrichment after card creation.
- */
+// ============================================================================
+// enrichBySourceRef — find/create resource node, then enrich
+// ============================================================================
+
 export async function enrichBySourceRef(
   userId: string,
   sourceTable: string,
@@ -467,7 +487,6 @@ export async function enrichBySourceRef(
     }
     const card = cards[0]!;
 
-    // Only create resource nodes for YouTube cards
     if (card.link_type !== 'youtube' && card.link_type !== 'youtube-shorts') {
       return null;
     }
@@ -490,7 +509,7 @@ export async function enrichBySourceRef(
 
   const nodeId = nodes[0]!.id;
 
-  // Check summary_dismissed flag (skip auto-enrich, allow manual re-generation)
+  // Check summary_dismissed flag
   if (!options?.force) {
     const nodeData = await prisma.$queryRaw<{ properties: Record<string, unknown> }[]>`
       SELECT properties FROM ontology.nodes WHERE id = ${nodeId}::uuid AND user_id = ${userId}::uuid
@@ -499,7 +518,6 @@ export async function enrichBySourceRef(
       return null;
     }
   } else {
-    // Manual re-generation: clear dismissed flag
     await prisma.$executeRaw`
       UPDATE ontology.nodes
       SET properties = properties - 'summary_dismissed', updated_at = now()
@@ -530,17 +548,12 @@ export interface BackfillResult {
   errors: { cardId: string; error: string }[];
 }
 
-/**
- * Create ontology resource nodes for existing user_local_cards that don't have one.
- * This bridges the gap: cards → resource nodes → enrichment → user_note.
- */
 export async function backfillResourceNodes(
   userId: string,
   options: { onProgress?: (event: BackfillProgressEvent) => void } = {}
 ): Promise<BackfillResult> {
   const prisma = getPrismaClient();
 
-  // Find YouTube cards that have no corresponding ontology resource node
   const cards = await prisma.$queryRaw<
     { id: string; url: string; title: string; link_type: string }[]
   >`
@@ -594,6 +607,10 @@ export async function backfillResourceNodes(
   return result;
 }
 
+// ============================================================================
+// Batch Enrich — legacy (user-scoped, uses ontology.nodes)
+// ============================================================================
+
 const MAX_BATCH_LIMIT = 500;
 
 export interface EnrichProgressEvent {
@@ -611,16 +628,13 @@ export async function batchEnrichResources(
   options: { limit?: number; delayMs?: number; onProgress?: (event: EnrichProgressEvent) => void } = {}
 ): Promise<BatchEnrichResult> {
   const prisma = getPrismaClient();
-  // limit=0 means "all" (capped at MAX_BATCH_LIMIT for safety)
   const rawLimit = options.limit ?? 10;
   const limit = rawLimit === 0 ? MAX_BATCH_LIMIT : Math.min(rawLimit, MAX_BATCH_LIMIT);
   const delayMs = options.delayMs ?? 2000;
 
-  // Find resource nodes without summary, YouTube link_type
   const nodes = await prisma.$queryRaw<{ id: string; title: string }[]>`
     SELECT id, title FROM ontology.nodes
     WHERE user_id = ${userId}::uuid
-      -- TODO: add "AND domain = 'service'" after domain column migration
       AND type = 'resource'
       AND (properties->>'link_type' = 'youtube' OR properties->>'url' LIKE '%youtube.com%' OR properties->>'url' LIKE '%youtu.be%')
       AND (properties->>'summary' IS NULL OR properties->>'summary' = '')
@@ -646,7 +660,7 @@ export async function batchEnrichResources(
       onProgress?.({ current: i + 1, total: nodes.length, nodeId: node.id, title: node.title, status: 'success', summary: enrichResult.summary });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      result.errors.push({ nodeId: node.id, error: msg });
+      result.errors.push({ videoId: node.id, error: msg });
       logger.warn('Batch enrich skipped node', { nodeId: node.id, error: msg });
       onProgress?.({ current: i + 1, total: nodes.length, nodeId: node.id, title: node.title, status: 'error', error: msg });
     }
@@ -660,6 +674,87 @@ export async function batchEnrichResources(
     userId,
     total: result.total,
     enriched: result.enriched,
+    errors: result.errors.length,
+  });
+
+  return result;
+}
+
+// ============================================================================
+// System Batch Enrich — no user auth, scans all cards for unsummarized videos
+// ============================================================================
+
+export interface SystemBatchResult {
+  total: number;
+  enriched: number;
+  skipped: number;
+  errors: { videoId: string; error: string }[];
+}
+
+const SYSTEM_BATCH_DELAY_MS = 2000;
+
+/**
+ * Scan all user_local_cards for YouTube URLs, extract unique video_ids,
+ * and enrich any that don't have a video_summaries entry.
+ * No user authentication required — this is a system/admin operation.
+ */
+export async function systemBatchEnrich(
+  options: { limit?: number; delayMs?: number } = {}
+): Promise<SystemBatchResult> {
+  const prisma = getPrismaClient();
+  const limit = Math.min(options.limit ?? 100, MAX_BATCH_LIMIT);
+  const delayMs = options.delayMs ?? SYSTEM_BATCH_DELAY_MS;
+
+  // Find YouTube cards whose video_id is NOT yet in video_summaries
+  const cards = await prisma.$queryRaw<
+    { url: string; title: string }[]
+  >`
+    SELECT DISTINCT ON (c.url) c.url, COALESCE(c.title, c.metadata_title, 'Untitled') as title
+    FROM public.user_local_cards c
+    WHERE c.link_type IN ('youtube', 'youtube-shorts')
+      AND NOT EXISTS (
+        SELECT 1 FROM public.video_summaries vs
+        WHERE vs.url = c.url
+      )
+    ORDER BY c.url, c.created_at ASC
+    LIMIT ${limit}
+  `;
+
+  const result: SystemBatchResult = {
+    total: cards.length,
+    enriched: 0,
+    skipped: 0,
+    errors: [],
+  };
+
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i]!;
+    const videoId = extractYouTubeVideoId(card.url);
+
+    if (!videoId) {
+      result.skipped++;
+      continue;
+    }
+
+    try {
+      await enrichVideo(videoId, { title: card.title, url: card.url });
+      result.enriched++;
+      logger.info('System batch enriched', { videoId, progress: `${i + 1}/${cards.length}` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      result.errors.push({ videoId, error: msg });
+      logger.warn('System batch enrich failed', { videoId, error: msg });
+    }
+
+    if (delayMs > 0 && i < cards.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  logger.info('System batch enrichment complete', {
+    total: result.total,
+    enriched: result.enriched,
+    skipped: result.skipped,
     errors: result.errors.length,
   });
 

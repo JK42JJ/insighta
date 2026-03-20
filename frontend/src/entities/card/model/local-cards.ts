@@ -5,7 +5,7 @@
  * stored in Supabase separately from YouTube synced videos.
  */
 
-import type { LinkType, InsightCard } from './types';
+import type { LinkType, InsightCard, VideoSummary } from './types';
 
 /**
  * Subscription tier types
@@ -42,6 +42,7 @@ export interface LocalCard {
   sort_order: number | null;
   created_at: string;
   updated_at: string;
+  video_summary?: VideoSummary;
 }
 
 /**
@@ -121,6 +122,7 @@ export function localCardToInsightCard(card: LocalCard): InsightCard {
           url: card.url,
         }
       : undefined,
+    videoSummary: card.video_summary,
   };
 }
 

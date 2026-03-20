@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
       case 'list': {
         const mandalaId = url.searchParams.get('mandala_id');
 
-        // Parallel fetch: subscription + cards (was 3 sequential queries, now 2 parallel)
+        // Parallel fetch: subscription + cards
         let cardsQuery = supabase
           .from('user_local_cards')
           .select('*')
@@ -234,9 +234,35 @@ Deno.serve(async (req) => {
 
         const cards = cardsResult.data || [];
 
+        // Enrich YouTube cards with video_summaries (LEFT JOIN equivalent)
+        const youtubeUrls = cards
+          .filter((c: Record<string, unknown>) => c.link_type === 'youtube' || c.link_type === 'youtube-shorts')
+          .map((c: Record<string, unknown>) => c.url as string);
+
+        let summaryMap = new Map<string, Record<string, unknown>>();
+        if (youtubeUrls.length > 0) {
+          const { data: summaries } = await supabase
+            .from('video_summaries')
+            .select('url, summary_en, summary_ko, tags, model')
+            .in('url', youtubeUrls);
+
+          if (summaries) {
+            for (const s of summaries) {
+              summaryMap.set(s.url, s);
+            }
+          }
+        }
+
+        const enrichedCards = cards.map((card: Record<string, unknown>) => {
+          const summary = summaryMap.get(card.url as string);
+          return summary
+            ? { ...card, video_summary: summary }
+            : card;
+        });
+
         return new Response(
           JSON.stringify({
-            cards,
+            cards: enrichedCards,
             subscription: {
               tier: subscription.tier,
               limit: subscription.local_cards_limit,
@@ -713,6 +739,7 @@ Deno.serve(async (req) => {
           .filter(Boolean);
 
         let cardsCreated = 0;
+        const createdCards: Array<{ id: string; url: string }> = [];
         if (cardRows.length > 0) {
           // Insert in batches to avoid hitting payload limits
           for (let i = 0; i < cardRows.length; i += 50) {
@@ -720,12 +747,15 @@ Deno.serve(async (req) => {
             const { data: inserted, error: insertError } = await supabase
               .from('user_local_cards')
               .upsert(batch as Record<string, unknown>[], { onConflict: 'user_id,url' })
-              .select('id');
+              .select('id, url');
 
             if (insertError) {
               console.error('[local-cards] import-playlist insert error:', insertError);
             } else {
               cardsCreated += (inserted?.length || 0);
+              for (const card of inserted || []) {
+                createdCards.push({ id: card.id, url: card.url });
+              }
             }
           }
         }
@@ -751,6 +781,7 @@ Deno.serve(async (req) => {
             success: true,
             playlist: { id: playlistId, title: playlistTitle, itemCount: playlistItemCount },
             cardsCreated,
+            cards: createdCards,
             quotaUsed,
             limitInfo: {
               tier: limitInfo.tier,

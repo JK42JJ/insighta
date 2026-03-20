@@ -67,8 +67,8 @@ export const ListViewItem = memo(function ListViewItem({
       {/* Title + Note preview */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{card.title || t('cards.untitled')}</p>
-        {card.userNote ? (
-          <CompactNotePreview note={card.userNote} maxLines={1} className="truncate" />
+        {card.userNote || card.videoSummary ? (
+          <CompactNotePreview note={card.userNote} maxLines={1} className="truncate" videoSummary={card.videoSummary} />
         ) : (
           <p className="text-xs text-muted-foreground truncate">{t('insightCard.noMemo')}</p>
         )}

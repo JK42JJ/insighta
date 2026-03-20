@@ -1,4 +1,4 @@
-export type { LinkType, UrlMetadata, InsightCard, MandalaLevel, MandalaPath } from './types';
+export type { LinkType, UrlMetadata, InsightCard, MandalaLevel, MandalaPath, VideoSummary } from './types';
 
 export type {
   SubscriptionTier,
