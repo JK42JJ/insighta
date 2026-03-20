@@ -179,7 +179,7 @@ const DiceBearFallback = memo(function DiceBearFallback({
       src={svgDataUri}
       alt=""
       className="rounded-full drop-shadow-md flex-1 min-h-0 object-contain animate-avatar-float transition-opacity duration-700"
-      style={{ width: '80%', maxHeight: '80%' }}
+      style={{ width: '80%', maxHeight: '80%', transform: 'scaleX(-1)' }}
       draggable={false}
     />
   );
@@ -265,7 +265,7 @@ const LazyRiveAvatar = lazy(() =>
       }, [rive, seed]);
 
       return (
-        <div className={className} style={{ width: '80%', aspectRatio: '1', maxHeight: '80%' }}>
+        <div className={className} style={{ width: '80%', aspectRatio: '1', maxHeight: '80%', transform: 'scaleX(-1)' }}>
           <RiveComponent style={{ width: '100%', height: '100%' }} />
         </div>
       );
