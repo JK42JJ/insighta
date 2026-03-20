@@ -58,6 +58,11 @@ export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps
             <span className="text-lg font-bold text-foreground tracking-tight hidden sm:inline">
               Insighta
             </span>
+            {import.meta.env.DEV && (
+              <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-md">
+                DEV
+              </span>
+            )}
             <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/30 rounded-md">
               {t('common.beta')}
             </span>
