@@ -189,7 +189,7 @@ export function InsightCardItem({
               />
             ) : (
               <div onDoubleClick={handleNoteDoubleClick}>
-                {card.userNote ? (
+                {card.userNote || card.videoSummary ? (
                   <div className="flex items-start gap-1">
                     <StickyNote
                       className="w-3 h-3 mt-0.5 shrink-0 text-primary/60"
@@ -201,6 +201,7 @@ export function InsightCardItem({
                       cardId={card.id}
                       summaryRating={summaryRating}
                       onRate={onRate}
+                      videoSummary={card.videoSummary}
                     />
                   </div>
                 ) : (
@@ -247,12 +248,13 @@ export function InsightCardItem({
                 className="w-full h-full text-xs bg-muted/50 border border-input rounded px-1.5 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
                 placeholder={t('cards.addNote')}
               />
-            ) : card.userNote ? (
+            ) : card.userNote || card.videoSummary ? (
               <CompactNotePreview
                 note={card.userNote}
                 cardId={card.id}
                 summaryRating={summaryRating}
                 onRate={onRate}
+                videoSummary={card.videoSummary}
               />
             ) : (
               <p className="text-xs text-muted-foreground/50 italic">

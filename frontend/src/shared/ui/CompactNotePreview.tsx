@@ -4,6 +4,7 @@ import { cn } from '@/shared/lib/utils';
 import { parseNoteMarkdown, type ParsedSegment } from '@/shared/lib/note-markdown';
 import { useTranslation } from 'react-i18next';
 import type { SummaryRating } from '@/features/card-management/model/useSummaryRating';
+import type { VideoSummary } from '@/entities/card/model/types';
 
 const AI_SUMMARY_PREFIX_EN = '🤖 AI Summary:\n';
 const AI_SUMMARY_PREFIX_KO = '🤖 AI 요약:\n';
@@ -18,6 +19,8 @@ interface CompactNotePreviewProps {
   summaryRating?: SummaryRating;
   /** Callback when user rates the summary */
   onRate?: (cardId: string, rating: SummaryRating) => void;
+  /** Central video summary from video_summaries table (preferred over parsing user_note) */
+  videoSummary?: VideoSummary;
 }
 
 function SegmentRenderer({ segment }: { segment: ParsedSegment }) {
@@ -172,11 +175,60 @@ function extractLocaleSummary(note: string, locale: string): { body: string; lab
   return null;
 }
 
-export function CompactNotePreview({ note, maxLines, className, cardId, summaryRating, onRate }: CompactNotePreviewProps) {
+function UserNotePreview({ note, maxLines, className }: { note: string; maxLines?: number; className?: string }) {
+  const parsedLines = parseNoteMarkdown(note);
+  const clampClass = maxLines === 1 ? 'line-clamp-1' : maxLines === 2 ? 'line-clamp-2' : undefined;
+
+  return (
+    <div className={cn('text-xs text-muted-foreground mt-1', clampClass, className)}>
+      {parsedLines.map((line, lineIdx) =>
+        line.segments.length > 0 ? (
+          <div key={lineIdx} className="whitespace-pre-wrap">
+            {line.segments.map((seg, segIdx) => (
+              <SegmentRenderer key={`${lineIdx}-${segIdx}`} segment={seg} />
+            ))}
+          </div>
+        ) : (
+          <div key={lineIdx}>&nbsp;</div>
+        )
+      )}
+    </div>
+  );
+}
+
+export function CompactNotePreview({ note, maxLines, className, cardId, summaryRating, onRate, videoSummary }: CompactNotePreviewProps) {
   const { i18n } = useTranslation();
+
+  // Priority 1: Use central video_summaries data if available
+  if (videoSummary?.summary_en) {
+    const isKo = i18n.language === 'ko';
+    const body = isKo && videoSummary.summary_ko ? videoSummary.summary_ko : videoSummary.summary_en;
+    const label = isKo ? 'AI 요약' : 'AI Summary';
+
+    // Show AI summary + user note below if exists
+    const userNote = note && !note.startsWith(AI_SUMMARY_PREFIX_EN) ? note : null;
+
+    return (
+      <>
+        <AiSummaryPreview
+          body={body}
+          label={label}
+          maxLines={userNote ? 2 : maxLines}
+          className={className}
+          cardId={cardId}
+          summaryRating={summaryRating}
+          onRate={onRate}
+        />
+        {userNote && (
+          <UserNotePreview note={userNote} maxLines={1} className={className} />
+        )}
+      </>
+    );
+  }
+
   if (!note) return null;
 
-  // Detect bilingual or single AI Summary and render locale-appropriate version
+  // Priority 2: Legacy — detect bilingual AI Summary embedded in user_note
   const localeSummary = extractLocaleSummary(note, i18n.language);
   if (localeSummary) {
     return (
