@@ -7,6 +7,7 @@ import { Sparkles, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 interface MandalaGridProps {
+  mandalaId?: string | null;
   level: MandalaLevel;
   cardsByCell: Record<number, InsightCard[]>;
   selectedCellIndex: number | null;
@@ -40,6 +41,7 @@ interface MandalaGridProps {
 export type MandalaSizeMode = 'compact' | 'standard' | 'spacious';
 
 export const MandalaGrid = memo(function MandalaGrid({
+  mandalaId,
   level,
   cardsByCell,
   selectedCellIndex,
@@ -356,7 +358,7 @@ export const MandalaGrid = memo(function MandalaGrid({
                   cards={cellCards}
                   sizeMode={sizeMode}
                   totalCards={totalCards}
-                  avatarSeed={level.id}
+                  avatarSeed={mandalaId || level.id}
                   isDropTarget={activeDragOverCellIndex === gridIndex}
                   isCellSwapTarget={
                     activeDragCellIndex !== null &&
