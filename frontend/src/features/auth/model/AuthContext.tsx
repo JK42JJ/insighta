@@ -47,17 +47,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } finally {
         setIsLoading(false);
         // Wait for apiClient to have the token cached before allowing queries
-        apiClient.tokenReady.then(() => setIsTokenReady(true));
+        apiClient.tokenReady.then(() => {
+          if (apiClient.getAccessToken()) {
+            setIsTokenReady(true);
+          }
+        });
       }
     };
 
     getInitialSession();
 
     // Listen for auth changes via event bus (single Supabase listener)
-    const unsubscribe = subscribeAuth((_event, session) => {
+    const unsubscribe = subscribeAuth((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       setError(null);
+      // Ensure isTokenReady reflects token availability on auth transitions
+      if (session?.access_token) {
+        // apiClient already cached the token in its own subscribeAuth listener
+        // (runs before this one due to Set insertion order)
+        setIsTokenReady(true);
+      } else if (event === 'SIGNED_OUT') {
+        setIsTokenReady(false);
+      }
     });
 
     return () => {
