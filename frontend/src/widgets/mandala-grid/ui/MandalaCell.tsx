@@ -568,7 +568,7 @@ export const MandalaCell = memo(
             seed={avatarSeed || label}
             totalCards={totalCards}
             centerGoal={label}
-            riveUrl="/avatars/interactive-avatar.riv"
+            riveUrl={undefined}
           />
         )}
 

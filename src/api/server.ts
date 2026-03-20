@@ -18,7 +18,7 @@ import { ontologyRoutes } from './routes/ontology';
 import { llmRoutes } from './routes/llm';
 import { adminRoutes } from './routes/admin';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
-import { testDatabaseConnection, disconnectDatabase } from '../modules/database/client';
+import { testDatabaseConnection, disconnectDatabase, resetConnectionPool } from '../modules/database/client';
 import { getClawbot } from '../modules/scheduler/clawbot';
 
 // Load environment variables
@@ -285,7 +285,28 @@ export async function buildServer() {
         );
     }
 
+    // Auto-reset stale connection pool on connection errors
+    const isConnectionErr =
+      (error instanceof Prisma.PrismaClientKnownRequestError &&
+        ['P2024', 'P1017', 'P1001', 'P1002'].includes(error.code)) ||
+      error.message?.includes('connection pool') ||
+      error.message?.includes('Connection refused');
+    if (isConnectionErr) {
+      resetConnectionPool().catch(() => {});
+      fastify.log.warn('Prisma connection pool reset due to connection error');
+      return reply
+        .code(503)
+        .send(
+          createErrorResponse(
+            ErrorCode.SERVICE_UNAVAILABLE,
+            'Database temporarily unavailable, please retry',
+            request.url
+          )
+        );
+    }
+
     if (error instanceof Prisma.PrismaClientInitializationError) {
+      resetConnectionPool().catch(() => {});
       fastify.log.error(
         { err: error, requestId: request.id, url: request.url },
         'Prisma initialization error'
