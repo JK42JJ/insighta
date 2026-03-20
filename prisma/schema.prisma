@@ -491,6 +491,21 @@ model user_local_cards {
   @@schema("public")
 }
 
+model video_summaries {
+  video_id            String   @id
+  url                 String
+  title               String?
+  summary_en          String?
+  summary_ko          String?
+  tags                String[]
+  model               String?
+  transcript_segments Int      @default(0)
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
 model content_entities {
   id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id     String         @db.Uuid

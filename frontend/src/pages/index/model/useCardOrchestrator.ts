@@ -13,6 +13,7 @@ import {
   useAllVideoStates,
   useUpdateVideoState,
 } from '@/features/youtube-sync/model/useYouTubeSync';
+import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
 import { convertToInsightCards } from '@/features/card-management/lib/youtubeToInsightCard';
 import { detectCardSource, getCardById } from '@/features/card-management/lib/cardUtils';
 import {
@@ -99,6 +100,7 @@ export function useCardOrchestrator(
   // YouTube sync
   const { data: allVideoStates } = useAllVideoStates();
   const updateVideoState = useUpdateVideoState();
+  const { autoSummaryEnabled } = useYouTubeAuth();
 
   // Local cards
   const {
@@ -117,9 +119,10 @@ export function useCardOrchestrator(
   // Track cards currently being enriched (for spinner UI)
   const [enrichingCardIds, setEnrichingCardIds] = useState<Set<string>>(new Set());
 
-  // Auto-enrichment for YouTube cards — tracks enriching state
+  // Auto-enrichment for YouTube cards — respects autoSummaryEnabled setting
   const triggerAutoEnrich = useCallback(
     async (cardId: string, videoUrl?: string) => {
+      if (!autoSummaryEnabled) return;
       setEnrichingCardIds((prev) => new Set(prev).add(cardId));
       try {
         // Step 1: Try to fetch transcript via Edge Function (Deno Deploy, not EC2)
@@ -165,7 +168,7 @@ export function useCardOrchestrator(
         });
       }
     },
-    [queryClient],
+    [queryClient, autoSummaryEnabled],
   );
 
   // Convert video states to InsightCards
@@ -594,6 +597,12 @@ export function useCardOrchestrator(
 
         // Invalidate local cards query to refresh UI
         queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+
+        // Fire-and-forget: trigger AI enrichment for each imported YouTube card
+        const importedCards: Array<{ id: string; url: string }> = data.cards || [];
+        for (const card of importedCards) {
+          triggerAutoEnrich(card.id, card.url).catch(() => {/* non-critical */});
+        }
       } catch (error) {
         toast({
           title: t('common.error'),
@@ -602,7 +611,7 @@ export function useCardOrchestrator(
         });
       }
     },
-    [toast, t, queryClient, mandalaId]
+    [toast, t, queryClient, mandalaId, triggerAutoEnrich]
   );
 
   // Card drop on mandala cell
