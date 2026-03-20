@@ -862,6 +862,29 @@ class ApiClient {
   }
 
   // ========================================
+  // Admin LLM
+  // ========================================
+
+  async getAdminLlm(): Promise<{
+    success: boolean;
+    data: {
+      config: { provider: string; openrouter_model: string; ollama_url: string; ollama_generate_model: string; ollama_embed_model: string };
+      active: { embedding: { provider: string; dimension: number }; generation: { provider: string; model: string } };
+      health: { ollama: boolean; gemini: boolean; openrouter: boolean };
+      auto_priority: string[];
+    };
+  }> {
+    return this.request('/admin/llm');
+  }
+
+  async updateAdminLlm(body: { provider: string; openrouter_model?: string }): Promise<{
+    success: boolean;
+    data: { provider: string; active: { embedding: { provider: string }; generation: { provider: string; model: string } } };
+  }> {
+    return this.request('/admin/llm', { method: 'PUT', body: JSON.stringify(body) });
+  }
+
+  // ========================================
   // Admin Analytics
   // ========================================
 
