@@ -65,6 +65,35 @@ interface Note {
   updatedAt: string;
 }
 
+interface ClawbotConfig {
+  cronExpression: string;
+  threshold: number;
+  batchLimit: number;
+  delayMs: number;
+  autoStart: boolean;
+}
+
+interface ClawbotRunRecord {
+  id: string;
+  trigger: 'cron' | 'manual' | 'startup';
+  status: 'running' | 'completed' | 'failed' | 'skipped';
+  startedAt: string;
+  completedAt: string | null;
+  unsummarizedCount: number;
+  result: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] } | null;
+  error: string | null;
+}
+
+interface ClawbotStatus {
+  enabled: boolean;
+  running: boolean;
+  config: ClawbotConfig;
+  currentRun: ClawbotRunRecord | null;
+  lastRun: ClawbotRunRecord | null;
+  nextRunEstimate: string | null;
+  stats: { totalRuns: number; totalEnriched: number; totalErrors: number; totalSkipped: number };
+}
+
 interface SyncStatus {
   playlistId: string;
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
@@ -662,9 +691,37 @@ class ApiClient {
       tiers: Array<{ tier: string; count: number }>;
       recentSignups: Array<{ date: string; count: number }>;
       content: { totalCards: number; totalMandalas: number };
+      kpi: {
+        totalNotes: number;
+        totalSummaries: number;
+        totalSyncedCards: number;
+        totalSyncedPlaylists: number;
+        summariesToday: number;
+        summariesWeek: number;
+      };
     };
   }> {
     return this.request('/admin/stats/overview');
+  }
+
+  async getAdminActivity(params: {
+    from: string;
+    to: string;
+    userId?: string;
+  }): Promise<{
+    success: boolean;
+    data: Array<{
+      date: string;
+      logins: number;
+      cardsCreated: number;
+      notesWritten: number;
+      aiSummaries: number;
+      mandalaActions: number;
+    }>;
+  }> {
+    const query = new URLSearchParams({ from: params.from, to: params.to });
+    if (params.userId) query.set('user_id', params.userId);
+    return this.request(`/admin/stats/activity?${query}`);
   }
 
   async getAdminUsers(params?: {
@@ -874,7 +931,11 @@ class ApiClient {
     data: {
       config: { provider: string; openrouter_model: string; ollama_url: string; ollama_generate_model: string; ollama_embed_model: string };
       active: { embedding: { provider: string; dimension: number }; generation: { provider: string; model: string } };
-      health: { ollama: boolean; gemini: boolean; openrouter: boolean };
+      health: {
+        ollama: boolean;
+        gemini: boolean;
+        openrouter: boolean | { available: boolean; latencyMs: number; credits?: string; error?: string };
+      };
       auto_priority: string[];
     };
   }> {
@@ -930,6 +991,34 @@ class ApiClient {
     };
   }> {
     return this.request(`/admin/enrichment/jobs/${id}`);
+  }
+
+  // ========================================
+  // Admin Clawbot
+  // ========================================
+
+  async getClawbotStatus(): Promise<{ success: boolean; data: ClawbotStatus }> {
+    return this.request('/admin/clawbot/status');
+  }
+
+  async triggerClawbot(): Promise<{ success: boolean; data: { message: string } }> {
+    return this.request('/admin/clawbot/trigger', { method: 'POST' });
+  }
+
+  async updateClawbotConfig(body: Partial<ClawbotConfig>): Promise<{ success: boolean; data: { config: ClawbotConfig } }> {
+    return this.request('/admin/clawbot/config', { method: 'PUT', body: JSON.stringify(body) });
+  }
+
+  async startClawbot(): Promise<{ success: boolean; data: { message: string } }> {
+    return this.request('/admin/clawbot/start', { method: 'POST' });
+  }
+
+  async stopClawbot(): Promise<{ success: boolean; data: { message: string } }> {
+    return this.request('/admin/clawbot/stop', { method: 'POST' });
+  }
+
+  async getClawbotHistory(limit: number = 20): Promise<{ success: boolean; data: { runs: ClawbotRunRecord[]; total: number } }> {
+    return this.request(`/admin/clawbot/history?limit=${limit}`);
   }
 
   // ========================================

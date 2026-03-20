@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/lib/api-client';
-import { Activity, Database, Server, Bot, Check, Loader2, Sparkles, ChevronDown, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Activity, Database, Server, Bot, Check, Loader2, Sparkles, ChevronDown, Clock, AlertCircle, CheckCircle2, Play, Square, SkipForward } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -77,19 +77,27 @@ function LlmSettingsCard() {
 
       {/* Provider Health Indicators */}
       <div className="flex gap-3 mb-4">
-        {(['ollama', 'openrouter', 'gemini'] as const).map((p) => (
-          <div key={p} className="flex items-center gap-1.5 text-xs">
-            <div className={cn('w-2 h-2 rounded-full', llm.health[p] ? 'bg-green-500' : 'bg-red-500')} />
-            <span className="text-muted-foreground capitalize">{p}</span>
-          </div>
-        ))}
+        {(['ollama', 'openrouter', 'gemini'] as const).map((p) => {
+          const val = llm.health[p];
+          const isUp = typeof val === 'object' && val !== null ? val.available : !!val;
+          return (
+            <div key={p} className="flex items-center gap-1.5 text-xs">
+              <div className={cn('w-2 h-2 rounded-full', isUp ? 'bg-green-500' : 'bg-red-500')} />
+              <span className="text-muted-foreground capitalize">{p}</span>
+              {typeof val === 'object' && val !== null && val.latencyMs > 0 && (
+                <span className="text-muted-foreground/60 font-mono">{val.latencyMs}ms</span>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Provider Selection */}
       <div className="grid grid-cols-4 gap-2 mb-4">
         {PROVIDER_OPTIONS.map((opt) => {
           const isActive = currentProvider === opt.value;
-          const isAvailable = opt.value === 'auto' || llm.health[opt.value as 'ollama' | 'openrouter' | 'gemini'];
+          const healthVal = llm.health[opt.value as 'ollama' | 'openrouter' | 'gemini'];
+          const isAvailable = opt.value === 'auto' || (typeof healthVal === 'object' && healthVal !== null ? healthVal.available : !!healthVal);
           return (
             <button
               key={opt.value}
@@ -158,6 +166,240 @@ function LlmSettingsCard() {
     </div>
   );
 }
+
+// ============================================================================
+// ClawbotCard
+// ============================================================================
+
+const CLAWBOT_POLL_RUNNING = 5_000;
+const CLAWBOT_POLL_IDLE = 30_000;
+
+type ClawbotRunStatus = 'running' | 'completed' | 'failed' | 'skipped';
+
+function ClawbotRunIcon({ status }: { status: ClawbotRunStatus }) {
+  if (status === 'running') return <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />;
+  if (status === 'completed') return <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />;
+  if (status === 'skipped') return <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />;
+  return <AlertCircle className="h-3.5 w-3.5 text-red-400" />;
+}
+
+function ClawbotCard() {
+  const queryClient = useQueryClient();
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const { data: statusData } = useQuery({
+    queryKey: ['admin', 'clawbot', 'status'],
+    queryFn: () => apiClient.getClawbotStatus(),
+    refetchInterval: (query) => {
+      const s = query.state.data?.data;
+      return s?.running ? CLAWBOT_POLL_RUNNING : CLAWBOT_POLL_IDLE;
+    },
+    staleTime: 3_000,
+  });
+
+  const { data: historyData } = useQuery({
+    queryKey: ['admin', 'clawbot', 'history'],
+    queryFn: () => apiClient.getClawbotHistory(10),
+    enabled: historyOpen,
+    staleTime: 5_000,
+  });
+
+  const status = statusData?.data;
+  const runs = historyData?.data?.runs ?? [];
+
+  const triggerMutation = useMutation({
+    mutationFn: () => apiClient.triggerClawbot(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'clawbot'] });
+    },
+  });
+
+  const startMutation = useMutation({
+    mutationFn: () => apiClient.startClawbot(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'clawbot'] });
+    },
+  });
+
+  const stopMutation = useMutation({
+    mutationFn: () => apiClient.stopClawbot(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'clawbot'] });
+    },
+  });
+
+  if (!status) {
+    return (
+      <div className="bg-card border border-border rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Bot className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Clawbot Summary Agent</span>
+        </div>
+        <div className="text-xs text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  const isToggling = startMutation.isPending || stopMutation.isPending;
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-4">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-4">
+        <Bot className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium">Clawbot Summary Agent</span>
+        <button
+          onClick={() => status.enabled ? stopMutation.mutate() : startMutation.mutate()}
+          disabled={isToggling}
+          className={cn(
+            'ml-auto flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors',
+            status.enabled
+              ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
+              : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
+          )}
+        >
+          {isToggling ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : status.enabled ? (
+            <><Square className="h-3 w-3" /> Stop</>
+          ) : (
+            <><Play className="h-3 w-3" /> Start</>
+          )}
+        </button>
+      </div>
+
+      {/* Status Row */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-muted-foreground mb-4">
+        <div className="flex justify-between">
+          <span>Status</span>
+          <span className="flex items-center gap-1.5">
+            <div className={cn('w-2 h-2 rounded-full', status.enabled ? (status.running ? 'bg-blue-500 animate-pulse' : 'bg-green-500') : 'bg-muted-foreground')} />
+            <span className="font-mono">
+              {status.running ? 'Running' : status.enabled ? 'Idle' : 'Stopped'}
+            </span>
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>Schedule</span>
+          <span className="font-mono">{status.config.cronExpression}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Threshold</span>
+          <span className="font-mono">{status.config.threshold}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Batch Limit</span>
+          <span className="font-mono">{status.config.batchLimit}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Delay</span>
+          <span className="font-mono">{status.config.delayMs / 1000}s</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Total Enriched</span>
+          <span className="font-mono text-green-400">{status.stats.totalEnriched}</span>
+        </div>
+      </div>
+
+      {/* Last Run Info */}
+      {status.lastRun && (
+        <div className="text-xs text-muted-foreground mb-3 flex items-center gap-1.5">
+          <ClawbotRunIcon status={status.lastRun.status} />
+          <span>
+            Last: {new Date(status.lastRun.startedAt).toLocaleString()} ({status.lastRun.trigger})
+            {status.lastRun.result && (
+              <span className="ml-1">
+                — {status.lastRun.result.enriched}/{status.lastRun.unsummarizedCount} enriched
+                {status.lastRun.result.errors.length > 0 && (
+                  <span className="text-red-400 ml-1">({status.lastRun.result.errors.length} err)</span>
+                )}
+              </span>
+            )}
+            {status.lastRun.status === 'skipped' && (
+              <span className="ml-1">— {status.lastRun.unsummarizedCount} &lt; threshold {status.config.threshold}</span>
+            )}
+          </span>
+        </div>
+      )}
+
+      {/* Current Run Progress */}
+      {status.currentRun && status.currentRun.status === 'running' && (
+        <div className="flex items-center gap-2 mb-3 text-xs text-blue-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>Running... ({status.currentRun.unsummarizedCount} unsummarized found)</span>
+        </div>
+      )}
+
+      {/* Run Now Button */}
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={() => triggerMutation.mutate()}
+          disabled={triggerMutation.isPending || status.running || !status.enabled}
+          className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+        >
+          {triggerMutation.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="h-3.5 w-3.5" />
+          )}
+          Run Now
+        </button>
+        {triggerMutation.isError && (
+          <span className="text-xs text-red-400">{(triggerMutation.error as Error).message}</span>
+        )}
+      </div>
+
+      {/* History (collapsible) */}
+      <div className="border-t border-border/50 pt-3">
+        <button
+          onClick={() => setHistoryOpen(!historyOpen)}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+        >
+          <Clock className="h-3 w-3" />
+          <span>History ({status.stats.totalRuns} runs)</span>
+          <ChevronDown className={cn('h-3 w-3 ml-auto transition-transform', historyOpen && 'rotate-180')} />
+        </button>
+
+        {historyOpen && runs.length > 0 && (
+          <div className="mt-2 space-y-1 max-h-[250px] overflow-y-auto scrollbar-thin">
+            {runs.map((run) => (
+              <div
+                key={run.id}
+                className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded border border-border/30 bg-muted/10"
+              >
+                <ClawbotRunIcon status={run.status} />
+                <span className="font-mono text-muted-foreground">
+                  {new Date(run.startedAt).toLocaleString()}
+                </span>
+                <span className="text-muted-foreground">{run.trigger}</span>
+                {run.result && (
+                  <span className="ml-auto text-muted-foreground">
+                    {run.result.enriched}/{run.unsummarizedCount}
+                    {run.result.errors.length > 0 && (
+                      <span className="text-red-400 ml-1">({run.result.errors.length} err)</span>
+                    )}
+                  </span>
+                )}
+                {run.status === 'skipped' && (
+                  <span className="ml-auto text-muted-foreground/60">skipped</span>
+                )}
+                {run.completedAt && run.startedAt && (
+                  <span className="text-muted-foreground/60 ml-1">
+                    {formatDuration(run.startedAt, run.completedAt)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// BatchEnrichCard
+// ============================================================================
 
 type EnrichJobStatus = 'running' | 'completed' | 'failed';
 
@@ -440,6 +682,9 @@ export function AdminHealth() {
 
           {/* LLM Settings */}
           <LlmSettingsCard />
+
+          {/* Clawbot Summary Agent */}
+          <ClawbotCard />
 
           {/* Batch Enrichment */}
           <BatchEnrichCard />
