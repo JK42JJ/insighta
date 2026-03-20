@@ -315,14 +315,8 @@ function CardBlock({
 }
 
 // --- Cell drag handle ---
-// --- DiceBear avatar for center cell ---
-const CenterAvatar = memo(function CenterAvatar({
-  seed,
-  sizeMode,
-}: {
-  seed: string;
-  sizeMode?: MandalaSizeMode;
-}) {
+// --- DiceBear avatar for center cell (fills the cell) ---
+const CenterAvatar = memo(function CenterAvatar({ seed }: { seed: string }) {
   const svgDataUri = useMemo(() => {
     const avatar = createAvatar(adventurer, { seed });
     return avatar.toDataUri();
@@ -332,11 +326,8 @@ const CenterAvatar = memo(function CenterAvatar({
     <img
       src={svgDataUri}
       alt=""
-      className="rounded-full shrink-0 drop-shadow-sm"
-      style={{
-        width: sizeMode === 'compact' ? 'clamp(24px, 8cqi, 40px)' : 'clamp(32px, 10cqi, 56px)',
-        height: sizeMode === 'compact' ? 'clamp(24px, 8cqi, 40px)' : 'clamp(32px, 10cqi, 56px)',
-      }}
+      className="rounded-full drop-shadow-md flex-1 min-h-0 object-contain"
+      style={{ width: '80%', maxHeight: '80%' }}
       draggable={false}
     />
   );
@@ -583,26 +574,27 @@ export const MandalaCell = memo(
         {/* Cell Drag Handle */}
         <CellDragHandle gridIndex={index} isCenter={isCenter} />
 
-        {/* Center avatar — DiceBear adventurer */}
+        {/* Center avatar — DiceBear adventurer (fills cell) */}
         {isCenter && label && (
-          <CenterAvatar seed={label} sizeMode={sizeMode} />
+          <CenterAvatar seed={label} />
         )}
 
-        {/* Label — fluid typography */}
-        <span
-          className={cn(
-            'text-center font-medium leading-tight transition-colors w-full shrink-0',
-            sizeMode === 'compact' ? 'line-clamp-1' : 'line-clamp-2',
-            isCenter && 'text-primary font-semibold',
-            !isCenter && 'text-foreground/80',
-            isSelected && !isCenter && 'text-primary'
-          )}
-          style={{
-            fontSize: isCenter ? 'clamp(10px, 3cqi, 16px)' : 'clamp(8px, 2.5cqi, 14px)',
-          }}
-        >
-          {label}
-        </span>
+        {/* Label — fluid typography (hidden for center cell — title shown in L1 header) */}
+        {!isCenter && (
+          <span
+            className={cn(
+              'text-center font-medium leading-tight transition-colors w-full shrink-0',
+              sizeMode === 'compact' ? 'line-clamp-1' : 'line-clamp-2',
+              'text-foreground/80',
+              isSelected && 'text-primary'
+            )}
+            style={{
+              fontSize: 'clamp(8px, 2.5cqi, 14px)',
+            }}
+          >
+            {label}
+          </span>
+        )}
 
         {/* Card visualization — fills remaining space */}
         {!isCenter && renderCards}
