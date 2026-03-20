@@ -8,6 +8,8 @@
  * - Handle errors and retries
  */
 
+import { fork } from 'child_process';
+import { resolve } from 'path';
 import { SyncStatus, SyncHistoryStatus } from '../../types/enums';
 import { db } from '../database/client';
 import { getPlaylistManager } from '../playlist/manager';
@@ -247,6 +249,14 @@ export class SyncEngine {
         // Release lock
         await this.playlistManager.releaseSyncLock(playlist.id, SyncStatus.COMPLETED);
 
+        // Trigger async enrichment for newly synced videos
+        if (itemsAdded > 0) {
+          const newVideoIds = changes.added
+            .map((ytItem: any) => ytItem.snippet?.resourceId?.videoId)
+            .filter(Boolean) as string[];
+          this.triggerAsyncEnrichment(newVideoIds);
+        }
+
         logSyncOperation(playlist.id, 'completed', {
           itemsAdded,
           itemsRemoved,
@@ -449,6 +459,26 @@ export class SyncEngine {
   public async syncAll(userId?: string): Promise<SyncResult[]> {
     const { playlists } = await this.playlistManager.listPlaylists(userId ? { userId } : {});
     return this.syncPlaylists(playlists.map((p) => p.id));
+  }
+
+  private triggerAsyncEnrichment(youtubeVideoIds: string[]): void {
+    if (youtubeVideoIds.length === 0) return;
+
+    const workerPath = resolve(__dirname, '../ontology/enrich-worker.js');
+    try {
+      const child = fork(workerPath, [], {
+        env: { ...process.env },
+        stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        detached: true,
+      });
+      child.send({ limit: youtubeVideoIds.length, delayMs: 2000 });
+      child.unref();
+      logger.info('Async enrichment triggered for synced videos', { count: youtubeVideoIds.length });
+    } catch (err) {
+      logger.warn('Failed to spawn enrichment worker', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 }
 
