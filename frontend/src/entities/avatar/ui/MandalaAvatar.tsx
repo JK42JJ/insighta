@@ -214,17 +214,7 @@ export const MandalaAvatar = memo(function MandalaAvatar({
 // Uses React.lazy + dynamic import to avoid bundling Rive WASM when not needed.
 import React, { lazy, Suspense } from 'react';
 
-// avatar-pack.riv has 3 artboards: "Avatar 1", "Avatar 2", "Avatar 3"
-// Each has an "idlePreview" animation (no state machine)
-const RIVE_ARTBOARDS = ['Avatar 1', 'Avatar 2', 'Avatar 3'] as const;
-
-function pickArtboard(seed: string): string {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
-  }
-  return RIVE_ARTBOARDS[Math.abs(hash) % RIVE_ARTBOARDS.length]!;
-}
+const RIVE_STATE_MACHINE = 'State Machine 1';
 
 const LazyRiveAvatar = lazy(() =>
   import('@rive-app/react-canvas').then((mod) => ({
@@ -239,18 +229,40 @@ const LazyRiveAvatar = lazy(() =>
       onError: () => void;
       className?: string;
     }) {
-      const artboard = useMemo(() => pickArtboard(seed), [seed]);
-
-      const { RiveComponent } = mod.useRive({
+      const { rive, RiveComponent } = mod.useRive({
         src: riveUrl,
-        artboard,
-        animations: 'idlePreview',
+        stateMachines: RIVE_STATE_MACHINE,
         autoplay: true,
         onLoadError: (e: unknown) => {
           console.warn('[MandalaAvatar] Rive load error, falling back to DiceBear', e);
           onError();
         },
+        onLoad: () => {
+          if (import.meta.env.DEV && rive) {
+            const inputs = rive.stateMachineInputs(RIVE_STATE_MACHINE);
+            console.log('[MandalaAvatar] Rive loaded', {
+              stateMachines: rive.stateMachineNames,
+              inputs: inputs?.map((i: any) => ({ name: i.name, type: i.type, value: i.value })),
+            });
+          }
+        },
       });
+
+      // Set numeric inputs from seed hash for avatar variation
+      useEffect(() => {
+        if (!rive) return;
+        const inputs = rive.stateMachineInputs(RIVE_STATE_MACHINE);
+        if (!inputs) return;
+        // Hash seed to get deterministic numeric values
+        let hash = 0;
+        for (let i = 0; i < seed.length; i++) hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+        // Apply hash-based values to numeric inputs for variation
+        const numInputs = inputs.filter((i: any) => i.type === 56); // 56 = number type in Rive
+        numInputs.forEach((input: any, idx: number) => {
+          const val = Math.abs((hash >> (idx * 3)) % 100);
+          input.value = val;
+        });
+      }, [rive, seed]);
 
       return (
         <div className={className} style={{ width: '80%', aspectRatio: '1', maxHeight: '80%' }}>
