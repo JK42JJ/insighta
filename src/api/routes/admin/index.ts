@@ -11,6 +11,7 @@ import { adminAnalyticsRoutes } from './analytics';
 import { adminContentRoutes } from './content';
 import { adminReportRoutes } from './reports';
 import { adminHealthRoutes } from './health';
+import { adminLlmRoutes } from './llm';
 
 /**
  * Admin routes plugin.
@@ -33,5 +34,6 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminReportRoutes, { prefix: '/reports' });
   await fastify.register(adminPaymentRoutes, { prefix: '/payments' });
   await fastify.register(adminHealthRoutes, { prefix: '/health' });
+  await fastify.register(adminLlmRoutes, { prefix: '/llm' });
   await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }
