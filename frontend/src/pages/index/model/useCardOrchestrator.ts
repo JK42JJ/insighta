@@ -119,14 +119,39 @@ export function useCardOrchestrator(
 
   // Auto-enrichment for YouTube cards — tracks enriching state
   const triggerAutoEnrich = useCallback(
-    async (cardId: string) => {
+    async (cardId: string, videoUrl?: string) => {
       setEnrichingCardIds((prev) => new Set(prev).add(cardId));
       try {
+        // Step 1: Try to fetch transcript via Edge Function (Deno Deploy, not EC2)
+        let transcript: string | undefined;
+        if (videoUrl) {
+          try {
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const transcriptRes = await fetch(
+              `${supabaseUrl}/functions/v1/fetch-transcript?video_id=${encodeURIComponent(videoUrl)}`,
+              { headers: await getAuthHeaders() },
+            );
+            if (transcriptRes.ok) {
+              const data = await transcriptRes.json();
+              if (data.full_text && data.segments > 0) {
+                transcript = data.full_text;
+              }
+            }
+          } catch {
+            // non-critical: fall back to server-side extraction
+          }
+        }
+
+        // Step 2: Enrich with transcript (or without — server will try its own extraction)
         const headers = await getAuthHeaders();
         await fetch('/api/v1/ontology/enrich/auto', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ source_table: 'user_local_cards', source_id: cardId }),
+          body: JSON.stringify({
+            source_table: 'user_local_cards',
+            source_id: cardId,
+            ...(transcript ? { transcript } : {}),
+          }),
         });
         // Refresh cards to pick up new AI summary in user_note
         queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
@@ -474,7 +499,7 @@ export function useCardOrchestrator(
 
         // Fire-and-forget: trigger AI enrichment for YouTube cards
         if (linkType === 'youtube' || linkType === 'youtube-shorts') {
-          triggerAutoEnrich(result.id).catch(() => {/* non-critical */});
+          triggerAutoEnrich(result.id, url).catch(() => {/* non-critical */});
         }
       } catch (error) {
         setPendingLocalCards((prev) => prev.filter((c) => c.id !== tempCard.id));
