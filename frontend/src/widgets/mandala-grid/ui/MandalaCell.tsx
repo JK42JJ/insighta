@@ -2,6 +2,8 @@ import { memo, useMemo, useState, useCallback } from 'react';
 import { cn } from '@/shared/lib/utils';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { GripVertical, Plus, Play, FileText, Link as LinkIcon } from 'lucide-react';
+import { createAvatar } from '@dicebear/core';
+import { adventurer } from '@dicebear/collection';
 import { generateProxySrc, handleThumbnailError } from '@/shared/lib/image-utils';
 import { InsightCard } from '@/entities/card/model/types';
 import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
@@ -313,6 +315,33 @@ function CardBlock({
 }
 
 // --- Cell drag handle ---
+// --- DiceBear avatar for center cell ---
+const CenterAvatar = memo(function CenterAvatar({
+  seed,
+  sizeMode,
+}: {
+  seed: string;
+  sizeMode?: MandalaSizeMode;
+}) {
+  const svgDataUri = useMemo(() => {
+    const avatar = createAvatar(adventurer, { seed });
+    return avatar.toDataUri();
+  }, [seed]);
+
+  return (
+    <img
+      src={svgDataUri}
+      alt=""
+      className="rounded-full shrink-0 drop-shadow-sm"
+      style={{
+        width: sizeMode === 'compact' ? 'clamp(24px, 8cqi, 40px)' : 'clamp(32px, 10cqi, 56px)',
+        height: sizeMode === 'compact' ? 'clamp(24px, 8cqi, 40px)' : 'clamp(32px, 10cqi, 56px)',
+      }}
+      draggable={false}
+    />
+  );
+});
+
 function CellDragHandle({ gridIndex, isCenter }: { gridIndex: number; isCenter: boolean }) {
   const dragData: DragData = { type: 'cell', gridIndex };
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -553,6 +582,11 @@ export const MandalaCell = memo(
 
         {/* Cell Drag Handle */}
         <CellDragHandle gridIndex={index} isCenter={isCenter} />
+
+        {/* Center avatar — DiceBear adventurer */}
+        {isCenter && label && (
+          <CenterAvatar seed={label} sizeMode={sizeMode} />
+        )}
 
         {/* Label — fluid typography */}
         <span
