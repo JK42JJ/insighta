@@ -13,3 +13,5 @@ export { searchByVector, searchByText } from './search';
 export type { VectorSearchResult, TextSearchResult } from './search';
 export { generateEmbedding, embedNode, batchEmbedNodes } from './embedding';
 export { enrichResourceNode, batchEnrichResources, enrichBySourceRef } from './enrichment';
+export { buildContext, buildNodeContext } from './context-builder';
+export type { ContextOptions, ContextResult } from './context-builder';
