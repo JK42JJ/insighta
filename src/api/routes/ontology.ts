@@ -20,7 +20,15 @@ import {
   AutoEnrichBodySchema,
   RateSummaryBodySchema,
 } from '../schemas/ontology.schema';
-import { enrichResourceNode, batchEnrichResources, enrichBySourceRef } from '../../modules/ontology/enrichment';
+import {
+  enrichResourceNode,
+  batchEnrichResources,
+  enrichBySourceRef,
+} from '../../modules/ontology/enrichment';
+import { chat } from '../../modules/ontology/chat';
+import { generateKnowledgeSummary } from '../../modules/ontology/report';
+import { routeRequest } from '../../modules/ontology/router';
+import { ChatBodySchema, SummaryQuerySchema, RouteBodySchema } from '../schemas/ontology.schema';
 
 // ============================================================================
 // Ontology Routes — 12 endpoints
@@ -322,9 +330,15 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
     const body = AutoEnrichBodySchema.parse(request.body);
     try {
-      const result = await enrichBySourceRef(userId, body.source_table, body.source_id, { force: body.force, transcript: body.transcript });
+      const result = await enrichBySourceRef(userId, body.source_table, body.source_id, {
+        force: body.force,
+        transcript: body.transcript,
+      });
       if (!result) {
-        return reply.send({ status: 'ok', data: { enriched: false, reason: 'node_not_found_or_not_youtube' } });
+        return reply.send({
+          status: 'ok',
+          data: { enriched: false, reason: 'node_not_found_or_not_youtube' },
+        });
       }
       return reply.send({ status: 'ok', data: result });
     } catch (err: any) {
@@ -423,6 +437,93 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
     const stats = await manager.getStats(userId);
     return reply.send({ status: 'ok', data: stats });
+  });
+
+  // ─── Chat ───
+
+  // POST /chat — GraphRAG chatbot
+  fastify.post('/chat', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const parsed = ChatBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        status: 'error',
+        code: 'INVALID_REQUEST',
+        message: parsed.error.issues.map((i) => i.message).join(', '),
+      });
+    }
+
+    try {
+      const result = await chat(userId, parsed.data);
+      return reply.send({ status: 'ok', data: result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(500).send({
+        status: 'error',
+        code: 'CHAT_FAILED',
+        message,
+      });
+    }
+  });
+
+  // ─── Summary Report ───
+
+  // GET /summary — weekly knowledge summary
+  fastify.get('/summary', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const parsed = SummaryQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        status: 'error',
+        code: 'INVALID_REQUEST',
+        message: parsed.error.issues.map((i) => i.message).join(', '),
+      });
+    }
+
+    try {
+      const result = await generateKnowledgeSummary(userId, parsed.data.period);
+      return reply.send({ status: 'ok', data: result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(500).send({
+        status: 'error',
+        code: 'SUMMARY_FAILED',
+        message,
+      });
+    }
+  });
+
+  // ─── AI Router ───
+
+  // POST /route — intent classification + dispatch
+  fastify.post('/route', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const parsed = RouteBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        status: 'error',
+        code: 'INVALID_REQUEST',
+        message: parsed.error.issues.map((i) => i.message).join(', '),
+      });
+    }
+
+    try {
+      const result = await routeRequest(userId, parsed.data);
+      return reply.send({ status: 'ok', data: result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(500).send({
+        status: 'error',
+        code: 'ROUTE_FAILED',
+        message,
+      });
+    }
   });
 
   done();

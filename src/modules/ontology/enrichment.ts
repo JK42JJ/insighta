@@ -167,7 +167,10 @@ async function reducePartials(
   }
 
   if (depth >= MAX_REDUCE_DEPTH) {
-    logger.warn('reducePartials max depth reached, truncating', { depth, partials: partials.length });
+    logger.warn('reducePartials max depth reached, truncating', {
+      depth,
+      partials: partials.length,
+    });
     const truncated: string[] = [];
     let budget = MAX_MERGE_INPUT;
     for (const p of partials) {
@@ -209,7 +212,10 @@ async function reducePartials(
 async function chunkedSummarize(
   title: string,
   transcript: string,
-  generate: (prompt: string, options?: { format?: 'json' | 'text'; temperature?: number }) => Promise<string>
+  generate: (
+    prompt: string,
+    options?: { format?: 'json' | 'text'; temperature?: number }
+  ) => Promise<string>
 ): Promise<SummaryResponse> {
   const truncated = transcript.slice(0, MAX_TRANSCRIPT_CHARS);
   const paragraphs = splitIntoParagraphs(truncated);
@@ -272,21 +278,28 @@ export async function enrichVideo(
   // 1. Check if summary already exists (skip unless force)
   if (!options?.force) {
     const existing = await prisma.$queryRaw<
-      { video_id: string; summary_en: string | null; summary_ko: string | null; tags: string[]; model: string | null }[]
+      {
+        video_id: string;
+        summary_en: string | null;
+        summary_ko: string | null;
+        tags: string[];
+        model: string | null;
+      }[]
     >`
       SELECT video_id, summary_en, summary_ko, tags, model
       FROM public.video_summaries
       WHERE video_id = ${videoId}
     `;
 
-    if (existing.length > 0 && existing[0]!.summary_en) {
+    const hit = existing[0];
+    if (hit?.summary_en) {
       logger.info('Video summary cache hit', { videoId });
       return {
         videoId,
-        summaryEn: existing[0]!.summary_en!,
-        summaryKo: existing[0]!.summary_ko || existing[0]!.summary_en!,
-        tags: existing[0]!.tags || [],
-        model: existing[0]!.model || '',
+        summaryEn: hit.summary_en,
+        summaryKo: hit.summary_ko || hit.summary_en,
+        tags: hit.tags || [],
+        model: hit.model || '',
         cached: true,
       };
     }
@@ -320,10 +333,10 @@ export async function enrichVideo(
     logger.info('Using chunked summarization', { videoId, transcriptLength: transcript.length });
     primarySummary = await chunkedSummarize(title, transcript, generate);
   } else {
-    const rawResponse = await generate(
-      buildSummaryPrompt(title, transcript),
-      { format: 'json', temperature: 0.3 }
-    );
+    const rawResponse = await generate(buildSummaryPrompt(title, transcript), {
+      format: 'json',
+      temperature: 0.3,
+    });
     primarySummary = parseSummaryResponse(rawResponse);
   }
 
@@ -343,7 +356,11 @@ export async function enrichVideo(
   const tags = primarySummary.tags;
   const modelName = generationProvider.model;
 
-  logger.info('Bilingual summary generated', { videoId, en: summaryEn.length, ko: summaryKo.length });
+  logger.info('Bilingual summary generated', {
+    videoId,
+    en: summaryEn.length,
+    ko: summaryKo.length,
+  });
 
   // 4. UPSERT to video_summaries
   const url = options?.url || `https://www.youtube.com/watch?v=${videoId}`;
@@ -445,7 +462,12 @@ export async function enrichResourceNode(
     });
   }
 
-  logger.info('Resource node enriched', { nodeId, videoId, tagsCount: result.tags.length, embedded });
+  logger.info('Resource node enriched', {
+    nodeId,
+    videoId,
+    tagsCount: result.tags.length,
+    embedded,
+  });
 
   return { nodeId, summary: result.summaryEn, tags: result.tags, embedded };
 }
@@ -595,15 +617,33 @@ export async function backfillResourceNodes(
         )
       `;
       result.created++;
-      options.onProgress?.({ current: i + 1, total: cards.length, cardId: card.id, title: card.title, status: 'created' });
+      options.onProgress?.({
+        current: i + 1,
+        total: cards.length,
+        cardId: card.id,
+        title: card.title,
+        status: 'created',
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       result.errors.push({ cardId: card.id, error: msg });
-      options.onProgress?.({ current: i + 1, total: cards.length, cardId: card.id, title: card.title, status: 'error', error: msg });
+      options.onProgress?.({
+        current: i + 1,
+        total: cards.length,
+        cardId: card.id,
+        title: card.title,
+        status: 'error',
+        error: msg,
+      });
     }
   }
 
-  logger.info('Backfill complete', { userId, total: result.total, created: result.created, errors: result.errors.length });
+  logger.info('Backfill complete', {
+    userId,
+    total: result.total,
+    created: result.created,
+    errors: result.errors.length,
+  });
   return result;
 }
 
@@ -625,7 +665,11 @@ export interface EnrichProgressEvent {
 
 export async function batchEnrichResources(
   userId: string,
-  options: { limit?: number; delayMs?: number; onProgress?: (event: EnrichProgressEvent) => void } = {}
+  options: {
+    limit?: number;
+    delayMs?: number;
+    onProgress?: (event: EnrichProgressEvent) => void;
+  } = {}
 ): Promise<BatchEnrichResult> {
   const prisma = getPrismaClient();
   const rawLimit = options.limit ?? 10;
@@ -652,17 +696,37 @@ export async function batchEnrichResources(
 
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]!;
-    onProgress?.({ current: i + 1, total: nodes.length, nodeId: node.id, title: node.title, status: 'start' });
+    onProgress?.({
+      current: i + 1,
+      total: nodes.length,
+      nodeId: node.id,
+      title: node.title,
+      status: 'start',
+    });
 
     try {
       const enrichResult = await enrichResourceNode(node.id, userId);
       result.enriched++;
-      onProgress?.({ current: i + 1, total: nodes.length, nodeId: node.id, title: node.title, status: 'success', summary: enrichResult.summary });
+      onProgress?.({
+        current: i + 1,
+        total: nodes.length,
+        nodeId: node.id,
+        title: node.title,
+        status: 'success',
+        summary: enrichResult.summary,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       result.errors.push({ videoId: node.id, error: msg });
       logger.warn('Batch enrich skipped node', { nodeId: node.id, error: msg });
-      onProgress?.({ current: i + 1, total: nodes.length, nodeId: node.id, title: node.title, status: 'error', error: msg });
+      onProgress?.({
+        current: i + 1,
+        total: nodes.length,
+        nodeId: node.id,
+        title: node.title,
+        status: 'error',
+        error: msg,
+      });
     }
 
     if (delayMs > 0 && i < nodes.length - 1) {
@@ -706,9 +770,7 @@ export async function systemBatchEnrich(
   const delayMs = options.delayMs ?? SYSTEM_BATCH_DELAY_MS;
 
   // Find YouTube videos (local cards + synced) not yet in video_summaries
-  const cards = await prisma.$queryRaw<
-    { vid: string; title: string }[]
-  >`
+  const cards = await prisma.$queryRaw<{ vid: string; title: string }[]>`
     SELECT vid, title FROM (
       SELECT DISTINCT ON (c.url)
         substring(c.url from 'v=([^&]+)') as vid,

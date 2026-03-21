@@ -5,9 +5,10 @@
  * Supports Google Gemini API
  */
 
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import { getPrismaClient } from '../database';
 import { getCaptionExtractor } from '../caption';
+import { createGenerationProvider } from '../llm';
+import type { GenerationProvider } from '../llm';
 import { logger } from '../../utils/logger';
 import type {
   VideoSummary,
@@ -20,30 +21,24 @@ import type {
 /**
  * Summary Generator Service
  *
- * Note: Database and caption extractor are lazily loaded to avoid
- * initializing at class instantiation time. This is required for
- * serverless environments where credentials may not be available
- * until the actual request is made.
+ * Uses LLM Provider Abstraction (#251) for generation.
+ * Provider selection: auto (Ollama → OpenRouter → Gemini) or explicit via LLM_PROVIDER.
  */
 export class SummaryGenerator {
-  // Lazy getters for dependencies - only initialize when actually needed
   private get db() {
     return getPrismaClient();
   }
   private get captionExtractor() {
     return getCaptionExtractor();
   }
-  private genAI: GoogleGenerativeAI | null = null;
+  private provider: GenerationProvider | null = null;
 
-  constructor() {
-    // Initialize Gemini if API key is available
-    const apiKey = process.env['GEMINI_API_KEY'];
-    if (apiKey) {
-      this.genAI = new GoogleGenerativeAI(apiKey);
-      logger.info('Gemini AI client initialized');
-    } else {
-      logger.warn('Gemini API key not found. Summarization will not work.');
+  private async getProvider(): Promise<GenerationProvider> {
+    if (!this.provider) {
+      this.provider = await createGenerationProvider();
+      logger.info('Summary generation provider initialized', { provider: this.provider.name, model: this.provider.model });
     }
+    return this.provider;
   }
 
   /**
@@ -58,10 +53,6 @@ export class SummaryGenerator {
       const language = options.language || 'en';
 
       logger.info('Generating summary', { videoId, level, language });
-
-      if (!this.genAI) {
-        throw new Error('Gemini API key not configured');
-      }
 
       // Extract captions in-memory (not persisted on server — legal compliance)
       const extractResult = await this.captionExtractor.extractCaptions(videoId, language);
@@ -79,8 +70,8 @@ export class SummaryGenerator {
         throw new Error('Video not found in database');
       }
 
-      // Generate summary using Gemini
-      const summary = await this.generateWithGemini(video.title, caption.fullText, level);
+      // Generate summary using LLM provider
+      const summary = await this.generateWithProvider(video.title, caption.fullText, level);
 
       // Save to database (update UserVideoState)
       // Note: UserVideoState requires user_id; store summary in video_notes as a workaround
@@ -128,64 +119,33 @@ export class SummaryGenerator {
   }
 
   /**
-   * Generate summary using Gemini API
+   * Generate summary using LLM provider abstraction
    */
-  private async generateWithGemini(
+  private async generateWithProvider(
     videoTitle: string,
     transcript: string,
     level: SummarizationLevel
   ): Promise<VideoSummary> {
-    if (!this.genAI) {
-      throw new Error('Gemini client not initialized');
-    }
+    const provider = await this.getProvider();
 
     const systemPrompt = this.getSystemPrompt(level);
     const userPrompt = this.getUserPrompt(videoTitle, transcript);
-
-    // Get Gemini model (using gemini-pro for text generation)
-    const model = this.genAI.getGenerativeModel({
-      model: process.env['GEMINI_MODEL'] || 'gemini-pro',
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: this.getMaxTokens(level),
-      },
-      safetySettings: [
-        {
-          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-      ],
-    });
-
-    // Combine system and user prompts for Gemini
     const prompt = `${systemPrompt}\n\n${userPrompt}`;
 
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const content = response.text();
-
-    // Debug: Log raw API response
-    logger.debug('Gemini API raw response', {
-      contentLength: content.length,
-      contentPreview: content.substring(0, 500),
-      fullContent: content,
+    const content = await provider.generate(prompt, {
+      temperature: 0.3,
+      maxTokens: this.getMaxTokens(level),
+      format: 'json',
     });
 
-    // Parse the structured response
-    const summary = this.parseAIResponse(content, level);
+    logger.debug('LLM summary response', {
+      provider: provider.name,
+      model: provider.model,
+      contentLength: content.length,
+      contentPreview: content.substring(0, 500),
+    });
 
+    const summary = this.parseAIResponse(content, level);
     return summary;
   }
 

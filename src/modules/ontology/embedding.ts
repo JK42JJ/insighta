@@ -38,9 +38,17 @@ export async function embedNode(
   const textParts = [title];
   const TEXT_KEYS = [
     // system domain
-    'symptom', 'cause', 'solution', 'lesson', 'rationale', 'description',
+    'symptom',
+    'cause',
+    'solution',
+    'lesson',
+    'rationale',
+    'description',
     // service domain
-    'url', 'user_note', 'level_key', 'summary',
+    'url',
+    'user_note',
+    'level_key',
+    'summary',
   ] as const;
   for (const key of TEXT_KEYS) {
     if (properties[key]) textParts.push(String(properties[key]));

@@ -23,7 +23,11 @@ import { botRoutes } from './routes/bot';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
-import { testDatabaseConnection, disconnectDatabase, resetConnectionPool } from '../modules/database/client';
+import {
+  testDatabaseConnection,
+  disconnectDatabase,
+  resetConnectionPool,
+} from '../modules/database/client';
 import { getClawbot } from '../modules/scheduler/clawbot';
 
 // Load environment variables
@@ -78,24 +82,20 @@ export async function buildServer() {
     crossOriginEmbedderPolicy: false,
   });
 
-  // Rate limiting
-  await fastify.register(rateLimit, {
-    max: parseInt(process.env['RATE_LIMIT_MAX'] || '100', 10),
-    timeWindow: process.env['RATE_LIMIT_WINDOW'] || '15 minutes',
-    allowList: (req) => req.url.startsWith('/health'),
-    errorResponseBuilder: (_request, context) => {
-      return createErrorResponse(
-        ErrorCode.RATE_LIMIT_EXCEEDED,
-        `Rate limit exceeded. Max ${context.max} requests per ${context.after}`,
-        _request.url
-      );
-    },
-    addHeaders: {
-      'x-ratelimit-limit': true,
-      'x-ratelimit-remaining': true,
-      'x-ratelimit-reset': true,
-    },
-  });
+  // Rate limiting — disabled in dev, 100/15min in prod
+  const isProd = process.env['NODE_ENV'] === 'production';
+  if (isProd) {
+    await fastify.register(rateLimit, {
+      max: parseInt(process.env['RATE_LIMIT_MAX'] || '100', 10),
+      timeWindow: process.env['RATE_LIMIT_WINDOW'] || '15 minutes',
+      allowList: (req) => req.url.startsWith('/health'),
+      addHeaders: {
+        'x-ratelimit-limit': true,
+        'x-ratelimit-remaining': true,
+        'x-ratelimit-reset': true,
+      },
+    });
+  }
 
   // ============================================================================
   // Authentication Plugin
@@ -444,7 +444,11 @@ export async function startServer() {
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
-      try { await getClawbot().stop(); } catch { /* ignore */ }
+      try {
+        await getClawbot().stop();
+      } catch {
+        /* ignore */
+      }
       await fastify.close();
       await disconnectDatabase();
       process.exit(0);
