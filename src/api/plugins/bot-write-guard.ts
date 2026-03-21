@@ -20,8 +20,8 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** Routes exempt from bot write guard (bot needs these to function) */
 const BOT_WRITE_EXEMPT_ROUTES = new Set([
-  '/api/v1/bot/request-approval',  // Bot must be able to request approval
-  '/api/v1/snapshots',             // Snapshot creation is part of the safety flow
+  '/api/v1/bot/request-approval', // Bot must be able to request approval
+  '/api/v1/snapshots', // Snapshot creation is part of the safety flow
 ]);
 
 const APPROVAL_TOKEN_TTL_MINUTES = 5;
@@ -40,14 +40,16 @@ export async function registerBotWriteGuard(fastify: FastifyInstance) {
     // Check for approval token header
     const tokenValue = request.headers['x-bot-approval-token'];
     if (!tokenValue || typeof tokenValue !== 'string') {
-      return reply.code(403).send(
-        createErrorResponse(
-          ErrorCode.FORBIDDEN,
-          'Bot write operations require approval. Use POST /api/v1/bot/request-approval first.',
-          request.url,
-          { hint: 'Include x-bot-approval-token header after user approves the action' }
-        )
-      );
+      return reply
+        .code(403)
+        .send(
+          createErrorResponse(
+            ErrorCode.FORBIDDEN,
+            'Bot write operations require approval. Use POST /api/v1/bot/request-approval first.',
+            request.url,
+            { hint: 'Include x-bot-approval-token header after user approves the action' }
+          )
+        );
     }
 
     // Validate token against DB
@@ -62,13 +64,15 @@ export async function registerBotWriteGuard(fastify: FastifyInstance) {
     });
 
     if (!approval) {
-      return reply.code(403).send(
-        createErrorResponse(
-          ErrorCode.FORBIDDEN,
-          'Invalid or expired approval token.',
-          request.url
-        )
-      );
+      return reply
+        .code(403)
+        .send(
+          createErrorResponse(
+            ErrorCode.FORBIDDEN,
+            'Invalid or expired approval token.',
+            request.url
+          )
+        );
     }
 
     // Mark token as used (one-time use)

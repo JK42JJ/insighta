@@ -46,7 +46,9 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
 
 export class OllamaGenerationProvider implements GenerationProvider {
   readonly name = 'ollama';
-  get model(): string { return `ollama/${config.ollama.generateModel}`; }
+  get model(): string {
+    return `ollama/${config.ollama.generateModel}`;
+  }
 
   private get baseUrl(): string {
     return config.ollama.url;

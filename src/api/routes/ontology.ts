@@ -20,7 +20,11 @@ import {
   AutoEnrichBodySchema,
   RateSummaryBodySchema,
 } from '../schemas/ontology.schema';
-import { enrichResourceNode, batchEnrichResources, enrichBySourceRef } from '../../modules/ontology/enrichment';
+import {
+  enrichResourceNode,
+  batchEnrichResources,
+  enrichBySourceRef,
+} from '../../modules/ontology/enrichment';
 
 // ============================================================================
 // Ontology Routes — 12 endpoints
@@ -322,9 +326,15 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
     const body = AutoEnrichBodySchema.parse(request.body);
     try {
-      const result = await enrichBySourceRef(userId, body.source_table, body.source_id, { force: body.force, transcript: body.transcript });
+      const result = await enrichBySourceRef(userId, body.source_table, body.source_id, {
+        force: body.force,
+        transcript: body.transcript,
+      });
       if (!result) {
-        return reply.send({ status: 'ok', data: { enriched: false, reason: 'node_not_found_or_not_youtube' } });
+        return reply.send({
+          status: 'ok',
+          data: { enriched: false, reason: 'node_not_found_or_not_youtube' },
+        });
       }
       return reply.send({ status: 'ok', data: result });
     } catch (err: any) {

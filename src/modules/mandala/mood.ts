@@ -27,7 +27,7 @@ function computeMood(signals: MoodSignals): MoodState {
 
 export async function getMood(
   mandalaId: string,
-  userId: string,
+  userId: string
 ): Promise<{ state: MoodState; signals: MoodSignals; updatedAt: string }> {
   const prisma = getPrismaClient();
   const now = new Date();
@@ -65,35 +65,27 @@ export async function getMood(
 
     // Weekly session count: unique days with activity in the last 7 days
     const uniqueDays = new Set(
-      activityLogs.map((log) =>
-        new Date(log.created_at).toISOString().slice(0, 10),
-      ),
+      activityLogs.map((log) => new Date(log.created_at).toISOString().slice(0, 10))
     );
     const weeklySessionCount = uniqueDays.size;
 
     // Entertainment ratio: proportion of youtube/youtube-shorts cards
     const entertainmentTypes = ['youtube', 'youtube-shorts'];
     const entertainmentCards = recentCards.filter((c) =>
-      entertainmentTypes.includes(c.link_type),
+      entertainmentTypes.includes(c.link_type)
     ).length;
-    const entertainmentRatio =
-      recentCards.length > 0 ? entertainmentCards / recentCards.length : 0;
+    const entertainmentRatio = recentCards.length > 0 ? entertainmentCards / recentCards.length : 0;
 
     // New topic count: unique cell indices used in recent cards
     const recentCellIndices = new Set(
-      recentCards
-        .filter((c) => c.cell_index !== null && c.cell_index >= 0)
-        .map((c) => c.cell_index),
+      recentCards.filter((c) => c.cell_index !== null && c.cell_index >= 0).map((c) => c.cell_index)
     );
     const newTopicCount = recentCellIndices.size;
 
     // Days since last activity
     const lastActivity = activityLogs[0]?.created_at;
     const daysSinceLastActivity = lastActivity
-      ? Math.floor(
-          (now.getTime() - new Date(lastActivity).getTime()) /
-            (24 * 60 * 60 * 1000),
-        )
+      ? Math.floor((now.getTime() - new Date(lastActivity).getTime()) / (24 * 60 * 60 * 1000))
       : 999;
 
     const signals: MoodSignals = {

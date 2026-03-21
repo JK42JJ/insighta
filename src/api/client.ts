@@ -530,7 +530,7 @@ export class YouTubeClient {
       const response = await retry(async () => {
         const res = await this.youtube!.channels.list({
           part: ['contentDetails'],
-          id: [channelId!],
+          id: [channelId],
         });
         return res.data;
       });

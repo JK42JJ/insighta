@@ -23,7 +23,11 @@ import { botRoutes } from './routes/bot';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
-import { testDatabaseConnection, disconnectDatabase, resetConnectionPool } from '../modules/database/client';
+import {
+  testDatabaseConnection,
+  disconnectDatabase,
+  resetConnectionPool,
+} from '../modules/database/client';
 import { getClawbot } from '../modules/scheduler/clawbot';
 
 // Load environment variables
@@ -440,7 +444,11 @@ export async function startServer() {
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
-      try { await getClawbot().stop(); } catch { /* ignore */ }
+      try {
+        await getClawbot().stop();
+      } catch {
+        /* ignore */
+      }
       await fastify.close();
       await disconnectDatabase();
       process.exit(0);
