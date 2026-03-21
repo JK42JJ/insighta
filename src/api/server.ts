@@ -17,7 +17,10 @@ import { imageRoutes } from './routes/images';
 import { ontologyRoutes } from './routes/ontology';
 import { llmRoutes } from './routes/llm';
 import { adminRoutes } from './routes/admin';
+import { subscriptionRoutes } from './routes/subscriptions';
+import { snapshotRoutes } from './routes/snapshots';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
+import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { testDatabaseConnection, disconnectDatabase, resetConnectionPool } from '../modules/database/client';
 import { getClawbot } from '../modules/scheduler/clawbot';
 
@@ -97,6 +100,9 @@ export async function buildServer() {
   // ============================================================================
 
   await registerAuth(fastify);
+
+  // Bot write guard — blocks bot write operations without approval token
+  await registerBotWriteGuard(fastify);
 
   // ============================================================================
   // Documentation Plugins (skip in test mode and serverless)
@@ -232,6 +238,12 @@ export async function buildServer() {
 
       // Register LLM provider routes (status, health)
       await instance.register(llmRoutes, { prefix: '/llm' });
+
+      // Register subscription routes (mandala subscription graph)
+      await instance.register(subscriptionRoutes, { prefix: '/subscriptions' });
+
+      // Register snapshot routes (card state backup/rollback for bot safety)
+      await instance.register(snapshotRoutes, { prefix: '/snapshots' });
 
       // Register admin routes (requires is_super_admin)
       await instance.register(adminRoutes, { prefix: '/admin' });

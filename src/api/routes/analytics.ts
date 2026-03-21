@@ -23,6 +23,8 @@ import {
   type WatchSessionResponse,
 } from '../schemas/analytics.schema';
 import { logger } from '../../utils/logger';
+import { getPrismaClient } from '../../modules/database';
+import { getMood } from '../../modules/mandala/mood';
 
 /**
  * Analytics routes plugin
@@ -249,6 +251,63 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
 
       return reply.code(200).send({ session: response });
     }
+  );
+
+  /**
+   * GET /api/v1/analytics/weekly-report - Weekly learning report per mandala
+   * Used by OpenClaw insighta-report skill
+   */
+  fastify.get(
+    '/weekly-report',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+      const userId = request.user.userId;
+      const prisma = getPrismaClient();
+      const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+      const userMandalas = await prisma.user_mandalas.findMany({
+        where: { user_id: userId },
+        select: { id: true, title: true },
+        orderBy: { position: 'asc' },
+      });
+
+      const mandalas = await Promise.all(
+        userMandalas.map(async (m) => {
+          const [moodResult, cardsCount, notesCount] = await Promise.all([
+            getMood(m.id, userId),
+            prisma.user_local_cards.count({
+              where: {
+                mandala_id: m.id,
+                user_id: userId,
+                created_at: { gte: oneWeekAgo },
+              },
+            }),
+            prisma.user_local_cards.count({
+              where: {
+                mandala_id: m.id,
+                user_id: userId,
+                user_note: { not: null },
+                updated_at: { gte: oneWeekAgo },
+              },
+            }),
+          ]);
+
+          return {
+            id: m.id,
+            name: m.title,
+            mood: moodResult.state,
+            sessions: moodResult.signals.weeklySessionCount,
+            notes: notesCount,
+            insights: cardsCount,
+          };
+        }),
+      );
+
+      return reply.send({ mandalas });
+    },
   );
 
   fastify.log.info('Analytics routes registered');
