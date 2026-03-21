@@ -19,6 +19,7 @@ import { llmRoutes } from './routes/llm';
 import { adminRoutes } from './routes/admin';
 import { subscriptionRoutes } from './routes/subscriptions';
 import { snapshotRoutes } from './routes/snapshots';
+import { botRoutes } from './routes/bot';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
@@ -248,6 +249,9 @@ export async function buildServer() {
 
       // Register snapshot routes (card state backup/rollback for bot safety)
       await instance.register(snapshotRoutes, { prefix: '/snapshots' });
+
+      // Register bot approval routes (write approval flow)
+      await instance.register(botRoutes, { prefix: '/bot' });
 
       // Register admin routes (requires is_super_admin)
       await instance.register(adminRoutes, { prefix: '/admin' });
