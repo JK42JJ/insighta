@@ -19,3 +19,5 @@ export { chat } from './chat';
 export type { ChatRequest, ChatResponse, ChatSource } from './chat';
 export { generateKnowledgeSummary } from './report';
 export type { KnowledgeSummary } from './report';
+export { routeRequest } from './router';
+export type { RouteRequest, RouteResult, IntentType } from './router';
