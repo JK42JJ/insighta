@@ -130,3 +130,11 @@ export const ChatBodySchema = z.object({
 });
 
 export type ChatBody = z.infer<typeof ChatBodySchema>;
+
+// -- Summary Report Schemas --
+
+export const SummaryQuerySchema = z.object({
+  period: z.enum(['day', 'week', 'month']).default('week'),
+});
+
+export type SummaryQuery = z.infer<typeof SummaryQuerySchema>;

@@ -26,7 +26,8 @@ import {
   enrichBySourceRef,
 } from '../../modules/ontology/enrichment';
 import { chat } from '../../modules/ontology/chat';
-import { ChatBodySchema } from '../schemas/ontology.schema';
+import { generateKnowledgeSummary } from '../../modules/ontology/report';
+import { ChatBodySchema, SummaryQuerySchema } from '../schemas/ontology.schema';
 
 // ============================================================================
 // Ontology Routes — 12 endpoints
@@ -461,6 +462,35 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.code(500).send({
         status: 'error',
         code: 'CHAT_FAILED',
+        message,
+      });
+    }
+  });
+
+  // ─── Summary Report ───
+
+  // GET /summary — weekly knowledge summary
+  fastify.get('/summary', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const parsed = SummaryQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        status: 'error',
+        code: 'INVALID_REQUEST',
+        message: parsed.error.issues.map((i) => i.message).join(', '),
+      });
+    }
+
+    try {
+      const result = await generateKnowledgeSummary(userId, parsed.data.period);
+      return reply.send({ status: 'ok', data: result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(500).send({
+        status: 'error',
+        code: 'SUMMARY_FAILED',
         message,
       });
     }
