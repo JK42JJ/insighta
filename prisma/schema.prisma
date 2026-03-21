@@ -378,6 +378,7 @@ model users {
   youtube_watch_history_imports  youtube_watch_history_imports[]
   card_snapshots                 card_snapshots[]
   bot_usage_log                  bot_usage_log[]
+  bot_approval_tokens            bot_approval_tokens[]
 
   @@index([instance_id])
   @@index([is_anonymous])
@@ -1041,6 +1042,22 @@ enum oauth_response_type {
   code
 
   @@schema("auth")
+}
+
+model bot_approval_tokens {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String   @db.Uuid
+  action_summary String
+  preview_data   Json?
+  token          String   @unique
+  status         String   @default("pending")
+  expires_at     DateTime @db.Timestamptz(6)
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  user           users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id], map: "idx_bot_approval_tokens_user")
+  @@index([token], map: "idx_bot_approval_tokens_token")
+  @@schema("public")
 }
 
 model bot_usage_log {
