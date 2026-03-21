@@ -377,6 +377,7 @@ model users {
   youtube_watch_history          youtube_watch_history[]
   youtube_watch_history_imports  youtube_watch_history_imports[]
   card_snapshots                 card_snapshots[]
+  bot_usage_log                  bot_usage_log[]
 
   @@index([instance_id])
   @@index([is_anonymous])
@@ -1040,6 +1041,19 @@ enum oauth_response_type {
   code
 
   @@schema("auth")
+}
+
+model bot_usage_log {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String?  @db.Uuid
+  command    String
+  metadata   Json?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       users?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id], map: "idx_bot_usage_log_user_id")
+  @@index([created_at(sort: Desc)], map: "idx_bot_usage_log_created_at")
+  @@schema("public")
 }
 
 model card_snapshots {
