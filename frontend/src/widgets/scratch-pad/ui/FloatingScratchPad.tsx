@@ -626,6 +626,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               {...dragAttributes}
               {...dragListeners}
               data-card-item
+              data-selected={isSelected || undefined}
               onClick={(e) => handleCardClick(e, card, idx)}
               className={cn(
                 'group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:-translate-y-0.5 rounded-sm',
@@ -892,6 +893,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                             {...dragAttributes}
                             {...dragListeners}
                             data-card-item
+                            data-selected={isSelected || undefined}
                             onClick={(e) => handleCardClick(e, card, idx)}
                             className={cn(
                               'group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:scale-[1.02]',
