@@ -138,3 +138,12 @@ export const SummaryQuerySchema = z.object({
 });
 
 export type SummaryQuery = z.infer<typeof SummaryQuerySchema>;
+
+// -- Router Schemas --
+
+export const RouteBodySchema = z.object({
+  query: z.string().min(1).max(2000),
+  conversationId: z.string().uuid().optional(),
+});
+
+export type RouteBody = z.infer<typeof RouteBodySchema>;

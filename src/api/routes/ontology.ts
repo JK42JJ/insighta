@@ -27,7 +27,8 @@ import {
 } from '../../modules/ontology/enrichment';
 import { chat } from '../../modules/ontology/chat';
 import { generateKnowledgeSummary } from '../../modules/ontology/report';
-import { ChatBodySchema, SummaryQuerySchema } from '../schemas/ontology.schema';
+import { routeRequest } from '../../modules/ontology/router';
+import { ChatBodySchema, SummaryQuerySchema, RouteBodySchema } from '../schemas/ontology.schema';
 
 // ============================================================================
 // Ontology Routes — 12 endpoints
@@ -491,6 +492,35 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.code(500).send({
         status: 'error',
         code: 'SUMMARY_FAILED',
+        message,
+      });
+    }
+  });
+
+  // ─── AI Router ───
+
+  // POST /route — intent classification + dispatch
+  fastify.post('/route', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const parsed = RouteBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        status: 'error',
+        code: 'INVALID_REQUEST',
+        message: parsed.error.issues.map((i) => i.message).join(', '),
+      });
+    }
+
+    try {
+      const result = await routeRequest(userId, parsed.data);
+      return reply.send({ status: 'ok', data: result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(500).send({
+        status: 'error',
+        code: 'ROUTE_FAILED',
         message,
       });
     }
