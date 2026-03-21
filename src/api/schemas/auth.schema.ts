@@ -61,10 +61,14 @@ export type RefreshTokenRequest = z.infer<typeof RefreshTokenRequestSchema>;
 /**
  * JWT Payload Schema
  */
+/** User roles for access control */
+export type UserRole = 'user' | 'bot';
+
 export const JWTPayloadSchema = z.object({
   userId: z.string().uuid(),
   email: z.string().email(),
   name: z.string(),
+  role: z.enum(['user', 'bot']).default('user'),
   iat: z.number().optional(), // Issued at (added by JWT library)
   exp: z.number().optional(), // Expiration time (added by JWT library)
 });
