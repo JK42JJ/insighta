@@ -15,3 +15,5 @@ export { generateEmbedding, embedNode, batchEmbedNodes } from './embedding';
 export { enrichResourceNode, batchEnrichResources, enrichBySourceRef } from './enrichment';
 export { buildContext, buildNodeContext } from './context-builder';
 export type { ContextOptions, ContextResult } from './context-builder';
+export { chat } from './chat';
+export type { ChatRequest, ChatResponse, ChatSource } from './chat';
