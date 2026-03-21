@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { getPrismaClient } from '../../modules/database';
 import { createErrorResponse, ErrorCode } from '../schemas/common.schema';
 
 /**
@@ -20,7 +21,10 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Routes exempt from bot write guard (bot needs these to function) */
 const BOT_WRITE_EXEMPT_ROUTES = new Set([
   '/api/v1/bot/request-approval',  // Bot must be able to request approval
+  '/api/v1/snapshots',             // Snapshot creation is part of the safety flow
 ]);
+
+const APPROVAL_TOKEN_TTL_MINUTES = 5;
 
 export async function registerBotWriteGuard(fastify: FastifyInstance) {
   fastify.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -33,9 +37,9 @@ export async function registerBotWriteGuard(fastify: FastifyInstance) {
     // Allow exempt routes
     if (BOT_WRITE_EXEMPT_ROUTES.has(request.url.split('?')[0] ?? '')) return;
 
-    // Check for approval token
-    const approvalToken = request.headers['x-bot-approval-token'];
-    if (!approvalToken) {
+    // Check for approval token header
+    const tokenValue = request.headers['x-bot-approval-token'];
+    if (!tokenValue || typeof tokenValue !== 'string') {
       return reply.code(403).send(
         createErrorResponse(
           ErrorCode.FORBIDDEN,
@@ -46,9 +50,48 @@ export async function registerBotWriteGuard(fastify: FastifyInstance) {
       );
     }
 
-    // TODO (P2): Validate approval token against bot_approval_tokens table
-    // For now, any non-empty token passes — P2 will add proper validation
+    // Validate token against DB
+    const prisma = getPrismaClient();
+    const approval = await prisma.bot_approval_tokens.findFirst({
+      where: {
+        token: tokenValue,
+        user_id: request.user.userId,
+        status: 'approved',
+        expires_at: { gte: new Date() },
+      },
+    });
+
+    if (!approval) {
+      return reply.code(403).send(
+        createErrorResponse(
+          ErrorCode.FORBIDDEN,
+          'Invalid or expired approval token.',
+          request.url
+        )
+      );
+    }
+
+    // Mark token as used (one-time use)
+    await prisma.bot_approval_tokens.update({
+      where: { id: approval.id },
+      data: { status: 'used' },
+    });
   });
 
   fastify.log.info('Bot write guard registered — bot write operations require approval token');
+}
+
+/**
+ * Generate a cryptographically random approval token
+ */
+export function generateApprovalToken(): string {
+  const { randomBytes } = require('crypto');
+  return randomBytes(32).toString('hex');
+}
+
+/**
+ * Get token expiry timestamp
+ */
+export function getTokenExpiry(): Date {
+  return new Date(Date.now() + APPROVAL_TOKEN_TTL_MINUTES * 60 * 1000);
 }
