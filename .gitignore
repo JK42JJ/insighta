@@ -122,3 +122,10 @@ docs-site/
 
 # Archived frontend v1
 frontend-old/
+
+# memsearch (dev memory — local only)
+.memsearch/
+.memsearch.toml
+
+# OpenClaw avatar bot — memory is env-specific
+openclaw/memory/
