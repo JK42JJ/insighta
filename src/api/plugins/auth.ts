@@ -132,9 +132,29 @@ export async function registerAuth(fastify: FastifyInstance) {
 
   /**
    * Decorator: Authentication hook for protected routes
+   * Supports Supabase JWT or bot service key (INSIGHTA_BOT_KEY)
    */
   fastify.decorate('authenticate', async function (request: FastifyRequest, reply: FastifyReply) {
     try {
+      // Phase 1: Bot service key auth (local, single-user)
+      // Bot gets role: 'bot' — write operations require approval token
+      const botKey = process.env['INSIGHTA_BOT_KEY'];
+      if (botKey) {
+        const token = extractTokenFromHeader(request.headers.authorization);
+        if (token === botKey) {
+          const botUserId = process.env['INSIGHTA_BOT_USER_ID'];
+          if (botUserId) {
+            request.user = {
+              userId: botUserId,
+              email: 'bot@insighta.one',
+              name: 'Insighta Bot',
+              role: 'bot',
+            };
+            return;
+          }
+        }
+      }
+
       const decoded = await request.jwtVerify<SupabaseJWTClaims>();
 
       const userMeta: Record<string, unknown> = decoded.user_metadata || {};
@@ -146,6 +166,7 @@ export async function registerAuth(fastify: FastifyInstance) {
           (userMeta['full_name'] as string) ||
           decoded.email?.split('@')[0] ||
           '',
+        role: 'user',
       };
     } catch (err) {
       const error = err as Error;
