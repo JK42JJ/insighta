@@ -17,3 +17,5 @@ export { buildContext, buildNodeContext } from './context-builder';
 export type { ContextOptions, ContextResult } from './context-builder';
 export { chat } from './chat';
 export type { ChatRequest, ChatResponse, ChatSource } from './chat';
+export { generateKnowledgeSummary } from './report';
+export type { KnowledgeSummary } from './report';
