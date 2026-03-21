@@ -121,3 +121,29 @@ export type VectorSearchBody = z.infer<typeof VectorSearchBodySchema>;
 export type ListEdgesQuery = z.infer<typeof ListEdgesQuerySchema>;
 export type TextSearchQuery = z.infer<typeof TextSearchQuerySchema>;
 export type SemanticSearchBody = z.infer<typeof SemanticSearchBodySchema>;
+
+// -- Chat Schemas --
+
+export const ChatBodySchema = z.object({
+  query: z.string().min(1).max(2000),
+  conversationId: z.string().uuid().optional(),
+});
+
+export type ChatBody = z.infer<typeof ChatBodySchema>;
+
+// -- Summary Report Schemas --
+
+export const SummaryQuerySchema = z.object({
+  period: z.enum(['day', 'week', 'month']).default('week'),
+});
+
+export type SummaryQuery = z.infer<typeof SummaryQuerySchema>;
+
+// -- Router Schemas --
+
+export const RouteBodySchema = z.object({
+  query: z.string().min(1).max(2000),
+  conversationId: z.string().uuid().optional(),
+});
+
+export type RouteBody = z.infer<typeof RouteBodySchema>;

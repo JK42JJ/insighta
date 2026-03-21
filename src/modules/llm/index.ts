@@ -94,7 +94,9 @@ export async function createGenerationProvider(): Promise<GenerationProvider> {
 
   if (config.openrouter.apiKey) {
     cachedGenerationProvider = new OpenRouterGenerationProvider();
-    logger.info('Generation provider: OpenRouter (Ollama unavailable, fallback)', { model: config.openrouter.model });
+    logger.info('Generation provider: OpenRouter (Ollama unavailable, fallback)', {
+      model: config.openrouter.model,
+    });
     return cachedGenerationProvider;
   }
 

@@ -1,4 +1,17 @@
 import { defineConfig, devices } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Load frontend/.env so VITE_* vars are available in test files
+const envPath = path.resolve(path.dirname(new URL(import.meta.url).pathname), '.env');
+if (fs.existsSync(envPath)) {
+  for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+    const match = line.match(/^\s*([\w.]+)\s*=\s*"?([^"#]*)"?\s*$/);
+    if (match && !process.env[match[1]]) {
+      process.env[match[1]] = match[2].trim();
+    }
+  }
+}
 
 const isCI = !!process.env.CI;
 
@@ -17,6 +30,7 @@ export default defineConfig({
     baseURL: process.env.BASE_URL || 'http://localhost:8081',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    video: 'on',
   },
 
   projects: [
