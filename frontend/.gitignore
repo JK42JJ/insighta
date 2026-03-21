@@ -27,3 +27,4 @@ dist-ssr
 tests/.auth/
 test-results/
 playwright-report/
+tests/regression/videos/
