@@ -160,6 +160,45 @@ async function apiCall(page: Page, method: string, path: string, body?: unknown)
 }
 
 // ---------------------------------------------------------------------------
+// DB Cleanup — delete ALL test-created cards by URL/title pattern
+// ---------------------------------------------------------------------------
+
+/**
+ * Delete all test-created cards from DB via EF.
+ * Fallback safety net — runs after afterAll ID-based cleanup.
+ */
+async function cleanupAllTestCards(page: Page): Promise<number> {
+  const allCards = await efCall(page, 'local-cards', { action: 'list' });
+  const cards = allCards.data?.cards || allCards.data || [];
+  let deleted = 0;
+  for (const card of cards) {
+    const url = (card.url || '').toLowerCase();
+    const title = card.title || '';
+    const isTestCard =
+      title.startsWith('E2E ') ||
+      url.includes('e2e_') ||
+      url.includes('example.com') ||
+      url.includes('fb.com') ||
+      url.includes('fb.watch') ||
+      url.includes('facebook.com') ||
+      url.includes('linkedin.com') ||
+      url.includes('notion.') ||
+      url.includes('instagram.com') ||
+      url.includes('x.com/status') ||
+      url.includes('twitter.com') ||
+      url.includes('/shorts/abc123') ||
+      url.includes('/@mkbhd') ||
+      url.includes('/feed/history') ||
+      url.includes('embed/dQw4w9WgXcQ') ||
+      url.includes('localhost:8081/api/v1/images/proxy');
+    if (isTestCard && card.id) {
+      try { await deleteCard(page, card.id); deleted++; } catch { /* best effort */ }
+    }
+  }
+  return deleted;
+}
+
+// ---------------------------------------------------------------------------
 // Card Integrity Verification
 // ---------------------------------------------------------------------------
 
@@ -2236,5 +2275,29 @@ test.describe('Ideation — Floating Mode', () => {
     const backCard = cards.find((c) => c.id === cardId);
     expect(backCard?.cell_index, 'Card should be back in scratchpad').toBe(-1);
     assertNoDuplicates(cards, 'after floating batch moves');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Global Cleanup — safety net for all test groups
+// ---------------------------------------------------------------------------
+
+test.describe('Global Cleanup', () => {
+  test('delete ALL remaining test cards from DB', async ({ page }) => {
+    const isReady = await waitForApp(page);
+    if (!isReady) { test.skip(true, 'Not authenticated'); return; }
+
+    const deleted = await cleanupAllTestCards(page);
+    if (deleted > 0) {
+      console.warn(`[CLEANUP] Deleted ${deleted} orphaned test cards from DB`);
+    }
+    // Verify none remain
+    const allCards = await efCall(page, 'local-cards', { action: 'list' });
+    const cards = allCards.data?.cards || allCards.data || [];
+    const remaining = cards.filter((c: RawCard) =>
+      (c.title || '').startsWith('E2E ') || (c.url || '').includes('e2e_') ||
+      (c.url || '').includes('example.com') || (c.url || '').includes('fb.com')
+    );
+    expect(remaining.length, 'Test cards should be fully cleaned up').toBe(0);
   });
 });
