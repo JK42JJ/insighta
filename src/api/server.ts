@@ -18,6 +18,7 @@ import { ontologyRoutes } from './routes/ontology';
 import { llmRoutes } from './routes/llm';
 import { adminRoutes } from './routes/admin';
 import { subscriptionRoutes } from './routes/subscriptions';
+import { snapshotRoutes } from './routes/snapshots';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { testDatabaseConnection, disconnectDatabase, resetConnectionPool } from '../modules/database/client';
@@ -240,6 +241,9 @@ export async function buildServer() {
 
       // Register subscription routes (mandala subscription graph)
       await instance.register(subscriptionRoutes, { prefix: '/subscriptions' });
+
+      // Register snapshot routes (card state backup/rollback for bot safety)
+      await instance.register(snapshotRoutes, { prefix: '/snapshots' });
 
       // Register admin routes (requires is_super_admin)
       await instance.register(adminRoutes, { prefix: '/admin' });

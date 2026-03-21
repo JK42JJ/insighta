@@ -376,6 +376,7 @@ model users {
   youtube_subscriptions          youtube_subscriptions[]
   youtube_watch_history          youtube_watch_history[]
   youtube_watch_history_imports  youtube_watch_history_imports[]
+  card_snapshots                 card_snapshots[]
 
   @@index([instance_id])
   @@index([is_anonymous])
@@ -1039,4 +1040,19 @@ enum oauth_response_type {
   code
 
   @@schema("auth")
+}
+
+model card_snapshots {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String   @db.Uuid
+  reason         String
+  snapshot_data  Json
+  status         String   @default("pending")
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  rolled_back_at DateTime? @db.Timestamptz(6)
+  user           users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id], map: "idx_card_snapshots_user_id")
+  @@index([status], map: "idx_card_snapshots_status")
+  @@schema("public")
 }
