@@ -21,6 +21,7 @@ import { subscriptionRoutes } from './routes/subscriptions';
 import { snapshotRoutes } from './routes/snapshots';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
+import { registerBotUsageLogger } from './plugins/bot-usage-logger';
 import { testDatabaseConnection, disconnectDatabase, resetConnectionPool } from '../modules/database/client';
 import { getClawbot } from '../modules/scheduler/clawbot';
 
@@ -103,6 +104,9 @@ export async function buildServer() {
 
   // Bot write guard — blocks bot write operations without approval token
   await registerBotWriteGuard(fastify);
+
+  // Bot usage logger — tracks bot API requests for Phase 0 pattern analysis (#309)
+  await registerBotUsageLogger(fastify);
 
   // ============================================================================
   // Documentation Plugins (skip in test mode and serverless)
