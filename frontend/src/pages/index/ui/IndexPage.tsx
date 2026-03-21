@@ -656,7 +656,7 @@ function AuthenticatedApp() {
         </div>
       </AppShell>
 
-      <DragOverlay dropAnimation={null} modifiers={[snapToCursor]}>
+      <DragOverlay dropAnimation={null} modifiers={[snapToCursor]} style={{ zIndex: 1100 }}>
         <DragOverlayContent
           dragData={activeDragData}
           allCards={allCardsMap}
