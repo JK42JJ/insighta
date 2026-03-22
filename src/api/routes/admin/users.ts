@@ -196,40 +196,32 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
   );
 
   // PATCH /api/v1/admin/users/:id/status — Suspend/activate user
-  fastify.patch<{ Params: { id: string } }>(
-    '/:id/status',
-    adminAuth,
-    async (request, reply) => {
-      const { id } = request.params;
-      const body = StatusUpdateSchema.parse(request.body);
+  fastify.patch<{ Params: { id: string } }>('/:id/status', adminAuth, async (request, reply) => {
+    const { id } = request.params;
+    const body = StatusUpdateSchema.parse(request.body);
 
-      // Prevent admin from banning themselves
-      if (request.user.userId === id && body.banned) {
-        return reply
-          .code(400)
-          .send(
-            createErrorResponse(ErrorCode.VALIDATION_ERROR, 'Cannot ban yourself', request.url)
-          );
-      }
+    // Prevent admin from banning themselves
+    if (request.user.userId === id && body.banned) {
+      return reply
+        .code(400)
+        .send(createErrorResponse(ErrorCode.VALIDATION_ERROR, 'Cannot ban yourself', request.url));
+    }
 
-      const bannedUntil = body.banned ? new Date('2099-12-31T23:59:59Z') : null;
+    const bannedUntil = body.banned ? new Date('2099-12-31T23:59:59Z') : null;
 
-      const result = await db.$queryRaw<Array<Record<string, unknown>>>`
+    const result = await db.$queryRaw<Array<Record<string, unknown>>>`
         UPDATE auth.users
         SET banned_until = ${bannedUntil}::timestamptz
         WHERE id = ${id}::uuid
         RETURNING id, email, banned_until
       `;
 
-      if (result.length === 0) {
-        return reply
-          .code(404)
-          .send(
-            createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'User not found', request.url)
-          );
-      }
-
-      return reply.send(createSuccessResponse(result[0]));
+    if (result.length === 0) {
+      return reply
+        .code(404)
+        .send(createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'User not found', request.url));
     }
-  );
+
+    return reply.send(createSuccessResponse(result[0]));
+  });
 }

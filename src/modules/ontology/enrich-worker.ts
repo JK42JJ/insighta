@@ -7,6 +7,7 @@
 
 import { systemBatchEnrich } from './enrichment';
 
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 process.on('message', async (msg: { limit: number; delayMs: number }) => {
   try {
     const result = await systemBatchEnrich({

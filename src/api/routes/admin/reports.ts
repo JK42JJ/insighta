@@ -80,15 +80,12 @@ export async function adminReportRoutes(fastify: FastifyInstance) {
   });
 
   // PATCH /api/v1/admin/reports/:id — Resolve/dismiss report
-  fastify.patch<{ Params: { id: string } }>(
-    '/:id',
-    adminAuth,
-    async (request, reply) => {
-      const { id } = request.params;
-      const body = ResolveReportSchema.parse(request.body);
-      const adminId = request.user.userId;
+  fastify.patch<{ Params: { id: string } }>('/:id', adminAuth, async (request, reply) => {
+    const { id } = request.params;
+    const body = ResolveReportSchema.parse(request.body);
+    const adminId = request.user.userId;
 
-      const result = await db.$queryRaw<Array<Record<string, unknown>>>`
+    const result = await db.$queryRaw<Array<Record<string, unknown>>>`
         UPDATE public.content_reports
         SET status = ${body.status},
             resolved_by = ${adminId}::uuid,
@@ -98,15 +95,14 @@ export async function adminReportRoutes(fastify: FastifyInstance) {
         RETURNING *
       `;
 
-      if (result.length === 0) {
-        return reply.code(404).send(
-          createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'Report not found', request.url)
-        );
-      }
-
-      return reply.send(createSuccessResponse(result[0]));
+    if (result.length === 0) {
+      return reply
+        .code(404)
+        .send(createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'Report not found', request.url));
     }
-  );
+
+    return reply.send(createSuccessResponse(result[0]));
+  });
 }
 
 export async function userReportRoutes(fastify: FastifyInstance) {
@@ -128,9 +124,15 @@ export async function userReportRoutes(fastify: FastifyInstance) {
       `;
 
       if (existing.length > 0) {
-        return reply.code(409).send(
-          createErrorResponse(ErrorCode.DUPLICATE_RESOURCE, 'You have already reported this content', request.url)
-        );
+        return reply
+          .code(409)
+          .send(
+            createErrorResponse(
+              ErrorCode.DUPLICATE_RESOURCE,
+              'You have already reported this content',
+              request.url
+            )
+          );
       }
 
       const result = await db.$queryRaw<Array<Record<string, unknown>>>`

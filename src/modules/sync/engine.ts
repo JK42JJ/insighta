@@ -473,7 +473,9 @@ export class SyncEngine {
       });
       child.send({ limit: youtubeVideoIds.length, delayMs: 2000 });
       child.unref();
-      logger.info('Async enrichment triggered for synced videos', { count: youtubeVideoIds.length });
+      logger.info('Async enrichment triggered for synced videos', {
+        count: youtubeVideoIds.length,
+      });
     } catch (err) {
       logger.warn('Failed to spawn enrichment worker', {
         error: err instanceof Error ? err.message : String(err),

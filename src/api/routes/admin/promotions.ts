@@ -102,88 +102,119 @@ export async function adminPromotionRoutes(fastify: FastifyInstance) {
   });
 
   // PATCH /api/v1/admin/promotions/:id
-  fastify.patch<{ Params: { id: string } }>(
-    '/:id',
-    adminAuth,
-    async (request, reply) => {
-      const { id } = request.params;
-      const body = UpdatePromotionSchema.parse(request.body);
-      const adminId = request.user.userId;
+  fastify.patch<{ Params: { id: string } }>('/:id', adminAuth, async (request, reply) => {
+    const { id } = request.params;
+    const body = UpdatePromotionSchema.parse(request.body);
+    const adminId = request.user.userId;
 
-      // Fetch current for audit
-      const current = await db.$queryRaw<Array<Record<string, unknown>>>`
+    // Fetch current for audit
+    const current = await db.$queryRaw<Array<Record<string, unknown>>>`
         SELECT * FROM public.admin_promotions WHERE id = ${id}::uuid
       `;
-      if (current.length === 0) {
-        return reply.code(404).send(
+    if (current.length === 0) {
+      return reply
+        .code(404)
+        .send(
           createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'Promotion not found', request.url)
         );
-      }
-
-      const setClauses: string[] = [];
-      const params: unknown[] = [id]; // $1 = id
-      let idx = 2;
-
-      if (body.code !== undefined) { setClauses.push(`code = $${idx}`); params.push(body.code); idx++; }
-      if (body.type !== undefined) { setClauses.push(`type = $${idx}`); params.push(body.type); idx++; }
-      if (body.value !== undefined) { setClauses.push(`value = $${idx}::jsonb`); params.push(JSON.stringify(body.value)); idx++; }
-      if (body.startsAt !== undefined) { setClauses.push(`starts_at = $${idx}::timestamptz`); params.push(body.startsAt); idx++; }
-      if (body.endsAt !== undefined) { setClauses.push(`ends_at = $${idx}::timestamptz`); params.push(body.endsAt); idx++; }
-      if (body.maxRedemptions !== undefined) { setClauses.push(`max_redemptions = $${idx}`); params.push(body.maxRedemptions); idx++; }
-      if (body.isActive !== undefined) { setClauses.push(`is_active = $${idx}`); params.push(body.isActive); idx++; }
-
-      if (setClauses.length === 0) {
-        return reply.code(400).send(
-          createErrorResponse(ErrorCode.VALIDATION_ERROR, 'No fields to update', request.url)
-        );
-      }
-
-      setClauses.push('updated_at = NOW()');
-
-      const result = await db.$queryRawUnsafe<Array<Record<string, unknown>>>(
-        `UPDATE public.admin_promotions SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
-        ...params
-      );
-
-      // Audit log
-      await db.$queryRawUnsafe(
-        `INSERT INTO public.admin_audit_log (admin_id, action, target_type, target_id, old_value, new_value)
-         VALUES ($1::uuid, 'update_promotion', 'promotion', $2::uuid, $3::jsonb, $4::jsonb)`,
-        adminId, id, JSON.stringify(current[0]), JSON.stringify(body)
-      );
-
-      return reply.send(createSuccessResponse(result[0]));
     }
-  );
+
+    const setClauses: string[] = [];
+    const params: unknown[] = [id]; // $1 = id
+    let idx = 2;
+
+    if (body.code !== undefined) {
+      setClauses.push(`code = $${idx}`);
+      params.push(body.code);
+      idx++;
+    }
+    if (body.type !== undefined) {
+      setClauses.push(`type = $${idx}`);
+      params.push(body.type);
+      idx++;
+    }
+    if (body.value !== undefined) {
+      setClauses.push(`value = $${idx}::jsonb`);
+      params.push(JSON.stringify(body.value));
+      idx++;
+    }
+    if (body.startsAt !== undefined) {
+      setClauses.push(`starts_at = $${idx}::timestamptz`);
+      params.push(body.startsAt);
+      idx++;
+    }
+    if (body.endsAt !== undefined) {
+      setClauses.push(`ends_at = $${idx}::timestamptz`);
+      params.push(body.endsAt);
+      idx++;
+    }
+    if (body.maxRedemptions !== undefined) {
+      setClauses.push(`max_redemptions = $${idx}`);
+      params.push(body.maxRedemptions);
+      idx++;
+    }
+    if (body.isActive !== undefined) {
+      setClauses.push(`is_active = $${idx}`);
+      params.push(body.isActive);
+      idx++;
+    }
+
+    if (setClauses.length === 0) {
+      return reply
+        .code(400)
+        .send(createErrorResponse(ErrorCode.VALIDATION_ERROR, 'No fields to update', request.url));
+    }
+
+    setClauses.push('updated_at = NOW()');
+
+    const result = await db.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `UPDATE public.admin_promotions SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+      ...params
+    );
+
+    // Audit log
+    await db.$queryRawUnsafe(
+      `INSERT INTO public.admin_audit_log (admin_id, action, target_type, target_id, old_value, new_value)
+         VALUES ($1::uuid, 'update_promotion', 'promotion', $2::uuid, $3::jsonb, $4::jsonb)`,
+      adminId,
+      id,
+      JSON.stringify(current[0]),
+      JSON.stringify(body)
+    );
+
+    return reply.send(createSuccessResponse(result[0]));
+  });
 
   // DELETE /api/v1/admin/promotions/:id (soft delete)
-  fastify.delete<{ Params: { id: string } }>(
-    '/:id',
-    adminAuth,
-    async (request, reply) => {
-      const { id } = request.params;
-      const adminId = request.user.userId;
+  fastify.delete<{ Params: { id: string } }>('/:id', adminAuth, async (request, reply) => {
+    const { id } = request.params;
+    const adminId = request.user.userId;
 
-      const result = await db.$queryRaw<Array<Record<string, unknown>>>`
+    const result = await db.$queryRaw<Array<Record<string, unknown>>>`
         UPDATE public.admin_promotions
         SET is_active = false, updated_at = NOW()
         WHERE id = ${id}::uuid AND is_active = true
         RETURNING *
       `;
 
-      if (result.length === 0) {
-        return reply.code(404).send(
-          createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'Promotion not found or already inactive', request.url)
+    if (result.length === 0) {
+      return reply
+        .code(404)
+        .send(
+          createErrorResponse(
+            ErrorCode.RESOURCE_NOT_FOUND,
+            'Promotion not found or already inactive',
+            request.url
+          )
         );
-      }
+    }
 
-      // Audit log
-      await db.$queryRaw`
+    // Audit log
+    await db.$queryRaw`
         INSERT INTO public.admin_audit_log (admin_id, action, target_type, target_id, old_value)
         VALUES (${adminId}::uuid, 'delete_promotion', 'promotion', ${id}::uuid, ${JSON.stringify(result[0])}::jsonb)
       `;
 
-      return reply.send(createSuccessResponse({ deleted: true }));
-    }
-  );
+    return reply.send(createSuccessResponse({ deleted: true }));
+  });
 }

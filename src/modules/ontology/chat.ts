@@ -111,11 +111,7 @@ async function getProvider(): Promise<GenerationProvider> {
   return generationProvider;
 }
 
-function buildChatPrompt(
-  query: string,
-  graphContext: string,
-  history: ConversationTurn[],
-): string {
+function buildChatPrompt(query: string, graphContext: string, history: ConversationTurn[]): string {
   const historyBlock =
     history.length > 0
       ? history.map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`).join('\n')
@@ -136,10 +132,7 @@ ${query}
 - Do NOT mention "knowledge graph" or "context" explicitly — answer naturally as if you know this information.`;
 }
 
-export async function chat(
-  userId: string,
-  request: ChatRequest,
-): Promise<ChatResponse> {
+export async function chat(userId: string, request: ChatRequest): Promise<ChatResponse> {
   const { query } = request;
   const conversationId = request.conversationId || crypto.randomUUID();
 
@@ -199,11 +192,11 @@ export async function chat(
   let contextText = '';
   if (allNodeIds.size > 0) {
     try {
-      const contextResult = await buildContext(
-        Array.from(allNodeIds),
-        userId,
-        { maxTokens: MAX_CONTEXT_TOKENS, includeEdges: true, includeProperties: true },
-      );
+      const contextResult = await buildContext(Array.from(allNodeIds), userId, {
+        maxTokens: MAX_CONTEXT_TOKENS,
+        includeEdges: true,
+        includeProperties: true,
+      });
       contextText = contextResult.text;
       logger.info('Context built', {
         conversationId,

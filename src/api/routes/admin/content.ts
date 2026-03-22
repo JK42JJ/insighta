@@ -70,85 +70,81 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
   });
 
   // PATCH /api/v1/admin/content/mandalas/:id — Hide/unhide, flag
-  fastify.patch<{ Params: { id: string } }>(
-    '/mandalas/:id',
-    adminAuth,
-    async (request, reply) => {
-      const { id } = request.params;
-      const body = ContentActionSchema.parse(request.body);
-      const adminId = request.user.userId;
+  fastify.patch<{ Params: { id: string } }>('/mandalas/:id', adminAuth, async (request, reply) => {
+    const { id } = request.params;
+    const body = ContentActionSchema.parse(request.body);
+    const adminId = request.user.userId;
 
-      const setClauses: string[] = [];
-      const params: unknown[] = [id]; // $1
-      let idx = 2;
+    const setClauses: string[] = [];
+    const params: unknown[] = [id]; // $1
+    let idx = 2;
 
-      if (body.hidden !== undefined) {
-        setClauses.push(`is_public = $${idx}`);
-        params.push(!body.hidden); // hidden=true → is_public=false
-        idx++;
-      }
-
-      if (setClauses.length === 0) {
-        return reply.code(400).send(
-          createErrorResponse(ErrorCode.VALIDATION_ERROR, 'No changes specified', request.url)
-        );
-      }
-
-      setClauses.push('updated_at = NOW()');
-
-      const result = await db.$queryRawUnsafe<Array<Record<string, unknown>>>(
-        `UPDATE public.user_mandalas SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
-        ...params
-      );
-
-      if (result.length === 0) {
-        return reply.code(404).send(
-          createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'Mandala not found', request.url)
-        );
-      }
-
-      // Audit log
-      await db.$queryRawUnsafe(
-        `INSERT INTO public.admin_audit_log (admin_id, action, target_type, target_id, new_value)
-         VALUES ($1::uuid, 'moderate_content', 'mandala', $2::uuid, $3::jsonb)`,
-        adminId, id, JSON.stringify(body)
-      );
-
-      return reply.send(createSuccessResponse(result[0]));
+    if (body.hidden !== undefined) {
+      setClauses.push(`is_public = $${idx}`);
+      params.push(!body.hidden); // hidden=true → is_public=false
+      idx++;
     }
-  );
+
+    if (setClauses.length === 0) {
+      return reply
+        .code(400)
+        .send(createErrorResponse(ErrorCode.VALIDATION_ERROR, 'No changes specified', request.url));
+    }
+
+    setClauses.push('updated_at = NOW()');
+
+    const result = await db.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `UPDATE public.user_mandalas SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+      ...params
+    );
+
+    if (result.length === 0) {
+      return reply
+        .code(404)
+        .send(createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'Mandala not found', request.url));
+    }
+
+    // Audit log
+    await db.$queryRawUnsafe(
+      `INSERT INTO public.admin_audit_log (admin_id, action, target_type, target_id, new_value)
+         VALUES ($1::uuid, 'moderate_content', 'mandala', $2::uuid, $3::jsonb)`,
+      adminId,
+      id,
+      JSON.stringify(body)
+    );
+
+    return reply.send(createSuccessResponse(result[0]));
+  });
 
   // DELETE /api/v1/admin/content/mandalas/:id — Admin force-delete
-  fastify.delete<{ Params: { id: string } }>(
-    '/mandalas/:id',
-    adminAuth,
-    async (request, reply) => {
-      const { id } = request.params;
-      const adminId = request.user.userId;
+  fastify.delete<{ Params: { id: string } }>('/mandalas/:id', adminAuth, async (request, reply) => {
+    const { id } = request.params;
+    const adminId = request.user.userId;
 
-      // Get mandala info for audit
-      const mandala = await db.$queryRaw<Array<Record<string, unknown>>>`
+    // Get mandala info for audit
+    const mandala = await db.$queryRaw<Array<Record<string, unknown>>>`
         SELECT * FROM public.user_mandalas WHERE id = ${id}::uuid
       `;
 
-      if (mandala.length === 0) {
-        return reply.code(404).send(
-          createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'Mandala not found', request.url)
-        );
-      }
-
-      // Delete levels first, then mandala
-      await db.$queryRaw`DELETE FROM public.user_mandala_levels WHERE mandala_id = ${id}::uuid`;
-      await db.$queryRaw`DELETE FROM public.user_mandalas WHERE id = ${id}::uuid`;
-
-      // Audit log
-      await db.$queryRawUnsafe(
-        `INSERT INTO public.admin_audit_log (admin_id, action, target_type, target_id, old_value)
-         VALUES ($1::uuid, 'delete_content', 'mandala', $2::uuid, $3::jsonb)`,
-        adminId, id, JSON.stringify(mandala[0])
-      );
-
-      return reply.send(createSuccessResponse({ deleted: true }));
+    if (mandala.length === 0) {
+      return reply
+        .code(404)
+        .send(createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'Mandala not found', request.url));
     }
-  );
+
+    // Delete levels first, then mandala
+    await db.$queryRaw`DELETE FROM public.user_mandala_levels WHERE mandala_id = ${id}::uuid`;
+    await db.$queryRaw`DELETE FROM public.user_mandalas WHERE id = ${id}::uuid`;
+
+    // Audit log
+    await db.$queryRawUnsafe(
+      `INSERT INTO public.admin_audit_log (admin_id, action, target_type, target_id, old_value)
+         VALUES ($1::uuid, 'delete_content', 'mandala', $2::uuid, $3::jsonb)`,
+      adminId,
+      id,
+      JSON.stringify(mandala[0])
+    );
+
+    return reply.send(createSuccessResponse({ deleted: true }));
+  });
 }
