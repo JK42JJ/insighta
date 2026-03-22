@@ -11,7 +11,10 @@ import { CardSkeleton } from './CardSkeleton';
 import { useQueryClient } from '@tanstack/react-query';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import type { LocalCardsResponse } from '@/entities/card/model/local-cards';
-import { useSummaryRatings, useRateSummary } from '@/features/card-management/model/useSummaryRating';
+import {
+  useSummaryRatings,
+  useRateSummary,
+} from '@/features/card-management/model/useSummaryRating';
 import type { SummaryRating } from '@/features/card-management/model/useSummaryRating';
 
 interface CardListProps {
@@ -62,7 +65,16 @@ function CardSlot({
 
 const PAGE_SIZE = 24;
 
-export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectionChange, enrichingCardIds, failedEnrichCardIds, onRetryEnrich }: CardListProps) {
+export function CardList({
+  cards,
+  isLoading,
+  onCardClick,
+  onSaveNote,
+  onSelectionChange,
+  enrichingCardIds,
+  failedEnrichCardIds,
+  onRetryEnrich,
+}: CardListProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data: summaryRatings } = useSummaryRatings();
@@ -74,7 +86,8 @@ export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectio
     },
     [rateSummary]
   );
-  const cachedCardCount = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list())?.cards.length;
+  const cachedCardCount = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list())?.cards
+    .length;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -257,7 +270,7 @@ export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectio
     <div className="animate-fade-in" ref={containerRef}>
       <div
         ref={gridRef}
-        className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center"
         style={{ minHeight: 'calc(100vh - 200px)' }}
       >
         {selectionStyle && <div style={selectionStyle} />}
