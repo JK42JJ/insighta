@@ -37,9 +37,15 @@ export async function checkoutRoutes(fastify: FastifyInstance) {
     { onRequest: [fastify.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!STRIPE_SECRET_KEY) {
-        return reply.code(503).send(
-          createErrorResponse(ErrorCode.VALIDATION_ERROR, 'Payment service not configured', request.url)
-        );
+        return reply
+          .code(503)
+          .send(
+            createErrorResponse(
+              ErrorCode.VALIDATION_ERROR,
+              'Payment service not configured',
+              request.url
+            )
+          );
       }
 
       const body = CheckoutSchema.parse(request.body);
@@ -54,11 +60,13 @@ export async function checkoutRoutes(fastify: FastifyInstance) {
       // const stripe = new Stripe(STRIPE_SECRET_KEY);
       // const session = await stripe.checkout.sessions.create({...});
 
-      return reply.send(createSuccessResponse({
-        message: 'Stripe checkout not yet configured. Set STRIPE_SECRET_KEY to enable.',
-        customerId: userSub[0]?.stripe_customer_id,
-        priceId: body.priceId,
-      }));
+      return reply.send(
+        createSuccessResponse({
+          message: 'Stripe checkout not yet configured. Set STRIPE_SECRET_KEY to enable.',
+          customerId: userSub[0]?.stripe_customer_id,
+          priceId: body.priceId,
+        })
+      );
     }
   );
 
@@ -68,45 +76,52 @@ export async function checkoutRoutes(fastify: FastifyInstance) {
     { onRequest: [fastify.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!STRIPE_SECRET_KEY) {
-        return reply.code(503).send(
-          createErrorResponse(ErrorCode.VALIDATION_ERROR, 'Payment service not configured', request.url)
-        );
+        return reply
+          .code(503)
+          .send(
+            createErrorResponse(
+              ErrorCode.VALIDATION_ERROR,
+              'Payment service not configured',
+              request.url
+            )
+          );
       }
 
-      return reply.send(createSuccessResponse({
-        message: 'Stripe portal not yet configured. Set STRIPE_SECRET_KEY to enable.',
-      }));
+      return reply.send(
+        createSuccessResponse({
+          message: 'Stripe portal not yet configured. Set STRIPE_SECRET_KEY to enable.',
+        })
+      );
     }
   );
 }
 
 export async function stripeWebhookRoutes(fastify: FastifyInstance) {
   // POST /api/v1/webhooks/stripe — Stripe webhook handler
-  fastify.post(
-    '/',
-    {},
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      if (!STRIPE_WEBHOOK_SECRET) {
-        return reply.code(503).send({ error: 'Webhook not configured' });
-      }
-
-      const sig = request.headers['stripe-signature'] as string;
-      if (!sig) {
-        return reply.code(400).send({ error: 'Missing stripe-signature header' });
-      }
-
-      // TODO: Verify signature and process events when Stripe is configured
-      // const event = stripe.webhooks.constructEvent(rawBody, sig, STRIPE_WEBHOOK_SECRET);
-      // switch (event.type) {
-      //   case 'checkout.session.completed': ...
-      //   case 'invoice.paid': ...
-      //   case 'invoice.payment_failed': ...
-      //   case 'customer.subscription.updated': ...
-      //   case 'customer.subscription.deleted': ...
-      // }
-
-      fastify.log.info({ type: 'stripe_webhook', sig: sig.slice(0, 20) }, 'Stripe webhook received (not processed — keys not configured)');
-      return reply.send({ received: true });
+  fastify.post('/', {}, async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!STRIPE_WEBHOOK_SECRET) {
+      return reply.code(503).send({ error: 'Webhook not configured' });
     }
-  );
+
+    const sig = request.headers['stripe-signature'] as string;
+    if (!sig) {
+      return reply.code(400).send({ error: 'Missing stripe-signature header' });
+    }
+
+    // TODO: Verify signature and process events when Stripe is configured
+    // const event = stripe.webhooks.constructEvent(rawBody, sig, STRIPE_WEBHOOK_SECRET);
+    // switch (event.type) {
+    //   case 'checkout.session.completed': ...
+    //   case 'invoice.paid': ...
+    //   case 'invoice.payment_failed': ...
+    //   case 'customer.subscription.updated': ...
+    //   case 'customer.subscription.deleted': ...
+    // }
+
+    fastify.log.info(
+      { type: 'stripe_webhook', sig: sig.slice(0, 20) },
+      'Stripe webhook received (not processed — keys not configured)'
+    );
+    return reply.send({ received: true });
+  });
 }

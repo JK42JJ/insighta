@@ -551,7 +551,10 @@ export async function enrichBySourceRef(
       RETURNING id
     `;
 
-    logger.info('Auto-created resource node for video state', { videoStateId: sourceId, nodeId: nodes[0]!.id });
+    logger.info('Auto-created resource node for video state', {
+      videoStateId: sourceId,
+      nodeId: nodes[0]!.id,
+    });
   }
 
   if (nodes.length === 0) {

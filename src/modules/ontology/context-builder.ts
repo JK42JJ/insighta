@@ -38,9 +38,15 @@ export interface ContextResult {
 
 /** Property keys that carry meaningful text for context */
 const TEXT_PROPERTY_KEYS = [
-  'user_note', 'content', 'description', 'url',
-  'summary', 'summary_en', 'summary_ko',
-  'subjects', 'summary_tags',
+  'user_note',
+  'content',
+  'description',
+  'url',
+  'summary',
+  'summary_en',
+  'summary_ko',
+  'subjects',
+  'summary_tags',
 ] as const;
 
 function estimateTokens(text: string): number {
@@ -53,10 +59,7 @@ function estimateTokens(text: string): number {
  * Example output:
  *   [resource] "React Performance" (url: youtube.com/..., user_note: "useMemo 정리")
  */
-function formatNode(
-  node: SubgraphResult['nodes'][number],
-  includeProperties: boolean,
-): string {
+function formatNode(node: SubgraphResult['nodes'][number], includeProperties: boolean): string {
   let line = `[${node.type}] "${node.title}"`;
 
   if (includeProperties && node.properties) {
@@ -89,10 +92,7 @@ function formatNode(
  * Example output:
  *   "React Performance" --[related_to]--> "React Hooks" (weight: 0.8)
  */
-function formatEdge(
-  edge: SubgraphResult['edges'][number],
-  nodeMap: Map<string, string>,
-): string {
+function formatEdge(edge: SubgraphResult['edges'][number], nodeMap: Map<string, string>): string {
   const sourceName = nodeMap.get(edge.source_id) ?? edge.source_id;
   const targetName = nodeMap.get(edge.target_id) ?? edge.target_id;
   const weightStr = edge.weight !== 1 ? ` (weight: ${edge.weight})` : '';
@@ -108,7 +108,7 @@ function formatEdge(
 export async function buildContext(
   nodeIds: string[],
   userId: string,
-  options: ContextOptions = {},
+  options: ContextOptions = {}
 ): Promise<ContextResult> {
   const maxTokens = options.maxTokens ?? 2000;
   const includeEdges = options.includeEdges ?? true;
@@ -140,9 +140,7 @@ export async function buildContext(
 
   // Format nodes and edges
   const nodeLines = nodes.map((n) => formatNode(n, includeProperties));
-  const edgeLines = includeEdges
-    ? edges.map((e) => formatEdge(e, nodeMap))
-    : [];
+  const edgeLines = includeEdges ? edges.map((e) => formatEdge(e, nodeMap)) : [];
 
   // Assemble context with token budget
   const maxChars = maxTokens * CHARS_PER_TOKEN;
@@ -213,7 +211,7 @@ export async function buildContext(
 export async function buildNodeContext(
   nodeId: string,
   userId: string,
-  options: ContextOptions = {},
+  options: ContextOptions = {}
 ): Promise<ContextResult> {
   return buildContext([nodeId], userId, options);
 }

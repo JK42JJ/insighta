@@ -19,7 +19,9 @@ export async function registerAdminAuth(fastify: FastifyInstance) {
       if (!userId) {
         return reply
           .code(401)
-          .send(createErrorResponse(ErrorCode.UNAUTHORIZED, 'Authentication required', request.url));
+          .send(
+            createErrorResponse(ErrorCode.UNAUTHORIZED, 'Authentication required', request.url)
+          );
       }
 
       // Check is_super_admin in auth.users
@@ -30,13 +32,7 @@ export async function registerAdminAuth(fastify: FastifyInstance) {
       if (!result[0]?.is_super_admin) {
         return reply
           .code(403)
-          .send(
-            createErrorResponse(
-              ErrorCode.FORBIDDEN,
-              'Admin access required',
-              request.url
-            )
-          );
+          .send(createErrorResponse(ErrorCode.FORBIDDEN, 'Admin access required', request.url));
       }
     }
   );

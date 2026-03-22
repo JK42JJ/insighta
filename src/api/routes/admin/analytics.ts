@@ -64,10 +64,12 @@ export async function adminAnalyticsRoutes(fastify: FastifyInstance) {
       SELECT COUNT(*)::int as total FROM auth.users
     `;
 
-    return reply.send(createSuccessResponse({
-      signups,
-      totalUsers: totalUsers[0]?.total ?? 0,
-    }));
+    return reply.send(
+      createSuccessResponse({
+        signups,
+        totalUsers: totalUsers[0]?.total ?? 0,
+      })
+    );
   });
 
   // GET /api/v1/admin/analytics/retention — cohort retention matrix
@@ -138,10 +140,12 @@ export async function adminAnalyticsRoutes(fastify: FastifyInstance) {
         AND (current_period_end IS NULL OR current_period_end > NOW())
     `;
 
-    return reply.send(createSuccessResponse({
-      mrr: mrr[0]?.mrr ?? 0,
-      subscribers: subscriberCount[0]?.count ?? 0,
-      monthlyBreakdown: transactions,
-    }));
+    return reply.send(
+      createSuccessResponse({
+        mrr: mrr[0]?.mrr ?? 0,
+        subscribers: subscriberCount[0]?.count ?? 0,
+        monthlyBreakdown: transactions,
+      })
+    );
   });
 }
