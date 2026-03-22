@@ -161,6 +161,7 @@ export function DetailPanel({ card, onSaveNote, onSaveWatchPosition, watchPositi
               onSave={handleSave}
               isYouTube
               sourceTable={card.sourceTable}
+              videoSummary={card.videoSummary}
             />
           </ResizablePanel>
         </ResizablePanelGroup>

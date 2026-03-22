@@ -134,6 +134,7 @@ export function ExternalLinkView({ card, onSave }: ExternalLinkViewProps) {
           onSave={onSave}
           isYouTube={false}
           sourceTable={card.sourceTable}
+          videoSummary={card.videoSummary}
         />
       </div>
     </div>
