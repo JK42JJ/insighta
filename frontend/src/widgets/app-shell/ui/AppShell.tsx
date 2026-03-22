@@ -13,6 +13,7 @@ interface AppShellProps {
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'insighta-sidebar-collapsed';
+const SIDEBAR_SIZE_KEY = 'insighta-sidebar-size';
 
 function getInitialCollapsed(): boolean {
   try {
@@ -20,6 +21,16 @@ function getInitialCollapsed(): boolean {
   } catch {
     return false;
   }
+}
+
+function getInitialSize(): 'compact' | 'wide' {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_SIZE_KEY);
+    if (stored === 'wide') return 'wide';
+  } catch {
+    // ignore
+  }
+  return 'compact';
 }
 
 export function AppShell({
@@ -31,6 +42,7 @@ export function AppShell({
   searchBarElement,
 }: AppShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialCollapsed);
+  const [sidebarSize, setSidebarSize] = useState<'compact' | 'wide'>(getInitialSize);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   const handleToggleCollapse = useCallback(() => {
@@ -45,6 +57,18 @@ export function AppShell({
     });
   }, []);
 
+  const handleToggleSize = useCallback(() => {
+    setSidebarSize((prev) => {
+      const next = prev === 'compact' ? 'wide' : 'compact';
+      try {
+        localStorage.setItem(SIDEBAR_SIZE_KEY, next);
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
   return (
     <div className="h-screen flex flex-col bg-surface-base overflow-hidden">
       <AppHeader onMobileMenuOpen={() => setMobileDrawerOpen(true)} searchBarElement={searchBarElement} />
@@ -52,7 +76,9 @@ export function AppShell({
       <div className="flex-1 flex overflow-hidden">
         <Sidebar
           collapsed={sidebarCollapsed}
+          sidebarSize={sidebarCollapsed ? 'compact' : sidebarSize}
           onToggleCollapse={handleToggleCollapse}
+          onToggleSize={sidebarCollapsed ? undefined : handleToggleSize}
           onNavigateHome={onNavigateHome}
           mandalaGridElement={mandalaGridElement}
           selectedMandalaId={selectedMandalaId}

@@ -60,6 +60,8 @@ function CardSlot({
   );
 }
 
+const PAGE_SIZE = 24;
+
 export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectionChange, enrichingCardIds, failedEnrichCardIds, onRetryEnrich }: CardListProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -75,8 +77,10 @@ export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectio
   const cachedCardCount = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list())?.cards.length;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // Sort cards: by sortOrder if available, otherwise by createdAt (newest first)
   const sortedCards = useMemo(() => {
@@ -89,6 +93,35 @@ export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectio
       return dateB - dateA;
     });
   }, [cards]);
+
+  // Reset visible count when card list changes (e.g., cell switch)
+  const cardListKey = useMemo(() => cards.map((c) => c.id).join(','), [cards]);
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [cardListKey]);
+
+  // Infinite scroll: observe sentinel at bottom of grid
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, sortedCards.length));
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [sortedCards.length]);
+
+  const visibleCards = useMemo(
+    () => sortedCards.slice(0, visibleCount),
+    [sortedCards, visibleCount]
+  );
+  const hasMore = visibleCount < sortedCards.length;
 
   // Filter out selection IDs that no longer exist in cards (e.g., after moving cards)
   useEffect(() => {
@@ -228,7 +261,7 @@ export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectio
         style={{ minHeight: 'calc(100vh - 200px)' }}
       >
         {selectionStyle && <div style={selectionStyle} />}
-        {sortedCards.map((card, idx) => {
+        {visibleCards.map((card, idx) => {
           const isSelected = selectedCardIds.has(card.id);
           return (
             <CardSlot key={card.id} card={card} isOver={false}>
@@ -267,6 +300,16 @@ export function CardList({ cards, isLoading, onCardClick, onSaveNote, onSelectio
           );
         })}
       </div>
+
+      {/* Infinite scroll sentinel */}
+      {hasMore && (
+        <div ref={sentinelRef} className="flex justify-center py-6">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+            {t('cards.loadingMore', { loaded: visibleCount, total: sortedCards.length })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

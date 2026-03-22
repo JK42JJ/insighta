@@ -79,7 +79,7 @@ function AiSummaryPreview({ body, label, maxLines, className, cardId, summaryRat
     [cardId, summaryRating, onRate]
   );
 
-  const clampClass = maxLines === 1
+  const bodyClampClass = maxLines === 1
     ? 'line-clamp-1'
     : maxLines === 2
       ? 'line-clamp-2'
@@ -91,7 +91,6 @@ function AiSummaryPreview({ body, label, maxLines, className, cardId, summaryRat
     <div
       className={cn(
         'border-l-2 border-blue-400 pl-2 pr-1 py-1 bg-blue-50/50 dark:bg-blue-950/30 rounded-r text-xs text-muted-foreground',
-        clampClass,
         className,
       )}
     >
@@ -127,17 +126,19 @@ function AiSummaryPreview({ body, label, maxLines, className, cardId, summaryRat
           </span>
         )}
       </div>
-      {parsedLines.map((line, lineIdx) =>
-        line.segments.length > 0 ? (
-          <div key={lineIdx} className="whitespace-pre-wrap">
-            {line.segments.map((seg, segIdx) => (
-              <SegmentRenderer key={`${lineIdx}-${segIdx}`} segment={seg} />
-            ))}
-          </div>
-        ) : (
-          <div key={lineIdx}>&nbsp;</div>
-        ),
-      )}
+      <div className={bodyClampClass}>
+        {parsedLines.map((line, lineIdx) =>
+          line.segments.length > 0 ? (
+            <div key={lineIdx} className="whitespace-pre-wrap">
+              {line.segments.map((seg, segIdx) => (
+                <SegmentRenderer key={`${lineIdx}-${segIdx}`} segment={seg} />
+              ))}
+            </div>
+          ) : (
+            <div key={lineIdx}>&nbsp;</div>
+          ),
+        )}
+      </div>
     </div>
   );
 }
@@ -213,14 +214,14 @@ export function CompactNotePreview({ note, maxLines, className, cardId, summaryR
         <AiSummaryPreview
           body={body}
           label={label}
-          maxLines={userNote ? 2 : maxLines}
+          maxLines={maxLines !== undefined ? (userNote ? 2 : maxLines) : undefined}
           className={className}
           cardId={cardId}
           summaryRating={summaryRating}
           onRate={onRate}
         />
         {userNote && (
-          <UserNotePreview note={userNote} maxLines={1} className={className} />
+          <UserNotePreview note={userNote} maxLines={maxLines !== undefined ? 1 : undefined} className={className} />
         )}
       </>
     );
