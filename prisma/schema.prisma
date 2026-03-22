@@ -369,6 +369,7 @@ model users {
   content_entities            content_entities[]
   user_subscriptions          user_subscriptions[]
   user_ui_preferences         user_ui_preferences[]
+  user_llm_keys               user_llm_keys[]
   UserVideoState              UserVideoState[]
   youtube_playlists              youtube_playlists[]
   youtube_sync_settings          youtube_sync_settings[]
@@ -574,6 +575,22 @@ model user_ui_preferences {
   users                    users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([user_id], map: "idx_user_ui_preferences_user_id")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_llm_keys {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String   @db.Uuid
+  provider       String   @db.VarChar(50)
+  encrypted_key  String
+  status         String   @default("active") @db.VarChar(20)
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @default(now()) @db.Timestamptz(6)
+  users          users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, provider])
+  @@index([user_id], map: "idx_user_llm_keys_user_id")
   @@schema("public")
 }
 
