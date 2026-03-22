@@ -273,37 +273,39 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
 
     const mandalas = await Promise.all(
       userMandalas.map(async (m) => {
-        const [moodResult, weeklyNewCards, weeklyNotes, totalCards, totalNotes] = await Promise.all([
-          getMood(m.id, userId),
-          prisma.user_local_cards.count({
-            where: {
-              mandala_id: m.id,
-              user_id: userId,
-              created_at: { gte: oneWeekAgo },
-            },
-          }),
-          prisma.user_local_cards.count({
-            where: {
-              mandala_id: m.id,
-              user_id: userId,
-              user_note: { not: null },
-              updated_at: { gte: oneWeekAgo },
-            },
-          }),
-          prisma.user_local_cards.count({
-            where: {
-              mandala_id: m.id,
-              user_id: userId,
-            },
-          }),
-          prisma.user_local_cards.count({
-            where: {
-              mandala_id: m.id,
-              user_id: userId,
-              user_note: { not: null },
-            },
-          }),
-        ]);
+        const [moodResult, weeklyNewCards, weeklyNotes, totalCards, totalNotes] = await Promise.all(
+          [
+            getMood(m.id, userId),
+            prisma.user_local_cards.count({
+              where: {
+                mandala_id: m.id,
+                user_id: userId,
+                created_at: { gte: oneWeekAgo },
+              },
+            }),
+            prisma.user_local_cards.count({
+              where: {
+                mandala_id: m.id,
+                user_id: userId,
+                user_note: { not: null },
+                updated_at: { gte: oneWeekAgo },
+              },
+            }),
+            prisma.user_local_cards.count({
+              where: {
+                mandala_id: m.id,
+                user_id: userId,
+              },
+            }),
+            prisma.user_local_cards.count({
+              where: {
+                mandala_id: m.id,
+                user_id: userId,
+                user_note: { not: null },
+              },
+            }),
+          ]
+        );
 
         return {
           id: m.id,
