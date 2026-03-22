@@ -563,7 +563,7 @@ function AuthenticatedApp() {
               </div>
             )}
 
-            <div className="flex-1 h-full overflow-y-auto px-4 py-4">
+            <div className={`flex-1 h-full px-4 py-4 ${modal.isModalOpen ? 'overflow-hidden' : 'overflow-y-auto'}`}>
               {/* Mobile search bar (hidden on md+, shown in header instead) */}
               <div className="md:hidden mb-3">
                 <SearchBar

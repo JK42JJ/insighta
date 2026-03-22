@@ -11,6 +11,8 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/features/auth/model/useAuth';
@@ -21,7 +23,9 @@ import { RefreshCw } from 'lucide-react';
 
 interface SidebarProps {
   collapsed: boolean;
+  sidebarSize: 'compact' | 'wide';
   onToggleCollapse: () => void;
+  onToggleSize?: () => void;
   onNavigateHome?: () => void;
   mandalaGridElement?: React.ReactNode;
   selectedMandalaId: string | null;
@@ -46,9 +50,16 @@ const SECONDARY_NAV: NavItem[] = [
 
 const BOTTOM_NAV: NavItem[] = [{ to: '/settings', icon: Settings, labelKey: 'sidebar.settings' }];
 
+const SIDEBAR_WIDTH = {
+  compact: '22rem',   // 352px
+  wide: '30rem',      // 480px
+} as const;
+
 export function Sidebar({
   collapsed,
+  sidebarSize,
   onToggleCollapse,
+  onToggleSize,
   onNavigateHome,
   mandalaGridElement,
   selectedMandalaId,
@@ -113,9 +124,10 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        'hidden md:flex flex-col h-full bg-sidebar border-r border-sidebar-border transition-[width] duration-200 ease-in-out',
-        collapsed ? 'w-16' : 'w-[var(--sidebar-width)]'
+        'hidden md:flex flex-col h-full bg-sidebar border-r border-sidebar-border shrink-0 transition-[width] duration-200 ease-in-out',
+        collapsed && 'w-16',
       )}
+      style={!collapsed ? { width: SIDEBAR_WIDTH[sidebarSize] } : undefined}
       aria-label={t('sidebar.navigation')}
     >
       {/* Main navigation */}
@@ -209,19 +221,37 @@ export function Sidebar({
           {!collapsed && <span>{t('common.logout')}</span>}
         </button>
 
-        {/* Collapse toggle */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onToggleCollapse}
-          className={cn(
-            'w-full mt-1 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent',
-            collapsed ? 'justify-center px-2' : 'justify-end'
+        {/* Bottom controls: size toggle + collapse toggle */}
+        <div className={cn('flex items-center mt-1', collapsed ? 'justify-center' : 'justify-end gap-1')}>
+          {!collapsed && onToggleSize && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleSize}
+              className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent px-2"
+              aria-label={sidebarSize === 'compact' ? 'Expand sidebar' : 'Shrink sidebar'}
+              title={sidebarSize === 'compact' ? 'Expand sidebar' : 'Shrink sidebar'}
+            >
+              {sidebarSize === 'compact' ? (
+                <Maximize2 className="w-3.5 h-3.5" />
+              ) : (
+                <Minimize2 className="w-3.5 h-3.5" />
+              )}
+            </Button>
           )}
-          aria-label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
-        >
-          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-        </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggleCollapse}
+            className={cn(
+              'text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent',
+              collapsed ? 'justify-center px-2' : 'px-2'
+            )}
+            aria-label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
+          >
+            {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </Button>
+        </div>
       </div>
     </aside>
   );

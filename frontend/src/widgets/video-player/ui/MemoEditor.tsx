@@ -130,7 +130,7 @@ export function MemoEditor({
   onEnrichStart,
   onEnrichEnd,
 }: MemoEditorProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [note, setNote] = useState(initialNote);
   const [isEditing, setIsEditing] = useState(!initialNote);
@@ -465,14 +465,19 @@ export function MemoEditor({
         <div className="px-3 pb-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
           {/* AI Summary — always visible (read-only, not part of user note) */}
           {isGeneratingSummary && <GeneratingIndicator />}
-          {videoSummary?.summary_en && !isGeneratingSummary && (
-            <div className="border-l-2 border-blue-400 pl-2 mb-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-r text-sm text-muted-foreground">
-              <div className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 mb-0.5">
-                <span>🤖</span> AI Summary:
+          {videoSummary?.summary_en && !isGeneratingSummary && (() => {
+            const isKo = i18n.language === 'ko';
+            const summaryText = isKo && videoSummary.summary_ko ? videoSummary.summary_ko : videoSummary.summary_en;
+            const summaryLabel = isKo ? 'AI 요약' : 'AI Summary';
+            return (
+              <div className="border-l-2 border-blue-400 pl-2 mb-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-r text-sm text-muted-foreground">
+                <div className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 mb-0.5">
+                  <span>🤖</span> {summaryLabel}:
+                </div>
+                <p className="whitespace-pre-wrap">{summaryText}</p>
               </div>
-              <p className="whitespace-pre-wrap">{videoSummary.summary_en}</p>
-            </div>
-          )}
+            );
+          })()}
 
           {/* User note — edit or preview mode */}
           {isEditing ? (
