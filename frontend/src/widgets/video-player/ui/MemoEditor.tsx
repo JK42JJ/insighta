@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, Timer, Camera } from 'lucide-react';
+import { MessageSquare, Timer, Camera, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -18,6 +18,25 @@ import { NotePreview } from './NotePreview';
 
 const AUTO_SAVE_DELAY_MS = 3_000;
 const IMAGE_MD_REGEX = /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
+
+/** Rolling dots animation: "Generating AI summary." → ".." → "..." → "." */
+function GeneratingIndicator() {
+  const [dots, setDots] = useState('.');
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDots((prev) => (prev.length >= 3 ? '.' : prev + '.'));
+    }, 500);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <div className="border-l-2 border-blue-400 pl-2 mb-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-r py-2 px-1">
+      <div className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <span className="font-medium">Generating AI summary{dots}</span>
+      </div>
+    </div>
+  );
+}
 
 interface CaptureImage {
   alt: string;
@@ -94,6 +113,8 @@ interface MemoEditorProps {
   isYouTube: boolean;
   sourceTable?: 'user_local_cards' | 'user_video_states';
   videoSummary?: { summary_en: string; summary_ko: string; tags?: string[]; model?: string };
+  onEnrichStart?: (cardId: string) => void;
+  onEnrichEnd?: (cardId: string) => void;
 }
 
 export function MemoEditor({
@@ -106,6 +127,8 @@ export function MemoEditor({
   isYouTube,
   sourceTable = 'user_local_cards',
   videoSummary,
+  onEnrichStart,
+  onEnrichEnd,
 }: MemoEditorProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -133,11 +156,10 @@ export function MemoEditor({
     }
   }, [isEditing]);
 
-  // Auto-save debounce (suppressed during AI summary generation to avoid saving placeholder)
+  // Auto-save debounce
   const scheduleAutoSave = useCallback(
     (newNote: string) => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-      if (suppressAutoSaveRef.current) return;
       autoSaveTimerRef.current = setTimeout(() => {
         onSave(cardId, newNote);
       }, AUTO_SAVE_DELAY_MS);
@@ -234,17 +256,14 @@ export function MemoEditor({
     }
   }, [videoId, playerRef, insertTextAtCursor, t]);
 
-  // Trigger AI summary generation for this card — inline animation at cursor
-  const GENERATING_PLACEHOLDER = '⏳ Generating AI summary...';
+  // Trigger AI summary generation for this card
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const suppressAutoSaveRef = useRef(false);
 
   const triggerAiSummary = useCallback(
     async (cleanedNote: string) => {
-      // Insert placeholder at cursor position — suppress auto-save to prevent saving placeholder
-      suppressAutoSaveRef.current = true;
-      insertTextAtCursor(GENERATING_PLACEHOLDER, cleanedNote);
+      setNote(cleanedNote);
       setIsGeneratingSummary(true);
+      onEnrichStart?.(cardId);
       try {
         // Try to fetch transcript via Edge Function (Deno Deploy, bypasses EC2 bot detection)
         let transcript: string | undefined;
@@ -275,25 +294,21 @@ export function MemoEditor({
         const data = await res.json();
         if (res.ok && data.data?.enriched !== false) {
           toast.success(t('videoPlayer.aiSummarySuccess'), { id: 'ai-summary' });
-          // Remove placeholder — cards refresh will bring the actual summary
-          setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
           queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
           if (sourceTable === 'user_video_states') {
             queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
           }
         } else {
           toast.error(t('videoPlayer.aiSummaryFailed'), { id: 'ai-summary' });
-          setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
         }
       } catch {
         toast.error(t('videoPlayer.aiSummaryFailed'), { id: 'ai-summary' });
-        setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
       } finally {
-        suppressAutoSaveRef.current = false;
         setIsGeneratingSummary(false);
+        onEnrichEnd?.(cardId);
       }
     },
-    [cardId, sourceTable, queryClient, t, insertTextAtCursor]
+    [cardId, sourceTable, videoId, queryClient, t, onEnrichStart, onEnrichEnd]
   );
 
   // Handle slash menu selection
@@ -473,7 +488,8 @@ export function MemoEditor({
             />
           ) : (
             <>
-              {videoSummary?.summary_en && (
+              {isGeneratingSummary && <GeneratingIndicator />}
+              {videoSummary?.summary_en && !isGeneratingSummary && (
                 <div className="border-l-2 border-blue-400 pl-2 mb-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-r text-sm text-muted-foreground">
                   <div className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 mb-0.5">
                     <span>🤖</span> AI Summary:
