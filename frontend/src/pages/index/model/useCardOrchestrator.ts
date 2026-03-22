@@ -82,6 +82,8 @@ export interface UseCardOrchestratorReturn {
   enrichingCardIds: Set<string>;
   failedEnrichCardIds: Set<string>;
   retryEnrich: (cardId: string, videoUrl?: string) => void;
+  markEnrichStart: (cardId: string) => void;
+  markEnrichEnd: (cardId: string) => void;
 }
 
 /**
@@ -1304,5 +1306,7 @@ export function useCardOrchestrator(
     enrichingCardIds,
     failedEnrichCardIds,
     retryEnrich,
+    markEnrichStart: (cardId: string) => setEnrichingCardIds((prev) => new Set(prev).add(cardId)),
+    markEnrichEnd: (cardId: string) => setEnrichingCardIds((prev) => { const next = new Set(prev); next.delete(cardId); return next; }),
   };
 }
