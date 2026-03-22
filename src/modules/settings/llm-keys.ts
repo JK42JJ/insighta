@@ -7,7 +7,7 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 const SALT_LENGTH = 32;
 
-const VALID_PROVIDERS = ['gemini', 'openrouter', 'anthropic', 'openai'] as const;
+const VALID_PROVIDERS = ['gemini', 'openrouter', 'anthropic', 'openai', 'perplexity'] as const;
 type LlmProvider = (typeof VALID_PROVIDERS)[number];
 
 function deriveKey(salt: Buffer): Buffer {
