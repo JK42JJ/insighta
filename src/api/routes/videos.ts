@@ -9,6 +9,8 @@ import { getVideoManager } from '../../modules/video';
 import { getCaptionExtractor } from '../../modules/caption/extractor';
 import { getPrismaClient } from '../../modules/database';
 import { getYouTubeClient } from '../client';
+import { fork } from 'child_process';
+import { resolve } from 'path';
 import {
   ListVideosQuerySchema,
   GetVideoParamsSchema,
@@ -474,6 +476,35 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       logger.info('Summary generated successfully', { videoId: id });
 
       return reply.code(200).send({ summary: response });
+    }
+  );
+
+  // POST /enrich-cards — trigger batch enrichment for user's unenriched YouTube cards
+  // Creates video_summaries entries which the local-cards EF JOINs to show summaries
+  const ENRICH_LIMIT = 50;
+  const ENRICH_DELAY_MS = 2000;
+
+  fastify.post(
+    '/enrich-cards',
+    { onRequest: [fastify.authenticate] },
+    async (_request, reply) => {
+      const workerPath = resolve(__dirname, '../../modules/ontology/enrich-worker.js');
+      try {
+        const child = fork(workerPath, [], {
+          env: { ...process.env },
+          stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+          detached: true,
+        });
+        child.send({ limit: ENRICH_LIMIT, delayMs: ENRICH_DELAY_MS });
+        child.unref();
+        logger.info('User-triggered enrichment started', { limit: ENRICH_LIMIT });
+        return reply.code(202).send({ status: 'ok', data: { message: 'Enrichment started', limit: ENRICH_LIMIT } });
+      } catch (err) {
+        logger.warn('Failed to spawn enrichment worker', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return reply.code(500).send({ status: 'error', error: 'Failed to start enrichment' });
+      }
     }
   );
 

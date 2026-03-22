@@ -121,8 +121,26 @@ export class CaptionExtractor {
         }
       }
 
+      // Final fallback: Supabase fetch-transcript Edge Function (residential proxy)
       if (segments.length === 0) {
-        throw new Error('No captions found (youtube-transcript + yt-dlp both failed)');
+        try {
+          logger.info('Falling back to fetch-transcript EF (residential proxy)', { youtubeId });
+          const efResult = await this.extractViaEdgeFunction(youtubeId);
+          if (efResult.length > 0) {
+            segments = efResult;
+            source = 'edge-function';
+            resolvedLang = LANG_PRIORITY[0]!;
+          }
+        } catch (err) {
+          logger.warn('fetch-transcript EF failed', {
+            youtubeId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      if (segments.length === 0) {
+        throw new Error('No captions found (youtube-transcript + yt-dlp + EF all failed)');
       }
 
       logger.info('Captions fetched (in-memory only)', {
@@ -150,6 +168,53 @@ export class CaptionExtractor {
       });
       return { success: false, videoId: youtubeId, language: LANG_PRIORITY[0]!, error: errorMessage };
     }
+  }
+
+  // --------------------------------------------------------------------------
+  // Supabase fetch-transcript Edge Function fallback (residential proxy)
+  // --------------------------------------------------------------------------
+
+  private async extractViaEdgeFunction(videoId: string): Promise<CaptionSegment[]> {
+    const supabaseUrl = process.env['SUPABASE_URL'];
+    const anonKey = process.env['SUPABASE_ANON_KEY'];
+
+    if (!supabaseUrl || !anonKey) {
+      throw new Error('SUPABASE_URL or SUPABASE_ANON_KEY not configured');
+    }
+
+    const efUrl = `${supabaseUrl}/functions/v1/fetch-transcript`;
+    const resp = await fetch(efUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${anonKey}`,
+        'apikey': anonKey,
+      },
+      body: JSON.stringify({ videoId }),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`EF fetch-transcript HTTP ${resp.status}: ${text}`);
+    }
+
+    const data = await resp.json() as {
+      video_id?: string;
+      full_text?: string;
+      segments?: number;
+      error?: string;
+    };
+
+    if (!data.full_text || !data.segments) {
+      throw new Error(data.error || 'Empty transcript from EF');
+    }
+
+    // EF returns aggregated full_text + segment count, convert to single segment
+    return [{
+      text: data.full_text,
+      start: 0,
+      duration: 0,
+    }];
   }
 
   // --------------------------------------------------------------------------
