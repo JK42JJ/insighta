@@ -1072,11 +1072,9 @@ export function useCardOrchestrator(
               videoStateId: id,
               updates: { user_note: note },
             });
-            toast({ title: t('index.memoSaved'), description: t('index.memoSavedYouTube') });
             break;
           case 'local':
             await updateLocalCard({ id, user_note: note });
-            toast({ title: t('index.memoSaved'), description: t('index.memoSavedLocal') });
             break;
           case 'pending': {
             const pendingCard = [...scratchPadCards, ...allMandalaCards].find((c) => c.id === id);
