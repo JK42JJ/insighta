@@ -178,7 +178,7 @@ export function InsightCardItem({
           </div>
 
           {/* Note preview — fixed height area */}
-          <div className="p-2 space-y-1 h-[72px] overflow-hidden">
+          <div className="px-2.5 pt-2 pb-3 space-y-1.5 h-[76px] overflow-hidden">
             {isEditing ? (
               <textarea
                 autoFocus
