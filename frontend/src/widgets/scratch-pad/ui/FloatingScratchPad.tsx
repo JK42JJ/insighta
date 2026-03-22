@@ -111,6 +111,39 @@ function DraggableScratchCard({
 const DOCK_THRESHOLD = 80;
 const SIDE_DOCK_THRESHOLD = 100;
 
+const STORAGE_KEY_SIZE = 'insighta:ideation:size';
+const STORAGE_KEY_POS = 'insighta:ideation:position';
+
+function loadPersistedSize(): { width: number; height: number } {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SIZE);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed.width === 'number' && typeof parsed.height === 'number') {
+        return parsed;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return { width: 320, height: 320 };
+}
+
+function loadPersistedPosition(): { x: number; y: number } | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_POS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+        return parsed;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadProps>(
   function FloatingScratchPad(
     {
@@ -134,13 +167,15 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     forwardedRef
   ) {
     const { t } = useTranslation();
-    const [position, setPosition] = useState(() => initialPosition ?? { x: 100, y: 100 });
+    const [position, setPosition] = useState(
+      () => initialPosition ?? loadPersistedPosition() ?? { x: 100, y: 100 }
+    );
     useEffect(() => {
       if (initialPosition && !isDragging) {
         setPosition(initialPosition);
       }
     }, [initialPosition?.x, initialPosition?.y]); // eslint-disable-line react-hooks/exhaustive-deps
-    const [size, setSize] = useState({ width: 320, height: 320 });
+    const [size, setSize] = useState(loadPersistedSize);
     const [isMinimized, setIsMinimized] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [isDockedDragging, setIsDockedDragging] = useState(false);
@@ -315,6 +350,14 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           setTimeout(() => setIsAnimating(false), 300);
         } else if (isDragging) {
           onPositionChange?.(position.x, position.y);
+          try {
+            localStorage.setItem(STORAGE_KEY_POS, JSON.stringify(position));
+          } catch { /* ignore */ }
+        }
+        if (isResizing) {
+          try {
+            localStorage.setItem(STORAGE_KEY_SIZE, JSON.stringify(size));
+          } catch { /* ignore */ }
         }
         setIsDragging(false);
         setIsResizing(false);
@@ -423,6 +466,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
 
     const handleCardClick = (e: React.MouseEvent, card: InsightCard, cardIndex: number) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+        // Ctrl+Shift+Click: range selection
         e.preventDefault();
         e.stopPropagation();
         if (lastSelectedIndex !== null) {
@@ -439,6 +483,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           setLastSelectedIndex(cardIndex);
         }
       } else if (e.ctrlKey || e.metaKey) {
+        // Ctrl+Click: toggle selection
         e.preventDefault();
         e.stopPropagation();
         setSelectedCardIds((prev) => {
@@ -449,9 +494,21 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
         });
         setLastSelectedIndex(cardIndex);
       } else {
-        setSelectedCardIds(new Set());
-        setLastSelectedIndex(null);
-        onCardClick(card);
+        // Plain click: toggle single card selection
+        e.stopPropagation();
+        const isCurrentlySelected = selectedCardIds.has(card.id);
+        if (isCurrentlySelected) {
+          // Deselect — if this was the only selected card, open it
+          setSelectedCardIds(new Set());
+          setLastSelectedIndex(null);
+          if (selectedCardIds.size === 1) {
+            onCardClick(card);
+          }
+        } else {
+          // Select single card (deselect others)
+          setSelectedCardIds(new Set([card.id]));
+          setLastSelectedIndex(cardIndex);
+        }
       }
     };
 
@@ -624,12 +681,12 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
             <div
               ref={dragRef}
               {...dragAttributes}
-              {...dragListeners}
               data-card-item
               data-selected={isSelected || undefined}
               onClick={(e) => handleCardClick(e, card, idx)}
               className={cn(
-                'group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:-translate-y-0.5 rounded-sm',
+                'group relative flex-shrink-0 transition-transform hover:-translate-y-0.5 rounded-sm cursor-pointer',
+                isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
                 isDragActive && 'opacity-30'
               )}
             >
@@ -667,6 +724,17 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                       className={checkSize}
                       style={{ color: 'hsl(var(--primary-foreground))' }}
                     />
+                  </div>
+                )}
+                {/* Drag handle — only this element triggers dnd-kit card drag */}
+                {!isCompact && (
+                  <div
+                    data-dnd-handle
+                    {...dragListeners}
+                    className="absolute bottom-0 left-0 z-10 bg-background/80 p-0.5 rounded-tr opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Move className="w-2.5 h-2.5 text-muted-foreground" />
                   </div>
                 )}
                 {!isCompact && (
@@ -1046,7 +1114,12 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
             </div>
           </div>
           {!isMinimized && (
-            <div className="p-3 overflow-hidden" style={{ height: 'calc(100% - 44px)' }}>
+            <div
+              ref={floatingContentRef}
+              className="p-3 overflow-hidden relative"
+              style={{ height: 'calc(100% - 44px)' }}
+              onClick={handleContainerClick}
+            >
               {isActiveDropTarget && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-primary/15 backdrop-blur-[2px] rounded-xl pointer-events-none z-10 gap-2">
                   <div
@@ -1060,6 +1133,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   </span>
                 </div>
               )}
+              {selectionStyle && <div style={selectionStyle} />}
               {cards.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <Plus className="w-4 h-4 mr-2 opacity-50" />
@@ -1067,11 +1141,8 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 </div>
               ) : (
                 <div
-                  ref={floatingContentRef}
-                  className="flex flex-wrap gap-2 overflow-y-auto h-full content-start p-1 relative"
-                  onClick={handleContainerClick}
+                  className="flex flex-wrap gap-2 overflow-y-auto h-full content-start"
                 >
-                  {selectionStyle && <div style={selectionStyle} />}
                   {sortedCards.map((card, idx) => renderCardItem(card, idx, false))}
                 </div>
               )}

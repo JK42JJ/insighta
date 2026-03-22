@@ -23,6 +23,7 @@ const DEFAULT_BATCH_LIMIT = 50;
 const DEFAULT_DELAY_MS = 3000;
 const MAX_RUN_HISTORY = 50;
 const STARTUP_DELAY_MS = 5000;
+const MAX_CONSECUTIVE_FAILURES = 3; // Auto-stop after N consecutive 0-enriched runs
 
 // ============================================================================
 // Types
@@ -81,6 +82,7 @@ export class ClawbotScheduler {
   private runHistory: ClawbotRunRecord[] = [];
   private childProcess: ChildProcess | null = null;
   private enabled = false;
+  private consecutiveFailures = 0;
 
   constructor(config?: Partial<ClawbotConfig>) {
     this.config = {
@@ -266,6 +268,20 @@ export class ClawbotScheduler {
         enriched: result.enriched,
         errors: result.errors.length,
       });
+
+      // Circuit breaker: auto-stop after consecutive zero-enrichment runs
+      if (result.enriched === 0 && result.errors.length > 0) {
+        this.consecutiveFailures++;
+        if (this.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          logger.error('Clawbot auto-stopped: too many consecutive failures', {
+            consecutiveFailures: this.consecutiveFailures,
+            lastErrors: result.errors.slice(0, 3).map((e) => e.error),
+          });
+          void this.stop();
+        }
+      } else {
+        this.consecutiveFailures = 0;
+      }
     } catch (err) {
       run.status = 'failed';
       run.completedAt = new Date().toISOString();
