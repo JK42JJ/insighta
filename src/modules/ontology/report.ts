@@ -86,15 +86,10 @@ async function getProvider(): Promise<GenerationProvider> {
   return generationProvider;
 }
 
-async function getPeriodStats(
-  userId: string,
-  interval: string,
-): Promise<PeriodStats> {
+async function getPeriodStats(userId: string, interval: string): Promise<PeriodStats> {
   const prisma = getPrismaClient();
 
-  const rows = await prisma.$queryRaw<
-    { action: string; cnt: bigint }[]
-  >`
+  const rows = await prisma.$queryRaw<{ action: string; cnt: bigint }[]>`
     SELECT action, count(*) as cnt
     FROM ontology.action_log
     WHERE user_id = ${userId}::uuid
@@ -119,10 +114,7 @@ async function getPeriodStats(
   };
 }
 
-async function getTopTopics(
-  userId: string,
-  interval: string,
-): Promise<TopTopic[]> {
+async function getTopTopics(userId: string, interval: string): Promise<TopTopic[]> {
   const prisma = getPrismaClient();
 
   return prisma.$queryRaw<TopTopic[]>`
@@ -154,10 +146,7 @@ async function getTopTopics(
   `;
 }
 
-async function getNewConnections(
-  userId: string,
-  interval: string,
-): Promise<NewConnection[]> {
+async function getNewConnections(userId: string, interval: string): Promise<NewConnection[]> {
   const prisma = getPrismaClient();
 
   return prisma.$queryRaw<NewConnection[]>`
@@ -199,19 +188,26 @@ function buildReportPrompt(
   newConnections: NewConnection[],
   gaps: GraphGap[],
   graphContext: string,
-  period: ReportPeriod,
+  period: ReportPeriod
 ): string {
-  const topicsBlock = topTopics.length > 0
-    ? topTopics.map((t) => `- ${t.title} (connections: ${t.edgeCount}, actions: ${t.actionCount})`).join('\n')
-    : '- No active topics this period';
+  const topicsBlock =
+    topTopics.length > 0
+      ? topTopics
+          .map((t) => `- ${t.title} (connections: ${t.edgeCount}, actions: ${t.actionCount})`)
+          .join('\n')
+      : '- No active topics this period';
 
-  const connectionsBlock = newConnections.length > 0
-    ? newConnections.map((c) => `- ${c.sourceTitle} → ${c.targetTitle} (${c.relation})`).join('\n')
-    : '- No new connections this period';
+  const connectionsBlock =
+    newConnections.length > 0
+      ? newConnections
+          .map((c) => `- ${c.sourceTitle} → ${c.targetTitle} (${c.relation})`)
+          .join('\n')
+      : '- No new connections this period';
 
-  const gapsBlock = gaps.length > 0
-    ? gaps.map((g) => `- ${g.title}: ${g.reason}`).join('\n')
-    : '- No gaps detected';
+  const gapsBlock =
+    gaps.length > 0
+      ? gaps.map((g) => `- ${g.title}: ${g.reason}`).join('\n')
+      : '- No gaps detected';
 
   return `Generate a knowledge learning summary report for the past ${period}.
 
@@ -263,7 +259,7 @@ function extractSuggestions(text: string): { summary: string; suggestions: strin
 
 export async function generateKnowledgeSummary(
   userId: string,
-  period: ReportPeriod = 'week',
+  period: ReportPeriod = 'week'
 ): Promise<KnowledgeSummary> {
   const interval = PERIOD_INTERVALS[period];
   const now = new Date();
@@ -303,7 +299,14 @@ export async function generateKnowledgeSummary(
   if (stats.totalActions > 0 || topTopics.length > 0) {
     try {
       const provider = await getProvider();
-      const prompt = buildReportPrompt(stats, topTopics, newConnections, gaps, graphContext, period);
+      const prompt = buildReportPrompt(
+        stats,
+        topTopics,
+        newConnections,
+        gaps,
+        graphContext,
+        period
+      );
       const raw = await provider.generate(prompt, { temperature: 0.7 });
       const parsed = extractSuggestions(raw);
       summary = parsed.summary;
@@ -320,7 +323,9 @@ export async function generateKnowledgeSummary(
 
   // 4. Add gap-based suggestions if LLM didn't generate enough
   if (suggestions.length === 0 && gaps.length > 0) {
-    suggestions = gaps.slice(0, 3).map((g) => `Connect "${g.title}" to related topics to strengthen your knowledge graph.`);
+    suggestions = gaps
+      .slice(0, 3)
+      .map((g) => `Connect "${g.title}" to related topics to strengthen your knowledge graph.`);
   }
 
   logger.info('Knowledge summary generated', {

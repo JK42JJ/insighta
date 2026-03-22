@@ -92,7 +92,8 @@ export async function adminStatsRoutes(fastify: FastifyInstance) {
 
     const now = new Date();
     const toDate = query.to || now.toISOString().slice(0, 10);
-    const fromDate = query.from || new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const fromDate =
+      query.from || new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const userId = query.user_id || null;
 
     const rows = await db.$queryRaw<

@@ -123,6 +123,7 @@ export function localCardToInsightCard(card: LocalCard): InsightCard {
         }
       : undefined,
     videoSummary: card.video_summary,
+    sourceTable: 'user_local_cards',
   };
 }
 

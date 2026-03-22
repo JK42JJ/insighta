@@ -344,11 +344,22 @@ export class ClawbotScheduler {
 
       child.send({ limit: this.config.batchLimit, delayMs: this.config.delayMs });
 
-      child.on('message', (msg: { type: string; data: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] } }) => {
-        if (msg.type === 'result') {
-          resolve_(msg.data);
+      child.on(
+        'message',
+        (msg: {
+          type: string;
+          data: {
+            total: number;
+            enriched: number;
+            skipped: number;
+            errors: { videoId: string; error: string }[];
+          };
+        }) => {
+          if (msg.type === 'result') {
+            resolve_(msg.data);
+          }
         }
-      });
+      );
 
       child.on('error', (err) => {
         this.childProcess = null;

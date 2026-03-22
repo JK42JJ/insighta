@@ -43,27 +43,29 @@ export async function adminHealthRoutes(fastify: FastifyInstance) {
     // Memory usage
     const mem = process.memoryUsage();
 
-    return reply.send(createSuccessResponse({
-      api: {
-        status: 'healthy',
-        uptime: Math.floor(uptime),
-        responseTimeMs: Date.now() - startTime,
-        memory: {
-          heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
-          heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
-          rssMB: Math.round(mem.rss / 1024 / 1024),
+    return reply.send(
+      createSuccessResponse({
+        api: {
+          status: 'healthy',
+          uptime: Math.floor(uptime),
+          responseTimeMs: Date.now() - startTime,
+          memory: {
+            heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
+            heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
+            rssMB: Math.round(mem.rss / 1024 / 1024),
+          },
         },
-      },
-      database: {
-        status: dbStatus,
-        latencyMs: dbLatencyMs,
-        activeConnections: dbConnections,
-        tableSizes,
-      },
-      environment: {
-        nodeVersion: process.version,
-        platform: process.platform,
-      },
-    }));
+        database: {
+          status: dbStatus,
+          latencyMs: dbLatencyMs,
+          activeConnections: dbConnections,
+          tableSizes,
+        },
+        environment: {
+          nodeVersion: process.version,
+          platform: process.platform,
+        },
+      })
+    );
   });
 }

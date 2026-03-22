@@ -115,7 +115,8 @@ export class CaptionExtractor {
           }
         } catch (err) {
           logger.warn('yt-dlp failed', {
-            youtubeId, lang,
+            youtubeId,
+            lang,
             error: err instanceof Error ? err.message : String(err),
           });
         }
@@ -166,7 +167,12 @@ export class CaptionExtractor {
         language: LANG_PRIORITY.join(','),
         error: errorMessage,
       });
-      return { success: false, videoId: youtubeId, language: LANG_PRIORITY[0]!, error: errorMessage };
+      return {
+        success: false,
+        videoId: youtubeId,
+        language: LANG_PRIORITY[0]!,
+        error: errorMessage,
+      };
     }
   }
 
@@ -187,8 +193,8 @@ export class CaptionExtractor {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${anonKey}`,
-        'apikey': anonKey,
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey,
       },
       body: JSON.stringify({ videoId }),
     });
@@ -198,7 +204,7 @@ export class CaptionExtractor {
       throw new Error(`EF fetch-transcript HTTP ${resp.status}: ${text}`);
     }
 
-    const data = await resp.json() as {
+    const data = (await resp.json()) as {
       video_id?: string;
       full_text?: string;
       segments?: number;
@@ -210,21 +216,20 @@ export class CaptionExtractor {
     }
 
     // EF returns aggregated full_text + segment count, convert to single segment
-    return [{
-      text: data.full_text,
-      start: 0,
-      duration: 0,
-    }];
+    return [
+      {
+        text: data.full_text,
+        start: 0,
+        duration: 0,
+      },
+    ];
   }
 
   // --------------------------------------------------------------------------
   // yt-dlp CLI fallback
   // --------------------------------------------------------------------------
 
-  private async extractWithYtDlp(
-    videoId: string,
-    language: string
-  ): Promise<CaptionSegment[]> {
+  private async extractWithYtDlp(videoId: string, language: string): Promise<CaptionSegment[]> {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ytdlp-'));
     const outputTemplate = path.join(tmpDir, '%(id)s');
     const url = `https://www.youtube.com/watch?v=${videoId}`;
@@ -236,19 +241,24 @@ export class CaptionExtractor {
           [
             '--write-sub',
             '--write-auto-sub',
-            '--sub-lang', language,
-            '--sub-format', 'json3',
+            '--sub-lang',
+            language,
+            '--sub-format',
+            'json3',
             '--skip-download',
-            '-o', outputTemplate,
+            '-o',
+            outputTemplate,
             url,
           ],
           { timeout: YT_DLP_TIMEOUT_MS },
           (error) => {
             if (error) {
               if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-                reject(new Error(
-                  'yt-dlp not found. Install: brew install yt-dlp (macOS) or pip install yt-dlp (Linux)'
-                ));
+                reject(
+                  new Error(
+                    'yt-dlp not found. Install: brew install yt-dlp (macOS) or pip install yt-dlp (Linux)'
+                  )
+                );
               } else {
                 reject(error);
               }

@@ -35,18 +35,33 @@ export async function adminRedemptionRoutes(fastify: FastifyInstance) {
       `;
 
       if (promos.length === 0) {
-        return reply.code(404).send(
-          createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'Invalid or expired promotion code', request.url)
-        );
+        return reply
+          .code(404)
+          .send(
+            createErrorResponse(
+              ErrorCode.RESOURCE_NOT_FOUND,
+              'Invalid or expired promotion code',
+              request.url
+            )
+          );
       }
 
       const promo = promos[0]!;
 
       // Check max redemptions
-      if (promo['max_redemptions'] != null && (promo['current_redemptions'] as number) >= (promo['max_redemptions'] as number)) {
-        return reply.code(400).send(
-          createErrorResponse(ErrorCode.VALIDATION_ERROR, 'Promotion has reached maximum redemptions', request.url)
-        );
+      if (
+        promo['max_redemptions'] != null &&
+        (promo['current_redemptions'] as number) >= (promo['max_redemptions'] as number)
+      ) {
+        return reply
+          .code(400)
+          .send(
+            createErrorResponse(
+              ErrorCode.VALIDATION_ERROR,
+              'Promotion has reached maximum redemptions',
+              request.url
+            )
+          );
       }
 
       // Check if user already redeemed
@@ -55,9 +70,15 @@ export async function adminRedemptionRoutes(fastify: FastifyInstance) {
         WHERE user_id = ${userId}::uuid AND promotion_id = ${promo['id'] as string}::uuid
       `;
       if (existing.length > 0) {
-        return reply.code(400).send(
-          createErrorResponse(ErrorCode.VALIDATION_ERROR, 'You have already redeemed this promotion', request.url)
-        );
+        return reply
+          .code(400)
+          .send(
+            createErrorResponse(
+              ErrorCode.VALIDATION_ERROR,
+              'You have already redeemed this promotion',
+              request.url
+            )
+          );
       }
 
       const promoValue = promo['value'] as Record<string, unknown>;
@@ -70,7 +91,8 @@ export async function adminRedemptionRoutes(fastify: FastifyInstance) {
           `INSERT INTO public.user_subscriptions (user_id, tier)
            VALUES ($1::uuid, $2)
            ON CONFLICT (user_id) DO UPDATE SET tier = $2, updated_at = NOW()`,
-          userId, promoValue['tier']
+          userId,
+          promoValue['tier']
         );
         appliedChanges['tier'] = promoValue['tier'];
       } else if (promoType === 'limit_increase') {
@@ -84,7 +106,9 @@ export async function adminRedemptionRoutes(fastify: FastifyInstance) {
                local_cards_limit = COALESCE(user_subscriptions.local_cards_limit, ${TIER_LIMITS.free.cards}) + $2,
                mandala_limit = COALESCE(user_subscriptions.mandala_limit, ${TIER_LIMITS.free.mandalas}) + $3,
                updated_at = NOW()`,
-            userId, limitIncrease, mandalaIncrease
+            userId,
+            limitIncrease,
+            mandalaIncrease
           );
           appliedChanges['localCardsLimit'] = `+${limitIncrease}`;
           appliedChanges['mandalaLimit'] = `+${mandalaIncrease}`;
@@ -119,19 +143,31 @@ export async function adminBulkRoutes(fastify: FastifyInstance) {
     const params: unknown[] = [];
     let idx = 1;
 
-    if (changes.tier !== undefined) { setClauses.push(`tier = $${idx}`); params.push(changes.tier); idx++; }
-    if (changes.localCardsLimit !== undefined) { setClauses.push(`local_cards_limit = $${idx}`); params.push(changes.localCardsLimit); idx++; }
-    if (changes.mandalaLimit !== undefined) { setClauses.push(`mandala_limit = $${idx}`); params.push(changes.mandalaLimit); idx++; }
+    if (changes.tier !== undefined) {
+      setClauses.push(`tier = $${idx}`);
+      params.push(changes.tier);
+      idx++;
+    }
+    if (changes.localCardsLimit !== undefined) {
+      setClauses.push(`local_cards_limit = $${idx}`);
+      params.push(changes.localCardsLimit);
+      idx++;
+    }
+    if (changes.mandalaLimit !== undefined) {
+      setClauses.push(`mandala_limit = $${idx}`);
+      params.push(changes.mandalaLimit);
+      idx++;
+    }
 
     if (setClauses.length === 0) {
-      return reply.code(400).send(
-        createErrorResponse(ErrorCode.VALIDATION_ERROR, 'No changes specified', request.url)
-      );
+      return reply
+        .code(400)
+        .send(createErrorResponse(ErrorCode.VALIDATION_ERROR, 'No changes specified', request.url));
     }
 
     let successCount = 0;
     for (const userId of userIds) {
-      const columns = setClauses.map(c => c.split(' = ')[0]!);
+      const columns = setClauses.map((c) => c.split(' = ')[0]!);
       const valuePlaceholders = Array.from({ length: params.length }, (_, i) => `$${i + 2}`);
 
       await db.$queryRawUnsafe(
@@ -148,7 +184,8 @@ export async function adminBulkRoutes(fastify: FastifyInstance) {
     await db.$queryRawUnsafe(
       `INSERT INTO public.admin_audit_log (admin_id, action, target_type, new_value)
        VALUES ($1::uuid, 'bulk_user_update', 'user', $2::jsonb)`,
-      adminId, JSON.stringify({ userIds, changes, successCount })
+      adminId,
+      JSON.stringify({ userIds, changes, successCount })
     );
 
     return reply.send(createSuccessResponse({ updated: successCount, total: userIds.length }));

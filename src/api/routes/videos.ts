@@ -78,7 +78,11 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
 
       const limit = Math.min(maxResults ?? 20, 50);
-      logger.info('Searching YouTube videos', { query: q, maxResults: limit, userId: request.user.userId });
+      logger.info('Searching YouTube videos', {
+        query: q,
+        maxResults: limit,
+        userId: request.user.userId,
+      });
 
       const ytClient = getYouTubeClient();
       const results = await ytClient.searchVideos(q.trim(), limit);
@@ -89,7 +93,8 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           videoId: r.id!.videoId!,
           title: r.snippet?.title ?? '',
           channelTitle: r.snippet?.channelTitle ?? '',
-          thumbnail: r.snippet?.thumbnails?.medium?.url ?? r.snippet?.thumbnails?.default?.url ?? '',
+          thumbnail:
+            r.snippet?.thumbnails?.medium?.url ?? r.snippet?.thumbnails?.default?.url ?? '',
           publishedAt: r.snippet?.publishedAt ?? '',
         }));
 
@@ -484,29 +489,27 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   const ENRICH_LIMIT = 50;
   const ENRICH_DELAY_MS = 2000;
 
-  fastify.post(
-    '/enrich-cards',
-    { onRequest: [fastify.authenticate] },
-    async (_request, reply) => {
-      const workerPath = resolve(__dirname, '../../modules/ontology/enrich-worker.js');
-      try {
-        const child = fork(workerPath, [], {
-          env: { ...process.env },
-          stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-          detached: true,
-        });
-        child.send({ limit: ENRICH_LIMIT, delayMs: ENRICH_DELAY_MS });
-        child.unref();
-        logger.info('User-triggered enrichment started', { limit: ENRICH_LIMIT });
-        return reply.code(202).send({ status: 'ok', data: { message: 'Enrichment started', limit: ENRICH_LIMIT } });
-      } catch (err) {
-        logger.warn('Failed to spawn enrichment worker', {
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return reply.code(500).send({ status: 'error', error: 'Failed to start enrichment' });
-      }
+  fastify.post('/enrich-cards', { onRequest: [fastify.authenticate] }, async (_request, reply) => {
+    const workerPath = resolve(__dirname, '../../modules/ontology/enrich-worker.js');
+    try {
+      const child = fork(workerPath, [], {
+        env: { ...process.env },
+        stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        detached: true,
+      });
+      child.send({ limit: ENRICH_LIMIT, delayMs: ENRICH_DELAY_MS });
+      child.unref();
+      logger.info('User-triggered enrichment started', { limit: ENRICH_LIMIT });
+      return reply
+        .code(202)
+        .send({ status: 'ok', data: { message: 'Enrichment started', limit: ENRICH_LIMIT } });
+    } catch (err) {
+      logger.warn('Failed to spawn enrichment worker', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return reply.code(500).send({ status: 'error', error: 'Failed to start enrichment' });
     }
-  );
+  });
 
   fastify.log.info('Video routes registered');
 

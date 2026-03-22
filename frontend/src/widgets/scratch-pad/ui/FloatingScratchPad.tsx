@@ -181,7 +181,13 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     const [isDockedDragging, setIsDockedDragging] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
     const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
+    const selectedCardIdsRef = useRef<Set<string>>(new Set());
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+
+    // Keep ref in sync for use in native event handlers (capture phase)
+    useEffect(() => {
+      selectedCardIdsRef.current = selectedCardIds;
+    }, [selectedCardIds]);
     const [pendingDock, setPendingDock] = useState<DockPosition | null>(null);
     const [isAnimating, setIsAnimating] = useState(false);
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -417,12 +423,18 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
         const activeRef = isFloating ? containerRef.current : dockedRef.current;
         if (!activeRef) return;
         if (!activeRef.contains(target)) {
+          // Finder pattern: if cards are selected, consume the click (deselect only, no action)
+          if (selectedCardIdsRef.current.size > 0) {
+            e.stopPropagation();
+            e.preventDefault();
+          }
           setSelectedCardIds(new Set());
           setLastSelectedIndex(null);
         }
       };
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
+      // Capture phase — fires BEFORE grid card onClick
+      document.addEventListener('click', handleClickOutside, true);
+      return () => document.removeEventListener('click', handleClickOutside, true);
     }, [isFloating]);
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -494,20 +506,22 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
         });
         setLastSelectedIndex(cardIndex);
       } else {
-        // Plain click: toggle single card selection
+        // Plain click — Finder/Photos selection model
         e.stopPropagation();
+        const hasSelection = selectedCardIds.size > 0;
         const isCurrentlySelected = selectedCardIds.has(card.id);
-        if (isCurrentlySelected) {
-          // Deselect — if this was the only selected card, open it
+
+        if (hasSelection) {
+          if (isCurrentlySelected) {
+            // Clicking a selected card while in selection mode → no-op
+            return;
+          }
+          // Clicking an unselected card while in selection mode → deselect all, wait
           setSelectedCardIds(new Set());
           setLastSelectedIndex(null);
-          if (selectedCardIds.size === 1) {
-            onCardClick(card);
-          }
         } else {
-          // Select single card (deselect others)
-          setSelectedCardIds(new Set([card.id]));
-          setLastSelectedIndex(cardIndex);
+          // No selection → normal card open
+          onCardClick(card);
         }
       }
     };
@@ -681,7 +695,9 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
             <div
               ref={dragRef}
               {...dragAttributes}
+              {...dragListeners}
               data-card-item
+              data-dnd-draggable
               data-selected={isSelected || undefined}
               onClick={(e) => handleCardClick(e, card, idx)}
               className={cn(
@@ -724,17 +740,6 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                       className={checkSize}
                       style={{ color: 'hsl(var(--primary-foreground))' }}
                     />
-                  </div>
-                )}
-                {/* Drag handle — only this element triggers dnd-kit card drag */}
-                {!isCompact && (
-                  <div
-                    data-dnd-handle
-                    {...dragListeners}
-                    className="absolute bottom-0 left-0 z-10 bg-background/80 p-0.5 rounded-tr opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Move className="w-2.5 h-2.5 text-muted-foreground" />
                   </div>
                 )}
                 {!isCompact && (
@@ -1116,7 +1121,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           {!isMinimized && (
             <div
               ref={floatingContentRef}
-              className="p-3 overflow-hidden relative"
+              className="p-3 overflow-y-auto relative"
               style={{ height: 'calc(100% - 44px)' }}
               onClick={handleContainerClick}
             >
@@ -1140,9 +1145,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   <span className="text-sm">{t('ideation.emptyHint')}</span>
                 </div>
               ) : (
-                <div
-                  className="flex flex-wrap gap-2 overflow-y-auto h-full content-start"
-                >
+                <div className="flex flex-wrap gap-2 content-start">
                   {sortedCards.map((card, idx) => renderCardItem(card, idx, false))}
                 </div>
               )}
