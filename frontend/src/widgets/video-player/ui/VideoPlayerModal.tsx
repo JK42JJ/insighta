@@ -145,6 +145,7 @@ export function VideoPlayerModal({
                 playerReady={playerReady}
                 onSave={handleSave}
                 isYouTube
+                sourceTable={card.sourceTable}
               />
             </ResizablePanel>
           </ResizablePanelGroup>

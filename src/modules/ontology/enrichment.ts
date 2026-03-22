@@ -525,6 +525,35 @@ export async function enrichBySourceRef(
     logger.info('Auto-created resource node for card', { cardId: sourceId, nodeId: nodes[0]!.id });
   }
 
+  // Auto-create resource node for synced YouTube video states
+  if (nodes.length === 0 && sourceTable === 'user_video_states') {
+    const videoStates = await prisma.$queryRaw<
+      { id: string; youtube_video_id: string; title: string }[]
+    >`
+      SELECT uvs.id, yv.youtube_video_id, yv.title
+      FROM public.user_video_states uvs
+      JOIN public.youtube_videos yv ON uvs.video_id = yv.id
+      WHERE uvs.id = ${sourceId}::uuid AND uvs.user_id = ${userId}::uuid
+    `;
+
+    if (videoStates.length === 0) {
+      return null;
+    }
+    const vs = videoStates[0]!;
+
+    const sourceRef = JSON.stringify({ table: 'user_video_states', id: vs.id });
+    const url = `https://www.youtube.com/watch?v=${vs.youtube_video_id}`;
+    const properties = JSON.stringify({ url, link_type: 'youtube' });
+
+    nodes = await prisma.$queryRaw<{ id: string }[]>`
+      INSERT INTO ontology.nodes (user_id, type, title, properties, source_ref)
+      VALUES (${userId}::uuid, 'resource', ${vs.title}, ${properties}::jsonb, ${sourceRef}::jsonb)
+      RETURNING id
+    `;
+
+    logger.info('Auto-created resource node for video state', { videoStateId: sourceId, nodeId: nodes[0]!.id });
+  }
+
   if (nodes.length === 0) {
     return null;
   }

@@ -12,6 +12,7 @@ import { SlashMenu } from '@/shared/ui/SlashMenu';
 import { getCaretCoordinates } from '@/shared/lib/get-caret-coordinates';
 import { getAuthHeaders } from '@/shared/lib/supabase-auth';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
+import { youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
 import { useQueryClient } from '@tanstack/react-query';
 import { NotePreview } from './NotePreview';
 
@@ -91,6 +92,7 @@ interface MemoEditorProps {
   playerReady: boolean;
   onSave: (id: string, note: string) => void;
   isYouTube: boolean;
+  sourceTable?: 'user_local_cards' | 'user_video_states';
 }
 
 export function MemoEditor({
@@ -101,6 +103,7 @@ export function MemoEditor({
   playerReady,
   onSave,
   isYouTube,
+  sourceTable = 'user_local_cards',
 }: MemoEditorProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -128,10 +131,11 @@ export function MemoEditor({
     }
   }, [isEditing]);
 
-  // Auto-save debounce
+  // Auto-save debounce (suppressed during AI summary generation to avoid saving placeholder)
   const scheduleAutoSave = useCallback(
     (newNote: string) => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      if (suppressAutoSaveRef.current) return;
       autoSaveTimerRef.current = setTimeout(() => {
         onSave(cardId, newNote);
       }, AUTO_SAVE_DELAY_MS);
@@ -231,10 +235,12 @@ export function MemoEditor({
   // Trigger AI summary generation for this card — inline animation at cursor
   const GENERATING_PLACEHOLDER = '⏳ Generating AI summary...';
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const suppressAutoSaveRef = useRef(false);
 
   const triggerAiSummary = useCallback(
     async (cleanedNote: string) => {
-      // Insert placeholder at cursor position
+      // Insert placeholder at cursor position — suppress auto-save to prevent saving placeholder
+      suppressAutoSaveRef.current = true;
       insertTextAtCursor(GENERATING_PLACEHOLDER, cleanedNote);
       setIsGeneratingSummary(true);
       try {
@@ -262,7 +268,7 @@ export function MemoEditor({
         const res = await fetch('/api/v1/ontology/enrich/auto', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ source_table: 'user_local_cards', source_id: cardId, force: true, ...(transcript ? { transcript } : {}) }),
+          body: JSON.stringify({ source_table: sourceTable, source_id: cardId, force: true, ...(transcript ? { transcript } : {}) }),
         });
         const data = await res.json();
         if (res.ok && data.data?.enriched !== false) {
@@ -270,6 +276,9 @@ export function MemoEditor({
           // Remove placeholder — cards refresh will bring the actual summary
           setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
           queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+          if (sourceTable === 'user_video_states') {
+            queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+          }
         } else {
           toast.error(t('videoPlayer.aiSummaryFailed'), { id: 'ai-summary' });
           setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
@@ -278,10 +287,11 @@ export function MemoEditor({
         toast.error(t('videoPlayer.aiSummaryFailed'), { id: 'ai-summary' });
         setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
       } finally {
+        suppressAutoSaveRef.current = false;
         setIsGeneratingSummary(false);
       }
     },
-    [cardId, queryClient, t, insertTextAtCursor]
+    [cardId, sourceTable, queryClient, t, insertTextAtCursor]
   );
 
   // Handle slash menu selection
