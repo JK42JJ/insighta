@@ -273,7 +273,7 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
 
     const mandalas = await Promise.all(
       userMandalas.map(async (m) => {
-        const [moodResult, cardsCount, notesCount] = await Promise.all([
+        const [moodResult, weeklyNewCards, weeklyNotes, totalCards, totalNotes] = await Promise.all([
           getMood(m.id, userId),
           prisma.user_local_cards.count({
             where: {
@@ -290,6 +290,19 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
               updated_at: { gte: oneWeekAgo },
             },
           }),
+          prisma.user_local_cards.count({
+            where: {
+              mandala_id: m.id,
+              user_id: userId,
+            },
+          }),
+          prisma.user_local_cards.count({
+            where: {
+              mandala_id: m.id,
+              user_id: userId,
+              user_note: { not: null },
+            },
+          }),
         ]);
 
         return {
@@ -297,8 +310,10 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
           name: m.title,
           mood: moodResult.state,
           sessions: moodResult.signals.weeklySessionCount,
-          notes: notesCount,
-          insights: cardsCount,
+          weeklyNewCards,
+          weeklyNotes,
+          totalCards,
+          totalNotes,
         };
       })
     );
