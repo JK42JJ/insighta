@@ -463,6 +463,18 @@ export function MemoEditor({
 
         {/* Content — fills remaining height from parent */}
         <div className="px-3 pb-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+          {/* AI Summary — always visible (read-only, not part of user note) */}
+          {isGeneratingSummary && <GeneratingIndicator />}
+          {videoSummary?.summary_en && !isGeneratingSummary && (
+            <div className="border-l-2 border-blue-400 pl-2 mb-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-r text-sm text-muted-foreground">
+              <div className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 mb-0.5">
+                <span>🤖</span> AI Summary:
+              </div>
+              <p className="whitespace-pre-wrap">{videoSummary.summary_en}</p>
+            </div>
+          )}
+
+          {/* User note — edit or preview mode */}
           {isEditing ? (
             <Textarea
               ref={textareaRef}
@@ -479,32 +491,21 @@ export function MemoEditor({
               readOnly={isGeneratingSummary}
               placeholder={t('videoPlayer.notePlaceholder')}
               className={cn(
-                'w-full h-full resize-none border-0 bg-transparent',
+                'w-full resize-none border-0 bg-transparent',
                 'focus-visible:ring-0 focus-visible:ring-offset-0',
-                'text-sm text-foreground/60 scrollbar-thin min-h-0',
+                'text-sm text-foreground/60 min-h-[80px]',
                 isGeneratingSummary && 'opacity-70 cursor-wait'
               )}
               style={{ caretColor: 'hsl(var(--primary))' }}
             />
           ) : (
-            <>
-              {isGeneratingSummary && <GeneratingIndicator />}
-              {videoSummary?.summary_en && !isGeneratingSummary && (
-                <div className="border-l-2 border-blue-400 pl-2 mb-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-r text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 mb-0.5">
-                    <span>🤖</span> AI Summary:
-                  </div>
-                  <p className="whitespace-pre-wrap">{videoSummary.summary_en}</p>
-                </div>
-              )}
-              <NotePreview
-                note={note}
-                videoId={videoId}
-                playerRef={playerRef}
-                playerReady={playerReady}
-                onEditClick={() => setIsEditing(true)}
-              />
-            </>
+            <NotePreview
+              note={note}
+              videoId={videoId}
+              playerRef={playerRef}
+              playerReady={playerReady}
+              onEditClick={() => setIsEditing(true)}
+            />
           )}
         </div>
       </div>
