@@ -89,8 +89,7 @@ export async function registerBotWriteGuard(fastify: FastifyInstance) {
  * Generate a cryptographically random approval token
  */
 export function generateApprovalToken(): string {
-  const { randomBytes } = require('crypto');
-  return randomBytes(32).toString('hex');
+  return crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
 }
 
 /**
