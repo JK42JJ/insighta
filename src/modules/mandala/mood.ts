@@ -9,20 +9,31 @@ interface MoodSignals {
   totalCards: number;
 }
 
-enum MoodState {
-  FOCUSED = 0,
-  RECHARGING = 1,
-  CHALLENGING = 2,
-  COMFORTABLE = 3,
-  NEEDS_SUPPORT = 4,
-}
+/**
+ * Mood state 1-5: activity-frequency gradient.
+ * Higher = more active. Used by OpenClaw bot for tone calibration.
+ */
+const MOOD_DEEP_SILENCE = 1; // 30+ days inactive
+const MOOD_RESTING = 2; // 7-29 days inactive
+const MOOD_RELAXED = 3; // active but low frequency (1-2 sessions/week)
+const MOOD_STEADY = 4; // moderate frequency (3-4 sessions/week)
+const MOOD_ON_FIRE = 5; // high frequency (5+ sessions/week)
+
+type MoodState = 1 | 2 | 3 | 4 | 5;
+
+const DEEP_SILENCE_THRESHOLD_DAYS = 30;
+const RESTING_THRESHOLD_DAYS = 7;
+const STEADY_THRESHOLD_SESSIONS = 3;
+const ON_FIRE_THRESHOLD_SESSIONS = 5;
 
 function computeMood(signals: MoodSignals): MoodState {
-  if (signals.daysSinceLastActivity >= 14) return MoodState.NEEDS_SUPPORT;
-  if (signals.newTopicCount >= 2) return MoodState.CHALLENGING;
-  if (signals.entertainmentRatio > 0.7) return MoodState.RECHARGING;
-  if (signals.weeklySessionCount >= 3) return MoodState.FOCUSED;
-  return MoodState.COMFORTABLE;
+  const { daysSinceLastActivity, weeklySessionCount } = signals;
+
+  if (daysSinceLastActivity >= DEEP_SILENCE_THRESHOLD_DAYS) return MOOD_DEEP_SILENCE;
+  if (daysSinceLastActivity >= RESTING_THRESHOLD_DAYS) return MOOD_RESTING;
+  if (weeklySessionCount >= ON_FIRE_THRESHOLD_SESSIONS) return MOOD_ON_FIRE;
+  if (weeklySessionCount >= STEADY_THRESHOLD_SESSIONS) return MOOD_STEADY;
+  return MOOD_RELAXED;
 }
 
 export async function getMood(
@@ -104,7 +115,7 @@ export async function getMood(
   } catch (error) {
     logger.error('Failed to compute mood', { mandalaId, userId, error });
     return {
-      state: MoodState.COMFORTABLE,
+      state: MOOD_RELAXED,
       signals: {
         weeklySessionCount: 0,
         entertainmentRatio: 0,
