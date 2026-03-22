@@ -93,6 +93,7 @@ interface MemoEditorProps {
   onSave: (id: string, note: string) => void;
   isYouTube: boolean;
   sourceTable?: 'user_local_cards' | 'user_video_states';
+  videoSummary?: { summary_en: string; summary_ko: string; tags?: string[]; model?: string };
 }
 
 export function MemoEditor({
@@ -104,6 +105,7 @@ export function MemoEditor({
   onSave,
   isYouTube,
   sourceTable = 'user_local_cards',
+  videoSummary,
 }: MemoEditorProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -470,13 +472,23 @@ export function MemoEditor({
               style={{ caretColor: 'hsl(var(--primary))' }}
             />
           ) : (
-            <NotePreview
-              note={note}
-              videoId={videoId}
-              playerRef={playerRef}
-              playerReady={playerReady}
-              onEditClick={() => setIsEditing(true)}
-            />
+            <>
+              {videoSummary?.summary_en && (
+                <div className="border-l-2 border-blue-400 pl-2 mb-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-r text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 mb-0.5">
+                    <span>🤖</span> AI Summary:
+                  </div>
+                  <p className="whitespace-pre-wrap">{videoSummary.summary_en}</p>
+                </div>
+              )}
+              <NotePreview
+                note={note}
+                videoId={videoId}
+                playerRef={playerRef}
+                playerReady={playerReady}
+                onEditClick={() => setIsEditing(true)}
+              />
+            </>
           )}
         </div>
       </div>
