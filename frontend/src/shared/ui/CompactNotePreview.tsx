@@ -90,7 +90,7 @@ function AiSummaryPreview({ body, label, maxLines, className, cardId, summaryRat
   return (
     <div
       className={cn(
-        'border-l-2 border-blue-400 pl-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-r text-xs text-muted-foreground',
+        'border-l-2 border-blue-400 pl-2 pr-1 py-1 bg-blue-50/50 dark:bg-blue-950/30 rounded-r text-xs text-muted-foreground',
         clampClass,
         className,
       )}

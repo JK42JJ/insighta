@@ -50,22 +50,71 @@ interface IntentPattern {
 const INTENT_PATTERNS: IntentPattern[] = [
   {
     intent: 'weekly_summary',
-    keywords: ['요약', 'summary', '리포트', 'report', '주간', 'weekly', '이번 주', 'this week', '월간', 'monthly', '오늘', 'today', '학습 현황', '진행 상황', 'progress'],
+    keywords: [
+      '요약',
+      'summary',
+      '리포트',
+      'report',
+      '주간',
+      'weekly',
+      '이번 주',
+      'this week',
+      '월간',
+      'monthly',
+      '오늘',
+      'today',
+      '학습 현황',
+      '진행 상황',
+      'progress',
+    ],
     weight: 1.5,
   },
   {
     intent: 'tag_memo',
-    keywords: ['태그', 'tag', '키워드', 'keyword', '분류', 'classify', '카테고리', 'category', '메모', 'memo', '라벨', 'label'],
+    keywords: [
+      '태그',
+      'tag',
+      '키워드',
+      'keyword',
+      '분류',
+      'classify',
+      '카테고리',
+      'category',
+      '메모',
+      'memo',
+      '라벨',
+      'label',
+    ],
     weight: 1.2,
   },
   {
     intent: 'summarize_video',
-    keywords: ['영상 요약', 'video summary', '동영상', 'video', 'youtube', '유튜브', '요약해', 'summarize'],
+    keywords: [
+      '영상 요약',
+      'video summary',
+      '동영상',
+      'video',
+      'youtube',
+      '유튜브',
+      '요약해',
+      'summarize',
+    ],
     weight: 1.3,
   },
   {
     intent: 'suggest_edges',
-    keywords: ['연결', 'connect', '관계', 'relation', '추천', 'suggest', '링크', 'link', '관련', 'related'],
+    keywords: [
+      '연결',
+      'connect',
+      '관계',
+      'relation',
+      '추천',
+      'suggest',
+      '링크',
+      'link',
+      '관련',
+      'related',
+    ],
     weight: 1.1,
   },
   {
@@ -110,10 +159,7 @@ function classifyIntent(query: string): { intent: IntentType; confidence: number
 // Router — classify + dispatch
 // ============================================================================
 
-export async function routeRequest(
-  userId: string,
-  request: RouteRequest,
-): Promise<RouteResult> {
+export async function routeRequest(userId: string, request: RouteRequest): Promise<RouteResult> {
   const { query } = request;
 
   const { intent, confidence } = classifyIntent(query);

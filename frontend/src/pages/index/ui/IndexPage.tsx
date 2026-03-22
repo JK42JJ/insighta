@@ -632,6 +632,8 @@ function AuthenticatedApp() {
             onSaveWatchPosition={cards.handleSaveWatchPosition}
             watchPositionCache={modal.watchPositionCache}
             panelSizeCache={modal.panelSizeCache}
+            onEnrichStart={cards.markEnrichStart}
+            onEnrichEnd={cards.markEnrichEnd}
           />
 
           {/* Mobile-only floating MandalaPanel */}

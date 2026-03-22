@@ -43,6 +43,7 @@ export interface InsightCard {
   lastWatchPosition?: number; // Last playback position in seconds (for YouTube videos)
   isInIdeation?: boolean; // Whether the card is in ideation (scratchpad) or mandala grid
   videoSummary?: VideoSummary; // Central video summary from video_summaries table
+  sourceTable?: 'user_local_cards' | 'user_video_states'; // Origin table for enrichment routing
 }
 
 export interface MandalaLevel {

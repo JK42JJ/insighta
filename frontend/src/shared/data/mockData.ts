@@ -257,7 +257,7 @@ export const createCardFromUrl = (
   const thumbnail = getThumbnailForUrl(url, linkType);
 
   return {
-    id: `card-${Date.now()}`,
+    id: crypto.randomUUID(),
     videoUrl: url,
     title: '', // Will be fetched asynchronously
     thumbnail,

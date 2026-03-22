@@ -26,6 +26,8 @@ interface VideoPlayerModalProps {
   onSaveWatchPosition?: (id: string, position: number) => void;
   watchPositionCache?: Map<string, number>;
   panelSizeCache?: Map<string, number>;
+  onEnrichStart?: (cardId: string) => void;
+  onEnrichEnd?: (cardId: string) => void;
 }
 
 export function VideoPlayerModal({
@@ -36,6 +38,8 @@ export function VideoPlayerModal({
   onSaveWatchPosition,
   watchPositionCache,
   panelSizeCache,
+  onEnrichStart,
+  onEnrichEnd,
 }: VideoPlayerModalProps) {
   const { t } = useTranslation();
   const playerRef = useRef<YTPlayer | null>(null);
@@ -145,6 +149,10 @@ export function VideoPlayerModal({
                 playerReady={playerReady}
                 onSave={handleSave}
                 isYouTube
+                sourceTable={card.sourceTable}
+                videoSummary={card.videoSummary}
+                onEnrichStart={onEnrichStart}
+                onEnrichEnd={onEnrichEnd}
               />
             </ResizablePanel>
           </ResizablePanelGroup>

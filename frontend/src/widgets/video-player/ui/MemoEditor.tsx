@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, Timer, Camera } from 'lucide-react';
+import { MessageSquare, Timer, Camera, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -12,11 +12,31 @@ import { SlashMenu } from '@/shared/ui/SlashMenu';
 import { getCaretCoordinates } from '@/shared/lib/get-caret-coordinates';
 import { getAuthHeaders } from '@/shared/lib/supabase-auth';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
+import { youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
 import { useQueryClient } from '@tanstack/react-query';
 import { NotePreview } from './NotePreview';
 
 const AUTO_SAVE_DELAY_MS = 3_000;
 const IMAGE_MD_REGEX = /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
+
+/** Rolling dots animation: "Generating AI summary." → ".." → "..." → "." */
+function GeneratingIndicator() {
+  const [dots, setDots] = useState('.');
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDots((prev) => (prev.length >= 3 ? '.' : prev + '.'));
+    }, 500);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <div className="border-l-2 border-blue-400 pl-2 mb-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-r py-2 px-1">
+      <div className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <span className="font-medium">Generating AI summary{dots}</span>
+      </div>
+    </div>
+  );
+}
 
 interface CaptureImage {
   alt: string;
@@ -91,6 +111,10 @@ interface MemoEditorProps {
   playerReady: boolean;
   onSave: (id: string, note: string) => void;
   isYouTube: boolean;
+  sourceTable?: 'user_local_cards' | 'user_video_states';
+  videoSummary?: { summary_en: string; summary_ko: string; tags?: string[]; model?: string };
+  onEnrichStart?: (cardId: string) => void;
+  onEnrichEnd?: (cardId: string) => void;
 }
 
 export function MemoEditor({
@@ -101,6 +125,10 @@ export function MemoEditor({
   playerReady,
   onSave,
   isYouTube,
+  sourceTable = 'user_local_cards',
+  videoSummary,
+  onEnrichStart,
+  onEnrichEnd,
 }: MemoEditorProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -228,15 +256,14 @@ export function MemoEditor({
     }
   }, [videoId, playerRef, insertTextAtCursor, t]);
 
-  // Trigger AI summary generation for this card — inline animation at cursor
-  const GENERATING_PLACEHOLDER = '⏳ Generating AI summary...';
+  // Trigger AI summary generation for this card
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   const triggerAiSummary = useCallback(
     async (cleanedNote: string) => {
-      // Insert placeholder at cursor position
-      insertTextAtCursor(GENERATING_PLACEHOLDER, cleanedNote);
+      setNote(cleanedNote);
       setIsGeneratingSummary(true);
+      onEnrichStart?.(cardId);
       try {
         // Try to fetch transcript via Edge Function (Deno Deploy, bypasses EC2 bot detection)
         let transcript: string | undefined;
@@ -262,26 +289,26 @@ export function MemoEditor({
         const res = await fetch('/api/v1/ontology/enrich/auto', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ source_table: 'user_local_cards', source_id: cardId, force: true, ...(transcript ? { transcript } : {}) }),
+          body: JSON.stringify({ source_table: sourceTable, source_id: cardId, force: true, ...(transcript ? { transcript } : {}) }),
         });
         const data = await res.json();
         if (res.ok && data.data?.enriched !== false) {
           toast.success(t('videoPlayer.aiSummarySuccess'), { id: 'ai-summary' });
-          // Remove placeholder — cards refresh will bring the actual summary
-          setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
           queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+          if (sourceTable === 'user_video_states') {
+            queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+          }
         } else {
           toast.error(t('videoPlayer.aiSummaryFailed'), { id: 'ai-summary' });
-          setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
         }
       } catch {
         toast.error(t('videoPlayer.aiSummaryFailed'), { id: 'ai-summary' });
-        setNote((prev) => prev.replace(GENERATING_PLACEHOLDER, '').trim());
       } finally {
         setIsGeneratingSummary(false);
+        onEnrichEnd?.(cardId);
       }
     },
-    [cardId, queryClient, t, insertTextAtCursor]
+    [cardId, sourceTable, videoId, queryClient, t, onEnrichStart, onEnrichEnd]
   );
 
   // Handle slash menu selection
@@ -436,6 +463,18 @@ export function MemoEditor({
 
         {/* Content — fills remaining height from parent */}
         <div className="px-3 pb-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+          {/* AI Summary — always visible (read-only, not part of user note) */}
+          {isGeneratingSummary && <GeneratingIndicator />}
+          {videoSummary?.summary_en && !isGeneratingSummary && (
+            <div className="border-l-2 border-blue-400 pl-2 mb-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-r text-sm text-muted-foreground">
+              <div className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 mb-0.5">
+                <span>🤖</span> AI Summary:
+              </div>
+              <p className="whitespace-pre-wrap">{videoSummary.summary_en}</p>
+            </div>
+          )}
+
+          {/* User note — edit or preview mode */}
           {isEditing ? (
             <Textarea
               ref={textareaRef}
@@ -452,9 +491,9 @@ export function MemoEditor({
               readOnly={isGeneratingSummary}
               placeholder={t('videoPlayer.notePlaceholder')}
               className={cn(
-                'w-full h-full resize-none border-0 bg-transparent',
+                'w-full resize-none border-0 bg-transparent',
                 'focus-visible:ring-0 focus-visible:ring-offset-0',
-                'text-sm text-foreground/60 scrollbar-thin min-h-0',
+                'text-sm text-foreground/60 min-h-[80px]',
                 isGeneratingSummary && 'opacity-70 cursor-wait'
               )}
               style={{ caretColor: 'hsl(var(--primary))' }}

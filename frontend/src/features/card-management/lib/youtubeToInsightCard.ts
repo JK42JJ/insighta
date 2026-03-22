@@ -35,6 +35,7 @@ export function convertToInsightCard(data: UserVideoStateWithVideo): InsightCard
     lastWatchPosition: data.watch_position_seconds ?? undefined,
     isInIdeation: data.is_in_ideation,
     videoSummary: data.video_summary,
+    sourceTable: 'user_video_states',
   };
 }
 

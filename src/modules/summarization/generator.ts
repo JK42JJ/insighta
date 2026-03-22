@@ -36,7 +36,10 @@ export class SummaryGenerator {
   private async getProvider(): Promise<GenerationProvider> {
     if (!this.provider) {
       this.provider = await createGenerationProvider();
-      logger.info('Summary generation provider initialized', { provider: this.provider.name, model: this.provider.model });
+      logger.info('Summary generation provider initialized', {
+        provider: this.provider.name,
+        model: this.provider.model,
+      });
     }
     return this.provider;
   }

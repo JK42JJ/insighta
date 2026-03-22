@@ -48,8 +48,8 @@ export function InsightCardItem({
   const [isEditing, setIsEditing] = useState(false);
   const [noteValue, setNoteValue] = useState(card.userNote ?? '');
 
-  // Flip is disabled when: explicitly disabled, setting off, or memo is empty
-  const hasContent = !!card.userNote?.trim();
+  // Flip is disabled when: explicitly disabled, setting off, or no content (memo or AI summary)
+  const hasContent = !!card.userNote?.trim() || !!card.videoSummary?.summary_en;
   const shouldDisableFlip = disableFlip || !cardFlipEnabled || !hasContent;
 
   // Build drag data — include selected card IDs for multi-select drag
@@ -178,7 +178,7 @@ export function InsightCardItem({
           </div>
 
           {/* Note preview — fixed height area */}
-          <div className="p-2 space-y-1 h-[72px] overflow-hidden">
+          <div className="px-2.5 pt-2 pb-3 space-y-1.5 h-[76px] overflow-hidden">
             {isEditing ? (
               <textarea
                 autoFocus

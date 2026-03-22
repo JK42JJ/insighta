@@ -12,6 +12,7 @@ import { useBatchMoveCards } from '@/features/card-management/model/useBatchMove
 import {
   useAllVideoStates,
   useUpdateVideoState,
+  youtubeSyncKeys,
 } from '@/features/youtube-sync/model/useYouTubeSync';
 import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
 import { convertToInsightCards } from '@/features/card-management/lib/youtubeToInsightCard';
@@ -81,6 +82,8 @@ export interface UseCardOrchestratorReturn {
   enrichingCardIds: Set<string>;
   failedEnrichCardIds: Set<string>;
   retryEnrich: (cardId: string, videoUrl?: string) => void;
+  markEnrichStart: (cardId: string) => void;
+  markEnrichEnd: (cardId: string) => void;
 }
 
 /**
@@ -125,7 +128,11 @@ export function useCardOrchestrator(
 
   // Core enrichment call — returns true on success, false on failure
   const executeEnrich = useCallback(
-    async (cardId: string, videoUrl?: string): Promise<boolean> => {
+    async (
+      cardId: string,
+      videoUrl?: string,
+      sourceTable: 'user_local_cards' | 'user_video_states' = 'user_local_cards',
+    ): Promise<boolean> => {
       try {
         // Step 1: Try to fetch transcript via Edge Function (Deno Deploy, not EC2)
         let transcript: string | undefined;
@@ -153,14 +160,15 @@ export function useCardOrchestrator(
           method: 'POST',
           headers,
           body: JSON.stringify({
-            source_table: 'user_local_cards',
+            source_table: sourceTable,
             source_id: cardId,
             ...(transcript ? { transcript } : {}),
           }),
         });
         if (!res.ok) return false;
-        // Refresh cards to pick up new AI summary
+        // Refresh both card sources to pick up new AI summary
         queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+        queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
         return true;
       } catch {
         return false;
@@ -172,7 +180,11 @@ export function useCardOrchestrator(
   // Auto-enrichment for YouTube cards — respects autoSummaryEnabled setting
   // Retries once on failure before marking as failed
   const triggerAutoEnrich = useCallback(
-    async (cardId: string, videoUrl?: string) => {
+    async (
+      cardId: string,
+      videoUrl?: string,
+      sourceTable: 'user_local_cards' | 'user_video_states' = 'user_local_cards',
+    ) => {
       if (!autoSummaryEnabled) return;
       setEnrichingCardIds((prev) => new Set(prev).add(cardId));
       setFailedEnrichCardIds((prev) => {
@@ -181,12 +193,12 @@ export function useCardOrchestrator(
         return next;
       });
 
-      let success = await executeEnrich(cardId, videoUrl);
+      let success = await executeEnrich(cardId, videoUrl, sourceTable);
 
       // Auto-retry once after 3s delay
       if (!success) {
         await new Promise((r) => setTimeout(r, 3000));
-        success = await executeEnrich(cardId, videoUrl);
+        success = await executeEnrich(cardId, videoUrl, sourceTable);
       }
 
       if (!success) {
@@ -204,8 +216,8 @@ export function useCardOrchestrator(
 
   // Manual retry for failed enrichment
   const retryEnrich = useCallback(
-    (cardId: string, videoUrl?: string) => {
-      triggerAutoEnrich(cardId, videoUrl).catch(() => {/* handled internally */});
+    (cardId: string, videoUrl?: string, sourceTable: 'user_local_cards' | 'user_video_states' = 'user_local_cards') => {
+      triggerAutoEnrich(cardId, videoUrl, sourceTable).catch(() => {/* handled internally */});
     },
     [triggerAutoEnrich],
   );
@@ -1294,5 +1306,7 @@ export function useCardOrchestrator(
     enrichingCardIds,
     failedEnrichCardIds,
     retryEnrich,
+    markEnrichStart: (cardId: string) => setEnrichingCardIds((prev) => new Set(prev).add(cardId)),
+    markEnrichEnd: (cardId: string) => setEnrichingCardIds((prev) => { const next = new Set(prev); next.delete(cardId); return next; }),
   };
 }
