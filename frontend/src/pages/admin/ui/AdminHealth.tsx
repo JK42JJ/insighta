@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { apiClient } from '@/shared/lib/api-client';
 import { Activity, Database, Server, Bot, Check, Loader2, Sparkles, ChevronDown, Clock, AlertCircle, CheckCircle2, Play, Square, SkipForward } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
@@ -211,6 +212,10 @@ function ClawbotCard() {
     mutationFn: () => apiClient.triggerClawbot(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'clawbot'] });
+      toast.success('Clawbot run triggered');
+    },
+    onError: (err) => {
+      toast.error(`Trigger failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     },
   });
 
@@ -218,6 +223,10 @@ function ClawbotCard() {
     mutationFn: () => apiClient.startClawbot(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'clawbot'] });
+      toast.success('Clawbot started');
+    },
+    onError: (err) => {
+      toast.error(`Start failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     },
   });
 
@@ -225,6 +234,10 @@ function ClawbotCard() {
     mutationFn: () => apiClient.stopClawbot(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'clawbot'] });
+      toast.success('Clawbot stopped');
+    },
+    onError: (err) => {
+      toast.error(`Stop failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     },
   });
 
