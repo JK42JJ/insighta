@@ -79,9 +79,14 @@ async function fetchPlaylistDetails(accessToken: string, playlistId: string) {
   };
 }
 
-async function fetchPlaylistItems(accessToken: string, playlistId: string): Promise<Array<{ videoId: string; position: number }>> {
-  const items: Array<{ videoId: string; position: number }> = [];
+async function fetchPlaylistItems(
+  accessToken: string,
+  playlistId: string,
+  publishedAfter?: string,
+): Promise<Array<{ videoId: string; position: number; publishedAt: string }>> {
+  const items: Array<{ videoId: string; position: number; publishedAt: string }> = [];
   let pageToken: string | undefined;
+  let hitCutoff = false;
 
   do {
     const url = new URL(`${YOUTUBE_API_BASE}/playlistItems`);
@@ -104,14 +109,23 @@ async function fetchPlaylistItems(accessToken: string, playlistId: string): Prom
 
     for (const item of data.items || []) {
       if (item.contentDetails?.videoId) {
+        const publishedAt = item.snippet?.publishedAt || '';
+
+        // Stop pagination when we hit videos older than the cutoff
+        if (publishedAfter && publishedAt && publishedAt < publishedAfter) {
+          hitCutoff = true;
+          break;
+        }
+
         items.push({
           videoId: item.contentDetails.videoId,
           position: item.snippet?.position || items.length,
+          publishedAt,
         });
       }
     }
 
-    pageToken = data.nextPageToken;
+    pageToken = hitCutoff ? undefined : data.nextPageToken;
   } while (pageToken);
 
   return items;
@@ -328,7 +342,11 @@ Deno.serve(async (req) => {
 
         const syncSteps: string[] = [];
         try {
-          const playlistItems = await fetchPlaylistItems(accessToken, playlist.youtube_playlist_id);
+          // Use playlist creation time as cutoff — only import videos published after
+          // the user added this playlist. First sync (last_synced_at=null) uses created_at;
+          // subsequent syncs use last_synced_at to pick up only new videos.
+          const publishedAfter = playlist.last_synced_at || playlist.created_at || undefined;
+          const playlistItems = await fetchPlaylistItems(accessToken, playlist.youtube_playlist_id, publishedAfter);
           const videoIds = playlistItems.map(item => item.videoId);
           const videoDetails = await fetchVideoDetails(accessToken, videoIds);
 
