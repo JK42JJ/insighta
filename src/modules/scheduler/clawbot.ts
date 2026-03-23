@@ -303,10 +303,10 @@ export class ClawbotScheduler {
     const prisma = getPrismaClient();
     const rows = await prisma.$queryRaw<{ count: bigint }[]>`
       SELECT COUNT(*) as count FROM (
-        SELECT DISTINCT extract_youtube_vid(c.url) as vid
+        SELECT DISTINCT c.video_id as vid
         FROM public.user_local_cards c
         WHERE c.link_type IN ('youtube', 'youtube-shorts')
-          AND extract_youtube_vid(c.url) IS NOT NULL
+          AND c.video_id IS NOT NULL
 
         UNION
 

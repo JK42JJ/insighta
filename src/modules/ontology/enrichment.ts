@@ -804,11 +804,12 @@ export async function systemBatchEnrich(
   // Find YouTube videos (local cards + synced) not yet in video_summaries
   const cards = await prisma.$queryRaw<{ vid: string; title: string }[]>`
     SELECT vid, title FROM (
-      SELECT DISTINCT ON (c.url)
-        extract_youtube_vid(c.url) as vid,
+      SELECT DISTINCT ON (c.video_id)
+        c.video_id as vid,
         COALESCE(c.title, c.metadata_title, 'Untitled') as title
       FROM public.user_local_cards c
       WHERE c.link_type IN ('youtube', 'youtube-shorts')
+        AND c.video_id IS NOT NULL
 
       UNION ALL
 
