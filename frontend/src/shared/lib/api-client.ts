@@ -80,7 +80,12 @@ interface ClawbotRunRecord {
   startedAt: string;
   completedAt: string | null;
   unsummarizedCount: number;
-  result: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] } | null;
+  result: {
+    total: number;
+    enriched: number;
+    skipped: number;
+    errors: { videoId: string; error: string }[];
+  } | null;
   error: string | null;
 }
 
@@ -212,12 +217,17 @@ class ApiClient {
 
   private isRefreshing = false;
 
-  private async request<T>(endpoint: string, options: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit & { timeoutMs?: number } = {}
+  ): Promise<T> {
     const url = `${this.baseUrl}/api/v1${endpoint}`;
     const token = await this.getFreshToken();
 
     if (import.meta.env.DEV) {
-      console.log(`[apiClient] ${options.method || 'GET'} ${endpoint} token:${token ? 'yes' : 'no'}`);
+      console.log(
+        `[apiClient] ${options.method || 'GET'} ${endpoint} token:${token ? 'yes' : 'no'}`
+      );
     }
 
     const { timeoutMs, ...fetchOptions } = options;
@@ -246,10 +256,7 @@ class ApiClient {
         throw new ApiHttpError(`Request timeout (${secs}s)`, 408);
       }
       // Network error (Failed to fetch, QUIC timeout, etc.)
-      throw new ApiHttpError(
-        err instanceof Error ? err.message : 'Network error',
-        0
-      );
+      throw new ApiHttpError(err instanceof Error ? err.message : 'Network error', 0);
     }
     clearTimeout(timeoutId);
 
@@ -652,9 +659,7 @@ class ApiClient {
     return this.request(`/mandalas/subscriptions${query}`);
   }
 
-  async getMandalaMood(
-    mandalaId: string,
-  ): Promise<{
+  async getMandalaMood(mandalaId: string): Promise<{
     state: number;
     signals: {
       weeklySessionCount: number;
@@ -720,11 +725,7 @@ class ApiClient {
     return this.request('/admin/stats/overview');
   }
 
-  async getAdminActivity(params: {
-    from: string;
-    to: string;
-    userId?: string;
-  }): Promise<{
+  async getAdminActivity(params: { from: string; to: string; userId?: string }): Promise<{
     success: boolean;
     data: Array<{
       date: string;
@@ -793,13 +794,16 @@ class ApiClient {
   // Admin Promotions
   // ========================================
 
-  async getAdminPromotions(params?: {
-    page?: number;
-    limit?: number;
-    status?: string;
-  }): Promise<{
+  async getAdminPromotions(params?: { page?: number; limit?: number; status?: string }): Promise<{
     items: Array<Record<string, unknown>>;
-    pagination: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
   }> {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
@@ -833,7 +837,9 @@ class ApiClient {
     });
   }
 
-  async deleteAdminPromotion(id: string): Promise<{ success: boolean; data: Record<string, unknown> }> {
+  async deleteAdminPromotion(
+    id: string
+  ): Promise<{ success: boolean; data: Record<string, unknown> }> {
     return this.request(`/admin/promotions/${id}`, { method: 'DELETE' });
   }
 
@@ -844,7 +850,14 @@ class ApiClient {
     targetType?: string;
   }): Promise<{
     items: Array<Record<string, unknown>>;
-    pagination: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
   }> {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
@@ -869,13 +882,16 @@ class ApiClient {
   // Admin Content Moderation
   // ========================================
 
-  async getAdminContent(params?: {
-    page?: number;
-    limit?: number;
-    search?: string;
-  }): Promise<{
+  async getAdminContent(params?: { page?: number; limit?: number; search?: string }): Promise<{
     items: Array<Record<string, unknown>>;
-    pagination: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
   }> {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
@@ -895,7 +911,9 @@ class ApiClient {
     });
   }
 
-  async deleteAdminContent(id: string): Promise<{ success: boolean; data: Record<string, unknown> }> {
+  async deleteAdminContent(
+    id: string
+  ): Promise<{ success: boolean; data: Record<string, unknown> }> {
     return this.request(`/admin/content/mandalas/${id}`, { method: 'DELETE' });
   }
 
@@ -906,7 +924,14 @@ class ApiClient {
     targetType?: string;
   }): Promise<{
     items: Array<Record<string, unknown>>;
-    pagination: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
   }> {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
@@ -930,8 +955,18 @@ class ApiClient {
   async getAdminHealth(): Promise<{
     success: boolean;
     data: {
-      api: { status: string; uptime: number; responseTimeMs: number; memory: { heapUsedMB: number; heapTotalMB: number; rssMB: number } };
-      database: { status: string; latencyMs: number; activeConnections: number; tableSizes: Array<Record<string, unknown>> };
+      api: {
+        status: string;
+        uptime: number;
+        responseTimeMs: number;
+        memory: { heapUsedMB: number; heapTotalMB: number; rssMB: number };
+      };
+      database: {
+        status: string;
+        latencyMs: number;
+        activeConnections: number;
+        tableSizes: Array<Record<string, unknown>>;
+      };
       environment: { nodeVersion: string; platform: string };
     };
   }> {
@@ -945,12 +980,23 @@ class ApiClient {
   async getAdminLlm(): Promise<{
     success: boolean;
     data: {
-      config: { provider: string; openrouter_model: string; ollama_url: string; ollama_generate_model: string; ollama_embed_model: string };
-      active: { embedding: { provider: string; dimension: number }; generation: { provider: string; model: string } };
+      config: {
+        provider: string;
+        openrouter_model: string;
+        ollama_url: string;
+        ollama_generate_model: string;
+        ollama_embed_model: string;
+      };
+      active: {
+        embedding: { provider: string; dimension: number };
+        generation: { provider: string; model: string };
+      };
       health: {
         ollama: boolean;
         gemini: boolean;
-        openrouter: boolean | { available: boolean; latencyMs: number; credits?: string; error?: string };
+        openrouter:
+          | boolean
+          | { available: boolean; latencyMs: number; credits?: string; error?: string };
       };
       auto_priority: string[];
     };
@@ -960,7 +1006,10 @@ class ApiClient {
 
   async updateAdminLlm(body: { provider: string; openrouter_model?: string }): Promise<{
     success: boolean;
-    data: { provider: string; active: { embedding: { provider: string }; generation: { provider: string; model: string } } };
+    data: {
+      provider: string;
+      active: { embedding: { provider: string }; generation: { provider: string; model: string } };
+    };
   }> {
     return this.request('/admin/llm', { method: 'PUT', body: JSON.stringify(body) });
   }
@@ -973,7 +1022,10 @@ class ApiClient {
     success: boolean;
     data: { jobId: string; status: string };
   }> {
-    return this.request('/admin/enrichment/batch-all', { method: 'POST', body: JSON.stringify(body) });
+    return this.request('/admin/enrichment/batch-all', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
   }
 
   async getEnrichJobs(limit: number = 20): Promise<{
@@ -985,7 +1037,12 @@ class ApiClient {
         limit: number;
         startedAt: string;
         completedAt: string | null;
-        result: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] } | null;
+        result: {
+          total: number;
+          enriched: number;
+          skipped: number;
+          errors: { videoId: string; error: string }[];
+        } | null;
         error: string | null;
       }>;
       total: number;
@@ -1002,7 +1059,12 @@ class ApiClient {
       limit: number;
       startedAt: string;
       completedAt: string | null;
-      result: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] } | null;
+      result: {
+        total: number;
+        enriched: number;
+        skipped: number;
+        errors: { videoId: string; error: string }[];
+      } | null;
       error: string | null;
     };
   }> {
@@ -1021,7 +1083,9 @@ class ApiClient {
     return this.request('/admin/clawbot/trigger', { method: 'POST' });
   }
 
-  async updateClawbotConfig(body: Partial<ClawbotConfig>): Promise<{ success: boolean; data: { config: ClawbotConfig } }> {
+  async updateClawbotConfig(
+    body: Partial<ClawbotConfig>
+  ): Promise<{ success: boolean; data: { config: ClawbotConfig } }> {
     return this.request('/admin/clawbot/config', { method: 'PUT', body: JSON.stringify(body) });
   }
 
@@ -1033,7 +1097,9 @@ class ApiClient {
     return this.request('/admin/clawbot/stop', { method: 'POST' });
   }
 
-  async getClawbotHistory(limit: number = 20): Promise<{ success: boolean; data: { runs: ClawbotRunRecord[]; total: number } }> {
+  async getClawbotHistory(
+    limit: number = 20
+  ): Promise<{ success: boolean; data: { runs: ClawbotRunRecord[]; total: number } }> {
     return this.request(`/admin/clawbot/history?limit=${limit}`);
   }
 
@@ -1041,20 +1107,67 @@ class ApiClient {
   // Admin Analytics
   // ========================================
 
-  async getAdminAnalyticsUsers(days: number = 30): Promise<{ success: boolean; data: { dau: Array<{ date: string; count: number }>; wau: Array<{ week: string; count: number }>; mau: Array<{ month: string; count: number }> } }> {
+  async getAdminAnalyticsUsers(
+    days: number = 30
+  ): Promise<{
+    success: boolean;
+    data: {
+      dau: Array<{ date: string; count: number }>;
+      wau: Array<{ week: string; count: number }>;
+      mau: Array<{ month: string; count: number }>;
+    };
+  }> {
     return this.request(`/admin/analytics/users?days=${days}`);
   }
 
-  async getAdminAnalyticsGrowth(days: number = 30): Promise<{ success: boolean; data: { signups: Array<{ date: string; count: number }>; totalUsers: number } }> {
+  async getAdminAnalyticsGrowth(
+    days: number = 30
+  ): Promise<{
+    success: boolean;
+    data: { signups: Array<{ date: string; count: number }>; totalUsers: number };
+  }> {
     return this.request(`/admin/analytics/growth?days=${days}`);
   }
 
-  async getAdminAnalyticsRevenue(): Promise<{ success: boolean; data: { mrr: number; subscribers: number; monthlyBreakdown: Array<Record<string, unknown>> } }> {
+  async getAdminAnalyticsRevenue(): Promise<{
+    success: boolean;
+    data: { mrr: number; subscribers: number; monthlyBreakdown: Array<Record<string, unknown>> };
+  }> {
     return this.request('/admin/analytics/revenue');
   }
 
-  async getAdminTransactions(): Promise<{ success: boolean; data: { transactions: Array<Record<string, unknown>> } }> {
+  async getAdminTransactions(): Promise<{
+    success: boolean;
+    data: { transactions: Array<Record<string, unknown>> };
+  }> {
     return this.request('/admin/payments/transactions');
+  }
+
+  // ========================================
+  // Settings — LLM Keys
+  // ========================================
+
+  async getLlmKeys(): Promise<{
+    status: number;
+    data: Array<{ provider: string; status: string; maskedKey: string; updatedAt: string }>;
+  }> {
+    return this.request('/settings/llm-keys');
+  }
+
+  async saveLlmKey(
+    provider: string,
+    apiKey: string
+  ): Promise<{ status: number; data: { provider: string; status: string; maskedKey: string } }> {
+    return this.request('/settings/llm-keys', {
+      method: 'POST',
+      body: JSON.stringify({ provider, apiKey }),
+    });
+  }
+
+  async deleteLlmKey(provider: string): Promise<{ status: number; data: { deleted: boolean } }> {
+    return this.request(`/settings/llm-keys/${encodeURIComponent(provider)}`, {
+      method: 'DELETE',
+    });
   }
 
   // ========================================

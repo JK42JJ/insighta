@@ -12,6 +12,7 @@ import { Bell, CreditCard, Globe, Palette, Shield, Trash2, Plug, Settings } from
 import { cn } from '@/shared/lib/utils';
 import { toast } from '@/shared/lib/use-toast';
 import { YouTubeSyncCard } from './YouTubeSyncCard';
+import { LlmKeysSettingsTab } from './LlmKeysSettingsTab';
 import { SubscriptionSettingsTab } from './SubscriptionSettingsTab';
 import {
   AlertDialog,
@@ -185,12 +186,16 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="cardFlipOnHover">{t('settings.cardFlipOnHover')}</Label>
-                      <p className="text-sm text-muted-foreground">{t('settings.cardFlipOnHoverDesc')}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {t('settings.cardFlipOnHoverDesc')}
+                      </p>
                     </div>
                     <Switch
                       id="cardFlipOnHover"
                       checked={settings.cardFlipOnHover}
-                      onCheckedChange={(checked) => setSettings({ ...settings, cardFlipOnHover: checked })}
+                      onCheckedChange={(checked) =>
+                        setSettings({ ...settings, cardFlipOnHover: checked })
+                      }
                     />
                   </div>
                 </CardContent>
@@ -244,6 +249,7 @@ export default function SettingsPage() {
             {activeCategory === 'integrations' && (
               <div className="space-y-6">
                 <YouTubeSyncCard />
+                <LlmKeysSettingsTab />
               </div>
             )}
 

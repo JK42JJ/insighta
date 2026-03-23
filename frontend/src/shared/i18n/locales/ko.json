@@ -126,7 +126,19 @@
     "settingsSaved": "저장 완료",
     "settingsSavedDesc": "설정이 저장되었습니다.",
     "dataDeleted": "데이터 삭제",
-    "dataDeletedDesc": "모든 데이터가 삭제되었습니다."
+    "dataDeletedDesc": "모든 데이터가 삭제되었습니다.",
+    "llmKeys": {
+      "title": "LLM API 키",
+      "description": "AI 제공자의 API 키를 관리합니다. 키는 암호화되어 저장됩니다.",
+      "updateKey": "새 키를 입력하여 업데이트...",
+      "saved": "키 저장 완료",
+      "savedDesc": "{{provider}} API 키가 저장되었습니다.",
+      "deleted": "키 삭제 완료",
+      "deletedDesc": "{{provider}} API 키가 삭제되었습니다.",
+      "error": "오류",
+      "saveError": "API 키 저장에 실패했습니다. 다시 시도해 주세요.",
+      "deleteError": "API 키 삭제에 실패했습니다. 다시 시도해 주세요."
+    }
   },
   "profile": {
     "title": "프로필",
@@ -660,12 +672,7 @@
     "monthlyPrice": "$19.90",
     "monthlyPeriod": "월",
     "monthlyAnnual": "연 $238.80",
-    "monthlyFeatures": [
-      "만다라트 3개",
-      "AI 요약 (월 100회)",
-      "플레이리스트 동기화",
-      "일반 지원"
-    ],
+    "monthlyFeatures": ["만다라트 3개", "AI 요약 (월 100회)", "플레이리스트 동기화", "일반 지원"],
     "monthlyTrial": "14일 무료 체험",
     "monthlyCtaDisabled": "곧 출시 예정",
     "compareTitle": "플랜 비교",
