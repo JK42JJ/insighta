@@ -80,18 +80,27 @@ export async function saveKey(
 
 export async function listKeys(
   userId: string
-): Promise<{ provider: string; status: string; maskedKey: string; updatedAt: string }[]> {
+): Promise<
+  { provider: string; status: string; priority: number; maskedKey: string; updatedAt: string }[]
+> {
   const prisma = getPrismaClient();
 
   const keys = await prisma.user_llm_keys.findMany({
     where: { user_id: userId },
-    orderBy: { provider: 'asc' },
+    orderBy: { priority: 'asc' },
   });
 
   return keys.map(
-    (k: { provider: string; status: string; encrypted_key: string; updated_at: Date }) => ({
+    (k: {
+      provider: string;
+      status: string;
+      priority: number;
+      encrypted_key: string;
+      updated_at: Date;
+    }) => ({
       provider: k.provider,
       status: k.status,
+      priority: k.priority,
       maskedKey: maskKey(decrypt(k.encrypted_key)),
       updatedAt: k.updated_at.toISOString(),
     })
@@ -110,6 +119,26 @@ export async function deleteKey(userId: string, provider: string): Promise<void>
   });
 
   logger.info('LLM key deleted', { userId, provider });
+}
+
+export async function updatePriorities(
+  userId: string,
+  items: { provider: string; priority: number; status: string }[]
+): Promise<void> {
+  const prisma = getPrismaClient();
+
+  await prisma.$transaction(
+    items
+      .filter((item) => isValidProvider(item.provider))
+      .map((item) =>
+        prisma.user_llm_keys.updateMany({
+          where: { user_id: userId, provider: item.provider },
+          data: { priority: item.priority, status: item.status, updated_at: new Date() },
+        })
+      )
+  );
+
+  logger.info('LLM key priorities updated', { userId, count: items.length });
 }
 
 export async function getDecryptedKey(userId: string, provider: string): Promise<string | null> {

@@ -1,5 +1,5 @@
 import { FastifyPluginCallback } from 'fastify';
-import { saveKey, listKeys, deleteKey } from '../../modules/settings/llm-keys';
+import { saveKey, listKeys, deleteKey, updatePriorities } from '../../modules/settings/llm-keys';
 
 function getUserId(request: any, reply: any): string | null {
   if (!request.user || !('userId' in request.user)) {
@@ -66,6 +66,34 @@ export const settingsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to delete key';
         return reply.code(400).send({ status: 400, code: 'INVALID_PROVIDER', message });
+      }
+    }
+  );
+
+  /**
+   * PUT /api/v1/settings/llm-keys/priorities — Batch update provider priorities and status
+   * Body: { items: [{ provider: string, priority: number, status: 'active' | 'inactive' }] }
+   */
+  fastify.put<{ Body: { items: { provider: string; priority: number; status: string }[] } }>(
+    '/llm-keys/priorities',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const { items } = request.body;
+      if (!Array.isArray(items)) {
+        return reply
+          .code(400)
+          .send({ status: 400, code: 'INVALID_BODY', message: 'items array required' });
+      }
+
+      try {
+        await updatePriorities(userId, items);
+        return reply.send({ status: 200, data: { updated: true } });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to update priorities';
+        return reply.code(400).send({ status: 400, code: 'UPDATE_FAILED', message });
       }
     }
   );
