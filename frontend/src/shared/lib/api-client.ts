@@ -99,6 +99,33 @@ interface ClawbotStatus {
   stats: { totalRuns: number; totalEnriched: number; totalErrors: number; totalSkipped: number };
 }
 
+interface EnrichSchedulerRunRecord {
+  startedAt: string;
+  completedAt: string | null;
+  pending: number;
+  batchSize: number;
+  result: {
+    total: number;
+    enriched: number;
+    skipped: number;
+    errors: { videoId: string; error: string }[];
+  } | null;
+  health: 'good' | 'ok' | 'bad';
+  skippedReason: string | null;
+}
+
+interface EnrichSchedulerStatus {
+  enabled: boolean;
+  running: boolean;
+  cardDelayMs: number;
+  consecutiveSuccess: number;
+  skipCyclesRemaining: number;
+  recentCycles: { enriched: number; errors: number };
+  lastRun: EnrichSchedulerRunRecord | null;
+  currentCycle: EnrichSchedulerRunRecord | null;
+  totalRuns: number;
+}
+
 interface SyncStatus {
   playlistId: string;
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
@@ -1101,6 +1128,28 @@ class ApiClient {
     limit: number = 20
   ): Promise<{ success: boolean; data: { runs: ClawbotRunRecord[]; total: number } }> {
     return this.request(`/admin/clawbot/history?limit=${limit}`);
+  }
+
+  // ========================================
+  // Enrichment Scheduler
+  // ========================================
+
+  async getEnrichSchedulerStatus(): Promise<{ status: string; data: EnrichSchedulerStatus }> {
+    return this.request('/admin/enrichment-scheduler/status');
+  }
+
+  async getEnrichSchedulerHistory(
+    limit: number = 10
+  ): Promise<{ status: string; data: EnrichSchedulerRunRecord[] }> {
+    return this.request(`/admin/enrichment-scheduler/history?limit=${limit}`);
+  }
+
+  async startEnrichScheduler(): Promise<{ status: string; message: string }> {
+    return this.request('/admin/enrichment-scheduler/start', { method: 'POST' });
+  }
+
+  async stopEnrichScheduler(): Promise<{ status: string; message: string }> {
+    return this.request('/admin/enrichment-scheduler/stop', { method: 'POST' });
   }
 
   // ========================================

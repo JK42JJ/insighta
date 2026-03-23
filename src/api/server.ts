@@ -30,6 +30,7 @@ import {
   resetConnectionPool,
 } from '../modules/database/client';
 import { getClawbot } from '../modules/scheduler/clawbot';
+import { getEnrichmentScheduler } from '../modules/enrichment/scheduler';
 
 // Load environment variables
 dotenv.config();
@@ -438,22 +439,29 @@ export async function startServer() {
     fastify.log.info(`Scalar API Reference available at http://${host}:${port}/api-reference`);
 
     // Clawbot summary agent — DISABLED (2026-03-22)
-    // Reason: caption extraction fails for all 43 videos, causing repeated YouTube API hits
-    // every 30 minutes (18+ failed runs observed). Risk of YouTube account ban.
-    // Re-enable only after caption extraction fallback (EF proxy) is deployed and verified.
-    // try {
-    //   await getClawbot().start();
-    //   fastify.log.info('Clawbot summary agent started');
-    // } catch (err) {
-    //   fastify.log.warn({ err }, 'Clawbot start failed (non-fatal)');
-    // }
-    fastify.log.info('Clawbot summary agent DISABLED — caption extraction fix pending');
+    // Superseded by EnrichmentScheduler (adaptive, proxy-only in prod)
+    fastify.log.info('Clawbot summary agent DISABLED — superseded by EnrichmentScheduler');
+
+    // Enrichment Scheduler — adaptive self-throttling background enrichment
+    // Prod: Edge Function proxy only (no direct YouTube calls)
+    // Policy: docs/CODING_CONVENTIONS.md § 3-5
+    try {
+      await getEnrichmentScheduler().start();
+      fastify.log.info('EnrichmentScheduler started (30min cycle)');
+    } catch (err) {
+      fastify.log.warn({ err }, 'EnrichmentScheduler start failed (non-fatal)');
+    }
 
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
       try {
         await getClawbot().stop();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await getEnrichmentScheduler().stop();
       } catch {
         /* ignore */
       }
