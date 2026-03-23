@@ -130,6 +130,8 @@
     "llmKeys": {
       "title": "LLM API Keys",
       "description": "Manage API keys for AI providers. Keys are encrypted at rest.",
+      "advanced": "Advanced",
+      "dragHint": "Drag to reorder fallback priority. Toggle switch to enable/disable providers.",
       "updateKey": "Enter new key to update...",
       "saved": "Key Saved",
       "savedDesc": "API key for {{provider}} has been saved.",
@@ -137,7 +139,8 @@
       "deletedDesc": "API key for {{provider}} has been removed.",
       "error": "Error",
       "saveError": "Failed to save API key. Please try again.",
-      "deleteError": "Failed to delete API key. Please try again."
+      "deleteError": "Failed to delete API key. Please try again.",
+      "priorityError": "Failed to update provider priority. Please try again."
     }
   },
   "profile": {

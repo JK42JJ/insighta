@@ -1107,9 +1107,7 @@ class ApiClient {
   // Admin Analytics
   // ========================================
 
-  async getAdminAnalyticsUsers(
-    days: number = 30
-  ): Promise<{
+  async getAdminAnalyticsUsers(days: number = 30): Promise<{
     success: boolean;
     data: {
       dau: Array<{ date: string; count: number }>;
@@ -1120,9 +1118,7 @@ class ApiClient {
     return this.request(`/admin/analytics/users?days=${days}`);
   }
 
-  async getAdminAnalyticsGrowth(
-    days: number = 30
-  ): Promise<{
+  async getAdminAnalyticsGrowth(days: number = 30): Promise<{
     success: boolean;
     data: { signups: Array<{ date: string; count: number }>; totalUsers: number };
   }> {
@@ -1167,6 +1163,15 @@ class ApiClient {
   async deleteLlmKey(provider: string): Promise<{ status: number; data: { deleted: boolean } }> {
     return this.request(`/settings/llm-keys/${encodeURIComponent(provider)}`, {
       method: 'DELETE',
+    });
+  }
+
+  async updateLlmKeyPriorities(
+    items: { provider: string; priority: number; status: string }[]
+  ): Promise<{ status: number; data: { updated: boolean } }> {
+    return this.request('/settings/llm-keys/priorities', {
+      method: 'PUT',
+      body: JSON.stringify({ items }),
     });
   }
 
