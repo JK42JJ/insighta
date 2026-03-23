@@ -126,7 +126,19 @@
     "settingsSaved": "Saved",
     "settingsSavedDesc": "Settings have been saved.",
     "dataDeleted": "Data Deleted",
-    "dataDeletedDesc": "All data has been deleted."
+    "dataDeletedDesc": "All data has been deleted.",
+    "llmKeys": {
+      "title": "LLM API Keys",
+      "description": "Manage API keys for AI providers. Keys are encrypted at rest.",
+      "updateKey": "Enter new key to update...",
+      "saved": "Key Saved",
+      "savedDesc": "API key for {{provider}} has been saved.",
+      "deleted": "Key Deleted",
+      "deletedDesc": "API key for {{provider}} has been removed.",
+      "error": "Error",
+      "saveError": "Failed to save API key. Please try again.",
+      "deleteError": "Failed to delete API key. Please try again."
+    }
   },
   "profile": {
     "title": "Profile",
