@@ -230,7 +230,7 @@ export class EnrichmentScheduler {
       WHERE c.link_type IN ('youtube', 'youtube-shorts')
         AND NOT EXISTS (
           SELECT 1 FROM public.video_summaries vs
-          WHERE vs.video_id = substring(c.url from 'v=([^&]+)')
+          WHERE vs.video_id = extract_youtube_vid(c.url)
         )
     `;
     const pending = Number(rows[0]?.count ?? 0);
@@ -293,14 +293,15 @@ export class EnrichmentScheduler {
     // Fetch unenriched YouTube cards (excluding permanently skipped)
     const cards = await prisma.$queryRaw<{ vid: string; title: string; url: string }[]>`
       SELECT
-        substring(c.url from 'v=([^&]+)') as vid,
+        extract_youtube_vid(c.url) as vid,
         COALESCE(c.title, c.metadata_title, 'Untitled') as title,
         c.url
       FROM public.user_local_cards c
       WHERE c.link_type IN ('youtube', 'youtube-shorts')
+        AND extract_youtube_vid(c.url) IS NOT NULL
         AND NOT EXISTS (
           SELECT 1 FROM public.video_summaries vs
-          WHERE vs.video_id = substring(c.url from 'v=([^&]+)')
+          WHERE vs.video_id = extract_youtube_vid(c.url)
         )
       ORDER BY c.created_at ASC
       LIMIT ${batchSize}
