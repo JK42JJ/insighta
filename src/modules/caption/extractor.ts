@@ -76,56 +76,63 @@ export class CaptionExtractor {
     // Language priority: explicit → en → ko → any available
     const LANG_PRIORITY = language ? [language] : ['en', 'ko'];
 
+    const isProd = process.env['NODE_ENV'] === 'production';
+
     try {
       let segments: CaptionSegment[] = [];
       let source = '';
       let resolvedLang = LANG_PRIORITY[0]!;
 
-      // Try each language in priority order
-      for (const lang of LANG_PRIORITY) {
-        logger.info('Extracting captions (in-memory)', { videoId: youtubeId, language: lang });
+      // Prod: skip direct YouTube calls (EC2 IP → bot detection → account ban risk)
+      // Dev: try direct methods first for speed, fallback to proxy
+      // Policy: docs/CODING_CONVENTIONS.md § 3-5
+      if (!isProd) {
+        for (const lang of LANG_PRIORITY) {
+          logger.info('Extracting captions (in-memory)', { videoId: youtubeId, language: lang });
 
-        // Primary: youtube-transcript
-        try {
-          const transcript = await (await loadFetchTranscript())(youtubeId, { lang });
-          if (transcript && transcript.length > 0) {
-            segments = transcript.map((item) => ({
-              text: item.text,
-              start: item.offset / 1000,
-              duration: item.duration / 1000,
-            }));
-            source = 'youtube-transcript';
-            resolvedLang = lang;
-            break;
+          // Primary: youtube-transcript
+          try {
+            const transcript = await (await loadFetchTranscript())(youtubeId, { lang });
+            if (transcript && transcript.length > 0) {
+              segments = transcript.map((item) => ({
+                text: item.text,
+                start: item.offset / 1000,
+                duration: item.duration / 1000,
+              }));
+              source = 'youtube-transcript';
+              resolvedLang = lang;
+              break;
+            }
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            logger.warn('youtube-transcript failed', { youtubeId, lang, error: errMsg });
           }
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          logger.warn('youtube-transcript failed', { youtubeId, lang, error: errMsg });
-        }
 
-        // Fallback: yt-dlp CLI
-        try {
-          logger.info('Falling back to yt-dlp', { youtubeId, lang });
-          const dlpSegments = await this.extractWithYtDlp(youtubeId, lang);
-          if (dlpSegments.length > 0) {
-            segments = dlpSegments;
-            source = 'yt-dlp';
-            resolvedLang = lang;
-            break;
+          // Fallback: yt-dlp CLI
+          try {
+            logger.info('Falling back to yt-dlp', { youtubeId, lang });
+            const dlpSegments = await this.extractWithYtDlp(youtubeId, lang);
+            if (dlpSegments.length > 0) {
+              segments = dlpSegments;
+              source = 'yt-dlp';
+              resolvedLang = lang;
+              break;
+            }
+          } catch (err) {
+            logger.warn('yt-dlp failed', {
+              youtubeId,
+              lang,
+              error: err instanceof Error ? err.message : String(err),
+            });
           }
-        } catch (err) {
-          logger.warn('yt-dlp failed', {
-            youtubeId,
-            lang,
-            error: err instanceof Error ? err.message : String(err),
-          });
         }
       }
 
-      // Final fallback: Supabase fetch-transcript Edge Function (residential proxy)
+      // Edge Function with residential proxy (prod: primary, dev: fallback)
       if (segments.length === 0) {
         try {
-          logger.info('Falling back to fetch-transcript EF (residential proxy)', { youtubeId });
+          const route = isProd ? 'primary (prod proxy-only)' : 'fallback';
+          logger.info(`Extracting via fetch-transcript EF (${route})`, { youtubeId });
           const efResult = await this.extractViaEdgeFunction(youtubeId);
           if (efResult.length > 0) {
             segments = efResult;
@@ -141,7 +148,8 @@ export class CaptionExtractor {
       }
 
       if (segments.length === 0) {
-        throw new Error('No captions found (youtube-transcript + yt-dlp + EF all failed)');
+        const methods = isProd ? 'EF proxy' : 'youtube-transcript + yt-dlp + EF';
+        throw new Error(`No captions found (${methods} all failed)`);
       }
 
       logger.info('Captions fetched (in-memory only)', {

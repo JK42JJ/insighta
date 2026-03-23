@@ -198,6 +198,12 @@ const apiKey = config.openrouter.apiKey;
 const apiKey = process.env.OPENROUTER_API_KEY;
 ```
 
+**Bot Domain Restriction**:
+- User-facing bots (Clawbot, persona characters, notification bots) operate in service domain only
+- Bots read only `domain='service'` data, call only service APIs, never access system domain (pattern, decision, problem)
+- Dev automation (Agent, CI/CD, MCP Server) is a tool, not a bot — operates in system domain
+- See `memory/project-principle-service-system.md` rule #6
+
 **Authentication**: All API routes require `onRequest: [fastify.authenticate]` except:
 - `/health`, `/api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/refresh`
 - Public endpoints (shared mandala view)
@@ -317,7 +323,20 @@ Checks: API uptime, DB connection + latency, memory usage. Located at `src/api/r
 
 **Circuit breaker**: If external service fails 3+ times in 1 minute, stop retrying for cooldown period. See `memory/troubleshooting.md` for known patterns.
 
-### 3-5. Code Review Standards
+### 3-5. YouTube Caption Extraction — Environment-Based Routing
+
+**Policy**: Prod 환경에서 YouTube에 직접 요청하면 EC2 IP가 봇으로 판정되어 계정 차단 위험이 있다.
+
+| Environment | Extraction Route | Rationale |
+|-------------|-----------------|-----------|
+| **Dev (local)** | youtube-transcript → yt-dlp → Edge Function (proxy) | 로컬 IP는 차단 위험 낮음, 빠른 직접 호출 우선 |
+| **Prod (EC2)** | Edge Function (WebShare residential proxy) **직행** | EC2 데이터센터 IP → YouTube 봇 감지 → 계정 차단 방지 |
+
+**구현**: `CaptionExtractor.extractCaptions()`에서 `NODE_ENV=production`일 때 youtube-transcript/yt-dlp를 건너뛰고 Edge Function 프록시만 사용.
+
+**근거**: Clawbot 무한 실패 루프 사건 (2026-03-22) — EC2에서 youtube-transcript 100% 차단, 1,500+ 무의미한 요청 발생.
+
+### 3-6. Code Review Standards
 
 | Criterion | Threshold |
 |-----------|----------|

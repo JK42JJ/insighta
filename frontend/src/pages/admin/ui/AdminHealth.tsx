@@ -2,7 +2,22 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/lib/api-client';
-import { Activity, Database, Server, Bot, Check, Loader2, Sparkles, ChevronDown, Clock, AlertCircle, CheckCircle2, Play, Square, SkipForward } from 'lucide-react';
+import {
+  Activity,
+  Database,
+  Server,
+  Bot,
+  Check,
+  Loader2,
+  Sparkles,
+  ChevronDown,
+  Clock,
+  AlertCircle,
+  CheckCircle2,
+  Play,
+  Square,
+  SkipForward,
+} from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -98,7 +113,11 @@ function LlmSettingsCard() {
         {PROVIDER_OPTIONS.map((opt) => {
           const isActive = currentProvider === opt.value;
           const healthVal = llm.health[opt.value as 'ollama' | 'openrouter' | 'gemini'];
-          const isAvailable = opt.value === 'auto' || (typeof healthVal === 'object' && healthVal !== null ? healthVal.available : !!healthVal);
+          const isAvailable =
+            opt.value === 'auto' ||
+            (typeof healthVal === 'object' && healthVal !== null
+              ? healthVal.available
+              : !!healthVal);
           return (
             <button
               key={opt.value}
@@ -137,17 +156,32 @@ function LlmSettingsCard() {
             className="w-full px-3 py-1.5 rounded-md border border-border bg-background text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <p className="text-[10px] text-muted-foreground mt-1">
-            e.g. qwen/qwen3-30b-a3b, mistralai/mistral-small-3.1-24b-instruct, google/gemini-2.0-flash-001
+            e.g. qwen/qwen3-30b-a3b, mistralai/mistral-small-3.1-24b-instruct,
+            google/gemini-2.0-flash-001
           </p>
         </div>
       )}
 
       {/* Current Config Summary */}
       <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs text-muted-foreground mb-4">
-        <div className="flex justify-between"><span>Embedding</span><span className="font-mono">{llm.active.embedding.provider} ({llm.active.embedding.dimension}d)</span></div>
-        <div className="flex justify-between"><span>Generation</span><span className="font-mono">{llm.active.generation.provider}</span></div>
-        <div className="flex justify-between"><span>Ollama URL</span><span className="font-mono">{llm.config.ollama_url}</span></div>
-        <div className="flex justify-between"><span>Ollama Model</span><span className="font-mono">{llm.config.ollama_generate_model}</span></div>
+        <div className="flex justify-between">
+          <span>Embedding</span>
+          <span className="font-mono">
+            {llm.active.embedding.provider} ({llm.active.embedding.dimension}d)
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>Generation</span>
+          <span className="font-mono">{llm.active.generation.provider}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Ollama URL</span>
+          <span className="font-mono">{llm.config.ollama_url}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Ollama Model</span>
+          <span className="font-mono">{llm.config.ollama_generate_model}</span>
+        </div>
       </div>
 
       {/* Save Button */}
@@ -157,12 +191,18 @@ function LlmSettingsCard() {
           disabled={updateMutation.isPending}
           className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
-          {updateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          {updateMutation.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Check className="h-3.5 w-3.5" />
+          )}
           Apply Provider Change
         </button>
       )}
       {updateMutation.isError && (
-        <p className="text-xs text-red-400 mt-2">Failed to update: {(updateMutation.error as Error).message}</p>
+        <p className="text-xs text-red-400 mt-2">
+          Failed to update: {(updateMutation.error as Error).message}
+        </p>
       )}
     </div>
   );
@@ -262,7 +302,7 @@ function ClawbotCard() {
         <Bot className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium">Clawbot Summary Agent</span>
         <button
-          onClick={() => status.enabled ? stopMutation.mutate() : startMutation.mutate()}
+          onClick={() => (status.enabled ? stopMutation.mutate() : startMutation.mutate())}
           disabled={isToggling}
           className={cn(
             'ml-auto flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors',
@@ -274,9 +314,13 @@ function ClawbotCard() {
           {isToggling ? (
             <Loader2 className="h-3 w-3 animate-spin" />
           ) : status.enabled ? (
-            <><Square className="h-3 w-3" /> Stop</>
+            <>
+              <Square className="h-3 w-3" /> Stop
+            </>
           ) : (
-            <><Play className="h-3 w-3" /> Start</>
+            <>
+              <Play className="h-3 w-3" /> Start
+            </>
           )}
         </button>
       </div>
@@ -286,7 +330,16 @@ function ClawbotCard() {
         <div className="flex justify-between">
           <span>Status</span>
           <span className="flex items-center gap-1.5">
-            <div className={cn('w-2 h-2 rounded-full', status.enabled ? (status.running ? 'bg-blue-500 animate-pulse' : 'bg-green-500') : 'bg-muted-foreground')} />
+            <div
+              className={cn(
+                'w-2 h-2 rounded-full',
+                status.enabled
+                  ? status.running
+                    ? 'bg-blue-500 animate-pulse'
+                    : 'bg-green-500'
+                  : 'bg-muted-foreground'
+              )}
+            />
             <span className="font-mono">
               {status.running ? 'Running' : status.enabled ? 'Idle' : 'Stopped'}
             </span>
@@ -324,12 +377,16 @@ function ClawbotCard() {
               <span className="ml-1">
                 — {status.lastRun.result.enriched}/{status.lastRun.unsummarizedCount} enriched
                 {status.lastRun.result.errors.length > 0 && (
-                  <span className="text-red-400 ml-1">({status.lastRun.result.errors.length} err)</span>
+                  <span className="text-red-400 ml-1">
+                    ({status.lastRun.result.errors.length} err)
+                  </span>
                 )}
               </span>
             )}
             {status.lastRun.status === 'skipped' && (
-              <span className="ml-1">— {status.lastRun.unsummarizedCount} &lt; threshold {status.config.threshold}</span>
+              <span className="ml-1">
+                — {status.lastRun.unsummarizedCount} &lt; threshold {status.config.threshold}
+              </span>
             )}
           </span>
         </div>
@@ -370,7 +427,9 @@ function ClawbotCard() {
         >
           <Clock className="h-3 w-3" />
           <span>History ({status.stats.totalRuns} runs)</span>
-          <ChevronDown className={cn('h-3 w-3 ml-auto transition-transform', historyOpen && 'rotate-180')} />
+          <ChevronDown
+            className={cn('h-3 w-3 ml-auto transition-transform', historyOpen && 'rotate-180')}
+          />
         </button>
 
         {historyOpen && runs.length > 0 && (
@@ -411,6 +470,269 @@ function ClawbotCard() {
 }
 
 // ============================================================================
+// EnrichmentSchedulerCard
+// ============================================================================
+
+const SCHED_POLL_RUNNING = 5_000;
+const SCHED_POLL_IDLE = 30_000;
+
+function EnrichmentSchedulerCard() {
+  const queryClient = useQueryClient();
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const { data: statusData } = useQuery({
+    queryKey: ['admin', 'enrichment-scheduler', 'status'],
+    queryFn: () => apiClient.getEnrichSchedulerStatus(),
+    refetchInterval: (query) => {
+      const s = query.state.data?.data;
+      return s?.running ? SCHED_POLL_RUNNING : SCHED_POLL_IDLE;
+    },
+    staleTime: 3_000,
+  });
+
+  const { data: historyData } = useQuery({
+    queryKey: ['admin', 'enrichment-scheduler', 'history'],
+    queryFn: () => apiClient.getEnrichSchedulerHistory(10),
+    enabled: historyOpen,
+    staleTime: 5_000,
+  });
+
+  const status = statusData?.data;
+  const runs = historyData?.data ?? [];
+
+  const startMutation = useMutation({
+    mutationFn: () => apiClient.startEnrichScheduler(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'enrichment-scheduler'] });
+      toast.success('Enrichment Scheduler started');
+    },
+    onError: (err) =>
+      toast.error(`Start failed: ${err instanceof Error ? err.message : 'Unknown'}`),
+  });
+
+  const stopMutation = useMutation({
+    mutationFn: () => apiClient.stopEnrichScheduler(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'enrichment-scheduler'] });
+      toast.success('Enrichment Scheduler stopped');
+    },
+    onError: (err) => toast.error(`Stop failed: ${err instanceof Error ? err.message : 'Unknown'}`),
+  });
+
+  if (!status) {
+    return (
+      <div className="bg-card border border-border rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Enrichment Scheduler</span>
+        </div>
+        <div className="text-xs text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  const isToggling = startMutation.isPending || stopMutation.isPending;
+  const healthColor = status.running
+    ? 'bg-blue-500 animate-pulse'
+    : status.enabled
+      ? 'bg-green-500'
+      : 'bg-muted-foreground';
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-4">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-4">
+        <Sparkles className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium">Enrichment Scheduler</span>
+        <span className="text-xs text-muted-foreground ml-1">(30min adaptive)</span>
+        <button
+          onClick={() => (status.enabled ? stopMutation.mutate() : startMutation.mutate())}
+          disabled={isToggling}
+          className={cn(
+            'ml-auto flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors',
+            status.enabled
+              ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
+              : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
+          )}
+        >
+          {isToggling ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : status.enabled ? (
+            <>
+              <Square className="h-3 w-3" /> Stop
+            </>
+          ) : (
+            <>
+              <Play className="h-3 w-3" /> Start
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Status Grid */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-muted-foreground mb-4">
+        <div className="flex justify-between">
+          <span>Status</span>
+          <span className="flex items-center gap-1.5">
+            <div className={cn('w-2 h-2 rounded-full', healthColor)} />
+            <span className="font-mono">
+              {status.running ? 'Running' : status.enabled ? 'Idle' : 'Stopped'}
+            </span>
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>Card Delay</span>
+          <span className="font-mono">{(status.cardDelayMs / 1000).toFixed(1)}s</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Recent Enriched</span>
+          <span className="font-mono text-green-400">{status.recentCycles.enriched}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Recent Errors</span>
+          <span className={cn('font-mono', status.recentCycles.errors > 0 ? 'text-red-400' : '')}>
+            {status.recentCycles.errors}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>Consecutive OK</span>
+          <span className="font-mono">{status.consecutiveSuccess}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Total Runs</span>
+          <span className="font-mono">{status.totalRuns}</span>
+        </div>
+        {status.skipCyclesRemaining > 0 && (
+          <div className="flex justify-between col-span-2">
+            <span className="text-yellow-400">Cooldown</span>
+            <span className="font-mono text-yellow-400">
+              {status.skipCyclesRemaining} cycles remaining
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Last Run */}
+      {status.lastRun && (
+        <div className="text-xs text-muted-foreground mb-3 flex items-center gap-1.5">
+          {status.lastRun.result ? (
+            status.lastRun.result.errors.length > 0 ? (
+              <AlertCircle className="h-3.5 w-3.5 text-yellow-400" />
+            ) : (
+              <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
+            )
+          ) : status.lastRun.skippedReason ? (
+            <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+          <span>
+            Last: {new Date(status.lastRun.startedAt).toLocaleString()}
+            {status.lastRun.result && (
+              <span className="ml-1">
+                — {status.lastRun.result.enriched}/{status.lastRun.pending} enriched
+                {status.lastRun.result.errors.length > 0 && (
+                  <span className="text-red-400 ml-1">
+                    ({status.lastRun.result.errors.length} err)
+                  </span>
+                )}
+              </span>
+            )}
+            {status.lastRun.skippedReason && (
+              <span className="ml-1 text-muted-foreground/60">
+                — {status.lastRun.skippedReason}
+              </span>
+            )}
+            <span className="ml-1 text-muted-foreground/60">[health: {status.lastRun.health}]</span>
+          </span>
+        </div>
+      )}
+
+      {/* Current Cycle */}
+      {status.currentCycle && (
+        <div className="flex items-center gap-2 mb-3 text-xs text-blue-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>
+            Processing... ({status.currentCycle.pending} pending, batch{' '}
+            {status.currentCycle.batchSize})
+          </span>
+        </div>
+      )}
+
+      {/* History */}
+      <div className="border-t border-border/50 pt-3">
+        <button
+          onClick={() => setHistoryOpen(!historyOpen)}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+        >
+          <Clock className="h-3 w-3" />
+          <span>History ({status.totalRuns} runs)</span>
+          <ChevronDown
+            className={cn('h-3 w-3 ml-auto transition-transform', historyOpen && 'rotate-180')}
+          />
+        </button>
+
+        {historyOpen && runs.length > 0 && (
+          <div className="mt-2 space-y-1 max-h-[250px] overflow-y-auto scrollbar-thin">
+            {runs.map((run, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded border border-border/30 bg-muted/10"
+              >
+                {run.result ? (
+                  run.result.errors.length > 0 ? (
+                    <AlertCircle className="h-3.5 w-3.5 text-yellow-400" />
+                  ) : run.result.enriched > 0 ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
+                  ) : (
+                    <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />
+                  )
+                ) : (
+                  <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+                <span className="font-mono text-muted-foreground">
+                  {new Date(run.startedAt).toLocaleString()}
+                </span>
+                <span
+                  className={cn(
+                    'px-1.5 py-0.5 rounded text-[10px]',
+                    run.health === 'good'
+                      ? 'bg-green-500/10 text-green-400'
+                      : run.health === 'ok'
+                        ? 'bg-yellow-500/10 text-yellow-400'
+                        : 'bg-red-500/10 text-red-400'
+                  )}
+                >
+                  {run.health}
+                </span>
+                {run.result && (
+                  <span className="ml-auto text-muted-foreground">
+                    {run.result.enriched}/{run.pending}
+                    {run.result.errors.length > 0 && (
+                      <span className="text-red-400 ml-1">({run.result.errors.length} err)</span>
+                    )}
+                  </span>
+                )}
+                {run.skippedReason && (
+                  <span className="ml-auto text-muted-foreground/60 truncate max-w-[150px]">
+                    {run.skippedReason}
+                  </span>
+                )}
+                {run.completedAt && run.startedAt && (
+                  <span className="text-muted-foreground/60 ml-1">
+                    {formatDuration(run.startedAt, run.completedAt)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // BatchEnrichCard
 // ============================================================================
 
@@ -422,7 +744,12 @@ interface EnrichJobData {
   limit: number;
   startedAt: string;
   completedAt: string | null;
-  result: { total: number; enriched: number; skipped: number; errors: { videoId: string; error: string }[] } | null;
+  result: {
+    total: number;
+    enriched: number;
+    skipped: number;
+    errors: { videoId: string; error: string }[];
+  } | null;
   error: string | null;
 }
 
@@ -476,7 +803,9 @@ function BatchEnrichCard() {
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium">Batch AI Summary</span>
-        <span className="text-xs text-muted-foreground ml-auto">Enrich YouTube cards without summaries</span>
+        <span className="text-xs text-muted-foreground ml-auto">
+          Enrich YouTube cards without summaries
+        </span>
       </div>
 
       {/* Controls */}
@@ -494,9 +823,13 @@ function BatchEnrichCard() {
           className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
           {hasRunning ? (
-            <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running...</>
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Running...
+            </>
           ) : (
-            <><Sparkles className="h-3.5 w-3.5" /> Run Batch</>
+            <>
+              <Sparkles className="h-3.5 w-3.5" /> Run Batch
+            </>
           )}
         </button>
       </div>
@@ -512,15 +845,21 @@ function BatchEnrichCard() {
       {latestJob?.result && latestJob.status === 'completed' && (
         <div className="grid grid-cols-3 gap-2 text-xs mb-3">
           <div className="bg-muted/30 rounded p-2 text-center">
-            <div className="text-lg font-mono font-bold text-foreground">{latestJob.result.total}</div>
+            <div className="text-lg font-mono font-bold text-foreground">
+              {latestJob.result.total}
+            </div>
             <div className="text-muted-foreground">Found</div>
           </div>
           <div className="bg-green-500/10 rounded p-2 text-center">
-            <div className="text-lg font-mono font-bold text-green-400">{latestJob.result.enriched}</div>
+            <div className="text-lg font-mono font-bold text-green-400">
+              {latestJob.result.enriched}
+            </div>
             <div className="text-muted-foreground">Enriched</div>
           </div>
           <div className="bg-red-500/10 rounded p-2 text-center">
-            <div className="text-lg font-mono font-bold text-red-400">{latestJob.result.errors.length}</div>
+            <div className="text-lg font-mono font-bold text-red-400">
+              {latestJob.result.errors.length}
+            </div>
             <div className="text-muted-foreground">Errors</div>
           </div>
         </div>
@@ -543,7 +882,9 @@ function BatchEnrichCard() {
           >
             <Clock className="h-3 w-3" />
             <span>History ({jobsList.length})</span>
-            <ChevronDown className={cn('h-3 w-3 ml-auto transition-transform', historyOpen && 'rotate-180')} />
+            <ChevronDown
+              className={cn('h-3 w-3 ml-auto transition-transform', historyOpen && 'rotate-180')}
+            />
           </button>
 
           {historyOpen && (
@@ -558,45 +899,70 @@ function BatchEnrichCard() {
                     <span className="font-mono text-muted-foreground">
                       {new Date(job.startedAt).toLocaleString()}
                     </span>
-                    <span className="text-muted-foreground">
-                      limit={job.limit}
-                    </span>
+                    <span className="text-muted-foreground">limit={job.limit}</span>
                     {job.result && (
                       <span className="ml-auto text-muted-foreground">
                         {job.result.enriched}/{job.result.total}
                         {job.result.errors.length > 0 && (
-                          <span className="text-red-400 ml-1">({job.result.errors.length} err)</span>
+                          <span className="text-red-400 ml-1">
+                            ({job.result.errors.length} err)
+                          </span>
                         )}
                       </span>
                     )}
                     {job.status === 'running' && (
-                      <span className="ml-auto text-blue-400">{formatDuration(job.startedAt, null)}</span>
+                      <span className="ml-auto text-blue-400">
+                        {formatDuration(job.startedAt, null)}
+                      </span>
                     )}
                     {job.completedAt && (
                       <span className="text-muted-foreground/60 ml-1">
                         {formatDuration(job.startedAt, job.completedAt)}
                       </span>
                     )}
-                    <ChevronDown className={cn('h-3 w-3 transition-transform', expandedJobId === job.id && 'rotate-180')} />
+                    <ChevronDown
+                      className={cn(
+                        'h-3 w-3 transition-transform',
+                        expandedJobId === job.id && 'rotate-180'
+                      )}
+                    />
                   </button>
 
                   {expandedJobId === job.id && (
                     <div className="px-2.5 pb-2 text-xs space-y-1">
-                      {job.error && (
-                        <div className="text-red-400 font-mono">{job.error}</div>
-                      )}
+                      {job.error && <div className="text-red-400 font-mono">{job.error}</div>}
                       {job.result && (
                         <>
                           <div className="grid grid-cols-4 gap-1">
-                            <div className="text-muted-foreground">Total: <span className="text-foreground font-mono">{job.result.total}</span></div>
-                            <div className="text-muted-foreground">Enriched: <span className="text-green-400 font-mono">{job.result.enriched}</span></div>
-                            <div className="text-muted-foreground">Skipped: <span className="text-foreground font-mono">{job.result.skipped}</span></div>
-                            <div className="text-muted-foreground">Errors: <span className="text-red-400 font-mono">{job.result.errors.length}</span></div>
+                            <div className="text-muted-foreground">
+                              Total:{' '}
+                              <span className="text-foreground font-mono">{job.result.total}</span>
+                            </div>
+                            <div className="text-muted-foreground">
+                              Enriched:{' '}
+                              <span className="text-green-400 font-mono">
+                                {job.result.enriched}
+                              </span>
+                            </div>
+                            <div className="text-muted-foreground">
+                              Skipped:{' '}
+                              <span className="text-foreground font-mono">
+                                {job.result.skipped}
+                              </span>
+                            </div>
+                            <div className="text-muted-foreground">
+                              Errors:{' '}
+                              <span className="text-red-400 font-mono">
+                                {job.result.errors.length}
+                              </span>
+                            </div>
                           </div>
                           {job.result.errors.length > 0 && (
                             <div className="mt-1 space-y-0.5 max-h-24 overflow-y-auto text-red-400/80 font-mono">
                               {job.result.errors.map((e, i) => (
-                                <div key={i}>{e.videoId}: {e.error}</div>
+                                <div key={i}>
+                                  {e.videoId}: {e.error}
+                                </div>
                               ))}
                             </div>
                           )}
@@ -655,15 +1021,32 @@ export function AdminHealth() {
               <div className="flex items-center gap-2 mb-3">
                 <Server className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">API Server</span>
-                <span className={cn('ml-auto px-2 py-0.5 rounded-full text-xs', STATUS_STYLES[api?.status ?? 'down'])}>
+                <span
+                  className={cn(
+                    'ml-auto px-2 py-0.5 rounded-full text-xs',
+                    STATUS_STYLES[api?.status ?? 'down']
+                  )}
+                >
                   {api?.status ?? 'unknown'}
                 </span>
               </div>
               <div className="space-y-1.5 text-xs text-muted-foreground">
-                <div className="flex justify-between"><span>Uptime</span><span className="font-mono">{formatUptime(api?.uptime ?? 0)}</span></div>
-                <div className="flex justify-between"><span>Response</span><span className="font-mono">{api?.responseTimeMs ?? 0}ms</span></div>
-                <div className="flex justify-between"><span>Heap Used</span><span className="font-mono">{api?.memory?.heapUsedMB ?? 0}MB</span></div>
-                <div className="flex justify-between"><span>RSS</span><span className="font-mono">{api?.memory?.rssMB ?? 0}MB</span></div>
+                <div className="flex justify-between">
+                  <span>Uptime</span>
+                  <span className="font-mono">{formatUptime(api?.uptime ?? 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Response</span>
+                  <span className="font-mono">{api?.responseTimeMs ?? 0}ms</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Heap Used</span>
+                  <span className="font-mono">{api?.memory?.heapUsedMB ?? 0}MB</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>RSS</span>
+                  <span className="font-mono">{api?.memory?.rssMB ?? 0}MB</span>
+                </div>
               </div>
             </div>
 
@@ -671,13 +1054,24 @@ export function AdminHealth() {
               <div className="flex items-center gap-2 mb-3">
                 <Database className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Database</span>
-                <span className={cn('ml-auto px-2 py-0.5 rounded-full text-xs', STATUS_STYLES[database?.status ?? 'down'])}>
+                <span
+                  className={cn(
+                    'ml-auto px-2 py-0.5 rounded-full text-xs',
+                    STATUS_STYLES[database?.status ?? 'down']
+                  )}
+                >
                   {database?.status ?? 'unknown'}
                 </span>
               </div>
               <div className="space-y-1.5 text-xs text-muted-foreground">
-                <div className="flex justify-between"><span>Latency</span><span className="font-mono">{database?.latencyMs ?? 0}ms</span></div>
-                <div className="flex justify-between"><span>Active Conn</span><span className="font-mono">{database?.activeConnections ?? 0}</span></div>
+                <div className="flex justify-between">
+                  <span>Latency</span>
+                  <span className="font-mono">{database?.latencyMs ?? 0}ms</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Active Conn</span>
+                  <span className="font-mono">{database?.activeConnections ?? 0}</span>
+                </div>
               </div>
             </div>
 
@@ -687,8 +1081,14 @@ export function AdminHealth() {
                 <span className="text-sm font-medium">Environment</span>
               </div>
               <div className="space-y-1.5 text-xs text-muted-foreground">
-                <div className="flex justify-between"><span>Node</span><span className="font-mono">{env?.nodeVersion ?? '—'}</span></div>
-                <div className="flex justify-between"><span>Platform</span><span className="font-mono">{env?.platform ?? '—'}</span></div>
+                <div className="flex justify-between">
+                  <span>Node</span>
+                  <span className="font-mono">{env?.nodeVersion ?? '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Platform</span>
+                  <span className="font-mono">{env?.platform ?? '—'}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -696,10 +1096,13 @@ export function AdminHealth() {
           {/* LLM Settings */}
           <LlmSettingsCard />
 
-          {/* Clawbot Summary Agent */}
+          {/* Enrichment Scheduler (adaptive, replaces Clawbot) */}
+          <EnrichmentSchedulerCard />
+
+          {/* Clawbot Summary Agent (legacy) */}
           <ClawbotCard />
 
-          {/* Batch Enrichment */}
+          {/* Batch Enrichment (manual) */}
           <BatchEnrichCard />
 
           {/* Table Sizes */}
@@ -710,15 +1113,24 @@ export function AdminHealth() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Table</th>
-                  <th className="text-right text-xs font-medium text-muted-foreground px-4 py-2">Rows</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">
+                    Table
+                  </th>
+                  <th className="text-right text-xs font-medium text-muted-foreground px-4 py-2">
+                    Rows
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {(database?.tableSizes ?? []).map((t: Record<string, unknown>) => (
-                  <tr key={t['table_name'] as string} className="border-b border-border last:border-0 hover:bg-muted/20">
+                  <tr
+                    key={t['table_name'] as string}
+                    className="border-b border-border last:border-0 hover:bg-muted/20"
+                  >
                     <td className="px-4 py-2 text-sm font-mono">{t['table_name'] as string}</td>
-                    <td className="px-4 py-2 text-sm text-right font-mono">{String(t['row_count'] ?? 0)}</td>
+                    <td className="px-4 py-2 text-sm text-right font-mono">
+                      {String(t['row_count'] ?? 0)}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -14,6 +14,7 @@ import { adminHealthRoutes } from './health';
 import { adminLlmRoutes } from './llm';
 import { adminEnrichmentRoutes } from './enrichment';
 import { adminClawbotRoutes } from './clawbot';
+import { adminEnrichmentSchedulerRoutes } from './enrichment-scheduler';
 
 /**
  * Admin routes plugin.
@@ -39,5 +40,6 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminLlmRoutes, { prefix: '/llm' });
   await fastify.register(adminEnrichmentRoutes, { prefix: '/enrichment' });
   await fastify.register(adminClawbotRoutes, { prefix: '/clawbot' });
+  await fastify.register(adminEnrichmentSchedulerRoutes, { prefix: '/enrichment-scheduler' });
   await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }
