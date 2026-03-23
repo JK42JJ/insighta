@@ -805,7 +805,7 @@ export async function systemBatchEnrich(
   const cards = await prisma.$queryRaw<{ vid: string; title: string }[]>`
     SELECT vid, title FROM (
       SELECT DISTINCT ON (c.url)
-        substring(c.url from 'v=([^&]+)') as vid,
+        extract_youtube_vid(c.url) as vid,
         COALESCE(c.title, c.metadata_title, 'Untitled') as title
       FROM public.user_local_cards c
       WHERE c.link_type IN ('youtube', 'youtube-shorts')
