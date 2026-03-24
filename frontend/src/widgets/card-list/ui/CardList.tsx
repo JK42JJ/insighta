@@ -55,7 +55,7 @@ function CardSlot({
       data-card-id={card.id}
       className={cn(
         'w-full transition-all duration-200 rounded-2xl relative',
-        isOver && 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-[1.02]'
+        isOver && 'border-2 border-dashed border-primary bg-primary/5 scale-[1.02]'
       )}
     >
       {children}

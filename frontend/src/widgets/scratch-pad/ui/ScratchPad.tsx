@@ -141,7 +141,7 @@ export function ScratchPad({
       className={cn(
         'relative px-4 py-3 rounded-xl transition-all duration-300',
         'bg-surface-light border border-border/40',
-        isDropTarget ? 'border-primary bg-primary/8 scale-[1.01]' : 'hover:border-border/60'
+        isDropTarget ? 'border-2 border-dashed border-primary bg-primary/5 scale-[1.01]' : 'hover:border-border/60'
       )}
       style={{ boxShadow: isDropTarget ? 'var(--shadow-lg)' : 'var(--shadow-sm)' }}
       onDragOver={handleDragOver}
