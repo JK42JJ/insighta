@@ -20,13 +20,12 @@ import { useAddLocalCard } from '@/features/card-management/model/useLocalCards'
 import { PlaylistItem } from './PlaylistItem';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/shared/ui/collapsible';
 import { cn } from '@/shared/lib/utils';
-import { Loader2, Plus, RefreshCw, Youtube, LogIn, ChevronDown, Tv, History, Hash, Search, ExternalLink, Check } from 'lucide-react';
-import { Badge } from '@/shared/ui/badge';
+import { Loader2, Plus, RefreshCw, Youtube, LogIn, ChevronDown, Tv, Hash, Search, ExternalLink, Check } from 'lucide-react';
 import type { SyncInterval } from '@/entities/youtube/model/types';
 
 const SYNC_INTERVAL_KEYS: SyncInterval[] = ['manual', '1h', '6h', '12h', '24h'];
 
-type SyncTab = 'playlists' | 'channels' | 'history' | 'hashtags';
+type SyncTab = 'playlists' | 'channels' | 'hashtags';
 
 export function YouTubeSyncCard() {
   const { toast } = useToast();
@@ -350,7 +349,6 @@ export function YouTubeSyncCard() {
               {([
                 { id: 'playlists' as SyncTab, icon: Youtube, label: 'Playlists' },
                 { id: 'channels' as SyncTab, icon: Tv, label: 'Channels' },
-                { id: 'history' as SyncTab, icon: History, label: 'History' },
                 { id: 'hashtags' as SyncTab, icon: Hash, label: 'Hashtags' },
               ]).map(({ id, icon: Icon, label }) => (
                 <button
@@ -365,11 +363,6 @@ export function YouTubeSyncCard() {
                 >
                   <Icon className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{label}</span>
-                  {id === 'history' && (
-                    <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0 h-4 border-muted-foreground/30 text-muted-foreground">
-                      Soon
-                    </Badge>
-                  )}
                 </button>
               ))}
             </div>
@@ -507,23 +500,6 @@ export function YouTubeSyncCard() {
                     </div>
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* History Tab — OAuth Required */}
-            {activeTab === 'history' && (
-              <div className="text-center py-12 text-muted-foreground space-y-4">
-                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto">
-                  <History className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="font-medium">Watch History Import</p>
-                  <p className="text-sm mt-1 max-w-md mx-auto">
-                    Importing watch history requires YouTube OAuth with extended permissions.
-                    This feature will be available in a future update.
-                  </p>
-                </div>
-                <Badge variant="outline" className="text-xs">Requires OAuth Scope Extension</Badge>
               </div>
             )}
 
