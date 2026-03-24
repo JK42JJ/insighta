@@ -372,6 +372,7 @@ model users {
   user_llm_keys               user_llm_keys[]
   UserVideoState              UserVideoState[]
   youtube_playlists              youtube_playlists[]
+  source_mandala_mappings     source_mandala_mappings[]
   youtube_sync_settings          youtube_sync_settings[]
   youtube_channels               youtube_channels[]
   youtube_subscriptions          youtube_subscriptions[]
@@ -405,6 +406,7 @@ model user_mandalas {
   subscriptions    mandala_subscriptions[]
   activity_logs    mandala_activity_log[]
   contentEntities  content_entities[]
+  sourceMappings   source_mandala_mappings[]
 
   @@index([user_id], map: "idx_user_mandalas_user_id")
   @@index([is_public], map: "idx_user_mandalas_is_public")
@@ -430,6 +432,22 @@ model user_mandala_levels {
 
   @@unique([mandala_id, level_key])
   @@index([mandala_id], map: "idx_user_mandala_levels_mandala_id")
+  @@schema("public")
+}
+
+model source_mandala_mappings {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String        @db.Uuid
+  source_type String        // 'playlist', 'channel', 'hashtag'
+  source_id   String        // youtube_playlist_id or channel_id
+  mandala_id  String        @db.Uuid
+  created_at  DateTime      @default(now()) @db.Timestamptz(6)
+
+  user    users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  mandala user_mandalas  @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, source_type, source_id, mandala_id])
+  @@index([user_id], map: "idx_source_mandala_mappings_user_id")
   @@schema("public")
 }
 

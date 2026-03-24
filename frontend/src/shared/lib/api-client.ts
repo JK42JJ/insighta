@@ -619,6 +619,45 @@ class ApiClient {
   }
 
   // ========================================
+  // Source-Mandala Mappings
+  // ========================================
+
+  async listSourceMappings(): Promise<{
+    mappings: Array<{
+      id: string;
+      source_type: string;
+      source_id: string;
+      mandala_id: string;
+      mandala: { id: string; title: string };
+      created_at: string;
+    }>;
+  }> {
+    return this.request('/mandalas/source-mappings');
+  }
+
+  async createSourceMappings(
+    sourceType: string,
+    sourceIds: string[],
+    mandalaId: string
+  ): Promise<{ created: number }> {
+    return this.request('/mandalas/source-mappings', {
+      method: 'POST',
+      body: JSON.stringify({ sourceType, sourceIds, mandalaId }),
+    });
+  }
+
+  async deleteSourceMapping(
+    sourceType: string,
+    sourceId: string,
+    mandalaId: string
+  ): Promise<{ deleted: boolean }> {
+    return this.request('/mandalas/source-mappings', {
+      method: 'DELETE',
+      body: JSON.stringify({ sourceType, sourceId, mandalaId }),
+    });
+  }
+
+  // ========================================
   // Mandala Share & Subscribe
   // ========================================
 

@@ -107,6 +107,7 @@ export function localCardToInsightCard(card: LocalCard): InsightCard {
     thumbnail: card.thumbnail || '',
     userNote: card.user_note || '',
     createdAt: new Date(card.created_at),
+    updatedAt: new Date(card.updated_at),
     cellIndex: card.cell_index,
     levelId: card.level_id,
     mandalaId: card.mandala_id,

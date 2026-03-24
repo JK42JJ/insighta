@@ -136,6 +136,7 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params;
       const body = SubscriptionUpdateSchema.parse(request.body);
+      const adminId = request.user.userId;
 
       const userCheck = await db.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM auth.users WHERE id = ${id}::uuid
@@ -146,24 +147,46 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
           .send(createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'User not found', request.url));
       }
 
+      // Capture old values for audit log
+      const oldSub = await db.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT tier, local_cards_limit, mandala_limit
+        FROM public.user_subscriptions WHERE user_id = ${id}::uuid
+      `;
+      const oldValues = oldSub[0] ?? { tier: DEFAULT_TIER, local_cards_limit: TIER_LIMITS.free.cards, mandala_limit: TIER_LIMITS.free.mandalas };
+
       // Build dynamic SET clause
       const setClauses: string[] = [];
       const setParams: unknown[] = [id]; // $1 = user_id
       let idx = 2;
 
+      // Resolve effective limits: explicit override > tier defaults > keep current
+      let effectiveCardsLimit = body.localCardsLimit;
+      let effectiveMandalaLimit = body.mandalaLimit;
+
       if (body.tier !== undefined) {
+        const tierKey = body.tier as keyof typeof TIER_LIMITS;
+        const tierDefaults = TIER_LIMITS[tierKey];
+
         setClauses.push(`tier = $${idx}`);
         setParams.push(body.tier);
         idx++;
+
+        // Auto-apply tier default limits unless explicitly overridden
+        if (effectiveCardsLimit === undefined) {
+          effectiveCardsLimit = tierDefaults.cards ?? 999_999;
+        }
+        if (effectiveMandalaLimit === undefined) {
+          effectiveMandalaLimit = tierDefaults.mandalas ?? 999_999;
+        }
       }
-      if (body.localCardsLimit !== undefined) {
+      if (effectiveCardsLimit !== undefined) {
         setClauses.push(`local_cards_limit = $${idx}`);
-        setParams.push(body.localCardsLimit);
+        setParams.push(effectiveCardsLimit);
         idx++;
       }
-      if (body.mandalaLimit !== undefined) {
+      if (effectiveMandalaLimit !== undefined) {
         setClauses.push(`mandala_limit = $${idx}`);
-        setParams.push(body.mandalaLimit);
+        setParams.push(effectiveMandalaLimit);
         idx++;
       }
 
@@ -180,7 +203,7 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
 
       const upsertQuery = `
         INSERT INTO public.user_subscriptions (user_id, ${columns.join(', ')})
-        VALUES ($1, ${valuePlaceholders.join(', ')})
+        VALUES ($1::uuid, ${valuePlaceholders.join(', ')})
         ON CONFLICT (user_id)
         DO UPDATE SET ${setClauses.join(', ')}, updated_at = NOW()
         RETURNING *
@@ -190,6 +213,19 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         upsertQuery,
         ...setParams
       );
+
+      // Write audit log
+      const newRow = result[0] ?? {};
+      const newValues = {
+        tier: newRow['tier'],
+        local_cards_limit: newRow['local_cards_limit'],
+        mandala_limit: newRow['mandala_limit'],
+      };
+      await db.$queryRaw`
+        INSERT INTO public.admin_audit_log (id, admin_id, action, target_type, target_id, old_value, new_value)
+        VALUES (gen_random_uuid(), ${adminId}::uuid, 'tier_change', 'user_subscription', ${id}::uuid,
+          ${JSON.stringify(oldValues)}::jsonb, ${JSON.stringify(newValues)}::jsonb)
+      `;
 
       return reply.send(createSuccessResponse(result[0]));
     }

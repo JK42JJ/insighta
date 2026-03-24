@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from 'next-themes';
-import { Moon, Sun, LogIn, Loader2, Menu } from 'lucide-react';
+import { Moon, Sun, LogIn, LogOut, HelpCircle, Loader2, Menu } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import {
@@ -13,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
 import { useAuth } from '@/features/auth/model/useAuth';
+import { useLocalCardsAsInsight } from '@/features/card-management/model/useLocalCards';
+import { TierBadge } from '@/shared/ui/tier-badge';
 
 interface AppHeaderProps {
   onMobileMenuOpen?: () => void;
@@ -21,13 +24,24 @@ interface AppHeaderProps {
 
 export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps) {
   const { t, i18n } = useTranslation();
-  const { isLoggedIn, isLoading, userName, userEmail, userAvatar } = useAuth();
+  const { isLoggedIn, isLoading, userName, userEmail, userAvatar, signOut } = useAuth();
+  const { subscription } = useLocalCardsAsInsight();
   const { theme, setTheme } = useTheme();
   const isDark = theme === 'dark';
   const navigate = useNavigate();
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const toggleTheme = () => setTheme(isDark ? 'light' : 'dark');
   const toggleLanguage = () => i18n.changeLanguage(i18n.language === 'ko' ? 'en' : 'ko');
+
+  const handleLogout = async () => {
+    setIsSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 h-14 bg-surface-mid/95 backdrop-blur-md border-b border-border/50">
@@ -106,6 +120,12 @@ export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps
           {isLoading ? (
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           ) : isLoggedIn ? (
+            <>
+              {/* Tier Badge — click navigates to subscription for free users */}
+              <TierBadge
+                tier={subscription.tier}
+                onClick={subscription.tier === 'free' ? () => navigate('/settings?tab=subscription') : undefined}
+              />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -140,8 +160,28 @@ export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps
                 <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
                   <Link to="/settings">{t('header.settings')}</Link>
                 </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-border/50" />
+                <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
+                  <Link to="/help">
+                    <HelpCircle className="w-4 h-4" />
+                    {t('header.help')}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  disabled={isSigningOut}
+                  className="gap-2 cursor-pointer text-destructive focus:text-destructive hover:bg-destructive/10"
+                >
+                  {isSigningOut ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <LogOut className="w-4 h-4" />
+                  )}
+                  {t('common.logout')}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </>
           ) : (
             <Button
               variant="outline"

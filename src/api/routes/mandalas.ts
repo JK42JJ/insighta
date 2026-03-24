@@ -1,6 +1,7 @@
 import { FastifyPluginCallback } from 'fastify';
 import { getMandalaManager } from '../../modules/mandala';
 import { getMood } from '../../modules/mandala/mood';
+import { getPrismaClient } from '../../modules/database/client';
 
 interface MandalaLevelBody {
   levelKey: string;
@@ -190,6 +191,102 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     return reply.send({ quota });
   });
 
+  // ═══ Source-Mandala Mappings (must be before /:id routes) ═══
+
+  fastify.get(
+    '/source-mappings',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const mappings = await getPrismaClient().source_mandala_mappings.findMany({
+        where: { user_id: userId },
+        include: { mandala: { select: { id: true, title: true } } },
+        orderBy: { created_at: 'desc' },
+      });
+
+      return reply.send({ mappings });
+    }
+  );
+
+  fastify.post<{
+    Body: { sourceType: string; sourceIds: string[]; mandalaId: string };
+  }>(
+    '/source-mappings',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const { sourceType, sourceIds, mandalaId } = request.body;
+
+      if (!sourceType || !sourceIds?.length || !mandalaId) {
+        return reply.code(400).send({ error: 'sourceType, sourceIds, and mandalaId are required' });
+      }
+
+      const VALID_SOURCE_TYPES = ['playlist', 'channel', 'hashtag'];
+      if (!VALID_SOURCE_TYPES.includes(sourceType)) {
+        return reply.code(400).send({ error: `sourceType must be one of: ${VALID_SOURCE_TYPES.join(', ')}` });
+      }
+
+      const mandala = await getPrismaClient().user_mandalas.findFirst({
+        where: { id: mandalaId, user_id: userId },
+      });
+      if (!mandala) {
+        return reply.code(404).send({ error: 'Mandala not found' });
+      }
+
+      const created = [];
+      for (const sourceId of sourceIds) {
+        try {
+          const mapping = await getPrismaClient().source_mandala_mappings.create({
+            data: {
+              user_id: userId,
+              source_type: sourceType,
+              source_id: sourceId,
+              mandala_id: mandalaId,
+            },
+          });
+          created.push(mapping);
+        } catch (err: any) {
+          if (err.code === 'P2002') continue;
+          throw err;
+        }
+      }
+
+      return reply.send({ created: created.length, mappings: created });
+    }
+  );
+
+  fastify.delete<{
+    Body: { sourceType: string; sourceId: string; mandalaId: string };
+  }>(
+    '/source-mappings',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const { sourceType, sourceId, mandalaId } = request.body;
+
+      if (!sourceType || !sourceId || !mandalaId) {
+        return reply.code(400).send({ error: 'sourceType, sourceId, and mandalaId are required' });
+      }
+
+      await getPrismaClient().source_mandala_mappings.deleteMany({
+        where: {
+          user_id: userId,
+          source_type: sourceType,
+          source_id: sourceId,
+          mandala_id: mandalaId,
+        },
+      });
+
+      return reply.send({ deleted: true });
+    }
+  );
+
   /**
    * GET /api/v1/mandalas/list - List all user mandalas with pagination
    */
@@ -242,7 +339,15 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       try {
         const manager = getMandalaManager();
-        const mandala = await manager.createMandala(userId, title.trim(), levels ?? []);
+        // Auto-create default root level with 8 empty sectors if no levels provided
+        const effectiveLevels = (levels && levels.length > 0) ? levels : [{
+          levelKey: 'root',
+          centerGoal: title.trim(),
+          subjects: ['', '', '', '', '', '', '', ''],
+          position: 0,
+          depth: 0,
+        }];
+        const mandala = await manager.createMandala(userId, title.trim(), effectiveLevels);
 
         // If this is the first (default) mandala, link unlinked cards (non-fatal)
         if (mandala.isDefault) {

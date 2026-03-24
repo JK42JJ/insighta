@@ -3,11 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import {
   Home,
-  Compass,
-  LayoutTemplate,
   Settings,
   User,
   CreditCard,
+  HelpCircle,
   LogOut,
   Loader2,
 } from 'lucide-react';
@@ -31,14 +30,13 @@ interface NavItem {
 
 const MAIN_NAV: NavItem[] = [
   { to: '/', icon: Home, labelKey: 'sidebar.home', exact: true },
-  { to: '/explore', icon: Compass, labelKey: 'sidebar.explore' },
-  { to: '/templates', icon: LayoutTemplate, labelKey: 'sidebar.templates' },
 ];
 
 const ACCOUNT_NAV: NavItem[] = [
   { to: '/profile', icon: User, labelKey: 'header.profile' },
   { to: '/subscription', icon: CreditCard, labelKey: 'header.subscription' },
   { to: '/settings', icon: Settings, labelKey: 'sidebar.settings' },
+  { to: '/help', icon: HelpCircle, labelKey: 'header.help' },
 ];
 
 export function MobileDrawer({ open, onOpenChange, onNavigateHome }: MobileDrawerProps) {
