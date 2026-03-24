@@ -137,7 +137,10 @@ export default function SettingsPage() {
             </div>
 
             {/* Profile Card */}
-            <div className="flex items-center gap-4 p-5 mb-4 bg-surface-mid border border-border/50 rounded-xl hover:border-border/80 transition-colors">
+            <div
+              className="flex items-center gap-4 p-5 mb-4 bg-surface-mid border border-border/50 rounded-xl hover:border-primary/40 hover:bg-surface-mid/80 cursor-pointer transition-colors"
+              onClick={() => navigate('/profile')}
+            >
               <Avatar className="w-14 h-14 border-2 border-primary/20">
                 <AvatarImage src={userAvatar ?? undefined} alt={userName || 'User'} />
                 <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">

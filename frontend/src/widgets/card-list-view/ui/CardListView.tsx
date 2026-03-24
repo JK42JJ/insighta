@@ -154,7 +154,7 @@ export function CardListView({
   const contextHeaderElement = (
     <ContextHeader
       title={title}
-      totalCardCount={totalCardCount ?? cards.length}
+      totalCardCount={cards.length}
       viewMode={effectiveViewMode}
       onViewModeChange={onViewModeChange}
       selectedCardIds={selectedCardIds}
@@ -199,8 +199,8 @@ export function CardListView({
       <div
         ref={setGridAreaRef}
         className={cn(
-          'animate-fade-in transition-all duration-200 rounded-lg',
-          isExternalCardDragActive && 'ring-2 ring-primary ring-inset bg-primary/10'
+          'animate-fade-in transition-all duration-200',
+          isExternalCardDragActive && '-mx-4 px-4 border-2 border-dashed border-primary bg-primary/5 rounded-md'
         )}
       >
         {contextHeaderElement}

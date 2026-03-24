@@ -775,10 +775,10 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
             <div
               ref={setDockedElRef}
               className={cn(
-                'relative transition-all duration-300 w-full',
+                'relative transition-all duration-300 w-full rounded-md',
                 'bg-surface-mid/95 backdrop-blur-sm',
                 isTop ? 'border-b border-border/50' : 'border-t border-border/50',
-                isActiveDropTarget && 'border-primary/60 bg-primary/5',
+                isActiveDropTarget && 'border-2 border-dashed border-primary bg-primary/5',
                 isDockedDragging && 'opacity-50'
               )}
               style={{ boxShadow: isActiveDropTarget ? 'var(--shadow-sm)' : 'none' }}
@@ -883,7 +883,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               'relative transition-all duration-300 h-full',
               'bg-surface-light/80',
               dockPosition === 'left' ? 'border-r border-border/40' : 'border-l border-border/40',
-              isActiveDropTarget && 'border-primary bg-primary/8',
+              isActiveDropTarget && 'border-2 border-dashed border-primary bg-primary/5',
               isDockedDragging && 'opacity-50',
               isAnimating && 'animate-fade-in'
             )}
@@ -1039,7 +1039,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           className={cn(
             'fixed rounded-xl transition-shadow duration-200',
             'bg-surface-mid/98 backdrop-blur-xl border border-border/60',
-            isActiveDropTarget && 'border-primary bg-primary/8',
+            isActiveDropTarget && 'border-2 border-dashed border-primary bg-primary/5',
             isDragging && 'cursor-grabbing',
             isResizing && 'cursor-se-resize'
           )}
