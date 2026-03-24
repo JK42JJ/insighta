@@ -1,6 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthContext } from '@/features/auth/model/AuthContext';
-import { PageLoader } from '@/shared/ui/PageLoader';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -10,8 +9,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, isLoading } = useAuthContext();
   const location = useLocation();
 
+  // Return null during auth check to prevent full-screen spinner flash.
+  // The previous page (or HTML shell background) stays visible until auth resolves.
   if (isLoading) {
-    return <PageLoader />;
+    return null;
   }
 
   if (!user) {
