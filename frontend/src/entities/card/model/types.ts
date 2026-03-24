@@ -34,6 +34,7 @@ export interface InsightCard {
   thumbnail: string;
   userNote: string;
   createdAt: Date;
+  updatedAt?: Date;
   cellIndex: number;
   levelId: string; // Which mandala level this card belongs to
   mandalaId?: string | null; // Which mandala this card belongs to

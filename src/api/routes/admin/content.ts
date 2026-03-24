@@ -94,7 +94,7 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
     setClauses.push('updated_at = NOW()');
 
     const result = await db.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      `UPDATE public.user_mandalas SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+      `UPDATE public.user_mandalas SET ${setClauses.join(', ')} WHERE id = $1::uuid RETURNING *`,
       ...params
     );
 

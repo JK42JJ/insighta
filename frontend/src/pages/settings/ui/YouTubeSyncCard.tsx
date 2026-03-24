@@ -19,6 +19,12 @@ import type { YouTubeSearchResult } from '@/features/youtube-sync/model/useYouTu
 import { useAddLocalCard } from '@/features/card-management/model/useLocalCards';
 import { PlaylistItem } from './PlaylistItem';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/shared/ui/collapsible';
+import {
+  useMandalaList,
+  useSourceMappings,
+  useCreateSourceMappings,
+  useDeleteSourceMapping,
+} from '@/features/mandala';
 import { cn } from '@/shared/lib/utils';
 import { Loader2, Plus, RefreshCw, Youtube, LogIn, ChevronDown, Tv, Hash, Search, ExternalLink, Check } from 'lucide-react';
 import type { SyncInterval } from '@/entities/youtube/model/types';
@@ -39,12 +45,48 @@ export function YouTubeSyncCard() {
   const [searchResults, setSearchResults] = useState<YouTubeSearchResult[]>([]);
   const [addedVideoIds, setAddedVideoIds] = useState<Set<string>>(new Set());
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [selectedPlaylists, setSelectedPlaylists] = useState<Set<string>>(new Set());
+  const [assignDropdownOpen, setAssignDropdownOpen] = useState(false);
+  const [assignSearch, setAssignSearch] = useState('');
 
   const youtubeAuth = useYouTubeAuth();
   const ytSync = useYouTubeSync();
   const updateSettings = useUpdateSyncSettings();
   const youtubeSearch = useYouTubeSearch();
   const addLocalCard = useAddLocalCard();
+
+  const { data: mandalaListData } = useMandalaList();
+  const mandalaOptions = mandalaListData?.mandalas ?? [];
+  const { data: sourceMappingsData } = useSourceMappings();
+  const createSourceMappings = useCreateSourceMappings();
+  const deleteSourceMapping = useDeleteSourceMapping();
+
+  // Build lookup: sourceId -> mandala titles with mandalaId
+  const sourceMappingLookup = (() => {
+    const lookup: Record<string, Array<{ mandalaId: string; title: string }>> = {};
+    for (const m of sourceMappingsData?.mappings ?? []) {
+      if (!lookup[m.source_id]) lookup[m.source_id] = [];
+      lookup[m.source_id].push({ mandalaId: m.mandala_id, title: m.mandala.title });
+    }
+    return lookup;
+  })();
+
+  const togglePlaylistSelection = (playlistId: string) => {
+    setSelectedPlaylists((prev) => {
+      const next = new Set(prev);
+      if (next.has(playlistId)) next.delete(playlistId);
+      else next.add(playlistId);
+      return next;
+    });
+  };
+
+  const toggleAllPlaylists = () => {
+    if (selectedPlaylists.size === playlists.length) {
+      setSelectedPlaylists(new Set());
+    } else {
+      setSelectedPlaylists(new Set(playlists.map((p) => p.id)));
+    }
+  };
 
   const syncInterval = (youtubeAuth.syncInterval as SyncInterval) || 'manual';
   const autoSyncEnabled = youtubeAuth.autoSyncEnabled;
@@ -257,6 +299,184 @@ export function YouTubeSyncCard() {
     }
   };
 
+  const handleAssignToMandala = async (mandalaId: string, mandalaTitle: string, targetPlaylists: typeof playlists) => {
+    const sourceIds = Array.from(selectedPlaylists)
+      .filter((id) => targetPlaylists.some((p) => p.id === id))
+      .map((id) => {
+        const p = targetPlaylists.find((pl) => pl.id === id);
+        return p?.youtube_playlist_id ?? id;
+      });
+    if (sourceIds.length === 0) return;
+
+    const sourceType = sourceIds[0]?.startsWith('UU') ? 'channel' : 'playlist';
+
+    try {
+      await createSourceMappings.mutateAsync({ sourceType, sourceIds, mandalaId });
+      toast({
+        title: t('youtube.assignedToMandala', 'Assigned to mandala'),
+        description: `${sourceIds.length} sources → ${mandalaTitle}`,
+      });
+      setSelectedPlaylists(new Set());
+    } catch {
+      toast({ title: t('common.error'), variant: 'destructive' });
+    }
+  };
+
+  const handleRemoveLabel = async (sourceId: string, mandalaId: string) => {
+    const sourceType = sourceId.startsWith('UU') ? 'channel' : 'playlist';
+    try {
+      await deleteSourceMapping.mutateAsync({ sourceType, sourceId, mandalaId });
+    } catch {
+      toast({ title: t('common.error'), variant: 'destructive' });
+    }
+  };
+
+  const renderBulkToolbar = (targetPlaylists: typeof playlists) => {
+    if (targetPlaylists.length === 0) return null;
+    const allSelected = targetPlaylists.every((p) => selectedPlaylists.has(p.id)) && targetPlaylists.length > 0;
+    const someSelected = targetPlaylists.some((p) => selectedPlaylists.has(p.id));
+    const selectedCount = targetPlaylists.filter((p) => selectedPlaylists.has(p.id)).length;
+
+    const toggleAll = () => {
+      setSelectedPlaylists((prev) => {
+        const next = new Set(prev);
+        if (allSelected) {
+          targetPlaylists.forEach((p) => next.delete(p.id));
+        } else {
+          targetPlaylists.forEach((p) => next.add(p.id));
+        }
+        return next;
+      });
+    };
+
+    return (
+      <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-light/50 border border-border/30">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={toggleAll}
+            className="w-3.5 h-3.5 rounded border-border accent-primary"
+          />
+          {someSelected ? `${selectedCount} selected` : t('youtube.selectAll', 'Select all')}
+        </label>
+        {someSelected && mandalaOptions.length > 0 && (
+          <div className="ml-auto relative">
+            <button
+              onClick={() => { setAssignDropdownOpen((v) => !v); setAssignSearch(''); }}
+              className="text-xs font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-1 rounded-md transition-colors flex items-center gap-1.5"
+            >
+              {t('youtube.assignToMandala', 'Assign to Mandala')}
+              <ChevronDown className={cn('w-3 h-3 transition-transform', assignDropdownOpen && 'rotate-180')} />
+            </button>
+            {assignDropdownOpen && (
+              <div className="absolute right-0 top-full mt-1 w-60 bg-surface-mid border border-border rounded-lg shadow-lg z-50 py-1">
+                <div className="px-2 pb-1">
+                  <input
+                    type="text"
+                    value={assignSearch}
+                    onChange={(e) => setAssignSearch(e.target.value)}
+                    placeholder={t('youtube.searchMandala', 'Search mandalas...')}
+                    className="w-full px-2.5 py-1.5 text-xs bg-surface-light border border-border/50 rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {mandalaOptions
+                    .filter((m) => !assignSearch || m.title.toLowerCase().includes(assignSearch.toLowerCase()))
+                    .map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          handleAssignToMandala(m.id, m.title, targetPlaylists);
+                          setAssignDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors flex items-center gap-2"
+                      >
+                        <span className="truncate">{m.title}</span>
+                        {m.isDefault && (
+                          <span className="text-[9px] font-bold text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded-full">Current</span>
+                        )}
+                      </button>
+                    ))}
+                  {mandalaOptions.filter((m) => !assignSearch || m.title.toLowerCase().includes(assignSearch.toLowerCase())).length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center py-3">{t('common.noResults', 'No results')}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderPlaylistList = (targetPlaylists: typeof playlists) => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    if (targetPlaylists.length === 0) {
+      return (
+        <div className="text-center py-8 text-muted-foreground">
+          <Youtube className="h-12 w-12 mx-auto mb-3 opacity-50" />
+          <p>{t('youtube.noPlaylists')}</p>
+          <p className="text-sm">{t('youtube.noPlaylistsHint')}</p>
+        </div>
+      );
+    }
+    return (
+      <div className="max-h-[480px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+        {targetPlaylists.map((playlist) => {
+          const labels = sourceMappingLookup[playlist.youtube_playlist_id] ?? [];
+          return (
+            <div key={playlist.id} className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                checked={selectedPlaylists.has(playlist.id)}
+                onChange={() => togglePlaylistSelection(playlist.id)}
+                className="w-3.5 h-3.5 mt-3.5 rounded border-border accent-primary shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <PlaylistItem
+                  playlist={playlist}
+                  onSync={handleSyncPlaylist}
+                  onDelete={handleDeletePlaylist}
+                  isSyncing={syncingPlaylistId === playlist.id}
+                  isDeleting={deletingPlaylistId === playlist.id}
+                />
+                {labels.length > 0 && (
+                  <div className="flex gap-1 flex-wrap mt-1 ml-1 mb-1">
+                    {labels.map((mapping) => (
+                      <span
+                        key={mapping.mandalaId}
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20"
+                      >
+                        {mapping.title}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveLabel(playlist.youtube_playlist_id, mapping.mandalaId);
+                          }}
+                          className="opacity-60 hover:opacity-100 transition-opacity text-[8px] ml-0.5"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   if (isAuthLoading) {
     return (
       <Card>
@@ -400,49 +620,36 @@ export function YouTubeSyncCard() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>
-                      {t('youtube.registeredPlaylists')} ({playlists.length})
+                      {t('youtube.registeredPlaylists')} ({playlists.filter(p => !p.youtube_playlist_id.startsWith('UU')).length})
                     </Label>
-                    {playlists.length > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleSyncAll}
-                        disabled={isSyncingAll}
-                      >
-                        {isSyncingAll ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                        )}
-                        {t('youtube.syncAll')}
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {playlists.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleSyncAll}
+                          disabled={isSyncingAll}
+                        >
+                          {isSyncingAll ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                          )}
+                          {t('youtube.syncAll')}
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
-                  {isLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : playlists.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Youtube className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p>{t('youtube.noPlaylists')}</p>
-                      <p className="text-sm">{t('youtube.noPlaylistsHint')}</p>
-                    </div>
-                  ) : (
-                    <div className="max-h-[480px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-                      {playlists.map((playlist) => (
-                        <PlaylistItem
-                          key={playlist.id}
-                          playlist={playlist}
-                          onSync={handleSyncPlaylist}
-                          onDelete={handleDeletePlaylist}
-                          isSyncing={syncingPlaylistId === playlist.id}
-                          isDeleting={deletingPlaylistId === playlist.id}
-                        />
-                      ))}
-                    </div>
-                  )}
+                  {(() => {
+                    const purePlaylists = playlists.filter(p => !p.youtube_playlist_id.startsWith('UU'));
+                    return (
+                      <>
+                        {renderBulkToolbar(purePlaylists)}
+                        {renderPlaylistList(purePlaylists)}
+                      </>
+                    );
+                  })()}
                 </div>
               </>
             )}
@@ -481,25 +688,16 @@ export function YouTubeSyncCard() {
                   </p>
                 </div>
 
-                {playlists.length > 0 && (
-                  <div className="space-y-2">
-                    <Label>Imported Channels ({playlists.filter(p => p.youtube_playlist_id.startsWith('UU')).length})</Label>
-                    <div className="max-h-[320px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-                      {playlists
-                        .filter(p => p.youtube_playlist_id.startsWith('UU'))
-                        .map((playlist) => (
-                          <PlaylistItem
-                            key={playlist.id}
-                            playlist={playlist}
-                            onSync={handleSyncPlaylist}
-                            onDelete={handleDeletePlaylist}
-                            isSyncing={syncingPlaylistId === playlist.id}
-                            isDeleting={deletingPlaylistId === playlist.id}
-                          />
-                        ))}
+                {(() => {
+                  const channelPlaylists = playlists.filter(p => p.youtube_playlist_id.startsWith('UU'));
+                  return channelPlaylists.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Imported Channels ({channelPlaylists.length})</Label>
+                      {renderBulkToolbar(channelPlaylists)}
+                      {renderPlaylistList(channelPlaylists)}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 

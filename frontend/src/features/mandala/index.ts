@@ -10,6 +10,10 @@ export {
   useSubscriptions,
   useSubscribeMandala,
   useUnsubscribeMandala,
+  useUpdateSectorNames,
+  useSourceMappings,
+  useCreateSourceMappings,
+  useDeleteSourceMapping,
 } from './model/useMandalaQuery';
 export {
   apiLevelsToRecord,

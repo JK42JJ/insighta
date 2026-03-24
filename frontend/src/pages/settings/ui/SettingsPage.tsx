@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from 'next-themes';
 import { AppShell } from '@/widgets/app-shell';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
@@ -8,11 +9,16 @@ import { Label } from '@/shared/ui/label';
 import { Switch } from '@/shared/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { Separator } from '@/shared/ui/separator';
-import { Bell, CreditCard, Globe, Palette, Shield, Trash2, Plug, Settings } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
+import { TierBadge } from '@/shared/ui/tier-badge';
+import { Trash2, Check } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { toast } from '@/shared/lib/use-toast';
+import { useAuth } from '@/features/auth/model/useAuth';
+import { useLocalCardsAsInsight } from '@/features/card-management/model/useLocalCards';
 import { YouTubeSyncCard } from './YouTubeSyncCard';
 import { LlmKeysSettingsTab } from './LlmKeysSettingsTab';
+import { MandalaSettingsTab } from './MandalaSettingsTab';
 import { SubscriptionSettingsTab } from './SubscriptionSettingsTab';
 import {
   AlertDialog,
@@ -28,45 +34,85 @@ import {
 
 type SettingsCategory =
   | 'general'
+  | 'mandalas'
   | 'appearance'
   | 'notifications'
   | 'integrations'
   | 'subscription'
   | 'data';
 
-const CATEGORIES: { id: SettingsCategory; icon: typeof Settings; labelKey: string }[] = [
-  { id: 'general', icon: Globe, labelKey: 'settings.general' },
-  { id: 'appearance', icon: Palette, labelKey: 'settings.appearance' },
-  { id: 'notifications', icon: Bell, labelKey: 'settings.notifications' },
-  { id: 'integrations', icon: Plug, labelKey: 'settings.integrations' },
-  { id: 'subscription', icon: CreditCard, labelKey: 'settings.subscription' },
-  { id: 'data', icon: Shield, labelKey: 'settings.dataPrivacy' },
+const VALID_TABS: SettingsCategory[] = [
+  'general', 'mandalas', 'appearance', 'notifications',
+  'integrations', 'subscription', 'data',
 ];
+
+/** Auto-save helper: persist to localStorage and dispatch event */
+function autoSave(key: string, value: Record<string, unknown>) {
+  localStorage.setItem(key, JSON.stringify(value));
+  window.dispatchEvent(new Event('app-settings-changed'));
+}
 
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
-  const [activeCategory, setActiveCategory] = useState<SettingsCategory>('general');
-  const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem('app-settings');
-    const parsed = saved ? JSON.parse(saved) : {};
-    return {
-      notifications: parsed.notifications ?? true,
-      emailUpdates: parsed.emailUpdates ?? false,
-      autoSave: parsed.autoSave ?? true,
-      language: i18n.language,
-      theme: parsed.theme ?? 'dark',
-      cardFlipOnHover: parsed.cardFlipOnHover ?? true,
-    };
-  });
+  const { userName, userEmail, userAvatar } = useAuth();
+  const { subscription } = useLocalCardsAsInsight();
+  const { theme, setTheme } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeCategory = (searchParams.get('tab') as SettingsCategory) || 'general';
 
-  const handleSave = () => {
-    localStorage.setItem('app-settings', JSON.stringify(settings));
-    window.dispatchEvent(new Event('app-settings-changed'));
+  // Redirect invalid tab to general
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && !VALID_TABS.includes(tab as SettingsCategory)) {
+      setSearchParams({ tab: 'general' }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  // Settings state with auto-save
+  const getSettings = () => {
+    try {
+      const saved = localStorage.getItem('app-settings');
+      const parsed = saved ? JSON.parse(saved) : {};
+      return {
+        notifications: parsed.notifications ?? true,
+        emailUpdates: parsed.emailUpdates ?? false,
+        syncCompletion: parsed.syncCompletion ?? true,
+        aiInsightReady: parsed.aiInsightReady ?? true,
+        autoSave: parsed.autoSave ?? true,
+        language: i18n.language,
+        theme: parsed.theme ?? 'dark',
+        cardFlipOnHover: parsed.cardFlipOnHover ?? true,
+        minimapHeatIntensity: parsed.minimapHeatIntensity ?? true,
+        minimapNumberOverlay: parsed.minimapNumberOverlay ?? false,
+        defaultView: parsed.defaultView ?? 'grid',
+      };
+    } catch {
+      return {
+        notifications: true, emailUpdates: false, syncCompletion: true,
+        aiInsightReady: true, autoSave: true, language: i18n.language,
+        theme: 'dark', cardFlipOnHover: true, minimapHeatIntensity: true,
+        minimapNumberOverlay: false, defaultView: 'grid',
+      };
+    }
+  };
+
+  // We read fresh each render to avoid stale closures
+  const settings = getSettings();
+
+  const updateSetting = (key: string, value: unknown) => {
+    const current = getSettings();
+    const updated = { ...current, [key]: value };
+    autoSave('app-settings', updated);
     toast({
       title: t('settings.settingsSaved'),
       description: t('settings.settingsSavedDesc'),
     });
+  };
+
+  const handleLanguageChange = (value: string) => {
+    i18n.changeLanguage(value);
+    updateSetting('language', value);
   };
 
   const handleDeleteData = () => {
@@ -79,235 +125,359 @@ export default function SettingsPage() {
     navigate('/');
   };
 
-  const handleLanguageChange = (value: string) => {
-    setSettings({ ...settings, language: value });
-    i18n.changeLanguage(value);
-  };
-
   return (
     <AppShell>
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
-        <h1 className="text-2xl font-bold text-foreground mb-6">{t('settings.title')}</h1>
+      <div className="px-6 md:px-10 py-8 max-w-3xl">
+        {/* General */}
+        {activeCategory === 'general' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.general')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.generalDesc', 'Profile and basic app settings')}</p>
+            </div>
 
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Left sidebar nav */}
-          <nav className="md:w-48 flex-shrink-0">
-            <ul className="flex md:flex-col gap-1 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0">
-              {CATEGORIES.map(({ id, icon: Icon, labelKey }) => (
-                <li key={id}>
-                  <button
-                    onClick={() => setActiveCategory(id)}
-                    className={cn(
-                      'flex items-center gap-2 px-3 py-2 rounded-md text-sm whitespace-nowrap w-full text-left transition-colors',
-                      activeCategory === id
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                    )}
-                  >
-                    <Icon className="w-4 h-4 flex-shrink-0" />
-                    {t(labelKey)}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          {/* Right content area */}
-          <div className="flex-1 space-y-6">
-            {/* General */}
-            {activeCategory === 'general' && (
-              <Card className="bg-surface-mid border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg">{t('settings.general', 'General')}</CardTitle>
-                  <CardDescription>{t('settings.languageDesc')}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="language">{t('settings.languageSelect')}</Label>
-                      <p className="text-sm text-muted-foreground">
-                        {t('settings.languageSelectDesc')}
-                      </p>
-                    </div>
-                    <Select value={settings.language} onValueChange={handleLanguageChange}>
-                      <SelectTrigger className="w-32 bg-surface-light border-border/50">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ko">한국어</SelectItem>
-                        <SelectItem value="en">English</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Separator className="bg-border/50" />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="autoSave">{t('settings.autoSave')}</Label>
-                      <p className="text-sm text-muted-foreground">{t('settings.autoSaveDesc')}</p>
-                    </div>
-                    <Switch
-                      id="autoSave"
-                      checked={settings.autoSave}
-                      onCheckedChange={(checked) => setSettings({ ...settings, autoSave: checked })}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Appearance */}
-            {activeCategory === 'appearance' && (
-              <Card className="bg-surface-mid border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg">{t('settings.appearance')}</CardTitle>
-                  <CardDescription>{t('settings.appearanceDesc')}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="theme">{t('settings.theme')}</Label>
-                      <p className="text-sm text-muted-foreground">{t('settings.themeDesc')}</p>
-                    </div>
-                    <Select
-                      value={settings.theme}
-                      onValueChange={(value) => setSettings({ ...settings, theme: value })}
-                    >
-                      <SelectTrigger className="w-32 bg-surface-light border-border/50">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="light">{t('settings.themeLight')}</SelectItem>
-                        <SelectItem value="dark">{t('settings.themeDark')}</SelectItem>
-                        <SelectItem value="system">{t('settings.themeSystem')}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Separator className="bg-border/50" />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="cardFlipOnHover">{t('settings.cardFlipOnHover')}</Label>
-                      <p className="text-sm text-muted-foreground">
-                        {t('settings.cardFlipOnHoverDesc')}
-                      </p>
-                    </div>
-                    <Switch
-                      id="cardFlipOnHover"
-                      checked={settings.cardFlipOnHover}
-                      onCheckedChange={(checked) =>
-                        setSettings({ ...settings, cardFlipOnHover: checked })
-                      }
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Notifications */}
-            {activeCategory === 'notifications' && (
-              <Card className="bg-surface-mid border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg">{t('settings.notifications')}</CardTitle>
-                  <CardDescription>{t('settings.notificationsDesc')}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="notifications">{t('settings.pushNotifications')}</Label>
-                      <p className="text-sm text-muted-foreground">
-                        {t('settings.pushNotificationsDesc')}
-                      </p>
-                    </div>
-                    <Switch
-                      id="notifications"
-                      checked={settings.notifications}
-                      onCheckedChange={(checked) =>
-                        setSettings({ ...settings, notifications: checked })
-                      }
-                    />
-                  </div>
-                  <Separator className="bg-border/50" />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="emailUpdates">{t('settings.emailNotifications')}</Label>
-                      <p className="text-sm text-muted-foreground">
-                        {t('settings.emailNotificationsDesc')}
-                      </p>
-                    </div>
-                    <Switch
-                      id="emailUpdates"
-                      checked={settings.emailUpdates}
-                      onCheckedChange={(checked) =>
-                        setSettings({ ...settings, emailUpdates: checked })
-                      }
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Integrations */}
-            {activeCategory === 'integrations' && (
-              <div className="space-y-6">
-                <YouTubeSyncCard />
-                <LlmKeysSettingsTab />
+            {/* Profile Card */}
+            <div className="flex items-center gap-4 p-5 mb-4 bg-surface-mid border border-border/50 rounded-xl hover:border-border/80 transition-colors">
+              <Avatar className="w-14 h-14 border-2 border-primary/20">
+                <AvatarImage src={userAvatar ?? undefined} alt={userName || 'User'} />
+                <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">
+                  {userName?.charAt(0)?.toUpperCase() || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-bold text-foreground">{userName || 'User'}</span>
+                  <TierBadge tier={subscription.tier} />
+                </div>
+                <p className="text-sm text-muted-foreground truncate">{userEmail || ''}</p>
               </div>
-            )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-border/50 text-muted-foreground hover:text-foreground"
+                onClick={() => navigate('/profile')}
+              >
+                {t('settings.editProfile', 'Edit Profile')}
+              </Button>
+            </div>
 
-            {/* Subscription */}
-            {activeCategory === 'subscription' && <SubscriptionSettingsTab />}
-
-            {/* Data & Privacy */}
-            {activeCategory === 'data' && (
-              <Card className="bg-surface-mid border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg">{t('settings.dataPrivacy')}</CardTitle>
-                  <CardDescription>{t('settings.dataPrivacyDesc')}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-destructive">{t('settings.deleteAllData')}</Label>
-                      <p className="text-sm text-muted-foreground">
-                        {t('settings.deleteAllDataDesc')}
-                      </p>
-                    </div>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" className="gap-2">
-                          <Trash2 className="w-4 h-4" />
-                          {t('common.delete')}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="bg-surface-mid border-border/50">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>{t('settings.deleteConfirmTitle')}</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            {t('settings.deleteConfirmDesc')}
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="bg-surface-light border-border/50">
-                            {t('common.cancel')}
-                          </AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={handleDeleteData}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            {t('common.delete')}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+            <Card className="bg-surface-mid border-border/50">
+              <CardContent className="divide-y divide-border/30">
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="language">{t('settings.languageSelect')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.languageSelectDesc')}</p>
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                  <Select value={settings.language} onValueChange={handleLanguageChange}>
+                    <SelectTrigger className="w-32 bg-surface-light border-border/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ko">한국어</SelectItem>
+                      <SelectItem value="en">English</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="autoSave">{t('settings.autoSave')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.autoSaveDesc')}</p>
+                  </div>
+                  <Switch
+                    id="autoSave"
+                    checked={settings.autoSave}
+                    onCheckedChange={(checked) => updateSetting('autoSave', checked)}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="defaultView">{t('settings.defaultView', 'Default View')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.defaultViewDesc', 'Starting view when opening a mandala')}</p>
+                  </div>
+                  <Select value={settings.defaultView} onValueChange={(v) => updateSetting('defaultView', v)}>
+                    <SelectTrigger className="w-32 bg-surface-light border-border/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="grid">{t('viewMode.grid', 'Grid')}</SelectItem>
+                      <SelectItem value="list">{t('viewMode.list', 'List')}</SelectItem>
+                      <SelectItem value="listDetail">{t('viewMode.listDetail', 'List Detail')}</SelectItem>
+                      <SelectItem value="insights">{t('viewMode.insights', 'Insights')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
 
-            <Button onClick={handleSave} className="w-full md:w-auto">
-              {t('settings.saveSettings')}
-            </Button>
-          </div>
-        </div>
+        {/* Mandalas */}
+        {activeCategory === 'mandalas' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.mandalas')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.mandalaDesc')}</p>
+            </div>
+            <MandalaSettingsTab />
+          </>
+        )}
+
+        {/* Appearance */}
+        {activeCategory === 'appearance' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.appearance')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.appearanceDesc')}</p>
+            </div>
+
+            {/* Theme 3-way Preview Card */}
+            <Card className="bg-surface-mid border-border/50 mb-4">
+              <CardContent className="p-5">
+                <Label className="mb-3 block">{t('settings.theme')}</Label>
+                <div className="grid grid-cols-3 gap-3">
+                  {(['light', 'dark', 'system'] as const).map((opt) => {
+                    const isSelected = theme === opt;
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => {
+                          setTheme(opt);
+                          updateSetting('theme', opt);
+                        }}
+                        className={cn(
+                          'relative p-3 rounded-xl border-2 transition-all duration-200 text-center',
+                          isSelected
+                            ? 'border-primary shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]'
+                            : 'border-border hover:border-muted-foreground/40'
+                        )}
+                      >
+                        {isSelected && (
+                          <span className="absolute top-2 right-2 w-5 h-5 bg-primary rounded-full flex items-center justify-center animate-in zoom-in-50 duration-300">
+                            <Check className="w-3 h-3 text-primary-foreground" />
+                          </span>
+                        )}
+                        <div
+                          className={cn(
+                            'w-full h-12 rounded-lg mb-2.5 relative overflow-hidden',
+                            opt === 'dark' && 'bg-gradient-to-br from-[hsl(220,16%,8%)] to-[hsl(220,13%,18%)]',
+                            opt === 'light' && 'bg-gradient-to-br from-[hsl(220,14%,96%)] to-white',
+                            opt === 'system' && 'bg-gradient-to-r from-[hsl(220,16%,8%)] via-[hsl(220,16%,8%)] to-white'
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              'absolute bottom-1.5 left-1/2 -translate-x-1/2 w-2/5 h-1 rounded-full',
+                              opt === 'dark' && 'bg-primary',
+                              opt === 'light' && 'bg-primary/80',
+                              opt === 'system' && 'bg-gradient-to-r from-primary to-primary/80'
+                            )}
+                          />
+                        </div>
+                        <span className={cn(
+                          'text-xs font-semibold',
+                          isSelected ? 'text-primary' : 'text-muted-foreground'
+                        )}>
+                          {t(`settings.theme${opt.charAt(0).toUpperCase() + opt.slice(1)}`)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-surface-mid border-border/50">
+              <CardContent className="divide-y divide-border/30">
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="cardFlipOnHover">{t('settings.cardFlipOnHover')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.cardFlipOnHoverDesc')}</p>
+                  </div>
+                  <Switch
+                    id="cardFlipOnHover"
+                    checked={settings.cardFlipOnHover}
+                    onCheckedChange={(checked) => updateSetting('cardFlipOnHover', checked)}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="minimapHeat">{t('settings.minimapHeatIntensity', 'Minimap heat intensity')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.minimapHeatIntensityDesc', 'Show card density as color opacity')}</p>
+                  </div>
+                  <Switch
+                    id="minimapHeat"
+                    checked={settings.minimapHeatIntensity}
+                    onCheckedChange={(checked) => updateSetting('minimapHeatIntensity', checked)}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="minimapNumbers">{t('settings.minimapNumberOverlay', 'Minimap number overlay')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.minimapNumberOverlayDesc', 'Show card counts (#) in minimap cells')}</p>
+                  </div>
+                  <Switch
+                    id="minimapNumbers"
+                    checked={settings.minimapNumberOverlay}
+                    onCheckedChange={(checked) => updateSetting('minimapNumberOverlay', checked)}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {/* Notifications */}
+        {activeCategory === 'notifications' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.notifications')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.notificationsDesc')}</p>
+            </div>
+            <Card className="bg-surface-mid border-border/50">
+              <CardContent className="divide-y divide-border/30">
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="notifications">{t('settings.pushNotifications')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.pushNotificationsDesc')}</p>
+                  </div>
+                  <Switch
+                    id="notifications"
+                    checked={settings.notifications}
+                    onCheckedChange={(checked) => updateSetting('notifications', checked)}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="emailUpdates">{t('settings.emailNotifications')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.emailNotificationsDesc')}</p>
+                  </div>
+                  <Switch
+                    id="emailUpdates"
+                    checked={settings.emailUpdates}
+                    onCheckedChange={(checked) => updateSetting('emailUpdates', checked)}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="syncCompletion">{t('settings.syncCompletion', 'Sync completion')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.syncCompletionDesc', 'Notify when YouTube sync completes')}</p>
+                  </div>
+                  <Switch
+                    id="syncCompletion"
+                    checked={settings.syncCompletion}
+                    onCheckedChange={(checked) => updateSetting('syncCompletion', checked)}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="aiInsightReady">{t('settings.aiInsightReady', 'AI insight ready')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.aiInsightReadyDesc', 'Notify when AI summary is available')}</p>
+                  </div>
+                  <Switch
+                    id="aiInsightReady"
+                    checked={settings.aiInsightReady}
+                    onCheckedChange={(checked) => updateSetting('aiInsightReady', checked)}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {/* Integrations */}
+        {activeCategory === 'integrations' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.integrations')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.integrationsDesc', 'Manage connected services and API keys')}</p>
+            </div>
+            <div className="space-y-6">
+              <YouTubeSyncCard />
+              <LlmKeysSettingsTab />
+            </div>
+          </>
+        )}
+
+        {/* Subscription */}
+        {activeCategory === 'subscription' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.subscription')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.subscriptionDesc')}</p>
+            </div>
+            <SubscriptionSettingsTab />
+          </>
+        )}
+
+        {/* Data & Privacy */}
+        {activeCategory === 'data' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.dataPrivacy')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.dataPrivacyDesc')}</p>
+            </div>
+            <Card className="bg-surface-mid border-border/50">
+              <CardContent className="divide-y divide-border/30">
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label>{t('settings.exportData', 'Export Data')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.exportDataDesc', 'Download all your data as JSON')}</p>
+                  </div>
+                  <Button variant="outline" size="sm" className="border-border/50">
+                    {t('settings.exportBtn', 'Export JSON')}
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label className="text-destructive">{t('settings.deleteAllData')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.deleteAllDataDesc')}</p>
+                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" className="gap-2">
+                        <Trash2 className="w-4 h-4" />
+                        {t('common.delete')}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-surface-mid border-border/50">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{t('settings.deleteConfirmTitle')}</AlertDialogTitle>
+                        <AlertDialogDescription>{t('settings.deleteConfirmDesc')}</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-surface-light border-border/50">
+                          {t('common.cancel')}
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleDeleteData}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          {t('common.delete')}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label>{t('settings.termsOfService', 'Terms of Service')}</Label>
+                  </div>
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">
+                    {t('settings.viewTerms', 'View')}
+                  </a>
+                </div>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label>{t('settings.privacyPolicy', 'Privacy Policy')}</Label>
+                  </div>
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">
+                    {t('settings.viewPolicy', 'View')}
+                  </a>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </AppShell>
   );

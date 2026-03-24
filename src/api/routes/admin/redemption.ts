@@ -172,7 +172,7 @@ export async function adminBulkRoutes(fastify: FastifyInstance) {
 
       await db.$queryRawUnsafe(
         `INSERT INTO public.user_subscriptions (user_id, ${columns.join(', ')})
-         VALUES ($1, ${valuePlaceholders.join(', ')})
+         VALUES ($1::uuid, ${valuePlaceholders.join(', ')})
          ON CONFLICT (user_id) DO UPDATE SET ${setClauses.join(', ')}, updated_at = NOW()`,
         userId,
         ...params

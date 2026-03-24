@@ -45,6 +45,7 @@ export const queryKeys = {
     quota: () => [...queryKeys.mandala.all, 'quota'] as const,
     subscriptions: () => [...queryKeys.mandala.all, 'subscriptions'] as const,
     mood: (id: string) => [...queryKeys.mandala.all, 'mood', id] as const,
+    sourceMappings: () => [...queryKeys.mandala.all, 'source-mappings'] as const,
   },
   uiPreferences: {
     all: ['ui-preferences'] as const,

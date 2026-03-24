@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/lib/api-client';
-import { Search, ChevronLeft, ChevronRight, Shield, Ban } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Shield, Ban, Pencil } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { toast } from '@/shared/lib/use-toast';
 
 export function AdminUsers() {
   const queryClient = useQueryClient();
@@ -29,11 +30,30 @@ export function AdminUsers() {
     enabled: !!selectedUserId,
   });
 
+  const [tierEditTarget, setTierEditTarget] = useState<{
+    id: string;
+    email: string;
+    currentTier: string;
+    newTier: string;
+  } | null>(null);
+
   const tierMutation = useMutation({
     mutationFn: ({ id, tier }: { id: string; tier: string }) =>
       apiClient.updateUserSubscription(id, { tier }),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin'] });
+      toast({
+        title: 'Tier updated',
+        description: `${tierEditTarget?.email ?? 'User'}: ${tierEditTarget?.currentTier} → ${variables.tier}`,
+      });
+      setTierEditTarget(null);
+    },
+    onError: () => {
+      toast({
+        title: 'Failed to update tier',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -167,18 +187,20 @@ export function AdminUsers() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                        <select
-                          value={user.tier as string}
-                          onChange={(e) =>
-                            tierMutation.mutate({ id: uid, tier: e.target.value })
+                        <button
+                          onClick={() =>
+                            setTierEditTarget({
+                              id: uid,
+                              email: user.email as string,
+                              currentTier: user.tier as string,
+                              newTier: user.tier as string,
+                            })
                           }
-                          className="text-xs px-1.5 py-1 rounded border border-border bg-background"
+                          className="text-xs px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 flex items-center gap-1"
                         >
-                          <option value="free">Free</option>
-                          <option value="pro">Pro</option>
-                          <option value="lifetime">Lifetime</option>
-                          <option value="admin">Admin</option>
-                        </select>
+                          <Pencil className="h-3 w-3" />
+                          Edit
+                        </button>
                         <button
                           onClick={() =>
                             statusMutation.mutate({ id: uid, banned: !isBanned })
@@ -223,6 +245,72 @@ export function AdminUsers() {
             >
               <ChevronRight className="h-4 w-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tier Edit Dialog */}
+      {tierEditTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border border-border rounded-lg shadow-lg w-96 p-6">
+            <h3 className="text-lg font-semibold mb-1">Edit Subscription Tier</h3>
+            <p className="text-sm text-muted-foreground mb-4">{tierEditTarget.email}</p>
+
+            <div className="mb-4">
+              <label className="text-xs text-muted-foreground block mb-1">Current Tier</label>
+              <span className="text-sm font-medium capitalize">{tierEditTarget.currentTier}</span>
+            </div>
+
+            <div className="mb-6">
+              <label className="text-xs text-muted-foreground block mb-1">New Tier</label>
+              <select
+                value={tierEditTarget.newTier}
+                onChange={(e) =>
+                  setTierEditTarget({ ...tierEditTarget, newTier: e.target.value })
+                }
+                className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm"
+              >
+                <option value="free">Free</option>
+                <option value="pro">Pro</option>
+                <option value="lifetime">Lifetime</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            {tierEditTarget.currentTier !== tierEditTarget.newTier && (
+              <div className="mb-4 px-3 py-2 rounded-md bg-amber-500/10 text-amber-500 text-xs">
+                {tierEditTarget.currentTier} → {tierEditTarget.newTier}
+                {' — This change will be recorded in the audit log.'}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setTierEditTarget(null)}
+                className="text-sm px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (tierEditTarget.currentTier === tierEditTarget.newTier) {
+                    setTierEditTarget(null);
+                    return;
+                  }
+                  tierMutation.mutate({
+                    id: tierEditTarget.id,
+                    tier: tierEditTarget.newTier,
+                  });
+                }}
+                disabled={
+                  tierEditTarget.currentTier === tierEditTarget.newTier ||
+                  tierMutation.isPending
+                }
+                className="text-sm px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {tierMutation.isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
           </div>
         </div>
       )}

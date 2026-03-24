@@ -25,7 +25,7 @@ import {
   getTemplateTranslation,
 } from '@/shared/data/mandalaTemplates';
 import { MandalaLevel } from '@/entities/card/model/types';
-import { mockMandalaLevels } from '@/shared/data/mockData';
+import { EMPTY_ROOT_LEVELS } from '@/shared/data/mockData';
 import {
   useMandalaQuery,
   useMandalaList,
@@ -64,7 +64,7 @@ export default function MandalaSettingsPage() {
 
   // Derive mandala data from query
   const [mandalaData, setMandalaData] = useState<MandalaLevel>(() => {
-    return queryLevels['root'] || mockMandalaLevels['root'];
+    return queryLevels['root'] || EMPTY_ROOT_LEVELS['root'];
   });
 
   // Derive L2 sub-levels from query
@@ -263,7 +263,7 @@ export default function MandalaSettingsPage() {
     const hasContent =
       mandalaData.centerGoal !== '2024 Goals' ||
       mandalaData.subjects.some(
-        (s) => s !== mockMandalaLevels['root'].subjects[mandalaData.subjects.indexOf(s)]
+        (s) => s !== '' && s !== EMPTY_ROOT_LEVELS['root'].subjects[mandalaData.subjects.indexOf(s)]
       );
 
     if (hasContent) {

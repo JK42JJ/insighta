@@ -2,8 +2,19 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { apiClient, ApiHttpError, type MandalaResponse } from '@/shared/lib/api-client';
 import { queryKeys } from '@/shared/config/query-client';
 import { useAuth } from '@/features/auth/model/useAuth';
-import { mockMandalaLevels } from '@/shared/data/mockData';
 import type { MandalaLevel } from '@/entities/card/model/types';
+
+/** Fallback empty root level — used when no mandala exists in DB */
+const EMPTY_ROOT_LEVELS: Record<string, MandalaLevel> = {
+  root: {
+    id: 'root',
+    centerGoal: '',
+    subjects: ['', '', '', '', '', '', '', ''],
+    parentId: null,
+    parentCellIndex: null,
+    cards: [],
+  },
+};
 import {
   apiLevelsToRecord,
   recordToApiLevels,
@@ -33,7 +44,7 @@ export function useMandalaQuery(mandalaId?: string | null) {
       } catch (err: unknown) {
         // 404 means no mandala in DB — MigrationPrompt will handle localStorage migration
         if (err instanceof ApiHttpError && err.statusCode === 404) {
-          return mockMandalaLevels;
+          return EMPTY_ROOT_LEVELS;
         }
         throw err;
       }
@@ -68,7 +79,7 @@ export function useMandalaQuery(mandalaId?: string | null) {
   });
 
   return {
-    mandalaLevels: mandalaLevels && 'root' in mandalaLevels ? mandalaLevels : mockMandalaLevels,
+    mandalaLevels: mandalaLevels && 'root' in mandalaLevels ? mandalaLevels : EMPTY_ROOT_LEVELS,
     isLoading,
     isSaving: saveMutation.isPending,
     error,
@@ -237,6 +248,37 @@ export function useSubscribeMandala() {
   });
 }
 
+export function useUpdateSectorNames() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      mandalaId,
+      centerGoal,
+      subjects,
+    }: {
+      mandalaId: string;
+      centerGoal: string;
+      subjects: string[];
+    }) => {
+      return apiClient.updateMandalaLevels(mandalaId, [
+        {
+          levelKey: 'root',
+          centerGoal,
+          subjects,
+          position: 0,
+          depth: 0,
+        },
+      ]);
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.detail(vars.mandalaId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
+    },
+  });
+}
+
 export function useUnsubscribeMandala() {
   const queryClient = useQueryClient();
 
@@ -244,6 +286,59 @@ export function useUnsubscribeMandala() {
     mutationFn: (mandalaId: string) => apiClient.unsubscribeMandala(mandalaId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.mandala.subscriptions() });
+    },
+  });
+}
+
+// ========================================
+// Source-Mandala Mappings
+// ========================================
+
+export function useSourceMappings() {
+  const { isLoggedIn, isTokenReady } = useAuth();
+
+  return useQuery({
+    queryKey: queryKeys.mandala.sourceMappings(),
+    queryFn: () => apiClient.listSourceMappings(),
+    enabled: isLoggedIn && isTokenReady,
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateSourceMappings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sourceType,
+      sourceIds,
+      mandalaId,
+    }: {
+      sourceType: string;
+      sourceIds: string[];
+      mandalaId: string;
+    }) => apiClient.createSourceMappings(sourceType, sourceIds, mandalaId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.sourceMappings() });
+    },
+  });
+}
+
+export function useDeleteSourceMapping() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sourceType,
+      sourceId,
+      mandalaId,
+    }: {
+      sourceType: string;
+      sourceId: string;
+      mandalaId: string;
+    }) => apiClient.deleteSourceMapping(sourceType, sourceId, mandalaId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.sourceMappings() });
     },
   });
 }

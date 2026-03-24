@@ -168,7 +168,7 @@ export async function adminPromotionRoutes(fastify: FastifyInstance) {
     setClauses.push('updated_at = NOW()');
 
     const result = await db.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      `UPDATE public.admin_promotions SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+      `UPDATE public.admin_promotions SET ${setClauses.join(', ')} WHERE id = $1::uuid RETURNING *`,
       ...params
     );
 

@@ -1,12 +1,14 @@
 import { useState, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { AppHeader } from './AppHeader';
 import { MobileDrawer } from './MobileDrawer';
+import type { MinimapData } from './SidebarMandalaSection';
 
 interface AppShellProps {
   children: React.ReactNode;
   onNavigateHome?: () => void;
-  mandalaGridElement?: React.ReactNode;
+  minimapData?: MinimapData;
   selectedMandalaId: string | null;
   onMandalaSelect: (id: string) => void;
   searchBarElement?: React.ReactNode;
@@ -36,11 +38,13 @@ function getInitialSize(): 'compact' | 'wide' {
 export function AppShell({
   children,
   onNavigateHome,
-  mandalaGridElement,
+  minimapData,
   selectedMandalaId,
   onMandalaSelect,
   searchBarElement,
 }: AppShellProps) {
+  const location = useLocation();
+  const isSettingsRoute = location.pathname.startsWith('/settings');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialCollapsed);
   const [sidebarSize, setSidebarSize] = useState<'compact' | 'wide'>(getInitialSize);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -75,14 +79,15 @@ export function AppShell({
 
       <div className="flex-1 flex overflow-hidden">
         <Sidebar
-          collapsed={sidebarCollapsed}
+          collapsed={isSettingsRoute ? false : sidebarCollapsed}
           sidebarSize={sidebarCollapsed ? 'compact' : sidebarSize}
           onToggleCollapse={handleToggleCollapse}
           onToggleSize={sidebarCollapsed ? undefined : handleToggleSize}
           onNavigateHome={onNavigateHome}
-          mandalaGridElement={mandalaGridElement}
+          minimapData={minimapData}
           selectedMandalaId={selectedMandalaId}
           onMandalaSelect={onMandalaSelect}
+          settingsMode={isSettingsRoute}
         />
 
         <main id="main-content" className="flex-1 overflow-y-auto">

@@ -17,6 +17,7 @@ import { FloatingScratchPad } from '@/widgets/scratch-pad/ui/FloatingScratchPad'
 import { MandalaPanel } from '@/widgets/mandala-panel';
 import { MandalaGrid } from '@/widgets/mandala-grid/ui/MandalaGrid';
 import { MobileBottomNav } from '@/widgets/mobile-nav';
+import { InsightsView } from '@/widgets/insights-view';
 
 import { useMandalaQuery, useMandalaList, useSwitchMandala } from '@/features/mandala';
 import { useSearchCards, SearchBar } from '@/features/search';
@@ -520,7 +521,14 @@ function AuthenticatedApp() {
     >
       <AppShell
         onNavigateHome={() => navigation.handleNavigate('root')}
-        mandalaGridElement={mandalaGridElement()}
+        minimapData={{
+          cardsByCell: cards.cardsByCell,
+          sectorSubjects: navigation.currentLevel.subjects,
+          centerGoal: navigation.currentLevel.centerGoal,
+          selectedCellIndex: navigation.selectedCellIndex,
+          onCellClick: navigation.handleCellClick,
+          mandalaId: selectedMandalaId,
+        }}
         selectedMandalaId={selectedMandalaId}
         onMandalaSelect={handleMandalaSelect}
         searchBarElement={
@@ -609,35 +617,48 @@ function AuthenticatedApp() {
                   }}
                 />
               </div>
-              <CardListView
-                cards={search.isSearchActive ? search.results : cards.displayCards}
-                isLoading={search.isSearchActive ? search.isLoading : cards.isLoading}
-                title={search.isSearchActive ? t('search.results', 'Search Results') : cards.displayTitle}
-                viewMode={layout.viewMode}
-                listPanelRatio={layout.listPanelRatio}
-                mandalaId={effectiveMandalaId}
-                onViewModeChange={layout.handleSetViewMode}
-                onListPanelRatioChange={layout.handleSetListPanelRatio}
-                onCardClick={handleCardClick}
-                onCardDragStart={dragDrop.handleCardDragStart}
-                onMultiCardDragStart={dragDrop.handleMultiCardDragStart}
-                onSaveNote={cards.handleSaveNote}
-                onCardsReorder={cards.handleCardsReorder}
-                onDeleteCards={cards.handleDeleteCards}
-                onAddCard={navigation.selectedCellIndex != null ? handleAddCard : undefined}
-                onSaveWatchPosition={cards.handleSaveWatchPosition}
-                watchPositionCache={modal.watchPositionCache}
-                panelSizeCache={modal.panelSizeCache}
-                enrichingCardIds={cards.enrichingCardIds}
-                failedEnrichCardIds={cards.failedEnrichCardIds}
-                onRetryEnrich={cards.retryEnrich}
-                sectorSubjects={navigation.currentLevel.subjects}
-                selectedCellIndex={navigation.selectedCellIndex}
-                onCellClick={navigation.handleCellClick}
-                totalCardCount={cards.totalCards}
-                cardsByCell={cards.cardsByCell}
-                isExternalCardDragActive={activeDragData?.type === 'card'}
-              />
+              {layout.viewMode === 'insights' ? (
+                <InsightsView
+                  allCards={cards.allMandalaCards}
+                  scratchPadCards={cards.scratchPadCards}
+                  cardsByCell={cards.cardsByCell}
+                  totalCards={cards.totalCards}
+                  sectorSubjects={navigation.currentLevel.subjects}
+                  title={navigation.currentLevel.centerGoal}
+                  viewMode={layout.viewMode}
+                  onViewModeChange={layout.handleSetViewMode}
+                />
+              ) : (
+                <CardListView
+                  cards={search.isSearchActive ? search.results : cards.displayCards}
+                  isLoading={search.isSearchActive ? search.isLoading : cards.isLoading}
+                  title={search.isSearchActive ? t('search.results', 'Search Results') : cards.displayTitle}
+                  viewMode={layout.viewMode}
+                  listPanelRatio={layout.listPanelRatio}
+                  mandalaId={effectiveMandalaId}
+                  onViewModeChange={layout.handleSetViewMode}
+                  onListPanelRatioChange={layout.handleSetListPanelRatio}
+                  onCardClick={handleCardClick}
+                  onCardDragStart={dragDrop.handleCardDragStart}
+                  onMultiCardDragStart={dragDrop.handleMultiCardDragStart}
+                  onSaveNote={cards.handleSaveNote}
+                  onCardsReorder={cards.handleCardsReorder}
+                  onDeleteCards={cards.handleDeleteCards}
+                  onAddCard={navigation.selectedCellIndex != null ? handleAddCard : undefined}
+                  onSaveWatchPosition={cards.handleSaveWatchPosition}
+                  watchPositionCache={modal.watchPositionCache}
+                  panelSizeCache={modal.panelSizeCache}
+                  enrichingCardIds={cards.enrichingCardIds}
+                  failedEnrichCardIds={cards.failedEnrichCardIds}
+                  onRetryEnrich={cards.retryEnrich}
+                  sectorSubjects={navigation.currentLevel.subjects}
+                  selectedCellIndex={navigation.selectedCellIndex}
+                  onCellClick={navigation.handleCellClick}
+                  totalCardCount={cards.totalCards}
+                  cardsByCell={cards.cardsByCell}
+                  isExternalCardDragActive={activeDragData?.type === 'card'}
+                />
+              )}
             </div>
 
             {/* Right docked ScratchPad */}

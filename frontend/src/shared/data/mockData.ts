@@ -51,6 +51,18 @@ export const createScratchPadCards = (): InsightCard[] => [
   },
 ];
 
+/** Empty root levels — fallback when no mandala data exists */
+export const EMPTY_ROOT_LEVELS: Record<string, MandalaLevel> = {
+  root: {
+    id: 'root',
+    centerGoal: '',
+    subjects: ['', '', '', '', '', '', '', ''],
+    parentId: null,
+    parentCellIndex: null,
+    cards: [],
+  },
+};
+
 export const mockMandalaLevels: Record<string, MandalaLevel> = {
   root: {
     id: 'root',

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { LayoutGrid, List, Columns2, Network } from 'lucide-react';
+import { LayoutGrid, List, Columns2, Network, BarChart3 } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
 import type { ViewMode } from '@/entities/user/model/types';
@@ -14,6 +14,7 @@ const VIEW_OPTIONS = [
   { value: 'list' as const, icon: List, labelKey: 'view.list' },
   { value: 'list-detail' as const, icon: Columns2, labelKey: 'view.listDetail' },
   { value: 'graph' as const, icon: Network, labelKey: 'view.graph' },
+  { value: 'insights' as const, icon: BarChart3, labelKey: 'view.insights' },
 ];
 
 export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {

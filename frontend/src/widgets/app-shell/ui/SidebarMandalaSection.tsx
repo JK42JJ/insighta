@@ -1,47 +1,60 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { Search, Check, ChevronsUpDown, LayoutGrid, Plus, RefreshCw, Sparkles, ArrowRight, Loader2 } from 'lucide-react';
+import { LayoutGrid, Plus, RefreshCw, Loader2, ChevronDown } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { Popover, PopoverTrigger, PopoverContent } from '@/shared/ui/popover';
 import { ScrollArea } from '@/shared/ui/scroll-area';
-import { useMandalaList, useCreateMandala, useSwitchMandala } from '@/features/mandala';
+import { useMandalaList, useCreateMandala, useSwitchMandala, useUpdateSectorNames } from '@/features/mandala';
 import { toast } from '@/shared/lib/use-toast';
+import { SidebarHeatMinimap } from '@/widgets/sidebar-heat-minimap';
+import type { InsightCard } from '@/entities/card/model/types';
+
+export interface MinimapData {
+  cardsByCell: Record<number, InsightCard[]>;
+  sectorSubjects: string[];
+  centerGoal: string;
+  selectedCellIndex: number | null;
+  onCellClick: (cellIndex: number, subject: string) => void;
+  mandalaId: string | null;
+}
 
 interface SidebarMandalaSectionProps {
   collapsed: boolean;
-  mandalaGridElement?: React.ReactNode;
+  minimapData?: MinimapData;
   selectedMandalaId: string | null;
   onMandalaSelect: (id: string) => void;
 }
 
-type SortOption = 'recent' | 'az';
-
 export function SidebarMandalaSection({
   collapsed,
-  mandalaGridElement,
+  minimapData,
   selectedMandalaId,
   onMandalaSelect,
 }: SidebarMandalaSectionProps) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { data: listData, isLoading, isError, error, refetch } = useMandalaList();
 
   const createMandala = useCreateMandala();
   const switchMandala = useSwitchMandala();
+  const updateSectorNames = useUpdateSectorNames();
 
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [loadingTooLong, setLoadingTooLong] = useState(false);
+  const SECTION_STORAGE_KEY = 'insighta-mandalas-open';
+  const [sectionOpen, setSectionOpen] = useState(() => {
+    try { return localStorage.getItem(SECTION_STORAGE_KEY) !== 'false'; } catch { return true; }
+  });
+  const toggleSection = () => {
+    setSectionOpen((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(SECTION_STORAGE_KEY, String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
   const [quickCreateMode, setQuickCreateMode] = useState(false);
   const [quickCreateTitle, setQuickCreateTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const quickCreateRef = useRef<HTMLInputElement>(null);
 
   // 16s loading timeout — harmonized: DB 12s < HTTP 14s < UI 16s
-  // Shows retry instead of infinite skeleton after all retries exhausted
   const LOADING_TIMEOUT_MS = 16_000;
   useEffect(() => {
     if (!isLoading) {
@@ -53,35 +66,6 @@ export function SidebarMandalaSection({
   }, [isLoading]);
 
   const mandalas = listData?.mandalas ?? [];
-
-  const selectedMandala = mandalas.find((m) => m.id === selectedMandalaId);
-
-  const filtered = useMemo(() => {
-    if (!search) return mandalas;
-    const q = search.toLowerCase();
-    return mandalas.filter((m) => m.title.toLowerCase().includes(q));
-  }, [mandalas, search]);
-
-  const sorted = useMemo(() => {
-    const list = [...filtered];
-    if (sortBy === 'az') {
-      return list.sort((a, b) => a.title.localeCompare(b.title));
-    }
-    return list.sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-  }, [filtered, sortBy]);
-
-  // Auto-focus search input when popover opens
-  useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 0);
-  }, [open]);
-
-  const handleSelect = (id: string) => {
-    onMandalaSelect(id);
-    setOpen(false);
-    setSearch('');
-  };
 
   const handleQuickCreate = async () => {
     const title = quickCreateTitle.trim();
@@ -97,7 +81,6 @@ export function SidebarMandalaSection({
       toast({ title: t('mandalaSettings.created') });
       setQuickCreateMode(false);
       setQuickCreateTitle('');
-      setOpen(false);
     } catch {
       toast({ title: t('mandalaSettings.quotaExceeded'), variant: 'destructive' });
     } finally {
@@ -117,7 +100,10 @@ export function SidebarMandalaSection({
         <button
           className="w-full flex items-center justify-center px-2 py-2.5 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
           title={t('sidebar.mandalas')}
-          onClick={() => navigate('/')}
+          onClick={() => {
+            const first = mandalas[0];
+            if (first) onMandalaSelect(first.id);
+          }}
         >
           <LayoutGrid className="w-5 h-5" />
         </button>
@@ -125,12 +111,12 @@ export function SidebarMandalaSection({
     );
   }
 
-  // Loading state (with 10s timeout → retry)
+  // Loading state
   if (isLoading) {
     return (
       <div className="px-2 space-y-0.5">
         <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-          {t('sidebar.mandalas')}
+          {t('sidebar.myMandalas')}
         </div>
         {loadingTooLong ? (
           <button
@@ -156,7 +142,7 @@ export function SidebarMandalaSection({
     return (
       <div className="px-2 space-y-0.5">
         <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-          {t('sidebar.mandalas')}
+          {t('sidebar.myMandalas')}
         </div>
         <button
           onClick={() => refetch()}
@@ -169,189 +155,135 @@ export function SidebarMandalaSection({
     );
   }
 
-  // Empty state
-  if (mandalas.length === 0) {
-    return (
-      <div className="px-2 space-y-0.5">
-        <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-          {t('sidebar.mandalas')}
-        </div>
-        <button
-          onClick={() => navigate('/mandalas')}
-          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          {t('mandalaSettings.createNew')}
-        </button>
-      </div>
-    );
-  }
+  // Sort by createdAt desc (most recent first)
+  const sortedMandalas = [...mandalas].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 
   return (
-    <div className="px-2 space-y-1.5">
-      <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-        {t('sidebar.mandalas')}
+    <div className="px-2 flex flex-col">
+      {/* Section header — clickable to fold/unfold */}
+      <button
+        onClick={toggleSection}
+        className="w-full flex items-center justify-between px-3 py-1.5 group"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 group-hover:text-sidebar-foreground/60 transition-colors shrink-0">
+            {t('sidebar.myMandalas')}
+          </span>
+          {!sectionOpen && selectedMandalaId && (() => {
+            const selected = mandalas.find((m) => m.id === selectedMandalaId);
+            return selected ? (
+              <span className="text-[11px] text-sidebar-foreground/70 truncate">
+                {selected.title}
+              </span>
+            ) : null;
+          })()}
+        </div>
+        <ChevronDown
+          className={cn(
+            'w-3 h-3 text-sidebar-foreground/30 shrink-0 transition-transform duration-200',
+            !sectionOpen && '-rotate-90'
+          )}
+        />
+      </button>
+
+      {!sectionOpen ? null : <>
+      {/* Mandala list — foldable */}
+      <ScrollArea className="max-h-[200px]">
+        <ul className="space-y-0.5" role="list">
+          {sortedMandalas.map((mandala) => {
+            const isSelected = mandala.id === selectedMandalaId;
+            return (
+              <li key={mandala.id}>
+                <button
+                  onClick={() => onMandalaSelect(mandala.id)}
+                  className={cn(
+                    'relative w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                    'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                    isSelected
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                      : 'text-sidebar-foreground/70'
+                  )}
+                >
+                  {isSelected && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] bg-sidebar-primary rounded-r-sm" />
+                  )}
+                  <span className="flex-1 text-left truncate">{mandala.title}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </ScrollArea>
+
+      {/* + New mandala / Quick create */}
+      {quickCreateMode ? (
+        <div className="flex items-center gap-1.5 px-3 py-2">
+          <input
+            ref={quickCreateRef}
+            type="text"
+            placeholder={t('mandalas.quickCreatePlaceholder')}
+            value={quickCreateTitle}
+            onChange={(e) => setQuickCreateTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === 'Enter') handleQuickCreate();
+              if (e.key === 'Escape') {
+                setQuickCreateMode(false);
+                setQuickCreateTitle('');
+              }
+            }}
+            onBlur={() => {
+              if (!isCreating && !quickCreateTitle.trim()) {
+                setQuickCreateMode(false);
+                setQuickCreateTitle('');
+              }
+            }}
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-sidebar-foreground/40 text-sidebar-foreground"
+            disabled={isCreating}
+          />
+          {isCreating && <Loader2 className="w-3.5 h-3.5 animate-spin text-sidebar-foreground/50" />}
+        </div>
+      ) : (
+        <button
+          onClick={() => setQuickCreateMode(true)}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-sidebar-primary hover:bg-sidebar-accent transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5 shrink-0" />
+          {t('sidebar.newMandala')}
+        </button>
+      )}
+
+      </>}
+
+      {/* Divider */}
+      <div className="my-2 mx-2">
+        <div className="h-px bg-sidebar-border" />
       </div>
 
-      {/* Searchable dropdown trigger */}
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            className={cn(
-              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-              'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-              'bg-sidebar-accent/50 text-sidebar-foreground'
-            )}
-          >
-            <LayoutGrid className="w-4 h-4 shrink-0" />
-            <span className="flex-1 text-left truncate">
-              {selectedMandala?.title ?? t('sidebar.selectMandala', 'Select mandala')}
-            </span>
-            <ChevronsUpDown className="w-3.5 h-3.5 shrink-0 text-sidebar-foreground/50" />
-          </button>
-        </PopoverTrigger>
-
-        <PopoverContent
-          className="w-[var(--radix-popover-trigger-width)] p-0"
-          align="start"
-          sideOffset={4}
-        >
-          {/* Search input */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-border/30">
-            <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder={t('sidebar.searchMandalas', 'Search mandalas...')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
-            />
-          </div>
-
-          {/* Sort filter */}
-          <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border/20">
-            <button
-              onClick={() => setSortBy('recent')}
-              className={cn(
-                'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
-                sortBy === 'recent'
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {t('sidebar.sortRecent', 'Recently added')}
-            </button>
-            <button
-              onClick={() => setSortBy('az')}
-              className={cn(
-                'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
-                sortBy === 'az'
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              A-Z
-            </button>
-          </div>
-
-          {/* Mandala list */}
-          <ScrollArea className="max-h-[240px]">
-            <div className="py-1">
-              {sorted.length === 0 ? (
-                <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                  {t('sidebar.noResults', 'No results')}
-                </div>
-              ) : (
-                sorted.map((mandala) => (
-                  <button
-                    key={mandala.id}
-                    onClick={() => handleSelect(mandala.id)}
-                    className={cn(
-                      'w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors',
-                      'hover:bg-accent hover:text-accent-foreground',
-                      mandala.id === selectedMandalaId && 'bg-accent/50'
-                    )}
-                  >
-                    {mandala.id === selectedMandalaId ? (
-                      <Check className="w-3.5 h-3.5 shrink-0 text-primary" />
-                    ) : (
-                      <span className="w-3.5 h-3.5 shrink-0" />
-                    )}
-                    <span className="flex-1 text-left truncate">{mandala.title}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </ScrollArea>
-
-          {/* Quick Create / Actions */}
-          <div className="border-t border-border/30">
-            {quickCreateMode ? (
-              <div className="flex items-center gap-1.5 px-3 py-2">
-                <input
-                  ref={quickCreateRef}
-                  type="text"
-                  placeholder={t('mandalas.quickCreatePlaceholder')}
-                  value={quickCreateTitle}
-                  onChange={(e) => setQuickCreateTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleQuickCreate();
-                    if (e.key === 'Escape') {
-                      setQuickCreateMode(false);
-                      setQuickCreateTitle('');
+      {/* Minimap — always visible (sector navigator) */}
+      {minimapData && (
+        <SidebarHeatMinimap
+          cardsByCell={minimapData.cardsByCell}
+          sectorSubjects={minimapData.sectorSubjects}
+          centerGoal={minimapData.centerGoal}
+          selectedCellIndex={minimapData.selectedCellIndex}
+          onCellClick={minimapData.onCellClick}
+          onSectorNamesChange={
+            minimapData.mandalaId
+              ? (newGoal, newSubjects) => {
+                  updateSectorNames.mutate(
+                    { mandalaId: minimapData.mandalaId!, centerGoal: newGoal, subjects: newSubjects },
+                    {
+                      onSuccess: () => toast({ title: t('minimap.saved') }),
+                      onError: () => toast({ title: t('common.error'), variant: 'destructive' }),
                     }
-                  }}
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
-                  disabled={isCreating}
-                />
-                {isCreating && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
-              </div>
-            ) : (
-              <button
-                onClick={() => setQuickCreateMode(true)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5 shrink-0" />
-                {t('mandalas.quickCreate')}
-              </button>
-            )}
-            <button
-              onClick={() => {
-                setOpen(false);
-                navigate('/mandalas?tab=templates');
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            >
-              <Sparkles className="w-3.5 h-3.5 shrink-0" />
-              {t('mandalas.fromTemplate')}
-            </button>
-          </div>
-          <div className="border-t border-border/30">
-            <button
-              onClick={() => {
-                setOpen(false);
-                navigate('/mandalas');
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            >
-              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
-              {t('mandalas.manageAll')}
-            </button>
-          </div>
-        </PopoverContent>
-      </Popover>
-
-      {/* Mandala grid — always visible for selected mandala */}
-      {mandalaGridElement && (
-        <div
-          className="rounded-lg overflow-hidden border border-border/20"
-          style={{ containerType: 'inline-size' }}
-        >
-          <div className="w-full aspect-square flex items-center justify-center p-1">
-            {mandalaGridElement}
-          </div>
-        </div>
+                  );
+                }
+              : undefined
+          }
+        />
       )}
     </div>
   );

@@ -26,6 +26,7 @@ export function convertToInsightCard(data: UserVideoStateWithVideo): InsightCard
     thumbnail: video.thumbnail_url || '',
     userNote: data.user_note || '',
     createdAt: new Date(data.added_to_ideation_at),
+    updatedAt: new Date(data.updated_at),
     cellIndex: data.cell_index,
     levelId: data.level_id,
     mandalaId: data.mandala_id,

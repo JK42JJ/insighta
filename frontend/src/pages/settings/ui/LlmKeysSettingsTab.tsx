@@ -362,12 +362,19 @@ export function LlmKeysSettingsTab() {
                   {t('settings.llmKeys.advanced')}
                 </Badge>
               </div>
-              <ChevronDown
-                className={cn(
-                  'w-5 h-5 text-muted-foreground transition-transform',
-                  isOpen && 'rotate-180'
+              <div className="flex items-center gap-2">
+                {!isOpen && savedKeys.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {savedKeys.filter((k) => k.status === 'active').length} active
+                  </span>
                 )}
-              />
+                <ChevronDown
+                  className={cn(
+                    'w-5 h-5 text-muted-foreground transition-transform',
+                    isOpen && 'rotate-180'
+                  )}
+                />
+              </div>
             </div>
             <CardDescription>{t('settings.llmKeys.description')}</CardDescription>
           </CardHeader>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { MandalaLevel, MandalaPath } from '@/entities/card/model/types';
-import { mockMandalaLevels } from '@/shared/data/mockData';
+import { EMPTY_ROOT_LEVELS } from '@/shared/data/mockData';
 
 interface UseMandalaNavigationReturn {
   currentLevelId: string;
@@ -51,7 +51,7 @@ export function useMandalaNavigation(deps?: {
 
   // Mandala levels state - initialized from query data
   const [mandalaLevels, setMandalaLevels] = useState<Record<string, MandalaLevel>>(
-    () => initialLevels ?? mockMandalaLevels
+    () => initialLevels ?? EMPTY_ROOT_LEVELS
   );
 
   const [currentLevelId, setCurrentLevelId] = useState('root');
