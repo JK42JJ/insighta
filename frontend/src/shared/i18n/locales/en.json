@@ -276,7 +276,24 @@
     "latestFirst": "Latest",
     "dragToMove": "Drag to move",
     "addCard": "Add Card",
-    "addCardPlaceholder": "Paste a URL..."
+    "addCardPlaceholder": "Paste a URL...",
+    "loadingMore": "Loading... {{loaded}} of {{total}}"
+  },
+  "contextHeader": {
+    "home": "Home",
+    "mandala": "Mandala",
+    "cardCount": "{{count}} cards",
+    "filteredCount": "{{filtered}} of {{total}} cards",
+    "toggleFilter": "Toggle filters",
+    "all": "All",
+    "clearAll": "Clear all",
+    "noFilterResults": "No cards match the selected filters",
+    "sortLatest": "Latest",
+    "sortOldest": "Oldest",
+    "sortTitleAZ": "Title A-Z",
+    "sortTitleZA": "Title Z-A",
+    "selectSectorFirst": "Select a sector",
+    "selectSectorDesc": "Choose a sector from the pills above to assign cards."
   },
   "search": {
     "placeholder": "Search cards... (⌘K)",

@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Clock, Move, Trash2, Plus } from 'lucide-react';
+import { useDroppable } from '@dnd-kit/core';
 import type { InsightCard } from '@/entities/card/model/types';
+import { cn } from '@/shared/lib/utils';
 import type { ViewMode } from '@/entities/user/model/types';
 import { ViewSwitcher } from '@/features/view-mode';
 import { CardList } from '@/widgets/card-list/ui/CardList';
@@ -9,8 +10,8 @@ import { ListView } from '@/widgets/list-view';
 import { DetailPanel } from '@/widgets/detail-panel';
 import { GraphView } from '@/components/graph/GraphView';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
-import { Popover, PopoverTrigger, PopoverContent } from '@/shared/ui/popover';
-import { Input } from '@/shared/ui/input';
+import { ContextHeader, type SortMode } from './ContextHeader';
+import { LabelFilterPills } from './LabelFilterPills';
 
 interface CardListViewProps {
   cards: InsightCard[];
@@ -35,6 +36,15 @@ interface CardListViewProps {
   enrichingCardIds?: Set<string>;
   failedEnrichCardIds?: Set<string>;
   onRetryEnrich?: (cardId: string, videoUrl?: string) => void;
+  // Sector pills
+  sectorSubjects?: string[];
+  selectedCellIndex?: number | null;
+  onCellClick?: (cellIndex: number, subject: string) => void;
+  totalCardCount?: number;
+  /** Card count per sector cell (index 0-7) for pill badges */
+  cardsByCell?: Record<number, InsightCard[]>;
+  /** True when an external card drag is active (from Ideation) */
+  isExternalCardDragActive?: boolean;
 }
 
 export function CardListView({
@@ -52,21 +62,31 @@ export function CardListView({
   onSaveNote,
   onCardsReorder,
   onDeleteCards,
-  onAddCard,
   onSaveWatchPosition,
   watchPositionCache,
   panelSizeCache,
-  highlightedCardId,
   enrichingCardIds,
   failedEnrichCardIds,
   onRetryEnrich,
+  sectorSubjects,
+  selectedCellIndex,
+  onCellClick,
+  totalCardCount,
+  cardsByCell,
+  isExternalCardDragActive,
 }: CardListViewProps) {
   const { t } = useTranslation();
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
+  const [sortMode, setSortMode] = useState<SortMode>('latest');
 
-  // Mobile detection: auto-fallback list-detail to list
+  // Grid-area droppable at CardListView level (covers header + pills + grid)
+  const { setNodeRef: setGridAreaRef } = useDroppable({
+    id: 'drop-grid-area',
+    data: { type: 'grid-area' as const },
+  });
+
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
@@ -75,6 +95,35 @@ export function CardListView({
   }, []);
 
   const effectiveViewMode = viewMode === 'list-detail' && isMobile ? 'list' : viewMode;
+
+  // Sort cards based on sortMode
+  const sortedCards = useMemo(() => {
+    const arr = [...cards];
+    switch (sortMode) {
+      case 'latest':
+        return arr.sort((a, b) => {
+          if (a.sortOrder !== undefined && b.sortOrder !== undefined)
+            return a.sortOrder - b.sortOrder;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+      case 'oldest':
+        return arr.sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+      case 'title-asc':
+        return arr.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+      case 'title-desc':
+        return arr.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
+      default:
+        return arr;
+    }
+  }, [cards, sortMode]);
+
+  // Sector card counts (0-7)
+  const sectorCounts = useMemo(() => {
+    if (!sectorSubjects || !cardsByCell) return [];
+    return sectorSubjects.map((_, idx) => (cardsByCell[idx] ?? []).length);
+  }, [sectorSubjects, cardsByCell]);
 
   const handleCardSelect = useCallback((card: InsightCard) => {
     setActiveCard(card);
@@ -97,97 +146,37 @@ export function CardListView({
     }
   }, [selectedCardIds, onDeleteCards]);
 
-  // Add card popover state
-  const [addCardUrl, setAddCardUrl] = useState('');
-  const [isAddCardOpen, setIsAddCardOpen] = useState(false);
-  const addCardInputRef = useRef<HTMLInputElement>(null);
+  const handleAllClick = useCallback(() => {
+    onCellClick?.(-1, '');
+  }, [onCellClick]);
 
-  const handleAddCardSubmit = useCallback(() => {
-    const trimmed = addCardUrl.trim();
-    if (!trimmed || !onAddCard) return;
-    onAddCard(trimmed);
-    setAddCardUrl('');
-    setIsAddCardOpen(false);
-  }, [addCardUrl, onAddCard]);
-
-  // Header with title, sort info, and ViewSwitcher
-  const headerElement = (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-3">
-        <h3 className="text-lg font-semibold">
-          {title} {t('cards.insights')}
-        </h3>
-        {selectedCardIds.length > 0 && (
-          <div className="flex items-center gap-1.5 animate-fade-in">
-            <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
-              {t('cards.selected', { count: selectedCardIds.length })}
-            </span>
-            <button
-              onClick={handleDeleteSelected}
-              className="p-1 rounded text-destructive hover:bg-destructive/10 transition-colors"
-              title={t('cards.deleteSelected')}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-      </div>
-      <div className="flex items-center gap-3">
-        {effectiveViewMode === 'grid' && (
-          <>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock className="w-3 h-3" />
-              <span>{t('cards.latestFirst')}</span>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Move className="w-3 h-3" />
-              <span>{t('cards.dragToMove')}</span>
-            </div>
-          </>
-        )}
-        {onAddCard && (
-          <Popover open={isAddCardOpen} onOpenChange={setIsAddCardOpen}>
-            <PopoverTrigger asChild>
-              <button
-                className="p-1.5 rounded-md hover:bg-accent transition-colors"
-                title={t('cards.addCard')}
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-72 p-3">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleAddCardSubmit();
-                }}
-                className="flex gap-2"
-              >
-                <Input
-                  ref={addCardInputRef}
-                  value={addCardUrl}
-                  onChange={(e) => setAddCardUrl(e.target.value)}
-                  placeholder={t('cards.addCardPlaceholder')}
-                  className="h-8 text-sm"
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  disabled={!addCardUrl.trim()}
-                  className="shrink-0 h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none transition-colors"
-                >
-                  {t('cards.addCard')}
-                </button>
-              </form>
-            </PopoverContent>
-          </Popover>
-        )}
-        <ViewSwitcher value={viewMode} onChange={onViewModeChange} />
-      </div>
-    </div>
+  // Context header
+  const contextHeaderElement = (
+    <ContextHeader
+      title={title}
+      totalCardCount={totalCardCount ?? cards.length}
+      viewMode={effectiveViewMode}
+      onViewModeChange={onViewModeChange}
+      selectedCardIds={selectedCardIds}
+      onDeleteSelected={handleDeleteSelected}
+      sortMode={sortMode}
+      onSortModeChange={setSortMode}
+    />
   );
 
-  // Graph mode: render knowledge graph (minimal header, full area for canvas)
+  // Sector pills
+  const sectorPillsElement = sectorSubjects && sectorSubjects.length > 0 && (
+    <LabelFilterPills
+      sectors={sectorSubjects}
+      selectedIndex={selectedCellIndex ?? null}
+      totalCount={totalCardCount ?? cards.length}
+      sectorCounts={sectorCounts}
+      onSectorClick={(idx, subject) => onCellClick?.(idx, subject)}
+      onAllClick={handleAllClick}
+    />
+  );
+
+  // Graph mode
   if (effectiveViewMode === 'graph') {
     return (
       <div className="h-full flex flex-col animate-fade-in">
@@ -204,13 +193,20 @@ export function CardListView({
     );
   }
 
-  // Grid mode: render existing CardList
+  // Grid mode
   if (effectiveViewMode === 'grid') {
     return (
-      <div className="animate-fade-in">
-        {headerElement}
+      <div
+        ref={setGridAreaRef}
+        className={cn(
+          'animate-fade-in transition-all duration-200 rounded-lg',
+          isExternalCardDragActive && 'ring-2 ring-primary ring-inset bg-primary/10'
+        )}
+      >
+        {contextHeaderElement}
+        {sectorPillsElement}
         <CardList
-          cards={cards}
+          cards={sortedCards}
           isLoading={isLoading}
           title={title}
           onCardClick={onCardClick}
@@ -228,14 +224,15 @@ export function CardListView({
     );
   }
 
-  // List mode: full-width list
+  // List mode
   if (effectiveViewMode === 'list') {
     return (
       <div className="h-full flex flex-col animate-fade-in">
-        {headerElement}
+        {contextHeaderElement}
+        {sectorPillsElement}
         <div className="flex-1 min-h-0">
           <ListView
-            cards={cards}
+            cards={sortedCards}
             activeCardId={activeCard?.id ?? null}
             onCardSelect={handleCardSelect}
             onCardClick={onCardClick}
@@ -245,15 +242,16 @@ export function CardListView({
     );
   }
 
-  // List-detail mode: split panel
+  // List-detail mode
   return (
     <div className="h-full flex flex-col animate-fade-in">
-      {headerElement}
+      {contextHeaderElement}
+      {sectorPillsElement}
       <div className="flex-1 min-h-0 rounded-lg border overflow-hidden">
         <ResizablePanelGroup direction="horizontal" onLayout={handlePanelResize}>
           <ResizablePanel defaultSize={listPanelRatio} minSize={25} maxSize={60}>
             <ListView
-              cards={cards}
+              cards={sortedCards}
               activeCardId={activeCard?.id ?? null}
               onCardSelect={handleCardSelect}
               onCardClick={onCardClick}
