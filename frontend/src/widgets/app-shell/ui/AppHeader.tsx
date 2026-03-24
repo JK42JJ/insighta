@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from 'next-themes';
@@ -16,6 +16,7 @@ import {
 import { useAuth } from '@/features/auth/model/useAuth';
 import { useLocalCardsAsInsight } from '@/features/card-management/model/useLocalCards';
 import { TierBadge } from '@/shared/ui/tier-badge';
+import { getAuthCache, updateAuthCacheTier } from '@/features/auth/lib/auth-cache';
 
 interface AppHeaderProps {
   onMobileMenuOpen?: () => void;
@@ -27,6 +28,17 @@ export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps
   const { isLoggedIn, isLoading, userName, userEmail, userAvatar, signOut } = useAuth();
   const { subscription } = useLocalCardsAsInsight();
   const { theme, setTheme } = useTheme();
+
+  // Use cached tier for instant render, then sync when API responds
+  const cachedTier = getAuthCache()?.tier;
+  const displayTier = subscription.tier !== 'free' ? subscription.tier : (cachedTier ?? subscription.tier);
+
+  // Sync tier to cache when subscription data arrives from API
+  useEffect(() => {
+    if (subscription.tier && subscription.tier !== 'free') {
+      updateAuthCacheTier(subscription.tier);
+    }
+  }, [subscription.tier]);
   const isDark = theme === 'dark';
   const navigate = useNavigate();
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -123,8 +135,8 @@ export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps
             <>
               {/* Tier Badge — click navigates to subscription for free users */}
               <TierBadge
-                tier={subscription.tier}
-                onClick={subscription.tier === 'free' ? () => navigate('/settings?tab=subscription') : undefined}
+                tier={displayTier}
+                onClick={displayTier === 'free' ? () => navigate('/settings?tab=subscription') : undefined}
               />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
