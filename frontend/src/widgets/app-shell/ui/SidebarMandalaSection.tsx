@@ -345,7 +345,7 @@ export function SidebarMandalaSection({
       {/* Mandala grid — always visible for selected mandala */}
       {mandalaGridElement && (
         <div
-          className="rounded-lg overflow-hidden bg-surface-base/50 border border-border/20"
+          className="rounded-lg overflow-hidden border border-border/20"
           style={{ containerType: 'inline-size' }}
         >
           <div className="w-full aspect-square flex items-center justify-center p-1">
