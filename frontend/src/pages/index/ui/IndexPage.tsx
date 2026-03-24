@@ -396,8 +396,33 @@ function AuthenticatedApp() {
           cards.handleScratchPadCardDrop(dragData.card.id);
         }
       }
+
+      // Card dropped on grid area OR on a card-slot from Ideation (sector must be selected)
+      const isGridAreaDrop =
+        (dragData.type === 'card' || dragData.type === 'card-reorder') &&
+        (dropData.type === 'grid-area' ||
+          (dragData.type === 'card' && dropData.type === 'card-slot'));
+
+      if (isGridAreaDrop) {
+        if (navigation.selectedCellIndex !== null) {
+          if (multiCardIds && multiCardIds.length > 1) {
+            cards.handleCardDrop(navigation.selectedCellIndex, undefined, undefined, multiCardIds);
+          } else {
+            cards.handleCardDrop(navigation.selectedCellIndex, undefined, dragData.card.id);
+          }
+        } else {
+          // "All" selected — show toast to select a sector first
+          toast({
+            title: t('contextHeader.selectSectorFirst', 'Select a sector'),
+            description: t(
+              'contextHeader.selectSectorDesc',
+              'Choose a sector from the pills above to assign cards.'
+            ),
+          });
+        }
+      }
     },
-    [cards, navigation, dragDrop]
+    [cards, navigation, dragDrop, toast, t]
   );
 
   const handleDragCancel = useCallback(() => {
@@ -606,6 +631,12 @@ function AuthenticatedApp() {
                 enrichingCardIds={cards.enrichingCardIds}
                 failedEnrichCardIds={cards.failedEnrichCardIds}
                 onRetryEnrich={cards.retryEnrich}
+                sectorSubjects={navigation.currentLevel.subjects}
+                selectedCellIndex={navigation.selectedCellIndex}
+                onCellClick={navigation.handleCellClick}
+                totalCardCount={cards.totalCards}
+                cardsByCell={cards.cardsByCell}
+                isExternalCardDragActive={activeDragData?.type === 'card'}
               />
             </div>
 

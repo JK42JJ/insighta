@@ -77,6 +77,8 @@ export function CardList({
 }: CardListProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+
+
   const { data: summaryRatings } = useSummaryRatings();
   const rateSummary = useRateSummary();
 
@@ -252,13 +254,21 @@ export function CardList({
     [lastSelectedIndex, sortedCards, onCardClick]
   );
 
+
   if (isLoading && cards.length === 0) {
     return <CardSkeleton count={cachedCardCount ?? 6} />;
   }
 
   if (cards.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
+      <div
+        ref={gridRef}
+        className={cn(
+          'text-center py-12 text-muted-foreground transition-all duration-200 rounded-lg',
+          false
+        )}
+        style={{ minHeight: 'calc(100vh - 300px)' }}
+      >
         <FileVideo className="w-12 h-12 mx-auto mb-3 opacity-50" />
         <p>{t('cards.noInsights')}</p>
         <p className="text-sm mt-1">{t('cards.dragToAdd')}</p>
@@ -270,7 +280,10 @@ export function CardList({
     <div className="animate-fade-in" ref={containerRef}>
       <div
         ref={gridRef}
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center"
+        className={cn(
+          'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center transition-all duration-200',
+          false
+        )}
         style={{ minHeight: 'calc(100vh - 200px)' }}
       >
         {selectionStyle && <div style={selectionStyle} />}

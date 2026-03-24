@@ -10,7 +10,8 @@ export type DragData =
 export type DropData =
   | { type: 'mandala-cell'; gridIndex: number; subjectIndex: number }
   | { type: 'card-slot'; cardId: string; cardIndex: number }
-  | { type: 'scratchpad' };
+  | { type: 'scratchpad' }
+  | { type: 'grid-area' };
 
 // Unique ID helpers
 export function cardDragId(cardId: string) {
