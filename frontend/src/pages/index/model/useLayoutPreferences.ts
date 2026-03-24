@@ -23,8 +23,10 @@ interface UseLayoutPreferencesReturn {
   // View mode
   viewMode: ViewMode;
   listPanelRatio: number;
+  gridColumns: number;
   handleSetViewMode: (mode: ViewMode) => void;
   handleSetListPanelRatio: (ratio: number) => void;
+  handleSetGridColumns: (columns: number) => void;
 }
 
 export function useLayoutPreferences(): UseLayoutPreferencesReturn {
@@ -39,6 +41,7 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
     setMandalaPanelRatio,
     setViewMode,
     setListPanelRatio,
+    setGridColumns,
   } = useUIPreferences();
 
   const [hasInitializedPreferences, setHasInitializedPreferences] = useState(false);
@@ -49,6 +52,10 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
   const [mandalaPanelRatio, setMandalaPanelRatioLocal] = useState(30);
   const [viewMode, setViewModeLocal] = useState<ViewMode>('grid');
   const [listPanelRatio, setListPanelRatioLocal] = useState(40);
+  const [gridColumns, setGridColumnsLocal] = useState(() => {
+    const cached = localStorage.getItem('insighta-grid-columns');
+    return cached ? Number(cached) : 4;
+  });
 
   // Extract primitive values to avoid object reference issues in useEffect
   const prefScratchpadFloating = preferences?.scratchpad_is_floating;
@@ -58,6 +65,7 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
   const prefMandalaPanelRatio = preferences?.mandala_panel_ratio;
   const prefViewMode = preferences?.view_mode;
   const prefListPanelRatio = preferences?.list_panel_ratio;
+  const prefGridColumns = preferences?.grid_columns;
 
   // Sync local state with preferences ONLY on initial load
   useEffect(() => {
@@ -71,6 +79,8 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
       setMandalaPanelRatioLocal(prefMandalaPanelRatio ?? 30);
       setViewModeLocal((prefViewMode as ViewMode) ?? 'grid');
       setListPanelRatioLocal(prefListPanelRatio ?? 40);
+      const cachedGridCols = localStorage.getItem('insighta-grid-columns');
+      setGridColumnsLocal(prefGridColumns ?? (cachedGridCols ? Number(cachedGridCols) : 4));
       setHasInitializedPreferences(true);
     }
   }, [
@@ -80,6 +90,7 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
     prefMandalaPanelRatio,
     prefViewMode,
     prefListPanelRatio,
+    prefGridColumns,
     hasInitializedPreferences,
   ]);
 
@@ -124,6 +135,15 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
     [isLoggedIn, setListPanelRatio]
   );
 
+  const handleSetGridColumns = useCallback(
+    (columns: number) => {
+      setGridColumnsLocal(columns);
+      localStorage.setItem('insighta-grid-columns', String(columns));
+      if (isLoggedIn) setGridColumns(columns);
+    },
+    [isLoggedIn, setGridColumns]
+  );
+
   return {
     isScratchPadFloating,
     scratchPadDockPosition,
@@ -137,7 +157,9 @@ export function useLayoutPreferences(): UseLayoutPreferencesReturn {
     handleSetMandalaPanelRatio,
     viewMode,
     listPanelRatio,
+    gridColumns,
     handleSetViewMode,
     handleSetListPanelRatio,
+    handleSetGridColumns,
   };
 }

@@ -10,8 +10,14 @@ import { ListView } from '@/widgets/list-view';
 import { DetailPanel } from '@/widgets/detail-panel';
 import { GraphView } from '@/components/graph/GraphView';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
+import { LayoutGrid, Grid3X3 } from 'lucide-react';
+import { Slider } from '@/shared/ui/slider';
 import { ContextHeader, type SortMode } from './ContextHeader';
 import { LabelFilterPills } from './LabelFilterPills';
+
+const MIN_GRID_COLUMNS = 2;
+const MAX_GRID_COLUMNS = 6;
+const COMPACT_THRESHOLD = 5;
 
 interface CardListViewProps {
   cards: InsightCard[];
@@ -45,6 +51,10 @@ interface CardListViewProps {
   cardsByCell?: Record<number, InsightCard[]>;
   /** True when an external card drag is active (from Ideation) */
   isExternalCardDragActive?: boolean;
+  /** Grid column count (2-6) */
+  gridColumns?: number;
+  /** Grid column change handler */
+  onGridColumnsChange?: (columns: number) => void;
 }
 
 export function CardListView({
@@ -74,6 +84,8 @@ export function CardListView({
   totalCardCount,
   cardsByCell,
   isExternalCardDragActive,
+  gridColumns = 4,
+  onGridColumnsChange,
 }: CardListViewProps) {
   const { t } = useTranslation();
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
@@ -150,6 +162,22 @@ export function CardListView({
     onCellClick?.(-1, '');
   }, [onCellClick]);
 
+  // Grid column slider element (inline in header)
+  const gridSliderElement = onGridColumnsChange && effectiveViewMode === 'grid' ? (
+    <div className="hidden md:flex items-center gap-1.5">
+      <LayoutGrid className="w-2.5 h-2.5 text-muted-foreground/60" />
+      <Slider
+        value={[gridColumns]}
+        min={MIN_GRID_COLUMNS}
+        max={MAX_GRID_COLUMNS}
+        step={1}
+        onValueChange={([v]) => onGridColumnsChange(v)}
+        className="w-20"
+      />
+      <Grid3X3 className="w-2.5 h-2.5 text-muted-foreground/60" />
+    </div>
+  ) : null;
+
   // Context header
   const contextHeaderElement = (
     <ContextHeader
@@ -161,6 +189,7 @@ export function CardListView({
       onDeleteSelected={handleDeleteSelected}
       sortMode={sortMode}
       onSortModeChange={setSortMode}
+      sliderElement={gridSliderElement}
     />
   );
 
@@ -209,6 +238,8 @@ export function CardListView({
           cards={sortedCards}
           isLoading={isLoading}
           title={title}
+          gridColumns={gridColumns}
+          compact={gridColumns >= COMPACT_THRESHOLD}
           onCardClick={onCardClick}
           onCardDragStart={onCardDragStart}
           onMultiCardDragStart={onMultiCardDragStart}

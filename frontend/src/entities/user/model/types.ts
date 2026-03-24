@@ -35,6 +35,7 @@ export interface UIPreferences {
   // View mode preferences
   view_mode: ViewMode;
   list_panel_ratio: number;
+  grid_columns: number;
 
   created_at?: string;
   updated_at?: string;
@@ -63,6 +64,7 @@ export const DEFAULT_UI_PREFERENCES: UIPreferences = {
   // View mode defaults
   view_mode: 'grid',
   list_panel_ratio: 40,
+  grid_columns: 4,
 };
 
 /**

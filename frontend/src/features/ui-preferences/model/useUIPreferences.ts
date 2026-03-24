@@ -32,6 +32,7 @@ interface UseUIPreferencesReturn {
   setViewMode: (mode: ViewMode) => void;
   setListPanelRatio: (ratio: number) => void;
   setMandalaPanelRatio: (ratio: number) => void;
+  setGridColumns: (columns: number) => void;
 }
 
 /**
@@ -288,6 +289,13 @@ export function useUIPreferences(): UseUIPreferencesReturn {
     [updatePreferences]
   );
 
+  const setGridColumns = useCallback(
+    (columns: number) => {
+      updatePreferences({ grid_columns: columns });
+    },
+    [updatePreferences]
+  );
+
   return {
     preferences: data || DEFAULT_UI_PREFERENCES,
     isLoading,
@@ -305,5 +313,6 @@ export function useUIPreferences(): UseUIPreferencesReturn {
     setViewMode,
     setListPanelRatio,
     setMandalaPanelRatio,
+    setGridColumns,
   };
 }

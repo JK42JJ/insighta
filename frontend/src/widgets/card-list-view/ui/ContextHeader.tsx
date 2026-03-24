@@ -21,6 +21,7 @@ interface ContextHeaderProps {
   onDeleteSelected?: () => void;
   sortMode: SortMode;
   onSortModeChange: (mode: SortMode) => void;
+  sliderElement?: React.ReactNode;
 }
 
 const SORT_OPTIONS: { value: SortMode; labelKey: string }[] = [
@@ -39,6 +40,7 @@ export function ContextHeader({
   onDeleteSelected,
   sortMode,
   onSortModeChange,
+  sliderElement,
 }: ContextHeaderProps) {
   const { t } = useTranslation();
   const titleInitial = title.charAt(0).toUpperCase();
@@ -74,8 +76,10 @@ export function ContextHeader({
         )}
       </div>
 
-      {/* Right: sort + drag hint + view */}
+      {/* Right: slider + drag hint + sort + view */}
       <div className="flex items-center gap-1.5 shrink-0">
+        {sliderElement}
+
         {viewMode === 'grid' && (
           <div className="hidden lg:flex items-center gap-0.5 text-[10px] text-muted-foreground">
             <Move className="w-2.5 h-2.5" />
