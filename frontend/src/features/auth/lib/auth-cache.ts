@@ -11,6 +11,7 @@ export interface AuthCacheData {
   email: string;
   name: string;
   avatar: string | null;
+  tier: string;
   timestamp: number;
 }
 
@@ -39,6 +40,14 @@ export function setAuthCache(data: Omit<AuthCacheData, 'timestamp'>): void {
     );
   } catch {
     // localStorage full or blocked — ignore silently
+  }
+}
+
+/** Update tier in existing cache (call when subscription data loads) */
+export function updateAuthCacheTier(tier: string): void {
+  const cache = getAuthCache();
+  if (cache) {
+    setAuthCache({ ...cache, tier });
   }
 }
 

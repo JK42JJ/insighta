@@ -50,13 +50,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         } else {
           setSession(session);
           setUser(session?.user ?? null);
-          // Update cache with fresh data
+          // Update cache with fresh data (preserve existing tier — subscription query updates it separately)
           if (session?.user) {
             setAuthCache({
               userId: session.user.id,
               email: session.user.email ?? '',
               name: session.user.user_metadata?.full_name ?? session.user.email?.split('@')[0] ?? '',
               avatar: session.user.user_metadata?.avatar_url ?? null,
+              tier: cachedAuth?.tier ?? 'free',
             });
           } else if (cachedAuth) {
             // No session but we had cache — user logged out elsewhere
@@ -83,13 +84,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(session);
       setUser(session?.user ?? null);
       setError(null);
-      // Sync auth cache
+      // Sync auth cache (preserve tier from existing cache)
       if (session?.user) {
+        const existing = getAuthCache();
         setAuthCache({
           userId: session.user.id,
           email: session.user.email ?? '',
           name: session.user.user_metadata?.full_name ?? session.user.email?.split('@')[0] ?? '',
           avatar: session.user.user_metadata?.avatar_url ?? null,
+          tier: existing?.tier ?? 'free',
         });
       }
       // Ensure isTokenReady reflects token availability on auth transitions
