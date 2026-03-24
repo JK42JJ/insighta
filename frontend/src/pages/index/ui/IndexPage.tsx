@@ -638,6 +638,8 @@ function AuthenticatedApp() {
                   mandalaId={effectiveMandalaId}
                   onViewModeChange={layout.handleSetViewMode}
                   onListPanelRatioChange={layout.handleSetListPanelRatio}
+                  gridColumns={layout.gridColumns}
+                  onGridColumnsChange={layout.handleSetGridColumns}
                   onCardClick={handleCardClick}
                   onCardDragStart={dragDrop.handleCardDragStart}
                   onMultiCardDragStart={dragDrop.handleMultiCardDragStart}

@@ -31,6 +31,8 @@ interface CardListProps {
   enrichingCardIds?: Set<string>;
   failedEnrichCardIds?: Set<string>;
   onRetryEnrich?: (cardId: string, videoUrl?: string) => void;
+  gridColumns?: number;
+  compact?: boolean;
 }
 
 // Wrapper to make each card slot a droppable for reorder
@@ -74,6 +76,8 @@ export function CardList({
   enrichingCardIds,
   failedEnrichCardIds,
   onRetryEnrich,
+  gridColumns = 4,
+  compact = false,
 }: CardListProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -281,10 +285,13 @@ export function CardList({
       <div
         ref={gridRef}
         className={cn(
-          'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center transition-all duration-200',
+          'grid grid-cols-1 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center transition-all duration-200',
           false
         )}
-        style={{ minHeight: 'calc(100vh - 200px)' }}
+        style={{
+          minHeight: 'calc(100vh - 200px)',
+          gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
+        }}
       >
         {selectionStyle && <div style={selectionStyle} />}
         {visibleCards.map((card, idx) => {
@@ -321,6 +328,7 @@ export function CardList({
                 isEnriching={enrichingCardIds?.has(card.id)}
                 isEnrichFailed={failedEnrichCardIds?.has(card.id)}
                 onRetryEnrich={onRetryEnrich}
+                compact={compact}
               />
             </CardSlot>
           );

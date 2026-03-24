@@ -26,6 +26,7 @@ interface InsightCardItemProps {
   isEnriching?: boolean;
   isEnrichFailed?: boolean;
   onRetryEnrich?: (cardId: string, videoUrl?: string) => void;
+  compact?: boolean;
 }
 
 export function InsightCardItem({
@@ -42,6 +43,7 @@ export function InsightCardItem({
   isEnriching = false,
   isEnrichFailed = false,
   onRetryEnrich,
+  compact = false,
 }: InsightCardItemProps) {
   const { t } = useTranslation();
   const cardFlipEnabled = useCardFlipSetting();
@@ -50,7 +52,7 @@ export function InsightCardItem({
 
   // Flip is disabled when: explicitly disabled, setting off, or no content (memo or AI summary)
   const hasContent = !!card.userNote?.trim() || !!card.videoSummary?.summary_en;
-  const shouldDisableFlip = disableFlip || !cardFlipEnabled || !hasContent;
+  const shouldDisableFlip = disableFlip || !cardFlipEnabled || !hasContent || compact;
 
   // Build drag data — include selected card IDs for multi-select drag
   const isSelected = selectedCardIds?.has(card.id) ?? false;
@@ -177,8 +179,8 @@ export function InsightCardItem({
             </div>
           </div>
 
-          {/* Note preview — fixed height area */}
-          <div className="px-2.5 pt-2 pb-3 space-y-1.5 h-[76px] overflow-hidden">
+          {/* Note preview — fixed height area (hidden in compact mode) */}
+          <div className={cn('px-2.5 pt-2 pb-3 space-y-1.5 h-[76px] overflow-hidden', compact && 'hidden')}>
             {isEditing ? (
               <textarea
                 autoFocus
@@ -255,7 +257,8 @@ export function InsightCardItem({
         <div className={cn(
           'absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-xl border p-3 flex flex-col',
           'pointer-events-none',
-          !shouldDisableFlip && 'group-hover:pointer-events-auto'
+          !shouldDisableFlip && 'group-hover:pointer-events-auto',
+          compact && 'hidden'
         )}>
           <h4 className="text-xs font-semibold line-clamp-1 mb-1">{card.title}</h4>
           <div className="flex-1 overflow-y-auto" onDoubleClick={handleNoteDoubleClick}>
