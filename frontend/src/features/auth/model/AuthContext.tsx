@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { supabase } from '@/shared/integrations/supabase/client';
 import { subscribeAuth } from '@/shared/lib/auth-event-bus';
 import { apiClient } from '@/shared/lib/api-client';
+import { getAuthCache, setAuthCache, clearAuthCache } from '@/features/auth/lib/auth-cache';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -21,9 +22,15 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
+  // If we have a cached session, skip the loading state entirely for instant render
+  const cachedAuth = getAuthCache();
+  const [user, setUser] = useState<User | null>(
+    cachedAuth
+      ? ({ id: cachedAuth.userId, email: cachedAuth.email, user_metadata: { full_name: cachedAuth.name, avatar_url: cachedAuth.avatar } } as unknown as User)
+      : null
+  );
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!cachedAuth);
   const [isTokenReady, setIsTokenReady] = useState(false);
   const [error, setError] = useState<AuthError | null>(null);
 
@@ -38,9 +45,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (error) {
           console.error('Error getting session:', error);
           setError(error);
+          // Cache was wrong — clear it
+          if (cachedAuth) clearAuthCache();
         } else {
           setSession(session);
           setUser(session?.user ?? null);
+          // Update cache with fresh data
+          if (session?.user) {
+            setAuthCache({
+              userId: session.user.id,
+              email: session.user.email ?? '',
+              name: session.user.user_metadata?.full_name ?? session.user.email?.split('@')[0] ?? '',
+              avatar: session.user.user_metadata?.avatar_url ?? null,
+            });
+          } else if (cachedAuth) {
+            // No session but we had cache — user logged out elsewhere
+            clearAuthCache();
+          }
         }
       } catch (err) {
         console.error('Unexpected error getting session:', err);
@@ -62,13 +83,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(session);
       setUser(session?.user ?? null);
       setError(null);
+      // Sync auth cache
+      if (session?.user) {
+        setAuthCache({
+          userId: session.user.id,
+          email: session.user.email ?? '',
+          name: session.user.user_metadata?.full_name ?? session.user.email?.split('@')[0] ?? '',
+          avatar: session.user.user_metadata?.avatar_url ?? null,
+        });
+      }
       // Ensure isTokenReady reflects token availability on auth transitions
       if (session?.access_token) {
-        // apiClient already cached the token in its own subscribeAuth listener
-        // (runs before this one due to Set insertion order)
         setIsTokenReady(true);
       } else if (event === 'SIGNED_OUT') {
         setIsTokenReady(false);
+        clearAuthCache();
       }
     });
 

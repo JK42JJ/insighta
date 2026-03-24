@@ -9,6 +9,16 @@
     <meta name="description" content="Insighta — Organize, annotate, and gain insights from your saved content with AI-powered knowledge management." />
     <meta name="theme-color" content="#09090b" />
     <title>Insighta</title>
+    <style>
+      /* Prevent white flash before JS loads */
+      #root:empty {
+        min-height: 100vh;
+        background: hsl(220,16%,8%);
+      }
+      html:not(.dark) #root:empty {
+        background: hsl(0,0%,100%);
+      }
+    </style>
     <script>
       try {
         if (localStorage.getItem('theme') !== 'light') {

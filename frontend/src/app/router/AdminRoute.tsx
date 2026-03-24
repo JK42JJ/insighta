@@ -1,6 +1,5 @@
 import { Navigate } from 'react-router-dom';
 import { useAuthContext } from '@/features/auth/model/AuthContext';
-import { PageLoader } from '@/shared/ui/PageLoader';
 import { useAdminCheck } from '@/pages/admin/hooks/useAdminCheck';
 import { ApiHttpError } from '@/shared/lib/api-client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -17,7 +16,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
   const queryClient = useQueryClient();
 
   if (authLoading || adminLoading) {
-    return <PageLoader />;
+    return null;
   }
 
   if (!user) {
