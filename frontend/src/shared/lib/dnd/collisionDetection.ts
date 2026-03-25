@@ -16,6 +16,13 @@ import {
  */
 export const pointerWithinThenClosest: CollisionDetection = (args) => {
   const pointerCollisions = pointerWithin(args);
-  if (pointerCollisions.length > 0) return pointerCollisions;
+  if (pointerCollisions.length > 0) {
+    // Prioritize scratchpad over grid-area when both overlap (z-index aware)
+    const scratchpadCollision = pointerCollisions.find(
+      (c) => c.id === 'drop-scratchpad'
+    );
+    if (scratchpadCollision) return [scratchpadCollision];
+    return pointerCollisions;
+  }
   return closestCenter(args);
 };

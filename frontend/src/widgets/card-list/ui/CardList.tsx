@@ -191,11 +191,15 @@ export function CardList({
 
   // Drag select hook
   const handleDragSelectChange = useCallback(
-    (selectedIndices: number[]) => {
+    (selectedIndices: number[], additive: boolean) => {
       const newSelectedIds = new Set(
         selectedIndices.map((idx) => sortedCards[idx]?.id).filter(Boolean)
       );
-      setSelectedCardIds(newSelectedIds);
+      if (additive) {
+        setSelectedCardIds((prev) => new Set([...prev, ...newSelectedIds]));
+      } else {
+        setSelectedCardIds(newSelectedIds);
+      }
     },
     [sortedCards]
   );
@@ -205,7 +209,7 @@ export function CardList({
     justFinishedDrag,
     isDragging: isDragSelecting,
   } = useDragSelect({
-    containerRef: gridRef,
+    containerRef: containerRef,
     itemSelector: '[data-card-item]',
     onSelectionChange: handleDragSelectChange,
     enabled: true,
@@ -268,7 +272,7 @@ export function CardList({
       <div
         ref={gridRef}
         className={cn(
-          'text-center py-12 text-muted-foreground transition-all duration-200 rounded-lg',
+          'text-center py-12 text-muted-foreground transition-all duration-200 rounded-lg select-none',
           false
         )}
         style={{ minHeight: 'calc(100vh - 300px)' }}
@@ -281,11 +285,12 @@ export function CardList({
   }
 
   return (
-    <div className="animate-fade-in" ref={containerRef}>
+    <div className="animate-fade-in -mx-4 px-4 relative select-none" ref={containerRef}>
+      {selectionStyle && <div style={selectionStyle} />}
       <div
         ref={gridRef}
         className={cn(
-          'grid grid-cols-1 gap-4 p-3 relative min-h-full flex-1 pb-20 justify-items-center transition-all duration-200',
+          'grid grid-cols-1 gap-4 p-3 min-h-full flex-1 pb-20 justify-items-center transition-all duration-200',
           false
         )}
         style={{
@@ -293,7 +298,6 @@ export function CardList({
           gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
         }}
       >
-        {selectionStyle && <div style={selectionStyle} />}
         {visibleCards.map((card, idx) => {
           const isSelected = selectedCardIds.has(card.id);
           return (

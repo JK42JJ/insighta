@@ -189,7 +189,7 @@ export function InsightCardItem({
                 onBlur={handleNoteSave}
                 onKeyDown={handleNoteKeyDown}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full text-xs bg-muted/50 border border-input rounded px-1.5 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full text-xs bg-muted/50 border border-input rounded px-1.5 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring select-text"
                 rows={2}
                 placeholder={t('cards.addNote')}
               />
@@ -270,7 +270,7 @@ export function InsightCardItem({
                 onBlur={handleNoteSave}
                 onKeyDown={handleNoteKeyDown}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full h-full text-xs bg-muted/50 border border-input rounded px-1.5 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full h-full text-xs bg-muted/50 border border-input rounded px-1.5 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-ring select-text"
                 placeholder={t('cards.addNote')}
               />
             ) : card.userNote || card.videoSummary ? (
