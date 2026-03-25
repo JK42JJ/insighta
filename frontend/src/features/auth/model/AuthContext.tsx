@@ -12,6 +12,10 @@ interface AuthContextType {
   isTokenReady: boolean;
   error: AuthError | null;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
+  signInWithMagicLink: (email: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -135,6 +139,81 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const signInWithEmail = async (email: string, password: string) => {
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setError(error);
+        throw error;
+      }
+    } catch (err) {
+      if (err instanceof Error && !('status' in err)) {
+        console.error('Unexpected error during email sign-in:', err);
+      }
+      throw err;
+    }
+  };
+
+  const signUpWithEmail = async (email: string, password: string, name?: string) => {
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: name ? { full_name: name } : undefined },
+      });
+      if (error) {
+        setError(error);
+        throw error;
+      }
+    } catch (err) {
+      if (err instanceof Error && !('status' in err)) {
+        console.error('Unexpected error during email sign-up:', err);
+      }
+      throw err;
+    }
+  };
+
+  const signInWithMagicLink = async (email: string) => {
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+        },
+      });
+      if (error) {
+        setError(error);
+        throw error;
+      }
+    } catch (err) {
+      if (err instanceof Error && !('status' in err)) {
+        console.error('Unexpected error during magic link:', err);
+      }
+      throw err;
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    setError(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        setError(error);
+        throw error;
+      }
+    } catch (err) {
+      if (err instanceof Error && !('status' in err)) {
+        console.error('Unexpected error during password reset:', err);
+      }
+      throw err;
+    }
+  };
+
   const signOut = async () => {
     setError(null);
     try {
@@ -159,6 +238,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isTokenReady,
         error,
         signInWithGoogle,
+        signInWithEmail,
+        signUpWithEmail,
+        signInWithMagicLink,
+        resetPassword,
         signOut,
       }}
     >
