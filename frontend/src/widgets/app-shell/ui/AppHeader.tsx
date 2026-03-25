@@ -142,7 +142,7 @@ export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps
               <DropdownMenuTrigger asChild>
                 <button
                   aria-label={t('header.openUserMenu')}
-                  className="flex items-center p-0.5 rounded-full hover:ring-2 hover:ring-primary/30 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  className="flex items-center p-0.5 rounded-full hover:ring-2 hover:ring-primary/30 transition-all focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                 >
                   <Avatar className="w-8 h-8 border-2 border-primary/20">
                     <AvatarImage src={userAvatar ?? undefined} alt={userName || 'User'} />
@@ -154,7 +154,8 @@ export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="w-56 bg-surface-mid border-border/50 z-50"
+                onCloseAutoFocus={(e) => e.preventDefault()}
+                className="w-56 bg-surface-mid border-border/50 z-50 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none"
               >
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col gap-1">

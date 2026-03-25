@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 
 /** Check if the target element is a dnd-kit drag handle or a selected draggable card */
 function isDndActivator(el: HTMLElement): boolean {
@@ -15,7 +15,7 @@ interface SelectionBox {
 interface UseDragSelectOptions {
   containerRef: React.RefObject<HTMLElement>;
   itemSelector: string;
-  onSelectionChange: (selectedIndices: number[]) => void;
+  onSelectionChange: (selectedIndices: number[], additive: boolean) => void;
   enabled?: boolean;
 }
 
@@ -26,89 +26,53 @@ export function useDragSelect({
   enabled = true,
 }: UseDragSelectOptions) {
   const [isDragging, setIsDragging] = useState(false);
+  // Viewport coordinates for visual rendering (converted to container-relative in useMemo)
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
   const [justFinishedDrag, setJustFinishedDrag] = useState(false);
-  const startPosRef = useRef({ x: 0, y: 0 });
   const isPendingRef = useRef(false);
   const startClientRef = useRef({ x: 0, y: 0 });
+  const endClientRef = useRef({ x: 0, y: 0 });
   const isDraggingRef = useRef(false);
+  const shiftKeyRef = useRef(false);
+  // Stable refs for use in native event handlers (avoid stale closures)
+  const containerRefStable = useRef(containerRef);
+  containerRefStable.current = containerRef;
+  const itemSelectorRef = useRef(itemSelector);
+  itemSelectorRef.current = itemSelector;
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
   const DRAG_THRESHOLD = 5;
 
-  // Keep ref in sync with state for use in native event handlers
   useEffect(() => {
     isDraggingRef.current = isDragging;
   }, [isDragging]);
 
-  const getRelativePosition = useCallback(
-    (clientX: number, clientY: number) => {
-      if (!containerRef.current) return { x: 0, y: 0 };
-      const rect = containerRef.current.getBoundingClientRect();
-      return {
-        x: clientX - rect.left + containerRef.current.scrollLeft,
-        y: clientY - rect.top + containerRef.current.scrollTop,
-      };
-    },
-    [containerRef]
-  );
-
-  const getSelectedIndices = useCallback(() => {
-    if (!containerRef.current || !selectionBox) return [];
-
-    const items = containerRef.current.querySelectorAll(itemSelector);
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const selectedIndices: number[] = [];
-
-    const minX = Math.min(selectionBox.startX, selectionBox.endX);
-    const maxX = Math.max(selectionBox.startX, selectionBox.endX);
-    const minY = Math.min(selectionBox.startY, selectionBox.endY);
-    const maxY = Math.max(selectionBox.startY, selectionBox.endY);
-
-    items.forEach((item, index) => {
-      const itemRect = item.getBoundingClientRect();
-      const itemX = itemRect.left - containerRect.left + containerRef.current!.scrollLeft;
-      const itemY = itemRect.top - containerRect.top + containerRef.current!.scrollTop;
-      const itemRight = itemX + itemRect.width;
-      const itemBottom = itemY + itemRect.height;
-
-      if (itemX < maxX && itemRight > minX && itemY < maxY && itemBottom > minY) {
-        selectedIndices.push(index);
-      }
-    });
-
-    return selectedIndices;
-  }, [containerRef, itemSelector, selectionBox]);
-
-  // Use pointerdown on document (capture phase) to fire BEFORE dnd-kit's handlers
   useEffect(() => {
     if (!enabled) return;
 
     const handlePointerDown = (e: PointerEvent) => {
       if (e.button !== 0) return;
       if (e.ctrlKey || e.metaKey) return;
+      shiftKeyRef.current = e.shiftKey;
 
-      // Only handle events inside our container
-      const container = containerRef.current;
+      const container = containerRefStable.current.current;
       if (!container) return;
       if (!container.contains(e.target as Node)) return;
 
-      // Skip if started on dnd-kit drag handle
       const target = e.target as HTMLElement;
       if (isDndActivator(target)) return;
 
-      const pos = getRelativePosition(e.clientX, e.clientY);
-      startPosRef.current = pos;
       startClientRef.current = { x: e.clientX, y: e.clientY };
+      endClientRef.current = { x: e.clientX, y: e.clientY };
       isPendingRef.current = true;
     };
 
     const handlePointerMove = (e: PointerEvent) => {
-      // Threshold check: start drag-select after moving enough pixels
       if (isPendingRef.current && !isDraggingRef.current) {
         const dx = Math.abs(e.clientX - startClientRef.current.x);
         const dy = Math.abs(e.clientY - startClientRef.current.y);
 
         if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
-          // Final check: if the start element was a dnd handle, bail out
           const startTarget = document.elementFromPoint(
             startClientRef.current.x,
             startClientRef.current.y
@@ -120,15 +84,13 @@ export function useDragSelect({
 
           isPendingRef.current = false;
           isDraggingRef.current = true;
-
-          // Prevent text selection
           document.body.style.userSelect = 'none';
 
           setSelectionBox({
-            startX: startPosRef.current.x,
-            startY: startPosRef.current.y,
-            endX: startPosRef.current.x,
-            endY: startPosRef.current.y,
+            startX: startClientRef.current.x,
+            startY: startClientRef.current.y,
+            endX: startClientRef.current.x,
+            endY: startClientRef.current.y,
           });
           setIsDragging(true);
         }
@@ -136,14 +98,39 @@ export function useDragSelect({
 
       if (!isDraggingRef.current) return;
 
-      const pos = getRelativePosition(e.clientX, e.clientY);
-      setSelectionBox((prev) => (prev ? { ...prev, endX: pos.x, endY: pos.y } : null));
+      endClientRef.current = { x: e.clientX, y: e.clientY };
+      setSelectionBox((prev) =>
+        prev ? { ...prev, endX: e.clientX, endY: e.clientY } : null
+      );
     };
 
     const handlePointerUp = () => {
       if (isDraggingRef.current) {
-        // Use a microtask to read the latest selectionBox state
+        // Perform intersection IMMEDIATELY using refs (no React state timing issues)
+        const container = containerRefStable.current.current;
+        if (container) {
+          const start = startClientRef.current;
+          const end = endClientRef.current;
+          const minX = Math.min(start.x, end.x);
+          const maxX = Math.max(start.x, end.x);
+          const minY = Math.min(start.y, end.y);
+          const maxY = Math.max(start.y, end.y);
+
+          const items = container.querySelectorAll(itemSelectorRef.current);
+          const selectedIndices: number[] = [];
+
+          items.forEach((item, index) => {
+            const r = item.getBoundingClientRect();
+            if (r.left < maxX && r.right > minX && r.top < maxY && r.bottom > minY) {
+              selectedIndices.push(index);
+            }
+          });
+
+          onSelectionChangeRef.current(selectedIndices, shiftKeyRef.current);
+        }
+
         setIsDragging(false);
+        setSelectionBox(null);
         setJustFinishedDrag(true);
         setTimeout(() => setJustFinishedDrag(false), 100);
       }
@@ -152,7 +139,6 @@ export function useDragSelect({
       document.body.style.userSelect = '';
     };
 
-    // Capture phase ensures we fire BEFORE any child element handlers (including dnd-kit)
     document.addEventListener('pointerdown', handlePointerDown, true);
     document.addEventListener('pointermove', handlePointerMove);
     document.addEventListener('pointerup', handlePointerUp);
@@ -163,34 +149,34 @@ export function useDragSelect({
       document.removeEventListener('pointerup', handlePointerUp);
       document.body.style.userSelect = '';
     };
-  }, [enabled, containerRef, getRelativePosition]);
+  }, [enabled]);
 
-  // Finalize selection when isDragging transitions from true to false
-  const prevDraggingRef = useRef(false);
-  useEffect(() => {
-    if (prevDraggingRef.current && !isDragging && selectionBox) {
-      const selectedIndices = getSelectedIndices();
-      onSelectionChange(selectedIndices);
-      setSelectionBox(null);
-    }
-    prevDraggingRef.current = isDragging;
-  }, [isDragging, selectionBox, getSelectedIndices, onSelectionChange]);
+  // Convert viewport coordinates to container-relative for absolute-positioned visual rect
+  const selectionStyle = useMemo(() => {
+    if (!selectionBox || !isDragging || !containerRef.current) return null;
 
-  const selectionStyle =
-    selectionBox && isDragging
-      ? {
-          position: 'absolute' as const,
-          left: Math.min(selectionBox.startX, selectionBox.endX),
-          top: Math.min(selectionBox.startY, selectionBox.endY),
-          width: Math.abs(selectionBox.endX - selectionBox.startX),
-          height: Math.abs(selectionBox.endY - selectionBox.startY),
-          backgroundColor: 'rgba(255, 107, 61, 0.15)',
-          border: '1px solid rgba(255, 107, 61, 0.5)',
-          borderRadius: '4px',
-          pointerEvents: 'none' as const,
-          zIndex: 50,
-        }
-      : null;
+    const rect = containerRef.current.getBoundingClientRect();
+    const scrollLeft = containerRef.current.scrollLeft;
+    const scrollTop = containerRef.current.scrollTop;
+
+    const startRelX = selectionBox.startX - rect.left + scrollLeft;
+    const startRelY = selectionBox.startY - rect.top + scrollTop;
+    const endRelX = selectionBox.endX - rect.left + scrollLeft;
+    const endRelY = selectionBox.endY - rect.top + scrollTop;
+
+    return {
+      position: 'absolute' as const,
+      left: Math.min(startRelX, endRelX),
+      top: Math.min(startRelY, endRelY),
+      width: Math.abs(endRelX - startRelX),
+      height: Math.abs(endRelY - startRelY),
+      backgroundColor: 'rgba(255, 107, 61, 0.15)',
+      border: '1px solid rgba(255, 107, 61, 0.5)',
+      borderRadius: '4px',
+      pointerEvents: 'none' as const,
+      zIndex: 50,
+    };
+  }, [selectionBox, isDragging, containerRef]);
 
   return {
     isDragging,
