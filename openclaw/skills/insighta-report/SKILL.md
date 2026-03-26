@@ -15,8 +15,9 @@ heartbeat (주 1회 월요일) 또는 사용자 요청 시 호출.
 
 1. Insighta API에 GET 요청:
    ```bash
-   curl -s "http://localhost:3000/api/v1/analytics/weekly-report" \
-     -H "Authorization: Bearer $INSIGHTA_SERVICE_KEY"
+   INSIGHTA_API_URL="${INSIGHTA_API_URL:-http://localhost:3000}"
+   curl -s "${INSIGHTA_API_URL}/api/v1/analytics/weekly-report" \
+     -H "Authorization: Bearer $INSIGHTA_BOT_KEY"
    ```
 
 2. 만다라트별 활동 요약 생성
@@ -34,6 +35,10 @@ heartbeat (주 1회 월요일) 또는 사용자 요청 시 호출.
    ```
 
 5. 활동이 전혀 없는 만다라트는 가볍게만 언급하고 넘어간다.
+
+## Environment Variables
+- `INSIGHTA_BOT_KEY` — Bot 인증 Bearer 토큰 (필수)
+- `INSIGHTA_API_URL` — API base URL (기본값: `http://localhost:3000`, prod: `https://insighta.one`)
 
 ## API Response Format
 ```json
