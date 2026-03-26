@@ -4,6 +4,7 @@ import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 import { Lightbulb, Plus, ExternalLink } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { handleThumbnailError } from '@/shared/lib/image-utils';
 import {
   format,
   differenceInHours,
@@ -268,10 +269,7 @@ export function ScratchPad({
                           src={card.thumbnail}
                           alt={card.title}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              'https://via.placeholder.com/320x180?text=Thumbnail';
-                          }}
+                          onError={handleThumbnailError}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 

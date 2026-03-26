@@ -6,6 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { InsightCard } from '@/entities/card/model/types';
 import { type DragData, type DropData, cardDragId } from '@/shared/lib/dnd';
 import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
+import { handleThumbnailError } from '@/shared/lib/image-utils';
 import {
   Lightbulb,
   Plus,
@@ -835,6 +836,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   draggable={false}
                   className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                   loading="lazy"
+                  onError={handleThumbnailError}
                 />
                 <span
                   className={cn(
@@ -1119,6 +1121,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                                 draggable={false}
                                 className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                                 loading="lazy"
+                                onError={handleThumbnailError}
                               />
                               <span className="absolute bottom-0 right-0 text-[7px] bg-background/80 text-foreground px-0.5 font-medium rounded-tl">
                                 {getTimeLabel(new Date(card.createdAt), t)}

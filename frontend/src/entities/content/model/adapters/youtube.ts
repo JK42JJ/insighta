@@ -26,7 +26,7 @@ export const YouTubeAdapter: SourceAdapter<UserVideoStateWithVideo> = {
     const videoId = extractVideoId(url);
     return {
       title: videoId ? `YouTube Video (${videoId})` : 'YouTube Video',
-      thumbnail: videoId ? `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg` : null,
+      thumbnail: videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null,
       description: null,
       author: null,
       siteName: 'YouTube',

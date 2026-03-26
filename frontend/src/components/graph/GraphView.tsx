@@ -7,6 +7,7 @@ import { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Network, Loader2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { handleThumbnailError } from '@/shared/lib/image-utils';
 import { useGraphData } from './useGraphData';
 import { useGraphViewStore } from './useGraphViewStore';
 import { GraphCanvas } from './GraphCanvas';
@@ -208,6 +209,7 @@ function NodeDetailOverlay({
               src={thumbnail}
               alt=""
               className="mt-2 rounded h-16 object-cover"
+              onError={handleThumbnailError}
             />
           )}
           {node.type === 'goal' && node.properties.level_key && (
