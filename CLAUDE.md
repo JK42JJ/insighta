@@ -180,6 +180,14 @@ docs/design/                          <- 설계 문서 디렉토리 (GitHub repo
 - **Bot 역할 한정**: 사용자 대면 봇은 서비스 도메인에서만 동작. 시스템 도메인 접근 금지. 개발 자동화(Agent, CI/CD)는 도구이며 시스템 도메인에서 동작.
 - → [상세: memory/project-principle-service-system.md]
 
+### 테스트 필수 규칙 (절대 규칙)
+- **새 함수/hook/API 추가 시** → 해당 기능의 단위 테스트 최소 1개 함께 작성. 테스트 없이 "완료" 처리 금지.
+- **버그 수정 시** → 해당 버그를 재현하는 regression test 1개 함께 작성. 같은 버그가 두 번 발생하면 안 됨.
+- **테스트 0개 CP는 미완료** — tsc + build 통과는 50%. 테스트 통과가 나머지 50%.
+- **기존 테스트 삭제/skip 처리 금지** — 테스트가 실패하면 코드를 고쳐야지 테스트를 제거하면 안 됨.
+- **테스트 인프라**: Backend = Jest (`tests/smoke/`), Frontend = Vitest (`frontend/src/__tests__/`)
+- **CI 게이트**: test-backend + test-frontend job이 실패하면 build/deploy 차단됨
+
 ### 삭제 금지
 - `scripts/agent-dashboard.sh`, `scripts/ops-dashboard.sh`
 - `.claude/` 하위 모든 파일

@@ -50,10 +50,38 @@ jobs:
             echo "History: D&D regression 3x (CP248, CP268, CP271)"
           fi
 
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx jest --testPathPattern=tests/smoke
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: cd frontend && npm ci
+      - run: cd frontend && npx vitest run
+
   build-api:
     name: Build API
     runs-on: ubuntu-latest
-    needs: [lint, typecheck]
+    needs: [lint, typecheck, test-backend]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -67,7 +95,7 @@ jobs:
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest
-    needs: [lint]
+    needs: [lint, test-frontend]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
