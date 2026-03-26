@@ -1,5 +1,6 @@
 // Dynamic import to avoid module-level config validation crash in CI.
 // server.ts → config/index.ts → parseEnv() throws if ENCRYPTION_SECRET missing.
+export {};
 
 const canBootServer = !!(
   process.env['SUPABASE_JWT_SECRET'] ||
