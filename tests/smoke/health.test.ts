@@ -1,7 +1,6 @@
-import { buildServer } from '../../src/api/server';
+// Dynamic import to avoid module-level config validation crash in CI.
+// server.ts → config/index.ts → parseEnv() throws if ENCRYPTION_SECRET missing.
 
-// buildServer() requires SUPABASE_JWT_SECRET or JWKS access.
-// In CI (no DB, no Supabase), skip server boot tests.
 const canBootServer = !!(
   process.env['SUPABASE_JWT_SECRET'] ||
   process.env['JWT_SECRET'] ||
@@ -11,9 +10,11 @@ const canBootServer = !!(
 const describeIfServer = canBootServer ? describe : describe.skip;
 
 describeIfServer('GET /health', () => {
-  let app: Awaited<ReturnType<typeof buildServer>>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let app: any;
 
   beforeAll(async () => {
+    const { buildServer } = await import('../../src/api/server');
     app = await buildServer();
     await app.ready();
   });
@@ -39,7 +40,6 @@ describe('Health test environment check', () => {
     if (!canBootServer) {
       console.log('SKIP: Server boot tests skipped — no JWT_SECRET/SUPABASE_URL configured');
     }
-    // Always passes — ensures the test file itself is valid
     expect(true).toBe(true);
   });
 });
