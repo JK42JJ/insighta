@@ -508,6 +508,48 @@ class ApiClient {
   }
 
   // ========================================
+  // Mandala Sharing Endpoints
+  // ========================================
+
+  async createShareLink(mandalaId: string, mode: 'view' | 'view_cards' | 'clone' = 'view', expiresInDays?: number): Promise<{
+    status: string;
+    data: { id: string; shareCode: string; mode: string; expiresAt: string | null; createdAt: string };
+  }> {
+    return this.request('/sharing/create', {
+      method: 'POST',
+      body: JSON.stringify({ mandalaId, mode, expiresInDays }),
+    });
+  }
+
+  async getSharedMandala(code: string): Promise<{
+    status: string;
+    data: {
+      share: { id: string; shareCode: string; mode: string; expiresAt: string | null };
+      mandala: { title: string; levels: Array<{ levelKey: string; centerGoal: string; subjects: string[]; parentLevelId: string | null }>; cardCount?: number };
+    };
+  }> {
+    return this.request(`/sharing/${code}`);
+  }
+
+  async cloneSharedMandala(code: string): Promise<{
+    status: string;
+    data: { mandalaId: string; title: string };
+  }> {
+    return this.request(`/sharing/${code}/clone`, { method: 'POST' });
+  }
+
+  async listShareLinks(mandalaId: string): Promise<{
+    status: string;
+    data: Array<{ id: string; shareCode: string; mode: string; expiresAt: string | null; createdAt: string }>;
+  }> {
+    return this.request(`/sharing/mandala/${mandalaId}`);
+  }
+
+  async deleteShareLink(shareId: string): Promise<{ status: string }> {
+    return this.request(`/sharing/${shareId}`, { method: 'DELETE' });
+  }
+
+  // ========================================
   // YouTube Library Endpoints
   // ========================================
 

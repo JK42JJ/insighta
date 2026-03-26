@@ -12,7 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/dialog';
-import { Loader2, Plus, ExternalLink, MoreHorizontal } from 'lucide-react';
+import { Loader2, Plus, ExternalLink, MoreHorizontal, Share2 } from 'lucide-react';
+import { ShareMandalaModal } from '@/features/sharing/ui/ShareMandalaModal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +38,7 @@ export function MandalaSettingsTab() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null);
+  const [shareTarget, setShareTarget] = useState<{ id: string; title: string } | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
   const { data: mandalaListData, isLoading: isListLoading } = useMandalaList();
@@ -225,6 +227,16 @@ export function MandalaSettingsTab() {
                             {t('mandalaSettings.edit', 'Edit')}
                             <ExternalLink className="w-3 h-3 ml-auto" />
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShareTarget({ id: mandala.id, title: displayTitle });
+                            }}
+                            className="text-sm"
+                          >
+                            {t('mandalaSettings.share', 'Share')}
+                            <Share2 className="w-3 h-3 ml-auto" />
+                          </DropdownMenuItem>
                           {!mandala.isDefault && (
                             <DropdownMenuItem
                               onClick={(e) => {
@@ -328,6 +340,15 @@ export function MandalaSettingsTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Share Modal */}
+      {shareTarget && (
+        <ShareMandalaModal
+          open={!!shareTarget}
+          onOpenChange={(open) => { if (!open) setShareTarget(null); }}
+          mandalaId={shareTarget.id}
+          mandalaTitle={shareTarget.title}
+        />
+      )}
     </>
   );
 }
