@@ -508,6 +508,28 @@ class ApiClient {
   }
 
   // ========================================
+  // YouTube Library Endpoints
+  // ========================================
+
+  async getYouTubeSubscriptions(pageToken?: string): Promise<{
+    status: string;
+    data: Array<{ channelId: string; title: string; description: string; thumbnailUrl: string; publishedAt: string }>;
+    pagination: { nextPageToken?: string; totalResults: number };
+  }> {
+    const query = pageToken ? `?pageToken=${pageToken}` : '';
+    return this.request(`/youtube/subscriptions${query}`);
+  }
+
+  async getYouTubePlaylists(pageToken?: string): Promise<{
+    status: string;
+    data: Array<{ playlistId: string; title: string; description: string; thumbnailUrl: string; itemCount: number; publishedAt: string }>;
+    pagination: { nextPageToken?: string; totalResults: number };
+  }> {
+    const query = pageToken ? `?pageToken=${pageToken}` : '';
+    return this.request(`/youtube/playlists${query}`);
+  }
+
+  // ========================================
   // Analytics Endpoints
   // ========================================
 
