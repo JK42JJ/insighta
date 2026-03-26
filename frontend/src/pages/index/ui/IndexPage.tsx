@@ -7,6 +7,7 @@ import {
   type DragOverEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { AppShell } from '@/widgets/app-shell';
@@ -35,6 +36,7 @@ import {
   pointerWithinThenClosest,
   type DragData,
   type DropData,
+  cardDragId,
 } from '@/shared/lib/dnd';
 
 const LandingPage = lazy(() => import('@/pages/landing'));
@@ -384,6 +386,30 @@ function AuthenticatedApp() {
         }));
 
         cards.handleCardsReorder?.(reorderedCards);
+      }
+
+      // ScratchPad internal reorder: both active and over are scratchpad cards
+      const activeSource = dragData.type === 'card' ? (dragData as { source?: string }).source : undefined;
+      const overSource = (over.data.current as Record<string, unknown> | undefined)?.source;
+      if (
+        activeSource === 'scratchpad' &&
+        overSource === 'scratchpad' &&
+        active.id !== over.id
+      ) {
+        const sortedSP = [...cards.scratchPadCards].sort((a, b) => {
+          if (a.sortOrder != null && b.sortOrder != null) return a.sortOrder - b.sortOrder;
+          if (a.sortOrder != null) return -1;
+          if (b.sortOrder != null) return 1;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        const oldIndex = sortedSP.findIndex((c) => cardDragId(c.id) === String(active.id));
+        const newIndex = sortedSP.findIndex((c) => cardDragId(c.id) === String(over.id));
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const reordered = arrayMove(sortedSP, oldIndex, newIndex)
+            .map((card, index) => ({ ...card, sortOrder: index }));
+          cards.handleCardsReorder?.(reordered);
+        }
+        return;
       }
 
       // Card dropped on scratchpad

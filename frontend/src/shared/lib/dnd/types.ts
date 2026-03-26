@@ -2,7 +2,7 @@ import type { InsightCard } from '@/entities/card/model/types';
 
 // Data attached to draggable items
 export type DragData =
-  | { type: 'card'; card: InsightCard; selectedCardIds?: string[] }
+  | { type: 'card'; card: InsightCard; selectedCardIds?: string[]; source?: 'scratchpad' }
   | { type: 'cell'; gridIndex: number }
   | { type: 'card-reorder'; card: InsightCard };
 
