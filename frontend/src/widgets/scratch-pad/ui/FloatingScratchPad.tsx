@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback, forwardRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useDroppable, useDraggable } from '@dnd-kit/core';
+import { useDroppable } from '@dnd-kit/core';
+import { useSortable, SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { InsightCard } from '@/entities/card/model/types';
 import { type DragData, type DropData, cardDragId } from '@/shared/lib/dnd';
 import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
@@ -73,7 +75,7 @@ function getTimeLabel(
   return format(date, 'yy.MM');
 }
 
-function DraggableScratchCard({
+function SortableScratchCard({
   card,
   selectedCardIds,
   children,
@@ -83,19 +85,24 @@ function DraggableScratchCard({
   children: (props: {
     isDragging: boolean;
     dragRef: (node: HTMLElement | null) => void;
-    dragListeners: ReturnType<typeof useDraggable>['listeners'];
-    dragAttributes: ReturnType<typeof useDraggable>['attributes'];
+    dragListeners: ReturnType<typeof useSortable>['listeners'];
+    dragAttributes: ReturnType<typeof useSortable>['attributes'];
+    style: React.CSSProperties;
   }) => React.ReactNode;
 }) {
   const multiIds =
     selectedCardIds.has(card.id) && selectedCardIds.size > 1
       ? Array.from(selectedCardIds)
       : undefined;
-  const dragData: DragData = { type: 'card', card, selectedCardIds: multiIds };
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const dragData: DragData = { type: 'card', card, selectedCardIds: multiIds, source: 'scratchpad' };
+  const { attributes, listeners, setNodeRef, isDragging, transform, transition } = useSortable({
     id: cardDragId(card.id),
     data: dragData,
   });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
   return (
     <>
       {children({
@@ -103,6 +110,7 @@ function DraggableScratchCard({
         dragRef: setNodeRef,
         dragListeners: listeners,
         dragAttributes: attributes,
+        style,
       })}
     </>
   );
@@ -245,10 +253,18 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
 
     const sortedCards = useMemo(
       () =>
-        [...cards].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        ),
+        [...cards].sort((a, b) => {
+          if (a.sortOrder != null && b.sortOrder != null) return a.sortOrder - b.sortOrder;
+          if (a.sortOrder != null) return -1;
+          if (b.sortOrder != null) return 1;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }),
       [cards]
+    );
+
+    const sortableIds = useMemo(
+      () => sortedCards.map((c) => cardDragId(c.id)),
+      [sortedCards]
     );
 
     const handleDragSelectChange = useCallback(
@@ -691,13 +707,14 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       const checkSize = isCompact ? 'w-2 h-2' : 'w-2.5 h-2.5';
 
       return (
-        <DraggableScratchCard key={card.id} card={card} selectedCardIds={selectedCardIds}>
-          {({ isDragging: isDragActive, dragRef, dragListeners, dragAttributes }) => {
+        <SortableScratchCard key={card.id} card={card} selectedCardIds={selectedCardIds}>
+          {({ isDragging: isDragActive, dragRef, dragListeners, dragAttributes, style: sortableStyle }) => {
             // Selected cards: entire card is draggable. Unselected: only grip handle.
             const cardListeners = isSelected ? dragListeners : undefined;
             return (
             <div
               ref={dragRef}
+              style={sortableStyle}
               {...dragAttributes}
               {...cardListeners}
               data-card-item
@@ -773,7 +790,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
             </div>
           );
           }}
-        </DraggableScratchCard>
+        </SortableScratchCard>
       );
     };
 
@@ -852,14 +869,16 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 scroll-smooth"
                   onClick={handleContainerClick}
                 >
-                  {cards.length === 0 ? (
-                    <div className="flex items-center gap-1.5 text-muted-foreground/60">
-                      <Plus className="w-3 h-3" />
-                      <span className="text-xs">{t('ideation.emptyHint')}</span>
-                    </div>
-                  ) : (
-                    sortedCards.map((card, idx) => renderCardItem(card, idx, true))
-                  )}
+                  <SortableContext items={sortableIds} strategy={rectSortingStrategy}>
+                    {cards.length === 0 ? (
+                      <div className="flex items-center gap-1.5 text-muted-foreground/60">
+                        <Plus className="w-3 h-3" />
+                        <span className="text-xs">{t('ideation.emptyHint')}</span>
+                      </div>
+                    ) : (
+                      sortedCards.map((card, idx) => renderCardItem(card, idx, true))
+                    )}
+                  </SortableContext>
                 </div>
                 <button
                   onClick={() => scrollByAmount('right')}
@@ -969,19 +988,21 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                     </span>
                   </div>
                 ) : (
-                  sortedCards.map((card, idx) => {
+                  <SortableContext items={sortableIds} strategy={rectSortingStrategy}>
+                  {sortedCards.map((card, idx) => {
                     const isSelected = selectedCardIds.has(card.id);
                     return (
-                      <DraggableScratchCard
+                      <SortableScratchCard
                         key={card.id}
                         card={card}
                         selectedCardIds={selectedCardIds}
                       >
-                        {({ isDragging: isDragActive, dragRef, dragListeners, dragAttributes }) => {
+                        {({ isDragging: isDragActive, dragRef, dragListeners, dragAttributes, style: sortableStyle }) => {
                           const cardListeners = isSelected ? dragListeners : undefined;
                           return (
                           <div
                             ref={dragRef}
+                            style={sortableStyle}
                             {...dragAttributes}
                             {...cardListeners}
                             data-card-item
@@ -1041,9 +1062,10 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                           </div>
                         );
                         }}
-                      </DraggableScratchCard>
+                      </SortableScratchCard>
                     );
-                  })
+                  })}
+                  </SortableContext>
                 )}
               </div>
               <button
@@ -1180,7 +1202,9 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2 content-start">
-                  {sortedCards.map((card, idx) => renderCardItem(card, idx, false))}
+                  <SortableContext items={sortableIds} strategy={rectSortingStrategy}>
+                    {sortedCards.map((card, idx) => renderCardItem(card, idx, false))}
+                  </SortableContext>
                 </div>
               )}
             </div>
