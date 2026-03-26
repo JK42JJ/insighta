@@ -72,10 +72,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: cd frontend && npm install --no-audit
+          node-version: 20
+      - name: Clean install (resolves platform-specific native binaries)
+        run: cd frontend && npm install --no-package-lock --no-audit
       - run: cd frontend && npx vitest run
 
   build-api:
