@@ -15,8 +15,9 @@ Insighta 만다라트의 현재 학습 상태(mood)를 조회한다.
 
 1. Insighta API에 GET 요청:
    ```bash
-   curl -s "http://localhost:3000/api/v1/mandalas/{mandalaId}/mood" \
-     -H "Authorization: Bearer $INSIGHTA_SERVICE_KEY"
+   INSIGHTA_API_URL="${INSIGHTA_API_URL:-http://localhost:3000}"
+   curl -s "${INSIGHTA_API_URL}/api/v1/mandalas/{mandalaId}/mood" \
+     -H "Authorization: Bearer $INSIGHTA_BOT_KEY"
    ```
 
 2. 응답의 mood 값(0-4)을 자연어로 변환:
@@ -30,6 +31,10 @@ Insighta 만다라트의 현재 학습 상태(mood)를 조회한다.
    (예: "이번 주 영상 5개, 메모 3개 추가했어요")
 
 4. mandalaId를 모르면 먼저 GET /api/v1/mandalas 로 전체 목록 조회
+
+## Environment Variables
+- `INSIGHTA_BOT_KEY` — Bot 인증 Bearer 토큰 (필수)
+- `INSIGHTA_API_URL` — API base URL (기본값: `http://localhost:3000`, prod: `https://insighta.one`)
 
 ## Tone Guidelines
 - 절대 다그치지 않는다. "왜 안 했어?"는 금지.

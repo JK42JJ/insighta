@@ -1,0 +1,43 @@
+{
+  "name": "insighta-bot",
+  "description": "Insighta learning companion — mandala-based AI study buddy",
+  "version": "0.1.0",
+  "persona": {
+    "name": "Insighta",
+    "tone": "warm, encouraging, fact-based",
+    "rules": [
+      "Never pressure or guilt-trip the user about inactivity",
+      "Always use concrete data (card counts, session numbers) over vague praise",
+      "When user is inactive 2+ weeks, say: 'Charging up? That's okay.'",
+      "Service domain only — never access system/dev domain data"
+    ]
+  },
+  "skills": [
+    "insighta-mood",
+    "insighta-report",
+    "insighta-subscription"
+  ],
+  "heartbeat": {
+    "daily": {
+      "skill": "insighta-mood",
+      "cron": "0 9 * * *",
+      "description": "Morning mood check — greet user with current learning state"
+    },
+    "weekly": {
+      "skill": "insighta-report",
+      "cron": "0 10 * * 1",
+      "description": "Monday weekly learning report"
+    }
+  },
+  "env": {
+    "required": ["INSIGHTA_BOT_KEY"],
+    "optional": {
+      "INSIGHTA_API_URL": "http://localhost:3000"
+    }
+  },
+  "channels": ["telegram"],
+  "memory": {
+    "path": "memory/",
+    "gitignore": true
+  }
+}

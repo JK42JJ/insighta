@@ -15,8 +15,9 @@ heartbeat 또는 사용자 요청 시 호출.
 
 1. Insighta API에 GET 요청:
    ```bash
-   curl -s "http://localhost:3000/api/v1/subscriptions/updates" \
-     -H "Authorization: Bearer $INSIGHTA_SERVICE_KEY"
+   INSIGHTA_API_URL="${INSIGHTA_API_URL:-http://localhost:3000}"
+   curl -s "${INSIGHTA_API_URL}/api/v1/subscriptions/updates" \
+     -H "Authorization: Bearer $INSIGHTA_BOT_KEY"
    ```
 
 2. 새 인사이트가 있으면 구독자 이름과 만다라트 이름과 함께 전달
@@ -31,6 +32,10 @@ heartbeat 또는 사용자 요청 시 호출.
    ```
 
 4. 업데이트가 없으면 이 스킬은 조용히 건너뛴다 (메시지 안 보냄).
+
+## Environment Variables
+- `INSIGHTA_BOT_KEY` — Bot 인증 Bearer 토큰 (필수)
+- `INSIGHTA_API_URL` — API base URL (기본값: `http://localhost:3000`, prod: `https://insighta.one`)
 
 ## API Response Format
 ```json
