@@ -29,7 +29,7 @@ const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 const CARD_INTEGRITY_FIELDS = ['id', 'title', 'url', 'cell_index', 'level_id'] as const;
 
 /** Optional but important fields that indicate a full card (not a ghost copy) */
-const CARD_CONTENT_FIELDS = ['thumbnail', 'link_type', 'user_note'] as const;
+const _CARD_CONTENT_FIELDS = ['thumbnail', 'link_type', 'user_note'] as const;
 
 // ---------------------------------------------------------------------------
 // Auth Helper
@@ -748,7 +748,7 @@ test.describe('D&D — Ideation Position-Sensitive Tests', () => {
     }
 
     const beforeCards = await getAllCards(page, mandalaId);
-    const cardId = await card.getAttribute('data-card-id');
+    const _cardId = await card.getAttribute('data-card-id');
 
     const box = await card.boundingBox();
     if (!box) { test.skip(true, 'No bounding box'); return; }

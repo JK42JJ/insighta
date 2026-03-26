@@ -76,7 +76,7 @@ export function useUIPreferences(): UseUIPreferencesReturn {
           return DEFAULT_UI_PREFERENCES;
         }
         // 42P01: table doesn't exist, 404: not found - return defaults silently
-        if (error.code === '42P01' || (error as any).status === 404) {
+        if (error.code === '42P01' || (error as { status?: number }).status === 404) {
           console.warn('user_ui_preferences table not found, using defaults');
           return DEFAULT_UI_PREFERENCES;
         }
@@ -89,12 +89,13 @@ export function useUIPreferences(): UseUIPreferencesReturn {
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
     // Prevent infinite retries on table not found or permission errors
-    retry: (failureCount, error: any) => {
+    retry: (failureCount, error: unknown) => {
+      const err = error as { code?: string; status?: number } | null;
       if (
-        error?.code === '42P01' ||
-        error?.status === 404 ||
-        error?.status === 403 ||
-        error?.status === 406
+        err?.code === '42P01' ||
+        err?.status === 404 ||
+        err?.status === 403 ||
+        err?.status === 406
       ) {
         return false;
       }
@@ -123,12 +124,13 @@ export function useUIPreferences(): UseUIPreferencesReturn {
       if (error) throw error;
     },
     // Prevent infinite retries on table not found or permission errors
-    retry: (failureCount, error: any) => {
+    retry: (failureCount, error: unknown) => {
+      const err = error as { code?: string; status?: number } | null;
       if (
-        error?.code === '42P01' ||
-        error?.status === 404 ||
-        error?.status === 403 ||
-        error?.status === 406
+        err?.code === '42P01' ||
+        err?.status === 404 ||
+        err?.status === 403 ||
+        err?.status === 406
       ) {
         return false;
       }

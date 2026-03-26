@@ -137,8 +137,8 @@ function AuthenticatedApp() {
   const { mandalaLevels: queryMandalaLevels } = useMandalaQuery(effectiveMandalaId);
 
   // 4. Refs to break circular dependency: navigation <-> card orchestrator
-  const moveCardsRef = useRef<(...args: any[]) => void>(() => {});
-  const swapCardsRef = useRef<(...args: any[]) => void>(() => {});
+  const moveCardsRef = useRef<(...args: unknown[]) => void>(() => {});
+  const swapCardsRef = useRef<(...args: unknown[]) => void>(() => {});
 
   // 5. Mandala navigation (wired to card orchestrator via refs)
   const navigation = useMandalaNavigation({

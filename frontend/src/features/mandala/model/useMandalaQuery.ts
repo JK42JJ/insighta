@@ -102,7 +102,7 @@ export function useMandalaList() {
     // P0 hardening: mandala list is service-critical — more aggressive retry
     retry: (failureCount, error) => {
       // Never retry auth errors beyond 1
-      if (error instanceof Error && 'statusCode' in error && (error as any).statusCode === 401) {
+      if (error instanceof Error && 'statusCode' in error && (error as { statusCode?: number }).statusCode === 401) {
         return failureCount < 1;
       }
       // Retry up to 5 times for this critical query (vs default 3)

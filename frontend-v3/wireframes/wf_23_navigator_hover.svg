@@ -1,0 +1,62 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg" style="background:#FFFFFF;font-family:Arial,sans-serif">
+<rect x="0" y="0" width="1440" height="900" rx="0" fill="#FFFFFF" stroke="none" stroke-width="1" />
+<rect x="0" y="0" width="1440" height="50" rx="0" fill="#F0F0F0" stroke="#D0D0D0" stroke-width="1" />
+<text x="16" y="31" font-size="14" fill="#111111" font-weight="bold" text-anchor="start">주식투자 — 전체 카드</text>
+<rect x="1340" y="12" width="88" height="28" rx="6" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<text x="1384" y="30" font-size="11" fill="#555555" font-weight="normal" text-anchor="middle">✕ 닫기</text>
+<rect x="0" y="50" width="1220" height="28" rx="0" fill="#FFF3D0" stroke="#DDAA00" stroke-width="1" />
+<text x="12" y="68" font-size="11" fill="#886600" font-weight="normal" text-anchor="start">3장 드래그 중 → ETF 섹터에 드롭합니다</text>
+<rect x="16" y="84" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="16" y="84" width="220" height="93" rx="8" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="16" y="169" width="220" height="8" rx="0" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="248" y="84" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="248" y="84" width="220" height="93" rx="8" fill="#2a1a3a" stroke="none" stroke-width="1" />
+<rect x="248" y="169" width="220" height="8" rx="0" fill="#2a1a3a" stroke="none" stroke-width="1" />
+<rect x="480" y="84" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="480" y="84" width="220" height="93" rx="8" fill="#1a3a2a" stroke="none" stroke-width="1" />
+<rect x="480" y="169" width="220" height="8" rx="0" fill="#1a3a2a" stroke="none" stroke-width="1" />
+<rect x="712" y="84" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="712" y="84" width="220" height="93" rx="8" fill="#3a2a1a" stroke="none" stroke-width="1" />
+<rect x="712" y="169" width="220" height="8" rx="0" fill="#3a2a1a" stroke="none" stroke-width="1" />
+<rect x="944" y="84" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="944" y="84" width="220" height="93" rx="8" fill="#1a1a3a" stroke="none" stroke-width="1" />
+<rect x="944" y="169" width="220" height="8" rx="0" fill="#1a1a3a" stroke="none" stroke-width="1" />
+<rect x="16" y="266" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="16" y="266" width="220" height="93" rx="8" fill="#2a3a1a" stroke="none" stroke-width="1" />
+<rect x="16" y="351" width="220" height="8" rx="0" fill="#2a3a1a" stroke="none" stroke-width="1" />
+<rect x="248" y="266" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="248" y="266" width="220" height="93" rx="8" fill="#3a1a1a" stroke="none" stroke-width="1" />
+<rect x="248" y="351" width="220" height="8" rx="0" fill="#3a1a1a" stroke="none" stroke-width="1" />
+<rect x="480" y="266" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="480" y="266" width="220" height="93" rx="8" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="480" y="351" width="220" height="8" rx="0" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="520" y="250" width="160" height="56" rx="8" fill="#FFFFFF" stroke="#4488CC" stroke-width="2" />
+<rect x="520" y="250" width="160" height="28" rx="8" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="520" y="278" width="160" height="8" rx="0" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="526" y="252" width="26" height="18" rx="9" fill="#4488CC" stroke="none" stroke-width="1" />
+<text x="539" y="264" font-size="9" fill="#FFFFFF" font-weight="bold" text-anchor="middle">3</text>
+<text x="530" y="296" font-size="9" fill="#4488CC" font-weight="bold" text-anchor="start">ETF에 드롭</text>
+<rect x="1220" y="0" width="220" height="900" rx="0" fill="#F5F5F5" stroke="#BBBBBB" stroke-width="1.5" />
+<text x="1232" y="26" font-size="11" fill="#111111" font-weight="bold" text-anchor="start">만다라 네비게이터</text>
+<rect x="1228" y="36" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1256" y="54" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">기시경제</text>
+<rect x="1288" y="36" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1316" y="54" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">주식투자</text>
+<rect x="1348" y="36" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1376" y="54" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">자산분배</text>
+<rect x="1226" y="66" width="60" height="32" rx="5" fill="#E8FFE8" stroke="#44AA44" stroke-width="2" />
+<text x="1256" y="86" font-size="8" fill="#111111" font-weight="bold" text-anchor="middle">ETF</text>
+<rect x="1288" y="64" width="90" height="24" rx="6" fill="#111111" stroke="none" stroke-width="1" />
+<text x="1333" y="78" font-size="8" fill="#FFFFFF" font-weight="bold" text-anchor="middle">ETF에 드롭</text>
+<rect x="1288" y="68" width="56" height="28" rx="4" fill="#D0D8E8" stroke="#BBBBBB" stroke-width="1" />
+<text x="1316" y="86" font-size="12" fill="#111111" font-weight="normal" text-anchor="middle">🐱</text>
+<rect x="1348" y="68" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1376" y="86" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">크립토</text>
+<rect x="1228" y="100" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1256" y="118" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">은퇴설계</text>
+<rect x="1288" y="100" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1316" y="118" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">실물자산</text>
+<rect x="1348" y="100" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1376" y="118" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">시장전망</text>
+<text x="12" y="888" font-size="9" fill="#999999">[ WF-23 ] 네비게이터 hover · ETF 셀 초록 강조 · 드롭 툴팁 · 드래그 고스트 업데이트</text>
+</svg>

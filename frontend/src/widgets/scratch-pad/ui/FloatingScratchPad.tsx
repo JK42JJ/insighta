@@ -221,7 +221,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     const [isDragging, setIsDragging] = useState(false);
     const [isDockedDragging, setIsDockedDragging] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
-    const [isDockResizing, setIsDockResizing] = useState(false);
+    const [_isDockResizing, setIsDockResizing] = useState(false);
     const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
     const selectedCardIdsRef = useRef<Set<string>>(new Set());
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
@@ -567,7 +567,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           const multiCardIds = JSON.parse(multiCardIdsData) as string[];
           onMultiCardDrop?.(multiCardIds);
           return;
-        } catch (err) {
+        } catch (_err) {
           // Fall through
         }
       }

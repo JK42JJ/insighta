@@ -16,10 +16,6 @@ import {
 import { normalizeUrl } from '@/shared/lib/url-normalize';
 import { useToast } from '@/shared/lib/use-toast';
 
-interface UseCardDragDropDeps {
-  draggingCard: InsightCard | null;
-}
-
 export interface UseCardDragDropReturn {
   isDraggingOver: boolean;
   draggingCard: InsightCard | null;

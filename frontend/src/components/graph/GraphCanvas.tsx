@@ -137,7 +137,7 @@ export function GraphCanvas({
 
       ctx.globalAlpha = 1;
     },
-    [] // eslint-disable-line react-hooks/exhaustive-deps
+    []  
   );
 
   // Link rendering (stable — empty deps, reads state via ref)
@@ -156,7 +156,7 @@ export function GraphCanvas({
       if (isStructural) return s.isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)';
       return s.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
     },
-    [] // eslint-disable-line react-hooks/exhaustive-deps
+    []  
   );
 
   // Zoom to fit on data change

@@ -1,0 +1,41 @@
+<svg width="390" height="844" viewBox="0 0 390 844" xmlns="http://www.w3.org/2000/svg" style="background:#FFFFFF;font-family:Arial,sans-serif">
+<rect x="0" y="0" width="390" height="844" rx="0" fill="#EBEBEB" stroke="none" stroke-width="1" />
+<rect x="0" y="0" width="390" height="44" rx="0" fill="#F0F0F0" stroke="#D0D0D0" stroke-width="1" />
+<text x="10" y="28" font-size="12" fill="#111111" font-weight="bold" text-anchor="start">Insighta</text>
+<rect x="0" y="44" width="390" height="800" rx="0" fill="#E8E8E8" stroke="none" stroke-width="1" />
+<text x="195" y="300" font-size="12" fill="#999999" font-weight="normal" text-anchor="middle">만다라 그리드</text>
+<rect x="0" y="362" width="390" height="482" rx="16" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1.5" />
+<rect x="175" y="370" width="40" height="4" rx="2" fill="#D0D0D0" stroke="none" stroke-width="1" />
+<text x="14" y="394" font-size="12" fill="#111111" font-weight="bold" text-anchor="start">Ideation</text>
+<rect x="85" y="380" width="28" height="16" rx="8" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<text x="89" y="392" font-size="8" fill="#555555" font-weight="normal" text-anchor="start">586</text>
+<rect x="340" y="380" width="40" height="16" rx="4" fill="#FFFFFF" stroke="#4488CC" stroke-width="1" />
+<text x="360" y="392" font-size="9" fill="#4488CC" font-weight="bold" text-anchor="middle">AI</text>
+<text x="14" y="410" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">∞ 시간 초월 카드</text>
+<rect x="0" y="418" width="390" height="24" rx="0" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="8" y="421" width="64" height="18" rx="9" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<text x="40" y="434" font-size="8" fill="#111111" font-weight="normal" text-anchor="middle">전체</text>
+<rect x="80" y="421" width="64" height="18" rx="9" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="112" y="434" font-size="8" fill="#555555" font-weight="normal" text-anchor="middle">#테크</text>
+<rect x="152" y="421" width="64" height="18" rx="9" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="184" y="434" font-size="8" fill="#555555" font-weight="normal" text-anchor="middle">#투자</text>
+<rect x="224" y="421" width="64" height="18" rx="9" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="256" y="434" font-size="8" fill="#555555" font-weight="normal" text-anchor="middle">#경제</text>
+<rect x="6" y="446" width="186" height="80" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="6" y="446" width="186" height="42" rx="8" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="6" y="480" width="186" height="8" rx="0" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<text x="12" y="500" font-size="8" fill="#111111" font-weight="bold" text-anchor="start">테슬라</text>
+<rect x="198" y="446" width="186" height="80" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="198" y="446" width="186" height="42" rx="8" fill="#2a1a3a" stroke="none" stroke-width="1" />
+<rect x="198" y="480" width="186" height="8" rx="0" fill="#2a1a3a" stroke="none" stroke-width="1" />
+<text x="204" y="500" font-size="8" fill="#111111" font-weight="bold" text-anchor="start">엔비디아</text>
+<rect x="6" y="532" width="186" height="80" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="6" y="532" width="186" height="42" rx="8" fill="#3a2a1a" stroke="none" stroke-width="1" />
+<rect x="6" y="566" width="186" height="8" rx="0" fill="#3a2a1a" stroke="none" stroke-width="1" />
+<text x="12" y="586" font-size="8" fill="#111111" font-weight="bold" text-anchor="start">아이온큐</text>
+<rect x="198" y="532" width="186" height="80" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="198" y="532" width="186" height="42" rx="8" fill="#1a3a2a" stroke="none" stroke-width="1" />
+<rect x="198" y="566" width="186" height="8" rx="0" fill="#1a3a2a" stroke="none" stroke-width="1" />
+<text x="204" y="586" font-size="8" fill="#111111" font-weight="bold" text-anchor="start">팔란티어</text>
+<text x="12" y="888" font-size="9" fill="#999999">[ WF-17 ] 모바일 Ideation 바텀 시트 · 390×844 · 절반 높이 · Label 탭 · 2열 카드</text>
+</svg>

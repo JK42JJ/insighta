@@ -1,0 +1,64 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg" style="background:#FFFFFF;font-family:Arial,sans-serif">
+<text x="720" y="30" font-size="16" fill="#111111" font-weight="bold" text-anchor="middle">Insighta — 디자인 토큰</text>
+<line x1="0" y1="40" x2="1440" y2="40" stroke="#D0D0D0" stroke-width="1" />
+<text x="16" y="60" font-size="13" fill="#111111" font-weight="bold" text-anchor="start">색상 팔레트</text>
+<rect x="16" y="72" width="100" height="40" rx="6" fill="#111111" stroke="#D0D0D0" stroke-width="1" />
+<text x="16" y="130" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">#111111</text>
+<text x="16" y="142" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">TEXT1 — 주요 텍스트</text>
+<rect x="246" y="72" width="100" height="40" rx="6" fill="#555555" stroke="#D0D0D0" stroke-width="1" />
+<text x="246" y="130" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">#555555</text>
+<text x="246" y="142" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">TEXT2 — 보조 텍스트</text>
+<rect x="476" y="72" width="100" height="40" rx="6" fill="#999999" stroke="#D0D0D0" stroke-width="1" />
+<text x="476" y="130" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">#999999</text>
+<text x="476" y="142" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">TEXT3 — 힌트 텍스트</text>
+<rect x="706" y="72" width="100" height="40" rx="6" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="706" y="130" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">#FFFFFF</text>
+<text x="706" y="142" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">BG — 배경 (흰색)</text>
+<rect x="936" y="72" width="100" height="40" rx="6" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<text x="936" y="130" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">#F5F5F5</text>
+<text x="936" y="142" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">SURF — 카드/패널</text>
+<rect x="1166" y="72" width="100" height="40" rx="6" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<text x="1166" y="130" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">#EBEBEB</text>
+<text x="1166" y="142" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">SURF2 — 진한 서피스</text>
+<rect x="16" y="152" width="100" height="40" rx="6" fill="#D0D0D0" stroke="#D0D0D0" stroke-width="1" />
+<text x="16" y="210" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">#D0D0D0</text>
+<text x="16" y="222" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">BORDER — 기본 테두리</text>
+<rect x="246" y="152" width="100" height="40" rx="6" fill="#4488CC" stroke="#D0D0D0" stroke-width="1" />
+<text x="246" y="210" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">#4488CC</text>
+<text x="246" y="222" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">ACCENT BLUE — 선택/링크</text>
+<rect x="476" y="152" width="100" height="40" rx="6" fill="#44AA44" stroke="#D0D0D0" stroke-width="1" />
+<text x="476" y="210" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">#44AA44</text>
+<text x="476" y="222" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">SUCCESS GREEN — 완료</text>
+<rect x="706" y="152" width="100" height="40" rx="6" fill="#CC9900" stroke="#D0D0D0" stroke-width="1" />
+<text x="706" y="210" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">#CC9900</text>
+<text x="706" y="222" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">WARN AMBER — 경고</text>
+<rect x="936" y="152" width="100" height="40" rx="6" fill="#CC4444" stroke="#D0D0D0" stroke-width="1" />
+<text x="936" y="210" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">#CC4444</text>
+<text x="936" y="222" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">DANGER RED — 오류</text>
+<rect x="1166" y="152" width="100" height="40" rx="6" fill="#D0D8E8" stroke="#D0D0D0" stroke-width="1" />
+<text x="1166" y="210" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">#D0D8E8</text>
+<text x="1166" y="222" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">CENTER BLUE — 만다라 중심</text>
+<text x="16" y="260" font-size="13" fill="#111111" font-weight="bold" text-anchor="start">타이포그래피 스케일</text>
+<text x="16" y="296" font-size="32" fill="#111111" font-weight="bold" text-anchor="start">Display 32</text>
+<text x="300" y="292" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">font-size: 32px / font-weight: bold</text>
+<line x1="16" y1="316" x2="1424" y2="316" stroke="#D0D0D0" stroke-width="1" stroke-dasharray='2,4'/>
+<text x="16" y="340" font-size="24" fill="#111111" font-weight="bold" text-anchor="start">H1 24</text>
+<text x="300" y="340" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">font-size: 24px / font-weight: bold</text>
+<line x1="16" y1="356" x2="1424" y2="356" stroke="#D0D0D0" stroke-width="1" stroke-dasharray='2,4'/>
+<text x="16" y="386" font-size="20" fill="#111111" font-weight="bold" text-anchor="start">H2 20</text>
+<text x="300" y="388" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">font-size: 20px / font-weight: bold</text>
+<line x1="16" y1="400" x2="1424" y2="400" stroke="#D0D0D0" stroke-width="1" stroke-dasharray='2,4'/>
+<text x="16" y="432" font-size="16" fill="#111111" font-weight="bold" text-anchor="start">H3 16</text>
+<text x="300" y="436" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">font-size: 16px / font-weight: bold</text>
+<line x1="16" y1="444" x2="1424" y2="444" stroke="#D0D0D0" stroke-width="1" stroke-dasharray='2,4'/>
+<text x="16" y="479" font-size="14" fill="#111111" font-weight="normal" text-anchor="start">Body 14</text>
+<text x="300" y="484" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">font-size: 14px / font-weight: 400</text>
+<line x1="16" y1="490" x2="1424" y2="490" stroke="#D0D0D0" stroke-width="1" stroke-dasharray='2,4'/>
+<text x="16" y="526" font-size="12" fill="#111111" font-weight="normal" text-anchor="start">Caption 12</text>
+<text x="300" y="532" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">font-size: 12px / font-weight: 400</text>
+<line x1="16" y1="536" x2="1424" y2="536" stroke="#D0D0D0" stroke-width="1" stroke-dasharray='2,4'/>
+<text x="16" y="572" font-size="9" fill="#111111" font-weight="normal" text-anchor="start">Label 9</text>
+<text x="300" y="580" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">font-size: 9px / font-weight: 400</text>
+<line x1="16" y1="581" x2="1424" y2="581" stroke="#D0D0D0" stroke-width="1" stroke-dasharray='2,4'/>
+<text x="12" y="888" font-size="9" fill="#999999">[ WF-29 ] 디자인 토큰 · 12색 팔레트 · 7단계 타이포그래피 스케일</text>
+</svg>

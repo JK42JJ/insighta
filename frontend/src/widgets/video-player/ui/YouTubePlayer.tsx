@@ -121,7 +121,7 @@ export function YouTubePlayer({
       if (!document.fullscreenElement) {
         requestAnimationFrame(() => {
           document.body.style.display = 'none';
-          document.body.offsetHeight; // Force reflow
+          void document.body.offsetHeight; // Force reflow
           document.body.style.display = '';
         });
       }

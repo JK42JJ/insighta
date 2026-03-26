@@ -1,0 +1,125 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg" style="background:#FFFFFF;font-family:Arial,sans-serif">
+<rect x="0" y="0" width="1440" height="900" rx="0" fill="#FFFFFF" stroke="none" stroke-width="1" />
+<rect x="0" y="0" width="1440" height="50" rx="0" fill="#F0F0F0" stroke="#D0D0D0" stroke-width="1" />
+<text x="16" y="31" font-size="14" fill="#111111" font-weight="bold" text-anchor="start">주식투자 — 전체 카드</text>
+<rect x="200" y="12" width="56" height="28" rx="14" fill="#222222" stroke="none" stroke-width="1" />
+<text x="228" y="30" font-size="9" fill="#FFFFFF" font-weight="bold" text-anchor="middle">3장 선택</text>
+<rect x="266" y="12" width="66" height="28" rx="6" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<text x="282" y="30" font-size="10" fill="#555555" font-weight="normal" text-anchor="start">전체 선택</text>
+<rect x="338" y="12" width="66" height="28" rx="6" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<text x="354" y="30" font-size="10" fill="#555555" font-weight="normal" text-anchor="start">선택 해제</text>
+<rect x="1340" y="12" width="88" height="28" rx="6" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<text x="1360" y="30" font-size="11" fill="#555555" font-weight="normal" text-anchor="start">✕ 닫기</text>
+<rect x="0" y="50" width="1200" height="28" rx="0" fill="#FFF3D0" stroke="#DDAA00" stroke-width="1" />
+<text x="12" y="68" font-size="11" fill="#886600" font-weight="normal" text-anchor="start">3장 드래그 중 → 우측 만다라 네비게이터에 드롭하세요</text>
+<g opacity="0.35">
+<rect x="16" y="84" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#4488CC" stroke-width="2" />
+<rect x="16" y="84" width="220" height="93" rx="8" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="16" y="169" width="220" height="8" rx="0" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<circle cx="30" cy="98" r="9" fill="#4488CC" stroke="#4488CC" stroke-width="1"/>
+<text x="30" y="102" font-size="8" fill="#FFFFFF" font-weight="bold" text-anchor="middle">✓</text>
+<text x="24" y="191" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">테슬라, 차세대</text>
+</g>
+<g opacity="1">
+<rect x="248" y="84" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="248" y="84" width="220" height="93" rx="8" fill="#2a1a3a" stroke="none" stroke-width="1" />
+<rect x="248" y="169" width="220" height="8" rx="0" fill="#2a1a3a" stroke="none" stroke-width="1" />
+<circle cx="262" cy="98" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<text x="256" y="191" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">엔비디아 양자</text>
+</g>
+<g opacity="0.35">
+<rect x="480" y="84" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#4488CC" stroke-width="2" />
+<rect x="480" y="84" width="220" height="93" rx="8" fill="#1a3a2a" stroke="none" stroke-width="1" />
+<rect x="480" y="169" width="220" height="8" rx="0" fill="#1a3a2a" stroke="none" stroke-width="1" />
+<circle cx="494" cy="98" r="9" fill="#4488CC" stroke="#4488CC" stroke-width="1"/>
+<text x="494" y="102" font-size="8" fill="#FFFFFF" font-weight="bold" text-anchor="middle">✓</text>
+<text x="488" y="191" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">팔란티어 경쟁</text>
+</g>
+<g opacity="1">
+<rect x="712" y="84" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="712" y="84" width="220" height="93" rx="8" fill="#3a2a1a" stroke="none" stroke-width="1" />
+<rect x="712" y="169" width="220" height="8" rx="0" fill="#3a2a1a" stroke="none" stroke-width="1" />
+<circle cx="726" cy="98" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<text x="720" y="191" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">아이온큐 전망</text>
+</g>
+<g opacity="0.35">
+<rect x="944" y="84" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#4488CC" stroke-width="2" />
+<rect x="944" y="84" width="220" height="93" rx="8" fill="#1a1a3a" stroke="none" stroke-width="1" />
+<rect x="944" y="169" width="220" height="8" rx="0" fill="#1a1a3a" stroke="none" stroke-width="1" />
+<circle cx="958" cy="98" r="9" fill="#4488CC" stroke="#4488CC" stroke-width="1"/>
+<text x="958" y="102" font-size="8" fill="#FFFFFF" font-weight="bold" text-anchor="middle">✓</text>
+<text x="952" y="191" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">유상증자 CEO</text>
+</g>
+<g opacity="1">
+<rect x="16" y="266" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="16" y="266" width="220" height="93" rx="8" fill="#2a3a1a" stroke="none" stroke-width="1" />
+<rect x="16" y="351" width="220" height="8" rx="0" fill="#2a3a1a" stroke="none" stroke-width="1" />
+<circle cx="30" cy="280" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<text x="24" y="373" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">엔비디아 실적</text>
+</g>
+<g opacity="1">
+<rect x="248" y="266" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="248" y="266" width="220" height="93" rx="8" fill="#3a1a1a" stroke="none" stroke-width="1" />
+<rect x="248" y="351" width="220" height="8" rx="0" fill="#3a1a1a" stroke="none" stroke-width="1" />
+<circle cx="262" cy="280" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<text x="256" y="373" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">팔란티어 CEO</text>
+</g>
+<g opacity="1">
+<rect x="480" y="266" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="480" y="266" width="220" height="93" rx="8" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="480" y="351" width="220" height="8" rx="0" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<circle cx="494" cy="280" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<text x="488" y="373" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">테슬라 로봇</text>
+</g>
+<g opacity="1">
+<rect x="712" y="266" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="712" y="266" width="220" height="93" rx="8" fill="#2a1a3a" stroke="none" stroke-width="1" />
+<rect x="712" y="351" width="220" height="8" rx="0" fill="#2a1a3a" stroke="none" stroke-width="1" />
+<circle cx="726" cy="280" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<text x="720" y="373" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">2030 반도체</text>
+</g>
+<g opacity="1">
+<rect x="944" y="266" width="220" height="170" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="944" y="266" width="220" height="93" rx="8" fill="#1a3a1a" stroke="none" stroke-width="1" />
+<rect x="944" y="351" width="220" height="8" rx="0" fill="#1a3a1a" stroke="none" stroke-width="1" />
+<circle cx="958" cy="280" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<text x="952" y="373" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">미국 주식 2025</text>
+</g>
+<rect x="560" y="300" width="180" height="60" rx="8" fill="#FFFFFF" stroke="#4488CC" stroke-width="2" />
+<rect x="560" y="300" width="180" height="32" rx="8" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="560" y="332" width="180" height="8" rx="0" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="570" y="302" width="28" height="18" rx="9" fill="#4488CC" stroke="none" stroke-width="1" />
+<text x="584" y="314" font-size="10" fill="#FFFFFF" font-weight="bold" text-anchor="middle">3</text>
+<text x="575" y="350" font-size="9" fill="#555555" font-weight="normal" text-anchor="start">카드 3장 이동 중</text>
+<rect x="1220" y="0" width="220" height="900" rx="0" fill="#F5F5F5" stroke="#BBBBBB" stroke-width="1.5" />
+<rect x="1220" y="0" width="220" height="50" rx="0" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<text x="1232" y="30" font-size="12" fill="#111111" font-weight="bold" text-anchor="start">만다라 네비게이터</text>
+<text x="1232" y="48" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">드롭할 섹터를 선택하세요</text>
+<rect x="1228" y="60" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1256" y="78" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">기시경제</text>
+<rect x="1288" y="60" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1316" y="78" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">주식투자</text>
+<rect x="1348" y="60" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1376" y="78" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">자산분배</text>
+<rect x="1228" y="92" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1256" y="110" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">ETF</text>
+<rect x="1288" y="92" width="56" height="28" rx="4" fill="#D0D8E8" stroke="#BBBBBB" stroke-width="1" />
+<text x="1316" y="110" font-size="12" fill="#111111" font-weight="normal" text-anchor="middle">🐱</text>
+<rect x="1348" y="92" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1376" y="110" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">크립토</text>
+<rect x="1228" y="124" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1256" y="142" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">은퇴설계</text>
+<rect x="1288" y="124" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1316" y="142" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">실물자산</text>
+<rect x="1348" y="124" width="56" height="28" rx="4" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1376" y="142" font-size="7" fill="#999999" font-weight="normal" text-anchor="middle">시장전망</text>
+<text x="1232" y="180" font-size="9" fill="#999999" font-weight="normal" text-anchor="start">다른 만다라로 이동</text>
+<line x1="1228" y1="188" x2="1432" y2="188" stroke="#D0D0D0" stroke-width="1" />
+<rect x="1228" y="196" width="204" height="38" rx="6" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1240" y="220" font-size="14" fill="#111111" font-weight="normal" text-anchor="start">🦊</text>
+<text x="1260" y="220" font-size="10" fill="#555555" font-weight="normal" text-anchor="start">AI/ML 전문가</text>
+<rect x="1228" y="240" width="204" height="38" rx="6" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="1240" y="264" font-size="14" fill="#111111" font-weight="normal" text-anchor="start">🐢</text>
+<text x="1260" y="264" font-size="10" fill="#555555" font-weight="normal" text-anchor="start">영어</text>
+<text x="12" y="888" font-size="9" fill="#999999">[ WF-09 ] 전체화면 다중선택 + 네비게이터 슬라이드인 · 3장 선택 · 드래그 고스트 · 우측 9×9 + 만다라 목록</text>
+</svg>

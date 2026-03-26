@@ -504,7 +504,7 @@ test.describe('External Input — URL Classification', () => {
         expect(isUnsupported).toBe(true);
       } else {
         // Not a valid URL → paste handler ignores silently (no toast expected)
-        const toastVisible = await page.locator('[data-sonner-toast]').first().isVisible().catch(() => false);
+        const _toastVisible = await page.locator('[data-sonner-toast]').first().isVisible().catch(() => false);
         // No toast is acceptable for invalid text
         expect(true).toBe(true);
       }
