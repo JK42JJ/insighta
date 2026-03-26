@@ -90,6 +90,13 @@ export function useAddLocalCard() {
 
   return useMutation({
     mutationFn: async (payload: AddLocalCardPayload): Promise<LocalCard> => {
+      // Structural validation gate — block invalid cards before API call
+      const { isValidCardForInsert } = await import('@/shared/lib/card-validation');
+      const validation = isValidCardForInsert({ url: payload.url, title: payload.title });
+      if (!validation.valid) {
+        throw new Error(`Card validation failed: ${validation.reason}`);
+      }
+
       const headers = await getAuthHeaders();
       const response = await fetch(localCardsUrl('add'), {
         method: 'POST',

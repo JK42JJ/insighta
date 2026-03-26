@@ -867,6 +867,10 @@ export function useCardOrchestrator(
           }
 
           const newCard = createCardFromUrl(url, cellIndex, currentLevelId);
+          if (!newCard) {
+            toast({ title: t('index.invalidUrl'), description: 'This URL cannot be saved as a card.', variant: 'destructive' });
+            return;
+          }
           setPendingLocalCards((prev) => [...prev, newCard]);
           toast({
             title: t('index.insightAdded'),
@@ -962,6 +966,10 @@ export function useCardOrchestrator(
         }
 
         const newCard = createCardFromUrl(url, -1, 'scratchpad');
+        if (!newCard) {
+          toast({ title: t('index.invalidUrl'), description: 'This URL cannot be saved as a card.', variant: 'destructive' });
+          return;
+        }
         setPendingLocalCards((prev) => [...prev, newCard]);
         toast({
           title: t('index.addedToIdeation'),
