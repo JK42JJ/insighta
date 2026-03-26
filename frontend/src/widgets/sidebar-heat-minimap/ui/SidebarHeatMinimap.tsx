@@ -360,7 +360,7 @@ function HeatCell({
       )}
       <span
         className={cn(
-          'text-[9px] leading-tight text-center line-clamp-1 px-0.5',
+          'text-[9px] leading-tight text-center line-clamp-2 break-words px-0.5',
           isPlaceholder && 'italic',
           isCenter
             ? 'text-sidebar-foreground font-medium text-[10px]'

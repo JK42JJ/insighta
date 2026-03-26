@@ -1,11 +1,10 @@
+import { useState, useCallback, useRef } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Home,
   ChevronLeft,
   ChevronRight,
-  Maximize2,
-  Minimize2,
   Settings,
   Palette,
   Bell,
@@ -60,11 +59,25 @@ const SETTINGS_NAV_GROUPS = [
   },
 ];
 
+const MIN_SIDEBAR_WIDTH = 240;
+const MAX_SIDEBAR_WIDTH = 480;
+const DEFAULT_SIDEBAR_WIDTH = 250;
+const SIDEBAR_WIDTH_KEY = 'insighta-sidebar-width';
+
+function getInitialWidth(): number {
+  try {
+    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (!isNaN(parsed)) return Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed));
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_SIDEBAR_WIDTH;
+}
+
 interface SidebarProps {
   collapsed: boolean;
-  sidebarSize: 'compact' | 'wide';
   onToggleCollapse: () => void;
-  onToggleSize?: () => void;
   onNavigateHome?: () => void;
   minimapData?: MinimapData;
   selectedMandalaId: string | null;
@@ -83,16 +96,9 @@ const MAIN_NAV: NavItem[] = [
   { to: '/', icon: Home, labelKey: 'sidebar.home', exact: true },
 ];
 
-const SIDEBAR_WIDTH = {
-  compact: '22rem',   // 352px
-  wide: '30rem',      // 480px
-} as const;
-
 export function Sidebar({
   collapsed,
-  sidebarSize,
   onToggleCollapse,
-  onToggleSize,
   onNavigateHome,
   minimapData,
   selectedMandalaId,
@@ -103,11 +109,59 @@ export function Sidebar({
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [sidebarWidth, setSidebarWidth] = useState(getInitialWidth);
+  const widthRef = useRef(sidebarWidth);
+  widthRef.current = sidebarWidth;
 
   const isActive = (path: string, exact?: boolean) => {
     if (exact) return location.pathname === path;
     return location.pathname.startsWith(path);
   };
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const sidebar = e.currentTarget.parentElement as HTMLElement;
+    const startWidth = sidebar.getBoundingClientRect().width;
+
+    // Disable transition during drag for instant feedback
+    sidebar.style.transition = 'none';
+
+    const onMouseMove = (ev: MouseEvent) => {
+      // DOM direct manipulation — no React rerender, 60fps
+      const newWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, startWidth + (ev.clientX - startX)));
+      sidebar.style.width = `${newWidth}px`;
+    };
+
+    const onMouseUp = (ev: MouseEvent) => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      sidebar.style.transition = '';
+
+      // Sync React state + persist once on mouseup
+      const finalWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, startWidth + (ev.clientX - startX)));
+      setSidebarWidth(finalWidth);
+      widthRef.current = finalWidth;
+      try {
+        localStorage.setItem(SIDEBAR_WIDTH_KEY, String(finalWidth));
+      } catch { /* ignore */ }
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  const handleResizeDoubleClick = useCallback(() => {
+    setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
+    widthRef.current = DEFAULT_SIDEBAR_WIDTH;
+    try {
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(DEFAULT_SIDEBAR_WIDTH));
+    } catch { /* ignore */ }
+  }, []);
 
   const renderNavItem = (item: NavItem) => {
     const active = isActive(item.to, item.exact);
@@ -156,8 +210,7 @@ export function Sidebar({
     navigate('/');
   };
 
-  // Settings sidebar width — fixed compact width for clean nav
-  const SETTINGS_SIDEBAR_WIDTH = '16rem'; // 256px
+  const showResizeHandle = !collapsed;
 
   return (
     <aside
@@ -166,11 +219,7 @@ export function Sidebar({
         !settingsMode && collapsed && 'w-16',
       )}
       style={{
-        width: settingsMode
-          ? SETTINGS_SIDEBAR_WIDTH
-          : collapsed
-            ? undefined
-            : SIDEBAR_WIDTH[sidebarSize],
+        width: collapsed && !settingsMode ? undefined : `${sidebarWidth}px`,
       }}
       aria-label={t('sidebar.navigation')}
     >
@@ -216,25 +265,9 @@ export function Sidebar({
           </ErrorBoundary>
         </nav>
 
-        {/* Bottom section — collapse/size toggles only */}
+        {/* Bottom section — collapse toggle only */}
         <div className="px-2 py-3 border-t border-sidebar-border">
           <div className={cn('flex items-center', collapsed ? 'justify-center' : 'justify-end gap-1')}>
-            {!collapsed && onToggleSize && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onToggleSize}
-                className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent px-2"
-                aria-label={sidebarSize === 'compact' ? 'Expand sidebar' : 'Shrink sidebar'}
-                title={sidebarSize === 'compact' ? 'Expand sidebar' : 'Shrink sidebar'}
-              >
-                {sidebarSize === 'compact' ? (
-                  <Maximize2 className="w-3.5 h-3.5" />
-                ) : (
-                  <Minimize2 className="w-3.5 h-3.5" />
-                )}
-              </Button>
-            )}
             <Button
               variant="ghost"
               size="sm"
@@ -284,22 +317,22 @@ export function Sidebar({
               )}
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = activeSettingsTab === item.id;
+                const active = activeSettingsTab === item.id;
                 return (
                   <button
                     key={item.id}
                     onClick={() => handleSettingsTabClick(item.id)}
                     className={cn(
                       'relative flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13.5px] font-medium transition-all duration-150 border border-transparent',
-                      isActive
+                      active
                         ? 'bg-sidebar-primary/10 text-sidebar-primary border-sidebar-primary/15 font-semibold'
                         : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground'
                     )}
                   >
-                    {isActive && (
+                    {active && (
                       <span className="absolute -left-1 top-1/2 -translate-y-1/2 w-[3px] h-[18px] bg-sidebar-primary rounded-r-sm" />
                     )}
-                    <Icon className={cn('w-4 h-4 shrink-0', isActive ? 'opacity-100' : 'opacity-60')} />
+                    <Icon className={cn('w-4 h-4 shrink-0', active ? 'opacity-100' : 'opacity-60')} />
                     {t(item.labelKey)}
                   </button>
                 );
@@ -308,6 +341,15 @@ export function Sidebar({
           ))}
         </nav>
       </div>
+
+      {/* Resize handle */}
+      {showResizeHandle && (
+        <div
+          className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors z-50"
+          onMouseDown={handleResizeStart}
+          onDoubleClick={handleResizeDoubleClick}
+        />
+      )}
     </aside>
   );
 }
