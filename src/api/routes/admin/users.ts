@@ -152,7 +152,11 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         SELECT tier, local_cards_limit, mandala_limit
         FROM public.user_subscriptions WHERE user_id = ${id}::uuid
       `;
-      const oldValues = oldSub[0] ?? { tier: DEFAULT_TIER, local_cards_limit: TIER_LIMITS.free.cards, mandala_limit: TIER_LIMITS.free.mandalas };
+      const oldValues = oldSub[0] ?? {
+        tier: DEFAULT_TIER,
+        local_cards_limit: TIER_LIMITS.free.cards,
+        mandala_limit: TIER_LIMITS.free.mandalas,
+      };
 
       // Build dynamic SET clause
       const setClauses: string[] = [];
