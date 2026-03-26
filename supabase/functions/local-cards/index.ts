@@ -300,6 +300,23 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Structural validation — block thumbnail/CDN URLs from becoming cards
+        const BLOCKED_CARD_HOSTS = ['img.youtube.com', 'i.ytimg.com', 'i1.ytimg.com', 'i2.ytimg.com', 'i3.ytimg.com', 'i4.ytimg.com', 'yt3.ggpht.com', 'lh3.googleusercontent.com'];
+        try {
+          const urlHost = new URL(body.url).hostname.toLowerCase();
+          if (BLOCKED_CARD_HOSTS.some(h => urlHost === h || urlHost.endsWith('.' + h))) {
+            return new Response(
+              JSON.stringify({ error: 'INVALID_URL', message: `Blocked host: ${urlHost}. Thumbnail/CDN URLs cannot be saved as cards.` }),
+              { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+            );
+          }
+        } catch {
+          return new Response(
+            JSON.stringify({ error: 'INVALID_URL', message: 'Invalid URL format' }),
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+          );
+        }
+
         // Validate cell_index range (matches DB CHECK constraint)
         const cellIndex = body.cell_index ?? -1;
         if (cellIndex < -1 || cellIndex >= 9) {

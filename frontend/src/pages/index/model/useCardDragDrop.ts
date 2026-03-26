@@ -196,6 +196,10 @@ export function useGlobalPaste(deps: {
       }
 
       const newCard = createCardFromUrl(text, -1, 'scratchpad');
+      if (!newCard) {
+        toast({ title: 'Invalid URL', description: 'This URL cannot be saved as a card.' });
+        return;
+      }
       deps.addPendingCard(newCard);
 
       toast({

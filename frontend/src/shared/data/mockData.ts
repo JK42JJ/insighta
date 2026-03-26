@@ -1,4 +1,5 @@
 import type { MandalaLevel, InsightCard, LinkType, UrlMetadata } from '@/entities/card/model/types';
+import { isValidCardForInsert } from '@/shared/lib/card-validation';
 import { supabase } from '@/shared/integrations/supabase/client';
 
 export const createMockCards = (): InsightCard[] => [
@@ -145,6 +146,25 @@ export const extractYouTubePlaylistId = (url: string): string | null => {
   }
 };
 
+// YouTube video/page hosts (exclude CDN/image hosts like img.youtube.com, i.ytimg.com)
+const YOUTUBE_PAGE_HOSTS = new Set([
+  'youtube.com',
+  'www.youtube.com',
+  'm.youtube.com',
+  'youtu.be',
+  'www.youtu.be',
+  'music.youtube.com',
+]);
+
+const isYouTubePageUrl = (url: string): boolean => {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return YOUTUBE_PAGE_HOSTS.has(hostname);
+  } catch {
+    return false;
+  }
+};
+
 // Detect link type from URL
 export const detectLinkType = (url: string): LinkType => {
   const lowerUrl = url.toLowerCase();
@@ -153,7 +173,7 @@ export const detectLinkType = (url: string): LinkType => {
   // - /playlist?list=PLxxx → playlist import
   // - /watch?v=xxx&list=PLxxx → single video (video ID takes priority)
   if (
-    (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) &&
+    isYouTubePageUrl(url) &&
     extractYouTubePlaylistId(url)
   ) {
     try {
@@ -167,12 +187,12 @@ export const detectLinkType = (url: string): LinkType => {
   }
 
   // YouTube Shorts
-  if (lowerUrl.includes('youtube.com/shorts/') || lowerUrl.includes('youtu.be/shorts/')) {
+  if (isYouTubePageUrl(url) && lowerUrl.includes('/shorts/')) {
     return 'youtube-shorts';
   }
 
-  // YouTube regular
-  if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) {
+  // YouTube regular (excludes CDN hosts like img.youtube.com, i.ytimg.com)
+  if (isYouTubePageUrl(url)) {
     return 'youtube';
   }
 
@@ -259,12 +279,18 @@ export const getThumbnailForUrl = (url: string, linkType: LinkType): string => {
   }
 };
 
-// Create a new card from any supported URL
+// Create a new card from any supported URL — returns null if URL is invalid
 export const createCardFromUrl = (
   url: string,
   cellIndex: number,
   levelId: string = 'root'
-): InsightCard => {
+): InsightCard | null => {
+  const validation = isValidCardForInsert({ url });
+  if (!validation.valid) {
+    console.error(`[card-insert-blocked] ${validation.reason}`, { url });
+    return null;
+  }
+
   const linkType = detectLinkType(url);
   const thumbnail = getThumbnailForUrl(url, linkType);
 
