@@ -21,6 +21,7 @@ import { subscriptionRoutes } from './routes/subscriptions';
 import { snapshotRoutes } from './routes/snapshots';
 import { botRoutes } from './routes/bot';
 import { settingsRoutes } from './routes/settings';
+import { youtubeRoutes } from './routes/youtube';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
@@ -257,6 +258,9 @@ export async function buildServer() {
 
       // Register settings routes (LLM keys management)
       await instance.register(settingsRoutes, { prefix: '/settings' });
+
+      // Register YouTube library routes (subscriptions, playlists)
+      await instance.register(youtubeRoutes, { prefix: '/youtube' });
 
       // Register admin routes (requires is_super_admin)
       await instance.register(adminRoutes, { prefix: '/admin' });
