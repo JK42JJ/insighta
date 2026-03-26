@@ -15,8 +15,9 @@ WORKDIR /app
 # Copy package files for layer caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (--no-package-lock: macOS lockfile misses Linux native
+# binaries for rollup due to npm/cli#4828 optional deps bug)
+RUN npm install --no-package-lock --no-audit
 
 # Copy source files
 COPY . .

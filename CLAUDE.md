@@ -187,6 +187,8 @@ docs/design/                          <- 설계 문서 디렉토리 (GitHub repo
 - **기존 테스트 삭제/skip 처리 금지** — 테스트가 실패하면 코드를 고쳐야지 테스트를 제거하면 안 됨.
 - **테스트 인프라**: Backend = Jest (`tests/smoke/`), Frontend = Vitest (`frontend/src/__tests__/`)
 - **CI 게이트**: test-backend + test-frontend job이 실패하면 build/deploy 차단됨
+- **CI/CD 변경 시 Docker 검증 필수** — `docker run node:20` 또는 `docker build`로 로컬 검증 후 push. CI fix 커밋이 3회 연속 실패하면 중단하고 근본 원인 재분석.
+- **npm/cli#4828 주의** — macOS에서 생성한 lockfile은 Linux native binary(rollup, esbuild 등) 누락. frontend CI/Docker는 `npm install --no-package-lock --no-audit` 사용.
 
 ### 삭제 금지
 - `scripts/agent-dashboard.sh`, `scripts/ops-dashboard.sh`
