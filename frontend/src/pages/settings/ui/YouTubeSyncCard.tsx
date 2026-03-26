@@ -91,7 +91,7 @@ export function YouTubeSyncCard() {
     });
   };
 
-  const toggleAllPlaylists = () => {
+  const _toggleAllPlaylists = () => {
     if (selectedPlaylists.size === playlists.length) {
       setSelectedPlaylists(new Set());
     } else {

@@ -29,10 +29,6 @@ export default function ExplorePage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
-
-  if (slug) {
-    return <PublicMandalaView slug={slug} />;
-  }
   const [mandalas, setMandalas] = useState<PublicMandala[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -40,6 +36,7 @@ export default function ExplorePage() {
   const limit = 12;
 
   useEffect(() => {
+    if (slug) return; // Skip fetching when viewing a specific mandala
     const fetchMandalas = async () => {
       setLoading(true);
       try {
@@ -53,7 +50,11 @@ export default function ExplorePage() {
       }
     };
     fetchMandalas();
-  }, [page]);
+  }, [page, slug]);
+
+  if (slug) {
+    return <PublicMandalaView slug={slug} />;
+  }
 
   const totalPages = Math.ceil(total / limit);
 

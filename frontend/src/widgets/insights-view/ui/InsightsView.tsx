@@ -29,7 +29,7 @@ export function InsightsView({
   allCards,
   scratchPadCards,
   cardsByCell,
-  totalCards,
+  totalCards: _totalCards,
   sectorSubjects,
   title,
   viewMode,

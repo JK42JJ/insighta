@@ -9,8 +9,8 @@ interface AppShellProps {
   children: React.ReactNode;
   onNavigateHome?: () => void;
   minimapData?: MinimapData;
-  selectedMandalaId: string | null;
-  onMandalaSelect: (id: string) => void;
+  selectedMandalaId?: string | null;
+  onMandalaSelect?: (id: string) => void;
   searchBarElement?: React.ReactNode;
 }
 

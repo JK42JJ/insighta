@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 
 /** Check if the target element is a dnd-kit drag handle or a selected draggable card */
 function isDndActivator(el: HTMLElement): boolean {

@@ -38,7 +38,7 @@ export function getCaretCoordinates(
   style.wordWrap = 'break-word';
 
   for (const prop of MIRROR_STYLE_PROPS) {
-    (style as any)[prop] = (computed as any)[prop];
+    (style as unknown as Record<string, string>)[prop] = (computed as unknown as Record<string, string>)[prop];
   }
 
   div.textContent = textarea.value.substring(0, position);

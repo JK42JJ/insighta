@@ -1,0 +1,32 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg" style="background:#FFFFFF;font-family:Arial,sans-serif">
+<rect x="0" y="0" width="1440" height="44" rx="0" fill="#F0F0F0" stroke="#D0D0D0" stroke-width="1" />
+<rect x="14" y="11" width="22" height="22" rx="4" fill="#CCCCCC" stroke="#D0D0D0" stroke-width="1" />
+<text x="42" y="28" font-size="13" fill="#111111" font-weight="bold" text-anchor="start">Insighta</text>
+<rect x="100" y="14" width="28" height="16" rx="3" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<text x="103" y="26" font-size="9" fill="#555555" font-weight="normal" text-anchor="start">DEV</text>
+<rect x="132" y="14" width="34" height="16" rx="3" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<text x="135" y="26" font-size="9" fill="#555555" font-weight="normal" text-anchor="start">BETA</text>
+<rect x="480" y="9" width="480" height="26" rx="13" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" />
+<text x="498" y="27" font-size="11" fill="#999999" font-weight="normal" text-anchor="start">Search cards...  (⌘K)</text>
+<text x="1230" y="28" font-size="11" fill="#555555" font-weight="normal" text-anchor="start">KO</text>
+<circle cx="1278" cy="22" r="10" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1"/>
+<circle cx="1416" cy="22" r="16" fill="#CCCCCC" stroke="#D0D0D0" stroke-width="1"/>
+<text x="1410" y="26" font-size="10" fill="#111111" font-weight="bold" text-anchor="middle">JK</text>
+<rect x="460" y="250" width="520" height="420" rx="16" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1.5" />
+<circle cx="700" cy="275" r="5" fill="#111111" stroke="#D0D0D0" stroke-width="1"/>
+<circle cx="720" cy="275" r="5" fill="#D0D0D0" stroke="#D0D0D0" stroke-width="1"/>
+<circle cx="740" cy="275" r="5" fill="#D0D0D0" stroke="#D0D0D0" stroke-width="1"/>
+<text x="720" y="296" font-size="10" fill="#999999" font-weight="normal" text-anchor="middle">1 / 3</text>
+<text x="720" y="330" font-size="16" fill="#111111" font-weight="bold" text-anchor="middle">지금 가장 키우고 싶은 것이 뭔가요?</text>
+<rect x="540" y="360" width="360" height="40" rx="8" fill="#F5F5F5" stroke="#BBBBBB" stroke-width="1" />
+<text x="552" y="386" font-size="12" fill="#999999" font-weight="normal" text-anchor="start">예: 투자, 영어, 백엔드 개발...</text>
+<rect x="560" y="418" width="48" height="26" rx="13" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<text x="584" y="436" font-size="10" fill="#555555" font-weight="normal" text-anchor="middle">투자</text>
+<rect x="640" y="418" width="48" height="26" rx="13" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<text x="664" y="436" font-size="10" fill="#555555" font-weight="normal" text-anchor="middle">영어</text>
+<rect x="720" y="418" width="96" height="26" rx="13" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<text x="768" y="436" font-size="10" fill="#555555" font-weight="normal" text-anchor="middle">백엔드 개발</text>
+<rect x="640" y="510" width="160" height="40" rx="8" fill="#111111" stroke="none" stroke-width="1" />
+<text x="720" y="535" font-size="13" fill="#FFFFFF" font-weight="bold" text-anchor="middle">다음 →</text>
+<text x="12" y="888" font-size="9" fill="#999999">[ WF-10 ] 온보딩 Step 1 · 만다라 주제 입력 · 제안 chip · 스텝 인디케이터</text>
+</svg>

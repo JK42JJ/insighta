@@ -116,12 +116,12 @@ function buildAvatarUri(
   preset: ExpressionPreset,
   theme: ThemePreset | null,
 ): string {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const avatar = createAvatar(adventurer, {
     seed,
-    eyes: preset.eyes as any,
-    eyebrows: preset.eyebrows as any,
-    mouth: preset.mouth as any,
+    eyes: preset.eyes as never[],
+    eyebrows: preset.eyebrows as never[],
+    mouth: preset.mouth as never[],
     ...(theme?.hair && { hair: theme.hair }),
     ...(theme?.hairColor && { hairColor: theme.hairColor }),
     ...(theme?.glasses && { glasses: theme.glasses }),
@@ -242,7 +242,7 @@ const LazyRiveAvatar = lazy(() =>
             const inputs = rive.stateMachineInputs(RIVE_STATE_MACHINE);
             console.log('[MandalaAvatar] Rive loaded', {
               stateMachines: rive.stateMachineNames,
-              inputs: inputs?.map((i: any) => ({ name: i.name, type: i.type, value: i.value })),
+              inputs: inputs?.map((i: { name: string; type: number; value: unknown }) => ({ name: i.name, type: i.type, value: i.value })),
             });
           }
         },
@@ -257,8 +257,8 @@ const LazyRiveAvatar = lazy(() =>
         let hash = 0;
         for (let i = 0; i < seed.length; i++) hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
         // Apply hash-based values to numeric inputs for variation
-        const numInputs = inputs.filter((i: any) => i.type === 56); // 56 = number type in Rive
-        numInputs.forEach((input: any, idx: number) => {
+        const numInputs = inputs.filter((i: { type: number }) => i.type === 56); // 56 = number type in Rive
+        numInputs.forEach((input: { value: number | boolean }, idx: number) => {
           const val = Math.abs((hash >> (idx * 3)) % 100);
           input.value = val;
         });

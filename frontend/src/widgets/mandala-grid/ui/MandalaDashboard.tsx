@@ -12,7 +12,7 @@ interface MandalaDashboardProps {
 }
 
 export function MandalaDashboard({
-  centerGoal,
+  centerGoal: _centerGoal,
   subjects,
   cardsByCell,
   onFlipBack,

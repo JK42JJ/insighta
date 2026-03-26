@@ -1,0 +1,129 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg" style="background:#FFFFFF;font-family:Arial,sans-serif">
+<rect x="0" y="0" width="1440" height="900" rx="0" fill="#FFFFFF" stroke="none" stroke-width="1" />
+<rect x="0" y="0" width="1440" height="50" rx="0" fill="#F0F0F0" stroke="#D0D0D0" stroke-width="1" />
+<text x="16" y="31" font-size="14" fill="#111111" font-weight="bold" text-anchor="start">주식투자 — 전체 카드</text>
+<text x="200" y="31" font-size="11" fill="#999999" font-weight="normal" text-anchor="start">12장</text>
+<rect x="240" y="12" width="72" height="28" rx="6" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<text x="256" y="30" font-size="11" fill="#555555" font-weight="normal" text-anchor="start">AI 분류</text>
+<rect x="316" y="12" width="26" height="28" rx="5" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<text x="324" y="30" font-size="13" fill="#555555" font-weight="normal" text-anchor="start">−</text>
+<rect x="346" y="12" width="26" height="28" rx="5" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<text x="354" y="30" font-size="13" fill="#555555" font-weight="normal" text-anchor="start">+</text>
+<rect x="386" y="14" width="70" height="24" rx="12" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<rect x="388" y="16" width="32" height="20" rx="10" fill="#888888" stroke="none" stroke-width="1" />
+<text x="394" y="29" font-size="8" fill="#FFFFFF" font-weight="normal" text-anchor="start">작게</text>
+<text x="428" y="29" font-size="8" fill="#999999" font-weight="normal" text-anchor="start">크게</text>
+<rect x="1340" y="12" width="88" height="28" rx="6" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<text x="1360" y="30" font-size="11" fill="#555555" font-weight="normal" text-anchor="start">✕ 닫기</text>
+<rect x="0" y="50" width="1440" height="28" rx="0" fill="#FFFBE0" stroke="#DDCC00" stroke-width="1" />
+<text x="12" y="68" font-size="11" fill="#887700" font-weight="normal" text-anchor="start">카드를 클릭해서 선택 · 선택 후 드래그 → 만다라 네비게이터</text>
+<rect x="16" y="84" width="268" height="180" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="16" y="84" width="268" height="99" rx="8" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="16" y="175" width="268" height="8" rx="0" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<circle cx="30" cy="98" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<rect x="248" y="90" width="32" height="14" rx="3" fill="#00000066" stroke="none" stroke-width="1" />
+<text x="252" y="100" font-size="7" fill="#FFFFFF" font-weight="normal" text-anchor="start">YouTube</text>
+<text x="24" y="197" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">테슬라, 차세대 문명의 시작</text>
+<rect x="24" y="211" width="40" height="14" rx="7" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<circle cx="30" cy="218" r="3" fill="#4488CC" stroke="#4488CC" stroke-width="1"/>
+<rect x="300" y="84" width="268" height="180" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="300" y="84" width="268" height="99" rx="8" fill="#2a1a3a" stroke="none" stroke-width="1" />
+<rect x="300" y="175" width="268" height="8" rx="0" fill="#2a1a3a" stroke="none" stroke-width="1" />
+<circle cx="314" cy="98" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<rect x="532" y="90" width="32" height="14" rx="3" fill="#00000066" stroke="none" stroke-width="1" />
+<text x="536" y="100" font-size="7" fill="#FFFFFF" font-weight="normal" text-anchor="start">YouTube</text>
+<text x="308" y="197" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">엔비디아 양자컴퓨팅 전략</text>
+<rect x="308" y="211" width="40" height="14" rx="7" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<circle cx="314" cy="218" r="3" fill="#4488CC" stroke="#4488CC" stroke-width="1"/>
+<rect x="584" y="84" width="268" height="180" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="584" y="84" width="268" height="99" rx="8" fill="#1a3a2a" stroke="none" stroke-width="1" />
+<rect x="584" y="175" width="268" height="8" rx="0" fill="#1a3a2a" stroke="none" stroke-width="1" />
+<circle cx="598" cy="98" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<rect x="816" y="90" width="32" height="14" rx="3" fill="#00000066" stroke="none" stroke-width="1" />
+<text x="820" y="100" font-size="7" fill="#FFFFFF" font-weight="normal" text-anchor="start">YouTube</text>
+<text x="592" y="197" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">팔란티어 경쟁자가 없나요?</text>
+<rect x="592" y="211" width="40" height="14" rx="7" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<circle cx="598" cy="218" r="3" fill="#CC8800" stroke="#CC8800" stroke-width="1"/>
+<rect x="868" y="84" width="268" height="180" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="868" y="84" width="268" height="99" rx="8" fill="#3a2a1a" stroke="none" stroke-width="1" />
+<rect x="868" y="175" width="268" height="8" rx="0" fill="#3a2a1a" stroke="none" stroke-width="1" />
+<circle cx="882" cy="98" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<rect x="1100" y="90" width="32" height="14" rx="3" fill="#00000066" stroke="none" stroke-width="1" />
+<text x="1104" y="100" font-size="7" fill="#FFFFFF" font-weight="normal" text-anchor="start">YouTube</text>
+<text x="876" y="197" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">아이온큐 10년 전망</text>
+<rect x="876" y="211" width="40" height="14" rx="7" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<circle cx="882" cy="218" r="3" fill="#CC8800" stroke="#CC8800" stroke-width="1"/>
+<rect x="1152" y="84" width="268" height="180" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="1152" y="84" width="268" height="99" rx="8" fill="#1a1a3a" stroke="none" stroke-width="1" />
+<rect x="1152" y="175" width="268" height="8" rx="0" fill="#1a1a3a" stroke="none" stroke-width="1" />
+<circle cx="1166" cy="98" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<rect x="1384" y="90" width="32" height="14" rx="3" fill="#00000066" stroke="none" stroke-width="1" />
+<text x="1388" y="100" font-size="7" fill="#FFFFFF" font-weight="normal" text-anchor="start">YouTube</text>
+<text x="1160" y="197" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">유상증자 CEO 고백</text>
+<rect x="1160" y="211" width="40" height="14" rx="7" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<circle cx="1166" cy="218" r="3" fill="#338866" stroke="#338866" stroke-width="1"/>
+<rect x="16" y="280" width="268" height="180" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="16" y="280" width="268" height="99" rx="8" fill="#2a3a1a" stroke="none" stroke-width="1" />
+<rect x="16" y="371" width="268" height="8" rx="0" fill="#2a3a1a" stroke="none" stroke-width="1" />
+<circle cx="30" cy="294" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<rect x="248" y="286" width="32" height="14" rx="3" fill="#00000066" stroke="none" stroke-width="1" />
+<text x="252" y="296" font-size="7" fill="#FFFFFF" font-weight="normal" text-anchor="start">YouTube</text>
+<text x="24" y="393" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">엔비디아 실적 발표</text>
+<rect x="24" y="407" width="40" height="14" rx="7" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<circle cx="30" cy="414" r="3" fill="#4488CC" stroke="#4488CC" stroke-width="1"/>
+<rect x="300" y="280" width="268" height="180" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="300" y="280" width="268" height="99" rx="8" fill="#3a1a1a" stroke="none" stroke-width="1" />
+<rect x="300" y="371" width="268" height="8" rx="0" fill="#3a1a1a" stroke="none" stroke-width="1" />
+<circle cx="314" cy="294" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<rect x="532" y="286" width="32" height="14" rx="3" fill="#00000066" stroke="none" stroke-width="1" />
+<text x="536" y="296" font-size="7" fill="#FFFFFF" font-weight="normal" text-anchor="start">YouTube</text>
+<text x="308" y="393" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">팔란티어 CEO 단독</text>
+<rect x="308" y="407" width="40" height="14" rx="7" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<circle cx="314" cy="414" r="3" fill="#CC8800" stroke="#CC8800" stroke-width="1"/>
+<rect x="584" y="280" width="268" height="180" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="584" y="280" width="268" height="99" rx="8" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<rect x="584" y="371" width="268" height="8" rx="0" fill="#1a2a3a" stroke="none" stroke-width="1" />
+<circle cx="598" cy="294" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<rect x="816" y="286" width="32" height="14" rx="3" fill="#00000066" stroke="none" stroke-width="1" />
+<text x="820" y="296" font-size="7" fill="#FFFFFF" font-weight="normal" text-anchor="start">YouTube</text>
+<text x="592" y="393" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">테슬라 로봇 택시 전략</text>
+<rect x="592" y="407" width="40" height="14" rx="7" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<circle cx="598" cy="414" r="3" fill="#4488CC" stroke="#4488CC" stroke-width="1"/>
+<rect x="868" y="280" width="268" height="180" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="868" y="280" width="268" height="99" rx="8" fill="#2a1a3a" stroke="none" stroke-width="1" />
+<rect x="868" y="371" width="268" height="8" rx="0" fill="#2a1a3a" stroke="none" stroke-width="1" />
+<circle cx="882" cy="294" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<rect x="1100" y="286" width="32" height="14" rx="3" fill="#00000066" stroke="none" stroke-width="1" />
+<text x="1104" y="296" font-size="7" fill="#FFFFFF" font-weight="normal" text-anchor="start">YouTube</text>
+<text x="876" y="393" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">2030년 반도체 전쟁</text>
+<rect x="876" y="407" width="40" height="14" rx="7" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<circle cx="882" cy="414" r="3" fill="#4488CC" stroke="#4488CC" stroke-width="1"/>
+<rect x="1152" y="280" width="268" height="180" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="1152" y="280" width="268" height="99" rx="8" fill="#1a3a1a" stroke="none" stroke-width="1" />
+<rect x="1152" y="371" width="268" height="8" rx="0" fill="#1a3a1a" stroke="none" stroke-width="1" />
+<circle cx="1166" cy="294" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<rect x="1384" y="286" width="32" height="14" rx="3" fill="#00000066" stroke="none" stroke-width="1" />
+<text x="1388" y="296" font-size="7" fill="#FFFFFF" font-weight="normal" text-anchor="start">YouTube</text>
+<text x="1160" y="393" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">미국 주식 2025 전략</text>
+<rect x="1160" y="407" width="40" height="14" rx="7" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<circle cx="1166" cy="414" r="3" fill="#338866" stroke="#338866" stroke-width="1"/>
+<rect x="16" y="476" width="268" height="180" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="16" y="476" width="268" height="99" rx="8" fill="#3a3a1a" stroke="none" stroke-width="1" />
+<rect x="16" y="567" width="268" height="8" rx="0" fill="#3a3a1a" stroke="none" stroke-width="1" />
+<circle cx="30" cy="490" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<rect x="248" y="482" width="32" height="14" rx="3" fill="#00000066" stroke="none" stroke-width="1" />
+<text x="252" y="492" font-size="7" fill="#FFFFFF" font-weight="normal" text-anchor="start">YouTube</text>
+<text x="24" y="589" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">퀀텀컴퓨팅 실용화 시점</text>
+<rect x="24" y="603" width="40" height="14" rx="7" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<circle cx="30" cy="610" r="3" fill="#4488CC" stroke="#4488CC" stroke-width="1"/>
+<rect x="300" y="476" width="268" height="180" rx="8" fill="#F5F5F5" stroke="#D0D0D0" stroke-width="1" />
+<rect x="300" y="476" width="268" height="99" rx="8" fill="#1a1a2a" stroke="none" stroke-width="1" />
+<rect x="300" y="567" width="268" height="8" rx="0" fill="#1a1a2a" stroke="none" stroke-width="1" />
+<circle cx="314" cy="490" r="9" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.5"/>
+<rect x="532" y="482" width="32" height="14" rx="3" fill="#00000066" stroke="none" stroke-width="1" />
+<text x="536" y="492" font-size="7" fill="#FFFFFF" font-weight="normal" text-anchor="start">YouTube</text>
+<text x="308" y="589" font-size="9" fill="#111111" font-weight="bold" text-anchor="start">팔란티어 100달러 시나리오</text>
+<rect x="308" y="603" width="40" height="14" rx="7" fill="#EBEBEB" stroke="#D0D0D0" stroke-width="1" />
+<circle cx="314" cy="610" r="3" fill="#CC8800" stroke="#CC8800" stroke-width="1"/>
+<text x="12" y="888" font-size="9" fill="#999999">[ WF-08 ] 전체화면 섹터 · 5열 그리드 · AI분류 +-버튼 · 카드크기 토글 · 셀렉트 체크박스 · hint bar</text>
+</svg>

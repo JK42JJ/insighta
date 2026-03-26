@@ -27,7 +27,7 @@ export function DraggableCard({ card, onClick, compact = false }: DraggableCardP
 
   const handleShareToX = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/;
+    const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/;
     const linkMatch = card.userNote?.match(linkPattern);
 
     let shareUrl: string;

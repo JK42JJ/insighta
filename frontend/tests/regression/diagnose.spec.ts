@@ -46,8 +46,8 @@ test('diagnose: check auth state and API from page context', async ({ page }) =>
       });
       const body = await resp.json();
       return { status: resp.status, body };
-    } catch (err: any) {
-      return { error: err.message };
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err.message : String(err) };
     }
   });
 

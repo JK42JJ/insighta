@@ -44,7 +44,21 @@ function normalizeStatus(status: string | undefined): string {
 }
 
 /** Map Backend API camelCase playlist to snake_case YouTubePlaylist */
-function mapPlaylistResponse(p: any): YouTubePlaylist {
+interface PlaylistApiResponse {
+  id: string;
+  youtubeId: string;
+  title: string;
+  description?: string | null;
+  thumbnailUrl?: string | null;
+  channelTitle?: string | null;
+  itemCount?: number;
+  lastSyncedAt?: string | null;
+  syncStatus?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function mapPlaylistResponse(p: PlaylistApiResponse): YouTubePlaylist {
   return {
     id: p.id,
     user_id: '',
@@ -172,7 +186,7 @@ export function useDeletePlaylist() {
   return useMutation({
     mutationFn: async (playlistId: string): Promise<void> => {
       const headers = await getAuthHeaders();
-      const { 'Content-Type': _, ...headersWithoutCT } = headers;
+      const { 'Content-Type': _contentType, ...headersWithoutCT } = headers;
       const response = await fetch(`/api/v1/playlists/${playlistId}`, {
         method: 'DELETE',
         headers: headersWithoutCT,

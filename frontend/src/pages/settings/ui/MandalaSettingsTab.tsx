@@ -29,17 +29,6 @@ import {
   useSwitchMandala,
   useMandalaQuota,
 } from '@/features/mandala';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/shared/ui/alert-dialog';
 
 export function MandalaSettingsTab() {
   const navigate = useNavigate();
