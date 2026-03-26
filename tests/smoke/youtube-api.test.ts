@@ -1,5 +1,6 @@
 // YouTube API smoke tests — validates subscriptions/playlists endpoints.
 // Dynamic import to avoid module-level config validation crash in CI.
+export {};
 
 const canBootServer = !!(
   process.env['SUPABASE_JWT_SECRET'] ||

@@ -1,4 +1,5 @@
 // Sharing API smoke tests — validates share link creation and public access.
+export {};
 
 const canBootServer = !!(
   process.env['SUPABASE_JWT_SECRET'] ||

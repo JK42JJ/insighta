@@ -1,5 +1,6 @@
 // Dynamic import to avoid module-level config validation crash in CI.
 // database/client.ts → config/index.ts → parseEnv() throws if ENCRYPTION_SECRET missing.
+export {};
 
 const hasDatabase = !!process.env['DATABASE_URL'];
 const describeIfDb = hasDatabase ? describe : describe.skip;
