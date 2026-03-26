@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { InsightCard } from '@/entities/card/model/types';
 import type { ViewMode } from '@/entities/user/model/types';
+import { handleThumbnailError } from '@/shared/lib/image-utils';
 import { ViewSwitcher } from '@/features/view-mode';
 
 interface InsightsViewProps {
@@ -333,6 +334,7 @@ export function InsightsView({
                     src={card.thumbnail}
                     alt=""
                     className="w-9 h-6 rounded-sm object-cover shrink-0 bg-muted"
+                    onError={handleThumbnailError}
                   />
                 ) : (
                   <div className="w-9 h-6 rounded-sm bg-muted flex items-center justify-center shrink-0">
