@@ -91,6 +91,7 @@ docs/design/                          <- 설계 문서 디렉토리 (GitHub repo
 | **UX 디자인 패턴 리서치** | `docs/design/UX_Design_Patterns_for_Knowledge_Management_Grids.md` | 3-layer header, label filtering, D&D 패턴, minimap 동기화, 접근성 | UX 리팩토링, 필터 UI, D&D 개선 시 |
 | **비전 문서** | `docs/VISION.md` | 8단계 성장 여정, 캐릭터 시스템, 소비 시각화 철학, 소셜/구독 설계 | 새 기능 기획, 아키텍처 결정 시 |
 | **Ontology 아키텍처** | `docs/ontology-architecture.md` | Knowledge Graph 스키마, shadow sync, embedding, action log | Ontology/Graph 관련 작업 시 |
+| **만다라 에디터 AI UX 패턴** | `docs/design/mandala-editor-ai-ux-patterns.md` | 20+ AI 도구 분석, 5대 설계 결정 (2-phase gen, tab+minimap, compound undo, partial regen, template+AI) | 만다라 에디터 재설계, AI 생성 기능 구현 시 |
 
 ### 시각 참조 자료
 
@@ -99,6 +100,7 @@ docs/design/                          <- 설계 문서 디렉토리 (GitHub repo
 | 사이드바 재설계 비주얼 | `docs/design/insighta-sidebar-redesign-visual.html` | 사이드바 story의 시각 참조 (브라우저에서 열기) |
 | 미니맵 heat intensity mockup | `docs/design/insighta-minimap-heat-intensity.html` | 미니맵 디자인 참조 (# 토글 포함) |
 | Insights 뷰 재설계 mockup | `docs/design/insighta-insights-view-redesign.html` | Insights 뷰 레이아웃 + 색상 참조 |
+| 만다라 에디터 v3 mockup | `docs/design/insighta-mandala-editor-v3.html` | AI 만다라 에디터 UX 시각 참조 |
 
 ### 절대 규칙 (설계 문서 관련)
 
