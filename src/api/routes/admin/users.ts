@@ -26,6 +26,9 @@ const StatusUpdateSchema = z.object({
   banReason: z.string().optional(),
 });
 
+/** Permanent ban uses far-future date */
+const PERMANENT_BAN_DATE = '2099-12-31T23:59:59Z';
+
 export async function adminUserRoutes(fastify: FastifyInstance) {
   const adminAuth = { onRequest: [fastify.authenticate, fastify.authenticateAdmin] };
 
@@ -247,7 +250,7 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         .send(createErrorResponse(ErrorCode.VALIDATION_ERROR, 'Cannot ban yourself', request.url));
     }
 
-    const bannedUntil = body.banned ? new Date('2099-12-31T23:59:59Z') : null;
+    const bannedUntil = body.banned ? new Date(PERMANENT_BAN_DATE) : null;
 
     const result = await db.$queryRaw<Array<Record<string, unknown>>>`
         UPDATE auth.users

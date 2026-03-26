@@ -36,6 +36,12 @@ import {
 import { logger } from '../../utils/logger';
 import { createErrorResponse, ErrorCode } from '../schemas/common.schema';
 
+const SUMMARY_WORD_LIMITS = {
+  brief: 100,
+  detailed: 300,
+  comprehensive: 500,
+} as const;
+
 /**
  * Video routes plugin
  *
@@ -451,21 +457,9 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       // For now, create a simple summary from captions
       const fullText = captionResult.caption.fullText;
       const words = fullText.split(' ');
-      let summaryText: string;
-
-      switch (level) {
-        case 'brief':
-          summaryText = words.slice(0, 100).join(' ') + '...';
-          break;
-        case 'detailed':
-          summaryText = words.slice(0, 300).join(' ') + '...';
-          break;
-        case 'comprehensive':
-          summaryText = words.slice(0, 500).join(' ') + '...';
-          break;
-        default:
-          summaryText = words.slice(0, 100).join(' ') + '...';
-      }
+      const wordLimit =
+        SUMMARY_WORD_LIMITS[level as keyof typeof SUMMARY_WORD_LIMITS] ?? SUMMARY_WORD_LIMITS.brief;
+      const summaryText = words.slice(0, wordLimit).join(' ') + '...';
 
       // Save summary to user state via notes field
       await getVideo().addNotes(id, request.user.userId, summaryText);

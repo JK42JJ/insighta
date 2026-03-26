@@ -3,6 +3,9 @@ import { Prisma } from '@prisma/client';
 import { db } from '../../../modules/database/client';
 import { createSuccessResponse } from '../../schemas/common.schema';
 
+const DEFAULT_ACTIVITY_RANGE_DAYS = 6;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 export async function adminStatsRoutes(fastify: FastifyInstance) {
   const adminAuth = { onRequest: [fastify.authenticate, fastify.authenticateAdmin] };
 
@@ -93,7 +96,8 @@ export async function adminStatsRoutes(fastify: FastifyInstance) {
     const now = new Date();
     const toDate = query.to || now.toISOString().slice(0, 10);
     const fromDate =
-      query.from || new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      query.from ||
+      new Date(now.getTime() - DEFAULT_ACTIVITY_RANGE_DAYS * MS_PER_DAY).toISOString().slice(0, 10);
     const userId = query.user_id || null;
 
     const rows = await db.$queryRaw<

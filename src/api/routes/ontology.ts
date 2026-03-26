@@ -19,6 +19,7 @@ import {
   BatchEnrichBodySchema,
   AutoEnrichBodySchema,
   RateSummaryBodySchema,
+  NodeIdParamsSchema,
 } from '../schemas/ontology.schema';
 import {
   enrichResourceNode,
@@ -83,7 +84,7 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const userId = getUserId(request, reply);
     if (!userId) return;
 
-    const { id } = request.params as { id: string };
+    const { id } = NodeIdParamsSchema.parse(request.params);
     const node = await manager.getNode(userId, id);
     if (!node) {
       return reply
@@ -98,7 +99,7 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const userId = getUserId(request, reply);
     if (!userId) return;
 
-    const { id } = request.params as { id: string };
+    const { id } = NodeIdParamsSchema.parse(request.params);
     const body = UpdateNodeBodySchema.parse(request.body);
     try {
       const node = await manager.updateNode(userId, id, body);
@@ -123,7 +124,7 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const userId = getUserId(request, reply);
     if (!userId) return;
 
-    const { id } = request.params as { id: string };
+    const { id } = NodeIdParamsSchema.parse(request.params);
     try {
       await manager.deleteNode(userId, id);
       return reply.send({ status: 'ok', data: { deleted: true } });
@@ -145,7 +146,7 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const userId = getUserId(request, reply);
       if (!userId) return;
 
-      const { id } = request.params as { id: string };
+      const { id } = NodeIdParamsSchema.parse(request.params);
       const query = NeighborsQuerySchema.parse(request.query);
       const neighbors = await getNeighbors(id, userId, query.relation, query.depth);
       return reply.send({ status: 'ok', data: neighbors });
@@ -160,7 +161,7 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const userId = getUserId(request, reply);
       if (!userId) return;
 
-      const { id } = request.params as { id: string };
+      const { id } = NodeIdParamsSchema.parse(request.params);
       const query = HistoryQuerySchema.parse(request.query);
       const history = await manager.getNodeHistory(userId, id, query.limit);
       return reply.send({ status: 'ok', data: history });
@@ -224,7 +225,7 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const userId = getUserId(request, reply);
     if (!userId) return;
 
-    const { id } = request.params as { id: string };
+    const { id } = NodeIdParamsSchema.parse(request.params);
     try {
       await manager.deleteEdge(userId, id);
       return reply.send({ status: 'ok', data: { deleted: true } });

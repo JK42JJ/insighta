@@ -6,6 +6,8 @@ import { createErrorResponse, createSuccessResponse, ErrorCode } from '../../sch
 const STRIPE_WEBHOOK_SECRET = process.env['STRIPE_WEBHOOK_SECRET'] ?? '';
 const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'] ?? '';
 
+const MAX_TRANSACTION_LIST_SIZE = 100;
+
 const CheckoutSchema = z.object({
   priceId: z.string().min(1),
   successUrl: z.string().url(),
@@ -24,7 +26,7 @@ export async function adminPaymentRoutes(fastify: FastifyInstance) {
       FROM public.payment_transactions pt
       LEFT JOIN auth.users u ON u.id = pt.user_id
       ORDER BY pt.created_at DESC
-      LIMIT 100
+      LIMIT ${MAX_TRANSACTION_LIST_SIZE}
     `;
     return reply.send(createSuccessResponse({ transactions }));
   });
