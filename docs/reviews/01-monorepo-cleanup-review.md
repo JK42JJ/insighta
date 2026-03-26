@@ -170,5 +170,5 @@ rm scripts/test-runner.ts
 ---
 
 *작성일: 2025-12-20*
-*작성자: James Kim (jamesjk4242@gmail.com)*
+*작성자: James Kim (admin@insighta.one)*
 *검토 방법: 3개 Explore Agent 병렬 실행*

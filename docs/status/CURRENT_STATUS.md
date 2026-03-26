@@ -843,5 +843,5 @@ Phase 4 (Advanced API Features)와 Phase 5 (Frontend Integration)가 완료되�
 ---
 
 *Last reviewed: 2025-12-22*
-*Maintained by: James Kim (jamesjk4242@gmail.com)*
+*Maintained by: James Kim (admin@insighta.one)*
 *Version: 2.2*

@@ -1040,5 +1040,5 @@ Phase 3.3 Tasks:
 
 **Document Version**: 1.0
 **Last Updated**: 2025-12-16
-**Maintainer**: James Kim (jamesjk4242@gmail.com)
+**Maintainer**: James Kim (admin@insighta.one)
 **Status**: Ready for Implementation 🚀

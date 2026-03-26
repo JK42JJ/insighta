@@ -17,7 +17,7 @@
 | OAuth Scope | `youtube.readonly` (비민감 스코프) | 완료 |
 | Redirect URI | `https://insighta.one/oauth/callback` | 완료 |
 | 라우팅 | `App.tsx:35-36`에서 `/privacy`, `/terms` 라우트 등록 | 완료 |
-| 연락처 | `jamesjk4242@gmail.com` | 완료 |
+| 연락처 | `admin@insighta.one` | 완료 |
 
 ## 실행 절차 (Google Cloud Console 수동 작업)
 
@@ -30,12 +30,12 @@
 | 필드 | 값 |
 |------|-----|
 | App name | `Insighta` |
-| User support email | `jamesjk4242@gmail.com` |
+| User support email | `admin@insighta.one` |
 | App homepage | `https://insighta.one` |
 | Privacy policy link | `https://insighta.one/privacy` |
 | Terms of service link | `https://insighta.one/terms` |
 | Authorized domains | `insighta.one` |
-| Developer contact email | `jamesjk4242@gmail.com` |
+| Developer contact email | `admin@insighta.one` |
 
 ### Step 2: Scopes 확인
 

@@ -131,5 +131,5 @@ docs/
 
 ---
 
-**Maintained by**: James Kim (jamesjk4242@gmail.com)
+**Maintained by**: James Kim (admin@insighta.one)
 **Project**: Insighta (Insighta)
