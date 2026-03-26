@@ -24,6 +24,7 @@
 | `auth-guard.test.ts` | 3 | Protected routes reject unauthenticated requests |
 | `bot-api.test.ts` | 9 | Bot auth rejection + authenticated endpoints (mood, report, subscriptions, pending) |
 | `prisma-connect.test.ts` | 2 | Prisma client connection + query |
+| `youtube-api.test.ts` | 3 | YouTube subscriptions/playlists auth rejection + env check |
 
 **Note**: Smoke tests use `describeIfServer` pattern — skipped in CI when env vars missing, run locally with real DB.
 
