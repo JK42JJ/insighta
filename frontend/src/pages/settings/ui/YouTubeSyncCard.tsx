@@ -26,7 +26,18 @@ import {
   useDeleteSourceMapping,
 } from '@/features/mandala';
 import { cn } from '@/shared/lib/utils';
-import { Loader2, Plus, RefreshCw, Youtube, LogIn, ChevronDown, Tv, Hash, Search, ExternalLink, Check } from 'lucide-react';
+import { Loader2, Plus, RefreshCw, Youtube, LogIn, ChevronDown, Tv, Hash, Search, ExternalLink, Check, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/shared/ui/alert-dialog';
 import type { SyncInterval } from '@/entities/youtube/model/types';
 
 const SYNC_INTERVAL_KEYS: SyncInterval[] = ['manual', '1h', '6h', '12h', '24h'];
@@ -331,6 +342,28 @@ export function YouTubeSyncCard() {
     }
   };
 
+  const handleBulkSync = async (targetPlaylists: typeof playlists) => {
+    const ids = targetPlaylists.filter((p) => selectedPlaylists.has(p.id)).map((p) => p.id);
+    for (const id of ids) {
+      try {
+        await ytSync.syncPlaylist(id);
+      } catch { /* continue */ }
+    }
+    toast({ title: t('youtube.syncAllComplete'), description: `${ids.length} playlists synced.` });
+    setSelectedPlaylists(new Set());
+  };
+
+  const handleBulkDelete = async (targetPlaylists: typeof playlists) => {
+    const ids = targetPlaylists.filter((p) => selectedPlaylists.has(p.id)).map((p) => p.id);
+    for (const id of ids) {
+      try {
+        await ytSync.deletePlaylist(id);
+      } catch { /* continue */ }
+    }
+    toast({ title: t('youtube.playlistDeleted'), description: `${ids.length} playlists deleted.` });
+    setSelectedPlaylists(new Set());
+  };
+
   const renderBulkToolbar = (targetPlaylists: typeof playlists) => {
     if (targetPlaylists.length === 0) return null;
     const allSelected = targetPlaylists.every((p) => selectedPlaylists.has(p.id)) && targetPlaylists.length > 0;
@@ -360,6 +393,40 @@ export function YouTubeSyncCard() {
           />
           {someSelected ? `${selectedCount} selected` : t('youtube.selectAll', 'Select all')}
         </label>
+        {someSelected && (
+          <>
+            <button
+              onClick={() => handleBulkSync(targetPlaylists)}
+              className="text-xs font-semibold text-foreground border border-border/50 bg-surface-light hover:bg-muted/50 px-3 py-1 rounded-md transition-colors flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3 h-3" />
+              {t('youtube.syncSelected', 'Sync')}
+            </button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button className="text-xs font-semibold text-destructive border border-destructive/30 bg-destructive/5 hover:bg-destructive/10 px-3 py-1 rounded-md transition-colors flex items-center gap-1.5">
+                  <Trash2 className="w-3 h-3" />
+                  {t('youtube.deleteSelected', 'Delete')}
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="bg-surface-mid border-border/50">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{t('youtube.bulkDeleteTitle', 'Delete selected playlists?')}</AlertDialogTitle>
+                  <AlertDialogDescription>{t('youtube.bulkDeleteDesc', 'This will remove the selected playlists and their synced data.')}</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="bg-surface-light border-border/50">{t('common.cancel')}</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => handleBulkDelete(targetPlaylists)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {t('common.delete')}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        )}
         {someSelected && mandalaOptions.length > 0 && (
           <div className="ml-auto relative">
             <button

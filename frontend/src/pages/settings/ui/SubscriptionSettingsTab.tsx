@@ -1,14 +1,32 @@
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
-import { Badge } from '@/shared/ui/badge';
 import { useLocalCardsAsInsight } from '@/features/card-management/model/useLocalCards';
 import { useMandalaQuota } from '@/features/mandala/model/useMandalaQuery';
+import { cn } from '@/shared/lib/utils';
 
-function UsageBar({ value }: { value: number }) {
+const UNLIMITED_THRESHOLD = 999999;
+
+const TIER_STYLES: Record<string, string> = {
+  admin: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+  pro: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
+  free: 'bg-muted text-muted-foreground border-border/50',
+};
+
+function formatQuota(used: number, limit: number) {
+  if (limit >= UNLIMITED_THRESHOLD) {
+    return { display: `${used} used`, suffix: 'Unlimited', showBar: false };
+  }
+  return { display: `${used} / ${limit}`, suffix: '', showBar: true };
+}
+
+function UsageBar({ value, exceeded }: { value: number; exceeded?: boolean }) {
   return (
     <div className="h-2 w-full rounded-full bg-muted">
       <div
-        className="h-full rounded-full bg-primary transition-all"
+        className={cn(
+          'h-full rounded-full transition-all',
+          exceeded ? 'bg-destructive' : 'bg-primary'
+        )}
         style={{ width: `${Math.min(100, value)}%` }}
       />
     </div>
@@ -20,15 +38,20 @@ export function SubscriptionSettingsTab() {
   const { subscription } = useLocalCardsAsInsight();
   const { data: mandalaQuota } = useMandalaQuota();
 
+  const cardQuota = formatQuota(subscription.used, subscription.limit);
   const cardPercent = subscription.limit > 0
     ? Math.round((subscription.used / subscription.limit) * 100)
     : 0;
 
   const mandalaUsed = mandalaQuota?.used ?? 0;
   const mandalaLimit = mandalaQuota?.limit ?? subscription.mandalaLimit ?? 3;
+  const mandalaQuotaFmt = formatQuota(mandalaUsed, mandalaLimit);
   const mandalaPercent = mandalaLimit > 0
     ? Math.round((mandalaUsed / mandalaLimit) * 100)
     : 0;
+
+  const tierKey = subscription.tier?.toLowerCase() ?? 'free';
+  const tierStyle = TIER_STYLES[tierKey] ?? TIER_STYLES.free;
 
   return (
     <Card className="bg-surface-mid border-border/50">
@@ -40,9 +63,9 @@ export function SubscriptionSettingsTab() {
         {/* Current Tier */}
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-foreground">{t('settings.currentTier')}</span>
-          <Badge variant="outline" className="capitalize">
+          <span className={cn('text-xs font-bold px-2.5 py-0.5 rounded-full border capitalize', tierStyle)}>
             {subscription.tier}
-          </Badge>
+          </span>
         </div>
 
         {/* Card Usage */}
@@ -50,10 +73,17 @@ export function SubscriptionSettingsTab() {
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">{t('settings.cardUsage')}</span>
             <span className="text-foreground font-medium">
-              {subscription.used} / {subscription.limit}
+              {cardQuota.display}
+              {cardQuota.suffix && (
+                <span className="ml-1.5 text-xs text-muted-foreground">{cardQuota.suffix}</span>
+              )}
             </span>
           </div>
-          <UsageBar value={cardPercent} />
+          {cardQuota.showBar ? (
+            <UsageBar value={cardPercent} />
+          ) : (
+            <div className="h-2 w-full rounded-full bg-gradient-to-r from-primary/20 via-primary/10 to-transparent" />
+          )}
         </div>
 
         {/* Mandala Usage */}
@@ -61,10 +91,17 @@ export function SubscriptionSettingsTab() {
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">{t('settings.mandalaUsage')}</span>
             <span className="text-foreground font-medium">
-              {mandalaUsed} / {mandalaLimit}
+              {mandalaQuotaFmt.display}
+              {mandalaQuotaFmt.suffix && (
+                <span className="ml-1.5 text-xs text-muted-foreground">{mandalaQuotaFmt.suffix}</span>
+              )}
             </span>
           </div>
-          <UsageBar value={mandalaPercent} />
+          {mandalaQuotaFmt.showBar ? (
+            <UsageBar value={mandalaPercent} exceeded={mandalaPercent > 100} />
+          ) : (
+            <div className="h-2 w-full rounded-full bg-gradient-to-r from-primary/20 via-primary/10 to-transparent" />
+          )}
         </div>
       </CardContent>
     </Card>

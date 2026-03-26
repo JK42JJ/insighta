@@ -12,7 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/dialog';
-import { Loader2, Plus, ExternalLink } from 'lucide-react';
+import { Loader2, Plus, ExternalLink, MoreHorizontal } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/ui/dropdown-menu';
 import { cn } from '@/shared/lib/utils';
 import { toast } from '@/shared/lib/use-toast';
 import {
@@ -41,11 +47,14 @@ export function MandalaSettingsTab() {
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null);
+  const [renameValue, setRenameValue] = useState('');
 
   const { data: mandalaListData, isLoading: isListLoading } = useMandalaList();
   const { data: quotaData } = useMandalaQuota();
   const createMandala = useCreateMandala();
   const deleteMandala = useDeleteMandala();
+  const renameMandala = useRenameMandala();
   const switchMandala = useSwitchMandala();
 
   const mandalas = mandalaListData?.mandalas ?? [];
@@ -75,6 +84,18 @@ export function MandalaSettingsTab() {
     try {
       await deleteMandala.mutateAsync(id);
       toast({ title: t('mandalaSettings.deleted') });
+    } catch {
+      toast({ title: t('common.error'), variant: 'destructive' });
+    }
+  };
+
+  const handleRename = async () => {
+    if (!renameTarget || !renameValue.trim()) return;
+    try {
+      await renameMandala.mutateAsync({ id: renameTarget.id, title: renameValue.trim() });
+      toast({ title: t('mandalaSettings.renamed', 'Mandala renamed') });
+      setRenameTarget(null);
+      setRenameValue('');
     } catch {
       toast({ title: t('common.error'), variant: 'destructive' });
     }
@@ -166,57 +187,68 @@ export function MandalaSettingsTab() {
                           )}
                         </div>
                         <div className="flex items-center gap-2.5 mt-0.5 text-xs text-muted-foreground">
-                          <span>{sectorCount} {t('mandalaSettings.sectors', 'sectors')}</span>
+                          <span className={cn(sectorCount === 0 && 'text-muted-foreground/50')}>
+                            {sectorCount} {t('mandalaSettings.sectors', 'sectors')}
+                          </span>
                           <span>·</span>
                           <span>{t('mandalaSettings.updated', 'Updated')} {updatedDate}</span>
                         </div>
                       </div>
 
-                      {/* Hover actions */}
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/mandalas/${mandala.id}/edit`);
-                          }}
-                          className="text-xs font-semibold text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
-                        >
-                          Edit
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-
-                        {!mandala.isDefault && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <button
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-xs text-destructive/60 hover:text-destructive transition-colors"
-                              >
-                                {t('common.delete')}
-                              </button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent className="bg-surface-mid border-border/50">
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>{t('mandalaSettings.deleteConfirm')}</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  {t('mandalaSettings.deleteConfirmDesc', { title: displayTitle })}
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel className="bg-surface-light border-border/50">
-                                  {t('common.cancel')}
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(mandala.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  {t('common.delete')}
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                      </div>
+                      {/* Action menu */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-muted/50 transition-all"
+                          >
+                            <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-surface-mid border-border/50 w-44">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSetCurrent(mandala.id);
+                            }}
+                            disabled={mandala.isDefault}
+                            className="text-sm"
+                          >
+                            {t('mandalaSettings.setAsCurrent', 'Set as Current')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRenameTarget({ id: mandala.id, title: displayTitle });
+                              setRenameValue(displayTitle);
+                            }}
+                            className="text-sm"
+                          >
+                            {t('mandalaSettings.rename', 'Rename')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/mandalas/${mandala.id}/edit`);
+                            }}
+                            className="text-sm"
+                          >
+                            {t('mandalaSettings.edit', 'Edit')}
+                            <ExternalLink className="w-3 h-3 ml-auto" />
+                          </DropdownMenuItem>
+                          {!mandala.isDefault && (
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(mandala.id);
+                              }}
+                              className="text-sm text-destructive focus:text-destructive"
+                            >
+                              {t('common.delete')}
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   );
                 })}
@@ -228,19 +260,55 @@ export function MandalaSettingsTab() {
           <div className="px-5 py-3 border-t border-border/30">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-muted-foreground">{t('mandalaSettings.quota')}</span>
-              <span className="text-xs font-bold font-mono">
+              <span className={cn('text-xs font-bold font-mono', !isUnlimited && quotaUsed > quotaLimit && 'text-destructive')}>
                 {quotaUsed} / {isUnlimited ? '∞' : quotaLimit}
               </span>
             </div>
             <div className="h-1.5 rounded-full bg-muted overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-primary to-primary/70 transition-all duration-700"
-                style={{ width: isUnlimited ? '5%' : `${quotaPercent}%` }}
+                className={cn(
+                  'h-full rounded-full transition-all duration-700',
+                  !isUnlimited && quotaUsed > quotaLimit
+                    ? 'bg-destructive'
+                    : 'bg-gradient-to-r from-primary to-primary/70'
+                )}
+                style={{ width: isUnlimited ? '5%' : `${Math.min(quotaPercent, 100)}%` }}
               />
             </div>
+            {!isUnlimited && quotaUsed > quotaLimit && (
+              <p className="text-xs text-destructive mt-2">
+                {t('mandalaSettings.quotaExceededMsg', "You've exceeded your mandala limit. Upgrade or remove a mandala.")}
+              </p>
+            )}
           </div>
         </Card>
       </div>
+
+      {/* Rename Mandala Dialog */}
+      <Dialog open={!!renameTarget} onOpenChange={(open) => { if (!open) setRenameTarget(null); }}>
+        <DialogContent className="bg-surface-mid border-border/50">
+          <DialogHeader>
+            <DialogTitle>{t('mandalaSettings.rename', 'Rename')}</DialogTitle>
+            <DialogDescription>{t('mandalaSettings.renameDesc', 'Enter a new name for this mandala.')}</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            placeholder={t('mandalaSettings.createTitlePlaceholder')}
+            className="bg-surface-light border-border/50"
+            onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameTarget(null)} className="border-border/50">
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={handleRename} disabled={!renameValue.trim() || renameMandala.isPending}>
+              {renameMandala.isPending && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
+              {t('common.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Mandala Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>

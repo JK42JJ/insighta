@@ -179,6 +179,9 @@
     "saveSettings": "설정 저장",
     "settingsSaved": "저장 완료",
     "settingsSavedDesc": "설정이 저장되었습니다.",
+    "deleteTypePlaceholder": "확인하려면 \"DELETE\"를 입력하세요",
+    "notifGroupCommunication": "커뮤니케이션",
+    "notifGroupActivity": "활동 알림",
     "dataDeleted": "데이터 삭제",
     "dataDeletedDesc": "모든 데이터가 삭제되었습니다.",
     "llmKeys": {
