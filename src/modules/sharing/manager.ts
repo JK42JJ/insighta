@@ -40,7 +40,7 @@ export async function createShareLink(
   mandalaId: string,
   userId: string,
   mode: 'view' | 'view_cards' | 'clone' = 'view',
-  expiresInDays?: number,
+  expiresInDays?: number
 ): Promise<ShareLink> {
   const prisma = getPrismaClient();
 
@@ -79,7 +79,7 @@ export async function createShareLink(
  * Get shared mandala by share code. Returns null if expired or not found.
  */
 export async function getSharedMandala(
-  shareCode: string,
+  shareCode: string
 ): Promise<{ share: ShareLink; mandala: SharedMandala } | null> {
   const prisma = getPrismaClient();
 
@@ -115,12 +115,19 @@ export async function getSharedMandala(
     mandala: {
       id: share.mandala.id,
       title: share.mandala.title,
-      levels: share.mandala.levels.map((l: { level_key: string; center_goal: string; subjects: string[]; parent_level_id: string | null }) => ({
-        levelKey: l.level_key,
-        centerGoal: l.center_goal,
-        subjects: l.subjects,
-        parentLevelId: l.parent_level_id,
-      })),
+      levels: share.mandala.levels.map(
+        (l: {
+          level_key: string;
+          center_goal: string;
+          subjects: string[];
+          parent_level_id: string | null;
+        }) => ({
+          levelKey: l.level_key,
+          centerGoal: l.center_goal,
+          subjects: l.subjects,
+          parentLevelId: l.parent_level_id,
+        })
+      ),
       cardCount: share.mandala._count.localCards,
     },
   };
@@ -132,7 +139,7 @@ export async function getSharedMandala(
  */
 export async function cloneSharedMandala(
   shareCode: string,
-  targetUserId: string,
+  targetUserId: string
 ): Promise<{ mandalaId: string; title: string }> {
   const prisma = getPrismaClient();
 
@@ -200,10 +207,7 @@ export async function cloneSharedMandala(
 /**
  * List share links for a mandala.
  */
-export async function listShareLinks(
-  mandalaId: string,
-  userId: string,
-): Promise<ShareLink[]> {
+export async function listShareLinks(mandalaId: string, userId: string): Promise<ShareLink[]> {
   const prisma = getPrismaClient();
 
   // Verify ownership
@@ -219,22 +223,27 @@ export async function listShareLinks(
     orderBy: { created_at: 'desc' },
   });
 
-  return shares.map((s: { id: string; share_code: string; mode: string; expires_at: Date | null; created_at: Date }) => ({
-    id: s.id,
-    shareCode: s.share_code,
-    mode: s.mode,
-    expiresAt: s.expires_at?.toISOString() ?? null,
-    createdAt: s.created_at.toISOString(),
-  }));
+  return shares.map(
+    (s: {
+      id: string;
+      share_code: string;
+      mode: string;
+      expires_at: Date | null;
+      created_at: Date;
+    }) => ({
+      id: s.id,
+      shareCode: s.share_code,
+      mode: s.mode,
+      expiresAt: s.expires_at?.toISOString() ?? null,
+      createdAt: s.created_at.toISOString(),
+    })
+  );
 }
 
 /**
  * Delete a share link.
  */
-export async function deleteShareLink(
-  shareId: string,
-  userId: string,
-): Promise<void> {
+export async function deleteShareLink(shareId: string, userId: string): Promise<void> {
   const prisma = getPrismaClient();
 
   const share = await prisma.mandala_shares.findUnique({

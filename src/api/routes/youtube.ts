@@ -22,10 +22,7 @@ export const youtubeRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
 
       try {
-        const result = await getUserSubscriptions(
-          request.user.userId,
-          request.query.pageToken,
-        );
+        const result = await getUserSubscriptions(request.user.userId, request.query.pageToken);
         return reply.send({
           status: 'ok',
           data: result.items,
@@ -39,7 +36,8 @@ export const youtubeRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           return reply.code(400).send({
             status: 'error',
             code: 'YOUTUBE_NOT_CONNECTED',
-            message: 'YouTube account not connected or token expired. Please reconnect via Settings.',
+            message:
+              'YouTube account not connected or token expired. Please reconnect via Settings.',
           });
         }
         if (err.message.startsWith('YOUTUBE_API_ERROR')) {
@@ -51,7 +49,7 @@ export const youtubeRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         }
         throw err;
       }
-    },
+    }
   );
 
   /**
@@ -67,10 +65,7 @@ export const youtubeRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
 
       try {
-        const result = await getUserPlaylists(
-          request.user.userId,
-          request.query.pageToken,
-        );
+        const result = await getUserPlaylists(request.user.userId, request.query.pageToken);
         return reply.send({
           status: 'ok',
           data: result.items,
@@ -84,7 +79,8 @@ export const youtubeRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           return reply.code(400).send({
             status: 'error',
             code: 'YOUTUBE_NOT_CONNECTED',
-            message: 'YouTube account not connected or token expired. Please reconnect via Settings.',
+            message:
+              'YouTube account not connected or token expired. Please reconnect via Settings.',
           });
         }
         if (err.message.startsWith('YOUTUBE_API_ERROR')) {
@@ -96,7 +92,7 @@ export const youtubeRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         }
         throw err;
       }
-    },
+    }
   );
 
   done();
