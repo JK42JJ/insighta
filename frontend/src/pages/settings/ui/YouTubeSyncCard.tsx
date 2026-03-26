@@ -18,6 +18,7 @@ import {
 import type { YouTubeSearchResult } from '@/features/youtube-sync/model/useYouTubeSync';
 import { useAddLocalCard } from '@/features/card-management/model/useLocalCards';
 import { PlaylistItem } from './PlaylistItem';
+import { YouTubeImportPanel } from './YouTubeImportPanel';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/shared/ui/collapsible';
 import {
   useMandalaList,
@@ -103,6 +104,7 @@ export function YouTubeSyncCard() {
   const autoSyncEnabled = youtubeAuth.autoSyncEnabled;
   const autoSummaryEnabled = youtubeAuth.autoSummaryEnabled;
   const playlists = ytSync.playlists;
+  const registeredPlaylistIds = new Set(playlists.map(p => p.youtube_playlist_id));
   const isLoading = ytSync.isLoading;
   const isAdding = ytSync.isAdding;
   const isSyncingAll = ytSync.isSyncingAll;
@@ -682,6 +684,14 @@ export function YouTubeSyncCard() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Import from YouTube Library */}
+                <YouTubeImportPanel
+                  registeredPlaylistIds={registeredPlaylistIds}
+                  onImportComplete={() => ytSync.refetch()}
+                />
+
+                <Separator />
 
                 {/* Registered Playlists */}
                 <div className="space-y-2">
