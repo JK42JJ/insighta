@@ -806,36 +806,25 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       return (
         <SortableScratchCard key={card.id} card={card} selectedCardIds={selectedCardIds}>
           {({ isDragging: isDragActive, dragRef, dragListeners, dragAttributes, style: sortableStyle }) => {
-            // Selected cards: entire card is draggable. Unselected: only grip handle.
-            const cardListeners = isSelected ? dragListeners : undefined;
+            // ScratchPad cards: entire card is always draggable (cards are small,
+            // grip handle is impractical at 56x32px). PointerSensor distance:5
+            // ensures clicks still work (no movement = click, 5px+ = drag).
             return (
             <div
               ref={dragRef}
               style={sortableStyle}
               {...dragAttributes}
-              {...cardListeners}
+              {...dragListeners}
               data-card-item
-              data-dnd-draggable={isSelected || undefined}
+              data-dnd-draggable=""
               data-selected={isSelected || undefined}
               onClick={(e) => handleCardClick(e, card, idx)}
               className={cn(
-                'group relative flex-shrink-0 transition-transform hover:-translate-y-0.5 rounded-sm cursor-pointer',
-                isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background cursor-grab active:cursor-grabbing',
+                'group relative flex-shrink-0 transition-transform hover:-translate-y-0.5 rounded-sm cursor-grab active:cursor-grabbing',
+                isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
                 isDragActive && 'opacity-30'
               )}
             >
-              {/* Drag handle for unselected cards */}
-              {!isSelected && (
-                <div
-                  {...dragListeners}
-                  data-dnd-handle
-                  className="absolute top-0.5 right-0.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-                >
-                  <div className="bg-background/80 backdrop-blur-sm rounded p-0.5">
-                    <GripVertical className="w-2 h-2 text-muted-foreground" />
-                  </div>
-                </div>
-              )}
               <div
                 className={cn('relative overflow-hidden bg-muted rounded-sm', cardSize)}
                 style={{ boxShadow: 'var(--shadow-sm)' }}
@@ -843,6 +832,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 <img
                   src={card.thumbnail}
                   alt={card.title}
+                  draggable={false}
                   className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                   loading="lazy"
                 />
@@ -1103,35 +1093,22 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                         selectedCardIds={selectedCardIds}
                       >
                         {({ isDragging: isDragActive, dragRef, dragListeners, dragAttributes, style: sortableStyle }) => {
-                          const cardListeners = isSelected ? dragListeners : undefined;
                           return (
                           <div
                             ref={dragRef}
                             style={sortableStyle}
                             {...dragAttributes}
-                            {...cardListeners}
+                            {...dragListeners}
                             data-card-item
-                            data-dnd-draggable={isSelected || undefined}
+                            data-dnd-draggable=""
                             data-selected={isSelected || undefined}
                             onClick={(e) => handleCardClick(e, card, idx)}
                             className={cn(
-                              'group relative flex-shrink-0 cursor-pointer transition-transform hover:scale-[1.02]',
-                              isSelected && 'cursor-grab active:cursor-grabbing',
+                              'group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:scale-[1.02]',
+                              isSelected && 'ring-1 ring-primary',
                               isDragActive && 'opacity-30'
                             )}
                           >
-                            {/* Drag handle for unselected cards */}
-                            {!isSelected && (
-                              <div
-                                {...dragListeners}
-                                data-dnd-handle
-                                className="absolute top-0.5 right-0.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-                              >
-                                <div className="bg-background/80 backdrop-blur-sm rounded p-0.5">
-                                  <GripVertical className="w-2 h-2 text-muted-foreground" />
-                                </div>
-                              </div>
-                            )}
                             <div
                               className="relative w-full aspect-video overflow-hidden bg-muted rounded"
                               style={{ boxShadow: 'var(--shadow-xs)' }}
@@ -1139,6 +1116,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                               <img
                                 src={card.thumbnail}
                                 alt={card.title}
+                                draggable={false}
                                 className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                                 loading="lazy"
                               />
