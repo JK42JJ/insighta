@@ -33,6 +33,9 @@ const CACHE_TTL = {
   VIDEOS: 3600, // 1 hour
 };
 
+/** YouTube API limits batch video requests to 50 IDs */
+const MAX_YOUTUBE_BATCH_SIZE = 50;
+
 /**
  * YouTube API Client
  */
@@ -389,7 +392,7 @@ export class YouTubeClient {
       return [];
     }
 
-    const limitedIds = videoIds.slice(0, 50);
+    const limitedIds = videoIds.slice(0, MAX_YOUTUBE_BATCH_SIZE);
     const cacheKey = `videos:${limitedIds.sort().join(',')}`;
 
     // Check cache first

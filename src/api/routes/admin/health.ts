@@ -2,6 +2,9 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { db } from '../../../modules/database/client';
 import { createSuccessResponse } from '../../schemas/common.schema';
 
+const DB_HEALTHY_LATENCY_MS = 500;
+const MAX_TABLE_DISPLAY_COUNT = 15;
+
 export async function adminHealthRoutes(fastify: FastifyInstance) {
   const adminAuth = { onRequest: [fastify.authenticate, fastify.authenticateAdmin] };
 
@@ -21,7 +24,7 @@ export async function adminHealthRoutes(fastify: FastifyInstance) {
       `;
       dbLatencyMs = Date.now() - dbStart;
       dbConnections = connResult[0]?.count ?? 0;
-      dbStatus = dbLatencyMs < 500 ? 'healthy' : 'degraded';
+      dbStatus = dbLatencyMs < DB_HEALTHY_LATENCY_MS ? 'healthy' : 'degraded';
     } catch {
       dbStatus = 'down';
     }
@@ -34,7 +37,7 @@ export async function adminHealthRoutes(fastify: FastifyInstance) {
       FROM pg_stat_user_tables
       WHERE schemaname = 'public'
       ORDER BY n_live_tup DESC
-      LIMIT 15
+      LIMIT ${MAX_TABLE_DISPLAY_COUNT}
     `;
 
     // API uptime

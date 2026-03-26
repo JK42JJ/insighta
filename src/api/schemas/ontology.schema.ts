@@ -6,6 +6,10 @@ import { z } from 'zod';
 
 // -- Request Schemas --
 
+export const NodeIdParamsSchema = z.object({
+  id: z.string().uuid('Invalid node/edge ID format'),
+});
+
 export const DomainEnum = z.enum(['service', 'system']);
 
 export const ListNodesQuerySchema = z.object({
