@@ -61,7 +61,7 @@ const SETTINGS_NAV_GROUPS = [
 
 const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 480;
-const DEFAULT_SIDEBAR_WIDTH = 250;
+const DEFAULT_SIDEBAR_WIDTH = 300;
 const SIDEBAR_WIDTH_KEY = 'insighta-sidebar-width';
 
 function getInitialWidth(): number {

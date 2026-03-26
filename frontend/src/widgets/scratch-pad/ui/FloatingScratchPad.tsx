@@ -121,6 +121,37 @@ const SIDE_DOCK_THRESHOLD = 100;
 
 const STORAGE_KEY_SIZE = 'insighta:ideation:size';
 const STORAGE_KEY_POS = 'insighta:ideation:position';
+const STORAGE_KEY_DOCK_H_HEIGHT = 'insighta:ideation:dock-h-height';
+const STORAGE_KEY_DOCK_V_WIDTH = 'insighta:ideation:dock-v-width';
+
+const DEFAULT_DOCK_H_HEIGHT = 64;
+const MIN_DOCK_H_HEIGHT = 48;
+const MAX_DOCK_H_HEIGHT = 300;
+const DEFAULT_DOCK_V_WIDTH = 90;
+const MIN_DOCK_V_WIDTH = 60;
+const MAX_DOCK_V_WIDTH = 300;
+
+function loadDockedHeight(): number {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_DOCK_H_HEIGHT);
+    if (saved) {
+      const n = parseInt(saved, 10);
+      if (!isNaN(n)) return Math.max(MIN_DOCK_H_HEIGHT, Math.min(MAX_DOCK_H_HEIGHT, n));
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_DOCK_H_HEIGHT;
+}
+
+function loadDockedWidth(): number {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_DOCK_V_WIDTH);
+    if (saved) {
+      const n = parseInt(saved, 10);
+      if (!isNaN(n)) return Math.max(MIN_DOCK_V_WIDTH, Math.min(MAX_DOCK_V_WIDTH, n));
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_DOCK_V_WIDTH;
+}
 
 function loadPersistedSize(): { width: number; height: number } {
   try {
@@ -184,10 +215,13 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       }
     }, [initialPosition?.x, initialPosition?.y]); // eslint-disable-line react-hooks/exhaustive-deps
     const [size, setSize] = useState(loadPersistedSize);
+    const [dockHHeight, setDockHHeight] = useState(loadDockedHeight);
+    const [dockVWidth, setDockVWidth] = useState(loadDockedWidth);
     const [isMinimized, setIsMinimized] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [isDockedDragging, setIsDockedDragging] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
+    const [isDockResizing, setIsDockResizing] = useState(false);
     const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
     const selectedCardIdsRef = useRef<Set<string>>(new Set());
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
@@ -322,6 +356,69 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       setIsDockedDragging(true);
       setPendingDock(null);
     };
+
+    const handleDockResizeStart = useCallback((e: React.MouseEvent, axis: 'height' | 'width') => {
+      e.preventDefault();
+      e.stopPropagation();
+      const startPos = axis === 'height' ? e.clientY : e.clientX;
+      const container = (e.currentTarget as HTMLElement).closest('[data-dock-container]') as HTMLElement | null;
+      if (!container) return;
+      const startSize = axis === 'height'
+        ? container.getBoundingClientRect().height
+        : container.getBoundingClientRect().width;
+
+      container.style.transition = 'none';
+      setIsDockResizing(true);
+
+      const onMouseMove = (ev: MouseEvent) => {
+        const delta = (axis === 'height' ? ev.clientY : ev.clientX) - startPos;
+        const min = axis === 'height' ? MIN_DOCK_H_HEIGHT : MIN_DOCK_V_WIDTH;
+        const max = axis === 'height' ? MAX_DOCK_H_HEIGHT : MAX_DOCK_V_WIDTH;
+        const newSize = Math.max(min, Math.min(max, startSize + delta));
+        if (axis === 'height') {
+          container.style.height = `${newSize}px`;
+        } else {
+          container.style.width = `${newSize}px`;
+        }
+      };
+
+      const onMouseUp = (ev: MouseEvent) => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        container.style.transition = '';
+        setIsDockResizing(false);
+
+        const delta = (axis === 'height' ? ev.clientY : ev.clientX) - startPos;
+        const min = axis === 'height' ? MIN_DOCK_H_HEIGHT : MIN_DOCK_V_WIDTH;
+        const max = axis === 'height' ? MAX_DOCK_H_HEIGHT : MAX_DOCK_V_WIDTH;
+        const finalSize = Math.max(min, Math.min(max, startSize + delta));
+
+        if (axis === 'height') {
+          setDockHHeight(finalSize);
+          try { localStorage.setItem(STORAGE_KEY_DOCK_H_HEIGHT, String(finalSize)); } catch { /* ignore */ }
+        } else {
+          setDockVWidth(finalSize);
+          try { localStorage.setItem(STORAGE_KEY_DOCK_V_WIDTH, String(finalSize)); } catch { /* ignore */ }
+        }
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = axis === 'height' ? 'row-resize' : 'col-resize';
+      document.body.style.userSelect = 'none';
+    }, []);
+
+    const handleDockResizeDoubleClick = useCallback((axis: 'height' | 'width') => {
+      if (axis === 'height') {
+        setDockHHeight(DEFAULT_DOCK_H_HEIGHT);
+        try { localStorage.setItem(STORAGE_KEY_DOCK_H_HEIGHT, String(DEFAULT_DOCK_H_HEIGHT)); } catch { /* ignore */ }
+      } else {
+        setDockVWidth(DEFAULT_DOCK_V_WIDTH);
+        try { localStorage.setItem(STORAGE_KEY_DOCK_V_WIDTH, String(DEFAULT_DOCK_V_WIDTH)); } catch { /* ignore */ }
+      }
+    }, []);
 
     const handleResizeMouseDown = (e: React.MouseEvent) => {
       if (!isFloating) return;
@@ -808,6 +905,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           >
             <div
               ref={setDockedElRef}
+              data-dock-container
               className={cn(
                 'relative transition-all duration-300 w-full rounded-md',
                 'bg-surface-mid/95 backdrop-blur-sm',
@@ -815,7 +913,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 isActiveDropTarget && 'border-2 border-dashed border-primary bg-primary/5',
                 isDockedDragging && 'opacity-50'
               )}
-              style={{ boxShadow: isActiveDropTarget ? 'var(--shadow-sm)' : 'none' }}
+              style={{ height: `${dockHHeight}px`, boxShadow: isActiveDropTarget ? 'var(--shadow-sm)' : 'none' }}
               onDragOver={handleDragOver}
               onDragLeave={onDragLeave}
               onDrop={handleDrop}
@@ -902,6 +1000,12 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   <Move className="w-3 h-3" />
                 </Button>
               </div>
+              {/* Resize handle — bottom edge */}
+              <div
+                className="absolute bottom-0 left-0 w-full h-1 cursor-row-resize hover:bg-primary/20 active:bg-primary/30 transition-colors z-50"
+                onMouseDown={(e) => handleDockResizeStart(e, 'height')}
+                onDoubleClick={() => handleDockResizeDoubleClick('height')}
+              />
             </div>
           </div>
         </>
@@ -923,7 +1027,8 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               isDockedDragging && 'opacity-50',
               isAnimating && 'animate-fade-in'
             )}
-            style={{ boxShadow: isActiveDropTarget ? 'var(--shadow-md)' : 'none', width: '90px' }}
+            data-dock-container
+            style={{ boxShadow: isActiveDropTarget ? 'var(--shadow-md)' : 'none', width: `${dockVWidth}px` }}
             onDragOver={handleDragOver}
             onDragLeave={onDragLeave}
             onDrop={handleDrop}
@@ -1081,6 +1186,15 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
             </div>
+            {/* Resize handle — side edge */}
+            <div
+              className={cn(
+                'absolute top-0 h-full w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors z-50',
+                dockPosition === 'left' ? 'right-0' : 'left-0'
+              )}
+              onMouseDown={(e) => handleDockResizeStart(e, 'width')}
+              onDoubleClick={() => handleDockResizeDoubleClick('width')}
+            />
           </div>
         </>
       );
