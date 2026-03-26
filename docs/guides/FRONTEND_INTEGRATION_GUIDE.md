@@ -2938,7 +2938,7 @@ export function parseThumbnailUrl(
 ## 문서 정보
 
 - **작성일**: 2025-12-19
-- **작성자**: James Kim (jamesjk4242@gmail.com)
+- **작성자**: James Kim (admin@insighta.one)
 - **프로젝트**: Insighta (Insighta)
 - **버전**: 2.0.0
 - **API 버전**: v1

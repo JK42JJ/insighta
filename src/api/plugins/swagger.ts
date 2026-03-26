@@ -21,7 +21,7 @@ export async function registerSwagger(fastify: FastifyInstance) {
         version: '1.0.0',
         contact: {
           name: 'Insighta Support',
-          email: 'jamesjk4242@gmail.com',
+          email: 'admin@insighta.one',
         },
         license: {
           name: 'MIT',

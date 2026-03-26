@@ -668,5 +668,5 @@ validateSpec();
 ---
 
 **문서 버전**: 1.0
-**작성자**: James Kim (jamesjk4242@gmail.com)
+**작성자**: James Kim (admin@insighta.one)
 **작성일**: 2025-12-16

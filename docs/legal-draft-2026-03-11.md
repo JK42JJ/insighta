@@ -95,7 +95,7 @@ We may update this Privacy Policy from time to time. We encourage you to frequen
 
 ### 12. Contact
 
-For privacy-related questions, contact: [jamesjk4242@gmail.com](mailto:jamesjk4242@gmail.com)
+For privacy-related questions, contact: [admin@insighta.one](mailto:admin@insighta.one)
 
 ---
 
@@ -187,7 +187,7 @@ We may update these Terms from time to time. We will notify users of material ch
 
 ### 16. Contact
 
-For questions about these Terms, contact: [jamesjk4242@gmail.com](mailto:jamesjk4242@gmail.com)
+For questions about these Terms, contact: [admin@insighta.one](mailto:admin@insighta.one)
 
 ---
 

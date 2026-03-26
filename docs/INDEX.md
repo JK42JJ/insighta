@@ -253,5 +253,5 @@ insighta/
 ---
 
 **Last Updated**: 2025-12-22
-**Maintained by**: James Kim (jamesjk4242@gmail.com)
+**Maintained by**: James Kim (admin@insighta.one)
 **Project**: Insighta (Insighta)

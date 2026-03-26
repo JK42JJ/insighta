@@ -1,6 +1,6 @@
 # GraphRAG Roadmap — Agent-Human Collaboration Intelligence
 
-**Owner**: JK (jamesjk4242@gmail.com)
+**Owner**: JK (admin@insighta.one)
 **Project**: Insighta (https://insighta.one) — GitHub: JK42JJ/insighta
 **Goal**: 사용자의 만다라트 목표를 중심으로 모든 콘텐츠가 Knowledge Graph로 연결되는 지능형 지식 관리 플랫폼
 **North Star**: 사용자가 만다라트에 설정한 목표를 향해 지속적으로 성장하도록 돕는 지능형 지식 관리 플랫폼.
