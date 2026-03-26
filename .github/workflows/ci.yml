@@ -29,6 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -36,6 +38,17 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
       - run: npm run typecheck
+      - name: D&D Change Guard
+        if: github.event_name == 'pull_request'
+        run: |
+          DND_FILES=$(git diff origin/main --name-only | grep -E "(useCardDragDrop|useDragSelect|DraggableCard|SortableContext|DndContext|useDroppable|useSortable|SidebarHeatMinimap|collisionDetection|FloatingScratchPad|MandalaCell)" || true)
+          if [ -n "$DND_FILES" ]; then
+            echo "::warning::D&D CRITICAL FILES CHANGED — verify regression manually"
+            echo "$DND_FILES"
+            echo ""
+            echo "Required: run dnd-smoke.spec.ts locally + browser manual verification"
+            echo "History: D&D regression 3x (CP248, CP268, CP271)"
+          fi
 
   build-api:
     name: Build API

@@ -104,7 +104,7 @@ docs/design/                          <- 설계 문서 디렉토리 (GitHub repo
 
 1. **설계 문서와 충돌하는 구현 금지** — story에 "Don't touch" 항목이 있으면 해당 코드 변경 금지
 2. **CSS 색상 하드코딩 금지** — 반드시 `minimap-color-spec.md`의 CSS 변수 규칙 따름
-3. **D&D 로직은 절대 건드리지 않음** — story에 명시된 D&D 보존 규칙 준수
+3. **D&D 로직은 절대 건드리지 않음** — story에 명시된 D&D 보존 규칙 준수. D&D 보호 장치 3종 유지: `dnd-smoke.spec.ts`(CI gate), D&D Change Guard(CI 경고), ESLint D&D override(auto-fix 방지). 이 3개를 제거하거나 무력화하는 변경 금지.
 4. **recharts 도입 금지 (Insights 뷰)** — CSS + SVG로 구현
 5. **기존 컴포넌트 삭제 금지** — `-legacy/`로 이동 + `@deprecated` 주석 추가
 
