@@ -20,6 +20,8 @@ Usage: /save [title]
 
 ### Step 1: Gather Information (parallel execution)
 
+**Token optimization**: Use `bash scripts/cc-save-context.sh [last-hash]` (1 call) instead of individual git/tail/wc commands (5+ calls).
+
 - `git log --oneline` (commits since last checkpoint)
 - `git diff --stat` (uncommitted changes)
 - `git status` (untracked files)
