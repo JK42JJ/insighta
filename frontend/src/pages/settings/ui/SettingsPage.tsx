@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from 'next-themes';
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/shared/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { TierBadge } from '@/shared/ui/tier-badge';
-import { Trash2, Check } from 'lucide-react';
+import { Trash2, Check, Download } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { toast } from '@/shared/lib/use-toast';
 import { useAuth } from '@/features/auth/model/useAuth';
@@ -60,6 +60,7 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeCategory = (searchParams.get('tab') as SettingsCategory) || 'general';
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   // Redirect invalid tab to general
   useEffect(() => {
@@ -100,15 +101,21 @@ export default function SettingsPage() {
   // We read fresh each render to avoid stale closures
   const settings = getSettings();
 
-  const updateSetting = (key: string, value: unknown) => {
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const updateSetting = useCallback((key: string, value: unknown) => {
     const current = getSettings();
     const updated = { ...current, [key]: value };
     autoSave('app-settings', updated);
-    toast({
-      title: t('settings.settingsSaved'),
-      description: t('settings.settingsSavedDesc'),
-    });
-  };
+
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      toast({
+        title: t('settings.settingsSaved'),
+        description: t('settings.settingsSavedDesc'),
+      });
+    }, 1500);
+  }, [t]);
 
   const handleLanguageChange = (value: string) => {
     i18n.changeLanguage(value);
@@ -127,7 +134,7 @@ export default function SettingsPage() {
 
   return (
     <AppShell>
-      <div className="px-6 md:px-10 py-8 max-w-3xl">
+      <div className="px-6 md:px-10 py-8 w-full max-w-3xl mx-auto">
         {/* General */}
         {activeCategory === 'general' && (
           <>
@@ -338,6 +345,7 @@ export default function SettingsPage() {
             </div>
             <Card className="bg-surface-mid border-border/50">
               <CardContent className="divide-y divide-border/30">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 pb-2 pt-1">{t('settings.notifGroupCommunication', 'Communication')}</p>
                 <div className="flex items-center justify-between py-4">
                   <div>
                     <Label htmlFor="notifications">{t('settings.pushNotifications')}</Label>
@@ -360,6 +368,7 @@ export default function SettingsPage() {
                     onCheckedChange={(checked) => updateSetting('emailUpdates', checked)}
                   />
                 </div>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 pt-4 pb-2">{t('settings.notifGroupActivity', 'Activity Alerts')}</p>
                 <div className="flex items-center justify-between py-4">
                   <div>
                     <Label htmlFor="syncCompletion">{t('settings.syncCompletion', 'Sync completion')}</Label>
@@ -426,16 +435,23 @@ export default function SettingsPage() {
                     <Label>{t('settings.exportData', 'Export Data')}</Label>
                     <p className="text-sm text-muted-foreground">{t('settings.exportDataDesc', 'Download all your data as JSON')}</p>
                   </div>
-                  <Button variant="outline" size="sm" className="border-border/50">
-                    {t('settings.exportBtn', 'Export JSON')}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="border-border/50 gap-1.5">
+                      <Download className="w-3.5 h-3.5" />
+                      JSON
+                    </Button>
+                    <Button variant="outline" size="sm" className="border-border/50 gap-1.5">
+                      <Download className="w-3.5 h-3.5" />
+                      CSV
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between py-4">
                   <div>
                     <Label className="text-destructive">{t('settings.deleteAllData')}</Label>
                     <p className="text-sm text-muted-foreground">{t('settings.deleteAllDataDesc')}</p>
                   </div>
-                  <AlertDialog>
+                  <AlertDialog onOpenChange={(open) => { if (!open) setDeleteConfirmText(''); }}>
                     <AlertDialogTrigger asChild>
                       <Button variant="destructive" size="sm" className="gap-2">
                         <Trash2 className="w-4 h-4" />
@@ -447,13 +463,23 @@ export default function SettingsPage() {
                         <AlertDialogTitle>{t('settings.deleteConfirmTitle')}</AlertDialogTitle>
                         <AlertDialogDescription>{t('settings.deleteConfirmDesc')}</AlertDialogDescription>
                       </AlertDialogHeader>
+                      <div className="py-2">
+                        <input
+                          type="text"
+                          value={deleteConfirmText}
+                          onChange={(e) => setDeleteConfirmText(e.target.value)}
+                          placeholder={t('settings.deleteTypePlaceholder', 'Type "DELETE" to confirm')}
+                          className="w-full px-3 py-2 text-sm bg-surface-light border border-border/50 rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-destructive"
+                        />
+                      </div>
                       <AlertDialogFooter>
                         <AlertDialogCancel className="bg-surface-light border-border/50">
                           {t('common.cancel')}
                         </AlertDialogCancel>
                         <AlertDialogAction
                           onClick={handleDeleteData}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          disabled={deleteConfirmText !== 'DELETE'}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {t('common.delete')}
                         </AlertDialogAction>

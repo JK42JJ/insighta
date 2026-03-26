@@ -179,6 +179,9 @@
     "saveSettings": "Save Settings",
     "settingsSaved": "Saved",
     "settingsSavedDesc": "Settings have been saved.",
+    "deleteTypePlaceholder": "Type \"DELETE\" to confirm",
+    "notifGroupCommunication": "Communication",
+    "notifGroupActivity": "Activity Alerts",
     "dataDeleted": "Data Deleted",
     "dataDeletedDesc": "All data has been deleted.",
     "llmKeys": {
