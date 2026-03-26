@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Insighta — Mandala Editor v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&family=Source+Serif+Pro:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* ================================================================
+   INSIGHTA DESIGN TOKENS — from index.css (dark mode)
+   ================================================================ */
+:root {
+  /* Surfaces — layered depth */
+  --bg-base: hsl(220, 15%, 10%);
+  --bg-mid: hsl(220, 13%, 13%);
+  --bg-light: hsl(220, 12%, 17%);
+  --bg-sunken: hsl(220, 16%, 7%);
+  --bg-hover: hsl(220, 12%, 20%);
+  --bg-elevated: hsl(220, 12%, 22%);
+
+  /* Primary — Insighta indigo */
+  --primary: hsl(234, 60%, 72%);
+  --primary-muted: hsl(234, 40%, 28%);
+  --primary-glow: hsl(234, 60%, 72%, 0.12);
+  --primary-border: hsl(234, 50%, 35%);
+  --primary-fg: hsl(220, 15%, 10%);
+
+  /* Text */
+  --text: hsl(220, 10%, 95%);
+  --text-secondary: hsl(220, 10%, 72%);
+  --text-muted: hsl(220, 10%, 45%);
+  --text-dim: hsl(220, 10%, 32%);
+
+  /* Borders */
+  --border: hsl(220, 12%, 22%);
+  --border-subtle: hsl(220, 30%, 100%, 0.06);
+  --border-focus: hsl(234, 60%, 72%);
+
+  /* Semantic */
+  --success: hsl(152, 50%, 48%);
+  --success-muted: hsl(152, 30%, 18%);
+  --warning: hsl(38, 70%, 50%);
+  --warning-muted: hsl(38, 35%, 18%);
+  --danger: hsl(0, 55%, 52%);
+  --danger-muted: hsl(0, 30%, 18%);
+
+  /* Subject accent palette — muted, sophisticated */
+  --s1: hsl(210, 40%, 55%);
+  --s2: hsl(170, 35%, 48%);
+  --s3: hsl(340, 35%, 55%);
+  --s4: hsl(262, 35%, 58%);
+  --s5: hsl(28, 45%, 52%);
+  --s6: hsl(195, 40%, 50%);
+  --s7: hsl(145, 30%, 48%);
+  --s8: hsl(300, 25%, 52%);
+
+  /* Shadows — dark mode depth */
+  --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.4), 0 -1px 0 hsl(220 30% 20% / 0.15) inset;
+  --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.5), 0 2px 4px hsl(0 0% 0% / 0.3);
+  --shadow-lg: 0 12px 30px hsl(0 0% 0% / 0.55), 0 6px 12px hsl(0 0% 0% / 0.35);
+  --shadow-inset: 0 2px 6px hsl(0 0% 0% / 0.5) inset, 0 -1px 0 hsl(220 30% 20% / 0.15) inset;
+  --shadow-glow: 0 0 20px hsl(234, 60%, 72%, 0.15);
+
+  /* Radius */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  /* Type */
+  --font: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif: 'Source Serif Pro', Georgia, serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: var(--font);
+  background: var(--bg-base);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ================================================================
+   ICON SYSTEM — inline SVG via CSS masks
+   ================================================================ */
+.icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+.icon-sm { width: 14px; height: 14px; }
+.icon-lg { width: 20px; height: 20px; }
+.icon-xl { width: 24px; height: 24px; }
+
+.icon-arrow-left { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 19-7-7 7-7'/%3E%3Cpath d='M19 12H5'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 19-7-7 7-7'/%3E%3Cpath d='M19 12H5'/%3E%3C/svg%3E"); }
+.icon-undo { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7v6h6'/%3E%3Cpath d='M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7v6h6'/%3E%3Cpath d='M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13'/%3E%3C/svg%3E"); }
+.icon-redo { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 7v6h-6'/%3E%3Cpath d='M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 7v6h-6'/%3E%3Cpath d='M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7'/%3E%3C/svg%3E"); }
+.icon-sparkles { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z'/%3E%3Cpath d='M5 3v4'/%3E%3Cpath d='M19 17v4'/%3E%3Cpath d='M3 5h4'/%3E%3Cpath d='M17 19h4'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z'/%3E%3Cpath d='M5 3v4'/%3E%3Cpath d='M19 17v4'/%3E%3Cpath d='M3 5h4'/%3E%3Cpath d='M17 19h4'/%3E%3C/svg%3E"); }
+.icon-save { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z'/%3E%3Cpath d='M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7'/%3E%3Cpath d='M7 3v4a1 1 0 0 0 1 1h7'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z'/%3E%3Cpath d='M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7'/%3E%3Cpath d='M7 3v4a1 1 0 0 0 1 1h7'/%3E%3C/svg%3E"); }
+.icon-eye { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E"); }
+.icon-refresh { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/%3E%3Cpath d='M3 3v5h5'/%3E%3Cpath d='M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16'/%3E%3Cpath d='M16 16h5v5'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/%3E%3Cpath d='M3 3v5h5'/%3E%3Cpath d='M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16'/%3E%3Cpath d='M16 16h5v5'/%3E%3C/svg%3E"); }
+.icon-pencil { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z'/%3E%3C/svg%3E"); }
+.icon-check { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E"); }
+.icon-x { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E"); }
+.icon-columns { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Cpath d='M12 3v18'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Cpath d='M12 3v18'/%3E%3C/svg%3E"); }
+.icon-history { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/%3E%3Cpath d='M3 3v5h5'/%3E%3Cpath d='M12 7v5l4 2'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/%3E%3Cpath d='M3 3v5h5'/%3E%3Cpath d='M12 7v5l4 2'/%3E%3C/svg%3E"); }
+.icon-layout { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Cpath d='M3 9h18'/%3E%3Cpath d='M9 21V9'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Cpath d='M3 9h18'/%3E%3Cpath d='M9 21V9'/%3E%3C/svg%3E"); }
+.icon-grip { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='5' r='1'/%3E%3Ccircle cx='9' cy='12' r='1'/%3E%3Ccircle cx='9' cy='19' r='1'/%3E%3Ccircle cx='15' cy='5' r='1'/%3E%3Ccircle cx='15' cy='12' r='1'/%3E%3Ccircle cx='15' cy='19' r='1'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='5' r='1'/%3E%3Ccircle cx='9' cy='12' r='1'/%3E%3Ccircle cx='9' cy='19' r='1'/%3E%3Ccircle cx='15' cy='5' r='1'/%3E%3Ccircle cx='15' cy='12' r='1'/%3E%3Ccircle cx='15' cy='19' r='1'/%3E%3C/svg%3E"); }
+.icon-bookmark { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z'/%3E%3C/svg%3E"); }
+
+/* ================================================================
+   LAYOUT
+   ================================================================ */
+.page { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+/* HEADER */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--bg-mid);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.header-left { display: flex; align-items: center; gap: 14px; }
+.back-btn {
+  display: flex; align-items: center; gap: 5px;
+  background: none; border: none; color: var(--text-secondary);
+  font: 600 13px/1 var(--font); cursor: pointer;
+  padding: 6px 10px; border-radius: var(--r-sm);
+  transition: all 0.15s;
+}
+.back-btn:hover { background: var(--bg-light); color: var(--text); }
+
+.title-block {}
+.title-main { font: 700 16px/1.2 var(--font); color: var(--text); }
+.title-sub { font: 400 12px/1 var(--font); color: var(--text-muted); margin-top: 3px; }
+
+.header-right { display: flex; align-items: center; gap: 8px; }
+
+/* BUTTONS */
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 14px; border-radius: var(--r-sm);
+  font: 600 12px/1 var(--font); cursor: pointer;
+  transition: all 0.15s; border: none;
+}
+.btn-outline {
+  background: transparent; color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.btn-outline:hover { background: var(--bg-light); color: var(--text); border-color: var(--text-dim); }
+.btn-primary { background: var(--primary); color: var(--primary-fg); }
+.btn-primary:hover { filter: brightness(1.08); box-shadow: var(--shadow-glow); }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+.btn-success { background: var(--success); color: white; }
+.btn-success:hover { filter: brightness(1.1); }
+.btn-danger-outline { background: transparent; color: var(--danger); border: 1px solid var(--danger-muted); }
+.btn-danger-outline:hover { background: var(--danger-muted); }
+
+/* TOOLBAR */
+.toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 24px;
+  background: var(--bg-mid);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 8px; }
+
+.undo-group {
+  display: flex; gap: 1px;
+  background: var(--bg-sunken);
+  border-radius: var(--r-sm);
+  padding: 2px;
+  box-shadow: var(--shadow-inset);
+}
+.undo-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 26px;
+  background: none; border: none; color: var(--text-muted);
+  border-radius: var(--r-xs); cursor: pointer;
+  transition: all 0.12s;
+}
+.undo-btn:hover { background: var(--bg-hover); color: var(--text); }
+.undo-btn.disabled { opacity: 0.25; pointer-events: none; }
+
+.version-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-light);
+  border-radius: 100px;
+  font: 500 11px/1 var(--font);
+  color: var(--text-muted);
+}
+.status-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--success);
+}
+
+/* PHASE STEPPER */
+.phase-stepper {
+  display: flex; align-items: center; gap: 3px;
+  font: 500 11px/1 var(--font);
+}
+.phase-item {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  border-radius: 100px;
+}
+.phase-item.done { background: var(--success-muted); color: var(--success); }
+.phase-item.active { background: var(--primary-muted); color: var(--primary); }
+.phase-item.pending { color: var(--text-dim); }
+.phase-num {
+  width: 16px; height: 16px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700;
+}
+.phase-item.done .phase-num { background: var(--success); color: white; }
+.phase-item.active .phase-num { background: var(--primary); color: var(--primary-fg); }
+.phase-item.pending .phase-num { background: var(--bg-light); color: var(--text-dim); border: 1px solid var(--border); }
+.phase-sep { width: 12px; height: 1px; background: var(--border); }
+.phase-sep.done { background: var(--success); }
+
+/* ================================================================
+   MAIN CONTENT
+   ================================================================ */
+.main { flex: 1; display: flex; overflow: hidden; }
+
+.editor-area {
+  flex: 1; overflow-y: auto;
+  padding: 28px 32px;
+  display: flex; flex-direction: column; align-items: center; gap: 24px;
+}
+
+.side-panel {
+  width: 340px; flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg-mid);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+/* ================================================================
+   AI PROMPT
+   ================================================================ */
+.prompt-section { width: 100%; max-width: 680px; }
+.prompt-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  background: var(--bg-light);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-lg);
+  transition: all 0.25s;
+}
+.prompt-bar:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.ai-icon-wrap {
+  width: 28px; height: 28px; border-radius: var(--r-sm);
+  background: linear-gradient(135deg, var(--primary), hsl(280, 50%, 55%));
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px hsl(234, 60%, 72%, 0.25);
+}
+.ai-icon-wrap .icon { color: white; }
+
+.prompt-input {
+  flex: 1; background: none; border: none;
+  color: var(--text); font: 400 14px/1 var(--font);
+  outline: none;
+}
+.prompt-input::placeholder { color: var(--text-dim); }
+
+.generate-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 8px 14px;
+  background: var(--primary); color: var(--primary-fg);
+  border: none; border-radius: var(--r-sm);
+  font: 600 12px/1 var(--font); cursor: pointer;
+  transition: all 0.15s; white-space: nowrap;
+}
+.generate-btn:hover { filter: brightness(1.1); box-shadow: var(--shadow-glow); }
+
+.chips { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.chip {
+  padding: 4px 10px;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  font: 500 11px/1 var(--font);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chip:hover { background: var(--primary-muted); border-color: var(--primary-border); color: var(--primary); }
+
+/* ================================================================
+   REVIEW BANNER
+   ================================================================ */
+.review-banner {
+  width: 100%; max-width: 680px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--primary-muted);
+  border: 1px solid var(--primary-border);
+  border-radius: var(--r-md);
+}
+.review-left { display: flex; align-items: center; gap: 8px; }
+.review-left .icon { color: var(--primary); }
+.review-text { font: 400 12px/1.4 var(--font); color: var(--text-secondary); }
+.review-text strong { color: var(--text); font-weight: 600; }
+.review-actions { display: flex; gap: 6px; }
+
+/* ================================================================
+   VARIANT TABS + MINIMAPS
+   ================================================================ */
+.variant-section { width: 100%; max-width: 680px; }
+.variant-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+
+.variant-tabs {
+  display: flex; gap: 1px;
+  background: var(--bg-sunken);
+  border-radius: var(--r-sm);
+  padding: 2px;
+  box-shadow: var(--shadow-inset);
+}
+.v-tab {
+  padding: 6px 14px;
+  background: none; border: none;
+  color: var(--text-muted);
+  font: 600 12px/1 var(--font);
+  cursor: pointer; border-radius: var(--r-xs);
+  transition: all 0.15s; position: relative;
+}
+.v-tab.active {
+  background: var(--bg-hover);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+.v-tab:hover:not(.active) { color: var(--text-secondary); }
+.v-tab .dot {
+  position: absolute; top: 2px; right: 2px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--primary);
+}
+
+.variant-minimaps { display: flex; gap: 10px; margin-bottom: 16px; }
+.v-mini {
+  flex: 1; padding: 8px;
+  background: var(--bg-light);
+  border: 1.5px solid transparent;
+  border-radius: var(--r-md);
+  cursor: pointer; transition: all 0.2s;
+}
+.v-mini.active { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+.v-mini:hover:not(.active) { border-color: var(--border); }
+
+.mini-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 2px; aspect-ratio: 1;
+}
+.m-cell { border-radius: 2px; background: var(--bg-hover); }
+.m-cell.center { background: var(--primary-muted); }
+.m-cell.filled { background: var(--bg-elevated); }
+
+.mini-label {
+  text-align: center; margin-top: 5px;
+  font: 600 10px/1 var(--font); color: var(--text-dim);
+  letter-spacing: 0.02em;
+}
+.v-mini.active .mini-label { color: var(--primary); }
+
+/* ================================================================
+   MANDALA GRID — production quality
+   ================================================================ */
+.mandala-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 6px; width: 100%; max-width: 520px; margin: 0 auto;
+}
+
+.m-card {
+  position: relative;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 18px 14px 14px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; cursor: pointer;
+  aspect-ratio: 1;
+  transition: all 0.2s;
+  box-shadow: var(--shadow-sm);
+}
+.m-card:hover {
+  border-color: var(--text-dim);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Center cell */
+.m-card.center {
+  background: hsl(234, 30%, 16%);
+  border-color: var(--primary-border);
+  box-shadow: var(--shadow-sm), 0 0 0 3px var(--primary-glow);
+}
+
+/* AI generated state */
+.m-card.ai-gen {
+  background: linear-gradient(180deg, var(--bg-light) 0%, hsl(234, 20%, 14%) 100%);
+  border-color: hsl(234, 35%, 28%);
+}
+
+/* Subject color indicators — left border accent */
+.m-card[data-s="1"] { border-left: 2.5px solid var(--s1); }
+.m-card[data-s="2"] { border-left: 2.5px solid var(--s2); }
+.m-card[data-s="3"] { border-left: 2.5px solid var(--s3); }
+.m-card[data-s="4"] { border-left: 2.5px solid var(--s4); }
+.m-card[data-s="5"] { border-left: 2.5px solid var(--s5); }
+.m-card[data-s="6"] { border-left: 2.5px solid var(--s6); }
+.m-card[data-s="7"] { border-left: 2.5px solid var(--s7); }
+.m-card[data-s="8"] { border-left: 2.5px solid var(--s8); }
+
+.m-num {
+  position: absolute; top: 6px; left: 10px;
+  font: 700 9px/1 var(--font); color: var(--text-dim);
+  letter-spacing: 0.04em;
+}
+.m-ai-mark {
+  position: absolute; top: 5px; right: 7px;
+  color: var(--primary); opacity: 0.5;
+}
+.m-title {
+  font: 600 13px/1.35 var(--font); color: var(--text);
+  word-break: keep-all;
+}
+.m-sub {
+  font: 400 10px/1 var(--font); color: var(--text-dim);
+  margin-top: 4px;
+}
+.m-actions {
+  position: absolute; bottom: 5px; right: 5px;
+  display: flex; gap: 2px; opacity: 0;
+  transition: opacity 0.15s;
+}
+.m-card:hover .m-actions { opacity: 1; }
+.m-act {
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-hover); border: none;
+  color: var(--text-muted); border-radius: var(--r-xs);
+  cursor: pointer; transition: all 0.12s;
+}
+.m-act:hover { background: var(--primary-muted); color: var(--primary); }
+
+/* ================================================================
+   SIDE PANEL
+   ================================================================ */
+.panel-tabs {
+  display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.p-tab {
+  flex: 1; padding: 11px 8px;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  font: 600 12px/1 var(--font); color: var(--text-muted);
+  background: none; border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer; transition: all 0.15s;
+}
+.p-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.p-tab:hover:not(.active) { color: var(--text-secondary); }
+
+.panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+
+/* L2 SUB-ITEMS */
+.l2-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.l2-title {
+  display: flex; align-items: center; gap: 7px;
+  font: 700 13px/1 var(--font);
+}
+.l2-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+.l2-list { display: flex; flex-direction: column; gap: 3px; }
+.l2-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 8px;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transition: all 0.12s;
+}
+.l2-row:hover { background: var(--bg-hover); border-color: var(--text-dim); }
+.l2-row.ai-gen { border-left: 2px solid var(--primary); }
+
+.l2-num {
+  font: 700 9px/1 var(--font); color: var(--text-dim);
+  width: 14px; text-align: center; flex-shrink: 0;
+}
+.l2-input {
+  flex: 1; background: none; border: none;
+  font: 400 12px/1.3 var(--font); color: var(--text);
+  outline: none; padding: 0;
+}
+.l2-input::placeholder { color: var(--text-dim); }
+.l2-row-actions { display: flex; gap: 1px; opacity: 0; transition: opacity 0.12s; }
+.l2-row:hover .l2-row-actions { opacity: 1; }
+
+/* Other subjects list */
+.subject-nav { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border); }
+.subject-nav-title {
+  font: 700 10px/1 var(--font); color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.s-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 8px;
+  border-radius: var(--r-sm);
+  cursor: pointer; transition: all 0.12s;
+  font: 500 12px/1 var(--font); color: var(--text-secondary);
+}
+.s-item:hover { background: var(--bg-light); color: var(--text); }
+.s-count { margin-left: auto; font: 500 10px/1 var(--font); color: var(--text-dim); }
+
+/* HISTORY */
+.h-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px; border-radius: var(--r-sm);
+  cursor: pointer; transition: all 0.12s;
+}
+.h-item:hover { background: var(--bg-light); }
+.h-item.active { background: var(--primary-muted); }
+.h-icon {
+  width: 22px; height: 22px; border-radius: var(--r-xs);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px;
+}
+.h-icon.ai { background: var(--primary-muted); color: var(--primary); }
+.h-icon.manual { background: var(--bg-light); color: var(--text-muted); }
+.h-icon.save { background: var(--warning-muted); color: var(--warning); }
+.h-label { font: 600 11px/1.3 var(--font); color: var(--text); }
+.h-time { font: 400 10px/1 var(--font); color: var(--text-dim); margin-top: 2px; }
+
+/* ================================================================
+   TEMPLATE CARDS
+   ================================================================ */
+.tpl-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer; transition: all 0.15s;
+}
+.tpl-card:hover { border-color: var(--primary-border); background: var(--bg-hover); }
+.tpl-icon {
+  width: 34px; height: 34px; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font: 700 11px/1 var(--font);
+  color: white;
+}
+.tpl-name { font: 600 12px/1.2 var(--font); color: var(--text); }
+.tpl-desc { font: 400 11px/1.3 var(--font); color: var(--text-muted); margin-top: 2px; }
+
+@media (max-width: 1024px) {
+  .side-panel { display: none; }
+  .editor-area { padding: 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <button class="back-btn"><span class="icon icon-arrow-left"></span> Back</button>
+      <div class="title-block">
+        <div class="title-main">Mandala Design</div>
+        <div class="title-sub">온라인비즈니스 바로시작</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-outline btn-sm"><span class="icon icon-sm icon-eye"></span> Preview</button>
+      <button class="btn btn-primary"><span class="icon icon-sm icon-save"></span> Save</button>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <div class="undo-group">
+        <button class="undo-btn" title="Undo ⌘Z"><span class="icon icon-sm icon-undo"></span></button>
+        <button class="undo-btn" title="Redo ⌘⇧Z"><span class="icon icon-sm icon-redo"></span></button>
+      </div>
+      <div class="version-pill">
+        <span class="status-dot"></span>
+        v3 · Saved 2s ago
+      </div>
+    </div>
+    <div class="toolbar-right">
+      <div class="phase-stepper">
+        <div class="phase-item done">
+          <span class="phase-num"><span class="icon" style="width:10px;height:10px;" class="icon-check"></span>✓</span>
+          Goal
+        </div>
+        <span class="phase-sep done"></span>
+        <div class="phase-item active">
+          <span class="phase-num">2</span>
+          Subjects
+        </div>
+        <span class="phase-sep"></span>
+        <div class="phase-item pending">
+          <span class="phase-num">3</span>
+          L2 Items
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="editor-area">
+
+      <!-- AI PROMPT -->
+      <div class="prompt-section">
+        <div class="prompt-bar">
+          <div class="ai-icon-wrap"><span class="icon icon-sm icon-sparkles"></span></div>
+          <input class="prompt-input" value="온라인 비즈니스 성공적으로 시작하기" placeholder="목표를 입력하면 AI가 만다라를 생성합니다..." />
+          <button class="generate-btn"><span class="icon icon-sm icon-sparkles"></span> Generate</button>
+        </div>
+        <div class="chips">
+          <span class="chip">커리어 성장</span>
+          <span class="chip">학습 계획</span>
+          <span class="chip">재테크</span>
+          <span class="chip">건강 관리</span>
+          <span class="chip">사이드 프로젝트</span>
+        </div>
+      </div>
+
+      <!-- REVIEW BANNER -->
+      <div class="review-banner">
+        <div class="review-left">
+          <span class="icon icon-sparkles" style="color:var(--primary);"></span>
+          <span class="review-text">AI generated <strong>8 subjects</strong> for review. Click cells to edit individually.</span>
+        </div>
+        <div class="review-actions">
+          <button class="btn btn-success btn-sm"><span class="icon icon-sm icon-check"></span> Accept All</button>
+          <button class="btn btn-danger-outline btn-sm"><span class="icon icon-sm icon-x"></span> Reject</button>
+          <button class="btn btn-outline btn-sm"><span class="icon icon-sm icon-refresh"></span> Retry</button>
+        </div>
+      </div>
+
+      <!-- VARIANT TABS + MINIMAPS -->
+      <div class="variant-section">
+        <div class="variant-header">
+          <div class="variant-tabs">
+            <button class="v-tab active">Variant A <span class="dot"></span></button>
+            <button class="v-tab">Variant B</button>
+            <button class="v-tab">Variant C</button>
+          </div>
+          <button class="btn btn-outline btn-sm"><span class="icon icon-sm icon-columns"></span> Compare</button>
+        </div>
+
+        <div class="variant-minimaps">
+          <div class="v-mini active">
+            <div class="mini-grid">
+              <div class="m-cell filled"></div><div class="m-cell filled"></div><div class="m-cell filled"></div>
+              <div class="m-cell filled"></div><div class="m-cell center"></div><div class="m-cell filled"></div>
+              <div class="m-cell filled"></div><div class="m-cell filled"></div><div class="m-cell filled"></div>
+            </div>
+            <div class="mini-label">A · 실전형</div>
+          </div>
+          <div class="v-mini">
+            <div class="mini-grid">
+              <div class="m-cell filled"></div><div class="m-cell filled"></div><div class="m-cell filled"></div>
+              <div class="m-cell filled"></div><div class="m-cell center"></div><div class="m-cell filled"></div>
+              <div class="m-cell filled"></div><div class="m-cell filled"></div><div class="m-cell filled"></div>
+            </div>
+            <div class="mini-label">B · 체계형</div>
+          </div>
+          <div class="v-mini">
+            <div class="mini-grid">
+              <div class="m-cell filled"></div><div class="m-cell filled"></div><div class="m-cell filled"></div>
+              <div class="m-cell filled"></div><div class="m-cell center"></div><div class="m-cell filled"></div>
+              <div class="m-cell filled"></div><div class="m-cell filled"></div><div class="m-cell filled"></div>
+            </div>
+            <div class="mini-label">C · 마케팅형</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MANDALA GRID -->
+      <div class="mandala-grid">
+        <div class="m-card ai-gen" data-s="1">
+          <span class="m-num">1</span>
+          <span class="m-ai-mark"><span class="icon icon-sm icon-sparkles"></span></span>
+          <span class="m-title">시장조사</span>
+          <span class="m-sub">0 / 8 items</span>
+          <div class="m-actions">
+            <button class="m-act" title="Regenerate"><span class="icon icon-sm icon-refresh"></span></button>
+            <button class="m-act" title="Edit"><span class="icon icon-sm icon-pencil"></span></button>
+          </div>
+        </div>
+        <div class="m-card ai-gen" data-s="2">
+          <span class="m-num">2</span>
+          <span class="m-ai-mark"><span class="icon icon-sm icon-sparkles"></span></span>
+          <span class="m-title">사업 모델</span>
+          <span class="m-sub">0 / 8 items</span>
+          <div class="m-actions">
+            <button class="m-act"><span class="icon icon-sm icon-refresh"></span></button>
+            <button class="m-act"><span class="icon icon-sm icon-pencil"></span></button>
+          </div>
+        </div>
+        <div class="m-card ai-gen" data-s="3">
+          <span class="m-num">3</span>
+          <span class="m-ai-mark"><span class="icon icon-sm icon-sparkles"></span></span>
+          <span class="m-title">브랜딩</span>
+          <span class="m-sub">0 / 8 items</span>
+          <div class="m-actions">
+            <button class="m-act"><span class="icon icon-sm icon-refresh"></span></button>
+            <button class="m-act"><span class="icon icon-sm icon-pencil"></span></button>
+          </div>
+        </div>
+        <div class="m-card ai-gen" data-s="4">
+          <span class="m-num">4</span>
+          <span class="m-ai-mark"><span class="icon icon-sm icon-sparkles"></span></span>
+          <span class="m-title">플랫폼 구축</span>
+          <span class="m-sub">0 / 8 items</span>
+          <div class="m-actions">
+            <button class="m-act"><span class="icon icon-sm icon-refresh"></span></button>
+            <button class="m-act"><span class="icon icon-sm icon-pencil"></span></button>
+          </div>
+        </div>
+        <div class="m-card center">
+          <span class="m-title" style="font-size:14px;font-weight:800;font-family:var(--font-serif);">온라인비즈니스<br/>바로시작</span>
+        </div>
+        <div class="m-card ai-gen" data-s="5">
+          <span class="m-num">5</span>
+          <span class="m-ai-mark"><span class="icon icon-sm icon-sparkles"></span></span>
+          <span class="m-title">콘텐츠 전략</span>
+          <span class="m-sub">0 / 8 items</span>
+          <div class="m-actions">
+            <button class="m-act"><span class="icon icon-sm icon-refresh"></span></button>
+            <button class="m-act"><span class="icon icon-sm icon-pencil"></span></button>
+          </div>
+        </div>
+        <div class="m-card ai-gen" data-s="6">
+          <span class="m-num">6</span>
+          <span class="m-ai-mark"><span class="icon icon-sm icon-sparkles"></span></span>
+          <span class="m-title">마케팅</span>
+          <span class="m-sub">0 / 8 items</span>
+          <div class="m-actions">
+            <button class="m-act"><span class="icon icon-sm icon-refresh"></span></button>
+            <button class="m-act"><span class="icon icon-sm icon-pencil"></span></button>
+          </div>
+        </div>
+        <div class="m-card ai-gen" data-s="7">
+          <span class="m-num">7</span>
+          <span class="m-ai-mark"><span class="icon icon-sm icon-sparkles"></span></span>
+          <span class="m-title">재무·수익</span>
+          <span class="m-sub">0 / 8 items</span>
+          <div class="m-actions">
+            <button class="m-act"><span class="icon icon-sm icon-refresh"></span></button>
+            <button class="m-act"><span class="icon icon-sm icon-pencil"></span></button>
+          </div>
+        </div>
+        <div class="m-card ai-gen" data-s="8">
+          <span class="m-num">8</span>
+          <span class="m-ai-mark"><span class="icon icon-sm icon-sparkles"></span></span>
+          <span class="m-title">자기계발</span>
+          <span class="m-sub">0 / 8 items</span>
+          <div class="m-actions">
+            <button class="m-act"><span class="icon icon-sm icon-refresh"></span></button>
+            <button class="m-act"><span class="icon icon-sm icon-pencil"></span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIDE PANEL -->
+    <div class="side-panel">
+      <div class="panel-tabs">
+        <button class="p-tab active"><span class="icon icon-sm icon-layout"></span> Details</button>
+        <button class="p-tab"><span class="icon icon-sm icon-sparkles"></span> Templates</button>
+        <button class="p-tab"><span class="icon icon-sm icon-history"></span> History</button>
+      </div>
+
+      <div class="panel-body">
+        <!-- L2 Detail for "시장조사" -->
+        <div>
+          <div class="l2-head">
+            <div class="l2-title">
+              <span class="l2-dot" style="background:var(--s1);"></span>
+              시장조사
+            </div>
+            <button class="btn btn-outline btn-sm"><span class="icon icon-sm icon-sparkles"></span> AI Fill</button>
+          </div>
+
+          <div class="l2-list">
+            <div class="l2-row ai-gen"><span class="l2-num">1</span><input class="l2-input" value="타겟 고객 페르소나 정의" /><div class="l2-row-actions"><button class="m-act"><span class="icon icon-sm icon-refresh"></span></button></div></div>
+            <div class="l2-row ai-gen"><span class="l2-num">2</span><input class="l2-input" value="경쟁사 3곳 벤치마킹" /><div class="l2-row-actions"><button class="m-act"><span class="icon icon-sm icon-refresh"></span></button></div></div>
+            <div class="l2-row ai-gen"><span class="l2-num">3</span><input class="l2-input" value="키워드 리서치 (네이버/구글)" /><div class="l2-row-actions"><button class="m-act"><span class="icon icon-sm icon-refresh"></span></button></div></div>
+            <div class="l2-row ai-gen"><span class="l2-num">4</span><input class="l2-input" value="시장 규모 및 성장성 분석" /><div class="l2-row-actions"><button class="m-act"><span class="icon icon-sm icon-refresh"></span></button></div></div>
+            <div class="l2-row ai-gen"><span class="l2-num">5</span><input class="l2-input" value="잠재 고객 인터뷰 5명" /><div class="l2-row-actions"><button class="m-act"><span class="icon icon-sm icon-refresh"></span></button></div></div>
+            <div class="l2-row ai-gen"><span class="l2-num">6</span><input class="l2-input" value="트렌드 분석 (소셜 미디어)" /><div class="l2-row-actions"><button class="m-act"><span class="icon icon-sm icon-refresh"></span></button></div></div>
+            <div class="l2-row ai-gen"><span class="l2-num">7</span><input class="l2-input" value="가격 정책 벤치마크" /><div class="l2-row-actions"><button class="m-act"><span class="icon icon-sm icon-refresh"></span></button></div></div>
+            <div class="l2-row ai-gen"><span class="l2-num">8</span><input class="l2-input" value="MVP 기능 리스트 작성" /><div class="l2-row-actions"><button class="m-act"><span class="icon icon-sm icon-refresh"></span></button></div></div>
+          </div>
+        </div>
+
+        <!-- Other subjects -->
+        <div class="subject-nav">
+          <div class="subject-nav-title">Other Subjects</div>
+          <div class="s-item"><span class="l2-dot" style="background:var(--s2);"></span> 사업 모델 <span class="s-count">0/8</span></div>
+          <div class="s-item"><span class="l2-dot" style="background:var(--s3);"></span> 브랜딩 <span class="s-count">0/8</span></div>
+          <div class="s-item"><span class="l2-dot" style="background:var(--s4);"></span> 플랫폼 구축 <span class="s-count">0/8</span></div>
+          <div class="s-item"><span class="l2-dot" style="background:var(--s5);"></span> 콘텐츠 전략 <span class="s-count">0/8</span></div>
+          <div class="s-item"><span class="l2-dot" style="background:var(--s6);"></span> 마케팅 <span class="s-count">0/8</span></div>
+          <div class="s-item"><span class="l2-dot" style="background:var(--s7);"></span> 재무·수익 <span class="s-count">0/8</span></div>
+          <div class="s-item"><span class="l2-dot" style="background:var(--s8);"></span> 자기계발 <span class="s-count">0/8</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
