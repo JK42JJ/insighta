@@ -43,7 +43,10 @@ async function getAccessToken(userId: string): Promise<string | null> {
 
   if (!settings?.youtube_access_token) return null;
 
-  if (settings.youtube_token_expires_at && new Date(settings.youtube_token_expires_at) < new Date()) {
+  if (
+    settings.youtube_token_expires_at &&
+    new Date(settings.youtube_token_expires_at) < new Date()
+  ) {
     return null; // Token expired — frontend should trigger refresh via youtube-auth Edge Function
   }
 
@@ -56,7 +59,7 @@ async function getAccessToken(userId: string): Promise<string | null> {
  */
 export async function getUserSubscriptions(
   userId: string,
-  pageToken?: string,
+  pageToken?: string
 ): Promise<{ items: YouTubeSubscription[]; nextPageToken?: string; totalResults: number }> {
   const accessToken = await getAccessToken(userId);
   if (!accessToken) {
@@ -103,7 +106,7 @@ export async function getUserSubscriptions(
  */
 export async function getUserPlaylists(
   userId: string,
-  pageToken?: string,
+  pageToken?: string
 ): Promise<{ items: YouTubePlaylist[]; nextPageToken?: string; totalResults: number }> {
   const accessToken = await getAccessToken(userId);
   if (!accessToken) {

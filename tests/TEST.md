@@ -6,7 +6,7 @@
 
 | Layer | Framework | Config | CI Job | Files | Status |
 |-------|-----------|--------|--------|-------|--------|
-| Backend (unit/smoke) | Jest + ts-jest | `jest.config.ts` | `test-backend` | 7 | 5 pass, 2 fail |
+| Backend (unit/smoke) | Jest + ts-jest | `jest.config.ts` | `test-backend` | 8 | 6 pass, 2 fail |
 | Frontend (smoke) | Vitest + happy-dom | `frontend/vitest.config.ts` | `test-frontend` | 4 | 4 pass (CI) |
 | E2E (regression) | Playwright | — | manual | 8 | manual only |
 
@@ -25,6 +25,7 @@
 | `bot-api.test.ts` | 9 | Bot auth rejection + authenticated endpoints (mood, report, subscriptions, pending) |
 | `prisma-connect.test.ts` | 2 | Prisma client connection + query |
 | `youtube-api.test.ts` | 3 | YouTube subscriptions/playlists auth rejection + env check |
+| `sharing-api.test.ts` | 6 | Sharing CRUD (create/view/clone/list/delete) + bot write guard |
 
 **Note**: Smoke tests use `describeIfServer` pattern — skipped in CI when env vars missing, run locally with real DB.
 
