@@ -146,6 +146,13 @@ docs/design/                          <- 설계 문서 디렉토리 (GitHub repo
 - 스키마 변경 시: `prisma db push` (로컬) → PR 머지 → CI/CD migrate job (프로덕션)
 - 수동 SQL 실행 시: 로컬 psql 먼저 → 확인 후 → 프로덕션 psql
 
+### 껍데기 기능 금지 — "완료"의 조건 (절대 규칙)
+- **빌드 통과(tsc + build) ≠ 완료. Prod에서 실제 동작 확인이 "완료"의 조건.**
+- **Local DB에만 테이블 생성하고 Prod 미적용 금지** → 새 테이블은 반드시 Prisma 스키마에 포함 (CI/CD 자동 배포 경로)
+- **기능 구현 후 Prod 검증 필수**: curl 또는 브라우저에서 Prod API 실제 호출 → 성공 확인. 검증 증거 없으면 미완료.
+- **사례**: Admin Phase 2-3에서 6개 테이블이 로컬에서만 존재 → Prod Admin write 기능 전부 실패 → 유저 발견 시점까지 2주간 방치
+- → [상세: memory/feedback-no-mockup-code.md]
+
 ### 의존성 연쇄 수정 규칙 (Cross-Layer Propagation)
 - **의존성 관계에 있는 기능은 반드시 함께 검토/수정/테스트해야 한다. 예외 없음.**
 - **사용자 데이터 기능 구현 시 DB 파이프라인 필수 (retro #24)**: DB 테이블 → API 엔드포인트 → Frontend Hook → UI 순서. useState만으로 사용자 설정/매핑 저장은 **절대 금지** (목업 코드). 3단계 확인: (1) DB 테이블 존재? (2) API 존재? (3) Hook 존재? → 모두 YES일 때만 UI 구현.

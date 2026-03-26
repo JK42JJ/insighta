@@ -1125,3 +1125,73 @@ model card_snapshots {
   @@index([status], map: "idx_card_snapshots_status")
   @@schema("public")
 }
+
+model admin_audit_log {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  admin_id    String   @db.Uuid
+  action      String   @db.VarChar(100)
+  target_type String   @db.VarChar(50)
+  target_id   String?  @db.Uuid
+  old_value   Json?
+  new_value   Json?
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+model admin_promotions {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                String    @unique @db.VarChar(50)
+  type                String    @db.VarChar(30)
+  value               Json
+  starts_at           DateTime? @db.Timestamptz(6)
+  ends_at             DateTime? @db.Timestamptz(6)
+  max_redemptions     Int?
+  current_redemptions Int?      @default(0)
+  is_active           Boolean?  @default(true)
+  created_by          String?   @db.Uuid
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+model user_promotion_redemptions {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String    @db.Uuid
+  promotion_id    String    @db.Uuid
+  redeemed_at     DateTime? @default(now()) @db.Timestamptz(6)
+  applied_changes Json
+
+  @@schema("public")
+}
+
+model content_reports {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reporter_id     String    @db.Uuid
+  target_type     String    @db.VarChar(30)
+  target_id       String    @db.Uuid
+  reason          String    @db.VarChar(50)
+  description     String?
+  status          String?   @default("pending") @db.VarChar(20)
+  resolved_by     String?   @db.Uuid
+  resolved_at     DateTime? @db.Timestamptz(6)
+  resolution_note String?
+  created_at      DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+model payment_transactions {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String    @db.Uuid
+  stripe_payment_id String?   @unique @db.VarChar(255)
+  stripe_invoice_id String?   @db.VarChar(255)
+  amount            Int
+  currency          String?   @default("usd") @db.VarChar(3)
+  status            String    @db.VarChar(30)
+  description       String?
+  created_at        DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
