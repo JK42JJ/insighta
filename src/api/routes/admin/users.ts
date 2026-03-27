@@ -229,9 +229,7 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         local_cards_limit: newRow['local_cards_limit'],
         mandala_limit: newRow['mandala_limit'],
       };
-      const auditNewValue = body.reason
-        ? { ...newValues, reason: body.reason }
-        : newValues;
+      const auditNewValue = body.reason ? { ...newValues, reason: body.reason } : newValues;
       await db.$queryRaw`
         INSERT INTO public.admin_audit_log (id, admin_id, action, target_type, target_id, old_value, new_value)
         VALUES (gen_random_uuid(), ${adminId}::uuid, 'tier_change', 'user_subscription', ${id}::uuid,
