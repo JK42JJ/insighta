@@ -21,6 +21,7 @@ import { MobileBottomNav } from '@/widgets/mobile-nav';
 import { InsightsView } from '@/widgets/insights-view';
 
 import { useMandalaQuery, useMandalaList, useSwitchMandala } from '@/features/mandala';
+import { useMandalaStore } from '@/stores/mandalaStore';
 import { useSearchCards, SearchBar } from '@/features/search';
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
 import { useLayoutPreferences } from '../model/useLayoutPreferences';
@@ -149,6 +150,18 @@ function AuthenticatedApp() {
     toast: (opts) => toast(opts),
     t: (key, opts) => t(key, opts as Record<string, string>),
   });
+
+  // 5a. Bridge: sync UI selection state to Zustand store (additive — existing props untouched)
+  // Using store API directly (not hook) since these are write-only syncs — no re-render needed.
+  useEffect(() => {
+    useMandalaStore.getState().selectMandala(effectiveMandalaId);
+  }, [effectiveMandalaId]);
+  useEffect(() => {
+    useMandalaStore.getState().setCurrentLevel(navigation.currentLevelId);
+  }, [navigation.currentLevelId]);
+  useEffect(() => {
+    useMandalaStore.getState().setSelectedCell(navigation.selectedCellIndex);
+  }, [navigation.selectedCellIndex]);
 
   // 5. Card orchestrator (needs navigation state)
   const cards = useCardOrchestrator(

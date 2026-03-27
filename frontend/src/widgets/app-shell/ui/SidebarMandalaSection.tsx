@@ -6,6 +6,7 @@ import { ScrollArea } from '@/shared/ui/scroll-area';
 import { useMandalaList, useCreateMandala, useSwitchMandala, useUpdateSectorNames } from '@/features/mandala';
 import { toast } from '@/shared/lib/use-toast';
 import { SidebarHeatMinimap } from '@/widgets/sidebar-heat-minimap';
+import { useMandalaStore } from '@/stores/mandalaStore';
 import type { InsightCard } from '@/entities/card/model/types';
 
 export interface MinimapData {
@@ -20,16 +21,20 @@ export interface MinimapData {
 interface SidebarMandalaSectionProps {
   collapsed: boolean;
   minimapData?: MinimapData;
-  selectedMandalaId: string | null;
+  /** @deprecated Use useMandalaStore() instead. Kept for backward compatibility during migration. */
+  selectedMandalaId?: string | null;
   onMandalaSelect: (id: string) => void;
 }
 
 export function SidebarMandalaSection({
   collapsed,
   minimapData,
-  selectedMandalaId,
+  selectedMandalaId: selectedMandalaIdProp,
   onMandalaSelect,
 }: SidebarMandalaSectionProps) {
+  // Primary: Zustand store. Fallback: prop (during migration).
+  const selectedMandalaIdFromStore = useMandalaStore((s) => s.selectedMandalaId);
+  const selectedMandalaId = selectedMandalaIdFromStore ?? selectedMandalaIdProp ?? null;
   const { t } = useTranslation();
   const { data: listData, isLoading, isError, error, refetch } = useMandalaList();
 
