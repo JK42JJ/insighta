@@ -80,8 +80,7 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   onNavigateHome?: () => void;
   minimapData?: MinimapData;
-  selectedMandalaId: string | null;
-  onMandalaSelect: (id: string) => void;
+  onMandalaSelect?: (id: string) => void;
   settingsMode?: boolean;
 }
 
@@ -101,7 +100,6 @@ export function Sidebar({
   onToggleCollapse,
   onNavigateHome,
   minimapData,
-  selectedMandalaId,
   onMandalaSelect,
   settingsMode = false,
 }: SidebarProps) {
@@ -259,7 +257,6 @@ export function Sidebar({
             <SidebarMandalaSection
               collapsed={collapsed}
               minimapData={minimapData}
-              selectedMandalaId={selectedMandalaId}
               onMandalaSelect={onMandalaSelect}
             />
           </ErrorBoundary>

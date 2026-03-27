@@ -568,7 +568,6 @@ function AuthenticatedApp() {
           onCellClick: navigation.handleCellClick,
           mandalaId: selectedMandalaId,
         }}
-        selectedMandalaId={selectedMandalaId}
         onMandalaSelect={handleMandalaSelect}
         searchBarElement={
           <SearchBar
