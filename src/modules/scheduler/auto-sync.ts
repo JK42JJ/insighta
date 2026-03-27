@@ -299,7 +299,8 @@ export class AutoSyncScheduler {
       // Check quota availability before syncing
       const { remaining } = await this.quotaManager.getTodayUsage();
 
-      if (remaining < 100) {
+      const QUOTA_SKIP_THRESHOLD = 100;
+      if (remaining < QUOTA_SKIP_THRESHOLD) {
         logger.warn('Insufficient quota for sync job', {
           playlistId,
           remaining,
@@ -348,16 +349,18 @@ export class AutoSyncScheduler {
     // Parse common cron patterns
     const parts = cronExpression.trim().split(/\s+/);
 
+    const DEFAULT_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+    const MIN_SYNC_INTERVAL_MS = 60 * 1000; // 1 minute
+
     if (parts.length !== 5) {
-      // Default to 6 hours if parsing fails
-      return 6 * 60 * 60 * 1000;
+      return DEFAULT_SYNC_INTERVAL_MS;
     }
 
     const [minute, hour, dayOfMonth, , dayOfWeek] = parts;
 
     // Every minute: * * * * *
     if (minute === '*' && hour === '*' && dayOfMonth === '*' && dayOfWeek === '*') {
-      return 60 * 1000; // 1 minute minimum
+      return MIN_SYNC_INTERVAL_MS;
     }
 
     // Every N minutes: */N * * * *

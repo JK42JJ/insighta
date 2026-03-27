@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { db } from '../../../modules/database/client';
+import { db } from '@/modules/database/client';
 import {
   createErrorResponse,
   createPaginatedResponse,
@@ -8,7 +8,7 @@ import {
   ErrorCode,
   PaginationQuerySchema,
 } from '../../schemas/common.schema';
-import { DEFAULT_TIER, TIER_LIMITS } from '@/config/quota';
+import { DEFAULT_TIER, TIER_LIMITS, UNLIMITED_LIMIT } from '@/config/quota';
 
 const UserListQuerySchema = PaginationQuerySchema.extend({
   search: z.string().optional(),
@@ -19,6 +19,7 @@ const SubscriptionUpdateSchema = z.object({
   tier: z.enum(['free', 'pro', 'lifetime', 'admin']).optional(),
   localCardsLimit: z.number().int().min(0).optional(),
   mandalaLimit: z.number().int().min(0).optional(),
+  reason: z.string().max(500).optional(),
 });
 
 const StatusUpdateSchema = z.object({
@@ -180,10 +181,10 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
 
         // Auto-apply tier default limits unless explicitly overridden
         if (effectiveCardsLimit === undefined) {
-          effectiveCardsLimit = tierDefaults.cards ?? 999_999;
+          effectiveCardsLimit = tierDefaults.cards ?? UNLIMITED_LIMIT;
         }
         if (effectiveMandalaLimit === undefined) {
-          effectiveMandalaLimit = tierDefaults.mandalas ?? 999_999;
+          effectiveMandalaLimit = tierDefaults.mandalas ?? UNLIMITED_LIMIT;
         }
       }
       if (effectiveCardsLimit !== undefined) {
@@ -228,10 +229,13 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         local_cards_limit: newRow['local_cards_limit'],
         mandala_limit: newRow['mandala_limit'],
       };
+      const auditNewValue = body.reason
+        ? { ...newValues, reason: body.reason }
+        : newValues;
       await db.$queryRaw`
         INSERT INTO public.admin_audit_log (id, admin_id, action, target_type, target_id, old_value, new_value)
         VALUES (gen_random_uuid(), ${adminId}::uuid, 'tier_change', 'user_subscription', ${id}::uuid,
-          ${JSON.stringify(oldValues)}::jsonb, ${JSON.stringify(newValues)}::jsonb)
+          ${JSON.stringify(oldValues)}::jsonb, ${JSON.stringify(auditNewValue)}::jsonb)
       `;
 
       return reply.send(createSuccessResponse(result[0]));

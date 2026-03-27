@@ -1,6 +1,6 @@
 # Convention Violations — Phase 1
 
-> Detected on 2026-03-19. Do NOT bulk-fix. Fix when modifying the file for other reasons (progressive improvement).
+> Detected on 2026-03-19. **All 20 violations resolved (2026-03-27, CP296).**
 
 ## 1. Deep Relative Imports (3+ levels)
 

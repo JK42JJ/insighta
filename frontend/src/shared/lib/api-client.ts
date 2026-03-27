@@ -902,7 +902,7 @@ class ApiClient {
 
   async updateUserSubscription(
     id: string,
-    data: { tier?: string; localCardsLimit?: number; mandalaLimit?: number }
+    data: { tier?: string; localCardsLimit?: number; mandalaLimit?: number; reason?: string }
   ): Promise<{ success: boolean; data: Record<string, unknown> }> {
     return this.request(`/admin/users/${id}/subscription`, {
       method: 'PATCH',

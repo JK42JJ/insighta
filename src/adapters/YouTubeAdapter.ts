@@ -36,6 +36,9 @@ import {
   AdapterErrorCode,
 } from './DataSourceAdapter';
 
+/** YouTube API daily quota limit (units per day) */
+const YOUTUBE_DAILY_QUOTA_LIMIT = 10_000;
+
 /**
  * YouTube-specific adapter configuration
  */
@@ -187,7 +190,7 @@ export class YouTubeAdapter implements DataSourceAdapter {
       this.isInitialized = true;
       logger.info('YouTubeAdapter initialized', {
         version: this.version,
-        quotaLimit: config.quotaLimit ?? 10000,
+        quotaLimit: config.quotaLimit ?? YOUTUBE_DAILY_QUOTA_LIMIT,
         cacheEnabled: config.cacheEnabled ?? true,
       });
     } catch (error) {
@@ -803,7 +806,7 @@ export class YouTubeAdapter implements DataSourceAdapter {
       // Quota and Rate Limiting
       hasQuotaLimit: true,
       hasRateLimit: true,
-      quotaLimit: this.config?.quotaLimit ?? 10000,
+      quotaLimit: this.config?.quotaLimit ?? YOUTUBE_DAILY_QUOTA_LIMIT,
       rateLimitPerSecond: this.config?.rateLimitPerSecond ?? 100,
     };
   }
@@ -828,7 +831,7 @@ export class YouTubeAdapter implements DataSourceAdapter {
    * ```
    */
   async healthCheck(): Promise<HealthStatus> {
-    const quotaLimit = this.config?.quotaLimit ?? 10000;
+    const quotaLimit = this.config?.quotaLimit ?? YOUTUBE_DAILY_QUOTA_LIMIT;
 
     try {
       // Try to fetch a public playlist to verify API access
@@ -881,7 +884,7 @@ export class YouTubeAdapter implements DataSourceAdapter {
     remaining: number;
     resetAt?: Date;
   }> {
-    const limit = this.config?.quotaLimit ?? 10000;
+    const limit = this.config?.quotaLimit ?? YOUTUBE_DAILY_QUOTA_LIMIT;
 
     return {
       used: this.quotaUsed,
@@ -959,7 +962,7 @@ export class YouTubeAdapter implements DataSourceAdapter {
   private trackQuota(cost: number): void {
     this.quotaUsed += cost;
 
-    const limit = this.config?.quotaLimit ?? 10000;
+    const limit = this.config?.quotaLimit ?? YOUTUBE_DAILY_QUOTA_LIMIT;
     const remaining = limit - this.quotaUsed;
 
     logger.debug('Quota usage tracked', {

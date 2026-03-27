@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { createSuccessResponse } from '../../schemas/common.schema';
-import { logger } from '../../../utils/logger';
+import { logger } from '@/utils/logger';
 import { randomUUID } from 'crypto';
 import { fork } from 'child_process';
 import { resolve } from 'path';

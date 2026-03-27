@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { db } from '../../../modules/database/client';
+import { db } from '@/modules/database/client';
 import { createErrorResponse, createSuccessResponse, ErrorCode } from '../../schemas/common.schema';
 
 const STRIPE_WEBHOOK_SECRET = process.env['STRIPE_WEBHOOK_SECRET'] ?? '';

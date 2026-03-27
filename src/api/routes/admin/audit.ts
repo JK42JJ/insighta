@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { db } from '../../../modules/database/client';
+import { db } from '@/modules/database/client';
 import { createPaginatedResponse, PaginationQuerySchema } from '../../schemas/common.schema';
 
 const AuditLogQuerySchema = PaginationQuerySchema.extend({

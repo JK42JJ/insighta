@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { getEnrichmentScheduler } from '../../../modules/enrichment/scheduler';
+import { getEnrichmentScheduler } from '@/modules/enrichment/scheduler';
 
 export async function adminEnrichmentSchedulerRoutes(fastify: FastifyInstance) {
   const adminAuth = { onRequest: [fastify.authenticate, fastify.authenticateAdmin] };
