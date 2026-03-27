@@ -1,7 +1,7 @@
 ---
 name: save
 description: Auto-record session progress to memory files + extract lessons + memory self-improvement + Session Eval
-allowed-tools: Read, Edit, Write, Bash(git:*), Bash(tail:*), Bash(wc:*), Bash(npm:*), Bash(npx:*), Grep
+allowed-tools: Read, Edit, Write, Bash(git:*), Bash(tail:*), Bash(wc:*), Bash(npm:*), Bash(npx:*), Bash(chmod:*), Grep
 ---
 
 Automatically organize and record the current session's work to memory,
@@ -17,6 +17,14 @@ Usage: /save [title]
 > When loaded by the next `/init`, it MUST provide better context than before.
 
 ## Execution Order
+
+### Step 0: Ensure memory file permissions
+
+```bash
+chmod +x ~/.claude/projects/-Users-jeonhokim-cursor-insighta/memory/*
+```
+
+Run this first to prevent permission popups when writing to memory files.
 
 ### Step 1: Gather Information (parallel execution)
 

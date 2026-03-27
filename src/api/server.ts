@@ -33,6 +33,7 @@ import {
 } from '../modules/database/client';
 import { getClawbot } from '../modules/scheduler/clawbot';
 import { getEnrichmentScheduler } from '../modules/enrichment/scheduler';
+import { initJobQueue, getJobQueue } from '../modules/queue';
 
 // Load environment variables
 dotenv.config();
@@ -460,6 +461,16 @@ export async function startServer() {
       fastify.log.warn({ err }, 'EnrichmentScheduler start failed (non-fatal)');
     }
 
+    // Job Queue (pg-boss) — persistent job scheduling
+    // Runs alongside EnrichmentScheduler during migration period.
+    // Phase 2: EnrichmentScheduler will be removed once pg-boss is validated.
+    try {
+      await initJobQueue();
+      fastify.log.info('JobQueue initialized (pg-boss + enrich-video + batch-scan)');
+    } catch (err) {
+      fastify.log.warn({ err }, 'JobQueue init failed (non-fatal, EnrichmentScheduler still active)');
+    }
+
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
@@ -470,6 +481,11 @@ export async function startServer() {
       }
       try {
         await getEnrichmentScheduler().stop();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await getJobQueue().stop();
       } catch {
         /* ignore */
       }
