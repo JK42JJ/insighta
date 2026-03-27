@@ -9,7 +9,6 @@ interface AppShellProps {
   children: React.ReactNode;
   onNavigateHome?: () => void;
   minimapData?: MinimapData;
-  onMandalaSelect?: (id: string) => void;
   searchBarElement?: React.ReactNode;
 }
 
@@ -27,7 +26,6 @@ export function AppShell({
   children,
   onNavigateHome,
   minimapData,
-  onMandalaSelect,
   searchBarElement,
 }: AppShellProps) {
   const location = useLocation();
@@ -49,7 +47,10 @@ export function AppShell({
 
   return (
     <div className="h-screen flex flex-col bg-surface-base overflow-hidden">
-      <AppHeader onMobileMenuOpen={() => setMobileDrawerOpen(true)} searchBarElement={searchBarElement} />
+      <AppHeader
+        onMobileMenuOpen={() => setMobileDrawerOpen(true)}
+        searchBarElement={searchBarElement}
+      />
 
       <div className="flex-1 flex overflow-hidden">
         <Sidebar
@@ -57,7 +58,6 @@ export function AppShell({
           onToggleCollapse={handleToggleCollapse}
           onNavigateHome={onNavigateHome}
           minimapData={minimapData}
-          onMandalaSelect={onMandalaSelect}
           settingsMode={isSettingsRoute}
         />
 

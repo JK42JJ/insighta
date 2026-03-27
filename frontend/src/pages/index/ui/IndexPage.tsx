@@ -20,7 +20,7 @@ import { MandalaGrid } from '@/widgets/mandala-grid/ui/MandalaGrid';
 import { MobileBottomNav } from '@/widgets/mobile-nav';
 import { InsightsView } from '@/widgets/insights-view';
 
-import { useMandalaQuery, useMandalaList, useSwitchMandala } from '@/features/mandala';
+import { useMandalaQuery, useMandalaList } from '@/features/mandala';
 import { useMandalaStore } from '@/stores/mandalaStore';
 import { useSearchCards, SearchBar } from '@/features/search';
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
@@ -105,18 +105,19 @@ function AuthenticatedApp() {
   const [isFloatingPanelOpen, setIsFloatingPanelOpen] = useState(false);
 
   const { data: mandalaListData } = useMandalaList();
-  const switchMandala = useSwitchMandala();
 
-  // Selected mandala — local state, initialized from isDefault
+  // Selected mandala — Zustand store is source of truth, synced from sidebar + default init
+  const storeSelectedMandalaId = useMandalaStore((s) => s.selectedMandalaId);
   const [selectedMandalaId, setSelectedMandalaId] = useState<string | null>(null);
-  const switchTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const handleMandalaSelect = useCallback((id: string) => {
-    setSelectedMandalaId(id);
-    clearTimeout(switchTimerRef.current);
-    switchTimerRef.current = setTimeout(() => {
-      switchMandala.mutate(id);
-    }, 300);
-  }, [switchMandala]);
+
+  // Sync store → local state (sidebar mandala selection triggers this)
+  useEffect(() => {
+    if (storeSelectedMandalaId && storeSelectedMandalaId !== selectedMandalaId) {
+      setSelectedMandalaId(storeSelectedMandalaId);
+    }
+  }, [storeSelectedMandalaId]);
+
+  // Initialize default mandala
   useEffect(() => {
     if (!selectedMandalaId && mandalaListData?.mandalas) {
       const defaultMandala = mandalaListData.mandalas.find((m) => m.isDefault);
@@ -402,13 +403,10 @@ function AuthenticatedApp() {
       }
 
       // ScratchPad internal reorder: both active and over are scratchpad cards
-      const activeSource = dragData.type === 'card' ? (dragData as { source?: string }).source : undefined;
+      const activeSource =
+        dragData.type === 'card' ? (dragData as { source?: string }).source : undefined;
       const overSource = (over.data.current as Record<string, unknown> | undefined)?.source;
-      if (
-        activeSource === 'scratchpad' &&
-        overSource === 'scratchpad' &&
-        active.id !== over.id
-      ) {
+      if (activeSource === 'scratchpad' && overSource === 'scratchpad' && active.id !== over.id) {
         const sortedSP = [...cards.scratchPadCards].sort((a, b) => {
           if (a.sortOrder != null && b.sortOrder != null) return a.sortOrder - b.sortOrder;
           if (a.sortOrder != null) return -1;
@@ -418,8 +416,10 @@ function AuthenticatedApp() {
         const oldIndex = sortedSP.findIndex((c) => cardDragId(c.id) === String(active.id));
         const newIndex = sortedSP.findIndex((c) => cardDragId(c.id) === String(over.id));
         if (oldIndex !== -1 && newIndex !== -1) {
-          const reordered = arrayMove(sortedSP, oldIndex, newIndex)
-            .map((card, index) => ({ ...card, sortOrder: index }));
+          const reordered = arrayMove(sortedSP, oldIndex, newIndex).map((card, index) => ({
+            ...card,
+            sortOrder: index,
+          }));
           cards.handleCardsReorder?.(reordered);
         }
         return;
@@ -568,7 +568,6 @@ function AuthenticatedApp() {
           onCellClick: navigation.handleCellClick,
           mandalaId: selectedMandalaId,
         }}
-        onMandalaSelect={handleMandalaSelect}
         searchBarElement={
           <SearchBar
             value={search.searchTerm}
@@ -634,7 +633,9 @@ function AuthenticatedApp() {
               </div>
             )}
 
-            <div className={`flex-1 h-full px-4 py-4 ${modal.isModalOpen ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+            <div
+              className={`flex-1 h-full px-4 py-4 ${modal.isModalOpen ? 'overflow-hidden' : 'overflow-y-auto'}`}
+            >
               {/* Mobile search bar (hidden on md+, shown in header instead) */}
               <div className="md:hidden mb-3">
                 <SearchBar
@@ -670,7 +671,11 @@ function AuthenticatedApp() {
                 <CardListView
                   cards={search.isSearchActive ? search.results : cards.displayCards}
                   isLoading={search.isSearchActive ? search.isLoading : cards.isLoading}
-                  title={search.isSearchActive ? t('search.results', 'Search Results') : cards.displayTitle}
+                  title={
+                    search.isSearchActive
+                      ? t('search.results', 'Search Results')
+                      : cards.displayTitle
+                  }
                   viewMode={layout.viewMode}
                   listPanelRatio={layout.listPanelRatio}
                   mandalaId={effectiveMandalaId}

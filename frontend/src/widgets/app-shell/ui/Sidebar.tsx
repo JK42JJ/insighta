@@ -48,14 +48,16 @@ const SETTINGS_NAV_GROUPS = [
   {
     labelKey: 'settings.navBilling',
     items: [
-      { id: 'subscription' as SettingsCategory, icon: CreditCard, labelKey: 'settings.subscription' },
+      {
+        id: 'subscription' as SettingsCategory,
+        icon: CreditCard,
+        labelKey: 'settings.subscription',
+      },
     ],
   },
   {
     labelKey: '',
-    items: [
-      { id: 'data' as SettingsCategory, icon: Shield, labelKey: 'settings.dataPrivacy' },
-    ],
+    items: [{ id: 'data' as SettingsCategory, icon: Shield, labelKey: 'settings.dataPrivacy' }],
   },
 ];
 
@@ -71,7 +73,9 @@ function getInitialWidth(): number {
       const parsed = parseInt(saved, 10);
       if (!isNaN(parsed)) return Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed));
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return DEFAULT_SIDEBAR_WIDTH;
 }
 
@@ -80,7 +84,6 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   onNavigateHome?: () => void;
   minimapData?: MinimapData;
-  onMandalaSelect?: (id: string) => void;
   settingsMode?: boolean;
 }
 
@@ -91,16 +94,13 @@ interface NavItem {
   exact?: boolean;
 }
 
-const MAIN_NAV: NavItem[] = [
-  { to: '/', icon: Home, labelKey: 'sidebar.home', exact: true },
-];
+const MAIN_NAV: NavItem[] = [{ to: '/', icon: Home, labelKey: 'sidebar.home', exact: true }];
 
 export function Sidebar({
   collapsed,
   onToggleCollapse,
   onNavigateHome,
   minimapData,
-  onMandalaSelect,
   settingsMode = false,
 }: SidebarProps) {
   const { t } = useTranslation();
@@ -127,7 +127,10 @@ export function Sidebar({
 
     const onMouseMove = (ev: MouseEvent) => {
       // DOM direct manipulation — no React rerender, 60fps
-      const newWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, startWidth + (ev.clientX - startX)));
+      const newWidth = Math.max(
+        MIN_SIDEBAR_WIDTH,
+        Math.min(MAX_SIDEBAR_WIDTH, startWidth + (ev.clientX - startX))
+      );
       sidebar.style.width = `${newWidth}px`;
     };
 
@@ -139,12 +142,17 @@ export function Sidebar({
       sidebar.style.transition = '';
 
       // Sync React state + persist once on mouseup
-      const finalWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, startWidth + (ev.clientX - startX)));
+      const finalWidth = Math.max(
+        MIN_SIDEBAR_WIDTH,
+        Math.min(MAX_SIDEBAR_WIDTH, startWidth + (ev.clientX - startX))
+      );
       setSidebarWidth(finalWidth);
       widthRef.current = finalWidth;
       try {
         localStorage.setItem(SIDEBAR_WIDTH_KEY, String(finalWidth));
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     };
 
     document.addEventListener('mousemove', onMouseMove);
@@ -158,7 +166,9 @@ export function Sidebar({
     widthRef.current = DEFAULT_SIDEBAR_WIDTH;
     try {
       localStorage.setItem(SIDEBAR_WIDTH_KEY, String(DEFAULT_SIDEBAR_WIDTH));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const renderNavItem = (item: NavItem) => {
@@ -214,7 +224,7 @@ export function Sidebar({
     <aside
       className={cn(
         'hidden md:flex flex-col h-full bg-sidebar border-r border-sidebar-border shrink-0 transition-[width] duration-300 ease-in-out overflow-hidden relative',
-        !settingsMode && collapsed && 'w-16',
+        !settingsMode && collapsed && 'w-16'
       )}
       style={{
         width: collapsed && !settingsMode ? undefined : `${sidebarWidth}px`,
@@ -254,17 +264,15 @@ export function Sidebar({
               </div>
             )}
           >
-            <SidebarMandalaSection
-              collapsed={collapsed}
-              minimapData={minimapData}
-              onMandalaSelect={onMandalaSelect}
-            />
+            <SidebarMandalaSection collapsed={collapsed} minimapData={minimapData} />
           </ErrorBoundary>
         </nav>
 
         {/* Bottom section — collapse toggle only */}
         <div className="px-2 py-3 border-t border-sidebar-border">
-          <div className={cn('flex items-center', collapsed ? 'justify-center' : 'justify-end gap-1')}>
+          <div
+            className={cn('flex items-center', collapsed ? 'justify-center' : 'justify-end gap-1')}
+          >
             <Button
               variant="ghost"
               size="sm"
@@ -275,7 +283,11 @@ export function Sidebar({
               )}
               aria-label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
             >
-              {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              {collapsed ? (
+                <ChevronRight className="w-4 h-4" />
+              ) : (
+                <ChevronLeft className="w-4 h-4" />
+              )}
             </Button>
           </div>
         </div>
@@ -309,9 +321,7 @@ export function Sidebar({
                   {t(group.labelKey, group.labelKey.split('.').pop())}
                 </div>
               )}
-              {!group.labelKey && gIdx > 0 && (
-                <div className="mx-2 my-2 h-px bg-sidebar-border" />
-              )}
+              {!group.labelKey && gIdx > 0 && <div className="mx-2 my-2 h-px bg-sidebar-border" />}
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const active = activeSettingsTab === item.id;
@@ -329,7 +339,9 @@ export function Sidebar({
                     {active && (
                       <span className="absolute -left-1 top-1/2 -translate-y-1/2 w-[3px] h-[18px] bg-sidebar-primary rounded-r-sm" />
                     )}
-                    <Icon className={cn('w-4 h-4 shrink-0', active ? 'opacity-100' : 'opacity-60')} />
+                    <Icon
+                      className={cn('w-4 h-4 shrink-0', active ? 'opacity-100' : 'opacity-60')}
+                    />
                     {t(item.labelKey)}
                   </button>
                 );
