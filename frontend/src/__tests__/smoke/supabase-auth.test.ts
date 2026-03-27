@@ -30,6 +30,11 @@ vi.mock('@shared/lib/auth-event-bus', () => ({
   subscribeAuth: vi.fn(),
 }));
 
+// Ensure VITE_SUPABASE_URL is set for CI (no .env file in CI)
+if (!import.meta.env.VITE_SUPABASE_URL) {
+  import.meta.env.VITE_SUPABASE_URL = 'https://test-project.supabase.co';
+}
+
 import { getEdgeFunctionUrl } from '@shared/lib/supabase-auth';
 
 describe('supabase-auth', () => {
