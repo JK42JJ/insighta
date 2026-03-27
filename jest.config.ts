@@ -11,6 +11,7 @@ const config: Config = {
     '^@/cli/(.*)$': '<rootDir>/src/cli/$1',
     '^@/config/(.*)$': '<rootDir>/src/config/$1',
     '^@/utils/(.*)$': '<rootDir>/src/utils/$1',
+    '^@scalar/fastify-api-reference$': '<rootDir>/tests/__mocks__/scalar.ts',
   },
   transform: {
     '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
