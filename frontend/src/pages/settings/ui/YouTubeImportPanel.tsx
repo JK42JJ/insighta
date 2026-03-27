@@ -34,8 +34,15 @@ export function YouTubeImportPanel({ registeredPlaylistIds, onImportComplete }: 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isImporting, setIsImporting] = useState(false);
 
-  const { data: subscriptions, isLoading: subsLoading, error: subsError } = useYouTubeSubscriptions();
-  const { data: playlists, isLoading: playlistsLoading, error: playlistsError } = useYouTubePlaylists();
+  const subs = useYouTubeSubscriptions();
+  const pls = useYouTubePlaylists();
+
+  const subscriptions = subs.data?.pages.flatMap(p => p.data) ?? [];
+  const playlists = pls.data?.pages.flatMap(p => p.data) ?? [];
+  const subsLoading = subs.isLoading;
+  const playlistsLoading = pls.isLoading;
+  const subsError = subs.error;
+  const playlistsError = pls.error;
 
   const isNotConnected = subsError?.message?.includes('YOUTUBE_NOT_CONNECTED') ||
     playlistsError?.message?.includes('YOUTUBE_NOT_CONNECTED');
@@ -116,6 +123,9 @@ export function YouTubeImportPanel({ registeredPlaylistIds, onImportComplete }: 
         }));
 
   const isLoading = activeTab === 'playlists' ? playlistsLoading : subsLoading;
+  const activeQuery = activeTab === 'playlists' ? pls : subs;
+  const hasNextPage = activeQuery.hasNextPage;
+  const isFetchingNextPage = activeQuery.isFetchingNextPage;
 
   return (
     <div className="space-y-3">
@@ -220,6 +230,19 @@ export function YouTubeImportPanel({ registeredPlaylistIds, onImportComplete }: 
               )}
             </button>
           ))}
+          {hasNextPage && (
+            <button
+              onClick={() => activeQuery.fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="w-full py-2 text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+            >
+              {isFetchingNextPage ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
+              ) : (
+                t('youtube.loadMore', 'Load more...')
+              )}
+            </button>
+          )}
         </div>
       )}
     </div>
