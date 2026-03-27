@@ -40,7 +40,9 @@ export async function registerBatchScanWorker(): Promise<void> {
   await boss.work<BatchScanPayload>(JOB_NAMES.BATCH_SCAN, handleBatchScan);
 
   // Schedule recurring execution (cron)
-  await boss.schedule(JOB_NAMES.BATCH_SCAN, QUEUE_CONFIG.BATCH_SCAN_CRON, { limit: MAX_BATCH_SIZE });
+  await boss.schedule(JOB_NAMES.BATCH_SCAN, QUEUE_CONFIG.BATCH_SCAN_CRON, {
+    limit: MAX_BATCH_SIZE,
+  });
 
   logger.info('batch-scan worker registered + scheduled', {
     cron: QUEUE_CONFIG.BATCH_SCAN_CRON,

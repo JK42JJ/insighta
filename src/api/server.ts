@@ -468,7 +468,10 @@ export async function startServer() {
       await initJobQueue();
       fastify.log.info('JobQueue initialized (pg-boss + enrich-video + batch-scan)');
     } catch (err) {
-      fastify.log.warn({ err }, 'JobQueue init failed (non-fatal, EnrichmentScheduler still active)');
+      fastify.log.warn(
+        { err },
+        'JobQueue init failed (non-fatal, EnrichmentScheduler still active)'
+      );
     }
 
     // Graceful shutdown
