@@ -6,8 +6,8 @@
 
 | Layer | Framework | Config | CI Job | Files | Status |
 |-------|-----------|--------|--------|-------|--------|
-| Backend (unit/smoke) | Jest + ts-jest | `jest.config.ts` | `test-backend` | 8 | 6 pass, 2 fail |
-| Frontend (smoke) | Vitest + happy-dom | `frontend/vitest.config.ts` | `test-frontend` | 4 | 4 pass (CI) |
+| Backend (unit/smoke) | Jest + ts-jest | `jest.config.ts` | `test-backend` | 10 | 10 pass (159 tests) |
+| Frontend (smoke) | Vitest + happy-dom | `frontend/vitest.config.ts` | `test-frontend` | 13 | 13 pass (137 tests) |
 | E2E (regression) | Playwright | — | manual | 8 | manual only |
 
 ## Backend Tests (Jest)
@@ -26,6 +26,7 @@
 | `prisma-connect.test.ts` | 2 | Prisma client connection + query |
 | `youtube-api.test.ts` | 3 | YouTube subscriptions/playlists auth rejection + env check |
 | `sharing-api.test.ts` | 6 | Sharing CRUD (create/view/clone/list/delete) + bot write guard |
+| `admin-api.test.ts` | 13 | Admin endpoint auth rejection (9 routes) + invalid token + subscription/status PATCH |
 
 **Note**: Smoke tests use `describeIfServer` pattern — skipped in CI when env vars missing, run locally with real DB.
 
@@ -34,8 +35,8 @@
 | File | Tests | Status |
 |------|-------|--------|
 | `api/mandala-routes.test.ts` | 111 | Pass |
-| `modules/mandala-manager.test.ts` | — | Failing (DB dependency) |
-| `modules/context-builder.test.ts` | — | Failing (module import) |
+| `modules/mandala-manager.test.ts` | 24 | Pass (pro tier naming, quota limits) |
+| `modules/context-builder.test.ts` | 24 | Pass (TypeScript cast, @/ alias imports) |
 
 ## Frontend Tests (Vitest)
 
@@ -48,9 +49,23 @@
 | File | Tests | Description |
 |------|-------|-------------|
 | `app-smoke.test.ts` | 3 | App component renders without crash |
-| `card-validation.test.ts` | 9 | Card URL validation + shell card detection |
-| `detect-link-type.test.ts` | 8 | Link type detection (YouTube, URL, hostname whitelist) |
-| `image-utils.test.ts` | 8 | Thumbnail URL generation + fallback chain |
+| `card-validation.test.ts` | 7 | Card URL validation + shell card detection |
+| `detect-link-type.test.ts` | 10 | Link type detection (YouTube, URL, hostname whitelist) |
+| `image-utils.test.ts` | 6 | Thumbnail URL generation + fallback chain |
+| `url-normalize.test.ts` | 15 | YouTube URL variants (9) + generic URL normalization + edge cases |
+| `note-markdown.test.ts` | 13 | Timestamp extraction (4) + markdown parsing (9: text/link/image/mixed) |
+| `collision-detection.test.ts` | 4 | D&D pointerWithinThenClosest collision strategy + scratchpad priority |
+| `graph-converters.test.ts` | 16 | Ontology→Graph conversion (node/edge/category/val clamp/edge filter) |
+| `offline-queue.test.ts` | 9 | IndexedDB offline mutation queue (enqueue/getAll/remove/flushQueue) |
+| `localStorage-validation.test.ts` | 19 | Zod schema validation + localStorage parsing (MandalaLevel/SubLevel/JSON) |
+| `fileUpload.test.ts` | 14 | File type detection + supported check + file icons |
+| `slash-commands.test.ts` | 14 | Slash command registry + player-dependent filtering |
+
+### Store Tests (`frontend/src/__tests__/stores/`)
+
+| File | Tests | Description |
+|------|-------|-------------|
+| `mandalaStore.test.ts` | 7 | Zustand mandala UI store (state + actions + independence) |
 
 **Note**: Supabase client mocked via `setupFiles` (`frontend/src/__tests__/setup.ts`).
 
@@ -109,7 +124,7 @@ npx playwright test tests/regression/dnd-smoke.spec.ts
 
 ## Known Issues
 
-- `mandala-manager.test.ts` and `context-builder.test.ts` fail locally (DB/module dependency)
+- `mandala-manager.test.ts` and `context-builder.test.ts` — fixed (CP299, 2026-03-27)
 - Frontend Vitest requires Node 20 (Node 24 has rollup native module issue)
 - Playwright has no root config — E2E runs are manual
 - Bot API authenticated tests skip in CI (no INSIGHTA_BOT_KEY in GitHub Secrets)
