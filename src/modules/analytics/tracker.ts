@@ -376,10 +376,19 @@ export class AnalyticsTracker {
       // Recommend review date based on retention score
       let recommendedReviewDate: Date | null = null;
       const COMPLETION_THRESHOLD_PERCENT = 50;
-      if (analytics.lastWatchedAt && analytics.completionPercentage >= COMPLETION_THRESHOLD_PERCENT) {
+      if (
+        analytics.lastWatchedAt &&
+        analytics.completionPercentage >= COMPLETION_THRESHOLD_PERCENT
+      ) {
         const REVIEW_INTERVAL_DAYS = { excellent: 30, good: 14, fair: 7, poor: 3 } as const;
         const daysUntilReview =
-          retentionScore >= 80 ? REVIEW_INTERVAL_DAYS.excellent : retentionScore >= 60 ? REVIEW_INTERVAL_DAYS.good : retentionScore >= 40 ? REVIEW_INTERVAL_DAYS.fair : REVIEW_INTERVAL_DAYS.poor;
+          retentionScore >= 80
+            ? REVIEW_INTERVAL_DAYS.excellent
+            : retentionScore >= 60
+              ? REVIEW_INTERVAL_DAYS.good
+              : retentionScore >= 40
+                ? REVIEW_INTERVAL_DAYS.fair
+                : REVIEW_INTERVAL_DAYS.poor;
 
         recommendedReviewDate = new Date(analytics.lastWatchedAt);
         recommendedReviewDate.setDate(recommendedReviewDate.getDate() + daysUntilReview);

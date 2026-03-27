@@ -1,10 +1,6 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import {
-  createEmbeddingProvider,
-  createGenerationProvider,
-  resetProviders,
-} from '@/modules/llm';
+import { createEmbeddingProvider, createGenerationProvider, resetProviders } from '@/modules/llm';
 import { isOllamaAvailable } from '@/modules/llm/ollama';
 import { config } from '@/config/index';
 import { createSuccessResponse } from '../../schemas/common.schema';
