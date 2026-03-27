@@ -8,6 +8,9 @@
     ],
     "frontend/src/**/*.{ts,tsx}": [
       "prettier --write"
+    ],
+    "tests/**/*.ts": [
+      "prettier --write"
     ]
   },
   "description": "Insighta - Personal knowledge management platform powered by YouTube playlists",
@@ -123,7 +126,7 @@
     "eslint-plugin-prettier": "^5.1.2",
     "husky": "^8.0.3",
     "jest": "^29.7.0",
-    "lint-staged": "^16.3.2",
+    "lint-staged": "^16.4.0",
     "msw": "^2.7.3",
     "prettier": "^3.1.1",
     "prisma": "^5.7.1",
