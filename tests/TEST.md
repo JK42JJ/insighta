@@ -6,7 +6,7 @@
 
 | Layer | Framework | Config | CI Job | Files | Status |
 |-------|-----------|--------|--------|-------|--------|
-| Backend (unit/smoke) | Jest + ts-jest | `jest.config.ts` | `test-backend` | 10 | 10 pass (159 tests) |
+| Backend (unit/smoke) | Jest + ts-jest | `jest.config.ts` | `test-backend` | 11 | 11 pass (177 tests) |
 | Frontend (smoke) | Vitest + happy-dom | `frontend/vitest.config.ts` | `test-frontend` | 13 | 13 pass (137 tests) |
 | E2E (regression) | Playwright | — | manual | 8 | manual only |
 
@@ -37,6 +37,7 @@
 | `api/mandala-routes.test.ts` | 111 | Pass |
 | `modules/mandala-manager.test.ts` | 24 | Pass (pro tier naming, quota limits) |
 | `modules/context-builder.test.ts` | 24 | Pass (TypeScript cast, @/ alias imports) |
+| `modules/job-queue.test.ts` | 18 | Pass (pg-boss manager lifecycle, singleton, connection string handling, type constants) |
 
 ## Frontend Tests (Vitest)
 
