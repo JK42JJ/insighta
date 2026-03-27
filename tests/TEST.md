@@ -1,13 +1,13 @@
 # Test Infrastructure — Insighta
 
-> Last updated: 2026-03-27
+> Last updated: 2026-03-28
 
 ## Overview
 
 | Layer                | Framework          | Config                      | CI Job          | Files | Status              |
 | -------------------- | ------------------ | --------------------------- | --------------- | ----- | ------------------- |
-| Backend (unit/smoke) | Jest + ts-jest     | `jest.config.ts`            | `test-backend`  | 12    | 12 pass (184 tests) |
-| Frontend (smoke)     | Vitest + happy-dom | `frontend/vitest.config.ts` | `test-frontend` | 13    | 13 pass (137 tests) |
+| Backend (unit/smoke) | Jest + ts-jest     | `jest.config.ts`            | `test-backend`  | 16    | 16 pass (236 tests) |
+| Frontend (smoke)     | Vitest + happy-dom | `frontend/vitest.config.ts` | `test-frontend` | 14    | 14 pass (142 tests) |
 | E2E (regression)     | Playwright         | —                           | manual          | 8     | manual only         |
 
 ## Backend Tests (Jest)
@@ -27,6 +27,7 @@
 | `youtube-api.test.ts`    | 3     | YouTube subscriptions/playlists auth rejection + env check                           |
 | `sharing-api.test.ts`    | 6     | Sharing CRUD (create/view/clone/list/delete) + bot write guard                       |
 | `admin-api.test.ts`      | 13    | Admin endpoint auth rejection (9 routes) + invalid token + subscription/status PATCH |
+| `notes-api.test.ts`      | 14    | Notes/Quota/Subscriptions/Ontology API auth rejection (14 endpoints) |
 
 **Note**: Smoke tests use `describeIfServer` pattern — skipped in CI when env vars missing, run locally with real DB.
 
@@ -39,6 +40,9 @@
 | `modules/context-builder.test.ts` | 24    | Pass (TypeScript cast, @/ alias imports)                                                     |
 | `modules/job-queue.test.ts`       | 18    | Pass (pg-boss manager lifecycle, singleton, connection string handling, type constants)      |
 | `modules/queue-handlers.test.ts`  | 7     | Pass (enrich-video enqueue/register, batch-scan register/schedule, initJobQueue integration) |
+| `modules/quota-manager.test.ts`   | 14    | Pass (getOperationCost per type, calculateSyncCost page boundaries)                         |
+| `modules/llm-keys.test.ts`        | 12    | Pass (AES-256-GCM encrypt/decrypt roundtrip, maskKey, provider validation, listKeys)        |
+| `modules/note-manager.test.ts`    | 15    | Pass (formatTimestamp, mapToVideoNote, exportToJSON, exportToCSV escaping)                   |
 
 ## Frontend Tests (Vitest)
 
@@ -62,6 +66,7 @@
 | `localStorage-validation.test.ts` | 19    | Zod schema validation + localStorage parsing (MandalaLevel/SubLevel/JSON) |
 | `fileUpload.test.ts`              | 14    | File type detection + supported check + file icons                        |
 | `slash-commands.test.ts`          | 14    | Slash command registry + player-dependent filtering                       |
+| `supabase-auth.test.ts`          | 5     | Edge Function URL construction (getEdgeFunctionUrl)                       |
 
 ### Store Tests (`frontend/src/__tests__/stores/`)
 
