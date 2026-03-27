@@ -4,15 +4,14 @@
  */
 
 // Mock graph.ts before importing context-builder
-jest.mock('../../../src/modules/ontology/graph', () => ({
+jest.mock('@/modules/ontology/graph', () => ({
   getSubgraph: jest.fn(),
 }));
 
-import { buildContext, buildNodeContext } from '../../../src/modules/ontology/context-builder';
-import { getSubgraph } from '../../../src/modules/ontology/graph';
+import { buildContext, buildNodeContext } from '@/modules/ontology/context-builder';
+import { getSubgraph } from '@/modules/ontology/graph';
 
-/** @type {jest.MockedFunction<typeof getSubgraph>} */
-const mockedGetSubgraph = /** @type {any} */ (getSubgraph);
+const mockedGetSubgraph = getSubgraph as jest.MockedFunction<typeof getSubgraph>;
 
 const MOCK_USER_ID = '0192fedf-85f4-47ab-a652-7fdd116e2b39';
 

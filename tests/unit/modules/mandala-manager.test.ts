@@ -375,10 +375,10 @@ describe('MandalaManager', () => {
       });
     });
 
-    test('should use premium quota for premium tier', async () => {
+    test('should use pro quota for pro tier', async () => {
       const mockTx = createMockTx();
-      mockTx.user_subscriptions.findUnique.mockResolvedValue({ tier: 'premium' });
-      mockTx.user_mandalas.count.mockResolvedValue(10); // within premium limit (50)
+      mockTx.user_subscriptions.findUnique.mockResolvedValue({ tier: 'pro' });
+      mockTx.user_mandalas.count.mockResolvedValue(10); // within pro limit (20)
       mockTx.user_mandalas.aggregate.mockResolvedValue({ _max: { position: 9 } });
       mockTx.user_mandalas.create.mockResolvedValue({ id: 'prem-1', user_id: mockUserId });
       mockTx.user_mandalas.findUnique.mockResolvedValue({
@@ -679,17 +679,17 @@ describe('MandalaManager', () => {
       });
     });
 
-    test('should return premium tier quota info', async () => {
-      mockPrisma.user_subscriptions.findUnique.mockResolvedValue({ tier: 'premium' });
+    test('should return pro tier quota info', async () => {
+      mockPrisma.user_subscriptions.findUnique.mockResolvedValue({ tier: 'pro' });
       mockPrisma.user_mandalas.count.mockResolvedValue(10);
 
       const result = await manager.getUserQuota(mockUserId);
 
       expect(result).toEqual({
-        tier: 'premium',
-        limit: 50,
+        tier: 'pro',
+        limit: 20,
         used: 10,
-        remaining: 40,
+        remaining: 10,
       });
     });
 
