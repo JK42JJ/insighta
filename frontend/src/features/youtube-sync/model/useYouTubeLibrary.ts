@@ -1,9 +1,10 @@
 /**
  * Hook for fetching user's YouTube library (subscriptions & playlists)
  * via the new /api/v1/youtube/* endpoints.
+ * Uses useInfiniteQuery for automatic pagination support.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/lib/api-client';
 
 export interface YouTubeSubscriptionItem {
@@ -23,28 +24,32 @@ export interface YouTubePlaylistItem {
   publishedAt: string;
 }
 
+const STALE_TIME_MS = 1000 * 60 * 30; // 30 min cache
+
 export function useYouTubeSubscriptions(enabled = true) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['youtube', 'subscriptions'],
-    queryFn: async () => {
-      const result = await apiClient.getYouTubeSubscriptions();
-      return result.data;
+    queryFn: async ({ pageParam }) => {
+      return apiClient.getYouTubeSubscriptions(pageParam);
     },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.pagination?.nextPageToken ?? undefined,
     enabled,
-    staleTime: 1000 * 60 * 30, // 30 min cache
+    staleTime: STALE_TIME_MS,
     retry: false,
   });
 }
 
 export function useYouTubePlaylists(enabled = true) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['youtube', 'playlists-library'],
-    queryFn: async () => {
-      const result = await apiClient.getYouTubePlaylists();
-      return result.data;
+    queryFn: async ({ pageParam }) => {
+      return apiClient.getYouTubePlaylists(pageParam);
     },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.pagination?.nextPageToken ?? undefined,
     enabled,
-    staleTime: 1000 * 60 * 30,
+    staleTime: STALE_TIME_MS,
     retry: false,
   });
 }
