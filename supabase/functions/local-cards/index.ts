@@ -1,5 +1,25 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+/** Hosts that serve images/thumbnails — never valid as card URLs */
+const BLOCKED_CARD_HOSTS = [
+  'img.youtube.com', 'i.ytimg.com', 'i1.ytimg.com', 'i2.ytimg.com',
+  'i3.ytimg.com', 'i4.ytimg.com', 'yt3.ggpht.com', 'lh3.googleusercontent.com',
+];
+
+/** Validate URL is not empty and not a blocked CDN host. Returns error string or null. */
+function validateCardUrl(url: string): string | null {
+  if (!url || !url.trim()) return 'URL is empty';
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    if (BLOCKED_CARD_HOSTS.some(h => hostname === h || hostname.endsWith('.' + h))) {
+      return `Blocked host: ${hostname}. Thumbnail/CDN URLs cannot be saved as cards.`;
+    }
+  } catch {
+    return 'Invalid URL format';
+  }
+  return null;
+}
+
 const ALLOWED_ORIGINS = [
   'https://insighta.one',
   'https://www.insighta.one',
@@ -301,18 +321,10 @@ Deno.serve(async (req) => {
         }
 
         // Structural validation — block thumbnail/CDN URLs from becoming cards
-        const BLOCKED_CARD_HOSTS = ['img.youtube.com', 'i.ytimg.com', 'i1.ytimg.com', 'i2.ytimg.com', 'i3.ytimg.com', 'i4.ytimg.com', 'yt3.ggpht.com', 'lh3.googleusercontent.com'];
-        try {
-          const urlHost = new URL(body.url).hostname.toLowerCase();
-          if (BLOCKED_CARD_HOSTS.some(h => urlHost === h || urlHost.endsWith('.' + h))) {
-            return new Response(
-              JSON.stringify({ error: 'INVALID_URL', message: `Blocked host: ${urlHost}. Thumbnail/CDN URLs cannot be saved as cards.` }),
-              { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
-            );
-          }
-        } catch {
+        const urlError = validateCardUrl(body.url);
+        if (urlError) {
           return new Response(
-            JSON.stringify({ error: 'INVALID_URL', message: 'Invalid URL format' }),
+            JSON.stringify({ error: 'INVALID_URL', message: urlError }),
             { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
@@ -531,6 +543,26 @@ Deno.serve(async (req) => {
 
         // Process inserts (pending cards → persist)
         if (inserts && inserts.length > 0) {
+          // Validate all insert URLs against blocked hosts
+          const CELL_INDEX_MIN = -1;
+          const CELL_INDEX_MAX = 8;
+          for (const item of inserts) {
+            const urlErr = validateCardUrl(item.url);
+            if (urlErr) {
+              return new Response(
+                JSON.stringify({ error: 'INVALID_URL', message: urlErr }),
+                { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+              );
+            }
+            const ci = item.cell_index ?? -1;
+            if (ci < CELL_INDEX_MIN || ci > CELL_INDEX_MAX) {
+              return new Response(
+                JSON.stringify({ error: 'INVALID_CELL_INDEX', message: `cell_index must be ${CELL_INDEX_MIN}..${CELL_INDEX_MAX}` }),
+                { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+              );
+            }
+          }
+
           // Check limit for inserts
           const limitInfo = await checkCardLimit(supabase, user.id);
           if (limitInfo.used + inserts.length > limitInfo.limit) {
