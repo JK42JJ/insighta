@@ -32,7 +32,6 @@ import {
   resetConnectionPool,
 } from '../modules/database/client';
 import { getClawbot } from '../modules/scheduler/clawbot';
-import { getEnrichmentScheduler } from '../modules/enrichment/scheduler';
 import { initJobQueue, getJobQueue } from '../modules/queue';
 
 // Load environment variables
@@ -447,31 +446,19 @@ export async function startServer() {
     fastify.log.info(`Swagger UI available at http://${host}:${port}/documentation`);
     fastify.log.info(`Scalar API Reference available at http://${host}:${port}/api-reference`);
 
-    // Clawbot summary agent — DISABLED (2026-03-22)
-    // Superseded by EnrichmentScheduler (adaptive, proxy-only in prod)
-    fastify.log.info('Clawbot summary agent DISABLED — superseded by EnrichmentScheduler');
-
-    // Enrichment Scheduler — adaptive self-throttling background enrichment
-    // Prod: Edge Function proxy only (no direct YouTube calls)
-    // Policy: docs/CODING_CONVENTIONS.md § 3-5
-    try {
-      await getEnrichmentScheduler().start();
-      fastify.log.info('EnrichmentScheduler started (30min cycle)');
-    } catch (err) {
-      fastify.log.warn({ err }, 'EnrichmentScheduler start failed (non-fatal)');
-    }
+    // Clawbot + EnrichmentScheduler — DISABLED (2026-03-27)
+    // Both superseded by pg-boss JobQueue (persistent, Postgres-backed)
+    // Rollback: re-enable getEnrichmentScheduler().start() in enrichment/scheduler.ts
+    fastify.log.info('Clawbot + EnrichmentScheduler DISABLED — superseded by pg-boss JobQueue');
 
     // Job Queue (pg-boss) — persistent job scheduling
-    // Runs alongside EnrichmentScheduler during migration period.
-    // Phase 2: EnrichmentScheduler will be removed once pg-boss is validated.
+    // Replaces EnrichmentScheduler (Phase 2 complete)
+    // batch-scan: cron */30 → enrich-video jobs (health-adaptive)
     try {
       await initJobQueue();
       fastify.log.info('JobQueue initialized (pg-boss + enrich-video + batch-scan)');
     } catch (err) {
-      fastify.log.warn(
-        { err },
-        'JobQueue init failed (non-fatal, EnrichmentScheduler still active)'
-      );
+      fastify.log.warn({ err }, 'JobQueue init failed (non-fatal)');
     }
 
     // Graceful shutdown
@@ -479,11 +466,6 @@ export async function startServer() {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
       try {
         await getClawbot().stop();
-      } catch {
-        /* ignore */
-      }
-      try {
-        await getEnrichmentScheduler().stop();
       } catch {
         /* ignore */
       }
