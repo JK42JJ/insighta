@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LayoutGrid, Plus, RefreshCw, Loader2, ChevronDown } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
@@ -21,20 +21,22 @@ export interface MinimapData {
 interface SidebarMandalaSectionProps {
   collapsed: boolean;
   minimapData?: MinimapData;
-  /** @deprecated Use useMandalaStore() instead. Kept for backward compatibility during migration. */
-  selectedMandalaId?: string | null;
-  onMandalaSelect: (id: string) => void;
+  /** Optional callback for mandala selection. If omitted, only updates store. */
+  onMandalaSelect?: (id: string) => void;
 }
 
 export function SidebarMandalaSection({
   collapsed,
   minimapData,
-  selectedMandalaId: selectedMandalaIdProp,
   onMandalaSelect,
 }: SidebarMandalaSectionProps) {
-  // Primary: Zustand store. Fallback: prop (during migration).
-  const selectedMandalaIdFromStore = useMandalaStore((s) => s.selectedMandalaId);
-  const selectedMandalaId = selectedMandalaIdFromStore ?? selectedMandalaIdProp ?? null;
+  const selectedMandalaId = useMandalaStore((s) => s.selectedMandalaId);
+  const selectMandala = useMandalaStore((s) => s.selectMandala);
+
+  const handleMandalaSelect = useCallback((id: string) => {
+    selectMandala(id);
+    onMandalaSelect?.(id);
+  }, [selectMandala, onMandalaSelect]);
   const { t } = useTranslation();
   const { data: listData, isLoading, isError, error, refetch } = useMandalaList();
 
@@ -81,7 +83,7 @@ export function SidebarMandalaSection({
       const newId = result?.mandala?.id;
       if (newId) {
         await switchMandala.mutateAsync(newId);
-        onMandalaSelect(newId);
+        handleMandalaSelect(newId);
       }
       toast({ title: t('mandalaSettings.created') });
       setQuickCreateMode(false);
@@ -107,7 +109,7 @@ export function SidebarMandalaSection({
           title={t('sidebar.mandalas')}
           onClick={() => {
             const first = mandalas[0];
-            if (first) onMandalaSelect(first.id);
+            if (first) handleMandalaSelect(first.id);
           }}
         >
           <LayoutGrid className="w-5 h-5" />
@@ -202,7 +204,7 @@ export function SidebarMandalaSection({
             return (
               <li key={mandala.id}>
                 <button
-                  onClick={() => onMandalaSelect(mandala.id)}
+                  onClick={() => handleMandalaSelect(mandala.id)}
                   className={cn(
                     'relative w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
                     'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',

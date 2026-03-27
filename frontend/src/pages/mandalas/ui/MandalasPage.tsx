@@ -140,7 +140,7 @@ export default function MandalasPage() {
   };
 
   return (
-    <AppShell selectedMandalaId={null} onMandalaSelect={() => {}}>
+    <AppShell>
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">

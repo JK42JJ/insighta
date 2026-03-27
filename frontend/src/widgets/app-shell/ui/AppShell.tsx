@@ -9,7 +9,6 @@ interface AppShellProps {
   children: React.ReactNode;
   onNavigateHome?: () => void;
   minimapData?: MinimapData;
-  selectedMandalaId?: string | null;
   onMandalaSelect?: (id: string) => void;
   searchBarElement?: React.ReactNode;
 }
@@ -28,7 +27,6 @@ export function AppShell({
   children,
   onNavigateHome,
   minimapData,
-  selectedMandalaId,
   onMandalaSelect,
   searchBarElement,
 }: AppShellProps) {
@@ -59,7 +57,6 @@ export function AppShell({
           onToggleCollapse={handleToggleCollapse}
           onNavigateHome={onNavigateHome}
           minimapData={minimapData}
-          selectedMandalaId={selectedMandalaId}
           onMandalaSelect={onMandalaSelect}
           settingsMode={isSettingsRoute}
         />
