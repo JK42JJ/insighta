@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Prisma } from '@prisma/client';
-import { db } from '../../../modules/database/client';
+import { db } from '@/modules/database/client';
 import { createSuccessResponse } from '../../schemas/common.schema';
 
 const DEFAULT_ACTIVITY_RANGE_DAYS = 6;

@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { db } from '../../../modules/database/client';
+import { db } from '@/modules/database/client';
 import { createSuccessResponse } from '../../schemas/common.schema';
 
 const DB_HEALTHY_LATENCY_MS = 500;

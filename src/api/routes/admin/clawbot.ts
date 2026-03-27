@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { createSuccessResponse } from '../../schemas/common.schema';
-import { getClawbot } from '../../../modules/scheduler/clawbot';
+import { getClawbot } from '@/modules/scheduler/clawbot';
 
 // ============================================================================
 // Schemas

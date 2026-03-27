@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { db } from '../../../modules/database/client';
+import { db } from '@/modules/database/client';
 import { createSuccessResponse } from '../../schemas/common.schema';
 
 const DateRangeSchema = z.object({

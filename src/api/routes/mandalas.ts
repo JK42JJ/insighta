@@ -3,6 +3,8 @@ import { getMandalaManager } from '../../modules/mandala';
 import { getMood } from '../../modules/mandala/mood';
 import { getPrismaClient } from '../../modules/database/client';
 
+const MAX_PAGINATION_LIMIT = 100;
+
 interface MandalaLevelBody {
   levelKey: string;
   centerGoal: string;
@@ -149,7 +151,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       if (
         (page !== undefined && (isNaN(page) || page < 1)) ||
-        (limit !== undefined && (isNaN(limit) || limit < 1 || limit > 100))
+        (limit !== undefined && (isNaN(limit) || limit < 1 || limit > MAX_PAGINATION_LIMIT))
       ) {
         return reply.code(400).send({ error: 'Invalid pagination parameters' });
       }
@@ -292,7 +294,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       if (
         (page !== undefined && (isNaN(page) || page < 1)) ||
-        (limit !== undefined && (isNaN(limit) || limit < 1 || limit > 100))
+        (limit !== undefined && (isNaN(limit) || limit < 1 || limit > MAX_PAGINATION_LIMIT))
       ) {
         return reply.code(400).send({ error: 'Invalid pagination parameters' });
       }

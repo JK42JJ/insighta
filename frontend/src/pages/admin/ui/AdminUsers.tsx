@@ -35,11 +35,12 @@ export function AdminUsers() {
     email: string;
     currentTier: string;
     newTier: string;
+    reason: string;
   } | null>(null);
 
   const tierMutation = useMutation({
-    mutationFn: ({ id, tier }: { id: string; tier: string }) =>
-      apiClient.updateUserSubscription(id, { tier }),
+    mutationFn: ({ id, tier, reason }: { id: string; tier: string; reason?: string }) =>
+      apiClient.updateUserSubscription(id, { tier, reason: reason || undefined }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin'] });
       toast({
@@ -194,6 +195,7 @@ export function AdminUsers() {
                               email: user.email as string,
                               currentTier: user.tier as string,
                               newTier: user.tier as string,
+                              reason: '',
                             })
                           }
                           className="text-xs px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 flex items-center gap-1"
@@ -278,10 +280,30 @@ export function AdminUsers() {
             </div>
 
             {tierEditTarget.currentTier !== tierEditTarget.newTier && (
-              <div className="mb-4 px-3 py-2 rounded-md bg-amber-500/10 text-amber-500 text-xs">
-                {tierEditTarget.currentTier} → {tierEditTarget.newTier}
-                {' — This change will be recorded in the audit log.'}
-              </div>
+              <>
+                <div className="mb-4">
+                  <label className="text-xs text-muted-foreground block mb-1">
+                    Reason <span className="text-destructive">*</span>
+                  </label>
+                  <textarea
+                    value={tierEditTarget.reason}
+                    onChange={(e) =>
+                      setTierEditTarget({ ...tierEditTarget, reason: e.target.value })
+                    }
+                    placeholder="Why is this tier change needed?"
+                    maxLength={500}
+                    rows={3}
+                    className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1 text-right">
+                    {tierEditTarget.reason.length}/500
+                  </p>
+                </div>
+                <div className="mb-4 px-3 py-2 rounded-md bg-amber-500/10 text-amber-500 text-xs">
+                  {tierEditTarget.currentTier} → {tierEditTarget.newTier}
+                  {' — This change will be recorded in the audit log.'}
+                </div>
+              </>
             )}
 
             <div className="flex justify-end gap-2">
@@ -300,10 +322,12 @@ export function AdminUsers() {
                   tierMutation.mutate({
                     id: tierEditTarget.id,
                     tier: tierEditTarget.newTier,
+                    reason: tierEditTarget.reason,
                   });
                 }}
                 disabled={
                   tierEditTarget.currentTier === tierEditTarget.newTier ||
+                  (tierEditTarget.currentTier !== tierEditTarget.newTier && !tierEditTarget.reason.trim()) ||
                   tierMutation.isPending
                 }
                 className="text-sm px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"

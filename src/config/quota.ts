@@ -38,6 +38,9 @@ export const TIER_LIMITS = {
   },
 } as const satisfies Record<Tier, Record<string, number | null>>;
 
+/** DB sentinel value for unlimited resource limits (null tiers store this in DB) */
+export const UNLIMITED_LIMIT = 999_999;
+
 /** Global API rate limits per tier (requests per minute). `null` means unlimited. */
 export const TIER_RATE_LIMITS: Record<Tier, number | null> = {
   free: 100,
