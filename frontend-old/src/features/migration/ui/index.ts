@@ -1,1 +1,0 @@
-export { MigrationPrompt } from './MigrationPrompt';
