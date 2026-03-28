@@ -9,9 +9,10 @@
  */
 
 import { skillRegistry } from './registry';
+import { NewsletterSkill } from './newsletter';
 
 // Skill registration — add one line per new skill
-// skillRegistry.register(new NewsletterSkill())  // Step 4
+skillRegistry.register(new NewsletterSkill());
 // skillRegistry.register(new ReportSkill())      // future
 // skillRegistry.register(new AlertSkill())       // future
 
