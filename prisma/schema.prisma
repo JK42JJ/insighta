@@ -1256,7 +1256,7 @@ model newsletter_logs {
   subject        String?
   curated_videos Json?
   sent_at        DateTime @default(now()) @db.Timestamptz(6)
-  resend_id      String?  @db.VarChar(100)
+  message_id     String?  @db.VarChar(200)
   status         String   @default("sent") @db.VarChar(20)
   users          users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
 

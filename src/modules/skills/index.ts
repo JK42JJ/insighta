@@ -17,4 +17,6 @@ import { skillRegistry } from './registry';
 
 export { skillRegistry };
 export { checkSkillQuota } from './quota-checker';
+export { checkSummaryQuality } from './summary-gate';
 export type { InsightaSkill, SkillContext, SkillResult, SkillPreview, SkillTrigger } from './types';
+export type { GateResult, RichSummary } from './summary-gate';
