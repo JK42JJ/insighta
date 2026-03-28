@@ -19,12 +19,29 @@ function getInitialCollapsed(): boolean {
   }
 }
 
+/** Routes that render the full sidebar layout */
+const SIDEBAR_ROUTES = [
+  '/',
+  '/mandalas',
+  '/profile',
+  '/subscription',
+  '/help',
+  '/privacy',
+  '/terms',
+];
+
 export function AppShell({ children }: AppShellProps) {
   const minimapData = useShellStore((s) => s.minimapData);
   const searchBarElement = useShellStore((s) => s.searchBarElement);
   const onNavigateHome = useShellStore((s) => s.onNavigateHome);
   const location = useLocation();
   const isSettingsRoute = location.pathname.startsWith('/settings');
+  const showSidebar =
+    isSettingsRoute ||
+    SIDEBAR_ROUTES.some((r) =>
+      r === '/' ? location.pathname === '/' : location.pathname.startsWith(r)
+    );
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialCollapsed);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
@@ -39,6 +56,15 @@ export function AppShell({ children }: AppShellProps) {
       return next;
     });
   }, []);
+
+  // Public routes — no sidebar, no header chrome
+  if (!showSidebar) {
+    return (
+      <main id="main-content" className="h-screen overflow-y-auto">
+        {children}
+      </main>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-surface-base overflow-hidden">
@@ -64,7 +90,7 @@ export function AppShell({ children }: AppShellProps) {
       <MobileDrawer
         open={mobileDrawerOpen}
         onOpenChange={setMobileDrawerOpen}
-        onNavigateHome={onNavigateHome}
+        onNavigateHome={onNavigateHome ?? undefined}
       />
     </div>
   );
