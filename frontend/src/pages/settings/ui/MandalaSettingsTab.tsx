@@ -273,40 +273,45 @@ export function MandalaSettingsTab() {
             )}
           </CardContent>
 
-          {/* Quota bar — hidden for unlimited tiers */}
-          {!isUnlimited && (
-            <div className="px-5 py-3 border-t border-border/30">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-muted-foreground">
-                  {t('mandalaSettings.quota')}
-                </span>
-                <span
-                  className={cn(
-                    'text-xs font-bold font-mono',
-                    quotaLimit !== null && quotaUsed > quotaLimit && 'text-destructive'
-                  )}
-                >
-                  {quotaUsed} / {quotaLimit}
-                </span>
-              </div>
-              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-all duration-700',
-                    quotaLimit !== null && quotaUsed > quotaLimit
-                      ? 'bg-destructive'
-                      : 'bg-gradient-to-r from-primary to-primary/70'
-                  )}
-                  style={{ width: `${Math.min(quotaPercent, 100)}%` }}
-                />
-              </div>
-              {quotaLimit !== null && quotaUsed > quotaLimit && (
-                <p className="text-xs text-destructive mt-2">
-                  {t('mandalaSettings.quotaExceededMsg')}
-                </p>
-              )}
+          {/* Quota bar */}
+          <div className="px-5 py-3 border-t border-border/30">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-muted-foreground">
+                {t('mandalaSettings.quota')}
+              </span>
+              <span
+                className={cn(
+                  'text-xs font-bold font-mono',
+                  !isUnlimited &&
+                    quotaLimit !== null &&
+                    quotaUsed > quotaLimit &&
+                    'text-destructive'
+                )}
+              >
+                {quotaUsed} / {isUnlimited ? '\u221E' : quotaLimit}
+              </span>
             </div>
-          )}
+            {!isUnlimited && (
+              <>
+                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all duration-700',
+                      quotaLimit !== null && quotaUsed > quotaLimit
+                        ? 'bg-destructive'
+                        : 'bg-gradient-to-r from-primary to-primary/70'
+                    )}
+                    style={{ width: `${Math.min(quotaPercent, 100)}%` }}
+                  />
+                </div>
+                {quotaLimit !== null && quotaUsed > quotaLimit && (
+                  <p className="text-xs text-destructive mt-2">
+                    {t('mandalaSettings.quotaExceededMsg')}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </Card>
       </div>
 

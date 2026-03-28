@@ -162,23 +162,25 @@ export default function MandalasPage() {
           </Button>
         </div>
 
-        {/* Quota bar — hidden for unlimited tiers */}
-        {!isUnlimited && (
-          <div className="mb-6 p-3 rounded-lg bg-surface-mid border border-border/50">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm text-muted-foreground">{t('mandalaSettings.quota')}</span>
-              <span className="text-sm font-medium text-foreground">
-                {t('mandalaSettings.quotaDesc', { used: quotaUsed, limit: quotaLimit })}
-              </span>
-            </div>
+        {/* Quota bar */}
+        <div className="mb-6 p-3 rounded-lg bg-surface-mid border border-border/50">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm text-muted-foreground">{t('mandalaSettings.quota')}</span>
+            <span className="text-sm font-medium text-foreground">
+              {isUnlimited
+                ? `${quotaUsed} / \u221E`
+                : t('mandalaSettings.quotaDesc', { used: quotaUsed, limit: quotaLimit })}
+            </span>
+          </div>
+          {!isUnlimited && (
             <div className="h-2 rounded-full bg-surface-light overflow-hidden">
               <div
                 className="h-full rounded-full bg-primary transition-all"
                 style={{ width: `${quotaPercent}%` }}
               />
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-border/50">
