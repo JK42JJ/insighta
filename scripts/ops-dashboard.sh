@@ -362,19 +362,6 @@ render_issues() {
   fi
 
   echo -e "  ${BD}ISSUES${NC}  ${D}open: ${open_count}, closed: ${closed_count}, total: ${total_count} (${pct}%)${NC}  ${D}PRs: ${pr_count:-0}${NC}"
-
-  local issues; issues=$(cache_get issues 9999)
-  if [ -n "$issues" ]; then
-    local cols; cols=$(dash_cols)
-    local title_max=$(( cols - 4 ))
-    local count=0
-    while IFS= read -r line; do
-      [ -z "$line" ] && continue
-      count=$((count + 1))
-      [ "$count" -gt 3 ] && break
-      echo -e "   ${D}${line:0:$title_max}${NC}"
-    done <<< "$issues"
-  fi
 }
 
 # =============================================================================
