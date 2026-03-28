@@ -48,8 +48,10 @@ export default function MandalasPage() {
 
   const mandalas = listData?.mandalas ?? [];
   const quotaUsed = quotaData?.used ?? mandalas.length;
-  const quotaLimit = quotaData?.limit ?? 3;
-  const quotaPercent = quotaLimit > 0 ? Math.min((quotaUsed / quotaLimit) * 100, 100) : 0;
+  const quotaLimit = quotaData?.limit;
+  const isUnlimited = quotaLimit === null;
+  const quotaPercent =
+    !isUnlimited && quotaLimit > 0 ? Math.min((quotaUsed / quotaLimit) * 100, 100) : 0;
 
   const setTab = (tab: Tab) => {
     if (tab === 'my') {
@@ -160,21 +162,23 @@ export default function MandalasPage() {
           </Button>
         </div>
 
-        {/* Quota bar */}
-        <div className="mb-6 p-3 rounded-lg bg-surface-mid border border-border/50">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-sm text-muted-foreground">{t('mandalaSettings.quota')}</span>
-            <span className="text-sm font-medium text-foreground">
-              {t('mandalaSettings.quotaDesc', { used: quotaUsed, limit: quotaLimit })}
-            </span>
+        {/* Quota bar — hidden for unlimited tiers */}
+        {!isUnlimited && (
+          <div className="mb-6 p-3 rounded-lg bg-surface-mid border border-border/50">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm text-muted-foreground">{t('mandalaSettings.quota')}</span>
+              <span className="text-sm font-medium text-foreground">
+                {t('mandalaSettings.quotaDesc', { used: quotaUsed, limit: quotaLimit })}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-surface-light overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${quotaPercent}%` }}
+              />
+            </div>
           </div>
-          <div className="h-2 rounded-full bg-surface-light overflow-hidden">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${quotaPercent}%` }}
-            />
-          </div>
-        </div>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-border/50">

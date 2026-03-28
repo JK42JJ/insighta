@@ -2,7 +2,7 @@ import { getPrismaClient } from '../database/client';
 import { logger } from '../../utils/logger';
 import { user_mandalas } from '@prisma/client';
 import { nanoid } from 'nanoid';
-import { DEFAULT_TIER, getMandalaLimit, UNLIMITED_LIMIT, type Tier } from '@/config/quota';
+import { DEFAULT_TIER, getMandalaLimit, type Tier } from '@/config/quota';
 
 interface MandalaLevelData {
   levelKey: string;
@@ -45,9 +45,9 @@ interface ListMandalasResult {
 
 interface UserQuota {
   tier: string;
-  limit: number;
+  limit: number | null;
   used: number;
-  remaining: number;
+  remaining: number | null;
 }
 
 let instance: MandalaManager | null = null;
@@ -264,20 +264,30 @@ export class MandalaManager {
     levels: MandalaLevelData[]
   ): Promise<MandalaWithLevels> {
     return await this.prisma.$transaction(async (tx) => {
-      // Resolve user tier
-      const subscription = await tx.user_subscriptions.findUnique({
-        where: { user_id: userId },
-        select: { tier: true, mandala_limit: true },
-      });
-      const tier = (subscription?.tier ?? DEFAULT_TIER) as Tier;
-      const limit = subscription?.mandala_limit ?? getMandalaLimit(tier);
+      // Resolve user tier + admin status
+      const [subscription, adminCheck] = await Promise.all([
+        tx.user_subscriptions.findUnique({
+          where: { user_id: userId },
+          select: { tier: true, mandala_limit: true },
+        }),
+        this.prisma.$queryRaw<Array<{ is_super_admin: boolean | null }>>`
+          SELECT is_super_admin FROM auth.users WHERE id = ${userId}::uuid
+        `,
+      ]);
+      const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
+      const tier = isSuperAdmin
+        ? ('admin' as Tier)
+        : ((subscription?.tier ?? DEFAULT_TIER) as Tier);
+      const tierLimit = getMandalaLimit(tier);
+      const limit =
+        isSuperAdmin || tierLimit === Infinity ? null : (subscription?.mandala_limit ?? tierLimit);
 
       // Count existing mandalas (quota check inside transaction for atomicity)
       const count = await tx.user_mandalas.count({
         where: { user_id: userId },
       });
 
-      if (count >= limit) {
+      if (limit !== null && count >= limit) {
         const err = new Error('Mandala quota exceeded') as Error & {
           quota: number;
           current: number;
@@ -515,16 +525,15 @@ export class MandalaManager {
 
     const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
     const tier = isSuperAdmin ? ('admin' as Tier) : ((subscription?.tier ?? DEFAULT_TIER) as Tier);
-    const rawLimit = isSuperAdmin
-      ? UNLIMITED_LIMIT
-      : (subscription?.mandala_limit ?? getMandalaLimit(tier));
-    const limit = rawLimit === Infinity ? UNLIMITED_LIMIT : rawLimit;
+    const tierLimit = getMandalaLimit(tier);
+    const isUnlimited = isSuperAdmin || tierLimit === Infinity;
+    const limit = isUnlimited ? null : (subscription?.mandala_limit ?? tierLimit);
 
     return {
       tier,
       limit,
       used,
-      remaining: Math.max(0, limit - used),
+      remaining: limit === null ? null : Math.max(0, limit - used),
     };
   }
 

@@ -4,8 +4,6 @@ import { useLocalCardsAsInsight } from '@/features/card-management/model/useLoca
 import { useMandalaQuota } from '@/features/mandala/model/useMandalaQuery';
 import { cn } from '@/shared/lib/utils';
 
-const UNLIMITED_THRESHOLD = 999999;
-
 const TIER_STYLES: Record<string, string> = {
   admin: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
   pro: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
@@ -14,10 +12,10 @@ const TIER_STYLES: Record<string, string> = {
 
 function formatQuota(
   used: number,
-  limit: number,
+  limit: number | null,
   t: (key: string, opts?: Record<string, unknown>) => string
 ) {
-  if (limit >= UNLIMITED_THRESHOLD) {
+  if (limit === null) {
     return {
       display: t('settings.quotaUsed', { count: used }),
       suffix: t('settings.unlimited'),
@@ -51,9 +49,10 @@ export function SubscriptionSettingsTab() {
     subscription.limit > 0 ? Math.round((subscription.used / subscription.limit) * 100) : 0;
 
   const mandalaUsed = mandalaQuota?.used ?? 0;
-  const mandalaLimit = mandalaQuota?.limit ?? subscription.mandalaLimit ?? 3;
+  const mandalaLimit = mandalaQuota?.limit ?? null;
   const mandalaQuotaFmt = formatQuota(mandalaUsed, mandalaLimit, t);
-  const mandalaPercent = mandalaLimit > 0 ? Math.round((mandalaUsed / mandalaLimit) * 100) : 0;
+  const mandalaPercent =
+    mandalaLimit !== null && mandalaLimit > 0 ? Math.round((mandalaUsed / mandalaLimit) * 100) : 0;
 
   const tierKey = subscription.tier?.toLowerCase() ?? 'free';
   const tierStyle = TIER_STYLES[tierKey] ?? TIER_STYLES.free;
