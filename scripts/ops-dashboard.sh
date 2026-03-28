@@ -23,6 +23,7 @@ echo $$ > "$PIDFILE"
 # -- Config --------------------------------------------------------------------
 CACHE_DIR="/tmp/ops-cache"; mkdir -p "$CACHE_DIR" 2>/dev/null
 DOMAIN="${DOMAIN:-insighta.one}"
+REPO_NWO="JK42JJ/insighta"
 SREF="${SUPABASE_PROJECT_REF:-rckkhhjanqgaopynhfgd}"; SDB_URL="${SUPABASE_DB_URL:-}"
 EC2_ID="i-0b375829716559a09"
 SSH_KEY="$DASH_PROJECT_ROOT/prx01-tubearchive.pem"
@@ -206,11 +207,8 @@ fetch_issues() {
   [ -n "$issues" ] && echo "$issues" | cache_set issues
   # Counts — use search API for accurate totals (gh issue list has 30 default limit)
   local o=0 cl=0
-  local repo_nwo; repo_nwo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
-  if [ -n "$repo_nwo" ]; then
-    o=$(gh api "search/issues?q=repo:${repo_nwo}+type:issue+state:open" --jq '.total_count' 2>/dev/null || echo 0)
-    cl=$(gh api "search/issues?q=repo:${repo_nwo}+type:issue+state:closed" --jq '.total_count' 2>/dev/null || echo 0)
-  fi
+  o=$(gh api "search/issues?q=repo:${REPO_NWO}+type:issue+state:open" --jq '.total_count' 2>/dev/null || echo 0)
+  cl=$(gh api "search/issues?q=repo:${REPO_NWO}+type:issue+state:closed" --jq '.total_count' 2>/dev/null || echo 0)
   o="${o:-0}"; cl="${cl:-0}"
   local total=$(( o + cl ))
   echo "${o}|${cl}|${total}" | cache_set issue_counts
