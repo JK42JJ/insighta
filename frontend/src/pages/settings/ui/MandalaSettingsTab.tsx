@@ -65,7 +65,7 @@ export function MandalaSettingsTab() {
   const handleSetCurrent = async (id: string) => {
     try {
       await switchMandala.mutateAsync(id);
-      toast({ title: t('mandalaSettings.currentChanged', 'Default mandala changed') });
+      toast({ title: t('mandalaSettings.currentChanged') });
     } catch {
       toast({ title: t('common.error'), variant: 'destructive' });
     }
@@ -84,7 +84,7 @@ export function MandalaSettingsTab() {
     if (!renameTarget || !renameValue.trim()) return;
     try {
       await renameMandala.mutateAsync({ id: renameTarget.id, title: renameValue.trim() });
-      toast({ title: t('mandalaSettings.renamed', 'Mandala renamed') });
+      toast({ title: t('mandalaSettings.renamed') });
       setRenameTarget(null);
       setRenameValue('');
     } catch {
@@ -111,9 +111,17 @@ export function MandalaSettingsTab() {
         <Card className="bg-surface-mid border-border/50">
           <div className="flex items-center gap-3 px-5 py-3 border-b border-border/30">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
-                <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+              <svg
+                className="w-4 h-4 text-primary"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                viewBox="0 0 24 24"
+              >
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
               </svg>
             </div>
             <h3 className="text-sm font-bold flex-1">{t('mandalaSettings.myMandalas')}</h3>
@@ -162,7 +170,9 @@ export function MandalaSettingsTab() {
                     >
                       {/* Emoji placeholder */}
                       <div className="w-9 h-9 rounded-lg bg-surface-light flex items-center justify-center text-lg shrink-0">
-                        {mandala.title?.match(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u)?.[0] || '📋'}
+                        {mandala.title?.match(
+                          /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u
+                        )?.[0] || '📋'}
                       </div>
 
                       {/* Meta */}
@@ -173,16 +183,18 @@ export function MandalaSettingsTab() {
                           </span>
                           {mandala.isDefault && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/20">
-                              Current
+                              {t('mandalaSettings.current')}
                             </span>
                           )}
                         </div>
                         <div className="flex items-center gap-2.5 mt-0.5 text-xs text-muted-foreground">
                           <span className={cn(sectorCount === 0 && 'text-muted-foreground/50')}>
-                            {sectorCount} {t('mandalaSettings.sectors', 'sectors')}
+                            {sectorCount} {t('mandalaSettings.sectors')}
                           </span>
                           <span>·</span>
-                          <span>{t('mandalaSettings.updated', 'Updated')} {updatedDate}</span>
+                          <span>
+                            {t('mandalaSettings.updated')} {updatedDate}
+                          </span>
                         </div>
                       </div>
 
@@ -196,7 +208,10 @@ export function MandalaSettingsTab() {
                             <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-surface-mid border-border/50 w-44">
+                        <DropdownMenuContent
+                          align="end"
+                          className="bg-surface-mid border-border/50 w-44"
+                        >
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
@@ -205,7 +220,7 @@ export function MandalaSettingsTab() {
                             disabled={mandala.isDefault}
                             className="text-sm"
                           >
-                            {t('mandalaSettings.setAsCurrent', 'Set as Current')}
+                            {t('mandalaSettings.setAsCurrent')}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={(e) => {
@@ -215,7 +230,7 @@ export function MandalaSettingsTab() {
                             }}
                             className="text-sm"
                           >
-                            {t('mandalaSettings.rename', 'Rename')}
+                            {t('mandalaSettings.rename')}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={(e) => {
@@ -224,7 +239,7 @@ export function MandalaSettingsTab() {
                             }}
                             className="text-sm"
                           >
-                            {t('mandalaSettings.edit', 'Edit')}
+                            {t('mandalaSettings.edit')}
                             <ExternalLink className="w-3 h-3 ml-auto" />
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -234,7 +249,7 @@ export function MandalaSettingsTab() {
                             }}
                             className="text-sm"
                           >
-                            {t('mandalaSettings.share', 'Share')}
+                            {t('mandalaSettings.share')}
                             <Share2 className="w-3 h-3 ml-auto" />
                           </DropdownMenuItem>
                           {!mandala.isDefault && (
@@ -260,8 +275,15 @@ export function MandalaSettingsTab() {
           {/* Quota bar */}
           <div className="px-5 py-3 border-t border-border/30">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-muted-foreground">{t('mandalaSettings.quota')}</span>
-              <span className={cn('text-xs font-bold font-mono', !isUnlimited && quotaUsed > quotaLimit && 'text-destructive')}>
+              <span className="text-xs font-semibold text-muted-foreground">
+                {t('mandalaSettings.quota')}
+              </span>
+              <span
+                className={cn(
+                  'text-xs font-bold font-mono',
+                  !isUnlimited && quotaUsed > quotaLimit && 'text-destructive'
+                )}
+              >
                 {quotaUsed} / {isUnlimited ? '∞' : quotaLimit}
               </span>
             </div>
@@ -278,7 +300,7 @@ export function MandalaSettingsTab() {
             </div>
             {!isUnlimited && quotaUsed > quotaLimit && (
               <p className="text-xs text-destructive mt-2">
-                {t('mandalaSettings.quotaExceededMsg', "You've exceeded your mandala limit. Upgrade or remove a mandala.")}
+                {t('mandalaSettings.quotaExceededMsg')}
               </p>
             )}
           </div>
@@ -286,11 +308,16 @@ export function MandalaSettingsTab() {
       </div>
 
       {/* Rename Mandala Dialog */}
-      <Dialog open={!!renameTarget} onOpenChange={(open) => { if (!open) setRenameTarget(null); }}>
+      <Dialog
+        open={!!renameTarget}
+        onOpenChange={(open) => {
+          if (!open) setRenameTarget(null);
+        }}
+      >
         <DialogContent className="bg-surface-mid border-border/50">
           <DialogHeader>
-            <DialogTitle>{t('mandalaSettings.rename', 'Rename')}</DialogTitle>
-            <DialogDescription>{t('mandalaSettings.renameDesc', 'Enter a new name for this mandala.')}</DialogDescription>
+            <DialogTitle>{t('mandalaSettings.rename')}</DialogTitle>
+            <DialogDescription>{t('mandalaSettings.renameDesc')}</DialogDescription>
           </DialogHeader>
           <Input
             value={renameValue}
@@ -300,10 +327,17 @@ export function MandalaSettingsTab() {
             onKeyDown={(e) => e.key === 'Enter' && handleRename()}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameTarget(null)} className="border-border/50">
+            <Button
+              variant="outline"
+              onClick={() => setRenameTarget(null)}
+              className="border-border/50"
+            >
               {t('common.cancel')}
             </Button>
-            <Button onClick={handleRename} disabled={!renameValue.trim() || renameMandala.isPending}>
+            <Button
+              onClick={handleRename}
+              disabled={!renameValue.trim() || renameMandala.isPending}
+            >
               {renameMandala.isPending && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
               {t('common.confirm')}
             </Button>
@@ -344,7 +378,9 @@ export function MandalaSettingsTab() {
       {shareTarget && (
         <ShareMandalaModal
           open={!!shareTarget}
-          onOpenChange={(open) => { if (!open) setShareTarget(null); }}
+          onOpenChange={(open) => {
+            if (!open) setShareTarget(null);
+          }}
           mandalaId={shareTarget.id}
           mandalaTitle={shareTarget.title}
         />

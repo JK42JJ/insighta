@@ -197,8 +197,11 @@
       "error": "Error",
       "saveError": "Failed to save API key. Please try again.",
       "deleteError": "Failed to delete API key. Please try again.",
-      "priorityError": "Failed to update provider priority. Please try again."
-    }
+      "priorityError": "Failed to update provider priority. Please try again.",
+      "activeCount": "{{count}} active"
+    },
+    "quotaUsed": "{{count}} used",
+    "unlimited": "Unlimited"
   },
   "profile": {
     "title": "Profile",
@@ -626,6 +629,11 @@
     "sectors": "sectors",
     "updated": "Updated",
     "quotaExceeded": "Mandala limit reached. Upgrade to create more.",
+    "quotaExceededMsg": "You've exceeded your mandala limit. Upgrade or remove a mandala.",
+    "setAsCurrent": "Set as Current",
+    "edit": "Edit",
+    "share": "Share",
+    "renameDesc": "Enter a new name for this mandala.",
     "subscribed": "Subscribed"
   },
   "insightCard": {
