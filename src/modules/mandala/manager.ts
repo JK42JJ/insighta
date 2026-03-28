@@ -2,7 +2,7 @@ import { getPrismaClient } from '../database/client';
 import { logger } from '../../utils/logger';
 import { user_mandalas } from '@prisma/client';
 import { nanoid } from 'nanoid';
-import { DEFAULT_TIER, getMandalaLimit, type Tier } from '@/config/quota';
+import { DEFAULT_TIER, getMandalaLimit, UNLIMITED_LIMIT, type Tier } from '@/config/quota';
 
 interface MandalaLevelData {
   levelKey: string;
@@ -500,7 +500,7 @@ export class MandalaManager {
    * Returns quota information for the user.
    */
   async getUserQuota(userId: string): Promise<UserQuota> {
-    const [subscription, used] = await Promise.all([
+    const [subscription, used, adminCheck] = await Promise.all([
       this.prisma.user_subscriptions.findUnique({
         where: { user_id: userId },
         select: { tier: true, mandala_limit: true },
@@ -508,10 +508,15 @@ export class MandalaManager {
       this.prisma.user_mandalas.count({
         where: { user_id: userId },
       }),
+      this.prisma.$queryRaw<Array<{ is_super_admin: boolean | null }>>`
+        SELECT is_super_admin FROM auth.users WHERE id = ${userId}::uuid
+      `,
     ]);
 
-    const tier = (subscription?.tier ?? DEFAULT_TIER) as Tier;
-    const limit = subscription?.mandala_limit ?? getMandalaLimit(tier);
+    const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
+    const tier = isSuperAdmin ? ('admin' as Tier) : ((subscription?.tier ?? DEFAULT_TIER) as Tier);
+    const rawLimit = subscription?.mandala_limit ?? getMandalaLimit(tier);
+    const limit = rawLimit === Infinity ? UNLIMITED_LIMIT : rawLimit;
 
     return {
       tier,
