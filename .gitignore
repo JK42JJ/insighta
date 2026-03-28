@@ -120,8 +120,9 @@ src/api/openapi.json
 # Legacy
 docs-site/
 
-# Archived frontend v1
+# Legacy frontend directories (local only)
 frontend-old/
+frontend-v3/
 
 # memsearch (dev memory — local only)
 .memsearch/

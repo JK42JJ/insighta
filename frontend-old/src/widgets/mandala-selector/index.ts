@@ -1,1 +1,0 @@
-export { MandalaSelector } from './ui';
