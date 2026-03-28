@@ -63,6 +63,11 @@ const envSchema = z.object({
   // OpenRouter
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_MODEL: z.string().default('qwen/qwen3.5-9b'),
+
+  // Gmail SMTP Relay (IP-authenticated via EC2)
+  GMAIL_SMTP_HOST: z.string().default('smtp-relay.gmail.com'),
+  GMAIL_SMTP_PORT: z.coerce.number().default(587),
+  GMAIL_SMTP_FROM: z.string().default('noreply@insighta.one'),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -163,6 +168,13 @@ export const config = {
   openrouter: {
     apiKey: env.OPENROUTER_API_KEY,
     model: env.OPENROUTER_MODEL,
+  },
+
+  // Gmail SMTP Relay (IP-authenticated, no password)
+  gmail: {
+    smtpHost: env.GMAIL_SMTP_HOST,
+    smtpPort: env.GMAIL_SMTP_PORT,
+    smtpFrom: env.GMAIL_SMTP_FROM,
   },
 
   // YouTube API costs (in quota units)
