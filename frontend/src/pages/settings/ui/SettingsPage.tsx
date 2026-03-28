@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from 'next-themes';
-
+import { AppShell } from '@/widgets/app-shell';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent } from '@/shared/ui/card';
 import { Label } from '@/shared/ui/label';
@@ -41,13 +41,8 @@ type SettingsCategory =
   | 'data';
 
 const VALID_TABS: SettingsCategory[] = [
-  'general',
-  'mandalas',
-  'appearance',
-  'notifications',
-  'integrations',
-  'subscription',
-  'data',
+  'general', 'mandalas', 'appearance', 'notifications',
+  'integrations', 'subscription', 'data',
 ];
 
 /** Auto-save helper: persist to localStorage and dispatch event */
@@ -94,17 +89,10 @@ export default function SettingsPage() {
       };
     } catch {
       return {
-        notifications: true,
-        emailUpdates: false,
-        syncCompletion: true,
-        aiInsightReady: true,
-        autoSave: true,
-        language: i18n.language,
-        theme: 'dark',
-        cardFlipOnHover: true,
-        minimapHeatIntensity: true,
-        minimapNumberOverlay: false,
-        defaultView: 'grid',
+        notifications: true, emailUpdates: false, syncCompletion: true,
+        aiInsightReady: true, autoSave: true, language: i18n.language,
+        theme: 'dark', cardFlipOnHover: true, minimapHeatIntensity: true,
+        minimapNumberOverlay: false, defaultView: 'grid',
       };
     }
   };
@@ -114,22 +102,19 @@ export default function SettingsPage() {
 
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const updateSetting = useCallback(
-    (key: string, value: unknown) => {
-      const current = getSettings();
-      const updated = { ...current, [key]: value };
-      autoSave('app-settings', updated);
+  const updateSetting = useCallback((key: string, value: unknown) => {
+    const current = getSettings();
+    const updated = { ...current, [key]: value };
+    autoSave('app-settings', updated);
 
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = setTimeout(() => {
-        toast({
-          title: t('settings.settingsSaved'),
-          description: t('settings.settingsSavedDesc'),
-        });
-      }, 1500);
-    },
-    [t]
-  );
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      toast({
+        title: t('settings.settingsSaved'),
+        description: t('settings.settingsSavedDesc'),
+      });
+    }, 1500);
+  }, [t]);
 
   const handleLanguageChange = (value: string) => {
     i18n.changeLanguage(value);
@@ -147,446 +132,381 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="px-6 md:px-10 py-8 w-full max-w-3xl mx-auto">
-      {/* General */}
-      {activeCategory === 'general' && (
-        <>
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-foreground">{t('settings.general')}</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {t('settings.generalDesc', 'Profile and basic app settings')}
-            </p>
-          </div>
-
-          {/* Profile Card */}
-          <div
-            className="flex items-center gap-4 p-5 mb-4 bg-surface-mid border border-border/50 rounded-xl hover:border-primary/40 hover:bg-surface-mid/80 cursor-pointer transition-colors"
-            onClick={() => navigate('/profile')}
-          >
-            <Avatar className="w-14 h-14 border-2 border-primary/20">
-              <AvatarImage src={userAvatar ?? undefined} alt={userName || 'User'} />
-              <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">
-                {userName?.charAt(0)?.toUpperCase() || 'U'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-base font-bold text-foreground">{userName || 'User'}</span>
-                <TierBadge tier={subscription.tier} />
-              </div>
-              <p className="text-sm text-muted-foreground truncate">{userEmail || ''}</p>
+    <AppShell>
+      <div className="px-6 md:px-10 py-8 w-full max-w-3xl mx-auto">
+        {/* General */}
+        {activeCategory === 'general' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.general')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.generalDesc', 'Profile and basic app settings')}</p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-border/50 text-muted-foreground hover:text-foreground"
+
+            {/* Profile Card */}
+            <div
+              className="flex items-center gap-4 p-5 mb-4 bg-surface-mid border border-border/50 rounded-xl hover:border-primary/40 hover:bg-surface-mid/80 cursor-pointer transition-colors"
               onClick={() => navigate('/profile')}
             >
-              {t('settings.editProfile', 'Edit Profile')}
-            </Button>
-          </div>
-
-          <Card className="bg-surface-mid border-border/50">
-            <CardContent className="divide-y divide-border/30">
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="language">{t('settings.languageSelect')}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.languageSelectDesc')}
-                  </p>
+              <Avatar className="w-14 h-14 border-2 border-primary/20">
+                <AvatarImage src={userAvatar ?? undefined} alt={userName || 'User'} />
+                <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">
+                  {userName?.charAt(0)?.toUpperCase() || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-bold text-foreground">{userName || 'User'}</span>
+                  <TierBadge tier={subscription.tier} />
                 </div>
-                <Select value={settings.language} onValueChange={handleLanguageChange}>
-                  <SelectTrigger className="w-32 bg-surface-light border-border/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ko">한국어</SelectItem>
-                    <SelectItem value="en">English</SelectItem>
-                  </SelectContent>
-                </Select>
+                <p className="text-sm text-muted-foreground truncate">{userEmail || ''}</p>
               </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="autoSave">{t('settings.autoSave')}</Label>
-                  <p className="text-sm text-muted-foreground">{t('settings.autoSaveDesc')}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-border/50 text-muted-foreground hover:text-foreground"
+                onClick={() => navigate('/profile')}
+              >
+                {t('settings.editProfile', 'Edit Profile')}
+              </Button>
+            </div>
+
+            <Card className="bg-surface-mid border-border/50">
+              <CardContent className="divide-y divide-border/30">
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="language">{t('settings.languageSelect')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.languageSelectDesc')}</p>
+                  </div>
+                  <Select value={settings.language} onValueChange={handleLanguageChange}>
+                    <SelectTrigger className="w-32 bg-surface-light border-border/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ko">한국어</SelectItem>
+                      <SelectItem value="en">English</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Switch
-                  id="autoSave"
-                  checked={settings.autoSave}
-                  onCheckedChange={(checked) => updateSetting('autoSave', checked)}
-                />
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="defaultView">{t('settings.defaultView', 'Default View')}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.defaultViewDesc', 'Starting view when opening a mandala')}
-                  </p>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="autoSave">{t('settings.autoSave')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.autoSaveDesc')}</p>
+                  </div>
+                  <Switch
+                    id="autoSave"
+                    checked={settings.autoSave}
+                    onCheckedChange={(checked) => updateSetting('autoSave', checked)}
+                  />
                 </div>
-                <Select
-                  value={settings.defaultView}
-                  onValueChange={(v) => updateSetting('defaultView', v)}
-                >
-                  <SelectTrigger className="w-32 bg-surface-light border-border/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="grid">{t('viewMode.grid', 'Grid')}</SelectItem>
-                    <SelectItem value="list">{t('viewMode.list', 'List')}</SelectItem>
-                    <SelectItem value="listDetail">
-                      {t('viewMode.listDetail', 'List Detail')}
-                    </SelectItem>
-                    <SelectItem value="insights">{t('viewMode.insights', 'Insights')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="defaultView">{t('settings.defaultView', 'Default View')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.defaultViewDesc', 'Starting view when opening a mandala')}</p>
+                  </div>
+                  <Select value={settings.defaultView} onValueChange={(v) => updateSetting('defaultView', v)}>
+                    <SelectTrigger className="w-32 bg-surface-light border-border/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="grid">{t('viewMode.grid', 'Grid')}</SelectItem>
+                      <SelectItem value="list">{t('viewMode.list', 'List')}</SelectItem>
+                      <SelectItem value="listDetail">{t('viewMode.listDetail', 'List Detail')}</SelectItem>
+                      <SelectItem value="insights">{t('viewMode.insights', 'Insights')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
 
-      {/* Mandalas */}
-      {activeCategory === 'mandalas' && (
-        <>
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-foreground">{t('settings.mandalas')}</h2>
-            <p className="text-sm text-muted-foreground mt-1">{t('settings.mandalaDesc')}</p>
-          </div>
-          <MandalaSettingsTab />
-        </>
-      )}
+        {/* Mandalas */}
+        {activeCategory === 'mandalas' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.mandalas')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.mandalaDesc')}</p>
+            </div>
+            <MandalaSettingsTab />
+          </>
+        )}
 
-      {/* Appearance */}
-      {activeCategory === 'appearance' && (
-        <>
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-foreground">{t('settings.appearance')}</h2>
-            <p className="text-sm text-muted-foreground mt-1">{t('settings.appearanceDesc')}</p>
-          </div>
+        {/* Appearance */}
+        {activeCategory === 'appearance' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.appearance')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.appearanceDesc')}</p>
+            </div>
 
-          {/* Theme 3-way Preview Card */}
-          <Card className="bg-surface-mid border-border/50 mb-4">
-            <CardContent className="p-5">
-              <Label className="mb-3 block">{t('settings.theme')}</Label>
-              <div className="grid grid-cols-3 gap-3">
-                {(['light', 'dark', 'system'] as const).map((opt) => {
-                  const isSelected = theme === opt;
-                  return (
-                    <button
-                      key={opt}
-                      onClick={() => {
-                        setTheme(opt);
-                        updateSetting('theme', opt);
-                      }}
-                      className={cn(
-                        'relative p-3 rounded-xl border-2 transition-all duration-200 text-center',
-                        isSelected
-                          ? 'border-primary shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]'
-                          : 'border-border hover:border-muted-foreground/40'
-                      )}
-                    >
-                      {isSelected && (
-                        <span className="absolute top-2 right-2 w-5 h-5 bg-primary rounded-full flex items-center justify-center animate-in zoom-in-50 duration-300">
-                          <Check className="w-3 h-3 text-primary-foreground" />
-                        </span>
-                      )}
-                      <div
+            {/* Theme 3-way Preview Card */}
+            <Card className="bg-surface-mid border-border/50 mb-4">
+              <CardContent className="p-5">
+                <Label className="mb-3 block">{t('settings.theme')}</Label>
+                <div className="grid grid-cols-3 gap-3">
+                  {(['light', 'dark', 'system'] as const).map((opt) => {
+                    const isSelected = theme === opt;
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => {
+                          setTheme(opt);
+                          updateSetting('theme', opt);
+                        }}
                         className={cn(
-                          'w-full h-12 rounded-lg mb-2.5 relative overflow-hidden',
-                          opt === 'dark' &&
-                            'bg-gradient-to-br from-[hsl(220,16%,8%)] to-[hsl(220,13%,18%)]',
-                          opt === 'light' && 'bg-gradient-to-br from-[hsl(220,14%,96%)] to-white',
-                          opt === 'system' &&
-                            'bg-gradient-to-r from-[hsl(220,16%,8%)] via-[hsl(220,16%,8%)] to-white'
+                          'relative p-3 rounded-xl border-2 transition-all duration-200 text-center',
+                          isSelected
+                            ? 'border-primary shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]'
+                            : 'border-border hover:border-muted-foreground/40'
                         )}
                       >
+                        {isSelected && (
+                          <span className="absolute top-2 right-2 w-5 h-5 bg-primary rounded-full flex items-center justify-center animate-in zoom-in-50 duration-300">
+                            <Check className="w-3 h-3 text-primary-foreground" />
+                          </span>
+                        )}
                         <div
                           className={cn(
-                            'absolute bottom-1.5 left-1/2 -translate-x-1/2 w-2/5 h-1 rounded-full',
-                            opt === 'dark' && 'bg-primary',
-                            opt === 'light' && 'bg-primary/80',
-                            opt === 'system' && 'bg-gradient-to-r from-primary to-primary/80'
+                            'w-full h-12 rounded-lg mb-2.5 relative overflow-hidden',
+                            opt === 'dark' && 'bg-gradient-to-br from-[hsl(220,16%,8%)] to-[hsl(220,13%,18%)]',
+                            opt === 'light' && 'bg-gradient-to-br from-[hsl(220,14%,96%)] to-white',
+                            opt === 'system' && 'bg-gradient-to-r from-[hsl(220,16%,8%)] via-[hsl(220,16%,8%)] to-white'
                           )}
-                        />
-                      </div>
-                      <span
-                        className={cn(
+                        >
+                          <div
+                            className={cn(
+                              'absolute bottom-1.5 left-1/2 -translate-x-1/2 w-2/5 h-1 rounded-full',
+                              opt === 'dark' && 'bg-primary',
+                              opt === 'light' && 'bg-primary/80',
+                              opt === 'system' && 'bg-gradient-to-r from-primary to-primary/80'
+                            )}
+                          />
+                        </div>
+                        <span className={cn(
                           'text-xs font-semibold',
                           isSelected ? 'text-primary' : 'text-muted-foreground'
-                        )}
-                      >
-                        {t(`settings.theme${opt.charAt(0).toUpperCase() + opt.slice(1)}`)}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+                        )}>
+                          {t(`settings.theme${opt.charAt(0).toUpperCase() + opt.slice(1)}`)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-surface-mid border-border/50">
-            <CardContent className="divide-y divide-border/30">
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="cardFlipOnHover">{t('settings.cardFlipOnHover')}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.cardFlipOnHoverDesc')}
-                  </p>
+            <Card className="bg-surface-mid border-border/50">
+              <CardContent className="divide-y divide-border/30">
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="cardFlipOnHover">{t('settings.cardFlipOnHover')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.cardFlipOnHoverDesc')}</p>
+                  </div>
+                  <Switch
+                    id="cardFlipOnHover"
+                    checked={settings.cardFlipOnHover}
+                    onCheckedChange={(checked) => updateSetting('cardFlipOnHover', checked)}
+                  />
                 </div>
-                <Switch
-                  id="cardFlipOnHover"
-                  checked={settings.cardFlipOnHover}
-                  onCheckedChange={(checked) => updateSetting('cardFlipOnHover', checked)}
-                />
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="minimapHeat">
-                    {t('settings.minimapHeatIntensity', 'Minimap heat intensity')}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.minimapHeatIntensityDesc', 'Show card density as color opacity')}
-                  </p>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="minimapHeat">{t('settings.minimapHeatIntensity', 'Minimap heat intensity')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.minimapHeatIntensityDesc', 'Show card density as color opacity')}</p>
+                  </div>
+                  <Switch
+                    id="minimapHeat"
+                    checked={settings.minimapHeatIntensity}
+                    onCheckedChange={(checked) => updateSetting('minimapHeatIntensity', checked)}
+                  />
                 </div>
-                <Switch
-                  id="minimapHeat"
-                  checked={settings.minimapHeatIntensity}
-                  onCheckedChange={(checked) => updateSetting('minimapHeatIntensity', checked)}
-                />
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="minimapNumbers">
-                    {t('settings.minimapNumberOverlay', 'Minimap number overlay')}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t(
-                      'settings.minimapNumberOverlayDesc',
-                      'Show card counts (#) in minimap cells'
-                    )}
-                  </p>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="minimapNumbers">{t('settings.minimapNumberOverlay', 'Minimap number overlay')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.minimapNumberOverlayDesc', 'Show card counts (#) in minimap cells')}</p>
+                  </div>
+                  <Switch
+                    id="minimapNumbers"
+                    checked={settings.minimapNumberOverlay}
+                    onCheckedChange={(checked) => updateSetting('minimapNumberOverlay', checked)}
+                  />
                 </div>
-                <Switch
-                  id="minimapNumbers"
-                  checked={settings.minimapNumberOverlay}
-                  onCheckedChange={(checked) => updateSetting('minimapNumberOverlay', checked)}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
+              </CardContent>
+            </Card>
+          </>
+        )}
 
-      {/* Notifications */}
-      {activeCategory === 'notifications' && (
-        <>
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-foreground">{t('settings.notifications')}</h2>
-            <p className="text-sm text-muted-foreground mt-1">{t('settings.notificationsDesc')}</p>
-          </div>
-          <Card className="bg-surface-mid border-border/50">
-            <CardContent className="divide-y divide-border/30">
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 pb-2 pt-1">
-                {t('settings.notifGroupCommunication', 'Communication')}
-              </p>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="notifications">{t('settings.pushNotifications')}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.pushNotificationsDesc')}
-                  </p>
+        {/* Notifications */}
+        {activeCategory === 'notifications' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.notifications')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.notificationsDesc')}</p>
+            </div>
+            <Card className="bg-surface-mid border-border/50">
+              <CardContent className="divide-y divide-border/30">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 pb-2 pt-1">{t('settings.notifGroupCommunication', 'Communication')}</p>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="notifications">{t('settings.pushNotifications')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.pushNotificationsDesc')}</p>
+                  </div>
+                  <Switch
+                    id="notifications"
+                    checked={settings.notifications}
+                    onCheckedChange={(checked) => updateSetting('notifications', checked)}
+                  />
                 </div>
-                <Switch
-                  id="notifications"
-                  checked={settings.notifications}
-                  onCheckedChange={(checked) => updateSetting('notifications', checked)}
-                />
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="emailUpdates">{t('settings.emailNotifications')}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.emailNotificationsDesc')}
-                  </p>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="emailUpdates">{t('settings.emailNotifications')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.emailNotificationsDesc')}</p>
+                  </div>
+                  <Switch
+                    id="emailUpdates"
+                    checked={settings.emailUpdates}
+                    onCheckedChange={(checked) => updateSetting('emailUpdates', checked)}
+                  />
                 </div>
-                <Switch
-                  id="emailUpdates"
-                  checked={settings.emailUpdates}
-                  onCheckedChange={(checked) => updateSetting('emailUpdates', checked)}
-                />
-              </div>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 pt-4 pb-2">
-                {t('settings.notifGroupActivity', 'Activity Alerts')}
-              </p>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="syncCompletion">
-                    {t('settings.syncCompletion', 'Sync completion')}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.syncCompletionDesc', 'Notify when YouTube sync completes')}
-                  </p>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 pt-4 pb-2">{t('settings.notifGroupActivity', 'Activity Alerts')}</p>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="syncCompletion">{t('settings.syncCompletion', 'Sync completion')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.syncCompletionDesc', 'Notify when YouTube sync completes')}</p>
+                  </div>
+                  <Switch
+                    id="syncCompletion"
+                    checked={settings.syncCompletion}
+                    onCheckedChange={(checked) => updateSetting('syncCompletion', checked)}
+                  />
                 </div>
-                <Switch
-                  id="syncCompletion"
-                  checked={settings.syncCompletion}
-                  onCheckedChange={(checked) => updateSetting('syncCompletion', checked)}
-                />
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="aiInsightReady">
-                    {t('settings.aiInsightReady', 'AI insight ready')}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.aiInsightReadyDesc', 'Notify when AI summary is available')}
-                  </p>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="aiInsightReady">{t('settings.aiInsightReady', 'AI insight ready')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.aiInsightReadyDesc', 'Notify when AI summary is available')}</p>
+                  </div>
+                  <Switch
+                    id="aiInsightReady"
+                    checked={settings.aiInsightReady}
+                    onCheckedChange={(checked) => updateSetting('aiInsightReady', checked)}
+                  />
                 </div>
-                <Switch
-                  id="aiInsightReady"
-                  checked={settings.aiInsightReady}
-                  onCheckedChange={(checked) => updateSetting('aiInsightReady', checked)}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
+              </CardContent>
+            </Card>
+          </>
+        )}
 
-      {/* Integrations */}
-      {activeCategory === 'integrations' && (
-        <>
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-foreground">{t('settings.integrations')}</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {t('settings.integrationsDesc', 'Manage connected services and API keys')}
-            </p>
-          </div>
-          <div className="space-y-6">
-            <YouTubeSyncCard />
-            <LlmKeysSettingsTab />
-          </div>
-        </>
-      )}
+        {/* Integrations */}
+        {activeCategory === 'integrations' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.integrations')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.integrationsDesc', 'Manage connected services and API keys')}</p>
+            </div>
+            <div className="space-y-6">
+              <YouTubeSyncCard />
+              <LlmKeysSettingsTab />
+            </div>
+          </>
+        )}
 
-      {/* Subscription */}
-      {activeCategory === 'subscription' && (
-        <>
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-foreground">{t('settings.subscription')}</h2>
-            <p className="text-sm text-muted-foreground mt-1">{t('settings.subscriptionDesc')}</p>
-          </div>
-          <SubscriptionSettingsTab />
-        </>
-      )}
+        {/* Subscription */}
+        {activeCategory === 'subscription' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.subscription')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.subscriptionDesc')}</p>
+            </div>
+            <SubscriptionSettingsTab />
+          </>
+        )}
 
-      {/* Data & Privacy */}
-      {activeCategory === 'data' && (
-        <>
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-foreground">{t('settings.dataPrivacy')}</h2>
-            <p className="text-sm text-muted-foreground mt-1">{t('settings.dataPrivacyDesc')}</p>
-          </div>
-          <Card className="bg-surface-mid border-border/50">
-            <CardContent className="divide-y divide-border/30">
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label>{t('settings.exportData', 'Export Data')}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.exportDataDesc', 'Download all your data as JSON')}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="border-border/50 gap-1.5">
-                    <Download className="w-3.5 h-3.5" />
-                    JSON
-                  </Button>
-                  <Button variant="outline" size="sm" className="border-border/50 gap-1.5">
-                    <Download className="w-3.5 h-3.5" />
-                    CSV
-                  </Button>
-                </div>
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label className="text-destructive">{t('settings.deleteAllData')}</Label>
-                  <p className="text-sm text-muted-foreground">{t('settings.deleteAllDataDesc')}</p>
-                </div>
-                <AlertDialog
-                  onOpenChange={(open) => {
-                    if (!open) setDeleteConfirmText('');
-                  }}
-                >
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" size="sm" className="gap-2">
-                      <Trash2 className="w-4 h-4" />
-                      {t('common.delete')}
+        {/* Data & Privacy */}
+        {activeCategory === 'data' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-foreground">{t('settings.dataPrivacy')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{t('settings.dataPrivacyDesc')}</p>
+            </div>
+            <Card className="bg-surface-mid border-border/50">
+              <CardContent className="divide-y divide-border/30">
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label>{t('settings.exportData', 'Export Data')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.exportDataDesc', 'Download all your data as JSON')}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="border-border/50 gap-1.5">
+                      <Download className="w-3.5 h-3.5" />
+                      JSON
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="bg-surface-mid border-border/50">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>{t('settings.deleteConfirmTitle')}</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {t('settings.deleteConfirmDesc')}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <div className="py-2">
-                      <input
-                        type="text"
-                        value={deleteConfirmText}
-                        onChange={(e) => setDeleteConfirmText(e.target.value)}
-                        placeholder={t(
-                          'settings.deleteTypePlaceholder',
-                          'Type "DELETE" to confirm'
-                        )}
-                        className="w-full px-3 py-2 text-sm bg-surface-light border border-border/50 rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-destructive"
-                      />
-                    </div>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel className="bg-surface-light border-border/50">
-                        {t('common.cancel')}
-                      </AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleDeleteData}
-                        disabled={deleteConfirmText !== 'DELETE'}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
+                    <Button variant="outline" size="sm" className="border-border/50 gap-1.5">
+                      <Download className="w-3.5 h-3.5" />
+                      CSV
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label className="text-destructive">{t('settings.deleteAllData')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings.deleteAllDataDesc')}</p>
+                  </div>
+                  <AlertDialog onOpenChange={(open) => { if (!open) setDeleteConfirmText(''); }}>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" className="gap-2">
+                        <Trash2 className="w-4 h-4" />
                         {t('common.delete')}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label>{t('settings.termsOfService', 'Terms of Service')}</Label>
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-surface-mid border-border/50">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{t('settings.deleteConfirmTitle')}</AlertDialogTitle>
+                        <AlertDialogDescription>{t('settings.deleteConfirmDesc')}</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <div className="py-2">
+                        <input
+                          type="text"
+                          value={deleteConfirmText}
+                          onChange={(e) => setDeleteConfirmText(e.target.value)}
+                          placeholder={t('settings.deleteTypePlaceholder', 'Type "DELETE" to confirm')}
+                          className="w-full px-3 py-2 text-sm bg-surface-light border border-border/50 rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-destructive"
+                        />
+                      </div>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-surface-light border-border/50">
+                          {t('common.cancel')}
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleDeleteData}
+                          disabled={deleteConfirmText !== 'DELETE'}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {t('common.delete')}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
-                <a
-                  href="/terms"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-primary hover:underline"
-                >
-                  {t('settings.viewTerms', 'View')}
-                </a>
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label>{t('settings.privacyPolicy', 'Privacy Policy')}</Label>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label>{t('settings.termsOfService', 'Terms of Service')}</Label>
+                  </div>
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">
+                    {t('settings.viewTerms', 'View')}
+                  </a>
                 </div>
-                <a
-                  href="/privacy"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-primary hover:underline"
-                >
-                  {t('settings.viewPolicy', 'View')}
-                </a>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
-    </div>
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label>{t('settings.privacyPolicy', 'Privacy Policy')}</Label>
+                  </div>
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">
+                    {t('settings.viewPolicy', 'View')}
+                  </a>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
+    </AppShell>
   );
 }

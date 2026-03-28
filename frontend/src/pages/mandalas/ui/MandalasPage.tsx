@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/dialog';
-
+import { AppShell } from '@/widgets/app-shell';
 import { toast } from '@/shared/lib/use-toast';
 import {
   useMandalaList,
@@ -140,7 +140,7 @@ export default function MandalasPage() {
   };
 
   return (
-    <>
+    <AppShell>
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -286,6 +286,6 @@ export default function MandalasPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </AppShell>
   );
 }
