@@ -27,7 +27,20 @@ import {
   useDeleteSourceMapping,
 } from '@/features/mandala';
 import { cn } from '@/shared/lib/utils';
-import { Loader2, Plus, RefreshCw, Youtube, LogIn, ChevronDown, Tv, Hash, Search, ExternalLink, Check, Trash2 } from 'lucide-react';
+import {
+  Loader2,
+  Plus,
+  RefreshCw,
+  Youtube,
+  LogIn,
+  ChevronDown,
+  Tv,
+  Hash,
+  Search,
+  ExternalLink,
+  Check,
+  Trash2,
+} from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -104,7 +117,7 @@ export function YouTubeSyncCard() {
   const autoSyncEnabled = youtubeAuth.autoSyncEnabled;
   const autoSummaryEnabled = youtubeAuth.autoSummaryEnabled;
   const playlists = ytSync.playlists;
-  const registeredPlaylistIds = new Set(playlists.map(p => p.youtube_playlist_id));
+  const registeredPlaylistIds = new Set(playlists.map((p) => p.youtube_playlist_id));
   const isLoading = ytSync.isLoading;
   const isAdding = ytSync.isAdding;
   const isSyncingAll = ytSync.isSyncingAll;
@@ -115,7 +128,7 @@ export function YouTubeSyncCard() {
     if (!channelUrl.trim()) {
       toast({
         title: t('common.error'),
-        description: 'Please enter a YouTube channel URL.',
+        description: t('youtube.channelUrlRequired'),
         variant: 'destructive',
       });
       return;
@@ -124,13 +137,13 @@ export function YouTubeSyncCard() {
       await ytSync.addPlaylist(channelUrl.trim());
       setChannelUrl('');
       toast({
-        title: 'Channel Added',
-        description: 'Channel uploads playlist has been imported.',
+        title: t('youtube.channelAdded'),
+        description: t('youtube.channelAddedDesc'),
       });
     } catch (error) {
       toast({
         title: t('common.error'),
-        description: error instanceof Error ? error.message : 'Failed to add channel.',
+        description: error instanceof Error ? error.message : t('youtube.channelAddFailed'),
         variant: 'destructive',
       });
     }
@@ -139,13 +152,16 @@ export function YouTubeSyncCard() {
   const handleHashtagSearch = async () => {
     if (!hashtagQuery.trim()) return;
     try {
-      const results = await youtubeSearch.mutateAsync({ query: hashtagQuery.trim(), maxResults: 20 });
+      const results = await youtubeSearch.mutateAsync({
+        query: hashtagQuery.trim(),
+        maxResults: 20,
+      });
       setSearchResults(results);
       setAddedVideoIds(new Set());
     } catch (error) {
       toast({
         title: t('common.error'),
-        description: error instanceof Error ? error.message : 'Search failed.',
+        description: error instanceof Error ? error.message : t('youtube.searchFailed'),
         variant: 'destructive',
       });
     }
@@ -163,13 +179,13 @@ export function YouTubeSyncCard() {
       });
       setAddedVideoIds((prev) => new Set([...prev, video.videoId]));
       toast({
-        title: 'Card Added',
-        description: `"${video.title}" added to scratchpad.`,
+        title: t('youtube.cardAdded'),
+        description: t('youtube.cardAddedDesc', { title: video.title }),
       });
     } catch (error) {
       toast({
         title: t('common.error'),
-        description: error instanceof Error ? error.message : 'Failed to add video.',
+        description: error instanceof Error ? error.message : t('youtube.videoAddFailed'),
         variant: 'destructive',
       });
     }
@@ -312,7 +328,11 @@ export function YouTubeSyncCard() {
     }
   };
 
-  const handleAssignToMandala = async (mandalaId: string, mandalaTitle: string, targetPlaylists: typeof playlists) => {
+  const handleAssignToMandala = async (
+    mandalaId: string,
+    mandalaTitle: string,
+    targetPlaylists: typeof playlists
+  ) => {
     const sourceIds = Array.from(selectedPlaylists)
       .filter((id) => targetPlaylists.some((p) => p.id === id))
       .map((id) => {
@@ -349,9 +369,14 @@ export function YouTubeSyncCard() {
     for (const id of ids) {
       try {
         await ytSync.syncPlaylist(id);
-      } catch { /* continue */ }
+      } catch {
+        /* continue */
+      }
     }
-    toast({ title: t('youtube.syncAllComplete'), description: `${ids.length} playlists synced.` });
+    toast({
+      title: t('youtube.syncAllComplete'),
+      description: t('youtube.playlistsSynced', { count: ids.length }),
+    });
     setSelectedPlaylists(new Set());
   };
 
@@ -360,15 +385,21 @@ export function YouTubeSyncCard() {
     for (const id of ids) {
       try {
         await ytSync.deletePlaylist(id);
-      } catch { /* continue */ }
+      } catch {
+        /* continue */
+      }
     }
-    toast({ title: t('youtube.playlistDeleted'), description: `${ids.length} playlists deleted.` });
+    toast({
+      title: t('youtube.playlistDeleted'),
+      description: t('youtube.playlistsDeleted', { count: ids.length }),
+    });
     setSelectedPlaylists(new Set());
   };
 
   const renderBulkToolbar = (targetPlaylists: typeof playlists) => {
     if (targetPlaylists.length === 0) return null;
-    const allSelected = targetPlaylists.every((p) => selectedPlaylists.has(p.id)) && targetPlaylists.length > 0;
+    const allSelected =
+      targetPlaylists.every((p) => selectedPlaylists.has(p.id)) && targetPlaylists.length > 0;
     const someSelected = targetPlaylists.some((p) => selectedPlaylists.has(p.id));
     const selectedCount = targetPlaylists.filter((p) => selectedPlaylists.has(p.id)).length;
 
@@ -413,11 +444,20 @@ export function YouTubeSyncCard() {
               </AlertDialogTrigger>
               <AlertDialogContent className="bg-surface-mid border-border/50">
                 <AlertDialogHeader>
-                  <AlertDialogTitle>{t('youtube.bulkDeleteTitle', 'Delete selected playlists?')}</AlertDialogTitle>
-                  <AlertDialogDescription>{t('youtube.bulkDeleteDesc', 'This will remove the selected playlists and their synced data.')}</AlertDialogDescription>
+                  <AlertDialogTitle>
+                    {t('youtube.bulkDeleteTitle', 'Delete selected playlists?')}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {t(
+                      'youtube.bulkDeleteDesc',
+                      'This will remove the selected playlists and their synced data.'
+                    )}
+                  </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel className="bg-surface-light border-border/50">{t('common.cancel')}</AlertDialogCancel>
+                  <AlertDialogCancel className="bg-surface-light border-border/50">
+                    {t('common.cancel')}
+                  </AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => handleBulkDelete(targetPlaylists)}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -432,11 +472,16 @@ export function YouTubeSyncCard() {
         {someSelected && mandalaOptions.length > 0 && (
           <div className="ml-auto relative">
             <button
-              onClick={() => { setAssignDropdownOpen((v) => !v); setAssignSearch(''); }}
+              onClick={() => {
+                setAssignDropdownOpen((v) => !v);
+                setAssignSearch('');
+              }}
               className="text-xs font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-1 rounded-md transition-colors flex items-center gap-1.5"
             >
               {t('youtube.assignToMandala', 'Assign to Mandala')}
-              <ChevronDown className={cn('w-3 h-3 transition-transform', assignDropdownOpen && 'rotate-180')} />
+              <ChevronDown
+                className={cn('w-3 h-3 transition-transform', assignDropdownOpen && 'rotate-180')}
+              />
             </button>
             {assignDropdownOpen && (
               <div className="absolute right-0 top-full mt-1 w-60 bg-surface-mid border border-border rounded-lg shadow-lg z-50 py-1">
@@ -452,7 +497,10 @@ export function YouTubeSyncCard() {
                 </div>
                 <div className="max-h-48 overflow-y-auto">
                   {mandalaOptions
-                    .filter((m) => !assignSearch || m.title.toLowerCase().includes(assignSearch.toLowerCase()))
+                    .filter(
+                      (m) =>
+                        !assignSearch || m.title.toLowerCase().includes(assignSearch.toLowerCase())
+                    )
                     .map((m) => (
                       <button
                         key={m.id}
@@ -464,12 +512,19 @@ export function YouTubeSyncCard() {
                       >
                         <span className="truncate">{m.title}</span>
                         {m.isDefault && (
-                          <span className="text-[9px] font-bold text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded-full">Current</span>
+                          <span className="text-[9px] font-bold text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded-full">
+                            Current
+                          </span>
                         )}
                       </button>
                     ))}
-                  {mandalaOptions.filter((m) => !assignSearch || m.title.toLowerCase().includes(assignSearch.toLowerCase())).length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center py-3">{t('common.noResults', 'No results')}</p>
+                  {mandalaOptions.filter(
+                    (m) =>
+                      !assignSearch || m.title.toLowerCase().includes(assignSearch.toLowerCase())
+                  ).length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center py-3">
+                      {t('common.noResults', 'No results')}
+                    </p>
                   )}
                 </div>
               </div>
@@ -617,7 +672,7 @@ export function YouTubeSyncCard() {
               <div className="flex items-center gap-3">
                 {!isOpen && playlists.length > 0 && (
                   <span className="text-sm text-muted-foreground">
-                    {playlists.length} playlists
+                    {playlists.length} {t('youtube.playlists')}
                   </span>
                 )}
                 <ChevronDown
@@ -635,11 +690,11 @@ export function YouTubeSyncCard() {
           <CardContent className="space-y-6">
             {/* Source Type Tabs */}
             <div className="flex gap-1 p-1 rounded-lg bg-surface-light/50 border border-border/30">
-              {([
-                { id: 'playlists' as SyncTab, icon: Youtube, label: 'Playlists' },
-                { id: 'channels' as SyncTab, icon: Tv, label: 'Channels' },
-                { id: 'hashtags' as SyncTab, icon: Hash, label: 'Hashtags' },
-              ]).map(({ id, icon: Icon, label }) => (
+              {[
+                { id: 'playlists' as SyncTab, icon: Youtube, label: t('youtube.tabPlaylists') },
+                { id: 'channels' as SyncTab, icon: Tv, label: t('youtube.tabChannels') },
+                { id: 'hashtags' as SyncTab, icon: Hash, label: t('youtube.tabHashtags') },
+              ].map(({ id, icon: Icon, label }) => (
                 <button
                   key={id}
                   onClick={() => setActiveTab(id)}
@@ -697,7 +752,8 @@ export function YouTubeSyncCard() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>
-                      {t('youtube.registeredPlaylists')} ({playlists.filter(p => !p.youtube_playlist_id.startsWith('UU')).length})
+                      {t('youtube.registeredPlaylists')} (
+                      {playlists.filter((p) => !p.youtube_playlist_id.startsWith('UU')).length})
                     </Label>
                     <div className="flex items-center gap-2">
                       {playlists.length > 0 && (
@@ -719,7 +775,9 @@ export function YouTubeSyncCard() {
                   </div>
 
                   {(() => {
-                    const purePlaylists = playlists.filter(p => !p.youtube_playlist_id.startsWith('UU'));
+                    const purePlaylists = playlists.filter(
+                      (p) => !p.youtube_playlist_id.startsWith('UU')
+                    );
                     return (
                       <>
                         {renderBulkToolbar(purePlaylists)}
@@ -735,14 +793,12 @@ export function YouTubeSyncCard() {
             {activeTab === 'channels' && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="channel-url">Add Channel</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Paste a YouTube channel URL to import all uploaded videos as a playlist.
-                  </p>
+                  <Label htmlFor="channel-url">{t('youtube.addChannel')}</Label>
+                  <p className="text-xs text-muted-foreground">{t('youtube.addChannelDesc')}</p>
                   <div className="flex gap-2">
                     <Input
                       id="channel-url"
-                      placeholder="https://www.youtube.com/@channelname"
+                      placeholder={t('youtube.channelPlaceholder')}
                       value={channelUrl}
                       onChange={(e) => setChannelUrl(e.target.value)}
                       onKeyDown={(e) => {
@@ -761,18 +817,24 @@ export function YouTubeSyncCard() {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Supported formats: youtube.com/@handle, youtube.com/channel/UCxxxx, youtube.com/c/Name
+                    {t('youtube.channelFormats')}
                   </p>
                 </div>
 
                 {(() => {
-                  const channelPlaylists = playlists.filter(p => p.youtube_playlist_id.startsWith('UU'));
-                  return channelPlaylists.length > 0 && (
-                    <div className="space-y-2">
-                      <Label>Imported Channels ({channelPlaylists.length})</Label>
-                      {renderBulkToolbar(channelPlaylists)}
-                      {renderPlaylistList(channelPlaylists)}
-                    </div>
+                  const channelPlaylists = playlists.filter((p) =>
+                    p.youtube_playlist_id.startsWith('UU')
+                  );
+                  return (
+                    channelPlaylists.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>
+                          {t('youtube.importedChannels')} ({channelPlaylists.length})
+                        </Label>
+                        {renderBulkToolbar(channelPlaylists)}
+                        {renderPlaylistList(channelPlaylists)}
+                      </div>
+                    )
                   );
                 })()}
               </div>
@@ -782,14 +844,12 @@ export function YouTubeSyncCard() {
             {activeTab === 'hashtags' && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="hashtag-search">Search Videos</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Search YouTube by keyword or hashtag and add videos to your scratchpad.
-                  </p>
+                  <Label htmlFor="hashtag-search">{t('youtube.searchVideos')}</Label>
+                  <p className="text-xs text-muted-foreground">{t('youtube.searchVideosDesc')}</p>
                   <div className="flex gap-2">
                     <Input
                       id="hashtag-search"
-                      placeholder="e.g. #machinelearning, React tutorial"
+                      placeholder={t('youtube.searchPlaceholder')}
                       value={hashtagQuery}
                       onChange={(e) => setHashtagQuery(e.target.value)}
                       onKeyDown={(e) => {
@@ -798,20 +858,25 @@ export function YouTubeSyncCard() {
                         }
                       }}
                     />
-                    <Button onClick={handleHashtagSearch} disabled={youtubeSearch.isPending || !hashtagQuery.trim()}>
+                    <Button
+                      onClick={handleHashtagSearch}
+                      disabled={youtubeSearch.isPending || !hashtagQuery.trim()}
+                    >
                       {youtubeSearch.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <Search className="h-4 w-4" />
                       )}
-                      <span className="ml-2 hidden sm:inline">Search</span>
+                      <span className="ml-2 hidden sm:inline">{t('youtube.search')}</span>
                     </Button>
                   </div>
                 </div>
 
                 {searchResults.length > 0 && (
                   <div className="space-y-2">
-                    <Label>Results ({searchResults.length})</Label>
+                    <Label>
+                      {t('youtube.results')} ({searchResults.length})
+                    </Label>
                     <div className="max-h-[400px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
                       {searchResults.map((video) => {
                         const isAdded = addedVideoIds.has(video.videoId);
@@ -829,15 +894,12 @@ export function YouTubeSyncCard() {
                             )}
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">{video.title}</p>
-                              <p className="text-xs text-muted-foreground truncate">{video.channelTitle}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {video.channelTitle}
+                              </p>
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                asChild
-                                className="h-8 w-8 p-0"
-                              >
+                              <Button variant="ghost" size="sm" asChild className="h-8 w-8 p-0">
                                 <a
                                   href={`https://www.youtube.com/watch?v=${video.videoId}`}
                                   target="_blank"
