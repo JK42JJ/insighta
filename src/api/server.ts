@@ -23,6 +23,7 @@ import { botRoutes } from './routes/bot';
 import { settingsRoutes } from './routes/settings';
 import { youtubeRoutes } from './routes/youtube';
 import { sharingRoutes } from './routes/sharing';
+import { skillRoutes } from './routes/skills';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
@@ -265,6 +266,9 @@ export async function buildServer() {
 
       // Register sharing routes (mandala share links, clone)
       await instance.register(sharingRoutes, { prefix: '/sharing' });
+
+      // Register skills routes (SkillRegistry — newsletter, report, etc.)
+      await instance.register(skillRoutes, { prefix: '/skills' });
 
       // Register admin routes (requires is_super_admin)
       await instance.register(adminRoutes, { prefix: '/admin' });
