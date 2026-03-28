@@ -736,9 +736,13 @@ class ApiClient {
   async getMandalaQuota(): Promise<{
     used: number;
     limit: number | null;
-    plan: string;
+    tier: string;
+    remaining: number | null;
   }> {
-    return this.request('/mandalas/quota');
+    const res = await this.request<{
+      quota: { used: number; limit: number | null; tier: string; remaining: number | null };
+    }>('/mandalas/quota');
+    return res.quota;
   }
 
   // ========================================
