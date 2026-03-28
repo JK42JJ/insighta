@@ -17,7 +17,7 @@ YouTube channel/playlist registration
   -> Structured summary generation (new — Python Sidecar)
   -> Quality validation (new — SummaryQualityGate)
   -> Newsletter curation (new — NewsletterSkill)
-  -> Resend delivery (new)
+  -> Gmail SMTP (Google Workspace) delivery (new)
   -> pg_cron weekly schedule (new)
 ```
 
@@ -108,7 +108,7 @@ model newsletter_logs {
   subject         String?
   curated_videos  Json?    // Top N selected video snapshot
   sent_at         DateTime @default(now()) @db.Timestamptz(6)
-  resend_id       String?  @db.VarChar(100)
+  message_id      String?  @db.VarChar(100)
   status          String   @default("sent") @db.VarChar(20)
   users           users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -513,14 +513,22 @@ async def generate_rich_summary(
 New file: `src/modules/skills/newsletter.ts`
 
 ```typescript
-import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
 import { prisma } from '../database/client'
 import { logger } from '../../utils/logger'
 import { TIER_LIMITS } from '@/config/quota'
 import type { InsightaSkill, SkillContext, SkillResult, SkillPreview, Tier } from './types'
 
 const log = logger.child({ module: 'NewsletterSkill' })
-const resend = new Resend(process.env.RESEND_API_KEY)
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.GMAIL_SMTP_USER,
+    pass: process.env.GMAIL_SMTP_APP_PASSWORD,
+  },
+})
 
 // Curation config
 const CURATION_CONFIG = {
@@ -584,14 +592,12 @@ export class NewsletterSkill implements InsightaSkill {
       const subject = `This week's ${mandala?.title ?? 'learning'} curation — Top ${curated.length}`
       const html = this.buildHtml(curated, mandala?.title, tier)
 
-      const { data: resendData, error } = await resend.emails.send({
+      const info = await transporter.sendMail({
         from: 'Insighta <noreply@insighta.one>',
         to: user.email,
         subject,
         html,
       })
-
-      if (error) throw new Error(error.message)
 
       // 6. Record send log
       await prisma.newsletter_logs.create({
@@ -600,7 +606,7 @@ export class NewsletterSkill implements InsightaSkill {
           mandala_id: mandalaId,
           subject,
           curated_videos: curated,
-          resend_id: resendData?.id,
+          message_id: info.messageId,
           status: 'sent',
         },
       })
@@ -614,7 +620,7 @@ export class NewsletterSkill implements InsightaSkill {
 
       return {
         success: true,
-        data: { resend_id: resendData?.id, curated_count: curated.length },
+        data: { message_id: info.messageId, curated_count: curated.length },
         metadata: { duration_ms: Date.now() - start },
       }
     } catch (err) {
@@ -879,37 +885,41 @@ Batch endpoint (`/api/v1/skills/newsletter/batch`):
 
 ---
 
-## Step 7: Resend Setup
+## Step 7: Gmail SMTP Setup
 
 ```bash
 # 1. npm install
-npm install resend
+npm install nodemailer
+npm install --save-dev @types/nodemailer
 
-# 2. Add environment variable (.env)
-RESEND_API_KEY=re_xxxxxxxxxxxx
+# 2. Add environment variables (.env)
+GMAIL_SMTP_USER=noreply@insighta.one
+GMAIL_SMTP_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
 
 # 3. Add to src/config/index.ts
-resend: {
-  apiKey: env.RESEND_API_KEY,
+gmail: {
+  smtpUser: env.GMAIL_SMTP_USER,
+  smtpAppPassword: env.GMAIL_SMTP_APP_PASSWORD,
 },
 ```
 
-In Resend dashboard:
-- Add domain: `insighta.one`
-- Add DNS records (MX, TXT, DKIM)
-- Sender address: `noreply@insighta.one`
+Google Workspace app password setup:
+- Account: `noreply@insighta.one` (Google Workspace)
+- Google Account -> Security -> 2-Step Verification -> App passwords
+- Generate app password for "Mail" / "Other (Custom name)" -> copy 16-character password
+- Send limit: 2,000 emails/day (Google Workspace)
 
 ---
 
 ## Recommended Implementation Order
 
 ```
-Day 1  Prisma migration (4 tables) + Resend setup
+Day 1  Prisma migration (4 tables) + Gmail SMTP setup
 Day 2  SkillRegistry + types (src/modules/skills/)
 Day 3  SummaryQualityGate + rich_summary (Python Sidecar)
 Day 4  NewsletterSkill (curate + buildHtml)
 Day 5  API routes + dryRun endpoint preview verification
-Day 6  Resend actual send test (test email)
+Day 6  Gmail SMTP actual send test (test email)
 Day 7  pg_cron schedule setup + E2E verification
 ```
 
@@ -922,8 +932,8 @@ Day 7  pg_cron schedule setup + E2E verification
 [ ] skillRegistry.register() log output confirmed
 [ ] POST /api/v1/skills/newsletter/preview response verified
 [ ] video_rich_summaries has quality_flag='pass' records
-[ ] Resend test email received
-[ ] newsletter_logs table has send records
+[ ] Gmail SMTP test email received (noreply@insighta.one)
+[ ] newsletter_logs table has send records (message_id populated)
 [ ] skill_runs table has success records
 [ ] pg_cron job registered: SELECT * FROM cron.job;
 ```
@@ -949,9 +959,66 @@ The bot never implements skill logic directly. It always delegates through Skill
 
 1. **Do not touch mandala loading** — Only read UserVideoState, user_mandala_levels; no modifications
 2. **Include cards without rich_summary in newsletter** — Handle with one_liner fallback
-3. **Always dryRun before Resend send** — `POST /api/v1/skills/newsletter/preview`
+3. **Always dryRun before Gmail SMTP send** — `POST /api/v1/skills/newsletter/preview`
 4. **getLLMProvider(userId)** — Follow existing `src/modules/llm/` pattern exactly. Do not create new one
 5. **When using `$queryRaw`** — Must use tagged template literal to prevent SQL injection
+
+---
+
+## SummaryQualityGate Architecture
+
+The SummaryQualityGate is designed with a two-phase evolution path. The public interface (`check()`) is stable across both phases — only the internal implementation changes.
+
+### Interface Contract (invariant across phases)
+
+```typescript
+interface GateResult {
+  score: number    // 0.0 – 1.0
+  passed: boolean  // score >= threshold
+  action: 'use' | 'retry' | 'fallback'
+  reasons: string[]
+}
+
+interface SummaryQualityGate {
+  check(summary: Record<string, unknown>): GateResult
+}
+```
+
+### Phase 1 — TypeScript Rule-Based Gate (current)
+
+**Location**: `src/modules/skills/summary-gate.ts`
+
+Rule-based validation running entirely in the Node.js process alongside the SkillRegistry. No additional infrastructure required.
+
+Validation rules:
+- Structure check (40 pts): `core_argument` length 10–100 chars, `key_points` >= 3 items, `actionables` present
+- Hallucination check (30 pts): regex scan for AI refusal patterns and repeated characters
+- Meta field check (30 pts): `bias_signals` parseable as array, `content_type` and `depth_level` in allowed enum sets
+
+Pass threshold: score >= 0.7. On failure: action = `retry` (up to 1 retry), then `fallback` to one_liner.
+
+### Phase 2 — Python Sidecar ML-Based Gate (future)
+
+**Location**: `python_sidecar/quality/ml_gate.py`
+
+ML-based gate using a lightweight embedding model served inside the existing Python Sidecar process. No new infrastructure.
+
+Components:
+- **Model**: BGE-M3 (BAAI/bge-m3), exported to ONNX for CPU inference
+- **Runtime**: ONNX Runtime via HuggingFace `optimum` — no GPU required
+- **Scoring**: cosine similarity between generated summary and source transcript embeddings; semantic coherence replaces the regex hallucination check
+
+Trigger for migration: when false-positive rate on rule-based gate exceeds 15% in production (tracked via `quality_flag='low'` rate in `video_rich_summaries`).
+
+### Migration Path
+
+Swap the internal implementation inside `src/modules/skills/summary-gate.ts` to call the Python Sidecar HTTP endpoint instead of running local rules. The `check()` signature and `GateResult` shape do not change. All callers (`newsletter.ts`, `rich_summary.py` wrapper) require zero modification.
+
+```
+Phase 1 (now):   NewsletterSkill -> TypeScript RuleGate (in-process)
+Phase 2 (later): NewsletterSkill -> TypeScript GateClient -> Python Sidecar MLGate
+                                                              (BGE-M3 / ONNX)
+```
 
 ---
 
