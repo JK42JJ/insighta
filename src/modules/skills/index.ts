@@ -16,4 +16,5 @@ import { skillRegistry } from './registry';
 // skillRegistry.register(new AlertSkill())       // future
 
 export { skillRegistry };
+export { checkSkillQuota } from './quota-checker';
 export type { InsightaSkill, SkillContext, SkillResult, SkillPreview, SkillTrigger } from './types';

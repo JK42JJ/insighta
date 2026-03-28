@@ -10,6 +10,7 @@
 
 import type { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
+import { checkSkillQuota, type SkillId } from './quota-checker';
 import { logger } from '@/utils/logger';
 import type { InsightaSkill, SkillContext, SkillResult } from './types';
 
@@ -44,6 +45,19 @@ class SkillRegistry {
     }
 
     const db = getPrismaClient();
+
+    // Quota guard — check before any DB writes
+    const QUOTA_SKILLS: SkillId[] = ['newsletter', 'report', 'alert'];
+    if (QUOTA_SKILLS.includes(skillId as SkillId)) {
+      const quota = await checkSkillQuota(skillId as SkillId, ctx.userId, ctx.tier);
+      if (!quota.allowed) {
+        return {
+          success: false,
+          error: quota.reason,
+          metadata: { duration_ms: 0, quota_exceeded: true },
+        };
+      }
+    }
 
     // Record execution start
     const run = await db.skill_runs.create({
