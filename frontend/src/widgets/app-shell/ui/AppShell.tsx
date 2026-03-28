@@ -20,15 +20,7 @@ function getInitialCollapsed(): boolean {
 }
 
 /** Routes that render the full sidebar layout */
-const SIDEBAR_ROUTES = [
-  '/',
-  '/mandalas',
-  '/profile',
-  '/subscription',
-  '/help',
-  '/privacy',
-  '/terms',
-];
+const SIDEBAR_ROUTES = ['/', '/mandalas'];
 
 export function AppShell({ children }: AppShellProps) {
   const minimapData = useShellStore((s) => s.minimapData);
