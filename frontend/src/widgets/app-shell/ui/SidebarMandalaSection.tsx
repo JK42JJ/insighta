@@ -130,7 +130,7 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
   if (isLoading) {
     return (
       <div className="px-2 space-y-0.5">
-        <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+        <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
           {t('sidebar.myMandalas')}
         </div>
         {loadingTooLong ? (
@@ -156,7 +156,7 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
 
     return (
       <div className="px-2 space-y-0.5">
-        <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+        <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
           {t('sidebar.myMandalas')}
         </div>
         <button
@@ -184,7 +184,7 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
       <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
         <PopoverTrigger asChild>
           <button className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-sidebar-accent rounded-lg transition-colors">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 shrink-0">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60 shrink-0">
               {t('sidebar.myMandalas')}
             </span>
             <span className="text-[11px] text-sidebar-foreground/70 truncate">{currentTitle}</span>

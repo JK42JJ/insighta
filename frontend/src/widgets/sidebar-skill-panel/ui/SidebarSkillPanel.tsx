@@ -84,12 +84,12 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
         <div className="space-y-1 mt-1">
           {isLoading && (
             <div className="flex items-center justify-center py-3">
-              <Loader2 className="w-4 h-4 animate-spin text-sidebar-foreground/40" />
+              <Loader2 className="w-4 h-4 animate-spin text-sidebar-foreground/60" />
             </div>
           )}
 
           {!isLoading && skills.length === 0 && (
-            <p className="text-xs text-sidebar-foreground/40 px-1 py-2">{t('skills.empty')}</p>
+            <p className="text-xs text-sidebar-foreground/60 px-1 py-2">{t('skills.empty')}</p>
           )}
 
           {skills.map((skill) => {

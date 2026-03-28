@@ -16,7 +16,14 @@ interface SidebarHeatMinimapProps {
 }
 
 const GRID_TO_SUBJECT: Record<number, number> = {
-  0: 0, 1: 1, 2: 2, 3: 3, 5: 4, 6: 5, 7: 6, 8: 7,
+  0: 0,
+  1: 1,
+  2: 2,
+  3: 3,
+  5: 4,
+  6: 5,
+  7: 6,
+  8: 7,
 };
 
 const STORAGE_KEY = 'insighta-minimap-numbers';
@@ -52,7 +59,11 @@ export function SidebarHeatMinimap({
   const handleToggle = () => {
     setShowNumbers((prev) => {
       const next = !prev;
-      try { localStorage.setItem(STORAGE_KEY, String(next)); } catch { /* ignore */ }
+      try {
+        localStorage.setItem(STORAGE_KEY, String(next));
+      } catch {
+        /* ignore */
+      }
       return next;
     });
   };
@@ -95,7 +106,7 @@ export function SidebarHeatMinimap({
     <div className="flex-shrink-0">
       {/* Header with edit toggle + # toggle */}
       <div className="flex items-center justify-between px-3 pb-1">
-        <span className="text-[9px] text-sidebar-foreground/40">
+        <span className="text-[9px] text-sidebar-foreground/60">
           {centerGoal || t('minimap.goalPlaceholder')} {t('minimap.sectors')}
         </span>
         <div className="flex items-center gap-1">
@@ -107,7 +118,7 @@ export function SidebarHeatMinimap({
                 'p-0.5 rounded transition-colors',
                 isEditing
                   ? 'text-primary hover:text-primary/80'
-                  : 'text-sidebar-foreground/40 hover:text-sidebar-foreground/70'
+                  : 'text-sidebar-foreground/60 hover:text-sidebar-foreground/70'
               )}
               aria-label={t('minimap.editSectors')}
               title={t('minimap.editSectors')}
@@ -126,7 +137,9 @@ export function SidebarHeatMinimap({
               aria-label={t('minimap.showNumbers')}
               title={t('minimap.showNumbers')}
             >
-              <span className="absolute text-[8px] font-bold text-sidebar-foreground/50 -left-3 top-0.5">#</span>
+              <span className="absolute text-[8px] font-bold text-sidebar-foreground/50 -left-3 top-0.5">
+                #
+              </span>
               <div
                 className={cn(
                   'absolute top-[2px] w-[11px] h-[11px] rounded-full bg-sidebar-background transition-[left]',
@@ -144,8 +157,12 @@ export function SidebarHeatMinimap({
           const isCenter = gridIndex === 4;
           const subjectIndex = GRID_TO_SUBJECT[gridIndex] ?? -1;
           const label = isCenter
-            ? (isEditing ? editGoal : centerGoal)
-            : (isEditing ? (editSubjects[subjectIndex] ?? '') : (sectorSubjects[subjectIndex] || ''));
+            ? isEditing
+              ? editGoal
+              : centerGoal
+            : isEditing
+              ? (editSubjects[subjectIndex] ?? '')
+              : sectorSubjects[subjectIndex] || '';
           const count = isCenter ? 0 : (cardsByCell[subjectIndex] ?? []).length;
           const opacity = isCenter ? 0 : cardCountToOpacity(count, maxCount);
           const isSelected = isCenter
@@ -241,7 +258,9 @@ function EditableCell({
       className={cn(
         'aspect-square rounded-[5px] flex items-center justify-center transition-all duration-150',
         'border border-dashed',
-        isCenter ? 'border-primary/50 bg-sidebar-accent' : 'border-sidebar-foreground/30 bg-muted/50'
+        isCenter
+          ? 'border-primary/50 bg-sidebar-accent'
+          : 'border-sidebar-foreground/30 bg-muted/50'
       )}
     >
       <input
@@ -361,7 +380,7 @@ function HeatCell({
           isCenter
             ? 'text-sidebar-foreground font-medium text-[10px]'
             : isPlaceholder
-              ? 'text-sidebar-foreground/40'
+              ? 'text-sidebar-foreground/60'
               : isSelected
                 ? 'text-primary font-medium'
                 : 'text-sidebar-foreground/70'

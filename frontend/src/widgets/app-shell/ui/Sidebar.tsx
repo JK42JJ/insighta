@@ -254,7 +254,7 @@ export function Sidebar({
           <ErrorBoundary
             fallbackRender={({ resetErrorBoundary }) => (
               <div className="px-2 space-y-0.5">
-                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
                   Mandalas
                 </div>
                 <button
