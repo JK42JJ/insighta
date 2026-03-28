@@ -6,7 +6,7 @@
 
 | Layer                | Framework          | Config                      | CI Job          | Files | Status              |
 | -------------------- | ------------------ | --------------------------- | --------------- | ----- | ------------------- |
-| Backend (unit/smoke) | Jest + ts-jest     | `jest.config.ts`            | `test-backend`  | 18    | 18 pass (263 tests) |
+| Backend (unit/smoke) | Jest + ts-jest     | `jest.config.ts`            | `test-backend`  | 20    | 20 pass (296 tests) |
 | Frontend (smoke)     | Vitest + happy-dom | `frontend/vitest.config.ts` | `test-frontend` | 14    | 14 pass (142 tests) |
 | E2E (regression)     | Playwright         | —                           | manual          | 8     | manual only         |
 
@@ -45,6 +45,8 @@
 | `modules/note-manager.test.ts`    | 15    | Pass (formatTimestamp, mapToVideoNote, exportToJSON, exportToCSV escaping)                   |
 | `modules/caption-extractor.test.ts` | 14  | Pass (parseJson3 JSON3 parser: valid/empty/edge cases, singleton)                           |
 | `modules/enrichment-scheduler.test.ts` | 13 | Pass (lifecycle start/stop, getStatus shape, getHistory, singleton)                        |
+| `modules/skill-schema.test.ts`       | 12    | Pass (TIER_LIMITS.skills config: all tiers, newsletter/report/alert/recommend limits)      |
+| `modules/skill-registry.test.ts`     | 9     | Pass (register/get, listAll/listForTier, execute with skill_runs logging, error handling)  |
 
 ## Frontend Tests (Vitest)
 
