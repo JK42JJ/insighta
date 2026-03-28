@@ -365,7 +365,9 @@ export function LlmKeysSettingsTab() {
               <div className="flex items-center gap-2">
                 {!isOpen && savedKeys.length > 0 && (
                   <span className="text-xs text-muted-foreground">
-                    {savedKeys.filter((k) => k.status === 'active').length} active
+                    {t('settings.llmKeys.activeCount', {
+                      count: savedKeys.filter((k) => k.status === 'active').length,
+                    })}
                   </span>
                 )}
                 <ChevronDown

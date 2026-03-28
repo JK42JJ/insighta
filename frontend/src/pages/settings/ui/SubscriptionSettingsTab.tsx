@@ -12,9 +12,17 @@ const TIER_STYLES: Record<string, string> = {
   free: 'bg-muted text-muted-foreground border-border/50',
 };
 
-function formatQuota(used: number, limit: number) {
+function formatQuota(
+  used: number,
+  limit: number,
+  t: (key: string, opts?: Record<string, unknown>) => string
+) {
   if (limit >= UNLIMITED_THRESHOLD) {
-    return { display: `${used} used`, suffix: 'Unlimited', showBar: false };
+    return {
+      display: t('settings.quotaUsed', { count: used }),
+      suffix: t('settings.unlimited'),
+      showBar: false,
+    };
   }
   return { display: `${used} / ${limit}`, suffix: '', showBar: true };
 }
@@ -38,17 +46,14 @@ export function SubscriptionSettingsTab() {
   const { subscription } = useLocalCardsAsInsight();
   const { data: mandalaQuota } = useMandalaQuota();
 
-  const cardQuota = formatQuota(subscription.used, subscription.limit);
-  const cardPercent = subscription.limit > 0
-    ? Math.round((subscription.used / subscription.limit) * 100)
-    : 0;
+  const cardQuota = formatQuota(subscription.used, subscription.limit, t);
+  const cardPercent =
+    subscription.limit > 0 ? Math.round((subscription.used / subscription.limit) * 100) : 0;
 
   const mandalaUsed = mandalaQuota?.used ?? 0;
   const mandalaLimit = mandalaQuota?.limit ?? subscription.mandalaLimit ?? 3;
-  const mandalaQuotaFmt = formatQuota(mandalaUsed, mandalaLimit);
-  const mandalaPercent = mandalaLimit > 0
-    ? Math.round((mandalaUsed / mandalaLimit) * 100)
-    : 0;
+  const mandalaQuotaFmt = formatQuota(mandalaUsed, mandalaLimit, t);
+  const mandalaPercent = mandalaLimit > 0 ? Math.round((mandalaUsed / mandalaLimit) * 100) : 0;
 
   const tierKey = subscription.tier?.toLowerCase() ?? 'free';
   const tierStyle = TIER_STYLES[tierKey] ?? TIER_STYLES.free;
@@ -63,7 +68,12 @@ export function SubscriptionSettingsTab() {
         {/* Current Tier */}
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-foreground">{t('settings.currentTier')}</span>
-          <span className={cn('text-xs font-bold px-2.5 py-0.5 rounded-full border capitalize', tierStyle)}>
+          <span
+            className={cn(
+              'text-xs font-bold px-2.5 py-0.5 rounded-full border capitalize',
+              tierStyle
+            )}
+          >
             {subscription.tier}
           </span>
         </div>
@@ -93,7 +103,9 @@ export function SubscriptionSettingsTab() {
             <span className="text-foreground font-medium">
               {mandalaQuotaFmt.display}
               {mandalaQuotaFmt.suffix && (
-                <span className="ml-1.5 text-xs text-muted-foreground">{mandalaQuotaFmt.suffix}</span>
+                <span className="ml-1.5 text-xs text-muted-foreground">
+                  {mandalaQuotaFmt.suffix}
+                </span>
               )}
             </span>
           </div>
