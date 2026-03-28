@@ -39,7 +39,7 @@ interface Json3Event {
   segs?: { utf8?: string }[];
 }
 
-function parseJson3(body: string): CaptionSegment[] {
+export function parseJson3(body: string): CaptionSegment[] {
   const data: { events?: Json3Event[] } = JSON.parse(body);
   if (!data.events) return [];
 
