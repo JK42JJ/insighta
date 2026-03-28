@@ -239,13 +239,16 @@ export function Sidebar({
         )}
       >
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto scrollbar-none">
-          <ul className="space-y-1" role="list">
-            {MAIN_NAV.map(renderNavItem)}
-          </ul>
-
-          <div className="my-3 mx-2">
-            <div className="h-px bg-sidebar-border" />
-          </div>
+          {location.pathname === '/' && (
+            <>
+              <ul className="space-y-1" role="list">
+                {MAIN_NAV.map(renderNavItem)}
+              </ul>
+              <div className="my-3 mx-2">
+                <div className="h-px bg-sidebar-border" />
+              </div>
+            </>
+          )}
 
           {/* Mandala section — error boundary prevents sidebar crash */}
           <ErrorBoundary
