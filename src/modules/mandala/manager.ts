@@ -515,7 +515,9 @@ export class MandalaManager {
 
     const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
     const tier = isSuperAdmin ? ('admin' as Tier) : ((subscription?.tier ?? DEFAULT_TIER) as Tier);
-    const rawLimit = subscription?.mandala_limit ?? getMandalaLimit(tier);
+    const rawLimit = isSuperAdmin
+      ? UNLIMITED_LIMIT
+      : (subscription?.mandala_limit ?? getMandalaLimit(tier));
     const limit = rawLimit === Infinity ? UNLIMITED_LIMIT : rawLimit;
 
     return {
