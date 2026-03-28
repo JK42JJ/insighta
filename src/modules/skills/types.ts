@@ -31,6 +31,7 @@ export interface SkillResult {
   metadata?: {
     duration_ms: number;
     llm_tokens_used?: number;
+    quota_exceeded?: boolean;
   };
 }
 
