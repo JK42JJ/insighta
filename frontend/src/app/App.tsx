@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -7,12 +8,17 @@ import { AuthProvider } from '@/features/auth/model/AuthContext';
 import { Toaster } from '@/shared/ui/sonner';
 import { OfflineBanner, SwUpdatePrompt } from '@/widgets/offline-banner';
 import { ErrorFallback } from '@/shared/ui/ErrorFallback';
+import { AppShell } from '@/widgets/app-shell';
 import { AppRouter } from './router';
 import '@/shared/i18n/config';
 import './styles/index.css';
 
 function App() {
   const { t } = useTranslation();
+
+  // Memoize router element so AppShell re-renders (from store updates)
+  // do NOT cascade to children — breaks the infinite loop.
+  const routerElement = useMemo(() => <AppRouter />, []);
 
   return (
     <BrowserRouter>
@@ -24,7 +30,7 @@ function App() {
                 {t('common.skipToContent', 'Skip to main content')}
               </a>
               <OfflineBanner />
-              <AppRouter />
+              <AppShell>{routerElement}</AppShell>
               <Toaster />
               <SwUpdatePrompt />
             </AuthProvider>
