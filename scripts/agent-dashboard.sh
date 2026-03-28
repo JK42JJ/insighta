@@ -227,7 +227,12 @@ render_header() {
   local mod=$(git diff --name-only 2>/dev/null | wc -l | tr -d ' ')
   local staged=$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
   local untracked=$(git ls-files --others --exclude-standard 2>/dev/null | wc -l | tr -d ' ')
-  echo -e "  ${BD}${B}INSIGHTA${NC} ${D}work${NC}  ${D}${spin} $(date '+%H:%M')${NC}  ${Y}${branch}${NC}  ${D}M:${NC}${Y}${mod}${NC} ${D}S:${NC}${G}${staged}${NC} ${D}?:${NC}${D}${untracked}${NC}"
+  # Count running agents from parsed cache
+  local agent_count=0
+  [ -s "$PARSED_CACHE" ] && agent_count=$(grep -c 'RUNNING' "$PARSED_CACHE" 2>/dev/null || echo 0)
+  local agent_tag=""
+  [ "$agent_count" -gt 0 ] && agent_tag="  ${BG_GREEN} ${agent_count} agents ${NC}"
+  echo -e "  ${BD}${B}INSIGHTA${NC} ${D}work${NC}  ${D}${spin} $(date '+%H:%M')${NC}  ${Y}${branch}${NC}  ${D}M:${NC}${Y}${mod}${NC} ${D}S:${NC}${G}${staged}${NC} ${D}?:${NC}${D}${untracked}${NC}${agent_tag}"
 }
 
 render_now() {
@@ -282,9 +287,14 @@ render_agents() {
 
   [ "$running" -eq 0 ] && [ "$done_count" -eq 0 ] && return
 
-  local label="${running} running"
-  [ "$done_count" -gt 0 ] && label+=" · ${done_count} done"
-  echo -e "  ${BD}AGENTS${NC}  ${D}${label}${NC}"
+  local label
+  if [ "$running" -gt 0 ]; then
+    label="${BG_GREEN} ${running} RUNNING ${NC}"
+    [ "$done_count" -gt 0 ] && label+="  ${D}${done_count} done${NC}"
+  else
+    label="${D}${done_count} done${NC}"
+  fi
+  echo -e "  ${BD}AGENTS${NC}  ${label}"
   [ -n "$running_lines" ] && echo -ne "$running_lines"
   [ -n "$done_lines" ] && echo -ne "$done_lines"
 }

@@ -1,13 +1,13 @@
 # Test Infrastructure — Insighta
 
-> Last updated: 2026-03-28
+> Last updated: 2026-03-28 (skills.test.tsx added)
 
 ## Overview
 
 | Layer                | Framework          | Config                      | CI Job          | Files | Status              |
 | -------------------- | ------------------ | --------------------------- | --------------- | ----- | ------------------- |
-| Backend (unit/smoke) | Jest + ts-jest     | `jest.config.ts`            | `test-backend`  | 20    | 20 pass (296 tests) |
-| Frontend (smoke)     | Vitest + happy-dom | `frontend/vitest.config.ts` | `test-frontend` | 14    | 14 pass (142 tests) |
+| Backend (unit/smoke) | Jest + ts-jest     | `jest.config.ts`            | `test-backend`  | 21    | 21 pass (307 tests) |
+| Frontend (smoke)     | Vitest + happy-dom | `frontend/vitest.config.ts` | `test-frontend` | 15    | 15 pass (171 tests) |
 | E2E (regression)     | Playwright         | —                           | manual          | 8     | manual only         |
 
 ## Backend Tests (Jest)
@@ -28,6 +28,7 @@
 | `sharing-api.test.ts`    | 6     | Sharing CRUD (create/view/clone/list/delete) + bot write guard                       |
 | `admin-api.test.ts`      | 13    | Admin endpoint auth rejection (9 routes) + invalid token + subscription/status PATCH |
 | `notes-api.test.ts`      | 14    | Notes/Quota/Subscriptions/Ontology API auth rejection (14 endpoints) |
+| `skills-api.test.ts`     | 11    | Skills API: auth rejection (3), body validation (4), authenticated happy-path with mocked skillRegistry/DB/LLM (3), env check (1) |
 
 **Note**: Smoke tests use `describeIfServer` pattern — skipped in CI when env vars missing, run locally with real DB.
 
@@ -71,6 +72,12 @@
 | `fileUpload.test.ts`              | 14    | File type detection + supported check + file icons                        |
 | `slash-commands.test.ts`          | 14    | Slash command registry + player-dependent filtering                       |
 | `supabase-auth.test.ts`          | 5     | Edge Function URL construction (getEdgeFunctionUrl)                       |
+
+### Feature Tests (`frontend/src/__tests__/`)
+
+| File                | Tests | Description                                                                                                                                       |
+| ------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skills.test.tsx`   | 29    | Skills feature: useSkillList query config (key/queryFn/enabled/staleTime), useSkillPreview/useSkillExecute mutationFn wiring, SidebarSkillPanel logic (list derivation, null-mandalaId guard, collapsed toggle + localStorage, handlePreview/handleExecute happy-path + error flows, isActive state, SKILL_ICONS fallback) |
 
 ### Store Tests (`frontend/src/__tests__/stores/`)
 
