@@ -3,7 +3,7 @@
 > **SSOT**: This document is the single source of truth for all quota, rate limit, and tier-related policies.
 > Code implementations MUST reference this document. Hardcoded values MUST match these definitions.
 
-**Last updated**: 2026-03-19
+**Last updated**: 2026-03-28
 
 ---
 
@@ -68,7 +68,50 @@
 
 ---
 
-## 5. Implementation Status
+## 5. Skill (Action) Limits
+
+Skills are automated execution actions (newsletter, report, alert, recommendation)
+that operate on top of the knowledge graph.
+
+### 5.1 Monthly Execution Limits
+
+| Skill | free | pro | lifetime | admin |
+|-------|------|-----|----------|-------|
+| Newsletter | 4/month | Unlimited | Unlimited | Unlimited |
+| Report | 1/month | Unlimited | Unlimited | Unlimited |
+| Alert | 20/month | Unlimited | Unlimited | Unlimited |
+| Recommend | 3/day | 10/day | Unlimited | Unlimited |
+
+Counters reset on the 1st of each month (UTC).
+Tracked via the `skill_runs` table (started_at ≥ start of current month).
+
+### 5.2 Content Quality Differentiation
+
+| Feature | free | pro+ |
+|---------|------|------|
+| Summary mode | one_liner | structured (key_points, actionables, bias_signals) |
+| Curation count | Top 3 | Top 5 |
+| Bias analysis report | No | Yes |
+| Custom email template | No | Yes |
+| Send frequency | Weekly only | Weekly or Daily |
+| Target mandalas | Default mandala (1) | All mandalas |
+
+Full policy details: `docs/policies/skill-quota-policy.md`
+
+---
+
+## 6. Skill Quota Implementation Status
+
+| Item | Status | Location |
+|------|--------|----------|
+| Skill limits in `quota.ts` | Done | `TIER_LIMITS.*.skills` |
+| `SkillRegistry` + quota checker | Not implemented | Future `src/modules/skills/` |
+| `skill_runs` table | Not implemented | Needs migration |
+| Frontend skill quota display | Not implemented | Newsletter settings UI |
+
+---
+
+## 7. Resource Implementation Status
 
 | Item | Status | Location |
 |------|--------|----------|
@@ -84,7 +127,7 @@
 
 ---
 
-## 6. Hardcoded Values (SSOT Mapping)
+## 8. Hardcoded Values (SSOT Mapping)
 
 Centralized in `src/config/quota.ts`. Backend code imports from this module.
 Edge Functions (Deno runtime) cannot import Node modules — values are kept inline with SSOT comment.
@@ -100,13 +143,15 @@ Edge Functions (Deno runtime) cannot import Node modules — values are kept inl
 
 ---
 
-## 7. Future Work
+## 9. Future Work
 
 1. ~~**`src/config/quota.ts`**: Centralized quota constants~~ — Done (2026-03-19)
 2. ~~**Per-tier rate limiting**: Refactor `rate-limit.ts` to read user tier~~ — Done (2026-03-19)
 3. **AI summary queue**: Background processing for free tier
 4. **Report quota middleware**: Weekly report generation limit
 5. **`user_quota_boosts` table**: Automatic bonus expiry management
+6. **Skill quota checker**: `src/modules/skills/quota-checker.ts` + `skill_runs` table
+7. **SkillRegistry**: `src/modules/skills/registry.ts` with quota enforcement
 
 ---
 
@@ -116,3 +161,4 @@ Edge Functions (Deno runtime) cannot import Node modules — values are kept inl
 |------|--------|--------|
 | 2026-03-19 | Initial policy document created | JK |
 | 2026-03-19 | `src/config/quota.ts` + per-tier rate limit + hardcoding removal | JK |
+| 2026-03-28 | Section 5-6: Skill (Action) quota limits added, `TIER_LIMITS.skills` | JK |
