@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/lib/dashboard-common.sh"
 ISSUES_KR_MAP="$SCRIPT_DIR/data/issue-kr.json"
 ISSUES_CACHE="/tmp/insighta-issue-context"
 ISSUES_DISPLAY_LIMIT=5
-ISSUES_DESC_LINES=3
+ISSUES_DESC_LINES=1
 ISSUES_CACHE_TTL=300
 REFRESH_SEC=10
 
