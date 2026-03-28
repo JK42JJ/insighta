@@ -101,7 +101,6 @@ insighta/
 │       ├── pages/          #   Page components
 │       ├── shared/         #   Shared UI, utils, hooks
 │       └── widgets/        #   Composite UI blocks
-├── frontend-old/           # Archived v1 frontend (do not modify)
 ├── prisma/                 # Database schema & migrations
 ├── supabase/               # Edge Functions
 │   └── functions/
