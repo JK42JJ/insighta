@@ -7,7 +7,6 @@ import { AuthProvider } from '@/features/auth/model/AuthContext';
 import { Toaster } from '@/shared/ui/sonner';
 import { OfflineBanner, SwUpdatePrompt } from '@/widgets/offline-banner';
 import { ErrorFallback } from '@/shared/ui/ErrorFallback';
-import { AppShell } from '@/widgets/app-shell';
 import { AppRouter } from './router';
 import '@/shared/i18n/config';
 import './styles/index.css';
@@ -25,9 +24,7 @@ function App() {
                 {t('common.skipToContent', 'Skip to main content')}
               </a>
               <OfflineBanner />
-              <AppShell>
-                <AppRouter />
-              </AppShell>
+              <AppRouter />
               <Toaster />
               <SwUpdatePrompt />
             </AuthProvider>
