@@ -521,13 +521,10 @@ import type { InsightaSkill, SkillContext, SkillResult, SkillPreview, Tier } fro
 
 const log = logger.child({ module: 'NewsletterSkill' })
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.GMAIL_SMTP_USER,
-    pass: process.env.GMAIL_SMTP_APP_PASSWORD,
-  },
+  host: process.env.GMAIL_SMTP_HOST,   // smtp-relay.gmail.com
+  port: Number(process.env.GMAIL_SMTP_PORT ?? 587),
+  secure: false,  // STARTTLS — not SSL
+  // No auth field: IP-authenticated via EC2 (44.231.152.49) whitelisted in Google Workspace SMTP Relay
 })
 
 // Curation config
@@ -885,7 +882,9 @@ Batch endpoint (`/api/v1/skills/newsletter/batch`):
 
 ---
 
-## Step 7: Gmail SMTP Setup
+## Step 7: Gmail SMTP Relay Setup (IP Authentication — no app password)
+
+Insighta uses **Gmail SMTP Relay** (`smtp-relay.gmail.com`) authenticated by EC2 IP address, not by username/password. The EC2 instance IP `44.231.152.49` must be whitelisted in Google Workspace Admin before the first send.
 
 ```bash
 # 1. npm install
@@ -893,21 +892,35 @@ npm install nodemailer
 npm install --save-dev @types/nodemailer
 
 # 2. Add environment variables (.env)
-GMAIL_SMTP_USER=noreply@insighta.one
-GMAIL_SMTP_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
+GMAIL_SMTP_HOST=smtp-relay.gmail.com
+GMAIL_SMTP_PORT=587
+GMAIL_SMTP_FROM=noreply@insighta.one
 
 # 3. Add to src/config/index.ts
 gmail: {
-  smtpUser: env.GMAIL_SMTP_USER,
-  smtpAppPassword: env.GMAIL_SMTP_APP_PASSWORD,
+  smtpHost: env.GMAIL_SMTP_HOST,
+  smtpPort: Number(env.GMAIL_SMTP_PORT ?? 587),
+  smtpFrom: env.GMAIL_SMTP_FROM,
 },
 ```
 
-Google Workspace app password setup:
-- Account: `noreply@insighta.one` (Google Workspace)
-- Google Account -> Security -> 2-Step Verification -> App passwords
-- Generate app password for "Mail" / "Other (Custom name)" -> copy 16-character password
+Google Workspace SMTP Relay setup (one-time, Admin console):
+- Admin console -> Apps -> Google Workspace -> Gmail -> Routing -> SMTP relay service
+- Add allowed sender: `noreply@insighta.one` (or "Any address in domain")
+- Authentication: select "Only accept mail from the specified IP addresses" -> add `44.231.152.49`
+- Require TLS: enabled
+- No username/password is exchanged — the EC2 IP is the credential
 - Send limit: 2,000 emails/day (Google Workspace)
+
+nodemailer transporter for reference:
+```typescript
+nodemailer.createTransport({
+  host: process.env.GMAIL_SMTP_HOST,   // smtp-relay.gmail.com
+  port: Number(process.env.GMAIL_SMTP_PORT ?? 587),
+  secure: false,  // STARTTLS on port 587
+  // No auth field — IP-authenticated
+})
+```
 
 ---
 
