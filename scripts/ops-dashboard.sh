@@ -358,7 +358,7 @@ render_issues() {
   local open_count=0 closed_count=0 total_count=0 pct=0
   if [ -n "$counts" ]; then
     IFS='|' read -r open_count closed_count total_count <<< "$counts"
-    [ "$total_count" -gt 0 ] 2>/dev/null && pct=$(( closed_count * 100 / total_count ))
+    [ "${total_count:-0}" -gt 0 ] 2>/dev/null && pct=$(( closed_count * 100 / total_count ))
   fi
 
   echo -e "  ${BD}ISSUES${NC}  ${D}open: ${open_count}, closed: ${closed_count}, total: ${total_count} (${pct}%)${NC}  ${D}PRs: ${pr_count:-0}${NC}"
