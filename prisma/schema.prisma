@@ -381,6 +381,9 @@ model users {
   card_snapshots                 card_snapshots[]
   bot_usage_log                  bot_usage_log[]
   bot_approval_tokens            bot_approval_tokens[]
+  newsletter_settings            newsletter_settings?
+  newsletter_logs                newsletter_logs[]
+  skill_runs                     skill_runs[]
 
   @@index([instance_id])
   @@index([is_anonymous])
@@ -1211,5 +1214,72 @@ model payment_transactions {
   description       String?
   created_at        DateTime? @default(now()) @db.Timestamptz(6)
 
+  @@schema("public")
+}
+
+// --- Skill System --------------------------------------------------------
+
+model video_rich_summaries {
+  video_id      String   @id @db.VarChar(11)
+  tier_required String   @default("free") @db.VarChar(10)
+  one_liner     String?
+  structured    Json?
+  quality_score Float?
+  quality_flag  String?  @default("pending") @db.VarChar(20)
+  model         String?  @db.VarChar(50)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+model newsletter_settings {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String    @unique @db.Uuid
+  is_subscribed Boolean   @default(true)
+  frequency     String    @default("weekly") @db.VarChar(10)
+  day_of_week   Int       @default(1)
+  send_hour     Int       @default(9)
+  last_sent_at  DateTime? @db.Timestamptz(6)
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  users         users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id], map: "idx_newsletter_settings_user_id")
+  @@schema("public")
+}
+
+model newsletter_logs {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String   @db.Uuid
+  mandala_id     String?  @db.Uuid
+  subject        String?
+  curated_videos Json?
+  sent_at        DateTime @default(now()) @db.Timestamptz(6)
+  resend_id      String?  @db.VarChar(100)
+  status         String   @default("sent") @db.VarChar(20)
+  users          users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id], map: "idx_newsletter_logs_user_id")
+  @@index([sent_at(sort: Desc)], map: "idx_newsletter_logs_sent_at")
+  @@schema("public")
+}
+
+model skill_runs {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  skill_id    String    @db.VarChar(50)
+  user_id     String?   @db.Uuid
+  status      String    @default("running") @db.VarChar(20)
+  input       Json?
+  output      Json?
+  error       String?
+  retry_count Int       @default(0)
+  started_at  DateTime  @default(now()) @db.Timestamptz(6)
+  ended_at    DateTime? @db.Timestamptz(6)
+  users       users?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([skill_id, status], map: "idx_skill_runs_skill_status")
+  @@index([user_id], map: "idx_skill_runs_user_id")
+  @@index([started_at(sort: Desc)], map: "idx_skill_runs_started_at")
   @@schema("public")
 }
