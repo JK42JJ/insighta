@@ -744,6 +744,20 @@
     "goalPlaceholder": "Goal",
     "saved": "Sector names saved"
   },
+  "skills": {
+    "title": "Skills",
+    "empty": "No skills available for your plan",
+    "executing": "Running...",
+    "success": "Skill executed successfully",
+    "error": "Skill execution failed",
+    "previewFailed": "Preview failed",
+    "execute": "Run",
+    "curatedCount": "{{count}} items curated",
+    "newsletter": "Newsletter Draft",
+    "report": "Research Report",
+    "alert": "Alert",
+    "recommend": "Recommendation"
+  },
   "landing": {
     "ltdBanner": "Pioneer Lifetime Deal - $99 (was $299). Limited spots remaining.",
     "ltdBannerShort": "Pioneer LTD - $99 (was $299)",

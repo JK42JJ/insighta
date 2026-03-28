@@ -11,6 +11,7 @@ import {
 } from '@/features/mandala';
 import { toast } from '@/shared/lib/use-toast';
 import { SidebarHeatMinimap } from '@/widgets/sidebar-heat-minimap';
+import { SidebarSkillPanel } from '@/widgets/sidebar-skill-panel';
 import { useMandalaStore } from '@/stores/mandalaStore';
 import type { InsightCard } from '@/entities/card/model/types';
 
@@ -317,6 +318,14 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
           }
         />
       )}
+
+      {/* Divider */}
+      <div className="my-2 mx-2">
+        <div className="h-px bg-sidebar-border" />
+      </div>
+
+      {/* Skills panel */}
+      <SidebarSkillPanel mandalaId={minimapData?.mandalaId ?? null} />
     </div>
   );
 }

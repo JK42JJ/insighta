@@ -133,6 +133,27 @@ interface SyncStatus {
   error?: string;
 }
 
+interface SkillListResponse {
+  id: string;
+  description: string;
+  version: string;
+  trigger: { type: string; schedule?: string; event?: string };
+  inputSchema: Record<string, unknown>;
+}
+
+interface SkillPreviewResponse {
+  subject?: string;
+  preview_html?: string;
+  curated_count?: number;
+}
+
+interface SkillExecuteResponse {
+  success: boolean;
+  data?: Record<string, unknown>;
+  error?: string;
+  metadata?: { duration_ms: number; llm_tokens_used?: number; quota_exceeded?: boolean };
+}
+
 interface MandalaResponse {
   id: string;
   userId: string;
@@ -511,9 +532,19 @@ class ApiClient {
   // Mandala Sharing Endpoints
   // ========================================
 
-  async createShareLink(mandalaId: string, mode: 'view' | 'view_cards' | 'clone' = 'view', expiresInDays?: number): Promise<{
+  async createShareLink(
+    mandalaId: string,
+    mode: 'view' | 'view_cards' | 'clone' = 'view',
+    expiresInDays?: number
+  ): Promise<{
     status: string;
-    data: { id: string; shareCode: string; mode: string; expiresAt: string | null; createdAt: string };
+    data: {
+      id: string;
+      shareCode: string;
+      mode: string;
+      expiresAt: string | null;
+      createdAt: string;
+    };
   }> {
     return this.request('/sharing/create', {
       method: 'POST',
@@ -525,7 +556,16 @@ class ApiClient {
     status: string;
     data: {
       share: { id: string; shareCode: string; mode: string; expiresAt: string | null };
-      mandala: { title: string; levels: Array<{ levelKey: string; centerGoal: string; subjects: string[]; parentLevelId: string | null }>; cardCount?: number };
+      mandala: {
+        title: string;
+        levels: Array<{
+          levelKey: string;
+          centerGoal: string;
+          subjects: string[];
+          parentLevelId: string | null;
+        }>;
+        cardCount?: number;
+      };
     };
   }> {
     return this.request(`/sharing/${code}`);
@@ -540,7 +580,13 @@ class ApiClient {
 
   async listShareLinks(mandalaId: string): Promise<{
     status: string;
-    data: Array<{ id: string; shareCode: string; mode: string; expiresAt: string | null; createdAt: string }>;
+    data: Array<{
+      id: string;
+      shareCode: string;
+      mode: string;
+      expiresAt: string | null;
+      createdAt: string;
+    }>;
   }> {
     return this.request(`/sharing/mandala/${mandalaId}`);
   }
@@ -555,7 +601,13 @@ class ApiClient {
 
   async getYouTubeSubscriptions(pageToken?: string): Promise<{
     status: string;
-    data: Array<{ channelId: string; title: string; description: string; thumbnailUrl: string; publishedAt: string }>;
+    data: Array<{
+      channelId: string;
+      title: string;
+      description: string;
+      thumbnailUrl: string;
+      publishedAt: string;
+    }>;
     pagination: { nextPageToken?: string; totalResults: number };
   }> {
     const query = pageToken ? `?pageToken=${pageToken}` : '';
@@ -564,7 +616,14 @@ class ApiClient {
 
   async getYouTubePlaylists(pageToken?: string): Promise<{
     status: string;
-    data: Array<{ playlistId: string; title: string; description: string; thumbnailUrl: string; itemCount: number; publishedAt: string }>;
+    data: Array<{
+      playlistId: string;
+      title: string;
+      description: string;
+      thumbnailUrl: string;
+      itemCount: number;
+      publishedAt: string;
+    }>;
     pagination: { nextPageToken?: string; totalResults: number };
   }> {
     const query = pageToken ? `?pageToken=${pageToken}` : '';
@@ -1324,6 +1383,28 @@ class ApiClient {
     return this.request('/settings/llm-keys/priorities', {
       method: 'PUT',
       body: JSON.stringify({ items }),
+    });
+  }
+
+  // ========================================
+  // Skills
+  // ========================================
+
+  async listSkills(): Promise<{ data: SkillListResponse[] }> {
+    return this.request('/api/v1/skills');
+  }
+
+  async previewSkill(skillId: string, mandalaId: string): Promise<{ data: SkillPreviewResponse }> {
+    return this.request(`/api/v1/skills/${skillId}/preview`, {
+      method: 'POST',
+      body: JSON.stringify({ mandala_id: mandalaId }),
+    });
+  }
+
+  async executeSkill(skillId: string, mandalaId: string): Promise<{ data: SkillExecuteResponse }> {
+    return this.request(`/api/v1/skills/${skillId}/execute`, {
+      method: 'POST',
+      body: JSON.stringify({ mandala_id: mandalaId }),
     });
   }
 
