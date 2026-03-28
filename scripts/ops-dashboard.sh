@@ -204,10 +204,13 @@ fetch_issues() {
   local issues; issues=$(gh issue list --limit 5 --json number,title,createdAt \
     --jq '.[]|"#\(.number) \(.createdAt[5:10]) \(.title)"' 2>/dev/null)
   [ -n "$issues" ] && echo "$issues" | cache_set issues
-  # Counts — use gh issue list which is simpler and more reliable than search API
-  local o cl
-  o=$(gh issue list --state open --json number --jq 'length' 2>/dev/null)
-  cl=$(gh issue list --state closed --json number --jq 'length' 2>/dev/null)
+  # Counts — use search API for accurate totals (gh issue list has 30 default limit)
+  local o=0 cl=0
+  local repo_nwo; repo_nwo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
+  if [ -n "$repo_nwo" ]; then
+    o=$(gh api "search/issues?q=repo:${repo_nwo}+type:issue+state:open" --jq '.total_count' 2>/dev/null || echo 0)
+    cl=$(gh api "search/issues?q=repo:${repo_nwo}+type:issue+state:closed" --jq '.total_count' 2>/dev/null || echo 0)
+  fi
   o="${o:-0}"; cl="${cl:-0}"
   local total=$(( o + cl ))
   echo "${o}|${cl}|${total}" | cache_set issue_counts
