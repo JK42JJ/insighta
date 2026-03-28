@@ -49,15 +49,6 @@ export function AppShell({ children }: AppShellProps) {
     });
   }, []);
 
-  // Public routes — no sidebar, no header chrome
-  if (!showSidebar) {
-    return (
-      <main id="main-content" className="h-screen overflow-y-auto">
-        {children}
-      </main>
-    );
-  }
-
   return (
     <div className="h-screen flex flex-col bg-surface-base overflow-hidden">
       <AppHeader
@@ -66,13 +57,15 @@ export function AppShell({ children }: AppShellProps) {
       />
 
       <div className="flex-1 flex overflow-hidden">
-        <Sidebar
-          collapsed={isSettingsRoute ? false : sidebarCollapsed}
-          onToggleCollapse={handleToggleCollapse}
-          onNavigateHome={onNavigateHome ?? undefined}
-          minimapData={minimapData ?? undefined}
-          settingsMode={isSettingsRoute}
-        />
+        {showSidebar && (
+          <Sidebar
+            collapsed={isSettingsRoute ? false : sidebarCollapsed}
+            onToggleCollapse={handleToggleCollapse}
+            onNavigateHome={onNavigateHome ?? undefined}
+            minimapData={minimapData ?? undefined}
+            settingsMode={isSettingsRoute}
+          />
+        )}
 
         <main id="main-content" className="flex-1 overflow-y-auto">
           {children}
