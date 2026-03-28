@@ -47,6 +47,10 @@ export const queryKeys = {
     mood: (id: string) => [...queryKeys.mandala.all, 'mood', id] as const,
     sourceMappings: () => [...queryKeys.mandala.all, 'source-mappings'] as const,
   },
+  skills: {
+    all: ['skills'] as const,
+    list: () => ['skills', 'list'] as const,
+  },
   uiPreferences: {
     all: ['ui-preferences'] as const,
   },
