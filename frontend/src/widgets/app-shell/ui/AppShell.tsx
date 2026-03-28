@@ -3,13 +3,10 @@ import { useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { AppHeader } from './AppHeader';
 import { MobileDrawer } from './MobileDrawer';
-import type { MinimapData } from './SidebarMandalaSection';
+import { useShellStore } from '@/stores/shellStore';
 
 interface AppShellProps {
   children: React.ReactNode;
-  onNavigateHome?: () => void;
-  minimapData?: MinimapData;
-  searchBarElement?: React.ReactNode;
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'insighta-sidebar-collapsed';
@@ -22,12 +19,10 @@ function getInitialCollapsed(): boolean {
   }
 }
 
-export function AppShell({
-  children,
-  onNavigateHome,
-  minimapData,
-  searchBarElement,
-}: AppShellProps) {
+export function AppShell({ children }: AppShellProps) {
+  const minimapData = useShellStore((s) => s.minimapData);
+  const searchBarElement = useShellStore((s) => s.searchBarElement);
+  const onNavigateHome = useShellStore((s) => s.onNavigateHome);
   const location = useLocation();
   const isSettingsRoute = location.pathname.startsWith('/settings');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialCollapsed);
@@ -56,8 +51,8 @@ export function AppShell({
         <Sidebar
           collapsed={isSettingsRoute ? false : sidebarCollapsed}
           onToggleCollapse={handleToggleCollapse}
-          onNavigateHome={onNavigateHome}
-          minimapData={minimapData}
+          onNavigateHome={onNavigateHome ?? undefined}
+          minimapData={minimapData ?? undefined}
           settingsMode={isSettingsRoute}
         />
 
