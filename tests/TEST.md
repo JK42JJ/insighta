@@ -1,13 +1,13 @@
 # Test Infrastructure — Insighta
 
-> Last updated: 2026-03-28 (skills.test.tsx added)
+> Last updated: 2026-03-29 (mandala-quota, skill-execution, quota-display tests added)
 
 ## Overview
 
 | Layer                | Framework          | Config                      | CI Job          | Files | Status              |
 | -------------------- | ------------------ | --------------------------- | --------------- | ----- | ------------------- |
-| Backend (unit/smoke) | Jest + ts-jest     | `jest.config.ts`            | `test-backend`  | 21    | 21 pass (307 tests) |
-| Frontend (smoke)     | Vitest + happy-dom | `frontend/vitest.config.ts` | `test-frontend` | 15    | 15 pass (171 tests) |
+| Backend (unit/smoke) | Jest + ts-jest     | `jest.config.ts`            | `test-backend`  | 24    | 24 pass (357 tests) |
+| Frontend (smoke)     | Vitest + happy-dom | `frontend/vitest.config.ts` | `test-frontend` | 16    | 16 pass (190 tests) |
 | E2E (regression)     | Playwright         | —                           | manual          | 8     | manual only         |
 
 ## Backend Tests (Jest)
@@ -29,6 +29,8 @@
 | `admin-api.test.ts`      | 13    | Admin endpoint auth rejection (9 routes) + invalid token + subscription/status PATCH |
 | `notes-api.test.ts`      | 14    | Notes/Quota/Subscriptions/Ontology API auth rejection (14 endpoints) |
 | `skills-api.test.ts`     | 11    | Skills API: auth rejection (3), body validation (4), authenticated happy-path with mocked skillRegistry/DB/LLM (3), env check (1) |
+| `mandala-quota.test.ts`  | 13    | Mandala quota: auth rejection (1), response wrapper structure (5), creation enforcement (3), getUserQuota unit (3), env check (1) |
+| `skill-execution.test.ts`| 17    | SkillRegistry: register/lookup (5), execute happy-path (4), error handling (3), quota integration (4), env check (1) |
 
 **Note**: Smoke tests use `describeIfServer` pattern — skipped in CI when env vars missing, run locally with real DB.
 
@@ -37,7 +39,7 @@
 | File                              | Tests | Status                                                                                       |
 | --------------------------------- | ----- | -------------------------------------------------------------------------------------------- |
 | `api/mandala-routes.test.ts`      | 111   | Pass                                                                                         |
-| `modules/mandala-manager.test.ts` | 24    | Pass (pro tier naming, quota limits)                                                         |
+| `modules/mandala-manager.test.ts` | 60    | Pass (CRUD, quota enforcement with is_super_admin check, pro tier naming)                    |
 | `modules/context-builder.test.ts` | 24    | Pass (TypeScript cast, @/ alias imports)                                                     |
 | `modules/job-queue.test.ts`       | 18    | Pass (pg-boss manager lifecycle, singleton, connection string handling, type constants)      |
 | `modules/queue-handlers.test.ts`  | 7     | Pass (enrich-video enqueue/register, batch-scan register/schedule, initJobQueue integration) |
@@ -72,6 +74,7 @@
 | `fileUpload.test.ts`              | 14    | File type detection + supported check + file icons                        |
 | `slash-commands.test.ts`          | 14    | Slash command registry + player-dependent filtering                       |
 | `supabase-auth.test.ts`          | 5     | Edge Function URL construction (getEdgeFunctionUrl)                       |
+| `quota-display.test.ts`          | 19    | formatQuota helper (unlimited/limited), mandalaQuota defaults, percent calculation |
 
 ### Feature Tests (`frontend/src/__tests__/`)
 
