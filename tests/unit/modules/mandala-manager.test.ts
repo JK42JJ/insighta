@@ -60,6 +60,9 @@ const mockPrisma: any = {
     updateMany: jest.fn(),
   },
   $transaction: jest.fn(),
+  // Tagged template literal mock — called as prisma.$queryRaw`SELECT ...`
+  // Returns non-admin by default; override per-test with mockResolvedValueOnce
+  $queryRaw: jest.fn().mockResolvedValue([{ is_super_admin: false }]),
 };
 
 jest.mock('../../../src/modules/database/client', () => ({
@@ -244,7 +247,7 @@ describe('MandalaManager', () => {
       });
     });
 
-    test('should return null for another user\'s mandala', async () => {
+    test("should return null for another user's mandala", async () => {
       mockPrisma.user_mandalas.findFirst.mockResolvedValue(null);
 
       const result = await manager.getMandalaById('other-user', mockMandalaId);
@@ -346,9 +349,9 @@ describe('MandalaManager', () => {
 
       mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockTx));
 
-      await expect(
-        manager.createMandala(mockUserId, 'Over Quota', [])
-      ).rejects.toThrow('Mandala quota exceeded');
+      await expect(manager.createMandala(mockUserId, 'Over Quota', [])).rejects.toThrow(
+        'Mandala quota exceeded'
+      );
     });
 
     test('should set isDefault=false when user already has mandalas', async () => {
@@ -561,7 +564,10 @@ describe('MandalaManager', () => {
       mockPrisma.user_local_cards.updateMany.mockResolvedValue({ count: 0 });
 
       const mockTx = createMockTx();
-      mockTx.user_mandalas.findFirst.mockResolvedValueOnce({ ...mockRawMandala, is_default: false }); // re-verify
+      mockTx.user_mandalas.findFirst.mockResolvedValueOnce({
+        ...mockRawMandala,
+        is_default: false,
+      }); // re-verify
       mockTx.user_mandalas.delete.mockResolvedValue({});
 
       mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockTx));
@@ -632,9 +638,9 @@ describe('MandalaManager', () => {
     test('should throw when mandala not found', async () => {
       mockPrisma.user_mandalas.findFirst.mockResolvedValue(null);
 
-      await expect(
-        manager.deleteMandala(mockUserId, 'non-existent')
-      ).rejects.toThrow('Mandala not found');
+      await expect(manager.deleteMandala(mockUserId, 'non-existent')).rejects.toThrow(
+        'Mandala not found'
+      );
     });
 
     test('should handle deleting last mandala (no next to promote)', async () => {
@@ -850,9 +856,9 @@ describe('MandalaManager', () => {
     test('should throw when no default mandala exists', async () => {
       mockPrisma.user_mandalas.findFirst.mockResolvedValue(null);
 
-      await expect(
-        manager.updateLevel(mockUserId, 'root', { centerGoal: 'X' })
-      ).rejects.toThrow('Mandala not found');
+      await expect(manager.updateLevel(mockUserId, 'root', { centerGoal: 'X' })).rejects.toThrow(
+        'Mandala not found'
+      );
     });
   });
 
@@ -934,9 +940,9 @@ describe('MandalaManager', () => {
 
       mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockTx));
 
-      await expect(
-        manager.togglePublic(mockUserId, 'not-mine', true)
-      ).rejects.toThrow('Mandala not found');
+      await expect(manager.togglePublic(mockUserId, 'not-mine', true)).rejects.toThrow(
+        'Mandala not found'
+      );
     });
   });
 
@@ -983,9 +989,7 @@ describe('MandalaManager', () => {
     });
 
     test('should apply pagination and filter by is_public', async () => {
-      mockPrisma.user_mandalas.findMany.mockResolvedValue([
-        { ...mockRawMandala, is_public: true },
-      ]);
+      mockPrisma.user_mandalas.findMany.mockResolvedValue([{ ...mockRawMandala, is_public: true }]);
       mockPrisma.user_mandalas.count.mockResolvedValue(10);
 
       const result = await manager.listPublicMandalas({ page: 2, limit: 5 });
@@ -1027,9 +1031,9 @@ describe('MandalaManager', () => {
     test('should throw when mandala not found or not public', async () => {
       mockPrisma.user_mandalas.findUnique.mockResolvedValue(null);
 
-      await expect(
-        manager.subscribe('subscriber-1', 'non-existent')
-      ).rejects.toThrow('Mandala not found or not public');
+      await expect(manager.subscribe('subscriber-1', 'non-existent')).rejects.toThrow(
+        'Mandala not found or not public'
+      );
     });
 
     test('should throw when subscribing to own mandala', async () => {
@@ -1039,9 +1043,9 @@ describe('MandalaManager', () => {
         is_public: true,
       });
 
-      await expect(
-        manager.subscribe('subscriber-1', mockMandalaId)
-      ).rejects.toThrow('Cannot subscribe to own mandala');
+      await expect(manager.subscribe('subscriber-1', mockMandalaId)).rejects.toThrow(
+        'Cannot subscribe to own mandala'
+      );
     });
 
     test('should throw on private mandala', async () => {
@@ -1051,9 +1055,9 @@ describe('MandalaManager', () => {
         is_public: false,
       });
 
-      await expect(
-        manager.subscribe('subscriber-1', mockMandalaId)
-      ).rejects.toThrow('Mandala not found or not public');
+      await expect(manager.subscribe('subscriber-1', mockMandalaId)).rejects.toThrow(
+        'Mandala not found or not public'
+      );
     });
   });
 
@@ -1076,9 +1080,9 @@ describe('MandalaManager', () => {
     test('should throw when subscription not found', async () => {
       mockPrisma.mandala_subscriptions.deleteMany.mockResolvedValue({ count: 0 });
 
-      await expect(
-        manager.unsubscribe('subscriber-1', 'non-existent')
-      ).rejects.toThrow('Subscription not found');
+      await expect(manager.unsubscribe('subscriber-1', 'non-existent')).rejects.toThrow(
+        'Subscription not found'
+      );
     });
   });
 
@@ -1149,14 +1153,9 @@ describe('MandalaManager', () => {
     test('should include optional entityId and metadata', async () => {
       mockPrisma.mandala_activity_log.create.mockResolvedValue({ id: 'log-2' });
 
-      await manager.logActivity(
-        mockMandalaId,
-        mockUserId,
-        'card_added',
-        'card',
-        'card-123',
-        { position: 3 }
-      );
+      await manager.logActivity(mockMandalaId, mockUserId, 'card_added', 'card', 'card-123', {
+        position: 3,
+      });
 
       expect(mockPrisma.mandala_activity_log.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
@@ -1195,17 +1194,17 @@ describe('MandalaManager', () => {
     test('should throw for non-public mandala', async () => {
       mockPrisma.user_mandalas.findUnique.mockResolvedValue({ is_public: false });
 
-      await expect(
-        manager.getActivityLog(mockMandalaId)
-      ).rejects.toThrow('Mandala not found or not public');
+      await expect(manager.getActivityLog(mockMandalaId)).rejects.toThrow(
+        'Mandala not found or not public'
+      );
     });
 
     test('should throw for non-existent mandala', async () => {
       mockPrisma.user_mandalas.findUnique.mockResolvedValue(null);
 
-      await expect(
-        manager.getActivityLog('non-existent')
-      ).rejects.toThrow('Mandala not found or not public');
+      await expect(manager.getActivityLog('non-existent')).rejects.toThrow(
+        'Mandala not found or not public'
+      );
     });
 
     test('should apply pagination', async () => {
