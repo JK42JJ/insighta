@@ -173,7 +173,8 @@ export class NewsletterSkill implements InsightaSkill {
     const db = getPrismaClient();
     const since = new Date(Date.now() - CURATION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
-    const cards = await db.$queryRaw<CuratedCard[]>`
+    // Synced YouTube cards with rich summaries
+    const syncedCards = await db.$queryRaw<CuratedCard[]>`
       SELECT
         uvs.video_id,
         yv.youtube_video_id,
@@ -195,10 +196,43 @@ export class NewsletterSkill implements InsightaSkill {
       LIMIT ${CURATION_QUERY_LIMIT}
     `;
 
-    // Bias filter
-    const filtered = cards.filter((card) => {
+    // Local cards (non-YouTube: URLs, notes, etc.)
+    const localCards = await db.user_local_cards.findMany({
+      where: {
+        user_id: userId,
+        mandala_id: mandalaId,
+        cell_index: { gte: 0 },
+        created_at: { gte: since },
+      },
+      select: { id: true, title: true, url: true, cell_index: true, created_at: true },
+      orderBy: { created_at: 'desc' },
+      take: CURATION_QUERY_LIMIT,
+    });
+
+    // Merge: local cards as CuratedCard (no rich summary)
+    const allCards: CuratedCard[] = [
+      ...syncedCards,
+      ...localCards.map((c) => ({
+        video_id: c.id,
+        youtube_video_id: '',
+        title: c.title,
+        thumbnail_url: null,
+        channel_title: c.url ? new URL(c.url).hostname : null,
+        one_liner: null,
+        structured: null,
+        quality_score: null,
+        quality_flag: null,
+        created_at: c.created_at ?? new Date(),
+      })),
+    ];
+
+    // Sort by date descending
+    allCards.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    // Bias filter (only applies to cards with rich summaries)
+    const filtered = allCards.filter((card) => {
       if (card.quality_flag === 'low' || card.quality_flag === 'failed') return false;
-      if (!card.structured) return true; // no rich summary → pass (use one_liner)
+      if (!card.structured) return true; // no rich summary → pass
       const biasSignals = (card.structured as Record<string, unknown>)?.['bias_signals'];
       return !Array.isArray(biasSignals) || biasSignals.length <= MAX_BIAS_SIGNALS;
     });
@@ -252,12 +286,16 @@ export class NewsletterSkill implements InsightaSkill {
                 ${i + 1}. ${escapeHtml(card.title ?? '')}
               </p>
               ${summarySection}
-              <a href="https://youtube.com/watch?v=${escapeHtml(card.youtube_video_id ?? '')}"
-                 style="display:inline-block;margin-top:8px;padding:6px 12px;
-                        background:#111;color:#fff;border-radius:4px;
-                        font-size:12px;text-decoration:none;">
-                Watch on YouTube
-              </a>
+              ${
+                card.youtube_video_id
+                  ? `<a href="https://youtube.com/watch?v=${escapeHtml(card.youtube_video_id)}"
+                       style="display:inline-block;margin-top:8px;padding:6px 12px;
+                              background:#111;color:#fff;border-radius:4px;
+                              font-size:12px;text-decoration:none;">
+                      Watch on YouTube
+                    </a>`
+                  : ''
+              }
             </div>
           </div>
         </div>`;
