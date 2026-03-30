@@ -11,9 +11,11 @@ import {
   Copy,
   Download,
   X,
+  History,
 } from 'lucide-react';
-import { useSkillList, useSkillPreview, useSkillExecute } from '@/features/skill';
+import { useSkillList, useSkillPreview, useSkillExecute, useSkillOutputs } from '@/features/skill';
 import { useToast } from '@/shared/lib/use-toast';
+import type { SkillOutputResponse } from '@/shared/lib/api-client';
 
 const SKILL_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   newsletter: Mail,
@@ -48,10 +50,12 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
   });
   const [previewData, setPreviewData] = useState<SkillPreviewData | null>(null);
   const [outputData, setOutputData] = useState<SkillOutputData | null>(null);
+  const [expandedOutputId, setExpandedOutputId] = useState<string | null>(null);
 
   const { data: skillsResponse, isLoading } = useSkillList();
   const previewMutation = useSkillPreview();
   const executeMutation = useSkillExecute();
+  const { data: outputsResponse } = useSkillOutputs(mandalaId);
 
   const skills = skillsResponse?.data ?? [];
 
@@ -245,8 +249,115 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
               </div>
             );
           })}
+
+          {/* Outputs history */}
+          <SkillOutputHistory
+            outputs={outputsResponse?.data ?? []}
+            expandedId={expandedOutputId}
+            onToggle={setExpandedOutputId}
+            onCopy={(content) => {
+              navigator.clipboard.writeText(content);
+              toast({ title: t('common.copied', 'Copied to clipboard') });
+            }}
+          />
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SkillOutputHistory — collapsible list of past outputs
+// ---------------------------------------------------------------------------
+
+const SKILL_TYPE_LABELS: Record<string, string> = {
+  newsletter: 'Newsletter',
+  report: 'Report',
+};
+
+function formatRelativeDate(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function SkillOutputHistory({
+  outputs,
+  expandedId,
+  onToggle,
+  onCopy,
+}: {
+  outputs: SkillOutputResponse[];
+  expandedId: string | null;
+  onToggle: (id: string | null) => void;
+  onCopy: (content: string) => void;
+}) {
+  const { t } = useTranslation();
+
+  if (outputs.length === 0) return null;
+
+  return (
+    <div className="mt-3 pt-2 border-t border-sidebar-border/30">
+      <div className="flex items-center gap-1 px-1 mb-1">
+        <History className="w-3 h-3 text-sidebar-foreground/60" />
+        <span className="text-xs font-medium text-sidebar-foreground/60">
+          {t('skills.history')}
+        </span>
+      </div>
+      <div className="space-y-0.5">
+        {outputs.map((output) => {
+          const isExpanded = expandedId === output.id;
+          const Icon = SKILL_ICONS[output.skill_type] ?? Sparkles;
+
+          return (
+            <div key={output.id}>
+              <button
+                onClick={() => onToggle(isExpanded ? null : output.id)}
+                className="flex items-center gap-2 w-full text-left text-xs px-2 py-1 rounded-md hover:bg-sidebar-accent transition-colors"
+              >
+                <Icon className="w-3 h-3 shrink-0 text-sidebar-foreground/40" />
+                <span className="truncate flex-1">{output.title}</span>
+                <span className="text-[10px] text-sidebar-foreground/40 shrink-0">
+                  {formatRelativeDate(output.created_at)}
+                </span>
+              </button>
+              {isExpanded && (
+                <div className="mx-1 mt-1 mb-2 p-2 rounded bg-sidebar-accent/50 text-xs space-y-2 border border-sidebar-border/50">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sidebar-foreground/60">
+                      {SKILL_TYPE_LABELS[output.skill_type] ?? output.skill_type}
+                      {output.card_count != null &&
+                        ` · ${t('skills.outputCards', { count: output.card_count })}`}
+                    </span>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => onCopy(output.content)}
+                        className="p-1 rounded hover:bg-sidebar-accent"
+                        title="Copy"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => onToggle(null)}
+                        className="p-1 rounded hover:bg-sidebar-accent"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto prose prose-xs prose-invert whitespace-pre-wrap break-words">
+                    {output.content}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

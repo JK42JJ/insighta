@@ -43,6 +43,25 @@ jest.mock('../../src/utils/logger', () => ({
   },
 }));
 
+jest.mock('../../src/config', () => ({
+  config: {
+    gmail: {
+      smtpHost: 'localhost',
+      smtpPort: 587,
+      smtpFrom: 'test@test.com',
+    },
+    app: {
+      isDevelopment: true,
+      isProduction: false,
+      isTest: true,
+    },
+  },
+}));
+
+jest.mock('../../src/modules/skills/mailer', () => ({
+  transporter: { sendMail: jest.fn().mockResolvedValue({ messageId: 'mock' }) },
+}));
+
 const mockQueryMandalaCards = jest.fn();
 jest.mock('../../src/modules/skills/card-query', () => ({
   queryMandalaCards: (...args: unknown[]) => mockQueryMandalaCards(...args),

@@ -1,1 +1,1 @@
-export { useSkillList, useSkillPreview, useSkillExecute } from './model/useSkills';
+export { useSkillList, useSkillPreview, useSkillExecute, useSkillOutputs } from './model/useSkills';

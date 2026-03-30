@@ -27,3 +27,14 @@ export function useSkillExecute() {
       apiClient.executeSkill(skillId, mandalaId),
   });
 }
+
+export function useSkillOutputs(mandalaId: string | null) {
+  const { isLoggedIn, isTokenReady } = useAuth();
+
+  return useQuery({
+    queryKey: queryKeys.skills.outputs(mandalaId ?? ''),
+    queryFn: () => apiClient.listSkillOutputs(mandalaId!),
+    enabled: isLoggedIn && isTokenReady && !!mandalaId,
+    staleTime: 30_000,
+  });
+}
