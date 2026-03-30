@@ -1,6 +1,17 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronRight, Mail, FileText, Bell, Sparkles, Loader2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Mail,
+  FileText,
+  Bell,
+  Sparkles,
+  Loader2,
+  Copy,
+  Download,
+  X,
+} from 'lucide-react';
 import { useSkillList, useSkillPreview, useSkillExecute } from '@/features/skill';
 import { useToast } from '@/shared/lib/use-toast';
 
@@ -18,6 +29,13 @@ interface SkillPreviewData {
   curated_count?: number;
 }
 
+interface SkillOutputData {
+  title: string;
+  content: string;
+  card_count?: number;
+  sectors_covered?: number;
+}
+
 interface SidebarSkillPanelProps {
   mandalaId: string | null;
 }
@@ -29,6 +47,7 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
     return localStorage.getItem('sidebar-skills-collapsed') === 'true';
   });
   const [previewData, setPreviewData] = useState<SkillPreviewData | null>(null);
+  const [outputData, setOutputData] = useState<SkillOutputData | null>(null);
 
   const { data: skillsResponse, isLoading } = useSkillList();
   const previewMutation = useSkillPreview();
@@ -44,6 +63,7 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
 
   const handlePreview = async (skillId: string) => {
     if (!mandalaId) return;
+    setOutputData(null);
     try {
       const result = await previewMutation.mutateAsync({ skillId, mandalaId });
       setPreviewData({ skillId, ...result.data });
@@ -56,7 +76,16 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
     if (!mandalaId) return;
     try {
       const result = await executeMutation.mutateAsync({ skillId, mandalaId });
-      if (result.data.success) {
+      if (result.data.success && result.data.data) {
+        const data = result.data.data as Record<string, unknown>;
+        if (data.content) {
+          setOutputData({
+            title: (data.title as string) ?? t('skills.output'),
+            content: data.content as string,
+            card_count: data.card_count as number | undefined,
+            sectors_covered: data.sectors_covered as number | undefined,
+          });
+        }
         toast({ title: t('skills.success') });
       } else {
         toast({ title: result.data.error || t('skills.error'), variant: 'destructive' });
@@ -66,6 +95,23 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
       toast({ title: t('skills.error'), variant: 'destructive' });
     }
   };
+
+  const handleCopyOutput = useCallback(() => {
+    if (!outputData) return;
+    navigator.clipboard.writeText(outputData.content);
+    toast({ title: t('common.copied', 'Copied to clipboard') });
+  }, [outputData, toast, t]);
+
+  const handleDownloadOutput = useCallback(() => {
+    if (!outputData) return;
+    const blob = new Blob([outputData.content], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${outputData.title.replace(/[^a-zA-Z0-9가-힣]/g, '_')}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [outputData]);
 
   if (!mandalaId) return null;
 
@@ -90,6 +136,47 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
 
           {!isLoading && skills.length === 0 && (
             <p className="text-xs text-sidebar-foreground/60 px-1 py-2">{t('skills.empty')}</p>
+          )}
+
+          {/* Skill output result panel */}
+          {outputData && (
+            <div className="mx-1 mb-2 p-2 rounded bg-sidebar-accent/50 text-xs space-y-2 border border-sidebar-border/50">
+              <div className="flex items-center justify-between">
+                <p className="font-medium text-sm">{outputData.title}</p>
+                <button
+                  onClick={() => setOutputData(null)}
+                  className="text-sidebar-foreground/40 hover:text-sidebar-foreground/80"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {(outputData.card_count || outputData.sectors_covered) && (
+                <p className="text-sidebar-foreground/60">
+                  {outputData.card_count && `${outputData.card_count} cards`}
+                  {outputData.card_count && outputData.sectors_covered && ' · '}
+                  {outputData.sectors_covered && `${outputData.sectors_covered} sectors`}
+                </p>
+              )}
+              <div className="max-h-60 overflow-y-auto prose prose-xs prose-invert whitespace-pre-wrap break-words">
+                {outputData.content}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={handleCopyOutput}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-sidebar-accent"
+                >
+                  <Copy className="w-3 h-3" />
+                  {t('common.copy', 'Copy')}
+                </button>
+                <button
+                  onClick={handleDownloadOutput}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-sidebar-accent"
+                >
+                  <Download className="w-3 h-3" />
+                  {t('common.download', 'Download')}
+                </button>
+              </div>
+            </div>
           )}
 
           {skills.map((skill) => {

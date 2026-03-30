@@ -384,6 +384,7 @@ model users {
   newsletter_settings            newsletter_settings?
   newsletter_logs                newsletter_logs[]
   skill_runs                     skill_runs[]
+  skill_outputs                  skill_outputs[]
 
   @@index([instance_id])
   @@index([is_anonymous])
@@ -412,6 +413,7 @@ model user_mandalas {
   sourceMappings   source_mandala_mappings[]
 
   mandala_shares   mandala_shares[]
+  skill_outputs    skill_outputs[]
 
   @@index([user_id], map: "idx_user_mandalas_user_id")
   @@index([is_public], map: "idx_user_mandalas_is_public")
@@ -1281,5 +1283,26 @@ model skill_runs {
   @@index([skill_id, status], map: "idx_skill_runs_skill_status")
   @@index([user_id], map: "idx_skill_runs_user_id")
   @@index([started_at(sort: Desc)], map: "idx_skill_runs_started_at")
+  @@schema("public")
+}
+
+/// Skill output storage — generated content from skill executions
+model skill_outputs {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String    @db.Uuid
+  mandala_id  String    @db.Uuid
+  skill_type  String    @db.VarChar(50)
+  title       String
+  content     String
+  cell_scope  Int[]
+  card_count  Int?
+  model_used  String?   @db.VarChar(100)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime  @default(now()) @db.Timestamptz(6)
+  users       users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  mandala     user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, mandala_id], map: "idx_skill_outputs_user_mandala")
+  @@index([created_at(sort: Desc)], map: "idx_skill_outputs_created_at")
   @@schema("public")
 }

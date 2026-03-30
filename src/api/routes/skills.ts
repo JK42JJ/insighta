@@ -11,6 +11,7 @@
 
 import { FastifyPluginCallback } from 'fastify';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '../../modules/database';
 import { skillRegistry } from '../../modules/skills';
 import { createGenerationProvider } from '../../modules/llm';
@@ -158,6 +159,36 @@ export const skillRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       const statusCode = result.success ? 200 : 500;
       return reply.code(statusCode).send(createSuccessResponse(result));
+    }
+  );
+
+  /**
+   * GET /api/v1/skills/outputs — List user's skill outputs
+   */
+  fastify.get<{ Querystring: { mandala_id?: string; limit?: string } }>(
+    '/outputs',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        return reply
+          .code(401)
+          .send(createErrorResponse(ErrorCode.UNAUTHORIZED, 'Unauthorized', '/skills/outputs'));
+      }
+
+      const db = getPrismaClient();
+      const mandalaId = request.query.mandala_id;
+      const limit = Math.min(parseInt(request.query.limit ?? '10', 10), 50);
+
+      const outputs = await db.$queryRaw`
+        SELECT id, skill_type, title, content, cell_scope, card_count, model_used, created_at
+        FROM skill_outputs
+        WHERE user_id = ${request.user.userId}::uuid
+          ${mandalaId ? Prisma.sql`AND mandala_id = ${mandalaId}::uuid` : Prisma.empty}
+        ORDER BY created_at DESC
+        LIMIT ${limit}
+      `;
+
+      return reply.send(createSuccessResponse(outputs));
     }
   );
 
