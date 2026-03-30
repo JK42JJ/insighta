@@ -1409,6 +1409,7 @@ class ApiClient {
     return this.request(`/skills/${skillId}/execute`, {
       method: 'POST',
       body: JSON.stringify({ mandala_id: mandalaId }),
+      timeoutMs: 120_000, // LLM generation can take 30-90s
     });
   }
 

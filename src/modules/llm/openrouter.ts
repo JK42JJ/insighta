@@ -11,7 +11,7 @@ import { config } from '../../config';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MAX_TOKENS = 1024;
-const REQUEST_TIMEOUT_MS = 60_000;
+const REQUEST_TIMEOUT_MS = 120_000;
 
 export class OpenRouterGenerationProvider implements GenerationProvider {
   readonly name = 'openrouter';
