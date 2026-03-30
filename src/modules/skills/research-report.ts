@@ -159,19 +159,17 @@ export class ResearchReportSkill implements InsightaSkill {
   private async queryCards(
     userId: string,
     mandalaId: string,
-    rootLevelId: string | undefined,
+    _rootLevelId: string | undefined,
     cellScope: number[] | null
   ): Promise<CardRow[]> {
     const db = getPrismaClient();
 
-    // Local cards
+    // Local cards — all cards in mandala (no level_id filter: level_id stores level_key, not UUID)
     const localCards = await db.user_local_cards.findMany({
       where: {
         user_id: userId,
         mandala_id: mandalaId,
-        ...(rootLevelId ? { level_id: rootLevelId } : {}),
-        ...(cellScope ? { cell_index: { in: cellScope } } : {}),
-        cell_index: { gte: 0 },
+        cell_index: cellScope ? { in: cellScope } : { gte: 0 },
       },
       select: {
         id: true,
@@ -182,7 +180,7 @@ export class ResearchReportSkill implements InsightaSkill {
       take: REPORT_CARD_LIMIT,
     });
 
-    // Synced cards with summaries
+    // Synced cards with summaries — all in mandala (no level_id filter)
     const syncedCards = await db.$queryRaw<CardRow[]>`
       SELECT
         uvs.id::text,
@@ -199,7 +197,6 @@ export class ResearchReportSkill implements InsightaSkill {
         AND uvs.mandala_id = ${mandalaId}::uuid
         AND uvs.cell_index >= 0
         AND uvs.is_in_ideation = false
-        ${rootLevelId ? Prisma.sql`AND uvs.level_id = ${rootLevelId}` : Prisma.empty}
         ${cellScope ? Prisma.sql`AND uvs.cell_index = ANY(${cellScope}::int[])` : Prisma.empty}
       ORDER BY uvs.created_at DESC
       LIMIT ${REPORT_CARD_LIMIT}
