@@ -10,10 +10,11 @@
 
 import { skillRegistry } from './registry';
 import { NewsletterSkill } from './newsletter';
+import { ResearchReportSkill } from './research-report';
 
 // Skill registration — add one line per new skill
 skillRegistry.register(new NewsletterSkill());
-// skillRegistry.register(new ReportSkill())      // future
+skillRegistry.register(new ResearchReportSkill());
 // skillRegistry.register(new AlertSkill())       // future
 
 export { skillRegistry };
