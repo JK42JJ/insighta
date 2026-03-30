@@ -1,0 +1,17 @@
+node_modules
+dist
+.git
+.github
+.claude
+.env*
+.DS_Store
+coverage
+tests
+docs
+prompt
+scripts
+terraform
+frontend
+*.md
+*.pem
+logs
