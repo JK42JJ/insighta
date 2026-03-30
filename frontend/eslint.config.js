@@ -30,8 +30,9 @@ export default defineConfig([
       ],
     },
   },
-  // D&D 핵심 파일 보호 — auto-fix regression 방지 (CP248, CP268, CP271)
+  // D&D 핵심 파일 보호 — auto-fix regression 방지 (CP248, CP268, CP271, CP324)
   // warn = 리포트하되 --fix 시 자동 수정 안 함
+  // AppShell: DndContext 호스트. shellStore: dndHandlersRef 브릿지. minimap: useDroppable.
   {
     files: [
       'src/shared/lib/dnd/**',
@@ -41,6 +42,10 @@ export default defineConfig([
       'src/widgets/card-list/ui/DraggableCard.tsx',
       'src/widgets/scratch-pad/**/*.{ts,tsx}',
       'src/widgets/mandala-grid/ui/MandalaCell.tsx',
+      'src/widgets/app-shell/ui/AppShell.tsx',
+      'src/stores/shellStore.ts',
+      'src/widgets/sidebar-heat-minimap/**/*.{ts,tsx}',
+      'src/features/card-management/model/useBatchMoveCards.ts',
     ],
     rules: {
       '@typescript-eslint/no-unused-vars': [

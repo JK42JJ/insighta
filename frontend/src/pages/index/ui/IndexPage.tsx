@@ -1,7 +1,6 @@
 import { useRef, useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  DndContext,
   DragOverlay,
   type DragStartEvent,
   type DragOverEvent,
@@ -10,7 +9,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
-import { useShellStore } from '@/stores/shellStore';
+import { useShellStore, dndHandlersRef } from '@/stores/shellStore';
 import { DropZoneOverlay } from '@/widgets/header/ui/DropZoneOverlay';
 import { CardListView } from '@/widgets/card-list-view';
 import { VideoPlayerModal } from '@/widgets/video-player/ui/VideoPlayerModal';
@@ -31,10 +30,8 @@ import { useVideoModal } from '../model/useVideoModal';
 import { useToast } from '@/shared/lib/use-toast';
 import { useTranslation } from 'react-i18next';
 import {
-  useDndSensors,
   DragOverlayContent,
   snapToCursor,
-  pointerWithinThenClosest,
   type DragData,
   type DropData,
   cardDragId,
@@ -74,7 +71,6 @@ function AuthenticatedApp() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useTranslation();
-  const sensors = useDndSensors();
 
   // OAuth callback: consume returnTo from sessionStorage
   useEffect(() => {
@@ -524,30 +520,6 @@ function AuthenticatedApp() {
     />
   );
 
-  const announcements = useMemo(
-    () => ({
-      onDragStart({ active }) {
-        const data = active.data.current as DragData | undefined;
-        if (data?.type === 'cell') return t('dnd.dragStartCell', 'Picked up cell');
-        if (data?.type === 'card' || data?.type === 'card-reorder')
-          return t('dnd.dragStartCard', 'Picked up card');
-        return t('dnd.dragStart', 'Dragging');
-      },
-      onDragOver({ over }) {
-        if (over) return t('dnd.dragOver', 'Over drop zone');
-        return t('dnd.dragOutside', 'Outside drop zone');
-      },
-      onDragEnd({ over }) {
-        if (over) return t('dnd.dropped', 'Dropped');
-        return t('dnd.dragCancel', 'Drag cancelled');
-      },
-      onDragCancel() {
-        return t('dnd.dragCancel', 'Drag cancelled');
-      },
-    }),
-    [t]
-  );
-
   // -- Shell store sync --
   const setMinimapData = useShellStore((s) => s.setMinimapData);
   const setSearchBarElement = useShellStore((s) => s.setSearchBarElement);
@@ -556,7 +528,10 @@ function AuthenticatedApp() {
 
   // cleanup on unmount only
   useEffect(() => {
-    return () => clearShell();
+    return () => {
+      clearShell();
+      dndHandlersRef.current = null;
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // navigateHome — ref to avoid deps on navigation object
@@ -566,7 +541,15 @@ function AuthenticatedApp() {
     setOnNavigateHome(() => navigateHomeRef.current());
   }, [setOnNavigateHome]);
 
-  // minimapData — only update when primitive values change
+  // dndHandlers — sync via module-level ref (always latest, no useEffect delay)
+  dndHandlersRef.current = {
+    onDragStart: handleDragStart,
+    onDragOver: handleDragOver,
+    onDragEnd: handleDragEnd,
+    onDragCancel: handleDragCancel,
+  };
+
+  // minimapData — sync to shell store for sidebar minimap
   useEffect(() => {
     setMinimapData({
       cardsByCell: cards.cardsByCell,
@@ -577,7 +560,9 @@ function AuthenticatedApp() {
       mandalaId: selectedMandalaId,
     });
   }, [
+    cards.cardsByCell,
     navigation.currentLevel.centerGoal,
+    navigation.currentLevel.subjects,
     navigation.selectedCellIndex,
     selectedMandalaId,
     setMinimapData,
@@ -619,15 +604,7 @@ function AuthenticatedApp() {
   }, [searchBarMemo, setSearchBarElement]);
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={pointerWithinThenClosest}
-      accessibility={{ announcements }}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-    >
+    <>
       <div className="h-full flex flex-col overflow-hidden">
         {/* External drag overlay (full dimming + dashed border) */}
         <DropZoneOverlay
@@ -796,7 +773,7 @@ function AuthenticatedApp() {
           cellLabels={cellLabels}
         />
       </DragOverlay>
-    </DndContext>
+    </>
   );
 }
 

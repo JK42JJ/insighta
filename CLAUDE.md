@@ -51,8 +51,13 @@
 - CI/CD 변경 시 Docker 검증 필수. 3회 연속 CI 실패 -> 중단 + 근본 원인 재분석
 - npm/cli#4828: frontend CI/Docker는 `npm install --no-package-lock --no-audit`
 
-### D&D Protection
+### D&D Protection (절대 규칙)
 - D&D 로직 수정 금지. 보호 장치 3종 유지: `dnd-smoke.spec.ts`, D&D Change Guard, ESLint override
+- **DndContext는 AppShell.tsx에만 존재. IndexPage에 DndContext 생성 절대 금지.**
+- **AppShell 구조 변경 시**: Sidebar와 main이 DndContext 하위인지 반드시 검증
+- **minimapData useEffect deps**: `cards.cardsByCell` 포함 필수 (누락 시 사이드바 카운트 미갱신)
+- **D&D 핸들러 전달**: shellStore `dndHandlersRef` (module-level ref) 경유. useEffect/store state 금지 (stale closure 위험)
+- D&D 관련 파일 수정 시 `/test-dnd` 전/후 필수 실행
 
 ### Design Doc Compliance
 - 설계 문서와 충돌하는 구현 금지 ("Don't touch" 항목 준수)

@@ -21,13 +21,27 @@ setup('authenticate', async () => {
     return;
   }
 
-  // Skip if auth file already exists and is recent (less than 24h old)
+  // Skip if auth file already exists, is recent (less than 24h old), AND contains auth data
   if (fs.existsSync(authFile)) {
     const stat = fs.statSync(authFile);
     const ageMs = Date.now() - stat.mtimeMs;
     if (ageMs < 24 * 60 * 60 * 1000) {
-      console.log('Auth session still valid, skipping login.');
-      return;
+      // Verify the file actually contains Supabase auth tokens, not just i18n
+      try {
+        const content = JSON.parse(fs.readFileSync(authFile, 'utf-8'));
+        const hasAuth = content.origins?.some((o: { localStorage?: { name: string }[] }) =>
+          o.localStorage?.some((ls: { name: string }) =>
+            ls.name.includes('supabase') || ls.name.includes('sb-') || ls.name.includes('auth-token')
+          )
+        );
+        if (hasAuth) {
+          console.log('Auth session still valid, skipping login.');
+          return;
+        }
+        console.log('Auth file exists but has no Supabase tokens — re-authenticating.');
+      } catch {
+        console.log('Auth file corrupted — re-authenticating.');
+      }
     }
   }
 
@@ -71,10 +85,16 @@ setup('authenticate', async () => {
       await page.waitForLoadState('networkidle');
     }
 
-    // Check for authenticated state (sidebar)
-    const hasAside = await page.locator('aside').isVisible().catch(() => false);
-    if (hasAside) {
-      console.log('Authenticated state detected.');
+    // Check for authenticated state — look for elements only visible after login
+    // NOTE: AppShell renders <aside> on all routes (even unauthenticated), so
+    // we must check for auth-only content like the mandala grid or scratchpad.
+    const isAuthenticated = await page
+      .locator('[data-testid="mandala-grid"], [data-testid="scratchpad"], .mandala-cell')
+      .first()
+      .isVisible({ timeout: 1000 })
+      .catch(() => false);
+    if (isAuthenticated) {
+      console.log('Authenticated state detected (mandala grid visible).');
       await page.waitForTimeout(2000);
       await context.storageState({ path: authFile });
       console.log('Auth session saved to', authFile);
