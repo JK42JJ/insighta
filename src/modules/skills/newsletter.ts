@@ -20,6 +20,7 @@ import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { config } from '@/config/index';
 import { TIER_LIMITS, type Tier } from '@/config/quota';
+import { queryMandalaCards, type SkillCard } from './card-query';
 import type { InsightaSkill, SkillContext, SkillResult, SkillPreview } from './types';
 
 const log = logger.child({ module: 'NewsletterSkill' });
@@ -125,7 +126,12 @@ export class NewsletterSkill implements InsightaSkill {
           user_id: userId,
           mandala_id: mandalaId,
           subject,
-          curated_videos: curated as unknown as Prisma.InputJsonValue,
+          curated_videos: curated.map((c) => ({
+            id: c.id,
+            title: c.title,
+            source: c.source,
+            url: c.url,
+          })) as unknown as Prisma.InputJsonValue,
           message_id: info.messageId,
           status: 'sent',
         },
@@ -169,65 +175,16 @@ export class NewsletterSkill implements InsightaSkill {
   // Curation Pipeline
   // ============================================================================
 
-  private async curate(userId: string, mandalaId: string, topN: number) {
-    const db = getPrismaClient();
+  private async curate(userId: string, mandalaId: string, topN: number): Promise<SkillCard[]> {
     const since = new Date(Date.now() - CURATION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
-    // Synced YouTube cards with rich summaries
-    const syncedCards = await db.$queryRaw<CuratedCard[]>`
-      SELECT
-        uvs.video_id,
-        yv.youtube_video_id,
-        yv.title,
-        yv.thumbnail_url,
-        yv.channel_title,
-        vrs.one_liner,
-        vrs.structured,
-        vrs.quality_score,
-        vrs.quality_flag,
-        uvs.created_at
-      FROM user_video_states uvs
-      JOIN youtube_videos yv ON yv.id = uvs.video_id
-      LEFT JOIN video_rich_summaries vrs ON vrs.video_id = yv.youtube_video_id
-      WHERE uvs.user_id = ${userId}::uuid
-        AND uvs.mandala_id = ${mandalaId}::uuid
-        AND uvs.created_at >= ${since}
-      ORDER BY uvs.created_at DESC
-      LIMIT ${CURATION_QUERY_LIMIT}
-    `;
-
-    // Local cards (non-YouTube: URLs, notes, etc.)
-    const localCards = await db.user_local_cards.findMany({
-      where: {
-        user_id: userId,
-        mandala_id: mandalaId,
-        cell_index: { gte: 0 },
-        created_at: { gte: since },
-      },
-      select: { id: true, title: true, url: true, cell_index: true, created_at: true },
-      orderBy: { created_at: 'desc' },
-      take: CURATION_QUERY_LIMIT,
+    // Unified card query — local + synced from shared module
+    const allCards = await queryMandalaCards({
+      userId,
+      mandalaId,
+      since,
+      limit: CURATION_QUERY_LIMIT,
     });
-
-    // Merge: local cards as CuratedCard (no rich summary)
-    const allCards: CuratedCard[] = [
-      ...syncedCards,
-      ...localCards.map((c) => ({
-        video_id: c.id,
-        youtube_video_id: '',
-        title: c.title,
-        thumbnail_url: null,
-        channel_title: c.url ? new URL(c.url).hostname : null,
-        one_liner: null,
-        structured: null,
-        quality_score: null,
-        quality_flag: null,
-        created_at: c.created_at ?? new Date(),
-      })),
-    ];
-
-    // Sort by date descending
-    allCards.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     // Bias filter (only applies to cards with rich summaries)
     const filtered = allCards.filter((card) => {
@@ -252,7 +209,7 @@ export class NewsletterSkill implements InsightaSkill {
   // HTML Template
   // ============================================================================
 
-  private buildHtml(cards: CuratedCard[], mandalaTitle?: string, tier?: Tier): string {
+  private buildHtml(cards: SkillCard[], mandalaTitle?: string, tier?: Tier): string {
     const summaryMode = tier ? TIER_LIMITS[tier].skills.newsletter.summaryMode : 'one_liner';
 
     const cardHtml = cards
@@ -287,12 +244,12 @@ export class NewsletterSkill implements InsightaSkill {
               </p>
               ${summarySection}
               ${
-                card.youtube_video_id
-                  ? `<a href="https://youtube.com/watch?v=${escapeHtml(card.youtube_video_id)}"
+                card.url
+                  ? `<a href="${escapeHtml(card.url)}"
                        style="display:inline-block;margin-top:8px;padding:6px 12px;
                               background:#111;color:#fff;border-radius:4px;
                               font-size:12px;text-decoration:none;">
-                      Watch on YouTube
+                      ${card.source === 'synced' ? 'Watch on YouTube' : 'View'}
                     </a>`
                   : ''
               }
@@ -340,19 +297,6 @@ export class NewsletterSkill implements InsightaSkill {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-interface CuratedCard {
-  video_id: string;
-  youtube_video_id: string;
-  title: string | null;
-  thumbnail_url: string | null;
-  channel_title: string | null;
-  one_liner: string | null;
-  structured: unknown;
-  quality_score: number | null;
-  quality_flag: string | null;
-  created_at: Date;
-}
 
 function escapeHtml(str: string): string {
   return str
