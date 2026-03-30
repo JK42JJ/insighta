@@ -62,6 +62,18 @@ describe('checkSkillQuota', () => {
       expect(result.allowed).toBe(true);
       expect(mockCount).not.toHaveBeenCalled();
     });
+
+    it('returns allowed: true for script skill on pro tier', async () => {
+      const result = await checkSkillQuota('script', 'user-pro-4', 'pro');
+      expect(result.allowed).toBe(true);
+      expect(mockCount).not.toHaveBeenCalled();
+    });
+
+    it('returns allowed: true for blog skill on pro tier', async () => {
+      const result = await checkSkillQuota('blog', 'user-pro-5', 'pro');
+      expect(result.allowed).toBe(true);
+      expect(mockCount).not.toHaveBeenCalled();
+    });
   });
 
   // --------------------------------------------------------------------------
@@ -95,6 +107,24 @@ describe('checkSkillQuota', () => {
       expect(result.allowed).toBe(true);
       expect(result.remaining).toBe(20); // TIER_LIMITS.free.skills.alert.monthlyRuns = 20
     });
+
+    it('script: returns allowed: true with remaining: 2', async () => {
+      mockCount.mockResolvedValue(0);
+
+      const result = await checkSkillQuota('script', 'user-free-4', 'free');
+
+      expect(result.allowed).toBe(true);
+      expect(result.remaining).toBe(2); // TIER_LIMITS.free.skills.script.monthlyRuns = 2
+    });
+
+    it('blog: returns allowed: true with remaining: 2', async () => {
+      mockCount.mockResolvedValue(0);
+
+      const result = await checkSkillQuota('blog', 'user-free-5', 'free');
+
+      expect(result.allowed).toBe(true);
+      expect(result.remaining).toBe(2); // TIER_LIMITS.free.skills.blog.monthlyRuns = 2
+    });
   });
 
   // --------------------------------------------------------------------------
@@ -126,6 +156,22 @@ describe('checkSkillQuota', () => {
       const result = await checkSkillQuota('alert', 'user-free-full', 'free');
       expect(result.allowed).toBe(false);
       expect(result.remaining).toBe(0);
+    });
+
+    it('script: returns allowed: false when count equals limit (2/2)', async () => {
+      mockCount.mockResolvedValue(2);
+      const result = await checkSkillQuota('script', 'user-free-full', 'free');
+      expect(result.allowed).toBe(false);
+      expect(result.remaining).toBe(0);
+      expect(result.reason).toBe('Monthly limit exceeded (2/2)');
+    });
+
+    it('blog: returns allowed: false when count equals limit (2/2)', async () => {
+      mockCount.mockResolvedValue(2);
+      const result = await checkSkillQuota('blog', 'user-free-full', 'free');
+      expect(result.allowed).toBe(false);
+      expect(result.remaining).toBe(0);
+      expect(result.reason).toBe('Monthly limit exceeded (2/2)');
     });
   });
 
