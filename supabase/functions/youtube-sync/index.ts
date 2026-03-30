@@ -607,8 +607,7 @@ Deno.serve(async (req) => {
 
         const { error } = await supabase
           .from('youtube_sync_settings')
-          .update(updates)
-          .eq('user_id', user.id);
+          .upsert({ user_id: user.id, ...updates }, { onConflict: 'user_id' });
 
         if (error) {
           console.error('Failed to update settings:', error);
