@@ -11,23 +11,13 @@
  * Design: #334 (Mandala Skills Phase 1)
  */
 
-import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { TIER_LIMITS } from '@/config/quota';
+import { queryMandalaCards, type SkillCard } from './card-query';
 import type { InsightaSkill, SkillContext, SkillResult, SkillPreview } from './types';
 
 const log = logger.child({ module: 'ResearchReportSkill' });
-
-interface CardRow {
-  id: string;
-  title: string | null;
-  url: string | null;
-  cell_index: number;
-  one_liner: string | null;
-  channel_title: string | null;
-  source_table: string;
-}
 
 export class ResearchReportSkill implements InsightaSkill {
   id = 'report' as const;
@@ -79,8 +69,13 @@ export class ResearchReportSkill implements InsightaSkill {
       const rootLevel = levels[0];
       const sectorNames: string[] = rootLevel?.subjects ? rootLevel.subjects : [];
 
-      // 2. Query cards (local + synced)
-      const cards = await this.queryCards(userId, mandalaId, rootLevel?.id, cellScope, maxCards);
+      // 2. Query cards (local + synced) — unified card query
+      const cards = await queryMandalaCards({
+        userId,
+        mandalaId,
+        cellScope,
+        limit: maxCards,
+      });
       if (cards.length === 0) {
         return {
           success: true,
@@ -135,20 +130,13 @@ export class ResearchReportSkill implements InsightaSkill {
       select: { title: true },
     });
 
-    const levels = await db.user_mandala_levels.findMany({
-      where: { mandala_id: ctx.mandalaId },
-      orderBy: { position: 'asc' },
-      take: 1,
-    });
-
     const maxCards = TIER_LIMITS[ctx.tier].skills.report.maxCards;
-    const cards = await this.queryCards(
-      ctx.userId,
-      ctx.mandalaId,
-      levels[0]?.id,
+    const cards = await queryMandalaCards({
+      userId: ctx.userId,
+      mandalaId: ctx.mandalaId,
       cellScope,
-      maxCards
-    );
+      limit: maxCards,
+    });
 
     const sectorCount = [...new Set(cards.map((c) => c.cell_index))].length;
 
@@ -163,71 +151,8 @@ export class ResearchReportSkill implements InsightaSkill {
   // Helpers
   // ============================================================================
 
-  private async queryCards(
-    userId: string,
-    mandalaId: string,
-    _rootLevelId: string | undefined,
-    cellScope: number[] | null,
-    maxCards: number
-  ): Promise<CardRow[]> {
-    const db = getPrismaClient();
-
-    // Local cards — all cards in mandala (no level_id filter: level_id stores level_key, not UUID)
-    const localCards = await db.user_local_cards.findMany({
-      where: {
-        user_id: userId,
-        mandala_id: mandalaId,
-        cell_index: cellScope ? { in: cellScope } : { gte: 0 },
-      },
-      select: {
-        id: true,
-        title: true,
-        url: true,
-        cell_index: true,
-      },
-      take: maxCards,
-    });
-
-    // Synced cards with summaries — all in mandala (no level_id filter)
-    const syncedCards = await db.$queryRaw<CardRow[]>`
-      SELECT
-        uvs.id::text,
-        yv.title,
-        CONCAT('https://youtube.com/watch?v=', yv.youtube_video_id) as url,
-        uvs.cell_index,
-        vrs.one_liner,
-        yv.channel_title,
-        'synced' as source_table
-      FROM user_video_states uvs
-      JOIN youtube_videos yv ON yv.id = uvs.video_id
-      LEFT JOIN video_rich_summaries vrs ON vrs.video_id = yv.youtube_video_id
-      WHERE uvs.user_id = ${userId}::uuid
-        AND uvs.mandala_id = ${mandalaId}::uuid
-        AND uvs.cell_index >= 0
-        AND uvs.is_in_ideation = false
-        ${cellScope ? Prisma.sql`AND uvs.cell_index = ANY(${cellScope}::int[])` : Prisma.empty}
-      ORDER BY uvs.created_at DESC
-      LIMIT ${maxCards}
-    `;
-
-    const merged: CardRow[] = [
-      ...localCards.map((c) => ({
-        id: c.id,
-        title: c.title,
-        url: c.url,
-        cell_index: c.cell_index ?? 0,
-        one_liner: null,
-        channel_title: null,
-        source_table: 'local',
-      })),
-      ...syncedCards,
-    ];
-
-    return merged.slice(0, maxCards);
-  }
-
-  private buildContext(cards: CardRow[], sectorNames: string[], mandalaTitle: string): string {
-    const bySector = new Map<number, CardRow[]>();
+  private buildContext(cards: SkillCard[], sectorNames: string[], mandalaTitle: string): string {
+    const bySector = new Map<number, SkillCard[]>();
     for (const card of cards) {
       const list = bySector.get(card.cell_index) ?? [];
       list.push(card);
