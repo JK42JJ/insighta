@@ -757,6 +757,8 @@
     "report": "리서치 리포트",
     "alert": "알림",
     "recommend": "추천",
+    "script": "영상 스크립트",
+    "blog": "블로그 포스트",
     "history": "히스토리",
     "historyEmpty": "아직 생성된 결과가 없습니다",
     "outputCards": "{{count}}개 카드",

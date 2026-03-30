@@ -757,6 +757,8 @@
     "report": "Research Report",
     "alert": "Alert",
     "recommend": "Recommendation",
+    "script": "Video Script",
+    "blog": "Blog Post",
     "history": "History",
     "historyEmpty": "No outputs yet",
     "outputCards": "{{count}} cards",

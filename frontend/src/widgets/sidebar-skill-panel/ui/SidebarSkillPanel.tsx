@@ -12,6 +12,8 @@ import {
   Download,
   X,
   History,
+  Video,
+  PenLine,
 } from 'lucide-react';
 import { useSkillList, useSkillPreview, useSkillExecute, useSkillOutputs } from '@/features/skill';
 import { useToast } from '@/shared/lib/use-toast';
@@ -22,6 +24,8 @@ const SKILL_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
   report: FileText,
   alert: Bell,
   recommend: Sparkles,
+  script: Video,
+  blog: PenLine,
 };
 
 interface SkillPreviewData {
@@ -273,6 +277,10 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
 const SKILL_TYPE_LABELS: Record<string, string> = {
   newsletter: 'Newsletter',
   report: 'Report',
+  alert: 'Alert',
+  recommend: 'Recommend',
+  script: 'Video Script',
+  blog: 'Blog Post',
 };
 
 function formatRelativeDate(dateStr: string): string {
