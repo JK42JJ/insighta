@@ -30,6 +30,8 @@ const transporter = nodemailer.createTransport({
   host: config.gmail.smtpHost,
   port: config.gmail.smtpPort,
   secure: false, // STARTTLS
+  name: 'insighta.one', // EHLO hostname — must match Workspace domain
+  tls: { rejectUnauthorized: true },
 });
 
 // ============================================================================
