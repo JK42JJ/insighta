@@ -46,26 +46,28 @@ export async function queryMandalaCards(opts: CardQueryOptions): Promise<SkillCa
   const { userId, mandalaId, cellScope = null, since = null, limit } = opts;
   const db = getPrismaClient();
 
-  // 1. Local cards (primary data source)
-  const localCards = await db.user_local_cards.findMany({
-    where: {
-      user_id: userId,
-      mandala_id: mandalaId,
-      cell_index: cellScope ? { in: cellScope } : { gte: 0 },
-      ...(since ? { created_at: { gte: since } } : {}),
-    },
-    select: {
-      id: true,
-      title: true,
-      url: true,
-      cell_index: true,
-      created_at: true,
-    },
-    orderBy: { created_at: 'desc' },
-    take: limit,
-  });
+  // 1. Local cards with video_summaries LEFT JOIN (for enriched YouTube cards)
+  const localCards = await db.$queryRaw<LocalCardRow[]>`
+    SELECT
+      ulc.id::text AS id,
+      ulc.title,
+      ulc.url,
+      ulc.cell_index,
+      ulc.created_at,
+      vs.summary_en AS one_liner,
+      vs.tags
+    FROM user_local_cards ulc
+    LEFT JOIN video_summaries vs ON vs.video_id = ulc.video_id
+    WHERE ulc.user_id = ${userId}::uuid
+      AND ulc.mandala_id = ${mandalaId}::uuid
+      AND ulc.cell_index >= 0
+      ${cellScope ? Prisma.sql`AND ulc.cell_index = ANY(${cellScope}::int[])` : Prisma.empty}
+      ${since ? Prisma.sql`AND ulc.created_at >= ${since}` : Prisma.empty}
+    ORDER BY ulc.created_at DESC
+    LIMIT ${limit}
+  `;
 
-  // 2. Synced YouTube cards with rich summaries
+  // 2. Synced YouTube cards with video_summaries
   const syncedCards = await db.$queryRaw<SyncedCardRow[]>`
     SELECT
       uvs.id::text AS id,
@@ -74,14 +76,12 @@ export async function queryMandalaCards(opts: CardQueryOptions): Promise<SkillCa
       yv.thumbnail_url,
       uvs.cell_index,
       yv.channel_title,
-      vrs.one_liner,
-      vrs.structured,
-      vrs.quality_score,
-      vrs.quality_flag,
+      vs.summary_en AS one_liner,
+      vs.tags,
       uvs.created_at
     FROM user_video_states uvs
     JOIN youtube_videos yv ON yv.id = uvs.video_id
-    LEFT JOIN video_rich_summaries vrs ON vrs.video_id = yv.youtube_video_id
+    LEFT JOIN video_summaries vs ON vs.video_id = yv.youtube_video_id
     WHERE uvs.user_id = ${userId}::uuid
       AND uvs.mandala_id = ${mandalaId}::uuid
       AND uvs.cell_index >= 0
@@ -101,7 +101,7 @@ export async function queryMandalaCards(opts: CardQueryOptions): Promise<SkillCa
       thumbnail_url: null,
       cell_index: c.cell_index ?? 0,
       channel_title: c.url ? safeHostname(c.url) : null,
-      one_liner: null,
+      one_liner: c.one_liner ?? null,
       structured: null,
       quality_score: null,
       quality_flag: null,
@@ -115,10 +115,10 @@ export async function queryMandalaCards(opts: CardQueryOptions): Promise<SkillCa
       thumbnail_url: c.thumbnail_url,
       cell_index: c.cell_index,
       channel_title: c.channel_title,
-      one_liner: c.one_liner,
-      structured: c.structured,
-      quality_score: c.quality_score,
-      quality_flag: c.quality_flag,
+      one_liner: c.one_liner ?? null,
+      structured: null,
+      quality_score: null,
+      quality_flag: null,
       source: 'synced' as const,
       created_at: c.created_at,
     })),
@@ -133,6 +133,16 @@ export async function queryMandalaCards(opts: CardQueryOptions): Promise<SkillCa
 // Internal types
 // ---------------------------------------------------------------------------
 
+interface LocalCardRow {
+  id: string;
+  title: string | null;
+  url: string | null;
+  cell_index: number | null;
+  created_at: Date | null;
+  one_liner: string | null;
+  tags: string[] | null;
+}
+
 interface SyncedCardRow {
   id: string;
   title: string | null;
@@ -141,9 +151,7 @@ interface SyncedCardRow {
   cell_index: number;
   channel_title: string | null;
   one_liner: string | null;
-  structured: unknown;
-  quality_score: number | null;
-  quality_flag: string | null;
+  tags: string[] | null;
   created_at: Date;
 }
 

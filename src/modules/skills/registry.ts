@@ -47,7 +47,7 @@ class SkillRegistry {
     const db = getPrismaClient();
 
     // Quota guard — check before any DB writes
-    const QUOTA_SKILLS: SkillId[] = ['newsletter', 'report', 'alert'];
+    const QUOTA_SKILLS: SkillId[] = ['newsletter', 'report', 'alert', 'script', 'blog'];
     if (QUOTA_SKILLS.includes(skillId as SkillId)) {
       const quota = await checkSkillQuota(skillId as SkillId, ctx.userId, ctx.tier);
       if (!quota.allowed) {

@@ -29,7 +29,7 @@ export interface QuotaCheckResult {
 }
 
 /** Skills that have a monthlyRuns limit tracked via skill_runs table */
-export type SkillId = 'newsletter' | 'report' | 'alert';
+export type SkillId = 'newsletter' | 'report' | 'alert' | 'script' | 'blog';
 
 // ---------------------------------------------------------------------------
 // Implementation
@@ -38,7 +38,7 @@ export type SkillId = 'newsletter' | 'report' | 'alert';
 /**
  * Checks whether `userId` (on `tier`) may execute `skillId` right now.
  *
- * @param skillId - Skill to check ('newsletter' | 'report' | 'alert')
+ * @param skillId - Skill to check ('newsletter' | 'report' | 'alert' | 'script' | 'blog')
  * @param userId  - UUID of the requesting user
  * @param tier    - User's subscription tier
  * @returns QuotaCheckResult with allowed flag, optional reason, and remaining count
