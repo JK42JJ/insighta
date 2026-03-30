@@ -11,6 +11,7 @@ import { config } from '../../config';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MAX_TOKENS = 1024;
+const REQUEST_TIMEOUT_MS = 60_000;
 
 export class OpenRouterGenerationProvider implements GenerationProvider {
   readonly name = 'openrouter';
@@ -34,16 +35,30 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       reasoning: { enabled: false },
     };
 
-    const response = await fetch(OPENROUTER_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://insighta.one',
-        'X-Title': 'Insighta',
-      },
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+      response = await fetch(OPENROUTER_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://insighta.one',
+          'X-Title': 'Insighta',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
+        throw new Error(`OpenRouter request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const errorBody = await response.text();
