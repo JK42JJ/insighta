@@ -30,6 +30,9 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       messages: [{ role: 'user', content: prompt }],
       temperature: options?.temperature ?? 0.3,
       max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
+      // Disable thinking/reasoning mode — Qwen3 models consume token budget on reasoning,
+      // leaving content empty. See troubleshooting.md "Qwen3 thinking 모드 → 빈 응답".
+      reasoning: { enabled: false },
     };
 
     const controller = new AbortController();

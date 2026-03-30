@@ -93,11 +93,16 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
           description: t('skills.noContentDesc', 'Add more cards to your mandala first.'),
         });
       } else {
-        toast({ title: result.data.error || t('skills.error'), variant: 'destructive' });
+        toast({
+          title: t('skills.error'),
+          description: result.data.error,
+          variant: 'destructive',
+        });
       }
       setPreviewData(null);
-    } catch {
-      toast({ title: t('skills.error'), variant: 'destructive' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : undefined;
+      toast({ title: t('skills.error'), description: message, variant: 'destructive' });
     }
   };
 
