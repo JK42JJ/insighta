@@ -58,3 +58,39 @@ describe('DndContext Structure Guard', () => {
     expect(minimapEffectMatch![1]).toContain('cards.cardsByCell');
   });
 });
+
+describe('External D&D Handler Guard', () => {
+  it('CardListView must have onExternalUrlDrop prop and handlers', () => {
+    const content = readFile('widgets/card-list-view/ui/CardListView.tsx');
+    expect(content).toContain('onExternalUrlDrop');
+    expect(content).toContain('onDragOver={handleExternalDragOver}');
+    expect(content).toContain('onDrop={handleExternalDrop}');
+  });
+
+  it('CardListView must use extractUrlFromDragData for URL extraction', () => {
+    const content = readFile('widgets/card-list-view/ui/CardListView.tsx');
+    expect(content).toContain('extractUrlFromDragData');
+    expect(content).toContain('extractUrlFromHtml');
+  });
+
+  it('SidebarHeatMinimap must have onExternalUrlDrop prop and handlers', () => {
+    const content = readFile('widgets/sidebar-heat-minimap/ui/SidebarHeatMinimap.tsx');
+    expect(content).toContain('onExternalUrlDrop');
+    expect(content).toContain('onDragOver={handleExternalDragOver}');
+    expect(content).toContain('onDrop={handleExternalDrop}');
+  });
+
+  it('IndexPage must pass onExternalUrlDrop to CardListView and minimapData', () => {
+    const content = readFile('pages/index/ui/IndexPage.tsx');
+    expect(content).toContain('onExternalUrlDrop={');
+    const minimapBlock = content.match(/setMinimapData\(\{([\s\S]*?)\}\);/);
+    expect(minimapBlock).not.toBeNull();
+    expect(minimapBlock![1]).toContain('onExternalUrlDrop');
+  });
+
+  it('IndexPage must NOT have external DropZoneOverlay (only internal)', () => {
+    const content = readFile('pages/index/ui/IndexPage.tsx');
+    const overlayMatches = content.match(/<DropZoneOverlay/g);
+    expect(overlayMatches?.length ?? 0).toBeLessThanOrEqual(1);
+  });
+});

@@ -558,6 +558,9 @@ function AuthenticatedApp() {
       selectedCellIndex: navigation.selectedCellIndex,
       onCellClick: navigation.handleCellClick,
       mandalaId: selectedMandalaId,
+      onExternalUrlDrop: (cellIndex: number, url: string) => {
+        cards.handleCardDrop(cellIndex, url);
+      },
     });
   }, [
     cards.cardsByCell,
@@ -606,10 +609,9 @@ function AuthenticatedApp() {
   return (
     <>
       <div className="h-full flex flex-col overflow-hidden">
-        {/* External drag overlay (full dimming + dashed border) */}
-        <DropZoneOverlay
-          isVisible={dragDrop.isDraggingOver && !dragDrop.draggingCard && !dragDrop.isDraggingCell}
-        />
+        {/* External drag overlay removed — each drop zone (CardListView, minimap cells,
+            ScratchPad) handles its own visual feedback. Full-page overlay caused confusion
+            with duplicate dashed borders and z-index blocking issues. */}
         {/* Internal drag overlay (subtle dimming only) */}
         <DropZoneOverlay
           isVisible={
@@ -703,6 +705,16 @@ function AuthenticatedApp() {
                 onCardsReorder={cards.handleCardsReorder}
                 onDeleteCards={cards.handleDeleteCards}
                 onAddCard={navigation.selectedCellIndex != null ? handleAddCard : undefined}
+                onExternalUrlDrop={(url) => {
+                  if (navigation.selectedCellIndex != null) {
+                    cards.handleCardDrop(navigation.selectedCellIndex, url);
+                  } else {
+                    cards.handleScratchPadDrop(url);
+                  }
+                }}
+                onExternalFileDrop={(files) => {
+                  cards.handleScratchPadFileDrop(files);
+                }}
                 onSaveWatchPosition={cards.handleSaveWatchPosition}
                 watchPositionCache={modal.watchPositionCache}
                 panelSizeCache={modal.panelSizeCache}

@@ -5,6 +5,7 @@ import { Pencil, Check } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { type DropData } from '@/shared/lib/dnd';
 import type { InsightCard } from '@/entities/card/model/types';
+import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 
 interface SidebarHeatMinimapProps {
   cardsByCell: Record<number, InsightCard[]>;
@@ -13,6 +14,7 @@ interface SidebarHeatMinimapProps {
   selectedCellIndex: number | null;
   onCellClick: (cellIndex: number, subject: string) => void;
   onSectorNamesChange?: (centerGoal: string, subjects: string[]) => void;
+  onExternalUrlDrop?: (cellIndex: number, url: string) => void;
 }
 
 const GRID_TO_SUBJECT: Record<number, number> = {
@@ -49,6 +51,7 @@ export function SidebarHeatMinimap({
   selectedCellIndex,
   onCellClick,
   onSectorNamesChange,
+  onExternalUrlDrop,
 }: SidebarHeatMinimapProps) {
   const { t } = useTranslation();
   const [showNumbers, setShowNumbers] = useState(getInitialShowNumbers);
@@ -213,6 +216,7 @@ export function SidebarHeatMinimap({
                   onCellClick(subjectIndex, label);
                 }
               }}
+              onExternalUrlDrop={onExternalUrlDrop}
             />
           );
         })}
@@ -319,6 +323,7 @@ interface HeatCellProps {
   isSelected: boolean;
   showNumbers: boolean;
   onClick: () => void;
+  onExternalUrlDrop?: (cellIndex: number, url: string) => void;
 }
 
 function HeatCell({
@@ -332,7 +337,44 @@ function HeatCell({
   isSelected,
   showNumbers,
   onClick,
+  onExternalUrlDrop,
 }: HeatCellProps) {
+  const [isExternalDragOver, setIsExternalDragOver] = useState(false);
+
+  const handleExternalDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (isCenter || !onExternalUrlDrop) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setIsExternalDragOver(true);
+    },
+    [isCenter, onExternalUrlDrop]
+  );
+
+  const handleExternalDragLeave = useCallback(() => {
+    setIsExternalDragOver(false);
+  }, []);
+
+  const handleExternalDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsExternalDragOver(false);
+      if (isCenter || !onExternalUrlDrop) return;
+      const rawUrl =
+        e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+      let url = rawUrl ? extractUrlFromDragData(rawUrl) : null;
+      if (!url) {
+        const html = e.dataTransfer.getData('text/html');
+        if (html) url = extractUrlFromHtml(html);
+      }
+      if (url) {
+        onExternalUrlDrop(subjectIndex, url);
+      }
+    },
+    [isCenter, subjectIndex, onExternalUrlDrop]
+  );
+
   const dropData: DropData = {
     type: 'mandala-cell',
     gridIndex,
@@ -348,15 +390,24 @@ function HeatCell({
     <button
       ref={setNodeRef}
       onClick={onClick}
+      onDragOver={handleExternalDragOver}
+      onDragLeave={handleExternalDragLeave}
+      onDrop={handleExternalDrop}
       className={cn(
         'aspect-square rounded-[5px] flex flex-col items-center justify-center gap-0.5 transition-all duration-150',
         'border border-transparent',
         isCenter && 'border-sidebar-border',
         isSelected && 'border-primary',
-        !isCenter && !isSelected && !isOver && 'hover:border-sidebar-foreground/20',
+        !isCenter &&
+          !isSelected &&
+          !isOver &&
+          !isExternalDragOver &&
+          'hover:border-sidebar-foreground/20',
         'cursor-pointer',
-        // Drop target highlight
-        isOver && !isCenter && 'border-primary border-dashed scale-105 ring-1 ring-primary/40'
+        // Drop target highlight (internal D&D or external HTML5 drag)
+        (isOver || isExternalDragOver) &&
+          !isCenter &&
+          'border-2 border-dashed border-primary bg-primary/5 scale-105'
       )}
       style={{
         background: isCenter
