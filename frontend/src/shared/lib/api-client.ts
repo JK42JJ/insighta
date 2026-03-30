@@ -1395,18 +1395,18 @@ class ApiClient {
   // ========================================
 
   async listSkills(): Promise<{ data: SkillListResponse[] }> {
-    return this.request('/api/v1/skills');
+    return this.request('/skills');
   }
 
   async previewSkill(skillId: string, mandalaId: string): Promise<{ data: SkillPreviewResponse }> {
-    return this.request(`/api/v1/skills/${skillId}/preview`, {
+    return this.request(`/skills/${skillId}/preview`, {
       method: 'POST',
       body: JSON.stringify({ mandala_id: mandalaId }),
     });
   }
 
   async executeSkill(skillId: string, mandalaId: string): Promise<{ data: SkillExecuteResponse }> {
-    return this.request(`/api/v1/skills/${skillId}/execute`, {
+    return this.request(`/skills/${skillId}/execute`, {
       method: 'POST',
       body: JSON.stringify({ mandala_id: mandalaId }),
     });
