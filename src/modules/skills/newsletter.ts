@@ -231,32 +231,25 @@ export class NewsletterSkill implements InsightaSkill {
            </ul>`
             : `<p style="color:#555;font-size:14px;margin:8px 0;">${escapeHtml(card.one_liner ?? '')}</p>`;
 
+        const linkLabel = card.source === 'synced' ? 'YouTube' : (card.channel_title ?? 'Link');
+
         return `
         <div style="margin-bottom:24px;padding:16px;border:1px solid #e5e7eb;border-radius:8px;">
-          <div style="display:flex;gap:12px;align-items:flex-start;">
-            ${
-              card.thumbnail_url
-                ? `<img src="${escapeHtml(card.thumbnail_url)}" width="120" style="border-radius:4px;flex-shrink:0;" />`
-                : ''
-            }
-            <div style="flex:1;">
-              <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;">${escapeHtml(card.channel_title ?? '')}</p>
-              <p style="margin:0 0 8px;font-weight:600;font-size:15px;color:#111;">
-                ${i + 1}. ${escapeHtml(card.title ?? '')}
-              </p>
-              ${summarySection}
-              ${
-                card.url
-                  ? `<a href="${escapeHtml(card.url)}"
-                       style="display:inline-block;margin-top:8px;padding:6px 12px;
-                              background:#111;color:#fff;border-radius:4px;
-                              font-size:12px;text-decoration:none;">
-                      ${card.source === 'synced' ? 'Watch on YouTube' : 'View'}
-                    </a>`
-                  : ''
-              }
-            </div>
-          </div>
+          <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;">${escapeHtml(card.channel_title ?? '')}</p>
+          <p style="margin:0 0 8px;font-weight:600;font-size:15px;color:#111;">
+            ${i + 1}. ${escapeHtml(card.title ?? '')}
+          </p>
+          ${summarySection}
+          ${
+            card.url
+              ? `<a href="${escapeHtml(card.url)}"
+                   style="display:inline-block;margin-top:8px;padding:6px 12px;
+                          background:#111;color:#fff;border-radius:4px;
+                          font-size:12px;text-decoration:none;">
+                  ${escapeHtml(linkLabel)} →
+                </a>`
+              : ''
+          }
         </div>`;
       })
       .join('');
@@ -280,7 +273,7 @@ export class NewsletterSkill implements InsightaSkill {
 <body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111;">
   <h2 style="margin-bottom:4px;">This week's ${escapeHtml(mandalaTitle ?? 'learning')} curation</h2>
   <p style="color:#6b7280;font-size:14px;margin-top:0;">
-    Top ${cards.length} videos related to your goals
+    Top ${cards.length} items related to your goals
   </p>
   <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
   ${cardHtml}
