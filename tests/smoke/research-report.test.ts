@@ -6,7 +6,8 @@
  * dryRun preview, and $executeRaw persistence call.
  *
  * Mocking strategy:
- *   - getPrismaClient: mocked to avoid real DB connections
+ *   - getPrismaClient: mocked for mandala/level DB access
+ *   - queryMandalaCards: mocked to return unified SkillCard[]
  *   - GenerationProvider: inline mock object
  *   - logger: mocked to suppress output
  *
@@ -20,15 +21,11 @@ export {};
 
 const mockFindUniqueMandala = jest.fn();
 const mockFindManyLevels = jest.fn();
-const mockFindManyLocalCards = jest.fn();
-const mockQueryRaw = jest.fn();
 const mockExecuteRaw = jest.fn();
 
 const mockPrisma = {
   user_mandalas: { findUnique: mockFindUniqueMandala },
   user_mandala_levels: { findMany: mockFindManyLevels },
-  user_local_cards: { findMany: mockFindManyLocalCards },
-  $queryRaw: mockQueryRaw,
   $executeRaw: mockExecuteRaw,
 };
 
@@ -46,6 +43,11 @@ jest.mock('../../src/utils/logger', () => ({
   },
 }));
 
+const mockQueryMandalaCards = jest.fn();
+jest.mock('../../src/modules/skills/card-query', () => ({
+  queryMandalaCards: (...args: unknown[]) => mockQueryMandalaCards(...args),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports — after mocks are registered
 // ---------------------------------------------------------------------------
@@ -53,6 +55,7 @@ jest.mock('../../src/utils/logger', () => ({
 import { ResearchReportSkill } from '../../src/modules/skills/research-report';
 import type { SkillContext } from '../../src/modules/skills/types';
 import type { GenerationProvider } from '../../src/modules/llm/provider';
+import type { SkillCard } from '../../src/modules/skills/card-query';
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -74,19 +77,49 @@ const makeCtx = (overrides: Partial<SkillContext> = {}): SkillContext => ({
 
 const MANDALA_ROW = { title: 'Test Mandala' };
 const LEVEL_ROW = { id: 'level-1', subjects: ['Sector A', 'Sector B'], position: 0 };
-const LOCAL_CARDS = [
-  { id: 'card-1', title: 'Card One', url: null, cell_index: 0 },
-  { id: 'card-2', title: 'Card Two', url: 'https://example.com', cell_index: 1 },
-];
-const SYNCED_CARDS = [
+
+const SKILL_CARDS: SkillCard[] = [
+  {
+    id: 'card-1',
+    title: 'Card One',
+    url: null,
+    thumbnail_url: null,
+    cell_index: 0,
+    channel_title: null,
+    one_liner: null,
+    structured: null,
+    quality_score: null,
+    quality_flag: null,
+    source: 'local',
+    created_at: new Date('2026-03-28'),
+  },
+  {
+    id: 'card-2',
+    title: 'Card Two',
+    url: 'https://example.com',
+    thumbnail_url: null,
+    cell_index: 1,
+    channel_title: 'example.com',
+    one_liner: null,
+    structured: null,
+    quality_score: null,
+    quality_flag: null,
+    source: 'local',
+    created_at: new Date('2026-03-29'),
+  },
   {
     id: 'synced-1',
     title: 'Synced Video',
     url: 'https://youtube.com/watch?v=abc',
+    thumbnail_url: 'https://i.ytimg.com/vi/abc/maxresdefault.jpg',
     cell_index: 0,
-    one_liner: 'A great video',
     channel_title: 'Some Channel',
-    source_table: 'synced',
+    one_liner: 'A great video',
+    structured: null,
+    quality_score: null,
+    quality_flag: null,
+    source: 'synced',
+    created_at: new Date('2026-03-30'),
   },
 ];
 
@@ -132,8 +165,7 @@ describe('ResearchReportSkill.execute — happy path', () => {
     jest.clearAllMocks();
     mockFindUniqueMandala.mockResolvedValue(MANDALA_ROW);
     mockFindManyLevels.mockResolvedValue([LEVEL_ROW]);
-    mockFindManyLocalCards.mockResolvedValue(LOCAL_CARDS);
-    mockQueryRaw.mockResolvedValue(SYNCED_CARDS);
+    mockQueryMandalaCards.mockResolvedValue(SKILL_CARDS);
     mockExecuteRaw.mockResolvedValue(1);
     (mockLlm.generate as jest.Mock).mockResolvedValue('Mock report content');
   });
@@ -153,9 +185,8 @@ describe('ResearchReportSkill.execute — happy path', () => {
     expect(result.data?.['title']).toBe('Research Report: Test Mandala');
   });
 
-  it('returns data.card_count equal to total merged card count', async () => {
+  it('returns data.card_count equal to total card count', async () => {
     const result = await skill.execute(makeCtx());
-    // LOCAL_CARDS (2) + SYNCED_CARDS (1) = 3
     expect(result.data?.['card_count']).toBe(3);
   });
 
@@ -175,6 +206,13 @@ describe('ResearchReportSkill.execute — happy path', () => {
     await skill.execute(makeCtx());
     expect(mockExecuteRaw).toHaveBeenCalledTimes(1);
   });
+
+  it('calls queryMandalaCards with correct userId and mandalaId', async () => {
+    await skill.execute(makeCtx());
+    expect(mockQueryMandalaCards).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-abc', mandalaId: 'mandala-xyz' })
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -189,8 +227,7 @@ describe('ResearchReportSkill.execute — skipped (no cards)', () => {
     jest.clearAllMocks();
     mockFindUniqueMandala.mockResolvedValue(MANDALA_ROW);
     mockFindManyLevels.mockResolvedValue([LEVEL_ROW]);
-    mockFindManyLocalCards.mockResolvedValue([]);
-    mockQueryRaw.mockResolvedValue([]);
+    mockQueryMandalaCards.mockResolvedValue([]);
     mockExecuteRaw.mockResolvedValue(1);
   });
 
@@ -221,39 +258,32 @@ describe('ResearchReportSkill.execute — error handling', () => {
   beforeEach(() => {
     skill = new ResearchReportSkill();
     jest.clearAllMocks();
+    mockQueryMandalaCards.mockResolvedValue([]);
   });
 
   it('returns success:false with "Mandala not found" when mandala does not exist', async () => {
     mockFindUniqueMandala.mockResolvedValue(null);
-
     const result = await skill.execute(makeCtx());
-
     expect(result.success).toBe(false);
     expect(result.error).toBe('Mandala not found');
   });
 
   it('does NOT call llm.generate when mandala is missing', async () => {
     mockFindUniqueMandala.mockResolvedValue(null);
-
     await skill.execute(makeCtx());
-
     expect(mockLlm.generate).not.toHaveBeenCalled();
   });
 
   it('returns success:false and captures error message when an exception is thrown', async () => {
     mockFindUniqueMandala.mockRejectedValue(new Error('DB connection lost'));
-
     const result = await skill.execute(makeCtx());
-
     expect(result.success).toBe(false);
     expect(result.error).toBe('DB connection lost');
   });
 
   it('returns success:false and captures error string when a non-Error is thrown', async () => {
     mockFindUniqueMandala.mockRejectedValue('raw string error');
-
     const result = await skill.execute(makeCtx());
-
     expect(result.success).toBe(false);
     expect(result.error).toBe('raw string error');
   });
@@ -271,8 +301,7 @@ describe('ResearchReportSkill.dryRun', () => {
     jest.clearAllMocks();
     mockFindUniqueMandala.mockResolvedValue(MANDALA_ROW);
     mockFindManyLevels.mockResolvedValue([LEVEL_ROW]);
-    mockFindManyLocalCards.mockResolvedValue(LOCAL_CARDS);
-    mockQueryRaw.mockResolvedValue(SYNCED_CARDS);
+    mockQueryMandalaCards.mockResolvedValue(SKILL_CARDS);
   });
 
   it('returns subject containing the mandala title', async () => {
@@ -280,9 +309,8 @@ describe('ResearchReportSkill.dryRun', () => {
     expect(preview.subject).toContain('Test Mandala');
   });
 
-  it('returns curated_count equal to total merged card count', async () => {
+  it('returns curated_count equal to total card count', async () => {
     const preview = await skill.dryRun(makeCtx());
-    // LOCAL_CARDS (2) + SYNCED_CARDS (1) = 3
     expect(preview.curated_count).toBe(3);
   });
 
@@ -293,15 +321,13 @@ describe('ResearchReportSkill.dryRun', () => {
 
   it('returns preview_html containing sector count', async () => {
     const preview = await skill.dryRun(makeCtx());
-    // cell_index 0 and 1 appear across merged cards — 2 distinct sectors
+    // cell_index 0 and 1 — 2 distinct sectors
     expect(preview.preview_html).toContain('2');
   });
 
   it('falls back gracefully when mandala is not found (no throw)', async () => {
     mockFindUniqueMandala.mockResolvedValue(null);
-    mockFindManyLocalCards.mockResolvedValue([]);
-    mockQueryRaw.mockResolvedValue([]);
-
+    mockQueryMandalaCards.mockResolvedValue([]);
     const preview = await skill.dryRun(makeCtx());
     expect(preview.subject).toContain('Mandala');
     expect(preview.curated_count).toBe(0);
