@@ -37,7 +37,7 @@ const transporter = nodemailer.createTransport({
 
 const MAX_BIAS_SIGNALS = 1;
 const MAX_FROM_SAME_CHANNEL = 1;
-const CURATION_WINDOW_DAYS = 7;
+const CURATION_WINDOW_DAYS = 30;
 const CURATION_QUERY_LIMIT = 50;
 
 // ============================================================================
