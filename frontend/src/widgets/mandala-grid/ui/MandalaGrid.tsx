@@ -232,7 +232,7 @@ export const MandalaGrid = memo(function MandalaGrid({
   };
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="w-full h-full flex flex-col" data-testid="mandala-grid">
       {/* Header with stats - hidden in floating mode */}
       {!hideHeader && (
         <div className="flex items-center justify-between px-1 pb-2 flex-shrink-0">

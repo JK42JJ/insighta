@@ -27,7 +27,7 @@ async function waitForGrid(page: Page): Promise<Locator | null> {
   const gridContainer = sidebar.locator('.grid.grid-cols-3').first();
   for (let i = 0; i < 5; i++) {
     if (await gridContainer.isVisible().catch(() => false)) {
-      const cells = gridContainer.locator('[role="button"]');
+      const cells = gridContainer.locator('button, [role="button"]');
       if ((await cells.count()) === 9) return cells;
     }
     await page.waitForTimeout(1000);
@@ -46,7 +46,7 @@ async function findCellWithCards(
   page: Page,
   minCards = 1
 ): Promise<{ cell: Locator; count: number; index: number } | null> {
-  const cells = page.locator('aside .grid.grid-cols-3 [role="button"]');
+  const cells = page.locator('aside .grid.grid-cols-3 :is(button, [role="button"])');
   const count = await cells.count();
   for (let i = 0; i < count; i++) {
     if (i === 4) continue;
@@ -60,7 +60,7 @@ async function findCellWithCards(
 }
 
 async function findEmptyCell(page: Page): Promise<Locator | null> {
-  const cells = page.locator('aside .grid.grid-cols-3 [role="button"]');
+  const cells = page.locator('aside .grid.grid-cols-3 :is(button, [role="button"])');
   const count = await cells.count();
   for (let i = 0; i < count; i++) {
     if (i === 4) continue;
@@ -149,7 +149,7 @@ test.describe('D&D Smoke Tests — Critical Path (#329)', () => {
     const target = await findEmptyCell(page);
     if (!target) {
       // Use first non-center cell as fallback
-      const firstCell = page.locator('aside .grid.grid-cols-3 [role="button"]').first();
+      const firstCell = page.locator('aside .grid.grid-cols-3 :is(button, [role="button"])').first();
       if (!(await firstCell.isVisible().catch(() => false))) {
         test.skip(true, 'No target cell available');
         return;
@@ -172,11 +172,12 @@ test.describe('D&D Smoke Tests — Critical Path (#329)', () => {
     const cellCount = await cells.count();
     expect(cellCount).toBe(9);
 
-    // Each cell should be interactive (role="button" with tabIndex)
+    // Each cell should be interactive (<button> element or role="button")
     for (let i = 0; i < 9; i++) {
       const cell = cells.nth(i);
+      const tag = await cell.evaluate(el => el.tagName.toLowerCase());
       const role = await cell.getAttribute('role');
-      expect(role).toBe('button');
+      expect(tag === 'button' || role === 'button').toBe(true);
     }
 
     // Center cell (index 4) should show goal text

@@ -10,6 +10,16 @@ and **extract lessons** to **auto-improve** related memory files.
 Usage: /save [title]
 - If title omitted, auto-generate from git log
 
+## Performance: Background Execution
+
+**IMPORTANT**: /save blocks the user for 10-15 minutes. To avoid this:
+1. When user calls `/save`, launch this entire command as a **background Agent** (`run_in_background: true`)
+2. Respond immediately: "세션 기록을 백그라운드로 진행합니다. 다음 작업을 바로 시작하세요."
+3. The background agent executes all steps below autonomously
+4. User is notified when complete
+
+**Exception**: If the user explicitly asks to wait for /save results, run in foreground.
+
 ## Core Principles
 
 > `/save` is not just recording — it is the **Write stage of the learning cycle**.
