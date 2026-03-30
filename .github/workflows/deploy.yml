@@ -92,7 +92,7 @@ jobs:
   migrate:
     name: Database Schema Sync
     runs-on: ubuntu-latest
-    needs: [build-and-push]
+    needs: [ci]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -120,7 +120,7 @@ jobs:
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
-    needs: [migrate]
+    needs: [migrate, build-and-push]
     environment: production
     env:
       SG_ID: sg-079aa1ca6855e587b
@@ -196,12 +196,12 @@ jobs:
 
             # Wait for health check
             echo "Waiting for services to be healthy..."
-            sleep 10
+            sleep 5
 
             RETRIES=6
             for i in $(seq 1 $RETRIES); do
               if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
-                echo "Health check passed!"
+                echo "Health check passed on attempt $i!"
                 break
               fi
               if [ $i -eq $RETRIES ]; then
@@ -211,7 +211,7 @@ jobs:
                 exit 1
               fi
               echo "Attempt $i/$RETRIES - waiting..."
-              sleep 10
+              sleep 5
             done
 
             # Cleanup old images

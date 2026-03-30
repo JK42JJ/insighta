@@ -50,24 +50,9 @@ jobs:
             echo "History: D&D regression 3x (CP248, CP268, CP271)"
           fi
 
-  test-backend:
-    name: Test Backend
-    runs-on: ubuntu-latest
-    needs: [lint]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npx prisma generate
-      - run: npx jest --testPathPattern=tests/smoke
-
   test-frontend:
     name: Test Frontend
     runs-on: ubuntu-latest
-    needs: [lint]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -77,10 +62,11 @@ jobs:
         run: cd frontend && npm install --no-package-lock --no-audit
       - run: cd frontend && npx vitest run
 
-  build-api:
-    name: Build API
+  # Combined: test-backend + build-api (saves 1 npm ci)
+  test-and-build-api:
+    name: Test Backend & Build API
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test-backend]
+    needs: [typecheck]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -89,12 +75,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
+      - run: npx jest --testPathPattern=tests/smoke
       - run: npm run build
 
-  build-frontend:
-    name: Build Frontend
+  # Combined: build-frontend + a11y (saves 1 npm install + 1 vite build)
+  build-and-a11y-frontend:
+    name: Build Frontend & Accessibility
     runs-on: ubuntu-latest
-    needs: [lint, test-frontend]
+    needs: [test-frontend]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -107,22 +95,6 @@ jobs:
           VITE_API_URL: /api
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: placeholder
-
-  a11y:
-    name: Accessibility Check
-    runs-on: ubuntu-latest
-    needs: [build-frontend]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: cd frontend && npm install --no-package-lock --no-audit
       - run: cd frontend && npx playwright install --with-deps chromium
-      - run: cd frontend && npm run build
-        env:
-          VITE_API_URL: /api
-          VITE_SUPABASE_URL: https://placeholder.supabase.co
-          VITE_SUPABASE_PUBLISHABLE_KEY: placeholder
       - name: Run axe accessibility tests
         run: cd frontend && npx playwright test tests/a11y.spec.ts --project=no-auth
