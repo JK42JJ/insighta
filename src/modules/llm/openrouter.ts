@@ -30,9 +30,6 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       messages: [{ role: 'user', content: prompt }],
       temperature: options?.temperature ?? 0.3,
       max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
-      // Disable thinking/reasoning for Qwen3 models (consumes max_tokens budget)
-      // OpenRouter unified param for non-OpenAI models
-      reasoning: { enabled: false },
     };
 
     const controller = new AbortController();

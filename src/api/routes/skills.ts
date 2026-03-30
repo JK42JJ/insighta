@@ -157,8 +157,7 @@ export const skillRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         params: parsed.data,
       });
 
-      const statusCode = result.success ? 200 : 500;
-      return reply.code(statusCode).send(createSuccessResponse(result));
+      return reply.send(createSuccessResponse(result));
     }
   );
 

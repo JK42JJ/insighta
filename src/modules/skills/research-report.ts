@@ -14,11 +14,10 @@
 import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
+import { TIER_LIMITS } from '@/config/quota';
 import type { InsightaSkill, SkillContext, SkillResult, SkillPreview } from './types';
 
 const log = logger.child({ module: 'ResearchReportSkill' });
-
-const REPORT_CARD_LIMIT = 50;
 
 interface CardRow {
   id: string;
@@ -52,8 +51,9 @@ export class ResearchReportSkill implements InsightaSkill {
 
   async execute(ctx: SkillContext): Promise<SkillResult> {
     const start = Date.now();
-    const { userId, mandalaId, llm } = ctx;
+    const { userId, mandalaId, tier, llm } = ctx;
     const cellScope = (ctx.params?.['cell_scope'] as number[] | undefined) ?? null;
+    const maxCards = TIER_LIMITS[tier].skills.report.maxCards;
 
     try {
       const db = getPrismaClient();
@@ -80,7 +80,7 @@ export class ResearchReportSkill implements InsightaSkill {
       const sectorNames: string[] = rootLevel?.subjects ? rootLevel.subjects : [];
 
       // 2. Query cards (local + synced)
-      const cards = await this.queryCards(userId, mandalaId, rootLevel?.id, cellScope);
+      const cards = await this.queryCards(userId, mandalaId, rootLevel?.id, cellScope, maxCards);
       if (cards.length === 0) {
         return {
           success: true,
@@ -141,7 +141,14 @@ export class ResearchReportSkill implements InsightaSkill {
       take: 1,
     });
 
-    const cards = await this.queryCards(ctx.userId, ctx.mandalaId, levels[0]?.id, cellScope);
+    const maxCards = TIER_LIMITS[ctx.tier].skills.report.maxCards;
+    const cards = await this.queryCards(
+      ctx.userId,
+      ctx.mandalaId,
+      levels[0]?.id,
+      cellScope,
+      maxCards
+    );
 
     const sectorCount = [...new Set(cards.map((c) => c.cell_index))].length;
 
@@ -160,7 +167,8 @@ export class ResearchReportSkill implements InsightaSkill {
     userId: string,
     mandalaId: string,
     _rootLevelId: string | undefined,
-    cellScope: number[] | null
+    cellScope: number[] | null,
+    maxCards: number
   ): Promise<CardRow[]> {
     const db = getPrismaClient();
 
@@ -177,7 +185,7 @@ export class ResearchReportSkill implements InsightaSkill {
         url: true,
         cell_index: true,
       },
-      take: REPORT_CARD_LIMIT,
+      take: maxCards,
     });
 
     // Synced cards with summaries — all in mandala (no level_id filter)
@@ -199,7 +207,7 @@ export class ResearchReportSkill implements InsightaSkill {
         AND uvs.is_in_ideation = false
         ${cellScope ? Prisma.sql`AND uvs.cell_index = ANY(${cellScope}::int[])` : Prisma.empty}
       ORDER BY uvs.created_at DESC
-      LIMIT ${REPORT_CARD_LIMIT}
+      LIMIT ${maxCards}
     `;
 
     const merged: CardRow[] = [
@@ -215,7 +223,7 @@ export class ResearchReportSkill implements InsightaSkill {
       ...syncedCards,
     ];
 
-    return merged.slice(0, REPORT_CARD_LIMIT);
+    return merged.slice(0, maxCards);
   }
 
   private buildContext(cards: CardRow[], sectorNames: string[], mandalaTitle: string): string {

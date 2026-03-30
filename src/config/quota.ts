@@ -39,6 +39,7 @@ export interface SkillLimits {
   report: {
     monthlyRuns: number | null;
     depth: ReportDepth;
+    maxCards: number;
   };
   alert: {
     monthlyRuns: number | null;
@@ -79,6 +80,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
       report: {
         monthlyRuns: 1,
         depth: 'basic',
+        maxCards: 50,
       },
       alert: {
         monthlyRuns: 20,
@@ -108,6 +110,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
       report: {
         monthlyRuns: null,
         depth: 'full',
+        maxCards: 200,
       },
       alert: {
         monthlyRuns: null,
@@ -134,7 +137,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
         customTemplate: true,
         targetMandalas: null,
       },
-      report: { monthlyRuns: null, depth: 'full' },
+      report: { monthlyRuns: null, depth: 'full', maxCards: 500 },
       alert: { monthlyRuns: null, channels: ['email', 'push'] },
       recommend: { dailyItems: null, targetScope: 'all_mandalas' },
     },
@@ -154,7 +157,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
         customTemplate: true,
         targetMandalas: null,
       },
-      report: { monthlyRuns: null, depth: 'full' },
+      report: { monthlyRuns: null, depth: 'full', maxCards: 500 },
       alert: { monthlyRuns: null, channels: ['email', 'push'] },
       recommend: { dailyItems: null, targetScope: 'all_mandalas' },
     },
