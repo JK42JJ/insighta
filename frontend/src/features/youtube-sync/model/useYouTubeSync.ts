@@ -209,16 +209,18 @@ export function useDeletePlaylist() {
 export function useUpdateSyncSettings() {
   const queryClient = useQueryClient();
 
+  type UpdateSettingsVars = {
+    syncInterval?: SyncInterval;
+    autoSyncEnabled?: boolean;
+    autoSummaryEnabled?: boolean;
+  };
+
   return useMutation({
     mutationFn: async ({
       syncInterval,
       autoSyncEnabled,
       autoSummaryEnabled,
-    }: {
-      syncInterval?: SyncInterval;
-      autoSyncEnabled?: boolean;
-      autoSummaryEnabled?: boolean;
-    }): Promise<void> => {
+    }: UpdateSettingsVars): Promise<void> => {
       const headers = await getAuthHeaders();
       const response = await fetch(ytSyncUrl('update-settings'), {
         method: 'POST',
@@ -231,8 +233,34 @@ export function useUpdateSyncSettings() {
         throw new Error(error.error || 'Failed to update settings');
       }
     },
-    onSuccess: () => {
-      // Invalidate auth status to refresh sync settings
+    onMutate: async (vars: UpdateSettingsVars) => {
+      await queryClient.cancelQueries({ queryKey: ['youtube', 'auth', 'status'] });
+      const previous = queryClient.getQueryData<Record<string, unknown>>([
+        'youtube',
+        'auth',
+        'status',
+      ]);
+
+      queryClient.setQueryData(
+        ['youtube', 'auth', 'status'],
+        (old: Record<string, unknown> | undefined) => ({
+          ...old,
+          ...(vars.syncInterval !== undefined && { syncInterval: vars.syncInterval }),
+          ...(vars.autoSyncEnabled !== undefined && { autoSyncEnabled: vars.autoSyncEnabled }),
+          ...(vars.autoSummaryEnabled !== undefined && {
+            autoSummaryEnabled: vars.autoSummaryEnabled,
+          }),
+        })
+      );
+
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['youtube', 'auth', 'status'], context.previous);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['youtube', 'auth', 'status'] });
     },
   });
@@ -406,7 +434,13 @@ export interface YouTubeSearchResult {
  */
 export function useYouTubeSearch() {
   return useMutation({
-    mutationFn: async ({ query, maxResults }: { query: string; maxResults?: number }): Promise<YouTubeSearchResult[]> => {
+    mutationFn: async ({
+      query,
+      maxResults,
+    }: {
+      query: string;
+      maxResults?: number;
+    }): Promise<YouTubeSearchResult[]> => {
       const headers = await getAuthHeaders();
       const params = new URLSearchParams({ q: query });
       if (maxResults) params.set('maxResults', String(maxResults));
