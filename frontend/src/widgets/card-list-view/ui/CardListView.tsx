@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useDroppable } from '@dnd-kit/core';
 import type { InsightCard } from '@/entities/card/model/types';
 import { cn } from '@/shared/lib/utils';
+import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 import type { ViewMode } from '@/entities/user/model/types';
 import { ViewSwitcher } from '@/features/view-mode';
 import { CardList } from '@/widgets/card-list/ui/CardList';
@@ -10,7 +11,7 @@ import { ListView } from '@/widgets/list-view';
 import { DetailPanel } from '@/widgets/detail-panel';
 import { GraphView } from '@/components/graph/GraphView';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
-import { LayoutGrid, Grid3X3 } from 'lucide-react';
+import { LayoutGrid, Grid3X3, Plus } from 'lucide-react';
 import { Slider } from '@/shared/ui/slider';
 import { ContextHeader, type SortMode } from './ContextHeader';
 import { LabelFilterPills } from './LabelFilterPills';
@@ -35,6 +36,9 @@ interface CardListViewProps {
   onCardsReorder?: (reorderedCards: InsightCard[]) => void;
   onDeleteCards?: (cardIds: string[]) => void;
   onAddCard?: (url: string) => void;
+  /** External URL drop (native HTML5 drag from browser) */
+  onExternalUrlDrop?: (url: string) => void;
+  onExternalFileDrop?: (files: FileList) => void;
   onSaveWatchPosition?: (id: string, positionSeconds: number) => void;
   watchPositionCache?: Map<string, number>;
   panelSizeCache?: Map<string, number>;
@@ -72,6 +76,8 @@ export function CardListView({
   onSaveNote,
   onCardsReorder,
   onDeleteCards,
+  onExternalUrlDrop,
+  onExternalFileDrop,
   onSaveWatchPosition,
   watchPositionCache,
   panelSizeCache,
@@ -92,6 +98,43 @@ export function CardListView({
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>('latest');
+  const [isExternalDragOver, setIsExternalDragOver] = useState(false);
+
+  // Native HTML5 external drag handlers (YouTube URL from browser etc.)
+  const handleExternalDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (!onExternalUrlDrop) return;
+      e.preventDefault();
+      setIsExternalDragOver(true);
+    },
+    [onExternalUrlDrop]
+  );
+
+  const handleExternalDragLeave = useCallback(() => {
+    setIsExternalDragOver(false);
+  }, []);
+
+  const handleExternalDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsExternalDragOver(false);
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        onExternalFileDrop?.(e.dataTransfer.files);
+        return;
+      }
+      const rawUrl =
+        e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+      let url = rawUrl ? extractUrlFromDragData(rawUrl) : null;
+      if (!url) {
+        const html = e.dataTransfer.getData('text/html');
+        if (html) url = extractUrlFromHtml(html);
+      }
+      if (url) {
+        onExternalUrlDrop?.(url);
+      }
+    },
+    [onExternalUrlDrop, onExternalFileDrop]
+  );
 
   // Grid-area droppable at CardListView level (covers header + pills + grid)
   const { setNodeRef: setGridAreaRef } = useDroppable({
@@ -163,20 +206,21 @@ export function CardListView({
   }, [onCellClick]);
 
   // Grid column slider element (inline in header)
-  const gridSliderElement = onGridColumnsChange && effectiveViewMode === 'grid' ? (
-    <div className="hidden md:flex items-center gap-1.5">
-      <LayoutGrid className="w-2.5 h-2.5 text-muted-foreground/60" />
-      <Slider
-        value={[gridColumns]}
-        min={MIN_GRID_COLUMNS}
-        max={MAX_GRID_COLUMNS}
-        step={1}
-        onValueChange={([v]) => onGridColumnsChange(v)}
-        className="w-20"
-      />
-      <Grid3X3 className="w-2.5 h-2.5 text-muted-foreground/60" />
-    </div>
-  ) : null;
+  const gridSliderElement =
+    onGridColumnsChange && effectiveViewMode === 'grid' ? (
+      <div className="hidden md:flex items-center gap-1.5">
+        <LayoutGrid className="w-2.5 h-2.5 text-muted-foreground/60" />
+        <Slider
+          value={[gridColumns]}
+          min={MIN_GRID_COLUMNS}
+          max={MAX_GRID_COLUMNS}
+          step={1}
+          onValueChange={([v]) => onGridColumnsChange(v)}
+          className="w-20"
+        />
+        <Grid3X3 className="w-2.5 h-2.5 text-muted-foreground/60" />
+      </div>
+    ) : null;
 
   // Context header
   const contextHeaderElement = (
@@ -227,11 +271,34 @@ export function CardListView({
     return (
       <div
         ref={setGridAreaRef}
+        onDragOver={handleExternalDragOver}
+        onDragLeave={handleExternalDragLeave}
+        onDrop={handleExternalDrop}
         className={cn(
-          'animate-fade-in transition-all duration-200',
-          isExternalCardDragActive && '-mx-4 px-4 border-2 border-dashed border-primary bg-primary/5 rounded-md'
+          'animate-fade-in transition-all duration-200 relative',
+          (isExternalCardDragActive || isExternalDragOver) &&
+            '-mx-4 px-4 border-2 border-dashed border-primary bg-primary/5 rounded-md'
         )}
       >
+        {isExternalDragOver && (
+          <div className="absolute inset-0 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] pointer-events-none z-10">
+            <div className="flex flex-col items-center gap-2">
+              <div
+                className="rounded-md border border-dashed border-primary/40 bg-primary/10 flex items-center justify-center"
+                style={{
+                  width: '52px',
+                  aspectRatio: '16/9',
+                  animation: 'card-silhouette-pulse 1.5s ease-in-out infinite',
+                }}
+              >
+                <Plus className="w-4 h-4 text-primary/40" />
+              </div>
+              <span className="text-primary font-medium text-xs">
+                {t('index.dropToAdd', 'Drop to add card')}
+              </span>
+            </div>
+          </div>
+        )}
         {contextHeaderElement}
         {sectorPillsElement}
         <CardList
@@ -258,7 +325,12 @@ export function CardListView({
   // List mode
   if (effectiveViewMode === 'list') {
     return (
-      <div className="h-full flex flex-col animate-fade-in">
+      <div
+        className="h-full flex flex-col animate-fade-in"
+        onDragOver={handleExternalDragOver}
+        onDragLeave={handleExternalDragLeave}
+        onDrop={handleExternalDrop}
+      >
         {contextHeaderElement}
         {sectorPillsElement}
         <div className="flex-1 min-h-0">
@@ -275,7 +347,12 @@ export function CardListView({
 
   // List-detail mode
   return (
-    <div className="h-full flex flex-col animate-fade-in">
+    <div
+      className="h-full flex flex-col animate-fade-in"
+      onDragOver={handleExternalDragOver}
+      onDragLeave={handleExternalDragLeave}
+      onDrop={handleExternalDrop}
+    >
       {contextHeaderElement}
       {sectorPillsElement}
       <div className="flex-1 min-h-0 rounded-lg border overflow-hidden">

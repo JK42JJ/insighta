@@ -22,6 +22,7 @@ export interface MinimapData {
   selectedCellIndex: number | null;
   onCellClick: (cellIndex: number, subject: string) => void;
   mandalaId: string | null;
+  onExternalUrlDrop?: (cellIndex: number, url: string) => void;
 }
 
 const SWITCH_DEBOUNCE_MS = 300;
@@ -280,6 +281,7 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
           centerGoal={minimapData.centerGoal}
           selectedCellIndex={minimapData.selectedCellIndex}
           onCellClick={minimapData.onCellClick}
+          onExternalUrlDrop={minimapData.onExternalUrlDrop}
           onSectorNamesChange={
             minimapData.mandalaId
               ? (newGoal, newSubjects) => {
