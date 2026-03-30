@@ -14,25 +14,16 @@
  * Issue: #337
  */
 
-import nodemailer from 'nodemailer';
 import type { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { config } from '@/config/index';
 import { TIER_LIMITS, type Tier } from '@/config/quota';
 import { queryMandalaCards, type SkillCard } from './card-query';
+import { transporter } from './mailer';
 import type { InsightaSkill, SkillContext, SkillResult, SkillPreview } from './types';
 
 const log = logger.child({ module: 'NewsletterSkill' });
-
-// Gmail SMTP Relay — IP-authenticated via EC2, no password
-const transporter = nodemailer.createTransport({
-  host: config.gmail.smtpHost,
-  port: config.gmail.smtpPort,
-  secure: false, // STARTTLS
-  name: 'insighta.one', // EHLO hostname — must match Workspace domain
-  tls: { rejectUnauthorized: true },
-});
 
 // ============================================================================
 // Curation constants
