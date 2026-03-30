@@ -109,16 +109,18 @@ export default function SettingsPage() {
     }
   };
 
-  // We read fresh each render to avoid stale closures
-  const settings = getSettings();
+  // Settings state — useState so UI re-renders instantly on change
+  const [settings, setSettings] = useState(getSettings);
 
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const updateSetting = useCallback(
     (key: string, value: unknown) => {
-      const current = getSettings();
-      const updated = { ...current, [key]: value };
-      autoSave('app-settings', updated);
+      setSettings((prev) => {
+        const updated = { ...prev, [key]: value };
+        autoSave('app-settings', updated);
+        return updated;
+      });
 
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       toastTimerRef.current = setTimeout(() => {
