@@ -87,6 +87,11 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
           });
         }
         toast({ title: t('skills.success') });
+      } else if (result.data.data?.skipped) {
+        toast({
+          title: t('skills.noContent', 'No content available'),
+          description: t('skills.noContentDesc', 'Add more cards to your mandala first.'),
+        });
       } else {
         toast({ title: result.data.error || t('skills.error'), variant: 'destructive' });
       }
