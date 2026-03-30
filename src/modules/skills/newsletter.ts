@@ -188,8 +188,8 @@ export class NewsletterSkill implements InsightaSkill {
       FROM user_video_states uvs
       JOIN youtube_videos yv ON yv.id = uvs.video_id
       LEFT JOIN video_rich_summaries vrs ON vrs.video_id = yv.youtube_video_id
-      WHERE uvs.user_id = ${userId}
-        AND uvs.mandala_id = ${mandalaId}
+      WHERE uvs.user_id = ${userId}::uuid
+        AND uvs.mandala_id = ${mandalaId}::uuid
         AND uvs.created_at >= ${since}
       ORDER BY uvs.created_at DESC
       LIMIT ${CURATION_QUERY_LIMIT}
