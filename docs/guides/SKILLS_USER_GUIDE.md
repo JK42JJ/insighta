@@ -71,6 +71,60 @@ Generate a structured research report analyzing all knowledge in your mandala.
 
 ---
 
+### Video Script
+
+Generate a video script with Intro/Body/Outro structure from your mandala cards.
+
+| Item | Detail |
+|------|--------|
+| **What it does** | Collects cards from selected sectors, then AI generates a spoken-word video script with timing cues and visual markers |
+| **Output** | Markdown script (viewable inline, copyable, downloadable) |
+| **Best for** | YouTube videos, presentations, educational content |
+
+**Script structure:**
+1. INTRO (30-60 seconds) - hook + topic intro
+2. BODY (3-5 minutes) - one section per topic with [VISUAL CUE] markers
+3. OUTRO (30 seconds) - summary + call to action
+
+**Plan limits:**
+
+| | Free | Pro / Lifetime |
+|---|------|----------------|
+| Monthly runs | 2 | Unlimited |
+| Max cards | 30 | 100-300 |
+
+**Tip:** Scope to 1-2 sectors for a focused, shorter video. Full mandala produces a longer overview script.
+
+---
+
+### Blog Post
+
+Generate a SEO-structured blog post draft from your mandala knowledge.
+
+| Item | Detail |
+|------|--------|
+| **What it does** | Analyzes your cards by sector, then AI writes a complete blog post with headline, meta description, structured sections, and key takeaways |
+| **Output** | Markdown blog draft (viewable inline, copyable, downloadable) |
+| **Best for** | Content marketing, knowledge sharing, weekly blog cadence |
+
+**Blog structure:**
+1. SEO headline + meta description
+2. Introduction with hook
+3. 3-5 main sections with H2/H3 headings
+4. Key takeaways (bulleted)
+5. Conclusion with call to action
+
+**Plan limits:**
+
+| | Free | Pro / Lifetime |
+|---|------|----------------|
+| Monthly runs | 2 | Unlimited |
+| Max cards | 30 | 100-300 |
+
+**Tip:** Run on a single sector for a focused topic post, or full mandala for a comprehensive overview article.
+
+---
+
 ### Activity Alert
 
 Get a trend analysis of how your mandala activity has changed over the past week.

@@ -49,6 +49,14 @@ export interface SkillLimits {
     dailyItems: number | null;
     targetScope: TargetScope;
   };
+  script: {
+    monthlyRuns: number | null;
+    maxCards: number;
+  };
+  blog: {
+    monthlyRuns: number | null;
+    maxCards: number;
+  };
 }
 
 /** Resource limits shape per tier */
@@ -90,6 +98,14 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
         dailyItems: 3,
         targetScope: 'single_cell',
       },
+      script: {
+        monthlyRuns: 2,
+        maxCards: 30,
+      },
+      blog: {
+        monthlyRuns: 2,
+        maxCards: 30,
+      },
     },
   },
   pro: {
@@ -120,6 +136,14 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
         dailyItems: 10,
         targetScope: 'all_mandalas',
       },
+      script: {
+        monthlyRuns: null,
+        maxCards: 100,
+      },
+      blog: {
+        monthlyRuns: null,
+        maxCards: 100,
+      },
     },
   },
   lifetime: {
@@ -140,6 +164,8 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
       report: { monthlyRuns: null, depth: 'full', maxCards: 500 },
       alert: { monthlyRuns: null, channels: ['email', 'push'] },
       recommend: { dailyItems: null, targetScope: 'all_mandalas' },
+      script: { monthlyRuns: null, maxCards: 300 },
+      blog: { monthlyRuns: null, maxCards: 300 },
     },
   },
   admin: {
@@ -160,6 +186,8 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
       report: { monthlyRuns: null, depth: 'full', maxCards: 500 },
       alert: { monthlyRuns: null, channels: ['email', 'push'] },
       recommend: { dailyItems: null, targetScope: 'all_mandalas' },
+      script: { monthlyRuns: null, maxCards: 500 },
+      blog: { monthlyRuns: null, maxCards: 500 },
     },
   },
 };

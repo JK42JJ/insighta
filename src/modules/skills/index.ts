@@ -13,12 +13,16 @@ import { NewsletterSkill } from './newsletter';
 import { ResearchReportSkill } from './research-report';
 import { AlertSkill } from './alert';
 import { RecommendSkill } from './recommend';
+import { VideoScriptSkill } from './video-script';
+import { BlogPostSkill } from './blog-post';
 
 // Skill registration — add one line per new skill
 skillRegistry.register(new NewsletterSkill());
 skillRegistry.register(new ResearchReportSkill());
 skillRegistry.register(new AlertSkill());
 skillRegistry.register(new RecommendSkill());
+skillRegistry.register(new VideoScriptSkill());
+skillRegistry.register(new BlogPostSkill());
 
 export { skillRegistry };
 export { checkSkillQuota } from './quota-checker';
