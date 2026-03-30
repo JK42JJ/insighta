@@ -473,51 +473,17 @@ function ClawbotCard() {
 // EnrichmentSchedulerCard
 // ============================================================================
 
-const SCHED_POLL_RUNNING = 5_000;
 const SCHED_POLL_IDLE = 30_000;
 
 function EnrichmentSchedulerCard() {
-  const queryClient = useQueryClient();
-  const [historyOpen, setHistoryOpen] = useState(false);
-
   const { data: statusData } = useQuery({
     queryKey: ['admin', 'enrichment-scheduler', 'status'],
     queryFn: () => apiClient.getEnrichSchedulerStatus(),
-    refetchInterval: (query) => {
-      const s = query.state.data?.data;
-      return s?.running ? SCHED_POLL_RUNNING : SCHED_POLL_IDLE;
-    },
+    refetchInterval: SCHED_POLL_IDLE,
     staleTime: 3_000,
   });
 
-  const { data: historyData } = useQuery({
-    queryKey: ['admin', 'enrichment-scheduler', 'history'],
-    queryFn: () => apiClient.getEnrichSchedulerHistory(10),
-    enabled: historyOpen,
-    staleTime: 5_000,
-  });
-
   const status = statusData?.data;
-  const runs = historyData?.data ?? [];
-
-  const startMutation = useMutation({
-    mutationFn: () => apiClient.startEnrichScheduler(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'enrichment-scheduler'] });
-      toast.success('Enrichment Scheduler started');
-    },
-    onError: (err) =>
-      toast.error(`Start failed: ${err instanceof Error ? err.message : 'Unknown'}`),
-  });
-
-  const stopMutation = useMutation({
-    mutationFn: () => apiClient.stopEnrichScheduler(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'enrichment-scheduler'] });
-      toast.success('Enrichment Scheduler stopped');
-    },
-    onError: (err) => toast.error(`Stop failed: ${err instanceof Error ? err.message : 'Unknown'}`),
-  });
 
   if (!status) {
     return (
@@ -531,12 +497,10 @@ function EnrichmentSchedulerCard() {
     );
   }
 
-  const isToggling = startMutation.isPending || stopMutation.isPending;
-  const healthColor = status.running
-    ? 'bg-blue-500 animate-pulse'
-    : status.enabled
-      ? 'bg-green-500'
-      : 'bg-muted-foreground';
+  const healthColor = status.running ? 'bg-green-500' : 'bg-muted-foreground';
+
+  const queues = status.queues ?? {};
+  const queueNames = Object.keys(queues);
 
   return (
     <div className="bg-card border border-border rounded-lg p-4">
@@ -544,190 +508,50 @@ function EnrichmentSchedulerCard() {
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium">Enrichment Scheduler</span>
-        <span className="text-xs text-muted-foreground ml-1">(30min adaptive)</span>
-        <button
-          onClick={() => (status.enabled ? stopMutation.mutate() : startMutation.mutate())}
-          disabled={isToggling}
-          className={cn(
-            'ml-auto flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors',
-            status.enabled
-              ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
-              : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
-          )}
-        >
-          {isToggling ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : status.enabled ? (
-            <>
-              <Square className="h-3 w-3" /> Stop
-            </>
-          ) : (
-            <>
-              <Play className="h-3 w-3" /> Start
-            </>
-          )}
-        </button>
+        <span className="text-xs text-muted-foreground ml-1">({status.engine})</span>
+        <span className="ml-auto flex items-center gap-1.5">
+          <div className={cn('w-2 h-2 rounded-full', healthColor)} />
+          <span className="text-xs font-mono text-muted-foreground">
+            {status.running ? 'Running' : 'Stopped'}
+          </span>
+        </span>
       </div>
 
-      {/* Status Grid */}
-      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-muted-foreground mb-4">
-        <div className="flex justify-between">
-          <span>Status</span>
-          <span className="flex items-center gap-1.5">
-            <div className={cn('w-2 h-2 rounded-full', healthColor)} />
-            <span className="font-mono">
-              {status.running ? 'Running' : status.enabled ? 'Idle' : 'Stopped'}
-            </span>
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span>Card Delay</span>
-          <span className="font-mono">{(status.cardDelayMs / 1000).toFixed(1)}s</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Recent Enriched</span>
-          <span className="font-mono text-green-400">{status.recentCycles.enriched}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Recent Errors</span>
-          <span className={cn('font-mono', status.recentCycles.errors > 0 ? 'text-red-400' : '')}>
-            {status.recentCycles.errors}
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span>Consecutive OK</span>
-          <span className="font-mono">{status.consecutiveSuccess}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Total Runs</span>
-          <span className="font-mono">{status.totalRuns}</span>
-        </div>
-        {status.skipCyclesRemaining > 0 && (
-          <div className="flex justify-between col-span-2">
-            <span className="text-yellow-400">Cooldown</span>
-            <span className="font-mono text-yellow-400">
-              {status.skipCyclesRemaining} cycles remaining
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Last Run */}
-      {status.lastRun && (
-        <div className="text-xs text-muted-foreground mb-3 flex items-center gap-1.5">
-          {status.lastRun.result ? (
-            status.lastRun.result.errors.length > 0 ? (
-              <AlertCircle className="h-3.5 w-3.5 text-yellow-400" />
-            ) : (
-              <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
-            )
-          ) : status.lastRun.skippedReason ? (
-            <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />
-          ) : (
-            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-          )}
-          <span>
-            Last: {new Date(status.lastRun.startedAt).toLocaleString()}
-            {status.lastRun.result && (
-              <span className="ml-1">
-                — {status.lastRun.result.enriched}/{status.lastRun.pending} enriched
-                {status.lastRun.result.errors.length > 0 && (
-                  <span className="text-red-400 ml-1">
-                    ({status.lastRun.result.errors.length} err)
-                  </span>
-                )}
-              </span>
-            )}
-            {status.lastRun.skippedReason && (
-              <span className="ml-1 text-muted-foreground/60">
-                — {status.lastRun.skippedReason}
-              </span>
-            )}
-            <span className="ml-1 text-muted-foreground/60">[health: {status.lastRun.health}]</span>
-          </span>
-        </div>
-      )}
-
-      {/* Current Cycle */}
-      {status.currentCycle && (
-        <div className="flex items-center gap-2 mb-3 text-xs text-blue-400">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          <span>
-            Processing... ({status.currentCycle.pending} pending, batch{' '}
-            {status.currentCycle.batchSize})
-          </span>
-        </div>
-      )}
-
-      {/* History */}
-      <div className="border-t border-border/50 pt-3">
-        <button
-          onClick={() => setHistoryOpen(!historyOpen)}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
-        >
-          <Clock className="h-3 w-3" />
-          <span>History ({status.totalRuns} runs)</span>
-          <ChevronDown
-            className={cn('h-3 w-3 ml-auto transition-transform', historyOpen && 'rotate-180')}
-          />
-        </button>
-
-        {historyOpen && runs.length > 0 && (
-          <div className="mt-2 space-y-1 max-h-[250px] overflow-y-auto scrollbar-thin">
-            {runs.map((run, i) => (
+      {/* Queue Stats */}
+      {queueNames.length > 0 ? (
+        <div className="space-y-2">
+          {queueNames.map((name) => {
+            const q = queues[name];
+            return (
               <div
-                key={i}
-                className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded border border-border/30 bg-muted/10"
+                key={name}
+                className="grid grid-cols-5 gap-2 text-xs text-muted-foreground border border-border/30 rounded p-2"
               >
-                {run.result ? (
-                  run.result.errors.length > 0 ? (
-                    <AlertCircle className="h-3.5 w-3.5 text-yellow-400" />
-                  ) : run.result.enriched > 0 ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
-                  ) : (
-                    <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />
-                  )
-                ) : (
-                  <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />
-                )}
-                <span className="font-mono text-muted-foreground">
-                  {new Date(run.startedAt).toLocaleString()}
+                <span className="font-mono font-medium text-foreground col-span-1 truncate">
+                  {name}
                 </span>
-                <span
-                  className={cn(
-                    'px-1.5 py-0.5 rounded text-[10px]',
-                    run.health === 'good'
-                      ? 'bg-green-500/10 text-green-400'
-                      : run.health === 'ok'
-                        ? 'bg-yellow-500/10 text-yellow-400'
-                        : 'bg-red-500/10 text-red-400'
-                  )}
-                >
-                  {run.health}
+                <span>
+                  Created: <span className="font-mono">{q.created}</span>
                 </span>
-                {run.result && (
-                  <span className="ml-auto text-muted-foreground">
-                    {run.result.enriched}/{run.pending}
-                    {run.result.errors.length > 0 && (
-                      <span className="text-red-400 ml-1">({run.result.errors.length} err)</span>
-                    )}
+                <span>
+                  Active: <span className="font-mono text-blue-400">{q.active}</span>
+                </span>
+                <span>
+                  Done: <span className="font-mono text-green-400">{q.completed}</span>
+                </span>
+                <span>
+                  Failed:{' '}
+                  <span className={cn('font-mono', q.failed > 0 ? 'text-red-400' : '')}>
+                    {q.failed}
                   </span>
-                )}
-                {run.skippedReason && (
-                  <span className="ml-auto text-muted-foreground/60 truncate max-w-[150px]">
-                    {run.skippedReason}
-                  </span>
-                )}
-                {run.completedAt && run.startedAt && (
-                  <span className="text-muted-foreground/60 ml-1">
-                    {formatDuration(run.startedAt, run.completedAt)}
-                  </span>
-                )}
+                </span>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">No queues registered</p>
+      )}
     </div>
   );
 }
