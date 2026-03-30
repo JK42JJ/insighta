@@ -50,6 +50,7 @@
 - Backend: Jest (`tests/smoke/`), Frontend: Vitest (`frontend/src/__tests__/`)
 - CI/CD 변경 시 Docker 검증 필수. 3회 연속 CI 실패 -> 중단 + 근본 원인 재분석
 - npm/cli#4828: frontend CI/Docker는 `npm install --no-package-lock --no-audit`
+- **BE route 추가 → FE api-client 메서드 → URL contract 테스트 필수** (api-url-contract.test.ts 자동 검증)
 
 ### D&D Protection (절대 규칙)
 - D&D 로직 수정 금지. 보호 장치 3종 유지: `dnd-smoke.spec.ts`, D&D Change Guard, ESLint override
