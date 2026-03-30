@@ -50,6 +50,7 @@ export const queryKeys = {
   skills: {
     all: ['skills'] as const,
     list: () => ['skills', 'list'] as const,
+    outputs: (mandalaId: string) => ['skills', 'outputs', mandalaId] as const,
   },
   uiPreferences: {
     all: ['ui-preferences'] as const,

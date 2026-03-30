@@ -154,6 +154,17 @@ interface SkillExecuteResponse {
   metadata?: { duration_ms: number; llm_tokens_used?: number; quota_exceeded?: boolean };
 }
 
+export interface SkillOutputResponse {
+  id: string;
+  skill_type: string;
+  title: string;
+  content: string;
+  cell_scope: number[] | null;
+  card_count: number | null;
+  model_used: string | null;
+  created_at: string;
+}
+
 interface MandalaResponse {
   id: string;
   userId: string;
@@ -1411,6 +1422,10 @@ class ApiClient {
       body: JSON.stringify({ mandala_id: mandalaId }),
       timeoutMs: 120_000, // LLM generation can take 30-90s
     });
+  }
+
+  async listSkillOutputs(mandalaId: string, limit = 10): Promise<{ data: SkillOutputResponse[] }> {
+    return this.request(`/skills/outputs?mandala_id=${mandalaId}&limit=${limit}`);
   }
 
   // ========================================

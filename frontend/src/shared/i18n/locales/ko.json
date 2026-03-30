@@ -756,7 +756,11 @@
     "newsletter": "뉴스레터 초안",
     "report": "리서치 리포트",
     "alert": "알림",
-    "recommend": "추천"
+    "recommend": "추천",
+    "history": "히스토리",
+    "historyEmpty": "아직 생성된 결과가 없습니다",
+    "outputCards": "{{count}}개 카드",
+    "outputSectors": "{{count}}개 섹터"
   },
   "landing": {
     "ltdBanner": "Pioneer 평생 이용권 - $99 (정가 $299). 남은 자리가 얼마 없습니다.",

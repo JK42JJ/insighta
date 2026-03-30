@@ -11,11 +11,14 @@
 import { skillRegistry } from './registry';
 import { NewsletterSkill } from './newsletter';
 import { ResearchReportSkill } from './research-report';
+import { AlertSkill } from './alert';
+import { RecommendSkill } from './recommend';
 
 // Skill registration — add one line per new skill
 skillRegistry.register(new NewsletterSkill());
 skillRegistry.register(new ResearchReportSkill());
-// skillRegistry.register(new AlertSkill())       // future
+skillRegistry.register(new AlertSkill());
+skillRegistry.register(new RecommendSkill());
 
 export { skillRegistry };
 export { checkSkillQuota } from './quota-checker';

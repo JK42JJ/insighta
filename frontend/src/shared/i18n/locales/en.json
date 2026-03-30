@@ -756,7 +756,11 @@
     "newsletter": "Newsletter Draft",
     "report": "Research Report",
     "alert": "Alert",
-    "recommend": "Recommendation"
+    "recommend": "Recommendation",
+    "history": "History",
+    "historyEmpty": "No outputs yet",
+    "outputCards": "{{count}} cards",
+    "outputSectors": "{{count}} sectors"
   },
   "landing": {
     "ltdBanner": "Pioneer Lifetime Deal - $99 (was $299). Limited spots remaining.",
