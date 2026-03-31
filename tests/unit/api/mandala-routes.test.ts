@@ -28,6 +28,9 @@ const mockUpdateLevel = jest.fn();
 const mockTogglePublic = jest.fn();
 const mockGetPublicMandala = jest.fn();
 const mockListPublicMandalas = jest.fn();
+const mockListExploreMandalas = jest.fn();
+const mockToggleLike = jest.fn();
+const mockClonePublicMandala = jest.fn();
 const mockSubscribe = jest.fn();
 const mockUnsubscribe = jest.fn();
 const mockListSubscriptions = jest.fn();
@@ -50,6 +53,9 @@ jest.mock('../../../src/modules/mandala', () => ({
     togglePublic: mockTogglePublic,
     getPublicMandala: mockGetPublicMandala,
     listPublicMandalas: mockListPublicMandalas,
+    listExploreMandalas: mockListExploreMandalas,
+    toggleLike: mockToggleLike,
+    clonePublicMandala: mockClonePublicMandala,
     subscribe: mockSubscribe,
     unsubscribe: mockUnsubscribe,
     listSubscriptions: mockListSubscriptions,
@@ -315,12 +321,12 @@ describe('Mandala API Routes', () => {
   // ─── GET /explore ───
 
   describe('GET /explore', () => {
-    test('should return 200 with public mandalas', async () => {
-      mockListPublicMandalas.mockResolvedValue({
+    test('should return 200 with explore mandalas', async () => {
+      mockListExploreMandalas.mockResolvedValue({
         mandalas: [mockMandala],
         total: 1,
         page: 1,
-        limit: 20,
+        limit: 24,
       });
 
       const res = await app.inject({
@@ -341,8 +347,8 @@ describe('Mandala API Routes', () => {
       expect(res.statusCode).toBe(400);
     });
 
-    test('should pass pagination parameters', async () => {
-      mockListPublicMandalas.mockResolvedValue({
+    test('should pass filter parameters', async () => {
+      mockListExploreMandalas.mockResolvedValue({
         mandalas: [],
         total: 0,
         page: 2,
@@ -351,11 +357,19 @@ describe('Mandala API Routes', () => {
 
       const res = await app.inject({
         method: 'GET',
-        url: `${PREFIX}/explore?page=2&limit=5`,
+        url: `${PREFIX}/explore?page=2&limit=5&domain=tech&sort=popular&source=template`,
       });
 
       expect(res.statusCode).toBe(200);
-      expect(mockListPublicMandalas).toHaveBeenCalledWith({ page: 2, limit: 5 });
+      expect(mockListExploreMandalas).toHaveBeenCalledWith(
+        expect.objectContaining({
+          page: 2,
+          limit: 5,
+          domain: 'tech',
+          sort: 'popular',
+          source: 'template',
+        })
+      );
     });
   });
 

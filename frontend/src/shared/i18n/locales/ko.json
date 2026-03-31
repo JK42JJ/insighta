@@ -37,7 +37,64 @@
     "subscribe": "구독",
     "unsubscribe": "구독 해제",
     "recentActivity": "최근 활동",
-    "noActivity": "아직 활동이 없습니다"
+    "noActivity": "아직 활동이 없습니다",
+    "hero": {
+      "badge": "만다라트 탐색",
+      "titleBefore": "목표를 ",
+      "titleHighlight": "발견",
+      "titleAfter": "하고 시작하세요",
+      "subtitle": "체계적인 목표 관리를 하고 있는 사람들의 만다라트를 둘러보세요. 마음에 드는 구조를 복제해서 바로 시작할 수 있어요."
+    },
+    "search": {
+      "placeholder": "목표, 키워드로 검색..."
+    },
+    "domain": {
+      "all": "전체",
+      "tech": "기술/개발",
+      "learning": "학습/교육",
+      "health": "건강/피트니스",
+      "business": "비즈니스",
+      "finance": "재테크/투자",
+      "social": "인간관계",
+      "creative": "창작/예술",
+      "lifestyle": "라이프스타일",
+      "mind": "마인드"
+    },
+    "source": {
+      "all": "전체",
+      "template": "템플릿",
+      "community": "커뮤니티"
+    },
+    "sort": {
+      "popular": "인기",
+      "recent": "최신",
+      "cloned": "복제"
+    },
+    "toolbar": {
+      "count": "개의 만다라트"
+    },
+    "card": {
+      "likes": "좋아요",
+      "clones": "복제",
+      "templateLabel": "템플릿"
+    },
+    "time": {
+      "today": "오늘",
+      "1d": "1일 전",
+      "dAgo": "일 전",
+      "wAgo": "주 전",
+      "moAgo": "개월 전"
+    },
+    "modal": {
+      "clone": "내 만다라로 복제",
+      "copyLink": "링크 복사",
+      "improve": "AI로 개선하기",
+      "loading": "전체 만다라 로딩 중..."
+    },
+    "sharePrompt": {
+      "title": "나의 만다라트도 공유해보세요!",
+      "desc": "다른 사람들에게 영감을 줄 수 있어요."
+    }
   },
   "share": {
     "toggleLabel": "공개 공유",
@@ -931,6 +988,8 @@
     "manageAll": "만다라트 전체 관리",
     "tabMyMandalas": "내 만다라트",
     "tabTemplates": "템플릿",
+    "templatesMovedToExplore": "템플릿이 Explore 페이지로 이동했습니다.",
+    "goToExplore": "Explore에서 템플릿 찾기",
     "cardCount": "{{count}}개 카드",
     "public": "공개",
     "private": "비공개",

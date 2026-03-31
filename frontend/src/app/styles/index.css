@@ -172,6 +172,26 @@
     --input: 220 12% 20%;
     --ring: 234 60% 72%;
 
+    /* Domain colors — Explore page category accents */
+    --domain-tech: 234 89% 74%;
+    --domain-tech-dim: 234 89% 74% / 0.10;
+    --domain-learning: 168 76% 56%;
+    --domain-learning-dim: 168 76% 56% / 0.10;
+    --domain-health: 157 72% 51%;
+    --domain-health-dim: 157 72% 51% / 0.10;
+    --domain-business: 353 94% 71%;
+    --domain-business-dim: 353 94% 71% / 0.10;
+    --domain-finance: 45 96% 56%;
+    --domain-finance-dim: 45 96% 56% / 0.08;
+    --domain-social: 330 81% 71%;
+    --domain-social-dim: 330 81% 71% / 0.10;
+    --domain-creative: 263 70% 76%;
+    --domain-creative-dim: 263 70% 76% / 0.10;
+    --domain-lifestyle: 199 89% 58%;
+    --domain-lifestyle-dim: 199 89% 58% / 0.10;
+    --domain-mind: 82 78% 55%;
+    --domain-mind-dim: 82 78% 55% / 0.08;
+
     /* Sidebar */
     --sidebar-width: 22rem;
     --sidebar-background: 220 13% 13%;
@@ -314,6 +334,12 @@
     background: transparent;
   }
 
+  /* Gradient shift for explore hero text */
+  @keyframes gradShift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
   /* Shimmer animation for badges */
   @keyframes shimmer {
     0% {
@@ -396,6 +422,141 @@
 }
 
 @layer components {
+  /* ═══════════ Explore Page ═══════════ */
+
+  /* Hero gradient text */
+  @keyframes explore-grad-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  .explore-gradient-text {
+    background: linear-gradient(135deg, hsl(var(--primary)), #f472b6, #fbbf24);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    background-size: 200% 200%;
+    animation: explore-grad-shift 8s ease infinite;
+  }
+
+  /* Hero background glow */
+  .explore-hero-glow {
+    position: absolute;
+    top: -120px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 400px;
+    background: radial-gradient(ellipse, hsl(var(--primary) / 0.04) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* Card accent line (visible on hover via group) */
+  .explore-accent-line {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .group:hover .explore-accent-line,
+  .group\/card:hover .explore-accent-line { opacity: 1; }
+
+  /* Domain color utilities — use with CSS variables --d-color / --d-dim */
+  .explore-domain-badge { background: var(--d-dim); color: var(--d-color); }
+  .explore-domain-accent { background: linear-gradient(90deg, var(--d-color), transparent); }
+  .explore-domain-center { background: var(--d-dim) !important; color: var(--d-color) !important; }
+
+  /* 9×9 grid circular radial fade mask */
+  .explore-9x9-mask {
+    position: relative;
+  }
+  .explore-9x9-mask::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    border-radius: 0.75rem;
+    transition: background 0.4s ease;
+    background: radial-gradient(
+      circle at var(--mask-x, 50%) var(--mask-y, 50%),
+      transparent 18%,
+      hsl(var(--card) / 0.0) 20%,
+      hsl(var(--card) / 0.15) 32%,
+      hsl(var(--card) / 0.35) 44%,
+      hsl(var(--card) / 0.58) 56%,
+      hsl(var(--card) / 0.78) 68%,
+      hsl(var(--card) / 0.92) 80%,
+      hsl(var(--card) / 0.98) 92%
+    );
+  }
+
+  /* 9×9 cell base */
+  .explore-cell {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.2;
+    padding: 4px 3px;
+    word-break: keep-all;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s;
+    font-size: 10px;
+    font-weight: 400;
+    color: hsl(var(--muted-foreground));
+    background: hsl(var(--muted) / 0.08);
+    border: 1px solid hsl(var(--border) / 0.05);
+    border-radius: 2px;
+  }
+
+  /* Ring 0: center 3×3 block — punches through mask */
+  .explore-cell-ring0 {
+    font-size: 11px;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.3);
+    border-radius: 4px;
+    z-index: 2;
+    position: relative;
+  }
+
+  /* The absolute center cell */
+  .explore-cell-center {
+    font-size: 12px;
+    font-weight: 700;
+    z-index: 3;
+    position: relative;
+  }
+
+  /* Ring 1 */
+  .explore-cell-ring1 { font-size: 10px; font-weight: 500; }
+  /* Ring 2 */
+  .explore-cell-ring2 { font-size: 9px; font-weight: 400; }
+  /* Ring 3 */
+  .explore-cell-ring3 { font-size: 8px; font-weight: 300; color: hsl(var(--muted-foreground) / 0.5); }
+  /* Sub-goal center of each outer block */
+  .explore-cell-sub { font-weight: 600 !important; }
+
+  /* Hover: cell lifts above the mask */
+  .explore-cell:hover {
+    background: hsl(var(--muted) / 0.2) !important;
+    z-index: 4;
+    border-color: hsl(var(--border) / 0.3) !important;
+  }
+
+  /* Modal entry animation */
+  @keyframes explore-modal-in {
+    from { opacity: 0; transform: translateY(20px) scale(0.97); }
+    to { opacity: 1; transform: none; }
+  }
+  .explore-modal-enter {
+    animation: explore-modal-in 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
   /* Surface elevation classes */
   .surface-base {
     @apply bg-[hsl(var(--bg-base))];

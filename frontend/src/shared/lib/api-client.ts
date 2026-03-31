@@ -8,6 +8,7 @@
 
 import { supabase } from '@/shared/integrations/supabase/client';
 import { subscribeAuth } from './auth-event-bus';
+import type { ExploreListResponse } from '@/shared/types/explore';
 
 // In production VITE_API_URL="/api", in dev "http://localhost:3000"
 const VITE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -158,7 +159,9 @@ interface MandalaResponse {
     id: string;
     levelKey: string;
     centerGoal: string;
+    centerLabel?: string | null;
     subjects: string[];
+    subjectLabels?: string[];
     position: number;
     depth: number;
     color: string | null;
@@ -806,6 +809,39 @@ class ApiClient {
     if (limit) params.set('limit', String(limit));
     const query = params.toString() ? `?${params}` : '';
     return this.request(`/mandalas/explore${query}`);
+  }
+
+  // ─── Explore Page API ───
+
+  async listExploreMandalas(filters: {
+    q?: string;
+    domain?: string;
+    source?: string;
+    sort?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<ExploreListResponse> {
+    const params = new URLSearchParams();
+    if (filters.q) params.set('q', filters.q);
+    if (filters.domain && filters.domain !== 'all') params.set('domain', filters.domain);
+    if (filters.source && filters.source !== 'all') params.set('source', filters.source);
+    if (filters.sort) params.set('sort', filters.sort);
+    if (filters.page) params.set('page', String(filters.page));
+    if (filters.limit) params.set('limit', String(filters.limit));
+    const query = params.toString() ? `?${params}` : '';
+    return this.request<ExploreListResponse>(`/mandalas/explore${query}`);
+  }
+
+  async toggleMandalaLike(
+    mandalaId: string
+  ): Promise<{ success: boolean; data: { liked: boolean; likeCount: number } }> {
+    return this.request(`/mandalas/${mandalaId}/like`, { method: 'POST' });
+  }
+
+  async clonePublicMandala(
+    mandalaId: string
+  ): Promise<{ success: boolean; data: { mandalaId: string; title: string } }> {
+    return this.request(`/mandalas/${mandalaId}/clone`, { method: 'POST' });
   }
 
   async subscribeMandala(mandalaId: string): Promise<{ success: boolean }> {
