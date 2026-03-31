@@ -24,7 +24,7 @@ import {
   useToggleMandalaShare,
 } from '@/features/mandala';
 import { MandalaCardGrid } from './MandalaCardGrid';
-import { TemplatesTab } from './TemplatesTab';
+// TemplatesTab removed — redirects to /explore
 
 type Tab = 'my' | 'templates';
 
@@ -227,7 +227,12 @@ export default function MandalasPage() {
             />
           )
         ) : (
-          <TemplatesTab />
+          <div className="text-center py-16">
+            <p className="text-muted-foreground mb-4">{t('mandalas.templatesMovedToExplore')}</p>
+            <a href="/explore" className="text-primary hover:underline font-medium">
+              {t('mandalas.goToExplore')} →
+            </a>
+          </div>
         )}
       </div>
 

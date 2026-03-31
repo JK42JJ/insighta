@@ -1,173 +1,212 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Globe, Users, Loader2 } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Loader2, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { apiClient } from '@/shared/lib/api-client';
+import { useAuth } from '@/features/auth/model/useAuth';
+import { LandingHeader } from '@/pages/landing/ui/components/LandingHeader';
+import { GradientBackground } from '@/pages/landing/ui/components/GradientBackground';
+import { useExploreMandalas, useExploreClone } from '@/features/explore';
+import { useExploreFilters } from '@/features/explore';
+import { ExploreHero } from '@/features/explore/ui/ExploreHero';
+import { ExploreSearchBar } from '@/features/explore/ui/ExploreSearchBar';
+import { DomainChips } from '@/features/explore/ui/DomainChips';
+import { ExploreToolbar } from '@/features/explore/ui/ExploreToolbar';
+import { ExploreCard } from '@/features/explore/ui/ExploreCard';
+import { ExploreExpandModal } from '@/features/explore/ui/ExploreExpandModal';
 import { PublicMandalaView } from './PublicMandalaView';
+import type { ExploreMandala } from '@/shared/types/explore';
+import type { MandalaDomain } from '@/shared/config/domain-colors';
 
-interface PublicMandala {
-  id: string;
-  userId: string;
-  title: string;
-  isPublic: boolean;
-  shareSlug: string | null;
-  createdAt: string;
-  updatedAt: string;
-  levels: Array<{
-    id: string;
-    levelKey: string;
-    centerGoal: string;
-    subjects: string[];
-    position: number;
-    depth: number;
-  }>;
+interface ModalState {
+  isOpen: boolean;
+  mandala: ExploreMandala | null;
+  rootLevel: { centerGoal: string; subjects: string[] };
+  subLevels: ({ centerGoal: string; subjects: string[] } | null)[];
+  centerLabel?: string;
+  subLabels?: string[];
 }
+
+const EMPTY_MODAL: ModalState = {
+  isOpen: false,
+  mandala: null,
+  rootLevel: { centerGoal: '', subjects: [] },
+  subLevels: [],
+};
 
 export default function ExplorePage() {
   const { slug } = useParams<{ slug: string }>();
-  const navigate = useNavigate();
   const { t } = useTranslation();
-  const [mandalas, setMandalas] = useState<PublicMandala[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const limit = 12;
+  const navigate = useNavigate();
+  const { isLoggedIn } = useAuth();
+  const { filters, updateFilters } = useExploreFilters();
+  const { data, isLoading } = useExploreMandalas(filters);
+  const cloneMutation = useExploreClone();
 
-  useEffect(() => {
-    if (slug) return; // Skip fetching when viewing a specific mandala
-    const fetchMandalas = async () => {
-      setLoading(true);
+  const [modal, setModal] = useState<ModalState>(EMPTY_MODAL);
+
+  const handleCardClick = useCallback(async (mandala: ExploreMandala) => {
+    // Open modal with summary data first
+    setModal({
+      isOpen: true,
+      mandala,
+      rootLevel: mandala.rootLevel ?? { centerGoal: mandala.title, subjects: [] },
+      subLevels: [],
+      centerLabel: mandala.rootLevel?.centerLabel ?? undefined,
+      subLabels: mandala.rootLevel?.subjectLabels,
+    });
+
+    // Fetch full level data for 9×9 grid
+    if (mandala.shareSlug) {
       try {
-        const result = await apiClient.listPublicMandalas(page, limit);
-        setMandalas(result.mandalas as unknown as PublicMandala[]);
-        setTotal(result.total);
+        const result = await apiClient.getPublicMandala(mandala.shareSlug);
+        const levels = result.mandala.levels ?? [];
+        const root = levels.find((l) => l.depth === 0);
+        const subs = levels
+          .filter((l) => l.depth === 1)
+          .sort((a, b) => a.position - b.position)
+          .map((l) => ({ centerGoal: l.centerGoal, subjects: l.subjects }));
+
+        setModal((prev) => ({
+          ...prev,
+          rootLevel: root
+            ? { centerGoal: root.centerGoal, subjects: root.subjects }
+            : prev.rootLevel,
+          subLevels: subs,
+          centerLabel: root?.centerLabel ?? prev.centerLabel,
+          subLabels: (root?.subjectLabels?.length ?? 0) > 0 ? root!.subjectLabels : prev.subLabels,
+        }));
       } catch {
-        // silently fail for now
-      } finally {
-        setLoading(false);
+        // keep modal open with summary data
       }
-    };
-    fetchMandalas();
-  }, [page, slug]);
+    }
+  }, []);
 
-  if (slug) {
-    return <PublicMandalaView slug={slug} />;
-  }
+  const handleCloseModal = useCallback(() => setModal(EMPTY_MODAL), []);
 
-  const totalPages = Math.ceil(total / limit);
+  const handleClone = useCallback(() => {
+    if (!modal.mandala) return;
+    if (!isLoggedIn) {
+      navigate('/login?returnTo=/explore');
+      return;
+    }
+    cloneMutation.mutate(modal.mandala.id, {
+      onSuccess: (res) => navigate(`/mandalas/${res.data.mandalaId}/edit`),
+    });
+  }, [modal.mandala, isLoggedIn, navigate, cloneMutation]);
 
-  const getRootLevel = (mandala: PublicMandala) => {
-    return mandala.levels.find((l) => l.depth === 0);
-  };
+  const handleCopyLink = useCallback(async () => {
+    if (!modal.mandala) return;
+    const url = `${window.location.origin}/explore/${modal.mandala.shareSlug ?? modal.mandala.id}`;
+    await navigator.clipboard.writeText(url);
+  }, [modal.mandala]);
+
+  // Slug-based detail view
+  if (slug) return <PublicMandalaView slug={slug} />;
+
+  const mandalas = data?.mandalas ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.ceil(total / (data?.limit ?? 24));
 
   return (
-    <div className="min-h-screen bg-surface-base">
-      <header className="sticky top-0 z-50 bg-surface-mid/95 backdrop-blur-md border-b border-border/50">
-        <div className="container mx-auto px-4 py-3 flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/')}
-            className="rounded-lg"
-            aria-label={t('common.back')}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="flex items-center gap-2">
-            <Globe className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-bold text-foreground">{t('explore.title')}</h1>
-          </div>
-        </div>
-      </header>
+    <div className="relative min-h-screen bg-background">
+      <GradientBackground variant="F" />
+      <div className="relative z-10">
+        {!isLoggedIn && <LandingHeader />}
 
-      <main className="container mx-auto px-4 py-8">
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : mandalas.length === 0 ? (
-          <div className="text-center py-20">
-            <Globe className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
-            <h2 className="text-lg font-semibold text-foreground mb-2">{t('explore.empty')}</h2>
-            <p className="text-sm text-muted-foreground">{t('explore.emptyDesc')}</p>
-          </div>
-        ) : (
-          <>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {mandalas.map((mandala) => {
-                const root = getRootLevel(mandala);
-                return (
-                  <Card
-                    key={mandala.id}
-                    className="bg-surface-mid border-border/50 hover:border-primary/50 transition-all cursor-pointer group"
-                    onClick={() => mandala.shareSlug && navigate(`/explore/${mandala.shareSlug}`)}
-                  >
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base group-hover:text-primary transition-colors truncate">
-                        {mandala.title}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {root && (
-                        <>
-                          <p className="text-sm font-medium text-foreground/80 mb-2">
-                            {root.centerGoal}
-                          </p>
-                          <div className="flex flex-wrap gap-1">
-                            {root.subjects.slice(0, 4).map((s, i) => (
-                              <span
-                                key={i}
-                                className="text-xs px-2 py-0.5 bg-surface-light rounded-full text-muted-foreground"
-                              >
-                                {s}
-                              </span>
-                            ))}
-                            {root.subjects.length > 4 && (
-                              <span className="text-xs px-2 py-0.5 text-muted-foreground">
-                                +{root.subjects.length - 4}
-                              </span>
-                            )}
-                          </div>
-                        </>
-                      )}
-                      <div className="flex items-center gap-1 mt-3 text-xs text-muted-foreground">
-                        <Users className="w-3 h-3" />
-                        <span>{new Date(mandala.updatedAt).toLocaleDateString()}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+        <main className="max-w-[1120px] mx-auto px-7 pt-12 pb-24">
+          <ExploreHero />
+          <ExploreSearchBar value={filters.q} onChange={(q) => updateFilters({ q })} />
+          <DomainChips selected={filters.domain} onSelect={(domain) => updateFilters({ domain })} />
+          <ExploreToolbar
+            total={total}
+            source={filters.source}
+            sort={filters.sort}
+            onSourceChange={(source) => updateFilters({ source })}
+            onSortChange={(sort) => updateFilters({ sort })}
+          />
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             </div>
-
-            {totalPages > 1 && (
-              <div className="flex justify-center gap-2 mt-8">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                >
-                  {t('common.previous')}
-                </Button>
-                <span className="flex items-center px-3 text-sm text-muted-foreground">
-                  {page} / {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                >
-                  {t('common.next')}
-                </Button>
+          ) : mandalas.length === 0 ? (
+            <div className="text-center py-20">
+              <Globe className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
+              <h2 className="text-lg font-semibold text-foreground mb-2">{t('explore.empty')}</h2>
+              <p className="text-sm text-muted-foreground">{t('explore.emptyDesc')}</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(330px,1fr))] gap-3.5">
+                {mandalas.map((m) => (
+                  <ExploreCard
+                    key={m.id}
+                    id={m.id}
+                    title={m.title}
+                    centerGoal={m.rootLevel?.centerGoal ?? m.title}
+                    centerLabel={m.rootLevel?.centerLabel ?? undefined}
+                    subjects={m.rootLevel?.subjects ?? []}
+                    subjectLabels={m.rootLevel?.subjectLabels}
+                    domain={m.domain as MandalaDomain | null}
+                    isTemplate={m.isTemplate}
+                    author={m.author}
+                    likeCount={m.likeCount}
+                    cloneCount={m.cloneCount}
+                    updatedAt={new Date(m.updatedAt).toLocaleDateString()}
+                    onClick={() => handleCardClick(m)}
+                  />
+                ))}
               </div>
-            )}
-          </>
-        )}
-      </main>
+
+              {totalPages > 1 && (
+                <div className="flex justify-center gap-2 mt-8">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => updateFilters({ page: Math.max(1, filters.page - 1) })}
+                    disabled={filters.page === 1}
+                  >
+                    {t('common.previous')}
+                  </Button>
+                  <span className="flex items-center px-3 text-sm text-muted-foreground">
+                    {filters.page} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => updateFilters({ page: Math.min(totalPages, filters.page + 1) })}
+                    disabled={filters.page === totalPages}
+                  >
+                    {t('common.next')}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </main>
+      </div>
+
+      {modal.mandala && (
+        <ExploreExpandModal
+          isOpen={modal.isOpen}
+          onClose={handleCloseModal}
+          title={modal.mandala.title}
+          domain={modal.mandala.domain as MandalaDomain | null}
+          isTemplate={modal.mandala.isTemplate}
+          author={modal.mandala.author}
+          rootLevel={modal.rootLevel}
+          subLevels={modal.subLevels}
+          centerLabel={modal.centerLabel}
+          subLabels={modal.subLabels}
+          likeCount={modal.mandala.likeCount}
+          cloneCount={modal.mandala.cloneCount}
+          updatedAt={new Date(modal.mandala.updatedAt).toLocaleDateString()}
+          onClone={handleClone}
+          onCopyLink={handleCopyLink}
+        />
+      )}
     </div>
   );
 }

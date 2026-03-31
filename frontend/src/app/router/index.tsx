@@ -24,7 +24,7 @@ const PrivacyPage = lazy(() => import('@/pages/privacy'));
 const TermsPage = lazy(() => import('@/pages/terms'));
 const ExplorePage = lazy(() => import('@/pages/explore'));
 const PricingPage = lazy(() => import('@/pages/pricing'));
-const TemplatesPage = lazy(() => import('@/pages/templates'));
+// TemplatesPage removed — /templates redirects to /explore (Phase 5)
 const HelpPage = lazy(() => import('@/pages/help'));
 const NotFoundPage = lazy(() => import('@/pages/not-found'));
 const LandingPage = lazy(() => import('@/pages/landing'));
@@ -46,8 +46,8 @@ export function AppRouter() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/landing" element={<LandingPage />} />
         <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/templates" element={<TemplatesPage />} />
-        <Route path="/templates/:templateId" element={<TemplatesPage />} />
+        <Route path="/templates" element={<Navigate to="/explore" replace />} />
+        <Route path="/templates/:templateId" element={<Navigate to="/explore" replace />} />
         <Route
           path="/mandalas"
           element={
@@ -64,10 +64,7 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/mandala-settings"
-          element={<Navigate to="/mandalas" replace />}
-        />
+        <Route path="/mandala-settings" element={<Navigate to="/mandalas" replace />} />
         <Route
           path="/profile"
           element={

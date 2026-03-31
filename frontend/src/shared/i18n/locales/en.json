@@ -37,7 +37,64 @@
     "subscribe": "Subscribe",
     "unsubscribe": "Unsubscribe",
     "recentActivity": "Recent Activity",
-    "noActivity": "No activity yet"
+    "noActivity": "No activity yet",
+    "hero": {
+      "badge": "Explore Mandalas",
+      "titleBefore": "Discover goals and ",
+      "titleHighlight": "start yours",
+      "titleAfter": "",
+      "subtitle": "Browse structured goal plans from our community. Find one you love and clone it to get started right away."
+    },
+    "search": {
+      "placeholder": "Search by goal, keyword..."
+    },
+    "domain": {
+      "all": "All",
+      "tech": "Tech/Dev",
+      "learning": "Learning",
+      "health": "Health/Fitness",
+      "business": "Business",
+      "finance": "Finance",
+      "social": "Community",
+      "creative": "Creative/Art",
+      "lifestyle": "Lifestyle",
+      "mind": "Mindfulness"
+    },
+    "source": {
+      "all": "All",
+      "template": "Templates",
+      "community": "Community"
+    },
+    "sort": {
+      "popular": "Popular",
+      "recent": "Recent",
+      "cloned": "Most Cloned"
+    },
+    "toolbar": {
+      "count": "mandalas"
+    },
+    "card": {
+      "likes": "likes",
+      "clones": "clones",
+      "templateLabel": "Template"
+    },
+    "time": {
+      "today": "today",
+      "1d": "1d ago",
+      "dAgo": "d ago",
+      "wAgo": "w ago",
+      "moAgo": "mo ago"
+    },
+    "modal": {
+      "clone": "Clone to My Mandalas",
+      "copyLink": "Copy Link",
+      "improve": "Improve with AI",
+      "loading": "Loading full mandala..."
+    },
+    "sharePrompt": {
+      "title": "Share yours too!",
+      "desc": "Inspire others by making your mandala public."
+    }
   },
   "share": {
     "toggleLabel": "Public sharing",
@@ -936,6 +993,8 @@
     "manageAll": "Manage All Mandalas",
     "tabMyMandalas": "My Mandalas",
     "tabTemplates": "Templates",
+    "templatesMovedToExplore": "Templates have moved to Explore page.",
+    "goToExplore": "Browse templates in Explore",
     "cardCount": "{{count}} cards",
     "public": "Public",
     "private": "Private",

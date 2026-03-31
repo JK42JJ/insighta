@@ -143,21 +143,84 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   /**
    * GET /api/v1/mandalas/explore - List public mandalas for explore page (no auth)
    */
-  fastify.get<{ Querystring: { page?: string; limit?: string } }>(
-    '/explore',
+  fastify.get<{
+    Querystring: {
+      q?: string;
+      domain?: string;
+      source?: string;
+      sort?: string;
+      page?: string;
+      limit?: string;
+    };
+  }>('/explore', async (request, reply) => {
+    const { q, domain, source, sort } = request.query;
+    const page = request.query.page ? parseInt(request.query.page, 10) : undefined;
+    const limit = request.query.limit ? parseInt(request.query.limit, 10) : undefined;
+
+    if (
+      (page !== undefined && (isNaN(page) || page < 1)) ||
+      (limit !== undefined && (isNaN(limit) || limit < 1 || limit > MAX_PAGINATION_LIMIT))
+    ) {
+      return reply.code(400).send({ error: 'Invalid pagination parameters' });
+    }
+
+    const validSources = ['all', 'template', 'community'] as const;
+    const validSorts = ['popular', 'recent', 'cloned'] as const;
+
+    const result = await getMandalaManager().listExploreMandalas({
+      q: q || undefined,
+      domain: domain || undefined,
+      source: validSources.includes(source as (typeof validSources)[number])
+        ? (source as (typeof validSources)[number])
+        : undefined,
+      sort: validSorts.includes(sort as (typeof validSorts)[number])
+        ? (sort as (typeof validSorts)[number])
+        : undefined,
+      page,
+      limit,
+    });
+    return reply.send(result);
+  });
+
+  /**
+   * POST /api/v1/mandalas/:id/like - Toggle like on a public mandala (auth required)
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/:id/like',
+    { onRequest: [fastify.authenticate] },
     async (request, reply) => {
-      const page = request.query.page ? parseInt(request.query.page, 10) : undefined;
-      const limit = request.query.limit ? parseInt(request.query.limit, 10) : undefined;
+      const userId = getUserId(request, reply);
+      if (!userId) return;
 
-      if (
-        (page !== undefined && (isNaN(page) || page < 1)) ||
-        (limit !== undefined && (isNaN(limit) || limit < 1 || limit > MAX_PAGINATION_LIMIT))
-      ) {
-        return reply.code(400).send({ error: 'Invalid pagination parameters' });
+      try {
+        const result = await getMandalaManager().toggleLike(userId, request.params.id);
+        return reply.send({ success: true, data: result });
+      } catch {
+        return reply.code(404).send({ error: 'Mandala not found' });
       }
+    }
+  );
 
-      const result = await getMandalaManager().listPublicMandalas({ page, limit });
-      return reply.send(result);
+  /**
+   * POST /api/v1/mandalas/:id/clone - Clone a public mandala (auth required)
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/:id/clone',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      try {
+        const result = await getMandalaManager().clonePublicMandala(request.params.id, userId);
+        return reply.send({ success: true, data: result });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Clone failed';
+        if (message === 'MANDALA_NOT_FOUND') {
+          return reply.code(404).send({ error: 'Mandala not found or not public' });
+        }
+        return reply.code(500).send({ error: message });
+      }
     }
   );
 

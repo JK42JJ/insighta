@@ -1,6 +1,6 @@
 import { getPrismaClient } from '../database/client';
 import { logger } from '../../utils/logger';
-import { user_mandalas } from '@prisma/client';
+import { user_mandalas, Prisma } from '@prisma/client';
 import { nanoid } from 'nanoid';
 import { DEFAULT_TIER, getMandalaLimit, type Tier } from '@/config/quota';
 
@@ -28,12 +28,42 @@ export interface MandalaWithLevels {
     id: string;
     levelKey: string;
     centerGoal: string;
+    centerLabel: string | null;
     subjects: string[];
+    subjectLabels: string[];
     position: number;
     depth: number;
     color: string | null;
     parentLevelId: string | null;
   }[];
+}
+
+export interface ExploreMandala {
+  id: string;
+  title: string;
+  shareSlug: string | null;
+  domain: string | null;
+  isTemplate: boolean;
+  likeCount: number;
+  cloneCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  author: { displayName: string; avatarInitial: string } | null;
+  rootLevel: {
+    centerGoal: string;
+    centerLabel: string | null;
+    subjects: string[];
+    subjectLabels: string[];
+  } | null;
+}
+
+export interface ExploreFilters {
+  q?: string;
+  domain?: string;
+  source?: 'all' | 'template' | 'community';
+  sort?: 'popular' | 'recent' | 'cloned';
+  page?: number;
+  limit?: number;
 }
 
 interface ListMandalasResult {
@@ -73,7 +103,9 @@ export class MandalaManager {
         id: string;
         level_key: string;
         center_goal: string;
+        center_label?: string | null;
         subjects: string[];
+        subject_labels?: string[];
         position: number;
         depth: number;
         color: string | null;
@@ -95,7 +127,9 @@ export class MandalaManager {
         id: l.id,
         levelKey: l.level_key,
         centerGoal: l.center_goal,
+        centerLabel: l.center_label ?? null,
         subjects: l.subjects,
+        subjectLabels: l.subject_labels ?? [],
         position: l.position,
         depth: l.depth,
         color: l.color,
@@ -735,7 +769,251 @@ export class MandalaManager {
   }
 
   /**
-   * Lists public mandalas with pagination for the explore page.
+   * Lists public mandalas with filtering, sorting, and search for the explore page.
+   */
+  async listExploreMandalas(
+    filters: ExploreFilters = {}
+  ): Promise<{ mandalas: ExploreMandala[]; total: number; page: number; limit: number }> {
+    const MAX_EXPLORE_LIMIT = 50;
+    const page = filters.page ?? 1;
+    const limit = Math.min(filters.limit ?? 24, MAX_EXPLORE_LIMIT);
+    const skip = (page - 1) * limit;
+
+    // Build WHERE clause
+    const conditions: Prisma.user_mandalasWhereInput[] = [];
+
+    if (filters.source === 'template') {
+      conditions.push({ is_template: true });
+    } else if (filters.source === 'community') {
+      conditions.push({ is_public: true, is_template: false });
+    } else {
+      conditions.push({ OR: [{ is_public: true }, { is_template: true }] });
+    }
+
+    if (filters.domain) {
+      conditions.push({ domain: filters.domain });
+    }
+
+    if (filters.q) {
+      const search = filters.q;
+      conditions.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          {
+            levels: {
+              some: {
+                depth: 0,
+                center_goal: { contains: search, mode: 'insensitive' },
+              },
+            },
+          },
+        ],
+      });
+    }
+
+    const where: Prisma.user_mandalasWhereInput = { AND: conditions };
+
+    // Build ORDER BY
+    type SortKey = 'popular' | 'recent' | 'cloned';
+    const sortMap: Record<SortKey, Prisma.user_mandalasOrderByWithRelationInput[]> = {
+      popular: [{ like_count: 'desc' }, { created_at: 'desc' }],
+      recent: [{ created_at: 'desc' }],
+      cloned: [{ clone_count: 'desc' }, { created_at: 'desc' }],
+    };
+    const sortKey: SortKey = (filters.sort as SortKey) ?? 'popular';
+    const orderBy = sortMap[sortKey];
+
+    const [mandalas, total] = await Promise.all([
+      this.prisma.user_mandalas.findMany({
+        where,
+        include: {
+          levels: {
+            where: { depth: 0 },
+            orderBy: [{ position: 'asc' }],
+            take: 1,
+          },
+          users: {
+            select: {
+              id: true,
+              raw_user_meta_data: true,
+            },
+          },
+        },
+        orderBy,
+        skip,
+        take: limit,
+      }),
+      this.prisma.user_mandalas.count({ where }),
+    ]);
+
+    return {
+      mandalas: mandalas.map((m) => this.mapExploreMandala(m)),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  /**
+   * Maps a raw mandala record to ExploreMandala shape for the explore API.
+   */
+  private mapExploreMandala(
+    mandala: user_mandalas & {
+      levels: {
+        center_goal: string;
+        center_label?: string | null;
+        subjects: string[];
+        subject_labels?: string[];
+      }[];
+      users: {
+        id: string;
+        raw_user_meta_data: unknown;
+      };
+    }
+  ): ExploreMandala {
+    const rootLevel = mandala.levels[0] ?? null;
+    const meta = (mandala.users.raw_user_meta_data ?? {}) as Record<string, string>;
+    const displayName = meta['full_name'] ?? meta['name'] ?? 'User';
+    const avatarInitial = displayName.charAt(0).toUpperCase();
+
+    return {
+      id: mandala.id,
+      title: mandala.title,
+      shareSlug: mandala.share_slug,
+      domain: mandala.domain,
+      isTemplate: mandala.is_template,
+      likeCount: mandala.like_count,
+      cloneCount: mandala.clone_count,
+      createdAt: mandala.created_at,
+      updatedAt: mandala.updated_at,
+      author: mandala.is_template ? null : { displayName, avatarInitial },
+      rootLevel: rootLevel
+        ? {
+            centerGoal: rootLevel.center_goal,
+            centerLabel: rootLevel.center_label ?? null,
+            subjects: rootLevel.subjects,
+            subjectLabels: rootLevel.subject_labels ?? [],
+          }
+        : null,
+    };
+  }
+
+  /**
+   * Toggles a like on a public mandala. Returns the new liked state and count.
+   */
+  async toggleLike(
+    userId: string,
+    mandalaId: string
+  ): Promise<{ liked: boolean; likeCount: number }> {
+    const existing = await this.prisma.mandala_likes.findUnique({
+      where: { user_id_mandala_id: { user_id: userId, mandala_id: mandalaId } },
+    });
+
+    if (existing) {
+      await this.prisma.$transaction([
+        this.prisma.mandala_likes.delete({
+          where: { id: existing.id },
+        }),
+        this.prisma.user_mandalas.update({
+          where: { id: mandalaId },
+          data: { like_count: { decrement: 1 } },
+        }),
+      ]);
+    } else {
+      await this.prisma.$transaction([
+        this.prisma.mandala_likes.create({
+          data: { user_id: userId, mandala_id: mandalaId },
+        }),
+        this.prisma.user_mandalas.update({
+          where: { id: mandalaId },
+          data: { like_count: { increment: 1 } },
+        }),
+      ]);
+    }
+
+    const updated = await this.prisma.user_mandalas.findUnique({
+      where: { id: mandalaId },
+      select: { like_count: true },
+    });
+
+    return {
+      liked: !existing,
+      likeCount: updated?.like_count ?? 0,
+    };
+  }
+
+  /**
+   * Clones a public mandala for the target user.
+   * Copies structure (levels) without cards. Increments source clone_count.
+   */
+  async clonePublicMandala(
+    sourceMandalaId: string,
+    targetUserId: string
+  ): Promise<{ mandalaId: string; title: string }> {
+    const source = await this.prisma.user_mandalas.findFirst({
+      where: {
+        id: sourceMandalaId,
+        OR: [{ is_public: true }, { is_template: true }],
+      },
+    });
+
+    if (!source) {
+      throw new Error('MANDALA_NOT_FOUND');
+    }
+
+    const newMandala = await this.prisma.user_mandalas.create({
+      data: {
+        user_id: targetUserId,
+        title: `${source.title} (cloned)`,
+        is_default: false,
+        is_public: false,
+      },
+    });
+
+    // Clone levels with two-pass parent mapping (reuses sharing/manager pattern)
+    const sourceLevels = await this.prisma.user_mandala_levels.findMany({
+      where: { mandala_id: sourceMandalaId },
+      orderBy: { level_key: 'asc' },
+    });
+
+    const idMap = new Map<string, string>();
+
+    for (const level of sourceLevels) {
+      const newLevel = await this.prisma.user_mandala_levels.create({
+        data: {
+          mandala_id: newMandala.id,
+          level_key: level.level_key,
+          center_goal: level.center_goal,
+          subjects: level.subjects,
+          depth: level.depth,
+          color: level.color,
+          position: level.position,
+          parent_level_id: null,
+        },
+      });
+      idMap.set(level.id, newLevel.id);
+    }
+
+    for (const level of sourceLevels) {
+      if (level.parent_level_id && idMap.has(level.parent_level_id)) {
+        await this.prisma.user_mandala_levels.update({
+          where: { id: idMap.get(level.id)! },
+          data: { parent_level_id: idMap.get(level.parent_level_id)! },
+        });
+      }
+    }
+
+    // Atomic increment clone_count on source
+    await this.prisma.user_mandalas.update({
+      where: { id: sourceMandalaId },
+      data: { clone_count: { increment: 1 } },
+    });
+
+    return { mandalaId: newMandala.id, title: newMandala.title };
+  }
+
+  /**
+   * @deprecated Use listExploreMandalas instead
    */
   async listPublicMandalas(options?: {
     page?: number;

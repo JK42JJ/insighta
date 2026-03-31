@@ -385,6 +385,7 @@ model users {
   newsletter_logs                newsletter_logs[]
   skill_runs                     skill_runs[]
   skill_outputs                  skill_outputs[]
+  mandala_likes                  mandala_likes[]
 
   @@index([instance_id])
   @@index([is_anonymous])
@@ -398,11 +399,15 @@ model user_mandalas {
   user_id    String                @db.Uuid
   title      String                @default("My Mandala")
   is_default Boolean               @default(true)
-  is_public  Boolean               @default(false)
-  share_slug String?               @unique
-  position   Int                   @default(0)
-  created_at DateTime              @default(now()) @db.Timestamptz(6)
-  updated_at DateTime              @default(now()) @db.Timestamptz(6)
+  is_public    Boolean               @default(false)
+  is_template  Boolean               @default(false)
+  domain       String?
+  like_count   Int                   @default(0)
+  clone_count  Int                   @default(0)
+  share_slug   String?               @unique
+  position     Int                   @default(0)
+  created_at   DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime              @default(now()) @db.Timestamptz(6)
   users            users                      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   levels           user_mandala_levels[]
   videoStates      UserVideoState[]
@@ -414,9 +419,13 @@ model user_mandalas {
 
   mandala_shares   mandala_shares[]
   skill_outputs    skill_outputs[]
+  mandala_likes    mandala_likes[]
 
   @@index([user_id], map: "idx_user_mandalas_user_id")
   @@index([is_public], map: "idx_user_mandalas_is_public")
+  @@index([is_public, is_template], map: "idx_user_mandalas_explore")
+  @@index([domain], map: "idx_user_mandalas_domain")
+  @@index([like_count], map: "idx_user_mandalas_like_count")
   @@schema("public")
 }
 
@@ -436,6 +445,21 @@ model mandala_shares {
   @@schema("public")
 }
 
+/// Mandala likes — tracks which users liked which public mandalas
+model mandala_likes {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  mandala_id String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  users   users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  mandala user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, mandala_id])
+  @@index([mandala_id], map: "idx_mandala_likes_mandala")
+  @@schema("public")
+}
+
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model user_mandala_levels {
   id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -443,7 +467,9 @@ model user_mandala_levels {
   parent_level_id String?              @db.Uuid
   level_key       String
   center_goal     String               @default("")
+  center_label    String?
   subjects        String[]             @default([])
+  subject_labels  String[]             @default([])
   position        Int                  @default(0)
   depth           Int                  @default(0)
   color           String?

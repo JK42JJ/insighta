@@ -52,6 +52,10 @@ export const queryKeys = {
     list: () => ['skills', 'list'] as const,
     outputs: (mandalaId: string) => ['skills', 'outputs', mandalaId] as const,
   },
+  explore: {
+    all: ['explore'] as const,
+    list: (filters: Record<string, unknown>) => ['explore', 'list', filters] as const,
+  },
   uiPreferences: {
     all: ['ui-preferences'] as const,
   },
