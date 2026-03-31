@@ -2,6 +2,7 @@ import { getPrismaClient } from '../database/client';
 import { getCaptionExtractor } from '../caption/extractor';
 import { createGenerationProvider } from '../llm';
 import { embedNode } from './embedding';
+import { enrichRichSummary } from '../skills/rich-summary';
 import { logger } from '../../utils/logger';
 
 // ============================================================================
@@ -380,6 +381,20 @@ export async function enrichVideo(
   `;
 
   logger.info('Video summary saved', { videoId, tagsCount: tags.length, model: modelName });
+
+  // 5. Generate rich summary (non-fatal — video_summaries already saved)
+  try {
+    await enrichRichSummary(videoId, {
+      title,
+      description: options?.url,
+      transcript,
+    });
+  } catch (err) {
+    logger.warn('Rich summary generation failed (non-fatal)', {
+      videoId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   return {
     videoId,
