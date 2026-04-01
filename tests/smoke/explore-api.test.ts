@@ -208,16 +208,16 @@ describe('Explore API — listExploreMandalas', () => {
     );
   });
 
-  test('template source does NOT apply language filter', async () => {
+  test('template source applies language filter', async () => {
     mockFindMany.mockResolvedValue([]);
     mockCount.mockResolvedValue(0);
 
     await manager.listExploreMandalas({ source: 'template', language: 'en' });
 
     const whereArg = mockFindMany.mock.calls[0][0].where;
-    // template source should have is_template:true but NO language filter
-    const hasLanguage = whereArg.AND.some((c: Record<string, unknown>) => 'language' in c);
-    expect(hasLanguage).toBe(false);
+    expect(whereArg.AND).toEqual(
+      expect.arrayContaining([expect.objectContaining({ language: 'en' })])
+    );
   });
 
   test('community source applies language filter', async () => {
