@@ -780,19 +780,14 @@ export class MandalaManager {
 
     if (filters.source === 'template') {
       conditions.push({ is_template: true });
-      if (filters.language) {
-        conditions.push({ language: filters.language });
-      }
     } else if (filters.source === 'community') {
       conditions.push({ is_public: true, is_template: false });
-      if (filters.language) {
-        conditions.push({ language: filters.language });
-      }
     } else {
       conditions.push({ OR: [{ is_public: true }, { is_template: true }] });
-      if (filters.language) {
-        conditions.push({ language: filters.language });
-      }
+    }
+
+    if (filters.language) {
+      conditions.push({ language: filters.language });
     }
 
     if (filters.domain) {
