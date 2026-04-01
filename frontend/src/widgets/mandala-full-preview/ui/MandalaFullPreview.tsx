@@ -183,9 +183,17 @@ function getCellStyle(
   const s = DOMAIN_STYLES[domain];
   const isInActiveBlock = cell.blockIdx === activeBlock;
 
+  // L1→L2 전환: 외곽 블록 선택 시 비활성 블록을 dim 처리
+  const hasActiveOuter = activeBlock !== -1;
+
   // 활성 블록의 중앙 셀 (center 또는 sub-center) — 도메인 컬러 배경
   if (isInActiveBlock && (cell.isCenter || (activeBlock !== -1 && cell.isSubCenter))) {
-    return { background: s.dim, color: s.color };
+    return {
+      background: s.dim,
+      color: s.color,
+      opacity: 1,
+      transform: hasActiveOuter ? 'scale(1.02)' : undefined,
+    };
   }
 
   // 활성 블록의 일반 셀 — 선명하게 (font-size 변경 없이 색상만)
@@ -197,17 +205,31 @@ function getCellStyle(
       borderRadius: '4px',
       zIndex: 2,
       position: 'relative' as const,
+      opacity: 1,
     };
   }
 
   // 비활성 블록의 sub-center → 도메인 컬러 텍스트 + 클릭 가능
   if (cell.isSubCenter && cell.blockIdx !== -1) {
-    return { color: s.color, cursor: 'pointer' };
+    return {
+      color: s.color,
+      cursor: 'pointer',
+      opacity: hasActiveOuter ? 0.35 : undefined,
+    };
   }
 
   // 비활성인 원래 center 셀 (외곽 블록 선택 시) → 클릭 가능
   if (cell.isCenter && cell.blockIdx === -1 && activeBlock !== -1) {
-    return { color: s.color, cursor: 'pointer' };
+    return {
+      color: s.color,
+      cursor: 'pointer',
+      opacity: 0.35,
+    };
+  }
+
+  // 비활성 블록의 일반 셀 — dim 처리
+  if (hasActiveOuter && !isInActiveBlock) {
+    return { opacity: 0.2 };
   }
 
   return {};

@@ -10,6 +10,7 @@ export function useExploreMandalas(filters: ExploreFilters) {
       apiClient.listExploreMandalas({
         q: filters.q || undefined,
         domain: filters.domain !== 'all' ? filters.domain : undefined,
+        language: filters.language !== 'all' ? filters.language : undefined,
         source: filters.source !== 'all' ? filters.source : undefined,
         sort: filters.sort,
         page: filters.page,

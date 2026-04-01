@@ -60,6 +60,7 @@ export interface ExploreMandala {
 export interface ExploreFilters {
   q?: string;
   domain?: string;
+  language?: string;
   source?: 'all' | 'template' | 'community';
   sort?: 'popular' | 'recent' | 'cloned';
   page?: number;
@@ -792,6 +793,10 @@ export class MandalaManager {
 
     if (filters.domain) {
       conditions.push({ domain: filters.domain });
+    }
+
+    if (filters.language) {
+      conditions.push({ language: filters.language });
     }
 
     if (filters.q) {

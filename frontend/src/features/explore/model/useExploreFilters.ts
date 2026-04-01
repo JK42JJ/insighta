@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { ExploreFilters } from '@/shared/types/explore';
+import { useTranslation } from 'react-i18next';
+import type { ExploreFilters, ExploreLanguage } from '@/shared/types/explore';
 import { DEFAULT_EXPLORE_FILTERS } from '@/shared/types/explore';
 import { MANDALA_DOMAINS, type MandalaDomain } from '@/shared/config/domain-colors';
 
@@ -22,8 +23,19 @@ function isValidSort(v: string | null): v is Sort {
   return v !== null && (VALID_SORTS as readonly string[]).includes(v);
 }
 
+/** Derive explore language from i18n setting */
+function getLanguageFromI18n(lang: string): ExploreLanguage {
+  if (lang.startsWith('ko')) return 'ko';
+  if (lang.startsWith('en')) return 'en';
+  return 'all';
+}
+
 export function useExploreFilters() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { i18n } = useTranslation();
+
+  // Language is derived from the header language toggle (i18n), not a URL param
+  const language = getLanguageFromI18n(i18n.language);
 
   const filters: ExploreFilters = useMemo(() => {
     const q = searchParams.get('q') ?? '';
@@ -35,11 +47,12 @@ export function useExploreFilters() {
     return {
       q,
       domain: isValidDomain(domainParam) ? domainParam : 'all',
+      language,
       source: isValidSource(sourceParam) ? sourceParam : 'all',
       sort: isValidSort(sortParam) ? sortParam : 'popular',
       page: pageParam ? Math.max(1, parseInt(pageParam, 10) || 1) : 1,
     };
-  }, [searchParams]);
+  }, [searchParams, language]);
 
   const updateFilters = useCallback(
     (updates: Partial<ExploreFilters>) => {
@@ -52,7 +65,7 @@ export function useExploreFilters() {
           merged.page = 1;
         }
 
-        // Only set non-default values in URL
+        // Only set non-default values in URL (language is not in URL)
         if (merged.q) next.set('q', merged.q);
         else next.delete('q');
 

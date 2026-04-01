@@ -36,9 +36,12 @@ export interface ExploreMandalaDetail extends ExploreMandala {
 }
 
 /** Filter/sort state for the explore page */
+export type ExploreLanguage = 'all' | 'ko' | 'en';
+
 export interface ExploreFilters {
   q: string;
   domain: MandalaDomain | 'all';
+  language: ExploreLanguage;
   source: 'all' | 'template' | 'community';
   sort: 'popular' | 'recent' | 'cloned';
   page: number;
@@ -55,6 +58,7 @@ export interface ExploreListResponse {
 export const DEFAULT_EXPLORE_FILTERS: ExploreFilters = {
   q: '',
   domain: 'all',
+  language: 'all',
   source: 'all',
   sort: 'popular',
   page: 1,
