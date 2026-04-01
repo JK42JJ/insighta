@@ -819,7 +819,19 @@
     "history": "History",
     "historyEmpty": "No outputs yet",
     "outputCards": "{{count}} cards",
-    "outputSectors": "{{count}} sectors"
+    "outputSectors": "{{count}} sectors",
+    "descNewsletter": "Mandala-based weekly content curation newsletter",
+    "descReport": "Generate a structured research report from mandala cards",
+    "descAlert": "Get trend alerts based on mandala activity changes",
+    "descRecommend": "Get AI recommendations to fill knowledge gaps in your mandala",
+    "descScript": "Generate a video script from your mandala cards",
+    "descBlog": "Generate a blog post draft from your mandala knowledge",
+    "typeNewsletter": "Newsletter",
+    "typeReport": "Report",
+    "typeAlert": "Alert",
+    "typeRecommend": "Recommend",
+    "typeScript": "Video Script",
+    "typeBlog": "Blog Post"
   },
   "landing": {
     "ltdBanner": "Pioneer Lifetime Deal - $99 (was $299). Limited spots remaining.",

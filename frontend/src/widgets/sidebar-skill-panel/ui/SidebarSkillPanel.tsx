@@ -28,6 +28,24 @@ const SKILL_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
   blog: PenLine,
 };
 
+const SKILL_DESC_KEYS: Record<string, string> = {
+  newsletter: 'descNewsletter',
+  report: 'descReport',
+  alert: 'descAlert',
+  recommend: 'descRecommend',
+  script: 'descScript',
+  blog: 'descBlog',
+};
+
+const SKILL_TYPE_KEYS: Record<string, string> = {
+  newsletter: 'typeNewsletter',
+  report: 'typeReport',
+  alert: 'typeAlert',
+  recommend: 'typeRecommend',
+  script: 'typeScript',
+  blog: 'typeBlog',
+};
+
 interface SkillPreviewData {
   skillId: string;
   subject?: string;
@@ -215,7 +233,9 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
                   ) : (
                     <Icon className="w-3.5 h-3.5 shrink-0 text-sidebar-foreground/60" />
                   )}
-                  <span className="truncate">{skill.description}</span>
+                  <span className="truncate">
+                    {t(`skills.${SKILL_DESC_KEYS[skill.id] ?? skill.id}`, skill.description)}
+                  </span>
                 </button>
 
                 {/* Preview panel */}
@@ -274,14 +294,7 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
 // SkillOutputHistory — collapsible list of past outputs
 // ---------------------------------------------------------------------------
 
-const SKILL_TYPE_LABELS: Record<string, string> = {
-  newsletter: 'Newsletter',
-  report: 'Report',
-  alert: 'Alert',
-  recommend: 'Recommend',
-  script: 'Video Script',
-  blog: 'Blog Post',
-};
+// Skill type labels are now in i18n: skills.typeNewsletter, skills.typeReport, etc.
 
 function formatRelativeDate(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -337,7 +350,10 @@ function SkillOutputHistory({
                 <div className="mx-1 mt-1 mb-2 p-2 rounded bg-sidebar-accent/50 text-xs space-y-2 border border-sidebar-border/50">
                   <div className="flex items-center justify-between">
                     <span className="text-sidebar-foreground/60">
-                      {SKILL_TYPE_LABELS[output.skill_type] ?? output.skill_type}
+                      {t(
+                        `skills.${SKILL_TYPE_KEYS[output.skill_type] ?? output.skill_type}`,
+                        output.skill_type
+                      )}
                       {output.card_count != null &&
                         ` · ${t('skills.outputCards', { count: output.card_count })}`}
                     </span>

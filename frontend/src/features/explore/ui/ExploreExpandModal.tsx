@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Link2, Pencil, Heart, Copy, Share2 } from 'lucide-react';
 import { MandalaFullPreview } from '@/widgets/mandala-full-preview';
 import type { MandalaDomain } from '@/shared/config/domain-colors';
@@ -44,6 +45,7 @@ export function ExploreExpandModal({
   onClone,
   onCopyLink,
 }: Props) {
+  const { t } = useTranslation();
   // ESC key
   useEffect(() => {
     if (!isOpen) return;
@@ -103,7 +105,7 @@ export function ExploreExpandModal({
           <div className="flex items-center gap-2.5 flex-wrap">
             {ds && (
               <span className="explore-domain-badge text-xs font-semibold px-2.5 py-1 rounded">
-                {ds.label}
+                {t(`mandala.domain.${domain}`)}
               </span>
             )}
             <span
