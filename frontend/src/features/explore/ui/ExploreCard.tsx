@@ -1,4 +1,5 @@
 import { Heart, Copy } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { MandalaDomain } from '@/shared/config/domain-colors';
 import { DOMAIN_STYLES, domainCssVars } from '@/shared/config/domain-colors';
 
@@ -34,6 +35,7 @@ export function ExploreCard({
   isNew,
   onClick,
 }: Props) {
+  const { t } = useTranslation();
   const ds = domain ? DOMAIN_STYLES[domain] : null;
 
   return (
@@ -82,7 +84,7 @@ export function ExploreCard({
         </span>
         {ds && (
           <span className="explore-domain-badge text-[10px] font-semibold px-2.5 py-0.5 rounded whitespace-nowrap shrink-0 tracking-wide">
-            {ds.label}
+            {t(`mandala.domain.${domain}`)}
           </span>
         )}
       </div>

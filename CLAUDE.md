@@ -1,5 +1,20 @@
 # Insighta — Project Rules
 
+## 세션 시작 필수 로드 (매 세션 첫 번째 액션)
+
+아래 4개 파일을 읽기 전에는 어떤 작업도 시작하지 않는다:
+- `.claude/agents/DELEGATION.md`
+- `memory/work-efficiency.md`
+- `memory/feedback-speed-agents.md`
+- `memory/troubleshooting.md`
+
+## 팀 에이전트 강제 규칙
+
+독립 작업 2개 이상 존재 시 → 무조건 병렬 에이전트 실행.
+"에이전트를 써야 할까?" 고민하는 시간 자체가 낭비.
+기본값은 병렬. 순차 실행이 필요한 경우에만 순차.
+위반 시 troubleshooting.md에 기록.
+
 ## References (read when relevant)
 
 - Boot Sequence: `docs/BOOT_SEQUENCE.md` (loaded by /init skill)
