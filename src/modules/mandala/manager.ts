@@ -298,49 +298,46 @@ export class MandalaManager {
     title: string,
     levels: MandalaLevelData[]
   ): Promise<MandalaWithLevels> {
-    return await this.prisma.$transaction(async (tx) => {
-      // Resolve user tier + admin status
-      const [subscription, adminCheck] = await Promise.all([
-        tx.user_subscriptions.findUnique({
-          where: { user_id: userId },
-          select: { tier: true, mandala_limit: true },
-        }),
-        this.prisma.$queryRaw<Array<{ is_super_admin: boolean | null }>>`
-          SELECT is_super_admin FROM auth.users WHERE id = ${userId}::uuid
-        `,
-      ]);
-      const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
-      const tier = isSuperAdmin
-        ? ('admin' as Tier)
-        : ((subscription?.tier ?? DEFAULT_TIER) as Tier);
-      const tierLimit = getMandalaLimit(tier);
-      const limit =
-        isSuperAdmin || tierLimit === Infinity ? null : (subscription?.mandala_limit ?? tierLimit);
-
-      // Count existing mandalas (quota check inside transaction for atomicity)
-      const count = await tx.user_mandalas.count({
+    // Step 1: Read queries outside transaction (parallel)
+    const [subscription, adminCheck, count, maxPositionResult] = await Promise.all([
+      this.prisma.user_subscriptions.findUnique({
         where: { user_id: userId },
-      });
-
-      if (limit !== null && count >= limit) {
-        const err = new Error('Mandala quota exceeded') as Error & {
-          quota: number;
-          current: number;
-        };
-        err.quota = limit;
-        err.current = count;
-        throw err;
-      }
-
-      // Determine position and isDefault
-      const isDefault = count === 0;
-      const maxPositionResult = await tx.user_mandalas.aggregate({
+        select: { tier: true, mandala_limit: true },
+      }),
+      this.prisma.$queryRaw<Array<{ is_super_admin: boolean | null }>>`
+        SELECT is_super_admin FROM auth.users WHERE id = ${userId}::uuid
+      `,
+      this.prisma.user_mandalas.count({
+        where: { user_id: userId },
+      }),
+      this.prisma.user_mandalas.aggregate({
         where: { user_id: userId },
         _max: { position: true },
-      });
-      const position = (maxPositionResult._max.position ?? -1) + 1;
+      }),
+    ]);
 
-      // Create the mandala record
+    // Step 2: Quota validation (in-memory)
+    const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
+    const tier = isSuperAdmin ? ('admin' as Tier) : ((subscription?.tier ?? DEFAULT_TIER) as Tier);
+    const tierLimit = getMandalaLimit(tier);
+    const limit =
+      isSuperAdmin || tierLimit === Infinity ? null : (subscription?.mandala_limit ?? tierLimit);
+
+    if (limit !== null && count >= limit) {
+      const err = new Error('Mandala quota exceeded') as Error & {
+        quota: number;
+        current: number;
+      };
+      err.quota = limit;
+      err.current = count;
+      throw err;
+    }
+
+    const isDefault = count === 0;
+    const position = (maxPositionResult._max.position ?? -1) + 1;
+
+    // Step 3: Transaction for writes only (fast)
+    return await this.prisma.$transaction(async (tx) => {
       const mandala = await tx.user_mandalas.create({
         data: {
           user_id: userId,
@@ -350,12 +347,10 @@ export class MandalaManager {
         },
       });
 
-      // Create levels using two-pass pattern
       await this.createLevels(tx as any, mandala.id, levels);
 
       logger.info(`Mandala created: userId=${userId}, mandalaId=${mandala.id}, tier=${tier}`);
 
-      // Fetch and return the complete result
       const result = await tx.user_mandalas.findUnique({
         where: { id: mandala.id },
         include: {
