@@ -8,3 +8,4 @@ export * from './logger';
 export * from './errors';
 export * from './retry';
 export * from './cache';
+export * from './memory-cache';

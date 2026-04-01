@@ -3,6 +3,12 @@ import { logger } from '../../utils/logger';
 import { user_mandalas, Prisma } from '@prisma/client';
 import { nanoid } from 'nanoid';
 import { DEFAULT_TIER, getMandalaLimit, type Tier } from '@/config/quota';
+import {
+  EXPLORE_PAGE_LIMIT,
+  EXPLORE_DEFAULT_PAGE_SIZE,
+  type ExploreSource,
+  type ExploreSort,
+} from '@/config/explore';
 
 interface MandalaLevelData {
   levelKey: string;
@@ -61,8 +67,8 @@ export interface ExploreFilters {
   q?: string;
   domain?: string;
   language?: string;
-  source?: 'all' | 'template' | 'community';
-  sort?: 'popular' | 'recent' | 'cloned';
+  source?: ExploreSource;
+  sort?: ExploreSort;
   page?: number;
   limit?: number;
 }
@@ -770,9 +776,8 @@ export class MandalaManager {
   async listExploreMandalas(
     filters: ExploreFilters = {}
   ): Promise<{ mandalas: ExploreMandala[]; total: number; page: number; limit: number }> {
-    const MAX_EXPLORE_LIMIT = 50;
     const page = filters.page ?? 1;
-    const limit = Math.min(filters.limit ?? 24, MAX_EXPLORE_LIMIT);
+    const limit = Math.min(filters.limit ?? EXPLORE_DEFAULT_PAGE_SIZE, EXPLORE_PAGE_LIMIT);
     const skip = (page - 1) * limit;
 
     // Build WHERE clause
