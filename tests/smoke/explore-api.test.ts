@@ -208,6 +208,30 @@ describe('Explore API — listExploreMandalas', () => {
     );
   });
 
+  test('template source does NOT apply language filter', async () => {
+    mockFindMany.mockResolvedValue([]);
+    mockCount.mockResolvedValue(0);
+
+    await manager.listExploreMandalas({ source: 'template', language: 'en' });
+
+    const whereArg = mockFindMany.mock.calls[0][0].where;
+    // template source should have is_template:true but NO language filter
+    const hasLanguage = whereArg.AND.some((c: Record<string, unknown>) => 'language' in c);
+    expect(hasLanguage).toBe(false);
+  });
+
+  test('community source applies language filter', async () => {
+    mockFindMany.mockResolvedValue([]);
+    mockCount.mockResolvedValue(0);
+
+    await manager.listExploreMandalas({ source: 'community', language: 'ko' });
+
+    const whereArg = mockFindMany.mock.calls[0][0].where;
+    expect(whereArg.AND).toEqual(
+      expect.arrayContaining([expect.objectContaining({ language: 'ko' })])
+    );
+  });
+
   test('limits page size to MAX (50)', async () => {
     mockFindMany.mockResolvedValue([]);
     mockCount.mockResolvedValue(0);

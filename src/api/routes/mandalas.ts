@@ -5,6 +5,14 @@ import { getPrismaClient } from '../../modules/database/client';
 
 const MAX_PAGINATION_LIMIT = 100;
 
+// Explore 캐시: 시스템 템플릿은 거의 불변 → 10분 TTL
+const EXPLORE_CACHE_TTL_MS = 10 * 60 * 1000;
+const exploreCache = new Map<string, { data: unknown; expiry: number }>();
+
+export function clearExploreCache(): void {
+  exploreCache.clear();
+}
+
 interface MandalaLevelBody {
   levelKey: string;
   centerGoal: string;
@@ -169,7 +177,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const validSorts = ['popular', 'recent', 'cloned'] as const;
 
     const validLanguages = ['ko', 'en'] as const;
-    const result = await getMandalaManager().listExploreMandalas({
+    const parsedFilters = {
       q: q || undefined,
       domain: domain || undefined,
       language: validLanguages.includes(language as (typeof validLanguages)[number])
@@ -183,7 +191,26 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         : undefined,
       page,
       limit,
-    });
+    };
+
+    // 검색어가 있으면 캐시 스킵 (검색 결과는 매번 다름)
+    const cacheKey = parsedFilters.q
+      ? null
+      : `${parsedFilters.domain ?? ''}:${parsedFilters.source ?? ''}:${parsedFilters.sort ?? ''}:${parsedFilters.language ?? ''}:${parsedFilters.page ?? ''}:${parsedFilters.limit ?? ''}`;
+
+    if (cacheKey) {
+      const cached = exploreCache.get(cacheKey);
+      if (cached && Date.now() < cached.expiry) {
+        return reply.send(cached.data);
+      }
+    }
+
+    const result = await getMandalaManager().listExploreMandalas(parsedFilters);
+
+    if (cacheKey) {
+      exploreCache.set(cacheKey, { data: result, expiry: Date.now() + EXPLORE_CACHE_TTL_MS });
+    }
+
     return reply.send(result);
   });
 

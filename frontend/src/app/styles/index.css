@@ -466,7 +466,7 @@
   .explore-domain-accent { background: linear-gradient(90deg, var(--d-color), transparent); }
   .explore-domain-center { background: var(--d-dim) !important; color: var(--d-color) !important; }
 
-  /* 9×9 grid circular radial fade mask */
+  /* 9×9 grid spotlight — ::after overlay for pixel-level radial fade */
   .explore-9x9-mask {
     position: relative;
   }
@@ -474,21 +474,31 @@
     content: '';
     position: absolute;
     inset: 0;
-    pointer-events: none;
-    z-index: 1;
-    border-radius: 0.75rem;
-    transition: background 0.4s ease;
+    border-radius: inherit;
     background: radial-gradient(
       circle at var(--mask-x, 50%) var(--mask-y, 50%),
-      transparent 24%,
-      hsl(var(--card) / 0.0) 26%,
-      hsl(var(--card) / 0.20) 36%,
-      hsl(var(--card) / 0.45) 46%,
-      hsl(var(--card) / 0.65) 56%,
-      hsl(var(--card) / 0.80) 66%,
-      hsl(var(--card) / 0.92) 78%,
-      hsl(var(--card) / 0.98) 90%
+      transparent 10%,
+      hsl(var(--card) / 0.5) 20%,
+      hsl(var(--card) / 0.85) 32%,
+      hsl(var(--card)) 60%
     );
+    pointer-events: none;
+    z-index: 3;
+    transition: background 0.3s ease;
+  }
+
+  /* 서브골 클릭 시 중앙에서 자기 위치로 날아가는 애니메이션 */
+  @keyframes explore-fly-out {
+    0% {
+      transform: translate(var(--fly-x), var(--fly-y)) scale(0.7);
+      opacity: 0.3;
+      color: color-mix(in srgb, var(--d-color, currentColor) 40%, hsl(var(--muted-foreground)));
+    }
+    100% {
+      transform: translate(0, 0) scale(1);
+      opacity: 1;
+      color: color-mix(in srgb, var(--d-color, currentColor) 40%, hsl(var(--muted-foreground)));
+    }
   }
 
   /* 9×9 cell base */
@@ -514,12 +524,14 @@
   }
 
   /* Ring 0: center 3×3 block — punches through mask */
+  /* border-color is set per-cell via inline style (distance gradient) */
   .explore-cell-ring0 {
     font-size: 11px;
     font-weight: 600;
     color: hsl(var(--foreground));
     background: hsl(var(--card));
-    border: 1px solid hsl(var(--border) / 0.3);
+    border-width: 1px;
+    border-style: solid;
     border-radius: 4px;
     z-index: 2;
     position: relative;
@@ -542,11 +554,17 @@
   /* Sub-goal center of each outer block */
   .explore-cell-sub { font-weight: 600 !important; }
 
-  /* Hover: cell lifts above the mask */
+  /* Hover: cell lifts above the overlay (z-index 3) */
   .explore-cell:hover {
-    background: hsl(var(--muted) / 0.2) !important;
-    z-index: 4;
-    border-color: hsl(var(--border) / 0.3) !important;
+    background: hsl(var(--muted) / 0.4) !important;
+    opacity: 1 !important;
+    z-index: 5;
+    position: relative;
+  }
+  /* 외곽 sub-center만 hover 시 그리드 border 표시 */
+  .explore-cell-sub:hover {
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 4px;
   }
 
   /* Modal entry animation */

@@ -779,19 +779,20 @@ export class MandalaManager {
     const conditions: Prisma.user_mandalasWhereInput[] = [];
 
     if (filters.source === 'template') {
+      // templates are language-agnostic — no language filter
       conditions.push({ is_template: true });
     } else if (filters.source === 'community') {
       conditions.push({ is_public: true, is_template: false });
+      if (filters.language) {
+        conditions.push({ language: filters.language });
+      }
     } else {
+      // 'all': templates + community. Language filter only for community portion
       conditions.push({ OR: [{ is_public: true }, { is_template: true }] });
     }
 
     if (filters.domain) {
       conditions.push({ domain: filters.domain });
-    }
-
-    if (filters.language) {
-      conditions.push({ language: filters.language });
     }
 
     if (filters.q) {

@@ -66,6 +66,13 @@ export const DOMAIN_STYLES: Record<MandalaDomain, DomainStyle> = {
   mind: { label: '마인드', labelEn: 'Mind', color: '#a3e635', dim: 'rgba(163,230,53,0.08)' },
 };
 
+/** Get localized domain label */
+export function getDomainLabel(domain: MandalaDomain, lang: string): string {
+  const ds = DOMAIN_STYLES[domain];
+  if (!ds) return domain;
+  return lang.startsWith('ko') ? ds.label : ds.labelEn;
+}
+
 /** CSS 변수 주입용 style 객체 생성 */
 export function domainCssVars(domain: MandalaDomain | null): React.CSSProperties {
   if (!domain || !DOMAIN_STYLES[domain]) return {};
