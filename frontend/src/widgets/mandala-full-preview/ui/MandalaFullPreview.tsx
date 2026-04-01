@@ -51,12 +51,38 @@ const BLOCK_POSITIONS: Record<number, [number, number]> = {
   7: [2, 2],
 };
 
+// 중앙 3×3 블록 내 각 서브골의 절대 좌표 (blockIdx → [row, col])
+// subjects 배열: [0,1,2,3, center, 4,5,6,7]
+const CENTER_SUB_POSITIONS: Record<number, [number, number]> = {
+  0: [3, 3],
+  1: [3, 4],
+  2: [3, 5],
+  3: [4, 3],
+  4: [4, 5],
+  5: [5, 3],
+  6: [5, 4],
+  7: [5, 5],
+};
+
+// center sub-goal의 3×3 grid index → 연결된 외곽 blockIdx
+const CENTER_SUB_TO_BLOCK: Record<number, number> = {
+  0: 0,
+  1: 1,
+  2: 2,
+  3: 3,
+  5: 4,
+  6: 5,
+  7: 6,
+  8: 7,
+};
+
 interface CellData {
   text: string;
   ring: number;
   isCenter: boolean;
   isSubCenter: boolean;
   blockIdx: number; // -1 for center block, 0-7 for outer blocks
+  linkedBlock: number; // center sub-goal이 연결된 외곽 blockIdx (-1 if N/A)
   absRow: number;
   absCol: number;
 }
@@ -92,6 +118,7 @@ function buildCells(
               isCenter: idx === 4,
               isSubCenter: idx !== 4,
               blockIdx: -1,
+              linkedBlock: CENTER_SUB_TO_BLOCK[idx] ?? -1,
               absRow: brow * 3 + crow,
               absCol: bcol * 3 + ccol,
             });
@@ -132,6 +159,7 @@ function buildCells(
               isCenter: false,
               isSubCenter,
               blockIdx,
+              linkedBlock: -1,
               absRow: ar,
               absCol: ac,
             });
@@ -186,22 +214,34 @@ function getCellStyle(
   // L1→L2 전환: 외곽 블록 선택 시 비활성 블록을 dim 처리
   const hasActiveOuter = activeBlock !== -1;
 
-  // 활성 블록의 중앙 셀 (center 또는 sub-center) — 도메인 컬러 배경
-  if (isInActiveBlock && (cell.isCenter || (activeBlock !== -1 && cell.isSubCenter))) {
-    return {
-      background: s.dim,
-      color: s.color,
-      opacity: 1,
-      transform: hasActiveOuter ? 'scale(1.02)' : undefined,
-    };
-  }
-
-  // 활성 블록의 일반 셀 — 선명하게 (font-size 변경 없이 색상만)
-  if (isInActiveBlock) {
+  // === 중앙 블록 (blockIdx === -1) ===
+  if (cell.blockIdx === -1) {
+    // 메인 센터 셀 — 항상 도메인 컬러 배경
+    if (cell.isCenter) {
+      return {
+        background: s.dim,
+        color: s.color,
+        opacity: hasActiveOuter ? 0.35 : 1,
+        cursor: hasActiveOuter ? 'pointer' : undefined,
+      };
+    }
+    // 서브골 셀 — 톤다운 도메인 컬러
+    // 연결된 외곽 블록이 활성이면 하일라이트 유지, 아니면 dim
+    if (cell.isSubCenter) {
+      const isLinkedActive = hasActiveOuter && cell.linkedBlock === activeBlock;
+      return {
+        color: `color-mix(in srgb, ${s.color} 40%, hsl(var(--muted-foreground)))`,
+        background: 'hsl(var(--card))',
+        borderRadius: '4px',
+        zIndex: 2,
+        position: 'relative' as const,
+        opacity: isLinkedActive ? 1 : hasActiveOuter ? 0.35 : 1,
+      };
+    }
+    // 일반 셀
     return {
       color: 'hsl(var(--foreground))',
       background: 'hsl(var(--card))',
-      borderColor: 'hsl(var(--border) / 0.3)',
       borderRadius: '4px',
       zIndex: 2,
       position: 'relative' as const,
@@ -209,21 +249,39 @@ function getCellStyle(
     };
   }
 
-  // 비활성 블록의 sub-center → 도메인 컬러 텍스트 + 클릭 가능
-  if (cell.isSubCenter && cell.blockIdx !== -1) {
+  // === 외곽 블록 ===
+
+  // 활성 외곽 블록의 중앙 셀 — 중앙 3×3 sub-goal과 동일한 스타일
+  if (isInActiveBlock && cell.isSubCenter) {
     return {
-      color: s.color,
-      cursor: 'pointer',
-      opacity: hasActiveOuter ? 0.35 : undefined,
+      color: `color-mix(in srgb, ${s.color} 40%, hsl(var(--muted-foreground)))`,
+      background: 'hsl(var(--card))',
+      borderRadius: '4px',
+      zIndex: 2,
+      position: 'relative' as const,
+      opacity: 1,
+      transform: 'scale(1.02)',
     };
   }
 
-  // 비활성인 원래 center 셀 (외곽 블록 선택 시) → 클릭 가능
-  if (cell.isCenter && cell.blockIdx === -1 && activeBlock !== -1) {
+  // 활성 외곽 블록의 일반 셀
+  if (isInActiveBlock) {
     return {
-      color: s.color,
+      color: 'hsl(var(--foreground))',
+      background: 'hsl(var(--card))',
+      borderRadius: '4px',
+      zIndex: 2,
+      position: 'relative' as const,
+      opacity: 1,
+    };
+  }
+
+  // 비활성 외곽 블록의 sub-center — 무채색 톤다운
+  if (cell.isSubCenter) {
+    return {
+      color: 'hsl(var(--muted-foreground) / 0.6)',
       cursor: 'pointer',
-      opacity: 0.35,
+      opacity: hasActiveOuter ? 0.35 : undefined,
     };
   }
 
@@ -231,6 +289,9 @@ function getCellStyle(
   if (hasActiveOuter && !isInActiveBlock) {
     return { opacity: 0.2 };
   }
+
+  // 기본 상태: CSS mask-image가 픽셀 단위 radial fade 처리
+  // JS per-cell opacity 불필요
 
   return {};
 }
@@ -266,19 +327,29 @@ export function MandalaFullPreview({
   className,
 }: Props) {
   const [activeBlock, setActiveBlock] = useState<number>(-1); // -1 = center
+  // 방금 활성화된 블록 (fly-out 애니메이션 대상)
+  const [flyingBlock, setFlyingBlock] = useState<number | null>(null);
+  // 외곽 셀 hover → 중앙 sub-goal 연동 하일라이트
+  const [hoveredBlock, setHoveredBlock] = useState<number | null>(null);
 
   const subs = Array.from({ length: 8 }, (_, i) => subLevels[i] ?? null);
   const cells = buildCells(rootLevel, subs, centerLabel, subLabels);
 
   function handleCellClick(cell: CellData) {
-    // sub-goal 클릭 → 해당 블록 활성화
+    // sub-goal 클릭 → 해당 블록 활성화 + fly-out 애니메이션
     if (cell.isSubCenter && cell.blockIdx !== -1 && cell.blockIdx !== activeBlock) {
-      setActiveBlock(cell.blockIdx);
+      setFlyingBlock(cell.blockIdx);
+      // 약간의 딜레이 후 블록 활성화 (fly-out 보이도록)
+      requestAnimationFrame(() => {
+        setActiveBlock(cell.blockIdx);
+        setTimeout(() => setFlyingBlock(null), 600);
+      });
       return;
     }
     // center 셀 또는 이미 활성인 블록의 sub-center 클릭 → 중앙으로 복귀
     if (cell.isCenter || (cell.isSubCenter && cell.blockIdx === activeBlock)) {
       setActiveBlock(-1);
+      setFlyingBlock(null);
       return;
     }
   }
@@ -289,17 +360,73 @@ export function MandalaFullPreview({
         className="explore-9x9-mask grid grid-cols-9 gap-0.5 rounded-xl overflow-hidden relative"
         style={getMaskOrigin(activeBlock)}
       >
-        {cells.map((cell, i) => (
-          <div
-            key={i}
-            className={getCellClass(cell)}
-            style={getCellStyle(cell, activeBlock, domain)}
-            title={cell.text}
-            onClick={() => handleCellClick(cell)}
-          >
-            {cell.text}
-          </div>
-        ))}
+        {cells.map((cell, i) => {
+          const baseStyle = getCellStyle(cell, activeBlock, domain);
+          const isFlying = cell.isSubCenter && cell.blockIdx === flyingBlock;
+
+          // fly 시작점: 중앙 3×3 내 해당 서브골 셀 → 현재 셀 위치
+          let flyStyle: React.CSSProperties = {};
+          if (isFlying && cell.blockIdx !== -1) {
+            const origin = CENTER_SUB_POSITIONS[cell.blockIdx];
+            if (origin) {
+              const offsetCol = origin[1] - cell.absCol;
+              const offsetRow = origin[0] - cell.absRow;
+              const domainColor =
+                domain && DOMAIN_STYLES[domain] ? DOMAIN_STYLES[domain].color : undefined;
+              flyStyle = {
+                zIndex: 10,
+                '--fly-x': `calc(${offsetCol} * (100% + 2px))`,
+                '--fly-y': `calc(${offsetRow} * (100% + 2px))`,
+                '--d-color': domainColor,
+                animation: 'explore-fly-out 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              } as React.CSSProperties;
+            }
+          }
+
+          // 중앙 3×3 격자: 중심에서 외곽으로 border 희미해짐
+          let borderStyle: React.CSSProperties = {};
+          if (cell.blockIdx === -1) {
+            const dx = cell.absCol - 4;
+            const dy = cell.absRow - 4;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            // dist 0 = 0.8, dist 1.41(코너) = 0.3
+            const alpha = Math.max(0.15, 0.5 - dist * 0.25);
+            borderStyle = { borderColor: `rgba(148, 163, 184, ${alpha.toFixed(2)})` };
+          }
+
+          // 외곽 셀 hover → 중앙 sub-goal 연동 하일라이트
+          const isHoverLinked =
+            hoveredBlock !== null &&
+            cell.blockIdx === -1 &&
+            cell.isSubCenter &&
+            cell.linkedBlock === hoveredBlock;
+
+          const hoverLinkStyle: React.CSSProperties = isHoverLinked
+            ? { background: 'hsl(var(--muted) / 0.4)', opacity: 1, zIndex: 5, position: 'relative' }
+            : {};
+
+          return (
+            <div
+              key={i}
+              className={getCellClass(cell)}
+              style={{
+                ...baseStyle,
+                ...borderStyle,
+                transition: 'opacity 0.3s ease',
+                ...flyStyle,
+                ...hoverLinkStyle,
+              }}
+              title={cell.text}
+              onClick={() => handleCellClick(cell)}
+              onMouseEnter={() =>
+                cell.blockIdx !== -1 ? setHoveredBlock(cell.blockIdx) : undefined
+              }
+              onMouseLeave={() => setHoveredBlock(null)}
+            >
+              {cell.text}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

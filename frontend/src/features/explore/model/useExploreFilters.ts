@@ -34,7 +34,7 @@ export function useExploreFilters() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { i18n } = useTranslation();
 
-  // Language is derived from the header language toggle (i18n), not a URL param
+  // Language derived from i18n setting — EN users see EN templates, KO users see KO
   const language = getLanguageFromI18n(i18n.language);
 
   const filters: ExploreFilters = useMemo(() => {

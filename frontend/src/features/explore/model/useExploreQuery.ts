@@ -15,6 +15,7 @@ export function useExploreMandalas(filters: ExploreFilters) {
         sort: filters.sort,
         page: filters.page,
       }),
+    staleTime: 5 * 60 * 1000, // 5분 — 템플릿 데이터는 거의 불변
     placeholderData: (prev) => prev,
   });
 }

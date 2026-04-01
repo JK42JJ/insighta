@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 
 export function LandingHeader() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
+  const toggleLanguage = () => i18n.changeLanguage(i18n.language === 'ko' ? 'en' : 'ko');
   const isLanding = location.pathname === '/' || location.pathname === '';
 
   const handleFeaturesClick = (e: React.MouseEvent) => {
@@ -66,6 +67,17 @@ export function LandingHeader() {
 
         {/* CTA */}
         <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleLanguage}
+            aria-label={
+              i18n.language === 'ko' ? t('header.switchToEnglish') : t('header.switchToKorean')
+            }
+            className="rounded-lg text-xs font-medium px-2 hover:bg-muted"
+          >
+            {i18n.language === 'ko' ? 'EN' : 'KO'}
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => navigate('/login')}>
             {t('common.login')}
           </Button>

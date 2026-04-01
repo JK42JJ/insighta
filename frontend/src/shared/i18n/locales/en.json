@@ -29,8 +29,8 @@
   },
   "explore": {
     "title": "Explore Mandalas",
-    "empty": "No public mandalas yet",
-    "emptyDesc": "When users share their mandalas, they'll appear here.",
+    "empty": "English templates coming soon",
+    "emptyDesc": "We're preparing English mandala templates. Switch to Korean to browse available templates now.",
     "notFound": "Mandala not found",
     "backToExplore": "Back to Explore",
     "readOnly": "Read-only view",
