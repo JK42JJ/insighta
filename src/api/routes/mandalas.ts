@@ -147,13 +147,14 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     Querystring: {
       q?: string;
       domain?: string;
+      language?: string;
       source?: string;
       sort?: string;
       page?: string;
       limit?: string;
     };
   }>('/explore', async (request, reply) => {
-    const { q, domain, source, sort } = request.query;
+    const { q, domain, language, source, sort } = request.query;
     const page = request.query.page ? parseInt(request.query.page, 10) : undefined;
     const limit = request.query.limit ? parseInt(request.query.limit, 10) : undefined;
 
@@ -167,9 +168,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const validSources = ['all', 'template', 'community'] as const;
     const validSorts = ['popular', 'recent', 'cloned'] as const;
 
+    const validLanguages = ['ko', 'en'] as const;
     const result = await getMandalaManager().listExploreMandalas({
       q: q || undefined,
       domain: domain || undefined,
+      language: validLanguages.includes(language as (typeof validLanguages)[number])
+        ? language
+        : undefined,
       source: validSources.includes(source as (typeof validSources)[number])
         ? (source as (typeof validSources)[number])
         : undefined,

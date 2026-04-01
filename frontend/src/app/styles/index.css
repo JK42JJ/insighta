@@ -480,14 +480,14 @@
     transition: background 0.4s ease;
     background: radial-gradient(
       circle at var(--mask-x, 50%) var(--mask-y, 50%),
-      transparent 18%,
-      hsl(var(--card) / 0.0) 20%,
-      hsl(var(--card) / 0.15) 32%,
-      hsl(var(--card) / 0.35) 44%,
-      hsl(var(--card) / 0.58) 56%,
-      hsl(var(--card) / 0.78) 68%,
-      hsl(var(--card) / 0.92) 80%,
-      hsl(var(--card) / 0.98) 92%
+      transparent 24%,
+      hsl(var(--card) / 0.0) 26%,
+      hsl(var(--card) / 0.20) 36%,
+      hsl(var(--card) / 0.45) 46%,
+      hsl(var(--card) / 0.65) 56%,
+      hsl(var(--card) / 0.80) 66%,
+      hsl(var(--card) / 0.92) 78%,
+      hsl(var(--card) / 0.98) 90%
     );
   }
 
@@ -503,7 +503,8 @@
     word-break: keep-all;
     position: relative;
     overflow: hidden;
-    transition: all 0.3s;
+    transition: opacity 0.3s ease, transform 0.3s ease, background 0.3s ease, color 0.3s ease;
+    will-change: opacity, transform;
     font-size: 10px;
     font-weight: 400;
     color: hsl(var(--muted-foreground));

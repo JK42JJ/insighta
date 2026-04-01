@@ -816,6 +816,7 @@ class ApiClient {
   async listExploreMandalas(filters: {
     q?: string;
     domain?: string;
+    language?: string;
     source?: string;
     sort?: string;
     page?: number;
@@ -824,6 +825,7 @@ class ApiClient {
     const params = new URLSearchParams();
     if (filters.q) params.set('q', filters.q);
     if (filters.domain && filters.domain !== 'all') params.set('domain', filters.domain);
+    if (filters.language && filters.language !== 'all') params.set('language', filters.language);
     if (filters.source && filters.source !== 'all') params.set('source', filters.source);
     if (filters.sort) params.set('sort', filters.sort);
     if (filters.page) params.set('page', String(filters.page));

@@ -402,6 +402,7 @@ model user_mandalas {
   is_public    Boolean               @default(false)
   is_template  Boolean               @default(false)
   domain       String?
+  language     String?               @db.VarChar(10)
   like_count   Int                   @default(0)
   clone_count  Int                   @default(0)
   share_slug   String?               @unique
@@ -426,6 +427,7 @@ model user_mandalas {
   @@index([is_public, is_template], map: "idx_user_mandalas_explore")
   @@index([domain], map: "idx_user_mandalas_domain")
   @@index([like_count], map: "idx_user_mandalas_like_count")
+  @@index([language], map: "idx_user_mandalas_language")
   @@schema("public")
 }
 
