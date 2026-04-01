@@ -2,16 +2,17 @@ import { FastifyPluginCallback } from 'fastify';
 import { getMandalaManager } from '../../modules/mandala';
 import { getMood } from '../../modules/mandala/mood';
 import { getPrismaClient } from '../../modules/database/client';
+import {
+  EXPLORE_SOURCES,
+  EXPLORE_SORTS,
+  EXPLORE_LANGUAGES,
+  MAX_PAGINATION_LIMIT,
+  EXPLORE_CACHE_TTL_MS,
+} from '../../config/explore';
+import { MemoryCache } from '../../utils/memory-cache';
 
-const MAX_PAGINATION_LIMIT = 100;
-
-// Explore 캐시: 시스템 템플릿은 거의 불변 → 10분 TTL
-const EXPLORE_CACHE_TTL_MS = 10 * 60 * 1000;
-const exploreCache = new Map<string, { data: unknown; expiry: number }>();
-
-export function clearExploreCache(): void {
-  exploreCache.clear();
-}
+// Explore results cache — templates are near-immutable, 10-min TTL
+const exploreCache = new MemoryCache({ defaultTTLMs: EXPLORE_CACHE_TTL_MS, maxEntries: 100 });
 
 interface MandalaLevelBody {
   levelKey: string;
@@ -173,42 +174,43 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.code(400).send({ error: 'Invalid pagination parameters' });
     }
 
-    const validSources = ['all', 'template', 'community'] as const;
-    const validSorts = ['popular', 'recent', 'cloned'] as const;
-
-    const validLanguages = ['ko', 'en'] as const;
     const parsedFilters = {
       q: q || undefined,
       domain: domain || undefined,
-      language: validLanguages.includes(language as (typeof validLanguages)[number])
+      language: EXPLORE_LANGUAGES.includes(language as (typeof EXPLORE_LANGUAGES)[number])
         ? language
         : undefined,
-      source: validSources.includes(source as (typeof validSources)[number])
-        ? (source as (typeof validSources)[number])
+      source: EXPLORE_SOURCES.includes(source as (typeof EXPLORE_SOURCES)[number])
+        ? (source as (typeof EXPLORE_SOURCES)[number])
         : undefined,
-      sort: validSorts.includes(sort as (typeof validSorts)[number])
-        ? (sort as (typeof validSorts)[number])
+      sort: EXPLORE_SORTS.includes(sort as (typeof EXPLORE_SORTS)[number])
+        ? (sort as (typeof EXPLORE_SORTS)[number])
         : undefined,
       page,
       limit,
     };
 
-    // 검색어가 있으면 캐시 스킵 (검색 결과는 매번 다름)
+    // Skip cache for search queries (results vary per request)
     const cacheKey = parsedFilters.q
       ? null
-      : `${parsedFilters.domain ?? ''}:${parsedFilters.source ?? ''}:${parsedFilters.sort ?? ''}:${parsedFilters.language ?? ''}:${parsedFilters.page ?? ''}:${parsedFilters.limit ?? ''}`;
+      : MemoryCache.buildKey({
+          domain: parsedFilters.domain,
+          source: parsedFilters.source,
+          sort: parsedFilters.sort,
+          language: parsedFilters.language,
+          page: parsedFilters.page,
+          limit: parsedFilters.limit,
+        });
 
     if (cacheKey) {
       const cached = exploreCache.get(cacheKey);
-      if (cached && Date.now() < cached.expiry) {
-        return reply.send(cached.data);
-      }
+      if (cached) return reply.send(cached);
     }
 
     const result = await getMandalaManager().listExploreMandalas(parsedFilters);
 
     if (cacheKey) {
-      exploreCache.set(cacheKey, { data: result, expiry: Date.now() + EXPLORE_CACHE_TTL_MS });
+      exploreCache.set(cacheKey, result);
     }
 
     return reply.send(result);
