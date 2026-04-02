@@ -429,6 +429,7 @@ model user_mandalas {
   @@index([user_id], map: "idx_user_mandalas_user_id")
   @@index([is_public], map: "idx_user_mandalas_is_public")
   @@index([is_public, is_template], map: "idx_user_mandalas_explore")
+  @@index([is_template, language, domain], map: "idx_user_mandalas_explore_filter")
   @@index([domain], map: "idx_user_mandalas_domain")
   @@index([like_count], map: "idx_user_mandalas_like_count")
   @@index([language], map: "idx_user_mandalas_language")

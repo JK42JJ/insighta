@@ -23,5 +23,5 @@ export const EXPLORE_DEFAULT_PAGE_SIZE = 24;
 /** General pagination upper bound (shared across mandala routes) */
 export const MAX_PAGINATION_LIMIT = 100;
 
-/** Cache TTL for explore results in milliseconds (10 minutes) */
-export const EXPLORE_CACHE_TTL_MS = 10 * 60 * 1000;
+/** Cache TTL for explore results in milliseconds (1 hour — templates are near-immutable) */
+export const EXPLORE_CACHE_TTL_MS = 60 * 60 * 1000;
