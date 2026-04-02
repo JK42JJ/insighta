@@ -100,10 +100,9 @@ export function OrbitalMap({ centerLabel, cells }: OrbitalMapProps) {
                   r={RING_R}
                   fill="none"
                   stroke="hsl(var(--border))"
-                  strokeWidth={isEmpty ? 1.5 : 3}
-                  strokeDasharray={isEmpty ? '4 3' : 'none'}
+                  strokeWidth={3}
                   className="transition-opacity duration-200 group-hover:opacity-[0.15]"
-                  style={{ opacity: isEmpty ? 0.12 : 0.08 }}
+                  style={{ opacity: isEmpty ? 0.25 : 0.08 }}
                 />
                 {/* Progress ring */}
                 <circle
