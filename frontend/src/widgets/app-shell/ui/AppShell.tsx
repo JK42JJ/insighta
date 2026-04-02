@@ -27,6 +27,10 @@ function getInitialCollapsed(): boolean {
 /** Routes that render the full sidebar layout */
 const SIDEBAR_ROUTES = ['/', '/mandalas'];
 
+/** Routes where sidebar is explicitly hidden (full-width content) */
+const NO_SIDEBAR_ROUTES = ['/mandalas/new'];
+const NO_SIDEBAR_PATTERNS = [/^\/mandalas\/[^/]+$/, /^\/mandalas\/[^/]+\/edit$/];
+
 export function AppShell({ children }: AppShellProps) {
   const minimapData = useShellStore((s) => s.minimapData);
   const searchBarElement = useShellStore((s) => s.searchBarElement);
@@ -36,9 +40,14 @@ export function AppShell({ children }: AppShellProps) {
   const sensors = useDndSensors();
   const location = useLocation();
   const isSettingsRoute = location.pathname.startsWith('/settings');
-  // Sidebar only for authenticated users on app routes
+  // Sidebar only for authenticated users on app routes — hidden for wizard/dashboard/editor
+  const isNoSidebarRoute =
+    NO_SIDEBAR_ROUTES.includes(location.pathname) ||
+    NO_SIDEBAR_PATTERNS.some((p) => p.test(location.pathname));
+
   const showSidebar =
     isLoggedIn &&
+    !isNoSidebarRoute &&
     (isSettingsRoute ||
       SIDEBAR_ROUTES.some((r) =>
         r === '/' ? location.pathname === '/' : location.pathname.startsWith(r)

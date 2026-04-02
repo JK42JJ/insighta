@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
@@ -30,6 +30,7 @@ type Tab = 'my' | 'templates';
 
 export default function MandalasPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab: Tab = searchParams.get('tab') === 'templates' ? 'templates' : 'my';
 
@@ -41,7 +42,6 @@ export default function MandalasPage() {
   const switchMandala = useSwitchMandala();
   const toggleShare = useToggleMandalaShare();
 
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null);
   const [inputValue, setInputValue] = useState('');
@@ -60,18 +60,6 @@ export default function MandalasPage() {
       searchParams.set('tab', tab);
     }
     setSearchParams(searchParams, { replace: true });
-  };
-
-  const handleCreate = async () => {
-    if (!inputValue.trim()) return;
-    try {
-      await createMandala.mutateAsync(inputValue.trim());
-      toast({ title: t('mandalaSettings.created') });
-      setCreateDialogOpen(false);
-      setInputValue('');
-    } catch {
-      toast({ title: t('mandalaSettings.quotaExceeded'), variant: 'destructive' });
-    }
   };
 
   const handleRename = async () => {
@@ -150,13 +138,7 @@ export default function MandalasPage() {
             <h1 className="text-2xl font-bold text-foreground">{t('mandalas.title')}</h1>
             <p className="text-sm text-muted-foreground mt-1">{t('mandalas.subtitle')}</p>
           </div>
-          <Button
-            className="gap-1.5"
-            onClick={() => {
-              setInputValue('');
-              setCreateDialogOpen(true);
-            }}
-          >
+          <Button className="gap-1.5" onClick={() => navigate('/mandalas/new')}>
             <Plus className="w-4 h-4" />
             {t('mandalas.newMandala')}
           </Button>
@@ -215,10 +197,7 @@ export default function MandalasPage() {
           ) : (
             <MandalaCardGrid
               mandalas={mandalas}
-              onCreateNew={() => {
-                setInputValue('');
-                setCreateDialogOpen(true);
-              }}
+              onCreateNew={() => navigate('/mandalas/new')}
               onRename={openRename}
               onDuplicate={handleDuplicate}
               onSetDefault={handleSetDefault}
@@ -235,37 +214,6 @@ export default function MandalasPage() {
           </div>
         )}
       </div>
-
-      {/* Create Mandala Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="bg-surface-mid border-border/50">
-          <DialogHeader>
-            <DialogTitle>{t('mandalaSettings.createNew')}</DialogTitle>
-            <DialogDescription>{t('mandalaSettings.createNewDesc')}</DialogDescription>
-          </DialogHeader>
-          <Input
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder={t('mandalaSettings.createTitlePlaceholder')}
-            className="bg-surface-light border-border/50"
-            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            autoFocus
-          />
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setCreateDialogOpen(false)}
-              className="border-border/50"
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={handleCreate} disabled={!inputValue.trim() || createMandala.isPending}>
-              {createMandala.isPending && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
-              {t('common.confirm')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Rename Mandala Dialog */}
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>

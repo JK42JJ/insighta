@@ -1136,5 +1136,87 @@
     "s15P1": "당사는 본 약관을 수시로 업데이트할 수 있습니다. 중요한 변경 사항은 수정된 \"최종 수정\" 날짜와 함께 이 페이지에 업데이트된 약관을 게시하여 사용자에게 알립니다. 변경 후 서비스를 계속 사용하면 업데이트된 약관에 동의한 것으로 간주됩니다.",
     "s16Title": "16. 문의",
     "s16P1": "본 약관에 대한 질문은 다음으로 연락해 주세요:"
+  },
+  "wizard": {
+    "steps": { "domain": "도메인", "preview": "미리보기", "skills": "스킬" },
+    "navigation": { "aria": "위저드 단계" },
+    "stepStatus": { "completed": "완료", "current": "현재", "waiting": "대기" },
+    "domain": {
+      "title": "어떤 목표를 이루고 싶으세요?",
+      "subtitle": "분야를 선택하면 맞춤 템플릿을 추천해드려요",
+      "templates": { "title": "템플릿", "comingSoon": "준비 중" },
+      "separator": "또는",
+      "createBlank": "처음부터 직접 만들기",
+      "categories": {
+        "tech": "기술/개발", "health": "건강", "business": "비즈니스",
+        "finance": "재테크", "creative": "창작", "lifestyle": "라이프"
+      }
+    },
+    "preview": {
+      "centerGoal": "중심 목표 · {{count}}개 하위 영역",
+      "subject": "영역 {{index}} · {{count}}개 실행 항목",
+      "subtitle": "셀 위에 마우스를 올리면 세부 계획을 확인할 수 있어요",
+      "hint": { "line1": "← 셀 위에 마우스를", "line2": "올려보세요" },
+      "startButton": "이대로 시작하기",
+      "backButton": "다른 템플릿"
+    },
+    "skills": {
+      "title": "어떤 서비스를 받으시겠어요?",
+      "subtitle": "ON으로 켜면 실제 동작을 미리 볼 수 있어요",
+      "button": { "creating": "생성 중...", "start": "시작하기!" },
+      "card": { "preview": "켜서 미리보기", "toggle": "활성화" },
+      "state": { "active": "활성", "inactive": "비활성" }
+    },
+    "skill": {
+      "newsletter": { "name": "주간 뉴스레터", "desc": "매주 셀별 추천 영상 3개 + 핵심 요약" },
+      "alerts": { "name": "신규 영상 알림", "desc": "관련 신규 영상 발견 시 즉시 알림" },
+      "biasFilter": { "name": "편향 필터", "desc": "과대광고/편향 콘텐츠 자동 차단" },
+      "report": { "name": "월간 리포트", "desc": "학습 진행도 + 인사이트 분석", "proHint": "Pro 구독 시 매월 자동 리포트를 받을 수 있어요" },
+      "demo": {
+        "mail": "월요일 오전 8시 도착",
+        "bell": "새 영상 발견!",
+        "bias": { "thumbnail": "100배 확정!", "stamp": "차단됨", "label": "과대광고 필터링" },
+        "chart": "월별 성장 추이"
+      }
+    }
+  },
+  "editor": {
+    "header": { "title": "만다라 편집", "back": "뒤로 가기", "save": "저장", "saving": "저장 중..." },
+    "error": { "loadFailed": "편집 데이터를 불러올 수 없습니다. 다시 시도해 주세요.", "backButton": "돌아가기" },
+    "exploreLink": "Explore에서 템플릿 찾기",
+    "share": { "title": "공개 공유", "subtitle": "링크가 있는 누구나 볼 수 있습니다", "aria": "공개 공유 토글" },
+    "keyboard": { "nextCell": "다음 셀", "switchBlock": "블록 전환", "exit": "편집 종료" },
+    "navigator": { "aria": "블록 탐색", "centerBlock": "중심 블록", "aiFill": "블록 전체 AI 채우기" },
+    "grid": {
+      "centerLabel": "중심 목표 · 8개 서브목표",
+      "subLabel": "서브목표 · 8개 실행 항목",
+      "aria": "편집 그리드",
+      "centerPlaceholder": "중심 목표 입력",
+      "center": "중심 목표",
+      "item": "항목 {{index}}",
+      "aiSuggestion": "AI 제안 (항목 {{index}})",
+      "tabAccept": "Tab 수락"
+    },
+    "completion": { "thisBlock": "이 블록", "total": "전체" },
+    "ghostSuggestions": ["Storybook 문서화", "API 게이트웨이", "디자인 시스템", "성능 벤치마크", "E2E 테스트", "코드 리뷰 가이드", "기술 블로그", "데모 영상 제작"]
+  },
+  "dashboard": {
+    "error": { "title": "대시보드를 불러올 수 없습니다", "notFound": "만다라를 찾을 수 없습니다." },
+    "streak": { "suffix": "일 연속" },
+    "header": { "edit": "편집", "share": "공유" },
+    "section": { "recommendations": "추천 영상", "skills": "스킬", "stats": "통계" },
+    "resume": {
+      "empty": { "title": "최근 시청한 영상이 여기에 표시됩니다", "subtitle": "만다라 셀에 영상을 추가하고 시청하면 이어보기가 활성화돼요" },
+      "relevance": "관련도",
+      "playButton": "재생 ▶"
+    },
+    "orbital": { "emptyHint": "영상을 추가해보세요", "cellLabel": "영역 {{index}}" },
+    "biasAlert": { "title": "편향 필터링됨" },
+    "skills": { "newsletter": "뉴스레터", "alerts": "영상 알림", "biasFilter": "편향 필터", "report": "리포트" },
+    "stats": {
+      "filledCells": "채움 셀", "videos": "채운 항목", "streak": "연속 학습", "relevance": "평균 관련도",
+      "days": "일", "empty": "영상을 추가하면 학습 통계가 여기에 표시됩니다"
+    },
+    "videoShelf": { "empty": { "line1": "만다라 셀에 영상을 추가하면", "line2": "관련 영상을 추천해드려요" } }
   }
 }

@@ -1,0 +1,455 @@
+/* ═══════════════════════════════════════
+   Mandala Wizard — Animations & Skill demos
+   ═══════════════════════════════════════ */
+
+/* ─── Page-level transitions ─── */
+
+@keyframes wizardFadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes wizardSlideUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes wizardContentSwap {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.wizard-step-enter {
+  animation: wizardFadeUp 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.wizard-slide-up {
+  animation: wizardSlideUp 0.45s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.wizard-content-swap {
+  animation: wizardContentSwap 0.2s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* ─── Skill card structure ─── */
+
+.sk-card {
+  border-radius: 18px;
+  cursor: pointer;
+  transition: 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+
+.sk-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2);
+}
+
+/* Left color strip */
+.sk-card::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 18px 0 0 18px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.sk-card[data-sk="mail"]::after  { background: hsl(var(--primary)); }
+.sk-card[data-sk="bell"]::after  { background: #38d9a9; }
+.sk-card[data-sk="shield"]::after { background: #fcc419; }
+.sk-card[data-sk="chart"]::after { background: #ff6b6b; }
+
+.sk-card.is-on::after { opacity: 1; }
+
+/* ─── Tier badge ─── */
+
+.tier-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  z-index: 5;
+  transition: opacity 0.3s;
+}
+
+.tier-free {
+  background: rgba(56, 217, 169, 0.1);
+  color: #38d9a9;
+  border: 1px solid rgba(56, 217, 169, 0.15);
+}
+
+.tier-pro {
+  background: rgba(252, 196, 25, 0.1);
+  color: #fcc419;
+  border: 1px solid rgba(252, 196, 25, 0.15);
+}
+
+.sk-card.is-off .tier-badge { opacity: 0.25; }
+
+/* ─── Demo area ─── */
+
+.sk-demo {
+  height: 100px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--muted));
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.sk-demo-off {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--background) / 0.75);
+  font-size: 11px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  transition: opacity 0.3s;
+  z-index: 2;
+}
+
+.sk-card.is-on .sk-demo-off { opacity: 0; pointer-events: none; }
+.sk-card.is-off .sk-demo-off { opacity: 1; }
+
+/* ─── Info section ─── */
+
+.sk-info {
+  padding: 14px 18px;
+}
+
+.sk-name {
+  font-size: 14px;
+  font-weight: 700;
+  transition: color 0.25s;
+}
+
+.sk-card.is-off .sk-name {
+  color: hsl(var(--muted-foreground));
+}
+
+.sk-desc-text {
+  font-size: 11.5px;
+  color: hsl(var(--muted-foreground));
+  margin-top: 3px;
+  line-height: 1.5;
+  transition: color 0.25s;
+}
+
+.sk-card.is-off .sk-desc-text {
+  color: hsl(var(--foreground) / 0.07);
+}
+
+/* ─── Pro hint ─── */
+
+.sk-pro-hint {
+  font-size: 10.5px;
+  color: #fcc419;
+  padding: 0 18px 10px;
+  opacity: 0.6;
+  line-height: 1.5;
+  display: none;
+}
+
+.sk-card[data-sk="chart"].is-off .sk-pro-hint { display: block; }
+
+/* ─── Toggle switch ─── */
+
+.sk-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-top: 1px solid hsl(var(--border));
+  font-size: 11.5px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+}
+
+.sk-switch {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  position: relative;
+  transition: 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+  flex-shrink: 0;
+}
+
+.sk-card.is-on .sk-switch  { background: #38d9a9; }
+.sk-card.is-off .sk-switch { background: hsl(var(--muted-foreground)); }
+
+.sk-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.sk-card.is-on .sk-switch::after  { left: 18px; }
+.sk-card.is-off .sk-switch::after { left: 2px; }
+
+/* ═══════════════════════════════════════
+   Demo Animations
+   ═══════════════════════════════════════ */
+
+/* ─── Newsletter (envelope) ─── */
+
+.demo-mail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.demo-mail .env {
+  width: 42px;
+  height: 28px;
+  background: hsl(var(--primary) / 0.18);
+  border-radius: 4px 4px 6px 6px;
+  position: relative;
+  opacity: 0;
+}
+
+.sk-card.is-on .demo-mail .env {
+  animation: envFlyIn 0.5s 0.1s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+.demo-mail .env-flap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 14px;
+  background: hsl(var(--primary) / 0.3);
+  clip-path: polygon(0 0, 50% 100%, 100% 0);
+  transform-origin: top;
+  border-radius: 4px 4px 0 0;
+}
+
+.sk-card.is-on .demo-mail .env-flap {
+  animation: envOpen 0.3s 0.55s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+.demo-mail .env-line {
+  width: 22px;
+  height: 2px;
+  background: hsl(var(--primary) / 0.2);
+  border-radius: 1px;
+  position: absolute;
+  bottom: 6px;
+  left: 10px;
+}
+
+.demo-mail .env-line2 {
+  width: 16px;
+  height: 2px;
+  background: hsl(var(--primary) / 0.12);
+  border-radius: 1px;
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+}
+
+.demo-mail .demo-label {
+  font-size: 9.5px;
+  color: hsl(var(--primary));
+  font-weight: 600;
+  opacity: 0;
+}
+
+.sk-card.is-on .demo-mail .demo-label {
+  animation: wizardFadeUp 0.3s 0.7s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+/* ─── Alerts (bell) ─── */
+
+.demo-bell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.demo-bell .bell-icon {
+  color: #38d9a9;
+  opacity: 0.4;
+}
+
+.sk-card.is-on .demo-bell .bell-icon {
+  animation: bellShake 0.6s 0.15s cubic-bezier(0.19, 1, 0.22, 1);
+  opacity: 1;
+}
+
+.demo-bell .toast {
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(56, 217, 169, 0.12);
+  border: 1px solid rgba(56, 217, 169, 0.18);
+  font-size: 10px;
+  font-weight: 600;
+  color: #38d9a9;
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.sk-card.is-on .demo-bell .toast {
+  animation: toastSlide 0.35s 0.5s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+/* ─── Bias filter ─── */
+
+.demo-bias {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.demo-bias .fake-thumb {
+  width: 64px;
+  height: 38px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, hsl(var(--muted)), hsl(var(--foreground) / 0.04));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7.5px;
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+  position: relative;
+}
+
+.sk-card.is-on .demo-bias .fake-thumb {
+  animation: thumbFade 0.3s 0.5s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+.demo-bias .stamp {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  margin-top: -11px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 2px solid #ff6b6b;
+  color: #ff6b6b;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  opacity: 0;
+}
+
+.sk-card.is-on .demo-bias .stamp {
+  animation: stampHit 0.35s 0.55s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+.demo-bias .bias-label {
+  font-size: 9px;
+  color: hsl(var(--muted-foreground));
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.sk-card.is-on .demo-bias .bias-label {
+  animation: wizardFadeUp 0.3s 0.8s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+/* ─── Report (chart) ─── */
+
+.demo-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 48px;
+  padding: 0 16px;
+}
+
+.demo-chart .bar {
+  width: 18px;
+  border-radius: 3px 3px 0 0;
+  opacity: 0.25;
+  background: #ff6b6b;
+}
+
+.sk-card.is-on .demo-chart .bar { opacity: 0.65; }
+
+.sk-card.is-on .demo-chart .b1 { animation: barGrow1 0.4s 0.15s cubic-bezier(0.19, 1, 0.22, 1) both; }
+.sk-card.is-on .demo-chart .b2 { animation: barGrow2 0.4s 0.25s cubic-bezier(0.19, 1, 0.22, 1) both; }
+.sk-card.is-on .demo-chart .b3 { animation: barGrow3 0.4s 0.35s cubic-bezier(0.19, 1, 0.22, 1) both; }
+.sk-card.is-on .demo-chart .b4 { animation: barGrow4 0.4s 0.45s cubic-bezier(0.19, 1, 0.22, 1) both; }
+
+.demo-chart-label {
+  font-size: 9px;
+  color: hsl(var(--muted-foreground));
+  margin-left: 6px;
+  align-self: center;
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.sk-card.is-on .demo-chart-label {
+  animation: wizardFadeUp 0.3s 0.7s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+/* ═══════════════════════════════════════
+   Keyframes
+   ═══════════════════════════════════════ */
+
+@keyframes envFlyIn {
+  0%   { transform: translateY(18px) scale(0.7); opacity: 0; }
+  60%  { transform: translateY(-3px) scale(1.04); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes envOpen {
+  0%   { transform: rotateX(0); }
+  100% { transform: rotateX(180deg); }
+}
+
+@keyframes bellShake {
+  0%, 100% { transform: rotate(0); }
+  15%  { transform: rotate(14deg); }
+  30%  { transform: rotate(-12deg); }
+  45%  { transform: rotate(8deg); }
+  60%  { transform: rotate(-4deg); }
+  75%  { transform: rotate(2deg); }
+}
+
+@keyframes toastSlide {
+  0%   { transform: translateX(24px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes stampHit {
+  0%   { transform: scale(2.2) rotate(-12deg); opacity: 0; }
+  50%  { transform: scale(0.92) rotate(-12deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-12deg); opacity: 1; }
+}
+
+@keyframes thumbFade {
+  0%   { opacity: 1; }
+  100% { opacity: 0.15; }
+}
+
+@keyframes barGrow1 { from { height: 0; } to { height: 24px; } }
+@keyframes barGrow2 { from { height: 0; } to { height: 36px; } }
+@keyframes barGrow3 { from { height: 0; } to { height: 18px; } }
+@keyframes barGrow4 { from { height: 0; } to { height: 30px; } }

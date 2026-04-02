@@ -1,3 +1,4 @@
+/** @deprecated Replaced by MandalaEditorPage + MandalaDashboardPage in Mandala UX v3 */
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
@@ -26,11 +27,7 @@ import {
 } from '@/shared/data/mandalaTemplates';
 import { MandalaLevel } from '@/entities/card/model/types';
 import { EMPTY_ROOT_LEVELS } from '@/shared/data/mockData';
-import {
-  useMandalaQuery,
-  useMandalaList,
-  useToggleMandalaShare,
-} from '@/features/mandala';
+import { useMandalaQuery, useMandalaList, useToggleMandalaShare } from '@/features/mandala';
 import { Switch } from '@/shared/ui/switch';
 import { Label } from '@/shared/ui/label';
 import {

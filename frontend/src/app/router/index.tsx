@@ -15,7 +15,10 @@ import { AdminHealth } from '@/pages/admin/ui/AdminHealth';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
-const MandalaSettingsPage = lazy(() => import('@/pages/mandala-settings'));
+// MandalaSettingsPage moved to -legacy/ in Phase 5 — replaced by MandalaEditorPage
+const MandalaWizardPage = lazy(() => import('@/pages/mandala-wizard'));
+const MandalaDashboardPage = lazy(() => import('@/pages/mandala-dashboard'));
+const MandalaEditorPage = lazy(() => import('@/pages/mandala-editor'));
 const MandalasPage = lazy(() => import('@/pages/mandalas'));
 const ProfilePage = lazy(() => import('@/pages/profile'));
 const SubscriptionPage = lazy(() => import('@/pages/subscription'));
@@ -57,10 +60,26 @@ export function AppRouter() {
           }
         />
         <Route
+          path="/mandalas/new"
+          element={
+            <ProtectedRoute>
+              <MandalaWizardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/mandalas/:id/edit"
           element={
             <ProtectedRoute>
-              <MandalaSettingsPage />
+              <MandalaEditorPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/mandalas/:id"
+          element={
+            <ProtectedRoute>
+              <MandalaDashboardPage />
             </ProtectedRoute>
           }
         />

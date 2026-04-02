@@ -386,6 +386,7 @@ model users {
   skill_runs                     skill_runs[]
   skill_outputs                  skill_outputs[]
   mandala_likes                  mandala_likes[]
+  skill_configs                  user_skill_config[]
 
   @@index([instance_id])
   @@index([is_anonymous])
@@ -421,6 +422,9 @@ model user_mandalas {
   mandala_shares   mandala_shares[]
   skill_outputs    skill_outputs[]
   mandala_likes    mandala_likes[]
+  skill_configs    user_skill_config[]
+
+  source_template_id String? @db.Uuid
 
   @@index([user_id], map: "idx_user_mandalas_user_id")
   @@index([is_public], map: "idx_user_mandalas_is_public")
@@ -1332,5 +1336,24 @@ model skill_outputs {
 
   @@index([user_id, mandala_id], map: "idx_skill_outputs_user_mandala")
   @@index([created_at(sort: Desc)], map: "idx_skill_outputs_created_at")
+  @@schema("public")
+}
+
+/// User skill configuration per mandala — controls which skills are enabled
+model user_skill_config {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  mandala_id String   @db.Uuid
+  skill_type String   @db.VarChar(50)
+  enabled    Boolean  @default(false)
+  config     Json     @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  users   users         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  mandala user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, mandala_id, skill_type])
+  @@index([mandala_id], map: "idx_user_skill_config_mandala")
   @@schema("public")
 }

@@ -1141,5 +1141,87 @@
     "s15P1": "We may update these Terms from time to time. We will notify users of material changes by posting the updated Terms on this page with a revised \"Last updated\" date. Continued use of the Service after changes constitutes acceptance of the updated Terms.",
     "s16Title": "16. Contact",
     "s16P1": "For questions about these Terms, contact:"
+  },
+  "wizard": {
+    "steps": { "domain": "Domain", "preview": "Preview", "skills": "Skills" },
+    "navigation": { "aria": "Wizard steps" },
+    "stepStatus": { "completed": "Completed", "current": "Current", "waiting": "Waiting" },
+    "domain": {
+      "title": "What goal would you like to achieve?",
+      "subtitle": "Choose a domain and we'll recommend templates",
+      "templates": { "title": "Templates", "comingSoon": "Coming soon" },
+      "separator": "or",
+      "createBlank": "Start from scratch",
+      "categories": {
+        "tech": "Tech/Dev", "health": "Health", "business": "Business",
+        "finance": "Finance", "creative": "Creative", "lifestyle": "Lifestyle"
+      }
+    },
+    "preview": {
+      "centerGoal": "Core Goal · {{count}} sub-areas",
+      "subject": "Area {{index}} · {{count}} action items",
+      "subtitle": "Hover over cells to see detailed plans",
+      "hint": { "line1": "← Hover over", "line2": "a cell" },
+      "startButton": "Start with this",
+      "backButton": "Other templates"
+    },
+    "skills": {
+      "title": "Which services would you like?",
+      "subtitle": "Turn ON to preview how it works",
+      "button": { "creating": "Creating...", "start": "Let's go!" },
+      "card": { "preview": "Turn on to preview", "toggle": "Activate" },
+      "state": { "active": "Active", "inactive": "Inactive" }
+    },
+    "skill": {
+      "newsletter": { "name": "Weekly Newsletter", "desc": "3 recommended videos per cell + key summaries weekly" },
+      "alerts": { "name": "New Video Alerts", "desc": "Instant alerts when related new videos are found" },
+      "biasFilter": { "name": "Bias Filter", "desc": "Auto-block clickbait/biased content" },
+      "report": { "name": "Monthly Report", "desc": "Learning progress + insight analysis", "proHint": "Subscribe to Pro for monthly auto-reports" },
+      "demo": {
+        "mail": "Arrives Monday 8 AM",
+        "bell": "New video found!",
+        "bias": { "thumbnail": "100x guaranteed!", "stamp": "Blocked", "label": "Clickbait filtered" },
+        "chart": "Monthly growth trend"
+      }
+    }
+  },
+  "editor": {
+    "header": { "title": "Edit Mandala", "back": "Go back", "save": "Save", "saving": "Saving..." },
+    "error": { "loadFailed": "Failed to load edit data. Please try again.", "backButton": "Go back" },
+    "exploreLink": "Find templates in Explore",
+    "share": { "title": "Public Sharing", "subtitle": "Anyone with the link can view", "aria": "Toggle public sharing" },
+    "keyboard": { "nextCell": "Next cell", "switchBlock": "Switch block", "exit": "Exit editing" },
+    "navigator": { "aria": "Block navigation", "centerBlock": "Center block", "aiFill": "AI fill entire block" },
+    "grid": {
+      "centerLabel": "Core Goal · 8 sub-goals",
+      "subLabel": "Sub-goal · 8 action items",
+      "aria": "Edit grid",
+      "centerPlaceholder": "Enter core goal",
+      "center": "Core goal",
+      "item": "Item {{index}}",
+      "aiSuggestion": "AI suggestion (item {{index}})",
+      "tabAccept": "Tab to accept"
+    },
+    "completion": { "thisBlock": "This block", "total": "Total" },
+    "ghostSuggestions": ["Storybook docs", "API gateway", "Design system", "Performance benchmark", "E2E testing", "Code review guide", "Tech blog", "Demo video"]
+  },
+  "dashboard": {
+    "error": { "title": "Failed to load dashboard", "notFound": "Mandala not found." },
+    "streak": { "suffix": " day streak" },
+    "header": { "edit": "Edit", "share": "Share" },
+    "section": { "recommendations": "Recommended Videos", "skills": "Skills", "stats": "Statistics" },
+    "resume": {
+      "empty": { "title": "Recently watched videos appear here", "subtitle": "Add videos to mandala cells and watch them to activate resume" },
+      "relevance": "Relevance",
+      "playButton": "Play ▶"
+    },
+    "orbital": { "emptyHint": "Add some videos", "cellLabel": "Area {{index}}" },
+    "biasAlert": { "title": "Bias Filtered" },
+    "skills": { "newsletter": "Newsletter", "alerts": "Video Alerts", "biasFilter": "Bias Filter", "report": "Report" },
+    "stats": {
+      "filledCells": "Filled Cells", "videos": "Filled Items", "streak": "Learning Streak", "relevance": "Avg Relevance",
+      "days": "d", "empty": "Learning stats will appear here when you add videos"
+    },
+    "videoShelf": { "empty": { "line1": "Add videos to mandala cells", "line2": "to get recommendations" } }
   }
 }

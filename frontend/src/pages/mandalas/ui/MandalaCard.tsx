@@ -1,16 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  MoreVertical,
-  Pencil,
-  Copy,
-  Star,
-  Share2,
-  Trash2,
-  Globe,
-  Lock,
-} from 'lucide-react';
+import { MoreVertical, Pencil, Copy, Star, Share2, Trash2, Globe, Lock } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
 import { MandalaMiniPreview } from '@/widgets/mandala-mini-preview';
@@ -70,24 +61,15 @@ export function MandalaCard({
     <>
       <div className="group rounded-xl border border-border/50 bg-card hover:border-primary/40 hover:shadow-lg transition-all duration-200">
         {/* Mini Preview */}
-        <div
-          className="p-4 cursor-pointer"
-          onClick={() => navigate(`/mandalas/${mandala.id}/edit`)}
-        >
-          <MandalaMiniPreview
-            centerGoal={centerGoal}
-            subjects={subjects}
-            size="md"
-          />
+        <div className="p-4 cursor-pointer" onClick={() => navigate(`/mandalas/${mandala.id}`)}>
+          <MandalaMiniPreview centerGoal={centerGoal} subjects={subjects} size="md" />
         </div>
 
         {/* Info + Actions */}
         <div className="px-4 pb-4 space-y-2">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-semibold text-foreground truncate">
-                {mandala.title}
-              </h3>
+              <h3 className="text-sm font-semibold text-foreground truncate">{mandala.title}</h3>
               <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                 <span>{new Date(mandala.createdAt).toLocaleDateString()}</span>
                 {mandala.isPublic ? (
@@ -117,7 +99,7 @@ export function MandalaCard({
               variant="outline"
               size="sm"
               className="h-7 text-xs gap-1"
-              onClick={() => navigate(`/mandalas/${mandala.id}/edit`)}
+              onClick={() => navigate(`/mandalas/${mandala.id}`)}
             >
               <Pencil className="w-3 h-3" />
               {t('mandalas.edit')}

@@ -50,6 +50,12 @@ interface UpdateLevelBody {
   color?: string | null;
 }
 
+interface EditorBlock {
+  name: string;
+  isCenter: boolean;
+  items: string[]; // length 8
+}
+
 function getUserId(request: any, reply: any): string | null {
   if (!request.user || !('userId' in request.user)) {
     reply.code(401).send({ error: 'Unauthorized' });
@@ -377,6 +383,59 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   });
 
   /**
+   * POST /api/v1/mandalas/create-from-template - Create mandala from template with skill config
+   */
+  fastify.post<{
+    Body: { templateId: string; skills: Record<string, boolean> };
+  }>('/create-from-template', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const { templateId, skills } = request.body;
+
+    if (!templateId || typeof templateId !== 'string') {
+      return reply.code(400).send({ error: 'templateId is required' });
+    }
+
+    try {
+      // Reuse existing clone logic
+      const result = await getMandalaManager().clonePublicMandala(templateId, userId);
+
+      // Set source_template_id on the cloned mandala
+      const prisma = getPrismaClient();
+      await prisma.user_mandalas.update({
+        where: { id: result.mandalaId },
+        data: { source_template_id: templateId },
+      });
+
+      // Create skill config rows
+      if (skills && typeof skills === 'object') {
+        const skillEntries = Object.entries(skills);
+        if (skillEntries.length > 0) {
+          await prisma.user_skill_config.createMany({
+            data: skillEntries.map(([skillType, enabled]) => ({
+              user_id: userId,
+              mandala_id: result.mandalaId,
+              skill_type: skillType,
+              enabled: Boolean(enabled),
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      return reply.send({ mandalaId: result.mandalaId });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Create from template failed';
+      if (message === 'MANDALA_NOT_FOUND') {
+        return reply.code(404).send({ error: 'Template not found' });
+      }
+      request.log.error({ err, userId, templateId }, 'Failed to create from template');
+      return reply.code(500).send({ error: message });
+    }
+  });
+
+  /**
    * GET /api/v1/mandalas/list - List all user mandalas with pagination
    */
   fastify.get<{ Querystring: { page?: string; limit?: string } }>(
@@ -460,6 +519,259 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             quota: err.quota,
             current: err.current,
           });
+        }
+        throw err;
+      }
+    }
+  );
+
+  // ─── Dashboard endpoint (must be before /:id to avoid path conflicts) ───
+
+  /**
+   * GET /api/v1/mandalas/:id/dashboard - Get dashboard view data for a mandala
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/dashboard',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const mandala = await getMandalaManager().getMandalaById(userId, request.params.id);
+      if (!mandala) {
+        return reply.code(404).send({ error: 'Mandala not found' });
+      }
+
+      const levels: any[] = (mandala as any).levels ?? [];
+      const rootLevel = levels.find((l: any) => l.depth === 0);
+      const childLevels = levels
+        .filter((l: any) => l.depth === 1)
+        .sort((a: any, b: any) => a.position - b.position);
+
+      const centerLabel =
+        rootLevel?.centerLabel || rootLevel?.centerGoal || (mandala as any).title || '';
+      const subLabels: string[] = rootLevel?.subjects ?? [];
+
+      // Build cells from child levels (8 slots, positions 0-7)
+      const cells = Array.from({ length: 8 }, (_, pos) => {
+        const child = childLevels.find((l: any) => l.position === pos);
+        if (!child) {
+          return {
+            label: subLabels[pos] ?? '',
+            videoCount: 0,
+            totalSlots: 8,
+            isActive: false,
+          };
+        }
+        const subjects: string[] = Array.isArray(child.subjects) ? child.subjects : [];
+        const filledCount = subjects.filter((s: string) => s && s.trim() !== '').length;
+        return {
+          label: child.centerGoal || subLabels[pos] || '',
+          videoCount: filledCount,
+          totalSlots: 8,
+          isActive: filledCount > 0,
+        };
+      });
+
+      const filledCells = cells.filter((c) => c.videoCount > 0).length;
+      const totalVideos = cells.reduce((sum, c) => sum + c.videoCount, 0);
+
+      // Skills from user_skill_config
+      const skillConfigs = await getPrismaClient().user_skill_config.findMany({
+        where: { user_id: userId, mandala_id: request.params.id },
+        select: { skill_type: true, enabled: true },
+      });
+      const skills: Record<string, boolean> = {};
+      for (const sc of skillConfigs) {
+        skills[sc.skill_type] = sc.enabled;
+      }
+
+      return reply.send({
+        mandala: {
+          id: (mandala as any).id,
+          title: (mandala as any).title,
+          centerLabel,
+          subLabels,
+        },
+        cells,
+        skills,
+        stats: {
+          filledCells,
+          totalCells: 64,
+          totalVideos,
+          streakDays: 0,
+        },
+      });
+    }
+  );
+
+  /**
+   * PATCH /api/v1/mandalas/:id/skills - Toggle skill config for a mandala
+   */
+  fastify.patch<{
+    Params: { id: string };
+    Body: { skillType: string; enabled: boolean };
+  }>('/:id/skills', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const { skillType, enabled } = request.body;
+
+    if (!skillType || typeof enabled !== 'boolean') {
+      return reply.code(400).send({ error: 'skillType and enabled (boolean) are required' });
+    }
+
+    const prisma = getPrismaClient();
+
+    await prisma.user_skill_config.upsert({
+      where: {
+        user_id_mandala_id_skill_type: {
+          user_id: userId,
+          mandala_id: request.params.id,
+          skill_type: skillType,
+        },
+      },
+      update: { enabled },
+      create: {
+        user_id: userId,
+        mandala_id: request.params.id,
+        skill_type: skillType,
+        enabled,
+      },
+    });
+
+    return reply.send({ success: true, skillType, enabled });
+  });
+
+  // ─── Editor endpoints (must be before /:id to avoid path conflicts) ───
+
+  /**
+   * GET /api/v1/mandalas/:id/edit-data - Get mandala data in blocks format for the editor
+   *
+   * Converts the user_mandala_levels structure into 9 EditorBlocks:
+   *   blocks[0..3]  = child levels at position 0..3 (depth=1)
+   *   blocks[4]     = root level (depth=0, isCenter=true)
+   *   blocks[5..8]  = child levels at position 4..7 (depth=1)
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/edit-data',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const mandala = await getMandalaManager().getMandalaById(userId, request.params.id);
+      if (!mandala) {
+        return reply.code(404).send({ error: 'Mandala not found' });
+      }
+
+      const levels: any[] = (mandala as any).levels ?? [];
+
+      const rootLevel = levels.find((l: any) => l.depth === 0);
+      const childLevels = levels
+        .filter((l: any) => l.depth === 1)
+        .sort((a: any, b: any) => a.position - b.position);
+
+      const emptyBlock = (): EditorBlock => ({
+        name: '',
+        isCenter: false,
+        items: ['', '', '', '', '', '', '', ''],
+      });
+
+      // Build 8 child slots (positions 0–7); fill missing positions with empty blocks
+      const childSlots: EditorBlock[] = Array.from({ length: 8 }, (_, pos) => {
+        const child = childLevels.find((l: any) => l.position === pos);
+        if (!child) return emptyBlock();
+        return {
+          name: child.centerGoal ?? '',
+          isCenter: false,
+          items: Array.isArray(child.subjects) ? child.subjects : ['', '', '', '', '', '', '', ''],
+        };
+      });
+
+      const centerBlock: EditorBlock = rootLevel
+        ? {
+            name: rootLevel.centerGoal ?? '',
+            isCenter: true,
+            items: Array.isArray(rootLevel.subjects)
+              ? rootLevel.subjects
+              : ['', '', '', '', '', '', '', ''],
+          }
+        : { name: '', isCenter: true, items: ['', '', '', '', '', '', '', ''] };
+
+      // Final block order: children[0..3], center, children[4..7]
+      const blocks: EditorBlock[] = [
+        ...childSlots.slice(0, 4),
+        centerBlock,
+        ...childSlots.slice(4, 8),
+      ];
+
+      return reply.send({ blocks });
+    }
+  );
+
+  /**
+   * PUT /api/v1/mandalas/:id/edit-data - Save mandala from blocks format (editor)
+   *
+   * Converts 9 EditorBlocks back into MandalaLevelBody[] and calls updateMandalaLevels:
+   *   blocks[4]     → root level (depth=0, levelKey='root')
+   *   blocks[0..3]  → child levels at position 0..3 (depth=1)
+   *   blocks[5..8]  → child levels at position 4..7 (depth=1)
+   */
+  fastify.put<{ Params: { id: string }; Body: { blocks: EditorBlock[] } }>(
+    '/:id/edit-data',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const { blocks } = request.body;
+
+      if (!Array.isArray(blocks) || blocks.length !== 9) {
+        return reply.code(400).send({ error: 'blocks must be an array of exactly 9 items' });
+      }
+
+      // Verify ownership before writing
+      const mandala = await getMandalaManager().getMandalaById(userId, request.params.id);
+      if (!mandala) {
+        return reply.code(404).send({ error: 'Mandala not found' });
+      }
+
+      // Length guard above (=== 9) ensures these indices are always defined
+      const centerBlock = blocks[4] as EditorBlock;
+
+      const rootLevel: MandalaLevelBody = {
+        levelKey: 'root',
+        depth: 0,
+        position: 0,
+        centerGoal: centerBlock.name,
+        subjects: centerBlock.items,
+        parentLevelKey: null,
+      };
+
+      // blocks[0..3] → child positions 0..3; blocks[5..8] → child positions 4..7
+      const childIndices = [0, 1, 2, 3, 5, 6, 7, 8];
+      const childLevels: MandalaLevelBody[] = childIndices.map((blockIdx, childPos) => {
+        const block = blocks[blockIdx] as EditorBlock;
+        return {
+          levelKey: `sector_${childPos}`,
+          depth: 1,
+          position: childPos,
+          centerGoal: block.name,
+          subjects: block.items,
+          parentLevelKey: 'root',
+        };
+      });
+
+      try {
+        await getMandalaManager().updateMandalaLevels(userId, request.params.id, [
+          rootLevel,
+          ...childLevels,
+        ]);
+        return reply.send({ success: true });
+      } catch (err: any) {
+        if (err.message === 'Mandala not found') {
+          return reply.code(404).send({ error: 'Mandala not found' });
         }
         throw err;
       }
