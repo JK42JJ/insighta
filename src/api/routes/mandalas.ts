@@ -552,6 +552,31 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         rootLevel?.centerLabel || rootLevel?.centerGoal || (mandala as any).title || '';
       const subLabels: string[] = rootLevel?.subjects ?? [];
 
+      // Count actual cards per level (local cards + video states)
+      const prisma = getPrismaClient();
+      const mandalaId = request.params.id;
+
+      const localCardCounts = await prisma.user_local_cards.groupBy({
+        by: ['level_id'],
+        where: { mandala_id: mandalaId, user_id: userId },
+        _count: true,
+      });
+      const videoStateCounts = await prisma.userVideoState.groupBy({
+        by: ['level_id'],
+        where: { mandala_id: mandalaId, user_id: userId },
+        _count: true,
+      });
+
+      const cardCountByLevel = new Map<string, number>();
+      for (const row of localCardCounts) {
+        const key = row.level_id ?? '';
+        cardCountByLevel.set(key, (cardCountByLevel.get(key) ?? 0) + row._count);
+      }
+      for (const row of videoStateCounts) {
+        const key = row.level_id ?? '';
+        cardCountByLevel.set(key, (cardCountByLevel.get(key) ?? 0) + row._count);
+      }
+
       // Build cells from child levels (8 slots, positions 0-7)
       const cells = Array.from({ length: 8 }, (_, pos) => {
         const child = childLevels.find((l: any) => l.position === pos);
@@ -563,13 +588,12 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             isActive: false,
           };
         }
-        const subjects: string[] = Array.isArray(child.subjects) ? child.subjects : [];
-        const filledCount = subjects.filter((s: string) => s && s.trim() !== '').length;
+        const cardCount = cardCountByLevel.get(child.levelKey) ?? 0;
         return {
           label: child.centerGoal || subLabels[pos] || '',
-          videoCount: filledCount,
+          videoCount: cardCount,
           totalSlots: 8,
-          isActive: filledCount > 0,
+          isActive: cardCount > 0,
         };
       });
 
