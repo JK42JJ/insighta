@@ -89,7 +89,7 @@ export function OrbitalMap({ centerLabel, cells }: OrbitalMapProps) {
                   stroke={isEmpty ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
                   strokeWidth={3}
                   className="transition-opacity duration-200 group-hover:opacity-[0.15]"
-                  style={{ opacity: isEmpty ? 0.15 : 0.08 }}
+                  style={{ opacity: 0.08 }}
                 />
                 {/* Progress ring */}
                 <circle
