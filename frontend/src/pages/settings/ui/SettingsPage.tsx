@@ -80,31 +80,15 @@ export default function SettingsPage() {
       const saved = localStorage.getItem('app-settings');
       const parsed = saved ? JSON.parse(saved) : {};
       return {
-        notifications: parsed.notifications ?? true,
-        emailUpdates: parsed.emailUpdates ?? false,
-        syncCompletion: parsed.syncCompletion ?? true,
-        aiInsightReady: parsed.aiInsightReady ?? true,
-        autoSave: parsed.autoSave ?? true,
         language: i18n.language,
         theme: parsed.theme ?? 'dark',
         cardFlipOnHover: parsed.cardFlipOnHover ?? true,
-        minimapHeatIntensity: parsed.minimapHeatIntensity ?? true,
-        minimapNumberOverlay: parsed.minimapNumberOverlay ?? false,
-        defaultView: parsed.defaultView ?? 'grid',
       };
     } catch {
       return {
-        notifications: true,
-        emailUpdates: false,
-        syncCompletion: true,
-        aiInsightReady: true,
-        autoSave: true,
         language: i18n.language,
         theme: 'dark',
         cardFlipOnHover: true,
-        minimapHeatIntensity: true,
-        minimapNumberOverlay: false,
-        defaultView: 'grid',
       };
     }
   };
@@ -207,41 +191,6 @@ export default function SettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="autoSave">{t('settings.autoSave')}</Label>
-                  <p className="text-sm text-muted-foreground">{t('settings.autoSaveDesc')}</p>
-                </div>
-                <Switch
-                  id="autoSave"
-                  checked={settings.autoSave}
-                  onCheckedChange={(checked) => updateSetting('autoSave', checked)}
-                />
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="defaultView">{t('settings.defaultView', 'Default View')}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.defaultViewDesc', 'Starting view when opening a mandala')}
-                  </p>
-                </div>
-                <Select
-                  value={settings.defaultView}
-                  onValueChange={(v) => updateSetting('defaultView', v)}
-                >
-                  <SelectTrigger className="w-32 bg-surface-light border-border/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="grid">{t('viewMode.grid', 'Grid')}</SelectItem>
-                    <SelectItem value="list">{t('viewMode.list', 'List')}</SelectItem>
-                    <SelectItem value="listDetail">
-                      {t('viewMode.listDetail', 'List Detail')}
-                    </SelectItem>
-                    <SelectItem value="insights">{t('viewMode.insights', 'Insights')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </CardContent>
           </Card>
         </>
@@ -341,39 +290,6 @@ export default function SettingsPage() {
                   onCheckedChange={(checked) => updateSetting('cardFlipOnHover', checked)}
                 />
               </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="minimapHeat">
-                    {t('settings.minimapHeatIntensity', 'Minimap heat intensity')}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.minimapHeatIntensityDesc', 'Show card density as color opacity')}
-                  </p>
-                </div>
-                <Switch
-                  id="minimapHeat"
-                  checked={settings.minimapHeatIntensity}
-                  onCheckedChange={(checked) => updateSetting('minimapHeatIntensity', checked)}
-                />
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="minimapNumbers">
-                    {t('settings.minimapNumberOverlay', 'Minimap number overlay')}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t(
-                      'settings.minimapNumberOverlayDesc',
-                      'Show card counts (#) in minimap cells'
-                    )}
-                  </p>
-                </div>
-                <Switch
-                  id="minimapNumbers"
-                  checked={settings.minimapNumberOverlay}
-                  onCheckedChange={(checked) => updateSetting('minimapNumberOverlay', checked)}
-                />
-              </div>
             </CardContent>
           </Card>
         </>
@@ -387,69 +303,8 @@ export default function SettingsPage() {
             <p className="text-sm text-muted-foreground mt-1">{t('settings.notificationsDesc')}</p>
           </div>
           <Card className="bg-surface-mid border-border/50">
-            <CardContent className="divide-y divide-border/30">
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 pb-2 pt-1">
-                {t('settings.notifGroupCommunication', 'Communication')}
-              </p>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="notifications">{t('settings.pushNotifications')}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.pushNotificationsDesc')}
-                  </p>
-                </div>
-                <Switch
-                  id="notifications"
-                  checked={settings.notifications}
-                  onCheckedChange={(checked) => updateSetting('notifications', checked)}
-                />
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="emailUpdates">{t('settings.emailNotifications')}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.emailNotificationsDesc')}
-                  </p>
-                </div>
-                <Switch
-                  id="emailUpdates"
-                  checked={settings.emailUpdates}
-                  onCheckedChange={(checked) => updateSetting('emailUpdates', checked)}
-                />
-              </div>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 pt-4 pb-2">
-                {t('settings.notifGroupActivity', 'Activity Alerts')}
-              </p>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="syncCompletion">
-                    {t('settings.syncCompletion', 'Sync completion')}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.syncCompletionDesc', 'Notify when YouTube sync completes')}
-                  </p>
-                </div>
-                <Switch
-                  id="syncCompletion"
-                  checked={settings.syncCompletion}
-                  onCheckedChange={(checked) => updateSetting('syncCompletion', checked)}
-                />
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <Label htmlFor="aiInsightReady">
-                    {t('settings.aiInsightReady', 'AI insight ready')}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.aiInsightReadyDesc', 'Notify when AI summary is available')}
-                  </p>
-                </div>
-                <Switch
-                  id="aiInsightReady"
-                  checked={settings.aiInsightReady}
-                  onCheckedChange={(checked) => updateSetting('aiInsightReady', checked)}
-                />
-              </div>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              <p className="text-sm">{t('common.comingSoon', 'Coming soon')}</p>
             </CardContent>
           </Card>
         </>

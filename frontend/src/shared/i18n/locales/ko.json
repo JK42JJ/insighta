@@ -26,7 +26,8 @@
     "next": "다음",
     "loadFailed": "불러오지 못했습니다. 탭하여 재시도.",
     "retry": "다시 시도",
-    "noResults": "결과 없음"
+    "noResults": "결과 없음",
+    "comingSoon": "준비 중입니다"
   },
   "explore": {
     "title": "만다라트 탐색",

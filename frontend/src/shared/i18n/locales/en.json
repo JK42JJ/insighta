@@ -26,7 +26,8 @@
     "next": "Next",
     "loadFailed": "Couldn't load. Tap to retry.",
     "retry": "Retry",
-    "noResults": "No results"
+    "noResults": "No results",
+    "comingSoon": "Coming soon"
   },
   "explore": {
     "title": "Explore Mandalas",
