@@ -139,6 +139,11 @@ export default function MandalaEditorPage() {
             &larr;
           </Link>
           <h1 className="text-lg font-extrabold tracking-tight">{t('editor.header.title')}</h1>
+          {blocks.length > 0 && blocks[4] && (
+            <span className="text-sm text-muted-foreground truncate max-w-[200px]">
+              {blocks[4].name}
+            </span>
+          )}
         </div>
         <button
           onClick={save}
@@ -156,17 +161,14 @@ export default function MandalaEditorPage() {
 
       {/* ─── Pill Navigator ─── */}
       {blocks.length > 0 && (
-        <PillNavigator
-          blocks={blocks}
-          currentIndex={currentBlockIndex}
-          onSelect={selectBlock}
-        />
+        <PillNavigator blocks={blocks} currentIndex={currentBlockIndex} onSelect={selectBlock} />
       )}
 
       {/* ─── Focus Grid ─── */}
       {currentBlock && (
         <FocusGrid
           block={currentBlock}
+          mandalaId={id}
           onItemChange={handleItemChange}
           onCenterChange={handleCenterChange}
           onAiCell={handleAiCell}

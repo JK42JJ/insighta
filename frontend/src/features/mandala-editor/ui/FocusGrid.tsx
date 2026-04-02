@@ -1,5 +1,6 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
 import type { EditorBlock } from '@/shared/types/mandala-ux';
 import '@/features/mandala-editor/ui/mandala-editor.css';
@@ -22,6 +23,7 @@ const SPARKLE_SVG = (
 
 interface FocusGridProps {
   block: EditorBlock;
+  mandalaId?: string;
   onItemChange: (itemIdx: number, value: string) => void;
   onCenterChange: (value: string) => void;
   onAiCell: (itemIdx: number) => void;
@@ -39,6 +41,7 @@ function cellToItemIndex(cellIdx: number): number | 'center' {
 
 export default function FocusGrid({
   block,
+  mandalaId,
   onItemChange,
   onCenterChange,
   onAiCell,
@@ -136,26 +139,41 @@ export default function FocusGrid({
               role="gridcell"
             >
               {isCenter ? (
-                /* ─── Center cell: readOnly label + AI block fill ─── */
-                <button
-                  type="button"
-                  onClick={onAiBlock}
-                  className="flex flex-col items-center gap-2 w-full cursor-pointer group/center"
-                  aria-label={t('editor.navigator.aiFill')}
-                  title={t('editor.grid.aiBlockTooltip')}
-                >
-                  <span
-                    className="text-[14px] font-extrabold text-primary text-center leading-tight"
-                    style={{
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                    }}
+                /* ─── Center cell: dashboard link + AI block fill ─── */
+                <div className="flex flex-col items-center gap-2 w-full">
+                  {mandalaId ? (
+                    <Link
+                      to={`/mandalas/${mandalaId}`}
+                      className="text-[14px] font-extrabold text-primary text-center leading-tight hover:underline"
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {block.name}
+                    </Link>
+                  ) : (
+                    <span
+                      className="text-[14px] font-extrabold text-primary text-center leading-tight"
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {block.name}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onAiBlock}
+                    className="flex flex-col items-center gap-0.5 opacity-50 hover:opacity-100 hover:scale-110 transition-all cursor-pointer"
+                    title={t('editor.grid.aiBlockTooltip')}
+                    aria-label={t('editor.navigator.aiFill')}
                   >
-                    {block.name}
-                  </span>
-                  <span className="flex flex-col items-center gap-0.5 opacity-50 group-hover/center:opacity-100 group-hover/center:scale-110 transition-all">
                     <svg
                       width="20"
                       height="20"
@@ -172,8 +190,8 @@ export default function FocusGrid({
                     <span className="text-[10px] font-semibold text-primary">
                       {t('editor.grid.aiFillLabel')}
                     </span>
-                  </span>
-                </button>
+                  </button>
+                </div>
               ) : (
                 /* ─── Regular cell: editable input with 2-line clamp display ─── */
                 <>
@@ -182,7 +200,22 @@ export default function FocusGrid({
                     {itemIdx + 1}
                   </span>
 
-                  {/* Input */}
+                  {/* Display span (2-line clamp) — click to focus input */}
+                  {hasValue && (
+                    <span
+                      className="w-full text-center text-[13px] font-semibold text-foreground leading-snug cursor-text peer-focus:hidden"
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                      onClick={() => inputRefs.current[cellIdx]?.focus()}
+                    >
+                      {value}
+                    </span>
+                  )}
+                  {/* Input (visible when focused or empty) */}
                   <input
                     ref={(el) => {
                       inputRefs.current[cellIdx] = el;
@@ -192,7 +225,10 @@ export default function FocusGrid({
                     placeholder={ghost}
                     onChange={(e) => handleChange(cellIdx, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, cellIdx)}
-                    className="w-full text-center bg-transparent border-none outline-none leading-snug text-[13px] font-semibold text-foreground placeholder:text-primary/25 placeholder:italic placeholder:font-medium placeholder:text-xs"
+                    className={[
+                      'w-full text-center bg-transparent border-none outline-none leading-snug text-[13px] font-semibold text-foreground placeholder:text-primary/25 placeholder:italic placeholder:font-medium placeholder:text-xs',
+                      hasValue ? 'absolute inset-0 opacity-0 focus:relative focus:opacity-100' : '',
+                    ].join(' ')}
                     aria-label={t('editor.grid.item', { index: itemIdx + 1 })}
                   />
 
