@@ -22,7 +22,9 @@ import * as readline from 'readline';
 let prisma: PrismaClient | null = null;
 function getPrisma(): PrismaClient {
   if (!prisma) {
-    prisma = new PrismaClient();
+    prisma = new PrismaClient({
+      transactionOptions: { timeout: TRANSACTION_TIMEOUT_MS },
+    });
   }
   return prisma;
 }
@@ -98,7 +100,8 @@ interface SeedResult {
   errors: number;
 }
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 10;
+const TRANSACTION_TIMEOUT_MS = 30_000;
 
 interface ParsedEntry {
   entry: V3Entry;
