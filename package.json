@@ -58,7 +58,10 @@
     "prepare": "husky install",
     "precommit": "npm run lint && npm run typecheck",
     "prepush": "npm run test",
-    "create:adapter": "tsx scripts/create-adapter.ts"
+    "create:adapter": "tsx scripts/create-adapter.ts",
+    "dataset:validate": "tsx scripts/data/validate-dataset.ts",
+    "dataset:seed": "tsx scripts/data/seed-explore-templates.ts",
+    "dataset:export": "tsx scripts/data/jsonl-to-csv.ts"
   },
   "keywords": [
     "youtube",
