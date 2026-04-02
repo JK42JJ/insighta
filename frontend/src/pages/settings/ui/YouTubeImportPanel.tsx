@@ -126,7 +126,7 @@ export function YouTubeImportPanel({
       ? (playlists || []).map((p: YouTubePlaylistItem) => ({
           id: p.playlistId,
           title: p.title,
-          subtitle: `${p.itemCount} videos`,
+          subtitle: t('playlist.videoCount', { count: p.itemCount }),
           thumbnailUrl: p.thumbnailUrl,
           isRegistered: registeredPlaylistIds.has(p.playlistId),
         }))
