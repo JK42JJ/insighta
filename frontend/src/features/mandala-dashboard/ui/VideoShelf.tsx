@@ -10,41 +10,14 @@ interface VideoShelfProps {
 export function VideoShelf({ recommendations }: VideoShelfProps) {
   const { t } = useTranslation();
 
-  // Empty state — placeholder cards
+  // Empty state — compact hint
   if (recommendations.length === 0) {
     return (
-      <div className="mb-10 grid grid-cols-3 gap-3.5 opacity-60">
-        {Array.from({ length: 3 }, (_, i) => (
-          <div
-            key={i}
-            className="overflow-hidden rounded-[14px] border border-dashed border-border/60 bg-card"
-          >
-            <div
-              className="grid w-full place-items-center"
-              style={{ aspectRatio: '16/9', background: 'hsl(var(--muted) / 0.3)' }}
-            >
-              {i === 1 ? (
-                <Video className="h-5 w-5 text-muted-foreground opacity-30" />
-              ) : (
-                <div className="h-5 w-5" />
-              )}
-            </div>
-            <div className="px-3.5 py-3 pb-3.5">
-              {i === 1 ? (
-                <p className="text-center text-[11px] font-semibold text-muted-foreground/60">
-                  {t('dashboard.videoShelf.empty.line1')}
-                  <br />
-                  {t('dashboard.videoShelf.empty.line2')}
-                </p>
-              ) : (
-                <div className="space-y-1.5">
-                  <div className="h-3 w-3/4 rounded bg-muted/30" />
-                  <div className="h-3 w-1/2 rounded bg-muted/30" />
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+      <div className="mb-10 flex h-20 items-center justify-center gap-2.5 rounded-[14px] border border-dashed border-border/60 opacity-50">
+        <Video className="h-4 w-4 text-muted-foreground" />
+        <span className="text-xs font-semibold text-muted-foreground">
+          {t('dashboard.videoShelf.empty.line1')} {t('dashboard.videoShelf.empty.line2')}
+        </span>
       </div>
     );
   }
