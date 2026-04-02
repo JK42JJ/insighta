@@ -20,7 +20,6 @@ const MandalaWizardPage = lazy(() => import('@/pages/mandala-wizard'));
 const MandalaDashboardPage = lazy(() => import('@/pages/mandala-dashboard'));
 const MandalaEditorPage = lazy(() => import('@/pages/mandala-editor'));
 const MandalasPage = lazy(() => import('@/pages/mandalas'));
-const ProfilePage = lazy(() => import('@/pages/profile'));
 const SubscriptionPage = lazy(() => import('@/pages/subscription'));
 const SettingsPage = lazy(() => import('@/pages/settings'));
 const PrivacyPage = lazy(() => import('@/pages/privacy'));
@@ -84,14 +83,7 @@ export function AppRouter() {
           }
         />
         <Route path="/mandala-settings" element={<Navigate to="/mandalas" replace />} />
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <ProfilePage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/profile" element={<Navigate to="/settings?tab=profile" replace />} />
         <Route
           path="/settings"
           element={

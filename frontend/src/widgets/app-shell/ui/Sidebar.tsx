@@ -13,6 +13,7 @@ import {
   CreditCard,
   Shield,
   ArrowLeft,
+  User,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -22,6 +23,7 @@ import { RefreshCw } from 'lucide-react';
 
 type SettingsCategory =
   | 'general'
+  | 'profile'
   | 'appearance'
   | 'notifications'
   | 'mandalas'
@@ -34,6 +36,7 @@ const SETTINGS_NAV_GROUPS = [
     labelKey: 'settings.navAccount',
     items: [
       { id: 'general' as SettingsCategory, icon: Settings, labelKey: 'settings.general' },
+      { id: 'profile' as SettingsCategory, icon: User, labelKey: 'settings.profile' },
       { id: 'appearance' as SettingsCategory, icon: Palette, labelKey: 'settings.appearance' },
       { id: 'notifications' as SettingsCategory, icon: Bell, labelKey: 'settings.notifications' },
     ],

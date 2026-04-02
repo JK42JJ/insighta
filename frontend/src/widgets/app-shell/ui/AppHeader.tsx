@@ -31,7 +31,8 @@ export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps
 
   // Use cached tier for instant render, then sync when API responds
   const cachedTier = getAuthCache()?.tier;
-  const displayTier = subscription.tier !== 'free' ? subscription.tier : (cachedTier ?? subscription.tier);
+  const displayTier =
+    subscription.tier !== 'free' ? subscription.tier : (cachedTier ?? subscription.tier);
 
   // Sync tier to cache when subscription data arrives from API
   useEffect(() => {
@@ -97,9 +98,7 @@ export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps
 
         {/* Center: Search */}
         {searchBarElement && (
-          <div className="hidden md:flex items-center flex-1 max-w-md mx-4">
-            {searchBarElement}
-          </div>
+          <div className="hidden md:flex items-center flex-1 max-w-md mx-4">{searchBarElement}</div>
         )}
 
         {/* Right: Actions */}
@@ -136,64 +135,66 @@ export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps
               {/* Tier Badge — click navigates to subscription for free users */}
               <TierBadge
                 tier={displayTier}
-                onClick={displayTier === 'free' ? () => navigate('/settings?tab=subscription') : undefined}
+                onClick={
+                  displayTier === 'free' ? () => navigate('/settings?tab=subscription') : undefined
+                }
               />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  aria-label={t('header.openUserMenu')}
-                  className="flex items-center p-0.5 rounded-full hover:ring-2 hover:ring-primary/30 transition-all focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    aria-label={t('header.openUserMenu')}
+                    className="flex items-center p-0.5 rounded-full hover:ring-2 hover:ring-primary/30 transition-all focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                  >
+                    <Avatar className="w-8 h-8 border-2 border-primary/20">
+                      <AvatarImage src={userAvatar ?? undefined} alt={userName || 'User'} />
+                      <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
+                        {userName?.charAt(0)?.toUpperCase() || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  onCloseAutoFocus={(e) => e.preventDefault()}
+                  className="w-56 bg-surface-mid border-border/50 z-50 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none"
                 >
-                  <Avatar className="w-8 h-8 border-2 border-primary/20">
-                    <AvatarImage src={userAvatar ?? undefined} alt={userName || 'User'} />
-                    <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
-                      {userName?.charAt(0)?.toUpperCase() || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                onCloseAutoFocus={(e) => e.preventDefault()}
-                className="w-56 bg-surface-mid border-border/50 z-50 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none"
-              >
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col gap-1">
-                    <p className="text-sm font-medium text-foreground">{userName || 'User'}</p>
-                    <p className="text-xs text-muted-foreground truncate">{userEmail || ''}</p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-border/50" />
-                <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
-                  <Link to="/profile">{t('header.profile')}</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
-                  <Link to="/subscription">{t('header.subscription')}</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
-                  <Link to="/settings">{t('header.settings')}</Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-border/50" />
-                <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
-                  <Link to="/help">
-                    <HelpCircle className="w-4 h-4" />
-                    {t('header.help')}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleLogout}
-                  disabled={isSigningOut}
-                  className="gap-2 cursor-pointer text-destructive focus:text-destructive hover:bg-destructive/10"
-                >
-                  {isSigningOut ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <LogOut className="w-4 h-4" />
-                  )}
-                  {t('common.logout')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm font-medium text-foreground">{userName || 'User'}</p>
+                      <p className="text-xs text-muted-foreground truncate">{userEmail || ''}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator className="bg-border/50" />
+                  <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
+                    <Link to="/settings?tab=profile">{t('header.profile')}</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
+                    <Link to="/subscription">{t('header.subscription')}</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
+                    <Link to="/settings">{t('header.settings')}</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-border/50" />
+                  <DropdownMenuItem asChild className="gap-2 cursor-pointer hover:bg-surface-light">
+                    <Link to="/help">
+                      <HelpCircle className="w-4 h-4" />
+                      {t('header.help')}
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    disabled={isSigningOut}
+                    className="gap-2 cursor-pointer text-destructive focus:text-destructive hover:bg-destructive/10"
+                  >
+                    {isSigningOut ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <LogOut className="w-4 h-4" />
+                    )}
+                    {t('common.logout')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           ) : (
             <Button

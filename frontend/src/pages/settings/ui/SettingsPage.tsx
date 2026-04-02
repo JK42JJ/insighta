@@ -19,6 +19,7 @@ import { apiClient } from '@/shared/lib/api-client';
 import { YouTubeSyncCard } from './YouTubeSyncCard';
 import { LlmKeysSettingsTab } from './LlmKeysSettingsTab';
 import { MandalaSettingsTab } from './MandalaSettingsTab';
+import { ProfileSettingsTab } from './ProfileSettingsTab';
 import { SubscriptionSettingsTab } from './SubscriptionSettingsTab';
 import {
   AlertDialog,
@@ -34,6 +35,7 @@ import {
 
 type SettingsCategory =
   | 'general'
+  | 'profile'
   | 'mandalas'
   | 'appearance'
   | 'notifications'
@@ -43,6 +45,7 @@ type SettingsCategory =
 
 const VALID_TABS: SettingsCategory[] = [
   'general',
+  'profile',
   'mandalas',
   'appearance',
   'notifications',
@@ -208,7 +211,7 @@ export default function SettingsPage() {
           {/* Profile Card */}
           <div
             className="flex items-center gap-4 p-5 mb-4 bg-surface-mid border border-border/50 rounded-xl hover:border-primary/40 hover:bg-surface-mid/80 cursor-pointer transition-colors"
-            onClick={() => navigate('/profile')}
+            onClick={() => setSearchParams({ tab: 'profile' })}
           >
             <Avatar className="w-14 h-14 border-2 border-primary/20">
               <AvatarImage src={userAvatar ?? undefined} alt={userName || 'User'} />
@@ -227,7 +230,10 @@ export default function SettingsPage() {
               variant="outline"
               size="sm"
               className="border-border/50 text-muted-foreground hover:text-foreground"
-              onClick={() => navigate('/profile')}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSearchParams({ tab: 'profile' });
+              }}
             >
               {t('settings.editProfile', 'Edit Profile')}
             </Button>
@@ -254,6 +260,17 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+        </>
+      )}
+
+      {/* Profile */}
+      {activeCategory === 'profile' && (
+        <>
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-foreground">{t('profile.title')}</h2>
+            <p className="text-sm text-muted-foreground mt-1">{t('profile.subtitle')}</p>
+          </div>
+          <ProfileSettingsTab />
         </>
       )}
 
