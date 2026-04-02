@@ -225,15 +225,26 @@ async function seedFromJsonl(filePath: string): Promise<SeedResult> {
     }
   }
 
-  // 3b. Bulk insert: mandalas → root levels → sub levels (3 DB round trips)
-  console.log(`  Inserting ${mandalaRows.length} mandalas...`);
-  await prisma.user_mandalas.createMany({ data: mandalaRows, skipDuplicates: true });
+  // 3b. Bulk insert in chunks (Supabase Cloud has statement_timeout ~120s)
+  const CHUNK = 200;
 
-  console.log(`  Inserting ${rootLevelRows.length} root levels...`);
-  await prisma.user_mandala_levels.createMany({ data: rootLevelRows, skipDuplicates: true });
+  async function bulkInsertChunked<T>(label: string, rows: T[], fn: (chunk: T[]) => Promise<unknown>) {
+    console.log(`  Inserting ${rows.length} ${label}...`);
+    for (let c = 0; c < rows.length; c += CHUNK) {
+      await fn(rows.slice(c, c + CHUNK));
+      if (rows.length > CHUNK) console.log(`    ${label}: ${Math.min(c + CHUNK, rows.length)}/${rows.length}`);
+    }
+  }
 
-  console.log(`  Inserting ${subLevelRows.length} sub levels...`);
-  await prisma.user_mandala_levels.createMany({ data: subLevelRows, skipDuplicates: true });
+  await bulkInsertChunked('mandalas', mandalaRows, (chunk) =>
+    prisma.user_mandalas.createMany({ data: chunk, skipDuplicates: true })
+  );
+  await bulkInsertChunked('root levels', rootLevelRows, (chunk) =>
+    prisma.user_mandala_levels.createMany({ data: chunk, skipDuplicates: true })
+  );
+  await bulkInsertChunked('sub levels', subLevelRows, (chunk) =>
+    prisma.user_mandala_levels.createMany({ data: chunk, skipDuplicates: true })
+  );
 
   const inserted = mandalaRows.length;
 
