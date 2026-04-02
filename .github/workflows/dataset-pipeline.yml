@@ -1,0 +1,182 @@
+name: Dataset Pipeline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/explore-templates/**'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (no DB writes)'
+        type: boolean
+        default: false
+      skip_seed:
+        description: 'Skip seed step (validate + export only)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: dataset-pipeline
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate Dataset
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Validate JSONL files
+        run: |
+          EXIT=0
+          for f in data/explore-templates/mandala_*.jsonl; do
+            echo "=== Validating: $f ==="
+            npx tsx scripts/data/validate-dataset.ts "$f" || EXIT=1
+            echo ""
+          done
+          exit $EXIT
+
+  version:
+    name: Auto-Version Tag
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: tag
+        run: |
+          # Find latest dataset-v* tag
+          LATEST=$(git tag --list 'dataset-v*' --sort=-version:refname | head -1)
+          if [ -z "$LATEST" ]; then
+            NEW="dataset-v3.0.0"
+          else
+            # Bump patch: dataset-v3.0.0 → dataset-v3.0.1
+            BASE=${LATEST#dataset-v}
+            MAJOR=$(echo "$BASE" | cut -d. -f1)
+            MINOR=$(echo "$BASE" | cut -d. -f2)
+            PATCH=$(echo "$BASE" | cut -d. -f3)
+            NEW="dataset-v${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+          echo "version=$NEW" >> "$GITHUB_OUTPUT"
+          echo "Tagging: $NEW"
+
+      - name: Create tag
+        run: |
+          git tag ${{ steps.tag.outputs.version }}
+          git push origin ${{ steps.tag.outputs.version }}
+
+  seed:
+    name: Seed Prod DB
+    needs: validate
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.inputs.skip_seed != 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npx prisma generate
+
+      - name: Seed templates
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          FLAGS="--ci"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            FLAGS="$FLAGS --dry-run"
+          fi
+
+          for f in data/explore-templates/mandala_*.jsonl; do
+            echo "=== Seeding: $f ==="
+            npx tsx scripts/data/seed-explore-templates.ts "$f" $FLAGS
+            echo ""
+          done
+
+  export:
+    name: Export Kaggle CSV
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate CSV exports
+        run: |
+          for f in data/explore-templates/mandala_*.jsonl; do
+            echo "=== Exporting: $f ==="
+            npx tsx scripts/data/jsonl-to-csv.ts "$f"
+          done
+
+      - name: Update metadata stats
+        run: |
+          node -e "
+          const fs = require('fs');
+          const path = 'data/explore-templates/dataset-metadata.json';
+          const meta = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const readline = require('readline');
+
+          async function countByLang(lang) {
+            const file = 'data/explore-templates/mandala_' + lang + '.jsonl';
+            if (!fs.existsSync(file)) return { total: 0, domains: {} };
+            const rl = readline.createInterface({ input: fs.createReadStream(file) });
+            let total = 0;
+            const domains = {};
+            for await (const line of rl) {
+              if (!line.trim()) continue;
+              const e = JSON.parse(line);
+              total++;
+              const d = e.domain || 'unknown';
+              domains[d] = (domains[d] || 0) + 1;
+            }
+            return { total, domains };
+          }
+
+          (async () => {
+            meta.stats.ko = await countByLang('ko');
+            meta.stats.en = await countByLang('en');
+            fs.writeFileSync(path, JSON.stringify(meta, null, 2) + '\n');
+            console.log('Updated stats:', JSON.stringify(meta.stats, null, 2));
+          })();
+          "
+
+      - name: Commit CSV + metadata
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/explore-templates/*.csv data/explore-templates/dataset-metadata.json
+          if git diff --cached --quiet; then
+            echo "No CSV changes to commit"
+          else
+            git commit -m "chore(dataset): auto-generate CSV exports + update stats"
+            git push
+          fi

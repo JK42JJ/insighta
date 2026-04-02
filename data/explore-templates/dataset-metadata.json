@@ -1,0 +1,59 @@
+{
+  "title": "Mandala Chart Goal-Setting Templates",
+  "subtitle": "Structured 9x9 mandala goal templates across 9 life domains",
+  "description": "A curated dataset of mandala chart (mandalart) goal-setting templates. Each entry contains a center goal, 8 sub-goals, and 64 actionable items organized in the 9x9 mandala structure popularized by Shohei Ohtani.",
+  "id": "insighta/mandala-chart-templates",
+  "licenses": [
+    {
+      "name": "CC-BY-4.0"
+    }
+  ],
+  "keywords": [
+    "mandala-chart",
+    "mandalart",
+    "goal-setting",
+    "productivity",
+    "self-improvement",
+    "structured-goals"
+  ],
+  "resources": [
+    {
+      "path": "mandala_ko.csv",
+      "description": "Korean mandala chart templates (flat CSV format)"
+    },
+    {
+      "path": "mandala_en.csv",
+      "description": "English mandala chart templates (flat CSV format)"
+    }
+  ],
+  "version": {
+    "current": "3.0.0",
+    "history": [
+      {
+        "version": "3.0.0",
+        "date": "2026-04-02",
+        "changes": "Initial v3 dataset — 1000 KO templates across 9 domains"
+      }
+    ]
+  },
+  "stats": {
+    "ko": {
+      "total": 1000,
+      "domains": {
+        "tech": 0,
+        "learning": 0,
+        "health": 0,
+        "business": 0,
+        "finance": 0,
+        "social": 0,
+        "creative": 0,
+        "lifestyle": 0,
+        "mind": 0
+      }
+    },
+    "en": {
+      "total": 0,
+      "domains": {}
+    }
+  }
+}
