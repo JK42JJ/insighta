@@ -25,7 +25,8 @@
     "previous": "이전",
     "next": "다음",
     "loadFailed": "불러오지 못했습니다. 탭하여 재시도.",
-    "retry": "다시 시도"
+    "retry": "다시 시도",
+    "noResults": "결과 없음"
   },
   "explore": {
     "title": "만다라트 탐색",
@@ -402,7 +403,26 @@
     "searchPlaceholder": "예: #머신러닝, React 튜토리얼",
     "search": "검색",
     "results": "결과",
-    "current": "현재"
+    "current": "현재",
+    "importSuccess": "가져오기 완료",
+    "importFailed": "가져오기 실패",
+    "importSuccessDesc": "{{success}}건 가져옴{{failSuffix}}",
+    "importFailedDesc": "{{count}}건 가져오기 실패",
+    "importFailSuffix": ", {{count}}건 실패",
+    "connectFirst": "YouTube 라이브러리를 가져오려면 Google 계정을 연결하세요",
+    "importFromLibrary": "YouTube에서 가져오기",
+    "importBtn": "가져오기 ({{count}})",
+    "tabPlaylists": "내 플레이리스트",
+    "tabSubscriptions": "구독 채널",
+    "noSubscriptions": "구독 채널이 없습니다",
+    "loadMore": "더 보기...",
+    "added": "추가됨",
+    "channel": "채널",
+    "assignedToMandala": "만다라에 할당됨",
+    "sourcesAssigned": "{{count}}개 소스 → {{title}}",
+    "selectedCount": "{{count}}개 선택됨",
+    "assignToMandala": "만다라에 할당",
+    "searchMandala": "만다라 검색..."
   },
   "cards": {
     "noInsights": "아직 저장된 인사이트가 없습니다",
@@ -732,7 +752,11 @@
     "videoCount": "{{count}}개 동영상",
     "sync": "동기화",
     "deleteConfirmTitle": "플레이리스트를 삭제하시겠습니까?",
-    "deleteConfirmDesc": "\"{{title}}\" 플레이리스트가 삭제됩니다. 이미 아이디에이션 팔레트에 추가된 동영상은 유지됩니다."
+    "deleteConfirmDesc": "\"{{title}}\" 플레이리스트가 삭제됩니다. 이미 아이디에이션 팔레트에 추가된 동영상은 유지됩니다.",
+    "openOnYouTube": "YouTube에서 열기",
+    "syncStale": "동기화 중단됨",
+    "retrySyncStale": "중단된 동기화 재시도",
+    "thumbnailAlt": "플레이리스트 썸네일"
   },
   "time": {
     "justNow": "방금",

@@ -14,7 +14,7 @@ import {
 import { Loader2, RefreshCw, Trash2, ExternalLink, AlertCircle } from 'lucide-react';
 import type { YouTubePlaylist } from '@/entities/youtube/model/types';
 import { formatDistanceToNow } from 'date-fns';
-import { ko } from 'date-fns/locale';
+import { ko, enUS } from 'date-fns/locale';
 import { useTranslation } from 'react-i18next';
 
 interface PlaylistItemProps {
@@ -32,12 +32,13 @@ export function PlaylistItem({
   isSyncing,
   isDeleting,
 }: PlaylistItemProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language.startsWith('ko') ? ko : enUS;
 
   const lastSyncedText = playlist.last_synced_at
     ? formatDistanceToNow(new Date(playlist.last_synced_at), {
         addSuffix: true,
-        locale: ko,
+        locale: dateLocale,
       })
     : t('playlist.neverSynced');
 
@@ -78,7 +79,7 @@ export function PlaylistItem({
         {playlist.thumbnail_url ? (
           <img
             src={playlist.thumbnail_url}
-            alt={playlist.title || 'Playlist thumbnail'}
+            alt={playlist.title || t('playlist.thumbnailAlt')}
             className="w-full h-full object-cover"
           />
         ) : (
@@ -108,7 +109,7 @@ export function PlaylistItem({
         </div>
         <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
           <span>{t('playlist.videoCount', { count: playlist.item_count })}</span>
-          <span>*</span>
+          <span>·</span>
           <span>{lastSyncedText}</span>
           {statusBadge()}
         </div>

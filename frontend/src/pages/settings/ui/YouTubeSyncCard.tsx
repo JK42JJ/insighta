@@ -347,7 +347,7 @@ export function YouTubeSyncCard() {
       await createSourceMappings.mutateAsync({ sourceType, sourceIds, mandalaId });
       toast({
         title: t('youtube.assignedToMandala', 'Assigned to mandala'),
-        description: `${sourceIds.length} sources → ${mandalaTitle}`,
+        description: t('youtube.sourcesAssigned', { count: sourceIds.length, title: mandalaTitle }),
       });
       setSelectedPlaylists(new Set());
     } catch {
@@ -424,7 +424,9 @@ export function YouTubeSyncCard() {
             onChange={toggleAll}
             className="w-3.5 h-3.5 rounded border-border accent-primary"
           />
-          {someSelected ? `${selectedCount} selected` : t('youtube.selectAll', 'Select all')}
+          {someSelected
+            ? t('youtube.selectedCount', { count: selectedCount })
+            : t('youtube.selectAll', 'Select all')}
         </label>
         {someSelected && (
           <>
@@ -513,7 +515,7 @@ export function YouTubeSyncCard() {
                         <span className="truncate">{m.title}</span>
                         {m.isDefault && (
                           <span className="text-[9px] font-bold text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded-full">
-                            Current
+                            {t('youtube.current')}
                           </span>
                         )}
                       </button>

@@ -25,7 +25,8 @@
     "previous": "Previous",
     "next": "Next",
     "loadFailed": "Couldn't load. Tap to retry.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "noResults": "No results"
   },
   "explore": {
     "title": "Explore Mandalas",
@@ -402,7 +403,26 @@
     "searchPlaceholder": "e.g. #machinelearning, React tutorial",
     "search": "Search",
     "results": "Results",
-    "current": "Current"
+    "current": "Current",
+    "importSuccess": "Imported successfully",
+    "importFailed": "Import failed",
+    "importSuccessDesc": "{{success}} item(s) imported{{failSuffix}}",
+    "importFailedDesc": "{{count}} item(s) failed to import",
+    "importFailSuffix": ", {{count}} failed",
+    "connectFirst": "Connect your YouTube account to import your library",
+    "importFromLibrary": "Import from YouTube",
+    "importBtn": "Import ({{count}})",
+    "tabPlaylists": "My Playlists",
+    "tabSubscriptions": "Subscriptions",
+    "noSubscriptions": "No subscriptions found",
+    "loadMore": "Load more...",
+    "added": "Added",
+    "channel": "Channel",
+    "assignedToMandala": "Assigned to mandala",
+    "sourcesAssigned": "{{count}} sources → {{title}}",
+    "selectedCount": "{{count}} selected",
+    "assignToMandala": "Assign to Mandala",
+    "searchMandala": "Search mandalas..."
   },
   "cards": {
     "noInsights": "No saved insights yet",
@@ -732,7 +752,11 @@
     "videoCount": "{{count}} videos",
     "sync": "Sync",
     "deleteConfirmTitle": "Delete this playlist?",
-    "deleteConfirmDesc": "\"{{title}}\" playlist will be deleted. Videos already added to the ideation palette will be kept."
+    "deleteConfirmDesc": "\"{{title}}\" playlist will be deleted. Videos already added to the ideation palette will be kept.",
+    "openOnYouTube": "Open on YouTube",
+    "syncStale": "Sync stale",
+    "retrySyncStale": "Retry stale sync",
+    "thumbnailAlt": "Playlist thumbnail"
   },
   "time": {
     "justNow": "Just now",

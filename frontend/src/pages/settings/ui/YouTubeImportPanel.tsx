@@ -27,7 +27,10 @@ interface YouTubeImportPanelProps {
 
 type ImportTab = 'playlists' | 'subscriptions';
 
-export function YouTubeImportPanel({ registeredPlaylistIds, onImportComplete }: YouTubeImportPanelProps) {
+export function YouTubeImportPanel({
+  registeredPlaylistIds,
+  onImportComplete,
+}: YouTubeImportPanelProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<ImportTab>('playlists');
@@ -37,18 +40,19 @@ export function YouTubeImportPanel({ registeredPlaylistIds, onImportComplete }: 
   const subs = useYouTubeSubscriptions();
   const pls = useYouTubePlaylists();
 
-  const subscriptions = subs.data?.pages.flatMap(p => p.data) ?? [];
-  const playlists = pls.data?.pages.flatMap(p => p.data) ?? [];
+  const subscriptions = subs.data?.pages.flatMap((p) => p.data) ?? [];
+  const playlists = pls.data?.pages.flatMap((p) => p.data) ?? [];
   const subsLoading = subs.isLoading;
   const playlistsLoading = pls.isLoading;
   const subsError = subs.error;
   const playlistsError = pls.error;
 
-  const isNotConnected = subsError?.message?.includes('YOUTUBE_NOT_CONNECTED') ||
+  const isNotConnected =
+    subsError?.message?.includes('YOUTUBE_NOT_CONNECTED') ||
     playlistsError?.message?.includes('YOUTUBE_NOT_CONNECTED');
 
   const toggleSelection = (id: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -68,9 +72,10 @@ export function YouTubeImportPanel({ registeredPlaylistIds, onImportComplete }: 
 
     for (const id of selectedIds) {
       try {
-        const url = activeTab === 'playlists'
-          ? `https://www.youtube.com/playlist?list=${id}`
-          : `https://www.youtube.com/channel/${id}`;
+        const url =
+          activeTab === 'playlists'
+            ? `https://www.youtube.com/playlist?list=${id}`
+            : `https://www.youtube.com/channel/${id}`;
         await apiClient.importPlaylist(url);
         successCount++;
       } catch {
@@ -84,13 +89,16 @@ export function YouTubeImportPanel({ registeredPlaylistIds, onImportComplete }: 
     if (successCount > 0) {
       toast({
         title: t('youtube.importSuccess', 'Imported successfully'),
-        description: `${successCount} item(s) imported${failCount > 0 ? `, ${failCount} failed` : ''}`,
+        description: t('youtube.importSuccessDesc', {
+          success: successCount,
+          failSuffix: failCount > 0 ? t('youtube.importFailSuffix', { count: failCount }) : '',
+        }),
       });
       onImportComplete();
     } else {
       toast({
         title: t('youtube.importFailed', 'Import failed'),
-        description: `${failCount} item(s) failed to import`,
+        description: t('youtube.importFailedDesc', { count: failCount }),
         variant: 'destructive',
       });
     }
@@ -100,12 +108,20 @@ export function YouTubeImportPanel({ registeredPlaylistIds, onImportComplete }: 
     return (
       <div className="text-center py-6 text-muted-foreground">
         <Youtube className="w-8 h-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm">{t('youtube.connectFirst', 'Connect your YouTube account to import your library')}</p>
+        <p className="text-sm">
+          {t('youtube.connectFirst', 'Connect your YouTube account to import your library')}
+        </p>
       </div>
     );
   }
 
-  const items: Array<{ id: string; title: string; subtitle: string; thumbnailUrl: string; isRegistered: boolean }> =
+  const items: Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    thumbnailUrl: string;
+    isRegistered: boolean;
+  }> =
     activeTab === 'playlists'
       ? (playlists || []).map((p: YouTubePlaylistItem) => ({
           id: p.playlistId,
@@ -117,7 +133,7 @@ export function YouTubeImportPanel({ registeredPlaylistIds, onImportComplete }: 
       : (subscriptions || []).map((s: YouTubeSubscriptionItem) => ({
           id: s.channelId,
           title: s.title,
-          subtitle: s.description.slice(0, 60) || 'Channel',
+          subtitle: s.description.slice(0, 60) || t('youtube.channel'),
           thumbnailUrl: s.thumbnailUrl,
           isRegistered: registeredPlaylistIds.has(s.channelId),
         }));
@@ -132,27 +148,29 @@ export function YouTubeImportPanel({ registeredPlaylistIds, onImportComplete }: 
       <div className="flex items-center justify-between">
         <Label>{t('youtube.importFromLibrary', 'Import from YouTube')}</Label>
         {selectedIds.size > 0 && (
-          <Button
-            size="sm"
-            onClick={handleImport}
-            disabled={isImporting}
-            className="gap-1.5"
-          >
-            {isImporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            Import ({selectedIds.size})
+          <Button size="sm" onClick={handleImport} disabled={isImporting} className="gap-1.5">
+            {isImporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            {t('youtube.importBtn', { count: selectedIds.size })}
           </Button>
         )}
       </div>
 
       {/* Sub-tabs */}
       <div className="flex gap-1 p-0.5 rounded-md bg-surface-light/30 border border-border/20">
-        {([
-          { id: 'playlists' as ImportTab, icon: ListVideo, label: 'My Playlists' },
-          { id: 'subscriptions' as ImportTab, icon: Youtube, label: 'Subscriptions' },
-        ]).map(({ id, icon: Icon, label }) => (
+        {[
+          { id: 'playlists' as ImportTab, icon: ListVideo, label: t('youtube.tabPlaylists') },
+          { id: 'subscriptions' as ImportTab, icon: Youtube, label: t('youtube.tabSubscriptions') },
+        ].map(({ id, icon: Icon, label }) => (
           <button
             key={id}
-            onClick={() => { setActiveTab(id); setSelectedIds(new Set()); }}
+            onClick={() => {
+              setActiveTab(id);
+              setSelectedIds(new Set());
+            }}
             className={cn(
               'flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors flex-1 justify-center',
               activeTab === id
@@ -194,14 +212,16 @@ export function YouTubeImportPanel({ registeredPlaylistIds, onImportComplete }: 
               )}
             >
               {/* Checkbox */}
-              <div className={cn(
-                'w-4 h-4 rounded border flex items-center justify-center flex-shrink-0',
-                item.isRegistered
-                  ? 'bg-green-500/20 border-green-500/50'
-                  : selectedIds.has(item.id)
-                    ? 'bg-primary border-primary'
-                    : 'border-border'
-              )}>
+              <div
+                className={cn(
+                  'w-4 h-4 rounded border flex items-center justify-center flex-shrink-0',
+                  item.isRegistered
+                    ? 'bg-green-500/20 border-green-500/50'
+                    : selectedIds.has(item.id)
+                      ? 'bg-primary border-primary'
+                      : 'border-border'
+                )}
+              >
                 {(item.isRegistered || selectedIds.has(item.id)) && (
                   <Check className="h-3 w-3 text-white" />
                 )}
@@ -225,7 +245,7 @@ export function YouTubeImportPanel({ registeredPlaylistIds, onImportComplete }: 
 
               {item.isRegistered && (
                 <span className="text-[10px] text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded-full flex-shrink-0">
-                  Added
+                  {t('youtube.added')}
                 </span>
               )}
             </button>
