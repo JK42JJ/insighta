@@ -89,7 +89,7 @@ export function OrbitalMap({ centerLabel, cells }: OrbitalMapProps) {
                   stroke={isEmpty ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
                   strokeWidth={3}
                   className="transition-opacity duration-200 group-hover:opacity-[0.15]"
-                  style={{ opacity: isEmpty ? 0.4 : 0.08 }}
+                  style={{ opacity: isEmpty ? 0.15 : 0.08 }}
                 />
                 {/* Progress ring */}
                 <circle
@@ -118,7 +118,7 @@ export function OrbitalMap({ centerLabel, cells }: OrbitalMapProps) {
                 className="absolute inset-0 grid place-items-center text-sm font-extrabold tracking-tight"
                 style={{
                   color: isEmpty ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary))',
-                  opacity: isEmpty ? 0.5 : 1,
+                  opacity: isEmpty ? 0.25 : 1,
                 }}
               >
                 {cell.videoCount}
