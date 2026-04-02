@@ -105,38 +105,38 @@ export function OrbitalMap({ centerLabel, cells }: OrbitalMapProps) {
                   className="transition-opacity duration-200 group-hover:opacity-[0.15]"
                   style={{ opacity: isEmpty ? 0.12 : 0.08 }}
                 />
-                {/* Progress ring (hidden when empty) */}
-                {!isEmpty && (
-                  <circle
-                    cx={30}
-                    cy={30}
-                    r={RING_R}
-                    fill="none"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={3}
-                    strokeLinecap="round"
-                    transform="rotate(-90 30 30)"
-                    style={
-                      {
-                        '--circ': RING_CIRCUMFERENCE,
-                        '--offset': offset,
-                        strokeDasharray: RING_CIRCUMFERENCE,
-                        strokeDashoffset: RING_CIRCUMFERENCE,
-                        animation: `ringDraw 1.2s ease-out ${delay}s forwards`,
-                      } as React.CSSProperties
-                    }
-                  />
-                )}
+                {/* Progress ring */}
+                <circle
+                  cx={30}
+                  cy={30}
+                  r={RING_R}
+                  fill="none"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  transform="rotate(-90 30 30)"
+                  style={
+                    {
+                      '--circ': RING_CIRCUMFERENCE,
+                      '--offset': offset,
+                      strokeDasharray: RING_CIRCUMFERENCE,
+                      strokeDashoffset: RING_CIRCUMFERENCE,
+                      animation: isEmpty ? 'none' : `ringDraw 1.2s ease-out ${delay}s forwards`,
+                      opacity: isEmpty ? 0 : 1,
+                    } as React.CSSProperties
+                  }
+                />
               </svg>
-              {/* Count number (hidden when empty) */}
-              {!isEmpty && (
-                <div
-                  className="absolute inset-0 grid place-items-center text-sm font-extrabold tracking-tight"
-                  style={{ color: 'hsl(var(--primary))' }}
-                >
-                  {cell.videoCount}
-                </div>
-              )}
+              {/* Count number */}
+              <div
+                className="absolute inset-0 grid place-items-center text-sm font-extrabold tracking-tight"
+                style={{
+                  color: isEmpty ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary))',
+                  opacity: isEmpty ? 0.3 : 1,
+                }}
+              >
+                {cell.videoCount}
+              </div>
             </div>
             {/* Planet name */}
             <span
