@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/features/auth/model/useAuth';
+import { useMandalaList } from '@/features/mandala';
+import { useLocalCardsList } from '@/features/card-management/model/useLocalCards';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
@@ -12,8 +14,20 @@ import { Camera, Save, BarChart3, Calendar, Layers } from 'lucide-react';
 import { toast } from '@/shared/lib/use-toast';
 
 export function ProfileSettingsTab() {
-  const { t } = useTranslation();
-  const { userName, userEmail, userAvatar } = useAuth();
+  const { t, i18n } = useTranslation();
+  const { userName, userEmail, userAvatar, user } = useAuth();
+  const { data: mandalaListData } = useMandalaList();
+  const { data: cardsData } = useLocalCardsList();
+
+  const mandalaCount = mandalaListData?.mandalas?.length ?? 0;
+  const cardCount = cardsData?.cards?.length ?? 0;
+  const memberSince = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString(i18n.language, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : '-';
 
   const [profile, setProfile] = useState({
     name: userName || t('profile.defaultName'),
@@ -119,7 +133,7 @@ export function ProfileSettingsTab() {
                 <p className="text-sm font-medium text-foreground">
                   {t('profile.totalMandalas', 'Total Mandalas')}
                 </p>
-                <p className="text-xs text-muted-foreground">-</p>
+                <p className="text-xs text-muted-foreground">{mandalaCount}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -130,7 +144,7 @@ export function ProfileSettingsTab() {
                 <p className="text-sm font-medium text-foreground">
                   {t('profile.totalCards', 'Total Cards')}
                 </p>
-                <p className="text-xs text-muted-foreground">-</p>
+                <p className="text-xs text-muted-foreground">{cardCount}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -141,7 +155,7 @@ export function ProfileSettingsTab() {
                 <p className="text-sm font-medium text-foreground">
                   {t('profile.memberSince', 'Member Since')}
                 </p>
-                <p className="text-xs text-muted-foreground">-</p>
+                <p className="text-xs text-muted-foreground">{memberSince}</p>
               </div>
             </div>
           </CardContent>
