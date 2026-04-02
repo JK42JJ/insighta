@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
 import type { DashboardCell } from '@/shared/types/mandala-ux';
 
@@ -61,14 +62,24 @@ export function OrbitalMap({ centerLabel, cells }: OrbitalMapProps) {
         </span>
       </div>
 
-      {/* Empty state hint */}
+      {/* Empty state CTA */}
       {allEmpty && (
         <div
-          className="pointer-events-none absolute left-1/2 z-[6] -translate-x-1/2 text-center"
+          className="absolute left-1/2 z-[6] flex -translate-x-1/2 items-center gap-3"
           style={{ top: CENTER + 58 }}
         >
-          <span className="text-xs font-semibold text-muted-foreground/50">
-            {t('dashboard.orbital.emptyHint')}
+          <Link
+            to="/"
+            className="rounded-lg border border-border bg-transparent px-3.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
+          >
+            {t('dashboard.orbital.ctaAdd')} →
+          </Link>
+          <span
+            className="cursor-default rounded-lg px-3.5 py-1.5 text-[11px] font-semibold text-primary"
+            style={{ opacity: 0.4 }}
+            title={t('dashboard.orbital.ctaAiSoon')}
+          >
+            {t('dashboard.orbital.ctaAi')} ✦
           </span>
         </div>
       )}

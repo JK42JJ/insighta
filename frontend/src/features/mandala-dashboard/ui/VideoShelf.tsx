@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { Play, Video } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Play } from 'lucide-react';
 
 import type { DashboardRecommendation } from '@/shared/types/mandala-ux';
 
@@ -10,13 +11,22 @@ interface VideoShelfProps {
 export function VideoShelf({ recommendations }: VideoShelfProps) {
   const { t } = useTranslation();
 
-  // Empty state — compact hint
+  // Empty state — CTA buttons
   if (recommendations.length === 0) {
     return (
-      <div className="mb-10 flex h-20 items-center justify-center gap-2.5 rounded-[14px] border border-dashed border-border/60 opacity-50">
-        <Video className="h-4 w-4 text-muted-foreground" />
-        <span className="text-xs font-semibold text-muted-foreground">
-          {t('dashboard.videoShelf.empty.line1')} {t('dashboard.videoShelf.empty.line2')}
+      <div className="mb-10 flex h-20 items-center justify-center gap-3 rounded-[14px] border border-dashed border-border/60">
+        <Link
+          to="/"
+          className="rounded-lg border border-border bg-transparent px-3.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
+        >
+          {t('dashboard.orbital.ctaAdd')} →
+        </Link>
+        <span
+          className="cursor-default rounded-lg px-3.5 py-1.5 text-[11px] font-semibold text-primary"
+          style={{ opacity: 0.4 }}
+          title={t('dashboard.orbital.ctaAiSoon')}
+        >
+          {t('dashboard.orbital.ctaAi')} ✦
         </span>
       </div>
     );

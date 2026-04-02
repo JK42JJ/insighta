@@ -1215,7 +1215,7 @@
       "relevance": "Relevance",
       "playButton": "Play ▶"
     },
-    "orbital": { "emptyHint": "Add some videos", "cellLabel": "Area {{index}}" },
+    "orbital": { "emptyHint": "Add some videos", "cellLabel": "Area {{index}}", "ctaAdd": "Add videos from main", "ctaAi": "AI video recommendations", "ctaAiSoon": "Coming soon" },
     "biasAlert": { "title": "Bias Filtered" },
     "skills": { "newsletter": "Newsletter", "alerts": "Video Alerts", "biasFilter": "Bias Filter", "report": "Report" },
     "stats": {
