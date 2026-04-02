@@ -131,3 +131,5 @@ frontend-v3/
 # OpenClaw avatar bot — memory is env-specific
 openclaw/memory/
 .claude/commands/_deprecated/
+.env.bak
+.env.bak2
