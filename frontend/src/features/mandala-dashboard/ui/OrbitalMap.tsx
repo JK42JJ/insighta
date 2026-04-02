@@ -52,7 +52,7 @@ export function OrbitalMap({ centerLabel, cells }: OrbitalMapProps) {
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
-            maxWidth: 88,
+            maxWidth: 120,
             wordBreak: 'keep-all',
           }}
         >
