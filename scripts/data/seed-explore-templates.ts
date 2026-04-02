@@ -143,6 +143,7 @@ async function seedFromJsonl(filePath: string): Promise<SeedResult> {
         language: lang,
         is_template: true,
       },
+      select: { id: true },
     });
     if (existing) {
       skipped++;
@@ -160,6 +161,7 @@ async function seedFromJsonl(filePath: string): Promise<SeedResult> {
         language: entry.language ?? null,
         share_slug: nanoid(12),
       },
+      select: { id: true },
     });
 
     // Root level (depth=0): center_goal + sub_goals + labels
