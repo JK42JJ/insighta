@@ -231,6 +231,8 @@
     "exportData": "Export Data",
     "exportDataDesc": "Download all your data as JSON",
     "exportBtn": "Export JSON",
+    "exportSuccess": "Export complete",
+    "exportFailed": "Export failed",
     "termsOfService": "Terms of Service",
     "privacyPolicy": "Privacy Policy",
     "viewTerms": "View",

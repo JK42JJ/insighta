@@ -231,6 +231,8 @@
     "exportData": "데이터 내보내기",
     "exportDataDesc": "모든 데이터를 JSON으로 다운로드",
     "exportBtn": "JSON 내보내기",
+    "exportSuccess": "내보내기 완료",
+    "exportFailed": "내보내기 실패",
     "termsOfService": "서비스 이용약관",
     "privacyPolicy": "개인정보 처리방침",
     "viewTerms": "보기",

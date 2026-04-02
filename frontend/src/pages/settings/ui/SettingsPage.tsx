@@ -15,6 +15,7 @@ import { cn } from '@/shared/lib/utils';
 import { toast } from '@/shared/lib/use-toast';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { useLocalCardsAsInsight } from '@/features/card-management/model/useLocalCards';
+import { apiClient } from '@/shared/lib/api-client';
 import { YouTubeSyncCard } from './YouTubeSyncCard';
 import { LlmKeysSettingsTab } from './LlmKeysSettingsTab';
 import { MandalaSettingsTab } from './MandalaSettingsTab';
@@ -120,6 +121,66 @@ export default function SettingsPage() {
   const handleLanguageChange = (value: string) => {
     i18n.changeLanguage(value);
     updateSetting('language', value);
+  };
+
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async (format: 'json' | 'csv') => {
+    setIsExporting(true);
+    try {
+      const { mandalas } = await apiClient.listMandalas(1, 100);
+      const data = mandalas.map((m) => ({
+        id: m.id,
+        title: m.title,
+        createdAt: m.createdAt,
+        levels: m.levels,
+      }));
+
+      let content: string;
+      let mimeType: string;
+      let extension: string;
+
+      if (format === 'json') {
+        content = JSON.stringify(data, null, 2);
+        mimeType = 'application/json';
+        extension = 'json';
+      } else {
+        const rows = data.flatMap((m) =>
+          (m.levels ?? []).map((l) =>
+            [
+              m.id,
+              m.title,
+              m.createdAt,
+              l.levelKey,
+              l.centerGoal,
+              (l.subjects ?? []).join('; '),
+              l.depth,
+              l.position,
+            ]
+              .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`)
+              .join(',')
+          )
+        );
+        const header = 'mandala_id,title,created_at,level_key,center_goal,subjects,depth,position';
+        content = [header, ...rows].join('\n');
+        mimeType = 'text/csv';
+        extension = 'csv';
+      }
+
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `insighta-export-${new Date().toISOString().slice(0, 10)}.${extension}`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      toast({ title: t('settings.exportSuccess', 'Export complete') });
+    } catch {
+      toast({ title: t('settings.exportFailed', 'Export failed'), variant: 'destructive' });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleDeleteData = () => {
@@ -354,11 +415,23 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="border-border/50 gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border/50 gap-1.5"
+                    onClick={() => handleExport('json')}
+                    disabled={isExporting}
+                  >
                     <Download className="w-3.5 h-3.5" />
                     JSON
                   </Button>
-                  <Button variant="outline" size="sm" className="border-border/50 gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border/50 gap-1.5"
+                    onClick={() => handleExport('csv')}
+                    disabled={isExporting}
+                  >
                     <Download className="w-3.5 h-3.5" />
                     CSV
                   </Button>
