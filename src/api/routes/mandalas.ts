@@ -567,14 +567,52 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         _count: true,
       });
 
-      const cardCountByLevel = new Map<string, number>();
+      // Build level_id → position lookup (child levelKey → position)
+      const levelKeyToPosition = new Map<string, number>();
+      for (const child of childLevels) {
+        levelKeyToPosition.set(child.levelKey, child.position);
+      }
+
+      // Count cards per position (supports both levelKey-based and root+cell_index mapping)
+      const cardCountByPosition = new Map<number, number>();
+
       for (const row of localCardCounts) {
-        const key = row.level_id ?? '';
-        cardCountByLevel.set(key, (cardCountByLevel.get(key) ?? 0) + row._count);
+        const levelId = row.level_id ?? '';
+        if (levelId === 'root' || levelId === 'scratchpad' || levelId === '') continue;
+        const pos = levelKeyToPosition.get(levelId);
+        if (pos !== undefined) {
+          cardCountByPosition.set(pos, (cardCountByPosition.get(pos) ?? 0) + row._count);
+        }
       }
       for (const row of videoStateCounts) {
-        const key = row.level_id ?? '';
-        cardCountByLevel.set(key, (cardCountByLevel.get(key) ?? 0) + row._count);
+        const levelId = row.level_id ?? '';
+        if (levelId === 'root' || levelId === 'scratchpad' || levelId === '') continue;
+        const pos = levelKeyToPosition.get(levelId);
+        if (pos !== undefined) {
+          cardCountByPosition.set(pos, (cardCountByPosition.get(pos) ?? 0) + row._count);
+        }
+      }
+
+      // Cards with level_id="root" are mapped by cell_index to child positions
+      const rootLocalCards = await prisma.user_local_cards.findMany({
+        where: { mandala_id: mandalaId, user_id: userId, level_id: 'root' },
+        select: { cell_index: true },
+      });
+      for (const card of rootLocalCards) {
+        const pos = card.cell_index ?? -1;
+        if (pos >= 0 && pos < 8) {
+          cardCountByPosition.set(pos, (cardCountByPosition.get(pos) ?? 0) + 1);
+        }
+      }
+      const rootVideoStates = await prisma.userVideoState.findMany({
+        where: { mandala_id: mandalaId, user_id: userId, level_id: 'root' },
+        select: { cell_index: true },
+      });
+      for (const vs of rootVideoStates) {
+        const pos = vs.cell_index ?? -1;
+        if (pos >= 0 && pos < 8) {
+          cardCountByPosition.set(pos, (cardCountByPosition.get(pos) ?? 0) + 1);
+        }
       }
 
       // Build cells from child levels (8 slots, positions 0-7)
@@ -583,12 +621,12 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         if (!child) {
           return {
             label: subLabels[pos] ?? '',
-            videoCount: 0,
+            videoCount: cardCountByPosition.get(pos) ?? 0,
             totalSlots: 8,
-            isActive: false,
+            isActive: (cardCountByPosition.get(pos) ?? 0) > 0,
           };
         }
-        const cardCount = cardCountByLevel.get(child.levelKey) ?? 0;
+        const cardCount = cardCountByPosition.get(pos) ?? 0;
         return {
           label: child.centerGoal || subLabels[pos] || '',
           videoCount: cardCount,
