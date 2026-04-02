@@ -1195,7 +1195,9 @@
       "center": "중심 목표",
       "item": "항목 {{index}}",
       "aiSuggestion": "AI 제안 (항목 {{index}})",
-      "tabAccept": "Tab 수락"
+      "tabAccept": "Tab 수락",
+      "aiFillLabel": "AI 채우기",
+      "aiBlockTooltip": "이 블록의 빈 셀을 AI로 채웁니다"
     },
     "completion": { "thisBlock": "이 블록", "total": "전체" },
     "ghostSuggestions": ["Storybook 문서화", "API 게이트웨이", "디자인 시스템", "성능 벤치마크", "E2E 테스트", "코드 리뷰 가이드", "기술 블로그", "데모 영상 제작"]

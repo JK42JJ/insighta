@@ -1200,7 +1200,9 @@
       "center": "Core goal",
       "item": "Item {{index}}",
       "aiSuggestion": "AI suggestion (item {{index}})",
-      "tabAccept": "Tab to accept"
+      "tabAccept": "Tab to accept",
+      "aiFillLabel": "AI Fill",
+      "aiBlockTooltip": "Fill empty cells in this block with AI"
     },
     "completion": { "thisBlock": "This block", "total": "Total" },
     "ghostSuggestions": ["Storybook docs", "API gateway", "Design system", "Performance benchmark", "E2E testing", "Code review guide", "Tech blog", "Demo video"]

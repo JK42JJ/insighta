@@ -23,8 +23,9 @@ export default function CompletionBar({ blocks, currentBlockIndex }: CompletionB
         {t('editor.completion.thisBlock')}{' '}
         <strong className="text-teal-400 font-bold">
           {blockFilled}/{ITEMS_PER_BLOCK}
-        </strong>{' '}
-        \u00B7 {t('editor.completion.total')}{' '}
+        </strong>
+        {' · '}
+        {t('editor.completion.total')}{' '}
         <strong className="text-teal-400 font-bold">
           {totalFilled}/{TOTAL_ITEMS}
         </strong>

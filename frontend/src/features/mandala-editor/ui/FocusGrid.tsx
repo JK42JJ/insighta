@@ -140,8 +140,9 @@ export default function FocusGrid({
                 <button
                   type="button"
                   onClick={onAiBlock}
-                  className="flex flex-col items-center gap-1.5 w-full cursor-pointer"
+                  className="flex flex-col items-center gap-2 w-full cursor-pointer group/center"
                   aria-label={t('editor.navigator.aiFill')}
+                  title={t('editor.grid.aiBlockTooltip')}
                 >
                   <span
                     className="text-[14px] font-extrabold text-primary text-center leading-tight"
@@ -154,8 +155,23 @@ export default function FocusGrid({
                   >
                     {block.name}
                   </span>
-                  <span className="opacity-40 group-hover:opacity-80 transition-opacity">
-                    {SPARKLE_SVG}
+                  <span className="flex flex-col items-center gap-0.5 opacity-50 group-hover/center:opacity-100 group-hover/center:scale-110 transition-all">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                    </svg>
+                    <span className="text-[10px] font-semibold text-primary">
+                      {t('editor.grid.aiFillLabel')}
+                    </span>
                   </span>
                 </button>
               ) : (
