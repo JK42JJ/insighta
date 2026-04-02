@@ -98,120 +98,132 @@ interface SeedResult {
   errors: number;
 }
 
+const BATCH_SIZE = 50;
+
+interface ParsedEntry {
+  entry: V3Entry;
+  domainSlug: string;
+  dedupKey: string;
+}
+
 async function seedFromJsonl(filePath: string): Promise<SeedResult> {
   const prisma = getPrisma();
+
+  // Phase 1: Parse all JSONL entries
   const fileStream = fs.createReadStream(filePath);
   const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
-
-  let inserted = 0;
-  let skipped = 0;
+  const parsed: ParsedEntry[] = [];
   let errors = 0;
 
   for await (const line of rl) {
     if (!line.trim()) continue;
-
     let entry: V3Entry;
     try {
       entry = JSON.parse(line);
     } catch {
-      console.warn(`Invalid JSON, skipping line`);
+      console.warn('Invalid JSON, skipping line');
       errors++;
       continue;
     }
-
     const domainSlug = DOMAIN_LABEL_TO_SLUG[entry.domain];
-
     if (!domainSlug) {
       console.warn(`Unknown domain "${entry.domain}", skipping: ${entry.center_goal}`);
       errors++;
       continue;
     }
-
-    if (DRY_RUN) {
-      inserted++;
-      if (inserted % 100 === 0) console.log(`  [dry-run] ... ${inserted} would insert`);
-      continue;
-    }
-
-    // Idempotent dedup: center_goal + domain + language (all 3 fields)
-    const lang = entry.language ?? null;
-    const existing = await prisma.user_mandalas.findFirst({
-      where: {
-        user_id: SYSTEM_TEMPLATE_USER_ID,
-        title: entry.center_goal,
-        domain: domainSlug,
-        language: lang,
-        is_template: true,
-      },
-      select: { id: true },
-    });
-    if (existing) {
-      skipped++;
-      continue;
-    }
-
-    const mandala = await prisma.user_mandalas.create({
-      data: {
-        user_id: SYSTEM_TEMPLATE_USER_ID,
-        title: entry.center_goal,
-        is_default: false,
-        is_public: true,
-        is_template: true,
-        domain: domainSlug,
-        language: entry.language ?? null,
-        share_slug: nanoid(12),
-      },
-      select: { id: true },
-    });
-
-    // Root level (depth=0): center_goal + sub_goals + labels
-    const rootLevel = await prisma.user_mandala_levels.create({
-      data: {
-        mandala_id: mandala.id,
-        level_key: 'root',
-        center_goal: entry.center_goal,
-        center_label: entry.center_label ?? null,
-        subjects: entry.sub_goals.slice(0, 8),
-        subject_labels: entry.sub_labels?.slice(0, 8) ?? [],
-        depth: 0,
-        position: 0,
-      },
-    });
-
-    // Sub-levels (depth=1): each sub_goal + its actions
-    for (let i = 0; i < Math.min(entry.sub_goals.length, 8); i++) {
-      const subGoal = entry.sub_goals[i]!;
-      const actions = entry.actions[subGoal] ?? [];
-
-      // Clean [HIGH] tags from action text
-      const cleanActions = actions
-        .slice(0, 8)
-        .map((a) => a.replace(/\[HIGH\]\s*/g, ''));
-
-      const subLabel = entry.sub_labels?.[i] ?? null;
-      await prisma.user_mandala_levels.create({
-        data: {
-          mandala_id: mandala.id,
-          level_key: `sub-${i}`,
-          center_goal: subGoal,
-          center_label: subLabel,
-          subjects: cleanActions,
-          depth: 1,
-          position: i,
-          parent_level_id: rootLevel.id,
-        },
-      });
-    }
-
-    inserted++;
-    if (inserted % 50 === 0) {
-      console.log(`  ... ${inserted} inserted`);
-    }
+    const lang = entry.language ?? 'null';
+    parsed.push({ entry, domainSlug, dedupKey: `${entry.center_goal}||${domainSlug}||${lang}` });
   }
 
-  const mode = DRY_RUN ? '[DRY-RUN] ' : '';
-  console.log(`\n${mode}Seed complete: ${inserted} inserted, ${skipped} skipped, ${errors} errors`);
+  console.log(`  Parsed ${parsed.length} entries from JSONL (${errors} parse errors)`);
 
+  if (DRY_RUN) {
+    console.log(`\n[DRY-RUN] Seed complete: ${parsed.length} would insert, 0 skipped, ${errors} errors`);
+    return { inserted: parsed.length, skipped: 0, errors };
+  }
+
+  // Phase 2: Pre-fetch existing templates in one query (dedup)
+  const existingRows = await prisma.$queryRawUnsafe<{ title: string; domain: string; language: string | null }[]>(
+    `SELECT title, domain, language FROM user_mandalas
+     WHERE is_template = true AND user_id = $1::uuid`,
+    SYSTEM_TEMPLATE_USER_ID,
+  );
+  const existingKeys = new Set(
+    existingRows.map((r) => `${r.title}||${r.domain}||${r.language ?? 'null'}`),
+  );
+  console.log(`  Existing templates in DB: ${existingKeys.size}`);
+
+  const newEntries = parsed.filter((p) => !existingKeys.has(p.dedupKey));
+  const skipped = parsed.length - newEntries.length;
+  console.log(`  New to insert: ${newEntries.length}, skipped (existing): ${skipped}`);
+
+  if (newEntries.length === 0) {
+    console.log('\nSeed complete: 0 inserted, all already exist');
+    return { inserted: 0, skipped, errors };
+  }
+
+  // Phase 3: Batch insert using $transaction
+  let inserted = 0;
+  for (let i = 0; i < newEntries.length; i += BATCH_SIZE) {
+    const batch = newEntries.slice(i, i + BATCH_SIZE);
+    await prisma.$transaction(async (tx) => {
+      for (const { entry, domainSlug } of batch) {
+        const mandala = await tx.user_mandalas.create({
+          data: {
+            user_id: SYSTEM_TEMPLATE_USER_ID,
+            title: entry.center_goal,
+            is_default: false,
+            is_public: true,
+            is_template: true,
+            domain: domainSlug,
+            language: entry.language ?? null,
+            share_slug: nanoid(12),
+          },
+          select: { id: true },
+        });
+
+        // Root level (depth=0)
+        const rootLevel = await tx.user_mandala_levels.create({
+          data: {
+            mandala_id: mandala.id,
+            level_key: 'root',
+            center_goal: entry.center_goal,
+            center_label: entry.center_label ?? null,
+            subjects: entry.sub_goals.slice(0, 8),
+            subject_labels: entry.sub_labels?.slice(0, 8) ?? [],
+            depth: 0,
+            position: 0,
+          },
+        });
+
+        // Sub-levels (depth=1)
+        for (let j = 0; j < Math.min(entry.sub_goals.length, 8); j++) {
+          const subGoal = entry.sub_goals[j]!;
+          const actions = entry.actions[subGoal] ?? [];
+          const cleanActions = actions.slice(0, 8).map((a) => a.replace(/\[HIGH\]\s*/g, ''));
+          const subLabel = entry.sub_labels?.[j] ?? null;
+
+          await tx.user_mandala_levels.create({
+            data: {
+              mandala_id: mandala.id,
+              level_key: `sub-${j}`,
+              center_goal: subGoal,
+              center_label: subLabel,
+              subjects: cleanActions,
+              depth: 1,
+              position: j,
+              parent_level_id: rootLevel.id,
+            },
+          });
+        }
+      }
+    });
+
+    inserted += batch.length;
+    console.log(`  ... ${inserted}/${newEntries.length} inserted (batch ${Math.floor(i / BATCH_SIZE) + 1})`);
+  }
+
+  console.log(`\nSeed complete: ${inserted} inserted, ${skipped} skipped, ${errors} errors`);
   return { inserted, skipped, errors };
 }
 
