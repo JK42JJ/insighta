@@ -13,10 +13,19 @@
  *   { center_goal, domain, sub_goals[], actions: { [sub_goal]: string[] }, language }
  */
 
-import { getPrismaClient } from '../../src/modules/database/client';
+import { PrismaClient } from '@prisma/client';
 import { nanoid } from 'nanoid';
 import * as fs from 'fs';
 import * as readline from 'readline';
+
+// Standalone Prisma client — avoids config/index.ts full env validation
+let prisma: PrismaClient | null = null;
+function getPrisma(): PrismaClient {
+  if (!prisma) {
+    prisma = new PrismaClient();
+  }
+  return prisma;
+}
 
 // System user for template ownership
 const SYSTEM_TEMPLATE_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -64,7 +73,7 @@ interface V3Entry {
 }
 
 async function ensureSystemUser() {
-  const prisma = getPrismaClient();
+  const prisma = getPrisma();
 
   const existing = await prisma.$queryRawUnsafe<{ id: string }[]>(
     `SELECT id FROM auth.users WHERE id = $1::uuid`,
@@ -90,7 +99,7 @@ interface SeedResult {
 }
 
 async function seedFromJsonl(filePath: string): Promise<SeedResult> {
-  const prisma = getPrismaClient();
+  const prisma = getPrisma();
   const fileStream = fs.createReadStream(filePath);
   const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
@@ -206,7 +215,7 @@ async function seedFromJsonl(filePath: string): Promise<SeedResult> {
 
 async function postSeedValidation(jsonlPath: string): Promise<boolean> {
   console.log('\n=== Post-Seed Validation ===');
-  const prisma = getPrismaClient();
+  const prisma = getPrisma();
   let pass = true;
 
   // 1. Count JSONL entries by language
