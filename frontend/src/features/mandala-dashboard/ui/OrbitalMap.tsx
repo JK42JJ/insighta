@@ -25,7 +25,7 @@ export function OrbitalMap({ centerLabel, cells }: OrbitalMapProps) {
         style={{
           width: 340,
           height: 340,
-          border: '1px dashed hsl(var(--border) / 0.15)',
+          border: '1px dashed hsl(var(--primary) / 0.08)',
         }}
       />
       <div
@@ -33,7 +33,7 @@ export function OrbitalMap({ centerLabel, cells }: OrbitalMapProps) {
         style={{
           width: 200,
           height: 200,
-          border: '1px dashed hsl(var(--border) / 0.15)',
+          border: '1px dashed hsl(var(--primary) / 0.08)',
         }}
       />
 
@@ -47,7 +47,7 @@ export function OrbitalMap({ centerLabel, cells }: OrbitalMapProps) {
         }}
       >
         <span
-          className="text-center text-sm font-extrabold leading-tight tracking-tight text-primary"
+          className="text-center text-base font-black leading-tight tracking-tight text-primary"
           style={{
             display: '-webkit-box',
             WebkitLineClamp: 2,
@@ -99,7 +99,7 @@ export function OrbitalMap({ centerLabel, cells }: OrbitalMapProps) {
                   cy={30}
                   r={RING_R}
                   fill="none"
-                  stroke="hsl(var(--border))"
+                  stroke={isEmpty ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
                   strokeWidth={3}
                   className="transition-opacity duration-200 group-hover:opacity-[0.15]"
                   style={{ opacity: isEmpty ? 0.25 : 0.08 }}
@@ -131,7 +131,7 @@ export function OrbitalMap({ centerLabel, cells }: OrbitalMapProps) {
                 className="absolute inset-0 grid place-items-center text-sm font-extrabold tracking-tight"
                 style={{
                   color: isEmpty ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary))',
-                  opacity: isEmpty ? 0.3 : 1,
+                  opacity: isEmpty ? 0.5 : 1,
                 }}
               >
                 {cell.videoCount}
