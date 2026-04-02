@@ -7,30 +7,12 @@ interface PillNavigatorProps {
   blocks: EditorBlock[];
   currentIndex: number;
   onSelect: (idx: number) => void;
-  onAiBlock: () => void;
 }
-
-const SPARKLE_SVG = (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-  </svg>
-);
 
 export default function PillNavigator({
   blocks,
   currentIndex,
   onSelect,
-  onAiBlock,
 }: PillNavigatorProps) {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -120,28 +102,6 @@ export default function PillNavigator({
         })}
       </div>
 
-      {/* AI block fill button */}
-      <button
-        onClick={onAiBlock}
-        className={[
-          'flex-shrink-0 w-10 h-14 rounded-xl flex items-center justify-center',
-          'bg-card border border-dashed border-primary/20 text-primary',
-          'transition-all duration-200 relative group',
-          'hover:bg-primary/[0.04] hover:border-primary/35',
-        ].join(' ')}
-        aria-label={t('editor.navigator.aiFill')}
-      >
-        <span className="opacity-60 group-hover:opacity-100 transition-opacity">{SPARKLE_SVG}</span>
-        <span
-          className={[
-            'absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap',
-            'text-[9px] font-semibold text-primary',
-            'opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none',
-          ].join(' ')}
-        >
-          {t('editor.navigator.aiFill')}
-        </span>
-      </button>
     </div>
   );
 }

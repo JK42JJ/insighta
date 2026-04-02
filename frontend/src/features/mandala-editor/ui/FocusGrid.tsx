@@ -25,6 +25,7 @@ interface FocusGridProps {
   onItemChange: (itemIdx: number, value: string) => void;
   onCenterChange: (value: string) => void;
   onAiCell: (itemIdx: number) => void;
+  onAiBlock: () => void;
 }
 
 /**
@@ -41,6 +42,7 @@ export default function FocusGrid({
   onItemChange,
   onCenterChange,
   onAiCell,
+  onAiBlock,
 }: FocusGridProps) {
   const { t } = useTranslation();
   const ghostSuggestions = t('editor.ghostSuggestions', { returnObjects: true }) as string[];
@@ -133,71 +135,90 @@ export default function FocusGrid({
               ].join(' ')}
               role="gridcell"
             >
-              {/* Cell number (top-left, hidden for center) */}
-              {!isCenter && (
-                <span className="absolute top-[7px] left-[9px] text-[9px] font-bold text-muted-foreground/50">
-                  {itemIdx + 1}
-                </span>
-              )}
-
-              {/* Input */}
-              <input
-                ref={(el) => {
-                  inputRefs.current[cellIdx] = el;
-                }}
-                type="text"
-                value={value}
-                placeholder={isCenter ? t('editor.grid.centerPlaceholder') : ghost}
-                onChange={(e) => handleChange(cellIdx, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(e, cellIdx)}
-                className={[
-                  'w-full text-center bg-transparent border-none outline-none leading-snug',
-                  isCenter
-                    ? 'text-[15px] font-extrabold text-primary placeholder:text-primary/35'
-                    : 'text-[13px] font-semibold text-foreground placeholder:text-primary/25 placeholder:italic placeholder:font-medium placeholder:text-xs',
-                ].join(' ')}
-                aria-label={
-                  isCenter ? t('editor.grid.center') : t('editor.grid.item', { index: itemIdx + 1 })
-                }
-              />
-
-              {/* Filled indicator: small teal dot (bottom-right) */}
-              {hasValue && !isCenter && (
-                <span className="absolute bottom-[7px] right-[9px] w-[5px] h-[5px] rounded-full bg-teal-400/50" />
-              )}
-
-              {/* AI sparkle icon (top-right, empty cells only, not center) */}
-              {!hasValue && !isCenter && (
+              {isCenter ? (
+                /* ─── Center cell: readOnly label + AI block fill ─── */
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAiCell(itemIdx);
-                  }}
-                  className={[
-                    'absolute top-1.5 right-[7px] w-[22px] h-[22px] rounded-md',
-                    'grid place-items-center bg-primary/[0.06] border border-primary/10',
-                    'opacity-0 group-hover:opacity-100 group-hover:editor-sparkle-in',
-                    'cursor-pointer z-[2] transition-opacity',
-                    'hover:bg-primary/[0.12] hover:border-primary/25',
-                  ].join(' ')}
-                  aria-label={t('editor.grid.aiSuggestion', { index: itemIdx + 1 })}
+                  onClick={onAiBlock}
+                  className="flex flex-col items-center gap-1.5 w-full cursor-pointer"
+                  aria-label={t('editor.navigator.aiFill')}
                 >
-                  {SPARKLE_SVG}
+                  <span
+                    className="text-[14px] font-extrabold text-primary text-center leading-tight"
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {block.name}
+                  </span>
+                  <span className="opacity-40 group-hover:opacity-80 transition-opacity">
+                    {SPARKLE_SVG}
+                  </span>
                 </button>
-              )}
+              ) : (
+                /* ─── Regular cell: editable input with 2-line clamp display ─── */
+                <>
+                  {/* Cell number */}
+                  <span className="absolute top-[7px] left-[9px] text-[9px] font-bold text-muted-foreground/50">
+                    {itemIdx + 1}
+                  </span>
 
-              {/* "Tab 수락" hint (bottom, empty cells only, not center) */}
-              {!hasValue && !isCenter && (
-                <span
-                  className={[
-                    'absolute bottom-1.5 left-1/2 -translate-x-1/2',
-                    'text-[8px] font-semibold text-primary/20',
-                    'opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none',
-                  ].join(' ')}
-                >
-                  {t('editor.grid.tabAccept')}
-                </span>
+                  {/* Input */}
+                  <input
+                    ref={(el) => {
+                      inputRefs.current[cellIdx] = el;
+                    }}
+                    type="text"
+                    value={value}
+                    placeholder={ghost}
+                    onChange={(e) => handleChange(cellIdx, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, cellIdx)}
+                    className="w-full text-center bg-transparent border-none outline-none leading-snug text-[13px] font-semibold text-foreground placeholder:text-primary/25 placeholder:italic placeholder:font-medium placeholder:text-xs"
+                    aria-label={t('editor.grid.item', { index: itemIdx + 1 })}
+                  />
+
+                  {/* Filled indicator: small teal dot (bottom-right) */}
+                  {hasValue && (
+                    <span className="absolute bottom-[7px] right-[9px] w-[5px] h-[5px] rounded-full bg-teal-400/50" />
+                  )}
+
+                  {/* AI sparkle icon (top-right, empty cells only) */}
+                  {!hasValue && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAiCell(itemIdx);
+                      }}
+                      className={[
+                        'absolute top-1.5 right-[7px] w-[22px] h-[22px] rounded-md',
+                        'grid place-items-center bg-primary/[0.06] border border-primary/10',
+                        'opacity-0 group-hover:opacity-100 group-hover:editor-sparkle-in',
+                        'cursor-pointer z-[2] transition-opacity',
+                        'hover:bg-primary/[0.12] hover:border-primary/25',
+                      ].join(' ')}
+                      aria-label={t('editor.grid.aiSuggestion', { index: itemIdx + 1 })}
+                    >
+                      {SPARKLE_SVG}
+                    </button>
+                  )}
+
+                  {/* "Tab 수락" hint */}
+                  {!hasValue && (
+                    <span
+                      className={[
+                        'absolute bottom-1.5 left-1/2 -translate-x-1/2',
+                        'text-[8px] font-semibold text-primary/20',
+                        'opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none',
+                      ].join(' ')}
+                    >
+                      {t('editor.grid.tabAccept')}
+                    </span>
+                  )}
+                </>
               )}
             </div>
           );

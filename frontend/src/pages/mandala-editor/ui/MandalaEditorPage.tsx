@@ -160,7 +160,6 @@ export default function MandalaEditorPage() {
           blocks={blocks}
           currentIndex={currentBlockIndex}
           onSelect={selectBlock}
-          onAiBlock={handleAiBlock}
         />
       )}
 
@@ -171,6 +170,7 @@ export default function MandalaEditorPage() {
           onItemChange={handleItemChange}
           onCenterChange={handleCenterChange}
           onAiCell={handleAiCell}
+          onAiBlock={handleAiBlock}
         />
       )}
 
