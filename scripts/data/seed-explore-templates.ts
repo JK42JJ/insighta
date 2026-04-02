@@ -17,14 +17,13 @@ import { PrismaClient } from '@prisma/client';
 import { nanoid } from 'nanoid';
 import * as fs from 'fs';
 import * as readline from 'readline';
+import * as crypto from 'crypto';
 
 // Standalone Prisma client — avoids config/index.ts full env validation
 let prisma: PrismaClient | null = null;
 function getPrisma(): PrismaClient {
   if (!prisma) {
-    prisma = new PrismaClient({
-      transactionOptions: { timeout: TRANSACTION_TIMEOUT_MS },
-    });
+    prisma = new PrismaClient();
   }
   return prisma;
 }
@@ -100,9 +99,6 @@ interface SeedResult {
   errors: number;
 }
 
-const BATCH_SIZE = 10;
-const TRANSACTION_TIMEOUT_MS = 30_000;
-
 interface ParsedEntry {
   entry: V3Entry;
   domainSlug: string;
@@ -165,66 +161,81 @@ async function seedFromJsonl(filePath: string): Promise<SeedResult> {
     return { inserted: 0, skipped, errors };
   }
 
-  // Phase 3: Batch insert using $transaction
-  let inserted = 0;
-  for (let i = 0; i < newEntries.length; i += BATCH_SIZE) {
-    const batch = newEntries.slice(i, i + BATCH_SIZE);
-    await prisma.$transaction(async (tx) => {
-      for (const { entry, domainSlug } of batch) {
-        const mandala = await tx.user_mandalas.create({
-          data: {
-            user_id: SYSTEM_TEMPLATE_USER_ID,
-            title: entry.center_goal,
-            is_default: false,
-            is_public: true,
-            is_template: true,
-            domain: domainSlug,
-            language: entry.language ?? null,
-            share_slug: nanoid(12),
-          },
-          select: { id: true },
-        });
+  // Phase 3: Bulk insert using createMany (3 round trips total)
+  // Pre-generate all UUIDs so we can set FK references without round trips
 
-        // Root level (depth=0)
-        const rootLevel = await tx.user_mandala_levels.create({
-          data: {
-            mandala_id: mandala.id,
-            level_key: 'root',
-            center_goal: entry.center_goal,
-            center_label: entry.center_label ?? null,
-            subjects: entry.sub_goals.slice(0, 8),
-            subject_labels: entry.sub_labels?.slice(0, 8) ?? [],
-            depth: 0,
-            position: 0,
-          },
-        });
+  // 3a. Prepare mandala + level data with pre-generated IDs
+  type MandalaRow = { id: string; user_id: string; title: string; is_default: boolean; is_public: boolean; is_template: boolean; domain: string; language: string | null; share_slug: string; position: number };
+  type LevelRow = { id: string; mandala_id: string; level_key: string; center_goal: string; center_label: string | null; subjects: string[]; subject_labels: string[]; depth: number; position: number; parent_level_id: string | null; color: string };
 
-        // Sub-levels (depth=1)
-        for (let j = 0; j < Math.min(entry.sub_goals.length, 8); j++) {
-          const subGoal = entry.sub_goals[j]!;
-          const actions = entry.actions[subGoal] ?? [];
-          const cleanActions = actions.slice(0, 8).map((a) => a.replace(/\[HIGH\]\s*/g, ''));
-          const subLabel = entry.sub_labels?.[j] ?? null;
+  const mandalaRows: MandalaRow[] = [];
+  const rootLevelRows: LevelRow[] = [];
+  const subLevelRows: LevelRow[] = [];
 
-          await tx.user_mandala_levels.create({
-            data: {
-              mandala_id: mandala.id,
-              level_key: `sub-${j}`,
-              center_goal: subGoal,
-              center_label: subLabel,
-              subjects: cleanActions,
-              depth: 1,
-              position: j,
-              parent_level_id: rootLevel.id,
-            },
-          });
-        }
-      }
+  for (const { entry, domainSlug } of newEntries) {
+    const mandalaId = crypto.randomUUID();
+    const rootLevelId = crypto.randomUUID();
+    const subjects = entry.sub_goals.slice(0, 8);
+
+    mandalaRows.push({
+      id: mandalaId,
+      user_id: SYSTEM_TEMPLATE_USER_ID,
+      title: entry.center_goal,
+      is_default: false,
+      is_public: true,
+      is_template: true,
+      domain: domainSlug,
+      language: entry.language ?? null,
+      share_slug: nanoid(12),
+      position: 0,
     });
 
-    inserted += batch.length;
-    console.log(`  ... ${inserted}/${newEntries.length} inserted (batch ${Math.floor(i / BATCH_SIZE) + 1})`);
+    rootLevelRows.push({
+      id: rootLevelId,
+      mandala_id: mandalaId,
+      level_key: 'root',
+      center_goal: entry.center_goal,
+      center_label: entry.center_label ?? null,
+      subjects,
+      subject_labels: entry.sub_labels?.slice(0, 8) ?? [],
+      depth: 0,
+      position: 0,
+      parent_level_id: null,
+      color: '',
+    });
+
+    for (let j = 0; j < Math.min(subjects.length, 8); j++) {
+      const subGoal = subjects[j]!;
+      const actions = entry.actions[subGoal] ?? [];
+      const cleanActions = actions.slice(0, 8).map((a) => a.replace(/\[HIGH\]\s*/g, ''));
+
+      subLevelRows.push({
+        id: crypto.randomUUID(),
+        mandala_id: mandalaId,
+        level_key: `sub-${j}`,
+        center_goal: subGoal,
+        center_label: entry.sub_labels?.[j] ?? null,
+        subjects: cleanActions,
+        subject_labels: [],
+        depth: 1,
+        position: j,
+        parent_level_id: rootLevelId,
+        color: '',
+      });
+    }
   }
+
+  // 3b. Bulk insert: mandalas → root levels → sub levels (3 DB round trips)
+  console.log(`  Inserting ${mandalaRows.length} mandalas...`);
+  await prisma.user_mandalas.createMany({ data: mandalaRows, skipDuplicates: true });
+
+  console.log(`  Inserting ${rootLevelRows.length} root levels...`);
+  await prisma.user_mandala_levels.createMany({ data: rootLevelRows, skipDuplicates: true });
+
+  console.log(`  Inserting ${subLevelRows.length} sub levels...`);
+  await prisma.user_mandala_levels.createMany({ data: subLevelRows, skipDuplicates: true });
+
+  const inserted = mandalaRows.length;
 
   console.log(`\nSeed complete: ${inserted} inserted, ${skipped} skipped, ${errors} errors`);
   return { inserted, skipped, errors };
