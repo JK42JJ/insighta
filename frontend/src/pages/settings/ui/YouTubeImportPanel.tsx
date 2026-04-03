@@ -1,5 +1,5 @@
 /**
- * YouTube Import Panel — dropdown multi-select for subscriptions & playlists
+ * YouTube Import Panel — multi-select for subscriptions & playlists
  *
  * Fetches user's YouTube library via OAuth and displays as checkboxes.
  * Imports selected items as playlists via existing importPlaylist API.
@@ -9,10 +9,11 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { Label } from '@/shared/ui/label';
-import { Loader2, Download, Check, Youtube, ListVideo } from 'lucide-react';
+import { Loader2, Check, Youtube, ListVideo } from 'lucide-react';
 import { useToast } from '@/shared/lib/use-toast';
 import { apiClient } from '@/shared/lib/api-client';
 import { cn } from '@/shared/lib/utils';
+import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
 import {
   useYouTubeSubscriptions,
   useYouTubePlaylists,
@@ -26,6 +27,7 @@ interface YouTubeImportPanelProps {
 }
 
 type ImportTab = 'playlists' | 'subscriptions';
+type SortOption = 'name' | 'count' | 'date';
 
 export function YouTubeImportPanel({
   registeredPlaylistIds,
@@ -36,9 +38,11 @@ export function YouTubeImportPanel({
   const [activeTab, setActiveTab] = useState<ImportTab>('playlists');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isImporting, setIsImporting] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>('name');
 
-  const subs = useYouTubeSubscriptions();
-  const pls = useYouTubePlaylists();
+  const ytAuth = useYouTubeAuth();
+  const subs = useYouTubeSubscriptions(ytAuth.isConnected);
+  const pls = useYouTubePlaylists(ytAuth.isConnected);
 
   const subscriptions = subs.data?.pages.flatMap((p) => p.data) ?? [];
   const playlists = pls.data?.pages.flatMap((p) => p.data) ?? [];
@@ -48,8 +52,13 @@ export function YouTubeImportPanel({
   const playlistsError = pls.error;
 
   const isNotConnected =
-    subsError?.message?.includes('YOUTUBE_NOT_CONNECTED') ||
-    playlistsError?.message?.includes('YOUTUBE_NOT_CONNECTED');
+    !ytAuth.isConnected ||
+    (subsError as { code?: string })?.code === 'YOUTUBE_NOT_CONNECTED' ||
+    (playlistsError as { code?: string })?.code === 'YOUTUBE_NOT_CONNECTED';
+
+  // B-2: Counts for tabs
+  const playlistCount = playlists.length;
+  const subsCount = subscriptions.length;
 
   const toggleSelection = (id: string) => {
     setSelectedIds((prev) => {
@@ -104,23 +113,43 @@ export function YouTubeImportPanel({
     }
   };
 
+  // B-1: Not connected → show connect button
   if (isNotConnected) {
     return (
-      <div className="text-center py-6 text-muted-foreground">
-        <Youtube className="w-8 h-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm">
-          {t('youtube.connectFirst', 'Connect your YouTube account to import your library')}
-        </p>
+      <div className="space-y-3">
+        <Label>{t('youtube.importFromLibrary', 'Import from YouTube')}</Label>
+        <div className="text-center py-6 rounded-lg border border-border/30 bg-surface-light/30">
+          <Youtube className="w-8 h-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm text-muted-foreground">
+            {t('youtube.connectFirst', 'Connect your YouTube account to import your library')}
+          </p>
+          <Button
+            size="sm"
+            className="mt-3 bg-red-600 hover:bg-red-700 text-white gap-1.5"
+            onClick={ytAuth.connect}
+            disabled={ytAuth.isConnecting}
+          >
+            {ytAuth.isConnecting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Youtube className="h-3.5 w-3.5" />
+            )}
+            {t('youtube.connectGoogle')}
+          </Button>
+        </div>
       </div>
     );
   }
 
-  const items: Array<{
+  // B-3: Sort items
+  const rawItems: Array<{
     id: string;
     title: string;
     subtitle: string;
     thumbnailUrl: string;
     isRegistered: boolean;
+    itemCount: number;
+    date: string;
   }> =
     activeTab === 'playlists'
       ? (playlists || []).map((p: YouTubePlaylistItem) => ({
@@ -129,6 +158,8 @@ export function YouTubeImportPanel({
           subtitle: t('playlist.videoCount', { count: p.itemCount }),
           thumbnailUrl: p.thumbnailUrl,
           isRegistered: registeredPlaylistIds.has(p.playlistId),
+          itemCount: p.itemCount,
+          date: p.publishedAt,
         }))
       : (subscriptions || []).map((s: YouTubeSubscriptionItem) => ({
           id: s.channelId,
@@ -136,7 +167,15 @@ export function YouTubeImportPanel({
           subtitle: s.description.slice(0, 60) || t('youtube.channel'),
           thumbnailUrl: s.thumbnailUrl,
           isRegistered: registeredPlaylistIds.has(s.channelId),
+          itemCount: 0,
+          date: s.publishedAt,
         }));
+
+  const items = [...rawItems].sort((a, b) => {
+    if (sortBy === 'name') return a.title.localeCompare(b.title);
+    if (sortBy === 'count') return b.itemCount - a.itemCount;
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
 
   const isLoading = activeTab === 'playlists' ? playlistsLoading : subsLoading;
   const activeQuery = activeTab === 'playlists' ? pls : subs;
@@ -152,19 +191,30 @@ export function YouTubeImportPanel({
             {isImporting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Download className="h-3.5 w-3.5" />
+              <Check className="h-3.5 w-3.5" />
             )}
-            {t('youtube.importBtn', { count: selectedIds.size })}
+            {/* B-4: Clear label */}
+            {t('youtube.addSelected', { count: selectedIds.size })}
           </Button>
         )}
       </div>
 
-      {/* Sub-tabs */}
+      {/* Sub-tabs with counts (B-2) */}
       <div className="flex gap-1 p-0.5 rounded-md bg-surface-light/30 border border-border/20">
         {[
-          { id: 'playlists' as ImportTab, icon: ListVideo, label: t('youtube.tabPlaylists') },
-          { id: 'subscriptions' as ImportTab, icon: Youtube, label: t('youtube.tabSubscriptions') },
-        ].map(({ id, icon: Icon, label }) => (
+          {
+            id: 'playlists' as ImportTab,
+            icon: ListVideo,
+            label: t('youtube.tabPlaylists'),
+            count: playlistCount,
+          },
+          {
+            id: 'subscriptions' as ImportTab,
+            icon: Youtube,
+            label: t('youtube.tabSubscriptions'),
+            count: subsCount,
+          },
+        ].map(({ id, icon: Icon, label, count }) => (
           <button
             key={id}
             onClick={() => {
@@ -180,9 +230,32 @@ export function YouTubeImportPanel({
           >
             <Icon className="h-3 w-3" />
             {label}
+            {count > 0 && <span className="text-[10px] opacity-70">({count})</span>}
           </button>
         ))}
       </div>
+
+      {/* B-3: Sort options */}
+      {items.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          {(['name', 'count', 'date'] as SortOption[]).map((opt) => (
+            <button
+              key={opt}
+              onClick={() => setSortBy(opt)}
+              className={cn(
+                'px-2 py-0.5 rounded text-[10px] font-medium transition-colors',
+                sortBy === opt
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {opt === 'name' && t('common.name', 'Name')}
+              {opt === 'count' && t('common.videos', 'Videos')}
+              {opt === 'date' && t('common.date', 'Date')}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Items list */}
       {isLoading ? (
@@ -243,9 +316,10 @@ export function YouTubeImportPanel({
                 <p className="text-xs text-muted-foreground truncate">{item.subtitle}</p>
               </div>
 
+              {/* B-4: "등록됨" label */}
               {item.isRegistered && (
                 <span className="text-[10px] text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded-full flex-shrink-0">
-                  {t('youtube.added')}
+                  {t('youtube.registered', 'Registered')}
                 </span>
               )}
             </button>
@@ -265,6 +339,11 @@ export function YouTubeImportPanel({
           )}
         </div>
       )}
+
+      {/* B-5: Channel/Hashtag coming soon */}
+      <p className="text-[11px] text-muted-foreground">
+        {t('youtube.channelHashtagSoon', 'Channel and hashtag sources — coming soon')}
+      </p>
     </div>
   );
 }

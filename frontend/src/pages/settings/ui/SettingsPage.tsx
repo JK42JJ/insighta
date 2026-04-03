@@ -18,7 +18,7 @@ import { useLocalCardsAsInsight } from '@/features/card-management/model/useLoca
 import { apiClient } from '@/shared/lib/api-client';
 import { MandalaSettingsTab } from './MandalaSettingsTab';
 import { ProfileSettingsTab } from './ProfileSettingsTab';
-import { SourceManagementTab } from './SourceManagementTab';
+import { SourceManagementTabV2 } from './SourceManagementTabV2';
 import { ConnectedServicesTab } from './ConnectedServicesTab';
 import { SubscriptionSettingsTab } from './SubscriptionSettingsTab';
 import {
@@ -411,7 +411,7 @@ export default function SettingsPage() {
               {t('settings.sourceManagementDesc')}
             </p>
           </div>
-          <SourceManagementTab />
+          <SourceManagementTabV2 />
         </>
       )}
 

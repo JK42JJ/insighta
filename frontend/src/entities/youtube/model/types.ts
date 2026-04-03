@@ -31,6 +31,7 @@ export interface YouTubePlaylist {
   last_synced_at: string | null;
   sync_status: SyncStatus;
   sync_error: string | null;
+  is_paused: boolean;
   created_at: string;
   updated_at: string;
 }

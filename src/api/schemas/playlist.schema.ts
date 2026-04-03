@@ -65,6 +65,15 @@ export const DeletePlaylistParamsSchema = z.object({
 
 export type DeletePlaylistParams = z.infer<typeof DeletePlaylistParamsSchema>;
 
+/**
+ * Pause/Resume playlist params
+ */
+export const PausePlaylistParamsSchema = z.object({
+  id: z.string().uuid('Invalid playlist ID format'),
+});
+
+export type PausePlaylistParams = z.infer<typeof PausePlaylistParamsSchema>;
+
 // ============================================================================
 // Response Types
 // ============================================================================
@@ -79,6 +88,7 @@ export interface PlaylistResponse {
   thumbnailUrl: string | null;
   itemCount: number;
   syncStatus: string;
+  isPaused: boolean;
   lastSyncedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -140,6 +150,7 @@ const playlistResponseSchema = {
     thumbnailUrl: { type: ['string', 'null'] },
     itemCount: { type: 'integer' },
     syncStatus: { type: 'string', enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED'] },
+    isPaused: { type: 'boolean' },
     lastSyncedAt: { type: ['string', 'null'], format: 'date-time' },
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
@@ -152,6 +163,7 @@ const playlistResponseSchema = {
     'channelTitle',
     'itemCount',
     'syncStatus',
+    'isPaused',
     'createdAt',
     'updatedAt',
   ],
@@ -428,6 +440,74 @@ export const syncPlaylistSchema: FastifySchema = {
 /**
  * DELETE /api/v1/playlists/:id - Delete playlist
  */
+/**
+ * PATCH /api/v1/playlists/:id/pause - Pause playlist
+ */
+export const pausePlaylistSchema: FastifySchema = {
+  description: 'Pause a playlist (exclude from auto-sync)',
+  tags: ['playlists'],
+  security: [{ bearerAuth: [] }],
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: {
+        type: 'string',
+        format: 'uuid',
+        description: 'Playlist ID',
+      },
+    },
+  },
+  response: {
+    200: {
+      description: 'Playlist paused',
+      type: 'object',
+      properties: {
+        status: { type: 'string' },
+        isPaused: { type: 'boolean' },
+      },
+      required: ['status', 'isPaused'],
+    },
+    401: errorResponseSchema,
+    404: errorResponseSchema,
+    500: errorResponseSchema,
+  },
+};
+
+/**
+ * PATCH /api/v1/playlists/:id/resume - Resume playlist
+ */
+export const resumePlaylistSchema: FastifySchema = {
+  description: 'Resume a paused playlist (re-enable auto-sync)',
+  tags: ['playlists'],
+  security: [{ bearerAuth: [] }],
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: {
+        type: 'string',
+        format: 'uuid',
+        description: 'Playlist ID',
+      },
+    },
+  },
+  response: {
+    200: {
+      description: 'Playlist resumed',
+      type: 'object',
+      properties: {
+        status: { type: 'string' },
+        isPaused: { type: 'boolean' },
+      },
+      required: ['status', 'isPaused'],
+    },
+    401: errorResponseSchema,
+    404: errorResponseSchema,
+    500: errorResponseSchema,
+  },
+};
+
 export const deletePlaylistSchema: FastifySchema = {
   description: 'Delete a playlist and all its items',
   tags: ['playlists'],

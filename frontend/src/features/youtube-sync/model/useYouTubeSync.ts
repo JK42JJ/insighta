@@ -52,6 +52,7 @@ interface PlaylistApiResponse {
   thumbnailUrl?: string | null;
   channelTitle?: string | null;
   itemCount?: number;
+  isPaused?: boolean;
   lastSyncedAt?: string | null;
   syncStatus?: string;
   createdAt: string;
@@ -72,6 +73,7 @@ function mapPlaylistResponse(p: PlaylistApiResponse): YouTubePlaylist {
     last_synced_at: p.lastSyncedAt ?? null,
     sync_status: normalizeStatus(p.syncStatus),
     sync_error: null,
+    is_paused: p.isPaused ?? false,
     created_at: p.createdAt,
     updated_at: p.updatedAt,
   } as YouTubePlaylist;
@@ -195,6 +197,58 @@ export function useDeletePlaylist() {
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error?.message || 'Failed to delete playlist');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.playlists });
+    },
+  });
+}
+
+/**
+ * Hook to pause a playlist (exclude from auto-sync)
+ */
+export function usePausePlaylist() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (playlistId: string): Promise<void> => {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/v1/playlists/${playlistId}/pause`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to pause playlist');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.playlists });
+    },
+  });
+}
+
+/**
+ * Hook to resume a paused playlist (re-enable auto-sync)
+ */
+export function useResumePlaylist() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (playlistId: string): Promise<void> => {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/v1/playlists/${playlistId}/resume`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to resume playlist');
       }
     },
     onSuccess: () => {
@@ -466,6 +520,8 @@ export function useYouTubeSync() {
   const addPlaylist = useAddPlaylist();
   const syncPlaylist = useSyncPlaylist();
   const deletePlaylist = useDeletePlaylist();
+  const pausePlaylist = usePausePlaylist();
+  const resumePlaylist = useResumePlaylist();
   const updateSettings = useUpdateSyncSettings();
   const syncAll = useSyncAllPlaylists();
 
@@ -478,15 +534,25 @@ export function useYouTubeSync() {
     isAdding: addPlaylist.isPending,
     isSyncing: syncPlaylist.isPending,
     isDeleting: deletePlaylist.isPending,
+    isPausing: pausePlaylist.isPending,
+    isResuming: resumePlaylist.isPending,
     isSyncingAll: syncAll.isPending,
 
     // Error states
-    error: playlists.error || addPlaylist.error || syncPlaylist.error || deletePlaylist.error,
+    error:
+      playlists.error ||
+      addPlaylist.error ||
+      syncPlaylist.error ||
+      deletePlaylist.error ||
+      pausePlaylist.error ||
+      resumePlaylist.error,
 
     // Actions
     addPlaylist: addPlaylist.mutateAsync,
     syncPlaylist: syncPlaylist.mutateAsync,
     deletePlaylist: deletePlaylist.mutateAsync,
+    pausePlaylist: pausePlaylist.mutateAsync,
+    resumePlaylist: resumePlaylist.mutateAsync,
     updateSettings: updateSettings.mutateAsync,
     syncAll: syncAll.mutateAsync,
     refetch: playlists.refetch,

@@ -140,6 +140,8 @@ export function useYouTubeConnect() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: youtubeAuthKeys.status });
+      queryClient.invalidateQueries({ queryKey: ['youtube', 'subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['youtube', 'playlists-library'] });
     },
   });
 }
@@ -164,6 +166,8 @@ export function useYouTubeDisconnect() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: youtubeAuthKeys.status });
+      queryClient.invalidateQueries({ queryKey: ['youtube', 'subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['youtube', 'playlists-library'] });
     },
   });
 }

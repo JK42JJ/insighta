@@ -5,7 +5,7 @@ import { Switch } from '@/shared/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
 import { useUpdateSyncSettings } from '@/features/youtube-sync/model/useYouTubeSync';
-import { YouTubeSyncCard } from './YouTubeSyncCard';
+import { YouTubeConnectionCard } from './YouTubeConnectionCard';
 import { LlmKeysSettingsTab } from './LlmKeysSettingsTab';
 import type { SyncInterval } from '@/entities/youtube/model/types';
 
@@ -28,7 +28,7 @@ export function ConnectedServicesTab() {
 
   return (
     <div className="space-y-6">
-      <YouTubeSyncCard />
+      <YouTubeConnectionCard />
       <LlmKeysSettingsTab />
 
       {/* Sync Settings Card */}

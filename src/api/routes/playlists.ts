@@ -8,22 +8,27 @@ import { FastifyPluginCallback } from 'fastify';
 import { getPlaylistManager } from '../../modules/playlist';
 import { getSyncEngine } from '../../modules/sync';
 import { getAutoSyncScheduler } from '../../modules/scheduler/auto-sync';
+import { getPrismaClient } from '../../modules/database/client';
 import {
   ImportPlaylistRequestSchema,
   ListPlaylistsQuerySchema,
   GetPlaylistParamsSchema,
   SyncPlaylistParamsSchema,
   DeletePlaylistParamsSchema,
+  PausePlaylistParamsSchema,
   importPlaylistSchema,
   listPlaylistsSchema,
   getPlaylistSchema,
   syncPlaylistSchema,
   deletePlaylistSchema,
+  pausePlaylistSchema,
+  resumePlaylistSchema,
   type ImportPlaylistRequest,
   type ListPlaylistsQuery,
   type GetPlaylistParams,
   type SyncPlaylistParams,
   type DeletePlaylistParams,
+  type PausePlaylistParams,
   type PlaylistResponse,
   type ListPlaylistsResponse,
   type PlaylistWithItemsResponse,
@@ -76,6 +81,7 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         thumbnailUrl: playlist.thumbnail_url ?? null,
         itemCount: playlist.item_count ?? 0,
         syncStatus: playlist.sync_status ?? 'PENDING',
+        isPaused: playlist.is_paused ?? false,
         lastSyncedAt: playlist.last_synced_at?.toISOString() ?? null,
         createdAt: playlist.created_at.toISOString(),
         updatedAt: playlist.updated_at.toISOString(),
@@ -144,6 +150,7 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         thumbnailUrl: p.thumbnail_url ?? null,
         itemCount: p.item_count ?? 0,
         syncStatus: p.sync_status ?? 'PENDING',
+        isPaused: p.is_paused ?? false,
         lastSyncedAt: p.last_synced_at?.toISOString() ?? null,
         createdAt: p.created_at.toISOString(),
         updatedAt: p.updated_at.toISOString(),
@@ -192,6 +199,7 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         thumbnailUrl: playlist.thumbnail_url ?? null,
         itemCount: playlist.item_count ?? 0,
         syncStatus: playlist.sync_status ?? 'PENDING',
+        isPaused: playlist.is_paused ?? false,
         lastSyncedAt: playlist.last_synced_at?.toISOString() ?? null,
         createdAt: playlist.created_at.toISOString(),
         updatedAt: playlist.updated_at.toISOString(),
@@ -303,6 +311,106 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
         throw error;
       }
+    }
+  );
+
+  /**
+   * PATCH /api/v1/playlists/:id/title - Update playlist title
+   */
+  fastify.patch<{
+    Params: PausePlaylistParams;
+    Body: { title?: string };
+    Reply: { status: string };
+  }>(
+    '/:id/title',
+    {
+      onRequest: [fastify.authenticate],
+    },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        throw new Error('Unauthorized');
+      }
+
+      const { id } = PausePlaylistParamsSchema.parse(request.params);
+      const { title } = request.body || {};
+
+      // Verify ownership
+      await getManager().getPlaylist(id, request.user.userId);
+
+      const prisma = getPrismaClient();
+      await prisma.youtube_playlists.update({
+        where: { id },
+        data: {
+          ...(title !== undefined && { title }),
+          updated_at: new Date(),
+        },
+      });
+
+      logger.info('Playlist updated', { playlistId: id, userId: request.user.userId });
+
+      return reply.code(200).send({ status: 'ok' });
+    }
+  );
+
+  /**
+   * PATCH /api/v1/playlists/:id/pause - Pause playlist
+   */
+  fastify.patch<{ Params: PausePlaylistParams; Reply: { status: string; isPaused: boolean } }>(
+    '/:id/pause',
+    {
+      schema: pausePlaylistSchema,
+      onRequest: [fastify.authenticate],
+    },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        throw new Error('Unauthorized');
+      }
+
+      const { id } = PausePlaylistParamsSchema.parse(request.params);
+
+      // Verify ownership
+      await getManager().getPlaylist(id, request.user.userId);
+
+      const prisma = getPrismaClient();
+      await prisma.youtube_playlists.update({
+        where: { id },
+        data: { is_paused: true, updated_at: new Date() },
+      });
+
+      logger.info('Playlist paused', { playlistId: id, userId: request.user.userId });
+
+      return reply.code(200).send({ status: 'ok', isPaused: true });
+    }
+  );
+
+  /**
+   * PATCH /api/v1/playlists/:id/resume - Resume playlist
+   */
+  fastify.patch<{ Params: PausePlaylistParams; Reply: { status: string; isPaused: boolean } }>(
+    '/:id/resume',
+    {
+      schema: resumePlaylistSchema,
+      onRequest: [fastify.authenticate],
+    },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        throw new Error('Unauthorized');
+      }
+
+      const { id } = PausePlaylistParamsSchema.parse(request.params);
+
+      // Verify ownership
+      await getManager().getPlaylist(id, request.user.userId);
+
+      const prisma = getPrismaClient();
+      await prisma.youtube_playlists.update({
+        where: { id },
+        data: { is_paused: false, updated_at: new Date() },
+      });
+
+      logger.info('Playlist resumed', { playlistId: id, userId: request.user.userId });
+
+      return reply.code(200).send({ status: 'ok', isPaused: false });
     }
   );
 

@@ -12,7 +12,7 @@ interface WizardStepPreviewProps {
 
 export default function WizardStepPreview({
   template,
-  isLoadingDetail,
+  isLoadingDetail: _isLoadingDetail,
   onConfirm,
   onBack,
 }: WizardStepPreviewProps) {

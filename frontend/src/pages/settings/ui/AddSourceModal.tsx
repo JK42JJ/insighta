@@ -3,21 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
-import {
-  Loader2,
-  ListVideo,
-  Globe,
-  Rss,
-  Linkedin,
-  BookOpen,
-  Twitter,
-  FileText,
-  Headphones,
-  X,
-} from 'lucide-react';
+import { Loader2, X, Bot, Link } from 'lucide-react';
 import { apiClient } from '@/shared/lib/api-client';
 import { toast } from '@/shared/lib/use-toast';
 import { cn } from '@/shared/lib/utils';
+import { YouTubeImportPanel } from './YouTubeImportPanel';
+import { useYouTubeSync } from '@/features/youtube-sync/model/useYouTubeSync';
+import { useMandalaList, useCreateSourceMappings } from '@/features/mandala';
 
 interface AddSourceModalProps {
   isOpen: boolean;
@@ -25,56 +17,42 @@ interface AddSourceModalProps {
   onSourceAdded: () => void;
 }
 
-type SourceTypeId = 'youtube' | 'url' | 'rss';
-
-interface SourceTypeOption {
-  id: SourceTypeId;
-  name: string;
-  descKey: string;
-  icon: React.ComponentType<{ className?: string }>;
-  available: boolean;
-}
-
-const COMING_SOON_SOURCES = [
-  { id: 'linkedin', icon: Linkedin, nameKey: 'LinkedIn' },
-  { id: 'notion', icon: BookOpen, nameKey: 'Notion' },
-  { id: 'twitter', icon: Twitter, nameKey: 'X/Twitter' },
-  { id: 'file', icon: FileText, nameKey: 'File' },
-  { id: 'pocket', icon: BookOpen, nameKey: 'Pocket' },
-  { id: 'podcast', icon: Headphones, nameKey: 'Podcast' },
-];
+const COMING_SOON_SOURCES = ['URL', 'RSS', 'LinkedIn', 'Notion', 'Pocket', 'Podcast'];
 
 export function AddSourceModal({ isOpen, onClose, onSourceAdded }: AddSourceModalProps) {
   const { t } = useTranslation();
-  const [step, setStep] = useState<1 | 2>(1);
-  const [selectedType, setSelectedType] = useState<SourceTypeId | null>(null);
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [selectedMandalaId, setSelectedMandalaId] = useState<string | null>(null);
 
-  const SOURCE_TYPES: SourceTypeOption[] = [
-    {
-      id: 'youtube',
-      name: 'YouTube',
-      descKey: 'sources.youtube.desc',
-      icon: ListVideo,
-      available: true,
-    },
-    { id: 'url', name: 'URL', descKey: 'sources.url.desc', icon: Globe, available: false },
-    { id: 'rss', name: 'RSS', descKey: 'sources.rss.desc', icon: Rss, available: false },
-  ];
+  const ytSync = useYouTubeSync();
+  const { data: mandalaListData } = useMandalaList();
+  const mandalaOptions = mandalaListData?.mandalas ?? [];
+  const createSourceMappings = useCreateSourceMappings();
 
-  const handleSelectType = (typeId: SourceTypeId) => {
-    setSelectedType(typeId);
-    setStep(2);
-  };
+  const registeredPlaylistIds = new Set(ytSync.playlists.map((p) => p.youtube_playlist_id));
 
   const handleAddPlaylist = async () => {
     const url = playlistUrl.trim();
     if (!url) return;
     setIsAdding(true);
     try {
-      await apiClient.importPlaylist(url);
+      const result = await apiClient.importPlaylist(url);
       toast({ title: t('youtube.playlistAdded') });
+
+      // Create mandala mapping if selected
+      if (selectedMandalaId && result?.youtubeId) {
+        try {
+          await createSourceMappings.mutateAsync({
+            sourceType: 'playlist',
+            sourceIds: [result.youtubeId],
+            mandalaId: selectedMandalaId,
+          });
+        } catch {
+          // Non-fatal: source added, mapping failed
+        }
+      }
+
       onSourceAdded();
       handleClose();
     } catch {
@@ -85,16 +63,9 @@ export function AddSourceModal({ isOpen, onClose, onSourceAdded }: AddSourceModa
   };
 
   const handleClose = () => {
-    setStep(1);
-    setSelectedType(null);
     setPlaylistUrl('');
+    setSelectedMandalaId(null);
     onClose();
-  };
-
-  const handleBack = () => {
-    setStep(1);
-    setSelectedType(null);
-    setPlaylistUrl('');
   };
 
   if (!isOpen) return null;
@@ -104,119 +75,140 @@ export function AddSourceModal({ isOpen, onClose, onSourceAdded }: AddSourceModa
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
 
-      {/* Modal */}
-      <div className="relative bg-surface-mid border border-border/50 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+      {/* Modal — 640px wide */}
+      <div className="relative bg-surface-mid border border-border/50 rounded-xl shadow-2xl w-full max-w-[640px] mx-4 max-h-[85vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border/30">
-          <div>
-            <h2 className="text-base font-semibold">{t('settings.addSource')}</h2>
-            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-              <span className={cn('font-medium', step === 1 && 'text-primary')}>
-                1 {t('settings.selectSource')}
-              </span>
-              <span>{'>'}</span>
-              <span className={cn('font-medium', step === 2 && 'text-primary')}>
-                2 {t('settings.detailInput')}
-              </span>
-            </div>
-          </div>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border/30">
+          <h2 className="text-base font-semibold">{t('settings.addSource')}</h2>
           <button onClick={handleClose} className="text-muted-foreground hover:text-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="px-5 py-5">
-          {step === 1 && (
-            <div className="space-y-4">
-              {/* Available */}
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-3">
-                  {t('settings.available', 'Available')}
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {SOURCE_TYPES.map((src) => {
-                    const SrcIcon = src.icon;
-                    return (
-                      <button
-                        key={src.id}
-                        onClick={() => src.available && handleSelectType(src.id)}
-                        disabled={!src.available}
-                        className={cn(
-                          'flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors',
-                          src.available
-                            ? 'border-border/50 hover:border-primary/40 hover:bg-primary/5 cursor-pointer'
-                            : 'border-border/30 opacity-40 cursor-not-allowed'
-                        )}
-                      >
-                        <div className="w-9 h-9 rounded-lg bg-surface-light flex items-center justify-center">
-                          <SrcIcon className="w-5 h-5" />
-                        </div>
-                        <span className="text-xs font-medium">{src.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Coming Soon */}
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-3">
-                  {t('common.comingSoon')}
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {COMING_SOON_SOURCES.map((src) => {
-                    const SrcIcon = src.icon;
-                    return (
-                      <div
-                        key={src.id}
-                        className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border/20 opacity-30"
-                      >
-                        <div className="w-9 h-9 rounded-lg bg-surface-light flex items-center justify-center">
-                          <SrcIcon className="w-5 h-5" />
-                        </div>
-                        <span className="text-xs font-medium">{src.nameKey}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+        <div className="px-6 py-6 space-y-6 overflow-y-auto">
+          {/* URL Input */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Link className="w-4 h-4 text-muted-foreground" />
+              <Label className="text-sm font-medium">{t('sources.youtube.playlist')}</Label>
             </div>
-          )}
-
-          {step === 2 && selectedType === 'youtube' && (
-            <div className="space-y-4">
-              <button
-                onClick={handleBack}
-                className="text-xs text-muted-foreground hover:text-foreground mb-2"
-              >
-                {'<'} {t('common.back')}
-              </button>
-
-              <div className="space-y-2">
-                <Label>{t('sources.youtube.playlist')}</Label>
-                <p className="text-xs text-muted-foreground">{t('sources.youtube.playlistDesc')}</p>
-                <Input
-                  value={playlistUrl}
-                  onChange={(e) => setPlaylistUrl(e.target.value)}
-                  placeholder={t('youtube.playlistUrlPlaceholder')}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleAddPlaylist();
-                  }}
-                  className="bg-surface-light border-border/50"
-                />
-              </div>
-
+            <div className="flex gap-2">
+              <Input
+                value={playlistUrl}
+                onChange={(e) => setPlaylistUrl(e.target.value)}
+                placeholder={t('youtube.playlistUrlPlaceholder')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAddPlaylist();
+                }}
+                className="bg-surface-light border-border/50 flex-1"
+              />
               <Button
                 onClick={handleAddPlaylist}
                 disabled={!playlistUrl.trim() || isAdding}
-                className="w-full gap-2"
+                className="gap-1.5 px-4"
               >
-                {isAdding && <Loader2 className="h-4 w-4 animate-spin" />}
-                {t('settings.addSource')}
+                {isAdding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {t('common.add', 'Add')}
               </Button>
             </div>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-4">
+            <div className="flex-1 h-px bg-border/30" />
+            <span className="text-xs text-muted-foreground font-medium">
+              {t('common.or', 'or')}
+            </span>
+            <div className="flex-1 h-px bg-border/30" />
+          </div>
+
+          {/* YouTube Import Panel */}
+          <YouTubeImportPanel
+            registeredPlaylistIds={registeredPlaylistIds}
+            onImportComplete={onSourceAdded}
+          />
+
+          {/* Mandala Assignment — Radio List */}
+          {mandalaOptions.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-4">
+                <div className="flex-1 h-px bg-border/30" />
+                <span className="text-xs text-muted-foreground font-medium">
+                  {t('sources.assignMandala')}
+                </span>
+                <div className="flex-1 h-px bg-border/30" />
+              </div>
+              <p className="text-xs text-muted-foreground">{t('sources.assignMandalaDesc')}</p>
+              <p className="text-[11px] text-muted-foreground/70">
+                {t(
+                  'sources.mandalaApplyNote',
+                  'Applies to all sources added in this session. For individual mapping, use the mandala pills on each source card.'
+                )}
+              </p>
+              <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                {/* AI auto (default) */}
+                <button
+                  onClick={() => setSelectedMandalaId(null)}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors',
+                    selectedMandalaId === null
+                      ? 'bg-primary/5 border border-primary/30'
+                      : 'hover:bg-muted/50 border border-transparent'
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0',
+                      selectedMandalaId === null ? 'border-primary' : 'border-muted-foreground/40'
+                    )}
+                  >
+                    {selectedMandalaId === null && (
+                      <div className="w-2 h-2 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <Bot className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm font-medium">{t('sources.aiAuto')}</span>
+                    <p className="text-xs text-muted-foreground">
+                      {t('sources.aiAutoDesc', 'AI classifies videos automatically')}
+                    </p>
+                  </div>
+                </button>
+
+                {/* Mandala options */}
+                {mandalaOptions.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => setSelectedMandalaId(m.id === selectedMandalaId ? null : m.id)}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors',
+                      selectedMandalaId === m.id
+                        ? 'bg-primary/5 border border-primary/30'
+                        : 'hover:bg-muted/50 border border-transparent'
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0',
+                        selectedMandalaId === m.id ? 'border-primary' : 'border-muted-foreground/40'
+                      )}
+                    >
+                      {selectedMandalaId === m.id && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <span className="text-sm font-medium truncate">{m.title}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
+
+          {/* Coming Soon */}
+          <p className="text-xs text-muted-foreground text-center pt-2 pb-1">
+            {COMING_SOON_SOURCES.join(' · ')} — {t('common.comingSoon')}
+          </p>
         </div>
       </div>
     </div>

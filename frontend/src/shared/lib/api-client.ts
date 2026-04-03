@@ -18,6 +18,7 @@ const API_BASE_URL = VITE_API_URL.endsWith('/api') ? VITE_API_URL.slice(0, -4) :
 interface ApiError {
   message: string;
   statusCode: number;
+  code?: string;
   error?: string;
 }
 
@@ -36,6 +37,7 @@ interface Playlist {
   thumbnailUrl?: string;
   channelTitle?: string;
   itemCount: number;
+  isPaused?: boolean;
   publishedAt?: string;
   lastSyncedAt?: string;
   createdAt: string;
@@ -180,12 +182,14 @@ interface MandalaLevelBody {
 
 export class ApiHttpError extends Error {
   public readonly statusCode: number;
+  public readonly code: string | undefined;
   public readonly isTransient: boolean;
 
-  constructor(message: string, statusCode: number) {
+  constructor(message: string, statusCode: number, code?: string) {
     super(message);
     this.name = 'ApiHttpError';
     this.statusCode = statusCode;
+    this.code = code;
     this.isTransient = statusCode === 429 || statusCode >= 500;
   }
 }
@@ -339,7 +343,8 @@ class ApiClient {
       }
       throw new ApiHttpError(
         error.message || `HTTP Error: ${response.status}`,
-        error.statusCode || response.status
+        error.statusCode || response.status,
+        error.code
       );
     }
 
@@ -453,6 +458,25 @@ class ApiClient {
   async deletePlaylist(id: string): Promise<void> {
     return this.request<void>(`/playlists/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  async updatePlaylist(id: string, data: { title?: string }): Promise<void> {
+    return this.request<void>(`/playlists/${id}/title`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async pausePlaylist(id: string): Promise<void> {
+    return this.request<void>(`/playlists/${id}/pause`, {
+      method: 'PATCH',
+    });
+  }
+
+  async resumePlaylist(id: string): Promise<void> {
+    return this.request<void>(`/playlists/${id}/resume`, {
+      method: 'PATCH',
     });
   }
 
