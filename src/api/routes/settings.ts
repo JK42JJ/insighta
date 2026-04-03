@@ -1,5 +1,6 @@
 import { FastifyPluginCallback } from 'fastify';
 import { saveKey, listKeys, deleteKey, updatePriorities } from '../../modules/settings/llm-keys';
+import { getPrismaClient } from '../../modules/database/client';
 
 function getUserId(request: any, reply: any): string | null {
   if (!request.user || !('userId' in request.user)) {
@@ -97,6 +98,42 @@ export const settingsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
     }
   );
+
+  /**
+   * DELETE /api/v1/settings/account — Delete all user data from DB
+   * Keeps auth.users intact (account remains, data wiped)
+   */
+  fastify.delete('/account', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const prisma = getPrismaClient();
+
+    // Delete in dependency order — cascades handle child rows
+    await prisma.$executeRawUnsafe(`DELETE FROM user_mandalas WHERE user_id = $1::uuid`, userId);
+    await prisma.$executeRawUnsafe(`DELETE FROM user_local_cards WHERE user_id = $1::uuid`, userId);
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM youtube_playlists WHERE user_id = $1::uuid`,
+      userId
+    );
+    await prisma.$executeRawUnsafe(`DELETE FROM credentials WHERE user_id = $1::uuid`, userId);
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM user_subscriptions WHERE user_id = $1::uuid`,
+      userId
+    );
+    await prisma.$executeRawUnsafe(`DELETE FROM "UserVideoState" WHERE user_id = $1::uuid`, userId);
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM user_skill_config WHERE user_id = $1::uuid`,
+      userId
+    );
+    await prisma.$executeRawUnsafe(`DELETE FROM user_llm_keys WHERE user_id = $1::uuid`, userId);
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM newsletter_settings WHERE user_id = $1::uuid`,
+      userId
+    );
+
+    return reply.send({ status: 200, data: { deleted: true } });
+  });
 
   fastify.log.info('Settings routes registered');
   done();

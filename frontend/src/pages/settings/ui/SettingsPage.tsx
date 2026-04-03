@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from 'next-themes';
 
@@ -61,7 +61,6 @@ function autoSave(key: string, value: Record<string, unknown>) {
 }
 
 export default function SettingsPage() {
-  const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const { userName, userEmail, userAvatar } = useAuth();
   const { subscription } = useLocalCardsAsInsight();
@@ -186,14 +185,23 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteData = () => {
-    localStorage.clear();
-    toast({
-      title: t('settings.dataDeleted'),
-      description: t('settings.dataDeletedDesc'),
-      variant: 'destructive',
-    });
-    navigate('/');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteData = async () => {
+    setIsDeleting(true);
+    try {
+      await apiClient.deleteAccount();
+      localStorage.clear();
+      toast({
+        title: t('settings.dataDeleted'),
+        description: t('settings.dataDeletedDesc'),
+        variant: 'destructive',
+      });
+      window.location.href = '/';
+    } catch {
+      toast({ title: t('common.error'), variant: 'destructive' });
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -495,7 +503,7 @@ export default function SettingsPage() {
                       </AlertDialogCancel>
                       <AlertDialogAction
                         onClick={handleDeleteData}
-                        disabled={deleteConfirmText !== 'DELETE'}
+                        disabled={deleteConfirmText !== 'DELETE' || isDeleting}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {t('common.delete')}

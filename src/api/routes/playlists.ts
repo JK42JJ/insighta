@@ -7,6 +7,7 @@
 import { FastifyPluginCallback } from 'fastify';
 import { getPlaylistManager } from '../../modules/playlist';
 import { getSyncEngine } from '../../modules/sync';
+import { getAutoSyncScheduler } from '../../modules/scheduler/auto-sync';
 import {
   ImportPlaylistRequestSchema,
   ListPlaylistsQuerySchema,
@@ -81,6 +82,15 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       };
 
       logger.info('Playlist imported successfully', { playlistId: playlist.id });
+
+      // Auto-register sync schedule (6-hour default interval)
+      try {
+        const DEFAULT_SYNC_CRON = '0 */6 * * *'; // every 6 hours
+        await getAutoSyncScheduler().addPlaylist(playlist.id, DEFAULT_SYNC_CRON);
+        logger.info('Auto-sync schedule created', { playlistId: playlist.id });
+      } catch (err) {
+        logger.warn('Failed to create auto-sync schedule (non-fatal)', { error: err });
+      }
 
       return reply.code(200).send({ playlist: response });
     }

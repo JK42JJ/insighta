@@ -34,6 +34,7 @@ import {
 } from '../modules/database/client';
 import { getClawbot } from '../modules/scheduler/clawbot';
 import { initJobQueue, getJobQueue } from '../modules/queue';
+import { getAutoSyncScheduler } from '../modules/scheduler/auto-sync';
 
 // Load environment variables
 dotenv.config();
@@ -465,6 +466,14 @@ export async function startServer() {
       fastify.log.warn({ err }, 'JobQueue init failed (non-fatal)');
     }
 
+    // Auto-sync scheduler — periodic playlist synchronization
+    try {
+      await getAutoSyncScheduler().start();
+      fastify.log.info('AutoSyncScheduler started');
+    } catch (err) {
+      fastify.log.warn({ err }, 'AutoSyncScheduler init failed (non-fatal)');
+    }
+
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
@@ -475,6 +484,11 @@ export async function startServer() {
       }
       try {
         await getJobQueue().stop();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await getAutoSyncScheduler().stop();
       } catch {
         /* ignore */
       }

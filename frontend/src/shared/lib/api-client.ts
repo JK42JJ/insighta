@@ -1406,6 +1406,10 @@ class ApiClient {
     });
   }
 
+  async deleteAccount(): Promise<void> {
+    return this.request('/settings/account', { method: 'DELETE' });
+  }
+
   // ========================================
   // Skills
   // ========================================
