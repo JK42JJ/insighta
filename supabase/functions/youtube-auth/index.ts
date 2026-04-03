@@ -45,9 +45,10 @@ async function verifyState(state: string, secret: string): Promise<{ valid: bool
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
-// Required scopes for YouTube playlist access
+// Required scopes for YouTube playlist access + account email
 const SCOPES = [
   'https://www.googleapis.com/auth/youtube.readonly',
+  'https://www.googleapis.com/auth/userinfo.email',
 ];
 
 interface TokenResponse {
