@@ -21,13 +21,33 @@ import { SidebarMandalaSection, type MinimapData } from './SidebarMandalaSection
 import { ErrorBoundary } from 'react-error-boundary';
 import { RefreshCw } from 'lucide-react';
 
+/** Custom "source tray" icon from design spec §2-2 */
+function SourceIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3v9" />
+      <path d="M9 9l3 3 3-3" />
+      <path d="M21 15H16l-2 3H10l-2-3H3v4a2 2 0 002 2h14a2 2 0 002-2v-4z" />
+    </svg>
+  );
+}
+
 type SettingsCategory =
   | 'general'
   | 'profile'
   | 'appearance'
   | 'notifications'
   | 'mandalas'
-  | 'integrations'
+  | 'sources'
+  | 'services'
   | 'subscription'
   | 'data';
 
@@ -45,7 +65,12 @@ const SETTINGS_NAV_GROUPS = [
     labelKey: 'settings.navWorkspace',
     items: [
       { id: 'mandalas' as SettingsCategory, icon: LayoutGrid, labelKey: 'settings.mandalas' },
-      { id: 'integrations' as SettingsCategory, icon: Link2, labelKey: 'settings.integrations' },
+      {
+        id: 'sources' as SettingsCategory,
+        icon: SourceIcon,
+        labelKey: 'settings.sourceManagement',
+      },
+      { id: 'services' as SettingsCategory, icon: Link2, labelKey: 'settings.connectedServices' },
     ],
   },
   {

@@ -27,7 +27,22 @@
     "loadFailed": "Couldn't load. Tap to retry.",
     "retry": "Retry",
     "noResults": "No results",
-    "comingSoon": "Coming soon"
+    "comingSoon": "Coming soon",
+    "all": "All"
+  },
+  "sources": {
+    "youtube": {
+      "name": "YouTube",
+      "desc": "Playlists, Channels, Hashtags",
+      "playlist": "Playlist",
+      "playlistDesc": "Add a public playlist by URL",
+      "channel": "Channel",
+      "channelDesc": "Search by channel name or URL",
+      "hashtag": "Hashtag",
+      "hashtagDesc": "Sync search results by keyword"
+    },
+    "url": { "name": "URL", "desc": "Web pages, Blogs, News" },
+    "rss": { "name": "RSS", "desc": "Feed subscriptions" }
   },
   "explore": {
     "title": "Explore Mandalas",
@@ -202,6 +217,18 @@
     "general": "General",
     "profile": "Profile",
     "integrations": "Integrations",
+    "sourceManagement": "Source Management",
+    "sourceManagementDesc": "Register and sync playlists, channels, and hashtags",
+    "connectedServices": "Connected Services",
+    "connectedServicesDesc": "Manage connected service accounts and API keys",
+    "addSource": "Add Source",
+    "selectSource": "Select Source",
+    "detailInput": "Details",
+    "available": "Available",
+    "registeredSources": "Registered Sources",
+    "syncAll": "Sync All",
+    "noSources": "No registered sources",
+    "noSourcesHint": "Add a source to get started",
     "youtube": "YouTube",
     "mandala": "Mandalas",
     "mandalaDesc": "Manage and edit your mandalas",

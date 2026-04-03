@@ -16,10 +16,10 @@ import { toast } from '@/shared/lib/use-toast';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { useLocalCardsAsInsight } from '@/features/card-management/model/useLocalCards';
 import { apiClient } from '@/shared/lib/api-client';
-import { YouTubeSyncCard } from './YouTubeSyncCard';
-import { LlmKeysSettingsTab } from './LlmKeysSettingsTab';
 import { MandalaSettingsTab } from './MandalaSettingsTab';
 import { ProfileSettingsTab } from './ProfileSettingsTab';
+import { SourceManagementTab } from './SourceManagementTab';
+import { ConnectedServicesTab } from './ConnectedServicesTab';
 import { SubscriptionSettingsTab } from './SubscriptionSettingsTab';
 import {
   AlertDialog,
@@ -39,7 +39,8 @@ type SettingsCategory =
   | 'mandalas'
   | 'appearance'
   | 'notifications'
-  | 'integrations'
+  | 'sources'
+  | 'services'
   | 'subscription'
   | 'data';
 
@@ -49,7 +50,8 @@ const VALID_TABS: SettingsCategory[] = [
   'mandalas',
   'appearance',
   'notifications',
-  'integrations',
+  'sources',
+  'services',
   'subscription',
   'data',
 ];
@@ -69,9 +71,13 @@ export default function SettingsPage() {
   const activeCategory = (searchParams.get('tab') as SettingsCategory) || 'general';
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-  // Redirect invalid tab to general
+  // Redirect invalid/legacy tab
   useEffect(() => {
     const tab = searchParams.get('tab');
+    if (tab === 'integrations') {
+      setSearchParams({ tab: 'sources' }, { replace: true });
+      return;
+    }
     if (tab && !VALID_TABS.includes(tab as SettingsCategory)) {
       setSearchParams({ tab: 'general' }, { replace: true });
     }
@@ -396,19 +402,29 @@ export default function SettingsPage() {
         </>
       )}
 
-      {/* Integrations */}
-      {activeCategory === 'integrations' && (
+      {/* Source Management */}
+      {activeCategory === 'sources' && (
         <>
           <div className="mb-6">
-            <h2 className="text-xl font-bold text-foreground">{t('settings.integrations')}</h2>
+            <h2 className="text-xl font-bold text-foreground">{t('settings.sourceManagement')}</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              {t('settings.integrationsDesc', 'Manage connected services and API keys')}
+              {t('settings.sourceManagementDesc')}
             </p>
           </div>
-          <div className="space-y-6">
-            <YouTubeSyncCard />
-            <LlmKeysSettingsTab />
+          <SourceManagementTab />
+        </>
+      )}
+
+      {/* Connected Services */}
+      {activeCategory === 'services' && (
+        <>
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-foreground">{t('settings.connectedServices')}</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t('settings.connectedServicesDesc')}
+            </p>
           </div>
+          <ConnectedServicesTab />
         </>
       )}
 

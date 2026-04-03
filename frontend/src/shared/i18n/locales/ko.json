@@ -27,7 +27,22 @@
     "loadFailed": "불러오지 못했습니다. 탭하여 재시도.",
     "retry": "다시 시도",
     "noResults": "결과 없음",
-    "comingSoon": "준비 중입니다"
+    "comingSoon": "준비 중입니다",
+    "all": "전체"
+  },
+  "sources": {
+    "youtube": {
+      "name": "YouTube",
+      "desc": "플레이리스트 · 채널 · 해시태그",
+      "playlist": "플레이리스트",
+      "playlistDesc": "URL로 공개 플레이리스트 추가",
+      "channel": "채널",
+      "channelDesc": "채널명 검색 또는 URL로 추가",
+      "hashtag": "해시태그",
+      "hashtagDesc": "키워드 기반 검색 결과 동기화"
+    },
+    "url": { "name": "URL", "desc": "웹페이지 · 블로그 · 뉴스" },
+    "rss": { "name": "RSS", "desc": "피드 구독" }
   },
   "explore": {
     "title": "만다라트 탐색",
@@ -202,6 +217,18 @@
     "general": "일반",
     "profile": "프로필",
     "integrations": "연동 설정",
+    "sourceManagement": "소스 관리",
+    "sourceManagementDesc": "플레이리스트, 채널, 해시태그를 등록하고 동기화합니다",
+    "connectedServices": "연결된 서비스",
+    "connectedServicesDesc": "외부 서비스 계정 연결 및 API 키 관리",
+    "addSource": "소스 추가",
+    "selectSource": "소스 선택",
+    "detailInput": "상세 입력",
+    "available": "사용 가능",
+    "registeredSources": "등록된 소스",
+    "syncAll": "전체 동기화",
+    "noSources": "등록된 소스가 없습니다",
+    "noSourcesHint": "소스를 추가하여 콘텐츠를 가져오세요",
     "youtube": "YouTube",
     "mandala": "만다라트",
     "mandalaDesc": "만다라트를 관리하고 편집합니다",
