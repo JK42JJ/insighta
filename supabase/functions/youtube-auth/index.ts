@@ -204,14 +204,14 @@ Deno.serve(async (req) => {
         }
 
         // Return HTML that closes the popup and notifies parent
-        // Use English only to avoid Deno Edge Runtime encoding issues
+        // TextEncoder ensures proper UTF-8 byte encoding for Korean text
         const html = [
           '<!DOCTYPE html>',
           '<html><head><meta charset="utf-8">',
-          '<title>YouTube Connected</title></head>',
+          '<title>YouTube \uC5F0\uACB0 \uC644\uB8CC</title></head>',
           '<body>',
           '<p style="font-family:system-ui;text-align:center;margin-top:40px;color:#888">',
-          'Connecting YouTube account...</p>',
+          'YouTube \uACC4\uC815\uC744 \uC5F0\uACB0\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4...</p>',
           '<script>',
           '(function(){',
           '  var origin = window.location.origin || "https://insighta.one";',
@@ -226,7 +226,8 @@ Deno.serve(async (req) => {
           '</body></html>',
         ].join('\n');
 
-        return new Response(html, {
+        const body = new TextEncoder().encode(html);
+        return new Response(body, {
           status: 200,
           headers: {
             'Content-Type': 'text/html; charset=utf-8',
