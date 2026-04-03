@@ -204,32 +204,34 @@ Deno.serve(async (req) => {
         }
 
         // Return HTML that closes the popup and notifies parent
-        const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>YouTube 연결 완료</title>
-</head>
-<body>
-  <h1>YouTube 계정 연결 완료</h1>
-  <p>이 창은 자동으로 닫힙니다.</p>
-  <script>
-    if (window.opener) {
-      window.opener.postMessage({ type: 'youtube-auth-success' }, '*');
-      setTimeout(function() { window.close(); }, 500);
-    } else {
-      setTimeout(function() {
-        window.close();
-        // window.close() may be ignored if not opened by script — redirect as fallback
-        window.location.href = '/settings?tab=services&youtube=connected';
-      }, 500);
-    }
-  </script>
-</body>
-</html>`;
+        // Use English only to avoid Deno Edge Runtime encoding issues
+        const html = [
+          '<!DOCTYPE html>',
+          '<html><head><meta charset="utf-8">',
+          '<title>YouTube Connected</title></head>',
+          '<body>',
+          '<p style="font-family:system-ui;text-align:center;margin-top:40px;color:#888">',
+          'Connecting YouTube account...</p>',
+          '<script>',
+          '(function(){',
+          '  var origin = window.location.origin || "https://insighta.one";',
+          '  if (window.opener) {',
+          '    try { window.opener.postMessage({type:"youtube-auth-success"}, origin); } catch(e){}',
+          '    setTimeout(function(){ window.close(); }, 500);',
+          '  } else {',
+          '    window.location.href = "/settings?tab=services&youtube=connected";',
+          '  }',
+          '})();',
+          '</script>',
+          '</body></html>',
+        ].join('\n');
 
         return new Response(html, {
-          headers: { ...getCorsHeaders(req), 'Content-Type': 'text/html; charset=utf-8' },
+          status: 200,
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-store',
+          },
         });
       }
 
