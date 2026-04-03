@@ -366,6 +366,7 @@
     "syncSettings": "Sync Settings",
     "autoSyncInterval": "Auto Sync Interval",
     "autoSyncIntervalDesc": "Choose how often to sync playlists automatically",
+    "syncManual": "Manual",
     "backgroundSync": "Background Sync",
     "backgroundSyncDesc": "Automatically sync when the browser is open",
     "loginRequired": "Login Required",
