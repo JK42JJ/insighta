@@ -123,7 +123,7 @@ export function SourceManagementTab() {
           </p>
         </div>
       ) : (
-        <div className="space-y-2 max-h-[400px] overflow-y-auto">
+        <div className="space-y-2 max-h-[480px] overflow-y-auto pb-2">
           {filtered.map((source) => (
             <SourceCard
               key={source.id}
