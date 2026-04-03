@@ -52,8 +52,18 @@
       }
     },
     "en": {
-      "total": 0,
-      "domains": {}
+      "total": 999,
+      "domains": {
+        "Tech/Development": 111,
+        "Learning/Education": 111,
+        "Health/Fitness": 111,
+        "Business/Career": 110,
+        "Finance/Investment": 111,
+        "Relationships/Community": 112,
+        "Creative/Arts": 111,
+        "Lifestyle/Travel": 111,
+        "Mind/Spirituality": 111
+      }
     }
   }
 }
