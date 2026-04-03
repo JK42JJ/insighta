@@ -71,6 +71,23 @@ export default function SettingsPage() {
   const activeCategory = (searchParams.get('tab') as SettingsCategory) || 'general';
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
+  // Handle YouTube OAuth callback redirect (popup lands here after 302)
+  useEffect(() => {
+    if (searchParams.get('youtube') === 'connected') {
+      // Notify parent window (if opened as popup) and close
+      if (window.opener) {
+        try {
+          window.opener.postMessage({ type: 'youtube-auth-success' }, window.location.origin);
+        } catch {
+          /* cross-origin — parent will detect popup close via interval */
+        }
+        setTimeout(() => window.close(), 300);
+      }
+      // Clean up URL param (for non-popup case or if close fails)
+      setSearchParams({ tab: 'services' }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
   // Redirect invalid/legacy tab
   useEffect(() => {
     const tab = searchParams.get('tab');

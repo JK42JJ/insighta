@@ -203,34 +203,14 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Return HTML that closes the popup and notifies parent
-        // TextEncoder ensures proper UTF-8 byte encoding for Korean text
-        const html = [
-          '<!DOCTYPE html>',
-          '<html><head><meta charset="utf-8">',
-          '<title>YouTube \uC5F0\uACB0 \uC644\uB8CC</title></head>',
-          '<body>',
-          '<p style="font-family:system-ui;text-align:center;margin-top:40px;color:#888">',
-          'YouTube \uACC4\uC815\uC744 \uC5F0\uACB0\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4...</p>',
-          '<script>',
-          '(function(){',
-          '  var origin = window.location.origin || "https://insighta.one";',
-          '  if (window.opener) {',
-          '    try { window.opener.postMessage({type:"youtube-auth-success"}, origin); } catch(e){}',
-          '    setTimeout(function(){ window.close(); }, 500);',
-          '  } else {',
-          '    window.location.href = "/settings?tab=services&youtube=connected";',
-          '  }',
-          '})();',
-          '</script>',
-          '</body></html>',
-        ].join('\n');
-
-        const body = new TextEncoder().encode(html);
-        return new Response(body, {
-          status: 200,
+        // Redirect to frontend — let the app handle popup close + UI refresh.
+        // Supabase Edge Functions gateway doesn't reliably pass Content-Type: text/html,
+        // so returning HTML directly causes source code to display instead of rendering.
+        const frontendOrigin = Deno.env.get('FRONTEND_URL') || 'https://insighta.one';
+        return new Response(null, {
+          status: 302,
           headers: {
-            'Content-Type': 'text/html; charset=utf-8',
+            'Location': `${frontendOrigin}/settings?tab=services&youtube=connected`,
             'Cache-Control': 'no-store',
           },
         });

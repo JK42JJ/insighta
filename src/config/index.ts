@@ -9,7 +9,8 @@ import dotenv from 'dotenv';
 import { z } from 'zod';
 import path from 'path';
 
-// Load environment variables
+// Load environment variables (.env.local overrides .env)
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
 dotenv.config();
 
 /**
