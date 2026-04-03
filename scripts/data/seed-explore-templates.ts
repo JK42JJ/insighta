@@ -226,7 +226,7 @@ async function seedFromJsonl(filePath: string): Promise<SeedResult> {
   }
 
   // 3b. Bulk insert in chunks (Supabase Cloud has statement_timeout ~120s)
-  const CHUNK = 200;
+  const CHUNK = 50;
 
   async function bulkInsertChunked<T>(label: string, rows: T[], fn: (chunk: T[]) => Promise<unknown>) {
     console.log(`  Inserting ${rows.length} ${label}...`);
