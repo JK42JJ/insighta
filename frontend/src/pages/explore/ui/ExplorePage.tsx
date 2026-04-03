@@ -7,6 +7,7 @@ import { apiClient } from '@/shared/lib/api-client';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { LandingHeader } from '@/pages/landing/ui/components/LandingHeader';
 import { GradientBackground } from '@/pages/landing/ui/components/GradientBackground';
+import { FooterSection } from '@/pages/landing/ui/components/FooterSection';
 import { useExploreMandalas, useExploreClone } from '@/features/explore';
 import { useExploreFilters } from '@/features/explore';
 import { ExploreHero } from '@/features/explore/ui/ExploreHero';
@@ -207,6 +208,7 @@ export default function ExplorePage() {
           onCopyLink={handleCopyLink}
         />
       )}
+      <FooterSection />
     </div>
   );
 }

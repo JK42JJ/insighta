@@ -5,6 +5,7 @@ import { Button } from '@/shared/ui/button';
 import { useRef, useState } from 'react';
 import { GradientBackground } from '@/pages/landing/ui/components/GradientBackground';
 import { LandingHeader } from '@/pages/landing/ui/components/LandingHeader';
+import { FooterSection } from '@/pages/landing/ui/components/FooterSection';
 
 const TOTAL_SPOTS = 100;
 const SPOTS_REMAINING = 47;
@@ -242,6 +243,7 @@ export default function PricingPage() {
             </div>
           </div>
         </main>
+        <FooterSection />
       </div>
     </div>
   );
