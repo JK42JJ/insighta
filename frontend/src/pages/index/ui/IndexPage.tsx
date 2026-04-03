@@ -100,7 +100,14 @@ function AuthenticatedApp() {
 
   const [isFloatingPanelOpen, setIsFloatingPanelOpen] = useState(false);
 
-  const { data: mandalaListData } = useMandalaList();
+  const { data: mandalaListData, isSuccess: isMandalaListLoaded } = useMandalaList();
+
+  // New user: redirect to wizard when 0 mandalas
+  useEffect(() => {
+    if (isMandalaListLoaded && mandalaListData?.mandalas?.length === 0) {
+      navigate('/mandalas/new', { replace: true });
+    }
+  }, [isMandalaListLoaded, mandalaListData, navigate]);
 
   // Selected mandala — Zustand store is source of truth, synced from sidebar + default init
   const storeSelectedMandalaId = useMandalaStore((s) => s.selectedMandalaId);

@@ -1034,6 +1034,8 @@
     "noResults": "No results",
     "selectMandala": "Select mandala",
     "newMandala": "+ New mandala",
+    "createWithWizard": "Create with wizard",
+    "createBlank": "Quick create",
     "myMandalas": "My Mandalas"
   },
   "footer": {

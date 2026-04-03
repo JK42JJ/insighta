@@ -1029,6 +1029,8 @@
     "noResults": "결과 없음",
     "selectMandala": "만다라트 선택",
     "newMandala": "+ 새 만다라",
+    "createWithWizard": "위저드로 만들기",
+    "createBlank": "바로 만들기",
     "myMandalas": "내 만다라"
   },
   "footer": {

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { LayoutGrid, Plus, RefreshCw, Loader2, ChevronRight, Check } from 'lucide-react';
+import { LayoutGrid, Plus, RefreshCw, Loader2, ChevronRight, Check, Wand2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import {
   useMandalaList,
@@ -38,6 +39,7 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
   const { t } = useTranslation();
   const { data: listData, isLoading, isError, error, refetch } = useMandalaList();
 
+  const navigate = useNavigate();
   const createMandala = useCreateMandala();
   const switchMandala = useSwitchMandala();
   const updateSectorNames = useUpdateSectorNames();
@@ -74,26 +76,28 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
 
   const mandalas = listData?.mandalas ?? [];
 
-  const handleQuickCreate = async () => {
+  const handleQuickCreate = () => {
     const title = quickCreateTitle.trim();
     if (!title || isCreating) return;
     setIsCreating(true);
-    try {
-      const result = await createMandala.mutateAsync(title);
-      const newId = result?.mandala?.id;
-      if (newId) {
-        await switchMandala.mutateAsync(newId);
-        handleMandalaSelect(newId);
-      }
-      toast({ title: t('mandalaSettings.created') });
-      setQuickCreateMode(false);
-      setQuickCreateTitle('');
-      setPopoverOpen(false);
-    } catch {
-      toast({ title: t('mandalaSettings.quotaExceeded'), variant: 'destructive' });
-    } finally {
-      setIsCreating(false);
-    }
+    createMandala.mutate(title, {
+      onSuccess: (data) => {
+        const newId = data?.mandala?.id;
+        setQuickCreateMode(false);
+        setQuickCreateTitle('');
+        setPopoverOpen(false);
+        toast({ title: t('mandalaSettings.created') });
+        if (newId) {
+          navigate(`/mandalas/${newId}/edit`);
+        }
+      },
+      onError: () => {
+        toast({ title: t('mandalaSettings.quotaExceeded'), variant: 'destructive' });
+      },
+      onSettled: () => {
+        setIsCreating(false);
+      },
+    });
   };
 
   // Auto-focus quick create input
@@ -230,8 +234,21 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
             })}
           </div>
 
-          {/* Divider + New mandala */}
-          <div className="border-t border-border mt-1 pt-1">
+          {/* Divider + Create options */}
+          <div className="border-t border-border mt-1 pt-1 space-y-0.5">
+            {/* Wizard create */}
+            <button
+              onClick={() => {
+                setPopoverOpen(false);
+                navigate('/mandalas/new');
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-primary hover:bg-accent transition-colors"
+            >
+              <Wand2 className="w-3.5 h-3.5 shrink-0" />
+              {t('sidebar.createWithWizard')}
+            </button>
+
+            {/* Blank create (inline quick-create) */}
             {quickCreateMode ? (
               <div className="flex items-center gap-1.5 px-3 py-2">
                 <input
@@ -258,10 +275,10 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
             ) : (
               <button
                 onClick={() => setQuickCreateMode(true)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-primary hover:bg-accent transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               >
                 <Plus className="w-3.5 h-3.5 shrink-0" />
-                {t('sidebar.newMandala')}
+                {t('sidebar.createBlank')}
               </button>
             )}
           </div>
