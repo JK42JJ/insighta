@@ -181,6 +181,21 @@ Deno.serve(async (req) => {
 
         const tokens: TokenResponse = await tokenResponse.json();
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+        const now = new Date().toISOString();
+
+        // Fetch YouTube account email from Google userinfo
+        let youtubeEmail: string | null = null;
+        try {
+          const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            headers: { Authorization: `Bearer ${tokens.access_token}` },
+          });
+          if (userinfoRes.ok) {
+            const userinfo = await userinfoRes.json();
+            youtubeEmail = userinfo.email || null;
+          }
+        } catch (e) {
+          console.warn('Failed to fetch YouTube userinfo:', e);
+        }
 
         // Save tokens to database
         const { error: upsertError } = await supabase
@@ -190,7 +205,9 @@ Deno.serve(async (req) => {
             youtube_access_token: tokens.access_token,
             youtube_refresh_token: tokens.refresh_token || null,
             youtube_token_expires_at: expiresAt,
-            updated_at: new Date().toISOString(),
+            youtube_email: youtubeEmail,
+            connected_at: now,
+            updated_at: now,
           }, {
             onConflict: 'user_id',
           });
@@ -367,7 +384,7 @@ Deno.serve(async (req) => {
 
         const { data: settings } = await supabase
           .from('youtube_sync_settings')
-          .select('youtube_access_token, youtube_token_expires_at, sync_interval, auto_sync_enabled, auto_summary_enabled')
+          .select('youtube_access_token, youtube_token_expires_at, youtube_email, connected_at, sync_interval, auto_sync_enabled, auto_summary_enabled')
           .eq('user_id', user.id)
           .single();
 
@@ -381,6 +398,8 @@ Deno.serve(async (req) => {
             isConnected,
             isExpired: isConnected ? isExpired : null,
             expiresAt: settings?.youtube_token_expires_at || null,
+            youtubeEmail: settings?.youtube_email || null,
+            connectedAt: settings?.connected_at || null,
             syncInterval: settings?.sync_interval || 'manual',
             autoSyncEnabled: settings?.auto_sync_enabled || false,
             autoSummaryEnabled: settings?.auto_summary_enabled ?? true,

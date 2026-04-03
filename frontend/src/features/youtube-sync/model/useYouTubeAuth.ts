@@ -13,6 +13,8 @@ interface YouTubeAuthStatus {
   isConnected: boolean;
   isExpired: boolean | null;
   expiresAt: string | null;
+  youtubeEmail: string | null;
+  connectedAt: string | null;
   syncInterval: string;
   autoSyncEnabled: boolean;
   autoSummaryEnabled: boolean;
@@ -225,6 +227,8 @@ export function useYouTubeAuth() {
     isConnected: status.data?.isConnected ?? false,
     isExpired: status.data?.isExpired ?? null,
     expiresAt: status.data?.expiresAt ? new Date(status.data.expiresAt) : null,
+    youtubeEmail: status.data?.youtubeEmail ?? null,
+    connectedAt: status.data?.connectedAt ? new Date(status.data.connectedAt) : null,
     syncInterval: status.data?.syncInterval ?? 'manual',
     autoSyncEnabled: status.data?.autoSyncEnabled ?? false,
     autoSummaryEnabled: status.data?.autoSummaryEnabled ?? true,

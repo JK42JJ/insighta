@@ -3,12 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
 import { Loader2, Youtube, CheckCircle2, CircleOff } from 'lucide-react';
 import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
-import { useAuth } from '@/features/auth/model/useAuth';
 
 export function YouTubeConnectionCard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const ytAuth = useYouTubeAuth();
-  const { userEmail } = useAuth();
 
   return (
     <Card className="bg-surface-mid border-border/50">
@@ -28,8 +26,14 @@ export function YouTubeConnectionCard() {
             <div className="flex items-center gap-3">
               <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
               <div>
-                <span className="text-sm font-medium">{userEmail || t('youtube.connected')}</span>
-                <p className="text-xs text-muted-foreground mt-0.5">{t('youtube.connected')}</p>
+                <span className="text-sm font-medium">
+                  {ytAuth.youtubeEmail || t('youtube.connected')}
+                </span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {ytAuth.connectedAt
+                    ? `${t('youtube.connected')} · ${ytAuth.connectedAt.toLocaleDateString(i18n.language, { year: 'numeric', month: 'long', day: 'numeric' })}`
+                    : t('youtube.connected')}
+                </p>
               </div>
             </div>
             <Button
