@@ -204,29 +204,32 @@ Deno.serve(async (req) => {
         }
 
         // Return HTML that closes the popup and notifies parent
-        const html = `
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>YouTube 연결 완료</title>
-            </head>
-            <body>
-              <script>
-                if (window.opener) {
-                  window.opener.postMessage({ type: 'youtube-auth-success' }, '*');
-                  window.close();
-                } else {
-                  document.body.innerHTML = '<h1>YouTube 계정이 연결되었습니다. 이 창을 닫아주세요.</h1>';
-                }
-              </script>
-              <h1>YouTube 계정 연결 완료</h1>
-              <p>이 창을 닫아주세요.</p>
-            </body>
-          </html>
-        `;
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>YouTube 연결 완료</title>
+</head>
+<body>
+  <h1>YouTube 계정 연결 완료</h1>
+  <p>이 창은 자동으로 닫힙니다.</p>
+  <script>
+    if (window.opener) {
+      window.opener.postMessage({ type: 'youtube-auth-success' }, '*');
+      setTimeout(function() { window.close(); }, 500);
+    } else {
+      setTimeout(function() {
+        window.close();
+        // window.close() may be ignored if not opened by script — redirect as fallback
+        window.location.href = '/settings?tab=services&youtube=connected';
+      }, 500);
+    }
+  </script>
+</body>
+</html>`;
 
         return new Response(html, {
-          headers: { ...getCorsHeaders(req), 'Content-Type': 'text/html' },
+          headers: { ...getCorsHeaders(req), 'Content-Type': 'text/html; charset=utf-8' },
         });
       }
 
