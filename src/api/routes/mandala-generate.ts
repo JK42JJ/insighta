@@ -1,5 +1,6 @@
 import { FastifyPluginCallback } from 'fastify';
 import { config } from '../../config';
+import { createErrorResponse, ErrorCode } from '@/api/schemas/common.schema';
 
 // ============================================================================
 // Mandala Generate Routes — HuggingFace Space integration
@@ -38,11 +39,20 @@ function repairJson(text: string): string {
   // Strip <think>...</think> blocks
   cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 
-  // Try to find JSON object or array
-  for (const [startChar, endChar] of [
+  // Try to find JSON object or array (sort by which delimiter appears first)
+  const pairs: Array<[string, string]> = [
     ['{', '}'],
     ['[', ']'],
-  ] as const) {
+  ];
+  pairs.sort((a, b) => {
+    const idxA = cleaned.indexOf(a[0]);
+    const idxB = cleaned.indexOf(b[0]);
+    if (idxA === -1) return 1;
+    if (idxB === -1) return -1;
+    return idxA - idxB;
+  });
+
+  for (const [startChar, endChar] of pairs) {
     const startIdx = cleaned.indexOf(startChar);
     if (startIdx === -1) continue;
 
@@ -143,7 +153,9 @@ export const mandalaGenerateRoutes: FastifyPluginCallback = (fastify, _opts, don
       const { prompt, systemPrompt, maxTokens, temperature, topP, jsonMode } = request.body;
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-        return reply.code(400).send({ error: 'prompt is required' });
+        return reply
+          .code(400)
+          .send(createErrorResponse(ErrorCode.VALIDATION_ERROR, 'prompt is required', request.url));
       }
 
       const effectiveSystemPrompt =
@@ -210,10 +222,16 @@ export const mandalaGenerateRoutes: FastifyPluginCallback = (fastify, _opts, don
       }
 
       request.log.error({ err: lastError }, 'All HF Space call attempts failed');
-      return reply.code(502).send({
-        error: 'Failed to generate mandala plan',
-        detail: lastError?.message ?? 'Unknown error',
-      });
+      return reply
+        .code(502)
+        .send(
+          createErrorResponse(
+            ErrorCode.SERVICE_UNAVAILABLE,
+            'Failed to generate mandala plan',
+            request.url,
+            { detail: lastError?.message ?? 'Unknown error' }
+          )
+        );
     }
   );
 
@@ -221,7 +239,7 @@ export const mandalaGenerateRoutes: FastifyPluginCallback = (fastify, _opts, don
    * GET /api/v1/mandala/status
    * Check HF Space availability
    */
-  fastify.get('/status', async (_request, reply) => {
+  fastify.get('/status', { onRequest: [fastify.authenticate] }, async (_request, reply) => {
     try {
       const response = await fetch(HF_SPACE_URL, {
         method: 'GET',
