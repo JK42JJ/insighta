@@ -223,7 +223,7 @@ export const mandalaGenerateRoutes: FastifyPluginCallback = (fastify, _opts, don
 
       request.log.error({ err: lastError }, 'All HF Space call attempts failed');
       return reply
-        .code(502)
+        .code(503)
         .send(
           createErrorResponse(
             ErrorCode.SERVICE_UNAVAILABLE,
