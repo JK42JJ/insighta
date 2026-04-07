@@ -1330,7 +1330,7 @@
     },
     "orbital": { "emptyHint": "영상을 추가해보세요", "cellLabel": "영역 {{index}}", "ctaAdd": "메인에서 영상 추가하기", "ctaAi": "AI 영상 추천 받기", "ctaAiSoon": "준비 중" },
     "biasAlert": { "title": "편향 필터링됨" },
-    "skills": { "newsletter": "뉴스레터", "alerts": "영상 알림", "biasFilter": "편향 필터", "report": "리포트" },
+    "skills": { "videoDiscover": "유튜브 카드 추천", "newsletter": "뉴스레터", "alerts": "영상 알림", "biasFilter": "편향 필터", "report": "리포트" },
     "stats": {
       "filledCells": "채움 셀", "videos": "채운 항목", "streak": "연속 학습", "relevance": "평균 관련도",
       "days": "일", "empty": "영상을 추가하면 학습 통계가 여기에 표시됩니다"

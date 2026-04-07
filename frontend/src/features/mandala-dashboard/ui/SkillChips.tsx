@@ -1,11 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Mail, Bell, ShieldAlert, FileBarChart } from 'lucide-react';
+import { Mail, Bell, ShieldAlert, FileBarChart, Video } from 'lucide-react';
 
 import { apiClient } from '@/shared/lib/api-client';
 import type { SkillType } from '@/shared/types/mandala-ux';
 
-const SKILL_META: Record<SkillType, { labelKey: string; icon: React.ReactNode; color: string }> = {
+const SKILL_META: Record<
+  SkillType,
+  { labelKey: string; icon: React.ReactNode; color: string; beta?: boolean }
+> = {
+  // Listed first so it's the headline value-prop on the dashboard.
+  // BETA = backend executor lands in #358 Phase 3; toggle persists user opt-in.
+  video_discover: {
+    labelKey: 'dashboard.skills.videoDiscover',
+    icon: <Video className="h-3.5 w-3.5 flex-shrink-0" />,
+    color: '#a78bfa',
+    beta: true,
+  },
   newsletter: {
     labelKey: 'dashboard.skills.newsletter',
     icon: <Mail className="h-3.5 w-3.5 flex-shrink-0" />,
@@ -76,6 +87,11 @@ export function SkillChips({ mandalaId, skills }: SkillChipsProps) {
           >
             <span style={{ color: meta.color, opacity: 0.6 }}>{meta.icon}</span>
             {t(meta.labelKey)}
+            {meta.beta && (
+              <span className="rounded-full bg-violet-500/15 px-1.5 py-px text-[9px] font-bold text-violet-300">
+                BETA
+              </span>
+            )}
             <span
               className={[
                 'rounded-full px-1.5 py-px text-[9.5px] font-bold',

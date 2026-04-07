@@ -1334,7 +1334,7 @@
     },
     "orbital": { "emptyHint": "Add some videos", "cellLabel": "Area {{index}}", "ctaAdd": "Add videos from main", "ctaAi": "AI video recommendations", "ctaAiSoon": "Coming soon" },
     "biasAlert": { "title": "Bias Filtered" },
-    "skills": { "newsletter": "Newsletter", "alerts": "Video Alerts", "biasFilter": "Bias Filter", "report": "Report" },
+    "skills": { "videoDiscover": "YouTube Discover", "newsletter": "Newsletter", "alerts": "Video Alerts", "biasFilter": "Bias Filter", "report": "Report" },
     "stats": {
       "filledCells": "Filled Cells", "videos": "Filled Items", "streak": "Learning Streak", "relevance": "Avg Relevance",
       "days": "d", "empty": "Learning stats will appear here when you add videos"
