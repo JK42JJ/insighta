@@ -55,6 +55,12 @@ const envSchema = z.object({
   DAILY_QUOTA_LIMIT: z.coerce.number().default(10000),
   QUOTA_WARNING_THRESHOLD: z.coerce.number().default(9000),
 
+  // Mandala Generation (dedicated Ollama instance on Mac Mini)
+  MANDALA_GEN_URL: z.string().default('http://localhost:11434'),
+  MANDALA_GEN_MODEL: z.string().default('mandala-gen'),
+  MANDALA_EMBED_MODEL: z.string().default('qwen3-embedding:8b'),
+  MANDALA_EMBED_DIMENSION: z.coerce.number().default(4096),
+
   // LLM Provider
   OLLAMA_URL: z.string().default('http://localhost:11434'),
   OLLAMA_EMBED_MODEL: z.string().default('nomic-embed-text'),
@@ -155,6 +161,14 @@ export const config = {
   quota: {
     dailyLimit: env.DAILY_QUOTA_LIMIT,
     warningThreshold: env.QUOTA_WARNING_THRESHOLD,
+  },
+
+  // Mandala Generation (dedicated Ollama on Mac Mini)
+  mandalaGen: {
+    url: env.MANDALA_GEN_URL,
+    model: env.MANDALA_GEN_MODEL,
+    embedModel: env.MANDALA_EMBED_MODEL,
+    embedDimension: env.MANDALA_EMBED_DIMENSION,
   },
 
   // LLM Provider

@@ -835,6 +835,40 @@
 .reveal-delay-2 { transition-delay: 0.2s; }
 .reveal-delay-3 { transition-delay: 0.3s; }
 
+/* ─── Wizard MandalaCard AI loading animations ─── */
+
+@keyframes ai-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.ai-loading-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    hsl(var(--primary) / 0.08) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: ai-shimmer 2.4s linear infinite;
+}
+
+@keyframes ai-cell-breathe {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+[class*='ai-cell-pulse-'] {
+  animation: ai-cell-breathe 1.6s ease-in-out infinite;
+}
+.ai-cell-pulse-0 { animation-delay: 0s; }
+.ai-cell-pulse-1 { animation-delay: 0.12s; }
+.ai-cell-pulse-2 { animation-delay: 0.24s; }
+.ai-cell-pulse-3 { animation-delay: 0.36s; }
+.ai-cell-pulse-4 { animation-delay: 0.48s; }
+.ai-cell-pulse-5 { animation-delay: 0.6s; }
+.ai-cell-pulse-6 { animation-delay: 0.72s; }
+.ai-cell-pulse-7 { animation-delay: 0.84s; }
+.ai-cell-pulse-8 { animation-delay: 0.96s; }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

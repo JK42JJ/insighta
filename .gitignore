@@ -128,6 +128,10 @@ frontend-v3/
 .memsearch/
 .memsearch.toml
 
+# Mandala LoRA / model artifacts (local only — large binaries)
+outputs/
+test_mandala_*.py
+
 # OpenClaw avatar bot — memory is env-specific
 openclaw/memory/
 .claude/commands/_deprecated/

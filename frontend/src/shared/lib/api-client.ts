@@ -264,7 +264,7 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit & { timeoutMs?: number } = {}
+    options: RequestInit & { timeoutMs?: number; externalSignal?: AbortSignal } = {}
   ): Promise<T> {
     const url = `${this.baseUrl}/api/v1${endpoint}`;
     const token = await this.getFreshToken();
@@ -275,7 +275,7 @@ class ApiClient {
       );
     }
 
-    const { timeoutMs, ...fetchOptions } = options;
+    const { timeoutMs, externalSignal, ...fetchOptions } = options;
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -291,12 +291,23 @@ class ApiClient {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
 
+    // Forward external abort (e.g., user-initiated cancel)
+    const externalAbortHandler = () => controller.abort();
+    if (externalSignal) {
+      if (externalSignal.aborted) controller.abort();
+      else externalSignal.addEventListener('abort', externalAbortHandler, { once: true });
+    }
+
     let response: Response;
     try {
       response = await fetch(url, { ...fetchOptions, headers, signal: controller.signal });
     } catch (err) {
       clearTimeout(timeoutId);
+      if (externalSignal) externalSignal.removeEventListener('abort', externalAbortHandler);
       if (err instanceof DOMException && err.name === 'AbortError') {
+        if (externalSignal?.aborted) {
+          throw new ApiHttpError('Request canceled by user', 0);
+        }
         const secs = Math.round(effectiveTimeout / 1000);
         throw new ApiHttpError(`Request timeout (${secs}s)`, 408);
       }
@@ -304,6 +315,7 @@ class ApiClient {
       throw new ApiHttpError(err instanceof Error ? err.message : 'Network error', 0);
     }
     clearTimeout(timeoutId);
+    if (externalSignal) externalSignal.removeEventListener('abort', externalAbortHandler);
 
     if (import.meta.env.DEV) {
       console.log(`[apiClient] Response: ${response.status} ${endpoint}`);
@@ -760,6 +772,118 @@ class ApiClient {
       quota: { used: number; limit: number | null; tier: string; remaining: number | null };
     }>('/mandalas/quota');
     return res.quota;
+  }
+
+  // ========================================
+  // Mandala AI Generation
+  // ========================================
+
+  async generateMandala(
+    goal: string,
+    options?: { domain?: string; language?: 'ko' | 'en'; signal?: AbortSignal }
+  ): Promise<{
+    mandala: {
+      center_goal: string;
+      center_label: string;
+      language: string;
+      domain: string;
+      sub_goals: string[];
+      sub_labels?: string[];
+      actions: Record<string, string[]>;
+    };
+    source: 'lora' | 'llm-fallback';
+  }> {
+    const res = await this.request<{
+      data: {
+        mandala: {
+          center_goal: string;
+          center_label: string;
+          language: string;
+          domain: string;
+          sub_goals: string[];
+          sub_labels?: string[];
+          actions: Record<string, string[]>;
+        };
+        source: 'lora' | 'llm-fallback';
+      };
+    }>('/mandalas/generate', {
+      method: 'POST',
+      body: JSON.stringify({ goal, domain: options?.domain, language: options?.language }),
+      timeoutMs: 180_000, // Mandala generation takes ~80s on Mac Mini M4
+      externalSignal: options?.signal,
+    });
+    return res.data;
+  }
+
+  async generateLabels(params: {
+    center_goal: string;
+    sub_goals: string[];
+    language?: 'ko' | 'en';
+  }): Promise<{ center_label: string; sub_labels: string[] }> {
+    const res = await this.request<{
+      data: { center_label: string; sub_labels: string[] };
+    }>('/mandalas/generate-labels', {
+      method: 'POST',
+      body: JSON.stringify(params),
+      timeoutMs: 60_000,
+    });
+    return res.data;
+  }
+
+  async createMandalaWithData(params: {
+    title: string;
+    centerGoal: string;
+    subjects: string[];
+    subDetails?: Record<string, string[]>;
+    skills?: Record<string, boolean>;
+  }): Promise<{ mandalaId: string }> {
+    const res = await this.request<{ data: { mandalaId: string } }>('/mandalas/create-with-data', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+    return res.data;
+  }
+
+  async searchMandalasByGoal(
+    goal: string,
+    options?: { limit?: number; threshold?: number; language?: string; signal?: AbortSignal }
+  ): Promise<
+    Array<{
+      mandala_id: string;
+      center_goal: string;
+      center_label: string | null;
+      domain: string | null;
+      language: string | null;
+      similarity: number;
+      sub_goals: string[];
+    }>
+  > {
+    const res = await this.request<{
+      data: {
+        results: Array<{
+          mandala_id: string;
+          template_mandala_id: string | null;
+          center_goal: string;
+          center_label: string | null;
+          domain: string | null;
+          language: string | null;
+          similarity: number;
+          sub_goals: string[];
+          sub_labels: string[];
+          sub_actions: Record<number, string[]>;
+        }>;
+      };
+    }>('/mandalas/search-by-goal', {
+      method: 'POST',
+      body: JSON.stringify({
+        goal,
+        limit: options?.limit,
+        threshold: options?.threshold,
+        language: options?.language,
+      }),
+      externalSignal: options?.signal,
+    });
+    return res.data.results;
   }
 
   // ========================================

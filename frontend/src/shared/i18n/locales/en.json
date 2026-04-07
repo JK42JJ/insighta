@@ -1238,6 +1238,38 @@
         "finance": "Finance", "creative": "Creative", "lifestyle": "Lifestyle"
       }
     },
+    "goal": {
+      "title": "What is your goal?",
+      "subtitle": "Enter your goal — we'll find similar templates and generate a custom mandala.",
+      "placeholder": "e.g., Achieve TOEFL 100 in 6 months",
+      "placeholderPrefix": "e.g.,",
+      "inputAria": "Goal input",
+      "submit": "Go",
+      "cancel": "Cancel",
+      "clear": "Clear input",
+      "ai": {
+        "title": "AI-generated",
+        "loading": "AI is creating your mandala...",
+        "loadingDetail": "Usually takes about 1 minute",
+        "loadingCenter": "creating",
+        "sourceLora": "AI model",
+        "sourceFallback": "Fallback LLM",
+        "titleLora": "AI-crafted mandala for your goal",
+        "titleFallback": "AI-crafted mandala (fallback LLM)",
+        "error": "Generation is taking longer than expected. Would you like to try again?",
+        "retry": "Retry"
+      },
+      "card": {
+        "aiLoadingBadge": "AI generating...",
+        "aiCompleteBadge": "AI custom",
+        "matchLabel": "Best",
+        "domainGeneral": "general"
+      },
+      "similar": {
+        "title": "Similar templates",
+        "empty": "No similar templates found"
+      }
+    },
     "preview": {
       "centerGoal": "Core Goal · {{count}} sub-areas",
       "subject": "Area {{index}} · {{count}} action items",

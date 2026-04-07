@@ -1234,6 +1234,38 @@
         "finance": "재테크", "creative": "창작", "lifestyle": "라이프"
       }
     },
+    "goal": {
+      "title": "어떤 목표를 이루고 싶으세요?",
+      "subtitle": "목표를 입력하면 비슷한 템플릿을 찾고 맞춤 만다라트를 만들어드려요",
+      "placeholder": "예: 6개월 내 TOEFL 100점 달성",
+      "placeholderPrefix": "예:",
+      "inputAria": "목표 입력란",
+      "submit": "시작",
+      "cancel": "취소",
+      "clear": "입력 지우기",
+      "ai": {
+        "title": "AI 추천",
+        "loading": "AI가 만다라트를 만들고 있어요...",
+        "loadingDetail": "보통 1분 정도 걸려요",
+        "loadingCenter": "생성중",
+        "sourceLora": "AI 모델",
+        "sourceFallback": "보조 LLM",
+        "titleLora": "AI가 목표에 맞춰 만든 맞춤 만다라",
+        "titleFallback": "AI 맞춤 만다라 (보조 LLM)",
+        "error": "처리가 지연되고 있습니다. 다시 시도하시겠습니까?",
+        "retry": "다시 시도"
+      },
+      "card": {
+        "aiLoadingBadge": "AI 생성 중...",
+        "aiCompleteBadge": "AI 맞춤",
+        "matchLabel": "맞춤",
+        "domainGeneral": "일반"
+      },
+      "similar": {
+        "title": "비슷한 템플릿",
+        "empty": "비슷한 템플릿을 찾지 못했어요"
+      }
+    },
     "preview": {
       "centerGoal": "중심 목표 · {{count}}개 하위 영역",
       "subject": "영역 {{index}} · {{count}}개 실행 항목",

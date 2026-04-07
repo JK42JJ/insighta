@@ -15,9 +15,38 @@ export interface WizardTemplate {
   shareSlug: string | null;
   likeCount: number;
   centerGoal: string;
+  /** Short label shown in mini grid center cell (≤6 chars). Falls back to centerGoal. */
+  centerLabel?: string | null;
+  /** Full sub-goal text per cell (length 8) */
   subjects: string[];
-  /** depth=1 child levels, keyed by subject index */
+  /** Short labels per cell (length 8). Used for grid cells; subjects are used for hover detail. */
+  subLabels?: string[];
+  /** depth=1 child levels (8 actions per subject), keyed by subject index */
   subDetails: Record<number, string[]>;
+}
+
+export interface MandalaSearchResult {
+  mandala_id: string;
+  template_mandala_id: string | null;
+  center_goal: string;
+  center_label: string | null;
+  domain: string | null;
+  language: string | null;
+  similarity: number;
+  sub_goals: string[];
+  sub_labels: string[];
+  /** depth=1 actions per sub_goal index (8 strings each, total 64) */
+  sub_actions: Record<number, string[]>;
+}
+
+export interface GeneratedMandala {
+  center_goal: string;
+  center_label: string;
+  language: string;
+  domain: string;
+  sub_goals: string[];
+  sub_labels?: string[];
+  actions: Record<string, string[]>;
 }
 
 export interface WizardState {
@@ -25,6 +54,8 @@ export interface WizardState {
   selectedDomain: string | null;
   selectedTemplate: WizardTemplate | null;
   skills: Record<SkillType, boolean>;
+  /** User-entered goal text for hybrid search+generation flow */
+  goalInput: string;
 }
 
 // ─── Editor Types ───

@@ -10,6 +10,29 @@ interface WizardStepPreviewProps {
   onBack: () => void;
 }
 
+const CENTER_IDX = 4;
+
+/**
+ * Highlight occurrences of `label` inside `fullText` with a primary-tinted span.
+ * Used in the detail panel so the short label is visually anchored within the
+ * full sub-goal sentence.
+ */
+function HighlightedText({ text, highlight }: { text: string; highlight?: string | null }) {
+  if (!highlight || highlight.trim().length === 0 || !text.includes(highlight)) {
+    return <>{text}</>;
+  }
+  const idx = text.indexOf(highlight);
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="rounded-[3px] bg-primary/15 px-[3px] font-semibold text-primary">
+        {highlight}
+      </span>
+      {text.slice(idx + highlight.length)}
+    </>
+  );
+}
+
 export default function WizardStepPreview({
   template,
   isLoadingDetail: _isLoadingDetail,
@@ -19,35 +42,48 @@ export default function WizardStepPreview({
   const { t } = useTranslation();
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
-  // Build 3x3 cell array: [sub0..sub3, center, sub4..sub7]
-  const cells = [
-    ...template.subjects.slice(0, 4),
-    template.centerGoal,
-    ...template.subjects.slice(4),
-  ];
+  // Resolve center cell label: prefer centerLabel → centerGoal (full)
+  const centerCellText = template.centerLabel ?? template.centerGoal ?? '';
 
-  const CENTER_IDX = 4;
+  // Build cell label per index: prefer subLabels (full, never truncated) → fall back to subjects
+  const cellLabel = (idx: number): string => {
+    const label = template.subLabels?.[idx];
+    if (label && label.trim().length > 0) return label;
+    return template.subjects[idx] ?? '';
+  };
 
-  // Determine detail content based on hovered cell
+  // 9-cell layout: cells[0..3], center, cells[4..7]
+  const cells: string[] = [];
+  for (let i = 0; i < 9; i++) {
+    if (i === CENTER_IDX) cells.push(centerCellText);
+    else cells.push(cellLabel(i < CENTER_IDX ? i : i - 1));
+  }
+
+  // Detail content for hovered cell (full text + actions)
   const getDetail = () => {
     if (hoveredIdx === null) return null;
 
     if (hoveredIdx === CENTER_IDX) {
       return {
-        name: template.centerGoal,
+        title: template.centerGoal,
+        highlight: template.centerLabel ?? null,
         sub: t('wizard.preview.centerGoal', { count: template.subjects.length }),
-        items: template.subjects.map((s, i) => `${i + 1}. ${s}`),
+        items: template.subjects.map((s, i) => ({
+          text: `${i + 1}. ${s}`,
+          highlight: template.subLabels?.[i] ?? null,
+        })),
       };
     }
 
     const subjectIdx = hoveredIdx < CENTER_IDX ? hoveredIdx : hoveredIdx - 1;
-    const label = cells[hoveredIdx];
-    const subItems = template.subDetails[subjectIdx] ?? [];
+    const fullSubject = template.subjects[subjectIdx] ?? cells[hoveredIdx];
+    const actions = template.subDetails[subjectIdx] ?? [];
 
     return {
-      name: label,
-      sub: t('wizard.preview.subject', { index: subjectIdx + 1, count: subItems.length }),
-      items: subItems,
+      title: fullSubject,
+      highlight: template.subLabels?.[subjectIdx] ?? null,
+      sub: t('wizard.preview.subject', { index: subjectIdx + 1, count: actions.length }),
+      items: actions.map((a) => ({ text: a, highlight: null })),
     };
   };
 
@@ -61,9 +97,9 @@ export default function WizardStepPreview({
       </p>
 
       {/* Preview unit: grid + detail area */}
-      <div className="mt-9 flex items-start justify-center gap-9">
-        {/* 3x3 Grid */}
-        <div className="grid w-[300px] flex-shrink-0 grid-cols-3 gap-[5px]">
+      <div className="mt-9 flex items-start justify-center gap-10">
+        {/* 3x3 Grid (uses short labels for cells) */}
+        <div className="grid w-[320px] flex-shrink-0 grid-cols-3 gap-[6px]">
           {cells.map((label, idx) => {
             const isCenter = idx === CENTER_IDX;
             const isHovered = hoveredIdx === idx;
@@ -73,22 +109,22 @@ export default function WizardStepPreview({
                 key={idx}
                 onMouseEnter={() => setHoveredIdx(idx)}
                 onMouseLeave={() => setHoveredIdx(null)}
-                className={`flex aspect-square cursor-pointer items-center justify-center rounded-[10px] border p-1.5 text-center text-[12.5px] font-semibold leading-tight transition-all duration-200 ${
+                className={`flex aspect-square cursor-pointer items-center justify-center rounded-[10px] border p-2 text-center text-[13px] font-semibold leading-tight transition-all duration-200 ${
                   isCenter
-                    ? 'border-primary/[0.18] bg-[linear-gradient(135deg,hsl(var(--primary)/0.08),hsl(var(--primary)/0.03))] text-[13px] font-extrabold text-primary'
+                    ? 'border-primary/[0.18] bg-[linear-gradient(135deg,hsl(var(--primary)/0.08),hsl(var(--primary)/0.03))] text-[14px] font-extrabold text-primary'
                     : isHovered
                       ? 'border-primary/30 bg-primary/[0.05] text-primary'
                       : 'border-border bg-card text-muted-foreground'
                 }`}
               >
-                {label}
+                <span className="break-keep">{label}</span>
               </div>
             );
           })}
         </div>
 
-        {/* Detail area */}
-        <div className="w-[200px] flex-shrink-0 pt-1.5">
+        {/* Detail area — wider, no wrap on titles, comfortable line-height for action items */}
+        <div className="w-[360px] flex-shrink-0 pt-1.5">
           {detail === null ? (
             <div className="text-xs font-medium text-muted-foreground">
               {t('wizard.preview.hint.line1')}
@@ -97,17 +133,17 @@ export default function WizardStepPreview({
             </div>
           ) : (
             <div className="wizard-content-swap">
-              <div className="mb-0.5 text-[15px] font-extrabold tracking-tight text-primary">
-                {detail.name}
+              <div className="mb-1 break-keep text-[16px] font-extrabold leading-snug tracking-tight text-primary">
+                <HighlightedText text={detail.title} highlight={detail.highlight} />
               </div>
               <div className="mb-3.5 text-[10.5px] text-muted-foreground">{detail.sub}</div>
-              <ul className="list-none space-y-0">
+              <ul className="list-none space-y-[5px]">
                 {detail.items.map((item, i) => (
                   <li
                     key={i}
-                    className="py-[3.5px] text-[12.5px] text-muted-foreground transition-colors duration-100 hover:text-foreground"
+                    className="break-keep text-[12.5px] leading-[1.55] text-muted-foreground transition-colors duration-100 hover:text-foreground"
                   >
-                    {item}
+                    <HighlightedText text={item.text} highlight={item.highlight} />
                   </li>
                 ))}
               </ul>

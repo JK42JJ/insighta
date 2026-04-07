@@ -3,6 +3,15 @@ import { getMandalaManager } from '../../modules/mandala';
 import { getMood } from '../../modules/mandala/mood';
 import { getPrismaClient } from '../../modules/database/client';
 import {
+  generateMandala,
+  generateMandalaWithFallback,
+  generateLabels,
+  getCachedMandala,
+  setCachedMandala,
+  MandalaGenError,
+} from '../../modules/mandala/generator';
+import { searchMandalasByGoal, MandalaSearchError } from '../../modules/mandala/search';
+import {
   EXPLORE_SOURCES,
   EXPLORE_SORTS,
   EXPLORE_LANGUAGES,
@@ -464,6 +473,275 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
     }
   );
+
+  /**
+   * POST /api/v1/mandalas/generate - AI-generate a mandala from a goal using v13 model
+   */
+  fastify.post<{
+    Body: { goal: string; domain?: string; language?: 'ko' | 'en' };
+  }>('/generate', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const { goal, domain, language } = request.body;
+
+    if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
+      return reply.code(400).send({
+        status: 400,
+        code: 'INVALID_INPUT',
+        message: 'goal is required',
+      });
+    }
+
+    const trimmedGoal = goal.trim();
+    const cacheInput = { goal: trimmedGoal, domain, language };
+
+    // Cache lookup: identical normalized goal returns instantly (skips ~80s LoRA)
+    const cached = getCachedMandala(cacheInput);
+    if (cached) {
+      return reply.send({
+        status: 200,
+        data: { mandala: cached.mandala, source: cached.source, cached: true },
+      });
+    }
+
+    // Tier 2: Try LoRA v13 first
+    try {
+      const mandala = await generateMandala(cacheInput);
+      setCachedMandala(cacheInput, { mandala, source: 'lora' });
+      return reply.send({ status: 200, data: { mandala, source: 'lora', cached: false } });
+    } catch (err) {
+      if (err instanceof MandalaGenError) {
+        request.log.warn(
+          { err, userId, goal, code: err.code },
+          'LoRA generation failed, attempting Tier 3 fallback'
+        );
+
+        // Tier 3 fallback: embedding search → few-shot → OpenRouter LLM
+        try {
+          const mandala = await generateMandalaWithFallback(cacheInput);
+          setCachedMandala(cacheInput, { mandala, source: 'llm-fallback' });
+          return reply.send({
+            status: 200,
+            data: { mandala, source: 'llm-fallback', cached: false },
+          });
+        } catch (fallbackErr) {
+          request.log.error({ err: fallbackErr, userId, goal }, 'Tier 3 fallback also failed');
+          const code =
+            fallbackErr instanceof MandalaGenError
+              ? fallbackErr.code
+              : fallbackErr instanceof MandalaSearchError
+                ? fallbackErr.code
+                : 'GENERATION_FAILED';
+          return reply.code(503).send({
+            status: 503,
+            code,
+            message: `Both LoRA and fallback failed: ${err.message}`,
+          });
+        }
+      }
+
+      request.log.error({ err, userId, goal }, 'Mandala generation failed');
+      return reply.code(500).send({
+        status: 500,
+        code: 'GENERATION_FAILED',
+        message: 'Mandala generation failed',
+      });
+    }
+  });
+
+  /**
+   * POST /api/v1/mandalas/create-with-data - Create a mandala from full data (search result or AI-generated)
+   *
+   * Unlike /create-from-template which clones an existing DB template by ID,
+   * this endpoint takes the full mandala structure (title, subjects, actions) and
+   * creates a new user mandala. Used by the hybrid wizard (search result + AI generated).
+   */
+  fastify.post<{
+    Body: {
+      title: string;
+      centerGoal: string;
+      subjects: string[]; // 8 sub-goals
+      subDetails?: Record<string, string[]>; // depth=1 actions keyed by subject index
+      skills?: Record<string, boolean>;
+    };
+  }>('/create-with-data', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const { title, centerGoal, subjects, subDetails, skills } = request.body;
+
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return reply
+        .code(400)
+        .send({ status: 400, code: 'INVALID_INPUT', message: 'title is required' });
+    }
+    if (!Array.isArray(subjects) || subjects.length !== 8) {
+      return reply.code(400).send({
+        status: 400,
+        code: 'INVALID_INPUT',
+        message: 'subjects must be an array of 8 items',
+      });
+    }
+
+    try {
+      // Build levels: depth=0 root with 8 subjects, depth=1 for each subject with actions
+      const levels: Array<{
+        levelKey: string;
+        centerGoal: string;
+        subjects: string[];
+        position: number;
+        depth: number;
+        parentLevelKey?: string | null;
+      }> = [
+        {
+          levelKey: 'root',
+          centerGoal: centerGoal || title,
+          subjects,
+          position: 0,
+          depth: 0,
+          parentLevelKey: null,
+        },
+      ];
+
+      if (subDetails) {
+        subjects.forEach((_, idx) => {
+          const actions = subDetails[String(idx)] ?? subDetails[idx as unknown as string] ?? [];
+          if (Array.isArray(actions) && actions.length > 0) {
+            // Pad to 8 items if needed
+            const padded = [...actions];
+            while (padded.length < 8) padded.push('');
+            levels.push({
+              levelKey: `sub_${idx}`,
+              centerGoal: subjects[idx] ?? '',
+              subjects: padded.slice(0, 8),
+              position: idx,
+              depth: 1,
+              parentLevelKey: 'root',
+            });
+          }
+        });
+      }
+
+      const result = await getMandalaManager().createMandala(userId, title, levels);
+
+      // Create skill config rows
+      const prisma = getPrismaClient();
+      if (skills && typeof skills === 'object') {
+        const skillEntries = Object.entries(skills);
+        if (skillEntries.length > 0) {
+          await prisma.user_skill_config.createMany({
+            data: skillEntries.map(([skillType, enabled]) => ({
+              user_id: userId,
+              mandala_id: result.id,
+              skill_type: skillType,
+              enabled: Boolean(enabled),
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      return reply.send({ status: 200, data: { mandalaId: result.id } });
+    } catch (err) {
+      const anyErr = err as Error & { quota?: number; current?: number };
+      if (anyErr.message === 'Mandala quota exceeded') {
+        return reply.code(429).send({
+          status: 429,
+          code: 'QUOTA_EXCEEDED',
+          message: `Mandala limit reached (${anyErr.current}/${anyErr.quota})`,
+        });
+      }
+      request.log.error({ err, userId, title }, 'Failed to create mandala from data');
+      return reply.code(500).send({
+        status: 500,
+        code: 'CREATE_FAILED',
+        message: 'Failed to create mandala',
+      });
+    }
+  });
+
+  /**
+   * POST /api/v1/mandalas/generate-labels - Generate short labels (center + sub) via OpenRouter
+   *
+   * Used as fallback when search results or AI-generated mandalas have no labels.
+   */
+  fastify.post<{
+    Body: { center_goal: string; sub_goals: string[]; language?: 'ko' | 'en' };
+  }>('/generate-labels', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const { center_goal, sub_goals, language } = request.body;
+
+    if (!center_goal || !Array.isArray(sub_goals) || sub_goals.length === 0) {
+      return reply.code(400).send({
+        status: 400,
+        code: 'INVALID_INPUT',
+        message: 'center_goal and sub_goals are required',
+      });
+    }
+
+    try {
+      const labels = await generateLabels({ center_goal, sub_goals, language });
+      return reply.send({ status: 200, data: labels });
+    } catch (err) {
+      if (err instanceof MandalaGenError) {
+        const statusCode = err.code === 'SERVICE_UNAVAILABLE' || err.code === 'TIMEOUT' ? 503 : 422;
+        return reply.code(statusCode).send({
+          status: statusCode,
+          code: err.code,
+          message: err.message,
+        });
+      }
+      request.log.error({ err, userId, center_goal }, 'Label generation failed');
+      return reply.code(500).send({
+        status: 500,
+        code: 'GENERATION_FAILED',
+        message: 'Label generation failed',
+      });
+    }
+  });
+
+  /**
+   * POST /api/v1/mandalas/search-by-goal - Embedding search for similar mandalas
+   */
+  fastify.post<{
+    Body: { goal: string; limit?: number; threshold?: number; language?: string };
+  }>('/search-by-goal', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const { goal, limit, threshold, language } = request.body;
+
+    if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
+      return reply.code(400).send({
+        status: 400,
+        code: 'INVALID_INPUT',
+        message: 'goal is required',
+      });
+    }
+
+    try {
+      const results = await searchMandalasByGoal(goal.trim(), { limit, threshold, language });
+      return reply.send({ status: 200, data: { results } });
+    } catch (err) {
+      if (err instanceof MandalaSearchError) {
+        const statusCode = err.code === 'SERVICE_UNAVAILABLE' || err.code === 'TIMEOUT' ? 503 : 422;
+        return reply.code(statusCode).send({
+          status: statusCode,
+          code: err.code,
+          message: err.message,
+        });
+      }
+      request.log.error({ err, userId, goal }, 'Mandala search failed');
+      return reply.code(500).send({
+        status: 500,
+        code: 'SEARCH_FAILED',
+        message: 'Mandala search failed',
+      });
+    }
+  });
 
   /**
    * POST /api/v1/mandalas/create - Create a new mandala
