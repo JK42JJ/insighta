@@ -214,10 +214,11 @@ describe('triggerMandalaPostCreationAsync', () => {
     expect(mockSkillRegistryExecute).not.toHaveBeenCalled();
   });
 
-  it('continues to video-discover even when ensureMandalaEmbeddings reports failure', async () => {
-    // If embedding generation fails, the plugin preflight will detect
-    // missing embeddings and return a clean skip. Don't short-circuit
-    // the pipeline — let the plugin make its own decision.
+  it('SKIPS video-discover when ensureMandalaEmbeddings reports ok=false (short-circuit)', async () => {
+    // Design rule: if step 1 fails, don't bother running step 2 — the
+    // video-discover preflight would skip anyway for "no embeddings",
+    // burning 2 DB queries + LLM provider init + skill_runs logging for
+    // a guaranteed skip.
     mockEnsureEmbeddings.mockResolvedValue({
       ok: false,
       alreadyPresent: false,
@@ -225,27 +226,64 @@ describe('triggerMandalaPostCreationAsync', () => {
       embedMs: 500,
       reason: 'mandala has no root level',
     });
+    // These would be hit if short-circuit was broken — keep them defined
+    // so a regression shows up as "unexpected call" rather than a silent pass
     mockSkillConfigFindFirst.mockResolvedValue({ enabled: true });
     mockSubFindUnique.mockResolvedValue({ tier: 'free' });
-    mockSkillRegistryExecute.mockResolvedValue({ success: false, error: 'no sub_goal embeddings' });
+    mockSkillRegistryExecute.mockResolvedValue({ success: true, data: {} });
 
     triggerMandalaPostCreationAsync(USER_ID, MANDALA_ID);
     await flushAsync();
 
     expect(mockEnsureEmbeddings).toHaveBeenCalled();
-    expect(mockSkillRegistryExecute).toHaveBeenCalled(); // plugin still gets a chance
+    expect(mockSkillRegistryExecute).not.toHaveBeenCalled(); // short-circuited
+    expect(mockSkillConfigFindFirst).not.toHaveBeenCalled(); // also skipped
   });
 
-  it('continues to video-discover even when ensureMandalaEmbeddings throws', async () => {
+  it('SKIPS video-discover when ensureMandalaEmbeddings throws (short-circuit)', async () => {
     mockEnsureEmbeddings.mockRejectedValue(new Error('Ollama network error'));
     mockSkillConfigFindFirst.mockResolvedValue({ enabled: true });
-    mockSubFindUnique.mockResolvedValue({ tier: 'free' });
-    mockSkillRegistryExecute.mockResolvedValue({ success: false, error: 'no embeddings' });
+    mockSkillRegistryExecute.mockResolvedValue({ success: true, data: {} });
 
     expect(() => triggerMandalaPostCreationAsync(USER_ID, MANDALA_ID)).not.toThrow();
     await flushAsync();
 
     expect(mockEnsureEmbeddings).toHaveBeenCalled();
+    expect(mockSkillRegistryExecute).not.toHaveBeenCalled();
+    expect(mockSkillConfigFindFirst).not.toHaveBeenCalled();
+  });
+
+  it('proceeds to video-discover when ensureMandalaEmbeddings reports ok=true (alreadyPresent)', async () => {
+    mockEnsureEmbeddings.mockResolvedValue({
+      ok: true,
+      alreadyPresent: true,
+      finalCount: 8,
+      embedMs: 0,
+    });
+    mockSkillConfigFindFirst.mockResolvedValue({ enabled: true });
+    mockSubFindUnique.mockResolvedValue({ tier: 'free' });
+    mockSkillRegistryExecute.mockResolvedValue({ success: true, data: {} });
+
+    triggerMandalaPostCreationAsync(USER_ID, MANDALA_ID);
+    await flushAsync();
+
+    expect(mockSkillRegistryExecute).toHaveBeenCalled();
+  });
+
+  it('proceeds to video-discover when ensureMandalaEmbeddings reports ok=true (just generated)', async () => {
+    mockEnsureEmbeddings.mockResolvedValue({
+      ok: true,
+      alreadyPresent: false,
+      finalCount: 8,
+      embedMs: 9500,
+    });
+    mockSkillConfigFindFirst.mockResolvedValue({ enabled: true });
+    mockSubFindUnique.mockResolvedValue({ tier: 'free' });
+    mockSkillRegistryExecute.mockResolvedValue({ success: true, data: {} });
+
+    triggerMandalaPostCreationAsync(USER_ID, MANDALA_ID);
+    await flushAsync();
+
     expect(mockSkillRegistryExecute).toHaveBeenCalled();
   });
 

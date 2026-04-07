@@ -80,9 +80,18 @@ async function runPostCreation(userId: string, mandalaId: string): Promise<void>
   // These are a general platform asset — useful for video-discover,
   // similarity search, and the Phase 2b global centroid. We generate
   // them regardless of any skill opt-in.
+  //
+  // Short-circuit contract: if embeddings aren't ready at the end of
+  // step 1, DO NOT dispatch step 2. video-discover's preflight would
+  // skip anyway for "no sub_goal embeddings", so calling it would waste:
+  //   - 2 DB queries (user_skill_config + user_subscriptions)
+  //   - LLM provider init
+  //   - skill_runs INSERT/UPDATE for a guaranteed failure
+  let embeddingsReady = false;
   try {
     const result = await ensureMandalaEmbeddings(mandalaId);
     if (result.ok) {
+      embeddingsReady = true;
       if (result.alreadyPresent) {
         log.info(`embeddings already present for mandala=${mandalaId} (${result.finalCount}/8)`);
       } else {
@@ -92,15 +101,19 @@ async function runPostCreation(userId: string, mandalaId: string): Promise<void>
       }
     } else {
       log.warn(
-        `embedding generation failed for mandala=${mandalaId}: ${result.reason ?? 'unknown'}`
+        `embedding generation failed for mandala=${mandalaId}: ${result.reason ?? 'unknown'} — skipping video-discover`
       );
-      // Continue to step 2 — runVideoDiscover will detect missing
-      // embeddings in the plugin preflight and return a clean skip.
     }
   } catch (err) {
     log.warn(
-      `ensureMandalaEmbeddings threw for mandala=${mandalaId} (continuing): ${err instanceof Error ? err.message : String(err)}`
+      `ensureMandalaEmbeddings threw for mandala=${mandalaId}: ${err instanceof Error ? err.message : String(err)} — skipping video-discover`
     );
+  }
+
+  if (!embeddingsReady) {
+    // Stop here. Each step's precondition is verifiable before the next
+    // step runs — don't waste downstream resources on a guaranteed skip.
+    return;
   }
 
   // ── Step 2: video-discover (opt-in gated) ────────────────────────
