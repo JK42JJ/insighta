@@ -42,15 +42,41 @@ const log = logger.child({ module: 'video-discover' });
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
-// Rec Score weights (design doc §5)
+// Rec Score weights (CP353 P1 — tuned after view_count fix surfaced
+// freshness over-weighting + LLM noise keyword infiltration).
+//
+// Diff vs design doc §5 baseline:
+//   - video_quality 0.25 → 0.35 (+0.10) — taken from freshness
+//   - freshness     0.20 → 0.10 (-0.10) — fresh-but-irrelevant English videos
+//                                          were outranking popular Korean ones
+//   - diversity     0.10 → 0.00 (-0.10) — enforced by per-channel dedup loop
+//                                          instead of Rec Score; the score
+//                                          weight wasn't doing anything
+//   - per_mandala_relevance 0.10 (NEW)  — pulled diversity's 0.10 in;
+//                                          penalizes keywords with low cosine
+//                                          similarity to the user's mandala
+//                                          sub_goals (Q1 architecture: keep
+//                                          keyword_scores.goal_relevance global,
+//                                          compute per-mandala separately).
+//   - IKS / historical unchanged
 const REC_WEIGHT_IKS = 0.35;
-const REC_WEIGHT_VIDEO_QUALITY = 0.25;
-const REC_WEIGHT_FRESHNESS = 0.2;
-const REC_WEIGHT_DIVERSITY = 0.1;
+const REC_WEIGHT_VIDEO_QUALITY = 0.35;
+const REC_WEIGHT_FRESHNESS = 0.1;
+const REC_WEIGHT_PER_MANDALA = 0.1;
 const REC_WEIGHT_HISTORICAL = 0.1; // 0.5 placeholder until Layer 4 ships
+// Sum = 0.35 + 0.35 + 0.10 + 0.10 + 0.10 = 1.0
+// (diversity is no longer a Rec Score term — see per-channel dedup in execute())
 
-/** Days after which freshness drops to 0. */
-const FRESHNESS_HORIZON_DAYS = 90;
+/**
+ * Days after which freshness drops to 0. Educational content has a longer
+ * useful shelf life than entertainment, so 180 days (6 months) is more
+ * realistic than the original 90.
+ */
+const FRESHNESS_HORIZON_DAYS = 180;
+/** Max IDs per videos.list call (YouTube Data API hard limit). */
+const VIDEOS_LIST_MAX_IDS_PER_CALL = 50;
+/** Reference view count that maps to videoQuality 1.0 on the log scale. */
+const VIDEO_QUALITY_REFERENCE_VIEWS = 10_000_000;
 
 interface SubGoalCell {
   cellIndex: number;
@@ -326,24 +352,67 @@ export const executor: SkillExecutor = {
       };
     }
 
-    // ── Step 3: Batch videos.list to fetch view + like counts (1 quota unit) ─
+    // ── Step 3: Batch videos.list to fetch view + like counts ──────────
+    // YouTube Data API caps `id` parameter at 50 — chunk accordingly.
+    // 1 quota unit per chunk, regardless of id count.
     const uniqueVideoIds = Array.from(new Set(allCandidates.map((c) => c.videoId)));
+    let statsRequested = 0;
+    let statsReceived = 0;
+    let statsCallsMade = 0;
+    let statsCallFailures = 0;
     try {
-      const stats = await youtubeVideosBatch({
-        videoIds: uniqueVideoIds,
-        oauthToken: state.oauthToken,
-        fetchFn,
-      });
-      const statsById = new Map(stats.map((s) => [s.id ?? '', s]));
+      const allStats: YouTubeVideoStatsItem[] = [];
+      for (let i = 0; i < uniqueVideoIds.length; i += VIDEOS_LIST_MAX_IDS_PER_CALL) {
+        const chunk = uniqueVideoIds.slice(i, i + VIDEOS_LIST_MAX_IDS_PER_CALL);
+        statsRequested += chunk.length;
+        statsCallsMade += 1;
+        try {
+          const chunkStats = await youtubeVideosBatch({
+            videoIds: chunk,
+            oauthToken: state.oauthToken,
+            fetchFn,
+          });
+          allStats.push(...chunkStats);
+          statsReceived += chunkStats.length;
+        } catch (chunkErr) {
+          statsCallFailures += 1;
+          log.warn(
+            `videos.list chunk ${i / VIDEOS_LIST_MAX_IDS_PER_CALL + 1} failed: ${chunkErr instanceof Error ? chunkErr.message : String(chunkErr)}`
+          );
+        }
+      }
+      log.info(
+        `videos.list: requested=${statsRequested}, received=${statsReceived}, calls=${statsCallsMade}, failed=${statsCallFailures}`
+      );
+
+      const statsById = new Map(allStats.map((s) => [s.id ?? '', s]));
+      let mappedCount = 0;
+      let viewCountPopulated = 0;
       for (const cand of allCandidates) {
         const stat = statsById.get(cand.videoId);
         if (stat?.statistics) {
-          cand.viewCount = parseInt(stat.statistics.viewCount ?? '0', 10) || 0;
-          cand.likeCount = stat.statistics.likeCount
-            ? parseInt(stat.statistics.likeCount, 10) || 0
-            : null;
+          mappedCount += 1;
+          // viewCount is almost always present
+          const vcStr = stat.statistics.viewCount;
+          if (vcStr !== undefined) {
+            const vc = parseInt(vcStr, 10);
+            if (!Number.isNaN(vc)) {
+              cand.viewCount = vc;
+              viewCountPopulated += 1;
+            }
+          }
+          // likeCount is OFTEN missing — YouTube hides like counts for many
+          // creators by default. null fallback is the contracted signal.
+          const lcStr = stat.statistics.likeCount;
+          if (lcStr !== undefined) {
+            const lc = parseInt(lcStr, 10);
+            cand.likeCount = Number.isNaN(lc) ? null : lc;
+          }
         }
       }
+      log.info(
+        `videos.list mapping: candidates=${allCandidates.length}, mapped=${mappedCount}, view_count populated=${viewCountPopulated}`
+      );
     } catch (err) {
       log.warn(
         `videos.list batch failed (continuing without stats): ${err instanceof Error ? err.message : String(err)}`
@@ -535,15 +604,31 @@ interface YouTubeVideosBatchOpts {
 
 async function youtubeVideosBatch(opts: YouTubeVideosBatchOpts): Promise<YouTubeVideoStatsItem[]> {
   if (opts.videoIds.length === 0) return [];
+  if (opts.videoIds.length > VIDEOS_LIST_MAX_IDS_PER_CALL) {
+    throw new Error(
+      `youtubeVideosBatch called with ${opts.videoIds.length} ids — caller must chunk to ${VIDEOS_LIST_MAX_IDS_PER_CALL}`
+    );
+  }
   const url = new URL(`${YOUTUBE_API_BASE}/videos`);
   url.searchParams.set('part', 'statistics,contentDetails');
   url.searchParams.set('id', opts.videoIds.join(','));
-  url.searchParams.set('maxResults', String(opts.videoIds.length));
+  // NOTE: maxResults is NOT applicable when querying by id (YouTube Data API
+  // returns one item per id specified, up to the 50-id limit). Setting it
+  // would be a no-op at best and a source of confusion at worst.
 
   const res = await opts.fetchFn(url.toString(), {
     headers: { Authorization: `Bearer ${opts.oauthToken}` },
   });
-  if (!res.ok) throw new Error(`videos.list HTTP ${res.status}`);
+  if (!res.ok) {
+    let msg = '';
+    try {
+      const body = (await res.json()) as YouTubeVideosResponse;
+      msg = body.error?.message ?? '';
+    } catch {
+      // ignore
+    }
+    throw new Error(`videos.list HTTP ${res.status}${msg ? ` — ${msg}` : ''}`);
+  }
   const body = (await res.json()) as YouTubeVideosResponse;
   if (body.error) throw new Error(`videos.list error: ${body.error.message}`);
   return body.items ?? [];
@@ -554,15 +639,34 @@ async function youtubeVideosBatch(opts: YouTubeVideosBatchOpts): Promise<YouTube
 // ============================================================================
 
 function computeVideoQuality(cand: RecommendationCandidate): number {
-  // Without videos.list: defaults to 0.5 neutral.
-  // With stats: use like_ratio with 4% anchor, same as iks-scorer/scoring.ts.
-  if (cand.viewCount === null || cand.viewCount === 0 || cand.likeCount === null) {
-    return 0.5;
+  // Two signals are available with different reliability:
+  //   - viewCount       : almost always present in videos.list response
+  //   - likeCount       : often missing — YouTube hides counts for many videos
+  //
+  // Strategy:
+  //   - If viewCount missing entirely → 0.5 neutral (no signal)
+  //   - If only viewCount → log-scale quality, [0..1]
+  //   - If both present → 70% like_ratio + 30% view_log
+  if (cand.viewCount === null || cand.viewCount <= 0) return 0.5;
+
+  // View-count signal: log10 scale capped at 10M views = 1.0
+  // 100 views → 0.29, 10K → 0.57, 100K → 0.71, 1M → 0.86, 10M+ → 1.00
+  const viewLog = Math.log10(cand.viewCount + 1) / Math.log10(VIDEO_QUALITY_REFERENCE_VIEWS);
+  const viewSignal = viewLog < 0 ? 0 : viewLog > 1 ? 1 : viewLog;
+
+  if (cand.likeCount === null || cand.likeCount < 0) {
+    // No like data — view_count is the only signal
+    return viewSignal;
   }
-  const ratio = cand.likeCount / cand.viewCount;
+
+  // Like ratio signal: YouTube avg ~4%, 8%+ → top
+  const likeRatio = cand.likeCount / cand.viewCount;
   const LIKE_RATIO_TOP = 0.08;
-  const v = ratio / LIKE_RATIO_TOP;
-  return v < 0 ? 0 : v > 1 ? 1 : v;
+  const likeSignalRaw = likeRatio / LIKE_RATIO_TOP;
+  const likeSignal = likeSignalRaw < 0 ? 0 : likeSignalRaw > 1 ? 1 : likeSignalRaw;
+
+  // Blended (70/30) — likes is the stronger signal but views are more reliable
+  return likeSignal * 0.7 + viewSignal * 0.3;
 }
 
 function computeFreshness(publishedAt: string, nowMs: number): number {
@@ -576,12 +680,16 @@ function computeFreshness(publishedAt: string, nowMs: number): number {
 
 function computeRecScore(cand: RecommendationCandidate): number {
   const iksNorm = cand.iksTotal / 100;
+  // per_mandala_relevance is in [0, 1] (cosineToRelevance mapping in
+  // iks-scorer/embedding.ts converts cosine [-1, 1] → [0, 1]).
+  const perMandala =
+    cand.perMandalaRelevance < 0 ? 0 : cand.perMandalaRelevance > 1 ? 1 : cand.perMandalaRelevance;
   return (
     iksNorm * REC_WEIGHT_IKS +
     (cand.videoQuality ?? 0.5) * REC_WEIGHT_VIDEO_QUALITY +
     (cand.freshness ?? 0.5) * REC_WEIGHT_FRESHNESS +
-    0.5 * REC_WEIGHT_DIVERSITY + // diversity is enforced by per-channel dedup, not the score
-    0.5 * REC_WEIGHT_HISTORICAL // Layer 4 placeholder
+    perMandala * REC_WEIGHT_PER_MANDALA +
+    0.5 * REC_WEIGHT_HISTORICAL // Layer 4 placeholder until feedback loop ships
   );
 }
 
