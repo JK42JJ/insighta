@@ -389,6 +389,7 @@ model users {
   skill_configs                  user_skill_config[]
   recommendation_cache           recommendation_cache[]
   recommendation_feedback        recommendation_feedback[]
+  generation_log                 generation_log[]
 
   @@index([instance_id])
   @@index([is_anonymous])
@@ -1496,6 +1497,48 @@ model recommendation_feedback {
   @@index([recommendation_id], map: "idx_recommendation_feedback_rec")
   @@index([user_id, created_at(sort: Desc)], map: "idx_recommendation_feedback_user_created")
   @@index([action], map: "idx_recommendation_feedback_action")
+  @@schema("public")
+}
+
+/// Race-fallback outcome log for mandala generation.
+/// LoRA branch is captured even when it loses the race (background await),
+/// so its output can feed fine-tuning data + LoRA-vs-LLM quality analysis.
+/// See: docs/design/insighta-trend-recommendation-engine.md (eval pipeline)
+model generation_log {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                 String?   @db.Uuid
+  goal                    String
+  domain                  String?   @db.VarChar(100)
+  language                String    @default("ko") @db.VarChar(10)
+
+  // Race outcome
+  lora_won                Boolean
+  source_returned         String    @db.VarChar(20)
+
+  // LoRA branch (captured even when race-lost)
+  lora_output             Json?
+  lora_duration_ms        Int?
+  lora_valid              Boolean?
+  lora_sub_goals          Int?
+  lora_actions_total      Int?
+  lora_action_unique_rate Float?
+  lora_error              String?
+
+  // LLM branch (null only when LoRA won and LLM was cancelled mid-flight)
+  llm_output              Json?
+  llm_duration_ms         Int?
+  llm_valid               Boolean?
+  llm_error               String?
+
+  created_at              DateTime  @default(now()) @db.Timestamptz(6)
+
+  users users? @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([created_at(sort: Desc)], map: "idx_generation_log_created_at")
+  @@index([lora_won], map: "idx_generation_log_lora_won")
+  @@index([lora_valid], map: "idx_generation_log_lora_valid")
+  @@index([user_id], map: "idx_generation_log_user")
+  @@index([language], map: "idx_generation_log_language")
   @@schema("public")
 }
 

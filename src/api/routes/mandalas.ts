@@ -530,8 +530,12 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     // - LoRA wins (<=30s, valid) → return LoRA, cancel LLM
     // - LoRA times out or invalid → return LLM (already in flight)
     // - Both fail → 503
+    // Even on LoRA-loss, LoRA continues in the background and its result is
+    // captured to generation_log for fine-tuning + quality analysis.
     try {
-      const { mandala, source, duration_ms } = await generateMandalaRace(cacheInput);
+      const { mandala, source, duration_ms } = await generateMandalaRace(cacheInput, {
+        userId,
+      });
       setCachedMandala(cacheInput, { mandala, source });
       return reply.send({
         status: 200,

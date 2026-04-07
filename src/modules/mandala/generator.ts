@@ -7,9 +7,11 @@
  * Related: docs/research/mandala-model-eval-v14.md
  */
 
+import type { Prisma } from '@prisma/client';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { MemoryCache } from '../../utils/memory-cache';
+import { getPrismaClient } from '../database/client';
 import { searchMandalasByGoal, formatMandalasForFewShot } from './search';
 import { OpenRouterGenerationProvider } from '../llm/openrouter';
 
@@ -661,33 +663,155 @@ export interface RaceResult {
   duration_ms: number;
 }
 
-export async function generateMandalaRace(input: MandalaGenerateInput): Promise<RaceResult> {
-  const start = Date.now();
+// ─── Quality metrics ───
 
-  const loraController = new AbortController();
+/**
+ * distinct(actions) / total(actions). 1.0 means every action is unique;
+ * lower values flag the LoRA "repetition" failure mode where the model
+ * keeps spitting the same line.
+ */
+function computeActionUniqueRate(actions: Record<string, string[]> | undefined): number | null {
+  if (!actions) return null;
+  const all: string[] = [];
+  for (const arr of Object.values(actions)) {
+    if (Array.isArray(arr)) {
+      for (const a of arr) all.push(a.trim().toLowerCase());
+    }
+  }
+  if (all.length === 0) return null;
+  return new Set(all).size / all.length;
+}
+
+// ─── generation_log writer ───
+
+interface GenerationLogEntry {
+  user_id?: string;
+  goal: string;
+  domain?: string;
+  language: string;
+  lora_won: boolean;
+  source_returned: 'lora' | 'llm-fallback' | 'failed';
+  lora_output: GeneratedMandala | null;
+  lora_duration_ms: number | null;
+  lora_error: string | null;
+  llm_output: GeneratedMandala | null;
+  llm_duration_ms: number | null;
+  llm_error: string | null;
+}
+
+/**
+ * Fire-and-forget log writer. Never throws — logging failure must not break
+ * the user-facing race result. Captures derived quality metrics (validity,
+ * sub_goal count, action uniqueness) from raw branch outputs.
+ *
+ * If the user_id FK is invalid (e.g. cross-environment JWT, deleted user),
+ * the row is retried with user_id=null so we still preserve the analytics
+ * payload. The originating user is then unlinked but the LoRA-vs-LLM
+ * comparison data remains intact.
+ */
+async function logGenerationResult(entry: GenerationLogEntry): Promise<void> {
+  const lora = entry.lora_output;
+  const llm = entry.llm_output;
+  const loraValid = lora ? validateMandala(lora).valid : null;
+  const llmValid = llm ? validateMandala(llm).valid : null;
+  const loraSubGoals = Array.isArray(lora?.sub_goals) ? lora.sub_goals.length : null;
+  const loraActionsTotal = lora?.actions
+    ? Object.values(lora.actions).reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0)
+    : null;
+  const loraActionUniqueRate = computeActionUniqueRate(lora?.actions);
+
+  const buildData = (userId: string | null) => ({
+    user_id: userId,
+    goal: entry.goal,
+    domain: entry.domain ?? null,
+    language: entry.language,
+    lora_won: entry.lora_won,
+    source_returned: entry.source_returned,
+    lora_output: (lora ?? undefined) as Prisma.InputJsonValue | undefined,
+    lora_duration_ms: entry.lora_duration_ms,
+    lora_valid: loraValid,
+    lora_sub_goals: loraSubGoals,
+    lora_actions_total: loraActionsTotal,
+    lora_action_unique_rate: loraActionUniqueRate,
+    lora_error: entry.lora_error,
+    llm_output: (llm ?? undefined) as Prisma.InputJsonValue | undefined,
+    llm_duration_ms: entry.llm_duration_ms,
+    llm_valid: llmValid,
+    llm_error: entry.llm_error,
+  });
+
+  const db = getPrismaClient();
+
+  try {
+    await db.generation_log.create({ data: buildData(entry.user_id ?? null) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // FK violation on user_id (user not in this environment's auth.users) →
+    // retry with null user_id so the analytics payload survives.
+    if (entry.user_id && msg.includes('generation_log_user_id_fkey')) {
+      try {
+        await db.generation_log.create({ data: buildData(null) });
+        logger.warn(`generation_log: user_id ${entry.user_id} not found, logged with user_id=null`);
+        return;
+      } catch (retryErr) {
+        const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+        logger.warn(`generation_log: write failed (retry): ${retryMsg}`);
+        return;
+      }
+    }
+    logger.warn(`generation_log: write failed: ${msg}`);
+  }
+}
+
+export async function generateMandalaRace(
+  input: MandalaGenerateInput,
+  options?: { userId?: string }
+): Promise<RaceResult> {
+  const start = Date.now();
+  const userId = options?.userId;
+  const lang = input.language ?? 'ko';
+
+  // Only the LLM gets a controller. LoRA runs to completion even on race-loss
+  // so its output can be captured for fine-tuning + quality analysis (see
+  // generation_log table). The LoRA call has its own internal 600s upper bound.
   const llmController = new AbortController();
 
-  // Both promises catch errors so the race never throws unexpectedly.
-  // null = "this branch is unavailable" (failed/invalid/cancelled).
-  const loraPromise: Promise<GeneratedMandala | null> = generateMandala(
-    input,
-    loraController.signal
-  )
-    .then((m) => m)
+  // Per-branch timing/error captured via closure so the background logger
+  // sees the final values once each promise settles.
+  const loraStart = Date.now();
+  let loraDurationMs: number | null = null;
+  let loraError: string | null = null;
+  const loraPromise: Promise<GeneratedMandala | null> = generateMandala(input)
+    .then((m) => {
+      loraDurationMs = Date.now() - loraStart;
+      return m;
+    })
     .catch((err) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.warn(`Race: LoRA branch failed/invalid: ${msg} goal="${input.goal}"`);
+      loraDurationMs = Date.now() - loraStart;
+      loraError = err instanceof Error ? err.message : String(err);
+      logger.warn(`Race: LoRA branch failed/invalid: ${loraError} goal="${input.goal}"`);
       return null;
     });
 
+  const llmStart = Date.now();
+  let llmDurationMs: number | null = null;
+  let llmError: string | null = null;
   const llmPromise: Promise<GeneratedMandala | null> = generateMandalaWithFallback(
     input,
     llmController.signal
   )
-    .then((m) => m)
+    .then((m) => {
+      llmDurationMs = Date.now() - llmStart;
+      return m;
+    })
     .catch((err) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.warn(`Race: LLM branch failed: ${msg} goal="${input.goal}"`);
+      llmDurationMs = Date.now() - llmStart;
+      llmError = err instanceof Error ? err.message : String(err);
+      if (llmController.signal.aborted) {
+        logger.info(`Race: LLM cancelled (LoRA won) goal="${input.goal}"`);
+      } else {
+        logger.warn(`Race: LLM branch failed: ${llmError} goal="${input.goal}"`);
+      }
       return null;
     });
 
@@ -700,29 +824,65 @@ export async function generateMandalaRace(input: MandalaGenerateInput): Promise<
   const timeoutPromise = new Promise<RaceTick>((resolve) => {
     timeoutHandle = setTimeout(() => resolve({ kind: 'timeout' }), LORA_RACE_BUDGET_MS);
   });
-
   const loraTick = loraPromise.then<RaceTick>((m) => ({ kind: 'lora', mandala: m }));
 
   const first = await Promise.race([loraTick, timeoutPromise]);
   if (timeoutHandle) clearTimeout(timeoutHandle);
 
+  // ─── Case 1: LoRA won inside the 30s budget ───
   if (first.kind === 'lora' && first.mandala) {
-    // LoRA won inside the budget → cancel the LLM and return.
     llmController.abort();
-    // Suppress unhandled rejection on the discarded promise.
-    void llmPromise;
     const dur = Date.now() - start;
     logger.info(`Race: LoRA won goal="${input.goal}" duration=${(dur / 1000).toFixed(1)}s`);
+
+    // Background log: capture LoRA. LLM was cancelled mid-flight.
+    void logGenerationResult({
+      user_id: userId,
+      goal: input.goal,
+      domain: input.domain,
+      language: lang,
+      lora_won: true,
+      source_returned: 'lora',
+      lora_output: first.mandala,
+      lora_duration_ms: loraDurationMs,
+      lora_error: loraError,
+      llm_output: null,
+      llm_duration_ms: null,
+      llm_error: 'cancelled (LoRA won race)',
+    });
+
     return { mandala: first.mandala, source: 'lora', duration_ms: dur };
   }
 
-  // LoRA either timed out or returned null (failed/invalid).
-  // Cancel the LoRA fetch and await the LLM that's been running in parallel.
-  loraController.abort();
+  // ─── Case 2: LoRA missed the budget or returned null/invalid → use LLM ───
+  // Critically: do NOT abort the LoRA fetch. We let it run to completion in
+  // the background so its output (even if late) feeds the quality log.
   const reason = first.kind === 'timeout' ? 'timeout (30s)' : 'failed/invalid';
   logger.info(`Race: LoRA ${reason}, awaiting LLM fallback goal="${input.goal}"`);
 
   const llmMandala = await llmPromise;
+
+  // Background-await LoRA + log, regardless of LLM outcome. The user already
+  // has their result by this point; the log write is fire-and-forget so it
+  // never blocks the response.
+  const isFailed = llmMandala === null;
+  void loraPromise.then((loraData) => {
+    void logGenerationResult({
+      user_id: userId,
+      goal: input.goal,
+      domain: input.domain,
+      language: lang,
+      lora_won: false,
+      source_returned: isFailed ? 'failed' : 'llm-fallback',
+      lora_output: loraData,
+      lora_duration_ms: loraDurationMs,
+      lora_error: loraError,
+      llm_output: llmMandala,
+      llm_duration_ms: llmDurationMs,
+      llm_error: llmError,
+    });
+  });
+
   if (!llmMandala) {
     throw new MandalaGenError('Both LoRA and LLM fallback failed', 'GENERATION_FAILED');
   }
