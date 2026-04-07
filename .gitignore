@@ -28,6 +28,7 @@ prisma/data/
 prisma/migrations/
 !prisma/migrations/.gitkeep
 !prisma/migrations/ontology/
+!prisma/migrations/video_discover/
 
 # Logs
 logs/
