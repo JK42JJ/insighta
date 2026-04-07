@@ -1,6 +1,6 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Mail, Bell, Shield, BarChart3 } from 'lucide-react';
+import { Mail, Bell, Shield, BarChart3, Sparkles, Video } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { SkillType } from '@/shared/types/mandala-ux';
@@ -13,13 +13,22 @@ interface SkillCardData {
   type: SkillType;
   nameKey: string;
   descKey: string;
-  tier: 'FREE' | 'PRO';
+  tier: 'FREE' | 'PRO' | 'BETA';
   icon: LucideIcon;
-  demoKey: 'mail' | 'bell' | 'shield' | 'chart';
+  demoKey: 'mail' | 'bell' | 'shield' | 'chart' | 'video';
   proHintKey?: string;
 }
 
 const SKILL_CARDS: SkillCardData[] = [
+  {
+    type: 'video_discover',
+    nameKey: 'wizard.skill.videoDiscover.name',
+    descKey: 'wizard.skill.videoDiscover.desc',
+    tier: 'BETA',
+    icon: Video,
+    demoKey: 'video',
+    proHintKey: 'wizard.skill.videoDiscover.betaHint',
+  },
   {
     type: 'newsletter',
     nameKey: 'wizard.skill.newsletter.name',
@@ -105,11 +114,25 @@ function DemoChart() {
   );
 }
 
+function DemoVideo() {
+  const { t } = useTranslation();
+  return (
+    <div className="demo-video">
+      <div className="vid-thumb v1" />
+      <div className="vid-thumb v2" />
+      <div className="vid-thumb v3" />
+      <Sparkles className="vid-spark h-3.5 w-3.5 text-amber-300" />
+      <div className="demo-video-label">{t('wizard.skill.demo.video')}</div>
+    </div>
+  );
+}
+
 const DEMO_COMPONENTS: Record<string, React.FC> = {
   mail: DemoMail,
   bell: DemoBell,
   shield: DemoBias,
   chart: DemoChart,
+  video: DemoVideo,
 };
 
 // ─── Component ───
@@ -219,7 +242,11 @@ function SkillCard({ card, isOn, Demo, onToggle }: SkillCardProps) {
       }}
     >
       {/* Tier badge */}
-      <div className={`tier-badge ${card.tier === 'FREE' ? 'tier-free' : 'tier-pro'}`}>
+      <div
+        className={`tier-badge ${
+          card.tier === 'FREE' ? 'tier-free' : card.tier === 'PRO' ? 'tier-pro' : 'tier-beta'
+        }`}
+      >
         {card.tier}
       </div>
 

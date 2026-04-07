@@ -1290,11 +1290,13 @@
       "alerts": { "name": "New Video Alerts", "desc": "Instant alerts when related new videos are found" },
       "biasFilter": { "name": "Bias Filter", "desc": "Auto-block clickbait/biased content" },
       "report": { "name": "Monthly Report", "desc": "Learning progress + insight analysis", "proHint": "Subscribe to Pro for monthly auto-reports" },
+      "videoDiscover": { "name": "YouTube Card Discovery", "desc": "Auto-discover videos based on your goal + trends", "betaHint": "Coming soon — toggle on now and it'll auto-activate at launch" },
       "demo": {
         "mail": "Arrives Monday 8 AM",
         "bell": "New video found!",
         "bias": { "thumbnail": "100x guaranteed!", "stamp": "Blocked", "label": "Clickbait filtered" },
-        "chart": "Monthly growth trend"
+        "chart": "Monthly growth trend",
+        "video": "3 picks for today"
       }
     }
   },

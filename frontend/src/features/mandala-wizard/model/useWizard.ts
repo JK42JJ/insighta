@@ -81,6 +81,10 @@ const DEFAULT_SKILLS: Record<SkillType, boolean> = {
   alerts: true,
   bias_filter: true,
   report: false,
+  // Phase 0: backend executor not yet shipped (#358 Phase 1-3).
+  // Toggle persists user opt-in to user_skill_config; activates automatically
+  // when video-discover skill plugin lands.
+  video_discover: true,
 };
 
 // ─── Hook ───

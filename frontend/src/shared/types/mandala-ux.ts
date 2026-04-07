@@ -1,6 +1,12 @@
 // ─── Wizard Types ───
 
-export const SKILL_TYPES = ['newsletter', 'alerts', 'bias_filter', 'report'] as const;
+export const SKILL_TYPES = [
+  'newsletter',
+  'alerts',
+  'bias_filter',
+  'report',
+  'video_discover',
+] as const;
 export type SkillType = (typeof SKILL_TYPES)[number];
 
 export interface WizardDomain {

@@ -95,6 +95,12 @@
   border: 1px solid rgba(252, 196, 25, 0.15);
 }
 
+.tier-beta {
+  background: rgba(167, 139, 250, 0.12);
+  color: #a78bfa;
+  border: 1px solid rgba(167, 139, 250, 0.22);
+}
+
 .sk-card.is-off .tier-badge { opacity: 0.25; }
 
 /* ─── Demo area ─── */
@@ -409,9 +415,71 @@
   animation: wizardFadeUp 0.3s 0.7s cubic-bezier(0.19, 1, 0.22, 1) forwards;
 }
 
+/* ─── Video Discover (3 stacked thumbnails + sparkle) ─── */
+
+.demo-video {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+}
+
+.demo-video .vid-thumb {
+  position: absolute;
+  width: 32px;
+  height: 20px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.55), rgba(139, 92, 246, 0.35));
+  border: 1px solid rgba(167, 139, 250, 0.45);
+  opacity: 0;
+}
+
+.demo-video .v1 { transform: translate(-22px, 0) rotate(-6deg); }
+.demo-video .v2 { transform: translate(0, -2px) rotate(0deg); z-index: 2; }
+.demo-video .v3 { transform: translate(22px, 0) rotate(6deg); }
+
+.demo-video .vid-spark {
+  position: absolute;
+  top: 6px;
+  right: 18px;
+  opacity: 0;
+}
+
+.sk-card.is-on .demo-video .v1 { animation: vidThumbIn 0.45s 0.10s cubic-bezier(0.19, 1, 0.22, 1) forwards; }
+.sk-card.is-on .demo-video .v2 { animation: vidThumbIn 0.45s 0.20s cubic-bezier(0.19, 1, 0.22, 1) forwards; }
+.sk-card.is-on .demo-video .v3 { animation: vidThumbIn 0.45s 0.30s cubic-bezier(0.19, 1, 0.22, 1) forwards; }
+.sk-card.is-on .demo-video .vid-spark {
+  animation: vidSparkle 0.6s 0.55s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+.demo-video-label {
+  position: absolute;
+  bottom: 4px;
+  font-size: 9px;
+  color: hsl(var(--muted-foreground));
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.sk-card.is-on .demo-video-label {
+  animation: wizardFadeUp 0.3s 0.7s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
 /* ═══════════════════════════════════════
    Keyframes
    ═══════════════════════════════════════ */
+
+@keyframes vidThumbIn {
+  0%   { opacity: 0; transform: translate(var(--tx, 0), 8px) scale(0.7) rotate(var(--rot, 0deg)); }
+  100% { opacity: 0.9; }
+}
+@keyframes vidSparkle {
+  0%   { opacity: 0; transform: scale(0.4) rotate(-20deg); }
+  60%  { opacity: 1; transform: scale(1.15) rotate(8deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
 
 @keyframes envFlyIn {
   0%   { transform: translateY(18px) scale(0.7); opacity: 0; }
