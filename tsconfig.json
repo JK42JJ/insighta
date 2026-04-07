@@ -14,7 +14,8 @@
       "@/modules/*": ["modules/*"],
       "@/cli/*": ["cli/*"],
       "@/config/*": ["config/*"],
-      "@/utils/*": ["utils/*"]
+      "@/utils/*": ["utils/*"],
+      "@/skills/*": ["skills/*"]
     },
     "resolveJsonModule": true,
 

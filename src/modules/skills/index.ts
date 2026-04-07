@@ -15,7 +15,8 @@ import { AlertSkill } from './alert';
 import { RecommendSkill } from './recommend';
 import { VideoScriptSkill } from './video-script';
 import { BlogPostSkill } from './blog-post';
-import { VideoDiscoverSkill } from './video-discover';
+// VideoDiscoverSkill BETA stub removed in CP352 — real plugin lives at
+// src/skills/plugins/video-discover/ (registered via src/skills/index.ts).
 
 // Skill registration — add one line per new skill
 skillRegistry.register(new NewsletterSkill());
@@ -24,8 +25,11 @@ skillRegistry.register(new AlertSkill());
 skillRegistry.register(new RecommendSkill());
 skillRegistry.register(new VideoScriptSkill());
 skillRegistry.register(new BlogPostSkill());
-// BETA stub — visible in UI surfaces. Real plugin lands in #358 Phase 3.
-skillRegistry.register(new VideoDiscoverSkill());
+// (video-discover BETA stub removed — real plugin in src/skills/plugins/video-discover/)
+
+// New-style plugin registration entrypoint (#358 Phase 1+).
+// Side-effect import: registers all plugins under src/skills/plugins/.
+import '@/skills';
 
 export { skillRegistry };
 export { checkSkillQuota } from './quota-checker';

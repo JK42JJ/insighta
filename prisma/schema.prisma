@@ -1435,6 +1435,11 @@ model keyword_scores {
   weight_version      Int      @default(1)
   scored_at           DateTime @default(now()) @db.Timestamptz(6)
   expires_at          DateTime @db.Timestamptz(6)
+  /// Phase 2b: Qwen3-Embedding-8B vector for the keyword text.
+  /// Stored once by iks-scorer so Phase 3 video-discover can compute
+  /// per-mandala similarity without re-calling Mac Mini Ollama at recommendation time.
+  /// 4096d exceeds pgvector HNSW 2000d limit — brute-force cosine until volume forces a change.
+  embedding           Unsupported("vector(4096)")?
 
   @@unique([keyword, language])
   @@index([iks_total(sort: Desc)], map: "idx_keyword_scores_iks_desc")

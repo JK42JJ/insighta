@@ -173,7 +173,7 @@ keyword_accuracy (mat. view) → recommendation-tuner → scoring_weights (histo
 
 ## 9. 스킬 등록 (Plugin Architecture 준수)
 
-> **참조 문서**: `docs/design/insighta-skill-plugin-architecture.md`
+> **참조 문서**: `docs/design/insighta-skill-plugin-architecture.md` (CP352 작성 완료, #366)
 > (3-Layer: A=SkillRegistry, B=Temporal, C=VOC)
 >
 > 본 엔진의 3개 스킬은 모두 **신규 플러그인 규격**을 따른다.
@@ -317,14 +317,171 @@ src/skills/plugins/
   - 기존 `src/modules/skills/*.ts` → `src/skills/plugins/{id}/`로 마이그레이션 정책
   - Temporal Layer B 통합 시점 + VOC Layer C 워크플로우
 
-## 13. Out of Scope (Phase 0)
+## 13. 추천 정책 (Recommendation Policy)
+
+> **정의 시점**: 2026-04-07 (CP352 보완)
+> **구현 위치**: Phase 3 (`src/skills/plugins/video-discover/executor.ts`) + Phase 4 (대시보드 UI)
+
+### 13.1 추천 단위 + 수량
+
+```
+셀당 3개 × 8셀 = 주당 24개 추천
+갱신: 매주 월요일 04:00 KST (trend-collector + IKS-scorer 직후)
+TTL : 7일 (recommendation_cache.expires_at = created_at + 7d)
+```
+
+명시 상수 (Phase 3 구현 시 `src/config/video-discover.ts` 모듈 추출 대상):
+
+| Constant                    | Value | 의미                                  |
+| --------------------------- | ----- | ------------------------------------- |
+| `RECS_PER_CELL`             | `3`   | 셀당 추천 영상 수                     |
+| `CELLS_PER_MANDALA`         | `8`   | 만다라 sub_goal 수 (center 제외)      |
+| `RECS_PER_MANDALA_PER_WEEK` | `24`  | 위 둘의 곱                            |
+| `RECOMMENDATION_TTL_DAYS`   | `7`   | recommendation_cache TTL              |
+| `RECOMMENDATION_REFRESH_DOW` | `1`  | 갱신 요일 (0=일, 1=월)                |
+| `RECOMMENDATION_REFRESH_HOUR_KST` | `4` | 갱신 시각 (KST)                  |
+
+> 만료 정책 정리: `expires_at` 필터 + 주 1회 vacuum job (Open Question Q6 잠정 결정).
+
+### 13.2 대시보드 표시 정책
+
+```
+대시보드 상단: 전체 Top 3
+  → 8셀 추천 24개 중 rec_score 상위 3개
+  → 다양성 보정: 같은 셀에서 2개 이상 뽑지 않음
+
+셀 클릭 시: 해당 셀의 3개 표시 (rec_score 내림차순)
+
+각 영상 카드 액션: [추가] [나중에] [관심없음]
+  → "추가"   → 해당 셀의 카드로 편입 (recommendation_feedback action='add', score=0.7)
+  → "나중에" → 일단 숨김, 다음 갱신까지 유지 (action='later', score=0.1)
+  → "관심없음" → 즉시 숨김 + 같은 채널/키워드 향후 가중치 하향 (action='dismiss', score=-0.5)
+```
+
+### 13.3 사용자 액션 → recommendation_feedback 매핑
+
+§6 (Feedback Loop) 표와 일관성 유지:
+
+| UI 액션         | DB action   | action_score |
+| --------------- | ----------- | ------------ |
+| 카드 노출       | `impression`| `0.0`        |
+| 썸네일 클릭     | `click`     | `0.2`        |
+| 30초+ 시청      | `watch_30s` | `0.4`        |
+| **[추가]**      | `add`       | `0.7`        |
+| 메모 작성       | `memo`      | `0.9`        |
+| **[나중에]**    | `later`     | `0.1`        |
+| **[관심없음]**  | `dismiss`   | `-0.5`       |
+
+> `recommendation_feedback.action`은 `VARCHAR(20)`로 free-form. 위 7개 값이 SSOT — Phase 5 구현 시 enum으로 굳힐 것.
+
+### 13.4 갱신 사이클과 cron 정합
+
+- `trend-collector` (Phase 1, cron `0 3 * * *`) → 매일 트렌드 신호
+- `IKS-scorer` (Phase 2, 트리거 미확정) → 신호 갱신 후 키워드 점수
+- `video-discover` (Phase 3, 이벤트 + cron) → 매주 월 04:00 (RECS_PER_MANDALA_PER_WEEK 생성) + `mandala.created` 즉시 1회
+- `recommendation-tuner` (Phase 6, cron `0 4 * * 1`) → 주간 가중치 검토 (`video-discover`와 같은 시각, 직후 실행)
+
+## 14. 카드 Eviction 정책
+
+> **정의 시점**: 2026-04-07 (CP352 보완)
+> **구현 위치**: Phase 4 (`src/modules/cards/eviction.ts` — 신설 예정)
+> **적용 범위**: video-discover로 추가되는 카드뿐 아니라 **모든 자동 추가 카드** (recommend, news 등 향후 모든 스킬)
+
+### 14.1 셀당 한도
+
+```
+CELL_CARD_LIMIT = 8     // 만다라트 8×8 구조와 대칭
+사용자 흔적 있는 카드: 한도 초과 허용 (영구 보존)
+```
+
+### 14.2 사용자 흔적 (user trace) 정의
+
+다음 중 **하나라도** 있으면 영구 보존 (eviction 대상에서 제외):
+
+| 조건               | 판정 필드 (잠정)                       |
+| ------------------ | -------------------------------------- |
+| 메모 작성          | `local_cards.memo_count > 0` 또는 별도 join |
+| 타임스탬프 추가    | `card_timestamps` 행 존재              |
+| 수동 셀 이동       | `local_cards.is_manually_moved = true` |
+| 시청 완료 표시     | `local_cards.is_watch_completed = true`|
+
+> Phase 4 구현 직전, 위 필드들의 실제 schema 존재 여부를 `prisma/schema.prisma`에서 검증할 것 (현재는 사양 단계).
+
+### 14.3 eviction 알고리즘
+
+```typescript
+// src/modules/cards/eviction.ts (Phase 4 신설 예정)
+import { CELL_CARD_LIMIT } from '@/config/video-discover';
+
+export async function addCardToCell(cellId: string, newCard: Card) {
+  const cards = await getCardsInCell(cellId);
+
+  if (cards.length >= CELL_CARD_LIMIT) {
+    const evictable = cards
+      .filter((c) => !hasUserTrace(c))
+      .sort((a, b) => a.created_at.getTime() - b.created_at.getTime());
+
+    if (evictable.length > 0) {
+      // 가장 오래된 흔적 없는 카드 자동 archive (삭제 X)
+      await archiveCard(evictable[0].id);
+    }
+    // else: 모두 흔적 있음 → eviction 없이 한도 초과 허용
+  }
+
+  await insertCard(cellId, newCard);
+}
+
+export function hasUserTrace(card: Card): boolean {
+  return (
+    card.has_memo ||
+    card.has_timestamps ||
+    card.is_manually_moved ||
+    card.is_watch_completed
+  );
+}
+```
+
+### 14.4 archive 의미
+
+- **archive ≠ delete**: row는 보존, `status = 'archived'` 마킹만
+- 사용자는 "히스토리" 탭에서 언제든 열람/복원 가능
+- 추천 결과는 archive된 카드를 중복 제안하지 않음 (`status != 'archived'` 필터)
+
+### 14.5 심리학적 원칙 (절대 위반 금지)
+
+```
+✅ 사용자에게 정리를 요구하지 않음 (자동 archive)
+✅ 공들인 카드(메모, 타임스탬프)는 절대 사라지지 않음
+✅ 열심히 쓸수록 셀이 풍성해짐 (한도 초과 허용 = 보상)
+✅ archive는 히스토리에서 언제든 볼 수 있음 (안전망)
+❌ "카드가 가득 찼습니다" 같은 알림 절대 안 함
+❌ "오래된 카드를 정리하시겠습니까?" 같은 confirm 다이얼로그 금지
+❌ 사용자 흔적 있는 카드를 자동 삭제하는 모든 경로 금지
+```
+
+### 14.6 video-discover 추천 흐름과의 결합
+
+```
+유저 [추가] 클릭 (recommendation_cache → local_cards 편입)
+  ↓
+addCardToCell(cellId, newCard)
+  ↓
+한도 8 미만? → 그냥 INSERT
+한도 8 이상?
+  ├─ 흔적 없는 카드 있음 → 가장 오래된 것 archive → INSERT
+  └─ 모두 흔적 있음     → 한도 초과 허용 (INSERT만)
+```
+
+→ 유저는 항상 [추가]가 성공한다는 것만 보고, eviction은 백그라운드에서 침묵 처리.
+
+## 15. Out of Scope (Phase 0)
 
 - 코드 작성 (skills, jobs, UI)
 - Prod DB 적용
 - Cron 등록
 - 외부 API 키 발급
 
-## 14. References
+## 16. References
 
 - Existing skill pattern: `src/modules/skills/recommend.ts`, `src/modules/skills/types.ts`
 - SkillRegistry: `src/modules/skills/registry.ts`
