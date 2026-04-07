@@ -17,6 +17,7 @@ build/
 .env.docker
 .env.example
 .env.production.example
+.env.*-tmp
 
 # Database
 data/*.db
