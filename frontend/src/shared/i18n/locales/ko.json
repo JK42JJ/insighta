@@ -906,12 +906,14 @@
     "descRecommend": "만다라의 지식 공백을 채우는 AI 추천",
     "descScript": "만다라 카드로 영상 스크립트 생성",
     "descBlog": "만다라 지식으로 블로그 포스트 초안 생성",
+    "descVideoDiscover": "유튜브 카드 추천 (BETA — 곧 출시)",
     "typeNewsletter": "뉴스레터",
     "typeReport": "리포트",
     "typeAlert": "알림",
     "typeRecommend": "추천",
     "typeScript": "영상 스크립트",
-    "typeBlog": "블로그 포스트"
+    "typeBlog": "블로그 포스트",
+    "typeVideoDiscover": "유튜브 카드 추천"
   },
   "landing": {
     "ltdBanner": "Pioneer 평생 이용권 - $99 (정가 $299). 남은 자리가 얼마 없습니다.",

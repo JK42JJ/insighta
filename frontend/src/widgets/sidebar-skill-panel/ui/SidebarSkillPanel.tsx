@@ -26,6 +26,7 @@ const SKILL_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
   recommend: Sparkles,
   script: Video,
   blog: PenLine,
+  video_discover: Video,
 };
 
 const SKILL_DESC_KEYS: Record<string, string> = {
@@ -35,6 +36,7 @@ const SKILL_DESC_KEYS: Record<string, string> = {
   recommend: 'descRecommend',
   script: 'descScript',
   blog: 'descBlog',
+  video_discover: 'descVideoDiscover',
 };
 
 const SKILL_TYPE_KEYS: Record<string, string> = {
@@ -44,6 +46,7 @@ const SKILL_TYPE_KEYS: Record<string, string> = {
   recommend: 'typeRecommend',
   script: 'typeScript',
   blog: 'typeBlog',
+  video_discover: 'typeVideoDiscover',
 };
 
 interface SkillPreviewData {

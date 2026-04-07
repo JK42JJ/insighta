@@ -15,6 +15,7 @@ import { AlertSkill } from './alert';
 import { RecommendSkill } from './recommend';
 import { VideoScriptSkill } from './video-script';
 import { BlogPostSkill } from './blog-post';
+import { VideoDiscoverSkill } from './video-discover';
 
 // Skill registration — add one line per new skill
 skillRegistry.register(new NewsletterSkill());
@@ -23,6 +24,8 @@ skillRegistry.register(new AlertSkill());
 skillRegistry.register(new RecommendSkill());
 skillRegistry.register(new VideoScriptSkill());
 skillRegistry.register(new BlogPostSkill());
+// BETA stub — visible in UI surfaces. Real plugin lands in #358 Phase 3.
+skillRegistry.register(new VideoDiscoverSkill());
 
 export { skillRegistry };
 export { checkSkillQuota } from './quota-checker';
