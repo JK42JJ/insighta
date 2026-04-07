@@ -38,6 +38,18 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+    // Forward external abort (e.g. race-fallback discarding the LLM loser)
+    // into the same controller so the underlying fetch is cancelled too.
+    const externalSignal = options?.signal;
+    const onExternalAbort = () => controller.abort();
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        controller.abort();
+      } else {
+        externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+      }
+    }
+
     let response: Response;
     try {
       response = await fetch(OPENROUTER_API_URL, {
@@ -53,11 +65,18 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       });
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
+        // Distinguish "external cancel" from internal timeout for clearer logs.
+        if (externalSignal?.aborted) {
+          throw new Error('OpenRouter request cancelled by external signal');
+        }
         throw new Error(`OpenRouter request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
       }
       throw err;
     } finally {
       clearTimeout(timeout);
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', onExternalAbort);
+      }
     }
 
     if (!response.ok) {

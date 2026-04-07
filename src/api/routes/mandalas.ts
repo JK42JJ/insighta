@@ -3,8 +3,7 @@ import { getMandalaManager } from '../../modules/mandala';
 import { getMood } from '../../modules/mandala/mood';
 import { getPrismaClient } from '../../modules/database/client';
 import {
-  generateMandala,
-  generateMandalaWithFallback,
+  generateMandalaRace,
   generateLabels,
   getCachedMandala,
   setCachedMandala,
@@ -527,48 +526,27 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       });
     }
 
-    // Tier 2: Try LoRA v13 first
+    // Race fallback: LoRA + LLM in parallel, 30s LoRA budget.
+    // - LoRA wins (<=30s, valid) → return LoRA, cancel LLM
+    // - LoRA times out or invalid → return LLM (already in flight)
+    // - Both fail → 503
     try {
-      const mandala = await generateMandala(cacheInput);
-      setCachedMandala(cacheInput, { mandala, source: 'lora' });
-      return reply.send({ status: 200, data: { mandala, source: 'lora', cached: false } });
-    } catch (err) {
-      if (err instanceof MandalaGenError) {
-        request.log.warn(
-          { err, userId, goal, code: err.code },
-          'LoRA generation failed, attempting Tier 3 fallback'
-        );
-
-        // Tier 3 fallback: embedding search → few-shot → OpenRouter LLM
-        try {
-          const mandala = await generateMandalaWithFallback(cacheInput);
-          setCachedMandala(cacheInput, { mandala, source: 'llm-fallback' });
-          return reply.send({
-            status: 200,
-            data: { mandala, source: 'llm-fallback', cached: false },
-          });
-        } catch (fallbackErr) {
-          request.log.error({ err: fallbackErr, userId, goal }, 'Tier 3 fallback also failed');
-          const code =
-            fallbackErr instanceof MandalaGenError
-              ? fallbackErr.code
-              : fallbackErr instanceof MandalaSearchError
-                ? fallbackErr.code
-                : 'GENERATION_FAILED';
-          return reply.code(503).send({
-            status: 503,
-            code,
-            message: `Both LoRA and fallback failed: ${err.message}`,
-          });
-        }
-      }
-
-      request.log.error({ err, userId, goal }, 'Mandala generation failed');
-      return reply.code(500).send({
-        status: 500,
-        code: 'GENERATION_FAILED',
-        message: 'Mandala generation failed',
+      const { mandala, source, duration_ms } = await generateMandalaRace(cacheInput);
+      setCachedMandala(cacheInput, { mandala, source });
+      return reply.send({
+        status: 200,
+        data: { mandala, source, cached: false, duration_ms },
       });
+    } catch (err) {
+      const code =
+        err instanceof MandalaGenError
+          ? err.code
+          : err instanceof MandalaSearchError
+            ? err.code
+            : 'GENERATION_FAILED';
+      const message = err instanceof Error ? err.message : 'Mandala generation failed';
+      request.log.error({ err, userId, goal }, 'Mandala race failed (both branches)');
+      return reply.code(503).send({ status: 503, code, message });
     }
   });
 

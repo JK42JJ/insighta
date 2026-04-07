@@ -16,6 +16,11 @@ export interface GenerateOptions {
   temperature?: number;
   maxTokens?: number;
   format?: 'json' | 'text';
+  /**
+   * External AbortSignal — when fired, the in-flight request is cancelled.
+   * Used by race-fallback patterns to discard losers without waiting for them.
+   */
+  signal?: AbortSignal;
 }
 
 export interface GenerationProvider {

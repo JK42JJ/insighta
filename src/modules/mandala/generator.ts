@@ -306,7 +306,10 @@ function validateMandala(m: GeneratedMandala): { valid: boolean; reason?: string
 
 // ─── Generator ───
 
-export async function generateMandala(input: MandalaGenerateInput): Promise<GeneratedMandala> {
+export async function generateMandala(
+  input: MandalaGenerateInput,
+  externalSignal?: AbortSignal
+): Promise<GeneratedMandala> {
   const url = config.mandalaGen.url;
   const model = config.mandalaGen.model;
 
@@ -320,6 +323,17 @@ export async function generateMandala(input: MandalaGenerateInput): Promise<Gene
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), MANDALA_GEN_TIMEOUT_MS);
+
+  // Forward external abort (race-fallback discarding the LoRA loser) into
+  // the same controller so the in-flight Ollama fetch is cancelled too.
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+    }
+  }
 
   try {
     const response = await fetch(`${url}/api/generate`, {
@@ -402,6 +416,10 @@ export async function generateMandala(input: MandalaGenerateInput): Promise<Gene
     if (err instanceof MandalaGenError) throw err;
 
     if (err instanceof Error && err.name === 'AbortError') {
+      // Distinguish "race lost / external cancel" from "internal timeout".
+      if (externalSignal?.aborted) {
+        throw new MandalaGenError('Mandala generation cancelled', 'TIMEOUT');
+      }
       throw new MandalaGenError('Mandala generation timed out', 'TIMEOUT');
     }
 
@@ -415,6 +433,10 @@ export async function generateMandala(input: MandalaGenerateInput): Promise<Gene
     }
 
     throw new MandalaGenError(message, 'GENERATION_FAILED');
+  } finally {
+    if (externalSignal) {
+      externalSignal.removeEventListener('abort', onExternalAbort);
+    }
   }
 }
 
@@ -425,7 +447,8 @@ export async function generateMandala(input: MandalaGenerateInput): Promise<Gene
  * and call OpenRouter LLM to generate the mandala.
  */
 export async function generateMandalaWithFallback(
-  input: MandalaGenerateInput
+  input: MandalaGenerateInput,
+  externalSignal?: AbortSignal
 ): Promise<GeneratedMandala> {
   logger.info(`Mandala fallback (Tier 3) started: goal="${input.goal}"`);
 
@@ -471,6 +494,7 @@ Language: ${lang}
     temperature: 0.7,
     maxTokens: NUM_PREDICT,
     format: 'json',
+    signal: externalSignal,
   });
 
   const parsed = extractJsonRobust(raw);
@@ -603,6 +627,109 @@ export class MandalaGenError extends Error {
     super(message);
     this.name = 'MandalaGenError';
   }
+}
+
+// ─── Race Fallback (LoRA + LLM in parallel) ───
+//
+// Sequential pattern (old): LoRA → fail → start LLM → wait LLM. Worst case
+// = LoRA wall-time + LLM wall-time (~120s + 120s = 240s).
+//
+// Race pattern (new): start both immediately. LoRA gets a 30s budget; if it
+// produces a valid mandala in time, return it and abort the LLM. If LoRA is
+// late or invalid, return the LLM result that's already in flight — extra
+// wait ≈ 0 because LLM has been running the whole time.
+//
+//   t=0       LoRA start ─┐                           ┌── LLM cancelled (LoRA won)
+//             LLM start  ─┤                           │
+//   t=30s     ─────────── LoRA cut ─────────────       OR
+//   ...                                                ┌── return LLM (LoRA timed out / invalid)
+//   t=120s    ─────────── LLM result ───────────────   ┘
+//
+// Validation: LoRA result must pass validateMandala() (8 sub_goals + ≥56 actions).
+// On failure or timeout, the race resolves with the LLM result instead.
+//
+// Cancellation: when LoRA wins, the LLM AbortController fires and the
+// underlying OpenRouter fetch is cancelled (saves ~$0.0001 of compute).
+// When LoRA loses, the Ollama fetch is cancelled the same way.
+
+const LORA_RACE_BUDGET_MS = 30_000;
+
+export interface RaceResult {
+  mandala: GeneratedMandala;
+  source: 'lora' | 'llm-fallback';
+  /** Wall-clock duration in milliseconds (race start → resolved). */
+  duration_ms: number;
+}
+
+export async function generateMandalaRace(input: MandalaGenerateInput): Promise<RaceResult> {
+  const start = Date.now();
+
+  const loraController = new AbortController();
+  const llmController = new AbortController();
+
+  // Both promises catch errors so the race never throws unexpectedly.
+  // null = "this branch is unavailable" (failed/invalid/cancelled).
+  const loraPromise: Promise<GeneratedMandala | null> = generateMandala(
+    input,
+    loraController.signal
+  )
+    .then((m) => m)
+    .catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(`Race: LoRA branch failed/invalid: ${msg} goal="${input.goal}"`);
+      return null;
+    });
+
+  const llmPromise: Promise<GeneratedMandala | null> = generateMandalaWithFallback(
+    input,
+    llmController.signal
+  )
+    .then((m) => m)
+    .catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(`Race: LLM branch failed: ${msg} goal="${input.goal}"`);
+      return null;
+    });
+
+  // Race LoRA against a 30s timeout marker. If LoRA settles first (success
+  // OR failure), we get its outcome; if 30s elapses first, we treat LoRA as
+  // unavailable and fall through to the LLM that's already in flight.
+  type RaceTick = { kind: 'lora'; mandala: GeneratedMandala | null } | { kind: 'timeout' };
+
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<RaceTick>((resolve) => {
+    timeoutHandle = setTimeout(() => resolve({ kind: 'timeout' }), LORA_RACE_BUDGET_MS);
+  });
+
+  const loraTick = loraPromise.then<RaceTick>((m) => ({ kind: 'lora', mandala: m }));
+
+  const first = await Promise.race([loraTick, timeoutPromise]);
+  if (timeoutHandle) clearTimeout(timeoutHandle);
+
+  if (first.kind === 'lora' && first.mandala) {
+    // LoRA won inside the budget → cancel the LLM and return.
+    llmController.abort();
+    // Suppress unhandled rejection on the discarded promise.
+    void llmPromise;
+    const dur = Date.now() - start;
+    logger.info(`Race: LoRA won goal="${input.goal}" duration=${(dur / 1000).toFixed(1)}s`);
+    return { mandala: first.mandala, source: 'lora', duration_ms: dur };
+  }
+
+  // LoRA either timed out or returned null (failed/invalid).
+  // Cancel the LoRA fetch and await the LLM that's been running in parallel.
+  loraController.abort();
+  const reason = first.kind === 'timeout' ? 'timeout (30s)' : 'failed/invalid';
+  logger.info(`Race: LoRA ${reason}, awaiting LLM fallback goal="${input.goal}"`);
+
+  const llmMandala = await llmPromise;
+  if (!llmMandala) {
+    throw new MandalaGenError('Both LoRA and LLM fallback failed', 'GENERATION_FAILED');
+  }
+
+  const dur = Date.now() - start;
+  logger.info(`Race: LLM fallback won goal="${input.goal}" duration=${(dur / 1000).toFixed(1)}s`);
+  return { mandala: llmMandala, source: 'llm-fallback', duration_ms: dur };
 }
 
 // ─── Pre-warm ───
