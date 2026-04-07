@@ -1,6 +1,7 @@
 import { FastifyPluginCallback } from 'fastify';
 import { getMandalaManager } from '../../modules/mandala';
 import { getMood } from '../../modules/mandala/mood';
+import { triggerVideoDiscoverAsync } from '../../modules/mandala/video-discover-trigger';
 import { getPrismaClient } from '../../modules/database/client';
 import {
   generateMandalaRace,
@@ -433,6 +434,10 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         }
       }
 
+      // Phase 3.5: fire-and-forget video-discover for cloned mandala
+      // (opt-in via user_skill_config; safe if not enabled)
+      triggerVideoDiscoverAsync(userId, result.mandalaId);
+
       return reply.send({ mandalaId: result.mandalaId });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Create from template failed';
@@ -646,6 +651,10 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         }
       }
 
+      // Phase 3.5: fire-and-forget video-discover for new mandala
+      // (opt-in via user_skill_config; safe if not enabled)
+      triggerVideoDiscoverAsync(userId, result.id);
+
       return reply.send({ status: 200, data: { mandalaId: result.id } });
     } catch (err) {
       const anyErr = err as Error & { quota?: number; current?: number };
@@ -792,6 +801,12 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             // mandala_id columns may not exist yet
           }
         }
+
+        // Phase 3.5: fire-and-forget video-discover for new mandala
+        // (opt-in via user_skill_config; /create endpoint doesn't write
+        // skill config so this typically skips silently — the helper
+        // logs "not enabled" at info level)
+        triggerVideoDiscoverAsync(userId, mandala.id);
 
         return reply.code(201).send({ mandala });
       } catch (err: any) {
