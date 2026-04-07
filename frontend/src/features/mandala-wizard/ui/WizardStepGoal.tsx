@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Search, X } from 'lucide-react';
 
+import { apiClient } from '@/shared/lib/api-client';
 import type { MandalaSearchResult, GeneratedMandala } from '@/shared/types/mandala-ux';
 import MandalaCard from './MandalaCard';
 
@@ -73,6 +74,16 @@ export default function WizardStepGoal({
   useEffect(() => {
     setLocalGoal(goalInput);
   }, [goalInput]);
+
+  // Pre-warm Mac Mini Ollama model on first mount.
+  // Eliminates ~45s cold-start when the user clicks "Start". Fire-and-forget.
+  // Guard against React StrictMode double-mount (dev) so we only ping once.
+  const prewarmedRef = useRef(false);
+  useEffect(() => {
+    if (prewarmedRef.current) return;
+    prewarmedRef.current = true;
+    void apiClient.prewarmMandalaModel();
+  }, []);
 
   // ─── Rotating placeholder (trending examples) ───
   const examples = useMemo(() => {

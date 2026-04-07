@@ -8,6 +8,7 @@ import {
   generateLabels,
   getCachedMandala,
   setCachedMandala,
+  prewarmMandalaModel,
   MandalaGenError,
 } from '../../modules/mandala/generator';
 import { searchMandalasByGoal, MandalaSearchError } from '../../modules/mandala/search';
@@ -473,6 +474,27 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
     }
   );
+
+  /**
+   * POST /api/v1/mandalas/prewarm - Fire-and-forget Ollama model warm-up
+   *
+   * Called by the FE wizard when the user enters Step 1 (Goal). Triggers
+   * Ollama to load the LoRA model into VRAM/RAM with `keep_alive: 24h`,
+   * eliminating the ~45s cold-start that would otherwise blow past the
+   * /generate timeout. Returns immediately with status — never blocks the
+   * FE on completion (the actual model load happens server-side asynchronously
+   * within ~60s, but most of the time it's cached and returns in <1s).
+   */
+  fastify.post('/prewarm', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    // Fire-and-forget: kick off prewarm but don't await the entire thing.
+    // We do await briefly so we can report success/skip status, but the
+    // function itself has its own 60s ceiling.
+    const ok = await prewarmMandalaModel();
+    return reply.send({ status: 200, data: { warmed: ok } });
+  });
 
   /**
    * POST /api/v1/mandalas/generate - AI-generate a mandala from a goal using v13 model

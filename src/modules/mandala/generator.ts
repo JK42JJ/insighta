@@ -329,6 +329,10 @@ export async function generateMandala(input: MandalaGenerateInput): Promise<Gene
         model,
         prompt,
         stream: false,
+        // Keep model resident in VRAM/RAM for 24h after each call.
+        // Without this, Mac Mini Ollama uses default 5min TTL → cold-start
+        // (~45s reload) on next request after idle, blowing past FE timeout.
+        keep_alive: '24h',
         options: {
           num_predict: NUM_PREDICT,
           temperature: TEMPERATURE,
@@ -598,5 +602,63 @@ export class MandalaGenError extends Error {
   ) {
     super(message);
     this.name = 'MandalaGenError';
+  }
+}
+
+// ─── Pre-warm ───
+//
+// Triggers Ollama to load the mandala-gen model into VRAM/RAM without
+// generating a real response. Called fire-and-forget when the user enters
+// the wizard goal step. By the time they click "Start", the model is already
+// loaded — eliminating the ~45s cold-start that pushes total request time
+// over the FE 180s budget.
+//
+// Sends `keep_alive: '24h'` so the loaded model stays resident.
+// Returns true if the prewarm call succeeded (200), false otherwise. Never throws.
+
+const PREWARM_TIMEOUT_MS = 60_000;
+
+export async function prewarmMandalaModel(): Promise<boolean> {
+  const url = config.mandalaGen.url;
+  const model = config.mandalaGen.model;
+
+  if (!url) {
+    logger.warn('prewarmMandalaModel: MANDALA_GEN_URL not configured, skipping');
+    return false;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PREWARM_TIMEOUT_MS);
+
+  try {
+    // num_predict: 1 → minimal generation, just enough to force model load.
+    // Ollama treats this as a regular call so the model stays loaded for keep_alive.
+    const response = await fetch(`${url}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        prompt: 'ping',
+        stream: false,
+        keep_alive: '24h',
+        options: { num_predict: 1, temperature: 0 },
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      logger.warn(`prewarmMandalaModel: HTTP ${response.status}`);
+      return false;
+    }
+
+    logger.info(`prewarmMandalaModel: model "${model}" warmed (keep_alive=24h)`);
+    return true;
+  } catch (err) {
+    clearTimeout(timeout);
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn(`prewarmMandalaModel: failed: ${msg}`);
+    return false;
   }
 }

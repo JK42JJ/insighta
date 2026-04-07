@@ -809,10 +809,34 @@ class ApiClient {
     }>('/mandalas/generate', {
       method: 'POST',
       body: JSON.stringify({ goal, domain: options?.domain, language: options?.language }),
-      timeoutMs: 180_000, // Mandala generation takes ~80s on Mac Mini M4
+      // Mandala generation: ~120s warm on Mac Mini M4. Bumped from 180→240
+      // for safety margin (cold-start is mitigated by /prewarm + keep_alive=24h
+      // server-side, but variance can still push generation to ~150s).
+      timeoutMs: 240_000,
       externalSignal: options?.signal,
     });
     return res.data;
+  }
+
+  /**
+   * Fire-and-forget Mac Mini Ollama model warm-up.
+   * Call when entering the wizard goal step so the model is loaded by the
+   * time the user clicks "Start". Server-side function has its own 60s
+   * ceiling and `keep_alive: 24h` so the loaded model stays resident.
+   *
+   * Returns the server's reported warmed status. Errors are swallowed —
+   * prewarm is purely an optimization.
+   */
+  async prewarmMandalaModel(): Promise<boolean> {
+    try {
+      const res = await this.request<{ data: { warmed: boolean } }>('/mandalas/prewarm', {
+        method: 'POST',
+        timeoutMs: 65_000,
+      });
+      return res.data.warmed;
+    } catch {
+      return false;
+    }
   }
 
   async generateLabels(params: {
