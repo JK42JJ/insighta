@@ -24,7 +24,6 @@ import { settingsRoutes } from './routes/settings';
 import { youtubeRoutes } from './routes/youtube';
 import { sharingRoutes } from './routes/sharing';
 import { skillRoutes } from './routes/skills';
-import { mandalaGenerateRoutes } from './routes/mandala-generate';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
@@ -271,9 +270,6 @@ export async function buildServer() {
 
       // Register skills routes (SkillRegistry — newsletter, report, etc.)
       await instance.register(skillRoutes, { prefix: '/skills' });
-
-      // Register mandala generation routes (HF Space integration)
-      await instance.register(mandalaGenerateRoutes, { prefix: '/mandala' });
 
       // Register admin routes (requires is_super_admin)
       await instance.register(adminRoutes, { prefix: '/admin' });

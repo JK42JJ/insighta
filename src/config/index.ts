@@ -75,10 +75,6 @@ const envSchema = z.object({
   GMAIL_SMTP_HOST: z.string().default('smtp-relay.gmail.com'),
   GMAIL_SMTP_PORT: z.coerce.number().default(587),
   GMAIL_SMTP_FROM: z.string().default('noreply@insighta.one'),
-
-  // HuggingFace (mandala generation)
-  HF_TOKEN: z.string().optional(),
-  HF_SPACE_URL: z.string().default('https://jamesjk4242-insighta-mandala-v13-api.hf.space'),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -194,12 +190,6 @@ export const config = {
     smtpHost: env.GMAIL_SMTP_HOST,
     smtpPort: env.GMAIL_SMTP_PORT,
     smtpFrom: env.GMAIL_SMTP_FROM,
-  },
-
-  // HuggingFace (mandala generation via Gradio Space)
-  huggingface: {
-    token: env.HF_TOKEN,
-    spaceUrl: env.HF_SPACE_URL,
   },
 
   // YouTube API costs (in quota units)
