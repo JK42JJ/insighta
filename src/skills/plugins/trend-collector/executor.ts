@@ -57,6 +57,7 @@ import {
   type SuggestionItem,
 } from './sources/suggest';
 import { LEARNING_SEED_TERMS, type LearningSeed } from './seed-terms';
+import { loadDynamicSeedsFromMandalas, mergeSeeds } from './dynamic-seeds';
 
 const log = logger.child({ module: 'trend-collector' });
 
@@ -124,6 +125,25 @@ export const executor: SkillExecutor = {
 
     const fetchedAt = new Date();
     const expiresAt = new Date(fetchedAt.getTime() + TREND_COLLECTOR_TTL_DAYS * MS_PER_DAY);
+
+    // ── Phase 0: Dynamic seed expansion (CP353) ────────────────────────
+    // Pull a random sample of meaningful user mandala center_goals,
+    // LLM-extract topic keywords, and merge with hardcoded seeds. This
+    // covers long-tail user goals (향수 브랜드, 분산 시스템, 음악 치료사…)
+    // that the 30 hardcoded seeds miss.
+    let dynamicSeeds: readonly LearningSeed[] = [];
+    let dynamicSeedDurationMs = 0;
+    if (state.llmEnabled) {
+      const tDyn = Date.now();
+      const result = await loadDynamicSeedsFromMandalas({
+        ...(state.fetchImpl !== undefined ? { fetchImpl: state.fetchImpl } : {}),
+        ollamaUrl: state.llmUrl,
+      });
+      dynamicSeeds = result;
+      dynamicSeedDurationMs = Date.now() - tDyn;
+      log.info(`dynamic seeds loaded: +${dynamicSeeds.length} terms in ${dynamicSeedDurationMs}ms`);
+    }
+    const effectiveSeeds = mergeSeeds(state.seedTerms, dynamicSeeds);
 
     // ── Phase A: Trending fetch ────────────────────────────────────────
     const allVideos: TrendingVideo[] = [];
@@ -237,11 +257,11 @@ export const executor: SkillExecutor = {
     let suggestSucceeded = 0;
     let suggestFailed = 0;
     let suggestDurationMs = 0;
-    if (state.suggestEnabled && state.seedTerms.length > 0) {
+    if (state.suggestEnabled && effectiveSeeds.length > 0) {
       const tSugg = Date.now();
       // Process in small parallel batches to be polite to the unofficial endpoint
-      for (let i = 0; i < state.seedTerms.length; i += SUGGEST_PARALLELISM) {
-        const batch = state.seedTerms.slice(i, i + SUGGEST_PARALLELISM);
+      for (let i = 0; i < effectiveSeeds.length; i += SUGGEST_PARALLELISM) {
+        const batch = effectiveSeeds.slice(i, i + SUGGEST_PARALLELISM);
         const results = await Promise.all(
           batch.map(async (seed) => {
             try {
@@ -287,7 +307,7 @@ export const executor: SkillExecutor = {
       }
       suggestDurationMs = Date.now() - tSugg;
       log.info(
-        `Suggest collected ${suggestKeywords.length} keywords from ${suggestSucceeded}/${state.seedTerms.length} seeds in ${suggestDurationMs}ms`
+        `Suggest collected ${suggestKeywords.length} keywords from ${suggestSucceeded}/${effectiveSeeds.length} seeds (hardcoded=${state.seedTerms.length}, dynamic=${dynamicSeeds.length}) in ${suggestDurationMs}ms`
       );
     }
 

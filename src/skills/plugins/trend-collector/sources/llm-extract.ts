@@ -77,6 +77,11 @@ const SYSTEM_PROMPT = `너는 학습 콘텐츠 발굴 엔진을 위한 키워드
 - 기술/주제/도메인 명사만 보존
 - 학습/실용/교육 키워드를 우선 선택
 - 한국어로 유지 (영어 명사는 영어 그대로 OK)
+- **키워드는 반드시 완전한 단어로 추출. 약어/잘림 금지.**
+  - 예: "마케" ❌ → "마케팅" ✅
+  - 예: "재테" ❌ → "재테크" ✅
+  - 예: "프로그" ❌ → "프로그래밍" ✅
+  - 예: "필라" ❌ → "필라테스" ✅
 
 learning_score 기준:
 - 1.0: 명시적 강의/튜토리얼/교육 ("파이썬 입문 강의", "토익 LC 정답률")
@@ -280,6 +285,9 @@ function normalizeOne(title: string, raw: RawResult): ExtractedKeyword {
   } else if (typeof raw.keywords === 'string') {
     keywords = [raw.keywords.trim()];
   }
+  // Apply noise filter — drops Korean fragments / hallucinations like
+  // "입력", "실합", "안소", "주속", "호는" etc that slipped past the prompt
+  keywords = keywords.filter(isValidLearningKeyword);
   // Cap to 3 (prompt asked for 1-3 but defensive)
   if (keywords.length > 3) keywords = keywords.slice(0, 3);
 
@@ -295,6 +303,123 @@ function normalizeOne(title: string, raw: RawResult): ExtractedKeyword {
   if (score > 1) score = 1;
 
   return { title, keywords, learning_score: score };
+}
+
+/**
+ * Curated whitelist of valid EXACTLY-2-character Korean learning keywords.
+ *
+ * Filter scope: only applied when a Korean-only string is exactly 2 chars
+ * (`length === 2 && isKoreanOnly`). 3+ char Korean and English/mixed always
+ * pass — they don't need a whitelist.
+ *
+ * IMPORTANT: do NOT abbreviate longer terms here. "마케팅" is 3 chars and
+ * passes the filter naturally; adding "마케" as an abbreviation would be
+ * a bug (the filter never sees "마케팅" since it's not 2 chars).
+ *
+ * Add to this list when a legitimate 2-char Korean term gets filtered.
+ */
+const KOREAN_2CHAR_LEARNING_WHITELIST = new Set<string>([
+  // Generic learning vocabulary (highest impact — these attach to anything)
+  '강의',
+  '강좌',
+  '학원',
+  '입문',
+  '기초',
+  '심화',
+  '응용',
+  '실전',
+  '도전',
+  '시험',
+  '학습',
+  '공부',
+  '연습',
+  '훈련',
+  '코칭',
+  // Education / language
+  '토익',
+  '토플',
+  '수능',
+  '영어',
+  '한국',
+  '한자',
+  // Hobby / arts
+  '독서',
+  '서예',
+  '미술',
+  '사진',
+  '향수',
+  '와인',
+  '커피',
+  '제과',
+  '제빵',
+  '바둑',
+  '체스',
+  '복싱',
+  '발레',
+  '재즈',
+  '보컬',
+  '드럼',
+  '기타',
+  '첼로',
+  '하프',
+  '국악',
+  // Health / fitness
+  '요가',
+  '러닝',
+  '수영',
+  '등산',
+  '명상',
+  '단식',
+  '식단',
+  '근력',
+  '운동',
+  // Subjects
+  '수학',
+  '물리',
+  '화학',
+  '생물',
+  '지학',
+  '역사',
+  '철학',
+  '심리',
+  '경제',
+  '정치',
+  '사회',
+  '윤리',
+  // Career / business
+  '주식',
+  '창업',
+  '부업',
+  '회계',
+  '면접',
+  '협상',
+]);
+
+/**
+ * Validate an LLM-extracted keyword. Filters out:
+ *  - Empty / single-char strings
+ *  - Long sentence fragments (>60 chars)
+ *  - Korean-only 2-char words NOT in the curated whitelist
+ *    (catches "입력", "실합", "안소", "주속" etc — llama3.1 hallucinations)
+ *  - Strings containing broken Hangul jamo (standalone ㄱ, ㅏ, etc)
+ *
+ * Returns true if the keyword is plausibly a real learning topic.
+ */
+export function isValidLearningKeyword(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 2) return false;
+  if (trimmed.length > 60) return false;
+
+  // Reject standalone Hangul jamo (ㄱ, ㄴ, ㅏ, ㅓ, etc — broken text)
+  if (/[\u3131-\u318e]/.test(trimmed)) return false;
+
+  // Korean-only 2-char filter with whitelist exception
+  const isKoreanOnly = /^[\uac00-\ud7af]+$/.test(trimmed);
+  if (isKoreanOnly && trimmed.length === 2) {
+    return KOREAN_2CHAR_LEARNING_WHITELIST.has(trimmed);
+  }
+
+  return true;
 }
 
 function stripMarkdownFence(s: string): string {
