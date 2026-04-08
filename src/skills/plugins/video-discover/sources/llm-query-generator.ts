@@ -241,9 +241,17 @@ export async function generateSearchQueriesViaOpenRouter(
         ],
         temperature: 0.4,
         max_tokens: OPENROUTER_MAX_TOKENS,
-        // Same flag as OpenRouterGenerationProvider: Qwen3 burns tokens on
-        // "reasoning" otherwise and content arrives empty.
-        reasoning: { enabled: false },
+        // Qwen3 thinking-mode mitigation:
+        //   - reasoning.enabled:false  → ask provider not to bill thinking tokens
+        //   - reasoning.exclude:true   → strip <think> blocks from response
+        // Even with both flags some Qwen3 builds still emit prose ("Okay, let's
+        // tackle this query...") before the JSON. parseQueriesResponse handles
+        // that case via extractFirstJsonArray as a last-ditch fallback.
+        reasoning: { enabled: false, exclude: true },
+        // OpenAI-compatible JSON mode hint. Qwen3 ignores it on some
+        // OpenRouter routes but it never hurts and helps on the routes
+        // that do honor it.
+        response_format: { type: 'json_object' },
       }),
       signal: controller.signal,
     });
@@ -514,12 +522,47 @@ function buildUserPrompt(subGoal: string, centerGoal: string, language: string):
 // ============================================================================
 
 /**
+ * Recognized array-key aliases from the model. Both English and Korean
+ * variants are accepted because Ollama llama3.1 frequently emits
+ * `{"검색어": [...]}` / `{"결과": [...]}` / `{"searchTerms": [...]}`
+ * regardless of the system prompt insisting on a raw array.
+ */
+const ARRAY_KEY_ALIASES = [
+  'queries',
+  'results',
+  'items',
+  'data',
+  'searchTerms',
+  'search_terms',
+  '검색어',
+  '검색어들',
+  '결과',
+  '목록',
+  'list',
+];
+
+/**
+ * Numbered-key prefixes from the model. llama3.1 sometimes emits
+ * `{"검색어1": "...", "검색어2": "...", "검색어3": "..."}` instead of an
+ * array. We detect this shape and collect every string value whose key
+ * starts with one of these prefixes.
+ */
+const NUMBERED_KEY_PREFIXES = ['검색어', 'query', 'q', 'searchterm', 'search_term', '결과'];
+
+/**
  * Parse the model's response into a normalized list of search queries.
  *
  * Defensive against (in priority order):
  *  - Raw JSON array of strings (the happy path)
  *  - Markdown-fenced JSON array (`\`\`\`json [...]\`\`\``)
- *  - Object wrappers with `queries` / `results` / `items` keys
+ *  - Object wrappers with `queries`/`results`/`items`/`검색어`/`결과`/...
+ *    keys (full {@link ARRAY_KEY_ALIASES} list)
+ *  - Numbered-key objects: `{검색어1, 검색어2, 검색어3}` — collect string values
+ *  - Generic objects whose values are all strings — fallback to taking
+ *    the first MAX_QUERIES values in declaration order
+ *  - Reasoning-wrapper text (Qwen3 thinking-mode quirk): the model emits
+ *    "Okay, let's tackle this..." prose followed by a JSON array — we
+ *    extract the FIRST balanced `[...]` array from anywhere in the text
  *  - Trailing whitespace, leading newlines, BOMs
  *  - Empty / 1-character / quoted-empty queries (filtered out)
  *  - More than MAX_QUERIES results (truncated)
@@ -527,16 +570,18 @@ function buildUserPrompt(subGoal: string, centerGoal: string, language: string):
  * Throws {@link LlmQueryGenError} only when nothing usable could be extracted.
  */
 export function parseQueriesResponse(content: string): string[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    const stripped = stripMarkdownFence(content);
-    try {
-      parsed = JSON.parse(stripped);
-    } catch {
-      throw new LlmQueryGenError(`Could not parse LLM JSON: ${content.slice(0, 200)}`);
-    }
+  let parsed: unknown = tryParseAnyJson(content);
+
+  if (parsed === undefined) {
+    // Last-ditch: extract the first [..] balanced array from raw text.
+    // This handles Qwen3 thinking-mode output where the model emits
+    // prose like "Okay, let's tackle this..." before the JSON array.
+    const extracted = extractFirstJsonArray(content);
+    if (extracted !== null) parsed = extracted;
+  }
+
+  if (parsed === undefined) {
+    throw new LlmQueryGenError(`Could not parse LLM JSON: ${content.slice(0, 200)}`);
   }
 
   // Accept several shapes
@@ -545,9 +590,47 @@ export function parseQueriesResponse(content: string): string[] {
     candidates = parsed;
   } else if (parsed && typeof parsed === 'object') {
     const obj = parsed as Record<string, unknown>;
-    if (Array.isArray(obj['queries'])) candidates = obj['queries'];
-    else if (Array.isArray(obj['results'])) candidates = obj['results'];
-    else if (Array.isArray(obj['items'])) candidates = obj['items'];
+
+    // Shape 1: known array key alias
+    for (const key of ARRAY_KEY_ALIASES) {
+      const val = obj[key];
+      if (Array.isArray(val)) {
+        candidates = val;
+        break;
+      }
+    }
+
+    // Shape 2: numbered keys (e.g. {검색어1, 검색어2, 검색어3})
+    if (candidates.length === 0) {
+      const numberedEntries: Array<[string, string]> = [];
+      for (const [key, value] of Object.entries(obj)) {
+        if (typeof value !== 'string') continue;
+        const lower = key.toLowerCase();
+        const matchesPrefix = NUMBERED_KEY_PREFIXES.some((p) => lower.startsWith(p.toLowerCase()));
+        if (matchesPrefix && /\d+$/.test(key)) {
+          numberedEntries.push([key, value]);
+        }
+      }
+      if (numberedEntries.length > 0) {
+        // Sort by trailing digit so 검색어1 < 검색어2 < 검색어3
+        numberedEntries.sort((a, b) => {
+          const numA = parseInt(a[0].match(/(\d+)$/)?.[1] ?? '0', 10);
+          const numB = parseInt(b[0].match(/(\d+)$/)?.[1] ?? '0', 10);
+          return numA - numB;
+        });
+        candidates = numberedEntries.map(([, v]) => v);
+      }
+    }
+
+    // Shape 3: generic object whose values are all strings — take them
+    // in declaration order. Last-resort, only used when no known aliases
+    // and no numbered keys matched.
+    if (candidates.length === 0) {
+      const allStringValues = Object.values(obj).filter((v): v is string => typeof v === 'string');
+      if (allStringValues.length > 0 && allStringValues.length === Object.values(obj).length) {
+        candidates = allStringValues;
+      }
+    }
   }
 
   const cleaned: string[] = [];
@@ -566,6 +649,77 @@ export function parseQueriesResponse(content: string): string[] {
     throw new LlmQueryGenError(`LLM returned no usable queries: ${content.slice(0, 200)}`);
   }
   return cleaned;
+}
+
+/**
+ * Try `JSON.parse` on the raw content first, then on the fence-stripped
+ * version. Returns `undefined` (NOT null — the model could legitimately
+ * emit `null`) when neither parse succeeded.
+ */
+function tryParseAnyJson(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch {
+    // continue
+  }
+  const stripped = stripMarkdownFence(content);
+  if (stripped !== content) {
+    try {
+      return JSON.parse(stripped);
+    } catch {
+      // continue
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Find the FIRST balanced `[...]` JSON array anywhere in the text and
+ * try to parse it. Used as a last-ditch recovery for Qwen3 thinking-mode
+ * output that prefixes the JSON with prose ("Okay, let's tackle this
+ * query. The user wants three different Korean search terms...").
+ *
+ * Returns the parsed unknown on success, or `null` if no balanced array
+ * was found or the candidate substring still failed to parse.
+ */
+function extractFirstJsonArray(content: string): unknown | null {
+  const start = content.indexOf('[');
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < content.length; i++) {
+    const ch = content[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (inString) {
+      if (ch === '\\') {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === '[') depth += 1;
+    else if (ch === ']') {
+      depth -= 1;
+      if (depth === 0) {
+        const candidate = content.slice(start, i + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 function stripMarkdownFence(s: string): string {

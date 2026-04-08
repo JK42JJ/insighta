@@ -102,8 +102,64 @@ describe('parseQueriesResponse', () => {
     expect(() => parseQueriesResponse('["a", ""]')).toThrow(LlmQueryGenError);
   });
 
-  it('throws LlmQueryGenError when JSON shape has no recognized array key', () => {
-    expect(() => parseQueriesResponse('{"foo": "bar"}')).toThrow(LlmQueryGenError);
+  it('falls back to generic-object-of-strings when no known key matched', () => {
+    // The permissive fallback (Hotfix 2 parser) treats `{"foo": "bar"}` as
+    // a single-query result rather than throwing — better than dropping
+    // valid model output that just used an unexpected key name.
+    const out = parseQueriesResponse('{"foo": "bar"}');
+    expect(out).toEqual(['bar']);
+  });
+
+  it('throws LlmQueryGenError when JSON object has no string values at all', () => {
+    expect(() => parseQueriesResponse('{"foo": 42, "baz": true}')).toThrow(LlmQueryGenError);
+    expect(() => parseQueriesResponse('{}')).toThrow(LlmQueryGenError);
+  });
+
+  it('parses Korean array key {"검색어": [...]}', () => {
+    const out = parseQueriesResponse('{"검색어": ["조카 학습 동기", "공부 습관", "독서 습관"]}');
+    expect(out).toEqual(['조카 학습 동기', '공부 습관', '독서 습관']);
+  });
+
+  it('parses Korean array key {"결과": [...]}', () => {
+    const out = parseQueriesResponse('{"결과": ["q1 한국어", "q2 한국어", "q3 한국어"]}');
+    expect(out).toEqual(['q1 한국어', 'q2 한국어', 'q3 한국어']);
+  });
+
+  it('parses numbered Korean keys {"검색어1": "...", "검색어2": "..."}', () => {
+    const out = parseQueriesResponse(
+      '{"검색어1": "조카 인성 교육", "검색어2": "자존감 향상", "검색어3": "조카 성격 개발"}'
+    );
+    expect(out).toEqual(['조카 인성 교육', '자존감 향상', '조카 성격 개발']);
+  });
+
+  it('parses searchTerms key (Ollama llama3.1 quirk)', () => {
+    const out = parseQueriesResponse(
+      '{"searchTerms": ["조카 인성 교육 방법", "자존감 향상하는 놀이 활동", "조카 자존감 키우기"]}'
+    );
+    expect(out).toHaveLength(3);
+    expect(out[0]).toBe('조카 인성 교육 방법');
+  });
+
+  it('extracts JSON array from Qwen3 thinking-mode prose prefix', () => {
+    const wrapped =
+      "Okay, let's tackle this query. The user wants three different Korean " +
+      'search terms for YouTube based on the goal. Let me generate them now.\n\n' +
+      '["조카 학업 성적 향상", "조카 공부법 전략", "조카 학습 동기 부여"]';
+    const out = parseQueriesResponse(wrapped);
+    expect(out).toEqual(['조카 학업 성적 향상', '조카 공부법 전략', '조카 학습 동기 부여']);
+  });
+
+  it('extracts JSON array even when it appears after multi-line reasoning', () => {
+    const wrapped = `Let me think about this carefully.
+
+First, I should consider the user's intent.
+Second, I should generate diverse queries.
+Third, each query should be 2-6 words.
+
+Here is my final answer:
+["query 1", "query 2", "query 3"]`;
+    const out = parseQueriesResponse(wrapped);
+    expect(out).toEqual(['query 1', 'query 2', 'query 3']);
   });
 
   it('handles trimmed whitespace and BOMs gracefully', () => {
