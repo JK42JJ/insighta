@@ -1,28 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, Sparkles } from 'lucide-react';
 
 import { apiClient } from '@/shared/lib/api-client';
+import { DOMAIN_STYLES, type MandalaDomain, getDomainLabel } from '@/shared/config/domain-colors';
 
-// ─── Domain badge color mapping ───
-// Korean domain string → tailwind classes
-const DOMAIN_BADGE_CLASSES: Record<string, string> = {
-  '라이프스타일/여행': 'bg-purple-900/40 text-purple-300',
-  '마인드/영성': 'bg-cyan-900/40 text-cyan-300',
-  '비즈니스/금융': 'bg-pink-900/40 text-pink-300',
-  '기술/개발': 'bg-blue-900/40 text-blue-300',
-  '학습/교육': 'bg-emerald-900/40 text-emerald-300',
-  '건강/피트니스': 'bg-orange-900/40 text-orange-300',
-  '창작/예술': 'bg-yellow-900/40 text-yellow-300',
-  '재테크/투자': 'bg-pink-900/40 text-pink-300',
-};
+const DEFAULT_BADGE_CLASS = 'bg-muted text-muted-foreground';
+const AI_BADGE_CLASS = 'bg-primary/20 text-primary';
 
-const DEFAULT_BADGE = 'bg-muted text-muted-foreground';
-const AI_BADGE = 'bg-primary/20 text-primary';
-
-function getBadgeClasses(domain: string | null | undefined): string {
-  if (!domain) return DEFAULT_BADGE;
-  return DOMAIN_BADGE_CLASSES[domain] ?? DEFAULT_BADGE;
+function getDomainBadgeStyle(domain: string | null | undefined): CSSProperties | undefined {
+  if (!domain) return undefined;
+  const ds = DOMAIN_STYLES[domain as MandalaDomain];
+  if (!ds) return undefined;
+  return { backgroundColor: ds.dim, color: ds.color };
 }
 
 // ─── Mini cell text rendering ───
@@ -61,12 +51,21 @@ export default function MandalaCard({
   matchPct,
   onClick,
 }: MandalaCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isAiLoading = variant === 'ai-loading';
   const isTemplateLoading = variant === 'template-loading';
   const isLoading = isAiLoading || isTemplateLoading;
   const isAiComplete = variant === 'ai-complete';
   const isAi = isAiLoading || isAiComplete;
+
+  // Resolve domain → localized label + inline color style via SSOT
+  // (domain-colors.ts). DB stores the English enum ('finance', 'tech', …);
+  // the badge text is the translated label.
+  const domainStyle = isAi ? undefined : getDomainBadgeStyle(domain);
+  const domainLabel =
+    domain && DOMAIN_STYLES[domain as MandalaDomain]
+      ? getDomainLabel(domain as MandalaDomain, i18n.language)
+      : t('wizard.goal.card.domainGeneral', 'general');
 
   // Async label generation fallback: when no labels exist, fetch short labels via OpenRouter.
   const [generatedLabels, setGeneratedLabels] = useState<{
@@ -150,8 +149,9 @@ export default function MandalaCard({
         ) : (
           <div
             className={`inline-flex items-center gap-1 rounded px-2 py-[2px] text-[10px] font-semibold ${
-              isAi ? AI_BADGE : getBadgeClasses(domain)
+              isAi ? AI_BADGE_CLASS : domainStyle ? '' : DEFAULT_BADGE_CLASS
             }`}
+            style={domainStyle}
           >
             {isAiLoading && (
               <Sparkles
@@ -167,7 +167,7 @@ export default function MandalaCard({
               ? t('wizard.goal.card.aiLoadingBadge', 'AI generating...')
               : isAiComplete
                 ? t('wizard.goal.card.aiCompleteBadge', 'AI custom')
-                : (domain ?? t('wizard.goal.card.domainGeneral', 'general'))}
+                : domainLabel}
           </div>
         )}
         {!isLoading && (

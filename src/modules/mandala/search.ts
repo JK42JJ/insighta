@@ -202,11 +202,20 @@ export async function searchMandalasByGoal(
   // Primary: direct UUID match. Fallback: center_goal title match
   // against system-template rows (covers legacy embeddings whose
   // mandala_id is not a real user_mandalas.id).
+  //
+  // user_mandalas is the SSOT for domain + language — never read those
+  // from mandala_embeddings (the seed may drop or drift them).
   const embedMandalaIds = topRows.map((r) => r.mandala_id);
   const centerGoals = topRows.map((r) => r.center_goal);
 
-  const templateRows = await prisma.$queryRaw<Array<{ id: string; title: string }>>`
-    SELECT id::text AS id, title
+  interface TemplateMetaRow {
+    id: string;
+    title: string;
+    domain: string | null;
+    language: string | null;
+  }
+  const templateRows = await prisma.$queryRaw<TemplateMetaRow[]>`
+    SELECT id::text AS id, title, domain, language
     FROM user_mandalas
     WHERE id::text = ANY(${embedMandalaIds}::text[])
        OR (
@@ -214,11 +223,11 @@ export async function searchMandalasByGoal(
          AND title = ANY(${centerGoals}::text[])
        )
   `;
-  const idToTemplateId = new Map<string, string>();
-  const titleToTemplateId = new Map<string, string>();
+  const idToTemplate = new Map<string, TemplateMetaRow>();
+  const titleToTemplate = new Map<string, TemplateMetaRow>();
   for (const t of templateRows) {
-    idToTemplateId.set(t.id, t.id);
-    titleToTemplateId.set(t.title, t.id);
+    idToTemplate.set(t.id, t);
+    titleToTemplate.set(t.title, t);
   }
 
   // Step 3: Fetch depth=0 (sub_labels) + depth=1 (64 actions) for all
@@ -263,9 +272,12 @@ export async function searchMandalasByGoal(
   // Step 4: Combine. sub_goals and sub_labels are aliased to the same
   // user_mandala_levels.depth=0.subjects array — both fields exist in
   // the public response shape for backward compatibility with callers.
+  // domain and language are taken from user_mandalas (SSOT), not from
+  // the embedding row.
   return topRows.map((row) => {
-    const templateMandalaId =
-      idToTemplateId.get(row.mandala_id) ?? titleToTemplateId.get(row.center_goal) ?? null;
+    const template =
+      idToTemplate.get(row.mandala_id) ?? titleToTemplate.get(row.center_goal) ?? null;
+    const templateMandalaId = template?.id ?? null;
     const subLabels = templateMandalaId ? (subLabelsByTemplate.get(templateMandalaId) ?? []) : [];
     const subActions = templateMandalaId ? (actionsByTemplate.get(templateMandalaId) ?? {}) : {};
     return {
@@ -273,8 +285,8 @@ export async function searchMandalasByGoal(
       template_mandala_id: templateMandalaId,
       center_goal: row.center_goal,
       center_label: row.center_label,
-      domain: row.domain,
-      language: row.language,
+      domain: template?.domain ?? row.domain,
+      language: template?.language ?? row.language,
       similarity: Number(row.similarity),
       sub_goals: subLabels,
       sub_labels: subLabels,
