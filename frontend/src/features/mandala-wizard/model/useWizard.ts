@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 
 import { apiClient } from '@/shared/lib/api-client';
 import type {
@@ -92,6 +93,7 @@ const DEFAULT_SKILLS: Record<SkillType, boolean> = {
 export function useWizard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
 
   const templateSlug = searchParams.get('template');
 
@@ -217,6 +219,9 @@ export function useWizard() {
     mutationFn: (goal: string) =>
       apiClient.searchMandalasByGoal(goal, {
         limit: 3,
+        // Normalize to the exact codes the seeder writes ('ko' | 'en').
+        // i18n.language may be 'ko-KR' / 'en-US' from navigator detection.
+        language: i18n.language.startsWith('ko') ? 'ko' : 'en',
         signal: goalAbortRef.current?.signal,
       }),
   });
