@@ -15,8 +15,6 @@ import { AlertSkill } from './alert';
 import { RecommendSkill } from './recommend';
 import { VideoScriptSkill } from './video-script';
 import { BlogPostSkill } from './blog-post';
-// VideoDiscoverSkill BETA stub removed in CP352 — real plugin lives at
-// src/skills/plugins/video-discover/ (registered via src/skills/index.ts).
 
 // Skill registration — add one line per new skill
 skillRegistry.register(new NewsletterSkill());
@@ -25,11 +23,12 @@ skillRegistry.register(new AlertSkill());
 skillRegistry.register(new RecommendSkill());
 skillRegistry.register(new VideoScriptSkill());
 skillRegistry.register(new BlogPostSkill());
-// (video-discover BETA stub removed — real plugin in src/skills/plugins/video-discover/)
 
-// New-style plugin registration entrypoint (#358 Phase 1+).
-// Side-effect import: registers all plugins under src/skills/plugins/.
-import '@/skills';
+// Plugin registration entrypoint (#358). Side-effect import: each plugin
+// under src/skills/plugins/ registers itself into skillRegistry.
+// Explicit `/index` is required — tsconfig paths maps `@/skills/*`
+// (wildcard only), so bare `@/skills` fails at runtime in tsx.
+import '@/skills/index';
 
 export { skillRegistry };
 export { checkSkillQuota } from './quota-checker';
