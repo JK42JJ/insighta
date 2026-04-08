@@ -36,6 +36,7 @@ const mockPrisma: any = {
   },
   user_mandala_levels: {
     create: jest.fn(),
+    createMany: jest.fn().mockResolvedValue({ count: 0 }),
     deleteMany: jest.fn(),
     updateMany: jest.fn(),
   },
@@ -158,6 +159,7 @@ function createMockTx() {
     },
     user_mandala_levels: {
       create: jest.fn(),
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
       deleteMany: jest.fn(),
     },
     user_subscriptions: {
@@ -312,15 +314,33 @@ describe('MandalaManager', () => {
   // ─── createMandala ───
 
   describe('createMandala', () => {
+    // CP358 note: Step 1 parallel reads (user_subscriptions.findUnique,
+    // user_mandalas.count, user_mandalas.aggregate, $queryRaw admin check)
+    // run on `this.prisma` OUTSIDE the transaction. Tests stub mockPrisma
+    // for those, and mockTx for the write body only.
+
+    function stubStep1Reads(options: {
+      tier?: 'free' | 'pro';
+      count?: number;
+      maxPosition?: number | null;
+    }) {
+      mockPrisma.user_subscriptions.findUnique.mockResolvedValue({
+        tier: options.tier ?? 'free',
+        mandala_limit: null,
+      } as any);
+      mockPrisma.user_mandalas.count.mockResolvedValue(options.count ?? 0);
+      mockPrisma.user_mandalas.aggregate.mockResolvedValue({
+        _max: { position: options.maxPosition ?? null },
+      } as any);
+      // $queryRaw admin check already has a default mock that returns
+      // [{ is_super_admin: false }] (see top of file).
+    }
+
     test('should create mandala with correct transaction flow', async () => {
+      stubStep1Reads({ tier: 'free', count: 0 });
       const mockTx = createMockTx();
-      mockTx.user_subscriptions.findUnique.mockResolvedValue({ tier: 'free' });
-      mockTx.user_mandalas.count.mockResolvedValue(0);
-      mockTx.user_mandalas.aggregate.mockResolvedValue({ _max: { position: null } });
       mockTx.user_mandalas.create.mockResolvedValue({ id: 'new-mandala', user_id: mockUserId });
-      mockTx.user_mandala_levels.create
-        .mockResolvedValueOnce({ id: 'lvl-root' })
-        .mockResolvedValueOnce({ id: 'lvl-child-1' });
+      mockTx.user_mandala_levels.createMany.mockResolvedValue({ count: 2 });
       mockTx.user_mandalas.findUnique.mockResolvedValue({
         ...mockRawMandala,
         id: 'new-mandala',
@@ -343,23 +363,20 @@ describe('MandalaManager', () => {
     });
 
     test('should throw quota exceeded for free tier at limit', async () => {
-      const mockTx = createMockTx();
-      mockTx.user_subscriptions.findUnique.mockResolvedValue({ tier: 'free' });
-      mockTx.user_mandalas.count.mockResolvedValue(3); // free limit = 3
-
-      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockTx));
+      stubStep1Reads({ tier: 'free', count: 3 }); // free limit = 3
 
       await expect(manager.createMandala(mockUserId, 'Over Quota', [])).rejects.toThrow(
         'Mandala quota exceeded'
       );
+      // Transaction is never entered when quota fails upfront.
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
     test('should set isDefault=false when user already has mandalas', async () => {
+      stubStep1Reads({ tier: 'free', count: 1, maxPosition: 2 });
       const mockTx = createMockTx();
-      mockTx.user_subscriptions.findUnique.mockResolvedValue({ tier: 'free' });
-      mockTx.user_mandalas.count.mockResolvedValue(1);
-      mockTx.user_mandalas.aggregate.mockResolvedValue({ _max: { position: 2 } });
       mockTx.user_mandalas.create.mockResolvedValue({ id: 'new-2', user_id: mockUserId });
+      mockTx.user_mandala_levels.createMany.mockResolvedValue({ count: 0 });
       mockTx.user_mandalas.findUnique.mockResolvedValue({
         ...mockRawMandala,
         id: 'new-2',
@@ -379,11 +396,10 @@ describe('MandalaManager', () => {
     });
 
     test('should use pro quota for pro tier', async () => {
+      stubStep1Reads({ tier: 'pro', count: 10, maxPosition: 9 });
       const mockTx = createMockTx();
-      mockTx.user_subscriptions.findUnique.mockResolvedValue({ tier: 'pro' });
-      mockTx.user_mandalas.count.mockResolvedValue(10); // within pro limit (20)
-      mockTx.user_mandalas.aggregate.mockResolvedValue({ _max: { position: 9 } });
       mockTx.user_mandalas.create.mockResolvedValue({ id: 'prem-1', user_id: mockUserId });
+      mockTx.user_mandala_levels.createMany.mockResolvedValue({ count: 0 });
       mockTx.user_mandalas.findUnique.mockResolvedValue({
         ...mockRawMandala,
         id: 'prem-1',
@@ -397,15 +413,11 @@ describe('MandalaManager', () => {
       expect(result.id).toBe('prem-1');
     });
 
-    test('should create levels using two-pass pattern (root first, children second)', async () => {
+    test('should create levels via a single createMany with pre-resolved parent refs (CP358)', async () => {
+      stubStep1Reads({ tier: 'free', count: 0 });
       const mockTx = createMockTx();
-      mockTx.user_subscriptions.findUnique.mockResolvedValue(null); // defaults to free
-      mockTx.user_mandalas.count.mockResolvedValue(0);
-      mockTx.user_mandalas.aggregate.mockResolvedValue({ _max: { position: null } });
       mockTx.user_mandalas.create.mockResolvedValue({ id: 'new-m', user_id: mockUserId });
-      mockTx.user_mandala_levels.create
-        .mockResolvedValueOnce({ id: 'root-id' }) // root pass
-        .mockResolvedValueOnce({ id: 'child-id' }); // child pass
+      mockTx.user_mandala_levels.createMany.mockResolvedValue({ count: 2 });
       mockTx.user_mandalas.findUnique.mockResolvedValue({
         ...mockRawMandala,
         id: 'new-m',
@@ -415,30 +427,39 @@ describe('MandalaManager', () => {
 
       await manager.createMandala(mockUserId, 'Test', mockLevelsInput);
 
-      // Root level created first (depth=0)
-      expect(mockTx.user_mandala_levels.create).toHaveBeenNthCalledWith(1, {
-        data: expect.objectContaining({
-          level_key: 'root',
-          depth: 0,
-        }),
-      });
-      // Child level created second with parent_level_id resolved
-      expect(mockTx.user_mandala_levels.create).toHaveBeenNthCalledWith(2, {
-        data: expect.objectContaining({
-          level_key: 'child-1',
-          depth: 1,
-          parent_level_id: 'root-id',
-        }),
-      });
+      // Single batched INSERT replaces the old per-level round-trips.
+      expect(mockTx.user_mandala_levels.createMany).toHaveBeenCalledTimes(1);
+      expect(mockTx.user_mandala_levels.create).not.toHaveBeenCalled();
+
+      const call = mockTx.user_mandala_levels.createMany.mock.calls[0][0];
+      expect(Array.isArray(call.data)).toBe(true);
+      expect(call.data).toHaveLength(2); // root + 1 child
+
+      // Root is first and has no parent
+      const rootRow = call.data.find((d: any) => d.level_key === 'root');
+      expect(rootRow).toBeDefined();
+      expect(rootRow.depth).toBe(0);
+      expect(rootRow.parent_level_id).toBeNull();
+      expect(typeof rootRow.id).toBe('string');
+
+      // Child row has parent_level_id === root's pre-generated UUID
+      const childRow = call.data.find((d: any) => d.level_key === 'child-1');
+      expect(childRow).toBeDefined();
+      expect(childRow.depth).toBe(1);
+      expect(childRow.parent_level_id).toBe(rootRow.id);
     });
   });
 
   // ─── updateMandala ───
 
   describe('updateMandala', () => {
+    // CP358 note: verifyOwnership moved OUTSIDE the transaction, so it now
+    // calls `this.prisma.user_mandalas.findFirst` directly. All updateMandala
+    // tests stub the top-level mock instead of mockTx for the ownership check.
+
     test('should update title', async () => {
+      mockPrisma.user_mandalas.findFirst.mockResolvedValueOnce(mockRawMandala); // verifyOwnership
       const mockTx = createMockTx();
-      mockTx.user_mandalas.findFirst.mockResolvedValue(mockRawMandala); // verifyOwnership
       mockTx.user_mandalas.update.mockResolvedValue({});
       mockTx.user_mandalas.findUnique.mockResolvedValue({
         ...mockRawMandala,
@@ -459,8 +480,8 @@ describe('MandalaManager', () => {
     });
 
     test('should demote other mandalas when setting isDefault=true', async () => {
+      mockPrisma.user_mandalas.findFirst.mockResolvedValueOnce(mockRawMandala); // verifyOwnership
       const mockTx = createMockTx();
-      mockTx.user_mandalas.findFirst.mockResolvedValue(mockRawMandala);
       mockTx.user_mandalas.update.mockResolvedValue({});
       mockTx.user_mandalas.findUnique.mockResolvedValue(mockRawMandala);
 
@@ -475,19 +496,18 @@ describe('MandalaManager', () => {
     });
 
     test('should throw when mandala not found (ownership check)', async () => {
-      const mockTx = createMockTx();
-      mockTx.user_mandalas.findFirst.mockResolvedValue(null);
-
-      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockTx));
+      mockPrisma.user_mandalas.findFirst.mockResolvedValueOnce(null); // verifyOwnership
 
       await expect(
         manager.updateMandala(mockUserId, 'non-existent', { title: 'X' })
       ).rejects.toThrow('Mandala not found');
+      // Transaction is never entered when ownership fails upfront.
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
     test('should not demote when isDefault is not set to true', async () => {
+      mockPrisma.user_mandalas.findFirst.mockResolvedValueOnce(mockRawMandala); // verifyOwnership
       const mockTx = createMockTx();
-      mockTx.user_mandalas.findFirst.mockResolvedValue(mockRawMandala);
       mockTx.user_mandalas.update.mockResolvedValue({});
       mockTx.user_mandalas.findUnique.mockResolvedValue(mockRawMandala);
 
@@ -502,13 +522,11 @@ describe('MandalaManager', () => {
   // ─── updateMandalaLevels ───
 
   describe('updateMandalaLevels', () => {
-    test('should delete existing levels then recreate', async () => {
+    test('should delete existing levels then recreate via single createMany (CP358)', async () => {
       const mockTx = createMockTx();
       mockTx.user_mandalas.findFirst.mockResolvedValue(mockRawMandala);
       mockTx.user_mandala_levels.deleteMany.mockResolvedValue({ count: 2 });
-      mockTx.user_mandala_levels.create
-        .mockResolvedValueOnce({ id: 'new-root' })
-        .mockResolvedValueOnce({ id: 'new-child' });
+      mockTx.user_mandala_levels.createMany.mockResolvedValue({ count: 2 });
       mockTx.user_mandalas.update.mockResolvedValue({});
       mockTx.user_mandalas.findUnique.mockResolvedValue(mockRawMandala);
 
@@ -519,10 +537,15 @@ describe('MandalaManager', () => {
       expect(mockTx.user_mandala_levels.deleteMany).toHaveBeenCalledWith({
         where: { mandala_id: mockMandalaId },
       });
-      expect(mockTx.user_mandala_levels.create).toHaveBeenCalledTimes(2);
+      expect(mockTx.user_mandala_levels.createMany).toHaveBeenCalledTimes(1);
+      expect(mockTx.user_mandala_levels.create).not.toHaveBeenCalled();
     });
 
     test('should verify ownership before updating levels', async () => {
+      // verifyOwnership is now called OUTSIDE the transaction for updateMandala
+      // but still INSIDE for updateMandalaLevels (via the existing two-pass
+      // flow). The mock path is the same: the prisma.user_mandalas.findFirst
+      // stub returning null throws before the transaction body runs.
       const mockTx = createMockTx();
       mockTx.user_mandalas.findFirst.mockResolvedValue(null);
 
@@ -537,7 +560,7 @@ describe('MandalaManager', () => {
       const mockTx = createMockTx();
       mockTx.user_mandalas.findFirst.mockResolvedValue(mockRawMandala);
       mockTx.user_mandala_levels.deleteMany.mockResolvedValue({ count: 0 });
-      mockTx.user_mandala_levels.create.mockResolvedValue({ id: 'lvl' });
+      mockTx.user_mandala_levels.createMany.mockResolvedValue({ count: 1 });
       mockTx.user_mandalas.update.mockResolvedValue({});
       mockTx.user_mandalas.findUnique.mockResolvedValue(mockRawMandala);
 
@@ -754,7 +777,7 @@ describe('MandalaManager', () => {
         user_id: mockUserId,
       });
       mockTx.user_mandala_levels.deleteMany.mockResolvedValue({ count: 0 });
-      mockTx.user_mandala_levels.create.mockResolvedValue({ id: 'lvl' });
+      mockTx.user_mandala_levels.createMany.mockResolvedValue({ count: 1 });
 
       mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockTx));
 
@@ -778,7 +801,7 @@ describe('MandalaManager', () => {
         .mockResolvedValueOnce({ ...mockRawMandala, id: 'existing-m' }); // fetch complete
       mockTx.user_mandalas.update.mockResolvedValue({ ...existing, title: 'Updated' });
       mockTx.user_mandala_levels.deleteMany.mockResolvedValue({ count: 1 });
-      mockTx.user_mandala_levels.create.mockResolvedValue({ id: 'lvl' });
+      mockTx.user_mandala_levels.createMany.mockResolvedValue({ count: 1 });
 
       mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockTx));
 
@@ -791,32 +814,30 @@ describe('MandalaManager', () => {
       expect(mockTx.user_mandalas.create).not.toHaveBeenCalled();
     });
 
-    test('should replace levels using two-pass pattern', async () => {
+    test('should replace levels via single batched createMany (CP358)', async () => {
       const mockTx = createMockTx();
       mockTx.user_mandalas.findFirst
         .mockResolvedValueOnce({ id: 'm1', user_id: mockUserId })
         .mockResolvedValueOnce(mockRawMandala);
       mockTx.user_mandalas.update.mockResolvedValue({ id: 'm1' });
       mockTx.user_mandala_levels.deleteMany.mockResolvedValue({ count: 2 });
-      mockTx.user_mandala_levels.create
-        .mockResolvedValueOnce({ id: 'new-root' })
-        .mockResolvedValueOnce({ id: 'new-child' });
+      mockTx.user_mandala_levels.createMany.mockResolvedValue({ count: 2 });
 
       mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockTx));
 
       await manager.upsertMandala(mockUserId, 'Test', mockLevelsInput);
 
       expect(mockTx.user_mandala_levels.deleteMany).toHaveBeenCalled();
-      // Root first, then child with parent_level_id
-      expect(mockTx.user_mandala_levels.create).toHaveBeenNthCalledWith(1, {
-        data: expect.objectContaining({ level_key: 'root', depth: 0 }),
-      });
-      expect(mockTx.user_mandala_levels.create).toHaveBeenNthCalledWith(2, {
-        data: expect.objectContaining({
-          level_key: 'child-1',
-          parent_level_id: 'new-root',
-        }),
-      });
+      expect(mockTx.user_mandala_levels.createMany).toHaveBeenCalledTimes(1);
+      expect(mockTx.user_mandala_levels.create).not.toHaveBeenCalled();
+
+      const batch = mockTx.user_mandala_levels.createMany.mock.calls[0][0];
+      expect(Array.isArray(batch.data)).toBe(true);
+      const rootRow = batch.data.find((d: any) => d.level_key === 'root');
+      const childRow = batch.data.find((d: any) => d.level_key === 'child-1');
+      expect(rootRow.depth).toBe(0);
+      expect(rootRow.parent_level_id).toBeNull();
+      expect(childRow.parent_level_id).toBe(rootRow.id);
     });
   });
 

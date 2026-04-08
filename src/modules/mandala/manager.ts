@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { getPrismaClient } from '../database/client';
 import { logger } from '../../utils/logger';
 import { user_mandalas, Prisma } from '@prisma/client';
@@ -157,43 +158,47 @@ export class MandalaManager {
     mandalaId: string,
     levels: MandalaLevelData[]
   ): Promise<Map<string, string>> {
+    // CP358 hotfix — was the architectural cause of every "Failed to create
+    // mandala" P2028 timeout in this session. Previous implementation issued
+    // 1 + N sequential `tx.create()` calls inside the interactive transaction
+    // (1 root + 8 children = 9 round-trips). Each round-trip pays pgbouncer
+    // transaction-pool overhead + Supabase Cloud RTT (~3s in prod), so the
+    // 9 inserts alone exceeded the 5s default Prisma timeout, and even the
+    // 30s bandaid wasn't enough on cold connections (30,731ms observed).
+    //
+    // Fix: pre-generate UUIDs in JS so parent → child FK refs (parent_level_id)
+    // can be wired up *without* a round-trip per row. Then one `createMany()`
+    // batches all 9 rows into a single SQL statement = 1 round-trip total.
+    // The interactive transaction wrapping createMandala / updateMandalaLevels
+    // now does ~3 round-trips end-to-end instead of 11+, so the 30s timeout
+    // is comfortable headroom rather than a failing budget.
     const levelIdMap = new Map<string, string>();
 
-    const rootLevel = levels.find((l) => l.depth === 0);
-    if (rootLevel) {
-      const created = await tx.user_mandala_levels.create({
-        data: {
-          mandala_id: mandalaId,
-          level_key: rootLevel.levelKey,
-          center_goal: rootLevel.centerGoal,
-          subjects: rootLevel.subjects,
-          position: rootLevel.position,
-          depth: rootLevel.depth,
-          color: rootLevel.color,
-        },
-      });
-      levelIdMap.set(rootLevel.levelKey, created.id);
+    // Pass 1: assign a stable UUID to every level so we can resolve
+    // parent_level_id refs in JS without writing first.
+    const idsByKey = new Map<string, string>();
+    for (const level of levels) {
+      idsByKey.set(level.levelKey, randomUUID());
     }
 
-    const childLevels = levels.filter((l) => l.depth > 0);
-    for (const level of childLevels) {
-      const parentId = level.parentLevelKey ? (levelIdMap.get(level.parentLevelKey) ?? null) : null;
+    // Pass 2: build the createMany payload with pre-resolved FKs.
+    const data: Prisma.user_mandala_levelsCreateManyInput[] = levels.map((level) => ({
+      id: idsByKey.get(level.levelKey)!,
+      mandala_id: mandalaId,
+      parent_level_id: level.parentLevelKey ? (idsByKey.get(level.parentLevelKey) ?? null) : null,
+      level_key: level.levelKey,
+      center_goal: level.centerGoal,
+      subjects: level.subjects,
+      position: level.position,
+      depth: level.depth,
+      color: level.color ?? null,
+    }));
 
-      const created = await tx.user_mandala_levels.create({
-        data: {
-          mandala_id: mandalaId,
-          parent_level_id: parentId,
-          level_key: level.levelKey,
-          center_goal: level.centerGoal,
-          subjects: level.subjects,
-          position: level.position,
-          depth: level.depth,
-          color: level.color,
-        },
-      });
-      levelIdMap.set(level.levelKey, created.id);
+    await tx.user_mandala_levels.createMany({ data });
+
+    for (const [key, id] of idsByKey) {
+      levelIdMap.set(key, id);
     }
-
     return levelIdMap;
   }
 
@@ -397,44 +402,56 @@ export class MandalaManager {
     mandalaId: string,
     data: { title?: string; isDefault?: boolean; position?: number }
   ): Promise<MandalaWithLevels> {
-    return await this.prisma.$transaction(async (tx) => {
-      await this.verifyOwnership(userId, mandalaId, tx as any);
+    // CP358 hotfix — verifyOwnership is a pure read (no atomicity needed
+    // with the writes), so move it outside the transaction. That removes
+    // 1 round-trip from the transaction budget. The remaining writes
+    // (optional updateMany + update + final findUnique) still benefit from
+    // the same 30s budget as createMandala — pgbouncer round-trip variance
+    // is what overran the default 5000ms timeout (6,143ms observed).
+    await this.verifyOwnership(userId, mandalaId);
 
-      if (data.isDefault === true) {
-        // Demote all other mandalas for this user
-        await tx.user_mandalas.updateMany({
-          where: { user_id: userId, id: { not: mandalaId } },
-          data: { is_default: false },
-        });
-      }
+    return await this.prisma.$transaction(
+      async (tx) => {
+        if (data.isDefault === true) {
+          // Demote all other mandalas for this user
+          await tx.user_mandalas.updateMany({
+            where: { user_id: userId, id: { not: mandalaId } },
+            data: { is_default: false },
+          });
+        }
 
-      await tx.user_mandalas.update({
-        where: { id: mandalaId },
-        data: {
-          ...(data.title !== undefined && { title: data.title }),
-          ...(data.isDefault !== undefined && { is_default: data.isDefault }),
-          ...(data.position !== undefined && { position: data.position }),
-          updated_at: new Date(),
-        },
-      });
-
-      logger.info(`Mandala updated: userId=${userId}, mandalaId=${mandalaId}`);
-
-      const result = await tx.user_mandalas.findUnique({
-        where: { id: mandalaId },
-        include: {
-          levels: {
-            orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+        await tx.user_mandalas.update({
+          where: { id: mandalaId },
+          data: {
+            ...(data.title !== undefined && { title: data.title }),
+            ...(data.isDefault !== undefined && { is_default: data.isDefault }),
+            ...(data.position !== undefined && { position: data.position }),
+            updated_at: new Date(),
           },
-        },
-      });
+        });
 
-      if (!result) {
-        throw new Error('Failed to update mandala');
+        logger.info(`Mandala updated: userId=${userId}, mandalaId=${mandalaId}`);
+
+        const result = await tx.user_mandalas.findUnique({
+          where: { id: mandalaId },
+          include: {
+            levels: {
+              orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+            },
+          },
+        });
+
+        if (!result) {
+          throw new Error('Failed to update mandala');
+        }
+
+        return this.mapMandala(result);
+      },
+      {
+        maxWait: 5_000,
+        timeout: 30_000,
       }
-
-      return this.mapMandala(result);
-    });
+    );
   }
 
   /**
@@ -632,91 +649,61 @@ export class MandalaManager {
     title: string,
     levels: MandalaLevelData[]
   ): Promise<MandalaWithLevels> {
-    return await this.prisma.$transaction(async (tx) => {
-      // Upsert mandala
-      let mandala = await tx.user_mandalas.findFirst({
-        where: { user_id: userId, is_default: true },
-      });
-
-      if (mandala) {
-        mandala = await tx.user_mandalas.update({
-          where: { id: mandala.id },
-          data: { title, updated_at: new Date() },
+    // CP358 hotfix — was a third copy of the sequential-create-loop bug
+    // that killed createMandala. Now delegates to the shared
+    // `createLevels` helper (single createMany, 1 round-trip) and opts into
+    // the 30s transaction budget like createMandala / updateMandalaLevels.
+    return await this.prisma.$transaction(
+      async (tx) => {
+        // Upsert mandala
+        let mandala = await tx.user_mandalas.findFirst({
+          where: { user_id: userId, is_default: true },
         });
-      } else {
-        mandala = await tx.user_mandalas.create({
-          data: {
-            user_id: userId,
-            title,
-            is_default: true,
-            position: 0,
+
+        if (mandala) {
+          mandala = await tx.user_mandalas.update({
+            where: { id: mandala.id },
+            data: { title, updated_at: new Date() },
+          });
+        } else {
+          mandala = await tx.user_mandalas.create({
+            data: {
+              user_id: userId,
+              title,
+              is_default: true,
+              position: 0,
+            },
+          });
+        }
+
+        // Delete existing levels and recreate via the shared batched helper
+        await tx.user_mandala_levels.deleteMany({
+          where: { mandala_id: mandala.id },
+        });
+        await this.createLevels(tx as any, mandala.id, levels);
+
+        // Fetch the complete result using tx (inside transaction)
+        const fullMandala = await tx.user_mandalas.findFirst({
+          where: { id: mandala.id, user_id: userId },
+          include: {
+            levels: {
+              orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+            },
           },
         });
+
+        if (!fullMandala) {
+          throw new Error('Failed to create mandala');
+        }
+
+        logger.info(`Mandala upserted: userId=${userId}, mandalaId=${mandala.id}`);
+        return this.mapMandala(fullMandala);
+      },
+      {
+        maxWait: 5_000,
+        timeout: 30_000,
       }
-
-      // Delete existing levels and recreate
-      await tx.user_mandala_levels.deleteMany({
-        where: { mandala_id: mandala.id },
-      });
-
-      // First pass: create root level
-      const rootLevel = levels.find((l) => l.depth === 0);
-      const levelIdMap = new Map<string, string>();
-
-      if (rootLevel) {
-        const created = await tx.user_mandala_levels.create({
-          data: {
-            mandala_id: mandala.id,
-            level_key: rootLevel.levelKey,
-            center_goal: rootLevel.centerGoal,
-            subjects: rootLevel.subjects,
-            position: rootLevel.position,
-            depth: rootLevel.depth,
-            color: rootLevel.color,
-          },
-        });
-        levelIdMap.set(rootLevel.levelKey, created.id);
-      }
-
-      // Second pass: create child levels
-      const childLevels = levels.filter((l) => l.depth > 0);
-      for (const level of childLevels) {
-        const parentId = level.parentLevelKey
-          ? (levelIdMap.get(level.parentLevelKey) ?? null)
-          : null;
-
-        const created = await tx.user_mandala_levels.create({
-          data: {
-            mandala_id: mandala.id,
-            parent_level_id: parentId,
-            level_key: level.levelKey,
-            center_goal: level.centerGoal,
-            subjects: level.subjects,
-            position: level.position,
-            depth: level.depth,
-            color: level.color,
-          },
-        });
-        levelIdMap.set(level.levelKey, created.id);
-      }
-
-      // Fetch the complete result using tx (inside transaction)
-      const fullMandala = await tx.user_mandalas.findFirst({
-        where: { id: mandala.id, user_id: userId },
-        include: {
-          levels: {
-            orderBy: [{ depth: 'asc' }, { position: 'asc' }],
-          },
-        },
-      });
-
-      if (!fullMandala) {
-        throw new Error('Failed to create mandala');
-      }
-
-      logger.info(`Mandala upserted: userId=${userId}, mandalaId=${mandala.id}`);
-      return this.mapMandala(fullMandala);
-    });
+    );
   }
 
   /**
