@@ -43,7 +43,14 @@ export interface MandalaSearchOptions {
 // ─── Constants ───
 
 const DEFAULT_LIMIT = 5;
-const DEFAULT_THRESHOLD = 0.5;
+// CP358: Lowered from 0.5 to 0.3 after prod cosine sim measurement showed
+// "행복한 가족" → top match was 0.4166 against 1001 KO templates. dev's
+// data distribution clustered tighter; prod's broader template set produces
+// lower max sim values, so 0.5 always returned []. Minimum results below
+// also guarantees we never return an empty list when ANY data exists.
+const DEFAULT_THRESHOLD = 0.3;
+/** When threshold filter would return 0 rows, fall back to top-N regardless. */
+const MIN_RESULTS_GUARANTEE = 3;
 const MAX_LIMIT = 20;
 const EMBED_TIMEOUT_MS = 30_000;
 
@@ -162,16 +169,16 @@ export async function searchMandalasByGoal(
   }
   const where = Prisma.join(conditions, ' AND ');
 
-  const topRows = await prisma.$queryRaw<
-    Array<{
-      mandala_id: string;
-      center_goal: string;
-      center_label: string | null;
-      domain: string | null;
-      language: string | null;
-      similarity: number;
-    }>
-  >`
+  type TopRow = {
+    mandala_id: string;
+    center_goal: string;
+    center_label: string | null;
+    domain: string | null;
+    language: string | null;
+    similarity: number;
+  };
+
+  let topRows = await prisma.$queryRaw<TopRow[]>`
     WITH ranked AS (
       SELECT
         mandala_id::text AS mandala_id,
@@ -193,6 +200,47 @@ export async function searchMandalasByGoal(
     ORDER BY similarity DESC
     LIMIT ${limit}
   `;
+
+  // CP358 min-results guarantee: if the threshold filter returned fewer than
+  // MIN_RESULTS_GUARANTEE rows, retry WITHOUT the threshold filter so the
+  // user always sees the closest matches. UX rule: showing 3 imperfect
+  // matches > showing nothing.
+  if (topRows.length < MIN_RESULTS_GUARANTEE) {
+    const fallbackConditions: Prisma.Sql[] = [
+      Prisma.sql`level = 1`,
+      Prisma.sql`sub_goal_index IS NULL`,
+      Prisma.sql`embedding IS NOT NULL`,
+    ];
+    if (options.language) {
+      fallbackConditions.push(Prisma.sql`language = ${options.language}`);
+    }
+    const fallbackWhere = Prisma.join(fallbackConditions, ' AND ');
+    logger.info(
+      `Mandala search fallback: threshold ${threshold} produced ${topRows.length} rows for "${goalText}", retrying without threshold`
+    );
+    topRows = await prisma.$queryRaw<TopRow[]>`
+      WITH ranked AS (
+        SELECT
+          mandala_id::text AS mandala_id,
+          center_goal,
+          center_label,
+          domain,
+          language,
+          1 - (embedding <=> ${embeddingStr}::vector) AS similarity,
+          ROW_NUMBER() OVER (
+            PARTITION BY mandala_id
+            ORDER BY embedding <=> ${embeddingStr}::vector
+          ) AS rn
+        FROM mandala_embeddings
+        WHERE ${fallbackWhere}
+      )
+      SELECT mandala_id, center_goal, center_label, domain, language, similarity
+      FROM ranked
+      WHERE rn = 1
+      ORDER BY similarity DESC
+      LIMIT ${limit}
+    `;
+  }
 
   if (topRows.length === 0) {
     return [];
