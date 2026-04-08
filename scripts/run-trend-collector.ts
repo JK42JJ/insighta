@@ -24,8 +24,16 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 // Load .env first (base), then .env.local on top so the local-only YouTube key
 // (server-side, no HTTP-Referer restriction — credentials.md "Dev") wins.
-dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
+//
+// CP358 escape hatch: when running against PROD (or any non-dev target),
+// set INSIGHTA_PROD_RUN=1 alongside explicit DATABASE_URL/DIRECT_URL/...
+// inline env vars. The script will then SKIP loading dev .env files so the
+// CLI-injected values aren't override:true'd back to dev. CLAUDE.md hard
+// rule: never swap .env files. Use this flag instead.
+if (process.env['INSIGHTA_PROD_RUN'] !== '1') {
+  dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
+}
 
 import { executor } from '../src/skills/plugins/trend-collector/executor';
 import {

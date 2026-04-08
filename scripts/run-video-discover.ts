@@ -20,8 +20,11 @@
 
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
+// CP358 escape hatch — see CLAUDE.md ".env 불변" hard rule.
+if (process.env['INSIGHTA_PROD_RUN'] !== '1') {
+  dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
+}
 
 import { executor } from '../src/skills/plugins/video-discover/executor';
 import { getPrismaClient } from '../src/modules/database';

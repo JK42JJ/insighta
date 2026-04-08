@@ -36,6 +36,16 @@
 - GitHub Secrets name != env var name — check mapping in credentials.md
 - 새 시크릿 추가 시: credentials.md에 먼저 기록 -> 코드 작성
 
+### .env 불변 (절대 규칙, CP358)
+- **`.env`, `.env.local`, `.env.production` 파일을 수정/교체/삭제하는 행위 절대 금지.**
+- prod 스크립트 실행 시 환경변수는 **CLI 인라인 주입으로만**:
+  ```bash
+  DATABASE_URL=... DIRECT_URL=... npx tsx scripts/run-trend-collector.ts
+  ```
+- 파일 swap (cp prod.env .env → 실행 → 복원) 패턴 사용 금지. 소실 위험.
+- dotenv `override: true`로 인해 인라인 env가 override되는 스크립트는 **스크립트 자체를 수정**해서 `INSIGHTA_PROD_RUN=1` 같은 escape hatch 추가. 절대 .env 파일 건드리지 말 것.
+- 자동 백업: `~/.insighta-env-backup/` 에 날짜별 보존. 실수 시 `cp ~/.insighta-env-backup/.env-YYYYMMDD .env`로 복구.
+
 ### Two Repos
 ```
 /Users/jeonhokim/cursor/insighta/  <- 메인 앱 (이 프로젝트)

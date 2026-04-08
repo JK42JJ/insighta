@@ -16,8 +16,13 @@
 
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
+// CP358 escape hatch: when INSIGHTA_PROD_RUN=1, skip dev .env loading so
+// CLI-injected DATABASE_URL/DIRECT_URL/MANDALA_GEN_URL aren't override:true'd
+// back to dev. CLAUDE.md hard rule: never swap .env files. Use this flag.
+if (process.env['INSIGHTA_PROD_RUN'] !== '1') {
+  dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
+}
 
 import { executor } from '../src/skills/plugins/iks-scorer/executor';
 import { getPrismaClient } from '../src/modules/database';
