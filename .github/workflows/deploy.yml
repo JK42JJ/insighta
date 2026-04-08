@@ -165,17 +165,24 @@ jobs:
         env:
           OR_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OR_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          YT_SEARCH_KEY: ${{ secrets.YOUTUBE_API_KEY_SEARCH }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL
+          envs: OR_KEY,OR_MODEL,YT_SEARCH_KEY
           script: |
             set -e
             cd /opt/tubearchive
             # Add OPENROUTER keys if missing, update if present
             grep -q '^OPENROUTER_API_KEY=' .env 2>/dev/null && sed -i "s|^OPENROUTER_API_KEY=.*|OPENROUTER_API_KEY=${OR_KEY}|" .env || echo "OPENROUTER_API_KEY=${OR_KEY}" >> .env
             grep -q '^OPENROUTER_MODEL=' .env 2>/dev/null && sed -i "s|^OPENROUTER_MODEL=.*|OPENROUTER_MODEL=${OR_MODEL}|" .env || echo "OPENROUTER_MODEL=${OR_MODEL}" >> .env
+            # CP360 — dedicated YouTube API key for video-discover search.list
+            # (dual-auth mode in src/skills/plugins/video-discover/executor.ts).
+            # Mirrors the OPENROUTER pattern: idempotent add-or-update.
+            if [ -n "${YT_SEARCH_KEY}" ]; then
+              grep -q '^YOUTUBE_API_KEY_SEARCH=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH=.*|YOUTUBE_API_KEY_SEARCH=${YT_SEARCH_KEY}|" .env || echo "YOUTUBE_API_KEY_SEARCH=${YT_SEARCH_KEY}" >> .env
+            fi
             chmod 600 .env
 
       - name: Deploy via SSH
