@@ -65,13 +65,17 @@ export async function ensureMandalaEmbeddings(mandalaId: string): Promise<Ensure
   const db = getPrismaClient();
 
   // ── Step 1: load root level + subjects ────────────────────────────
-  const rootRows = await db.$queryRaw<{ center_goal: string; subjects: string[] }[]>(
-    Prisma.sql`SELECT center_goal, subjects
-               FROM user_mandala_levels
-               WHERE mandala_id = ${mandalaId} AND depth = 0
-               LIMIT 1`
-  );
-  if (rootRows.length === 0) {
+  // Use typed Prisma API instead of raw $queryRaw — `user_mandala_levels.mandala_id`
+  // is a UUID column (with @db.Uuid in schema) and Prisma.sql template literals
+  // send string params as text, which triggers `operator does not exist:
+  // text = uuid` on Supabase Cloud. Typed model operations honor @db.Uuid and
+  // bind the parameter as uuid correctly. (CP358 hotfix — was the silent root
+  // cause of every new mandala showing 0 cells.)
+  const root = await db.user_mandala_levels.findFirst({
+    where: { mandala_id: mandalaId, depth: 0 },
+    select: { center_goal: true, subjects: true },
+  });
+  if (!root) {
     return {
       ok: false,
       alreadyPresent: false,
@@ -80,7 +84,6 @@ export async function ensureMandalaEmbeddings(mandalaId: string): Promise<Ensure
       reason: `mandala ${mandalaId} has no root (depth=0) level`,
     };
   }
-  const root = rootRows[0]!;
   const allSubjects = (root.subjects ?? []).filter(
     (s): s is string => typeof s === 'string' && s.trim().length > 0
   );
