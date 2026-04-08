@@ -730,7 +730,7 @@ model youtube_playlists {
 /// Uses pgvector extension. 18009 rows in Prod (2026-04-04).
 model mandala_embeddings {
   id             BigInt                   @id @default(autoincrement())
-  mandala_id     String
+  mandala_id     String                   @db.Uuid
   level          Int
   sub_goal_index Int?
   text           String?
