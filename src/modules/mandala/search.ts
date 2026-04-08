@@ -43,7 +43,7 @@ export interface MandalaSearchOptions {
 // ─── Constants ───
 
 const DEFAULT_LIMIT = 5;
-const DEFAULT_THRESHOLD = 0.3;
+const DEFAULT_THRESHOLD = 0.5;
 const MAX_LIMIT = 20;
 const EMBED_TIMEOUT_MS = 30_000;
 
@@ -142,10 +142,18 @@ export async function searchMandalasByGoal(
 
   const prisma = getPrismaClient();
 
-  // Step 1: Top N mandala_ids from level=1 rows (center goals)
-  // Schema: level 1 = center, level 2 = sub_goal (per 20260403_mandala_embeddings.sql)
+  // Step 1: Top N unique mandalas by cosine similarity.
+  //
+  // Row convention in mandala_embeddings:
+  //   level=1, sub_goal_index IS NULL  → center-goal embedding (1 per template)
+  //   level=1, sub_goal_index IN 0..7  → sub_goal embedding (8 per user mandala)
+  //
+  // Template search uses the center-goal variant. ROW_NUMBER dedup is a
+  // safety belt in case a mandala has multiple center rows (seed bugs,
+  // concurrent writers).
   const conditions: Prisma.Sql[] = [
     Prisma.sql`level = 1`,
+    Prisma.sql`sub_goal_index IS NULL`,
     Prisma.sql`embedding IS NOT NULL`,
     Prisma.sql`1 - (embedding <=> ${embeddingStr}::vector) >= ${threshold}`,
   ];
@@ -164,16 +172,25 @@ export async function searchMandalasByGoal(
       similarity: number;
     }>
   >`
-    SELECT
-      mandala_id::text AS mandala_id,
-      center_goal,
-      center_label,
-      domain,
-      language,
-      1 - (embedding <=> ${embeddingStr}::vector) AS similarity
-    FROM mandala_embeddings
-    WHERE ${where}
-    ORDER BY embedding <=> ${embeddingStr}::vector
+    WITH ranked AS (
+      SELECT
+        mandala_id::text AS mandala_id,
+        center_goal,
+        center_label,
+        domain,
+        language,
+        1 - (embedding <=> ${embeddingStr}::vector) AS similarity,
+        ROW_NUMBER() OVER (
+          PARTITION BY mandala_id
+          ORDER BY embedding <=> ${embeddingStr}::vector
+        ) AS rn
+      FROM mandala_embeddings
+      WHERE ${where}
+    )
+    SELECT mandala_id, center_goal, center_label, domain, language, similarity
+    FROM ranked
+    WHERE rn = 1
+    ORDER BY similarity DESC
     LIMIT ${limit}
   `;
 
@@ -181,84 +198,76 @@ export async function searchMandalasByGoal(
     return [];
   }
 
-  // Step 2: Fetch sub_goals + sub_labels (level=2) for the matched mandala_ids
-  const mandalaIds = topRows.map((r) => r.mandala_id);
-  const subGoalRows = await prisma.$queryRaw<
-    Array<{
-      mandala_id: string;
-      sub_goal_index: number | null;
-      sub_goal: string | null;
-      sub_label: string | null;
-    }>
-  >`
-    SELECT mandala_id::text AS mandala_id, sub_goal_index, sub_goal, sub_label
-    FROM mandala_embeddings
-    WHERE mandala_id::text = ANY(${mandalaIds}::text[])
-      AND level = 2
-    ORDER BY mandala_id, sub_goal_index
-  `;
-
-  // Group sub_goals + sub_labels by mandala_id
-  const subGoalsByMandala = new Map<string, string[]>();
-  const subLabelsByMandala = new Map<string, string[]>();
-  for (const row of subGoalRows) {
-    if (row.sub_goal) {
-      const arr = subGoalsByMandala.get(row.mandala_id) ?? [];
-      arr.push(row.sub_goal);
-      subGoalsByMandala.set(row.mandala_id, arr);
-    }
-    if (row.sub_label) {
-      const arr = subLabelsByMandala.get(row.mandala_id) ?? [];
-      arr.push(row.sub_label);
-      subLabelsByMandala.set(row.mandala_id, arr);
-    }
-  }
-
-  // Step 3: Map embedding center_goal → real user_mandalas.id (system templates)
-  // and fetch depth=1 levels (64 actions per mandala)
+  // Step 2: Resolve embedding.mandala_id → user_mandalas row.
+  // Primary: direct UUID match. Fallback: center_goal title match
+  // against system-template rows (covers legacy embeddings whose
+  // mandala_id is not a real user_mandalas.id).
+  const embedMandalaIds = topRows.map((r) => r.mandala_id);
   const centerGoals = topRows.map((r) => r.center_goal);
+
   const templateRows = await prisma.$queryRaw<Array<{ id: string; title: string }>>`
     SELECT id::text AS id, title
     FROM user_mandalas
-    WHERE user_id = ${SYSTEM_TEMPLATES_USER_ID}::uuid
-      AND title = ANY(${centerGoals}::text[])
+    WHERE id::text = ANY(${embedMandalaIds}::text[])
+       OR (
+         user_id = ${SYSTEM_TEMPLATES_USER_ID}::uuid
+         AND title = ANY(${centerGoals}::text[])
+       )
   `;
+  const idToTemplateId = new Map<string, string>();
   const titleToTemplateId = new Map<string, string>();
   for (const t of templateRows) {
+    idToTemplateId.set(t.id, t.id);
     titleToTemplateId.set(t.title, t.id);
   }
 
-  // Step 4: Fetch depth=1 levels for matched templates → 64 actions per mandala
-  const templateIds = templateRows.map((t) => t.id);
+  // Step 3: Fetch depth=0 (sub_labels) + depth=1 (64 actions) for all
+  // resolved templates in one query. Authoritative source for the 9-cell
+  // preview is user_mandala_levels, not mandala_embeddings.
+  const templateIds = Array.from(new Set(templateRows.map((t) => t.id)));
   let levelRows: Array<{
     mandala_id: string;
+    depth: number;
     position: number;
     subjects: string[];
   }> = [];
   if (templateIds.length > 0) {
     levelRows = await prisma.$queryRaw<
-      Array<{ mandala_id: string; position: number; subjects: string[] }>
+      Array<{ mandala_id: string; depth: number; position: number; subjects: string[] }>
     >`
-      SELECT mandala_id::text AS mandala_id, position, subjects
+      SELECT mandala_id::text AS mandala_id, depth, position, subjects
       FROM user_mandala_levels
       WHERE mandala_id::text = ANY(${templateIds}::text[])
-        AND depth = 1
-      ORDER BY mandala_id, position
+        AND depth IN (0, 1)
+      ORDER BY mandala_id, depth, position
     `;
   }
 
-  // Group depth=1 levels (subjects[8] each) into Record<position, string[]>
-  const actionsByMandala = new Map<string, Record<number, string[]>>();
+  // Group levels:
+  //   depth=0, position=0 → sub_labels (subjects[0..7] = 8 sub_labels)
+  //   depth=1, position=0..7 → sub_actions[position] = subjects[0..7] (64 total)
+  const subLabelsByTemplate = new Map<string, string[]>();
+  const actionsByTemplate = new Map<string, Record<number, string[]>>();
   for (const row of levelRows) {
-    const map = actionsByMandala.get(row.mandala_id) ?? {};
-    map[row.position] = row.subjects ?? [];
-    actionsByMandala.set(row.mandala_id, map);
+    if (row.depth === 0 && row.position === 0) {
+      subLabelsByTemplate.set(row.mandala_id, row.subjects ?? []);
+      continue;
+    }
+    if (row.depth === 1) {
+      const map = actionsByTemplate.get(row.mandala_id) ?? {};
+      map[row.position] = row.subjects ?? [];
+      actionsByTemplate.set(row.mandala_id, map);
+    }
   }
 
-  // Combine
+  // Step 4: Combine. sub_goals and sub_labels are aliased to the same
+  // user_mandala_levels.depth=0.subjects array — both fields exist in
+  // the public response shape for backward compatibility with callers.
   return topRows.map((row) => {
-    const templateMandalaId = titleToTemplateId.get(row.center_goal) ?? null;
-    const subActions = templateMandalaId ? (actionsByMandala.get(templateMandalaId) ?? {}) : {};
+    const templateMandalaId =
+      idToTemplateId.get(row.mandala_id) ?? titleToTemplateId.get(row.center_goal) ?? null;
+    const subLabels = templateMandalaId ? (subLabelsByTemplate.get(templateMandalaId) ?? []) : [];
+    const subActions = templateMandalaId ? (actionsByTemplate.get(templateMandalaId) ?? {}) : {};
     return {
       mandala_id: row.mandala_id,
       template_mandala_id: templateMandalaId,
@@ -267,8 +276,8 @@ export async function searchMandalasByGoal(
       domain: row.domain,
       language: row.language,
       similarity: Number(row.similarity),
-      sub_goals: subGoalsByMandala.get(row.mandala_id) ?? [],
-      sub_labels: subLabelsByMandala.get(row.mandala_id) ?? [],
+      sub_goals: subLabels,
+      sub_labels: subLabels,
       sub_actions: subActions,
     };
   });
