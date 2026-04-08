@@ -342,36 +342,50 @@ export class MandalaManager {
     const isDefault = count === 0;
     const position = (maxPositionResult._max.position ?? -1) + 1;
 
-    // Step 3: Transaction for writes only (fast)
-    return await this.prisma.$transaction(async (tx) => {
-      const mandala = await tx.user_mandalas.create({
-        data: {
-          user_id: userId,
-          title,
-          is_default: isDefault,
-          position,
-        },
-      });
-
-      await this.createLevels(tx as any, mandala.id, levels);
-
-      logger.info(`Mandala created: userId=${userId}, mandalaId=${mandala.id}, tier=${tier}`);
-
-      const result = await tx.user_mandalas.findUnique({
-        where: { id: mandala.id },
-        include: {
-          levels: {
-            orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+    // Step 3: Transaction for writes only.
+    //
+    // CP358: createLevels writes 1 root + 8 child + ~64 actions = ~73 INSERTs
+    // through pgbouncer in us-west-2. Default Prisma transaction timeout is
+    // 5000ms which is insufficient for prod RTT (~80ms × 73 = 5.8s minimum,
+    // up to 18s on cold connections). Bumping `maxWait` + `timeout` to 30s
+    // covers worst-case wall time. This is the root cause of CP358 prod
+    // "Failed to create mandala" P2028 errors. CLAUDE.md hard rule candidate.
+    return await this.prisma.$transaction(
+      async (tx) => {
+        const mandala = await tx.user_mandalas.create({
+          data: {
+            user_id: userId,
+            title,
+            is_default: isDefault,
+            position,
           },
-        },
-      });
+        });
 
-      if (!result) {
-        throw new Error('Failed to create mandala');
+        await this.createLevels(tx as any, mandala.id, levels);
+
+        logger.info(`Mandala created: userId=${userId}, mandalaId=${mandala.id}, tier=${tier}`);
+
+        const result = await tx.user_mandalas.findUnique({
+          where: { id: mandala.id },
+          include: {
+            levels: {
+              orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+            },
+          },
+        });
+
+        if (!result) {
+          throw new Error('Failed to create mandala');
+        }
+
+        return this.mapMandala(result);
+      },
+      {
+        // 30s budget covers prod RTT × ~73 INSERTs with safety margin.
+        maxWait: 5_000,
+        timeout: 30_000,
       }
-
-      return this.mapMandala(result);
-    });
+    );
   }
 
   /**
@@ -432,39 +446,45 @@ export class MandalaManager {
     mandalaId: string,
     levels: MandalaLevelData[]
   ): Promise<MandalaWithLevels> {
-    return await this.prisma.$transaction(async (tx) => {
-      await this.verifyOwnership(userId, mandalaId, tx as any);
+    // CP358: same large-transaction timeout fix as createMandala. delete +
+    // recreate of 1 root + 8 child + ~64 actions through pgbouncer can
+    // exceed Prisma's default 5000ms.
+    return await this.prisma.$transaction(
+      async (tx) => {
+        await this.verifyOwnership(userId, mandalaId, tx as any);
 
-      // Delete and recreate levels
-      await tx.user_mandala_levels.deleteMany({
-        where: { mandala_id: mandalaId },
-      });
+        // Delete and recreate levels
+        await tx.user_mandala_levels.deleteMany({
+          where: { mandala_id: mandalaId },
+        });
 
-      await this.createLevels(tx as any, mandalaId, levels);
+        await this.createLevels(tx as any, mandalaId, levels);
 
-      // Touch updated_at on parent mandala
-      await tx.user_mandalas.update({
-        where: { id: mandalaId },
-        data: { updated_at: new Date() },
-      });
+        // Touch updated_at on parent mandala
+        await tx.user_mandalas.update({
+          where: { id: mandalaId },
+          data: { updated_at: new Date() },
+        });
 
-      logger.info(`Mandala levels updated: userId=${userId}, mandalaId=${mandalaId}`);
+        logger.info(`Mandala levels updated: userId=${userId}, mandalaId=${mandalaId}`);
 
-      const result = await tx.user_mandalas.findUnique({
-        where: { id: mandalaId },
-        include: {
-          levels: {
-            orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+        const result = await tx.user_mandalas.findUnique({
+          where: { id: mandalaId },
+          include: {
+            levels: {
+              orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+            },
           },
-        },
-      });
+        });
 
-      if (!result) {
-        throw new Error('Failed to update mandala levels');
-      }
+        if (!result) {
+          throw new Error('Failed to update mandala levels');
+        }
 
-      return this.mapMandala(result);
-    });
+        return this.mapMandala(result);
+      },
+      { maxWait: 5_000, timeout: 30_000 }
+    );
   }
 
   /**
