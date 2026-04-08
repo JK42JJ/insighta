@@ -38,7 +38,7 @@ import {
   VIDEO_DISCOVER_KEYWORD_POOL_SIZE,
   VIDEO_DISCOVER_QUERIES_PER_CELL,
 } from './manifest';
-import { generateSearchQueries, LlmQueryGenError } from './sources/llm-query-generator';
+import { generateSearchQueriesRace, LlmQueryGenError } from './sources/llm-query-generator';
 
 const log = logger.child({ module: 'video-discover' });
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -135,13 +135,25 @@ interface HydratedState {
   llmUrl: string;
   /**
    * Kill switch for Fix 2 (LLM query gen). When `true`, the executor skips
-   * the Ollama call entirely and goes straight to the legacy `${cell.text}
-   * ${keyword}` concat fallback. Set via `VIDEO_DISCOVER_DISABLE_LLM=1` in
-   * the runtime env. Added in CP358 hotfix after the first prod run had
-   * 7/8 LLM call failures (Mac Mini latency suspected) — Fix 1+3 still ship
-   * but Fix 2 is gated until the LLM path is debugged separately.
+   * BOTH the Ollama and OpenRouter calls and goes straight to the legacy
+   * `${cell.text} ${keyword}` concat fallback. Set via
+   * `VIDEO_DISCOVER_DISABLE_LLM=1` in the runtime env. Race orchestrator
+   * superseded the original Mac-Mini-only path but the kill switch stays
+   * as a defense-in-depth safety net.
    */
   llmDisabled: boolean;
+  /**
+   * OpenRouter API key for the race fallback. Empty string when unset —
+   * the race orchestrator gracefully degrades to Ollama-only in that
+   * case (no error). Sourced from `ctx.env.OPENROUTER_API_KEY`.
+   */
+  openRouterApiKey: string;
+  /**
+   * OpenRouter model identifier (e.g. `qwen/qwen3-30b-a3b`). Sourced
+   * from `ctx.env.OPENROUTER_MODEL` with the same default as the
+   * existing `OpenRouterGenerationProvider`.
+   */
+  openRouterModel: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -367,8 +379,13 @@ export const executor: SkillExecutor = {
     // Same convention as trend-collector executor.
     const llmUrl = ctx.env?.['OLLAMA_URL'] ?? 'http://100.91.173.17:11434';
     // Kill switch — set VIDEO_DISCOVER_DISABLE_LLM=1 to skip Fix 2 entirely
-    // and run on Fix 1+3 only. Useful when Mac Mini Ollama is unreliable.
+    // and run on Fix 1+3 only. Useful when both LLM providers are flapping.
     const llmDisabled = ctx.env?.['VIDEO_DISCOVER_DISABLE_LLM'] === '1';
+    // Race orchestrator config (CP358 hotfix 2). When the OpenRouter key is
+    // missing the race degenerates to Ollama-only — the executor stays
+    // working in either configuration.
+    const openRouterApiKey = ctx.env?.['OPENROUTER_API_KEY'] ?? '';
+    const openRouterModel = ctx.env?.['OPENROUTER_MODEL'] ?? 'qwen/qwen3-30b-a3b';
 
     const hydrated: HydratedState = {
       mandalaId,
@@ -380,6 +397,8 @@ export const executor: SkillExecutor = {
       centerGoal,
       llmUrl,
       llmDisabled,
+      openRouterApiKey,
+      openRouterModel,
     };
     return { ok: true, hydrated: hydrated as unknown as Record<string, unknown> };
   },
@@ -487,31 +506,44 @@ export const executor: SkillExecutor = {
       );
     }
 
+    // Race telemetry per cell — winner provider (ollama/openrouter), durations,
+    // and the number of cells where one provider beat the other. Logged at
+    // the end of the cell loop and surfaced in the final result data.
+    let raceWinsOllama = 0;
+    let raceWinsOpenRouter = 0;
+    let raceBothFailed = 0;
+
     for (const sel of cellSelections) {
       let queries: string[] | null = null;
       if (!state.llmDisabled) {
         try {
-          queries = await generateSearchQueries({
+          const raceResult = await generateSearchQueriesRace({
             subGoal: sel.cell.text,
             centerGoal: state.centerGoal,
             language: state.mandalaLanguage,
             baseUrl: state.llmUrl,
             fetchImpl: fetchFn,
+            openRouterApiKey: state.openRouterApiKey,
+            openRouterModel: state.openRouterModel,
           });
+          queries = raceResult.winner.queries;
           // Hard cap defensively even though the parser already limits.
-          if (queries.length > VIDEO_DISCOVER_QUERIES_PER_CELL) {
+          if (queries && queries.length > VIDEO_DISCOVER_QUERIES_PER_CELL) {
             queries = queries.slice(0, VIDEO_DISCOVER_QUERIES_PER_CELL);
           }
+          if (raceResult.winner.provider === 'ollama') raceWinsOllama += 1;
+          else raceWinsOpenRouter += 1;
           llmQueryGenSuccess += 1;
         } catch (err) {
           llmQueryGenFailures += 1;
+          raceBothFailed += 1;
           if (err instanceof LlmQueryGenError) {
             log.warn(
-              `LLM query gen failed for cell ${sel.cell.cellIndex} (falling back to concat): ${err.message}`
+              `LLM race failed for cell ${sel.cell.cellIndex} (falling back to concat): ${err.message}`
             );
           } else {
             log.warn(
-              `LLM query gen unexpected error for cell ${sel.cell.cellIndex}: ${err instanceof Error ? err.message : String(err)}`
+              `LLM race unexpected error for cell ${sel.cell.cellIndex}: ${err instanceof Error ? err.message : String(err)}`
             );
           }
           queries = null;
@@ -529,7 +561,7 @@ export const executor: SkillExecutor = {
     }
     if (!state.llmDisabled) {
       log.info(
-        `LLM query gen: success=${llmQueryGenSuccess}, failures=${llmQueryGenFailures}, search_calls=${searchCalls}`
+        `LLM race: success=${llmQueryGenSuccess}, both_failed=${raceBothFailed}, wins_ollama=${raceWinsOllama}, wins_openrouter=${raceWinsOpenRouter}, search_calls=${searchCalls}`
       );
     }
 
@@ -793,6 +825,9 @@ export const executor: SkillExecutor = {
         cell_keyword_pairs: cellSelections.length,
         llm_query_gen_success: llmQueryGenSuccess,
         llm_query_gen_failures: llmQueryGenFailures,
+        race_wins_ollama: raceWinsOllama,
+        race_wins_openrouter: raceWinsOpenRouter,
+        race_both_failed: raceBothFailed,
         search_calls: searchCalls,
         search_failures: searchFailures,
         candidates_total: allCandidates.length,

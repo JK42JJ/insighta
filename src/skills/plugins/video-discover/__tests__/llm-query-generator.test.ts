@@ -15,9 +15,25 @@
 
 import {
   generateSearchQueries,
+  generateSearchQueriesViaOllama,
+  generateSearchQueriesViaOpenRouter,
+  generateSearchQueriesRace,
   LlmQueryGenError,
   parseQueriesResponse,
 } from '../sources/llm-query-generator';
+
+// Silence the structured race-comparison logger output during tests so the
+// jest output stays readable. The structured rows are still emitted in
+// production via winston.
+jest.mock('@/utils/logger', () => ({
+  logger: {
+    child: () => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    }),
+  },
+}));
 
 // ============================================================================
 // parseQueriesResponse — defensive JSON shapes
@@ -273,5 +289,312 @@ describe('generateSearchQueries', () => {
     });
 
     expect(capturedModel).toBe('qwen2.5:7b');
+  });
+});
+
+// ============================================================================
+// generateSearchQueriesViaOllama — same path as deprecated alias
+// ============================================================================
+
+describe('generateSearchQueriesViaOllama', () => {
+  it('happy path: returns parsed queries', async () => {
+    const fetchImpl = jest.fn().mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ message: { content: '["q1", "q2", "q3"]' } }),
+      text: async () => '',
+    })) as unknown as typeof fetch;
+
+    const out = await generateSearchQueriesViaOllama({
+      subGoal: 'goal',
+      centerGoal: 'center',
+      language: 'ko',
+      fetchImpl,
+    });
+    expect(out).toEqual(['q1', 'q2', 'q3']);
+  });
+});
+
+// ============================================================================
+// generateSearchQueriesViaOpenRouter — request shape + error handling
+// ============================================================================
+
+describe('generateSearchQueriesViaOpenRouter', () => {
+  it('throws when apiKey is missing', async () => {
+    await expect(
+      generateSearchQueriesViaOpenRouter({
+        subGoal: 'goal',
+        centerGoal: 'center',
+        language: 'ko',
+        apiKey: '',
+        openRouterModel: 'qwen/qwen3-30b-a3b',
+      })
+    ).rejects.toThrow(LlmQueryGenError);
+  });
+
+  it('happy path: returns parsed queries from OpenRouter response shape', async () => {
+    const fetchImpl = jest.fn().mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: '["openrouter q1", "openrouter q2", "openrouter q3"]' } }],
+      }),
+      text: async () => '',
+    })) as unknown as typeof fetch;
+
+    const out = await generateSearchQueriesViaOpenRouter({
+      subGoal: 'goal',
+      centerGoal: 'center',
+      language: 'ko',
+      apiKey: 'sk-test',
+      openRouterModel: 'qwen/qwen3-30b-a3b',
+      fetchImpl,
+    });
+    expect(out).toEqual(['openrouter q1', 'openrouter q2', 'openrouter q3']);
+  });
+
+  it('hits OpenRouter URL with Bearer auth + correct model + reasoning disabled', async () => {
+    let capturedUrl = '';
+    let capturedHeaders: Record<string, string> | undefined;
+    let capturedBody: Record<string, unknown> | undefined;
+    const fetchImpl = jest.fn().mockImplementation(async (url: string, init) => {
+      capturedUrl = url;
+      capturedHeaders = init?.headers as Record<string, string>;
+      capturedBody = init?.body ? JSON.parse(init.body as string) : undefined;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: '["q1", "q2", "q3"]' } }],
+        }),
+        text: async () => '',
+      };
+    }) as unknown as typeof fetch;
+
+    await generateSearchQueriesViaOpenRouter({
+      subGoal: 'goal',
+      centerGoal: 'center',
+      language: 'ko',
+      apiKey: 'sk-test-key',
+      openRouterModel: 'qwen/qwen3-30b-a3b',
+      fetchImpl,
+    });
+
+    expect(capturedUrl).toBe('https://openrouter.ai/api/v1/chat/completions');
+    expect(capturedHeaders?.['Authorization']).toBe('Bearer sk-test-key');
+    expect(capturedBody?.['model']).toBe('qwen/qwen3-30b-a3b');
+    const reasoning = capturedBody?.['reasoning'] as { enabled: boolean } | undefined;
+    expect(reasoning?.enabled).toBe(false);
+  });
+
+  it('throws LlmQueryGenError on HTTP error', async () => {
+    const fetchImpl = jest.fn().mockImplementation(async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({}),
+      text: async () => 'unauthorized',
+    })) as unknown as typeof fetch;
+
+    await expect(
+      generateSearchQueriesViaOpenRouter({
+        subGoal: 'goal',
+        centerGoal: 'center',
+        language: 'ko',
+        apiKey: 'sk-test',
+        openRouterModel: 'qwen/qwen3-30b-a3b',
+        fetchImpl,
+      })
+    ).rejects.toThrow(LlmQueryGenError);
+  });
+
+  it('uses message.reasoning when message.content is empty (Qwen3 quirk)', async () => {
+    const fetchImpl = jest.fn().mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: '',
+              reasoning: '["reasoning q1", "reasoning q2", "reasoning q3"]',
+            },
+          },
+        ],
+      }),
+      text: async () => '',
+    })) as unknown as typeof fetch;
+
+    const out = await generateSearchQueriesViaOpenRouter({
+      subGoal: 'goal',
+      centerGoal: 'center',
+      language: 'ko',
+      apiKey: 'sk-test',
+      openRouterModel: 'qwen/qwen3-30b-a3b',
+      fetchImpl,
+    });
+    expect(out).toEqual(['reasoning q1', 'reasoning q2', 'reasoning q3']);
+  });
+});
+
+// ============================================================================
+// generateSearchQueriesRace — parallel + first-success-wins
+// ============================================================================
+
+describe('generateSearchQueriesRace', () => {
+  /**
+   * Build a fetch mock that routes:
+   *   - `/api/chat`     → Ollama, with optional delay/failure
+   *   - `/openrouter.ai/...` → OpenRouter, with optional delay/failure
+   */
+  function makeRaceFetch(opts: {
+    ollama?: { queries?: string[]; delayMs?: number; status?: number; throw?: string };
+    openrouter?: { queries?: string[]; delayMs?: number; status?: number; throw?: string };
+  }): typeof fetch {
+    return jest.fn().mockImplementation(async (url: string) => {
+      const isOllama = url.includes('/api/chat');
+      const isOpenRouter = url.includes('openrouter.ai');
+      const cfg = isOllama ? opts.ollama : isOpenRouter ? opts.openrouter : undefined;
+      if (!cfg) throw new Error(`Unmocked URL: ${url}`);
+
+      if (cfg.delayMs) {
+        await new Promise((r) => setTimeout(r, cfg.delayMs));
+      }
+      if (cfg.throw) {
+        throw new Error(cfg.throw);
+      }
+      const status = cfg.status ?? 200;
+      const ok = status >= 200 && status < 300;
+      if (!ok) {
+        return { ok, status, json: async () => ({}), text: async () => 'http error' };
+      }
+      if (isOllama) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ message: { content: JSON.stringify(cfg.queries ?? []) } }),
+          text: async () => '',
+        };
+      }
+      // OpenRouter shape
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify(cfg.queries ?? []) } }],
+        }),
+        text: async () => '',
+      };
+    }) as unknown as typeof fetch;
+  }
+
+  it('degrades to Ollama-only when openRouterApiKey is empty', async () => {
+    const fetchImpl = makeRaceFetch({
+      ollama: { queries: ['ollama-only q1', 'ollama-only q2', 'ollama-only q3'] },
+    });
+    const result = await generateSearchQueriesRace({
+      subGoal: 'goal',
+      centerGoal: 'center',
+      language: 'ko',
+      openRouterApiKey: '',
+      openRouterModel: 'qwen/qwen3-30b-a3b',
+      fetchImpl,
+    });
+    expect(result.winner.provider).toBe('ollama');
+    expect(result.winner.queries).toEqual(['ollama-only q1', 'ollama-only q2', 'ollama-only q3']);
+    expect(result.loser).toBeNull();
+  });
+
+  it('returns OpenRouter result when Ollama is slower', async () => {
+    const fetchImpl = makeRaceFetch({
+      ollama: { queries: ['slow ollama q1', 'q2', 'q3'], delayMs: 100 },
+      openrouter: { queries: ['fast openrouter q1', 'q2', 'q3'], delayMs: 1 },
+    });
+    const result = await generateSearchQueriesRace({
+      subGoal: 'goal',
+      centerGoal: 'center',
+      language: 'ko',
+      openRouterApiKey: 'sk-test',
+      openRouterModel: 'qwen/qwen3-30b-a3b',
+      fetchImpl,
+    });
+    expect(result.winner.provider).toBe('openrouter');
+    expect(result.winner.queries?.[0]).toBe('fast openrouter q1');
+    expect(result.loser).not.toBeNull();
+    expect(result.loser?.provider).toBe('ollama');
+    expect(result.loser?.queries?.[0]).toBe('slow ollama q1');
+  });
+
+  it('returns Ollama result when OpenRouter is slower', async () => {
+    const fetchImpl = makeRaceFetch({
+      ollama: { queries: ['fast ollama q1', 'q2', 'q3'], delayMs: 1 },
+      openrouter: { queries: ['slow openrouter q1', 'q2', 'q3'], delayMs: 100 },
+    });
+    const result = await generateSearchQueriesRace({
+      subGoal: 'goal',
+      centerGoal: 'center',
+      language: 'ko',
+      openRouterApiKey: 'sk-test',
+      openRouterModel: 'qwen/qwen3-30b-a3b',
+      fetchImpl,
+    });
+    expect(result.winner.provider).toBe('ollama');
+    expect(result.winner.queries?.[0]).toBe('fast ollama q1');
+    expect(result.loser?.provider).toBe('openrouter');
+    expect(result.loser?.queries?.[0]).toBe('slow openrouter q1');
+  });
+
+  it('returns OpenRouter result when Ollama fails entirely', async () => {
+    const fetchImpl = makeRaceFetch({
+      ollama: { throw: 'connection refused' },
+      openrouter: { queries: ['or q1', 'or q2', 'or q3'] },
+    });
+    const result = await generateSearchQueriesRace({
+      subGoal: 'goal',
+      centerGoal: 'center',
+      language: 'ko',
+      openRouterApiKey: 'sk-test',
+      openRouterModel: 'qwen/qwen3-30b-a3b',
+      fetchImpl,
+    });
+    expect(result.winner.provider).toBe('openrouter');
+    expect(result.loser?.provider).toBe('ollama');
+    expect(result.loser?.queries).toBeNull();
+    expect(result.loser?.error).toMatch(/connection refused/);
+  });
+
+  it('returns Ollama result when OpenRouter fails entirely', async () => {
+    const fetchImpl = makeRaceFetch({
+      ollama: { queries: ['ol q1', 'ol q2', 'ol q3'] },
+      openrouter: { status: 500 },
+    });
+    const result = await generateSearchQueriesRace({
+      subGoal: 'goal',
+      centerGoal: 'center',
+      language: 'ko',
+      openRouterApiKey: 'sk-test',
+      openRouterModel: 'qwen/qwen3-30b-a3b',
+      fetchImpl,
+    });
+    expect(result.winner.provider).toBe('ollama');
+    expect(result.loser?.provider).toBe('openrouter');
+    expect(result.loser?.queries).toBeNull();
+    expect(result.loser?.error).toMatch(/HTTP 500/);
+  });
+
+  it('throws LlmQueryGenError when BOTH providers fail', async () => {
+    const fetchImpl = makeRaceFetch({
+      ollama: { throw: 'ollama down' },
+      openrouter: { throw: 'openrouter down' },
+    });
+    await expect(
+      generateSearchQueriesRace({
+        subGoal: 'goal',
+        centerGoal: 'center',
+        language: 'ko',
+        openRouterApiKey: 'sk-test',
+        openRouterModel: 'qwen/qwen3-30b-a3b',
+        fetchImpl,
+      })
+    ).rejects.toThrow(LlmQueryGenError);
   });
 });

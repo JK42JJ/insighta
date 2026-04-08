@@ -295,10 +295,16 @@ describe('video-discover execute', () => {
         // overrides drive the new language/region branches.
         mandalaLanguage: 'ko',
         centerGoal: 'test center goal',
-        // Fix 2 (CP358): llmUrl is forwarded to generateSearchQueries via
-        // executor; tests use the in-process URL string and rely on the
+        // Fix 2 (CP358): llmUrl is forwarded to generateSearchQueriesRace
+        // via executor; tests use the in-process URL string and rely on the
         // fetch router to short-circuit /api/chat to canned responses.
         llmUrl: 'http://test-ollama:11434',
+        // Race orchestrator (CP358 hotfix 2). Default to Ollama-only mode
+        // by leaving the OpenRouter API key empty — existing tests then
+        // exercise the degraded-Ollama path which behaves like the
+        // pre-race code (1 LLM provider call per cell).
+        openRouterApiKey: '',
+        openRouterModel: 'qwen/test-model',
         // Kill switch (CP358 hotfix). Default false so existing LLM-path
         // tests stay green; the disable-path test below sets this true via
         // customState override.
@@ -326,10 +332,15 @@ describe('video-discover execute', () => {
     expect(result.status).toBe('success');
     expect(result.data['cells']).toBe(2);
     expect(result.data['cell_keyword_pairs']).toBe(2); // 2 cells × 1 kw
-    // Fix 2 (CP358): 2 cells × 3 LLM queries = 6 search.list calls
+    // Fix 2 (CP358): 2 cells × 3 LLM queries = 6 search.list calls.
+    // Default test state has empty OpenRouter key → race degrades to
+    // Ollama-only → all wins counted as ollama.
     expect(result.data['search_calls']).toBe(6);
     expect(result.data['llm_query_gen_success']).toBe(2);
     expect(result.data['llm_query_gen_failures']).toBe(0);
+    expect(result.data['race_wins_ollama']).toBe(2);
+    expect(result.data['race_wins_openrouter']).toBe(0);
+    expect(result.data['race_both_failed']).toBe(0);
     expect(result.data['recommendations_upserted']).toBeGreaterThan(0);
     expect(result.metrics?.rows_written?.['recommendation_cache']).toBeGreaterThan(0);
   });
