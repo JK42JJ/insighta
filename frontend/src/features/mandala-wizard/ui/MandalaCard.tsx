@@ -62,18 +62,21 @@ export default function MandalaCard({
 }: MandalaCardProps) {
   const { t, i18n } = useTranslation();
 
-  // Delayed state short-circuits the rich card — rendered as its own
-  // amber stalled card so the layout stays visually stable (same slot
-  // dimensions) while the in-flight request is still retryable.
-  if (variant === 'template-delayed' || variant === 'ai-delayed') {
-    return <DelayedCard variant={variant} onRetry={onRetry} />;
-  }
+  // CP358 hotfix: ALL hooks must be called before any conditional return,
+  // otherwise React error #300 ("Rendered fewer hooks than expected") fires
+  // when the variant transitions between delayed ↔ non-delayed.
+  // Async label generation fallback: when no labels exist, fetch short labels via OpenRouter.
+  const [generatedLabels, setGeneratedLabels] = useState<{
+    center_label: string;
+    sub_labels: string[];
+  } | null>(null);
 
   const isAiLoading = variant === 'ai-loading';
   const isTemplateLoading = variant === 'template-loading';
   const isLoading = isAiLoading || isTemplateLoading;
   const isAiComplete = variant === 'ai-complete';
   const isAi = isAiLoading || isAiComplete;
+  const isDelayed = variant === 'template-delayed' || variant === 'ai-delayed';
 
   // Resolve domain → localized label + inline color style via SSOT
   // (domain-colors.ts). DB stores the English enum ('finance', 'tech', …);
@@ -83,12 +86,6 @@ export default function MandalaCard({
     domain && DOMAIN_STYLES[domain as MandalaDomain]
       ? getDomainLabel(domain as MandalaDomain, i18n.language)
       : t('wizard.goal.card.domainGeneral', 'general');
-
-  // Async label generation fallback: when no labels exist, fetch short labels via OpenRouter.
-  const [generatedLabels, setGeneratedLabels] = useState<{
-    center_label: string;
-    sub_labels: string[];
-  } | null>(null);
 
   // Distinguish real short labels from full sub_goal text. We check
   // maxLen instead of avgLen because it is language-agnostic:
@@ -101,8 +98,10 @@ export default function MandalaCard({
   const maxLabelLen = validLabels.reduce((m, l) => (l.length > m ? l.length : m), 0);
   const hasRealLabels = validLabels.length >= 4 && maxLabelLen > 0 && maxLabelLen <= 30;
   const goalForLabels = title ?? centerLabel ?? '';
+  // Delayed variants don't render the rich card, so they never need generated
+  // labels — but the hook still has to be called unconditionally.
   const needsLabels =
-    !isLoading && !hasRealLabels && subjects.length >= 4 && goalForLabels.length > 0;
+    !isLoading && !isDelayed && !hasRealLabels && subjects.length >= 4 && goalForLabels.length > 0;
 
   useEffect(() => {
     if (!needsLabels) return;
@@ -119,6 +118,14 @@ export default function MandalaCard({
       cancelled = true;
     };
   }, [needsLabels, goalForLabels, subjects]);
+
+  // Delayed state short-circuits the rich card — rendered as its own
+  // amber stalled card so the layout stays visually stable (same slot
+  // dimensions) while the in-flight request is still retryable. This
+  // early return MUST be after all hooks above to keep hook order stable.
+  if (isDelayed) {
+    return <DelayedCard variant={variant} onRetry={onRetry} />;
+  }
 
   // Prefer (in order): generated sub labels → provided labels → full sub_goals
   // NOTE: We intentionally do NOT use generatedLabels.center_label.
