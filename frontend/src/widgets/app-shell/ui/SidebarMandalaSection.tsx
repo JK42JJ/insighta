@@ -19,6 +19,8 @@ import type { InsightCard } from '@/entities/card/model/types';
 export interface MinimapData {
   cardsByCell: Record<number, InsightCard[]>;
   sectorSubjects: string[];
+  /** 2-4 char short labels parallel to sectorSubjects (subject_labels). */
+  sectorLabels?: string[];
   centerGoal: string;
   selectedCellIndex: number | null;
   onCellClick: (cellIndex: number, subject: string) => void;
@@ -295,6 +297,7 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
         <SidebarHeatMinimap
           cardsByCell={minimapData.cardsByCell}
           sectorSubjects={minimapData.sectorSubjects}
+          sectorLabels={minimapData.sectorLabels}
           centerGoal={minimapData.centerGoal}
           selectedCellIndex={minimapData.selectedCellIndex}
           onCellClick={minimapData.onCellClick}

@@ -13,6 +13,7 @@ export function apiLevelsToRecord(apiMandala: MandalaResponse): Record<string, M
       id: level.levelKey,
       centerGoal: level.centerGoal,
       subjects: level.subjects,
+      subjectLabels: level.subjectLabels,
       parentId: parentLevel?.levelKey ?? null,
       parentCellIndex: level.depth > 0 ? level.position : null,
       cards: [],
@@ -28,6 +29,7 @@ export function recordToApiLevels(levels: Record<string, MandalaLevel>): {
     levelKey: string;
     centerGoal: string;
     subjects: string[];
+    subjectLabels?: string[];
     position: number;
     depth: number;
     parentLevelKey: string | null;
@@ -41,6 +43,7 @@ export function recordToApiLevels(levels: Record<string, MandalaLevel>): {
       levelKey: 'root',
       centerGoal: root.centerGoal,
       subjects: root.subjects,
+      subjectLabels: root.subjectLabels,
       position: 0,
       depth: 0,
       parentLevelKey: null,
@@ -53,6 +56,7 @@ export function recordToApiLevels(levels: Record<string, MandalaLevel>): {
       levelKey: key,
       centerGoal: level.centerGoal,
       subjects: level.subjects,
+      subjectLabels: level.subjectLabels,
       position: level.parentCellIndex ?? 0,
       depth: 1,
       parentLevelKey: level.parentId ?? 'root',

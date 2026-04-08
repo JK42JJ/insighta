@@ -10,6 +10,8 @@ import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockDa
 interface SidebarHeatMinimapProps {
   cardsByCell: Record<number, InsightCard[]>;
   sectorSubjects: string[];
+  /** 2-4 char short labels parallel to sectorSubjects. Falls back to sectorSubjects when missing. */
+  sectorLabels?: string[];
   centerGoal: string;
   selectedCellIndex: number | null;
   onCellClick: (cellIndex: number, subject: string) => void;
@@ -47,6 +49,7 @@ function getInitialShowNumbers(): boolean {
 export function SidebarHeatMinimap({
   cardsByCell,
   sectorSubjects,
+  sectorLabels,
   centerGoal,
   selectedCellIndex,
   onCellClick,
@@ -159,13 +162,18 @@ export function SidebarHeatMinimap({
         {Array.from({ length: 9 }).map((_, gridIndex) => {
           const isCenter = gridIndex === 4;
           const subjectIndex = GRID_TO_SUBJECT[gridIndex] ?? -1;
+          // Display label uses the short variant when available; edit mode still
+          // operates on the long subjects (source of truth, see onSectorNamesChange).
+          const shortLabel = sectorLabels?.[subjectIndex]?.trim();
+          const displayLabel =
+            shortLabel && shortLabel.length > 0 ? shortLabel : sectorSubjects[subjectIndex] || '';
           const label = isCenter
             ? isEditing
               ? editGoal
               : centerGoal
             : isEditing
               ? (editSubjects[subjectIndex] ?? '')
-              : sectorSubjects[subjectIndex] || '';
+              : displayLabel;
           const count = isCenter ? 0 : (cardsByCell[subjectIndex] ?? []).length;
           const opacity = isCenter ? 0 : cardCountToOpacity(count, maxCount);
           const isSelected = isCenter

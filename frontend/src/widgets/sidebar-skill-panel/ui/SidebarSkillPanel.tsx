@@ -97,19 +97,14 @@ const SKILL_SHORT_LABEL_KEYS: Record<string, string> = {
   blog: 'shortBlog',
 };
 
-/**
- * Result-producing skills shown to end users in the sidebar.
- * Internal pipeline plugins (trend-collector, iks-scorer, video-discover)
- * power features but never appear here — they belong in admin tooling.
- */
-const USER_VISIBLE_SKILL_TYPES: ReadonlySet<string> = new Set([
-  'recommend',
-  'newsletter',
-  'alert',
-  'report',
-  'script',
-  'blog',
-]);
+// SSOT import — keeps wizard + sidebar synced. Adding/removing a user-visible
+// skill happens in shared/types/mandala-ux.ts only.
+import {
+  USER_VISIBLE_SKILL_TYPES as USER_VISIBLE_SKILL_TYPES_ARRAY,
+  LINKED_SKILL_TOGGLES,
+} from '@/shared/types/mandala-ux';
+
+const USER_VISIBLE_SKILL_TYPES: ReadonlySet<string> = new Set(USER_VISIBLE_SKILL_TYPES_ARRAY);
 
 /**
  * UI-only PRO skill entries (no backend SkillId yet). Shown below the
@@ -192,15 +187,24 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
         await apiClient.tokenReady;
         const token = apiClient.getAccessToken();
         const baseUrl = (apiClient as unknown as { baseUrl: string }).baseUrl;
-        const response = await fetch(`${baseUrl}/api/v1/mandalas/${mandalaId}/skills`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ skillType: skillId, enabled: nextEnabled }),
-        });
-        if (!response.ok) throw new Error(`Skill toggle failed: ${response.status}`);
+
+        // CP358 SSOT: linked toggles. e.g. recommend → also flip video_discover
+        // so the BE pipeline lights up alongside the user-visible toggle.
+        const linked = LINKED_SKILL_TOGGLES[skillId] ?? [];
+        const allKeys = [skillId, ...linked];
+        const patchOne = (skillType: string) =>
+          fetch(`${baseUrl}/api/v1/mandalas/${mandalaId}/skills`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ skillType, enabled: nextEnabled }),
+          }).then((res) => {
+            if (!res.ok) throw new Error(`Skill toggle failed (${skillType}): ${res.status}`);
+          });
+        await Promise.all(allKeys.map(patchOne));
+
         // Invalidate the cache key shared with useDashboard so the badge re-renders.
         await queryClient.invalidateQueries({
           queryKey: ['mandala', 'dashboard', mandalaId],

@@ -12,6 +12,8 @@ interface InsightsViewProps {
   cardsByCell: Record<number, InsightCard[]>;
   totalCards: number;
   sectorSubjects: string[];
+  /** 2-4 char short labels parallel to sectorSubjects. Falls back to sectorSubjects when missing. */
+  sectorLabels?: string[];
   title: string;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
@@ -36,12 +38,20 @@ const GRID_TO_SUBJECT: Record<number, number> = {
   8: 7,
 };
 
+/** Choose the short label when available, otherwise the long subject text. */
+function pickSectorLabel(subjects: string[], labels: string[] | undefined, idx: number): string {
+  const short = labels?.[idx]?.trim();
+  if (short && short.length > 0) return short;
+  return subjects[idx] || `Sector ${idx + 1}`;
+}
+
 export function InsightsView({
   allCards,
   scratchPadCards,
   cardsByCell,
   totalCards: _totalCards,
   sectorSubjects,
+  sectorLabels,
   title,
   viewMode,
   onViewModeChange,
@@ -93,12 +103,12 @@ export function InsightsView({
     for (const [gridIdx, subIdx] of Object.entries(GRID_TO_SUBJECT)) {
       const cellCards = cardsByCell[Number(gridIdx)] ?? [];
       sectors.push({
-        label: sectorSubjects[subIdx] || `Sector ${subIdx + 1}`,
+        label: pickSectorLabel(sectorSubjects, sectorLabels, subIdx),
         count: cellCards.length,
       });
     }
     return sectors;
-  }, [cardsByCell, sectorSubjects]);
+  }, [cardsByCell, sectorSubjects, sectorLabels]);
 
   const emptySectors = useMemo(() => sectorData.filter((s) => s.count === 0), [sectorData]);
 

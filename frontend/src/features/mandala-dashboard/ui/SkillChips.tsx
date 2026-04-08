@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Mail, Bell, ShieldAlert, FileBarChart, Video } from 'lucide-react';
+import { Mail, Bell, FileBarChart, Video } from 'lucide-react';
 
 import { apiClient } from '@/shared/lib/api-client';
 import type { SkillType } from '@/shared/types/mandala-ux';
 
-const SKILL_META: Record<
-  SkillType,
-  { labelKey: string; icon: React.ReactNode; color: string; beta?: boolean }
+// Legacy MandalaDashboardPage component (CP356/358 carry-over: move to -legacy/).
+// Only the few skill types this page actually renders are mapped — Partial<>
+// keeps the file compiling without forcing the legacy page to know about
+// CP358's expanded SSOT.
+const SKILL_META: Partial<
+  Record<SkillType, { labelKey: string; icon: React.ReactNode; color: string; beta?: boolean }>
 > = {
   // Listed first so it's the headline value-prop on the dashboard.
   // BETA = backend executor lands in #358 Phase 3; toggle persists user opt-in.
@@ -22,15 +25,10 @@ const SKILL_META: Record<
     icon: <Mail className="h-3.5 w-3.5 flex-shrink-0" />,
     color: 'hsl(var(--primary))',
   },
-  alerts: {
+  alert: {
     labelKey: 'dashboard.skills.alerts',
     icon: <Bell className="h-3.5 w-3.5 flex-shrink-0" />,
     color: '#38d9a9',
-  },
-  bias_filter: {
-    labelKey: 'dashboard.skills.biasFilter',
-    icon: <ShieldAlert className="h-3.5 w-3.5 flex-shrink-0" />,
-    color: '#fcc419',
   },
   report: {
     labelKey: 'dashboard.skills.report',

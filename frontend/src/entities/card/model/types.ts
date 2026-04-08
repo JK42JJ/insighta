@@ -51,6 +51,8 @@ export interface MandalaLevel {
   id: string;
   centerGoal: string;
   subjects: string[];
+  /** 2-4 char short labels parallel to `subjects`. Optional — falls back to subjects when missing. */
+  subjectLabels?: string[];
   parentId: string | null;
   parentCellIndex: number | null;
   cards: InsightCard[];

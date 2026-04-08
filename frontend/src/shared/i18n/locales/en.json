@@ -1312,10 +1312,14 @@
       "state": { "active": "Active", "inactive": "Inactive" }
     },
     "skill": {
+      "recommend": { "name": "AI Video Picks", "desc": "Auto-fill each cell with personalized videos" },
       "newsletter": { "name": "Weekly Newsletter", "desc": "3 recommended videos per cell + key summaries weekly" },
+      "alert": { "name": "Activity Alerts", "desc": "Instant alerts when related new videos are found" },
       "alerts": { "name": "New Video Alerts", "desc": "Instant alerts when related new videos are found" },
       "biasFilter": { "name": "Bias Filter", "desc": "Auto-block clickbait/biased content" },
-      "report": { "name": "Monthly Report", "desc": "Learning progress + insight analysis", "proHint": "Subscribe to Pro for monthly auto-reports" },
+      "report": { "name": "Report", "desc": "Learning progress + insight analysis" },
+      "script": { "name": "Video Script", "desc": "Auto-generate video scripts from your mandala cards" },
+      "blog": { "name": "Blog Draft", "desc": "Draft blog posts from your mandala knowledge" },
       "videoDiscover": { "name": "YouTube Card Discovery", "desc": "Auto-discover videos based on your goal + trends", "betaHint": "Coming soon — toggle on now and it'll auto-activate at launch" },
       "demo": {
         "mail": "Arrives Monday 8 AM",

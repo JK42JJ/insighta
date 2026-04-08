@@ -1,13 +1,29 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Mail, Bell, Shield, BarChart3, Sparkles, Video } from 'lucide-react';
+import {
+  Mail,
+  Bell,
+  BarChart3,
+  Sparkles,
+  Video,
+  PenLine,
+  Youtube,
+  Check,
+  Loader2,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { SkillType } from '@/shared/types/mandala-ux';
+import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
 
 import './mandala-wizard.css';
 
 // ─── Skill card data ───
+//
+// CP358 SSOT: 6 user-visible skills aligned with USER_VISIBLE_SKILL_TYPES
+// in shared/types/mandala-ux.ts. Toggling "recommend" also flips
+// video_discover via LINKED_SKILL_TOGGLES in useWizard.setSkill — the user
+// sees one row but two skills get enabled.
 
 interface SkillCardData {
   type: SkillType;
@@ -15,19 +31,18 @@ interface SkillCardData {
   descKey: string;
   tier: 'FREE' | 'PRO' | 'BETA';
   icon: LucideIcon;
-  demoKey: 'mail' | 'bell' | 'shield' | 'chart' | 'video';
+  demoKey: 'mail' | 'bell' | 'video' | 'chart' | 'script' | 'blog';
   proHintKey?: string;
 }
 
 const SKILL_CARDS: SkillCardData[] = [
   {
-    type: 'video_discover',
-    nameKey: 'wizard.skill.videoDiscover.name',
-    descKey: 'wizard.skill.videoDiscover.desc',
-    tier: 'BETA',
-    icon: Video,
+    type: 'recommend',
+    nameKey: 'wizard.skill.recommend.name',
+    descKey: 'wizard.skill.recommend.desc',
+    tier: 'FREE',
+    icon: Sparkles,
     demoKey: 'video',
-    proHintKey: 'wizard.skill.videoDiscover.betaHint',
   },
   {
     type: 'newsletter',
@@ -38,29 +53,36 @@ const SKILL_CARDS: SkillCardData[] = [
     demoKey: 'mail',
   },
   {
-    type: 'alerts',
-    nameKey: 'wizard.skill.alerts.name',
-    descKey: 'wizard.skill.alerts.desc',
+    type: 'alert',
+    nameKey: 'wizard.skill.alert.name',
+    descKey: 'wizard.skill.alert.desc',
     tier: 'FREE',
     icon: Bell,
     demoKey: 'bell',
   },
   {
-    type: 'bias_filter',
-    nameKey: 'wizard.skill.biasFilter.name',
-    descKey: 'wizard.skill.biasFilter.desc',
-    tier: 'FREE',
-    icon: Shield,
-    demoKey: 'shield',
-  },
-  {
     type: 'report',
     nameKey: 'wizard.skill.report.name',
     descKey: 'wizard.skill.report.desc',
-    tier: 'PRO',
+    tier: 'FREE',
     icon: BarChart3,
     demoKey: 'chart',
-    proHintKey: 'wizard.skill.report.proHint',
+  },
+  {
+    type: 'script',
+    nameKey: 'wizard.skill.script.name',
+    descKey: 'wizard.skill.script.desc',
+    tier: 'FREE',
+    icon: Video,
+    demoKey: 'script',
+  },
+  {
+    type: 'blog',
+    nameKey: 'wizard.skill.blog.name',
+    descKey: 'wizard.skill.blog.desc',
+    tier: 'FREE',
+    icon: PenLine,
+    demoKey: 'blog',
   },
 ];
 
@@ -127,12 +149,15 @@ function DemoVideo() {
   );
 }
 
+// CP358: shield/bias_filter removed (skill no longer in user surface).
+// script + blog reuse the existing video demo until dedicated demos land.
 const DEMO_COMPONENTS: Record<string, React.FC> = {
   mail: DemoMail,
   bell: DemoBell,
-  shield: DemoBias,
   chart: DemoChart,
   video: DemoVideo,
+  script: DemoVideo,
+  blog: DemoChart,
 };
 
 // ─── Component ───
@@ -151,12 +176,23 @@ export default function WizardStepSkills({
   isCreating,
 }: WizardStepSkillsProps) {
   const { t } = useTranslation();
+  const {
+    isConnected: youtubeConnected,
+    isConnecting: youtubeConnecting,
+    connect: connectYouTube,
+  } = useYouTubeAuth();
 
   // Replay animations when step mounts by toggling a key
   const replayKey = useRef(0);
   useEffect(() => {
     replayKey.current += 1;
   }, []);
+
+  // YouTube CTA only matters when "AI 추천" (recommend) is enabled.
+  // recommend is the user-visible toggle that linked-flips video_discover,
+  // the system skill that burns user YouTube OAuth quota. Skip-able —
+  // user can complete wizard without connecting.
+  const showYouTubeCta = skills.recommend ?? false;
 
   return (
     <div className="wizard-step-enter">
@@ -166,6 +202,14 @@ export default function WizardStepSkills({
       <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted-foreground">
         {t('wizard.skills.subtitle')}
       </p>
+
+      {showYouTubeCta && (
+        <YouTubeConnectCta
+          isConnected={youtubeConnected}
+          isConnecting={youtubeConnecting}
+          onConnect={connectYouTube}
+        />
+      )}
 
       <div className="mt-6 grid grid-cols-2 gap-3.5">
         {SKILL_CARDS.map((card) => {
@@ -194,6 +238,73 @@ export default function WizardStepSkills({
           {isCreating ? t('wizard.skills.button.creating') : t('wizard.skills.button.start')}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── YouTube connect CTA (CP358 onboarding) ───
+
+interface YouTubeConnectCtaProps {
+  isConnected: boolean;
+  isConnecting: boolean;
+  onConnect: () => void;
+}
+
+function YouTubeConnectCta({ isConnected, isConnecting, onConnect }: YouTubeConnectCtaProps) {
+  const { t } = useTranslation();
+
+  if (isConnected) {
+    return (
+      <div className="mt-5 flex items-start gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/5 px-4 py-3">
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/15">
+          <Check className="h-4 w-4 text-emerald-500" />
+        </div>
+        <div className="flex-1 text-[12px] leading-relaxed">
+          <div className="font-semibold text-emerald-500">
+            {t('wizard.youtubeCta.connectedTitle', 'YouTube connected')}
+          </div>
+          <p className="mt-0.5 text-muted-foreground">
+            {t(
+              'wizard.youtubeCta.connectedDesc',
+              "We'll fill your mandala cells with personalized videos right after creation."
+            )}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 flex items-start gap-3 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3">
+      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-500/15">
+        <Youtube className="h-4 w-4 text-red-500" />
+      </div>
+      <div className="flex-1 text-[12px] leading-relaxed">
+        <div className="font-semibold text-foreground">
+          {t('wizard.youtubeCta.title', 'Connect YouTube for personalized recommendations')}
+        </div>
+        <p className="mt-0.5 text-muted-foreground">
+          {t(
+            'wizard.youtubeCta.desc',
+            "We'll match trending videos to each cell of your mandala. Skip this and connect later in Settings — no problem."
+          )}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onConnect}
+        disabled={isConnecting}
+        className="mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[11.5px] font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+      >
+        {isConnecting ? (
+          <>
+            <Loader2 className="h-3 w-3 animate-spin" />
+            {t('wizard.youtubeCta.connecting', 'Connecting…')}
+          </>
+        ) : (
+          t('wizard.youtubeCta.connectButton', 'Connect')
+        )}
+      </button>
     </div>
   );
 }

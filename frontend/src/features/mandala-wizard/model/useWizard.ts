@@ -4,12 +4,14 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import { apiClient } from '@/shared/lib/api-client';
-import type {
-  WizardState,
-  WizardTemplate,
-  SkillType,
-  MandalaSearchResult,
-  GeneratedMandala,
+import { useMandalaStore } from '@/stores/mandalaStore';
+import {
+  LINKED_SKILL_TOGGLES,
+  type WizardState,
+  type WizardTemplate,
+  type SkillType,
+  type MandalaSearchResult,
+  type GeneratedMandala,
 } from '@/shared/types/mandala-ux';
 
 // ─── API helpers (follows useEditor.ts pattern) ───
@@ -77,15 +79,21 @@ interface CreateFromTemplateResponse {
 
 // ─── Default skill state ───
 
+// Default skill state for a brand-new mandala. SSOT keys live in
+// shared/types/mandala-ux.ts. Six user-visible skills default ON; the
+// linked system skill (video_discover) is also ON via setSkill linkage
+// when "recommend" lands. trend_collector + iks_scorer are cron-only
+// system plugins; they have no per-mandala row, so they're omitted.
 const DEFAULT_SKILLS: Record<SkillType, boolean> = {
   newsletter: true,
-  alerts: true,
-  bias_filter: true,
-  report: false,
-  // Phase 0: backend executor not yet shipped (#358 Phase 1-3).
-  // Toggle persists user opt-in to user_skill_config; activates automatically
-  // when video-discover skill plugin lands.
+  report: true,
+  alert: true,
+  recommend: true,
+  script: true,
+  blog: true,
   video_discover: true,
+  trend_collector: false,
+  iks_scorer: false,
 };
 
 // ─── Hook ───
@@ -268,6 +276,19 @@ export function useWizard() {
   const isSearchDelayed = isSearchSoftDelayed || Boolean(searchMutation.error);
   const isGenerateDelayed = isGenerateSoftDelayed || Boolean(generateMutation.error);
 
+  // Post-creation routing: select the new mandala in the global store BEFORE
+  // navigating, so IndexPage's effective-mandala resolution lands on it
+  // immediately. CP358: wizard now lands on the unified `/` dashboard (the
+  // legacy `/mandalas/:id` MandalaDashboardPage redirect is a separate unit).
+  const selectMandalaInStore = useMandalaStore((s) => s.selectMandala);
+  const goToUnifiedDashboard = useCallback(
+    (newMandalaId: string) => {
+      selectMandalaInStore(newMandalaId);
+      navigate('/');
+    },
+    [navigate, selectMandalaInStore]
+  );
+
   // Create from template mutation (for DB templates)
   const createMutation = useMutation({
     mutationFn: (params: { templateId: string; skills: Record<string, boolean> }) =>
@@ -276,11 +297,12 @@ export function useWizard() {
         body: JSON.stringify(params),
       }),
     onSuccess: (data) => {
-      navigate(`/mandalas/${data.mandalaId}`);
+      goToUnifiedDashboard(data.mandalaId);
     },
   });
 
   // Create blank mandala mutation (for "처음부터 직접 만들기" / "Create from scratch")
+  // Blank mandalas need an editor first — keep them on the editor route.
   const createBlankMutation = useMutation({
     mutationFn: () =>
       fetchWithAuth<{ mandala: { id: string } }>('/mandalas/create', {
@@ -302,7 +324,7 @@ export function useWizard() {
       skills?: Record<string, boolean>;
     }) => apiClient.createMandalaWithData(params),
     onSuccess: (data) => {
-      navigate(`/mandalas/${data.mandalaId}`);
+      goToUnifiedDashboard(data.mandalaId);
     },
   });
 
@@ -327,10 +349,16 @@ export function useWizard() {
   }, []);
 
   const setSkill = useCallback((type: SkillType, enabled: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      skills: { ...prev.skills, [type]: enabled },
-    }));
+    setState((prev) => {
+      const next = { ...prev.skills, [type]: enabled };
+      // Linked toggles: e.g. recommend → also flip video_discover so the
+      // backend pipeline lights up alongside the user-facing toggle.
+      const linked = LINKED_SKILL_TOGGLES[type] ?? [];
+      for (const linkedKey of linked) {
+        next[linkedKey] = enabled;
+      }
+      return { ...prev, skills: next };
+    });
   }, []);
 
   const goToStep = useCallback((step: 1 | 2 | 3) => {

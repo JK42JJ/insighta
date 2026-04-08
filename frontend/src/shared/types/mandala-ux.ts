@@ -1,13 +1,43 @@
-// ─── Wizard Types ───
+// ─── Skill SSOT ───
+//
+// Single source of truth for FE skill type identifiers, mirroring the BE
+// SkillRegistry exactly. Three groups:
+//
+//   USER_VISIBLE_SKILL_TYPES — toggleable in wizard + sidebar (6 items)
+//   SYSTEM_SKILL_TYPES       — backend-only plugins, never shown to users
+//                              (video_discover, trend_collector, iks_scorer)
+//   SKILL_TYPES              — union of both = the type's runtime values
+//
+// Linked toggles: turning on certain user-visible skills also activates one
+// or more system skills as a side-effect. See LINKED_SKILL_TOGGLES.
 
-export const SKILL_TYPES = [
+/** Skills the user sees and toggles directly. Wizard + sidebar share this list. */
+export const USER_VISIBLE_SKILL_TYPES = [
   'newsletter',
-  'alerts',
-  'bias_filter',
   'report',
-  'video_discover',
+  'alert',
+  'recommend',
+  'script',
+  'blog',
 ] as const;
+
+/** Backend-only system plugins. Never rendered in user surfaces. */
+export const SYSTEM_SKILL_TYPES = ['video_discover', 'trend_collector', 'iks_scorer'] as const;
+
+export const SKILL_TYPES = [...USER_VISIBLE_SKILL_TYPES, ...SYSTEM_SKILL_TYPES] as const;
 export type SkillType = (typeof SKILL_TYPES)[number];
+
+/**
+ * When the user toggles a visible skill, also toggle these linked system
+ * skills as a side-effect. Example: "AI 추천" (recommend) is the only thing
+ * the user sees, but enabling it also flips video_discover so the BE
+ * recommendation pipeline starts producing data.
+ *
+ * Both wizard `setSkill` and sidebar `handleToggleSkill` honor this map.
+ */
+export const LINKED_SKILL_TOGGLES: Readonly<Record<string, readonly SkillType[]>> = {
+  recommend: ['video_discover'],
+};
 
 export interface WizardDomain {
   id: string;

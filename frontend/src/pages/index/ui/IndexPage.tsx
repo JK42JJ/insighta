@@ -561,6 +561,7 @@ function AuthenticatedApp() {
     setMinimapData({
       cardsByCell: cards.cardsByCell,
       sectorSubjects: navigation.currentLevel.subjects,
+      sectorLabels: navigation.currentLevel.subjectLabels,
       centerGoal: navigation.currentLevel.centerGoal,
       selectedCellIndex: navigation.selectedCellIndex,
       onCellClick: navigation.handleCellClick,
@@ -573,6 +574,7 @@ function AuthenticatedApp() {
     cards.cardsByCell,
     navigation.currentLevel.centerGoal,
     navigation.currentLevel.subjects,
+    navigation.currentLevel.subjectLabels,
     navigation.selectedCellIndex,
     selectedMandalaId,
     setMinimapData,
@@ -687,6 +689,7 @@ function AuthenticatedApp() {
                 cardsByCell={cards.cardsByCell}
                 totalCards={cards.totalCards}
                 sectorSubjects={navigation.currentLevel.subjects}
+                sectorLabels={navigation.currentLevel.subjectLabels}
                 title={navigation.currentLevel.centerGoal}
                 viewMode={layout.viewMode}
                 onViewModeChange={layout.handleSetViewMode}
