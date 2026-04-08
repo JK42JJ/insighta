@@ -45,12 +45,27 @@ export const VIDEO_DISCOVER_TTL_DAYS = 7;
 export const VIDEO_DISCOVER_KEYWORD_POOL_SIZE = 200;
 /**
  * Number of LLM-generated search queries per cell. Fix 2 (CP358) — replaces
- * the previous single sub_goal+keyword string. Quota math: 8 cells × 3 queries
- * × 100 units = 2,400 units per execute() = 24% of the user's daily 10k.
- * 3 is the safe upper bound; bumping to 5 would push a 4-mandala/day power
- * user over the daily limit.
+ * the previous single sub_goal+keyword string.
+ *
+ * CP360 post-validation: empirically 1 query per cell is sufficient for
+ * 95%+ relevance. The extra 2 queries per cell in the original 3-query
+ * configuration mostly produced near-duplicates (Qwen3/llama give
+ * variations of the same query like "파이썬 기초", "파이썬 입문", "파이썬
+ * 초보") which the per-cell dedup then collapses anyway. Net result was
+ * ~2× quota spend for negligible diversity gain.
+ *
+ * Quota math:
+ *   Before (3): 8 cells × 3 queries × 100 units = 2,400 units / mandala
+ *                → 10K/day supports 4 mandalas
+ *   After (1):  8 cells × 1 query  × 100 units =   800 units / mandala
+ *                → 10K/day supports 12 mandalas (3× headroom)
+ *
+ * Longer-term structural fix is trend_signals pool matching (Phase 3-I) —
+ * this value will drop toward 0 as pool coverage improves. Keeping this
+ * at 1 for now as the bridge between the current YouTube-search-heavy
+ * path and the future pool-first path.
  */
-export const VIDEO_DISCOVER_QUERIES_PER_CELL = 3;
+export const VIDEO_DISCOVER_QUERIES_PER_CELL = 1;
 
 export const manifest: SkillManifest = defineManifest({
   id: 'video-discover',
