@@ -175,6 +175,20 @@ interface HydratedState {
    * OpenRouter is flapping or the parser is producing garbage.
    */
   rerankDisabled: boolean;
+  /**
+   * CP360 quota relief — dedicated server API key for search.list/videos.list.
+   * When non-empty, the executor uses `?key=<this>` instead of OAuth Bearer,
+   * routing traffic through a separate Google Cloud project whose quota
+   * bucket is independent of the one backing `YOUTUBE_CLIENT_ID`. Leaves
+   * the OAuth token fallback in place for environments that still rely on
+   * per-user quotas (dev accounts without a server key).
+   *
+   * Sourced from `ctx.env.YOUTUBE_API_KEY_SEARCH`. Empty string disables
+   * this path entirely — the executor falls back to the legacy OAuth
+   * Bearer behavior. See credentials.md for the reset schedule and
+   * fallback chain.
+   */
+  youtubeApiKey: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -425,6 +439,9 @@ export const executor: SkillExecutor = {
     // we can keep LLM query generation (Fix 2) on while turning reranking
     // off, or vice versa. Both default enabled.
     const rerankDisabled = ctx.env?.['VIDEO_DISCOVER_DISABLE_RERANK'] === '1';
+    // CP360 quota relief — dedicated server API key for search.list.
+    // Optional: empty string falls back to OAuth Bearer (legacy path).
+    const youtubeApiKey = ctx.env?.['YOUTUBE_API_KEY_SEARCH'] ?? '';
 
     const hydrated: HydratedState = {
       mandalaId,
@@ -439,6 +456,7 @@ export const executor: SkillExecutor = {
       openRouterApiKey,
       openRouterModel,
       rerankDisabled,
+      youtubeApiKey,
     };
     return { ok: true, hydrated: hydrated as unknown as Record<string, unknown> };
   },
@@ -532,6 +550,7 @@ export const executor: SkillExecutor = {
         const items = await youtubeSearch({
           query,
           oauthToken: state.oauthToken,
+          apiKey: state.youtubeApiKey,
           maxResults: VIDEO_DISCOVER_SEARCH_RESULTS_PER_CELL,
           fetchFn,
           relevanceLanguage: state.mandalaLanguage,
@@ -667,6 +686,7 @@ export const executor: SkillExecutor = {
           const chunkStats = await youtubeVideosBatch({
             videoIds: chunk,
             oauthToken: state.oauthToken,
+            apiKey: state.youtubeApiKey,
             fetchFn,
           });
           allStats.push(...chunkStats);
@@ -1083,12 +1103,32 @@ export const executor: SkillExecutor = {
 };
 
 // ============================================================================
-// YouTube API helpers (user OAuth Bearer)
+// YouTube API helpers
+//
+// Dual-auth mode (CP360 quota relief):
+//   - If `apiKey` is non-empty, request is signed with `?key=<apiKey>` and
+//     hits the key's owning GCP project quota bucket. This is the preferred
+//     path for server-side search.list — the data is public, so no OAuth
+//     scope is required, and a dedicated project gives us an independent
+//     10K/day bucket.
+//   - If `apiKey` is empty, fall back to the legacy OAuth Bearer path.
+//     Quota then counts against the OAuth client's project (currently the
+//     same one as YOUTUBE_CLIENT_ID).
+//
+// Same helper is used by both search.list and videos.list because the
+// code path is identical: both endpoints accept either auth mode and
+// return public data.
 // ============================================================================
 
 interface YouTubeSearchOpts {
   query: string;
   oauthToken: string;
+  /**
+   * CP360 — dedicated API key for search.list. Non-empty value switches
+   * from OAuth Bearer to `?key=` auth (routes traffic to a different GCP
+   * project quota). Empty string preserves legacy OAuth behavior.
+   */
+  apiKey: string;
   maxResults: number;
   fetchFn: typeof fetch;
   /**
@@ -1120,9 +1160,15 @@ async function youtubeSearch(opts: YouTubeSearchOpts): Promise<YouTubeSearchItem
   url.searchParams.set('videoDuration', 'medium');
   url.searchParams.set('safeSearch', 'moderate');
 
-  const res = await opts.fetchFn(url.toString(), {
-    headers: { Authorization: `Bearer ${opts.oauthToken}` },
-  });
+  // Dual-auth: API key preferred, OAuth Bearer fallback (CP360 quota relief)
+  const headers: Record<string, string> = {};
+  if (opts.apiKey) {
+    url.searchParams.set('key', opts.apiKey);
+  } else {
+    headers['Authorization'] = `Bearer ${opts.oauthToken}`;
+  }
+
+  const res = await opts.fetchFn(url.toString(), { headers });
   if (!res.ok) {
     let msg = '';
     try {
@@ -1141,6 +1187,8 @@ async function youtubeSearch(opts: YouTubeSearchOpts): Promise<YouTubeSearchItem
 interface YouTubeVideosBatchOpts {
   videoIds: string[];
   oauthToken: string;
+  /** CP360 — dedicated API key (see youtubeSearch docs). */
+  apiKey: string;
   fetchFn: typeof fetch;
 }
 
@@ -1158,9 +1206,15 @@ async function youtubeVideosBatch(opts: YouTubeVideosBatchOpts): Promise<YouTube
   // returns one item per id specified, up to the 50-id limit). Setting it
   // would be a no-op at best and a source of confusion at worst.
 
-  const res = await opts.fetchFn(url.toString(), {
-    headers: { Authorization: `Bearer ${opts.oauthToken}` },
-  });
+  // Dual-auth: API key preferred, OAuth Bearer fallback (CP360 quota relief)
+  const headers: Record<string, string> = {};
+  if (opts.apiKey) {
+    url.searchParams.set('key', opts.apiKey);
+  } else {
+    headers['Authorization'] = `Bearer ${opts.oauthToken}`;
+  }
+
+  const res = await opts.fetchFn(url.toString(), { headers });
   if (!res.ok) {
     let msg = '';
     try {
