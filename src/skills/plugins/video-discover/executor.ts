@@ -39,6 +39,7 @@ import {
   VIDEO_DISCOVER_QUERIES_PER_CELL,
 } from './manifest';
 import { generateSearchQueriesRace, LlmQueryGenError } from './sources/llm-query-generator';
+import { rerankBatch, type RerankCandidate } from './sources/llm-reranker';
 
 const log = logger.child({ module: 'video-discover' });
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -86,15 +87,28 @@ const REC_WEIGHT_HISTORICAL = 0.1; // 0.5 placeholder until Layer 4 ships
 // (diversity is no longer a Rec Score term — see per-channel dedup in execute())
 
 /**
- * Days after which freshness drops to 0. Educational content has a longer
- * useful shelf life than entertainment, so 180 days (6 months) is more
- * realistic than the original 90.
+ * Days after which freshness drops to 0. CP360 (experiment #3 Phase 1-C):
+ * bumped 180 → 365 to reflect that educational content is often evergreen;
+ * cutting off at 6 months drops perfectly usable long-form tutorials. This
+ * remains a SOFT signal (weight 10%) — oldness still disfavors, just less
+ * aggressively.
  */
-const FRESHNESS_HORIZON_DAYS = 180;
+const FRESHNESS_HORIZON_DAYS = 365;
 /** Max IDs per videos.list call (YouTube Data API hard limit). */
 const VIDEOS_LIST_MAX_IDS_PER_CALL = 50;
 /** Reference view count that maps to videoQuality 1.0 on the log scale. */
 const VIDEO_QUALITY_REFERENCE_VIEWS = 10_000_000;
+/**
+ * CP360 experiment #3 Phase 1-A — hard view_count gate. Any candidate with
+ * fewer than this many views is dropped during Step 3.6 filter. The gate
+ * relaxes to {@link MIN_VIEW_COUNT_RELAX} on a per-cell basis if the hard
+ * cutoff would leave the cell with zero candidates, so we never starve a
+ * cell entirely. Rationale: in experiment #2 66% of "조카 교육" candidates
+ * had <10K views and were almost always low-quality / amateur uploads that
+ * beat high-view Korean videos because of iksTotal ties + freshness bumps.
+ */
+const MIN_VIEW_COUNT = 10_000;
+const MIN_VIEW_COUNT_RELAX = 1_000;
 
 interface SubGoalCell {
   cellIndex: number;
@@ -154,6 +168,13 @@ interface HydratedState {
    * existing `OpenRouterGenerationProvider`.
    */
   openRouterModel: string;
+  /**
+   * CP360 Phase 1-F kill switch. When `true`, the LLM reranking step is
+   * skipped entirely and all post-filter candidates flow into the upsert.
+   * Set via `VIDEO_DISCOVER_DISABLE_RERANK=1`. Use during incidents when
+   * OpenRouter is flapping or the parser is producing garbage.
+   */
+  rerankDisabled: boolean;
   fetchImpl?: typeof fetch;
 }
 
@@ -238,6 +259,20 @@ const TITLE_BLOCKLIST: readonly string[] = [
   'vlog',
   'mukbang',
   'reaction',
+  // CP360 experiment #3 Phase 1-D — advertising / PPL / sponsored content.
+  // These substrings are commonly disclosed in Korean YouTube titles for
+  // regulatory compliance, so matching on the title alone catches the vast
+  // majority of ad-heavy videos. False-positive risk on legit "광고 전략 강의"
+  // style educational content is accepted; LLM reranking (Phase 1-F) is the
+  // secondary line of defense.
+  '유료광고',
+  '협찬',
+  'ppl',
+  'sponsored',
+  '[ad]',
+  '[광고]',
+  '#ad',
+  '#광고',
 ];
 
 /** Minimum duration in seconds (Fix 3, CP358) — anything shorter is a Short. */
@@ -386,6 +421,10 @@ export const executor: SkillExecutor = {
     // working in either configuration.
     const openRouterApiKey = ctx.env?.['OPENROUTER_API_KEY'] ?? '';
     const openRouterModel = ctx.env?.['OPENROUTER_MODEL'] ?? 'qwen/qwen3-30b-a3b';
+    // CP360 Phase 1-F — rerank kill switch. Separate from llmDisabled so
+    // we can keep LLM query generation (Fix 2) on while turning reranking
+    // off, or vice versa. Both default enabled.
+    const rerankDisabled = ctx.env?.['VIDEO_DISCOVER_DISABLE_RERANK'] === '1';
 
     const hydrated: HydratedState = {
       mandalaId,
@@ -399,6 +438,7 @@ export const executor: SkillExecutor = {
       llmDisabled,
       openRouterApiKey,
       openRouterModel,
+      rerankDisabled,
     };
     return { ok: true, hydrated: hydrated as unknown as Record<string, unknown> };
   },
@@ -477,6 +517,13 @@ export const executor: SkillExecutor = {
       });
     }
 
+    // CP360 observability: collect unique failure reasons so skill_runs.error
+    // carries something actionable instead of the generic "0 candidates".
+    // Keyed by classification; value = {count, sample_message}. Classification
+    // is done via `classifySearchError` which recognizes the common cases
+    // (quota, auth, network).
+    const searchFailureReasons = new Map<string, { count: number; sample: string }>();
+
     async function runSearch(
       sel: { cell: SubGoalCell; keyword: KeywordRow; perMandalaRelevance: number },
       query: string
@@ -494,8 +541,16 @@ export const executor: SkillExecutor = {
         for (const item of items) pushCandidate(sel, item);
       } catch (err) {
         searchFailures += 1;
+        const msg = err instanceof Error ? err.message : String(err);
+        const classification = classifySearchError(msg);
+        const existing = searchFailureReasons.get(classification);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          searchFailureReasons.set(classification, { count: 1, sample: msg.slice(0, 200) });
+        }
         log.warn(
-          `YouTube search failed for cell ${sel.cell.cellIndex} q="${query}": ${err instanceof Error ? err.message : String(err)}`
+          `YouTube search failed for cell ${sel.cell.cellIndex} q="${query}" [${classification}]: ${msg}`
         );
       }
     }
@@ -566,14 +621,30 @@ export const executor: SkillExecutor = {
     }
 
     if (allCandidates.length === 0) {
+      // CP360: surface the classified cause instead of a generic message.
+      // Pick the dominant classification (most frequent), fall back to
+      // 'all_searches_returned_empty' when calls succeeded but no items.
+      const reasonSamples = [...searchFailureReasons.entries()]
+        .sort(([, a], [, b]) => b.count - a.count)
+        .map(([classification, v]) => ({
+          classification,
+          count: v.count,
+          sample: v.sample,
+        }));
+      const dominant = reasonSamples[0]?.classification ?? 'all_searches_returned_empty';
+      const errorMsg = reasonSamples[0]
+        ? `video-discover failed: ${dominant} (${reasonSamples[0].count}/${searchFailures} calls) — ${reasonSamples[0].sample}`
+        : 'YouTube search returned 0 candidate videos (all calls completed empty)';
       return {
         status: 'failed',
         data: {
           search_calls: searchCalls,
           search_failures: searchFailures,
           candidates: 0,
+          failure_classification: dominant,
+          failure_reasons: reasonSamples,
         },
-        error: 'YouTube search returned 0 candidate videos',
+        error: errorMsg,
         metrics: { duration_ms: Date.now() - t0 },
       };
     }
@@ -651,21 +722,83 @@ export const executor: SkillExecutor = {
 
     // ── Step 3.5: Fix 3 (CP358) — Shorts + title blocklist filters ────
     // Drop videos shorter than MIN_DURATION_SEC (Shorts) or whose titles
-    // contain entries from TITLE_BLOCKLIST (drama / vlog / reaction noise).
-    // The YouTube Search `videoDuration=medium` param (Fix 1) already filters
-    // most Shorts at the API boundary, but it's not 100% accurate so this is
-    // a defense-in-depth pass. Candidates with `durationSec === null` are
-    // kept (no signal == benefit of doubt).
+    // contain entries from TITLE_BLOCKLIST (drama / vlog / reaction + CP360
+    // ads/PPL additions). YouTube Search `videoDuration=medium` (Fix 1)
+    // already filters most Shorts at the API boundary but isn't 100%
+    // accurate so this is defense-in-depth. Candidates with
+    // `durationSec === null` are kept (no signal == benefit of doubt).
     const beforeFilter = allCandidates.length;
-    const filteredAllCandidates = allCandidates.filter((c) => {
-      if (c.durationSec !== null && c.durationSec < MIN_DURATION_SEC) return false;
-      if (titleContainsBlocked(c.title)) return false;
+    let droppedShorts = 0;
+    let droppedBlocklist = 0;
+    const survivedFix3 = allCandidates.filter((c) => {
+      if (c.durationSec !== null && c.durationSec < MIN_DURATION_SEC) {
+        droppedShorts += 1;
+        return false;
+      }
+      if (titleContainsBlocked(c.title)) {
+        droppedBlocklist += 1;
+        return false;
+      }
       return true;
     });
-    const droppedShortsBlocklist = beforeFilter - filteredAllCandidates.length;
-    if (droppedShortsBlocklist > 0) {
+    if (beforeFilter - survivedFix3.length > 0) {
       log.info(
-        `Fix 3 filter: dropped ${droppedShortsBlocklist} candidates (Shorts + blocklist), ${filteredAllCandidates.length} remain`
+        `Fix 3 filter: dropped shorts=${droppedShorts} blocklist=${droppedBlocklist}, ${survivedFix3.length} remain`
+      );
+    }
+
+    // ── Step 3.6: CP360 Phase 1-A — Per-cell hard view_count gate ─────
+    // Rationale: experiment #2 showed 66% of "조카 교육" candidates had
+    // fewer than 10K views and those low-quality uploads routinely beat
+    // high-view Korean videos because iksTotal is identical within a
+    // cell, leaving videoQuality + freshness to decide — and the
+    // log-scale videoQuality alone isn't decisive enough for hard
+    // quality guarantees.
+    //
+    // Strategy: per cell, apply the hard floor (MIN_VIEW_COUNT). If that
+    // would leave the cell with zero candidates, relax to
+    // MIN_VIEW_COUNT_RELAX so users still get SOMETHING rather than a
+    // blank cell. This preserves the "top-3 per cell" contract while
+    // eliminating the long tail of <10K junk.
+    //
+    // `viewCount === null` → keep (no signal; videos.list enrichment may
+    // have failed for that video specifically, don't penalize twice).
+    let droppedByViewGate = 0;
+    let relaxedCells = 0;
+    const byCellPre = new Map<number, RecommendationCandidate[]>();
+    for (const c of survivedFix3) {
+      const arr = byCellPre.get(c.cellIndex);
+      if (arr) arr.push(c);
+      else byCellPre.set(c.cellIndex, [c]);
+    }
+    const filteredAllCandidates: RecommendationCandidate[] = [];
+    for (const [cellIdx, cands] of byCellPre) {
+      const passesHard = cands.filter((c) => c.viewCount === null || c.viewCount >= MIN_VIEW_COUNT);
+      if (passesHard.length > 0) {
+        filteredAllCandidates.push(...passesHard);
+        droppedByViewGate += cands.length - passesHard.length;
+      } else {
+        // Relax: cell would be empty. Apply the softer floor.
+        const passesRelax = cands.filter(
+          (c) => c.viewCount === null || c.viewCount >= MIN_VIEW_COUNT_RELAX
+        );
+        if (passesRelax.length > 0) {
+          filteredAllCandidates.push(...passesRelax);
+          droppedByViewGate += cands.length - passesRelax.length;
+          relaxedCells += 1;
+          log.info(
+            `view-gate relaxed cell=${cellIdx}: 0 candidates ≥${MIN_VIEW_COUNT}, accepted ${passesRelax.length} ≥${MIN_VIEW_COUNT_RELAX}`
+          );
+        } else {
+          // Even relaxed produced nothing. The cell was either empty or
+          // all candidates had viewCount=0 (rare but possible). Drop all.
+          droppedByViewGate += cands.length;
+        }
+      }
+    }
+    if (droppedByViewGate > 0) {
+      log.info(
+        `view-gate filter: dropped ${droppedByViewGate} candidates <${MIN_VIEW_COUNT} views (relaxed cells: ${relaxedCells}), ${filteredAllCandidates.length} remain`
       );
     }
 
@@ -737,6 +870,89 @@ export const executor: SkillExecutor = {
       );
     }
 
+    // ── Step 4.6: CP360 Phase 1-F — LLM Reranking (final quality gate) ─
+    //
+    // A single OpenRouter call judges the remaining candidates Y/N for
+    // genuine learning value. Handles two failure modes gracefully:
+    //
+    //   1. Complete failure (HTTP error, empty content, both parse layers
+    //      fail) → verdicts empty → ALL candidates pass through unchanged.
+    //      Reranking is a soft signal — we never block the pipeline on it.
+    //
+    //   2. Partial parse — strict JSON finds some verdicts, loose regex
+    //      finds others, some indices missing entirely. Only the explicit
+    //      'N' verdicts drop; missing ones default to KEEP. This protects
+    //      against the false-negative case where the model glitches on
+    //      half the batch and we'd otherwise drop legitimate content.
+    //
+    // Kill switch: VIDEO_DISCOVER_DISABLE_RERANK=1.
+    // Missing OpenRouter key: silently skipped (graceful degradation).
+    let rerankDropped = 0;
+    let rerankParsedCount = 0;
+    let rerankParseMode: 'json' | 'regex' | 'failed' | 'skipped' = 'skipped';
+    let rerankDurationMs = 0;
+    let rerankError: string | null = null;
+    if (
+      state.rerankDisabled ||
+      !state.openRouterApiKey ||
+      !state.openRouterModel ||
+      finalRecommendations.length === 0
+    ) {
+      if (state.rerankDisabled) {
+        log.info('VIDEO_DISCOVER_DISABLE_RERANK=1 — skipping LLM reranking');
+      } else if (!state.openRouterApiKey || !state.openRouterModel) {
+        log.info('LLM reranking skipped — OpenRouter not configured');
+      }
+    } else {
+      // Batch all finalRecommendations into a single rerank call. With 8
+      // cells × 3 recs/cell = 24 max candidates this comfortably fits in
+      // the default DEFAULT_BATCH_SIZE=20 when some cells contributed <3
+      // (which is the common case after the view gate). If it ever grows
+      // past 20 the reranker slices internally — the rest pass through
+      // as KEEP, matching the soft-signal policy.
+      const rerankInputs: RerankCandidate[] = finalRecommendations.map((r, idx) => ({
+        index: idx,
+        title: r.title,
+        channel: r.channel,
+      }));
+      try {
+        const rerankResult = await rerankBatch({
+          candidates: rerankInputs,
+          centerGoal: state.centerGoal,
+          language: state.mandalaLanguage,
+          apiKey: state.openRouterApiKey,
+          model: state.openRouterModel,
+          fetchImpl: fetchFn,
+        });
+        rerankParsedCount = rerankResult.parsedCount;
+        rerankParseMode = rerankResult.parseMode;
+        rerankDurationMs = rerankResult.durationMs;
+        rerankError = rerankResult.error;
+
+        if (rerankResult.verdicts.size > 0) {
+          const keptAfterRerank = finalRecommendations.filter((_, idx) => {
+            const verdict = rerankResult.verdicts.get(idx);
+            // Undefined = missing verdict = default KEEP (protects against
+            // partial parse wiping legitimate content). Only explicit N drops.
+            return verdict !== 'N';
+          });
+          rerankDropped = finalRecommendations.length - keptAfterRerank.length;
+          finalRecommendations = keptAfterRerank;
+          log.info(
+            `rerank: parsed=${rerankResult.parsedCount}/${rerankInputs.length} mode=${rerankResult.parseMode} dropped=${rerankDropped} remain=${finalRecommendations.length} ${rerankResult.durationMs}ms`
+          );
+        } else {
+          log.warn(
+            `rerank produced zero verdicts (mode=${rerankResult.parseMode}, error=${rerankResult.error ?? 'none'}) — passing all ${finalRecommendations.length} candidates through`
+          );
+        }
+      } catch (err) {
+        // rerankBatch never throws per contract, but defensive belt.
+        rerankError = err instanceof Error ? err.message : String(err);
+        log.warn(`rerank threw unexpectedly (bug in rerankBatch?): ${rerankError}`);
+      }
+    }
+
     // ── Step 5: Upsert to recommendation_cache ─────────────────────────
     let upserted = 0;
     let upsertErrors = 0;
@@ -766,7 +982,14 @@ export const executor: SkillExecutor = {
               rec.viewCount && rec.viewCount > 0 && rec.likeCount !== null
                 ? rec.likeCount / rec.viewCount
                 : null,
-            duration_sec: null,
+            // CP360 H-2 — was hardcoded `null`, discarding the parsed
+            // contentDetails.duration from videos.list. Persisted for
+            // downstream freshness / shorts auditing.
+            duration_sec: rec.durationSec,
+            // CP360 H-2 — new column, persists YouTube publishedAt so we
+            // can retroactively ask "how old was this recommendation at
+            // the time we served it?" and tune FRESHNESS_HORIZON_DAYS.
+            published_at: safeParseDate(rec.publishedAt),
             rec_score: rec.recScore ?? 0,
             iks_score: rec.iksTotal,
             trend_keywords: [
@@ -792,6 +1015,10 @@ export const executor: SkillExecutor = {
               rec.viewCount && rec.viewCount > 0 && rec.likeCount !== null
                 ? rec.likeCount / rec.viewCount
                 : null,
+            // CP360 H-2 — propagate to existing rows on re-run so old
+            // rows pick up the columns after the first rerun. Idempotent.
+            duration_sec: rec.durationSec,
+            published_at: safeParseDate(rec.publishedAt),
             rec_score: rec.recScore ?? 0,
             iks_score: rec.iksTotal,
             trend_keywords: [
@@ -828,6 +1055,11 @@ export const executor: SkillExecutor = {
         race_wins_ollama: raceWinsOllama,
         race_wins_openrouter: raceWinsOpenRouter,
         race_both_failed: raceBothFailed,
+        rerank_parsed_count: rerankParsedCount,
+        rerank_parse_mode: rerankParseMode,
+        rerank_duration_ms: rerankDurationMs,
+        rerank_dropped: rerankDropped,
+        rerank_error: rerankError,
         search_calls: searchCalls,
         search_failures: searchFailures,
         candidates_total: allCandidates.length,
@@ -1053,6 +1285,64 @@ export function parseIsoDuration(iso?: string | null): number | null {
   // Reject the empty `PT` case (no hours/minutes/seconds groups matched)
   if (h === 0 && mi === 0 && s === 0 && iso === 'PT') return null;
   return h * 3600 + mi * 60 + s;
+}
+
+/**
+ * CP360 — classify a YouTube search error message into a short code so
+ * skill_runs.error / failure_classification carries something actionable.
+ * The search call throws with shapes like:
+ *   "search.list HTTP 403 — The request cannot be completed because you have exceeded your quota."
+ *   "search.list HTTP 401 — Invalid Credentials"
+ *   "search.list HTTP 400 — Invalid search parameter"
+ *   "fetch failed"
+ * Unknown messages fall through to 'unknown_search_error'.
+ *
+ * Kept case-insensitive on the message body since YouTube occasionally
+ * changes wording. Exported for unit tests.
+ */
+/**
+ * CP360 H-2 — parse a YouTube ISO-8601 publishedAt string into a Date,
+ * returning `null` on any parse error rather than throwing. YouTube
+ * publishedAt is always ISO-8601 in practice, but `pushCandidate` falls
+ * back to `new Date().toISOString()` on missing values — those are valid
+ * but we still want to defensively handle any future edge case.
+ */
+function safeParseDate(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function classifySearchError(msg: string): string {
+  if (!msg) return 'unknown_search_error';
+  const lower = msg.toLowerCase();
+  if (lower.includes('quota') || lower.includes('quotaexceeded')) {
+    return 'youtube_quota_exhausted';
+  }
+  if (lower.includes('403')) {
+    // 403 without "quota" often means OAuth scope or daily limit hit
+    return 'youtube_forbidden';
+  }
+  if (
+    lower.includes('401') ||
+    lower.includes('invalid credentials') ||
+    lower.includes('unauthorized')
+  ) {
+    return 'oauth_token_invalid';
+  }
+  if (lower.includes('400')) {
+    return 'youtube_bad_request';
+  }
+  if (lower.includes('429')) {
+    return 'youtube_rate_limited';
+  }
+  if (lower.includes('5') && /\b5\d\d\b/.test(lower)) {
+    return 'youtube_server_error';
+  }
+  if (lower.includes('fetch failed') || lower.includes('network') || lower.includes('timeout')) {
+    return 'network_error';
+  }
+  return 'unknown_search_error';
 }
 
 /**
