@@ -299,6 +299,10 @@ describe('video-discover execute', () => {
         // executor; tests use the in-process URL string and rely on the
         // fetch router to short-circuit /api/chat to canned responses.
         llmUrl: 'http://test-ollama:11434',
+        // Kill switch (CP358 hotfix). Default false so existing LLM-path
+        // tests stay green; the disable-path test below sets this true via
+        // customState override.
+        llmDisabled: false,
         fetchImpl,
         ...customState,
       },
@@ -661,6 +665,81 @@ describe('video-discover execute', () => {
     // Fallback uses `${cell.text} ${keyword}` format. URL search params encode
     // spaces as `+` (URLSearchParams default), so the assertion sees `+`.
     expect(queriesSeen).toEqual(['cell-0-text+kw1']);
+  });
+
+  it('Fix 2 hotfix: llmDisabled=true skips Ollama and uses legacy concat for all cells', async () => {
+    const ollamaCalls: string[] = [];
+    const queriesSeen: string[] = [];
+    const fetchImpl = jest.fn().mockImplementation(async (url: string) => {
+      if (url.includes('/api/chat')) {
+        // If this is reached, the kill switch is broken.
+        ollamaCalls.push(url);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ message: { content: '["should-not-see-this"]' } }),
+        };
+      }
+      if (url.includes('/youtube/v3/search')) {
+        const m = url.match(/[?&]q=([^&]+)/);
+        if (m) queriesSeen.push(decodeURIComponent(m[1] ?? ''));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            items: [
+              {
+                id: { videoId: 'fb-vid' },
+                snippet: {
+                  title: 'Fallback Video',
+                  channelTitle: 'Ch',
+                  channelId: 'c',
+                  publishedAt: '2026-04-01T00:00:00Z',
+                  thumbnails: { high: { url: 't' } },
+                },
+              },
+            ],
+          }),
+        };
+      }
+      if (url.includes('/youtube/v3/videos')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            items: [
+              {
+                id: 'fb-vid',
+                statistics: { viewCount: '100', likeCount: '5' },
+                contentDetails: { duration: 'PT5M' },
+              },
+            ],
+          }),
+        };
+      }
+      throw new Error(`Unmocked: ${url}`);
+    }) as unknown as typeof fetch;
+
+    const result = await executor.execute(
+      buildExeCtx(fetchImpl, {
+        llmDisabled: true,
+        subGoals: [
+          { cellIndex: 0, text: 'cell-zero', embedding: buildVec(1) },
+          { cellIndex: 1, text: 'cell-one', embedding: buildVec(2) },
+        ],
+      })
+    );
+
+    // Kill switch: zero Ollama calls
+    expect(ollamaCalls).toHaveLength(0);
+    expect(result.data['llm_query_gen_success']).toBe(0);
+    expect(result.data['llm_query_gen_failures']).toBe(0);
+    // Each cell makes exactly 1 search call using `${cell.text} ${keyword}`
+    expect(result.data['search_calls']).toBe(2);
+    // Each cell picks its closest keyword by cosine sim (cell-0/kw1 are
+    // buildVec(1), cell-1/kw2 are buildVec(2)) — fallback concat is
+    // `${cell.text} ${matched_keyword}`, encoded to + by URLSearchParams.
+    expect(queriesSeen.sort()).toEqual(['cell-one+kw2', 'cell-zero+kw1'].sort());
   });
 
   it('Fix 2: dedups same video across multiple LLM queries within one cell', async () => {

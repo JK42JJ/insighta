@@ -133,6 +133,15 @@ interface HydratedState {
    * Same convention as trend-collector. (Fix 2, CP358)
    */
   llmUrl: string;
+  /**
+   * Kill switch for Fix 2 (LLM query gen). When `true`, the executor skips
+   * the Ollama call entirely and goes straight to the legacy `${cell.text}
+   * ${keyword}` concat fallback. Set via `VIDEO_DISCOVER_DISABLE_LLM=1` in
+   * the runtime env. Added in CP358 hotfix after the first prod run had
+   * 7/8 LLM call failures (Mac Mini latency suspected) — Fix 1+3 still ship
+   * but Fix 2 is gated until the LLM path is debugged separately.
+   */
+  llmDisabled: boolean;
   fetchImpl?: typeof fetch;
 }
 
@@ -357,6 +366,9 @@ export const executor: SkillExecutor = {
     // Fix 2 (CP358): pull Ollama URL from env, default to Mac Mini Tailscale.
     // Same convention as trend-collector executor.
     const llmUrl = ctx.env?.['OLLAMA_URL'] ?? 'http://100.91.173.17:11434';
+    // Kill switch — set VIDEO_DISCOVER_DISABLE_LLM=1 to skip Fix 2 entirely
+    // and run on Fix 1+3 only. Useful when Mac Mini Ollama is unreliable.
+    const llmDisabled = ctx.env?.['VIDEO_DISCOVER_DISABLE_LLM'] === '1';
 
     const hydrated: HydratedState = {
       mandalaId,
@@ -367,6 +379,7 @@ export const executor: SkillExecutor = {
       mandalaLanguage,
       centerGoal,
       llmUrl,
+      llmDisabled,
     };
     return { ok: true, hydrated: hydrated as unknown as Record<string, unknown> };
   },
@@ -468,33 +481,41 @@ export const executor: SkillExecutor = {
       }
     }
 
+    if (state.llmDisabled) {
+      log.info(
+        'VIDEO_DISCOVER_DISABLE_LLM=1 — skipping Fix 2 LLM query gen, using legacy concat for all cells'
+      );
+    }
+
     for (const sel of cellSelections) {
       let queries: string[] | null = null;
-      try {
-        queries = await generateSearchQueries({
-          subGoal: sel.cell.text,
-          centerGoal: state.centerGoal,
-          language: state.mandalaLanguage,
-          baseUrl: state.llmUrl,
-          fetchImpl: fetchFn,
-        });
-        // Hard cap defensively even though the parser already limits.
-        if (queries.length > VIDEO_DISCOVER_QUERIES_PER_CELL) {
-          queries = queries.slice(0, VIDEO_DISCOVER_QUERIES_PER_CELL);
+      if (!state.llmDisabled) {
+        try {
+          queries = await generateSearchQueries({
+            subGoal: sel.cell.text,
+            centerGoal: state.centerGoal,
+            language: state.mandalaLanguage,
+            baseUrl: state.llmUrl,
+            fetchImpl: fetchFn,
+          });
+          // Hard cap defensively even though the parser already limits.
+          if (queries.length > VIDEO_DISCOVER_QUERIES_PER_CELL) {
+            queries = queries.slice(0, VIDEO_DISCOVER_QUERIES_PER_CELL);
+          }
+          llmQueryGenSuccess += 1;
+        } catch (err) {
+          llmQueryGenFailures += 1;
+          if (err instanceof LlmQueryGenError) {
+            log.warn(
+              `LLM query gen failed for cell ${sel.cell.cellIndex} (falling back to concat): ${err.message}`
+            );
+          } else {
+            log.warn(
+              `LLM query gen unexpected error for cell ${sel.cell.cellIndex}: ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+          queries = null;
         }
-        llmQueryGenSuccess += 1;
-      } catch (err) {
-        llmQueryGenFailures += 1;
-        if (err instanceof LlmQueryGenError) {
-          log.warn(
-            `LLM query gen failed for cell ${sel.cell.cellIndex} (falling back to concat): ${err.message}`
-          );
-        } else {
-          log.warn(
-            `LLM query gen unexpected error for cell ${sel.cell.cellIndex}: ${err instanceof Error ? err.message : String(err)}`
-          );
-        }
-        queries = null;
       }
 
       if (queries && queries.length > 0) {
@@ -502,13 +523,15 @@ export const executor: SkillExecutor = {
           await runSearch(sel, q);
         }
       } else {
-        // Fallback: legacy single concat query
+        // Fallback: legacy single concat query (also taken when llmDisabled).
         await runSearch(sel, `${sel.cell.text} ${sel.keyword.keyword}`);
       }
     }
-    log.info(
-      `LLM query gen: success=${llmQueryGenSuccess}, failures=${llmQueryGenFailures}, search_calls=${searchCalls}`
-    );
+    if (!state.llmDisabled) {
+      log.info(
+        `LLM query gen: success=${llmQueryGenSuccess}, failures=${llmQueryGenFailures}, search_calls=${searchCalls}`
+      );
+    }
 
     if (allCandidates.length === 0) {
       return {
