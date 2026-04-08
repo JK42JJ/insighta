@@ -538,6 +538,10 @@ export function useWizard() {
     selectGeneratedMandala,
     searchResults: searchMutation.data ?? [],
     isSearching: searchMutation.isPending,
+    // CP358: isSuccess gates the empty-state UI to eliminate the 1-frame
+    // race where reset() flips isPending to false before mutate() runs.
+    // isSuccess is only true when data has actually arrived from the server.
+    searchSucceeded: searchMutation.isSuccess,
     searchError: searchMutation.error,
     isSearchDelayed,
     retrySearch,

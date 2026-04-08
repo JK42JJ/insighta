@@ -28,6 +28,7 @@ export default function MandalaWizardPage() {
           goalInput={wizard.goalInput}
           searchResults={wizard.searchResults}
           isSearching={wizard.isSearching}
+          searchSucceeded={wizard.searchSucceeded}
           isSearchDelayed={wizard.isSearchDelayed}
           onRetrySearch={wizard.retrySearch}
           aiGenerated={wizard.aiGenerated}

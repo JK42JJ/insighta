@@ -38,6 +38,10 @@ interface WizardStepGoalProps {
   goalInput: string;
   searchResults: MandalaSearchResult[];
   isSearching: boolean;
+  /** True only after the search mutation has successfully resolved at least once.
+   *  Used to gate the "no templates found" empty state to avoid a 1-frame
+   *  flicker between reset() and mutate() when the user re-submits. */
+  searchSucceeded: boolean;
   isSearchDelayed: boolean;
   onRetrySearch: () => void;
   aiGenerated: GeneratedMandala | null;
@@ -59,6 +63,7 @@ export default function WizardStepGoal({
   goalInput,
   searchResults,
   isSearching,
+  searchSucceeded,
   isSearchDelayed,
   onRetrySearch,
   aiGenerated,
@@ -132,11 +137,12 @@ export default function WizardStepGoal({
   };
 
   const hasSubmitted = goalInput.length > 0;
-  // Empty state fires only when the search completed cleanly (not pending,
-  // not delayed, zero hits). A delayed search takes over the empty space
-  // and invites a retry instead.
+  // Empty state fires only when the search has actually resolved successfully
+  // with zero hits. CP358: gating on `searchSucceeded` (mutation.isSuccess)
+  // instead of `!isSearching` removes the 1-frame race between reset() and
+  // mutate() that briefly rendered a fake "no results" card.
   const showNoResults =
-    hasSubmitted && !isSearching && !isSearchDelayed && searchResults.length === 0;
+    hasSubmitted && searchSucceeded && !isSearchDelayed && searchResults.length === 0;
 
   return (
     <div className="wizard-step-enter">
