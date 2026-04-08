@@ -1,9 +1,8 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '@/shared/integrations/supabase/client';
 import { subscribeAuth } from '@/shared/lib/auth-event-bus';
 import { apiClient } from '@/shared/lib/api-client';
 import { getAuthCache, setAuthCache, clearAuthCache } from '@/features/auth/lib/auth-cache';
-import { queryClient } from '@/shared/config/query-client';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -43,29 +42,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isTokenReady, setIsTokenReady] = useState(false);
   const [error, setError] = useState<AuthError | null>(null);
 
-  // CP360 hotfix — cross-user cache leak.
-  //
-  // Until this guard existed, React Query cache entries were keyed like
-  // ['mandala','list'] with no userId in the key. After a signOut →
-  // signIn-as-different-user sequence, the sidebar would briefly (or
-  // permanently, until the next refetch) render the PREVIOUS user's
-  // mandalas for the NEW user — because the cache still had the old
-  // payload and the query key was identical across users.
-  //
-  // Concrete bug: jamesjk4242 creates "파이선 코딩 정복" → signs out →
-  // jamie24kim signs in → sidebar shows "파이선 코딩 정복" even though
-  // the DB correctly has NO such row for jamie24kim. Auth middleware on
-  // the backend is correct (userId comes from decoded.sub); the leak is
-  // entirely a stale React Query cache on the client.
-  //
-  // Fix: track the last observed userId in a ref and clear the ENTIRE
-  // query cache on any transition (null→user, user→null, userA→userB).
-  // Full .clear() is the blast-radius-minimal choice — it's O(n) in cached
-  // queries and fires at most once per sign-in/out, which is rare enough
-  // to not matter for UX. Adding userId to every query key individually
-  // would be defense-in-depth but is a much larger surface (dozens of
-  // query keys across the codebase).
-  const prevUserIdRef = useRef<string | null>(cachedAuth?.userId ?? null);
+  // Note: cross-user cache isolation is handled STRUCTURALLY by
+  // `QueryProvider` which owns a per-session QueryClient (Issue #369
+  // Option A). AuthContext used to run a blanket `queryClient.clear()`
+  // on every userId transition (hotfix D, CP360), but that was a
+  // workaround — the per-session client makes it redundant because
+  // there is no shared cache across sessions to leak.
 
   useEffect(() => {
     // Get initial session
@@ -81,16 +63,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Cache was wrong — clear it
           if (cachedAuth) clearAuthCache();
         } else {
-          // CP360 cross-user cache leak guard (initial session path).
-          // If the persisted session belongs to a different user than
-          // the localStorage cachedAuth hint, React Query would otherwise
-          // render the wrong user's cached data on first paint.
-          const resolvedUserId = session?.user?.id ?? null;
-          if (prevUserIdRef.current !== resolvedUserId) {
-            queryClient.clear();
-            prevUserIdRef.current = resolvedUserId;
-          }
-
           setSession(session);
           setUser(session?.user ?? null);
           // Update cache with fresh data (preserve existing tier — subscription query updates it separately)
@@ -123,18 +95,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     getInitialSession();
 
-    // Listen for auth changes via event bus (single Supabase listener)
+    // Listen for auth changes via event bus (single Supabase listener).
+    // Note: React Query cache isolation across users is handled by
+    // QueryProvider via per-session client (Issue #369 Option A), not here.
     const unsubscribe = subscribeAuth((event, session) => {
-      // CP360 cross-user cache leak guard — MUST run before setUser()
-      // so the next render doesn't read stale cache. Clear on ANY userId
-      // transition (including null→user and user→null). See the ref
-      // declaration above for the full rationale.
-      const newUserId = session?.user?.id ?? null;
-      if (prevUserIdRef.current !== newUserId) {
-        queryClient.clear();
-        prevUserIdRef.current = newUserId;
-      }
-
       setSession(session);
       setUser(session?.user ?? null);
       setError(null);
