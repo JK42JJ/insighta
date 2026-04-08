@@ -125,6 +125,11 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           );
         }
 
+        // Upsert may change sub_goal labels → embeddings + recommendations
+        // stale. Trigger refresh; the 5-min dedup guard inside the pipeline
+        // absorbs rapid successive upserts.
+        triggerMandalaPostCreationAsync(userId, mandala.id);
+
         return reply.send({ mandala, linked });
       } catch (err: any) {
         fastify.log.error({ err, userId }, 'upsertMandala failed');
@@ -143,7 +148,15 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const userId = getUserId(request, reply);
       if (!userId) return;
 
-      await getMandalaManager().updateLevel(userId, request.params.levelKey, request.body);
+      const mandalaId = await getMandalaManager().updateLevel(
+        userId,
+        request.params.levelKey,
+        request.body
+      );
+
+      // Editing one sub_goal label invalidates that cell's embedding.
+      // The dedup guard absorbs rapid successive edits.
+      triggerMandalaPostCreationAsync(userId, mandalaId);
 
       return reply.send({ success: true });
     }
@@ -434,8 +447,8 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         }
       }
 
-      // Phase 3.5: fire-and-forget video-discover for cloned mandala
-      // (opt-in via user_skill_config; safe if not enabled)
+      // Fire-and-forget post-creation pipeline for the cloned mandala.
+      // Opt-in via user_skill_config; safe if not enabled.
       triggerMandalaPostCreationAsync(userId, result.mandalaId);
 
       return reply.send({ mandalaId: result.mandalaId });
@@ -651,8 +664,8 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         }
       }
 
-      // Phase 3.5: fire-and-forget video-discover for new mandala
-      // (opt-in via user_skill_config; safe if not enabled)
+      // Fire-and-forget post-creation pipeline for the new mandala.
+      // Opt-in via user_skill_config; safe if not enabled.
       triggerMandalaPostCreationAsync(userId, result.id);
 
       return reply.send({ status: 200, data: { mandalaId: result.id } });
@@ -802,10 +815,9 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           }
         }
 
-        // Phase 3.5: fire-and-forget video-discover for new mandala
-        // (opt-in via user_skill_config; /create endpoint doesn't write
-        // skill config so this typically skips silently — the helper
-        // logs "not enabled" at info level)
+        // Fire-and-forget post-creation pipeline. /create doesn't write
+        // skill config, so the video-discover step typically logs
+        // "not enabled" and exits cleanly.
         triggerMandalaPostCreationAsync(userId, mandala.id);
 
         return reply.code(201).send({ mandala });
@@ -1216,6 +1228,10 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           request.params.id,
           levels
         );
+
+        // Replacing all levels invalidates every sub_goal embedding.
+        // The dedup guard absorbs rapid successive level replacements.
+        triggerMandalaPostCreationAsync(userId, mandala.id);
 
         return reply.send({ mandala });
       } catch (err: any) {

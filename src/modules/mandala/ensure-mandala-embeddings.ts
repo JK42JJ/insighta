@@ -1,26 +1,22 @@
 /**
- * ensureMandalaEmbeddings — Phase 3.5+ helper
+ * ensureMandalaEmbeddings
  *
- * Idempotently ensure a user mandala has level=1 sub_goal embeddings in
- * `mandala_embeddings`. Calls Mac Mini Ollama qwen3-embedding:8b to
- * generate 4096d vectors for the 8 subjects and INSERTs them.
+ * Idempotently ensure a user mandala has its 8 sub_goal embeddings in
+ * `mandala_embeddings` (level=1, sub_goal_index 0..7). Calls Mac Mini
+ * Ollama qwen3-embedding:8b to generate 4096d vectors.
  *
- * Why this exists separately from the mandala generation pipeline:
- *   The wizard's mandala creation endpoints (`/create`, `/create-with-data`,
- *   `/create-from-template`) currently persist the mandala tree into
- *   `user_mandala_levels` but do NOT populate `mandala_embeddings`. That
- *   gap caused Phase 3.5's video-discover trigger to silently skip every
- *   new user mandala with "no level=1 sub_goal embeddings yet". This
- *   module fills the gap in a fire-and-forget background task that runs
- *   AFTER the wizard response has already gone out.
+ * The wizard's mandala creation endpoints persist the mandala tree into
+ * `user_mandala_levels` but do NOT populate `mandala_embeddings` — this
+ * module is the fire-and-forget background job that fills that table so
+ * per-cell video-discover has the embeddings it needs.
  *
- * Wall time: ~8-15s per mandala against Mac Mini (qwen3-embedding:8b,
- * 4096d, 8 sub_goals in one batch). Callers MUST invoke via fire-and-forget
- * — NEVER block user-facing requests.
+ * Wall time: ~8-15s per mandala (qwen3-embedding:8b, 4096d, 8 sub_goals
+ * in one batch). Callers MUST invoke via fire-and-forget — never block
+ * user-facing requests.
  *
- * Idempotency: if 8 embeddings already exist, returns true immediately
- * without calling Ollama. If a partial state exists (say, 3/8 from a
- * previous crash), the partials are DELETEd and regenerated cleanly.
+ * Idempotency: classifies each of the 8 indexes as ok/missing/stale and
+ * only regenerates what actually changed. No embeddings are deleted
+ * unless they are being replaced at the same index.
  */
 
 import { Prisma } from '@prisma/client';

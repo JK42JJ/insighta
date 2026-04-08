@@ -1062,7 +1062,7 @@ export class MandalaManager {
     userId: string,
     levelKey: string,
     data: { centerGoal?: string; subjects?: string[]; color?: string | null }
-  ): Promise<void> {
+  ): Promise<string> {
     const mandala = await this.prisma.user_mandalas.findFirst({
       where: { user_id: userId, is_default: true },
     });
@@ -1080,6 +1080,8 @@ export class MandalaManager {
         updated_at: new Date(),
       },
     });
+
+    return mandala.id;
   }
 
   // ─── Subscription methods (Story #85-B) ───

@@ -28,6 +28,7 @@ const mockSkillConfigFindFirst = jest.fn();
 const mockSubFindUnique = jest.fn();
 const mockSkillRegistryExecute = jest.fn();
 const mockCreateGenerationProvider = jest.fn();
+const mockRecommendationCacheFindFirst = jest.fn();
 
 jest.mock('../../../src/modules/mandala/ensure-mandala-embeddings', () => ({
   ensureMandalaEmbeddings: mockEnsureEmbeddings,
@@ -37,6 +38,7 @@ jest.mock('@/modules/database', () => ({
   getPrismaClient: () => ({
     user_skill_config: { findFirst: mockSkillConfigFindFirst },
     user_subscriptions: { findUnique: mockSubFindUnique },
+    recommendation_cache: { findFirst: mockRecommendationCacheFindFirst },
   }),
 }));
 
@@ -81,6 +83,7 @@ describe('triggerMandalaPostCreationAsync', () => {
     mockSubFindUnique.mockReset();
     mockSkillRegistryExecute.mockReset();
     mockCreateGenerationProvider.mockReset();
+    mockRecommendationCacheFindFirst.mockReset();
     mockCreateGenerationProvider.mockResolvedValue({ name: 'stub' });
     // Default: embeddings succeed (already present) — tests override as needed
     mockEnsureEmbeddings.mockResolvedValue({
@@ -89,6 +92,9 @@ describe('triggerMandalaPostCreationAsync', () => {
       finalCount: 8,
       embedMs: 0,
     });
+    // Default: no recent recommendation_cache row — dedup gate is open.
+    // Tests that exercise the dedup path override this.
+    mockRecommendationCacheFindFirst.mockResolvedValue(null);
   });
 
   it('returns synchronously (fire-and-forget)', () => {
@@ -294,5 +300,61 @@ describe('triggerMandalaPostCreationAsync', () => {
     // Embeddings are a platform asset keyed by mandala, not user
     expect(mockEnsureEmbeddings).toHaveBeenCalledWith(MANDALA_ID);
     expect(mockEnsureEmbeddings).not.toHaveBeenCalledWith(USER_ID, MANDALA_ID);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 2 dedup gate (5-min window)
+  //
+  // Triggered now from UPDATE paths (PUT /, PATCH /levels/:key, PUT
+  // /:id/levels) — without this gate, rapid edits would re-call the
+  // YouTube Search API every time. The gate scans recommendation_cache
+  // for any row newer than RECENT_DISCOVER_WINDOW_MS for this mandala.
+  // ──────────────────────────────────────────────────────────────────────
+
+  it('SKIPS video-discover when recommendation_cache has a row created within the last 5 minutes', async () => {
+    // Recent row exists → dedup gate fires BEFORE opt-in/tier/LLM lookups
+    mockRecommendationCacheFindFirst.mockResolvedValue({
+      id: 'rec-1',
+      created_at: new Date(Date.now() - 60 * 1000), // 1 min ago
+    });
+    // These would be called only if dedup was broken — keep them defined
+    // so a regression manifests as "unexpected call"
+    mockSkillConfigFindFirst.mockResolvedValue({ enabled: true });
+    mockSubFindUnique.mockResolvedValue({ tier: 'free' });
+    mockSkillRegistryExecute.mockResolvedValue({ success: true, data: {} });
+
+    triggerMandalaPostCreationAsync(USER_ID, MANDALA_ID);
+    await flushAsync();
+
+    // Embedding step still ran (unconditional, before video-discover)
+    expect(mockEnsureEmbeddings).toHaveBeenCalled();
+    // Dedup gate fired
+    expect(mockRecommendationCacheFindFirst).toHaveBeenCalledTimes(1);
+    const call = mockRecommendationCacheFindFirst.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call).toMatchObject({
+      where: {
+        mandala_id: MANDALA_ID,
+        created_at: { gt: expect.any(Date) },
+      },
+    });
+    // Downstream lookups were short-circuited
+    expect(mockSkillConfigFindFirst).not.toHaveBeenCalled();
+    expect(mockSubFindUnique).not.toHaveBeenCalled();
+    expect(mockSkillRegistryExecute).not.toHaveBeenCalled();
+  });
+
+  it('PROCEEDS to video-discover when recommendation_cache has no rows newer than the window', async () => {
+    // No recent row — gate is open, normal flow continues
+    mockRecommendationCacheFindFirst.mockResolvedValue(null);
+    mockSkillConfigFindFirst.mockResolvedValue({ enabled: true });
+    mockSubFindUnique.mockResolvedValue({ tier: 'free' });
+    mockSkillRegistryExecute.mockResolvedValue({ success: true, data: { rows: 20 } });
+
+    triggerMandalaPostCreationAsync(USER_ID, MANDALA_ID);
+    await flushAsync();
+
+    expect(mockRecommendationCacheFindFirst).toHaveBeenCalledTimes(1);
+    expect(mockSkillConfigFindFirst).toHaveBeenCalled();
+    expect(mockSkillRegistryExecute).toHaveBeenCalledTimes(1);
   });
 });

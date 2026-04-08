@@ -1,48 +1,39 @@
 /**
- * mandala-post-creation — Phase 3.5 post-creation pipeline
+ * mandala-post-creation
  *
  * Fire-and-forget chain that runs AFTER a mandala has been persisted and
  * the wizard HTTP response has gone back to the user. Two sequential
  * steps, both off the request path:
  *
- *   1. ensureMandalaEmbeddings(mandalaId)
- *        Generate level=1 sub_goal embeddings via Mac Mini Ollama
- *        qwen3-embedding:8b (~8-15s). Idempotent: skipped if already
- *        present, partials are cleaned + regenerated.
+ *   1. ensureMandalaEmbeddings(mandalaId) — generate level=1 sub_goal
+ *      embeddings via Mac Mini Ollama qwen3-embedding:8b (~8-15s),
+ *      idempotent.
  *
- *   2. runVideoDiscover(userId, mandalaId)
- *        Opt-in gated on user_skill_config.video_discover=true. Calls
- *        the video-discover plugin which does YouTube Search with the
- *        user's OAuth token and upserts recommendation_cache rows.
+ *   2. runVideoDiscover(userId, mandalaId) — opt-in gated on
+ *      user_skill_config.video_discover=true. Calls the video-discover
+ *      plugin which does YouTube Search with the user's OAuth token
+ *      and upserts recommendation_cache rows.
  *
  * The wizard response MUST NOT wait for either step. Both are kicked off
  * via `setImmediate` and all failures are logged + swallowed.
  *
- * Why chain them instead of parallelizing: video-discover's plugin
- * preflight requires level=1 sub_goal embeddings to exist. Running them
- * in parallel would either race or force video-discover to always skip.
- * Sequential with embeddings first is the only correct order.
- *
- * Expected total wall time when OAuth is connected:
- *   ensureEmbeddings (~10s) + runVideoDiscover (~20s) = ~30s background.
- * Response latency added to wizard: 0ms.
+ * Steps are sequential, not parallel: video-discover's preflight
+ * requires level=1 sub_goal embeddings from step 1.
  *
  * Opt-in contract for video-discover (step 2):
- *   1. user_skill_config row for this mandala with
- *      skill_type='video_discover' AND enabled=true
+ *   1. user_skill_config row with skill_type='video_discover' and
+ *      enabled=true
  *   2. Valid YouTube OAuth token in youtube_sync_settings
  *   3. level=1 sub_goal embeddings (handled by step 1)
  *   4. keyword_scores has embedded rows (from trend-collector + iks-scorer cron)
  *
  * If ANY are missing, the plugin skip reason is logged at info level
- * and the chain exits cleanly. Nothing is ever thrown back to the caller.
+ * and the chain exits cleanly.
  *
- * Naming note: user_skill_config.skill_type uses 'video_discover'
- * (underscore, legacy from the BETA stub). The new plugin architecture
- * registers the real plugin with id 'video-discover' (kebab-case per
+ * Naming: user_skill_config.skill_type is 'video_discover' (underscore),
+ * the plugin id in SkillRegistry is 'video-discover' (kebab-case per
  * docs/design/insighta-skill-plugin-architecture.md §3). This helper
- * bridges the two names so the wizard's existing skill config data
- * keeps working without a migration.
+ * translates between them.
  */
 
 import { skillRegistry } from '@/modules/skills';
@@ -58,6 +49,19 @@ const log = logger.child({ module: 'mandala-post-creation' });
 const WIZARD_SKILL_TYPE = 'video_discover';
 /** The plugin id registered in SkillRegistry (kebab-case per plugin arch doc). */
 const PLUGIN_SKILL_ID = 'video-discover';
+
+/**
+ * Dedup window — when this hook fires from an UPDATE path (e.g. user
+ * edits a sub_goal label), we may have already run video-discover for
+ * the same mandala minutes ago. Re-running would burn YouTube Search
+ * quota for marginal benefit. If ANY recommendation_cache row exists for
+ * this mandala newer than this window, the next runVideoDiscover skips.
+ *
+ * 5 minutes is a deliberate floor: long enough to absorb wizard rapid-
+ * edit bursts, short enough that a real "I changed my mandala, please
+ * refresh" intent will land within the next pipeline tick.
+ */
+const RECENT_DISCOVER_WINDOW_MS = 5 * 60 * 1000;
 
 /**
  * Fire-and-forget post-creation pipeline. Returns void synchronously;
@@ -122,6 +126,25 @@ async function runPostCreation(userId: string, mandalaId: string): Promise<void>
 
 async function runVideoDiscover(userId: string, mandalaId: string): Promise<void> {
   const db = getPrismaClient();
+
+  // Dedup gate: skip if we already produced a recommendation_cache row
+  // for this mandala within RECENT_DISCOVER_WINDOW_MS. Protects YouTube
+  // Search quota when this hook fires repeatedly from edit/update paths.
+  // Checked BEFORE opt-in/tier/LLM lookups so a hot-path skip costs one
+  // indexed point query.
+  const cutoff = new Date(Date.now() - RECENT_DISCOVER_WINDOW_MS);
+  const recent = await db.recommendation_cache.findFirst({
+    where: { mandala_id: mandalaId, created_at: { gt: cutoff } },
+    select: { id: true, created_at: true },
+    orderBy: { created_at: 'desc' },
+  });
+  if (recent) {
+    const ageSec = Math.round((Date.now() - recent.created_at.getTime()) / 1000);
+    log.info(
+      `video-discover skipped (dedup) for mandala=${mandalaId} — last run ${ageSec}s ago, window=${RECENT_DISCOVER_WINDOW_MS / 1000}s`
+    );
+    return;
+  }
 
   // Opt-in gate: the user must have enabled video_discover in the wizard
   // Step 3 skill config. If not enabled (or no row), silently skip.
