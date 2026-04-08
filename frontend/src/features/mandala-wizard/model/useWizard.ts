@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { queryKeys } from '@/shared/config/query-client';
 
 import { apiClient } from '@/shared/lib/api-client';
 import { useMandalaStore } from '@/stores/mandalaStore';
@@ -280,13 +281,22 @@ export function useWizard() {
   // navigating, so IndexPage's effective-mandala resolution lands on it
   // immediately. CP358: wizard now lands on the unified `/` dashboard (the
   // legacy `/mandalas/:id` MandalaDashboardPage redirect is a separate unit).
+  //
+  // Cache invalidation: useMandalaList has staleTime 30s. Without invalidating,
+  // both IndexPage and SidebarMandalaSection render with stale data and the
+  // freshly created mandala is missing from the list — store selection points
+  // to a non-existent entry, fallback default mandala wins.
   const selectMandalaInStore = useMandalaStore((s) => s.selectMandala);
+  const queryClient = useQueryClient();
   const goToUnifiedDashboard = useCallback(
     (newMandalaId: string) => {
       selectMandalaInStore(newMandalaId);
+      // Force list refetch so the new mandala appears in sidebar + IndexPage.
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.all });
       navigate('/');
     },
-    [navigate, selectMandalaInStore]
+    [navigate, selectMandalaInStore, queryClient]
   );
 
   // Create from template mutation (for DB templates)
