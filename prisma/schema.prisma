@@ -1479,6 +1479,9 @@ model recommendation_cache {
   weight_version  Int      @default(1)
   created_at      DateTime @default(now()) @db.Timestamptz(6)
   expires_at      DateTime @db.Timestamptz(6)
+  /// YouTube publishedAt (CP360 — experiment #3). Persisted for post-hoc
+  /// freshness auditing. Nullable because older rows predate this column.
+  published_at    DateTime? @db.Timestamptz(6)
 
   users    users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   mandala  user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)

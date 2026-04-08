@@ -42,7 +42,7 @@ jest.mock('@/utils/logger', () => ({
   },
 }));
 
-import { executor, parseIsoDuration, titleContainsBlocked } from '../executor';
+import { executor, parseIsoDuration, titleContainsBlocked, classifySearchError } from '../executor';
 import type { PreflightContext, ExecuteContext } from '@/skills/_shared/types';
 
 // ============================================================================
@@ -1090,5 +1090,61 @@ describe('titleContainsBlocked', () => {
   it('returns false for empty/null titles', () => {
     expect(titleContainsBlocked('')).toBe(false);
     expect(titleContainsBlocked(null as unknown as string)).toBe(false);
+  });
+
+  // CP360 Phase 1-D — expanded blocklist covering ads/PPL/sponsored content
+  it('catches CP360 ad/PPL additions', () => {
+    expect(titleContainsBlocked('신형 블루투스 이어폰 유료광고 리뷰')).toBe(true);
+    expect(titleContainsBlocked('협찬받고 제작한 영상')).toBe(true);
+    expect(titleContainsBlocked('PPL 논란 정리')).toBe(true);
+    expect(titleContainsBlocked('Sponsored: Learn X in 10 min')).toBe(true);
+    expect(titleContainsBlocked('Product review [AD]')).toBe(true);
+    expect(titleContainsBlocked('영상 제작 #광고')).toBe(true);
+  });
+});
+
+// ============================================================================
+// classifySearchError — CP360 failure classification
+// ============================================================================
+
+describe('classifySearchError', () => {
+  it('detects YouTube quota exhaustion', () => {
+    expect(classifySearchError('search.list HTTP 403 — exceeded your quota')).toBe(
+      'youtube_quota_exhausted'
+    );
+    expect(classifySearchError('The request cannot be completed, quotaExceeded')).toBe(
+      'youtube_quota_exhausted'
+    );
+  });
+
+  it('distinguishes 403 without quota from quota', () => {
+    expect(classifySearchError('search.list HTTP 403 — forbidden')).toBe('youtube_forbidden');
+  });
+
+  it('detects OAuth token invalidation', () => {
+    expect(classifySearchError('search.list HTTP 401 — Invalid Credentials')).toBe(
+      'oauth_token_invalid'
+    );
+    expect(classifySearchError('HTTP 401 Unauthorized')).toBe('oauth_token_invalid');
+  });
+
+  it('detects bad request and rate limit', () => {
+    expect(classifySearchError('search.list HTTP 400 — invalid parameter')).toBe(
+      'youtube_bad_request'
+    );
+    expect(classifySearchError('HTTP 429 rate limited')).toBe('youtube_rate_limited');
+  });
+
+  it('detects server errors and network failures', () => {
+    expect(classifySearchError('search.list HTTP 503 — service unavailable')).toBe(
+      'youtube_server_error'
+    );
+    expect(classifySearchError('fetch failed')).toBe('network_error');
+    expect(classifySearchError('request timeout after 30000ms')).toBe('network_error');
+  });
+
+  it('falls through to unknown for novel errors', () => {
+    expect(classifySearchError('something weird happened')).toBe('unknown_search_error');
+    expect(classifySearchError('')).toBe('unknown_search_error');
   });
 });

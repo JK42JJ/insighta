@@ -205,11 +205,52 @@ async function runVideoDiscover(userId: string, mandalaId: string): Promise<void
       );
     }
   } else {
-    // Expected skip reasons: no OAuth, expired token, no sub_goal embeddings
-    // (if step 1 failed), no keyword_scores. These are NOT errors — they're
-    // graceful degradation modes the plugin returns so the wizard can proceed.
-    log.info(
-      `video-discover skipped for user=${userId} mandala=${mandalaId} in ${wallMs}ms — ${result.error ?? 'unknown reason'}`
-    );
+    // CP360 fire-and-forget observability fix:
+    //
+    // Previously ALL !success results were logged at INFO with a single
+    // line — including genuine failures like YouTube quota exhaustion,
+    // which looked identical to expected skips (no OAuth, no embeddings).
+    // The 영어말하기 도전하기 mandala incident (2026-04-08) silently lost
+    // 2400 quota units with zero operator-visible signal.
+    //
+    // Split logging into two bands:
+    //
+    //   - SKIP (log.info): expected preflight-time exits — no OAuth,
+    //     expired token, no sub_goal embeddings, no keyword_scores.
+    //     These are graceful-degradation signals, not errors.
+    //
+    //   - FAIL (log.warn + structured phase tag): the executor ran past
+    //     preflight but returned status=failed. The `data.failure_classification`
+    //     field (added in executor.ts CP360) carries the root cause
+    //     ('youtube_quota_exhausted', 'oauth_token_invalid', etc.). A
+    //     future notification pipeline can fan this out as a user-visible
+    //     banner; for now it's grep-able via phase='video-discover.pipeline-failure'.
+    //
+    // The line format is stable so an Ops Dashboard alert rule can key
+    // off the phase tag without brittle string matching.
+    const data = result.data;
+    const classification = (data?.['failure_classification'] as string | undefined) ?? null;
+    const isSkip = classification === null && !result.error;
+    if (isSkip) {
+      log.info(
+        `video-discover skipped for user=${userId} mandala=${mandalaId} in ${wallMs}ms — ${result.error ?? 'unknown reason'}`
+      );
+    } else {
+      log.warn(
+        `video-discover PIPELINE FAILURE for user=${userId} mandala=${mandalaId} in ${wallMs}ms — ${classification ?? 'unclassified'}: ${result.error ?? 'unknown'}`,
+        {
+          phase: 'video-discover.pipeline-failure',
+          user_id: userId,
+          mandala_id: mandalaId,
+          duration_ms: wallMs,
+          failure_classification: classification,
+          search_calls: data?.['search_calls'] ?? null,
+          search_failures: data?.['search_failures'] ?? null,
+          candidates: data?.['candidates'] ?? null,
+          failure_reasons: data?.['failure_reasons'] ?? null,
+          error: result.error ?? null,
+        }
+      );
+    }
   }
 }
