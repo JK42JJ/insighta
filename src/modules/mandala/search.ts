@@ -230,21 +230,43 @@ export async function searchMandalasByGoal(
     titleToTemplate.set(t.title, t);
   }
 
-  // Step 3: Fetch depth=0 (sub_labels) + depth=1 (64 actions) for all
-  // resolved templates in one query. Authoritative source for the 9-cell
-  // preview is user_mandala_levels, not mandala_embeddings.
+  // Step 3: Fetch depth=0 (sub_goals + sub_labels + center_label) and
+  // depth=1 (64 actions) for all resolved templates in one query.
+  // user_mandala_levels is the authoritative source:
+  //   depth=0 row:
+  //     center_goal    — full center text
+  //     center_label   — short center label (e.g. "미국주식 1억")
+  //     subjects[0..7] — 8 long sub_goal texts
+  //     subject_labels[0..7] — 8 short labels (e.g. "시장 기초")
+  //   depth=1 rows (position 0..7):
+  //     subjects[0..7] — 8 depth=1 actions per sub_goal (64 total)
   const templateIds = Array.from(new Set(templateRows.map((t) => t.id)));
   let levelRows: Array<{
     mandala_id: string;
     depth: number;
     position: number;
     subjects: string[];
+    subject_labels: string[] | null;
+    center_label: string | null;
   }> = [];
   if (templateIds.length > 0) {
     levelRows = await prisma.$queryRaw<
-      Array<{ mandala_id: string; depth: number; position: number; subjects: string[] }>
+      Array<{
+        mandala_id: string;
+        depth: number;
+        position: number;
+        subjects: string[];
+        subject_labels: string[] | null;
+        center_label: string | null;
+      }>
     >`
-      SELECT mandala_id::text AS mandala_id, depth, position, subjects
+      SELECT
+        mandala_id::text AS mandala_id,
+        depth,
+        position,
+        subjects,
+        subject_labels,
+        center_label
       FROM user_mandala_levels
       WHERE mandala_id::text = ANY(${templateIds}::text[])
         AND depth IN (0, 1)
@@ -253,13 +275,17 @@ export async function searchMandalasByGoal(
   }
 
   // Group levels:
-  //   depth=0, position=0 → sub_labels (subjects[0..7] = 8 sub_labels)
+  //   depth=0, position=0 → sub_goals (long) + sub_labels (short) + centerLabel
   //   depth=1, position=0..7 → sub_actions[position] = subjects[0..7] (64 total)
+  const subGoalsByTemplate = new Map<string, string[]>();
   const subLabelsByTemplate = new Map<string, string[]>();
+  const centerLabelByTemplate = new Map<string, string | null>();
   const actionsByTemplate = new Map<string, Record<number, string[]>>();
   for (const row of levelRows) {
     if (row.depth === 0 && row.position === 0) {
-      subLabelsByTemplate.set(row.mandala_id, row.subjects ?? []);
+      subGoalsByTemplate.set(row.mandala_id, row.subjects ?? []);
+      subLabelsByTemplate.set(row.mandala_id, row.subject_labels ?? []);
+      centerLabelByTemplate.set(row.mandala_id, row.center_label);
       continue;
     }
     if (row.depth === 1) {
@@ -269,26 +295,29 @@ export async function searchMandalasByGoal(
     }
   }
 
-  // Step 4: Combine. sub_goals and sub_labels are aliased to the same
-  // user_mandala_levels.depth=0.subjects array — both fields exist in
-  // the public response shape for backward compatibility with callers.
-  // domain and language are taken from user_mandalas (SSOT), not from
-  // the embedding row.
+  // Step 4: Combine. sub_goals (long text) and sub_labels (short labels)
+  // are distinct fields from user_mandala_levels. domain, language and
+  // center_label are taken from user_mandalas / user_mandala_levels
+  // (SSOT), not from the embedding row.
   return topRows.map((row) => {
     const template =
       idToTemplate.get(row.mandala_id) ?? titleToTemplate.get(row.center_goal) ?? null;
     const templateMandalaId = template?.id ?? null;
+    const subGoals = templateMandalaId ? (subGoalsByTemplate.get(templateMandalaId) ?? []) : [];
     const subLabels = templateMandalaId ? (subLabelsByTemplate.get(templateMandalaId) ?? []) : [];
     const subActions = templateMandalaId ? (actionsByTemplate.get(templateMandalaId) ?? {}) : {};
+    const centerLabel = templateMandalaId
+      ? (centerLabelByTemplate.get(templateMandalaId) ?? row.center_label)
+      : row.center_label;
     return {
       mandala_id: row.mandala_id,
       template_mandala_id: templateMandalaId,
       center_goal: row.center_goal,
-      center_label: row.center_label,
+      center_label: centerLabel,
       domain: template?.domain ?? row.domain,
       language: template?.language ?? row.language,
       similarity: Number(row.similarity),
-      sub_goals: subLabels,
+      sub_goals: subGoals,
       sub_labels: subLabels,
       sub_actions: subActions,
     };
