@@ -22,6 +22,11 @@ model UserVideoState {
   level_id               String?        @default("scratchpad")
   mandala_id             String?        @db.Uuid
   sort_order             Int?
+  /// True when the row was inserted by the auto-add pipeline (recommendation_cache → user_video_states).
+  /// Selective replace of stale recs only deletes WHERE auto_added=true AND user_note IS NULL
+  /// AND is_watched=false AND watch_position_seconds=0 AND is_in_ideation=false.
+  /// User trace on an auto-added row promotes it to permanent (preserved across refreshes).
+  auto_added             Boolean        @default(false)
   added_to_ideation_at   DateTime       @default(now()) @db.Timestamptz(6)
   createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -33,6 +38,7 @@ model UserVideoState {
   @@index([user_id], map: "idx_user_video_states_user_id")
   @@index([videoId], map: "idx_user_video_states_video_id")
   @@index([mandala_id], map: "idx_user_video_states_mandala_id")
+  @@index([mandala_id, cell_index, auto_added], map: "idx_user_video_states_auto_add_lookup")
   @@map("user_video_states")
   @@schema("public")
 }

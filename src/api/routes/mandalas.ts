@@ -79,6 +79,50 @@ function getUserId(request: any, reply: any): string | null {
   return request.user.userId;
 }
 
+/**
+ * Build skill_config rows for a freshly created mandala. Always ensures
+ * video_discover is enabled with auto_add=true unless the caller explicitly
+ * passed enabled=false. CP357 onboarding default: every new mandala lands
+ * the user on a populated dashboard.
+ */
+function buildSkillConfigRows(
+  userId: string,
+  mandalaId: string,
+  userSkills: Record<string, unknown> | null | undefined
+): any[] {
+  const rows = new Map<
+    string,
+    { user_id: string; mandala_id: string; skill_type: string; enabled: boolean; config: any }
+  >();
+
+  if (userSkills && typeof userSkills === 'object') {
+    for (const [skillType, enabled] of Object.entries(userSkills)) {
+      rows.set(skillType, {
+        user_id: userId,
+        mandala_id: mandalaId,
+        skill_type: skillType,
+        enabled: Boolean(enabled),
+        config: skillType === 'video_discover' ? { auto_add: true } : {},
+      });
+    }
+  }
+
+  // CP357 fallback: ensure video_discover is present and enabled by default
+  // so the post-creation pipeline runs auto-add. Caller can override by
+  // passing { video_discover: false } explicitly.
+  if (!rows.has('video_discover')) {
+    rows.set('video_discover', {
+      user_id: userId,
+      mandala_id: mandalaId,
+      skill_type: 'video_discover',
+      enabled: true,
+      config: { auto_add: true },
+    });
+  }
+
+  return Array.from(rows.values());
+}
+
 export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   // ─── Backward-compatible endpoints (Story #59) ───
 
@@ -436,21 +480,15 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         data: { source_template_id: templateId },
       });
 
-      // Create skill config rows
-      if (skills && typeof skills === 'object') {
-        const skillEntries = Object.entries(skills);
-        if (skillEntries.length > 0) {
-          await prisma.user_skill_config.createMany({
-            data: skillEntries.map(([skillType, enabled]) => ({
-              user_id: userId,
-              mandala_id: result.mandalaId,
-              skill_type: skillType,
-              enabled: Boolean(enabled),
-            })),
-            skipDuplicates: true,
-          });
-        }
-      }
+      // Create skill config rows (CP357: video_discover defaults ON with auto_add=true)
+      await prisma.user_skill_config.createMany({
+        data: buildSkillConfigRows(
+          userId,
+          result.mandalaId,
+          (skills as Record<string, unknown> | null | undefined) ?? null
+        ),
+        skipDuplicates: true,
+      });
 
       // Fire-and-forget post-creation pipeline for the cloned mandala.
       // Opt-in via user_skill_config; safe if not enabled.
@@ -652,22 +690,16 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       const result = await getMandalaManager().createMandala(userId, title, levels);
 
-      // Create skill config rows
+      // Create skill config rows (CP357: video_discover defaults ON with auto_add=true)
       const prisma = getPrismaClient();
-      if (skills && typeof skills === 'object') {
-        const skillEntries = Object.entries(skills);
-        if (skillEntries.length > 0) {
-          await prisma.user_skill_config.createMany({
-            data: skillEntries.map(([skillType, enabled]) => ({
-              user_id: userId,
-              mandala_id: result.id,
-              skill_type: skillType,
-              enabled: Boolean(enabled),
-            })),
-            skipDuplicates: true,
-          });
-        }
-      }
+      await prisma.user_skill_config.createMany({
+        data: buildSkillConfigRows(
+          userId,
+          result.id,
+          (skills as Record<string, unknown> | null | undefined) ?? null
+        ),
+        skipDuplicates: true,
+      });
 
       // Fire-and-forget post-creation pipeline for the new mandala.
       // Opt-in via user_skill_config; safe if not enabled.
@@ -1072,6 +1104,12 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
   /**
    * PATCH /api/v1/mandalas/:id/skills - Toggle skill config for a mandala
+   *
+   * Side effect (CP357): toggling video_discover ON triggers the
+   * post-creation pipeline so existing mandalas can backfill recommendations
+   * + auto-add cells without requiring a fake mandala edit. The 5-min
+   * recent-discover dedup gate (mandala-post-creation.ts) protects
+   * YouTube quota against rapid toggle bursts.
    */
   fastify.patch<{
     Params: { id: string };
@@ -1088,6 +1126,10 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
     const prisma = getPrismaClient();
 
+    // Default config payload — wizard fallback uses same shape so the
+    // selective-replace pipeline finds {auto_add:true} when first toggled.
+    const defaultConfig = skillType === 'video_discover' ? { auto_add: true } : {};
+
     await prisma.user_skill_config.upsert({
       where: {
         user_id_mandala_id_skill_type: {
@@ -1102,8 +1144,16 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         mandala_id: request.params.id,
         skill_type: skillType,
         enabled,
+        config: defaultConfig,
       },
     });
+
+    // Backfill trigger: if user just enabled video_discover, kick off the
+    // post-creation pipeline. Fire-and-forget — the dedup gate inside
+    // runVideoDiscover handles repeated toggles cheaply.
+    if (skillType === 'video_discover' && enabled) {
+      triggerMandalaPostCreationAsync(userId, request.params.id);
+    }
 
     return reply.send({ success: true, skillType, enabled });
   });

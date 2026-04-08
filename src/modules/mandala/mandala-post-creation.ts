@@ -42,6 +42,7 @@ import { createGenerationProvider } from '@/modules/llm';
 import type { Tier } from '@/config/quota';
 import { logger } from '@/utils/logger';
 import { ensureMandalaEmbeddings } from './ensure-mandala-embeddings';
+import { maybeAutoAddRecommendations } from './auto-add-recommendations';
 
 const log = logger.child({ module: 'mandala-post-creation' });
 
@@ -185,6 +186,24 @@ async function runVideoDiscover(userId: string, mandalaId: string): Promise<void
     log.info(
       `video-discover completed for user=${userId} mandala=${mandalaId} in ${wallMs}ms: ${JSON.stringify(result.data ?? {})}`
     );
+    // Step 3: place top-N per cell into user_video_states (selective replace).
+    // Skipped silently when config.auto_add=false or no recs were produced.
+    try {
+      const autoAddResult = await maybeAutoAddRecommendations(userId, mandalaId);
+      if (autoAddResult.ok) {
+        log.info(
+          `auto-add placed ${autoAddResult.rowsInserted} rows (preserved=${autoAddResult.rowsPreserved}, deleted=${autoAddResult.rowsDeleted}) for user=${userId} mandala=${mandalaId}`
+        );
+      } else {
+        log.info(
+          `auto-add skipped for user=${userId} mandala=${mandalaId}: ${autoAddResult.reason}`
+        );
+      }
+    } catch (err) {
+      log.warn(
+        `auto-add threw for user=${userId} mandala=${mandalaId}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   } else {
     // Expected skip reasons: no OAuth, expired token, no sub_goal embeddings
     // (if step 1 failed), no keyword_scores. These are NOT errors — they're
