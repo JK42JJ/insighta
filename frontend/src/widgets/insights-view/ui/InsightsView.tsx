@@ -4,6 +4,7 @@ import type { InsightCard } from '@/entities/card/model/types';
 import type { ViewMode } from '@/entities/user/model/types';
 import { handleThumbnailError } from '@/shared/lib/image-utils';
 import { ViewSwitcher } from '@/features/view-mode';
+import { RecommendationFeed } from '@/features/recommendation-feed/ui/RecommendationFeed';
 
 interface InsightsViewProps {
   allCards: InsightCard[];
@@ -14,6 +15,8 @@ interface InsightsViewProps {
   title: string;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
+  /** Optional — when provided, RecommendationFeed renders under the title row. */
+  mandalaId?: string | null;
 }
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -23,7 +26,14 @@ const CONTENT_TYPE_GOOD_THRESHOLD = 3;
 const SECTOR_DOMINANCE_THRESHOLD = 0.4;
 
 const GRID_TO_SUBJECT: Record<number, number> = {
-  0: 0, 1: 1, 2: 2, 3: 3, 5: 4, 6: 5, 7: 6, 8: 7,
+  0: 0,
+  1: 1,
+  2: 2,
+  3: 3,
+  5: 4,
+  6: 5,
+  7: 6,
+  8: 7,
 };
 
 export function InsightsView({
@@ -35,6 +45,7 @@ export function InsightsView({
   title,
   viewMode,
   onViewModeChange,
+  mandalaId,
 }: InsightsViewProps) {
   const { t } = useTranslation();
 
@@ -52,7 +63,9 @@ export function InsightsView({
       const age = now - new Date(c.createdAt).getTime();
       return age >= SEVEN_DAYS_MS && age < FOURTEEN_DAYS_MS;
     }).length;
-    const withSummary = all.filter((c) => c.videoSummary?.summary_en || c.videoSummary?.summary_ko).length;
+    const withSummary = all.filter(
+      (c) => c.videoSummary?.summary_en || c.videoSummary?.summary_ko
+    ).length;
     const summaryRate = all.length > 0 ? Math.round((withSummary / all.length) * 100) : 0;
 
     return {
@@ -87,10 +100,7 @@ export function InsightsView({
     return sectors;
   }, [cardsByCell, sectorSubjects]);
 
-  const emptySectors = useMemo(
-    () => sectorData.filter((s) => s.count === 0),
-    [sectorData]
-  );
+  const emptySectors = useMemo(() => sectorData.filter((s) => s.count === 0), [sectorData]);
 
   const maxSectorCount = useMemo(
     () => Math.max(1, ...sectorData.map((s) => s.count)),
@@ -106,7 +116,11 @@ export function InsightsView({
     }
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
-      .map(([type, count]) => ({ type, count, pct: all.length > 0 ? Math.round((count / all.length) * 100) : 0 }));
+      .map(([type, count]) => ({
+        type,
+        count,
+        pct: all.length > 0 ? Math.round((count / all.length) * 100) : 0,
+      }));
   }, [all]);
 
   // Dominant sector
@@ -130,11 +144,22 @@ export function InsightsView({
       .slice(0, 8);
   }, [all]);
 
-  // Empty state
+  // Empty state — preserve the original early-return condition + message,
+  // but also render the recommendation feed so a brand-new mandala still shows
+  // personalized guidance instead of an empty page.
   if (stats.total === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">{t('insights.noCards')}</p>
+      <div className="flex-1 overflow-y-auto space-y-4">
+        {mandalaId && (
+          <RecommendationFeed
+            mandalaId={mandalaId}
+            subLabels={sectorSubjects}
+            cardsByCell={cardsByCell}
+          />
+        )}
+        <div className="flex items-center justify-center p-8">
+          <p className="text-sm text-muted-foreground">{t('insights.noCards')}</p>
+        </div>
       </div>
     );
   }
@@ -154,6 +179,16 @@ export function InsightsView({
         </div>
         <ViewSwitcher value={viewMode} onChange={onViewModeChange} />
       </div>
+
+      {/* Layer 2: Personalized recommendation feed (CP356 — sits directly under
+          the title row, above the stats grid). Hidden when no mandalaId. */}
+      {mandalaId && (
+        <RecommendationFeed
+          mandalaId={mandalaId}
+          subLabels={sectorSubjects}
+          cardsByCell={cardsByCell}
+        />
+      )}
 
       {/* Row 1: Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -248,7 +283,9 @@ export function InsightsView({
                   {scratchPadCards.length > 0 && (
                     <div
                       className="h-full bg-amber-500/50 rounded-sm"
-                      style={{ width: `${Math.max(2, (scratchPadCards.length / maxSectorCount) * 100)}%` }}
+                      style={{
+                        width: `${Math.max(2, (scratchPadCards.length / maxSectorCount) * 100)}%`,
+                      }}
                     />
                   )}
                 </div>
@@ -416,11 +453,7 @@ function StatCard({
   color?: 'amber' | 'green';
 }) {
   const valueColor =
-    color === 'amber'
-      ? 'text-amber-500'
-      : color === 'green'
-        ? 'text-green-500'
-        : 'text-foreground';
+    color === 'amber' ? 'text-amber-500' : color === 'green' ? 'text-green-500' : 'text-foreground';
 
   return (
     <div className="bg-surface-mid border border-border/50 rounded-xl p-3">
@@ -446,20 +479,16 @@ function AlertRow({
   const icons = { warn: '!', info: 'i', danger: '!' };
 
   return (
-    <div className={`flex items-start gap-2 px-2.5 py-2 rounded-lg text-[11px] leading-relaxed ${styles[type]}`}>
+    <div
+      className={`flex items-start gap-2 px-2.5 py-2 rounded-lg text-[11px] leading-relaxed ${styles[type]}`}
+    >
       <span className="font-bold text-xs shrink-0 mt-px">{icons[type]}</span>
       <span>{children}</span>
     </div>
   );
 }
 
-const DONUT_COLORS = [
-  'hsl(var(--primary))',
-  '#639922',
-  '#BA7517',
-  '#D85A30',
-  '#9b59b6',
-];
+const DONUT_COLORS = ['hsl(var(--primary))', '#639922', '#BA7517', '#D85A30', '#9b59b6'];
 
 function ContentDonut({
   types,
@@ -475,7 +504,12 @@ function ContentDonut({
   let offset = 0;
   const segments = types.map((t, i) => {
     const len = total > 0 ? (t.count / total) * CIRCUMFERENCE : 0;
-    const seg = { ...t, dasharray: `${len} ${CIRCUMFERENCE - len}`, offset, color: DONUT_COLORS[i % DONUT_COLORS.length] };
+    const seg = {
+      ...t,
+      dasharray: `${len} ${CIRCUMFERENCE - len}`,
+      offset,
+      color: DONUT_COLORS[i % DONUT_COLORS.length],
+    };
     offset += len;
     return seg;
   });
@@ -504,7 +538,10 @@ function ContentDonut({
           <div key={t.type} className={t.count === 0 ? 'text-muted-foreground/40' : ''}>
             <span
               className="inline-block w-2 h-2 rounded-sm mr-1.5"
-              style={{ background: t.count > 0 ? DONUT_COLORS[i % DONUT_COLORS.length] : 'hsl(var(--muted))' }}
+              style={{
+                background:
+                  t.count > 0 ? DONUT_COLORS[i % DONUT_COLORS.length] : 'hsl(var(--muted))',
+              }}
             />
             {t.type}: {t.count} ({t.pct}%)
           </div>

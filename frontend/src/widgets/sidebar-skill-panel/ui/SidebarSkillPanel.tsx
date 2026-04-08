@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown,
   ChevronRight,
@@ -14,10 +15,54 @@ import {
   History,
   Video,
   PenLine,
+  Lock,
 } from 'lucide-react';
 import { useSkillList, useSkillPreview, useSkillExecute, useSkillOutputs } from '@/features/skill';
 import { useToast } from '@/shared/lib/use-toast';
-import type { SkillOutputResponse } from '@/shared/lib/api-client';
+import { apiClient, type SkillOutputResponse } from '@/shared/lib/api-client';
+
+// ─── Dashboard skill state hook (cache-shared with useDashboard via identical queryKey) ───
+//
+// Uses the SAME queryKey + staleTime as features/mandala-dashboard/model/useDashboard.ts
+// so React Query dedupes the underlying network call. We only use `select` to extract the
+// `skills` field — the cached object is the full DashboardApiResponse and remains shared.
+//
+// Phase 4: PRO list is empty. The badge component supports the PRO state for future use.
+const PRO_SKILL_TYPES: ReadonlySet<string> = new Set();
+const DASHBOARD_STALE_TIME_MS = 5 * 60 * 1000;
+
+interface DashboardApiResponseShape {
+  skills?: Record<string, boolean>;
+}
+
+async function fetchDashboardForSkills(mandalaId: string): Promise<DashboardApiResponseShape> {
+  await apiClient.tokenReady;
+  const token = apiClient.getAccessToken();
+  // Reach baseUrl the same way useDashboard.ts does (private field access pattern).
+  const baseUrl = (apiClient as unknown as { baseUrl: string }).baseUrl;
+  const url = `${baseUrl}/api/v1/mandalas/${mandalaId}/dashboard`;
+  const response = await fetch(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Dashboard API error: ${response.status}`);
+  }
+  return response.json() as Promise<DashboardApiResponseShape>;
+}
+
+function useDashboardSkills(mandalaId: string | null): Record<string, boolean> {
+  const { data } = useQuery({
+    queryKey: ['mandala', 'dashboard', mandalaId],
+    queryFn: () => fetchDashboardForSkills(mandalaId as string),
+    enabled: !!mandalaId,
+    staleTime: DASHBOARD_STALE_TIME_MS,
+    select: (d: DashboardApiResponseShape) => d.skills ?? {},
+  });
+  return data ?? {};
+}
 
 const SKILL_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   newsletter: Mail,
@@ -38,6 +83,56 @@ const SKILL_DESC_KEYS: Record<string, string> = {
   blog: 'descBlog',
   video_discover: 'descVideoDiscover',
 };
+
+/**
+ * Short user-facing labels (Korean / English via i18n).
+ * Long English descriptions clutter the sidebar — see CP356 fix #3.
+ */
+const SKILL_SHORT_LABEL_KEYS: Record<string, string> = {
+  recommend: 'shortRecommend',
+  newsletter: 'shortNewsletter',
+  alert: 'shortAlert',
+  report: 'shortReport',
+  script: 'shortScript',
+  blog: 'shortBlog',
+};
+
+/**
+ * Result-producing skills shown to end users in the sidebar.
+ * Internal pipeline plugins (trend-collector, iks-scorer, video-discover)
+ * power features but never appear here — they belong in admin tooling.
+ */
+const USER_VISIBLE_SKILL_TYPES: ReadonlySet<string> = new Set([
+  'recommend',
+  'newsletter',
+  'alert',
+  'report',
+  'script',
+  'blog',
+]);
+
+/**
+ * UI-only PRO skill entries (no backend SkillId yet). Shown below the
+ * free-tier divider with a Lock icon + PRO badge. Click → upgrade toast.
+ * When a real backend skill is added, move the id into USER_VISIBLE_SKILL_TYPES
+ * and remove the entry here.
+ */
+interface ExtraProSkill {
+  id: string;
+  shortLabelKey: string;
+  defaultLabel: string;
+}
+const EXTRA_PRO_SKILLS: ReadonlyArray<ExtraProSkill> = [
+  { id: 'pro-trend-analysis', shortLabelKey: 'shortProTrend', defaultLabel: '트렌드 분석' },
+  { id: 'pro-auto-research', shortLabelKey: 'shortProAutoResearch', defaultLabel: '자동 리서치' },
+];
+
+/**
+ * CP356 fix #4: hide preview/execute/output history rendering in the sidebar.
+ * Logic + hooks remain so they can move to a dedicated Settings page later.
+ * Set to true to restore the inline panels.
+ */
+const ENABLE_INLINE_SKILL_PANELS = false;
 
 const SKILL_TYPE_KEYS: Record<string, string> = {
   newsletter: 'typeNewsletter',
@@ -77,12 +172,62 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
   const [outputData, setOutputData] = useState<SkillOutputData | null>(null);
   const [expandedOutputId, setExpandedOutputId] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
   const { data: skillsResponse, isLoading } = useSkillList();
   const previewMutation = useSkillPreview();
   const executeMutation = useSkillExecute();
   const { data: outputsResponse } = useSkillOutputs(mandalaId);
+  const skillEnabledMap = useDashboardSkills(mandalaId);
+  const [togglingSkillId, setTogglingSkillId] = useState<string | null>(null);
 
-  const skills = skillsResponse?.data ?? [];
+  const skills = (skillsResponse?.data ?? []).filter((s) => USER_VISIBLE_SKILL_TYPES.has(s.id));
+
+  const handleToggleSkill = useCallback(
+    async (skillId: string) => {
+      if (!mandalaId) return;
+      const currentEnabled = skillEnabledMap[skillId] ?? false;
+      const nextEnabled = !currentEnabled;
+      setTogglingSkillId(skillId);
+      try {
+        await apiClient.tokenReady;
+        const token = apiClient.getAccessToken();
+        const baseUrl = (apiClient as unknown as { baseUrl: string }).baseUrl;
+        const response = await fetch(`${baseUrl}/api/v1/mandalas/${mandalaId}/skills`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ skillType: skillId, enabled: nextEnabled }),
+        });
+        if (!response.ok) throw new Error(`Skill toggle failed: ${response.status}`);
+        // Invalidate the cache key shared with useDashboard so the badge re-renders.
+        await queryClient.invalidateQueries({
+          queryKey: ['mandala', 'dashboard', mandalaId],
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : undefined;
+        toast({
+          title: t('skills.toggleFailed', 'Toggle failed'),
+          description: message,
+          variant: 'destructive',
+        });
+      } finally {
+        setTogglingSkillId(null);
+      }
+    },
+    [mandalaId, skillEnabledMap, queryClient, toast, t]
+  );
+
+  const handleProClick = useCallback(() => {
+    toast({
+      title: t('skills.proLockedTitle', 'PRO 기능입니다'),
+      description: t(
+        'skills.proLockedDesc',
+        '이 스킬은 PRO 플랜에서 곧 제공됩니다. 업그레이드 안내는 추후 출시 예정이에요.'
+      ),
+    });
+  }, [toast, t]);
 
   const toggleCollapse = () => {
     const next = !collapsed;
@@ -177,8 +322,8 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
             <p className="text-xs text-sidebar-foreground/60 px-1 py-2">{t('skills.empty')}</p>
           )}
 
-          {/* Skill output result panel */}
-          {outputData && (
+          {/* Skill output result panel — hidden in CP356 (logic preserved). */}
+          {ENABLE_INLINE_SKILL_PANELS && outputData && (
             <div className="mx-1 mb-2 p-2 rounded bg-sidebar-accent/50 text-xs space-y-2 border border-sidebar-border/50">
               <div className="flex items-center justify-between">
                 <p className="font-medium text-sm">{outputData.title}</p>
@@ -223,26 +368,34 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
             const isActive = previewData?.skillId === skill.id;
             const isPreviewing =
               previewMutation.isPending && previewMutation.variables?.skillId === skill.id;
+            const isToggling = togglingSkillId === skill.id;
 
             return (
               <div key={skill.id} className="rounded-md">
                 <button
-                  onClick={() => handlePreview(skill.id)}
-                  disabled={isPreviewing}
+                  onClick={() => handleToggleSkill(skill.id)}
+                  disabled={isToggling}
                   className="flex items-center gap-2 w-full text-left text-xs px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors disabled:opacity-50"
                 >
-                  {isPreviewing ? (
+                  {isToggling ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
                   ) : (
                     <Icon className="w-3.5 h-3.5 shrink-0 text-sidebar-foreground/60" />
                   )}
-                  <span className="truncate">
-                    {t(`skills.${SKILL_DESC_KEYS[skill.id] ?? skill.id}`, skill.description)}
+                  <span className="truncate flex-1">
+                    {t(
+                      `skills.${SKILL_SHORT_LABEL_KEYS[skill.id] ?? SKILL_DESC_KEYS[skill.id] ?? skill.id}`,
+                      skill.description
+                    )}
                   </span>
+                  <SkillStatusBadge
+                    enabled={skillEnabledMap[skill.id] ?? false}
+                    isPro={PRO_SKILL_TYPES.has(skill.id)}
+                  />
                 </button>
 
-                {/* Preview panel */}
-                {isActive && previewData && (
+                {/* Preview panel — hidden in CP356 (logic preserved). */}
+                {ENABLE_INLINE_SKILL_PANELS && isActive && previewData && (
                   <div className="mx-1 mt-1 mb-2 p-2 rounded bg-sidebar-accent/50 text-xs space-y-2">
                     {previewData.subject && <p className="font-medium">{previewData.subject}</p>}
                     {previewData.curated_count != null && (
@@ -277,19 +430,69 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
             );
           })}
 
-          {/* Outputs history */}
-          <SkillOutputHistory
-            outputs={outputsResponse?.data ?? []}
-            expandedId={expandedOutputId}
-            onToggle={setExpandedOutputId}
-            onCopy={(content) => {
-              navigator.clipboard.writeText(content);
-              toast({ title: t('common.copied', 'Copied to clipboard') });
-            }}
-          />
+          {/* Free / PRO divider */}
+          {EXTRA_PRO_SKILLS.length > 0 && skills.length > 0 && (
+            <div className="my-2 h-px bg-sidebar-border/60" aria-hidden="true" />
+          )}
+
+          {/* PRO (UI-only, no backend SkillId yet) */}
+          {EXTRA_PRO_SKILLS.map((proSkill) => (
+            <button
+              key={proSkill.id}
+              type="button"
+              onClick={handleProClick}
+              className="flex items-center gap-2 w-full text-left text-xs px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors opacity-80"
+            >
+              <Lock className="w-3.5 h-3.5 shrink-0 text-sidebar-foreground/40" />
+              <span className="truncate flex-1">
+                {t(`skills.${proSkill.shortLabelKey}`, proSkill.defaultLabel)}
+              </span>
+              <SkillStatusBadge enabled={false} isPro={true} />
+            </button>
+          ))}
+
+          {/* Outputs history — hidden in CP356 (logic preserved). */}
+          {ENABLE_INLINE_SKILL_PANELS && (
+            <SkillOutputHistory
+              outputs={outputsResponse?.data ?? []}
+              expandedId={expandedOutputId}
+              onToggle={setExpandedOutputId}
+              onCopy={(content) => {
+                navigator.clipboard.writeText(content);
+                toast({ title: t('common.copied', 'Copied to clipboard') });
+              }}
+            />
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SkillStatusBadge — ON / OFF / PRO pill
+// ---------------------------------------------------------------------------
+
+function SkillStatusBadge({ enabled, isPro }: { enabled: boolean; isPro: boolean }) {
+  if (isPro) {
+    return (
+      <span className="shrink-0 inline-flex items-center gap-0.5 text-[8px] font-bold px-1.5 py-0.5 rounded bg-primary/15 text-primary">
+        <Lock className="w-2 h-2" />
+        PRO
+      </span>
+    );
+  }
+  if (enabled) {
+    return (
+      <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500">
+        ON
+      </span>
+    );
+  }
+  return (
+    <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded border border-border/60 text-muted-foreground">
+      OFF
+    </span>
   );
 }
 

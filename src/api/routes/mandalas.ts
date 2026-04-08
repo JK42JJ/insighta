@@ -19,6 +19,11 @@ import {
   MAX_PAGINATION_LIMIT,
   EXPLORE_CACHE_TTL_MS,
 } from '../../config/explore';
+import {
+  RECOMMENDATION_FETCH_LIMIT,
+  RECOMMENDATION_DEFAULT_STATUS,
+  RECOMMENDATION_DEFAULT_MODE,
+} from '../../config/recommendations';
 import { MemoryCache } from '../../utils/memory-cache';
 
 // Explore results cache — templates are near-immutable, 10-min TTL
@@ -975,6 +980,95 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       });
     }
   );
+
+  /**
+   * GET /api/v1/mandalas/:id/recommendations - Read-only recommendation feed
+   *
+   * Returns recommendation_cache rows for the given mandala, optionally filtered
+   * by cell_index. Rows are produced by the video-discover skill plugin
+   * (Phase 3) and may be empty for most mandalas until that pipeline runs.
+   *
+   * Response 200 always returns a `items: []` shape (never 404 for empty).
+   * 404 is reserved for "mandala not owned by user".
+   */
+  fastify.get<{
+    Params: { id: string };
+    Querystring: { cell_index?: string };
+  }>('/:id/recommendations', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const mandalaId = request.params.id;
+
+    // Ownership check (returns 404 if not owned, matching dashboard endpoint)
+    const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
+    if (!mandala) {
+      return reply.code(404).send({ error: 'Mandala not found' });
+    }
+
+    // Optional cell_index filter
+    let cellIndexFilter: number | undefined;
+    if (request.query.cell_index !== undefined) {
+      const parsed = Number(request.query.cell_index);
+      if (!Number.isInteger(parsed) || parsed < 0 || parsed > 7) {
+        return reply.code(400).send({ error: 'cell_index must be an integer in [0, 7]' });
+      }
+      cellIndexFilter = parsed;
+    }
+
+    const prisma = getPrismaClient();
+
+    // Build cell_index → cell_label lookup from depth=1 child levels
+    const childLevels = ((mandala as any).levels ?? []).filter((l: any) => l.depth === 1);
+    const cellLabelByPosition = new Map<number, string>();
+    for (const child of childLevels) {
+      if (typeof child.position === 'number' && child.centerGoal) {
+        cellLabelByPosition.set(child.position, child.centerGoal);
+      }
+    }
+
+    // Read pending, unexpired recs ordered by cell then score
+    const rows = await prisma.recommendation_cache.findMany({
+      where: {
+        user_id: userId,
+        mandala_id: mandalaId,
+        status: RECOMMENDATION_DEFAULT_STATUS,
+        expires_at: { gt: new Date() },
+        ...(cellIndexFilter !== undefined ? { cell_index: cellIndexFilter } : {}),
+      },
+      orderBy: [{ cell_index: 'asc' }, { rec_score: 'desc' }],
+      take: RECOMMENDATION_FETCH_LIMIT,
+    });
+
+    const items = rows.map((row) => ({
+      id: row.id,
+      videoId: row.video_id,
+      title: row.title,
+      channel: row.channel,
+      thumbnail: row.thumbnail,
+      durationSec: row.duration_sec,
+      recScore: row.rec_score,
+      cellIndex: row.cell_index,
+      cellLabel: row.cell_index != null ? (cellLabelByPosition.get(row.cell_index) ?? null) : null,
+      keyword: row.keyword,
+      source: row.weight_version === 0 ? ('manual' as const) : ('auto_recommend' as const),
+      recReason: row.rec_reason,
+    }));
+
+    const firstRow = rows[0];
+    const lastRefreshed = firstRow
+      ? rows
+          .reduce((max, r) => (r.created_at > max ? r.created_at : max), firstRow.created_at)
+          .toISOString()
+      : null;
+
+    return reply.send({
+      mandalaId,
+      mode: RECOMMENDATION_DEFAULT_MODE,
+      items,
+      lastRefreshed,
+    });
+  });
 
   /**
    * PATCH /api/v1/mandalas/:id/skills - Toggle skill config for a mandala

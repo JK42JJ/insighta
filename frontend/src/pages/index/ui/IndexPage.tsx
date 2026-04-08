@@ -690,6 +690,7 @@ function AuthenticatedApp() {
                 title={navigation.currentLevel.centerGoal}
                 viewMode={layout.viewMode}
                 onViewModeChange={layout.handleSetViewMode}
+                mandalaId={effectiveMandalaId}
               />
             ) : (
               <CardListView

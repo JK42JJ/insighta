@@ -1090,6 +1090,34 @@ class ApiClient {
     return this.request(`/mandalas/${mandalaId}/activity${query}`);
   }
 
+  async getMandalaRecommendations(
+    mandalaId: string,
+    cellIndex?: number
+  ): Promise<{
+    mandalaId: string;
+    mode: 'auto' | 'manual';
+    items: Array<{
+      id: string;
+      videoId: string;
+      title: string;
+      channel: string | null;
+      thumbnail: string | null;
+      durationSec: number | null;
+      recScore: number;
+      cellIndex: number | null;
+      cellLabel: string | null;
+      keyword: string;
+      source: 'auto_recommend' | 'manual';
+      recReason: string | null;
+    }>;
+    lastRefreshed: string | null;
+  }> {
+    const params = new URLSearchParams();
+    if (cellIndex !== undefined) params.set('cell_index', String(cellIndex));
+    const query = params.toString() ? `?${params}` : '';
+    return this.request(`/mandalas/${mandalaId}/recommendations${query}`);
+  }
+
   // ========================================
   // Admin Endpoints
   // ========================================
