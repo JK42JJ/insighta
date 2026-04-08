@@ -28,9 +28,13 @@ export default function MandalaWizardPage() {
           goalInput={wizard.goalInput}
           searchResults={wizard.searchResults}
           isSearching={wizard.isSearching}
+          isSearchDelayed={wizard.isSearchDelayed}
+          onRetrySearch={wizard.retrySearch}
           aiGenerated={wizard.aiGenerated}
           aiSource={wizard.aiSource}
           isGenerating={wizard.isGenerating}
+          isGenerateDelayed={wizard.isGenerateDelayed}
+          onRetryGenerate={wizard.retryGenerate}
           generateError={wizard.generateError as Error | null}
           onSetGoalInput={wizard.setGoalInput}
           onSubmitGoal={wizard.submitGoal}

@@ -1270,6 +1270,13 @@
       "similar": {
         "title": "Similar templates",
         "empty": "No similar templates found"
+      },
+      "delayed": {
+        "aiTitle": "This is taking a while",
+        "aiSubtitle": "Want to try again?",
+        "templateTitle": "Template search is slower than usual",
+        "templateSubtitle": "Want to try again?",
+        "retry": "Retry"
       }
     },
     "preview": {

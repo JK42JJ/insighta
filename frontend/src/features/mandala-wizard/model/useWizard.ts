@@ -234,6 +234,40 @@ export function useWizard() {
       }),
   });
 
+  // ─── Delay detection ───
+  // Soft timeouts that flip the card to its "delayed" state without
+  // canceling the in-flight request. The request may still complete
+  // successfully after the flag fires; in that case the delayed card
+  // is replaced by the result. Hard errors set the flag immediately.
+  const SEARCH_DELAY_MS = 5000;
+  const GENERATE_DELAY_MS = 45000;
+
+  const [isSearchSoftDelayed, setIsSearchSoftDelayed] = useState(false);
+  const [isGenerateSoftDelayed, setIsGenerateSoftDelayed] = useState(false);
+
+  useEffect(() => {
+    if (!searchMutation.isPending) {
+      setIsSearchSoftDelayed(false);
+      return;
+    }
+    setIsSearchSoftDelayed(false);
+    const id = window.setTimeout(() => setIsSearchSoftDelayed(true), SEARCH_DELAY_MS);
+    return () => window.clearTimeout(id);
+  }, [searchMutation.isPending]);
+
+  useEffect(() => {
+    if (!generateMutation.isPending) {
+      setIsGenerateSoftDelayed(false);
+      return;
+    }
+    setIsGenerateSoftDelayed(false);
+    const id = window.setTimeout(() => setIsGenerateSoftDelayed(true), GENERATE_DELAY_MS);
+    return () => window.clearTimeout(id);
+  }, [generateMutation.isPending]);
+
+  const isSearchDelayed = isSearchSoftDelayed || Boolean(searchMutation.error);
+  const isGenerateDelayed = isGenerateSoftDelayed || Boolean(generateMutation.error);
+
   // Create from template mutation (for DB templates)
   const createMutation = useMutation({
     mutationFn: (params: { templateId: string; skills: Record<string, boolean> }) =>
@@ -348,6 +382,22 @@ export function useWizard() {
     setState((prev) => ({ ...prev, goalInput: '' }));
   }, [cancelGoal]);
 
+  /** Retry template search only (leaves in-flight AI generation untouched). */
+  const retrySearch = useCallback(() => {
+    const goal = state.goalInput.trim();
+    if (!goal) return;
+    searchMutation.reset();
+    searchMutation.mutate(goal);
+  }, [state.goalInput, searchMutation]);
+
+  /** Retry AI generation only (leaves in-flight template search untouched). */
+  const retryGenerate = useCallback(() => {
+    const goal = state.goalInput.trim();
+    if (!goal) return;
+    generateMutation.reset();
+    generateMutation.mutate(goal);
+  }, [state.goalInput, generateMutation]);
+
   /** Create a blank mandala (skip the wizard flow) and navigate to its editor */
   const createBlank = useCallback(() => {
     createBlankMutation.mutate();
@@ -461,9 +511,13 @@ export function useWizard() {
     searchResults: searchMutation.data ?? [],
     isSearching: searchMutation.isPending,
     searchError: searchMutation.error,
+    isSearchDelayed,
+    retrySearch,
     aiGenerated: generateMutation.data?.mandala ?? null,
     aiSource: generateMutation.data?.source ?? null,
     isGenerating: generateMutation.isPending,
     generateError: generateMutation.error,
+    isGenerateDelayed,
+    retryGenerate,
   };
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight, Search, Sparkles } from 'lucide-react';
 
 import { apiClient } from '@/shared/lib/api-client';
 import { DOMAIN_STYLES, type MandalaDomain, getDomainLabel } from '@/shared/config/domain-colors';
@@ -26,7 +26,13 @@ function renderCellText(text: string): string {
 
 // ─── Component ───
 
-export type MandalaCardVariant = 'template' | 'template-loading' | 'ai-loading' | 'ai-complete';
+export type MandalaCardVariant =
+  | 'template'
+  | 'template-loading'
+  | 'template-delayed'
+  | 'ai-loading'
+  | 'ai-complete'
+  | 'ai-delayed';
 
 export interface MandalaCardProps {
   variant: MandalaCardVariant;
@@ -39,6 +45,8 @@ export interface MandalaCardProps {
   title?: string;
   matchPct?: number;
   onClick?: () => void;
+  /** Retry handler for delayed variants. */
+  onRetry?: () => void;
 }
 
 export default function MandalaCard({
@@ -50,8 +58,17 @@ export default function MandalaCard({
   title,
   matchPct,
   onClick,
+  onRetry,
 }: MandalaCardProps) {
   const { t, i18n } = useTranslation();
+
+  // Delayed state short-circuits the rich card — rendered as its own
+  // amber stalled card so the layout stays visually stable (same slot
+  // dimensions) while the in-flight request is still retryable.
+  if (variant === 'template-delayed' || variant === 'ai-delayed') {
+    return <DelayedCard variant={variant} onRetry={onRetry} />;
+  }
+
   const isAiLoading = variant === 'ai-loading';
   const isTemplateLoading = variant === 'template-loading';
   const isLoading = isAiLoading || isTemplateLoading;
@@ -252,5 +269,81 @@ export default function MandalaCard({
         />
       )}
     </button>
+  );
+}
+
+// ─── Delayed card ───
+//
+// Amber stalled state used when a slow in-flight request crosses its
+// soft-timeout threshold. Keeps the same slot dimensions as a regular
+// card so the grid does not reflow. The underlying request is NOT
+// canceled by this state — if it resolves, the parent replaces the
+// delayed card with the real result. The retry button is an explicit
+// opt-in to re-fire the mutation.
+
+interface DelayedCardProps {
+  variant: 'template-delayed' | 'ai-delayed';
+  onRetry?: () => void;
+}
+
+function DelayedCard({ variant, onRetry }: DelayedCardProps) {
+  const { t } = useTranslation();
+  const isAi = variant === 'ai-delayed';
+
+  const title = isAi
+    ? t('wizard.goal.delayed.aiTitle', 'This is taking a while')
+    : t('wizard.goal.delayed.templateTitle', 'Template search is slower than usual');
+  const subtitle = isAi
+    ? t('wizard.goal.delayed.aiSubtitle', 'Want to try again?')
+    : t('wizard.goal.delayed.templateSubtitle', 'Want to try again?');
+  const retryLabel = t('wizard.goal.delayed.retry', 'Retry');
+
+  // Amber palette (hsl) — matches the mockup's --amber / --amber-bg
+  const AMBER = 'hsl(38, 90%, 60%)';
+  const AMBER_BG = 'hsl(38, 40%, 12%)';
+  const AMBER_BG_HOVER = 'hsl(38, 40%, 16%)';
+
+  return (
+    <div
+      className="group flex min-h-[260px] flex-col items-center justify-center rounded-[14px] px-5 py-7 text-center"
+      style={{
+        border: `1px dashed ${AMBER}`,
+        background: AMBER_BG,
+      }}
+      role="status"
+      aria-live="polite"
+    >
+      <div
+        className="mb-4 flex h-11 w-11 items-center justify-center rounded-full"
+        style={{ background: 'hsl(38, 50%, 20%)' }}
+      >
+        {isAi ? (
+          <Sparkles className="h-5 w-5" style={{ color: AMBER }} strokeWidth={2} />
+        ) : (
+          <Search className="h-5 w-5" style={{ color: AMBER }} strokeWidth={2} />
+        )}
+      </div>
+      <div className="mb-1 text-[13.5px] font-semibold leading-snug text-foreground">{title}</div>
+      <div className="mb-5 text-[12px] leading-snug text-muted-foreground">{subtitle}</div>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded-lg border bg-transparent px-4 py-1.5 text-[12px] font-semibold transition-colors"
+          style={{
+            borderColor: AMBER,
+            color: AMBER,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = AMBER_BG_HOVER;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          {retryLabel}
+        </button>
+      )}
+    </div>
   );
 }

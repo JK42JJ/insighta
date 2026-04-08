@@ -38,9 +38,13 @@ interface WizardStepGoalProps {
   goalInput: string;
   searchResults: MandalaSearchResult[];
   isSearching: boolean;
+  isSearchDelayed: boolean;
+  onRetrySearch: () => void;
   aiGenerated: GeneratedMandala | null;
   aiSource: 'lora' | 'llm-fallback' | null;
   isGenerating: boolean;
+  isGenerateDelayed: boolean;
+  onRetryGenerate: () => void;
   generateError: Error | null;
   onSetGoalInput: (goal: string) => void;
   onSubmitGoal: (goal: string) => void;
@@ -55,10 +59,12 @@ export default function WizardStepGoal({
   goalInput,
   searchResults,
   isSearching,
+  isSearchDelayed,
+  onRetrySearch,
   aiGenerated,
-  aiSource,
   isGenerating,
-  generateError,
+  isGenerateDelayed,
+  onRetryGenerate,
   onSetGoalInput,
   onSubmitGoal,
   onCancelGoal,
@@ -126,7 +132,11 @@ export default function WizardStepGoal({
   };
 
   const hasSubmitted = goalInput.length > 0;
-  const showNoResults = hasSubmitted && !isSearching && searchResults.length === 0;
+  // Empty state fires only when the search completed cleanly (not pending,
+  // not delayed, zero hits). A delayed search takes over the empty space
+  // and invites a retry instead.
+  const showNoResults =
+    hasSubmitted && !isSearching && !isSearchDelayed && searchResults.length === 0;
 
   return (
     <div className="wizard-step-enter">
@@ -190,7 +200,7 @@ export default function WizardStepGoal({
             {t('wizard.goal.similar.title', 'Similar templates')}
           </div>
 
-          {showNoResults && !isGenerating && !aiGenerated ? (
+          {showNoResults && !isGenerating && !isGenerateDelayed && !aiGenerated ? (
             <div className="rounded-xl border border-border bg-card px-4 py-8 text-center text-xs text-muted-foreground">
               {t('wizard.goal.similar.empty', 'No similar templates found.')}
             </div>
@@ -198,7 +208,8 @@ export default function WizardStepGoal({
             // Fixed 4-slot grid: 3 template slots + 1 AI slot.
             // Order is stable from the moment user submits — slots fill in as data arrives.
             <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-              {/* Slots 1-3: template results (skeleton while loading) */}
+              {/* Slots 1-3: template results, or a single delayed card
+                  in slot 0 when the search crosses its soft timeout. */}
               {[0, 1, 2].map((slotIdx) => {
                 const result = searchResults[slotIdx];
                 if (result) {
@@ -216,6 +227,19 @@ export default function WizardStepGoal({
                     />
                   );
                 }
+                if (isSearchDelayed) {
+                  // One delayed card in slot 0, slots 1-2 ghosted empty.
+                  if (slotIdx === 0) {
+                    return (
+                      <MandalaCard
+                        key="tpl-delayed"
+                        variant="template-delayed"
+                        onRetry={onRetrySearch}
+                      />
+                    );
+                  }
+                  return <div key={`tpl-empty-${slotIdx}`} aria-hidden="true" />;
+                }
                 if (isSearching) {
                   return <MandalaCard key={`tpl-skel-${slotIdx}`} variant="template-loading" />;
                 }
@@ -223,12 +247,7 @@ export default function WizardStepGoal({
               })}
 
               {/* Slot 4: AI card (always last) */}
-              {isGenerating && !aiGenerated ? (
-                <MandalaCard
-                  variant="ai-loading"
-                  centerLabel={t('wizard.goal.ai.loadingCenter', '생성중')}
-                />
-              ) : aiGenerated ? (
+              {aiGenerated ? (
                 <MandalaCard
                   variant="ai-complete"
                   domain={aiGenerated.domain}
@@ -239,28 +258,16 @@ export default function WizardStepGoal({
                   matchPct={100}
                   onClick={() => onSelectGeneratedMandala(aiGenerated)}
                 />
+              ) : isGenerateDelayed ? (
+                <MandalaCard variant="ai-delayed" onRetry={onRetryGenerate} />
+              ) : isGenerating ? (
+                <MandalaCard
+                  variant="ai-loading"
+                  centerLabel={t('wizard.goal.ai.loadingCenter', '생성중')}
+                />
               ) : (
                 <div aria-hidden="true" />
               )}
-            </div>
-          )}
-
-          {/* Error fallback (preserves earlier UX work) */}
-          {generateError && !isGenerating && !aiGenerated && (
-            <div className="mt-4 flex items-center justify-between gap-4 rounded-[14px] border border-border bg-card px-5 py-4">
-              <p className="text-[13px] text-muted-foreground">
-                {t(
-                  'wizard.goal.ai.error',
-                  'Generation is taking longer than expected. Would you like to try again?'
-                )}
-              </p>
-              <button
-                type="button"
-                onClick={() => onSubmitGoal(goalInput)}
-                className="flex-shrink-0 rounded-lg border border-border bg-transparent px-3 py-1.5 text-[12px] font-semibold text-foreground transition-colors hover:bg-foreground/[0.04]"
-              >
-                {t('wizard.goal.ai.retry', 'Retry')}
-              </button>
             </div>
           )}
         </div>

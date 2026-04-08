@@ -1266,6 +1266,13 @@
       "similar": {
         "title": "비슷한 템플릿",
         "empty": "비슷한 템플릿을 찾지 못했어요"
+      },
+      "delayed": {
+        "aiTitle": "처리가 지연되고 있어요",
+        "aiSubtitle": "다시 시도해볼까요?",
+        "templateTitle": "템플릿 검색이 오래 걸리고 있어요",
+        "templateSubtitle": "다시 시도해볼까요?",
+        "retry": "다시 시도"
       }
     },
     "preview": {
