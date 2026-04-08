@@ -73,12 +73,16 @@ export default function MandalaCard({
     sub_labels: string[];
   } | null>(null);
 
-  // Distinguish "real short labels" (avg ≤ 6 chars) from "truncated long text".
-  // Truncated long text indicates the labels haven't been properly generated.
+  // Distinguish real short labels from full sub_goal text. We check
+  // maxLen instead of avgLen because it is language-agnostic:
+  //   - Korean labels:  2-8 chars  ("시장 기초")
+  //   - English labels: 10-25 chars ("Country Selection")
+  //   - Full sub_goals: 40-100+ chars
+  // 30 sits comfortably above the longest real label and below the
+  // shortest full sub_goal, so Korean and English templates both pass.
   const validLabels = (subjectLabels ?? []).filter((l) => l && l.trim().length > 0);
-  const avgLabelLen =
-    validLabels.length > 0 ? validLabels.reduce((s, l) => s + l.length, 0) / validLabels.length : 0;
-  const hasRealLabels = validLabels.length >= 4 && avgLabelLen > 0 && avgLabelLen <= 6;
+  const maxLabelLen = validLabels.reduce((m, l) => (l.length > m ? l.length : m), 0);
+  const hasRealLabels = validLabels.length >= 4 && maxLabelLen > 0 && maxLabelLen <= 30;
   const goalForLabels = title ?? centerLabel ?? '';
   const needsLabels =
     !isLoading && !hasRealLabels && subjects.length >= 4 && goalForLabels.length > 0;
