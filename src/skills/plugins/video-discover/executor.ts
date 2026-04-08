@@ -36,11 +36,29 @@ import {
   VIDEO_DISCOVER_SEARCH_RESULTS_PER_CELL,
   VIDEO_DISCOVER_TTL_DAYS,
   VIDEO_DISCOVER_KEYWORD_POOL_SIZE,
+  VIDEO_DISCOVER_QUERIES_PER_CELL,
 } from './manifest';
+import { generateSearchQueries, LlmQueryGenError } from './sources/llm-query-generator';
 
 const log = logger.child({ module: 'video-discover' });
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
+
+/**
+ * Map mandala language → YouTube `regionCode` (ISO 3166-1 alpha-2).
+ * Used by Fix 1 (CP358) to bias YouTube search results to the user's locale
+ * instead of hardcoding KR. Languages not in this map fall back to no
+ * `regionCode` (relevanceLanguage alone).
+ */
+const LANG_TO_REGION: Record<string, string> = {
+  ko: 'KR',
+  en: 'US',
+  ja: 'JP',
+  zh: 'TW',
+  es: 'ES',
+  fr: 'FR',
+  de: 'DE',
+};
 
 // Rec Score weights (CP353 P1 — tuned after view_count fix surfaced
 // freshness over-weighting + LLM noise keyword infiltration).
@@ -97,6 +115,24 @@ interface HydratedState {
   oauthToken: string;
   subGoals: SubGoalCell[];
   keywords: KeywordRow[];
+  /**
+   * Mandala language (ISO 639-1, e.g. 'ko', 'en'). Sourced from
+   * `mandala_embeddings.language` (level=1) — same value across all 8
+   * sub_goals so we read it once. Defaults to 'ko' if missing. (Fix 1, CP358)
+   */
+  mandalaLanguage: string;
+  /**
+   * Mandala center goal (root level center text). Used by Fix 2 LLM query
+   * generator to ground the prompt. Sourced from `mandala_embeddings.center_goal`
+   * (level=1, same value across rows). Empty string if missing. (Fix 1+2, CP358)
+   */
+  centerGoal: string;
+  /**
+   * Ollama base URL for the LLM query generator. Sourced from
+   * `ctx.env.OLLAMA_URL` with the Mac Mini Tailscale IP as the default.
+   * Same convention as trend-collector. (Fix 2, CP358)
+   */
+  llmUrl: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -144,11 +180,53 @@ interface RecommendationCandidate {
   // Filled in after batch videos.list
   viewCount: number | null;
   likeCount: number | null;
+  /**
+   * Video duration in seconds, parsed from `contentDetails.duration` (ISO 8601).
+   * Fix 3 (CP358) — used to drop Shorts (<60s) post-hoc; the YouTube Search
+   * `videoDuration=medium` filter (Fix 1) is not 100% accurate.
+   */
+  durationSec: number | null;
   // Computed Rec Score components
   recScore?: number;
   videoQuality?: number;
   freshness?: number;
 }
+
+/**
+ * Fix 3 (CP358) — Title blocklist. Drops candidates whose titles contain
+ * drama / webnovel / vlog / reaction noise that pollutes education-intent
+ * queries. Tokens are matched case-insensitively as substrings; expand
+ * cautiously since false positives hurt diverse content.
+ */
+const TITLE_BLOCKLIST: readonly string[] = [
+  // Korean drama / webnovel / anime
+  '드라마',
+  '웹소설',
+  '웹툰',
+  '애니',
+  '만화',
+  // English
+  'drama',
+  'webtoon',
+  'anime',
+  'manga',
+  // Reaction / vlog / mukbang noise
+  '리액션',
+  '브이로그',
+  '먹방',
+  'vlog',
+  'mukbang',
+  'reaction',
+];
+
+/** Minimum duration in seconds (Fix 3, CP358) — anything shorter is a Short. */
+const MIN_DURATION_SEC = 60;
+/**
+ * Channel diversity cap (Fix 3, CP358). If a single channel contributes
+ * `>= GLOBAL_CHANNEL_CAP_THRESHOLD` videos to the final 24, collapse it to
+ * the highest-scored one only.
+ */
+const GLOBAL_CHANNEL_CAP_THRESHOLD = 3;
 
 export const executor: SkillExecutor = {
   manifest,
@@ -195,11 +273,22 @@ export const executor: SkillExecutor = {
       };
     }
 
-    // 3. Load 8 sub_goal embeddings for this mandala (level=1, 4096d)
+    // 3. Load 8 sub_goal embeddings for this mandala (level=1, 4096d).
+    // Fix 1 (CP358): also pull `language` + `center_goal` so the executor can
+    // pass relevanceLanguage/regionCode to YouTube Search and so the LLM
+    // query generator (Fix 2) has the center context.
     const subGoalRows = await db.$queryRaw<
-      { sub_goal_index: number; sub_goal: string | null; text: string | null; embedding: string }[]
+      {
+        sub_goal_index: number;
+        sub_goal: string | null;
+        text: string | null;
+        language: string | null;
+        center_goal: string | null;
+        embedding: string;
+      }[]
     >(
-      Prisma.sql`SELECT sub_goal_index, sub_goal, text, embedding::text AS embedding
+      Prisma.sql`SELECT sub_goal_index, sub_goal, text, language, center_goal,
+                        embedding::text AS embedding
                  FROM mandala_embeddings
                  WHERE mandala_id = ${mandalaId} AND level = 1 AND embedding IS NOT NULL
                  ORDER BY sub_goal_index NULLS LAST`
@@ -258,12 +347,26 @@ export const executor: SkillExecutor = {
       })
       .filter((k): k is KeywordRow => k !== null);
 
+    // Fix 1 (CP358): mandalaLanguage + centerGoal are stored per row but are
+    // identical across the 8 sub_goals (set once in ensure-mandala-embeddings).
+    // Read from the first row, default to safe values when missing.
+    const firstRow = subGoalRows[0];
+    const mandalaLanguage = (firstRow?.language ?? 'ko').toLowerCase();
+    const centerGoal = firstRow?.center_goal ?? '';
+
+    // Fix 2 (CP358): pull Ollama URL from env, default to Mac Mini Tailscale.
+    // Same convention as trend-collector executor.
+    const llmUrl = ctx.env?.['OLLAMA_URL'] ?? 'http://100.91.173.17:11434';
+
     const hydrated: HydratedState = {
       mandalaId,
       userId: ctx.userId,
       oauthToken: oauth.youtube_access_token,
       subGoals,
       keywords,
+      mandalaLanguage,
+      centerGoal,
+      llmUrl,
     };
     return { ok: true, hydrated: hydrated as unknown as Record<string, unknown> };
   },
@@ -300,44 +403,112 @@ export const executor: SkillExecutor = {
 
     log.info(`Selected ${cellSelections.length} (cell × keyword) pairs to search`);
 
-    // ── Step 2: YouTube search.list per cell × keyword (user OAuth) ────
+    // ── Step 2: LLM-driven multi-query YouTube search per cell ─────────
+    // Fix 2 (CP358): replace the previous `${sub_goal} ${top_keyword}` single-
+    // query call with VIDEO_DISCOVER_QUERIES_PER_CELL natural-language queries
+    // generated by Mac Mini Ollama (llama3.1). On any LLM failure for a cell,
+    // fall back to the legacy concat path so the skill never blocks on a
+    // hiccup. Quota: 8 cells × 3 queries × 100 = 2,400 units (24% of daily 10k).
     const allCandidates: RecommendationCandidate[] = [];
     let searchCalls = 0;
     let searchFailures = 0;
-    for (const sel of cellSelections) {
+    let llmQueryGenSuccess = 0;
+    let llmQueryGenFailures = 0;
+    const regionCode = LANG_TO_REGION[state.mandalaLanguage];
+    // Per-cell dedup so the same video doesn't enter the candidate pool twice
+    // when two LLM queries surface it.
+    const seenPerCell = new Set<string>();
+
+    function pushCandidate(
+      sel: { cell: SubGoalCell; keyword: KeywordRow; perMandalaRelevance: number },
+      item: YouTubeSearchItem
+    ): void {
+      const videoId = item.id?.videoId;
+      if (!videoId) return;
+      const key = `${sel.cell.cellIndex}:${videoId}`;
+      if (seenPerCell.has(key)) return;
+      seenPerCell.add(key);
+      allCandidates.push({
+        cellIndex: sel.cell.cellIndex,
+        keyword: sel.keyword.keyword,
+        iksTotal: sel.keyword.iksTotal,
+        perMandalaRelevance: sel.perMandalaRelevance,
+        videoId,
+        title: item.snippet?.title ?? '(untitled)',
+        channel: item.snippet?.channelTitle ?? '',
+        channelId: item.snippet?.channelId ?? '',
+        publishedAt: item.snippet?.publishedAt ?? new Date().toISOString(),
+        thumbnail: item.snippet?.thumbnails?.high?.url ?? '',
+        viewCount: null,
+        likeCount: null,
+        durationSec: null,
+      });
+    }
+
+    async function runSearch(
+      sel: { cell: SubGoalCell; keyword: KeywordRow; perMandalaRelevance: number },
+      query: string
+    ): Promise<void> {
       try {
         const items = await youtubeSearch({
-          query: `${sel.cell.text} ${sel.keyword.keyword}`,
+          query,
           oauthToken: state.oauthToken,
           maxResults: VIDEO_DISCOVER_SEARCH_RESULTS_PER_CELL,
           fetchFn,
+          relevanceLanguage: state.mandalaLanguage,
+          regionCode,
         });
         searchCalls += 1;
-        for (const item of items) {
-          const videoId = item.id?.videoId;
-          if (!videoId) continue;
-          allCandidates.push({
-            cellIndex: sel.cell.cellIndex,
-            keyword: sel.keyword.keyword,
-            iksTotal: sel.keyword.iksTotal,
-            perMandalaRelevance: sel.perMandalaRelevance,
-            videoId,
-            title: item.snippet?.title ?? '(untitled)',
-            channel: item.snippet?.channelTitle ?? '',
-            channelId: item.snippet?.channelId ?? '',
-            publishedAt: item.snippet?.publishedAt ?? new Date().toISOString(),
-            thumbnail: item.snippet?.thumbnails?.high?.url ?? '',
-            viewCount: null,
-            likeCount: null,
-          });
-        }
+        for (const item of items) pushCandidate(sel, item);
       } catch (err) {
         searchFailures += 1;
         log.warn(
-          `YouTube search failed for cell ${sel.cell.cellIndex} kw="${sel.keyword.keyword}": ${err instanceof Error ? err.message : String(err)}`
+          `YouTube search failed for cell ${sel.cell.cellIndex} q="${query}": ${err instanceof Error ? err.message : String(err)}`
         );
       }
     }
+
+    for (const sel of cellSelections) {
+      let queries: string[] | null = null;
+      try {
+        queries = await generateSearchQueries({
+          subGoal: sel.cell.text,
+          centerGoal: state.centerGoal,
+          language: state.mandalaLanguage,
+          baseUrl: state.llmUrl,
+          fetchImpl: fetchFn,
+        });
+        // Hard cap defensively even though the parser already limits.
+        if (queries.length > VIDEO_DISCOVER_QUERIES_PER_CELL) {
+          queries = queries.slice(0, VIDEO_DISCOVER_QUERIES_PER_CELL);
+        }
+        llmQueryGenSuccess += 1;
+      } catch (err) {
+        llmQueryGenFailures += 1;
+        if (err instanceof LlmQueryGenError) {
+          log.warn(
+            `LLM query gen failed for cell ${sel.cell.cellIndex} (falling back to concat): ${err.message}`
+          );
+        } else {
+          log.warn(
+            `LLM query gen unexpected error for cell ${sel.cell.cellIndex}: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+        queries = null;
+      }
+
+      if (queries && queries.length > 0) {
+        for (const q of queries) {
+          await runSearch(sel, q);
+        }
+      } else {
+        // Fallback: legacy single concat query
+        await runSearch(sel, `${sel.cell.text} ${sel.keyword.keyword}`);
+      }
+    }
+    log.info(
+      `LLM query gen: success=${llmQueryGenSuccess}, failures=${llmQueryGenFailures}, search_calls=${searchCalls}`
+    );
 
     if (allCandidates.length === 0) {
       return {
@@ -409,6 +580,10 @@ export const executor: SkillExecutor = {
             cand.likeCount = Number.isNaN(lc) ? null : lc;
           }
         }
+        // Fix 3 (CP358): parse contentDetails.duration into seconds for the
+        // Shorts filter applied after Step 3.5. videos.list already requests
+        // contentDetails (line ~613) so this is free quota-wise.
+        cand.durationSec = parseIsoDuration(stat?.contentDetails?.duration);
       }
       log.info(
         `videos.list mapping: candidates=${allCandidates.length}, mapped=${mappedCount}, view_count populated=${viewCountPopulated}`
@@ -419,22 +594,42 @@ export const executor: SkillExecutor = {
       );
     }
 
+    // ── Step 3.5: Fix 3 (CP358) — Shorts + title blocklist filters ────
+    // Drop videos shorter than MIN_DURATION_SEC (Shorts) or whose titles
+    // contain entries from TITLE_BLOCKLIST (drama / vlog / reaction noise).
+    // The YouTube Search `videoDuration=medium` param (Fix 1) already filters
+    // most Shorts at the API boundary, but it's not 100% accurate so this is
+    // a defense-in-depth pass. Candidates with `durationSec === null` are
+    // kept (no signal == benefit of doubt).
+    const beforeFilter = allCandidates.length;
+    const filteredAllCandidates = allCandidates.filter((c) => {
+      if (c.durationSec !== null && c.durationSec < MIN_DURATION_SEC) return false;
+      if (titleContainsBlocked(c.title)) return false;
+      return true;
+    });
+    const droppedShortsBlocklist = beforeFilter - filteredAllCandidates.length;
+    if (droppedShortsBlocklist > 0) {
+      log.info(
+        `Fix 3 filter: dropped ${droppedShortsBlocklist} candidates (Shorts + blocklist), ${filteredAllCandidates.length} remain`
+      );
+    }
+
     // ── Step 4: Compute Rec Score + pick top RECS_PER_CELL per cell ────
     const now = Date.now();
-    for (const cand of allCandidates) {
+    for (const cand of filteredAllCandidates) {
       cand.videoQuality = computeVideoQuality(cand);
       cand.freshness = computeFreshness(cand.publishedAt, now);
       cand.recScore = computeRecScore(cand);
     }
 
     const byCell = new Map<number, RecommendationCandidate[]>();
-    for (const cand of allCandidates) {
+    for (const cand of filteredAllCandidates) {
       const arr = byCell.get(cand.cellIndex);
       if (arr) arr.push(cand);
       else byCell.set(cand.cellIndex, [cand]);
     }
 
-    const finalRecommendations: RecommendationCandidate[] = [];
+    let finalRecommendations: RecommendationCandidate[] = [];
     for (const [, cands] of byCell) {
       cands.sort((a, b) => (b.recScore ?? 0) - (a.recScore ?? 0));
       // Apply diversity: drop duplicate channels within the same cell
@@ -447,6 +642,44 @@ export const executor: SkillExecutor = {
         cellTop.push(c);
       }
       finalRecommendations.push(...cellTop);
+    }
+
+    // ── Step 4.5: Fix 3 (CP358) — Global channel diversity cap ────────
+    // Per-cell dedup runs above, but a noisy channel can still surface in
+    // 3+ different cells. If any channel contributes >= GLOBAL_CHANNEL_CAP_THRESHOLD
+    // recommendations, collapse it to its highest-scored video only. We
+    // accept the resulting drop in total recommendation count (quality > quantity).
+    const channelCounts = new Map<string, number>();
+    for (const r of finalRecommendations) {
+      if (!r.channelId) continue;
+      channelCounts.set(r.channelId, (channelCounts.get(r.channelId) ?? 0) + 1);
+    }
+    const overusedChannels = new Set<string>();
+    for (const [ch, count] of channelCounts) {
+      if (count >= GLOBAL_CHANNEL_CAP_THRESHOLD) overusedChannels.add(ch);
+    }
+    let droppedByChannelCap = 0;
+    if (overusedChannels.size > 0) {
+      // Sort globally so the highest-scored video for each overused channel wins
+      const sorted = [...finalRecommendations].sort(
+        (a, b) => (b.recScore ?? 0) - (a.recScore ?? 0)
+      );
+      const keptChannels = new Set<string>();
+      const kept: RecommendationCandidate[] = [];
+      for (const r of sorted) {
+        if (overusedChannels.has(r.channelId)) {
+          if (keptChannels.has(r.channelId)) {
+            droppedByChannelCap += 1;
+            continue;
+          }
+          keptChannels.add(r.channelId);
+        }
+        kept.push(r);
+      }
+      finalRecommendations = kept;
+      log.info(
+        `Fix 3 channel cap: ${overusedChannels.size} overused channel(s), dropped ${droppedByChannelCap} duplicates`
+      );
     }
 
     // ── Step 5: Upsert to recommendation_cache ─────────────────────────
@@ -535,6 +768,8 @@ export const executor: SkillExecutor = {
         cells: state.subGoals.length,
         keyword_pool_size: state.keywords.length,
         cell_keyword_pairs: cellSelections.length,
+        llm_query_gen_success: llmQueryGenSuccess,
+        llm_query_gen_failures: llmQueryGenFailures,
         search_calls: searchCalls,
         search_failures: searchFailures,
         candidates_total: allCandidates.length,
@@ -566,6 +801,17 @@ interface YouTubeSearchOpts {
   oauthToken: string;
   maxResults: number;
   fetchFn: typeof fetch;
+  /**
+   * ISO 639-1 language code (e.g. 'ko', 'en'). Passed to YouTube as
+   * `relevanceLanguage`. Fix 1 (CP358) — was hardcoded 'ko' before.
+   */
+  relevanceLanguage: string;
+  /**
+   * Optional ISO 3166-1 alpha-2 region code (e.g. 'KR', 'US'). Passed to
+   * YouTube as `regionCode`. Skipped when caller cannot map the language
+   * to a region. Fix 1 (CP358) — was hardcoded 'KR' before.
+   */
+  regionCode?: string;
 }
 
 async function youtubeSearch(opts: YouTubeSearchOpts): Promise<YouTubeSearchItem[]> {
@@ -574,8 +820,14 @@ async function youtubeSearch(opts: YouTubeSearchOpts): Promise<YouTubeSearchItem
   url.searchParams.set('type', 'video');
   url.searchParams.set('q', opts.query);
   url.searchParams.set('maxResults', String(opts.maxResults));
-  url.searchParams.set('relevanceLanguage', 'ko');
-  url.searchParams.set('regionCode', 'KR');
+  url.searchParams.set('relevanceLanguage', opts.relevanceLanguage);
+  if (opts.regionCode) {
+    url.searchParams.set('regionCode', opts.regionCode);
+  }
+  // Fix 1 (CP358): drop Shorts (<60s) and the long-form bucket (>20min) at
+  // the search-API level. The API filter is not 100% accurate, so Fix 3 also
+  // post-filters by parsed duration after videos.list returns.
+  url.searchParams.set('videoDuration', 'medium');
   url.searchParams.set('safeSearch', 'moderate');
 
   const res = await opts.fetchFn(url.toString(), {
@@ -720,4 +972,41 @@ function parseVectorLiteral(literal: string): number[] {
     out[i] = parseFloat(parts[i] ?? '0');
   }
   return out;
+}
+
+// ============================================================================
+// Fix 3 (CP358) — Filter helpers
+// ============================================================================
+
+/**
+ * Parse an ISO 8601 duration string (`PT1H2M3S`) into total seconds.
+ * Returns `null` for missing/unparseable input. Implementation duplicated
+ * from YouTubeAdapter.parseDuration to comply with the plugin cross-import
+ * rule (CLAUDE.md §plugin cross-import). Exported for unit tests.
+ */
+export function parseIsoDuration(iso?: string | null): number | null {
+  if (!iso) return null;
+  const m = iso.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+  if (!m) return null;
+  const h = parseInt(m[1] ?? '0', 10);
+  const mi = parseInt(m[2] ?? '0', 10);
+  const s = parseInt(m[3] ?? '0', 10);
+  if (Number.isNaN(h) || Number.isNaN(mi) || Number.isNaN(s)) return null;
+  // Reject the empty `PT` case (no hours/minutes/seconds groups matched)
+  if (h === 0 && mi === 0 && s === 0 && iso === 'PT') return null;
+  return h * 3600 + mi * 60 + s;
+}
+
+/**
+ * Returns `true` if the title contains any TITLE_BLOCKLIST entry as a
+ * case-insensitive substring. Empty/null titles return `false`.
+ * Exported for unit tests.
+ */
+export function titleContainsBlocked(title: string): boolean {
+  if (!title) return false;
+  const lower = title.toLowerCase();
+  for (const t of TITLE_BLOCKLIST) {
+    if (lower.includes(t.toLowerCase())) return true;
+  }
+  return false;
 }

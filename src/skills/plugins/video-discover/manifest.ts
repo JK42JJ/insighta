@@ -43,6 +43,14 @@ export const VIDEO_DISCOVER_SEARCH_RESULTS_PER_CELL = 10;
 export const VIDEO_DISCOVER_TTL_DAYS = 7;
 /** How many top keyword_scores rows to load into memory for cosine matching. */
 export const VIDEO_DISCOVER_KEYWORD_POOL_SIZE = 200;
+/**
+ * Number of LLM-generated search queries per cell. Fix 2 (CP358) — replaces
+ * the previous single sub_goal+keyword string. Quota math: 8 cells × 3 queries
+ * × 100 units = 2,400 units per execute() = 24% of the user's daily 10k.
+ * 3 is the safe upper bound; bumping to 5 would push a 4-mandala/day power
+ * user over the daily limit.
+ */
+export const VIDEO_DISCOVER_QUERIES_PER_CELL = 3;
 
 export const manifest: SkillManifest = defineManifest({
   id: 'video-discover',
