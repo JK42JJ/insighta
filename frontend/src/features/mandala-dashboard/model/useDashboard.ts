@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { apiClient } from '@/shared/lib/api-client';
-import type {
-  DashboardResponse,
-  DashboardCell,
-  DashboardStats,
-  SkillType,
+import {
+  SKILL_TYPES,
+  type DashboardResponse,
+  type DashboardCell,
+  type DashboardStats,
+  type SkillType,
 } from '@/shared/types/mandala-ux';
 
 // ─── API helper (same pattern as mandala-editor/useEditor.ts) ───
@@ -54,12 +55,16 @@ interface DashboardApiResponse {
 function transformToDashboard(data: DashboardApiResponse): DashboardResponse {
   const { mandala, cells, skills: apiSkills, stats: apiStats } = data;
 
-  const skills: Record<SkillType, boolean> = {
-    newsletter: apiSkills?.newsletter ?? false,
-    alerts: apiSkills?.alerts ?? false,
-    bias_filter: apiSkills?.bias_filter ?? false,
-    report: apiSkills?.report ?? false,
-  };
+  // Iterate over SKILL_TYPES (SSOT) so any new skill type added there
+  // automatically flows through. Hardcoding the keys was the source of
+  // a video_discover-shaped hole that silently rendered as OFF.
+  const skills = SKILL_TYPES.reduce<Record<SkillType, boolean>>(
+    (acc, key) => {
+      acc[key] = apiSkills?.[key] ?? false;
+      return acc;
+    },
+    {} as Record<SkillType, boolean>
+  );
 
   const stats: DashboardStats = {
     filledCells: apiStats.filledCells,
