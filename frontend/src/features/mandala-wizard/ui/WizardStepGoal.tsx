@@ -42,12 +42,21 @@ interface WizardStepGoalProps {
    *  Used to gate the "no templates found" empty state to avoid a 1-frame
    *  flicker between reset() and mutate() when the user re-submits. */
   searchSucceeded: boolean;
-  isSearchDelayed: boolean;
+  /** CP361 Issue #375 — search has crossed the soft-slow threshold but is
+   *  still in flight (no error). Caller should show inline hint, NOT amber. */
+  isSearchSoftSlow: boolean;
+  /** CP361 Issue #375 — search mutation has actually errored. Show amber
+   *  DelayedCard with Retry button. */
+  isSearchFailed: boolean;
   onRetrySearch: () => void;
   aiGenerated: GeneratedMandala | null;
   aiSource: 'lora' | 'llm-fallback' | null;
   isGenerating: boolean;
-  isGenerateDelayed: boolean;
+  /** CP361 Issue #375 — AI generation has crossed the soft-slow threshold
+   *  but is still in flight. Caller should show inline hint, NOT amber. */
+  isGenerateSoftSlow: boolean;
+  /** CP361 Issue #375 — AI generation mutation has actually errored. */
+  isGenerateFailed: boolean;
   onRetryGenerate: () => void;
   generateError: Error | null;
   onSetGoalInput: (goal: string) => void;
@@ -64,11 +73,13 @@ export default function WizardStepGoal({
   searchResults,
   isSearching,
   searchSucceeded,
-  isSearchDelayed,
+  isSearchSoftSlow,
+  isSearchFailed,
   onRetrySearch,
   aiGenerated,
   isGenerating,
-  isGenerateDelayed,
+  isGenerateSoftSlow,
+  isGenerateFailed,
   onRetryGenerate,
   onSetGoalInput,
   onSubmitGoal,
@@ -141,8 +152,53 @@ export default function WizardStepGoal({
   // with zero hits. CP358: gating on `searchSucceeded` (mutation.isSuccess)
   // instead of `!isSearching` removes the 1-frame race between reset() and
   // mutate() that briefly rendered a fake "no results" card.
+  // CP361 Issue #375: split isSearchDelayed → isSearchSoftSlow + isSearchFailed.
+  // Don't fire empty state during soft-slow either (request still in flight).
   const showNoResults =
-    hasSubmitted && searchSucceeded && !isSearchDelayed && searchResults.length === 0;
+    hasSubmitted &&
+    searchSucceeded &&
+    !isSearchSoftSlow &&
+    !isSearchFailed &&
+    searchResults.length === 0;
+
+  // ─── CP361 Issue #375 — phased AI loading label (Bug B) ───
+  //
+  // AI generation (LoRA + LLM race) runs 30-45s normally. The user used to
+  // see a single "생성중" label the whole time and wonder "why is this stuck?".
+  // Client-side timer cycles a progress label through 3 phases based on
+  // elapsed time — NO backend streaming required. Purpose is expectation
+  // management, not real progress reporting.
+  //
+  // Thresholds are hand-tuned against observed prod timings:
+  //   0-10s  — "목표 분석 중..."        (embedding + keyword selection)
+  //   10-30s — "세부목표 8개 생성 중..." (LoRA pass or LLM draft)
+  //   30-60s — "만다라 완성 중..."      (LLM refinement / validation)
+  //   60s+   — soft-slow state kicks in (separate hint)
+  const [aiElapsedMs, setAiElapsedMs] = useState(0);
+  useEffect(() => {
+    if (!isGenerating) {
+      setAiElapsedMs(0);
+      return;
+    }
+    const start = Date.now();
+    const id = window.setInterval(() => setAiElapsedMs(Date.now() - start), 1000);
+    return () => window.clearInterval(id);
+  }, [isGenerating]);
+
+  const aiPhaseLabel =
+    aiElapsedMs < 10_000
+      ? t('wizard.goal.ai.phase1', '목표 분석 중...')
+      : aiElapsedMs < 30_000
+        ? t('wizard.goal.ai.phase2', '세부목표 8개 생성 중...')
+        : t('wizard.goal.ai.phase3', '만다라 완성 중...');
+
+  // Soft-slow inline hint text (shown below skeleton, NEVER amber).
+  const searchSoftSlowHint = isSearchSoftSlow
+    ? t('wizard.goal.softSlow.search', '평소보다 조금 걸리고 있어요...')
+    : undefined;
+  const generateSoftSlowHint = isGenerateSoftSlow
+    ? t('wizard.goal.softSlow.generate', '조금만 더 기다려 주세요...')
+    : undefined;
 
   return (
     <div className="wizard-step-enter">
@@ -206,7 +262,11 @@ export default function WizardStepGoal({
             {t('wizard.goal.similar.title', 'Similar templates')}
           </div>
 
-          {showNoResults && !isGenerating && !isGenerateDelayed && !aiGenerated ? (
+          {showNoResults &&
+          !isGenerating &&
+          !isGenerateSoftSlow &&
+          !isGenerateFailed &&
+          !aiGenerated ? (
             <div className="rounded-xl border border-border bg-card px-4 py-8 text-center text-xs text-muted-foreground">
               {t('wizard.goal.similar.empty', 'No similar templates found.')}
             </div>
@@ -214,8 +274,12 @@ export default function WizardStepGoal({
             // Fixed 4-slot grid: 3 template slots + 1 AI slot.
             // Order is stable from the moment user submits — slots fill in as data arrives.
             <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-              {/* Slots 1-3: template results, or a single delayed card
-                  in slot 0 when the search crosses its soft timeout. */}
+              {/* Slots 1-3: template results.
+                  CP361 Issue #375 — 3-way state branching:
+                    1. Real error  (isSearchFailed)   → amber DelayedCard + Retry
+                    2. Soft-slow   (isSearchSoftSlow) → skeleton + inline hint
+                    3. Loading     (isSearching)      → plain skeleton
+                  Failed takes priority over soft-slow. */}
               {[0, 1, 2].map((slotIdx) => {
                 const result = searchResults[slotIdx];
                 if (result) {
@@ -233,8 +297,8 @@ export default function WizardStepGoal({
                     />
                   );
                 }
-                if (isSearchDelayed) {
-                  // One delayed card in slot 0, slots 1-2 ghosted empty.
+                if (isSearchFailed) {
+                  // Real error — amber card with Retry in slot 0 only
                   if (slotIdx === 0) {
                     return (
                       <MandalaCard
@@ -247,12 +311,20 @@ export default function WizardStepGoal({
                   return <div key={`tpl-empty-${slotIdx}`} aria-hidden="true" />;
                 }
                 if (isSearching) {
-                  return <MandalaCard key={`tpl-skel-${slotIdx}`} variant="template-loading" />;
+                  // Soft-slow shows inline hint, otherwise plain skeleton.
+                  // Hint rendered ONLY on slot 0 so it doesn't repeat 3x.
+                  return (
+                    <MandalaCard
+                      key={`tpl-skel-${slotIdx}`}
+                      variant="template-loading"
+                      hint={slotIdx === 0 ? searchSoftSlowHint : undefined}
+                    />
+                  );
                 }
                 return <div key={`tpl-empty-${slotIdx}`} aria-hidden="true" />;
               })}
 
-              {/* Slot 4: AI card (always last) */}
+              {/* Slot 4: AI card — same 3-way split + phased loading label */}
               {aiGenerated ? (
                 <MandalaCard
                   variant="ai-complete"
@@ -264,12 +336,13 @@ export default function WizardStepGoal({
                   matchPct={100}
                   onClick={() => onSelectGeneratedMandala(aiGenerated)}
                 />
-              ) : isGenerateDelayed ? (
+              ) : isGenerateFailed ? (
                 <MandalaCard variant="ai-delayed" onRetry={onRetryGenerate} />
               ) : isGenerating ? (
                 <MandalaCard
                   variant="ai-loading"
-                  centerLabel={t('wizard.goal.ai.loadingCenter', '생성중')}
+                  centerLabel={aiPhaseLabel}
+                  hint={generateSoftSlowHint}
                 />
               ) : (
                 <div aria-hidden="true" />

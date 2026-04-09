@@ -243,39 +243,67 @@ export function useWizard() {
       }),
   });
 
-  // ─── Delay detection ───
-  // Soft timeouts that flip the card to its "delayed" state without
+  // ─── Delay detection — CP361 Issue #375 ───
+  //
+  // Soft timeouts that signal "this is taking longer than usual" without
   // canceling the in-flight request. The request may still complete
-  // successfully after the flag fires; in that case the delayed card
-  // is replaced by the result. Hard errors set the flag immediately.
-  const SEARCH_DELAY_MS = 5000;
-  const GENERATE_DELAY_MS = 45000;
+  // successfully after the flag fires — in that case the caller just
+  // replaces the soft-slow hint with the real result. Hard errors set
+  // the failed flag immediately.
+  //
+  // The soft-slow and failed states are DELIBERATELY SEPARATE:
+  //
+  //   - soft-slow → keep skeleton + neutral-colored hint text
+  //                 ("평소보다 조금 걸리고 있어요"). NO retry button.
+  //                 The user should wait; the request is still alive.
+  //   - failed    → amber DelayedCard with Retry button. The request
+  //                 actually threw (HTTP error, abort, hard timeout).
+  //
+  // Combining these into one flag (as the pre-CP361 code did) caused
+  // a "success flash" UX bug: a short transient amber warning just
+  // before the real result arrived, which users reported as
+  // "에러났네? → 어 됐네?" confusion on the jamie24kim account.
+  //
+  // Threshold tuning from observed prod latencies:
+  //
+  //   - SEARCH_DELAY_MS 8000 — template search calls Mac Mini Ollama
+  //       qwen3-embedding:8b (2-10s depending on warm state) then
+  //       pgvector cosine similarity (<0.5s). The old 5000 value cut
+  //       the warm→cold transition too aggressively.
+  //
+  //   - GENERATE_DELAY_MS 60000 — LoRA + LLM race averages 30-45s
+  //       under normal conditions. Old 45000 raced against typical
+  //       completion times. 60000 gives headroom to avoid the flash.
+  //       Phased progress labels (see WizardStepGoal) keep the user
+  //       oriented during the long wait.
+  const SEARCH_DELAY_MS = 8000;
+  const GENERATE_DELAY_MS = 60000;
 
-  const [isSearchSoftDelayed, setIsSearchSoftDelayed] = useState(false);
-  const [isGenerateSoftDelayed, setIsGenerateSoftDelayed] = useState(false);
+  const [isSearchSoftSlow, setIsSearchSoftSlow] = useState(false);
+  const [isGenerateSoftSlow, setIsGenerateSoftSlow] = useState(false);
 
   useEffect(() => {
     if (!searchMutation.isPending) {
-      setIsSearchSoftDelayed(false);
+      setIsSearchSoftSlow(false);
       return;
     }
-    setIsSearchSoftDelayed(false);
-    const id = window.setTimeout(() => setIsSearchSoftDelayed(true), SEARCH_DELAY_MS);
+    setIsSearchSoftSlow(false);
+    const id = window.setTimeout(() => setIsSearchSoftSlow(true), SEARCH_DELAY_MS);
     return () => window.clearTimeout(id);
   }, [searchMutation.isPending]);
 
   useEffect(() => {
     if (!generateMutation.isPending) {
-      setIsGenerateSoftDelayed(false);
+      setIsGenerateSoftSlow(false);
       return;
     }
-    setIsGenerateSoftDelayed(false);
-    const id = window.setTimeout(() => setIsGenerateSoftDelayed(true), GENERATE_DELAY_MS);
+    setIsGenerateSoftSlow(false);
+    const id = window.setTimeout(() => setIsGenerateSoftSlow(true), GENERATE_DELAY_MS);
     return () => window.clearTimeout(id);
   }, [generateMutation.isPending]);
 
-  const isSearchDelayed = isSearchSoftDelayed || Boolean(searchMutation.error);
-  const isGenerateDelayed = isGenerateSoftDelayed || Boolean(generateMutation.error);
+  const isSearchFailed = Boolean(searchMutation.error);
+  const isGenerateFailed = Boolean(generateMutation.error);
 
   // Post-creation routing: select the new mandala in the global store BEFORE
   // navigating, so IndexPage's effective-mandala resolution lands on it
@@ -553,13 +581,16 @@ export function useWizard() {
     // isSuccess is only true when data has actually arrived from the server.
     searchSucceeded: searchMutation.isSuccess,
     searchError: searchMutation.error,
-    isSearchDelayed,
+    // CP361 Issue #375 — split soft-slow vs failed states
+    isSearchSoftSlow,
+    isSearchFailed,
     retrySearch,
     aiGenerated: generateMutation.data?.mandala ?? null,
     aiSource: generateMutation.data?.source ?? null,
     isGenerating: generateMutation.isPending,
     generateError: generateMutation.error,
-    isGenerateDelayed,
+    isGenerateSoftSlow,
+    isGenerateFailed,
     retryGenerate,
   };
 }
