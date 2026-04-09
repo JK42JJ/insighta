@@ -10,6 +10,7 @@ import { OfflineBanner, SwUpdatePrompt } from '@/widgets/offline-banner';
 import { ErrorFallback } from '@/shared/ui/ErrorFallback';
 import { AppShell } from '@/widgets/app-shell';
 import { AppRouter } from './router';
+import { SideEditorHost, SideEditorRouteAdapter } from '@/features/side-note-editor';
 import '@/shared/i18n/config';
 import './styles/index.css';
 
@@ -31,6 +32,9 @@ function App() {
               </a>
               <OfflineBanner />
               <AppShell>{routerElement}</AppShell>
+              {/* Notion-style side editor — global overlay driven by URL + Zustand store */}
+              <SideEditorRouteAdapter />
+              <SideEditorHost />
               <Toaster />
               <SwUpdatePrompt />
             </AuthProvider>

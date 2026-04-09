@@ -120,13 +120,19 @@ function AuthenticatedApp() {
     }
   }, [storeSelectedMandalaId]);
 
-  // Initialize default mandala
+  // Initialize default mandala — only when NEITHER local state NOR the
+  // global store has a selection. Bug #2 fix (CP361): previously this
+  // only checked `!selectedMandalaId` (local). After wizard navigation,
+  // the store has the new mandala ID but local state is still null on
+  // first render. Both effects fired in the same cycle and the default-
+  // init OVERWROTE the store-synced selection with `is_default` mandala.
+  // Adding `!storeSelectedMandalaId` prevents this race.
   useEffect(() => {
-    if (!selectedMandalaId && mandalaListData?.mandalas) {
+    if (!selectedMandalaId && !storeSelectedMandalaId && mandalaListData?.mandalas) {
       const defaultMandala = mandalaListData.mandalas.find((m) => m.isDefault);
       if (defaultMandala) setSelectedMandalaId(defaultMandala.id);
     }
-  }, [mandalaListData, selectedMandalaId]);
+  }, [mandalaListData, selectedMandalaId, storeSelectedMandalaId]);
 
   // Effective mandalaId: resolves immediately from cached data even before useEffect fires
   const effectiveMandalaId = useMemo(() => {

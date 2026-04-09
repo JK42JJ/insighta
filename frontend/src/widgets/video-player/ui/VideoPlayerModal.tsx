@@ -153,6 +153,7 @@ export function VideoPlayerModal({
                 videoSummary={card.videoSummary}
                 onEnrichStart={onEnrichStart}
                 onEnrichEnd={onEnrichEnd}
+                mandalaId={card.mandalaId}
               />
             </ResizablePanel>
           </ResizablePanelGroup>

@@ -16,6 +16,10 @@ model UserVideoState {
   videoId                String         @map("video_id") @db.Uuid
   is_in_ideation         Boolean        @default(true)
   user_note              String?
+  /// Tiptap JSON for the Notion-style side editor (Phase 1-4 MVP).
+  /// Source of truth for rich notes. `user_note` is kept as a dual-written plain-text extract
+  /// so that the existing eviction rule (`user_note IS NULL`) continues to work unchanged.
+  user_note_json         Json?          @map("user_note_json") @db.JsonB
   watch_position_seconds Int?           @default(0)
   is_watched             Boolean?       @default(false)
   cell_index             Int?           @default(-1)

@@ -80,16 +80,29 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       clientOwnerRef.current = newUserId;
     }
 
-    // 1. Initial session resolution. If the persisted session belongs
-    //    to a specific user, claim the current (empty) client for that
-    //    user. No client swap needed — the fresh client from useState
-    //    is already empty.
+    // 1. Initial session resolution + bfcache mismatch detection.
+    //    On a fresh mount the client from useState is empty. But on
+    //    bfcache restoration (Safari / Chrome back-navigation from
+    //    Google OAuth redirect), the entire React tree — including the
+    //    QueryClient and its cache — survives from the PREVIOUS page
+    //    visit. If the authenticated user changed during the redirect,
+    //    the restored cache belongs to the wrong user.
+    //
+    //    Defense: compare the resolved session userId against the
+    //    clientOwnerRef that was set during the PREVIOUS mount. If they
+    //    differ, force a client replacement. On a true fresh mount
+    //    clientOwnerRef starts as null and the lazy-init client is
+    //    already empty, so the replacement is a harmless no-op.
     supabase.auth
       .getSession()
       .then(({ data }) => {
         if (cancelled) return;
-        const initialUserId = data.session?.user?.id ?? null;
-        clientOwnerRef.current = initialUserId;
+        const resolvedUserId = data.session?.user?.id ?? null;
+        if (clientOwnerRef.current !== null && clientOwnerRef.current !== resolvedUserId) {
+          replaceClient(resolvedUserId);
+        } else {
+          clientOwnerRef.current = resolvedUserId;
+        }
       })
       .catch(() => {
         // ignore — if getSession fails we leave the client unclaimed;
@@ -108,9 +121,22 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    // 3. bfcache hard-reload defense. When the browser restores a page
+    //    from back-forward cache (Safari/Chrome after OAuth redirect),
+    //    the event.persisted flag is true. The getSession() check above
+    //    handles MOST cases, but a hard reload is the safest guarantee
+    //    that no stale React state leaks across users.
+    function handlePageShow(event: PageTransitionEvent): void {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    }
+    window.addEventListener('pageshow', handlePageShow);
+
     return () => {
       cancelled = true;
       unsubscribe();
+      window.removeEventListener('pageshow', handlePageShow);
     };
     // Intentionally empty deps: this effect owns the full lifecycle.
     // `client` changes through setClient inside replaceClient, so
