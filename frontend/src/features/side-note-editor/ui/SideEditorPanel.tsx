@@ -1,6 +1,6 @@
 /**
  * Inner layout of the side editor sheet.
- * Owns the data fetch + auto-save wiring for a single videoId.
+ * Owns the data fetch + auto-save wiring for a single cardId.
  */
 import { useEffect, useRef } from 'react';
 import { useRichNoteQuery, useSaveRichNoteMutation } from '../model/useNoteQuery';
@@ -11,12 +11,12 @@ import { SaveStatusIndicator } from './SaveStatusIndicator';
 import type { TiptapDoc } from '../lib/note-parser';
 
 export interface SideEditorPanelProps {
-  videoId: string;
+  cardId: string;
 }
 
-export function SideEditorPanel({ videoId }: SideEditorPanelProps) {
-  const query = useRichNoteQuery(videoId);
-  const save = useSaveRichNoteMutation(videoId);
+export function SideEditorPanel({ cardId }: SideEditorPanelProps) {
+  const query = useRichNoteQuery(cardId);
+  const save = useSaveRichNoteMutation(cardId);
 
   const saveFn = async (doc: TiptapDoc): Promise<void> => {
     await save.mutateAsync(doc);
@@ -70,7 +70,7 @@ export function SideEditorPanel({ videoId }: SideEditorPanelProps) {
   return (
     <div className="flex h-full flex-col gap-4">
       <EditorHeader video={video} mandalaCell={mandalaCell} />
-      <NoteEditor key={videoId} initialContent={note} onDocChange={autoSave.trigger} />
+      <NoteEditor key={cardId} initialContent={note} onDocChange={autoSave.trigger} />
       <div className="flex items-center justify-end border-t border-border pt-2">
         <SaveStatusIndicator status={autoSave.status} onRetry={autoSave.retry} />
       </div>

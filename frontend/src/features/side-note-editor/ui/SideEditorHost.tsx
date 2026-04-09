@@ -28,7 +28,7 @@ export function SideEditorHost() {
         style={{ width: `${SHEET_WIDTH_PX}px` }}
         onInteractOutside={(e) => e.preventDefault()}
       >
-        {context && <SideEditorPanel videoId={context.videoId} />}
+        {context && <SideEditorPanel cardId={context.cardId} />}
       </SheetContent>
     </Sheet>
   );

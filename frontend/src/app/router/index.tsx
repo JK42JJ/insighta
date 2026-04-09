@@ -83,10 +83,10 @@ export function AppRouter() {
           }
         />
         {/* Notion-style side editor — overlays whatever page is underneath.
-            SideEditorRouteAdapter in App.tsx uses useMatch('/notes/:videoId')
+            SideEditorRouteAdapter in App.tsx uses useMatch('/notes/:cardId')
             to detect this route and drives the Sheet. The underlying page
             stays mounted beneath the overlay. */}
-        <Route path="/notes/:videoId" element={<IndexPage />} />
+        <Route path="/notes/:cardId" element={<IndexPage />} />
         <Route path="/mandala-settings" element={<Navigate to="/mandalas" replace />} />
         <Route path="/profile" element={<Navigate to="/settings?tab=profile" replace />} />
         <Route

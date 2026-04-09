@@ -70,9 +70,9 @@ function coerceTiptapDoc(value: Prisma.JsonValue | null): TiptapDoc | null {
 export class RichNoteService {
   constructor(private readonly db: PrismaClient = getPrismaClient()) {}
 
-  async getRichNote(userId: string, videoId: string): Promise<RichNoteView> {
-    const row = await this.db.userVideoState.findUnique({
-      where: { user_id_videoId: { user_id: userId, videoId } },
+  async getRichNote(userId: string, cardId: string): Promise<RichNoteView> {
+    const row = await this.db.userVideoState.findFirst({
+      where: { id: cardId, user_id: userId },
       select: {
         user_note: true,
         user_note_json: true,
@@ -92,7 +92,7 @@ export class RichNoteService {
     });
 
     if (!row) {
-      throw new RichNoteNotFoundError(`No user_video_state for user=${userId} video=${videoId}`);
+      throw new RichNoteNotFoundError(`No user_video_state for user=${userId} card=${cardId}`);
     }
 
     const jsonDoc = coerceTiptapDoc(row.user_note_json ?? null);
@@ -126,18 +126,30 @@ export class RichNoteService {
   /**
    * Dual-write Tiptap JSON + plain-text extract.
    * Empty docs clear both columns so the row becomes eligible for eviction again.
+   *
+   * Ownership is enforced by checking user_id before the UPDATE so an attacker
+   * cannot overwrite another user's note by guessing a card UUID.
    */
   async saveRichNote(
     userId: string,
-    videoId: string,
+    cardId: string,
     doc: TiptapNode
   ): Promise<{ updatedAt: string }> {
     const empty = isEmptyDoc(doc);
     const plainText = empty ? null : extractPlainText(doc);
 
+    // Verify ownership: the row must exist and belong to this user.
+    const existing = await this.db.userVideoState.findUnique({
+      where: { id: cardId },
+      select: { user_id: true },
+    });
+    if (!existing || existing.user_id !== userId) {
+      throw new RichNoteNotFoundError(`No user_video_state for user=${userId} card=${cardId}`);
+    }
+
     try {
       const updated = await this.db.userVideoState.update({
-        where: { user_id_videoId: { user_id: userId, videoId } },
+        where: { id: cardId },
         data: {
           user_note_json: empty ? Prisma.JsonNull : (doc as unknown as Prisma.InputJsonValue),
           user_note: plainText,
@@ -152,9 +164,9 @@ export class RichNoteService {
         'code' in err &&
         (err as { code?: string }).code === 'P2025'
       ) {
-        throw new RichNoteNotFoundError(`No user_video_state for user=${userId} video=${videoId}`);
+        throw new RichNoteNotFoundError(`No user_video_state for user=${userId} card=${cardId}`);
       }
-      logger.error('rich-note-service: save failed', { err, userId, videoId, empty });
+      logger.error('rich-note-service: save failed', { err, userId, cardId, empty });
       throw err;
     }
   }

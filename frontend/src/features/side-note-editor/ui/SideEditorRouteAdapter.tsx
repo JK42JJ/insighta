@@ -1,7 +1,7 @@
 /**
  * URL → store bridge.
  *
- * Watches the current location for `/notes/:videoId` and opens/closes the
+ * Watches the current location for `/notes/:cardId` and opens/closes the
  * Zustand store accordingly. Reads optional `?mandala=<id>` from the query
  * string so scratchpad cards (no mandala) are fully supported.
  *
@@ -11,7 +11,7 @@ import { useEffect } from 'react';
 import { useMatch, useSearchParams } from 'react-router-dom';
 import { useSideEditorStore } from '../model/useSideEditorStore';
 
-const ROUTE_PATTERN = '/notes/:videoId';
+const ROUTE_PATTERN = '/notes/:cardId';
 
 export function SideEditorRouteAdapter() {
   const match = useMatch(ROUTE_PATTERN);
@@ -20,9 +20,9 @@ export function SideEditorRouteAdapter() {
   const close = useSideEditorStore((s) => s.close);
 
   useEffect(() => {
-    if (match?.params.videoId) {
+    if (match?.params.cardId) {
       open({
-        videoId: match.params.videoId,
+        cardId: match.params.cardId,
         mandalaId: searchParams.get('mandala'),
       });
       return () => {
@@ -30,7 +30,7 @@ export function SideEditorRouteAdapter() {
       };
     }
     return undefined;
-  }, [match?.params.videoId, searchParams, open, close]);
+  }, [match?.params.cardId, searchParams, open, close]);
 
   return null;
 }

@@ -12,7 +12,7 @@ const canBootServer = !!(
 
 const describeIfServer = canBootServer ? describe : describe.skip;
 
-describeIfServer('Video Rich Notes API — auth rejection', () => {
+describeIfServer('Rich Notes API — auth rejection', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let app: any;
 
@@ -26,18 +26,18 @@ describeIfServer('Video Rich Notes API — auth rejection', () => {
     await app.close();
   });
 
-  it('GET /api/v1/videos/:videoId/notes/rich rejects without auth', async () => {
+  it('GET /api/v1/rich-notes/:cardId rejects without auth', async () => {
     const response = await app.inject({
       method: 'GET',
-      url: '/api/v1/videos/00000000-0000-0000-0000-000000000000/notes/rich',
+      url: '/api/v1/rich-notes/00000000-0000-0000-0000-000000000000',
     });
     expect(response.statusCode).toBe(401);
   });
 
-  it('PATCH /api/v1/videos/:videoId/notes/rich rejects without auth', async () => {
+  it('PATCH /api/v1/rich-notes/:cardId rejects without auth', async () => {
     const response = await app.inject({
       method: 'PATCH',
-      url: '/api/v1/videos/00000000-0000-0000-0000-000000000000/notes/rich',
+      url: '/api/v1/rich-notes/00000000-0000-0000-0000-000000000000',
       payload: { note: { type: 'doc', content: [] } },
     });
     expect(response.statusCode).toBe(401);

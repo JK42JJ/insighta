@@ -1,8 +1,8 @@
 /**
- * Video Rich Notes Routes
+ * Rich Notes Routes
  *
- * GET  /api/v1/videos/:videoId/notes/rich
- * PATCH /api/v1/videos/:videoId/notes/rich
+ * GET  /api/v1/rich-notes/:cardId
+ * PATCH /api/v1/rich-notes/:cardId
  *
  * Backs the Notion-style side editor (Phase 1-4 MVP).
  * Kept in a separate file from videos.ts to minimize merge conflicts with
@@ -19,7 +19,7 @@ import {
 import { logger } from '../../utils/logger';
 
 const paramsSchema = z.object({
-  videoId: z.string().uuid(),
+  cardId: z.string().uuid(),
 });
 
 const patchBodySchema = z.object({
@@ -30,7 +30,7 @@ export const videoRichNotesRoutes: FastifyPluginCallback = (fastify, _opts, done
   const service = () => getRichNoteService();
 
   fastify.get(
-    '/videos/:videoId/notes/rich',
+    '/rich-notes/:cardId',
     {
       onRequest: [fastify.authenticate],
     },
@@ -42,16 +42,16 @@ export const videoRichNotesRoutes: FastifyPluginCallback = (fastify, _opts, done
       const parseResult = paramsSchema.safeParse(request.params);
       if (!parseResult.success) {
         return reply.code(400).send({
-          error: 'Invalid videoId',
+          error: 'Invalid cardId',
           details: parseResult.error.flatten(),
         });
       }
-      const { videoId } = parseResult.data;
+      const { cardId } = parseResult.data;
 
       try {
-        const view = await service().getRichNote(request.user.userId, videoId);
+        const view = await service().getRichNote(request.user.userId, cardId);
         return reply.code(200).send({
-          videoId,
+          cardId,
           video: view.video,
           mandalaCell: view.mandalaCell,
           note: view.note,
@@ -62,14 +62,14 @@ export const videoRichNotesRoutes: FastifyPluginCallback = (fastify, _opts, done
         if (err instanceof RichNoteNotFoundError) {
           return reply.code(404).send({ error: 'Note not found' });
         }
-        logger.error('GET /videos/:videoId/notes/rich failed', { err, videoId });
+        logger.error('GET /rich-notes/:cardId failed', { err, cardId });
         return reply.code(500).send({ error: 'Internal error' });
       }
     }
   );
 
   fastify.patch(
-    '/videos/:videoId/notes/rich',
+    '/rich-notes/:cardId',
     {
       onRequest: [fastify.authenticate],
     },
@@ -81,11 +81,11 @@ export const videoRichNotesRoutes: FastifyPluginCallback = (fastify, _opts, done
       const paramsResult = paramsSchema.safeParse(request.params);
       if (!paramsResult.success) {
         return reply.code(400).send({
-          error: 'Invalid videoId',
+          error: 'Invalid cardId',
           details: paramsResult.error.flatten(),
         });
       }
-      const { videoId } = paramsResult.data;
+      const { cardId } = paramsResult.data;
 
       const bodyResult = patchBodySchema.safeParse(request.body);
       if (!bodyResult.success) {
@@ -105,13 +105,13 @@ export const videoRichNotesRoutes: FastifyPluginCallback = (fastify, _opts, done
       }
 
       try {
-        const result = await service().saveRichNote(request.user.userId, videoId, doc);
+        const result = await service().saveRichNote(request.user.userId, cardId, doc);
         return reply.code(200).send({ updatedAt: result.updatedAt });
       } catch (err) {
         if (err instanceof RichNoteNotFoundError) {
           return reply.code(404).send({ error: 'Note not found' });
         }
-        logger.error('PATCH /videos/:videoId/notes/rich failed', { err, videoId });
+        logger.error('PATCH /rich-notes/:cardId failed', { err, cardId });
         return reply.code(500).send({ error: 'Internal error' });
       }
     }

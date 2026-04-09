@@ -50,8 +50,8 @@ async function authedFetch(path: string, init?: RequestInit): Promise<Response> 
   });
 }
 
-export async function fetchRichNote(videoId: string): Promise<RichNoteResponse> {
-  const res = await authedFetch(`/videos/${videoId}/notes/rich`);
+export async function fetchRichNote(cardId: string): Promise<RichNoteResponse> {
+  const res = await authedFetch(`/rich-notes/${cardId}`);
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`fetchRichNote failed: ${res.status} ${body}`);
@@ -59,11 +59,8 @@ export async function fetchRichNote(videoId: string): Promise<RichNoteResponse> 
   return (await res.json()) as RichNoteResponse;
 }
 
-export async function saveRichNote(
-  videoId: string,
-  note: TiptapDoc
-): Promise<SaveRichNoteResponse> {
-  const res = await authedFetch(`/videos/${videoId}/notes/rich`, {
+export async function saveRichNote(cardId: string, note: TiptapDoc): Promise<SaveRichNoteResponse> {
+  const res = await authedFetch(`/rich-notes/${cardId}`, {
     method: 'PATCH',
     body: JSON.stringify({ note }),
   });

@@ -113,6 +113,8 @@ interface MemoEditorProps {
   onEnrichEnd?: (cardId: string) => void;
   /** Mandala ID for the expand-to-side-editor button (optional). */
   mandalaId?: string | null;
+  /** Close the parent modal (Dialog) before opening the side editor Sheet. */
+  onCloseModal?: () => void;
 }
 
 export function MemoEditor({
@@ -128,6 +130,7 @@ export function MemoEditor({
   onEnrichStart,
   onEnrichEnd,
   mandalaId,
+  onCloseModal,
 }: MemoEditorProps) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -470,7 +473,7 @@ export function MemoEditor({
             </span>
           )}
           {/* Expand to full-featured side editor */}
-          {videoId && (
+          {cardId && (
             <Button
               variant="ghost"
               size="icon"
@@ -480,8 +483,10 @@ export function MemoEditor({
                   clearTimeout(autoSaveTimerRef.current);
                   onSave(cardId, note);
                 }
+                // Close the parent Dialog before opening the Sheet (they conflict otherwise)
+                onCloseModal?.();
                 useSideEditorStore.getState().open({
-                  videoId,
+                  cardId,
                   mandalaId: mandalaId ?? null,
                 });
               }}

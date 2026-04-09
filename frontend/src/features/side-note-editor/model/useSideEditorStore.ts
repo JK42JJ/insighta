@@ -3,12 +3,13 @@
  *
  * The URL is the source of truth — `SideEditorRouteAdapter` calls `open()` on
  * mount and `close()` on unmount. The store only drives Sheet render state
- * and carries context (videoId + mandala cell info) to the panel.
+ * and carries context (cardId + mandala cell info) to the panel.
  */
 import { create } from 'zustand';
 
 export interface SideEditorContext {
-  videoId: string;
+  /** user_video_states.id — the primary key UUID, NOT the YouTube video ID. */
+  cardId: string;
   /** null for scratchpad cards with no mandala. */
   mandalaId: string | null;
 }

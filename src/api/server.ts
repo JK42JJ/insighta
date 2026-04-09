@@ -229,7 +229,7 @@ export async function buildServer() {
 
       // Register rich-notes routes (Notion-style side editor — Phase 1-4 MVP)
       // Intentionally kept in a separate plugin to avoid conflicts with videos.ts.
-      // Paths are `/videos/:videoId/notes/rich` (GET, PATCH).
+      // Paths are `/rich-notes/:cardId` (GET, PATCH).
       await instance.register(videoRichNotesRoutes);
 
       // Register notes routes (notes are nested under videos for create/list, but top-level for get/update/delete)

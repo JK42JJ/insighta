@@ -13,30 +13,30 @@ import {
 import type { TiptapDoc } from '../lib/note-parser';
 import { RICH_NOTE_QUERY_KEY } from '../config';
 
-export function useRichNoteQuery(videoId: string | null) {
+export function useRichNoteQuery(cardId: string | null) {
   return useQuery<RichNoteResponse>({
-    queryKey: [RICH_NOTE_QUERY_KEY, videoId],
+    queryKey: [RICH_NOTE_QUERY_KEY, cardId],
     queryFn: () => {
-      if (!videoId) throw new Error('videoId is required');
-      return fetchRichNote(videoId);
+      if (!cardId) throw new Error('cardId is required');
+      return fetchRichNote(cardId);
     },
-    enabled: Boolean(videoId),
+    enabled: Boolean(cardId),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
 }
 
-export function useSaveRichNoteMutation(videoId: string | null) {
+export function useSaveRichNoteMutation(cardId: string | null) {
   const queryClient = useQueryClient();
   return useMutation<SaveRichNoteResponse, Error, TiptapDoc>({
     mutationFn: async (doc) => {
-      if (!videoId) throw new Error('videoId is required');
-      return saveRichNote(videoId, doc);
+      if (!cardId) throw new Error('cardId is required');
+      return saveRichNote(cardId, doc);
     },
     onSuccess: (result) => {
-      if (!videoId) return;
+      if (!cardId) return;
       queryClient.setQueryData<RichNoteResponse | undefined>(
-        [RICH_NOTE_QUERY_KEY, videoId],
+        [RICH_NOTE_QUERY_KEY, cardId],
         (prev) =>
           prev
             ? {
