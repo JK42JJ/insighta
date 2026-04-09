@@ -32,6 +32,23 @@ const TRENDING_EXAMPLES: Record<string, string[]> = {
 
 const PLACEHOLDER_ROTATE_MS = 3500;
 
+// ─── CP361 Issue #375 — phased AI loading label thresholds ───
+//
+// Client-side timer thresholds for the "ai-loading" progress label.
+// Calibrated against observed prod LoRA+LLM completion times (30-45s
+// typical). The three phases are EXPECTATION MANAGEMENT strings, not
+// real progress reporting — backend has no streaming hook.
+//
+// Invariant: AI_PHASE_ANALYSIS_MS < AI_PHASE_DRAFT_MS < GENERATE_DELAY_MS
+// (the last threshold is owned by useWizard.ts). Bumping any of these
+// WITHOUT also bumping the next tier downstream will compress one phase
+// into invisibility.
+const AI_PHASE_ANALYSIS_MS = 10_000;
+const AI_PHASE_DRAFT_MS = 30_000;
+/** Poll interval for the AI phase label timer. 1s matches human-perceptible
+ *  label transitions without causing wasted re-renders. */
+const AI_PROGRESS_POLL_MS = 1_000;
+
 // ─── Component ───
 
 interface WizardStepGoalProps {
@@ -169,11 +186,9 @@ export default function WizardStepGoal({
   // elapsed time — NO backend streaming required. Purpose is expectation
   // management, not real progress reporting.
   //
-  // Thresholds are hand-tuned against observed prod timings:
-  //   0-10s  — "목표 분석 중..."        (embedding + keyword selection)
-  //   10-30s — "세부목표 8개 생성 중..." (LoRA pass or LLM draft)
-  //   30-60s — "만다라 완성 중..."      (LLM refinement / validation)
-  //   60s+   — soft-slow state kicks in (separate hint)
+  // Phase boundaries are defined by AI_PHASE_ANALYSIS_MS / AI_PHASE_DRAFT_MS
+  // at module scope (above) — see that block for the invariant with
+  // GENERATE_DELAY_MS.
   const [aiElapsedMs, setAiElapsedMs] = useState(0);
   useEffect(() => {
     if (!isGenerating) {
@@ -181,14 +196,14 @@ export default function WizardStepGoal({
       return;
     }
     const start = Date.now();
-    const id = window.setInterval(() => setAiElapsedMs(Date.now() - start), 1000);
+    const id = window.setInterval(() => setAiElapsedMs(Date.now() - start), AI_PROGRESS_POLL_MS);
     return () => window.clearInterval(id);
   }, [isGenerating]);
 
   const aiPhaseLabel =
-    aiElapsedMs < 10_000
+    aiElapsedMs < AI_PHASE_ANALYSIS_MS
       ? t('wizard.goal.ai.phase1', '목표 분석 중...')
-      : aiElapsedMs < 30_000
+      : aiElapsedMs < AI_PHASE_DRAFT_MS
         ? t('wizard.goal.ai.phase2', '세부목표 8개 생성 중...')
         : t('wizard.goal.ai.phase3', '만다라 완성 중...');
 
