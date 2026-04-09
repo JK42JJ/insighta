@@ -120,13 +120,13 @@ function AuthenticatedApp() {
     }
   }, [storeSelectedMandalaId]);
 
-  // Initialize default mandala
+  // Initialize default mandala — skip when store already has a selection.
   useEffect(() => {
-    if (!selectedMandalaId && mandalaListData?.mandalas) {
+    if (!selectedMandalaId && !storeSelectedMandalaId && mandalaListData?.mandalas) {
       const defaultMandala = mandalaListData.mandalas.find((m) => m.isDefault);
       if (defaultMandala) setSelectedMandalaId(defaultMandala.id);
     }
-  }, [mandalaListData, selectedMandalaId]);
+  }, [mandalaListData, selectedMandalaId, storeSelectedMandalaId]);
 
   // Effective mandalaId: resolves immediately from cached data even before useEffect fires
   const effectiveMandalaId = useMemo(() => {
