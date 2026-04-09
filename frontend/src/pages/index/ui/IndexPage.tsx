@@ -732,14 +732,12 @@ function AuthenticatedApp() {
                 }}
               />
             </div>
-            {/* Post-creation loading overlay */}
-            {isNewMandalaActive && cards.totalCards === 0 && !cards.isLoading && (
-              <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground animate-pulse">
+            {isNewMandalaActive && cards.totalCards === 0 && !cards.isLoading ? (
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
                 <Loader2 className="w-8 h-8 animate-spin text-primary/60" />
                 <p className="text-sm">{t('common.preparingCards', 'Preparing your cards...')}</p>
               </div>
-            )}
-            {layout.viewMode === 'insights' ? (
+            ) : layout.viewMode === 'insights' ? (
               <InsightsView
                 allCards={cards.allMandalaCards}
                 scratchPadCards={cards.scratchPadCards}
