@@ -472,8 +472,8 @@ export function MemoEditor({
               {t('videoPlayer.slashHint')}
             </span>
           )}
-          {/* Expand to full-featured side editor */}
-          {cardId && (
+          {/* Expand to full-featured side editor — only for user_video_states cards */}
+          {cardId && sourceTable === 'user_video_states' && (
             <Button
               variant="ghost"
               size="icon"
