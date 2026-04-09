@@ -8,9 +8,10 @@
 import { getAuthHeaders } from '@/shared/lib/supabase-auth';
 import type { TiptapDoc } from './note-parser';
 
-// Same resolution as shared/lib/api-client.ts — keep behavior in sync.
-const VITE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-const API_BASE_URL = VITE_API_URL.endsWith('/api') ? VITE_API_URL.slice(0, -4) : VITE_API_URL;
+// Use relative URL so requests go through the Vite proxy (/api → API server).
+// This avoids cross-origin issues (401) that occur when fetching absolute
+// http://localhost:3000 directly from http://localhost:8081.
+const API_BASE_URL = '';
 
 export interface RichNoteVideoMeta {
   id: string;
