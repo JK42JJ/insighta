@@ -47,6 +47,14 @@ export interface MandalaCardProps {
   onClick?: () => void;
   /** Retry handler for delayed variants. */
   onRetry?: () => void;
+  /**
+   * CP361 Issue #375 — inline hint text shown below the skeleton on
+   * `template-loading` / `ai-loading` variants. Used to communicate the
+   * soft-slow state ("평소보다 조금 걸리고 있어요") WITHOUT transitioning
+   * to the amber DelayedCard. Renders in neutral `text-muted-foreground`
+   * color — NEVER amber. Undefined / empty string = no hint shown.
+   */
+  hint?: string;
 }
 
 export default function MandalaCard({
@@ -59,6 +67,7 @@ export default function MandalaCard({
   matchPct,
   onClick,
   onRetry,
+  hint,
 }: MandalaCardProps) {
   const { t, i18n } = useTranslation();
 
@@ -269,11 +278,24 @@ export default function MandalaCard({
           </div>
         </div>
       ) : (
-        <div
-          className={`h-[3px] w-full animate-pulse rounded-full ${
-            isAiLoading ? 'bg-primary/20' : 'bg-foreground/[0.06]'
-          }`}
-        />
+        <>
+          <div
+            className={`h-[3px] w-full animate-pulse rounded-full ${
+              isAiLoading ? 'bg-primary/20' : 'bg-foreground/[0.06]'
+            }`}
+          />
+          {/* CP361 Issue #375 — soft-slow inline hint. Only visible when the
+              caller passes a hint string (via isSearchSoftSlow / isGenerateSoftSlow).
+              Neutral color — NEVER amber. Announced via aria-live for a11y. */}
+          {hint && (
+            <div
+              className="mt-3 text-center text-[11px] leading-snug text-muted-foreground"
+              aria-live="polite"
+            >
+              {hint}
+            </div>
+          )}
+        </>
       )}
     </button>
   );
