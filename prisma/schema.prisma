@@ -394,6 +394,7 @@ model users {
   newsletter_settings            newsletter_settings?
   newsletter_logs                newsletter_logs[]
   skill_runs                     skill_runs[]
+  pipeline_runs                  mandala_pipeline_runs[]
   skill_outputs                  skill_outputs[]
   mandala_likes                  mandala_likes[]
   skill_configs                  user_skill_config[]
@@ -437,6 +438,7 @@ model user_mandalas {
   mandala_likes    mandala_likes[]
   skill_configs    user_skill_config[]
   recommendation_cache recommendation_cache[]
+  pipeline_runs        mandala_pipeline_runs[]
 
   source_template_id String? @db.Uuid
 
@@ -1357,6 +1359,47 @@ model skill_runs {
   @@index([skill_id, status], map: "idx_skill_runs_skill_status")
   @@index([user_id], map: "idx_skill_runs_user_id")
   @@index([started_at(sort: Desc)], map: "idx_skill_runs_started_at")
+  @@schema("public")
+}
+
+/// Tracks mandala post-creation pipeline runs with per-step status/timestamp.
+/// Enables resume-from-failure, audit trail, and future Temporal migration.
+model mandala_pipeline_runs {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mandala_id     String    @db.Uuid
+  user_id        String    @db.Uuid
+  status         String    @default("pending") @db.VarChar(20) // pending | running | completed | failed | partial
+  trigger        String    @default("wizard") @db.VarChar(20)  // wizard | update | manual | retry
+
+  step1_status     String?   @db.VarChar(20)
+  step1_started_at DateTime? @db.Timestamptz(6)
+  step1_ended_at   DateTime? @db.Timestamptz(6)
+  step1_result     Json?
+  step1_error      String?
+
+  step2_status     String?   @db.VarChar(20)
+  step2_started_at DateTime? @db.Timestamptz(6)
+  step2_ended_at   DateTime? @db.Timestamptz(6)
+  step2_result     Json?
+  step2_error      String?
+
+  step3_status     String?   @db.VarChar(20)
+  step3_started_at DateTime? @db.Timestamptz(6)
+  step3_ended_at   DateTime? @db.Timestamptz(6)
+  step3_result     Json?
+  step3_error      String?
+
+  retry_count  Int       @default(0)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  completed_at DateTime? @db.Timestamptz(6)
+
+  mandala user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade)
+  user    users         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([mandala_id], map: "idx_pipeline_runs_mandala")
+  @@index([status], map: "idx_pipeline_runs_status")
+  @@index([user_id], map: "idx_pipeline_runs_user")
   @@schema("public")
 }
 

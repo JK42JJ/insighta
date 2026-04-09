@@ -1584,5 +1584,58 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     }
   );
 
+  /**
+   * GET /api/v1/mandalas/:id/pipeline-status — Pipeline run status
+   * Returns latest pipeline run with per-step status for frontend polling.
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/pipeline-status',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+
+      const db = getPrismaClient();
+      const run = await db.mandala_pipeline_runs.findFirst({
+        where: { mandala_id: request.params.id, user_id: request.user.userId },
+        orderBy: { created_at: 'desc' },
+      });
+
+      if (!run) {
+        return reply.send({ status: 'none', steps: {}, cardCount: 0 });
+      }
+
+      const cardCount = await db.userVideoState.count({
+        where: { mandala_id: request.params.id, user_id: request.user.userId },
+      });
+
+      return reply.send({
+        status: run.status,
+        steps: {
+          embeddings: {
+            status: run.step1_status ?? 'pending',
+            startedAt: run.step1_started_at,
+            endedAt: run.step1_ended_at,
+          },
+          discover: {
+            status: run.step2_status ?? 'pending',
+            startedAt: run.step2_started_at,
+            endedAt: run.step2_ended_at,
+          },
+          autoAdd: {
+            status: run.step3_status ?? 'pending',
+            startedAt: run.step3_started_at,
+            endedAt: run.step3_ended_at,
+          },
+        },
+        cardCount,
+        retryCount: run.retry_count,
+        createdAt: run.created_at,
+        completedAt: run.completed_at,
+      });
+    }
+  );
+
   done();
 };
