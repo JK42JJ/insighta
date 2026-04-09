@@ -22,12 +22,16 @@ const mockUserMandalaFindFirst = jest.fn();
 const mockOauthFindUnique = jest.fn();
 const mockQueryRaw = jest.fn();
 const mockRecCacheUpsert = jest.fn();
+const mockRecCacheFindMany = jest.fn();
 
 jest.mock('@/modules/database', () => ({
   getPrismaClient: () => ({
     user_mandalas: { findFirst: mockUserMandalaFindFirst },
     youtube_sync_settings: { findUnique: mockOauthFindUnique },
-    recommendation_cache: { upsert: mockRecCacheUpsert },
+    recommendation_cache: {
+      upsert: mockRecCacheUpsert,
+      findMany: mockRecCacheFindMany,
+    },
     $queryRaw: mockQueryRaw,
   }),
 }));
@@ -187,6 +191,10 @@ describe('video-discover execute', () => {
   beforeEach(() => {
     mockRecCacheUpsert.mockReset();
     mockRecCacheUpsert.mockResolvedValue({});
+    // Default: cache lookup returns nothing → tests exercise the
+    // YouTube-search path unless they override this mock explicitly.
+    mockRecCacheFindMany.mockReset();
+    mockRecCacheFindMany.mockResolvedValue([]);
   });
 
   function makeFetchRouter(opts: {
@@ -332,10 +340,11 @@ describe('video-discover execute', () => {
     expect(result.status).toBe('success');
     expect(result.data['cells']).toBe(2);
     expect(result.data['cell_keyword_pairs']).toBe(2); // 2 cells × 1 kw
-    // Fix 2 (CP358): 2 cells × 3 LLM queries = 6 search.list calls.
+    // CP360: 2 cells × 1 LLM query = 2 search.list calls (was 3 → 6 pre-CP360,
+    // reduced to cut quota waste — see manifest.ts VIDEO_DISCOVER_QUERIES_PER_CELL)
     // Default test state has empty OpenRouter key → race degrades to
     // Ollama-only → all wins counted as ollama.
-    expect(result.data['search_calls']).toBe(6);
+    expect(result.data['search_calls']).toBe(2);
     expect(result.data['llm_query_gen_success']).toBe(2);
     expect(result.data['llm_query_gen_failures']).toBe(0);
     expect(result.data['race_wins_ollama']).toBe(2);
@@ -555,7 +564,7 @@ describe('video-discover execute', () => {
   // Fix 2 (CP358): LLM-driven multi-query search per cell + fallback path
   // ─────────────────────────────────────────────────────────────────────
 
-  it('Fix 2: makes 3 search.list calls per cell using LLM-generated queries', async () => {
+  it('Fix 2: caps LLM queries per cell at VIDEO_DISCOVER_QUERIES_PER_CELL (CP360: 1)', async () => {
     const queriesSeen: string[] = [];
     const fetchImpl = jest.fn().mockImplementation(async (url: string) => {
       if (url.includes('/api/chat')) {
@@ -610,9 +619,10 @@ describe('video-discover execute', () => {
       })
     );
 
-    // 1 cell × 3 LLM queries = 3 search calls, all using the LLM-generated text
-    expect(result.data['search_calls']).toBe(3);
-    expect(queriesSeen).toEqual(['llm-q-A', 'llm-q-B', 'llm-q-C']);
+    // CP360: 1 cell × 1 query (cap) = 1 search call. LLM returns 3 queries
+    // but VIDEO_DISCOVER_QUERIES_PER_CELL=1 caps it to the first one only.
+    expect(result.data['search_calls']).toBe(1);
+    expect(queriesSeen).toEqual(['llm-q-A']);
     expect(result.data['llm_query_gen_success']).toBe(1);
     expect(result.data['llm_query_gen_failures']).toBe(0);
   });
@@ -753,7 +763,7 @@ describe('video-discover execute', () => {
     expect(queriesSeen.sort()).toEqual(['cell-one+kw2', 'cell-zero+kw1'].sort());
   });
 
-  it('Fix 2: dedups same video across multiple LLM queries within one cell', async () => {
+  it('Fix 2: single-query cap yields single search.list call per cell (CP360)', async () => {
     const fetchImpl = jest.fn().mockImplementation(async (url: string) => {
       if (url.includes('/api/chat')) {
         return {
@@ -803,8 +813,11 @@ describe('video-discover execute', () => {
       })
     );
 
-    // 3 search calls but only 1 unique candidate (per-cell dedup)
-    expect(result.data['search_calls']).toBe(3);
+    // CP360: VIDEO_DISCOVER_QUERIES_PER_CELL=1, so only 1 search.list call
+    // per cell regardless of how many queries the LLM returns. The per-cell
+    // dedup code path is no longer exercised by the default config — it
+    // remains in place as a safety net if the cap is ever raised again.
+    expect(result.data['search_calls']).toBe(1);
     expect(result.data['candidates_total']).toBe(1);
   });
 
@@ -1036,6 +1049,244 @@ describe('video-discover execute', () => {
     // After global channel cap, the noisy channel should have at most 1 video kept
     const noisyCount = upsertedVideoIds.filter((id) => id === 'noisy-vid').length;
     expect(noisyCount).toBeLessThanOrEqual(1);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // CP360 Phase 1 — Cross-run recommendation_cache reuse
+  // ─────────────────────────────────────────────────────────────────────
+
+  it('Phase 1: serves cell from recommendation_cache when ≥3 fresh rows exist', async () => {
+    // Mock: cache lookup returns 5 unique videos for the cell's keyword
+    const cachedRows = [
+      {
+        video_id: 'cached-vid-1',
+        title: 'Cached Video 1',
+        channel: 'Cached Channel A',
+        view_count: 50_000,
+        duration_sec: 600,
+        published_at: new Date('2026-04-01T00:00:00Z'),
+        thumbnail: 'https://img/1.jpg',
+        rec_score: 0.8,
+      },
+      {
+        video_id: 'cached-vid-2',
+        title: 'Cached Video 2',
+        channel: 'Cached Channel B',
+        view_count: 30_000,
+        duration_sec: 480,
+        published_at: new Date('2026-04-02T00:00:00Z'),
+        thumbnail: 'https://img/2.jpg',
+        rec_score: 0.75,
+      },
+      {
+        video_id: 'cached-vid-3',
+        title: 'Cached Video 3',
+        channel: 'Cached Channel C',
+        view_count: 100_000,
+        duration_sec: 720,
+        published_at: new Date('2026-04-03T00:00:00Z'),
+        thumbnail: 'https://img/3.jpg',
+        rec_score: 0.7,
+      },
+    ];
+    mockRecCacheFindMany.mockResolvedValue(cachedRows);
+
+    // Track fetch calls — should see NO YouTube search for the cell that
+    // was served from cache
+    const fetchCalls: string[] = [];
+    const fetchImpl = jest.fn().mockImplementation(async (url: string) => {
+      fetchCalls.push(url);
+      // Only videos.list should be called, and only for non-cached candidates
+      // (which is zero here since we only have 1 cell and it's cache-served)
+      if (url.includes('/youtube/v3/videos')) {
+        return { ok: true, status: 200, json: async () => ({ items: [] }) };
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as unknown as typeof fetch;
+
+    const result = await executor.execute(
+      buildExeCtx(fetchImpl, {
+        subGoals: [{ cellIndex: 0, text: 'python basics', embedding: buildVec(1) }],
+      })
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.data['cells_served_from_cache']).toBe(1);
+    expect(result.data['cache_hits_total']).toBe(3);
+    expect(result.data['quota_saved_units']).toBeGreaterThan(0);
+    // Search was NOT called — everything came from cache
+    expect(result.data['search_calls']).toBe(0);
+    // YouTube search.list was NOT in the fetch calls
+    expect(fetchCalls.some((u) => u.includes('/youtube/v3/search'))).toBe(false);
+
+    // All 3 cached videos were upserted with current user/mandala
+    expect(mockRecCacheUpsert).toHaveBeenCalledTimes(3);
+    const upsertedIds = mockRecCacheUpsert.mock.calls.map(
+      (c) => c[0].where.user_id_mandala_id_video_id.video_id
+    );
+    expect(upsertedIds.sort()).toEqual(['cached-vid-1', 'cached-vid-2', 'cached-vid-3']);
+  });
+
+  it('Phase 1: falls through to YouTube search when cache has <3 rows', async () => {
+    // Only 2 cached rows — below MIN_CACHE_HITS_PER_CELL=3 threshold
+    mockRecCacheFindMany.mockResolvedValue([
+      {
+        video_id: 'cached-1',
+        title: 'Cached 1',
+        channel: 'Ch1',
+        view_count: 50_000,
+        duration_sec: 600,
+        published_at: new Date(),
+        thumbnail: 't',
+        rec_score: 0.8,
+      },
+      {
+        video_id: 'cached-2',
+        title: 'Cached 2',
+        channel: 'Ch2',
+        view_count: 30_000,
+        duration_sec: 500,
+        published_at: new Date(),
+        thumbnail: 't',
+        rec_score: 0.7,
+      },
+    ]);
+
+    const fetchImpl = makeFetchRouter({
+      searchItems: [{ videoId: 'fresh-1', title: 'Fresh 1', channel: 'FreshCh', channelId: 'fc1' }],
+      statsItems: [{ videoId: 'fresh-1', viewCount: 20_000, likeCount: 100 }],
+    });
+
+    const result = await executor.execute(
+      buildExeCtx(fetchImpl, {
+        subGoals: [{ cellIndex: 0, text: 'cell-0', embedding: buildVec(1) }],
+      })
+    );
+
+    expect(result.data['cells_served_from_cache']).toBe(0);
+    expect(result.data['search_calls']).toBeGreaterThan(0);
+  });
+
+  it('Phase 1: VIDEO_DISCOVER_DISABLE_CACHE_REUSE=1 bypasses cache lookup', async () => {
+    // Stuff the cache with 5 rows but disable the feature — expect fallthrough
+    mockRecCacheFindMany.mockResolvedValue([
+      {
+        video_id: 'c1',
+        title: 'C1',
+        channel: 'C',
+        view_count: 50000,
+        duration_sec: 600,
+        published_at: new Date(),
+        thumbnail: 't',
+        rec_score: 0.8,
+      },
+      {
+        video_id: 'c2',
+        title: 'C2',
+        channel: 'C',
+        view_count: 50000,
+        duration_sec: 600,
+        published_at: new Date(),
+        thumbnail: 't',
+        rec_score: 0.8,
+      },
+      {
+        video_id: 'c3',
+        title: 'C3',
+        channel: 'C',
+        view_count: 50000,
+        duration_sec: 600,
+        published_at: new Date(),
+        thumbnail: 't',
+        rec_score: 0.8,
+      },
+      {
+        video_id: 'c4',
+        title: 'C4',
+        channel: 'C',
+        view_count: 50000,
+        duration_sec: 600,
+        published_at: new Date(),
+        thumbnail: 't',
+        rec_score: 0.8,
+      },
+    ]);
+
+    const fetchImpl = makeFetchRouter({
+      searchItems: [{ videoId: 'fresh-1', title: 'Fresh 1', channel: 'FreshCh', channelId: 'fc1' }],
+      statsItems: [{ videoId: 'fresh-1', viewCount: 20_000, likeCount: 100 }],
+    });
+
+    const ctx = buildExeCtx(fetchImpl, {
+      subGoals: [{ cellIndex: 0, text: 'cell-0', embedding: buildVec(1) }],
+    });
+    // Override: inject kill switch into hydrated state
+    (ctx.state as unknown as { cacheReuseDisabled: boolean }).cacheReuseDisabled = true;
+
+    const result = await executor.execute(ctx);
+    expect(result.data['cells_served_from_cache']).toBe(0);
+    // cache lookup MUST NOT be called when feature is disabled
+    expect(mockRecCacheFindMany).not.toHaveBeenCalled();
+  });
+
+  it('Phase 1: videos.list skips cached video ids (no wasted quota on enrichment)', async () => {
+    const cachedRows = [
+      {
+        video_id: 'cache-1',
+        title: 'C1',
+        channel: 'Ch',
+        view_count: 50000,
+        duration_sec: 600,
+        published_at: new Date(),
+        thumbnail: 't',
+        rec_score: 0.8,
+      },
+      {
+        video_id: 'cache-2',
+        title: 'C2',
+        channel: 'Ch',
+        view_count: 50000,
+        duration_sec: 600,
+        published_at: new Date(),
+        thumbnail: 't',
+        rec_score: 0.8,
+      },
+      {
+        video_id: 'cache-3',
+        title: 'C3',
+        channel: 'Ch',
+        view_count: 50000,
+        duration_sec: 600,
+        published_at: new Date(),
+        thumbnail: 't',
+        rec_score: 0.8,
+      },
+    ];
+    mockRecCacheFindMany.mockResolvedValue(cachedRows);
+
+    const videosListCalls: string[] = [];
+    const fetchImpl = jest.fn().mockImplementation(async (url: string) => {
+      if (url.includes('/youtube/v3/videos')) {
+        videosListCalls.push(url);
+        return { ok: true, status: 200, json: async () => ({ items: [] }) };
+      }
+      // If search gets called, something went wrong
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as unknown as typeof fetch;
+
+    await executor.execute(
+      buildExeCtx(fetchImpl, {
+        subGoals: [{ cellIndex: 0, text: 'cell-0', embedding: buildVec(1) }],
+      })
+    );
+
+    // Either videos.list was not called at all (no non-cached candidates),
+    // OR it was called but the id param didn't include any of the cached ids
+    for (const url of videosListCalls) {
+      expect(url).not.toContain('cache-1');
+      expect(url).not.toContain('cache-2');
+      expect(url).not.toContain('cache-3');
+    }
   });
 });
 
