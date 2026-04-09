@@ -22,8 +22,8 @@ import { EDITOR_PLACEHOLDER } from '../config';
 const lowlight = createLowlight(common);
 
 export interface UseNoteEditorOptions {
-  /** Initial Tiptap JSON. null/undefined → empty editor. */
-  initialContent: TiptapDoc | null;
+  /** Initial Tiptap JSON, plain text string, or null/undefined → empty editor. */
+  initialContent: TiptapDoc | string | null;
   /** Called on every editor update (content change). */
   onUpdate?: (doc: TiptapDoc) => void;
   /** Disable editing entirely (e.g., while the initial GET is loading). */

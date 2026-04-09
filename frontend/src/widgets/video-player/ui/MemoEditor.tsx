@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { MessageSquare, Timer, Camera, Loader2, Maximize2 } from 'lucide-react';
-import { useSideEditorStore } from '@/features/side-note-editor';
+import { useSideEditorStore, sideEditorSaveRef } from '@/features/side-note-editor';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -111,10 +111,6 @@ interface MemoEditorProps {
   videoSummary?: { summary_en: string; summary_ko: string; tags?: string[]; model?: string };
   onEnrichStart?: (cardId: string) => void;
   onEnrichEnd?: (cardId: string) => void;
-  /** Mandala ID for the expand-to-side-editor button (optional). */
-  mandalaId?: string | null;
-  /** Close the parent modal (Dialog) before opening the side editor Sheet. */
-  onCloseModal?: () => void;
 }
 
 export function MemoEditor({
@@ -129,8 +125,6 @@ export function MemoEditor({
   videoSummary,
   onEnrichStart,
   onEnrichEnd,
-  mandalaId,
-  onCloseModal,
 }: MemoEditorProps) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -472,22 +466,24 @@ export function MemoEditor({
               {t('videoPlayer.slashHint')}
             </span>
           )}
-          {/* Expand to full-featured side editor — only for user_video_states cards */}
-          {cardId && sourceTable === 'user_video_states' && (
+          {/* Expand to full-featured side editor — works for ALL card types */}
+          {cardId && (
             <Button
               variant="ghost"
               size="icon"
               onClick={() => {
-                // Flush pending auto-save before opening side editor
+                // Flush pending auto-save
                 if (autoSaveTimerRef.current) {
                   clearTimeout(autoSaveTimerRef.current);
                   onSave(cardId, note);
                 }
-                // Close the parent Dialog before opening the Sheet (they conflict otherwise)
-                onCloseModal?.();
+                // Set save callback ref (module-scope, not in Zustand state)
+                sideEditorSaveRef.current = onSave;
+                // Open the side editor with current note content (instant load)
                 useSideEditorStore.getState().open({
                   cardId,
-                  mandalaId: mandalaId ?? null,
+                  initialNote: note,
+                  videoTitle: '', // VideoPlayerModal doesn't expose title directly to MemoEditor
                 });
               }}
               className="ml-auto h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"

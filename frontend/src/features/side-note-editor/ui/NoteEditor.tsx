@@ -9,7 +9,8 @@ import type { TiptapDoc } from '../lib/note-parser';
 import { EditorToolbar } from './EditorToolbar';
 
 export interface NoteEditorProps {
-  initialContent: TiptapDoc | null;
+  /** Tiptap JSON doc, plain text string, or null. Strings are wrapped into a paragraph. */
+  initialContent: TiptapDoc | string | null;
   onDocChange: (doc: TiptapDoc) => void;
 }
 

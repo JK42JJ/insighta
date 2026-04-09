@@ -1,13 +1,14 @@
 /**
  * Global host mounted once in App.tsx.
  *
- * Subscribes to the Zustand store's `isOpen`/`context` and renders a Radix Sheet
- * with the editor panel inside. Closing the Sheet (X / ESC / overlay click) calls
- * `navigate(-1)` so that the URL stays the source of truth — `SideEditorRouteAdapter`
- * will then unmount and clear the store state.
+ * Uses a plain CSS-animated div instead of Radix Sheet to avoid
+ * Dialog-Dialog conflicts (Radix closes one when another opens).
+ * The VideoPlayerModal stays open while this panel slides in.
  */
-import { Sheet, SheetContent } from '@/shared/ui/sheet';
-import { useSideEditorStore } from '../model/useSideEditorStore';
+import { useEffect, useCallback } from 'react';
+import { X } from 'lucide-react';
+import { cn } from '@/shared/lib/utils';
+import { useSideEditorStore, sideEditorSaveRef } from '../model/useSideEditorStore';
 import { SideEditorPanel } from './SideEditorPanel';
 import { SHEET_WIDTH_PX } from '../config';
 
@@ -16,21 +17,52 @@ export function SideEditorHost() {
   const context = useSideEditorStore((s) => s.context);
   const close = useSideEditorStore((s) => s.close);
 
-  const handleOpenChange = (open: boolean): void => {
-    if (!open) close();
-  };
+  const handleClose = useCallback(() => {
+    close();
+    sideEditorSaveRef.current = null;
+  }, [close]);
+
+  // ESC to close (only the side editor, not the modal behind it)
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handler, true); // capture phase
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [isOpen, handleClose]);
 
   return (
-    <Sheet open={isOpen} onOpenChange={handleOpenChange} modal={false}>
-      <SheetContent
-        side="right"
-        className="z-[60] flex flex-col overflow-y-auto border-l border-border/20 bg-background p-0 shadow-2xl outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 sm:max-w-none"
-        style={{ width: `${SHEET_WIDTH_PX}px` }}
-        onInteractOutside={(e) => e.preventDefault()}
-        onOpenAutoFocus={(e) => e.preventDefault()}
+    <div
+      className={cn(
+        'fixed inset-y-0 right-0 z-[60] flex flex-col',
+        'border-l border-border/20 bg-background shadow-2xl',
+        'transition-transform duration-300 ease-out',
+        isOpen ? 'translate-x-0' : 'translate-x-full'
+      )}
+      style={{ width: `${SHEET_WIDTH_PX}px` }}
+    >
+      {/* Close button */}
+      <button
+        type="button"
+        onClick={handleClose}
+        className="absolute right-4 top-4 z-10 rounded-sm p-1 text-muted-foreground/60 transition-colors hover:text-foreground"
+        aria-label="Close"
       >
-        {context && <SideEditorPanel cardId={context.cardId} />}
-      </SheetContent>
-    </Sheet>
+        <X className="h-4 w-4" />
+      </button>
+
+      {context && (
+        <SideEditorPanel
+          cardId={context.cardId}
+          initialNote={context.initialNote}
+          videoTitle={context.videoTitle}
+          onSaveNote={(cardId, note) => sideEditorSaveRef.current?.(cardId, note)}
+        />
+      )}
+    </div>
   );
 }
