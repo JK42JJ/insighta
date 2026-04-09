@@ -14,7 +14,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/u
 import { LayoutGrid, Grid3X3, Plus } from 'lucide-react';
 import { Slider } from '@/shared/ui/slider';
 import { ContextHeader, type SortMode } from './ContextHeader';
-import { LabelFilterPills } from './LabelFilterPills';
+import { LabelFilterPillsV2 } from './LabelFilterPillsV2';
 
 const MIN_GRID_COLUMNS = 2;
 const MAX_GRID_COLUMNS = 6;
@@ -239,7 +239,7 @@ export function CardListView({
 
   // Sector pills
   const sectorPillsElement = sectorSubjects && sectorSubjects.length > 0 && (
-    <LabelFilterPills
+    <LabelFilterPillsV2
       sectors={sectorSubjects}
       selectedIndex={selectedCellIndex ?? null}
       totalCount={totalCardCount ?? cards.length}

@@ -500,6 +500,14 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       if (message === 'MANDALA_NOT_FOUND') {
         return reply.code(404).send({ error: 'Template not found' });
       }
+      if (message === 'Mandala quota exceeded') {
+        const anyErr = err as Error & { quota?: number; current?: number };
+        return reply.code(409).send({
+          error: 'Mandala quota exceeded',
+          quota: anyErr.quota,
+          current: anyErr.current,
+        });
+      }
       request.log.error({ err, userId, templateId }, 'Failed to create from template');
       return reply.code(500).send({ error: message });
     }
@@ -715,6 +723,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           message: `Mandala limit reached (${anyErr.current}/${anyErr.quota})`,
         });
       }
+      if (anyErr.message === 'DUPLICATE_TITLE') {
+        return reply.code(409).send({
+          status: 409,
+          code: 'DUPLICATE_TITLE',
+          message: 'A mandala with this title already exists',
+        });
+      }
       request.log.error({ err, userId, title }, 'Failed to create mandala from data');
       return reply.code(500).send({
         status: 500,
@@ -861,9 +876,16 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       } catch (err: any) {
         if (err.message === 'Mandala quota exceeded') {
           return reply.code(409).send({
-            error: 'Mandala quota exceeded',
+            code: 'QUOTA_EXCEEDED',
+            message: 'Mandala quota exceeded',
             quota: err.quota,
             current: err.current,
+          });
+        }
+        if (err.message === 'DUPLICATE_TITLE') {
+          return reply.code(409).send({
+            code: 'DUPLICATE_TITLE',
+            message: 'A mandala with this title already exists',
           });
         }
         throw err;
@@ -1404,7 +1426,15 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         if (err.message === 'Mandala not found') {
           return reply.code(404).send({ error: 'Mandala not found' });
         }
-        throw err;
+        request.log.error(
+          { err, userId, mandalaId: request.params.id },
+          'Failed to delete mandala'
+        );
+        return reply.code(500).send({
+          status: 500,
+          code: 'DELETE_FAILED',
+          message: 'Failed to delete mandala',
+        });
       }
     }
   );
