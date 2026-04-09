@@ -30,6 +30,7 @@ prisma/migrations/
 !prisma/migrations/.gitkeep
 !prisma/migrations/ontology/
 !prisma/migrations/video_discover/
+!prisma/migrations/manual/
 
 # Logs
 logs/
