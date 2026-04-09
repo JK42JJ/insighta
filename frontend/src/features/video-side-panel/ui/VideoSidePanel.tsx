@@ -45,13 +45,14 @@ export function VideoSidePanel() {
       role="complementary"
       aria-label="Video side panel"
       className={cn(
-        'fixed inset-y-0 right-0 z-[60] flex flex-col',
-        'border-l border-[rgba(255,255,255,0.04)]'
+        'flex-shrink-0 flex flex-col h-full overflow-hidden',
+        'border-l border-[rgba(255,255,255,0.04)]',
+        !isOpen && 'hidden'
       )}
       style={{
         width: `${PANEL_WIDTH_PX}px`,
         background: '#111219',
-        boxShadow: isOpen ? '-12px 0 40px rgba(0,0,0,0.3)' : 'none',
+        boxShadow: '-12px 0 40px rgba(0,0,0,0.3)',
         transition: `transform ${PANEL_TRANSITION}`,
         transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
       }}

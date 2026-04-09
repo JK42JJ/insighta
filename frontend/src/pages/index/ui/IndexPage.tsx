@@ -760,6 +760,9 @@ function AuthenticatedApp() {
               <FloatingScratchPad {...scratchPadProps(false)} />
             </div>
           )}
+
+          {/* Video side panel (Mode B) — flex-shrink-0 so dashboard reflows */}
+          <VideoSidePanel />
         </div>
 
         {/* Bottom docked ScratchPad */}
@@ -780,9 +783,6 @@ function AuthenticatedApp() {
           onEnrichStart={cards.markEnrichStart}
           onEnrichEnd={cards.markEnrichEnd}
         />
-
-        {/* Side panel for expanded note editing (Mode B) */}
-        <VideoSidePanel />
 
         {/* Mobile-only floating MandalaPanel */}
         {isMobile && (
