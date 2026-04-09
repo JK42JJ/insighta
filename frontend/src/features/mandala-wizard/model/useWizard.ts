@@ -316,12 +316,19 @@ export function useWizard() {
   // to a non-existent entry, fallback default mandala wins.
   const selectMandalaInStore = useMandalaStore((s) => s.selectMandala);
   const queryClient = useQueryClient();
+  // Bug #3 fix: await the refetch so the sidebar has fresh data by the time
+  // we navigate. Previously this was fire-and-forget invalidateQueries, which
+  // caused SidebarMandalaSection to render with stale list + fall back to
+  // `mandalas[0]` (= the previously first mandala, e.g. "AI/ML Expert") while
+  // the new mandala was still propagating. The refetch typically completes
+  // in < 300ms so the wait is imperceptible vs the old broken state.
   const goToUnifiedDashboard = useCallback(
-    (newMandalaId: string) => {
+    async (newMandalaId: string) => {
       selectMandalaInStore(newMandalaId);
-      // Force list refetch so the new mandala appears in sidebar + IndexPage.
-      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.all });
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: queryKeys.mandala.list() }),
+        queryClient.refetchQueries({ queryKey: queryKeys.mandala.quota() }),
+      ]);
       navigate('/');
     },
     [navigate, selectMandalaInStore, queryClient]

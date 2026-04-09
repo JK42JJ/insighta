@@ -179,6 +179,7 @@ export default function WizardStepSkills({
   const {
     isConnected: youtubeConnected,
     isConnecting: youtubeConnecting,
+    isLoading: youtubeLoading,
     connect: connectYouTube,
   } = useYouTubeAuth();
 
@@ -203,7 +204,12 @@ export default function WizardStepSkills({
         {t('wizard.skills.subtitle')}
       </p>
 
-      {showYouTubeCta && (
+      {/* Bug #2 fix: gate render on !youtubeLoading so the CTA does not
+          flash "not connected" → "connected" during the initial status
+          query. useYouTubeAuth defaults isConnected to false while the
+          query is still loading (status.data undefined), which caused a
+          visible flicker on every Step 3 mount. */}
+      {showYouTubeCta && !youtubeLoading && (
         <YouTubeConnectCta
           isConnected={youtubeConnected}
           isConnecting={youtubeConnecting}

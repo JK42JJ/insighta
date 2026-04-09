@@ -183,7 +183,15 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
   );
 
   const currentMandala = mandalas.find((m) => m.id === selectedMandalaId);
-  const currentTitle = currentMandala?.title ?? mandalas[0]?.title ?? '—';
+  // Bug #3 fix: when selectedMandalaId is set but the mandala isn't in the
+  // list yet (fresh creation, list refetch in flight), show a placeholder
+  // instead of falling back to mandals[0] — the previous fallback cascaded
+  // to the OLD first mandala (e.g. "AI/ML Expert") and looked like a
+  // cross-mandala UI leak. The mandals[0] fallback only applies when there
+  // is no selection at all (first-time user path).
+  const currentTitle = selectedMandalaId
+    ? (currentMandala?.title ?? '…')
+    : (mandalas[0]?.title ?? '—');
 
   return (
     <div className="px-2 flex flex-col">

@@ -41,8 +41,14 @@
       "hashtag": "Hashtag",
       "hashtagDesc": "Sync search results by keyword"
     },
-    "url": { "name": "URL", "desc": "Web pages, Blogs, News" },
-    "rss": { "name": "RSS", "desc": "Feed subscriptions" },
+    "url": {
+      "name": "URL",
+      "desc": "Web pages, Blogs, News"
+    },
+    "rss": {
+      "name": "RSS",
+      "desc": "Feed subscriptions"
+    },
     "assignMandala": "Assign to Mandala (optional)",
     "assignMandalaDesc": "Where should videos from this source be organized?",
     "aiAuto": "AI auto",
@@ -421,7 +427,6 @@
       "24h": "Every 24 hours"
     },
     "connect": "Connect YouTube",
-    "connected": "Connected",
     "disconnect": "Disconnect",
     "disconnectConfirm": "Disconnect YouTube?",
     "disconnectDesc": "You won't be able to access private playlists after disconnecting.",
@@ -442,7 +447,7 @@
     "playlistsSynced": "{{count}} playlists synced.",
     "playlistsDeleted": "{{count}} playlists deleted.",
     "playlists": "playlists",
-    "tabPlaylists": "Playlists",
+    "tabPlaylists": "My Playlists",
     "tabChannels": "Channels",
     "tabHashtags": "Hashtags",
     "addChannel": "Add Channel",
@@ -464,7 +469,6 @@
     "connectFirst": "Connect your YouTube account to import your library",
     "importFromLibrary": "Import from YouTube",
     "importBtn": "Import ({{count}})",
-    "tabPlaylists": "My Playlists",
     "tabSubscriptions": "Subscriptions",
     "noSubscriptions": "No subscriptions found",
     "loadMore": "Load more...",
@@ -683,7 +687,6 @@
     "multiCardMoved": "{{count}} cards moved",
     "movedToCell": "Moved to \"{{subject}}\".",
     "moveFailedDesc": "Please try again later.",
-    "cardMoved": "Card moved",
     "insightAdded": "Insight added",
     "insightAddedToCell": "Saved to \"{{subject}}\".",
     "mandalaNotReady": "Mandala is still loading. Please try again.",
@@ -774,18 +777,61 @@
     "clickToWriteNote": "Click to write a note..."
   },
   "dashboard": {
-    "focusMap": "Focus Map",
-    "focusMapSubtitle": "Where",
-    "focusMapDesc": "Distribution of my effort and interests",
-    "monthlyTrend": "Monthly Insight Accumulation Trend",
-    "monthlyTrendSubtitle": "How Fast",
-    "monthlyTrendDesc": "Growth speed and consistency of knowledge assets",
-    "qualityAnalysis": "Saved Insight Quality Analysis",
-    "qualityAnalysisSubtitle": "How Well",
-    "qualityAnalysisDesc": "Quality and engagement level of learning",
-    "totalCards": "Total Cards",
-    "withMemo": "With Memo",
-    "withoutMemo": "Without Memo"
+    "error": {
+      "title": "Failed to load dashboard",
+      "notFound": "Mandala not found."
+    },
+    "streak": {
+      "suffix": " day streak"
+    },
+    "header": {
+      "edit": "Edit",
+      "share": "Share"
+    },
+    "section": {
+      "recommendations": "Recommended Videos",
+      "skills": "Skills",
+      "stats": "Statistics"
+    },
+    "resume": {
+      "empty": {
+        "title": "Recently watched videos appear here",
+        "subtitle": "Add videos to mandala cells and watch them to activate resume"
+      },
+      "relevance": "Relevance",
+      "playButton": "Play ▶"
+    },
+    "orbital": {
+      "emptyHint": "Add some videos",
+      "cellLabel": "Area {{index}}",
+      "ctaAdd": "Add videos from main",
+      "ctaAi": "AI video recommendations",
+      "ctaAiSoon": "Coming soon"
+    },
+    "biasAlert": {
+      "title": "Bias Filtered"
+    },
+    "skills": {
+      "videoDiscover": "YouTube Discover",
+      "newsletter": "Newsletter",
+      "alerts": "Video Alerts",
+      "biasFilter": "Bias Filter",
+      "report": "Report"
+    },
+    "stats": {
+      "filledCells": "Filled Cells",
+      "videos": "Filled Items",
+      "streak": "Learning Streak",
+      "relevance": "Avg Relevance",
+      "days": "d",
+      "empty": "Learning stats will appear here when you add videos"
+    },
+    "videoShelf": {
+      "empty": {
+        "line1": "Add videos to mandala cells",
+        "line2": "to get recommendations"
+      }
+    }
   },
   "playlist": {
     "importing": "Importing playlist...",
@@ -1020,12 +1066,36 @@
     "compareTitle": "Compare Plans",
     "compareFeature": "Feature",
     "compareRows": [
-      { "feature": "Mandalas", "monthly": "3", "ltd": "Unlimited" },
-      { "feature": "AI Summaries", "monthly": "100/mo", "ltd": "500/mo" },
-      { "feature": "Playlist Sync", "monthly": "true", "ltd": "true" },
-      { "feature": "Priority Support", "monthly": "false", "ltd": "true" },
-      { "feature": "Lifetime Updates", "monthly": "false", "ltd": "true" },
-      { "feature": "Total Cost (1yr)", "monthly": "$238.80", "ltd": "$99" }
+      {
+        "feature": "Mandalas",
+        "monthly": "3",
+        "ltd": "Unlimited"
+      },
+      {
+        "feature": "AI Summaries",
+        "monthly": "100/mo",
+        "ltd": "500/mo"
+      },
+      {
+        "feature": "Playlist Sync",
+        "monthly": "true",
+        "ltd": "true"
+      },
+      {
+        "feature": "Priority Support",
+        "monthly": "false",
+        "ltd": "true"
+      },
+      {
+        "feature": "Lifetime Updates",
+        "monthly": "false",
+        "ltd": "true"
+      },
+      {
+        "feature": "Total Cost (1yr)",
+        "monthly": "$238.80",
+        "ltd": "$99"
+      }
     ],
     "faqTitle": "Frequently Asked Questions",
     "faq1q": "What does lifetime mean?",
@@ -1243,18 +1313,35 @@
     "s16P1": "For questions about these Terms, contact:"
   },
   "wizard": {
-    "steps": { "domain": "Domain", "preview": "Preview", "skills": "Skills" },
-    "navigation": { "aria": "Wizard steps" },
-    "stepStatus": { "completed": "Completed", "current": "Current", "waiting": "Waiting" },
+    "steps": {
+      "domain": "Domain",
+      "preview": "Preview",
+      "skills": "Skills"
+    },
+    "navigation": {
+      "aria": "Wizard steps"
+    },
+    "stepStatus": {
+      "completed": "Completed",
+      "current": "Current",
+      "waiting": "Waiting"
+    },
     "domain": {
       "title": "What goal would you like to achieve?",
       "subtitle": "Choose a domain and we'll recommend templates",
-      "templates": { "title": "Templates", "comingSoon": "Coming soon" },
+      "templates": {
+        "title": "Templates",
+        "comingSoon": "Coming soon"
+      },
       "separator": "or",
       "createBlank": "Start from scratch",
       "categories": {
-        "tech": "Tech/Dev", "health": "Health", "business": "Business",
-        "finance": "Finance", "creative": "Creative", "lifestyle": "Lifestyle"
+        "tech": "Tech/Dev",
+        "health": "Health",
+        "business": "Business",
+        "finance": "Finance",
+        "creative": "Creative",
+        "lifestyle": "Lifestyle"
       }
     },
     "goal": {
@@ -1276,7 +1363,10 @@
         "titleLora": "AI-crafted mandala for your goal",
         "titleFallback": "AI-crafted mandala (fallback LLM)",
         "error": "Generation is taking longer than expected. Would you like to try again?",
-        "retry": "Retry"
+        "retry": "Retry",
+        "phase1": "Analyzing goal...",
+        "phase2": "Generating 8 sub-goals...",
+        "phase3": "Finalizing mandala..."
       },
       "card": {
         "aiLoadingBadge": "AI generating...",
@@ -1294,49 +1384,123 @@
         "templateTitle": "Template search is slower than usual",
         "templateSubtitle": "Want to try again?",
         "retry": "Retry"
+      },
+      "softSlow": {
+        "search": "Taking longer than usual...",
+        "generate": "Please wait a bit longer..."
       }
     },
     "preview": {
       "centerGoal": "Core Goal · {{count}} sub-areas",
       "subject": "Area {{index}} · {{count}} action items",
       "subtitle": "Hover over cells to see detailed plans",
-      "hint": { "line1": "← Hover over", "line2": "a cell" },
+      "hint": {
+        "line1": "← Hover over",
+        "line2": "a cell"
+      },
       "startButton": "Start with this",
       "backButton": "Other templates"
     },
     "skills": {
       "title": "Which services would you like?",
       "subtitle": "Turn ON to preview how it works",
-      "button": { "creating": "Creating...", "start": "Let's go!" },
-      "card": { "preview": "Turn on to preview", "toggle": "Activate" },
-      "state": { "active": "Active", "inactive": "Inactive" }
+      "button": {
+        "creating": "Creating...",
+        "start": "Let's go!"
+      },
+      "card": {
+        "preview": "Turn on to preview",
+        "toggle": "Activate"
+      },
+      "state": {
+        "active": "Active",
+        "inactive": "Inactive"
+      }
     },
     "skill": {
-      "recommend": { "name": "AI Video Picks", "desc": "Auto-fill each cell with personalized videos" },
-      "newsletter": { "name": "Weekly Newsletter", "desc": "3 recommended videos per cell + key summaries weekly" },
-      "alert": { "name": "Activity Alerts", "desc": "Instant alerts when related new videos are found" },
-      "alerts": { "name": "New Video Alerts", "desc": "Instant alerts when related new videos are found" },
-      "biasFilter": { "name": "Bias Filter", "desc": "Auto-block clickbait/biased content" },
-      "report": { "name": "Report", "desc": "Learning progress + insight analysis" },
-      "script": { "name": "Video Script", "desc": "Auto-generate video scripts from your mandala cards" },
-      "blog": { "name": "Blog Draft", "desc": "Draft blog posts from your mandala knowledge" },
-      "videoDiscover": { "name": "YouTube Card Discovery", "desc": "Auto-discover videos based on your goal + trends", "betaHint": "Coming soon — toggle on now and it'll auto-activate at launch" },
+      "recommend": {
+        "name": "AI Video Picks",
+        "desc": "Auto-fill each cell with personalized videos"
+      },
+      "newsletter": {
+        "name": "Weekly Newsletter",
+        "desc": "3 recommended videos per cell + key summaries weekly"
+      },
+      "alert": {
+        "name": "Activity Alerts",
+        "desc": "Instant alerts when related new videos are found"
+      },
+      "alerts": {
+        "name": "New Video Alerts",
+        "desc": "Instant alerts when related new videos are found"
+      },
+      "biasFilter": {
+        "name": "Bias Filter",
+        "desc": "Auto-block clickbait/biased content"
+      },
+      "report": {
+        "name": "Report",
+        "desc": "Learning progress + insight analysis"
+      },
+      "script": {
+        "name": "Video Script",
+        "desc": "Auto-generate video scripts from your mandala cards"
+      },
+      "blog": {
+        "name": "Blog Draft",
+        "desc": "Draft blog posts from your mandala knowledge"
+      },
+      "videoDiscover": {
+        "name": "YouTube Card Discovery",
+        "desc": "Auto-discover videos based on your goal + trends",
+        "betaHint": "Coming soon — toggle on now and it'll auto-activate at launch"
+      },
       "demo": {
         "mail": "Arrives Monday 8 AM",
         "bell": "New video found!",
-        "bias": { "thumbnail": "100x guaranteed!", "stamp": "Blocked", "label": "Clickbait filtered" },
+        "bias": {
+          "thumbnail": "100x guaranteed!",
+          "stamp": "Blocked",
+          "label": "Clickbait filtered"
+        },
         "chart": "Monthly growth trend",
         "video": "3 picks for today"
       }
+    },
+    "quotaReached": {
+      "title": "Mandala limit reached",
+      "description": "You have reached the mandala limit for your plan ({{used}} / {{limit}}). Delete an existing mandala or upgrade to create more.",
+      "backHome": "Back to home",
+      "upgrade": "Upgrade plan"
     }
   },
   "editor": {
-    "header": { "title": "Edit Mandala", "back": "Go back", "save": "Save", "saving": "Saving..." },
-    "error": { "loadFailed": "Failed to load edit data. Please try again.", "backButton": "Go back" },
+    "header": {
+      "title": "Edit Mandala",
+      "back": "Go back",
+      "save": "Save",
+      "saving": "Saving..."
+    },
+    "error": {
+      "loadFailed": "Failed to load edit data. Please try again.",
+      "backButton": "Go back"
+    },
     "exploreLink": "Find templates in Explore",
-    "share": { "title": "Public Sharing", "subtitle": "Anyone with the link can view", "aria": "Toggle public sharing" },
-    "keyboard": { "nextCell": "Next cell", "switchBlock": "Switch block", "exit": "Exit editing" },
-    "navigator": { "aria": "Block navigation", "centerBlock": "Center block", "aiFill": "AI fill entire block" },
+    "share": {
+      "title": "Public Sharing",
+      "subtitle": "Anyone with the link can view",
+      "aria": "Toggle public sharing"
+    },
+    "keyboard": {
+      "nextCell": "Next cell",
+      "switchBlock": "Switch block",
+      "exit": "Exit editing"
+    },
+    "navigator": {
+      "aria": "Block navigation",
+      "centerBlock": "Center block",
+      "aiFill": "AI fill entire block"
+    },
     "grid": {
       "centerLabel": "Core Goal · 8 sub-goals",
       "subLabel": "Sub-goal · 8 action items",
@@ -1349,26 +1513,19 @@
       "aiFillLabel": "AI Fill",
       "aiBlockTooltip": "Fill empty cells in this block with AI"
     },
-    "completion": { "thisBlock": "This block", "total": "Total" },
-    "ghostSuggestions": ["Storybook docs", "API gateway", "Design system", "Performance benchmark", "E2E testing", "Code review guide", "Tech blog", "Demo video"]
-  },
-  "dashboard": {
-    "error": { "title": "Failed to load dashboard", "notFound": "Mandala not found." },
-    "streak": { "suffix": " day streak" },
-    "header": { "edit": "Edit", "share": "Share" },
-    "section": { "recommendations": "Recommended Videos", "skills": "Skills", "stats": "Statistics" },
-    "resume": {
-      "empty": { "title": "Recently watched videos appear here", "subtitle": "Add videos to mandala cells and watch them to activate resume" },
-      "relevance": "Relevance",
-      "playButton": "Play ▶"
+    "completion": {
+      "thisBlock": "This block",
+      "total": "Total"
     },
-    "orbital": { "emptyHint": "Add some videos", "cellLabel": "Area {{index}}", "ctaAdd": "Add videos from main", "ctaAi": "AI video recommendations", "ctaAiSoon": "Coming soon" },
-    "biasAlert": { "title": "Bias Filtered" },
-    "skills": { "videoDiscover": "YouTube Discover", "newsletter": "Newsletter", "alerts": "Video Alerts", "biasFilter": "Bias Filter", "report": "Report" },
-    "stats": {
-      "filledCells": "Filled Cells", "videos": "Filled Items", "streak": "Learning Streak", "relevance": "Avg Relevance",
-      "days": "d", "empty": "Learning stats will appear here when you add videos"
-    },
-    "videoShelf": { "empty": { "line1": "Add videos to mandala cells", "line2": "to get recommendations" } }
+    "ghostSuggestions": [
+      "Storybook docs",
+      "API gateway",
+      "Design system",
+      "Performance benchmark",
+      "E2E testing",
+      "Code review guide",
+      "Tech blog",
+      "Demo video"
+    ]
   }
 }
