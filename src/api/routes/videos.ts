@@ -9,6 +9,7 @@ import { getVideoManager } from '../../modules/video';
 import { getCaptionExtractor } from '../../modules/caption/extractor';
 import { getPrismaClient } from '../../modules/database';
 import { getYouTubeClient } from '../client';
+import { loadYouTubeOAuth } from '../plugins/youtube-oauth';
 import { fork } from 'child_process';
 import { resolve } from 'path';
 import {
@@ -49,6 +50,9 @@ const SUMMARY_WORD_LIMITS = {
  * initializing YouTube API client at plugin registration time.
  */
 export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
+  // Load YouTube OAuth credentials for all routes in this plugin
+  fastify.addHook('preHandler', loadYouTubeOAuth);
+
   // Lazy getters for managers - only initialize when actually needed
   const getVideo = () => getVideoManager();
   const getCaption = () => getCaptionExtractor();

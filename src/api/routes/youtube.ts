@@ -7,8 +7,11 @@
 
 import { FastifyPluginCallback } from 'fastify';
 import { getUserSubscriptions, getUserPlaylists } from '../../modules/youtube/api';
+import { loadYouTubeOAuth } from '../plugins/youtube-oauth';
 
 export const youtubeRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
+  // Load YouTube OAuth credentials for all routes in this plugin
+  fastify.addHook('preHandler', loadYouTubeOAuth);
   /**
    * GET /api/v1/youtube/subscriptions - Get user's YouTube subscriptions
    * Query: ?pageToken=xxx (optional, for pagination)

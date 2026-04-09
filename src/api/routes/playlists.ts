@@ -9,6 +9,7 @@ import { getPlaylistManager } from '../../modules/playlist';
 import { getSyncEngine } from '../../modules/sync';
 import { getAutoSyncScheduler } from '../../modules/scheduler/auto-sync';
 import { getPrismaClient } from '../../modules/database/client';
+import { loadYouTubeOAuth } from '../plugins/youtube-oauth';
 import {
   ImportPlaylistRequestSchema,
   ListPlaylistsQuerySchema,
@@ -45,6 +46,9 @@ import { logger } from '../../utils/logger';
  * until the actual request is made.
  */
 export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
+  // Load YouTube OAuth credentials for all routes in this plugin
+  fastify.addHook('preHandler', loadYouTubeOAuth);
+
   // Lazy getters for managers - only initialize when actually needed
   const getManager = () => getPlaylistManager();
   const getSync = () => getSyncEngine();
