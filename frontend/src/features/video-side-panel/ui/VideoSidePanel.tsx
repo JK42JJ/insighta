@@ -46,7 +46,7 @@ export function VideoSidePanel() {
       aria-label="Video side panel"
       className={cn(
         'flex-shrink-0 flex flex-col sticky top-0 h-screen bg-background',
-        'border-l border-border/[0.03]',
+        'border-l-0',
         !isOpen && 'hidden'
       )}
       style={{
