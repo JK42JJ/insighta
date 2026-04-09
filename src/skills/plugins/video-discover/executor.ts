@@ -139,10 +139,8 @@ const CACHE_LOOKBACK_MS = CACHE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
 const MIN_CACHE_HITS_PER_CELL = 3;
 /** How many rows to read per cell-cache lookup (avoids loading everything). */
 const CACHE_LOOKUP_LIMIT = 20;
-/** Min cell↔keyword cosine required to reuse cache.
- *  Below this, the cached keyword is topically wrong for the cell
- *  (basketball-mandala 2026-04-09: weak keyword → running videos). */
-const CACHE_REUSE_MIN_RELEVANCE = 0.5;
+/** Min cell↔keyword cosine for cache reuse. Strict: 0.80. */
+const CACHE_REUSE_MIN_RELEVANCE = 0.8;
 
 interface SubGoalCell {
   cellIndex: number;
@@ -699,13 +697,30 @@ export const executor: SkillExecutor = {
           if (!unique.has(r.video_id)) unique.set(r.video_id, r);
         }
 
-        if (unique.size < MIN_CACHE_HITS_PER_CELL) {
-          // Not enough coverage — fall through to search
+        if (unique.size < MIN_CACHE_HITS_PER_CELL) return false;
+
+        // Secondary title-overlap filter. The cosine gate above catches most
+        // topical mismatches, but keyword_scores can still map a weak cell
+        // onto a keyword whose cached videos are off-topic (e.g. "근력운동"
+        // keyword holds marathon content for a basketball cell). Drop any
+        // cached video whose title shares zero tokens with the sub_goal
+        // and the center_goal combined. Lightweight string match — no
+        // extra API calls, no embeddings.
+        const contextTokens = extractTopicTokens(`${state.centerGoal} ${sel.cell.text}`);
+        const titleFiltered: (typeof cached)[0][] = [];
+        for (const r of unique.values()) {
+          if (titleMatchesAnyToken(r.title, contextTokens)) {
+            titleFiltered.push(r);
+          }
+        }
+        if (titleFiltered.length < MIN_CACHE_HITS_PER_CELL) {
+          log.info(
+            `cache skip: cell=${sel.cell.cellIndex} keyword="${sel.keyword.keyword}" ${titleFiltered.length}/${unique.size} passed title filter < ${MIN_CACHE_HITS_PER_CELL} — fallback to search`
+          );
           return false;
         }
 
-        for (const r of unique.values()) {
-          // Skip videos already added by another cell's cache hit
+        for (const r of titleFiltered) {
           if (seenPerCell.has(`${sel.cell.cellIndex}:${r.video_id}`)) continue;
           seenPerCell.add(`${sel.cell.cellIndex}:${r.video_id}`);
           cachedVideoIds.add(r.video_id);
@@ -722,7 +737,7 @@ export const executor: SkillExecutor = {
             publishedAt: r.published_at?.toISOString() ?? new Date().toISOString(),
             thumbnail: r.thumbnail ?? '',
             viewCount: r.view_count,
-            likeCount: null, // not stored as raw count
+            likeCount: null,
             durationSec: r.duration_sec,
           });
           cacheHitsTotal += 1;
@@ -730,7 +745,7 @@ export const executor: SkillExecutor = {
         cellsServedFromCache += 1;
         quotaSavedUnits += VIDEO_DISCOVER_QUERIES_PER_CELL * 100;
         log.info(
-          `cache hit: cell=${sel.cell.cellIndex} keyword="${sel.keyword.keyword}" relevance=${sel.perMandalaRelevance.toFixed(3)} ${unique.size} videos from ${cached.length} rows — skipping YouTube search`
+          `cache hit: cell=${sel.cell.cellIndex} keyword="${sel.keyword.keyword}" relevance=${sel.perMandalaRelevance.toFixed(3)} ${titleFiltered.length}/${unique.size} passed title filter — skipping YouTube search`
         );
         return true;
       } catch (err) {
@@ -1536,6 +1551,39 @@ function safeParseDate(iso: string | null | undefined): Date | null {
   if (!iso) return null;
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Extract 2+ char topic tokens from a goal/sub_goal text. Used by the
+ * cache reuse title-overlap filter. Korean substrings, English words,
+ * digits — anything 2+ chars wide. Lowercased for case-insensitive match.
+ *
+ * Stopwords are intentionally minimal: short connectives like "및" / "의"
+ * are already < 2 chars after splitting, so the token length filter does
+ * most of the work.
+ */
+export function extractTopicTokens(text: string): string[] {
+  if (!text) return [];
+  const cleaned = text.replace(/[^\p{L}\p{N}\s]/gu, ' ');
+  const tokens = cleaned
+    .split(/\s+/)
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => t.length >= 2);
+  return Array.from(new Set(tokens));
+}
+
+/**
+ * Return true if the title contains at least one of the given tokens as
+ * a case-insensitive substring. Empty title or empty tokens → true (give
+ * benefit of doubt, downstream rerank catches outliers).
+ */
+export function titleMatchesAnyToken(title: string, tokens: string[]): boolean {
+  if (!title || tokens.length === 0) return true;
+  const lower = title.toLowerCase();
+  for (const t of tokens) {
+    if (lower.includes(t)) return true;
+  }
+  return false;
 }
 
 export function classifySearchError(msg: string): string {

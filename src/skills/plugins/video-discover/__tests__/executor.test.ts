@@ -1056,11 +1056,13 @@ describe('video-discover execute', () => {
   // ─────────────────────────────────────────────────────────────────────
 
   it('Phase 1: serves cell from recommendation_cache when ≥3 fresh rows exist', async () => {
-    // Mock: cache lookup returns 5 unique videos for the cell's keyword
+    // Mock: cache lookup returns 3 videos whose titles share tokens with
+    // the sub_goal "python basics" so they pass the title-overlap filter
+    // (CP361 cache reuse hardening).
     const cachedRows = [
       {
         video_id: 'cached-vid-1',
-        title: 'Cached Video 1',
+        title: 'Python Basics Tutorial 1',
         channel: 'Cached Channel A',
         view_count: 50_000,
         duration_sec: 600,
@@ -1070,7 +1072,7 @@ describe('video-discover execute', () => {
       },
       {
         video_id: 'cached-vid-2',
-        title: 'Cached Video 2',
+        title: 'Python for Beginners',
         channel: 'Cached Channel B',
         view_count: 30_000,
         duration_sec: 480,
@@ -1080,7 +1082,7 @@ describe('video-discover execute', () => {
       },
       {
         video_id: 'cached-vid-3',
-        title: 'Cached Video 3',
+        title: 'Learn Python Basics Fast',
         channel: 'Cached Channel C',
         view_count: 100_000,
         duration_sec: 720,
@@ -1125,6 +1127,45 @@ describe('video-discover execute', () => {
       (c) => c[0].where.user_id_mandala_id_video_id.video_id
     );
     expect(upsertedIds.sort()).toEqual(['cached-vid-1', 'cached-vid-2', 'cached-vid-3']);
+  });
+
+  it('Phase 1: falls through to YouTube search when cached titles fail topic-token filter', async () => {
+    // Simulate the 2026-04-09 basketball incident: cache has ≥3 rows for
+    // the keyword, but the titles are topically unrelated to the sub_goal.
+    // CP361 fix: title-overlap filter rejects them → fall through to search.
+    const cachedRows = Array.from({ length: 5 }, (_, i) => ({
+      video_id: `off-topic-${i}`,
+      title: `Marathon Training Tips ${i}`, // NO overlap with "python basics"
+      channel: `Running Channel ${i}`,
+      view_count: 50_000,
+      duration_sec: 600,
+      published_at: new Date(),
+      thumbnail: 't',
+      rec_score: 0.8,
+    }));
+    mockRecCacheFindMany.mockResolvedValue(cachedRows);
+
+    const fetchImpl = makeFetchRouter({
+      searchItems: [
+        { videoId: 'fresh-1', title: 'Python Tutorial', channel: 'PyCh', channelId: 'fc1' },
+      ],
+      statsItems: [{ videoId: 'fresh-1', viewCount: 20_000, likeCount: 100 }],
+    });
+
+    const result = await executor.execute(
+      buildExeCtx(fetchImpl, {
+        subGoals: [{ cellIndex: 0, text: 'python basics', embedding: buildVec(1) }],
+      })
+    );
+
+    // Title filter rejected all cached rows → fallback to search fired
+    expect(result.data['cells_served_from_cache']).toBe(0);
+    expect(result.data['search_calls']).toBeGreaterThan(0);
+    // NO cached videos were upserted
+    const upsertedIds = mockRecCacheUpsert.mock.calls.map(
+      (c) => c[0].where.user_id_mandala_id_video_id.video_id
+    );
+    expect(upsertedIds.some((id: string) => id.startsWith('off-topic-'))).toBe(false);
   });
 
   it('Phase 1: falls through to YouTube search when cache has <3 rows', async () => {
