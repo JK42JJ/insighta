@@ -13,6 +13,7 @@ import { useShellStore, dndHandlersRef } from '@/stores/shellStore';
 import { DropZoneOverlay } from '@/widgets/header/ui/DropZoneOverlay';
 import { CardListView } from '@/widgets/card-list-view';
 import { VideoPlayerModal } from '@/widgets/video-player/ui/VideoPlayerModal';
+import { VideoSidePanel, useVideoPanelStore } from '@/features/video-side-panel';
 import { FloatingScratchPad } from '@/widgets/scratch-pad/ui/FloatingScratchPad';
 import { MandalaPanel } from '@/widgets/mandala-panel';
 import { MandalaGrid } from '@/widgets/mandala-grid/ui/MandalaGrid';
@@ -209,9 +210,16 @@ function AuthenticatedApp() {
   // 6. Video modal
   const modal = useVideoModal(cards.allMandalaCards, cards.scratchPadCards);
 
-  // Wire card click to open modal
+  // Wire card click — dual mode: popup (default) or sidebar (expanded)
   const handleCardClick = (card: Parameters<typeof modal.openModal>[0]) => {
-    modal.openModal(card);
+    const panel = useVideoPanelStore.getState();
+    if (panel.mode === 'sidebar' && panel.isOpen) {
+      // Mode B: sidebar is open → swap card content, don't open modal
+      panel.openInSidebar(card);
+    } else {
+      // Mode A: default → open modal popup
+      modal.openModal(card);
+    }
   };
 
   // 7a. Add card via URL (reuses handleCardDrop)
@@ -772,6 +780,9 @@ function AuthenticatedApp() {
           onEnrichStart={cards.markEnrichStart}
           onEnrichEnd={cards.markEnrichEnd}
         />
+
+        {/* Side panel for expanded note editing (Mode B) */}
+        <VideoSidePanel />
 
         {/* Mobile-only floating MandalaPanel */}
         {isMobile && (
