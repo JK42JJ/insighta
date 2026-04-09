@@ -8,6 +8,7 @@ import { registerAuth } from './plugins/auth';
 import { authRoutes } from './routes/auth';
 import { playlistRoutes } from './routes/playlists';
 import { videoRoutes } from './routes/videos';
+import { videoRichNotesRoutes } from './routes/video-rich-notes';
 import { noteRoutes } from './routes/notes';
 import { analyticsRoutes } from './routes/analytics';
 import { syncRoutes } from './routes/sync';
@@ -225,6 +226,11 @@ export async function buildServer() {
 
       // Register videos routes
       await instance.register(videoRoutes, { prefix: '/videos' });
+
+      // Register rich-notes routes (Notion-style side editor — Phase 1-4 MVP)
+      // Intentionally kept in a separate plugin to avoid conflicts with videos.ts.
+      // Paths are `/videos/:videoId/notes/rich` (GET, PATCH).
+      await instance.register(videoRichNotesRoutes);
 
       // Register notes routes (notes are nested under videos for create/list, but top-level for get/update/delete)
       await instance.register(noteRoutes, { prefix: '/notes' });
