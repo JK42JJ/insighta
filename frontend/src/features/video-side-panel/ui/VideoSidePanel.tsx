@@ -45,16 +45,12 @@ export function VideoSidePanel() {
       role="complementary"
       aria-label="Video side panel"
       className={cn(
-        'flex-shrink-0 flex flex-col h-full overflow-hidden',
-        'border-l border-[rgba(255,255,255,0.04)]',
+        'flex-shrink-0 flex flex-col sticky top-0 h-screen',
+        'border-l border-[rgba(255,255,255,0.03)]',
         !isOpen && 'hidden'
       )}
       style={{
         width: `${PANEL_WIDTH_PX}px`,
-        background: '#111219',
-        boxShadow: '-12px 0 40px rgba(0,0,0,0.3)',
-        transition: `transform ${PANEL_TRANSITION}`,
-        transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
       }}
     >
       {/* Close button — overlaid on the video player area */}
