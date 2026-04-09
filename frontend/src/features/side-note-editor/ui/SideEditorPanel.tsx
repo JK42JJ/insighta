@@ -54,6 +54,11 @@ export function SideEditorPanel({ cardId }: SideEditorPanelProps) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-destructive">
         <span>메모를 불러오지 못했습니다.</span>
+        {query.error && (
+          <pre className="mt-1 max-w-full overflow-auto rounded bg-muted p-2 text-[10px] text-muted-foreground">
+            {query.error.message}
+          </pre>
+        )}
         <button
           type="button"
           onClick={() => query.refetch()}
