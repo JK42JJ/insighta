@@ -690,6 +690,26 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       const result = await getMandalaManager().createMandala(userId, title, levels);
 
+      // Best-effort label generation (non-fatal).
+      try {
+        const labels = await generateLabels({
+          center_goal: centerGoal || title,
+          sub_goals: subjects,
+        });
+        const prismaLabels = getPrismaClient();
+        await prismaLabels.user_mandala_levels.updateMany({
+          where: { mandala_id: result.id, depth: 0 },
+          data: {
+            center_label: labels.center_label,
+            subject_labels: labels.sub_labels,
+          },
+        });
+      } catch (labelErr) {
+        request.log.warn(
+          `Label gen failed for ${result.id}: ${labelErr instanceof Error ? labelErr.message : String(labelErr)}`
+        );
+      }
+
       // Create skill config rows (CP357: video_discover defaults ON with auto_add=true)
       const prisma = getPrismaClient();
       await prisma.user_skill_config.createMany({
