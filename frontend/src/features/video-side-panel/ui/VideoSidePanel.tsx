@@ -20,6 +20,7 @@ export function VideoSidePanel() {
   const isOpen = useVideoPanelStore((s) => s.isOpen);
   const card = useVideoPanelStore((s) => s.card);
   const activeTab = useVideoPanelStore((s) => s.activeTab);
+  const startTime = useVideoPanelStore((s) => s.startTime);
   const closeSidebar = useVideoPanelStore((s) => s.closeSidebar);
   const setTab = useVideoPanelStore((s) => s.setTab);
 
@@ -69,8 +70,8 @@ export function VideoSidePanel() {
         <X className="h-[13px] w-[13px]" />
       </button>
 
-      {/* Video player */}
-      {card && <PanelVideoPlayer videoUrl={card.videoUrl} />}
+      {/* Video player — resumes from the position captured in the modal */}
+      {card && <PanelVideoPlayer videoUrl={card.videoUrl} startTime={startTime} />}
 
       {/* Video info */}
       {card && <PanelVideoInfo card={card} />}

@@ -487,7 +487,9 @@ export function MemoEditor({
                 // 2. Close modal (Mode A → off)
                 onCloseModal?.();
                 // 3. Open sidebar panel (→ Mode B)
-                useVideoPanelStore.getState().expandToSidebar(card);
+                // Capture current playback position for seamless resume
+                const currentTime = playerRef.current?.getCurrentTime?.() ?? 0;
+                useVideoPanelStore.getState().expandToSidebar(card, Math.floor(currentTime));
               }}
               className="ml-auto h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
               title={t('videoPlayer.expandEditor', 'Expand editor')}

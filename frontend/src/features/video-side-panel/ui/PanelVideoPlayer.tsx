@@ -8,9 +8,11 @@ import { getYouTubeVideoId } from '@/widgets/video-player/model/youtube-api';
 
 export interface PanelVideoPlayerProps {
   videoUrl: string;
+  /** Resume playback from this position (seconds). */
+  startTime?: number;
 }
 
-export function PanelVideoPlayer({ videoUrl }: PanelVideoPlayerProps) {
+export function PanelVideoPlayer({ videoUrl, startTime }: PanelVideoPlayerProps) {
   const youtubeId = getYouTubeVideoId(videoUrl);
 
   if (!youtubeId) {
@@ -33,7 +35,7 @@ export function PanelVideoPlayer({ videoUrl }: PanelVideoPlayerProps) {
     <div className="w-full bg-black shrink-0">
       <iframe
         key={videoUrl}
-        src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0`}
+        src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0${startTime ? `&start=${Math.floor(startTime)}` : ''}`}
         className="w-full aspect-video"
         allow="autoplay; encrypted-media"
         allowFullScreen

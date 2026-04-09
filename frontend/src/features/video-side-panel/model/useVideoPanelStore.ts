@@ -18,9 +18,11 @@ export interface VideoPanelState {
   card: InsightCard | null;
   /** Active tab in the sidebar. */
   activeTab: 'notes' | 'ai-summary';
+  /** Video playback position to resume from (seconds). */
+  startTime: number;
 
   /** ↗ expand button in MemoEditor: close modal, open sidebar. */
-  expandToSidebar: (card: InsightCard) => void;
+  expandToSidebar: (card: InsightCard, startTime?: number) => void;
   /** Card click while sidebar is open: swap content without closing. */
   openInSidebar: (card: InsightCard) => void;
   /** ✕ close sidebar → revert to popup mode. */
@@ -34,8 +36,10 @@ export const useVideoPanelStore = create<VideoPanelState>((set) => ({
   isOpen: false,
   card: null,
   activeTab: 'notes',
+  startTime: 0,
 
-  expandToSidebar: (card) => set({ mode: 'sidebar', isOpen: true, card, activeTab: 'notes' }),
+  expandToSidebar: (card, startTime = 0) =>
+    set({ mode: 'sidebar', isOpen: true, card, activeTab: 'notes', startTime }),
 
   openInSidebar: (card) => set({ card, activeTab: 'notes' }),
 
