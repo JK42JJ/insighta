@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
-import { Play } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { NotebookPen, Play } from 'lucide-react';
 
 import type { DashboardRecommendation } from '@/shared/types/mandala-ux';
 
@@ -10,6 +10,8 @@ interface VideoShelfProps {
 
 export function VideoShelf({ recommendations }: VideoShelfProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { id: mandalaId } = useParams<{ id: string }>();
 
   // Empty state — CTA buttons
   if (recommendations.length === 0) {
@@ -67,8 +69,24 @@ export function VideoShelf({ recommendations }: VideoShelfProps) {
 
           {/* Body */}
           <div className="px-3.5 py-3 pb-3.5">
-            <div className="mb-2 text-[13px] font-semibold leading-snug tracking-tight">
-              {rec.title}
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <div className="flex-1 text-[13px] font-semibold leading-snug tracking-tight">
+                {rec.title}
+              </div>
+              {mandalaId && (
+                <button
+                  type="button"
+                  aria-label={t('dashboard.videoShelf.openNotes', 'Open notes')}
+                  title={t('dashboard.videoShelf.openNotes', 'Open notes')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/mandalas/${mandalaId}/notes/${rec.videoId}`);
+                  }}
+                  className="flex-shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                >
+                  <NotebookPen className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
             <div className="flex gap-1.5">
               <span className="rounded-[5px] bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
