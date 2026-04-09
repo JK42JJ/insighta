@@ -95,7 +95,12 @@ function SortableScratchCard({
     selectedCardIds.has(card.id) && selectedCardIds.size > 1
       ? Array.from(selectedCardIds)
       : undefined;
-  const dragData: DragData = { type: 'card', card, selectedCardIds: multiIds, source: 'scratchpad' };
+  const dragData: DragData = {
+    type: 'card',
+    card,
+    selectedCardIds: multiIds,
+    source: 'scratchpad',
+  };
   const { attributes, listeners, setNodeRef, isDragging, transform, transition } = useSortable({
     id: cardDragId(card.id),
     data: dragData,
@@ -139,7 +144,9 @@ function loadDockedHeight(): number {
       const n = parseInt(saved, 10);
       if (!isNaN(n)) return Math.max(MIN_DOCK_H_HEIGHT, Math.min(MAX_DOCK_H_HEIGHT, n));
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return DEFAULT_DOCK_H_HEIGHT;
 }
 
@@ -150,7 +157,9 @@ function loadDockedWidth(): number {
       const n = parseInt(saved, 10);
       if (!isNaN(n)) return Math.max(MIN_DOCK_V_WIDTH, Math.min(MAX_DOCK_V_WIDTH, n));
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return DEFAULT_DOCK_V_WIDTH;
 }
 
@@ -297,10 +306,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       [cards]
     );
 
-    const sortableIds = useMemo(
-      () => sortedCards.map((c) => cardDragId(c.id)),
-      [sortedCards]
-    );
+    const sortableIds = useMemo(() => sortedCards.map((c) => cardDragId(c.id)), [sortedCards]);
 
     const handleDragSelectChange = useCallback(
       (selectedIndices: number[]) => {
@@ -362,11 +368,14 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
       e.preventDefault();
       e.stopPropagation();
       const startPos = axis === 'height' ? e.clientY : e.clientX;
-      const container = (e.currentTarget as HTMLElement).closest('[data-dock-container]') as HTMLElement | null;
+      const container = (e.currentTarget as HTMLElement).closest(
+        '[data-dock-container]'
+      ) as HTMLElement | null;
       if (!container) return;
-      const startSize = axis === 'height'
-        ? container.getBoundingClientRect().height
-        : container.getBoundingClientRect().width;
+      const startSize =
+        axis === 'height'
+          ? container.getBoundingClientRect().height
+          : container.getBoundingClientRect().width;
 
       container.style.transition = 'none';
       setIsDockResizing(true);
@@ -398,10 +407,18 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
 
         if (axis === 'height') {
           setDockHHeight(finalSize);
-          try { localStorage.setItem(STORAGE_KEY_DOCK_H_HEIGHT, String(finalSize)); } catch { /* ignore */ }
+          try {
+            localStorage.setItem(STORAGE_KEY_DOCK_H_HEIGHT, String(finalSize));
+          } catch {
+            /* ignore */
+          }
         } else {
           setDockVWidth(finalSize);
-          try { localStorage.setItem(STORAGE_KEY_DOCK_V_WIDTH, String(finalSize)); } catch { /* ignore */ }
+          try {
+            localStorage.setItem(STORAGE_KEY_DOCK_V_WIDTH, String(finalSize));
+          } catch {
+            /* ignore */
+          }
         }
       };
 
@@ -414,10 +431,18 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
     const handleDockResizeDoubleClick = useCallback((axis: 'height' | 'width') => {
       if (axis === 'height') {
         setDockHHeight(DEFAULT_DOCK_H_HEIGHT);
-        try { localStorage.setItem(STORAGE_KEY_DOCK_H_HEIGHT, String(DEFAULT_DOCK_H_HEIGHT)); } catch { /* ignore */ }
+        try {
+          localStorage.setItem(STORAGE_KEY_DOCK_H_HEIGHT, String(DEFAULT_DOCK_H_HEIGHT));
+        } catch {
+          /* ignore */
+        }
       } else {
         setDockVWidth(DEFAULT_DOCK_V_WIDTH);
-        try { localStorage.setItem(STORAGE_KEY_DOCK_V_WIDTH, String(DEFAULT_DOCK_V_WIDTH)); } catch { /* ignore */ }
+        try {
+          localStorage.setItem(STORAGE_KEY_DOCK_V_WIDTH, String(DEFAULT_DOCK_V_WIDTH));
+        } catch {
+          /* ignore */
+        }
       }
     }, []);
 
@@ -472,12 +497,16 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
           onPositionChange?.(position.x, position.y);
           try {
             localStorage.setItem(STORAGE_KEY_POS, JSON.stringify(position));
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
         if (isResizing) {
           try {
             localStorage.setItem(STORAGE_KEY_SIZE, JSON.stringify(size));
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
         setIsDragging(false);
         setIsResizing(false);
@@ -806,78 +835,84 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
 
       return (
         <SortableScratchCard key={card.id} card={card} selectedCardIds={selectedCardIds}>
-          {({ isDragging: isDragActive, dragRef, dragListeners, dragAttributes, style: sortableStyle }) => {
+          {({
+            isDragging: isDragActive,
+            dragRef,
+            dragListeners,
+            dragAttributes,
+            style: sortableStyle,
+          }) => {
             // ScratchPad cards: entire card is always draggable (cards are small,
             // grip handle is impractical at 56x32px). PointerSensor distance:5
             // ensures clicks still work (no movement = click, 5px+ = drag).
             return (
-            <div
-              ref={dragRef}
-              style={sortableStyle}
-              {...dragAttributes}
-              {...dragListeners}
-              data-card-item
-              data-dnd-draggable=""
-              data-selected={isSelected || undefined}
-              onClick={(e) => handleCardClick(e, card, idx)}
-              className={cn(
-                'group relative flex-shrink-0 transition-transform hover:-translate-y-0.5 rounded-sm cursor-grab active:cursor-grabbing',
-                isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
-                isDragActive && 'opacity-30'
-              )}
-            >
               <div
-                className={cn('relative overflow-hidden bg-muted rounded-sm', cardSize)}
-                style={{ boxShadow: 'var(--shadow-sm)' }}
+                ref={dragRef}
+                style={sortableStyle}
+                {...dragAttributes}
+                {...dragListeners}
+                data-card-item
+                data-dnd-draggable=""
+                data-selected={isSelected || undefined}
+                onClick={(e) => handleCardClick(e, card, idx)}
+                className={cn(
+                  'group relative flex-shrink-0 transition-transform hover:-translate-y-0.5 rounded-sm cursor-grab active:cursor-grabbing',
+                  isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
+                  isDragActive && 'opacity-30'
+                )}
               >
-                <img
-                  src={card.thumbnail}
-                  alt={card.title}
-                  draggable={false}
-                  className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-                  loading="lazy"
-                  onError={handleThumbnailError}
-                />
-                <span
-                  className={cn(
-                    'absolute bottom-0 right-0 bg-background/90 text-foreground px-0.5 font-medium',
-                    timeSize
-                  )}
+                <div
+                  className={cn('relative overflow-hidden bg-muted rounded-sm', cardSize)}
+                  style={{ boxShadow: 'var(--shadow-sm)' }}
                 >
-                  {getTimeLabel(new Date(card.createdAt), t)}
-                </span>
-                {isSelected && (
-                  <div
-                    className="absolute top-0.5 left-0.5 bg-primary rounded-full p-0.5 cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedCardIds((prev) => {
-                        const next = new Set(prev);
-                        next.delete(card.id);
-                        return next;
-                      });
-                    }}
+                  <img
+                    src={card.thumbnail}
+                    alt={card.title}
+                    draggable={false}
+                    className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                    loading="lazy"
+                    onError={handleThumbnailError}
+                  />
+                  <span
+                    className={cn(
+                      'absolute bottom-0 right-0 bg-background/90 text-foreground px-0.5 font-medium',
+                      timeSize
+                    )}
                   >
-                    <Check
-                      className={checkSize}
-                      style={{ color: 'hsl(var(--primary-foreground))' }}
-                    />
-                  </div>
-                )}
-                {!isCompact && (
-                  <a
-                    href={card.videoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute top-0.5 right-0.5 z-10 bg-background/90 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity text-primary"
-                  >
-                    <ExternalLink className="w-2.5 h-2.5" />
-                  </a>
-                )}
+                    {getTimeLabel(new Date(card.createdAt), t)}
+                  </span>
+                  {isSelected && (
+                    <div
+                      className="absolute top-0.5 left-0.5 bg-primary rounded-full p-0.5 cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedCardIds((prev) => {
+                          const next = new Set(prev);
+                          next.delete(card.id);
+                          return next;
+                        });
+                      }}
+                    >
+                      <Check
+                        className={checkSize}
+                        style={{ color: 'hsl(var(--primary-foreground))' }}
+                      />
+                    </div>
+                  )}
+                  {!isCompact && (
+                    <a
+                      href={card.videoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-0.5 right-0.5 z-10 bg-background/90 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity text-primary"
+                    >
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  )}
+                </div>
               </div>
-            </div>
-          );
+            );
           }}
         </SortableScratchCard>
       );
@@ -905,7 +940,10 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 isActiveDropTarget && 'border-2 border-dashed border-primary bg-primary/5',
                 isDockedDragging && 'opacity-50'
               )}
-              style={{ height: `${dockHHeight}px`, boxShadow: isActiveDropTarget ? 'var(--shadow-sm)' : 'none' }}
+              style={{
+                height: `${dockHHeight}px`,
+                boxShadow: isActiveDropTarget ? 'var(--shadow-sm)' : 'none',
+              }}
               onDragOver={handleDragOver}
               onDragLeave={onDragLeave}
               onDrop={handleDrop}
@@ -914,7 +952,11 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-primary/10 backdrop-blur-[1px] pointer-events-none z-10 gap-1">
                   <div
                     className="rounded-md border border-dashed border-primary/40 bg-primary/10 flex items-center justify-center"
-                    style={{ width: '52px', aspectRatio: '16/9', animation: 'card-silhouette-pulse 1.5s ease-in-out infinite' }}
+                    style={{
+                      width: '52px',
+                      aspectRatio: '16/9',
+                      animation: 'card-silhouette-pulse 1.5s ease-in-out infinite',
+                    }}
                   >
                     <Play className="w-3 h-3 text-primary/40" />
                   </div>
@@ -994,7 +1036,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               </div>
               {/* Resize handle — bottom edge */}
               <div
-                className="absolute bottom-0 left-0 w-full h-1 cursor-row-resize hover:bg-primary/20 active:bg-primary/30 transition-colors z-50"
+                className="absolute bottom-0 left-0 w-full h-1 cursor-row-resize z-50"
                 onMouseDown={(e) => handleDockResizeStart(e, 'height')}
                 onDoubleClick={() => handleDockResizeDoubleClick('height')}
               />
@@ -1020,7 +1062,10 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               isAnimating && 'animate-fade-in'
             )}
             data-dock-container
-            style={{ boxShadow: isActiveDropTarget ? 'var(--shadow-md)' : 'none', width: `${dockVWidth}px` }}
+            style={{
+              boxShadow: isActiveDropTarget ? 'var(--shadow-md)' : 'none',
+              width: `${dockVWidth}px`,
+            }}
             onDragOver={handleDragOver}
             onDragLeave={onDragLeave}
             onDrop={handleDrop}
@@ -1029,7 +1074,11 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-primary/15 backdrop-blur-[2px] pointer-events-none z-10 gap-1">
                 <div
                   className="rounded-md border border-dashed border-primary/40 bg-primary/10 flex items-center justify-center"
-                  style={{ width: '40px', aspectRatio: '16/9', animation: 'card-silhouette-pulse 1.5s ease-in-out infinite' }}
+                  style={{
+                    width: '40px',
+                    aspectRatio: '16/9',
+                    animation: 'card-silhouette-pulse 1.5s ease-in-out infinite',
+                  }}
                 >
                   <Play className="w-2.5 h-2.5 text-primary/40" />
                 </div>
@@ -1086,71 +1135,77 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   </div>
                 ) : (
                   <SortableContext items={sortableIds} strategy={rectSortingStrategy}>
-                  {sortedCards.map((card, idx) => {
-                    const isSelected = selectedCardIds.has(card.id);
-                    return (
-                      <SortableScratchCard
-                        key={card.id}
-                        card={card}
-                        selectedCardIds={selectedCardIds}
-                      >
-                        {({ isDragging: isDragActive, dragRef, dragListeners, dragAttributes, style: sortableStyle }) => {
-                          return (
-                          <div
-                            ref={dragRef}
-                            style={sortableStyle}
-                            {...dragAttributes}
-                            {...dragListeners}
-                            data-card-item
-                            data-dnd-draggable=""
-                            data-selected={isSelected || undefined}
-                            onClick={(e) => handleCardClick(e, card, idx)}
-                            className={cn(
-                              'group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:scale-[1.02]',
-                              isSelected && 'ring-1 ring-primary',
-                              isDragActive && 'opacity-30'
-                            )}
-                          >
-                            <div
-                              className="relative w-full aspect-video overflow-hidden bg-muted rounded"
-                              style={{ boxShadow: 'var(--shadow-xs)' }}
-                            >
-                              <img
-                                src={card.thumbnail}
-                                alt={card.title}
-                                draggable={false}
-                                className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-                                loading="lazy"
-                                onError={handleThumbnailError}
-                              />
-                              <span className="absolute bottom-0 right-0 text-[7px] bg-background/80 text-foreground px-0.5 font-medium rounded-tl">
-                                {getTimeLabel(new Date(card.createdAt), t)}
-                              </span>
-                              {isSelected && (
+                    {sortedCards.map((card, idx) => {
+                      const isSelected = selectedCardIds.has(card.id);
+                      return (
+                        <SortableScratchCard
+                          key={card.id}
+                          card={card}
+                          selectedCardIds={selectedCardIds}
+                        >
+                          {({
+                            isDragging: isDragActive,
+                            dragRef,
+                            dragListeners,
+                            dragAttributes,
+                            style: sortableStyle,
+                          }) => {
+                            return (
+                              <div
+                                ref={dragRef}
+                                style={sortableStyle}
+                                {...dragAttributes}
+                                {...dragListeners}
+                                data-card-item
+                                data-dnd-draggable=""
+                                data-selected={isSelected || undefined}
+                                onClick={(e) => handleCardClick(e, card, idx)}
+                                className={cn(
+                                  'group relative flex-shrink-0 cursor-grab active:cursor-grabbing transition-transform hover:scale-[1.02]',
+                                  isSelected && 'ring-1 ring-primary',
+                                  isDragActive && 'opacity-30'
+                                )}
+                              >
                                 <div
-                                  className="absolute top-0 left-0 bg-primary rounded-br p-0.5 cursor-pointer"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedCardIds((prev) => {
-                                      const next = new Set(prev);
-                                      next.delete(card.id);
-                                      return next;
-                                    });
-                                  }}
+                                  className="relative w-full aspect-video overflow-hidden bg-muted rounded"
+                                  style={{ boxShadow: 'var(--shadow-xs)' }}
                                 >
-                                  <Check
-                                    className="w-2 h-2"
-                                    style={{ color: 'hsl(var(--primary-foreground))' }}
+                                  <img
+                                    src={card.thumbnail}
+                                    alt={card.title}
+                                    draggable={false}
+                                    className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                                    loading="lazy"
+                                    onError={handleThumbnailError}
                                   />
+                                  <span className="absolute bottom-0 right-0 text-[7px] bg-background/80 text-foreground px-0.5 font-medium rounded-tl">
+                                    {getTimeLabel(new Date(card.createdAt), t)}
+                                  </span>
+                                  {isSelected && (
+                                    <div
+                                      className="absolute top-0 left-0 bg-primary rounded-br p-0.5 cursor-pointer"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedCardIds((prev) => {
+                                          const next = new Set(prev);
+                                          next.delete(card.id);
+                                          return next;
+                                        });
+                                      }}
+                                    >
+                                      <Check
+                                        className="w-2 h-2"
+                                        style={{ color: 'hsl(var(--primary-foreground))' }}
+                                      />
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                        }}
-                      </SortableScratchCard>
-                    );
-                  })}
+                              </div>
+                            );
+                          }}
+                        </SortableScratchCard>
+                      );
+                    })}
                   </SortableContext>
                 )}
               </div>
@@ -1170,7 +1225,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
             {/* Resize handle — side edge */}
             <div
               className={cn(
-                'absolute top-0 h-full w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors z-50',
+                'absolute top-0 h-full w-1 cursor-col-resize z-50',
                 dockPosition === 'left' ? 'right-0' : 'left-0'
               )}
               onMouseDown={(e) => handleDockResizeStart(e, 'width')}
@@ -1280,7 +1335,11 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-primary/15 backdrop-blur-[2px] rounded-xl pointer-events-none z-10 gap-2">
                   <div
                     className="rounded-lg border border-dashed border-primary/40 bg-primary/10 flex items-center justify-center shadow-sm"
-                    style={{ width: '72px', aspectRatio: '16/9', animation: 'card-silhouette-pulse 1.5s ease-in-out infinite' }}
+                    style={{
+                      width: '72px',
+                      aspectRatio: '16/9',
+                      animation: 'card-silhouette-pulse 1.5s ease-in-out infinite',
+                    }}
                   >
                     <Play className="w-4 h-4 text-primary/40" />
                   </div>

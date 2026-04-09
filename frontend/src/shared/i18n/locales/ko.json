@@ -761,6 +761,8 @@
     "currentChanged": "기본 만다라가 변경되었습니다",
     "sectors": "섹터",
     "updated": "업데이트",
+    "deleteFailed": "만다라트 삭제에 실패했습니다. 잠시 후 다시 시도하세요.",
+    "duplicateTitle": "같은 제목의 만다라트가 이미 존재합니다.",
     "quotaExceeded": "만다라트 한도에 도달했습니다. 더 만들려면 업그레이드하세요.",
     "quotaExceededMsg": "만다라트 한도를 초과했습니다. 업그레이드하거나 만다라트를 삭제하세요.",
     "setAsCurrent": "기본으로 설정",

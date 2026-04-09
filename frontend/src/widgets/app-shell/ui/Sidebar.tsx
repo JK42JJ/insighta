@@ -385,7 +385,7 @@ export function Sidebar({
       {/* Resize handle */}
       {showResizeHandle && (
         <div
-          className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors z-50"
+          className="absolute top-0 right-0 w-1 h-full cursor-col-resize z-50"
           onMouseDown={handleResizeStart}
           onDoubleClick={handleResizeDoubleClick}
         />

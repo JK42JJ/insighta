@@ -227,6 +227,22 @@ export class MandalaManager {
   }
 
   /**
+   * Checks if a mandala with the same title already exists for the user.
+   * Throws 'DUPLICATE_TITLE' if found.
+   */
+  async checkDuplicateTitle(userId: string, title: string): Promise<void> {
+    const existing = await this.prisma.user_mandalas.findFirst({
+      where: { user_id: userId, title: title.trim() },
+      select: { id: true },
+    });
+    if (existing) {
+      const err = new Error('DUPLICATE_TITLE') as Error & { existingId: string };
+      err.existingId = existing.id;
+      throw err;
+    }
+  }
+
+  /**
    * Gets the default mandala for a user. Backward-compatible.
    */
   async getMandala(userId: string): Promise<MandalaWithLevels | null> {
@@ -309,6 +325,9 @@ export class MandalaManager {
     title: string,
     levels: MandalaLevelData[]
   ): Promise<MandalaWithLevels> {
+    // Step 0: Duplicate title check (CP362 #386)
+    await this.checkDuplicateTitle(userId, title);
+
     // Step 1: Read queries outside transaction (parallel)
     const [subscription, adminCheck, count, maxPositionResult] = await Promise.all([
       this.prisma.user_subscriptions.findUnique({
@@ -551,30 +570,35 @@ export class MandalaManager {
     }
 
     // Step 3: Delete mandala in a clean transaction
-    await this.prisma.$transaction(async (tx) => {
-      // Re-verify ownership inside transaction
-      const current = await this.verifyOwnership(userId, mandalaId, tx as any);
+    // CP362: same 30s timeout as createMandala/updateMandalaLevels.
+    // Cascade across 9+ related tables via pgbouncer can exceed default 5s.
+    await this.prisma.$transaction(
+      async (tx) => {
+        // Re-verify ownership inside transaction
+        const current = await this.verifyOwnership(userId, mandalaId, tx as any);
 
-      // If deleting the default mandala, promote the next candidate
-      if (current.is_default) {
-        const next = await tx.user_mandalas.findFirst({
-          where: { user_id: userId, id: { not: mandalaId } },
-          orderBy: [{ position: 'asc' }, { created_at: 'asc' }],
-        });
-
-        if (next) {
-          await tx.user_mandalas.update({
-            where: { id: next.id },
-            data: { is_default: true },
+        // If deleting the default mandala, promote the next candidate
+        if (current.is_default) {
+          const next = await tx.user_mandalas.findFirst({
+            where: { user_id: userId, id: { not: mandalaId } },
+            orderBy: [{ position: 'asc' }, { created_at: 'asc' }],
           });
-        }
-      }
 
-      // Cascade deletes levels via Prisma relation onDelete: Cascade
-      await tx.user_mandalas.delete({
-        where: { id: mandalaId },
-      });
-    });
+          if (next) {
+            await tx.user_mandalas.update({
+              where: { id: next.id },
+              data: { is_default: true },
+            });
+          }
+        }
+
+        // Cascade deletes levels via Prisma relation onDelete: Cascade
+        await tx.user_mandalas.delete({
+          where: { id: mandalaId },
+        });
+      },
+      { maxWait: 5_000, timeout: 30_000 }
+    );
 
     logger.info(`Mandala deleted: userId=${userId}, mandalaId=${mandalaId}`);
   }
@@ -973,10 +997,20 @@ export class MandalaManager {
       throw new Error('MANDALA_NOT_FOUND');
     }
 
+    // CP362 #386: deduplicate cloned title
+    let clonedTitle = `${source.title} (cloned)`;
+    const existing = await this.prisma.user_mandalas.findFirst({
+      where: { user_id: targetUserId, title: clonedTitle },
+      select: { id: true },
+    });
+    if (existing) {
+      clonedTitle = `${source.title} (cloned ${Date.now()})`;
+    }
+
     const newMandala = await this.prisma.user_mandalas.create({
       data: {
         user_id: targetUserId,
-        title: `${source.title} (cloned)`,
+        title: clonedTitle,
         is_default: false,
         is_public: false,
       },

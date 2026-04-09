@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, Timer, Camera, Loader2 } from 'lucide-react';
+import { MessageSquare, Timer, Camera, Loader2, Maximize2 } from 'lucide-react';
+import { useVideoPanelStore } from '@/features/video-side-panel';
+import type { InsightCard } from '@/entities/card/model/types';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -85,12 +87,7 @@ function CaptureGallery({
             className="relative flex-shrink-0 rounded overflow-hidden border border-border/20 hover:border-primary/40 transition-colors group"
             title={cap.alt}
           >
-            <img
-              src={cap.url}
-              alt={cap.alt}
-              className="h-8 w-auto object-cover"
-              loading="lazy"
-            />
+            <img src={cap.url} alt={cap.alt} className="h-8 w-auto object-cover" loading="lazy" />
             {cap.seconds !== null && (
               <span className="absolute bottom-0 right-0 text-[8px] bg-black/70 text-white px-0.5 rounded-tl">
                 {formatTime(cap.seconds)}
@@ -115,6 +112,10 @@ interface MemoEditorProps {
   videoSummary?: { summary_en: string; summary_ko: string; tags?: string[]; model?: string };
   onEnrichStart?: (cardId: string) => void;
   onEnrichEnd?: (cardId: string) => void;
+  /** Full card object for expanding to sidebar mode. */
+  card?: InsightCard;
+  /** Close the parent modal before switching to sidebar. */
+  onCloseModal?: () => void;
 }
 
 export function MemoEditor({
@@ -129,6 +130,8 @@ export function MemoEditor({
   videoSummary,
   onEnrichStart,
   onEnrichEnd,
+  card,
+  onCloseModal,
 }: MemoEditorProps) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -143,7 +146,7 @@ export function MemoEditor({
 
   // Sync with external note changes (e.g., when card changes) — avoid unnecessary setState
   useEffect(() => {
-    setNote(prev => prev === initialNote ? prev : initialNote);
+    setNote((prev) => (prev === initialNote ? prev : initialNote));
   }, [initialNote]);
 
   // Focus cursor at end of text when entering edit mode
@@ -219,42 +222,48 @@ export function MemoEditor({
   );
 
   // Insert timestamp at cursor
-  const insertTimestamp = useCallback((overrideNote?: string) => {
-    if (!playerRef.current || !videoId) {
-      toast.error(t('videoPlayer.playerNotReady'));
-      return;
-    }
+  const insertTimestamp = useCallback(
+    (overrideNote?: string) => {
+      if (!playerRef.current || !videoId) {
+        toast.error(t('videoPlayer.playerNotReady'));
+        return;
+      }
 
-    try {
-      const currentTime = Math.floor(playerRef.current.getCurrentTime());
-      const timestamp = formatTime(currentTime);
-      const link = `[⏱ ${timestamp}](https://www.youtube.com/watch?v=${videoId}&t=${currentTime}s)`;
+      try {
+        const currentTime = Math.floor(playerRef.current.getCurrentTime());
+        const timestamp = formatTime(currentTime);
+        const link = `[⏱ ${timestamp}](https://www.youtube.com/watch?v=${videoId}&t=${currentTime}s)`;
 
-      insertTextAtCursor(link, overrideNote);
-      toast.success(t('videoPlayer.timestampAdded', { timestamp }));
-    } catch {
-      toast.error(t('videoPlayer.timestampFailed'));
-    }
-  }, [videoId, playerRef, insertTextAtCursor, t]);
+        insertTextAtCursor(link, overrideNote);
+        toast.success(t('videoPlayer.timestampAdded', { timestamp }));
+      } catch {
+        toast.error(t('videoPlayer.timestampFailed'));
+      }
+    },
+    [videoId, playerRef, insertTextAtCursor, t]
+  );
 
   // Insert capture bookmark with thumbnail image markdown
-  const insertCapture = useCallback((overrideNote?: string) => {
-    if (!playerRef.current || !videoId) {
-      toast.error(t('videoPlayer.playerNotReady'));
-      return;
-    }
+  const insertCapture = useCallback(
+    (overrideNote?: string) => {
+      if (!playerRef.current || !videoId) {
+        toast.error(t('videoPlayer.playerNotReady'));
+        return;
+      }
 
-    try {
-      const currentTime = Math.floor(playerRef.current.getCurrentTime());
-      const timestamp = formatTime(currentTime);
-      const link = `![📸 ${timestamp}](https://img.youtube.com/vi/${videoId}/mqdefault.jpg#t=${currentTime}s)`;
+      try {
+        const currentTime = Math.floor(playerRef.current.getCurrentTime());
+        const timestamp = formatTime(currentTime);
+        const link = `![📸 ${timestamp}](https://img.youtube.com/vi/${videoId}/mqdefault.jpg#t=${currentTime}s)`;
 
-      insertTextAtCursor(link, overrideNote);
-      toast.success(t('videoPlayer.timestampAdded', { timestamp }));
-    } catch {
-      toast.error(t('videoPlayer.timestampFailed'));
-    }
-  }, [videoId, playerRef, insertTextAtCursor, t]);
+        insertTextAtCursor(link, overrideNote);
+        toast.success(t('videoPlayer.timestampAdded', { timestamp }));
+      } catch {
+        toast.error(t('videoPlayer.timestampFailed'));
+      }
+    },
+    [videoId, playerRef, insertTextAtCursor, t]
+  );
 
   // Trigger AI summary generation for this card
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
@@ -272,7 +281,7 @@ export function MemoEditor({
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
             const transcriptRes = await fetch(
               `${supabaseUrl}/functions/v1/fetch-transcript?video_id=${encodeURIComponent(videoId)}`,
-              { headers: await getAuthHeaders() },
+              { headers: await getAuthHeaders() }
             );
             if (transcriptRes.ok) {
               const tData = await transcriptRes.json();
@@ -289,7 +298,12 @@ export function MemoEditor({
         const res = await fetch('/api/v1/ontology/enrich/auto', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ source_table: sourceTable, source_id: cardId, force: true, ...(transcript ? { transcript } : {}) }),
+          body: JSON.stringify({
+            source_table: sourceTable,
+            source_id: cardId,
+            force: true,
+            ...(transcript ? { transcript } : {}),
+          }),
         });
         const data = await res.json();
         if (res.ok && data.data?.enriched !== false) {
@@ -459,25 +473,52 @@ export function MemoEditor({
               {t('videoPlayer.slashHint')}
             </span>
           )}
+          {/* Expand to full-featured side editor (Mode A → B transition) */}
+          {card && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                // 1. Flush pending auto-save
+                if (autoSaveTimerRef.current) {
+                  clearTimeout(autoSaveTimerRef.current);
+                  onSave(cardId, note);
+                }
+                // 2. Close modal (Mode A → off)
+                onCloseModal?.();
+                // 3. Open sidebar panel (→ Mode B)
+                // Capture current playback position for seamless resume
+                const currentTime = playerRef.current?.getCurrentTime?.() ?? 0;
+                useVideoPanelStore.getState().expandToSidebar(card, Math.floor(currentTime));
+              }}
+              className="ml-auto h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+              title={t('videoPlayer.expandEditor', 'Expand editor')}
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
 
         {/* Content — fills remaining height from parent */}
         <div className="px-3 pb-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
           {/* AI Summary — always visible (read-only, not part of user note) */}
           {isGeneratingSummary && <GeneratingIndicator />}
-          {videoSummary?.summary_en && !isGeneratingSummary && (() => {
-            const isKo = i18n.language === 'ko';
-            const summaryText = isKo && videoSummary.summary_ko ? videoSummary.summary_ko : videoSummary.summary_en;
-            const summaryLabel = isKo ? 'AI 요약' : 'AI Summary';
-            return (
-              <div className="border-l-2 border-blue-400 pl-2 mb-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-r text-sm text-muted-foreground">
-                <div className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 mb-0.5">
-                  <span>🤖</span> {summaryLabel}:
+          {videoSummary?.summary_en &&
+            !isGeneratingSummary &&
+            (() => {
+              const isKo = i18n.language === 'ko';
+              const summaryText =
+                isKo && videoSummary.summary_ko ? videoSummary.summary_ko : videoSummary.summary_en;
+              const summaryLabel = isKo ? 'AI 요약' : 'AI Summary';
+              return (
+                <div className="border-l-2 border-blue-400 pl-2 mb-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-r text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 mb-0.5">
+                    <span>🤖</span> {summaryLabel}:
+                  </div>
+                  <p className="whitespace-pre-wrap">{summaryText}</p>
                 </div>
-                <p className="whitespace-pre-wrap">{summaryText}</p>
-              </div>
-            );
-          })()}
+              );
+            })()}
 
           {/* User note — edit or preview mode */}
           {isEditing ? (
@@ -516,12 +557,14 @@ export function MemoEditor({
       </div>
 
       {/* SlashMenu — Portal to document.body to bypass overflow clip */}
-      {slashMenu && caretCoords && createPortal(
-        <div className="fixed z-[9999]" style={{ top: caretCoords.top, left: caretCoords.left }}>
-          <SlashMenu onSelect={handleSlashSelect} onClose={handleSlashClose} />
-        </div>,
-        document.body
-      )}
+      {slashMenu &&
+        caretCoords &&
+        createPortal(
+          <div className="fixed z-[9999]" style={{ top: caretCoords.top, left: caretCoords.left }}>
+            <SlashMenu onSelect={handleSlashSelect} onClose={handleSlashClose} />
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

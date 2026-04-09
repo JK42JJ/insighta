@@ -1,17 +1,9 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InsightCard } from '@/entities/card/model/types';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-} from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogDescription } from '@/shared/ui/dialog';
 import { DEFAULT_VIDEO_PANEL_RATIO } from '@/pages/index/model/useVideoModal';
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from '@/shared/ui/resizable';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
 import { getYouTubeVideoId } from '../model/youtube-api';
 import type { YTPlayer } from '../model/youtube-api';
 import { YouTubePlayer } from './YouTubePlayer';
@@ -44,7 +36,6 @@ export function VideoPlayerModal({
   const { t } = useTranslation();
   const playerRef = useRef<YTPlayer | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
-
 
   useEffect(() => {
     setPlayerReady(false);
@@ -101,7 +92,8 @@ export function VideoPlayerModal({
   const isYouTube = videoId !== null;
 
   const cachedPosition = watchPositionCache?.get(card.id);
-  const startTime = cachedPosition ?? (card.lastWatchPosition ? Math.floor(card.lastWatchPosition) : 0);
+  const startTime =
+    cachedPosition ?? (card.lastWatchPosition ? Math.floor(card.lastWatchPosition) : 0);
   const cachedPanelSize = panelSizeCache?.get(card.id) ?? DEFAULT_VIDEO_PANEL_RATIO;
 
   return (
@@ -120,7 +112,11 @@ export function VideoPlayerModal({
         </DialogDescription>
 
         {isYouTube && videoId ? (
-          <ResizablePanelGroup direction="vertical" className="flex-1 min-h-0" onLayout={handleLayout}>
+          <ResizablePanelGroup
+            direction="vertical"
+            className="flex-1 min-h-0"
+            onLayout={handleLayout}
+          >
             {/* Video Panel */}
             <ResizablePanel defaultSize={cachedPanelSize} minSize={30}>
               <YouTubePlayer
@@ -153,6 +149,8 @@ export function VideoPlayerModal({
                 videoSummary={card.videoSummary}
                 onEnrichStart={onEnrichStart}
                 onEnrichEnd={onEnrichEnd}
+                card={card}
+                onCloseModal={onClose}
               />
             </ResizablePanel>
           </ResizablePanelGroup>

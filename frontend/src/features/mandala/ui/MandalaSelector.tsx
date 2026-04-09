@@ -97,7 +97,7 @@ export function MandalaSelector() {
       toast({ title: t('mandalaSettings.deleted') });
       setDeleteOpen(false);
     } catch {
-      toast({ title: t('common.error'), variant: 'destructive' });
+      toast({ title: t('mandalaSettings.deleteFailed'), variant: 'destructive' });
     }
   };
 

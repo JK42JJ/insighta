@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDroppable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
-import { InsightCardItem } from './InsightCardItem';
+import { InsightCardItemV2 } from './InsightCardItemV2';
 import { FileVideo, Check } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDragSelect } from '@/features/drag-select/model/useDragSelect';
@@ -81,7 +81,6 @@ export function CardList({
 }: CardListProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-
 
   const { data: summaryRatings } = useSummaryRatings();
   const rateSummary = useRateSummary();
@@ -262,7 +261,6 @@ export function CardList({
     [lastSelectedIndex, sortedCards, onCardClick]
   );
 
-
   if (isLoading && cards.length === 0) {
     return <CardSkeleton count={cachedCardCount ?? 6} />;
   }
@@ -319,20 +317,15 @@ export function CardList({
                   <Check className="w-3 h-3 text-primary-foreground" />
                 </div>
               )}
-              <InsightCardItem
+              <InsightCardItemV2
                 card={card}
                 onCardClick={() => onCardClick?.(card)}
                 onCtrlClick={(e) => handleCardClick(e, card, idx)}
-                onSave={onSaveNote}
                 isDraggable={true}
                 selectedCardIds={selectedCardIds.size > 0 ? selectedCardIds : undefined}
-                disableFlip={isDragSelecting}
-                summaryRating={summaryRatings?.[card.id] as SummaryRating | undefined}
-                onRate={handleRate}
                 isEnriching={enrichingCardIds?.has(card.id)}
                 isEnrichFailed={failedEnrichCardIds?.has(card.id)}
                 onRetryEnrich={onRetryEnrich}
-                compact={compact}
               />
             </CardSlot>
           );

@@ -80,7 +80,7 @@ export default function MandalasPage() {
       await deleteMandala.mutateAsync(id);
       toast({ title: t('mandalaSettings.deleted') });
     } catch {
-      toast({ title: t('common.error'), variant: 'destructive' });
+      toast({ title: t('mandalaSettings.deleteFailed'), variant: 'destructive' });
     }
   };
 
@@ -118,8 +118,13 @@ export default function MandalasPage() {
         title: t('mandalas.duplicated'),
         description: t('mandalas.duplicatedDesc', { title: mandala.title }),
       });
-    } catch {
-      toast({ title: t('mandalaSettings.quotaExceeded'), variant: 'destructive' });
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'DUPLICATE_TITLE') {
+        toast({ title: t('mandalaSettings.duplicateTitle'), variant: 'destructive' });
+      } else {
+        toast({ title: t('mandalaSettings.quotaExceeded'), variant: 'destructive' });
+      }
     }
   };
 

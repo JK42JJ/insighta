@@ -760,6 +760,8 @@
     "currentChanged": "Default mandala changed",
     "sectors": "sectors",
     "updated": "Updated",
+    "deleteFailed": "Failed to delete mandala. Please try again later.",
+    "duplicateTitle": "A mandala with this title already exists.",
     "quotaExceeded": "Mandala limit reached. Upgrade to create more.",
     "quotaExceededMsg": "You've exceeded your mandala limit. Upgrade or remove a mandala.",
     "setAsCurrent": "Set as Current",

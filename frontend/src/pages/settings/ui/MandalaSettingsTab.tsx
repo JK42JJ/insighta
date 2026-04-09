@@ -57,8 +57,13 @@ export function MandalaSettingsTab() {
       toast({ title: t('mandalaSettings.created') });
       setCreateDialogOpen(false);
       setInputValue('');
-    } catch {
-      toast({ title: t('mandalaSettings.quotaExceeded'), variant: 'destructive' });
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'DUPLICATE_TITLE') {
+        toast({ title: t('mandalaSettings.duplicateTitle'), variant: 'destructive' });
+      } else {
+        toast({ title: t('mandalaSettings.quotaExceeded'), variant: 'destructive' });
+      }
     }
   };
 
@@ -76,7 +81,7 @@ export function MandalaSettingsTab() {
       await deleteMandala.mutateAsync(id);
       toast({ title: t('mandalaSettings.deleted') });
     } catch {
-      toast({ title: t('common.error'), variant: 'destructive' });
+      toast({ title: t('mandalaSettings.deleteFailed'), variant: 'destructive' });
     }
   };
 

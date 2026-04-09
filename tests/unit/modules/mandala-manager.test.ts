@@ -1242,4 +1242,94 @@ describe('MandalaManager', () => {
       );
     });
   });
+
+  // ─── checkDuplicateTitle (Bug #386 regression) ───
+
+  describe('checkDuplicateTitle', () => {
+    test('should throw DUPLICATE_TITLE when a mandala with the same title exists for the user', async () => {
+      mockPrisma.user_mandalas.findFirst.mockResolvedValueOnce({ id: 'existing-id' });
+
+      const err = await manager.checkDuplicateTitle(mockUserId, 'My Mandala').catch((e) => e);
+
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toBe('DUPLICATE_TITLE');
+      expect(err.existingId).toBe('existing-id');
+      expect(mockPrisma.user_mandalas.findFirst).toHaveBeenCalledWith({
+        where: { user_id: mockUserId, title: 'My Mandala' },
+        select: { id: true },
+      });
+    });
+
+    test('should resolve without error when no duplicate title exists for the user', async () => {
+      mockPrisma.user_mandalas.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        manager.checkDuplicateTitle(mockUserId, 'Unique Title')
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  // ─── createMandala — duplicate title guard (Bug #386 regression) ───
+
+  describe('createMandala — duplicate title guard', () => {
+    test('should reject with DUPLICATE_TITLE before entering the transaction', async () => {
+      // checkDuplicateTitle (Step 0) uses findFirst — return a hit to simulate duplicate
+      mockPrisma.user_mandalas.findFirst.mockResolvedValueOnce({ id: 'existing-id' });
+
+      await expect(
+        manager.createMandala(mockUserId, 'My Mandala', mockLevelsInput)
+      ).rejects.toThrow('DUPLICATE_TITLE');
+
+      // Step 1 parallel reads and the transaction must never run
+      expect(mockPrisma.user_subscriptions.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── deleteMandala — extended timeout guard (Bug #385 regression) ───
+
+  describe('deleteMandala — extended timeout guard', () => {
+    test('should complete successfully and call delete inside transaction (CP362 #385)', async () => {
+      // Outside tx: verifyOwnership (non-default mandala) + find default for orphan cards
+      mockPrisma.user_mandalas.findFirst
+        .mockResolvedValueOnce({ ...mockRawMandala, is_default: false }) // verifyOwnership
+        .mockResolvedValueOnce({ id: 'default-m', is_default: true }); // find default
+      mockPrisma.userVideoState.updateMany.mockResolvedValue({ count: 0 });
+      mockPrisma.user_local_cards.updateMany.mockResolvedValue({ count: 0 });
+
+      const mockTx = createMockTx();
+      mockTx.user_mandalas.findFirst.mockResolvedValueOnce({
+        ...mockRawMandala,
+        is_default: false,
+      }); // re-verify inside tx
+      mockTx.user_mandalas.delete.mockResolvedValue({});
+
+      // Capture the options argument passed to $transaction
+      let capturedOptions: any;
+      mockPrisma.$transaction.mockImplementation(async (fn: any, opts: any) => {
+        capturedOptions = opts;
+        return fn(mockTx);
+      });
+
+      await expect(manager.deleteMandala(mockUserId, mockMandalaId)).resolves.toBeUndefined();
+
+      expect(mockTx.user_mandalas.delete).toHaveBeenCalledWith({
+        where: { id: mockMandalaId },
+      });
+      // CP362 fix: transaction must use the extended timeout budget
+      expect(capturedOptions).toEqual({ maxWait: 5_000, timeout: 30_000 });
+    });
+
+    test('should throw Mandala not found for a non-existent mandala (CP362 #385)', async () => {
+      // verifyOwnership — the first findFirst call returns null
+      mockPrisma.user_mandalas.findFirst.mockResolvedValueOnce(null);
+
+      await expect(manager.deleteMandala(mockUserId, 'non-existent-id')).rejects.toThrow(
+        'Mandala not found'
+      );
+
+      // Transaction must never be entered when ownership check fails
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
 });

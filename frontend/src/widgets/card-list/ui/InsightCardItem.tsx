@@ -4,7 +4,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
-import { GripVertical, StickyNote, Play, Loader2, RotateCw } from 'lucide-react';
+import { GripVertical, StickyNote, Play, Loader2, RotateCw, NotepadText } from 'lucide-react';
 import { CompactNotePreview } from '@/shared/ui/CompactNotePreview';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
@@ -162,8 +162,18 @@ export function InsightCardItem({
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
 
+            {/* Memo indicator badge — bottom-left */}
+            {card.userNote?.trim() && (
+              <div className="absolute bottom-1 left-1.5 z-10 flex items-center gap-0.5 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white/80">
+                <NotepadText className="h-2.5 w-2.5" aria-hidden />
+              </div>
+            )}
+
             {/* Title overlay */}
-            <h4 className="absolute bottom-1 left-1.5 right-1.5 text-xs font-medium text-white line-clamp-2 leading-tight">
+            <h4
+              className="absolute bottom-1 left-1.5 right-1.5 text-xs font-medium text-white line-clamp-2 leading-tight"
+              style={{ paddingLeft: card.userNote?.trim() ? '22px' : undefined }}
+            >
               {card.title}
             </h4>
 
@@ -180,7 +190,12 @@ export function InsightCardItem({
           </div>
 
           {/* Note preview — fixed height area (hidden in compact mode) */}
-          <div className={cn('px-2.5 pt-2 pb-3 space-y-1.5 h-[76px] overflow-hidden', compact && 'hidden')}>
+          <div
+            className={cn(
+              'px-2.5 pt-2 pb-3 space-y-1.5 h-[76px] overflow-hidden',
+              compact && 'hidden'
+            )}
+          >
             {isEditing ? (
               <textarea
                 autoFocus
@@ -254,12 +269,14 @@ export function InsightCardItem({
         </div>
 
         {/* === Back face (note/memo view) === */}
-        <div className={cn(
-          'absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-xl border p-3 flex flex-col',
-          'pointer-events-none',
-          !shouldDisableFlip && 'group-hover:pointer-events-auto',
-          compact && 'hidden'
-        )}>
+        <div
+          className={cn(
+            'absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-xl border p-3 flex flex-col',
+            'pointer-events-none',
+            !shouldDisableFlip && 'group-hover:pointer-events-auto',
+            compact && 'hidden'
+          )}
+        >
           <h4 className="text-xs font-semibold line-clamp-1 mb-1">{card.title}</h4>
           <div className="flex-1 overflow-y-auto" onDoubleClick={handleNoteDoubleClick}>
             {isEditing ? (

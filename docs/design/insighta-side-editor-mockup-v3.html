@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Insighta — Side Panel v3 (Video + Notes)</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c0d12;
+  --bg2: #111219;
+  --bg3: #181a24;
+  --bg4: #1e2030;
+  --gb: rgba(255,255,255,.06);
+  --t1: #ededf0;
+  --t2: #9394a0;
+  --t3: #4e4f5c;
+  --t4: #353642;
+  --ind: #818cf8;
+  --is: rgba(129,140,248,.08);
+  --im: rgba(129,140,248,.15);
+  --em: #34d399;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--bg);
+  color: var(--t1);
+  height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  display: flex;
+}
+
+/* ===== State nav ===== */
+.state-nav {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--bg3);
+  border: 1px solid var(--gb);
+  z-index: 500;
+}
+
+.state-btn {
+  padding: 5px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: transparent;
+  color: var(--t3);
+}
+
+.state-btn.active { background: var(--im); color: var(--ind); }
+.state-btn:hover:not(.active) { color: var(--t2); }
+
+/* ===== Dashboard ===== */
+.dashboard {
+  flex: 1;
+  padding: 48px 20px 20px;
+  overflow-y: auto;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  min-width: 0;
+}
+
+.dash-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.dash-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.dash-count {
+  font-size: 12px;
+  color: var(--t3);
+  font-weight: 500;
+}
+
+.dash-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 14px;
+  flex-wrap: wrap;
+}
+
+.dtab {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--t3);
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+.dtab.active { background: var(--im); color: var(--ind); }
+.dtab:hover:not(.active) { color: var(--t2); }
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  background: var(--bg3);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.card:hover {
+  border-color: rgba(129,140,248,0.12);
+  transform: translateY(-1px);
+}
+
+.card.active {
+  border-color: rgba(129,140,248,0.3);
+  box-shadow: 0 0 16px rgba(129,140,248,0.05);
+}
+
+.card-thumb {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: linear-gradient(135deg, var(--bg4), var(--bg3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--t3);
+  position: relative;
+}
+
+.card-dur {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.7);
+  color: #aaa;
+}
+
+.card-body { padding: 8px 10px 10px; }
+
+.card-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t2);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-channel {
+  font-size: 10px;
+  color: var(--t3);
+  margin-top: 3px;
+}
+
+.card-ai {
+  font-size: 10px;
+  color: var(--t4);
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(255,255,255,0.03);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ===== Side Panel ===== */
+.side-panel {
+  width: 0;
+  background: var(--bg2);
+  border-left: 1px solid rgba(255,255,255,0.04);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+}
+
+.side-panel.open {
+  width: 560px;
+  box-shadow: -12px 0 40px rgba(0,0,0,0.3);
+}
+
+/* -- Video player area -- */
+.panel-video {
+  flex-shrink: 0;
+  background: #000;
+  position: relative;
+}
+
+.panel-player {
+  width: 100%;
+  aspect-ratio: 16/9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: linear-gradient(135deg, #0a0a14, #12101e);
+}
+
+.play-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.play-btn:hover {
+  background: rgba(255,255,255,0.14);
+  transform: scale(1.05);
+}
+
+.panel-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(6px);
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  z-index: 10;
+}
+
+.panel-close:hover {
+  background: rgba(0,0,0,0.65);
+  color: white;
+}
+
+.player-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255,255,255,0.08);
+}
+
+.player-progress {
+  height: 100%;
+  width: 18%;
+  background: var(--ind);
+  border-radius: 0 2px 2px 0;
+}
+
+/* -- Video info -- */
+.panel-info {
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  flex-shrink: 0;
+}
+
+.panel-vtitle {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  line-height: 1.35;
+  color: var(--t1);
+}
+
+.panel-vmeta {
+  font-size: 11px;
+  color: var(--t3);
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel-dot {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--t4);
+}
+
+.panel-cell {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--is);
+  color: var(--ind);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* -- Tabs -- */
+.panel-tabs {
+  display: flex;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  flex-shrink: 0;
+}
+
+.ptab {
+  padding: 8px 0;
+  margin-right: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--t3);
+  border: none;
+  background: none;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s;
+  font-family: inherit;
+}
+
+.ptab:hover { color: var(--t2); }
+
+.ptab.active { color: var(--t1); font-weight: 600; }
+
+.ptab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1.5px;
+  background: var(--ind);
+  border-radius: 1px;
+}
+
+/* -- Editor area -- */
+.panel-editor {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+.panel-editor::-webkit-scrollbar { width: 3px; }
+.panel-editor::-webkit-scrollbar-track { background: transparent; }
+.panel-editor::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 3px; }
+
+.note {
+  font-size: 14px;
+  line-height: 1.72;
+  color: rgba(237,237,240,0.88);
+  caret-color: var(--ind);
+  outline: none;
+  min-height: 200px;
+}
+
+.note h2 {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  margin-top: 22px;
+  margin-bottom: 4px;
+  color: var(--t1);
+}
+
+.note h2:first-child { margin-top: 0; }
+
+.note h3 {
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 16px;
+  margin-bottom: 3px;
+  color: var(--t1);
+}
+
+.note p { margin-bottom: 5px; }
+
+.note ul, .note ol {
+  margin-bottom: 5px;
+  padding-left: 18px;
+}
+
+.note li { margin-bottom: 2px; }
+.note li::marker { color: var(--t4); }
+
+.note code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.05);
+  color: var(--ind);
+}
+
+.note pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.3);
+  overflow-x: auto;
+}
+
+.note pre code {
+  padding: 0;
+  background: none;
+  color: var(--t2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.note blockquote {
+  margin: 8px 0;
+  padding: 5px 12px;
+  border-left: 2px solid rgba(129,140,248,0.2);
+  color: var(--t2);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.ts {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(129,140,248,0.1);
+  color: var(--ind);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ts:hover { background: rgba(129,140,248,0.18); }
+
+.placeholder { color: var(--t4); }
+
+/* AI tab */
+.ai-tab { display: none; }
+.ai-tab.show { display: block; }
+.notes-tab { display: block; }
+.notes-tab.hide { display: none; }
+
+.ai-sec { margin-bottom: 16px; }
+
+.ai-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--t3);
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.ai-txt {
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(237,237,240,0.78);
+}
+
+.ai-tag {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--is);
+  color: var(--ind);
+  margin: 0 4px 3px 0;
+}
+
+/* -- Footer -- */
+.panel-footer {
+  padding: 7px 16px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.save-s {
+  font-size: 10px;
+  color: var(--t3);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.save-d {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--em);
+}
+
+.wc {
+  font-size: 10px;
+  color: var(--t4);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* -- Bubble toolbar -- */
+.bubble {
+  position: fixed;
+  display: none;
+  align-items: center;
+  gap: 1px;
+  padding: 3px;
+  border-radius: 8px;
+  background: rgba(30,32,48,0.95);
+  border: 1px solid rgba(255,255,255,0.07);
+  box-shadow: 0 5px 20px rgba(0,0,0,0.45);
+  backdrop-filter: blur(12px);
+  z-index: 300;
+}
+
+.bb {
+  width: 26px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: var(--t2);
+  cursor: pointer;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: all 0.1s;
+}
+
+.bb:hover { background: rgba(255,255,255,0.07); color: var(--t1); }
+.bb.on { background: var(--im); color: var(--ind); }
+.bsep { width: 1px; height: 14px; background: rgba(255,255,255,0.06); margin: 0 1px; }
+
+/* Rules bar */
+.rules {
+  position: fixed;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--bg3);
+  border: 1px solid var(--gb);
+  z-index: 500;
+  font-size: 9px;
+  color: var(--t3);
+}
+
+.rules kbd {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg4);
+  border: 1px solid var(--gb);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  color: var(--t2);
+  margin-right: 3px;
+}
+</style>
+</head>
+<body>
+
+<div class="state-nav">
+  <button class="state-btn active" onclick="show('open')">패널 열림</button>
+  <button class="state-btn" onclick="show('closed')">패널 닫힘</button>
+  <button class="state-btn" onclick="show('ai')">AI 요약</button>
+  <button class="state-btn" onclick="show('empty')">빈 메모</button>
+</div>
+
+<div class="rules">
+  <span><kbd>카드 클릭</kbd> 패널에 영상+메모 로드</span>
+  <span><kbd>다른 카드</kbd> 영상+메모 교체</span>
+  <span><kbd>✕</kbd> 패널 닫힘</span>
+  <span><kbd>ESC</kbd> 패널 닫힘</span>
+</div>
+
+<!-- Dashboard -->
+<div class="dashboard" id="dash">
+  <div class="dash-header">
+    <span class="dash-title">투자</span>
+    <span class="dash-count">632장</span>
+  </div>
+  <div class="dash-tabs">
+    <button class="dtab active">전체 632</button>
+    <button class="dtab">#거시경제 38</button>
+    <button class="dtab">#주식투자 97</button>
+    <button class="dtab">#자산배분 24</button>
+    <button class="dtab">#ETF 74</button>
+    <button class="dtab">#크립토 28</button>
+  </div>
+  <div class="dash-grid" id="grid"></div>
+</div>
+
+<!-- Side Panel -->
+<div class="side-panel" id="panel">
+  <!-- Video -->
+  <div class="panel-video">
+    <div class="panel-player">
+      <div class="play-btn">▶</div>
+      <button class="panel-close" onclick="closePanel()">✕</button>
+      <div class="player-bar"><div class="player-progress"></div></div>
+    </div>
+  </div>
+
+  <!-- Info -->
+  <div class="panel-info">
+    <div class="panel-vtitle" id="pTitle">LiteParse — The Local Document Parser</div>
+    <div class="panel-vmeta">
+      <span id="pChannel">Sam Witteveen</span>
+      <span class="panel-dot"></span>
+      <span id="pDur">11:46</span>
+      <span class="panel-dot"></span>
+      <span class="panel-cell" id="pCell">크립토</span>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="panel-tabs">
+    <button class="ptab active" id="tNotes" onclick="tab('notes')">메모</button>
+    <button class="ptab" id="tAI" onclick="tab('ai')">AI 요약</button>
+  </div>
+
+  <!-- Editor -->
+  <div class="panel-editor">
+    <div class="notes-tab" id="notesTab">
+      <div class="note" contenteditable="true" spellcheck="false" id="noteEl">
+        <h2>LiteParse 핵심 정리</h2>
+        <p>로컬 문서 파싱 도구. LlamaIndex의 한계를 보완하는 접근.</p>
+        <ul>
+          <li>PDF/DOCX → 구조화된 텍스트 추출</li>
+          <li>청크 사이즈 자동 최적화 — 250토큰 고정 탈피</li>
+          <li>메타데이터 보존 (페이지 번호, 섹션 제목)</li>
+        </ul>
+        <h2>Insighta 적용</h2>
+        <p><code>video_rich_summaries</code> 파이프라인의 트랜스크립트 청킹에 참고. <span class="ts">▶ 3:24</span> adaptive chunking이 핵심.</p>
+        <blockquote>overlap보다 semantic boundary가 답</blockquote>
+        <h3>다음 단계</h3>
+        <ol>
+          <li>LiteParse GitHub 확인</li>
+          <li>트랜스크립트 파이프라인 비교</li>
+          <li>BGE-M3 임베딩 품질 테스트</li>
+        </ol>
+        <pre><code>chunks = lite_parse(doc,
+  strategy="semantic",
+  min_tokens=100,
+  max_tokens=500
+)</code></pre>
+      </div>
+    </div>
+    <div class="ai-tab" id="aiTab">
+      <div class="ai-sec">
+        <div class="ai-lbl">요약</div>
+        <div class="ai-txt">LiteParse는 문서 처리의 도전 과제를 극복하기 위해 로컬 파싱에 집중합니다. LlamaIndex 프레임워크의 한계를 보완하며, PDF 및 문서 처리 시 발생하는 맥락 손실 문제를 해결합니다.</div>
+      </div>
+      <div class="ai-sec">
+        <div class="ai-lbl">키워드</div>
+        <div><span class="ai-tag">문서 파싱</span><span class="ai-tag">LlamaIndex</span><span class="ai-tag">PDF</span><span class="ai-tag">RAG</span><span class="ai-tag">오픈소스</span></div>
+      </div>
+      <div class="ai-sec">
+        <div class="ai-lbl">핵심 인사이트</div>
+        <div class="ai-txt">
+          <ol style="padding-left:16px;margin:0;">
+            <li style="margin-bottom:4px;">Semantic boundary 청킹이 고정 크기보다 임베딩 품질 20-30% 향상</li>
+            <li style="margin-bottom:4px;">메타데이터 보존이 RAG 정확도에 직접 영향</li>
+            <li>로컬 파싱 = API 비용 $0, 초기 셋업 비용 존재</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="panel-footer">
+    <div class="save-s"><span class="save-d"></span><span>저장됨 · 3초 전</span></div>
+    <div class="wc">127 words</div>
+  </div>
+</div>
+
+<!-- Bubble toolbar -->
+<div class="bubble" id="bubble">
+  <button class="bb"><b>B</b></button>
+  <button class="bb"><i>I</i></button>
+  <button class="bb" style="font-family:'JetBrains Mono',monospace;font-size:10px;">&lt;/&gt;</button>
+  <span class="bsep"></span>
+  <button class="bb" style="font-size:10px;">H2</button>
+  <button class="bb" style="font-size:10px;">H3</button>
+  <span class="bsep"></span>
+  <button class="bb">•</button>
+  <button class="bb">1.</button>
+  <span class="bsep"></span>
+  <button class="bb" style="font-size:11px;">🔗</button>
+  <button class="bb" style="font-family:'JetBrains Mono',monospace;font-size:9px;">⏱</button>
+</div>
+
+<script>
+const vids = [
+  { t: 'LiteParse — The Local Document Parser', ch: 'Sam Witteveen', d: '11:46', cell: '크립토' },
+  { t: '고수를 봐: git fetch 쉽게 이해하기', ch: '코딩애플', d: '8:23', cell: '주식투자' },
+  { t: 'Claude Code — iOS Onboarding', ch: 'Shimmer', d: '14:02', cell: 'ETF' },
+  { t: '4월 주식시장 주목하세요 | 김영익 교수', ch: '김영익의 경제스쿨', d: '22:15', cell: '거시경제' },
+  { t: 'Live More by Doing Less', ch: 'Matt D\'Avella', d: '12:30', cell: '자산배분' },
+  { t: '26년 한국 부자 기준, 상위 10%?', ch: '슈카월드', d: '18:44', cell: '은퇴설계' },
+  { t: 'AI Is Dangerous, but Not for the Reasons You Think', ch: 'TED', d: '10:19', cell: '크립토' },
+  { t: '초보도 5분이면 OK! 무료 로고 만들기', ch: 'INDOORSY', d: '9:33', cell: 'ETF' },
+  { t: '1 Million Sandboxes per Second?!', ch: 'Fireship', d: '7:41', cell: '주식투자' },
+];
+
+const grid = document.getElementById('grid');
+vids.forEach((v, i) => {
+  const c = document.createElement('div');
+  c.className = 'card' + (i === 0 ? ' active' : '');
+  c.onclick = () => openCard(i);
+  c.innerHTML = `<div class="card-thumb">▶<span class="card-dur">${v.d}</span></div><div class="card-body"><div class="card-title">${v.t}</div><div class="card-channel">${v.ch}</div><div class="card-ai">⚡ AI 요약 미리보기...</div></div>`;
+  grid.appendChild(c);
+});
+
+function openCard(i) {
+  const v = vids[i];
+  document.getElementById('pTitle').textContent = v.t;
+  document.getElementById('pChannel').textContent = v.ch;
+  document.getElementById('pDur').textContent = v.d;
+  document.getElementById('pCell').textContent = v.cell;
+
+  document.querySelectorAll('.card').forEach((c, j) => {
+    c.classList.toggle('active', j === i);
+  });
+
+  document.getElementById('panel').classList.add('open');
+  tab('notes');
+}
+
+function closePanel() {
+  document.getElementById('panel').classList.remove('open');
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('active'));
+}
+
+function tab(t) {
+  const tN = document.getElementById('tNotes');
+  const tA = document.getElementById('tAI');
+  const nT = document.getElementById('notesTab');
+  const aT = document.getElementById('aiTab');
+  if (t === 'notes') {
+    tN.classList.add('active'); tA.classList.remove('active');
+    nT.classList.remove('hide'); aT.classList.remove('show');
+  } else {
+    tA.classList.add('active'); tN.classList.remove('active');
+    nT.classList.add('hide'); aT.classList.add('show');
+  }
+}
+
+function show(s) {
+  document.querySelectorAll('.state-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  const p = document.getElementById('panel');
+  if (s === 'open') { p.classList.add('open'); tab('notes'); document.getElementById('noteEl').innerHTML = '<h2>LiteParse 핵심 정리</h2><p>로컬 문서 파싱 도구. LlamaIndex 한계 보완.</p><ul><li>PDF/DOCX → 구조화 추출</li><li>청크 자동 최적화</li><li>메타데이터 보존</li></ul><h2>Insighta 적용</h2><p><code>video_rich_summaries</code>에서 <span class="ts">▶ 3:24</span> adaptive chunking 참고.</p><blockquote>overlap보다 semantic boundary</blockquote>'; }
+  else if (s === 'closed') { p.classList.remove('open'); }
+  else if (s === 'ai') { p.classList.add('open'); tab('ai'); }
+  else if (s === 'empty') { p.classList.add('open'); tab('notes'); document.getElementById('noteEl').innerHTML = '<p class="placeholder">메모를 작성해보세요…</p>'; }
+}
+
+document.addEventListener('mouseup', (e) => {
+  const sel = window.getSelection();
+  const b = document.getElementById('bubble');
+  if (sel && sel.toString().trim().length > 0 && e.target.closest('.note')) {
+    const r = sel.getRangeAt(0).getBoundingClientRect();
+    b.style.display = 'flex';
+    b.style.top = (r.top - 36) + 'px';
+    b.style.left = Math.max(10, r.left + r.width/2 - 130) + 'px';
+  } else if (!e.target.closest('.bubble')) {
+    b.style.display = 'none';
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closePanel();
+});
+</script>
+</body>
+</html>
