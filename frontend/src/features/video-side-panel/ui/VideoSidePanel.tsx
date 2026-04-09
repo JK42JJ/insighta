@@ -82,9 +82,11 @@ export function VideoSidePanel() {
       <div
         className={cn(
           'flex-1 overflow-y-auto px-4 py-3.5',
-          '[&::-webkit-scrollbar]:w-[3px]',
+          '[&::-webkit-scrollbar]:w-[4px]',
           '[&::-webkit-scrollbar-track]:bg-transparent',
-          '[&::-webkit-scrollbar-thumb]:rounded-[3px] [&::-webkit-scrollbar-thumb]:bg-[rgba(255,255,255,0.06)]'
+          '[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(255,255,255,0.08)]',
+          'hover:[&::-webkit-scrollbar-thumb]:bg-[rgba(255,255,255,0.2)]',
+          '[&::-webkit-scrollbar-thumb]:transition-colors'
         )}
       >
         {activeTab === 'notes' ? (
