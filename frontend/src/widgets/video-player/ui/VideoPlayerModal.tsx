@@ -149,6 +149,8 @@ export function VideoPlayerModal({
                 videoSummary={card.videoSummary}
                 onEnrichStart={onEnrichStart}
                 onEnrichEnd={onEnrichEnd}
+                card={card}
+                onCloseModal={onClose}
               />
             </ResizablePanel>
           </ResizablePanelGroup>

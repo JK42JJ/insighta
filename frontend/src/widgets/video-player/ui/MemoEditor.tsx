@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { MessageSquare, Timer, Camera, Loader2, Maximize2 } from 'lucide-react';
-import { useSideEditorStore, sideEditorSaveRef } from '@/features/side-note-editor';
+import { useVideoPanelStore } from '@/features/video-side-panel';
+import type { InsightCard } from '@/entities/card/model/types';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -111,6 +112,10 @@ interface MemoEditorProps {
   videoSummary?: { summary_en: string; summary_ko: string; tags?: string[]; model?: string };
   onEnrichStart?: (cardId: string) => void;
   onEnrichEnd?: (cardId: string) => void;
+  /** Full card object for expanding to sidebar mode. */
+  card?: InsightCard;
+  /** Close the parent modal before switching to sidebar. */
+  onCloseModal?: () => void;
 }
 
 export function MemoEditor({
@@ -125,6 +130,8 @@ export function MemoEditor({
   videoSummary,
   onEnrichStart,
   onEnrichEnd,
+  card,
+  onCloseModal,
 }: MemoEditorProps) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -466,25 +473,21 @@ export function MemoEditor({
               {t('videoPlayer.slashHint')}
             </span>
           )}
-          {/* Expand to full-featured side editor — works for ALL card types */}
-          {cardId && (
+          {/* Expand to full-featured side editor (Mode A → B transition) */}
+          {card && (
             <Button
               variant="ghost"
               size="icon"
               onClick={() => {
-                // Flush pending auto-save
+                // 1. Flush pending auto-save
                 if (autoSaveTimerRef.current) {
                   clearTimeout(autoSaveTimerRef.current);
                   onSave(cardId, note);
                 }
-                // Set save callback ref (module-scope, not in Zustand state)
-                sideEditorSaveRef.current = onSave;
-                // Open the side editor with current note content (instant load)
-                useSideEditorStore.getState().open({
-                  cardId,
-                  initialNote: note,
-                  videoTitle: '', // VideoPlayerModal doesn't expose title directly to MemoEditor
-                });
+                // 2. Close modal (Mode A → off)
+                onCloseModal?.();
+                // 3. Open sidebar panel (→ Mode B)
+                useVideoPanelStore.getState().expandToSidebar(card);
               }}
               className="ml-auto h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
               title={t('videoPlayer.expandEditor', 'Expand editor')}
