@@ -19,6 +19,7 @@ import { getQuotaManager } from '../quota/manager';
 import { logger, logSyncOperation } from '../../utils/logger';
 import { executeTransaction } from '../database/client';
 import { getErrorRecoveryManager, RecoveryStrategy } from '../../utils/error-recovery';
+import { Tier, DEFAULT_TIER } from '../../config/quota';
 
 /**
  * Sync result
@@ -98,6 +99,9 @@ export class SyncEngine {
       // Get playlist
       const playlist = await this.playlistManager.getPlaylist(playlistId);
 
+      // Load user's OAuth credentials before sync
+      await this.ensureOAuthCredentials(playlist.user_id);
+
       // Acquire sync lock
       await this.playlistManager.acquireSyncLock(playlist.id);
 
@@ -117,10 +121,24 @@ export class SyncEngine {
 
       try {
         // Fetch playlist items from YouTube
-        const { items: ytItems, quotaCost } = await this.fetchPlaylistItems(
+        const { items: allYtItems, quotaCost } = await this.fetchPlaylistItems(
           playlist.youtube_playlist_id
         );
         quotaUsed += quotaCost;
+
+        // Free-tier cutoff: only sync items published after channel subscription date.
+        // Pro/lifetime/admin: no cutoff (full historical sync).
+        const userTier = await this.resolveUserTier(playlist.user_id);
+        const ytItems = this.applyTierSyncFilter(allYtItems, playlist.created_at, userTier);
+
+        if (allYtItems.length !== ytItems.length) {
+          logger.info('Free-tier sync cutoff applied', {
+            playlistId,
+            total: allYtItems.length,
+            afterCutoff: ytItems.length,
+            cutoffDate: playlist.created_at.toISOString(),
+          });
+        }
 
         // Fetch video details
         const videoIds = ytItems
@@ -429,6 +447,66 @@ export class SyncEngine {
     });
 
     return { added, removed, reordered };
+  }
+
+  /**
+   * Resolve user's subscription tier from DB.
+   * Falls back to 'free' if no subscription exists.
+   */
+  private async resolveUserTier(userId: string): Promise<Tier> {
+    try {
+      const sub = await db.user_subscriptions.findUnique({
+        where: { user_id: userId },
+        select: { tier: true },
+      });
+      return (sub?.tier as Tier) ?? DEFAULT_TIER;
+    } catch {
+      return DEFAULT_TIER;
+    }
+  }
+
+  /**
+   * For free-tier users, filter YouTube items to only include videos published
+   * after the playlist/channel subscription date. Pro+ gets full history.
+   */
+  private applyTierSyncFilter(items: any[], subscriptionDate: Date, tier: Tier): any[] {
+    if (tier !== 'free') return items;
+
+    return items.filter((item: any) => {
+      const publishedAt = item.snippet?.publishedAt;
+      if (!publishedAt) return true; // keep items without date (safety)
+      return new Date(publishedAt) >= subscriptionDate;
+    });
+  }
+
+  /**
+   * Load OAuth credentials from youtube_sync_settings and set on YouTubeClient.
+   * Required for private playlists and channel uploads (API key only works for public data).
+   */
+  private async ensureOAuthCredentials(userId: string): Promise<void> {
+    try {
+      const settings = await db.youtube_sync_settings.findUnique({
+        where: { user_id: userId },
+      });
+
+      if (!settings?.youtube_access_token) {
+        logger.warn('No OAuth credentials for user, sync may fail for private data', { userId });
+        return;
+      }
+
+      this.youtubeClient.setCredentials({
+        access_token: settings.youtube_access_token,
+        refresh_token: settings.youtube_refresh_token,
+        expiry_date: settings.youtube_token_expires_at?.getTime() ?? null,
+      });
+
+      logger.debug('OAuth credentials loaded for sync', { userId });
+    } catch (error) {
+      logger.warn('Failed to load OAuth credentials (continuing with API key)', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   /**

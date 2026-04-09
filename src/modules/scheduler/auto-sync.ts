@@ -14,6 +14,7 @@ import * as cron from 'node-cron';
 import { getSyncEngine, SyncResult } from '../sync/engine';
 import { getQuotaManager } from '../quota/manager';
 import { getSchedulerManager, ScheduleInfo } from './manager';
+import { getPrismaClient } from '../database';
 import { logger } from '../../utils/logger';
 import { SyncStatus } from '../../types/enums';
 
@@ -79,8 +80,16 @@ export class AutoSyncScheduler {
       // Start the underlying SchedulerManager
       await this.schedulerManager.start();
 
+      // Auto-register orphan playlists (imported before auto-sync was deployed)
+      await this.backfillOrphanSchedules();
+
       // Load all enabled schedules
       const schedules = await this.schedulerManager.listSchedules(true);
+
+      // Start cron jobs for each schedule
+      for (const schedule of schedules) {
+        await this.startSchedule(schedule.playlistId);
+      }
 
       logger.info('AutoSyncScheduler started', {
         scheduleCount: schedules.length,
@@ -97,6 +106,49 @@ export class AutoSyncScheduler {
 
       logger.error('Failed to start AutoSyncScheduler', { error: this.lastError });
       throw error;
+    }
+  }
+
+  /**
+   * Backfill sync_schedules for playlists that were imported before auto-sync was deployed.
+   * Non-fatal: logs warnings but never throws.
+   */
+  private async backfillOrphanSchedules(): Promise<void> {
+    try {
+      const db = getPrismaClient();
+      const playlists = await db.youtube_playlists.findMany({
+        where: { is_paused: false },
+        select: { id: true, title: true },
+      });
+
+      const existingSchedules = await db.sync_schedules.findMany({
+        select: { playlist_id: true },
+      });
+      const scheduledIds = new Set(existingSchedules.map((s) => s.playlist_id));
+
+      const orphans = playlists.filter((pl) => !scheduledIds.has(pl.id));
+      if (orphans.length === 0) return;
+
+      logger.info('Backfilling sync schedules for orphan playlists', {
+        count: orphans.length,
+      });
+
+      const DEFAULT_CRON = '0 */6 * * *';
+      for (const pl of orphans) {
+        try {
+          await this.addPlaylist(pl.id, DEFAULT_CRON);
+          logger.info('Backfilled sync schedule', { playlistId: pl.id, title: pl.title });
+        } catch (err) {
+          logger.warn('Failed to backfill schedule (skipping)', {
+            playlistId: pl.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    } catch (error) {
+      logger.warn('backfillOrphanSchedules failed (non-fatal)', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
