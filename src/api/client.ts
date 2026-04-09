@@ -117,6 +117,12 @@ export class YouTubeClient {
 
     this.oauth2Client.setCredentials(filteredCredentials);
 
+    // Switch YouTube instance to OAuth auth (API key doesn't work for private data)
+    this.youtube = google.youtube({
+      version: 'v3',
+      auth: this.oauth2Client,
+    });
+
     // Initialize TokenManager with OAuth client and credentials
     this.tokenManager.initialize(this.oauth2Client, filteredCredentials);
 

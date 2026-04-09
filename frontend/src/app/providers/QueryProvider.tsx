@@ -88,29 +88,36 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       .getSession()
       .then(({ data }) => {
         if (cancelled) return;
-        const initialUserId = data.session?.user?.id ?? null;
-        clientOwnerRef.current = initialUserId;
+        const resolvedUserId = data.session?.user?.id ?? null;
+        if (clientOwnerRef.current !== null && clientOwnerRef.current !== resolvedUserId) {
+          replaceClient(resolvedUserId);
+        } else {
+          clientOwnerRef.current = resolvedUserId;
+        }
       })
-      .catch(() => {
-        // ignore — if getSession fails we leave the client unclaimed;
-        // the next auth event will repair the state
-      });
+      .catch(() => {});
 
     // 2. Subscribe to runtime auth transitions.
     const unsubscribe = subscribeAuth((_event, session) => {
       if (cancelled) return;
       const newUserId = session?.user?.id ?? null;
-      // Only replace on actual userId change — TOKEN_REFRESHED for the
-      // same user must NOT blow away the cache (would cause a refetch
-      // storm every time Supabase rotates the JWT, ~hourly).
       if (clientOwnerRef.current !== newUserId) {
         replaceClient(newUserId);
       }
     });
 
+    // 3. bfcache defense — OAuth redirect restores cached page state.
+    function handlePageShow(event: PageTransitionEvent): void {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    }
+    window.addEventListener('pageshow', handlePageShow);
+
     return () => {
       cancelled = true;
       unsubscribe();
+      window.removeEventListener('pageshow', handlePageShow);
     };
     // Intentionally empty deps: this effect owns the full lifecycle.
     // `client` changes through setClient inside replaceClient, so

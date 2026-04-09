@@ -3,7 +3,7 @@
 > **SSOT**: This document is the single source of truth for all quota, rate limit, and tier-related policies.
 > Code implementations MUST reference this document. Hardcoded values MUST match these definitions.
 
-**Last updated**: 2026-03-28
+**Last updated**: 2026-04-09
 
 ---
 
@@ -143,7 +143,45 @@ Edge Functions (Deno runtime) cannot import Node modules — values are kept inl
 
 ---
 
-## 9. Future Work
+## 9. YouTube Sync Policy
+
+### 9.1 Sync Data Scope (All Tiers)
+
+| Sync Type | Scope |
+|-----------|-------|
+| Auto-sync | Only videos published **after** the channel/playlist was added |
+
+**Cutoff date**: `youtube_playlists.created_at` (the moment the user added the source).
+
+**Rationale**: Large channels (5000+ videos) cause YouTube API quota exhaustion and DB transaction timeouts when syncing full history. Subscription-date cutoff applies to all tiers to protect system stability.
+
+### 9.2 Auto-Sync Schedule
+
+| Setting | Value |
+|---------|-------|
+| Default interval | 6 hours (`0 */6 * * *`) |
+| Quota skip threshold | Remaining < 100 units |
+| Max retries before disable | 3 |
+| Orphan backfill | On server start, auto-detect playlists without schedules |
+
+### 9.3 Implementation Status
+
+| Item | Status | Location |
+|------|--------|----------|
+| Subscription-date cutoff | Done | `SyncEngine.syncPlaylist()` inline filter |
+| Auto-sync scheduler | Done | `AutoSyncScheduler` (node-cron) |
+| Orphan backfill | Done | `AutoSyncScheduler.backfillOrphanSchedules()` |
+| OAuth credential auto-load | Done | `SyncEngine.ensureOAuthCredentials()` |
+
+### 9.4 Future Enhancements
+
+- Pro-tier sync depth configuration (e.g., last N months)
+- Per-channel sync interval customization
+- Sync priority queue (pro users first)
+
+---
+
+## 10. Future Work
 
 1. ~~**`src/config/quota.ts`**: Centralized quota constants~~ — Done (2026-03-19)
 2. ~~**Per-tier rate limiting**: Refactor `rate-limit.ts` to read user tier~~ — Done (2026-03-19)
@@ -152,6 +190,7 @@ Edge Functions (Deno runtime) cannot import Node modules — values are kept inl
 5. **`user_quota_boosts` table**: Automatic bonus expiry management
 6. **Skill quota checker**: `src/modules/skills/quota-checker.ts` + `skill_runs` table
 7. **SkillRegistry**: `src/modules/skills/registry.ts` with quota enforcement
+8. ~~**YouTube Sync tier-based cutoff**~~ — Done (2026-04-09)
 
 ---
 
@@ -162,3 +201,4 @@ Edge Functions (Deno runtime) cannot import Node modules — values are kept inl
 | 2026-03-19 | Initial policy document created | JK |
 | 2026-03-19 | `src/config/quota.ts` + per-tier rate limit + hardcoding removal | JK |
 | 2026-03-28 | Section 5-6: Skill (Action) quota limits added, `TIER_LIMITS.skills` | JK |
+| 2026-04-09 | Section 9: YouTube Sync tier-based policy (free=new-only, pro=full) | JK |

@@ -46,7 +46,14 @@ jest.mock('@/utils/logger', () => ({
   },
 }));
 
-import { executor, parseIsoDuration, titleContainsBlocked, classifySearchError } from '../executor';
+import {
+  executor,
+  parseIsoDuration,
+  titleContainsBlocked,
+  classifySearchError,
+  passesTieredViewGate,
+  computeAgeDays,
+} from '../executor';
 import type { PreflightContext, ExecuteContext } from '@/skills/_shared/types';
 
 // ============================================================================
@@ -1438,5 +1445,77 @@ describe('classifySearchError', () => {
   it('falls through to unknown for novel errors', () => {
     expect(classifySearchError('something weird happened')).toBe('unknown_search_error');
     expect(classifySearchError('')).toBe('unknown_search_error');
+  });
+});
+
+// ============================================================================
+// CP361 Phase 2 — Tiered view_count gate
+// ============================================================================
+
+describe('passesTieredViewGate (CP361 Phase 2)', () => {
+  const now = Date.parse('2026-04-09T00:00:00Z');
+  const daysAgo = (n: number): string => new Date(now - n * 24 * 60 * 60 * 1000).toISOString();
+
+  it('keeps candidates with null viewCount (enrichment missing)', () => {
+    expect(passesTieredViewGate({ viewCount: null, publishedAt: daysAgo(10) }, now)).toBe(true);
+  });
+
+  it('fresh tier: < 1 year needs 10K views', () => {
+    expect(passesTieredViewGate({ viewCount: 9_999, publishedAt: daysAgo(100) }, now)).toBe(false);
+    expect(passesTieredViewGate({ viewCount: 10_000, publishedAt: daysAgo(100) }, now)).toBe(true);
+  });
+
+  it('midlife tier: 1-3 years needs 100K views', () => {
+    // 2 years old, 50K views → fails midlife tier
+    expect(passesTieredViewGate({ viewCount: 50_000, publishedAt: daysAgo(730) }, now)).toBe(false);
+    // 2 years old, 150K views → passes
+    expect(passesTieredViewGate({ viewCount: 150_000, publishedAt: daysAgo(730) }, now)).toBe(true);
+  });
+
+  it('aging tier: 3-5 years needs 500K views', () => {
+    // 4 years old, 300K views → fails aging
+    expect(passesTieredViewGate({ viewCount: 300_000, publishedAt: daysAgo(1460) }, now)).toBe(
+      false
+    );
+    // 4 years old, 600K views → passes
+    expect(passesTieredViewGate({ viewCount: 600_000, publishedAt: daysAgo(1460) }, now)).toBe(
+      true
+    );
+  });
+
+  it('classic tier: 5+ years needs 1M views (timeless classic only)', () => {
+    // 8 years old, 500K views → fails classic
+    expect(passesTieredViewGate({ viewCount: 500_000, publishedAt: daysAgo(2920) }, now)).toBe(
+      false
+    );
+    // 8 years old, 2M views → passes (the "세바시 강연" case)
+    expect(passesTieredViewGate({ viewCount: 2_000_000, publishedAt: daysAgo(2920) }, now)).toBe(
+      true
+    );
+  });
+
+  it('falls back to fresh-tier floor when age cannot be parsed', () => {
+    expect(passesTieredViewGate({ viewCount: 10_000, publishedAt: 'not-a-date' }, now)).toBe(true);
+    expect(passesTieredViewGate({ viewCount: 9_999, publishedAt: 'not-a-date' }, now)).toBe(false);
+  });
+});
+
+describe('computeAgeDays', () => {
+  const now = Date.parse('2026-04-09T00:00:00Z');
+
+  it('returns days since publishedAt', () => {
+    const tenDaysAgo = new Date(now - 10 * 24 * 60 * 60 * 1000).toISOString();
+    const result = computeAgeDays(tenDaysAgo, now);
+    expect(result).not.toBeNull();
+    expect(result).toBeCloseTo(10, 1);
+  });
+
+  it('returns null for unparseable dates', () => {
+    expect(computeAgeDays('not-a-date', now)).toBeNull();
+  });
+
+  it('clamps negative ages (future timestamps) to 0', () => {
+    const future = new Date(now + 86400 * 1000).toISOString();
+    expect(computeAgeDays(future, now)).toBe(0);
   });
 });

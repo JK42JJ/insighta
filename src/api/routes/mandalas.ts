@@ -698,6 +698,28 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       const result = await getMandalaManager().createMandala(userId, title, levels);
 
+      // Label generation moved to fire-and-forget (was blocking response ~2s).
+      setImmediate(() => {
+        void (async () => {
+          try {
+            const labels = await generateLabels({
+              center_goal: centerGoal || title,
+              sub_goals: subjects,
+            });
+            const prismaLabels = getPrismaClient();
+            await prismaLabels.user_mandala_levels.updateMany({
+              where: { mandala_id: result.id, depth: 0 },
+              data: {
+                center_label: labels.center_label,
+                subject_labels: labels.sub_labels,
+              },
+            });
+          } catch {
+            // Non-fatal — sidebar falls back to sub_goals.
+          }
+        })();
+      });
+
       // Create skill config rows (CP357: video_discover defaults ON with auto_add=true)
       const prisma = getPrismaClient();
       await prisma.user_skill_config.createMany({

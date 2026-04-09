@@ -38,7 +38,7 @@ import {
   VIDEO_DISCOVER_KEYWORD_POOL_SIZE,
   VIDEO_DISCOVER_QUERIES_PER_CELL,
 } from './manifest';
-import { generateSearchQueriesRace, LlmQueryGenError } from './sources/llm-query-generator';
+import { generateSearchQueriesRace } from './sources/llm-query-generator';
 import { rerankBatch, type RerankCandidate } from './sources/llm-reranker';
 
 const log = logger.child({ module: 'video-discover' });
@@ -78,13 +78,17 @@ const LANG_TO_REGION: Record<string, string> = {
 //                                          keyword_scores.goal_relevance global,
 //                                          compute per-mandala separately).
 //   - IKS / historical unchanged
-const REC_WEIGHT_IKS = 0.35;
+// CP361 Phase 2: IKS 0.35 → 0.25, freshness 0.10 → 0.20.
+// IKS is cell-tied (same value for every candidate within a cell), so
+// reducing its weight does NOT affect intra-cell ranking — the 0.10 shift
+// into freshness gives stale content a larger rec_score penalty without
+// touching any signal's discriminative power within a cell.
+const REC_WEIGHT_IKS = 0.25;
 const REC_WEIGHT_VIDEO_QUALITY = 0.35;
-const REC_WEIGHT_FRESHNESS = 0.1;
+const REC_WEIGHT_FRESHNESS = 0.2;
 const REC_WEIGHT_PER_MANDALA = 0.1;
 const REC_WEIGHT_HISTORICAL = 0.1; // 0.5 placeholder until Layer 4 ships
-// Sum = 0.35 + 0.35 + 0.10 + 0.10 + 0.10 = 1.0
-// (diversity is no longer a Rec Score term — see per-channel dedup in execute())
+// Sum = 0.25 + 0.35 + 0.20 + 0.10 + 0.10 = 1.0
 
 /**
  * Days after which freshness drops to 0. CP360 (experiment #3 Phase 1-C):
@@ -99,16 +103,33 @@ const VIDEOS_LIST_MAX_IDS_PER_CALL = 50;
 /** Reference view count that maps to videoQuality 1.0 on the log scale. */
 const VIDEO_QUALITY_REFERENCE_VIEWS = 10_000_000;
 /**
- * CP360 experiment #3 Phase 1-A — hard view_count gate. Any candidate with
- * fewer than this many views is dropped during Step 3.6 filter. The gate
- * relaxes to {@link MIN_VIEW_COUNT_RELAX} on a per-cell basis if the hard
- * cutoff would leave the cell with zero candidates, so we never starve a
- * cell entirely. Rationale: in experiment #2 66% of "조카 교육" candidates
- * had <10K views and were almost always low-quality / amateur uploads that
- * beat high-view Korean videos because of iksTotal ties + freshness bumps.
+ * CP361 Phase 2 — tiered view_count gate by video age. Older content
+ * must clear a higher view bar to qualify; "timeless classic" tier
+ * (5+ years) requires 1M+ views. Fixes the "8-year-old videos with 30K
+ * views beating fresh candidates" pattern observed on 2026-04-09.
+ *
+ * Tiers (published_at age → min views):
+ *   < 1 year   → 10K    (fresh content)
+ *   1–3 years  → 100K   (mid-life)
+ *   3–5 years  → 500K   (aging, needs strong signal)
+ *   5+ years   → 1M     (timeless classic only)
+ *   null age   → 10K    (benefit of doubt when parse fails)
+ *   null views → keep   (videos.list enrichment missing, not the video's fault)
  */
-const MIN_VIEW_COUNT = 10_000;
-const MIN_VIEW_COUNT_RELAX = 1_000;
+const MIN_VIEWS_TIER_FRESH = 10_000;
+const MIN_VIEWS_TIER_MIDLIFE = 100_000;
+const MIN_VIEWS_TIER_AGING = 500_000;
+const MIN_VIEWS_TIER_CLASSIC = 1_000_000;
+const TIER_BOUNDARY_FRESH_DAYS = 365; // < 1 year
+const TIER_BOUNDARY_MIDLIFE_DAYS = 1095; // < 3 years
+const TIER_BOUNDARY_AGING_DAYS = 1825; // < 5 years
+/**
+ * Fresh-only relax floor. When the tiered gate leaves a cell empty, we
+ * try a relax pass that ONLY considers videos under TIER_BOUNDARY_FRESH_DAYS
+ * with this lower view floor. Stale content can never enter the relax
+ * path — user preference (2026-04-09): "0 cards > wrong cards".
+ */
+const MIN_VIEW_COUNT_RELAX_FRESH = 1_000;
 /**
  * CP360 Phase 1 — Cross-run recommendation_cache reuse.
  *
@@ -756,54 +777,48 @@ export const executor: SkillExecutor = {
       }
     }
 
-    for (const sel of cellSelections) {
-      // Phase 1 — try cache first. If it hits, skip LLM + search entirely.
-      if (await tryCellCache(sel)) continue;
-      let queries: string[] | null = null;
-      if (!state.llmDisabled) {
-        try {
-          const raceResult = await generateSearchQueriesRace({
-            subGoal: sel.cell.text,
-            centerGoal: state.centerGoal,
-            language: state.mandalaLanguage,
-            baseUrl: state.llmUrl,
-            fetchImpl: fetchFn,
-            openRouterApiKey: state.openRouterApiKey,
-            openRouterModel: state.openRouterModel,
-          });
-          queries = raceResult.winner.queries;
-          // Hard cap defensively even though the parser already limits.
-          if (queries && queries.length > VIDEO_DISCOVER_QUERIES_PER_CELL) {
-            queries = queries.slice(0, VIDEO_DISCOVER_QUERIES_PER_CELL);
-          }
-          if (raceResult.winner.provider === 'ollama') raceWinsOllama += 1;
-          else raceWinsOpenRouter += 1;
-          llmQueryGenSuccess += 1;
-        } catch (err) {
-          llmQueryGenFailures += 1;
-          raceBothFailed += 1;
-          if (err instanceof LlmQueryGenError) {
+    // All 8 cells in parallel (was sequential — 8× speedup).
+    // JS single-threaded: shared counters + array pushes are safe.
+    await Promise.all(
+      cellSelections.map(async (sel) => {
+        if (await tryCellCache(sel)) return;
+        let queries: string[] | null = null;
+        if (!state.llmDisabled) {
+          try {
+            const raceResult = await generateSearchQueriesRace({
+              subGoal: sel.cell.text,
+              centerGoal: state.centerGoal,
+              language: state.mandalaLanguage,
+              baseUrl: state.llmUrl,
+              fetchImpl: fetchFn,
+              openRouterApiKey: state.openRouterApiKey,
+              openRouterModel: state.openRouterModel,
+            });
+            queries = raceResult.winner.queries;
+            if (queries && queries.length > VIDEO_DISCOVER_QUERIES_PER_CELL) {
+              queries = queries.slice(0, VIDEO_DISCOVER_QUERIES_PER_CELL);
+            }
+            if (raceResult.winner.provider === 'ollama') raceWinsOllama += 1;
+            else raceWinsOpenRouter += 1;
+            llmQueryGenSuccess += 1;
+          } catch (err) {
+            llmQueryGenFailures += 1;
+            raceBothFailed += 1;
             log.warn(
-              `LLM race failed for cell ${sel.cell.cellIndex} (falling back to concat): ${err.message}`
+              `LLM race failed for cell ${sel.cell.cellIndex}: ${err instanceof Error ? err.message : String(err)}`
             );
-          } else {
-            log.warn(
-              `LLM race unexpected error for cell ${sel.cell.cellIndex}: ${err instanceof Error ? err.message : String(err)}`
-            );
+            queries = null;
           }
-          queries = null;
         }
-      }
-
-      if (queries && queries.length > 0) {
-        for (const q of queries) {
-          await runSearch(sel, q);
+        if (queries && queries.length > 0) {
+          for (const q of queries) {
+            await runSearch(sel, q);
+          }
+        } else {
+          await runSearch(sel, `${sel.cell.text} ${sel.keyword.keyword}`);
         }
-      } else {
-        // Fallback: legacy single concat query (also taken when llmDisabled).
-        await runSearch(sel, `${sel.cell.text} ${sel.keyword.keyword}`);
-      }
-    }
+      })
+    );
     if (!state.llmDisabled) {
       log.info(
         `LLM race: success=${llmQueryGenSuccess}, both_failed=${raceBothFailed}, wins_ollama=${raceWinsOllama}, wins_openrouter=${raceWinsOpenRouter}, search_calls=${searchCalls}`
@@ -950,24 +965,15 @@ export const executor: SkillExecutor = {
       );
     }
 
-    // ── Step 3.6: CP360 Phase 1-A — Per-cell hard view_count gate ─────
-    // Rationale: experiment #2 showed 66% of "조카 교육" candidates had
-    // fewer than 10K views and those low-quality uploads routinely beat
-    // high-view Korean videos because iksTotal is identical within a
-    // cell, leaving videoQuality + freshness to decide — and the
-    // log-scale videoQuality alone isn't decisive enough for hard
-    // quality guarantees.
-    //
-    // Strategy: per cell, apply the hard floor (MIN_VIEW_COUNT). If that
-    // would leave the cell with zero candidates, relax to
-    // MIN_VIEW_COUNT_RELAX so users still get SOMETHING rather than a
-    // blank cell. This preserves the "top-3 per cell" contract while
-    // eliminating the long tail of <10K junk.
-    //
-    // `viewCount === null` → keep (no signal; videos.list enrichment may
-    // have failed for that video specifically, don't penalize twice).
+    // ── Step 3.6: CP361 Phase 2 — Tiered view_count gate by age ───────
+    // Older videos must clear a higher view bar. Fixes the "8-year-old
+    // video with 30K views beating fresh candidates" pattern from
+    // 2026-04-09. Tier boundaries are module constants. When the tier
+    // empties a cell, relax ONLY into fresh-and-low-view territory —
+    // stale content never enters the final set (user preference).
     let droppedByViewGate = 0;
     let relaxedCells = 0;
+    const viewGateNow = Date.now();
     const byCellPre = new Map<number, RecommendationCandidate[]>();
     for (const c of survivedFix3) {
       const arr = byCellPre.get(c.cellIndex);
@@ -976,32 +982,35 @@ export const executor: SkillExecutor = {
     }
     const filteredAllCandidates: RecommendationCandidate[] = [];
     for (const [cellIdx, cands] of byCellPre) {
-      const passesHard = cands.filter((c) => c.viewCount === null || c.viewCount >= MIN_VIEW_COUNT);
-      if (passesHard.length > 0) {
-        filteredAllCandidates.push(...passesHard);
-        droppedByViewGate += cands.length - passesHard.length;
+      const passesTier = cands.filter((c) => passesTieredViewGate(c, viewGateNow));
+      if (passesTier.length > 0) {
+        filteredAllCandidates.push(...passesTier);
+        droppedByViewGate += cands.length - passesTier.length;
       } else {
-        // Relax: cell would be empty. Apply the softer floor.
-        const passesRelax = cands.filter(
-          (c) => c.viewCount === null || c.viewCount >= MIN_VIEW_COUNT_RELAX
-        );
-        if (passesRelax.length > 0) {
-          filteredAllCandidates.push(...passesRelax);
-          droppedByViewGate += cands.length - passesRelax.length;
+        // Fresh-only relax: < 1 year AND >= MIN_VIEW_COUNT_RELAX_FRESH.
+        // Stale content cannot enter even via relax — empty cell preferred.
+        const passesFreshRelax = cands.filter((c) => {
+          if (c.viewCount === null) return true; // enrichment missing, keep
+          const age = computeAgeDays(c.publishedAt, viewGateNow);
+          if (age === null) return c.viewCount >= MIN_VIEW_COUNT_RELAX_FRESH;
+          if (age >= TIER_BOUNDARY_FRESH_DAYS) return false;
+          return c.viewCount >= MIN_VIEW_COUNT_RELAX_FRESH;
+        });
+        if (passesFreshRelax.length > 0) {
+          filteredAllCandidates.push(...passesFreshRelax);
+          droppedByViewGate += cands.length - passesFreshRelax.length;
           relaxedCells += 1;
           log.info(
-            `view-gate relaxed cell=${cellIdx}: 0 candidates ≥${MIN_VIEW_COUNT}, accepted ${passesRelax.length} ≥${MIN_VIEW_COUNT_RELAX}`
+            `view-gate relaxed cell=${cellIdx}: 0 passed tier, accepted ${passesFreshRelax.length} fresh-and-low-view`
           );
         } else {
-          // Even relaxed produced nothing. The cell was either empty or
-          // all candidates had viewCount=0 (rare but possible). Drop all.
           droppedByViewGate += cands.length;
         }
       }
     }
     if (droppedByViewGate > 0) {
       log.info(
-        `view-gate filter: dropped ${droppedByViewGate} candidates <${MIN_VIEW_COUNT} views (relaxed cells: ${relaxedCells}), ${filteredAllCandidates.length} remain`
+        `view-gate tiered: dropped ${droppedByViewGate} candidates (relaxed cells: ${relaxedCells}), ${filteredAllCandidates.length} remain`
       );
     }
 
@@ -1451,13 +1460,41 @@ function computeVideoQuality(cand: RecommendationCandidate): number {
   return likeSignal * 0.7 + viewSignal * 0.3;
 }
 
-function computeFreshness(publishedAt: string, nowMs: number): number {
+/**
+ * Shared age calculation. Returns null when publishedAt cannot be parsed.
+ * Negative ages (clock skew / future timestamps) clamp to 0.
+ */
+export function computeAgeDays(publishedAt: string, nowMs: number): number | null {
   const publishedMs = Date.parse(publishedAt);
-  if (Number.isNaN(publishedMs)) return 0.5;
+  if (Number.isNaN(publishedMs)) return null;
   const ageDays = (nowMs - publishedMs) / MS_PER_DAY;
-  if (ageDays < 0) return 1.0;
-  if (ageDays > FRESHNESS_HORIZON_DAYS) return 0.0;
-  return 1 - ageDays / FRESHNESS_HORIZON_DAYS;
+  return ageDays < 0 ? 0 : ageDays;
+}
+
+function computeFreshness(publishedAt: string, nowMs: number): number {
+  const age = computeAgeDays(publishedAt, nowMs);
+  if (age === null) return 0.5;
+  if (age > FRESHNESS_HORIZON_DAYS) return 0.0;
+  return 1 - age / FRESHNESS_HORIZON_DAYS;
+}
+
+/**
+ * CP361 Phase 2 — tiered view_count gate. Age-dependent view floor:
+ * fresh content is allowed at 10K, stale content must clear progressively
+ * higher bars. Candidates with null viewCount are kept (benefit of doubt —
+ * videos.list enrichment failure should not double-penalize).
+ */
+export function passesTieredViewGate(
+  cand: Pick<RecommendationCandidate, 'viewCount' | 'publishedAt'>,
+  nowMs: number
+): boolean {
+  if (cand.viewCount === null) return true;
+  const age = computeAgeDays(cand.publishedAt, nowMs);
+  if (age === null) return cand.viewCount >= MIN_VIEWS_TIER_FRESH;
+  if (age < TIER_BOUNDARY_FRESH_DAYS) return cand.viewCount >= MIN_VIEWS_TIER_FRESH;
+  if (age < TIER_BOUNDARY_MIDLIFE_DAYS) return cand.viewCount >= MIN_VIEWS_TIER_MIDLIFE;
+  if (age < TIER_BOUNDARY_AGING_DAYS) return cand.viewCount >= MIN_VIEWS_TIER_AGING;
+  return cand.viewCount >= MIN_VIEWS_TIER_CLASSIC;
 }
 
 function computeRecScore(cand: RecommendationCandidate): number {
