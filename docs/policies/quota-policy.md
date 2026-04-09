@@ -145,18 +145,15 @@ Edge Functions (Deno runtime) cannot import Node modules — values are kept inl
 
 ## 9. YouTube Sync Policy
 
-### 9.1 Sync Data Scope by Tier
+### 9.1 Sync Data Scope (All Tiers)
 
-| Tier | Historical Data | Sync Scope |
-|------|----------------|------------|
-| `free` | **No** — subscription date cutoff | Only videos published **after** the channel/playlist was added |
-| `pro` | Yes — full history | All videos (no date cutoff) |
-| `lifetime` | Yes — full history | All videos (no date cutoff) |
-| `admin` | Yes — full history | All videos (no date cutoff) |
+| Sync Type | Scope |
+|-----------|-------|
+| Auto-sync | Only videos published **after** the channel/playlist was added |
 
 **Cutoff date**: `youtube_playlists.created_at` (the moment the user added the source).
 
-**Rationale**: Large channels (1000+ videos) cause transaction timeouts and excessive quota usage when syncing full history. Free-tier cutoff naturally limits sync volume to recent uploads only.
+**Rationale**: Large channels (5000+ videos) cause YouTube API quota exhaustion and DB transaction timeouts when syncing full history. Subscription-date cutoff applies to all tiers to protect system stability.
 
 ### 9.2 Auto-Sync Schedule
 
@@ -171,12 +168,10 @@ Edge Functions (Deno runtime) cannot import Node modules — values are kept inl
 
 | Item | Status | Location |
 |------|--------|----------|
-| Free-tier date cutoff | Done | `SyncEngine.applyTierSyncFilter()` |
-| Tier resolution | Done | `SyncEngine.resolveUserTier()` → `user_subscriptions.tier` |
+| Subscription-date cutoff | Done | `SyncEngine.syncPlaylist()` inline filter |
 | Auto-sync scheduler | Done | `AutoSyncScheduler` (node-cron) |
 | Orphan backfill | Done | `AutoSyncScheduler.backfillOrphanSchedules()` |
 | OAuth credential auto-load | Done | `SyncEngine.ensureOAuthCredentials()` |
-| Pro full-history sync | Ready | No cutoff when `tier !== 'free'` |
 
 ### 9.4 Future Enhancements
 

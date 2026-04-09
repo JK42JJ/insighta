@@ -19,7 +19,6 @@ import { getQuotaManager } from '../quota/manager';
 import { logger, logSyncOperation } from '../../utils/logger';
 import { executeTransaction } from '../database/client';
 import { getErrorRecoveryManager, RecoveryStrategy } from '../../utils/error-recovery';
-import { Tier, DEFAULT_TIER } from '../../config/quota';
 
 /**
  * Sync result
@@ -126,13 +125,16 @@ export class SyncEngine {
         );
         quotaUsed += quotaCost;
 
-        // Free-tier cutoff: only sync items published after channel subscription date.
-        // Pro/lifetime/admin: no cutoff (full historical sync).
-        const userTier = await this.resolveUserTier(playlist.user_id);
-        const ytItems = this.applyTierSyncFilter(allYtItems, playlist.created_at, userTier);
+        // Sync cutoff: only process videos published after subscription date.
+        // Prevents API/DB overload on large channels (5000+ videos).
+        const ytItems = allYtItems.filter((item: any) => {
+          const publishedAt = item.snippet?.publishedAt;
+          if (!publishedAt) return true;
+          return new Date(publishedAt) >= playlist.created_at;
+        });
 
         if (allYtItems.length !== ytItems.length) {
-          logger.info('Free-tier sync cutoff applied', {
+          logger.info('Sync cutoff applied — new videos only', {
             playlistId,
             total: allYtItems.length,
             afterCutoff: ytItems.length,
@@ -447,36 +449,6 @@ export class SyncEngine {
     });
 
     return { added, removed, reordered };
-  }
-
-  /**
-   * Resolve user's subscription tier from DB.
-   * Falls back to 'free' if no subscription exists.
-   */
-  private async resolveUserTier(userId: string): Promise<Tier> {
-    try {
-      const sub = await db.user_subscriptions.findUnique({
-        where: { user_id: userId },
-        select: { tier: true },
-      });
-      return (sub?.tier as Tier) ?? DEFAULT_TIER;
-    } catch {
-      return DEFAULT_TIER;
-    }
-  }
-
-  /**
-   * For free-tier users, filter YouTube items to only include videos published
-   * after the playlist/channel subscription date. Pro+ gets full history.
-   */
-  private applyTierSyncFilter(items: any[], subscriptionDate: Date, tier: Tier): any[] {
-    if (tier !== 'free') return items;
-
-    return items.filter((item: any) => {
-      const publishedAt = item.snippet?.publishedAt;
-      if (!publishedAt) return true; // keep items without date (safety)
-      return new Date(publishedAt) >= subscriptionDate;
-    });
   }
 
   /**
