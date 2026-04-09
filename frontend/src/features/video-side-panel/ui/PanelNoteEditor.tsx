@@ -59,7 +59,7 @@ export function PanelNoteEditor({ initialContent, onDocChange }: PanelNoteEditor
         className={[
           'max-w-none flex-1',
           // Root: no outline, no border, caret indigo
-          '[&_.ProseMirror]:min-h-[200px] [&_.ProseMirror]:outline-none [&_.ProseMirror]:caret-[#818cf8]',
+          '[&_.ProseMirror]:min-h-[200px] [&_.ProseMirror]:outline-none [&_.ProseMirror]:ring-0 [&_.ProseMirror]:ring-offset-0 [&_.ProseMirror]:caret-[#818cf8]',
           // Body text: 14px, line-height 1.72, slight transparency
           '[&_.ProseMirror]:text-[14px] [&_.ProseMirror]:leading-[1.72] [&_.ProseMirror]:text-[rgba(237,237,240,0.88)]',
           // Headings
