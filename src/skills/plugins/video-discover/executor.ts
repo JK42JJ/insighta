@@ -38,7 +38,7 @@ import {
   VIDEO_DISCOVER_KEYWORD_POOL_SIZE,
   VIDEO_DISCOVER_QUERIES_PER_CELL,
 } from './manifest';
-import { generateSearchQueriesRace, LlmQueryGenError } from './sources/llm-query-generator';
+import { generateSearchQueriesRace } from './sources/llm-query-generator';
 import { rerankBatch, type RerankCandidate } from './sources/llm-reranker';
 
 const log = logger.child({ module: 'video-discover' });
@@ -777,54 +777,48 @@ export const executor: SkillExecutor = {
       }
     }
 
-    for (const sel of cellSelections) {
-      // Phase 1 — try cache first. If it hits, skip LLM + search entirely.
-      if (await tryCellCache(sel)) continue;
-      let queries: string[] | null = null;
-      if (!state.llmDisabled) {
-        try {
-          const raceResult = await generateSearchQueriesRace({
-            subGoal: sel.cell.text,
-            centerGoal: state.centerGoal,
-            language: state.mandalaLanguage,
-            baseUrl: state.llmUrl,
-            fetchImpl: fetchFn,
-            openRouterApiKey: state.openRouterApiKey,
-            openRouterModel: state.openRouterModel,
-          });
-          queries = raceResult.winner.queries;
-          // Hard cap defensively even though the parser already limits.
-          if (queries && queries.length > VIDEO_DISCOVER_QUERIES_PER_CELL) {
-            queries = queries.slice(0, VIDEO_DISCOVER_QUERIES_PER_CELL);
-          }
-          if (raceResult.winner.provider === 'ollama') raceWinsOllama += 1;
-          else raceWinsOpenRouter += 1;
-          llmQueryGenSuccess += 1;
-        } catch (err) {
-          llmQueryGenFailures += 1;
-          raceBothFailed += 1;
-          if (err instanceof LlmQueryGenError) {
+    // All 8 cells in parallel (was sequential — 8× speedup).
+    // JS single-threaded: shared counters + array pushes are safe.
+    await Promise.all(
+      cellSelections.map(async (sel) => {
+        if (await tryCellCache(sel)) return;
+        let queries: string[] | null = null;
+        if (!state.llmDisabled) {
+          try {
+            const raceResult = await generateSearchQueriesRace({
+              subGoal: sel.cell.text,
+              centerGoal: state.centerGoal,
+              language: state.mandalaLanguage,
+              baseUrl: state.llmUrl,
+              fetchImpl: fetchFn,
+              openRouterApiKey: state.openRouterApiKey,
+              openRouterModel: state.openRouterModel,
+            });
+            queries = raceResult.winner.queries;
+            if (queries && queries.length > VIDEO_DISCOVER_QUERIES_PER_CELL) {
+              queries = queries.slice(0, VIDEO_DISCOVER_QUERIES_PER_CELL);
+            }
+            if (raceResult.winner.provider === 'ollama') raceWinsOllama += 1;
+            else raceWinsOpenRouter += 1;
+            llmQueryGenSuccess += 1;
+          } catch (err) {
+            llmQueryGenFailures += 1;
+            raceBothFailed += 1;
             log.warn(
-              `LLM race failed for cell ${sel.cell.cellIndex} (falling back to concat): ${err.message}`
+              `LLM race failed for cell ${sel.cell.cellIndex}: ${err instanceof Error ? err.message : String(err)}`
             );
-          } else {
-            log.warn(
-              `LLM race unexpected error for cell ${sel.cell.cellIndex}: ${err instanceof Error ? err.message : String(err)}`
-            );
+            queries = null;
           }
-          queries = null;
         }
-      }
-
-      if (queries && queries.length > 0) {
-        for (const q of queries) {
-          await runSearch(sel, q);
+        if (queries && queries.length > 0) {
+          for (const q of queries) {
+            await runSearch(sel, q);
+          }
+        } else {
+          await runSearch(sel, `${sel.cell.text} ${sel.keyword.keyword}`);
         }
-      } else {
-        // Fallback: legacy single concat query (also taken when llmDisabled).
-        await runSearch(sel, `${sel.cell.text} ${sel.keyword.keyword}`);
-      }
-    }
+      })
+    );
     if (!state.llmDisabled) {
       log.info(
         `LLM race: success=${llmQueryGenSuccess}, both_failed=${raceBothFailed}, wins_ollama=${raceWinsOllama}, wins_openrouter=${raceWinsOpenRouter}, search_calls=${searchCalls}`
