@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, Timer, Camera, Loader2 } from 'lucide-react';
+import { MessageSquare, Timer, Camera, Loader2, Maximize2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -115,6 +116,8 @@ interface MemoEditorProps {
   videoSummary?: { summary_en: string; summary_ko: string; tags?: string[]; model?: string };
   onEnrichStart?: (cardId: string) => void;
   onEnrichEnd?: (cardId: string) => void;
+  /** Mandala ID for the expand-to-side-editor button (optional). */
+  mandalaId?: string | null;
 }
 
 export function MemoEditor({
@@ -129,8 +132,10 @@ export function MemoEditor({
   videoSummary,
   onEnrichStart,
   onEnrichEnd,
+  mandalaId,
 }: MemoEditorProps) {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [note, setNote] = useState(initialNote);
   const [isEditing, setIsEditing] = useState(!initialNote);
@@ -458,6 +463,26 @@ export function MemoEditor({
             <span className="text-[10px] text-muted-foreground/50 flex-shrink-0 whitespace-nowrap">
               {t('videoPlayer.slashHint')}
             </span>
+          )}
+          {/* Expand to full-featured side editor */}
+          {videoId && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                // Flush pending auto-save before navigating away
+                if (autoSaveTimerRef.current) {
+                  clearTimeout(autoSaveTimerRef.current);
+                  onSave(cardId, note);
+                }
+                const mandalaParam = mandalaId ? `?mandala=${mandalaId}` : '';
+                navigate(`/notes/${videoId}${mandalaParam}`);
+              }}
+              className="ml-auto h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+              title={t('videoPlayer.expandEditor', 'Expand editor')}
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </Button>
           )}
         </div>
 

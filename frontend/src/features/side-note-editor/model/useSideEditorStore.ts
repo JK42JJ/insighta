@@ -9,9 +9,8 @@ import { create } from 'zustand';
 
 export interface SideEditorContext {
   videoId: string;
-  mandalaId: string;
-  /** -1 for scratchpad cards (no cell). */
-  cellIndex: number;
+  /** null for scratchpad cards with no mandala. */
+  mandalaId: string | null;
 }
 
 export interface SideEditorState {

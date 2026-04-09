@@ -18,15 +18,14 @@ describe('useSideEditorStore', () => {
     useSideEditorStore.getState().open({
       videoId: 'v-1',
       mandalaId: 'm-1',
-      cellIndex: 3,
-    });
+          });
     const state = useSideEditorStore.getState();
     expect(state.isOpen).toBe(true);
-    expect(state.context).toEqual({ videoId: 'v-1', mandalaId: 'm-1', cellIndex: 3 });
+    expect(state.context).toEqual({ videoId: 'v-1', mandalaId: 'm-1' });
   });
 
   it('close() resets isOpen but keeps context for exit animation', () => {
-    useSideEditorStore.getState().open({ videoId: 'v-1', mandalaId: 'm-1', cellIndex: 0 });
+    useSideEditorStore.getState().open({ videoId: 'v-1', mandalaId: 'm-1', });
     useSideEditorStore.getState().close();
     const state = useSideEditorStore.getState();
     expect(state.isOpen).toBe(false);

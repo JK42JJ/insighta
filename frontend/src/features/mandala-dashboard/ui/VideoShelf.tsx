@@ -80,7 +80,7 @@ export function VideoShelf({ recommendations }: VideoShelfProps) {
                   title={t('dashboard.videoShelf.openNotes', 'Open notes')}
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate(`/mandalas/${mandalaId}/notes/${rec.videoId}`);
+                    navigate(`/notes/${rec.videoId}${mandalaId ? `?mandala=${mandalaId}` : ''}`);
                   }}
                   className="flex-shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                 >
