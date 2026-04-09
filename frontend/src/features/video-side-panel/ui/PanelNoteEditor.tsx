@@ -11,8 +11,8 @@
  */
 import { useEffect, useRef } from 'react';
 import { BubbleMenu, EditorContent } from '@tiptap/react';
-import { useNoteEditor } from '@/features/side-note-editor/model/useNoteEditor';
-import type { TiptapDoc } from '@/features/side-note-editor/lib/note-parser';
+import { useNoteEditor } from '../model/useNoteEditor';
+import type { TiptapDoc } from '../lib/note-parser';
 import { EditorToolbar } from './EditorToolbar';
 
 /** Delay before auto-focus — lets the slide animation settle. */
