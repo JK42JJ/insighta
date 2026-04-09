@@ -24,7 +24,7 @@ export function SideEditorHost() {
     <Sheet open={isOpen} onOpenChange={handleOpenChange} modal={false}>
       <SheetContent
         side="right"
-        className="z-[60] flex flex-col overflow-y-auto border-l border-border shadow-2xl sm:max-w-none"
+        className="z-[60] flex flex-col overflow-y-auto border-l border-border/40 bg-background p-0 shadow-2xl sm:max-w-none"
         style={{ width: `${SHEET_WIDTH_PX}px` }}
         onInteractOutside={(e) => e.preventDefault()}
       >

@@ -73,10 +73,18 @@ export function SideEditorPanel({ cardId }: SideEditorPanelProps) {
   const { video, mandalaCell, note } = query.data;
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <EditorHeader video={video} mandalaCell={mandalaCell} />
-      <NoteEditor key={cardId} initialContent={note} onDocChange={autoSave.trigger} />
-      <div className="flex items-center justify-end border-t border-border pt-2">
+    <div className="flex h-full flex-col">
+      {/* Header — compact, separated by a subtle line */}
+      <div className="px-6 pt-6 pb-4">
+        <EditorHeader video={video} mandalaCell={mandalaCell} />
+      </div>
+      <div className="mx-6 border-t border-border/30" />
+      {/* Editor — generous padding, full height */}
+      <div className="flex-1 overflow-y-auto px-6 pt-4 pb-2">
+        <NoteEditor key={cardId} initialContent={note} onDocChange={autoSave.trigger} />
+      </div>
+      {/* Footer — minimal, right-aligned */}
+      <div className="flex items-center justify-end px-6 py-3 text-muted-foreground/60">
         <SaveStatusIndicator status={autoSave.status} onRetry={autoSave.retry} />
       </div>
     </div>

@@ -24,8 +24,10 @@ function ToolbarButton({ active, disabled, onClick, label, children }: ToolbarBu
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
-      className={`rounded px-2 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50 ${
-        active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'
+      className={`rounded-sm px-2 py-1 text-[11px] font-medium transition-all duration-100 disabled:cursor-not-allowed disabled:opacity-40 ${
+        active
+          ? 'bg-foreground/10 text-foreground'
+          : 'text-foreground/60 hover:bg-foreground/5 hover:text-foreground/80'
       }`}
     >
       {children}
@@ -46,7 +48,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   };
 
   return (
-    <div className="flex items-center gap-0.5 rounded-md border border-border bg-popover px-1 py-1 shadow-md">
+    <div className="flex items-center gap-0.5 rounded-lg border border-border/40 bg-popover/95 px-1.5 py-1 shadow-lg backdrop-blur-sm">
       <ToolbarButton
         label="Heading 1"
         active={editor.isActive('heading', { level: 1 })}
