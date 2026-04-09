@@ -128,15 +128,19 @@ function AuthenticatedApp() {
     }
   }, [mandalaListData, selectedMandalaId, storeSelectedMandalaId]);
 
-  // Effective mandalaId: resolves immediately from cached data even before useEffect fires
+  // Effective mandalaId: resolves immediately from cached data even before useEffect fires.
+  // Bug #2 fix: check storeSelectedMandalaId BEFORE is_default fallback. Without this,
+  // first render after wizard navigate always shows the old default mandala because
+  // selectedMandalaId is still null (useState init) and useMemo runs before useEffect.
   const effectiveMandalaId = useMemo(() => {
     if (selectedMandalaId) return selectedMandalaId;
+    if (storeSelectedMandalaId) return storeSelectedMandalaId;
     if (mandalaListData?.mandalas) {
       const defaultMandala = mandalaListData.mandalas.find((m) => m.isDefault);
       if (defaultMandala) return defaultMandala.id;
     }
     return null;
-  }, [selectedMandalaId, mandalaListData]);
+  }, [selectedMandalaId, storeSelectedMandalaId, mandalaListData]);
 
   // 3. Mandala data from DB (by selected mandala ID)
   const { mandalaLevels: queryMandalaLevels } = useMandalaQuery(effectiveMandalaId);
