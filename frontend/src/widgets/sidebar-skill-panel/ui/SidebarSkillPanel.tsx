@@ -16,10 +16,13 @@ import {
   Video,
   PenLine,
   Lock,
+  TrendingUp,
+  Search,
 } from 'lucide-react';
 import { useSkillList, useSkillPreview, useSkillExecute, useSkillOutputs } from '@/features/skill';
 import { useToast } from '@/shared/lib/use-toast';
 import { apiClient, type SkillOutputResponse } from '@/shared/lib/api-client';
+import { cn } from '@/shared/lib/utils';
 
 // ─── Dashboard skill state hook (cache-shared with useDashboard via identical queryKey) ───
 //
@@ -64,6 +67,8 @@ function useDashboardSkills(mandalaId: string | null): Record<string, boolean> {
   return data ?? {};
 }
 
+// ─── Icon mapping ───
+
 const SKILL_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   newsletter: Mail,
   report: FileText,
@@ -73,6 +78,45 @@ const SKILL_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
   blog: PenLine,
   video_discover: Video,
 };
+
+// ─── Color theme per skill (gradient bg + stroke color) ───
+
+interface SkillColor {
+  /** Tailwind-compatible gradient bg for the icon circle */
+  iconBg: string;
+  /** SVG stroke color */
+  stroke: string;
+}
+
+const SKILL_COLORS: Record<string, SkillColor> = {
+  newsletter: {
+    iconBg: 'linear-gradient(145deg, rgba(129,140,248,0.2), rgba(129,140,248,0.06))',
+    stroke: '#818cf8',
+  },
+  report: {
+    iconBg: 'linear-gradient(145deg, rgba(52,211,153,0.2), rgba(52,211,153,0.06))',
+    stroke: '#34d399',
+  },
+  alert: {
+    iconBg: 'linear-gradient(145deg, rgba(251,113,133,0.2), rgba(251,113,133,0.06))',
+    stroke: '#fb7185',
+  },
+  recommend: {
+    iconBg: 'linear-gradient(145deg, rgba(167,139,250,0.2), rgba(167,139,250,0.06))',
+    stroke: '#a78bfa',
+  },
+  script: {
+    iconBg: 'linear-gradient(145deg, rgba(56,189,248,0.2), rgba(56,189,248,0.06))',
+    stroke: '#38bdf8',
+  },
+  blog: {
+    iconBg: 'linear-gradient(145deg, rgba(251,146,60,0.2), rgba(251,146,60,0.06))',
+    stroke: '#fb923c',
+  },
+};
+
+const OFF_ICON_BG = 'rgba(255,255,255,0.025)';
+const PRO_ICON_BG = 'rgba(255,255,255,0.02)';
 
 const SKILL_DESC_KEYS: Record<string, string> = {
   newsletter: 'descNewsletter',
@@ -116,10 +160,21 @@ interface ExtraProSkill {
   id: string;
   shortLabelKey: string;
   defaultLabel: string;
+  icon: React.ComponentType<{ className?: string }>;
 }
 const EXTRA_PRO_SKILLS: ReadonlyArray<ExtraProSkill> = [
-  { id: 'pro-trend-analysis', shortLabelKey: 'shortProTrend', defaultLabel: '트렌드 분석' },
-  { id: 'pro-auto-research', shortLabelKey: 'shortProAutoResearch', defaultLabel: '자동 리서치' },
+  {
+    id: 'pro-trend-analysis',
+    shortLabelKey: 'shortProTrend',
+    defaultLabel: '트렌드 분석',
+    icon: TrendingUp,
+  },
+  {
+    id: 'pro-auto-research',
+    shortLabelKey: 'shortProAutoResearch',
+    defaultLabel: '자동 리서치',
+    icon: Search,
+  },
 ];
 
 /**
@@ -163,6 +218,7 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem('sidebar-skills-collapsed') === 'true';
   });
+  const [showAll, setShowAll] = useState(false);
   const [previewData, setPreviewData] = useState<SkillPreviewData | null>(null);
   const [outputData, setOutputData] = useState<SkillOutputData | null>(null);
   const [expandedOutputId, setExpandedOutputId] = useState<string | null>(null);
@@ -303,27 +359,38 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
 
   if (!mandalaId) return null;
 
+  // Active skill count for header
+  const activeCount = skills.filter((s) => skillEnabledMap[s.id]).length;
+  const totalCount = skills.length + EXTRA_PRO_SKILLS.length;
+
   return (
     <div className="px-2">
       {/* Section header */}
       <button
         onClick={toggleCollapse}
-        className="flex items-center gap-1 w-full text-left text-xs font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground/80 py-1 px-1"
+        className="flex items-center gap-1 w-full text-left py-1 px-1"
       >
-        {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        {t('skills.title')}
+        {collapsed ? (
+          <ChevronRight className="w-3 h-3 text-sidebar-foreground/40" />
+        ) : (
+          <ChevronDown className="w-3 h-3 text-sidebar-foreground/40" />
+        )}
+        <span className="text-xs font-bold text-sidebar-foreground/60">{t('skills.title')}</span>
+        <span className="ml-auto text-[10px] text-sidebar-foreground/30 font-mono">
+          {activeCount}/{totalCount} {t('skills.active', '활성')}
+        </span>
       </button>
 
       {!collapsed && (
-        <div className="space-y-1 mt-1">
+        <div className="mt-2">
           {isLoading && (
-            <div className="flex items-center justify-center py-3">
-              <Loader2 className="w-4 h-4 animate-spin text-sidebar-foreground/60" />
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="w-4 h-4 animate-spin text-sidebar-foreground/40" />
             </div>
           )}
 
           {!isLoading && skills.length === 0 && (
-            <p className="text-xs text-sidebar-foreground/60 px-1 py-2">{t('skills.empty')}</p>
+            <p className="text-xs text-sidebar-foreground/40 px-1 py-2">{t('skills.empty')}</p>
           )}
 
           {/* Skill output result panel — hidden in CP356 (logic preserved). */}
@@ -367,93 +434,164 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
             </div>
           )}
 
-          {skills.map((skill) => {
-            const Icon = SKILL_ICONS[skill.id] ?? Sparkles;
-            const isActive = previewData?.skillId === skill.id;
-            const isPreviewing =
-              previewMutation.isPending && previewMutation.variables?.skillId === skill.id;
-            const isToggling = togglingSkillId === skill.id;
+          {/* ─── Skill icon grid ─── */}
+          <div
+            className="grid gap-y-1 max-h-[320px] overflow-y-auto scrollbar-thin"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))' }}
+          >
+            {(showAll ? skills : skills.slice(0, 6)).map((skill) => {
+              const Icon = SKILL_ICONS[skill.id] ?? Sparkles;
+              const isEnabled = skillEnabledMap[skill.id] ?? false;
+              const isToggling = togglingSkillId === skill.id;
+              const color = SKILL_COLORS[skill.id];
 
-            return (
-              <div key={skill.id} className="rounded-md">
+              return (
                 <button
+                  key={skill.id}
+                  type="button"
                   onClick={() => handleToggleSkill(skill.id)}
                   disabled={isToggling}
-                  className="flex items-center gap-2 w-full text-left text-xs px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors disabled:opacity-50"
-                >
-                  {isToggling ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                  ) : (
-                    <Icon className="w-3.5 h-3.5 shrink-0 text-sidebar-foreground/60" />
+                  className={cn(
+                    'flex flex-col items-center py-3 px-1 rounded-xl cursor-pointer select-none',
+                    'transition-all duration-200',
+                    'hover:bg-[rgba(255,255,255,0.025)] active:scale-[0.96]',
+                    isToggling && 'opacity-50 pointer-events-none'
                   )}
-                  <span className="truncate flex-1">
+                >
+                  {/* Icon circle */}
+                  <div
+                    className="relative flex items-center justify-center w-12 h-12 rounded-[14px] mb-[7px] transition-all duration-300"
+                    style={{
+                      background: isEnabled ? (color?.iconBg ?? OFF_ICON_BG) : OFF_ICON_BG,
+                    }}
+                  >
+                    {/* Glow dot (ON only) */}
+                    {isEnabled && (
+                      <span
+                        className="absolute -top-px -right-px w-[3px] h-[3px] rounded-full"
+                        style={{
+                          background: '#34d399',
+                          boxShadow: '0 0 6px 1px rgba(52,211,153,0.6)',
+                        }}
+                      />
+                    )}
+                    {isToggling ? (
+                      <Loader2 className="w-6 h-6 animate-spin text-sidebar-foreground/40" />
+                    ) : (
+                      <span
+                        className="transition-all duration-300"
+                        style={{
+                          color: isEnabled ? (color?.stroke ?? '#9394a0') : '#3a3b46',
+                          opacity: isEnabled ? 1 : 0.35,
+                        }}
+                      >
+                        <Icon className="w-6 h-6" />
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Label */}
+                  <span
+                    className={cn(
+                      'text-[10px] font-bold text-center tracking-tight transition-colors duration-300 antialiased',
+                      isEnabled ? 'text-[#ededf0]' : 'text-[#4e4f5c]'
+                    )}
+                  >
                     {t(
                       `skills.${SKILL_SHORT_LABEL_KEYS[skill.id] ?? SKILL_DESC_KEYS[skill.id] ?? skill.id}`,
                       skill.description
                     )}
                   </span>
-                  <SkillStatusBadge
-                    enabled={skillEnabledMap[skill.id] ?? false}
-                    isPro={PRO_SKILL_TYPES.has(skill.id)}
-                  />
-                </button>
 
-                {/* Preview panel — hidden in CP356 (logic preserved). */}
-                {ENABLE_INLINE_SKILL_PANELS && isActive && previewData && (
-                  <div className="mx-1 mt-1 mb-2 p-2 rounded bg-sidebar-accent/50 text-xs space-y-2">
-                    {previewData.subject && <p className="font-medium">{previewData.subject}</p>}
-                    {previewData.curated_count != null && (
-                      <p className="text-sidebar-foreground/60">
-                        {t('skills.curatedCount', { count: previewData.curated_count })}
-                      </p>
+                  {/* Activity feedback (placeholder — Phase 2 real data) */}
+                  <span
+                    className={cn(
+                      "text-[9px] mt-0.5 font-['JetBrains_Mono',monospace] text-[#5a5b68] transition-opacity duration-300",
+                      isEnabled ? 'opacity-100' : 'opacity-0'
                     )}
-                    {previewData.preview_html && (
-                      <div
-                        className="prose prose-xs max-h-32 overflow-y-auto"
-                        dangerouslySetInnerHTML={{ __html: previewData.preview_html }}
-                      />
-                    )}
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        onClick={() => handleExecute(skill.id)}
-                        disabled={executeMutation.isPending}
-                        className="flex-1 px-2 py-1 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                      >
-                        {executeMutation.isPending ? t('skills.executing') : t('skills.execute')}
-                      </button>
-                      <button
-                        onClick={() => setPreviewData(null)}
-                        className="px-2 py-1 rounded text-xs text-sidebar-foreground/60 hover:bg-sidebar-accent"
-                      >
-                        {t('common.cancel')}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  >
+                    {/* Phase 2: real activity data from skill_execution_log */}
+                    &nbsp;
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Show more toggle */}
+          {skills.length > 6 && (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="w-full text-center text-[9px] font-medium text-sidebar-foreground/40 hover:text-sidebar-foreground/60 py-1 transition-colors"
+            >
+              {showAll
+                ? t('skills.showLess', '접기')
+                : t('skills.showMore', `+${skills.length - 6}개 더보기`)}
+            </button>
+          )}
 
           {/* Free / PRO divider */}
           {EXTRA_PRO_SKILLS.length > 0 && skills.length > 0 && (
-            <div className="my-2 h-px bg-sidebar-border/60" aria-hidden="true" />
+            <div className="my-1 h-px bg-[rgba(255,255,255,0.03)]" aria-hidden="true" />
           )}
 
-          {/* PRO (UI-only, no backend SkillId yet) */}
-          {EXTRA_PRO_SKILLS.map((proSkill) => (
-            <button
-              key={proSkill.id}
-              type="button"
-              onClick={handleProClick}
-              className="flex items-center gap-2 w-full text-left text-xs px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors opacity-80"
-            >
-              <Lock className="w-3.5 h-3.5 shrink-0 text-sidebar-foreground/40" />
-              <span className="truncate flex-1">
-                {t(`skills.${proSkill.shortLabelKey}`, proSkill.defaultLabel)}
-              </span>
-              <SkillStatusBadge enabled={false} isPro={true} />
-            </button>
-          ))}
+          {/* PRO skills (UI-only) */}
+          <div
+            className="grid gap-y-1"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))' }}
+          >
+            {EXTRA_PRO_SKILLS.map((proSkill) => {
+              const ProIcon = proSkill.icon;
+              return (
+                <button
+                  key={proSkill.id}
+                  type="button"
+                  onClick={handleProClick}
+                  className={cn(
+                    'relative flex flex-col items-center py-3 px-1 rounded-xl cursor-pointer select-none',
+                    'transition-all duration-200',
+                    'hover:bg-[rgba(255,255,255,0.025)] active:scale-[0.96]'
+                  )}
+                >
+                  {/* PRO badge */}
+                  <span
+                    className="absolute top-2 right-3 text-[7px] font-extrabold tracking-wider px-1 py-px rounded-[3px]"
+                    style={{
+                      background: 'rgba(251,191,36,0.1)',
+                      color: '#fbbf24',
+                    }}
+                  >
+                    PRO
+                  </span>
+
+                  {/* Icon circle — dashed border */}
+                  <div
+                    className="flex items-center justify-center w-12 h-12 rounded-[14px] mb-[7px]"
+                    style={{
+                      background: PRO_ICON_BG,
+                      border: '1px dashed rgba(251,191,36,0.15)',
+                    }}
+                  >
+                    <ProIcon className="w-6 h-6 text-[#3a3b46] opacity-25" />
+                  </div>
+
+                  {/* Label */}
+                  <span className="text-[11px] font-semibold text-[#3a3b46] text-center">
+                    {t(`skills.${proSkill.shortLabelKey}`, proSkill.defaultLabel)}
+                  </span>
+
+                  {/* Upgrade CTA */}
+                  <span
+                    className="text-[8px] mt-1 font-bold tracking-wide uppercase px-1.5 py-px rounded-[3px]"
+                    style={{ background: 'rgba(251,191,36,0.08)', color: '#fbbf24' }}
+                  >
+                    UPGRADE
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
           {/* Outputs history — hidden in CP356 (logic preserved). */}
           {ENABLE_INLINE_SKILL_PANELS && (
@@ -470,33 +608,6 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
         </div>
       )}
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// SkillStatusBadge — ON / OFF / PRO pill
-// ---------------------------------------------------------------------------
-
-function SkillStatusBadge({ enabled, isPro }: { enabled: boolean; isPro: boolean }) {
-  if (isPro) {
-    return (
-      <span className="shrink-0 inline-flex items-center gap-0.5 text-[8px] font-bold px-1.5 py-0.5 rounded bg-primary/15 text-primary">
-        <Lock className="w-2 h-2" />
-        PRO
-      </span>
-    );
-  }
-  if (enabled) {
-    return (
-      <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500">
-        ON
-      </span>
-    );
-  }
-  return (
-    <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded border border-border/60 text-muted-foreground">
-      OFF
-    </span>
   );
 }
 
