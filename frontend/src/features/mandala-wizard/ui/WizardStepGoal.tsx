@@ -202,17 +202,17 @@ export default function WizardStepGoal({
 
   const aiPhaseLabel =
     aiElapsedMs < AI_PHASE_ANALYSIS_MS
-      ? t('wizard.goal.ai.phase1', '목표 분석 중...')
+      ? t('wizard.goal.ai.phase1', 'Analyzing goal...')
       : aiElapsedMs < AI_PHASE_DRAFT_MS
-        ? t('wizard.goal.ai.phase2', '세부목표 8개 생성 중...')
-        : t('wizard.goal.ai.phase3', '만다라 완성 중...');
+        ? t('wizard.goal.ai.phase2', 'Generating 8 sub-goals...')
+        : t('wizard.goal.ai.phase3', 'Finalizing mandala...');
 
-  // Soft-slow inline hint text (shown below skeleton, NEVER amber).
+  // Soft-slow inline hint text (shown below skeleton, never amber).
   const searchSoftSlowHint = isSearchSoftSlow
-    ? t('wizard.goal.softSlow.search', '평소보다 조금 걸리고 있어요...')
+    ? t('wizard.goal.softSlow.search', 'Taking longer than usual...')
     : undefined;
   const generateSoftSlowHint = isGenerateSoftSlow
-    ? t('wizard.goal.softSlow.generate', '조금만 더 기다려 주세요...')
+    ? t('wizard.goal.softSlow.generate', 'Please wait a bit longer...')
     : undefined;
 
   return (

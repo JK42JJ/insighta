@@ -41,8 +41,14 @@
       "hashtag": "해시태그",
       "hashtagDesc": "키워드 기반 검색 결과 동기화"
     },
-    "url": { "name": "URL", "desc": "웹페이지 · 블로그 · 뉴스" },
-    "rss": { "name": "RSS", "desc": "피드 구독" },
+    "url": {
+      "name": "URL",
+      "desc": "웹페이지 · 블로그 · 뉴스"
+    },
+    "rss": {
+      "name": "RSS",
+      "desc": "피드 구독"
+    },
     "assignMandala": "만다라 연결 (선택사항)",
     "assignMandalaDesc": "이 소스의 영상을 어디에 정리할까요?",
     "aiAuto": "AI 자동",
@@ -422,7 +428,6 @@
       "24h": "24시간마다"
     },
     "connect": "YouTube 연결",
-    "connected": "연결됨",
     "disconnect": "연결 해제",
     "disconnectConfirm": "YouTube 연결을 해제하시겠습니까?",
     "disconnectDesc": "연결을 해제하면 비공개 플레이리스트에 접근할 수 없습니다.",
@@ -443,7 +448,7 @@
     "playlistsSynced": "{{count}}개 재생목록이 동기화되었습니다.",
     "playlistsDeleted": "{{count}}개 재생목록이 삭제되었습니다.",
     "playlists": "재생목록",
-    "tabPlaylists": "재생목록",
+    "tabPlaylists": "내 플레이리스트",
     "tabChannels": "채널",
     "tabHashtags": "해시태그",
     "addChannel": "채널 추가",
@@ -465,7 +470,6 @@
     "connectFirst": "YouTube 라이브러리를 가져오려면 Google 계정을 연결하세요",
     "importFromLibrary": "YouTube에서 가져오기",
     "importBtn": "가져오기 ({{count}})",
-    "tabPlaylists": "내 플레이리스트",
     "tabSubscriptions": "구독 채널",
     "noSubscriptions": "구독 채널이 없습니다",
     "loadMore": "더 보기...",
@@ -649,7 +653,7 @@
     "limitExceeded": "카드 제한 초과",
     "cardAdded": "카드가 추가되었습니다",
     "cardDeleted": "카드가 삭제되었습니다",
-    "cardMoved": "카드가 이동되었습니다",
+    "cardMoved": "카드 이동됨",
     "moveFailed": "이동 실패",
     "deleteFailed": "삭제 실패",
     "loginRequired": "로그인이 필요합니다",
@@ -684,7 +688,6 @@
     "multiCardMoved": "{{count}}개 카드 이동됨",
     "movedToCell": "\"{{subject}}\"로 이동했습니다.",
     "moveFailedDesc": "잠시 후 다시 시도해 주세요.",
-    "cardMoved": "카드 이동됨",
     "insightAdded": "인사이트 추가됨",
     "insightAddedToCell": "\"{{subject}}\"에 저장되었습니다.",
     "mandalaNotReady": "만다라가 아직 로딩 중입니다. 잠시 후 다시 시도해주세요.",
@@ -775,18 +778,61 @@
     "clickToWriteNote": "클릭하여 메모 작성..."
   },
   "dashboard": {
-    "focusMap": "Focus Map",
-    "focusMapSubtitle": "어디에 (Where)",
-    "focusMapDesc": "나의 노력과 관심사 분포",
-    "monthlyTrend": "월별 인사이트 축적 트렌드",
-    "monthlyTrendSubtitle": "얼마나 (How Fast)",
-    "monthlyTrendDesc": "지식 자산의 성장 속도와 꾸준함",
-    "qualityAnalysis": "저장된 인사이트 품질 분석",
-    "qualityAnalysisSubtitle": "어떻게 (How Well)",
-    "qualityAnalysisDesc": "학습의 질과 참여 수준",
-    "totalCards": "총 카드",
-    "withMemo": "메모 있음",
-    "withoutMemo": "메모 없음"
+    "error": {
+      "title": "대시보드를 불러올 수 없습니다",
+      "notFound": "만다라를 찾을 수 없습니다."
+    },
+    "streak": {
+      "suffix": "일 연속"
+    },
+    "header": {
+      "edit": "편집",
+      "share": "공유"
+    },
+    "section": {
+      "recommendations": "추천 영상",
+      "skills": "스킬",
+      "stats": "통계"
+    },
+    "resume": {
+      "empty": {
+        "title": "최근 시청한 영상이 여기에 표시됩니다",
+        "subtitle": "만다라 셀에 영상을 추가하고 시청하면 이어보기가 활성화돼요"
+      },
+      "relevance": "관련도",
+      "playButton": "재생 ▶"
+    },
+    "orbital": {
+      "emptyHint": "영상을 추가해보세요",
+      "cellLabel": "영역 {{index}}",
+      "ctaAdd": "메인에서 영상 추가하기",
+      "ctaAi": "AI 영상 추천 받기",
+      "ctaAiSoon": "준비 중"
+    },
+    "biasAlert": {
+      "title": "편향 필터링됨"
+    },
+    "skills": {
+      "videoDiscover": "유튜브 카드 추천",
+      "newsletter": "뉴스레터",
+      "alerts": "영상 알림",
+      "biasFilter": "편향 필터",
+      "report": "리포트"
+    },
+    "stats": {
+      "filledCells": "채움 셀",
+      "videos": "채운 항목",
+      "streak": "연속 학습",
+      "relevance": "평균 관련도",
+      "days": "일",
+      "empty": "영상을 추가하면 학습 통계가 여기에 표시됩니다"
+    },
+    "videoShelf": {
+      "empty": {
+        "line1": "만다라 셀에 영상을 추가하면",
+        "line2": "관련 영상을 추천해드려요"
+      }
+    }
   },
   "playlist": {
     "importing": "플레이리스트 가져오는 중...",
@@ -1010,18 +1056,47 @@
     "monthlyPrice": "$19.90",
     "monthlyPeriod": "월",
     "monthlyAnnual": "연 $238.80",
-    "monthlyFeatures": ["만다라트 3개", "AI 요약 (월 100회)", "플레이리스트 동기화", "일반 지원"],
+    "monthlyFeatures": [
+      "만다라트 3개",
+      "AI 요약 (월 100회)",
+      "플레이리스트 동기화",
+      "일반 지원"
+    ],
     "monthlyTrial": "14일 무료 체험",
     "monthlyCtaDisabled": "곧 출시 예정",
     "compareTitle": "플랜 비교",
     "compareFeature": "기능",
     "compareRows": [
-      { "feature": "만다라트", "monthly": "3개", "ltd": "무제한" },
-      { "feature": "AI 요약", "monthly": "월 100회", "ltd": "월 500회" },
-      { "feature": "플레이리스트 동기화", "monthly": "true", "ltd": "true" },
-      { "feature": "우선 지원", "monthly": "false", "ltd": "true" },
-      { "feature": "평생 업데이트", "monthly": "false", "ltd": "true" },
-      { "feature": "1년 총 비용", "monthly": "$238.80", "ltd": "$99" }
+      {
+        "feature": "만다라트",
+        "monthly": "3개",
+        "ltd": "무제한"
+      },
+      {
+        "feature": "AI 요약",
+        "monthly": "월 100회",
+        "ltd": "월 500회"
+      },
+      {
+        "feature": "플레이리스트 동기화",
+        "monthly": "true",
+        "ltd": "true"
+      },
+      {
+        "feature": "우선 지원",
+        "monthly": "false",
+        "ltd": "true"
+      },
+      {
+        "feature": "평생 업데이트",
+        "monthly": "false",
+        "ltd": "true"
+      },
+      {
+        "feature": "1년 총 비용",
+        "monthly": "$238.80",
+        "ltd": "$99"
+      }
     ],
     "faqTitle": "자주 묻는 질문",
     "faq1q": "평생이란 정말 평생인가요?",
@@ -1239,18 +1314,35 @@
     "s16P1": "본 약관에 대한 질문은 다음으로 연락해 주세요:"
   },
   "wizard": {
-    "steps": { "domain": "도메인", "preview": "미리보기", "skills": "스킬" },
-    "navigation": { "aria": "위저드 단계" },
-    "stepStatus": { "completed": "완료", "current": "현재", "waiting": "대기" },
+    "steps": {
+      "domain": "도메인",
+      "preview": "미리보기",
+      "skills": "스킬"
+    },
+    "navigation": {
+      "aria": "위저드 단계"
+    },
+    "stepStatus": {
+      "completed": "완료",
+      "current": "현재",
+      "waiting": "대기"
+    },
     "domain": {
       "title": "어떤 목표를 이루고 싶으세요?",
       "subtitle": "분야를 선택하면 맞춤 템플릿을 추천해드려요",
-      "templates": { "title": "템플릿", "comingSoon": "준비 중" },
+      "templates": {
+        "title": "템플릿",
+        "comingSoon": "준비 중"
+      },
       "separator": "또는",
       "createBlank": "처음부터 직접 만들기",
       "categories": {
-        "tech": "기술/개발", "health": "건강", "business": "비즈니스",
-        "finance": "재테크", "creative": "창작", "lifestyle": "라이프"
+        "tech": "기술/개발",
+        "health": "건강",
+        "business": "비즈니스",
+        "finance": "재테크",
+        "creative": "창작",
+        "lifestyle": "라이프"
       }
     },
     "goal": {
@@ -1272,7 +1364,10 @@
         "titleLora": "AI가 목표에 맞춰 만든 맞춤 만다라",
         "titleFallback": "AI 맞춤 만다라 (보조 LLM)",
         "error": "처리가 지연되고 있습니다. 다시 시도하시겠습니까?",
-        "retry": "다시 시도"
+        "retry": "다시 시도",
+        "phase1": "목표 분석 중...",
+        "phase2": "세부목표 8개 생성 중...",
+        "phase3": "만다라 완성 중..."
       },
       "card": {
         "aiLoadingBadge": "AI 생성 중...",
@@ -1290,49 +1385,123 @@
         "templateTitle": "템플릿 검색이 오래 걸리고 있어요",
         "templateSubtitle": "다시 시도해볼까요?",
         "retry": "다시 시도"
+      },
+      "softSlow": {
+        "search": "평소보다 조금 걸리고 있어요...",
+        "generate": "조금만 더 기다려 주세요..."
       }
     },
     "preview": {
       "centerGoal": "중심 목표 · {{count}}개 하위 영역",
       "subject": "영역 {{index}} · {{count}}개 실행 항목",
       "subtitle": "셀 위에 마우스를 올리면 세부 계획을 확인할 수 있어요",
-      "hint": { "line1": "← 셀 위에 마우스를", "line2": "올려보세요" },
+      "hint": {
+        "line1": "← 셀 위에 마우스를",
+        "line2": "올려보세요"
+      },
       "startButton": "이대로 시작하기",
       "backButton": "다른 템플릿"
     },
     "skills": {
       "title": "어떤 서비스를 받으시겠어요?",
       "subtitle": "ON으로 켜면 실제 동작을 미리 볼 수 있어요",
-      "button": { "creating": "생성 중...", "start": "시작하기!" },
-      "card": { "preview": "켜서 미리보기", "toggle": "활성화" },
-      "state": { "active": "활성", "inactive": "비활성" }
+      "button": {
+        "creating": "생성 중...",
+        "start": "시작하기!"
+      },
+      "card": {
+        "preview": "켜서 미리보기",
+        "toggle": "활성화"
+      },
+      "state": {
+        "active": "활성",
+        "inactive": "비활성"
+      }
     },
     "skill": {
-      "recommend": { "name": "AI 영상 추천", "desc": "셀별 맞춤 영상을 자동으로 찾아 채워줘요" },
-      "newsletter": { "name": "주간 뉴스레터", "desc": "매주 셀별 추천 영상 3개 + 핵심 요약" },
-      "alert": { "name": "활동 알림", "desc": "관련 신규 영상 발견 시 즉시 알림" },
-      "alerts": { "name": "신규 영상 알림", "desc": "관련 신규 영상 발견 시 즉시 알림" },
-      "biasFilter": { "name": "편향 필터", "desc": "과대광고/편향 콘텐츠 자동 차단" },
-      "report": { "name": "리포트", "desc": "학습 진행도 + 인사이트 분석" },
-      "script": { "name": "영상 스크립트", "desc": "만다라 카드로 영상 스크립트 자동 생성" },
-      "blog": { "name": "블로그 초안", "desc": "만다라 지식으로 블로그 포스트 초안 작성" },
-      "videoDiscover": { "name": "유튜브 카드 추천", "desc": "목표 + 트렌드 기반 영상 자동 발굴", "betaHint": "곧 출시 예정 — 지금 켜두면 출시 즉시 자동 활성화돼요" },
+      "recommend": {
+        "name": "AI 영상 추천",
+        "desc": "셀별 맞춤 영상을 자동으로 찾아 채워줘요"
+      },
+      "newsletter": {
+        "name": "주간 뉴스레터",
+        "desc": "매주 셀별 추천 영상 3개 + 핵심 요약"
+      },
+      "alert": {
+        "name": "활동 알림",
+        "desc": "관련 신규 영상 발견 시 즉시 알림"
+      },
+      "alerts": {
+        "name": "신규 영상 알림",
+        "desc": "관련 신규 영상 발견 시 즉시 알림"
+      },
+      "biasFilter": {
+        "name": "편향 필터",
+        "desc": "과대광고/편향 콘텐츠 자동 차단"
+      },
+      "report": {
+        "name": "리포트",
+        "desc": "학습 진행도 + 인사이트 분석"
+      },
+      "script": {
+        "name": "영상 스크립트",
+        "desc": "만다라 카드로 영상 스크립트 자동 생성"
+      },
+      "blog": {
+        "name": "블로그 초안",
+        "desc": "만다라 지식으로 블로그 포스트 초안 작성"
+      },
+      "videoDiscover": {
+        "name": "유튜브 카드 추천",
+        "desc": "목표 + 트렌드 기반 영상 자동 발굴",
+        "betaHint": "곧 출시 예정 — 지금 켜두면 출시 즉시 자동 활성화돼요"
+      },
       "demo": {
         "mail": "월요일 오전 8시 도착",
         "bell": "새 영상 발견!",
-        "bias": { "thumbnail": "100배 확정!", "stamp": "차단됨", "label": "과대광고 필터링" },
+        "bias": {
+          "thumbnail": "100배 확정!",
+          "stamp": "차단됨",
+          "label": "과대광고 필터링"
+        },
         "chart": "월별 성장 추이",
         "video": "오늘의 추천 3편"
       }
+    },
+    "quotaReached": {
+      "title": "만다라 생성 한도에 도달했습니다",
+      "description": "플랜의 만다라 한도에 도달했습니다 ({{used}} / {{limit}}). 기존 만다라를 삭제하거나 플랜을 업그레이드하세요.",
+      "backHome": "홈으로",
+      "upgrade": "플랜 업그레이드"
     }
   },
   "editor": {
-    "header": { "title": "만다라 편집", "back": "뒤로 가기", "save": "저장", "saving": "저장 중..." },
-    "error": { "loadFailed": "편집 데이터를 불러올 수 없습니다. 다시 시도해 주세요.", "backButton": "돌아가기" },
+    "header": {
+      "title": "만다라 편집",
+      "back": "뒤로 가기",
+      "save": "저장",
+      "saving": "저장 중..."
+    },
+    "error": {
+      "loadFailed": "편집 데이터를 불러올 수 없습니다. 다시 시도해 주세요.",
+      "backButton": "돌아가기"
+    },
     "exploreLink": "Explore에서 템플릿 찾기",
-    "share": { "title": "공개 공유", "subtitle": "링크가 있는 누구나 볼 수 있습니다", "aria": "공개 공유 토글" },
-    "keyboard": { "nextCell": "다음 셀", "switchBlock": "블록 전환", "exit": "편집 종료" },
-    "navigator": { "aria": "블록 탐색", "centerBlock": "중심 블록", "aiFill": "블록 전체 AI 채우기" },
+    "share": {
+      "title": "공개 공유",
+      "subtitle": "링크가 있는 누구나 볼 수 있습니다",
+      "aria": "공개 공유 토글"
+    },
+    "keyboard": {
+      "nextCell": "다음 셀",
+      "switchBlock": "블록 전환",
+      "exit": "편집 종료"
+    },
+    "navigator": {
+      "aria": "블록 탐색",
+      "centerBlock": "중심 블록",
+      "aiFill": "블록 전체 AI 채우기"
+    },
     "grid": {
       "centerLabel": "중심 목표 · 8개 서브목표",
       "subLabel": "서브목표 · 8개 실행 항목",
@@ -1345,26 +1514,19 @@
       "aiFillLabel": "AI 채우기",
       "aiBlockTooltip": "이 블록의 빈 셀을 AI로 채웁니다"
     },
-    "completion": { "thisBlock": "이 블록", "total": "전체" },
-    "ghostSuggestions": ["Storybook 문서화", "API 게이트웨이", "디자인 시스템", "성능 벤치마크", "E2E 테스트", "코드 리뷰 가이드", "기술 블로그", "데모 영상 제작"]
-  },
-  "dashboard": {
-    "error": { "title": "대시보드를 불러올 수 없습니다", "notFound": "만다라를 찾을 수 없습니다." },
-    "streak": { "suffix": "일 연속" },
-    "header": { "edit": "편집", "share": "공유" },
-    "section": { "recommendations": "추천 영상", "skills": "스킬", "stats": "통계" },
-    "resume": {
-      "empty": { "title": "최근 시청한 영상이 여기에 표시됩니다", "subtitle": "만다라 셀에 영상을 추가하고 시청하면 이어보기가 활성화돼요" },
-      "relevance": "관련도",
-      "playButton": "재생 ▶"
+    "completion": {
+      "thisBlock": "이 블록",
+      "total": "전체"
     },
-    "orbital": { "emptyHint": "영상을 추가해보세요", "cellLabel": "영역 {{index}}", "ctaAdd": "메인에서 영상 추가하기", "ctaAi": "AI 영상 추천 받기", "ctaAiSoon": "준비 중" },
-    "biasAlert": { "title": "편향 필터링됨" },
-    "skills": { "videoDiscover": "유튜브 카드 추천", "newsletter": "뉴스레터", "alerts": "영상 알림", "biasFilter": "편향 필터", "report": "리포트" },
-    "stats": {
-      "filledCells": "채움 셀", "videos": "채운 항목", "streak": "연속 학습", "relevance": "평균 관련도",
-      "days": "일", "empty": "영상을 추가하면 학습 통계가 여기에 표시됩니다"
-    },
-    "videoShelf": { "empty": { "line1": "만다라 셀에 영상을 추가하면", "line2": "관련 영상을 추천해드려요" } }
+    "ghostSuggestions": [
+      "Storybook 문서화",
+      "API 게이트웨이",
+      "디자인 시스템",
+      "성능 벤치마크",
+      "E2E 테스트",
+      "코드 리뷰 가이드",
+      "기술 블로그",
+      "데모 영상 제작"
+    ]
   }
 }

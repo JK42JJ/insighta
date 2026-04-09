@@ -139,6 +139,10 @@ const CACHE_LOOKBACK_MS = CACHE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
 const MIN_CACHE_HITS_PER_CELL = 3;
 /** How many rows to read per cell-cache lookup (avoids loading everything). */
 const CACHE_LOOKUP_LIMIT = 20;
+/** Min cell↔keyword cosine required to reuse cache.
+ *  Below this, the cached keyword is topically wrong for the cell
+ *  (basketball-mandala 2026-04-09: weak keyword → running videos). */
+const CACHE_REUSE_MIN_RELEVANCE = 0.5;
 
 interface SubGoalCell {
   cellIndex: number;
@@ -670,6 +674,15 @@ export const executor: SkillExecutor = {
       perMandalaRelevance: number;
     }): Promise<boolean> {
       if (state.cacheReuseDisabled) return false;
+
+      // Semantic gate — weak keyword cosine means cached videos are off-topic.
+      if (sel.perMandalaRelevance < CACHE_REUSE_MIN_RELEVANCE) {
+        log.info(
+          `cache skip: cell=${sel.cell.cellIndex} keyword="${sel.keyword.keyword}" relevance=${sel.perMandalaRelevance.toFixed(3)} < threshold ${CACHE_REUSE_MIN_RELEVANCE} — fallback to search`
+        );
+        return false;
+      }
+
       try {
         const cached = await db.recommendation_cache.findMany({
           where: {
@@ -704,8 +717,8 @@ export const executor: SkillExecutor = {
             videoId: r.video_id,
             title: r.title,
             channel: r.channel ?? '',
-            // No channel_id in cache — use channel title as dedup surrogate
-            channelId: r.channel ?? '',
+            // Fallback to video_id so null-channel rows don't collide in dedup.
+            channelId: r.channel ?? r.video_id,
             publishedAt: r.published_at?.toISOString() ?? new Date().toISOString(),
             thumbnail: r.thumbnail ?? '',
             viewCount: r.view_count,
@@ -717,7 +730,7 @@ export const executor: SkillExecutor = {
         cellsServedFromCache += 1;
         quotaSavedUnits += VIDEO_DISCOVER_QUERIES_PER_CELL * 100;
         log.info(
-          `cache hit: cell=${sel.cell.cellIndex} keyword="${sel.keyword.keyword}" ${unique.size} videos from ${cached.length} rows — skipping YouTube search`
+          `cache hit: cell=${sel.cell.cellIndex} keyword="${sel.keyword.keyword}" relevance=${sel.perMandalaRelevance.toFixed(3)} ${unique.size} videos from ${cached.length} rows — skipping YouTube search`
         );
         return true;
       } catch (err) {
