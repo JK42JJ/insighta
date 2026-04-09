@@ -69,10 +69,10 @@ export function PanelNoteEditor({ initialContent, onDocChange }: PanelNoteEditor
           // Paragraphs
           '[&_.ProseMirror_p]:mb-[5px]',
           // Lists
-          '[&_.ProseMirror_ul]:mb-[5px] [&_.ProseMirror_ul]:pl-[18px]',
-          '[&_.ProseMirror_ol]:mb-[5px] [&_.ProseMirror_ol]:pl-[18px]',
+          '[&_.ProseMirror_ul]:mb-[5px] [&_.ProseMirror_ul]:pl-[18px] [&_.ProseMirror_ul]:list-disc',
+          '[&_.ProseMirror_ol]:mb-[5px] [&_.ProseMirror_ol]:pl-[18px] [&_.ProseMirror_ol]:list-decimal',
           '[&_.ProseMirror_li]:mb-[2px]',
-          '[&_.ProseMirror_li::marker]:text-[#353642]',
+          '[&_.ProseMirror_li::marker]:text-[#9394a0]',
           '[&_.ProseMirror_li_p]:my-0',
           // Inline code — JetBrains Mono 12px
           "[&_.ProseMirror_code]:font-['JetBrains_Mono',monospace] [&_.ProseMirror_code]:text-[12px]",

@@ -6,6 +6,7 @@
  *
  * Buttons: B, I, </>, | H2, H3, | bullet, ordered, | link
  */
+import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Editor } from '@tiptap/react';
 import { cn } from '@/shared/lib/utils';
 
@@ -47,16 +48,93 @@ function Separator() {
 }
 
 export function EditorToolbar({ editor }: EditorToolbarProps) {
-  const promptForLink = () => {
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const linkInputRef = useRef<HTMLInputElement>(null);
+
+  const openLinkInput = useCallback(() => {
     const previous = editor.getAttributes('link')['href'] as string | undefined;
-    const url = window.prompt('URL', previous ?? '');
-    if (url === null) return;
+    setLinkUrl(previous ?? '');
+    setShowLinkInput(true);
+  }, [editor]);
+
+  useEffect(() => {
+    if (showLinkInput) {
+      linkInputRef.current?.focus();
+      linkInputRef.current?.select();
+    }
+  }, [showLinkInput]);
+
+  const applyLink = useCallback(() => {
+    const url = linkUrl.trim();
     if (url === '') {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
-      return;
+    } else {
+      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     }
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-  };
+    setShowLinkInput(false);
+    setLinkUrl('');
+  }, [editor, linkUrl]);
+
+  const cancelLink = useCallback(() => {
+    setShowLinkInput(false);
+    setLinkUrl('');
+    editor.commands.focus();
+  }, [editor]);
+
+  const handleLinkKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyLink();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelLink();
+      }
+    },
+    [applyLink, cancelLink]
+  );
+
+  if (showLinkInput) {
+    return (
+      <div
+        className={cn(
+          'flex items-center gap-1.5 rounded-lg px-2 py-1.5',
+          'bg-[rgba(30,32,48,0.95)] backdrop-blur-[12px]',
+          'border border-[rgba(255,255,255,0.07)]',
+          'shadow-[0_5px_20px_rgba(0,0,0,0.45)]'
+        )}
+      >
+        <input
+          ref={linkInputRef}
+          type="url"
+          value={linkUrl}
+          onChange={(e) => setLinkUrl(e.target.value)}
+          onKeyDown={handleLinkKeyDown}
+          placeholder="https://..."
+          className={cn(
+            'h-6 w-[200px] rounded-[5px] border-0 bg-[rgba(255,255,255,0.06)] px-2',
+            'text-[12px] text-[#ededf0] placeholder:text-[#4e4f5c]',
+            'outline-none ring-0'
+          )}
+        />
+        <button
+          type="button"
+          onClick={applyLink}
+          className="flex h-6 items-center rounded-[5px] bg-[rgba(129,140,248,0.15)] px-2 text-[11px] font-medium text-[#818cf8] hover:bg-[rgba(129,140,248,0.25)]"
+        >
+          ✓
+        </button>
+        <button
+          type="button"
+          onClick={cancelLink}
+          className="flex h-6 items-center rounded-[5px] px-1.5 text-[11px] text-[#9394a0] hover:bg-[rgba(255,255,255,0.07)] hover:text-[#ededf0]"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -126,7 +204,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
       <Separator />
 
-      <ToolbarButton label="Link" active={editor.isActive('link')} onClick={promptForLink}>
+      <ToolbarButton label="Link" active={editor.isActive('link')} onClick={openLinkInput}>
         {'🔗'}
       </ToolbarButton>
     </div>

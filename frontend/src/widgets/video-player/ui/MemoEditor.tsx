@@ -540,6 +540,7 @@ export function MemoEditor({
                 'w-full resize-none border-0 bg-transparent',
                 'focus-visible:ring-0 focus-visible:ring-offset-0',
                 'text-sm text-foreground/60 min-h-[80px]',
+                'placeholder:text-xs placeholder:text-muted-foreground/60',
                 isGeneratingSummary && 'opacity-70 cursor-wait'
               )}
               style={{ caretColor: 'hsl(var(--primary))' }}

@@ -70,8 +70,8 @@ export function VideoSidePanel() {
         <X className="h-[13px] w-[13px]" />
       </button>
 
-      {/* Video player — resumes from the position captured in the modal */}
-      {card && <PanelVideoPlayer videoUrl={card.videoUrl} startTime={startTime} />}
+      {/* Video player — unmounts on close to stop audio; card kept for resume */}
+      {isOpen && card && <PanelVideoPlayer videoUrl={card.videoUrl} startTime={startTime} />}
 
       {/* Video info */}
       {card && <PanelVideoInfo card={card} />}
