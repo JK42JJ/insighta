@@ -344,7 +344,7 @@ export function useIdeationVideos() {
 /**
  * Hook to get ALL video states (ideation + mandala) (Edge Function)
  */
-export function useAllVideoStates() {
+export function useAllVideoStates(refetchInterval?: number | false) {
   const { isLoggedIn, isTokenReady } = useAuth();
 
   return useQuery({
@@ -363,6 +363,7 @@ export function useAllVideoStates() {
     enabled: isLoggedIn && isTokenReady,
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
+    refetchInterval: refetchInterval ?? false,
   });
 }
 

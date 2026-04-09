@@ -315,23 +315,54 @@ export function useWizard() {
   // freshly created mandala is missing from the list — store selection points
   // to a non-existent entry, fallback default mandala wins.
   const selectMandalaInStore = useMandalaStore((s) => s.selectMandala);
+  const setJustCreated = useMandalaStore((s) => s.setJustCreated);
   const queryClient = useQueryClient();
-  // Bug #3 fix: await the refetch so the sidebar has fresh data by the time
-  // we navigate. Previously this was fire-and-forget invalidateQueries, which
-  // caused SidebarMandalaSection to render with stale list + fall back to
-  // `mandalas[0]` (= the previously first mandala, e.g. "AI/ML Expert") while
-  // the new mandala was still propagating. The refetch typically completes
-  // in < 300ms so the wait is imperceptible vs the old broken state.
+  // Bug #3 v2: optimistic cache injection instead of await refetchQueries.
+  // setQueryData synchronously injects the new mandala into the list cache,
+  // so IndexPage sees it immediately on mount. Background invalidation
+  // replaces the stub with full server data.
   const goToUnifiedDashboard = useCallback(
-    async (newMandalaId: string) => {
+    (newMandalaId: string, title?: string) => {
+      // 1. Optimistic: inject minimal mandala into list cache
+      queryClient.setQueryData(
+        queryKeys.mandala.list(),
+        (old: { mandalas: Array<Record<string, unknown>>; total: number } | undefined) => {
+          if (!old) return old;
+          const exists = old.mandalas.some((m) => m.id === newMandalaId);
+          if (exists) return old;
+          return {
+            ...old,
+            total: old.total + 1,
+            mandalas: [
+              ...old.mandalas,
+              {
+                id: newMandalaId,
+                title: title ?? state.selectedTemplate?.centerGoal ?? 'New Mandala',
+                isDefault: false,
+                isPublic: false,
+                shareSlug: null,
+                position: old.mandalas.length,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                levels: [],
+              },
+            ],
+          };
+        }
+      );
+
+      // 2. Select in store + mark as just-created (enables card polling)
       selectMandalaInStore(newMandalaId);
-      await Promise.all([
-        queryClient.refetchQueries({ queryKey: queryKeys.mandala.list() }),
-        queryClient.refetchQueries({ queryKey: queryKeys.mandala.quota() }),
-      ]);
+      setJustCreated(newMandalaId);
+
+      // 3. Navigate immediately (no await needed — cache is already injected)
       navigate('/');
+
+      // 4. Background: replace optimistic stub with real server data
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.quota() });
     },
-    [navigate, selectMandalaInStore, queryClient]
+    [navigate, selectMandalaInStore, setJustCreated, queryClient, state.selectedTemplate]
   );
 
   // Create from template mutation (for DB templates)

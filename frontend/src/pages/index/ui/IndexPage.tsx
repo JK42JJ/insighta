@@ -22,6 +22,8 @@ import { InsightsView } from '@/widgets/insights-view';
 
 import { useMandalaQuery, useMandalaList } from '@/features/mandala';
 import { useMandalaStore } from '@/stores/mandalaStore';
+import { youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
+import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import { useSearchCards, SearchBar } from '@/features/search';
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
 import { useLayoutPreferences } from '../model/useLayoutPreferences';
@@ -30,6 +32,7 @@ import { useCardDragDrop, useGlobalPaste } from '../model/useCardDragDrop';
 import { useVideoModal } from '../model/useVideoModal';
 import { useToast } from '@/shared/lib/use-toast';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   DragOverlayContent,
   snapToCursor,
@@ -72,6 +75,7 @@ function AuthenticatedApp() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
 
   // OAuth callback: consume returnTo from sessionStorage
   useEffect(() => {
@@ -181,6 +185,40 @@ function AuthenticatedApp() {
     },
     navigation.selectedCellIndex
   );
+
+  // 5c. Post-creation card polling: when a mandala was just created via wizard,
+  // poll for cards every 5s until they appear or 90s timeout.
+  const justCreatedMandalaId = useMandalaStore((s) => s.justCreatedMandalaId);
+  const clearJustCreated = useMandalaStore((s) => s.setJustCreated);
+  const isNewMandalaActive = justCreatedMandalaId === effectiveMandalaId && !!effectiveMandalaId;
+
+  useEffect(() => {
+    if (!isNewMandalaActive) return;
+
+    const POLL_INTERVAL_MS = 5_000;
+    const POLL_TIMEOUT_MS = 90_000;
+
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+      queryClient.invalidateQueries({ queryKey: localCardsKeys.all });
+    }, POLL_INTERVAL_MS);
+
+    const timeout = setTimeout(() => {
+      clearJustCreated(null);
+    }, POLL_TIMEOUT_MS);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [isNewMandalaActive, queryClient, clearJustCreated]);
+
+  // Auto-stop polling when cards appear
+  useEffect(() => {
+    if (isNewMandalaActive && cards.totalCards > 0) {
+      clearJustCreated(null);
+    }
+  }, [isNewMandalaActive, cards.totalCards, clearJustCreated]);
 
   // Patch refs after orchestrator init
   useEffect(() => {
@@ -694,6 +732,13 @@ function AuthenticatedApp() {
                 }}
               />
             </div>
+            {/* Post-creation loading overlay */}
+            {isNewMandalaActive && cards.totalCards === 0 && !cards.isLoading && (
+              <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground animate-pulse">
+                <Loader2 className="w-8 h-8 animate-spin text-primary/60" />
+                <p className="text-sm">{t('common.preparingCards', 'Preparing your cards...')}</p>
+              </div>
+            )}
             {layout.viewMode === 'insights' ? (
               <InsightsView
                 allCards={cards.allMandalaCards}
