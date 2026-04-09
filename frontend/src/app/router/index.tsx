@@ -82,6 +82,18 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         />
+        {/* Notion-style side editor — overlays the dashboard.
+            Renders the same page element so the dashboard stays mounted
+            beneath the Sheet. <SideEditorRouteAdapter /> in App.tsx
+            reads the :videoId param via useMatch and drives the sheet. */}
+        <Route
+          path="/mandalas/:id/notes/:videoId"
+          element={
+            <ProtectedRoute>
+              <MandalaDashboardPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/mandala-settings" element={<Navigate to="/mandalas" replace />} />
         <Route path="/profile" element={<Navigate to="/settings?tab=profile" replace />} />
         <Route
