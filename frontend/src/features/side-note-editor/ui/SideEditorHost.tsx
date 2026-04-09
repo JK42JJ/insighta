@@ -24,9 +24,10 @@ export function SideEditorHost() {
     <Sheet open={isOpen} onOpenChange={handleOpenChange} modal={false}>
       <SheetContent
         side="right"
-        className="z-[60] flex flex-col overflow-y-auto border-l border-border/40 bg-background p-0 shadow-2xl sm:max-w-none"
+        className="z-[60] flex flex-col overflow-y-auto border-l border-border/20 bg-background p-0 shadow-2xl outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 sm:max-w-none"
         style={{ width: `${SHEET_WIDTH_PX}px` }}
         onInteractOutside={(e) => e.preventDefault()}
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {context && <SideEditorPanel cardId={context.cardId} />}
       </SheetContent>

@@ -24,6 +24,16 @@ export function NoteEditor({ initialContent, onDocChange }: NoteEditorProps) {
     onUpdate: (doc) => onChangeRef.current(doc),
   });
 
+  // Auto-focus the editor when it mounts so the user can type immediately.
+  useEffect(() => {
+    if (editor && !editor.isFocused) {
+      // Small delay so the Sheet slide-in animation finishes first.
+      const timer = setTimeout(() => editor.commands.focus('end'), 200);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [editor]);
+
   if (!editor) {
     return <div className="text-xs text-muted-foreground">에디터를 불러오는 중…</div>;
   }
