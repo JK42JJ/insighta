@@ -4,9 +4,10 @@
  * Mode A (popup): card click → VideoPlayerModal (managed by useVideoModal, NOT this store)
  * Mode B (sidebar): ↗ expand → VideoSidePanel (managed by THIS store)
  *
- * The store only controls Mode B state. Mode A is left to the existing useVideoModal hook.
+ * Persisted to localStorage so the sidebar survives page refresh.
  */
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { InsightCard } from '@/entities/card/model/types';
 
 export interface VideoPanelState {
@@ -31,19 +32,33 @@ export interface VideoPanelState {
   setTab: (tab: 'notes' | 'ai-summary') => void;
 }
 
-export const useVideoPanelStore = create<VideoPanelState>((set) => ({
-  mode: 'popup',
-  isOpen: false,
-  card: null,
-  activeTab: 'notes',
-  startTime: 0,
+export const useVideoPanelStore = create<VideoPanelState>()(
+  persist(
+    (set) => ({
+      mode: 'popup',
+      isOpen: false,
+      card: null,
+      activeTab: 'notes',
+      startTime: 0,
 
-  expandToSidebar: (card, startTime = 0) =>
-    set({ mode: 'sidebar', isOpen: true, card, activeTab: 'notes', startTime }),
+      expandToSidebar: (card, startTime = 0) =>
+        set({ mode: 'sidebar', isOpen: true, card, activeTab: 'notes', startTime }),
 
-  openInSidebar: (card) => set({ card, activeTab: 'notes' }),
+      openInSidebar: (card) => set({ card, activeTab: 'notes' }),
 
-  closeSidebar: () => set({ mode: 'popup', isOpen: false }),
+      closeSidebar: () => set({ mode: 'popup', isOpen: false }),
 
-  setTab: (tab) => set({ activeTab: tab }),
-}));
+      setTab: (tab) => set({ activeTab: tab }),
+    }),
+    {
+      name: 'insighta-video-panel',
+      partialize: (state) => ({
+        mode: state.mode,
+        isOpen: state.isOpen,
+        card: state.card,
+        activeTab: state.activeTab,
+        // startTime intentionally excluded — don't resume playback on refresh
+      }),
+    }
+  )
+);
