@@ -10,6 +10,40 @@ import { getPrismaClient } from '../database';
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 const MAX_RESULTS = 50;
 
+/**
+ * In-memory cache for YouTube API responses.
+ * Key: `${userId}:${endpoint}:${pageToken}`, Value: { data, expiry }
+ *
+ * Subscriptions and playlists change infrequently (user adds/removes channels
+ * maybe once a week). 6-hour TTL protects YouTube quota (100 units/call for
+ * subscriptions) while keeping data reasonably fresh.
+ */
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const responseCache = new Map<string, { data: unknown; expiry: number }>();
+
+function getCached<T>(key: string): T | null {
+  const entry = responseCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiry) {
+    responseCache.delete(key);
+    return null;
+  }
+  return entry.data as T;
+}
+
+function setCache(key: string, data: unknown): void {
+  responseCache.set(key, { data, expiry: Date.now() + CACHE_TTL_MS });
+}
+
+/** Clear cache for a user (call after YouTube reconnect/disconnect) */
+export function clearYouTubeCache(userId: string): void {
+  for (const key of responseCache.keys()) {
+    if (key.startsWith(`${userId}:`)) {
+      responseCache.delete(key);
+    }
+  }
+}
+
 interface YouTubeSubscription {
   channelId: string;
   title: string;
@@ -61,6 +95,12 @@ export async function getUserSubscriptions(
   userId: string,
   pageToken?: string
 ): Promise<{ items: YouTubeSubscription[]; nextPageToken?: string; totalResults: number }> {
+  type SubResult = { items: YouTubeSubscription[]; nextPageToken?: string; totalResults: number };
+
+  const cacheKey = `${userId}:subscriptions:${pageToken ?? ''}`;
+  const cached = getCached<SubResult>(cacheKey);
+  if (cached) return cached;
+
   const accessToken = await getAccessToken(userId);
   if (!accessToken) {
     throw new Error('YOUTUBE_NOT_CONNECTED');
@@ -93,11 +133,14 @@ export async function getUserSubscriptions(
     publishedAt: item.snippet?.publishedAt || '',
   }));
 
-  return {
+  const result: SubResult = {
     items,
     nextPageToken: data.nextPageToken,
     totalResults: data.pageInfo?.totalResults || 0,
   };
+
+  setCache(cacheKey, result);
+  return result;
 }
 
 /**
@@ -108,6 +151,12 @@ export async function getUserPlaylists(
   userId: string,
   pageToken?: string
 ): Promise<{ items: YouTubePlaylist[]; nextPageToken?: string; totalResults: number }> {
+  type PlResult = { items: YouTubePlaylist[]; nextPageToken?: string; totalResults: number };
+
+  const cacheKey = `${userId}:playlists:${pageToken ?? ''}`;
+  const cached = getCached<PlResult>(cacheKey);
+  if (cached) return cached;
+
   const accessToken = await getAccessToken(userId);
   if (!accessToken) {
     throw new Error('YOUTUBE_NOT_CONNECTED');
@@ -140,9 +189,12 @@ export async function getUserPlaylists(
     publishedAt: item.snippet?.publishedAt || '',
   }));
 
-  return {
+  const result: PlResult = {
     items,
     nextPageToken: data.nextPageToken,
     totalResults: data.pageInfo?.totalResults || 0,
   };
+
+  setCache(cacheKey, result);
+  return result;
 }
