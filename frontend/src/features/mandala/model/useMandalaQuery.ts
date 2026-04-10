@@ -102,7 +102,11 @@ export function useMandalaList() {
     // P0 hardening: mandala list is service-critical — more aggressive retry
     retry: (failureCount, error) => {
       // Never retry auth errors beyond 1
-      if (error instanceof Error && 'statusCode' in error && (error as { statusCode?: number }).statusCode === 401) {
+      if (
+        error instanceof Error &&
+        'statusCode' in error &&
+        (error as { statusCode?: number }).statusCode === 401
+      ) {
         return failureCount < 1;
       }
       // Retry up to 5 times for this critical query (vs default 3)
@@ -119,7 +123,7 @@ export function useMandalaQuota() {
     queryKey: queryKeys.mandala.quota(),
     queryFn: () => apiClient.getMandalaQuota(),
     enabled: isLoggedIn && isTokenReady,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000, // 5 min — quota changes only on mandala create/delete
   });
 }
 
@@ -134,7 +138,11 @@ export function useCreateMandala() {
       if (newMandala) {
         queryClient.setQueryData(
           queryKeys.mandala.list(),
-          (old: { mandalas: MandalaResponse[]; total: number; page: number; limit: number } | undefined) => {
+          (
+            old:
+              | { mandalas: MandalaResponse[]; total: number; page: number; limit: number }
+              | undefined
+          ) => {
             if (!old) return old;
             return {
               ...old,
@@ -163,7 +171,11 @@ export function useDeleteMandala() {
       const previous = queryClient.getQueryData(queryKeys.mandala.list());
       queryClient.setQueryData(
         queryKeys.mandala.list(),
-        (old: { mandalas: MandalaResponse[]; total: number; page: number; limit: number } | undefined) => {
+        (
+          old:
+            | { mandalas: MandalaResponse[]; total: number; page: number; limit: number }
+            | undefined
+        ) => {
           if (!old) return old;
           return {
             ...old,
@@ -233,7 +245,7 @@ export function useSubscriptions() {
     queryKey: queryKeys.mandala.subscriptions(),
     queryFn: () => apiClient.listSubscriptions(1, 100),
     enabled: isLoggedIn && isTokenReady,
-    staleTime: 30_000,
+    staleTime: 5 * 60_000, // 5 min — subscriptions change rarely
   });
 }
 
@@ -301,7 +313,7 @@ export function useSourceMappings() {
     queryKey: queryKeys.mandala.sourceMappings(),
     queryFn: () => apiClient.listSourceMappings(),
     enabled: isLoggedIn && isTokenReady,
-    staleTime: 30_000,
+    staleTime: 5 * 60_000, // 5 min — source mappings change rarely
   });
 }
 

@@ -35,6 +35,6 @@ export function useSkillOutputs(mandalaId: string | null) {
     queryKey: queryKeys.skills.outputs(mandalaId ?? ''),
     queryFn: () => apiClient.listSkillOutputs(mandalaId!),
     enabled: isLoggedIn && isTokenReady && !!mandalaId,
-    staleTime: 30_000,
+    staleTime: 5 * 60_000, // 5 min — skill outputs only change when pipeline runs
   });
 }
