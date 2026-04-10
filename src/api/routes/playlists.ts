@@ -61,6 +61,7 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     {
       schema: importPlaylistSchema,
       onRequest: [fastify.authenticate],
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
       // Type guard for authenticated user
@@ -239,6 +240,7 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     {
       schema: syncPlaylistSchema,
       onRequest: [fastify.authenticate],
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
       // Type guard for authenticated user
