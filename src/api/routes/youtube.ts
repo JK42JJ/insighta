@@ -6,7 +6,11 @@
  */
 
 import { FastifyPluginCallback } from 'fastify';
-import { getUserSubscriptions, getUserPlaylists } from '../../modules/youtube/api';
+import {
+  getUserSubscriptions,
+  getUserPlaylists,
+  clearYouTubeCache,
+} from '../../modules/youtube/api';
 import { loadYouTubeOAuth } from '../plugins/youtube-oauth';
 
 export const youtubeRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
@@ -97,6 +101,18 @@ export const youtubeRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
     }
   );
+
+  /**
+   * POST /api/v1/youtube/cache-clear — Invalidate YouTube API cache for user
+   * Called by FE after OAuth disconnect/reconnect to ensure fresh data.
+   */
+  fastify.post('/cache-clear', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    if (!request.user || !('userId' in request.user)) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    clearYouTubeCache(request.user.userId);
+    return reply.send({ status: 'ok' });
+  });
 
   done();
 };

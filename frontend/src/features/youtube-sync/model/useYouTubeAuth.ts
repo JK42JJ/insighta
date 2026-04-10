@@ -166,10 +166,17 @@ export function useYouTubeDisconnect() {
         throw new Error('Failed to disconnect');
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: youtubeAuthKeys.status });
       queryClient.invalidateQueries({ queryKey: ['youtube', 'subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['youtube', 'playlists-library'] });
+      // Clear BE in-memory YouTube API cache (6h TTL)
+      try {
+        const authHeaders = await getAuthHeaders();
+        await fetch('/api/v1/youtube/cache-clear', { method: 'POST', headers: authHeaders });
+      } catch {
+        // Non-critical — cache expires naturally after 6h
+      }
     },
   });
 }
