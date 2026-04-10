@@ -213,30 +213,40 @@ export class PlaylistManager {
    */
   public async getPlaylistWithItems(
     playlistId: string,
-    userId?: string
+    userId?: string,
+    limit: number = 50,
+    offset: number = 0
   ): Promise<
     youtube_playlists & {
       youtube_playlist_items: (youtube_playlist_items & { youtube_videos: any })[];
+      _itemsTotal: number;
     }
   > {
     const playlist = await this.getPlaylist(playlistId, userId);
 
-    const playlistWithItems = await db.youtube_playlists.findUnique({
-      where: { id: playlist.id },
-      include: {
-        youtube_playlist_items: {
-          where: { removed_at: null },
-          include: { youtube_videos: true },
-          orderBy: { position: 'asc' },
+    const [playlistWithItems, itemsTotal] = await Promise.all([
+      db.youtube_playlists.findUnique({
+        where: { id: playlist.id },
+        include: {
+          youtube_playlist_items: {
+            where: { removed_at: null },
+            include: { youtube_videos: true },
+            orderBy: { position: 'asc' },
+            take: limit,
+            skip: offset,
+          },
         },
-      },
-    });
+      }),
+      db.youtube_playlist_items.count({
+        where: { playlist_id: playlist.id, removed_at: null },
+      }),
+    ]);
 
     if (!playlistWithItems) {
       throw new RecordNotFoundError('Playlist', playlistId);
     }
 
-    return playlistWithItems;
+    return { ...playlistWithItems, _itemsTotal: itemsTotal };
   }
 
   /**

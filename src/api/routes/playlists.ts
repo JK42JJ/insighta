@@ -175,7 +175,14 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   /**
    * GET /api/v1/playlists/:id - Get playlist details
    */
-  fastify.get<{ Params: GetPlaylistParams; Reply: { playlist: PlaylistWithItemsResponse } }>(
+  fastify.get<{
+    Params: GetPlaylistParams;
+    Querystring: { limit?: string; offset?: string };
+    Reply: {
+      playlist: PlaylistWithItemsResponse;
+      pagination: { limit: number; offset: number; total: number };
+    };
+  }>(
     '/:id',
     {
       schema: getPlaylistSchema,
@@ -189,10 +196,17 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       const validatedParams = GetPlaylistParamsSchema.parse(request.params);
       const { id } = validatedParams;
+      const limit = Math.min(Number(request.query.limit) || 50, 200);
+      const offset = Math.max(Number(request.query.offset) || 0, 0);
 
       logger.info('Getting playlist details', { playlistId: id, userId: request.user.userId });
 
-      const playlist = await getManager().getPlaylistWithItems(id, request.user.userId);
+      const playlist = await getManager().getPlaylistWithItems(
+        id,
+        request.user.userId,
+        limit,
+        offset
+      );
 
       const response: PlaylistWithItemsResponse = {
         id: playlist.id,
@@ -228,7 +242,10 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         })),
       };
 
-      return reply.code(200).send({ playlist: response });
+      return reply.code(200).send({
+        playlist: response,
+        pagination: { limit, offset, total: playlist._itemsTotal },
+      });
     }
   );
 
@@ -417,6 +434,48 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       logger.info('Playlist resumed', { playlistId: id, userId: request.user.userId });
 
       return reply.code(200).send({ status: 'ok', isPaused: false });
+    }
+  );
+
+  /**
+   * POST /api/v1/playlists/sync-all - Sync all non-paused playlists (batch)
+   * Replaces N+1 pattern of calling /:id/sync per playlist.
+   */
+  fastify.post<{
+    Reply: {
+      status: string;
+      results: Array<{ playlistId: string; status: string; itemsAdded: number }>;
+    };
+  }>(
+    '/sync-all',
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: { max: 2, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        throw new Error('Unauthorized');
+      }
+
+      const userId = request.user.userId;
+      const { playlists } = await getManager().listPlaylists({ userId });
+      const active = playlists.filter((p) => !p.is_paused);
+
+      const results: Array<{ playlistId: string; status: string; itemsAdded: number }> = [];
+      for (const pl of active) {
+        try {
+          const result = await getSync().syncPlaylist(pl.id);
+          results.push({ playlistId: pl.id, status: result.status, itemsAdded: result.itemsAdded });
+        } catch (err) {
+          results.push({
+            playlistId: pl.id,
+            status: 'failed',
+            itemsAdded: 0,
+          });
+        }
+      }
+
+      return reply.send({ status: 'ok', results });
     }
   );
 
