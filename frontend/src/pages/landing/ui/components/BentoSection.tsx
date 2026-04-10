@@ -1,7 +1,19 @@
+import { useState, useRef, useCallback } from 'react';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 
+const DEMO_VIDEO_SRC = '/insighta-demo.mp4';
+
 export function BentoSection({ onLogin }: { onLogin: () => void }) {
+  const [showDemo, setShowDemo] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const openDemo = useCallback(() => setShowDemo(true), []);
+  const closeDemo = useCallback(() => {
+    setShowDemo(false);
+    if (videoRef.current) videoRef.current.pause();
+  }, []);
+
   return (
     <div className="flex w-full flex-col items-center justify-center">
       {/* Section header */}
@@ -48,7 +60,7 @@ export function BentoSection({ onLogin }: { onLogin: () => void }) {
               <Button size="lg" onClick={onLogin}>
                 Start Now
               </Button>
-              <Button variant="outline" size="lg" onClick={onLogin}>
+              <Button variant="outline" size="lg" onClick={openDemo}>
                 Watch Demo
               </Button>
             </div>
@@ -141,6 +153,30 @@ export function BentoSection({ onLogin }: { onLogin: () => void }) {
           </div>
         </div>
       </div>
+
+      {/* Demo video modal */}
+      {showDemo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={closeDemo}
+        >
+          <div className="relative w-full max-w-4xl mx-4" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={closeDemo}
+              className="absolute -top-10 right-0 text-white/70 hover:text-white text-sm font-medium transition-colors"
+            >
+              Close ✕
+            </button>
+            <video
+              ref={videoRef}
+              src={DEMO_VIDEO_SRC}
+              controls
+              autoPlay
+              className="w-full rounded-lg shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
