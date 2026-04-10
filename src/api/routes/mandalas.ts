@@ -569,59 +569,66 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
    */
   fastify.post<{
     Body: { goal: string; domain?: string; language?: 'ko' | 'en' };
-  }>('/generate', { onRequest: [fastify.authenticate] }, async (request, reply) => {
-    const userId = getUserId(request, reply);
-    if (!userId) return;
+  }>(
+    '/generate',
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
 
-    const { goal, domain, language } = request.body;
+      const { goal, domain, language } = request.body;
 
-    if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
-      return reply.code(400).send({
-        status: 400,
-        code: 'INVALID_INPUT',
-        message: 'goal is required',
-      });
-    }
+      if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
+        return reply.code(400).send({
+          status: 400,
+          code: 'INVALID_INPUT',
+          message: 'goal is required',
+        });
+      }
 
-    const trimmedGoal = goal.trim();
-    const cacheInput = { goal: trimmedGoal, domain, language };
+      const trimmedGoal = goal.trim();
+      const cacheInput = { goal: trimmedGoal, domain, language };
 
-    // Cache lookup: identical normalized goal returns instantly (skips ~80s LoRA)
-    const cached = getCachedMandala(cacheInput);
-    if (cached) {
-      return reply.send({
-        status: 200,
-        data: { mandala: cached.mandala, source: cached.source, cached: true },
-      });
-    }
+      // Cache lookup: identical normalized goal returns instantly (skips ~80s LoRA)
+      const cached = getCachedMandala(cacheInput);
+      if (cached) {
+        return reply.send({
+          status: 200,
+          data: { mandala: cached.mandala, source: cached.source, cached: true },
+        });
+      }
 
-    // Race fallback: LoRA + LLM in parallel, 30s LoRA budget.
-    // - LoRA wins (<=30s, valid) → return LoRA, cancel LLM
-    // - LoRA times out or invalid → return LLM (already in flight)
-    // - Both fail → 503
-    // Even on LoRA-loss, LoRA continues in the background and its result is
-    // captured to generation_log for fine-tuning + quality analysis.
-    try {
-      const { mandala, source, duration_ms } = await generateMandalaRace(cacheInput, {
-        userId,
-      });
-      setCachedMandala(cacheInput, { mandala, source });
-      return reply.send({
-        status: 200,
-        data: { mandala, source, cached: false, duration_ms },
-      });
-    } catch (err) {
-      const code =
-        err instanceof MandalaGenError
-          ? err.code
-          : err instanceof MandalaSearchError
+      // Race fallback: LoRA + LLM in parallel, 30s LoRA budget.
+      // - LoRA wins (<=30s, valid) → return LoRA, cancel LLM
+      // - LoRA times out or invalid → return LLM (already in flight)
+      // - Both fail → 503
+      // Even on LoRA-loss, LoRA continues in the background and its result is
+      // captured to generation_log for fine-tuning + quality analysis.
+      try {
+        const { mandala, source, duration_ms } = await generateMandalaRace(cacheInput, {
+          userId,
+        });
+        setCachedMandala(cacheInput, { mandala, source });
+        return reply.send({
+          status: 200,
+          data: { mandala, source, cached: false, duration_ms },
+        });
+      } catch (err) {
+        const code =
+          err instanceof MandalaGenError
             ? err.code
-            : 'GENERATION_FAILED';
-      const message = err instanceof Error ? err.message : 'Mandala generation failed';
-      request.log.error({ err, userId, goal }, 'Mandala race failed (both branches)');
-      return reply.code(503).send({ status: 503, code, message });
+            : err instanceof MandalaSearchError
+              ? err.code
+              : 'GENERATION_FAILED';
+        const message = err instanceof Error ? err.message : 'Mandala generation failed';
+        request.log.error({ err, userId, goal }, 'Mandala race failed (both branches)');
+        return reply.code(503).send({ status: 503, code, message });
+      }
     }
-  });
+  );
 
   /**
    * POST /api/v1/mandalas/create-with-data - Create a mandala from full data (search result or AI-generated)
@@ -808,40 +815,48 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
    */
   fastify.post<{
     Body: { goal: string; limit?: number; threshold?: number; language?: string };
-  }>('/search-by-goal', { onRequest: [fastify.authenticate] }, async (request, reply) => {
-    const userId = getUserId(request, reply);
-    if (!userId) return;
+  }>(
+    '/search-by-goal',
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
 
-    const { goal, limit, threshold, language } = request.body;
+      const { goal, limit, threshold, language } = request.body;
 
-    if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
-      return reply.code(400).send({
-        status: 400,
-        code: 'INVALID_INPUT',
-        message: 'goal is required',
-      });
-    }
-
-    try {
-      const results = await searchMandalasByGoal(goal.trim(), { limit, threshold, language });
-      return reply.send({ status: 200, data: { results } });
-    } catch (err) {
-      if (err instanceof MandalaSearchError) {
-        const statusCode = err.code === 'SERVICE_UNAVAILABLE' || err.code === 'TIMEOUT' ? 503 : 422;
-        return reply.code(statusCode).send({
-          status: statusCode,
-          code: err.code,
-          message: err.message,
+      if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
+        return reply.code(400).send({
+          status: 400,
+          code: 'INVALID_INPUT',
+          message: 'goal is required',
         });
       }
-      request.log.error({ err, userId, goal }, 'Mandala search failed');
-      return reply.code(500).send({
-        status: 500,
-        code: 'SEARCH_FAILED',
-        message: 'Mandala search failed',
-      });
+
+      try {
+        const results = await searchMandalasByGoal(goal.trim(), { limit, threshold, language });
+        return reply.send({ status: 200, data: { results } });
+      } catch (err) {
+        if (err instanceof MandalaSearchError) {
+          const statusCode =
+            err.code === 'SERVICE_UNAVAILABLE' || err.code === 'TIMEOUT' ? 503 : 422;
+          return reply.code(statusCode).send({
+            status: statusCode,
+            code: err.code,
+            message: err.message,
+          });
+        }
+        request.log.error({ err, userId, goal }, 'Mandala search failed');
+        return reply.code(500).send({
+          status: 500,
+          code: 'SEARCH_FAILED',
+          message: 'Mandala search failed',
+        });
+      }
     }
-  });
+  );
 
   /**
    * POST /api/v1/mandalas/create - Create a new mandala
