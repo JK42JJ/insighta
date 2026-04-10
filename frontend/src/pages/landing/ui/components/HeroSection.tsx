@@ -1,11 +1,20 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { CheckCircle2, Play } from 'lucide-react';
 
+const DEMO_VIDEO_SRC = '/insighta-demo.mp4';
+
 export function HeroSection() {
-  const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const [showDemo, setShowDemo] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const openDemo = useCallback(() => setShowDemo(true), []);
+  const closeDemo = useCallback(() => {
+    setShowDemo(false);
+    if (videoRef.current) videoRef.current.pause();
+  }, []);
   const isKo = i18n.language === 'ko';
 
   return (
@@ -47,7 +56,7 @@ export function HeroSection() {
             variant="outline"
             size="lg"
             className="rounded-full px-8 py-6 text-base gap-2"
-            onClick={() => navigate('/login')}
+            onClick={openDemo}
           >
             <Play className="w-4 h-4" />
             {t('landing.heroSecondary')}
@@ -83,6 +92,30 @@ export function HeroSection() {
           ))}
         </div>
       </div>
+
+      {/* Demo video modal */}
+      {showDemo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={closeDemo}
+        >
+          <div className="relative w-full max-w-4xl mx-4" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={closeDemo}
+              className="absolute -top-10 right-0 text-white/70 hover:text-white text-sm font-medium transition-colors"
+            >
+              Close ✕
+            </button>
+            <video
+              ref={videoRef}
+              src={DEMO_VIDEO_SRC}
+              controls
+              autoPlay
+              className="w-full rounded-lg shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
     </section>
   );
 }
