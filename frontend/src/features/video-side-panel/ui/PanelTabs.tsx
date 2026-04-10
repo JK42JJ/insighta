@@ -1,8 +1,9 @@
 /**
- * [메모] [AI 요약] tab bar.
+ * Notes / AI Summary tab bar for the side panel.
  *
  * Design tokens: insighta-side-editor-mockup-v3.html
  */
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
 
 export interface PanelTabsProps {
@@ -10,15 +11,17 @@ export interface PanelTabsProps {
   onTabChange: (tab: 'notes' | 'ai-summary') => void;
 }
 
-const TABS: Array<{ key: 'notes' | 'ai-summary'; label: string }> = [
-  { key: 'notes', label: '메모' },
-  { key: 'ai-summary', label: 'AI 요약' },
+const TAB_KEYS: Array<{ key: 'notes' | 'ai-summary'; i18nKey: string }> = [
+  { key: 'notes', i18nKey: 'videoPlayer.panelTabNotes' },
+  { key: 'ai-summary', i18nKey: 'videoPlayer.panelTabAiSummary' },
 ];
 
 export function PanelTabs({ activeTab, onTabChange }: PanelTabsProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex shrink-0 border-b border-[rgba(255,255,255,0.04)] px-4" role="tablist">
-      {TABS.map((tab) => {
+      {TAB_KEYS.map((tab) => {
         const isActive = activeTab === tab.key;
         return (
           <button
@@ -32,7 +35,7 @@ export function PanelTabs({ activeTab, onTabChange }: PanelTabsProps) {
               isActive ? 'font-semibold text-[#ededf0]' : 'text-[#4e4f5c] hover:text-[#9394a0]'
             )}
           >
-            {tab.label}
+            {t(tab.i18nKey)}
             {/* Active indicator — 1.5px indigo bottom line */}
             {isActive && (
               <span

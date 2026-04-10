@@ -4,17 +4,18 @@
  *
  * Design tokens: insighta-side-editor-mockup-v3.html
  */
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useVideoPanelStore } from '../model/useVideoPanelStore';
-import { PANEL_WIDTH_PX, PANEL_TRANSITION } from '../config';
+import { PANEL_WIDTH_PX } from '../config';
 import { PanelVideoPlayer } from './PanelVideoPlayer';
 import { PanelVideoInfo } from './PanelVideoInfo';
 import { PanelTabs } from './PanelTabs';
 import { PanelNoteEditor } from './PanelNoteEditor';
 import { PanelAISummary } from './PanelAISummary';
 import { PanelFooter } from './PanelFooter';
+import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
 
 export function VideoSidePanel() {
   const isOpen = useVideoPanelStore((s) => s.isOpen);
@@ -23,6 +24,18 @@ export function VideoSidePanel() {
   const startTime = useVideoPanelStore((s) => s.startTime);
   const closeSidebar = useVideoPanelStore((s) => s.closeSidebar);
   const setTab = useVideoPanelStore((s) => s.setTab);
+
+  const playerRef = useRef<YTPlayer | null>(null);
+  const playerReadyRef = useRef(false);
+
+  const handlePlayerReady = useCallback(() => {
+    playerReadyRef.current = true;
+  }, []);
+
+  // Reset ready state when panel closes
+  useEffect(() => {
+    if (!isOpen) playerReadyRef.current = false;
+  }, [isOpen]);
 
   // ESC handler — capture phase so it doesn't propagate to the modal underneath.
   useEffect(() => {
@@ -41,6 +54,17 @@ export function VideoSidePanel() {
 
   const handleTabChange = useCallback((tab: 'notes' | 'ai-summary') => setTab(tab), [setTab]);
 
+  /** Seek the video player to a specific position (used by TimestampNode clicks). */
+  const handleSeek = useCallback((seconds: number) => {
+    if (playerRef.current && playerReadyRef.current) {
+      try {
+        playerRef.current.seekTo(seconds, true);
+      } catch {
+        // Player might not be ready
+      }
+    }
+  }, []);
+
   return (
     <div
       role="complementary"
@@ -57,7 +81,7 @@ export function VideoSidePanel() {
       {/* Close button — overlaid on the video player area */}
       <button
         type="button"
-        aria-label="패널 닫기"
+        aria-label="Close panel"
         onClick={closeSidebar}
         className={cn(
           'absolute top-2 right-2 z-10',
@@ -71,7 +95,14 @@ export function VideoSidePanel() {
       </button>
 
       {/* Video player — unmounts on close to stop audio; card kept for resume */}
-      {isOpen && card && <PanelVideoPlayer videoUrl={card.videoUrl} startTime={startTime} />}
+      {isOpen && card && (
+        <PanelVideoPlayer
+          videoUrl={card.videoUrl}
+          startTime={startTime}
+          playerRef={playerRef}
+          onReady={handlePlayerReady}
+        />
+      )}
 
       {/* Video info */}
       {card && <PanelVideoInfo card={card} />}
@@ -87,6 +118,9 @@ export function VideoSidePanel() {
             onDocChange={() => {
               // TODO: wire to useAutoSave in next PR
             }}
+            onTimestampClick={handleSeek}
+            playerRef={playerRef}
+            videoUrl={card?.videoUrl}
           />
         ) : (
           <PanelAISummary videoSummary={card?.videoSummary} />

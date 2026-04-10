@@ -27,6 +27,7 @@ export interface YTPlayer {
   getCurrentTime: () => number;
   getPlayerState: () => number;
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  loadVideoById: (videoId: string, startSeconds?: number) => void;
   pauseVideo: () => void;
   playVideo: () => void;
   destroy: () => void;

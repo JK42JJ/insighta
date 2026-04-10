@@ -66,10 +66,11 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   }, [showLinkInput]);
 
   const applyLink = useCallback(() => {
-    const url = linkUrl.trim();
+    let url = linkUrl.trim();
     if (url === '') {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
     } else {
+      if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
       editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     }
     setShowLinkInput(false);

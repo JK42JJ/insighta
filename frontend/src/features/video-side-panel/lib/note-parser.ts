@@ -34,15 +34,55 @@ export const EMPTY_DOC: TiptapDoc = {
   content: [{ type: 'paragraph' }],
 };
 
+/** Regex to match markdown links: [label](url) */
+const MD_LINK_RE = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+
+/**
+ * Parse a single line of plain text, converting markdown links to Tiptap text nodes
+ * with link marks. Non-link text becomes plain text nodes.
+ */
+function parsePlainTextLine(line: string): TiptapNode[] {
+  const nodes: TiptapNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of line.matchAll(MD_LINK_RE)) {
+    const before = line.slice(lastIndex, match.index);
+    if (before) {
+      nodes.push({ type: 'text', text: before });
+    }
+
+    const label = match[1];
+    const href = match[2];
+    nodes.push({
+      type: 'text',
+      text: label,
+      marks: [{ type: 'link', attrs: { href, target: '_blank' } }],
+    });
+
+    lastIndex = match.index! + match[0].length;
+  }
+
+  const remaining = line.slice(lastIndex);
+  if (remaining) {
+    nodes.push({ type: 'text', text: remaining });
+  }
+
+  return nodes;
+}
+
 export function wrapLegacyPlainText(text: string): TiptapDoc {
+  const lines = text.split('\n');
+  const paragraphs: TiptapNode[] = lines.map((line) => {
+    const nodes = parsePlainTextLine(line);
+    return {
+      type: 'paragraph',
+      content: nodes.length > 0 ? nodes : undefined,
+    };
+  });
+
   return {
     type: 'doc',
-    content: [
-      {
-        type: 'paragraph',
-        content: text.length > 0 ? [{ type: 'text', text }] : undefined,
-      },
-    ],
+    content: paragraphs.length > 0 ? paragraphs : [{ type: 'paragraph' }],
   };
 }
 

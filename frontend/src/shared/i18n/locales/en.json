@@ -587,7 +587,13 @@
     "aiSummaryFailed": "Failed to generate AI summary",
     "insertInsight": "Insight",
     "comingSoon": "Soon",
-    "pastePlaceholder": "Copy and paste important content from the original page.\n\nMy Insights:\n- Key takeaways\n- Action items\n- Ideas to reference\n\n(Ctrl+Enter to save)"
+    "pastePlaceholder": "Copy and paste important content from the original page.\n\nMy Insights:\n- Key takeaways\n- Action items\n- Ideas to reference\n\n(Ctrl+Enter to save)",
+    "panelPlaceholder": "Write a note...",
+    "panelCloseLabel": "Close panel",
+    "panelTabNotes": "Notes",
+    "panelTabAiSummary": "Summary",
+    "slashTimestamp": "Timestamp",
+    "slashCapture": "Capture Bookmark"
   },
   "mandala": {
     "title": "Mandala",

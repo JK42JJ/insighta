@@ -12,8 +12,8 @@ export const PANEL_TRANSITION = '0.35s cubic-bezier(0.16, 1, 0.3, 1)';
 /** Auto-save debounce delay (milliseconds). */
 export const AUTO_SAVE_DEBOUNCE_MS = 1500;
 
-/** Duration the "저장됨" indicator stays visible before reverting to idle (ms). */
+/** Duration the saved indicator stays visible before reverting to idle (ms). */
 export const SAVED_DISPLAY_MS = 3000;
 
-/** Tiptap editor placeholder text. */
-export const EDITOR_PLACEHOLDER = '메모를 작성해보세요…';
+/** Default placeholder fallback (overridden by i18n at runtime). */
+export const EDITOR_PLACEHOLDER_FALLBACK = 'Write a note...';

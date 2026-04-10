@@ -1,13 +1,14 @@
 /**
  * Tiptap editor hook with the MVP extension set.
  *
- * Extensions (Phase 1-4):
+ * Extensions:
  *   StarterKit (doc, paragraph, text, heading, lists, bold/italic/code, etc.)
  *   Placeholder
  *   Link (autolink, no open-on-click)
  *   CodeBlockLowlight (with lowlight)
+ *   TimestampPlugin (YouTube timestamp links → clickable pills with seekTo)
  *
- * Deferred to Phase 2: TimestampNode, Image, @tiptap/extension-youtube.
+ * Deferred to Phase 2: Image, @tiptap/extension-youtube.
  */
 import { useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -16,8 +17,9 @@ import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { createLowlight, common } from 'lowlight';
 import { useMemo } from 'react';
-import type { TiptapDoc } from '../lib/note-parser';
-import { EDITOR_PLACEHOLDER } from '../config';
+import { parseRichNote, type TiptapDoc } from '../lib/note-parser';
+import { EDITOR_PLACEHOLDER_FALLBACK } from '../config';
+import { TimestampPlugin } from '../lib/timestamp-node';
 
 const lowlight = createLowlight(common);
 
@@ -28,12 +30,18 @@ export interface UseNoteEditorOptions {
   onUpdate?: (doc: TiptapDoc) => void;
   /** Disable editing entirely (e.g., while the initial GET is loading). */
   editable?: boolean;
+  /** Called when a timestamp pill is clicked (seconds). */
+  onTimestampClick?: (seconds: number) => void;
+  /** Placeholder text (i18n resolved by caller). */
+  placeholder?: string;
 }
 
 export function useNoteEditor({
   initialContent,
   onUpdate,
   editable = true,
+  onTimestampClick,
+  placeholder = EDITOR_PLACEHOLDER_FALLBACK,
 }: UseNoteEditorOptions): Editor | null {
   // Memoize extensions so Tiptap doesn't reinitialize on every render.
   const extensions = useMemo(
@@ -42,16 +50,19 @@ export function useNoteEditor({
         heading: { levels: [1, 2, 3] },
         codeBlock: false, // replaced by CodeBlockLowlight below
       }),
-      Placeholder.configure({ placeholder: EDITOR_PLACEHOLDER }),
-      Link.configure({ openOnClick: false, autolink: true }),
+      Placeholder.configure({ placeholder }),
+      Link.configure({ openOnClick: true, autolink: true }),
       CodeBlockLowlight.configure({ lowlight }),
+      TimestampPlugin.configure({ onSeek: onTimestampClick }),
     ],
-    []
+    // onTimestampClick is a stable callback from useCallback in VideoSidePanel
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [onTimestampClick, placeholder]
   );
 
   return useEditor({
     extensions,
-    content: initialContent ?? '',
+    content: parseRichNote(initialContent) ?? '',
     editable,
     immediatelyRender: false,
     onUpdate: ({ editor }) => {

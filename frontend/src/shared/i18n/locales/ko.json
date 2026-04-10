@@ -588,7 +588,13 @@
     "aiSummaryFailed": "AI 요약 생성에 실패했습니다",
     "insertInsight": "인사이트",
     "comingSoon": "준비중",
-    "pastePlaceholder": "원본 페이지에서 중요한 내용을 복사해서 붙여넣으세요.\n\n나의 인사이트:\n- 핵심 내용 요약\n- 적용할 점\n- 참고할 아이디어\n\n(Ctrl+Enter로 저장)"
+    "pastePlaceholder": "원본 페이지에서 중요한 내용을 복사해서 붙여넣으세요.\n\n나의 인사이트:\n- 핵심 내용 요약\n- 적용할 점\n- 참고할 아이디어\n\n(Ctrl+Enter로 저장)",
+    "panelPlaceholder": "메모를 작성해보세요…",
+    "panelCloseLabel": "패널 닫기",
+    "panelTabNotes": "메모",
+    "panelTabAiSummary": "요약",
+    "slashTimestamp": "타임스탬프",
+    "slashCapture": "캡처 북마크"
   },
   "mandala": {
     "title": "만다라트",
