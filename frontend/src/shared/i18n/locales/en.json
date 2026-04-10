@@ -1203,7 +1203,7 @@
   },
   "privacy": {
     "title": "Privacy Policy",
-    "lastUpdated": "Last updated: March 28, 2026",
+    "lastUpdated": "Last updated: April 10, 2026",
     "s1Title": "1. Overview",
     "s1P1": "Insighta (\"we\", \"our\", \"the Service\") is a personal knowledge management platform that syncs YouTube playlists, generates AI-powered summaries from video captions, and provides note-taking tools for learning purposes. We take your privacy seriously. This policy explains what information we collect, how we use it, and what rights you have in relation to it.",
     "s2Title": "2. Data We Collect",
@@ -1236,7 +1236,7 @@
     "s6Google": "<strong>Google / YouTube API Services</strong>",
     "s6Gemini": "<strong>Google Gemini</strong> (vector embedding generation for knowledge graph features)",
     "s6OpenRouter": "<strong>OpenRouter</strong> (AI language model hosting for video caption summarization)",
-    "s6WebShare": "<strong>WebShare</strong> (residential proxy service for YouTube caption extraction)",
+    "s6CaptionData": "We extract publicly available captions (subtitles) from YouTube videos using YouTube's public caption API. We do not download, store, or redistribute any video or audio content. Only text transcripts are used to generate AI summaries for personal knowledge management.",
     "s6P2": "We do not use any third-party advertising networks or retargeting services.",
     "s7Title": "7. Data Storage & Security",
     "s7Item1": "All data is stored in a secured PostgreSQL database hosted on Supabase Cloud (AWS us-west-2 region).",
@@ -1264,7 +1264,7 @@
   },
   "terms": {
     "title": "Terms of Service",
-    "lastUpdated": "Last updated: March 28, 2026",
+    "lastUpdated": "Last updated: April 10, 2026",
     "s1Title": "1. Acceptance of Terms",
     "s1P1": "By accessing or using Insighta (\"the Service\"), you agree to be bound by these Terms of Service (\"Terms\"). If you do not agree to these Terms, you may not access or use the Service.",
     "s2Title": "2. Description of Service",

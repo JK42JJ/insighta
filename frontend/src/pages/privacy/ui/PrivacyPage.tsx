@@ -180,18 +180,7 @@ const PrivacyPage = () => {
               OpenRouter Privacy Policy<span className={SR_ONLY}> (opens in new tab)</span>
             </a>
           </li>
-          <li>
-            <Trans i18nKey="privacy.s6WebShare" components={{ strong: <strong /> }} />
-            {' — '}
-            <a
-              href="https://www.webshare.io/privacy-policy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={LINK_CLASS}
-            >
-              WebShare Privacy Policy<span className={SR_ONLY}> (opens in new tab)</span>
-            </a>
-          </li>
+          <li>{t('privacy.s6CaptionData')}</li>
         </ul>
         <p className="mt-2">{t('privacy.s6P2')}</p>
       </section>

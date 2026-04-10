@@ -1204,7 +1204,7 @@
   },
   "privacy": {
     "title": "개인정보처리방침",
-    "lastUpdated": "최종 수정: 2026년 3월 28일",
+    "lastUpdated": "최종 수정: 2026년 4월 10일",
     "s1Title": "1. 개요",
     "s1P1": "Insighta(이하 \"당사\", \"서비스\")는 YouTube 재생목록을 동기화하고, 동영상 자막에서 AI 기반 요약을 생성하며, 학습 목적의 메모 도구를 제공하는 개인 지식 관리 플랫폼입니다. 당사는 귀하의 개인정보를 중요하게 여기며, 본 방침에서 수집하는 정보, 사용 방법 및 귀하의 권리에 대해 설명합니다.",
     "s2Title": "2. 수집하는 정보",
@@ -1237,7 +1237,7 @@
     "s6Google": "<strong>Google / YouTube API 서비스</strong>",
     "s6Gemini": "<strong>Google Gemini</strong> (지식 그래프 기능을 위한 벡터 임베딩 생성)",
     "s6OpenRouter": "<strong>OpenRouter</strong> (동영상 자막 요약을 위한 AI 언어 모델 호스팅)",
-    "s6WebShare": "<strong>WebShare</strong> (YouTube 자막 추출을 위한 주거용 프록시 서비스)",
+    "s6CaptionData": "YouTube 동영상의 공개 자막(자막)을 YouTube 공개 자막 API를 통해 추출합니다. 동영상이나 오디오 콘텐츠를 다운로드, 저장 또는 재배포하지 않습니다. 텍스트 자막만 개인 지식 관리를 위한 AI 요약 생성에 사용됩니다.",
     "s6P2": "당사는 제3자 광고 네트워크 또는 리타겟팅 서비스를 사용하지 않습니다.",
     "s7Title": "7. 데이터 저장 및 보안",
     "s7Item1": "모든 데이터는 Supabase Cloud(AWS us-west-2 리전)에서 호스팅되는 보안 PostgreSQL 데이터베이스에 저장됩니다.",
@@ -1265,7 +1265,7 @@
   },
   "terms": {
     "title": "서비스 이용약관",
-    "lastUpdated": "최종 수정: 2026년 3월 28일",
+    "lastUpdated": "최종 수정: 2026년 4월 10일",
     "s1Title": "1. 약관 동의",
     "s1P1": "Insighta(이하 \"서비스\")에 접근하거나 사용함으로써 귀하는 본 서비스 이용약관(이하 \"약관\")에 동의하게 됩니다. 본 약관에 동의하지 않는 경우 서비스에 접근하거나 사용할 수 없습니다.",
     "s2Title": "2. 서비스 설명",

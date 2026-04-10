@@ -71,6 +71,99 @@ export function extractYouTubeVideoId(url: string): string | null {
   }
 }
 
+// --------------------------------------------------------------------------
+// Metadata-enriched fallback — YouTube Data API metadata → LLM context
+// --------------------------------------------------------------------------
+
+interface VideoMetadata {
+  title: string;
+  description: string;
+  channelTitle: string;
+  tags: string[];
+  durationSeconds: number;
+  viewCount: number;
+  likeCount: number;
+}
+
+async function fetchVideoMetadata(
+  prisma: ReturnType<typeof getPrismaClient>,
+  videoId: string
+): Promise<VideoMetadata> {
+  const rows = await prisma.$queryRaw<
+    {
+      title: string | null;
+      description: string | null;
+      channel_title: string | null;
+      duration_seconds: number | null;
+      view_count: bigint | null;
+      like_count: bigint | null;
+    }[]
+  >`
+    SELECT title, description, channel_title, duration_seconds, view_count, like_count
+    FROM public.youtube_videos
+    WHERE youtube_video_id = ${videoId}
+    LIMIT 1
+  `;
+
+  const row = rows[0];
+  if (!row) {
+    logger.warn('No youtube_videos record found for metadata fallback', { videoId });
+    return {
+      title: videoId,
+      description: '',
+      channelTitle: '',
+      tags: [],
+      durationSeconds: 0,
+      viewCount: 0,
+      likeCount: 0,
+    };
+  }
+
+  return {
+    title: row.title || videoId,
+    description: row.description || '',
+    channelTitle: row.channel_title || '',
+    tags: [],
+    durationSeconds: row.duration_seconds || 0,
+    viewCount: Number(row.view_count || 0),
+    likeCount: Number(row.like_count || 0),
+  };
+}
+
+function buildMetadataTranscript(metadata: VideoMetadata): string {
+  const parts: string[] = [];
+
+  parts.push(`Title: ${metadata.title}`);
+
+  if (metadata.channelTitle) {
+    parts.push(`Channel: ${metadata.channelTitle}`);
+  }
+
+  if (metadata.durationSeconds > 0) {
+    const minutes = Math.floor(metadata.durationSeconds / 60);
+    parts.push(`Duration: ${minutes} minutes`);
+  }
+
+  if (metadata.viewCount > 0) {
+    parts.push(`Views: ${metadata.viewCount.toLocaleString()}`);
+  }
+
+  if (metadata.likeCount > 0) {
+    parts.push(`Likes: ${metadata.likeCount.toLocaleString()}`);
+  }
+
+  if (metadata.description) {
+    const descTruncated = metadata.description.slice(0, 3000);
+    parts.push(`\nDescription:\n${descTruncated}`);
+  }
+
+  if (metadata.tags.length > 0) {
+    parts.push(`\nTags: ${metadata.tags.join(', ')}`);
+  }
+
+  return parts.join('\n');
+}
+
 function parseSummaryResponse(raw: string): SummaryResponse {
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
@@ -306,9 +399,10 @@ export async function enrichVideo(
     }
   }
 
-  // 2. Get transcript
+  // 2. Get transcript (or fallback to YouTube metadata)
   let transcript: string;
   let transcriptSegments = 0;
+  let isMetadataEnriched = false;
 
   if (options?.transcript) {
     transcript = options.transcript;
@@ -316,11 +410,16 @@ export async function enrichVideo(
   } else {
     const captionExtractor = getCaptionExtractor();
     const captionResult = await captionExtractor.extractCaptions(videoId);
-    if (!captionResult.success || !captionResult.caption) {
-      throw new Error(`CAPTION_FAILED: ${captionResult.error || 'unknown'}`);
+    if (captionResult.success && captionResult.caption) {
+      transcript = captionResult.caption.fullText;
+      transcriptSegments = captionResult.caption.segments?.length ?? 0;
+    } else {
+      // Fallback: build metadata-enriched context from YouTube Data API
+      logger.info('Captions unavailable, falling back to metadata-enriched summary', { videoId });
+      const metadata = await fetchVideoMetadata(prisma, videoId);
+      transcript = buildMetadataTranscript(metadata);
+      isMetadataEnriched = true;
     }
-    transcript = captionResult.caption.fullText;
-    transcriptSegments = captionResult.caption.segments?.length ?? 0;
   }
 
   // 3. Generate bilingual summary
@@ -355,7 +454,7 @@ export async function enrichVideo(
   }
 
   const tags = primarySummary.tags;
-  const modelName = generationProvider.model;
+  const modelName = isMetadataEnriched ? 'metadata-enriched' : generationProvider.model;
 
   logger.info('Bilingual summary generated', {
     videoId,

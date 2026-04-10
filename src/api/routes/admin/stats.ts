@@ -204,4 +204,115 @@ export async function adminStatsRoutes(fastify: FastifyInstance) {
       )
     );
   });
+
+  // GET /api/v1/admin/stats/summary-coverage — Summary coverage KPI
+  fastify.get(
+    '/summary-coverage',
+    adminAuth,
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      const [coverage] = await db.$queryRaw<
+        Array<{
+          total_cards: number;
+          summary_total: number;
+          summary_caption: number;
+          summary_metadata: number;
+          summary_pending: number;
+          rich_summary_total: number;
+          rich_summary_pass: number;
+          rich_summary_low: number;
+          rich_summary_failed: number;
+          avg_quality_caption: number | null;
+          avg_quality_metadata: number | null;
+          quality_good: number;
+          quality_needs_review: number;
+          quality_poor: number;
+        }>
+      >`
+        WITH card_videos AS (
+          SELECT DISTINCT video_id AS vid FROM public.user_local_cards
+          WHERE video_id IS NOT NULL AND link_type IN ('youtube', 'youtube-shorts')
+        ),
+        summary_stats AS (
+          SELECT
+            COUNT(*)::int AS summary_total,
+            COUNT(*) FILTER (WHERE model != 'metadata-enriched')::int AS summary_caption,
+            COUNT(*) FILTER (WHERE model = 'metadata-enriched')::int AS summary_metadata
+          FROM public.video_summaries
+          WHERE summary_en IS NOT NULL
+        ),
+        rich_stats AS (
+          SELECT
+            COUNT(*)::int AS rich_total,
+            COUNT(*) FILTER (WHERE quality_flag = 'pass')::int AS rich_pass,
+            COUNT(*) FILTER (WHERE quality_flag = 'low')::int AS rich_low,
+            COUNT(*) FILTER (WHERE quality_flag = 'failed')::int AS rich_failed,
+            ROUND(AVG(quality_score) FILTER (WHERE quality_flag = 'pass')::numeric, 2) AS avg_quality_all,
+            COUNT(*) FILTER (WHERE quality_score >= 0.7)::int AS quality_good,
+            COUNT(*) FILTER (WHERE quality_score >= 0.4 AND quality_score < 0.7)::int AS quality_needs_review,
+            COUNT(*) FILTER (WHERE quality_score < 0.4 OR quality_score IS NULL)::int AS quality_poor
+          FROM public.video_rich_summaries
+        ),
+        quality_by_source AS (
+          SELECT
+            ROUND(AVG(vrs.quality_score) FILTER (WHERE vs.model != 'metadata-enriched')::numeric, 2) AS avg_q_caption,
+            ROUND(AVG(vrs.quality_score) FILTER (WHERE vs.model = 'metadata-enriched')::numeric, 2) AS avg_q_metadata
+          FROM public.video_rich_summaries vrs
+          LEFT JOIN public.video_summaries vs ON vs.video_id = vrs.video_id
+          WHERE vrs.quality_score IS NOT NULL
+        )
+        SELECT
+          (SELECT COUNT(*)::int FROM card_videos) AS total_cards,
+          ss.summary_total,
+          ss.summary_caption,
+          ss.summary_metadata,
+          (SELECT COUNT(*)::int FROM card_videos) - ss.summary_total AS summary_pending,
+          rs.rich_total AS rich_summary_total,
+          rs.rich_pass AS rich_summary_pass,
+          rs.rich_low AS rich_summary_low,
+          rs.rich_failed AS rich_summary_failed,
+          qbs.avg_q_caption AS avg_quality_caption,
+          qbs.avg_q_metadata AS avg_quality_metadata,
+          rs.quality_good,
+          rs.quality_needs_review,
+          rs.quality_poor
+        FROM summary_stats ss, rich_stats rs, quality_by_source qbs
+      `;
+
+      const c = coverage!;
+      const totalCards = c.total_cards || 0;
+      const summaryTotal = c.summary_total || 0;
+      const coveragePct = totalCards > 0 ? Math.round((summaryTotal / totalCards) * 1000) / 10 : 0;
+      const richTotal = c.rich_summary_total || 0;
+      const richPct = totalCards > 0 ? Math.round((richTotal / totalCards) * 1000) / 10 : 0;
+
+      return reply.send(
+        createSuccessResponse({
+          totalCards,
+          summaryCoverage: {
+            total: summaryTotal,
+            percentage: coveragePct,
+            captionBased: c.summary_caption || 0,
+            metadataEnriched: c.summary_metadata || 0,
+            pending: c.summary_pending || 0,
+          },
+          richSummaryCoverage: {
+            total: richTotal,
+            percentage: richPct,
+            pass: c.rich_summary_pass || 0,
+            low: c.rich_summary_low || 0,
+            failed: c.rich_summary_failed || 0,
+          },
+          quality: {
+            avgCaptionBased: c.avg_quality_caption ?? null,
+            avgMetadataEnriched: c.avg_quality_metadata ?? null,
+            distribution: {
+              good: c.quality_good || 0,
+              needsReview: c.quality_needs_review || 0,
+              poor: c.quality_poor || 0,
+            },
+          },
+        })
+      );
+    }
+  );
 }

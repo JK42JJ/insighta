@@ -323,18 +323,18 @@ Checks: API uptime, DB connection + latency, memory usage. Located at `src/api/r
 
 **Circuit breaker**: If external service fails 3+ times in 1 minute, stop retrying for cooldown period. See `memory/troubleshooting.md` for known patterns.
 
-### 3-5. YouTube Caption Extraction — Environment-Based Routing
+### 3-5. YouTube Caption Extraction
 
-**Policy**: Prod 환경에서 YouTube에 직접 요청하면 EC2 IP가 봇으로 판정되어 계정 차단 위험이 있다.
+**Policy**: YouTube 공개 자막만 추출. youtube-transcript npm 패키지(Innertube API) 단독 사용.
 
 | Environment | Extraction Route | Rationale |
 |-------------|-----------------|-----------|
-| **Dev (local)** | youtube-transcript → yt-dlp → Edge Function (proxy) | 로컬 IP는 차단 위험 낮음, 빠른 직접 호출 우선 |
-| **Prod (EC2)** | Edge Function (WebShare residential proxy) **직행** | EC2 데이터센터 IP → YouTube 봇 감지 → 계정 차단 방지 |
+| **Dev (local)** | youtube-transcript (Innertube API) | 공개 자막만 추출 |
+| **Prod (EC2)** | youtube-transcript (Innertube API) | 동일 — 공개 자막만 추출 |
 
-**구현**: `CaptionExtractor.extractCaptions()`에서 `NODE_ENV=production`일 때 youtube-transcript/yt-dlp를 건너뛰고 Edge Function 프록시만 사용.
+**구현**: `CaptionExtractor.extractCaptions()`에서 youtube-transcript 시도 → 실패 시 `success: false` 반환.
 
-**근거**: Clawbot 무한 실패 루프 사건 (2026-03-22) — EC2에서 youtube-transcript 100% 차단, 1,500+ 무의미한 요청 발생.
+**금지**: yt-dlp, 프록시 서비스, 영상 다운로드 도구 사용 금지 (YouTube TOS 위반, Google OAuth 심사 거부 사유).
 
 ### 3-6. Code Review Standards
 
