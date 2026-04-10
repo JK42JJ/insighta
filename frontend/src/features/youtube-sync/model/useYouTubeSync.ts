@@ -435,8 +435,6 @@ export function useUpdateVideoState() {
  */
 export function useSyncAllPlaylists() {
   const queryClient = useQueryClient();
-  const { data: playlists } = useYouTubePlaylists();
-  const syncPlaylist = useSyncPlaylist();
 
   return useMutation({
     mutationFn: async (): Promise<{
@@ -444,25 +442,24 @@ export function useSyncAllPlaylists() {
       failed: number;
       errors: string[];
     }> => {
-      if (!playlists || playlists.length === 0) {
-        throw new Error('No playlists to sync');
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/v1/playlists/sync-all', {
+        method: 'POST',
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error('Sync all failed');
       }
 
-      let synced = 0;
-      let failed = 0;
-      const errors: string[] = [];
-
-      for (const playlist of playlists) {
-        try {
-          await syncPlaylist.mutateAsync(playlist.id);
-          synced++;
-        } catch (error) {
-          failed++;
-          errors.push(
-            `${playlist.title}: ${error instanceof Error ? error.message : 'Unknown error'}`
-          );
-        }
-      }
+      const data = await response.json();
+      const results: Array<{ playlistId: string; status: string; itemsAdded: number }> =
+        data.results ?? [];
+      const synced = results.filter((r) => r.status === 'completed').length;
+      const failed = results.filter((r) => r.status === 'failed').length;
+      const errors = results
+        .filter((r) => r.status === 'failed')
+        .map((r) => `${r.playlistId}: failed`);
 
       return { synced, failed, errors };
     },
