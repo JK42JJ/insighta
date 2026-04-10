@@ -89,7 +89,10 @@ function buildPrompt(input: MandalaGenerateInput): string {
       ? `다음 목표에 대한 만다라트를 생성하세요: ${input.goal}`
       : `Generate a Mandalart chart for the following goal: ${input.goal}`;
 
-  return `### Instruction:\n${instruction}\n### Input:\n도메인: ${domain}\n언어: ${lang}\n### Output:\n`;
+  const inputMeta =
+    lang === 'ko' ? `도메인: ${domain}\n언어: ${lang}` : `Domain: ${domain}\nLanguage: ${lang}`;
+
+  return `### Instruction:\n${instruction}\n### Input:\n${inputMeta}\n### Output:\n`;
 }
 
 // ─── Robust JSON Parser v4.1 (Devin, 5/5 PASS) ───
@@ -477,18 +480,32 @@ export async function generateMandalaWithFallback(
       ? '당신은 만다라트 차트 전문가입니다. 주어진 목표에 대해 9x9 만다라트 차트를 JSON으로 생성합니다.'
       : 'You are a Mandalart chart expert. Generate a 9x9 mandala chart in JSON for the given goal.';
 
+  const examplesHeader =
+    lang === 'ko'
+      ? '다음은 유사한 기존 만다라 참고 예시입니다:'
+      : 'Here are similar existing mandalas as reference examples:';
+
+  const generateInstr =
+    lang === 'ko'
+      ? '아래 목표에 대해 새로운 만다라를 생성하세요. 반드시 아래 구조의 유효한 JSON 객체만 출력하세요:'
+      : 'Now generate a new mandala for the goal below. Output ONLY a valid JSON object with this exact structure:';
+
+  const goalLabel = lang === 'ko' ? '목표' : 'Goal';
+  const domainLabel = lang === 'ko' ? '도메인' : 'Domain';
+  const langLabel = lang === 'ko' ? '언어' : 'Language';
+
   const prompt = `${systemInstruction}
 
-Here are similar existing mandalas as reference examples:
+${examplesHeader}
 
 ${examples}
 
-Now generate a new mandala for the goal below. Output ONLY a valid JSON object with this exact structure:
+${generateInstr}
 {"center_goal": "...", "center_label": "short label", "language": "${lang}", "domain": "${domain}", "sub_goals": ["8 items"], "actions": {"sub_goal_1": ["8 items per sub_goal"], ...}}
 
-Goal: ${input.goal}
-Domain: ${domain}
-Language: ${lang}
+${goalLabel}: ${input.goal}
+${domainLabel}: ${domain}
+${langLabel}: ${lang}
 `;
 
   const provider = new OpenRouterGenerationProvider();
