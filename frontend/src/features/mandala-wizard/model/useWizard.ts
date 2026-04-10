@@ -15,6 +15,13 @@ import {
   type GeneratedMandala,
 } from '@/shared/types/mandala-ux';
 
+// ─── Language detection — detect from goal text, not UI locale ───
+
+function detectGoalLanguage(goal: string): 'ko' | 'en' {
+  const koreanCharCount = (goal.match(/[\uAC00-\uD7AF\u3130-\u318F]/g) || []).length;
+  return koreanCharCount > 0 ? 'ko' : 'en';
+}
+
 // ─── API helpers (follows useEditor.ts pattern) ───
 
 async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -228,9 +235,7 @@ export function useWizard() {
     mutationFn: (goal: string) =>
       apiClient.searchMandalasByGoal(goal, {
         limit: 3,
-        // Normalize to the exact codes the seeder writes ('ko' | 'en').
-        // i18n.language may be 'ko-KR' / 'en-US' from navigator detection.
-        language: i18n.language.startsWith('ko') ? 'ko' : 'en',
+        language: detectGoalLanguage(goal),
         signal: goalAbortRef.current?.signal,
       }),
   });
@@ -239,7 +244,7 @@ export function useWizard() {
   const generateMutation = useMutation({
     mutationFn: (goal: string) =>
       apiClient.generateMandala(goal, {
-        language: i18n.language.startsWith('ko') ? 'ko' : 'en',
+        language: detectGoalLanguage(goal),
         signal: goalAbortRef.current?.signal,
       }),
   });
