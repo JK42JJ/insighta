@@ -957,67 +957,45 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         rootLevel?.centerLabel || rootLevel?.centerGoal || (mandala as any).title || '';
       const subLabels: string[] = rootLevel?.subjects ?? [];
 
-      // Count actual cards per level (local cards + video states)
+      // Count cards per cell — single unified query instead of 4 separate Prisma calls.
+      // Combines user_local_cards + user_video_states, handles both level_id-based
+      // and root+cell_index mapping in one SQL round-trip.
       const prisma = getPrismaClient();
       const mandalaId = request.params.id;
 
-      const localCardCounts = await prisma.user_local_cards.groupBy({
-        by: ['level_id'],
-        where: { mandala_id: mandalaId, user_id: userId },
-        _count: true,
-      });
-      const videoStateCounts = await prisma.userVideoState.groupBy({
-        by: ['level_id'],
-        where: { mandala_id: mandalaId, user_id: userId },
-        _count: true,
-      });
-
-      // Build level_id → position lookup (child levelKey → position)
+      // Build level_id → position lookup
       const levelKeyToPosition = new Map<string, number>();
       for (const child of childLevels) {
         levelKeyToPosition.set(child.levelKey, child.position);
       }
 
-      // Count cards per position (supports both levelKey-based and root+cell_index mapping)
+      const cardCountRows: Array<{ cell_pos: number; cnt: number }> = await prisma.$queryRaw`
+        SELECT cell_pos, SUM(cnt)::int AS cnt FROM (
+          -- local cards with level_id mapping
+          SELECT CASE
+            WHEN level_id = 'root' THEN cell_index
+            ELSE (SELECT position FROM user_mandala_levels WHERE level_key = level_id AND mandala_id = ${mandalaId}::uuid LIMIT 1)
+          END AS cell_pos, 1 AS cnt
+          FROM user_local_cards
+          WHERE mandala_id = ${mandalaId}::uuid AND user_id = ${userId}::uuid
+            AND (level_id IS NOT NULL AND level_id != 'scratchpad' AND level_id != '')
+          UNION ALL
+          -- video states with level_id mapping
+          SELECT CASE
+            WHEN level_id = 'root' THEN cell_index
+            ELSE (SELECT position FROM user_mandala_levels WHERE level_key = level_id AND mandala_id = ${mandalaId}::uuid LIMIT 1)
+          END AS cell_pos, 1 AS cnt
+          FROM user_video_states
+          WHERE mandala_id = ${mandalaId}::uuid AND user_id = ${userId}::uuid
+            AND (level_id IS NOT NULL AND level_id != 'scratchpad' AND level_id != '')
+        ) combined
+        WHERE cell_pos >= 0 AND cell_pos < 8
+        GROUP BY cell_pos
+      `;
+
       const cardCountByPosition = new Map<number, number>();
-
-      for (const row of localCardCounts) {
-        const levelId = row.level_id ?? '';
-        if (levelId === 'root' || levelId === 'scratchpad' || levelId === '') continue;
-        const pos = levelKeyToPosition.get(levelId);
-        if (pos !== undefined) {
-          cardCountByPosition.set(pos, (cardCountByPosition.get(pos) ?? 0) + row._count);
-        }
-      }
-      for (const row of videoStateCounts) {
-        const levelId = row.level_id ?? '';
-        if (levelId === 'root' || levelId === 'scratchpad' || levelId === '') continue;
-        const pos = levelKeyToPosition.get(levelId);
-        if (pos !== undefined) {
-          cardCountByPosition.set(pos, (cardCountByPosition.get(pos) ?? 0) + row._count);
-        }
-      }
-
-      // Cards with level_id="root" are mapped by cell_index to child positions
-      const rootLocalCards = await prisma.user_local_cards.findMany({
-        where: { mandala_id: mandalaId, user_id: userId, level_id: 'root' },
-        select: { cell_index: true },
-      });
-      for (const card of rootLocalCards) {
-        const pos = card.cell_index ?? -1;
-        if (pos >= 0 && pos < 8) {
-          cardCountByPosition.set(pos, (cardCountByPosition.get(pos) ?? 0) + 1);
-        }
-      }
-      const rootVideoStates = await prisma.userVideoState.findMany({
-        where: { mandala_id: mandalaId, user_id: userId, level_id: 'root' },
-        select: { cell_index: true },
-      });
-      for (const vs of rootVideoStates) {
-        const pos = vs.cell_index ?? -1;
-        if (pos >= 0 && pos < 8) {
-          cardCountByPosition.set(pos, (cardCountByPosition.get(pos) ?? 0) + 1);
-        }
+      for (const row of cardCountRows) {
+        cardCountByPosition.set(row.cell_pos, row.cnt);
       }
 
       // Build cells from child levels (8 slots, positions 0-7)
