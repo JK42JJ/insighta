@@ -239,6 +239,21 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
       const currentEnabled = skillEnabledMap[skillId] ?? false;
       const nextEnabled = !currentEnabled;
       setTogglingSkillId(skillId);
+
+      // Optimistic update — immediately reflect toggle in UI
+      const dashboardKey = ['mandala', 'dashboard', mandalaId];
+      const previousData = queryClient.getQueryData<DashboardApiResponseShape>(dashboardKey);
+      const linked = LINKED_SKILL_TOGGLES[skillId] ?? [];
+      const allKeys = [skillId, ...linked];
+      queryClient.setQueryData<DashboardApiResponseShape>(dashboardKey, (old) => {
+        if (!old) return old;
+        const updatedSkills = { ...(old.skills ?? {}) };
+        for (const key of allKeys) {
+          updatedSkills[key] = nextEnabled;
+        }
+        return { ...old, skills: updatedSkills };
+      });
+
       try {
         await apiClient.tokenReady;
         const token = apiClient.getAccessToken();
@@ -246,8 +261,6 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
 
         // CP358 SSOT: linked toggles. e.g. recommend → also flip video_discover
         // so the BE pipeline lights up alongside the user-visible toggle.
-        const linked = LINKED_SKILL_TOGGLES[skillId] ?? [];
-        const allKeys = [skillId, ...linked];
         const patchOne = (skillType: string) =>
           fetch(`${baseUrl}/api/v1/mandalas/${mandalaId}/skills`, {
             method: 'PATCH',
@@ -266,6 +279,10 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
           queryKey: ['mandala', 'dashboard', mandalaId],
         });
       } catch (err) {
+        // Rollback optimistic update on error
+        if (previousData) {
+          queryClient.setQueryData(dashboardKey, previousData);
+        }
         const message = err instanceof Error ? err.message : undefined;
         toast({
           title: t('skills.toggleFailed', 'Toggle failed'),
