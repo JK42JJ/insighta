@@ -239,6 +239,7 @@ export function useWizard() {
   const generateMutation = useMutation({
     mutationFn: (goal: string) =>
       apiClient.generateMandala(goal, {
+        language: i18n.language.startsWith('ko') ? 'ko' : 'en',
         signal: goalAbortRef.current?.signal,
       }),
   });
