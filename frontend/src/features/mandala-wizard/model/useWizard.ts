@@ -322,7 +322,7 @@ export function useWizard() {
   // so IndexPage sees it immediately on mount. Background invalidation
   // replaces the stub with full server data.
   const goToUnifiedDashboard = useCallback(
-    (newMandalaId: string, title?: string) => {
+    async (newMandalaId: string, title?: string) => {
       // 1. Optimistic: inject minimal mandala into list cache
       queryClient.setQueryData(
         queryKeys.mandala.list(),
@@ -355,12 +355,10 @@ export function useWizard() {
       selectMandalaInStore(newMandalaId);
       setJustCreated(newMandalaId);
 
-      // 3. Navigate immediately (no await needed — cache is already injected)
-      navigate('/');
-
-      // 4. Background: replace optimistic stub with real server data
-      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
+      // 3. Refetch list to replace optimistic stub with full server data, then navigate
+      await queryClient.refetchQueries({ queryKey: queryKeys.mandala.list() });
       queryClient.invalidateQueries({ queryKey: queryKeys.mandala.quota() });
+      navigate('/');
     },
     [navigate, selectMandalaInStore, setJustCreated, queryClient, state.selectedTemplate]
   );
