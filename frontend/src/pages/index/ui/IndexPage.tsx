@@ -818,7 +818,7 @@ function AuthenticatedApp() {
           {/* Resizable Video side panel */}
           {isSidePanelOpen && (
             <>
-              <ResizableHandle />
+              <ResizableHandle className="bg-[rgba(255,255,255,0.06)]" />
               <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
                 <VideoSidePanel />
               </ResizablePanel>
