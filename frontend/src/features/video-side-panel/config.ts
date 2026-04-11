@@ -3,8 +3,10 @@
  * Design tokens extracted from insighta-side-editor-mockup-v3.html.
  */
 
-/** Panel width in pixels (mockup spec). */
-export const PANEL_WIDTH_PX = 560;
+/** Panel size in percentage (react-resizable-panels). */
+export const PANEL_DEFAULT_PCT = 35;
+export const PANEL_MIN_PCT = 25;
+export const PANEL_MAX_PCT = 50;
 
 /** Slide animation timing (mockup spec). */
 export const PANEL_TRANSITION = '0.35s cubic-bezier(0.16, 1, 0.3, 1)';

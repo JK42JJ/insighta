@@ -10,6 +10,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { trackCardViewed } from '@/shared/lib/posthog';
+import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import { useShellStore, dndHandlersRef } from '@/stores/shellStore';
 import { DropZoneOverlay } from '@/widgets/header/ui/DropZoneOverlay';
 import { CardListView } from '@/widgets/card-list-view';
@@ -248,6 +249,7 @@ function AuthenticatedApp() {
 
   // 6. Video modal
   const modal = useVideoModal(cards.allMandalaCards, cards.scratchPadCards);
+  const isSidePanelOpen = useVideoPanelStore((s) => s.isOpen);
 
   // Wire card click — dual mode: popup (default) or sidebar (expanded)
   const handleCardClick = (card: Parameters<typeof modal.openModal>[0]) => {
@@ -704,110 +706,125 @@ function AuthenticatedApp() {
           />
         )}
 
-        {/* Main Content Area — CardListView always full width */}
-        <div className="flex-1 overflow-hidden flex">
-          {/* Left docked ScratchPad */}
-          {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'left' && (
-            <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-r border-border/30 relative z-30 h-full">
-              <FloatingScratchPad {...scratchPadProps(false)} />
+        {/* Main Content Area — PanelGroup for resizable side panel */}
+        <PanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+          <Panel defaultSize={isSidePanelOpen ? 65 : 100} minSize={50}>
+            <div className="flex h-full overflow-hidden">
+              {/* Left docked ScratchPad */}
+              {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'left' && (
+                <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-r border-border/30 relative z-30 h-full">
+                  <FloatingScratchPad {...scratchPadProps(false)} />
+                </div>
+              )}
+
+              <div
+                className={`flex-1 h-full px-4 py-4 ${modal.isModalOpen ? 'overflow-hidden' : 'overflow-y-auto scrollbar-pro'}`}
+              >
+                {/* Mobile search bar (hidden on md+, shown in header instead) */}
+                <div className="md:hidden mb-3">
+                  <SearchBar
+                    value={search.searchTerm}
+                    onChange={search.setSearchTerm}
+                    onClear={search.clearSearch}
+                    isLoading={search.isLoading}
+                    resultCount={search.total}
+                    filteredCount={search.filteredCount}
+                    isSearchActive={search.isSearchActive}
+                    sourceFilter={search.sourceFilter}
+                    onSourceFilterChange={search.setSourceFilter}
+                    onArrowDown={() => search.moveHighlight('down')}
+                    onArrowUp={() => search.moveHighlight('up')}
+                    onEnter={() => {
+                      const card = search.getHighlightedCard();
+                      if (card) handleCardClick(card);
+                    }}
+                  />
+                </div>
+                {layout.viewMode === 'insights' ? (
+                  <InsightsView
+                    allCards={cards.allMandalaCards}
+                    scratchPadCards={cards.scratchPadCards}
+                    cardsByCell={cards.cardsByCell}
+                    totalCards={cards.totalCards}
+                    sectorSubjects={navigation.currentLevel.subjects}
+                    sectorLabels={navigation.currentLevel.subjectLabels}
+                    title={navigation.currentLevel.centerGoal}
+                    viewMode={layout.viewMode}
+                    onViewModeChange={layout.handleSetViewMode}
+                    mandalaId={effectiveMandalaId}
+                  />
+                ) : (
+                  <CardListView
+                    cards={search.isSearchActive ? search.results : cards.displayCards}
+                    isLoading={
+                      search.isSearchActive
+                        ? search.isLoading
+                        : cards.isLoading || isNewMandalaActive
+                    }
+                    title={
+                      search.isSearchActive
+                        ? t('search.results', 'Search Results')
+                        : cards.displayTitle
+                    }
+                    viewMode={layout.viewMode}
+                    listPanelRatio={layout.listPanelRatio}
+                    mandalaId={effectiveMandalaId}
+                    onViewModeChange={layout.handleSetViewMode}
+                    onListPanelRatioChange={layout.handleSetListPanelRatio}
+                    gridColumns={layout.gridColumns}
+                    onGridColumnsChange={layout.handleSetGridColumns}
+                    onCardClick={handleCardClick}
+                    onCardDragStart={dragDrop.handleCardDragStart}
+                    onMultiCardDragStart={dragDrop.handleMultiCardDragStart}
+                    onSaveNote={cards.handleSaveNote}
+                    onCardsReorder={cards.handleCardsReorder}
+                    onDeleteCards={cards.handleDeleteCards}
+                    onAddCard={navigation.selectedCellIndex != null ? handleAddCard : undefined}
+                    onExternalUrlDrop={(url) => {
+                      if (navigation.selectedCellIndex != null) {
+                        cards.handleCardDrop(navigation.selectedCellIndex, url);
+                      } else {
+                        cards.handleScratchPadDrop(url);
+                      }
+                    }}
+                    onExternalFileDrop={(files) => {
+                      cards.handleScratchPadFileDrop(files);
+                    }}
+                    onSaveWatchPosition={cards.handleSaveWatchPosition}
+                    watchPositionCache={modal.watchPositionCache}
+                    panelSizeCache={modal.panelSizeCache}
+                    enrichingCardIds={cards.enrichingCardIds}
+                    failedEnrichCardIds={cards.failedEnrichCardIds}
+                    onRetryEnrich={cards.retryEnrich}
+                    sectorSubjects={navigation.currentLevel.subjects}
+                    selectedCellIndex={navigation.selectedCellIndex}
+                    onCellClick={navigation.handleCellClick}
+                    totalCardCount={cards.totalCards}
+                    cardsByCell={cards.cardsByCell}
+                    isExternalCardDragActive={activeDragData?.type === 'card'}
+                  />
+                )}
+              </div>
+
+              {/* Right docked ScratchPad */}
+              {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'right' && (
+                <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-l border-border/30 relative z-30 h-full">
+                  <FloatingScratchPad {...scratchPadProps(false)} />
+                </div>
+              )}
             </div>
+          </Panel>
+
+          {/* Resizable Video side panel */}
+          {isSidePanelOpen && (
+            <>
+              <PanelResizeHandle className="w-1.5 hover:bg-primary/20 active:bg-primary/30 transition-colors cursor-col-resize bg-border/30" />
+              <Panel defaultSize={35} minSize={25} maxSize={50}>
+                <VideoSidePanel />
+              </Panel>
+            </>
           )}
-
-          <div
-            className={`flex-1 h-full px-4 py-4 ${modal.isModalOpen ? 'overflow-hidden' : 'overflow-y-auto scrollbar-pro'}`}
-          >
-            {/* Mobile search bar (hidden on md+, shown in header instead) */}
-            <div className="md:hidden mb-3">
-              <SearchBar
-                value={search.searchTerm}
-                onChange={search.setSearchTerm}
-                onClear={search.clearSearch}
-                isLoading={search.isLoading}
-                resultCount={search.total}
-                filteredCount={search.filteredCount}
-                isSearchActive={search.isSearchActive}
-                sourceFilter={search.sourceFilter}
-                onSourceFilterChange={search.setSourceFilter}
-                onArrowDown={() => search.moveHighlight('down')}
-                onArrowUp={() => search.moveHighlight('up')}
-                onEnter={() => {
-                  const card = search.getHighlightedCard();
-                  if (card) handleCardClick(card);
-                }}
-              />
-            </div>
-            {layout.viewMode === 'insights' ? (
-              <InsightsView
-                allCards={cards.allMandalaCards}
-                scratchPadCards={cards.scratchPadCards}
-                cardsByCell={cards.cardsByCell}
-                totalCards={cards.totalCards}
-                sectorSubjects={navigation.currentLevel.subjects}
-                sectorLabels={navigation.currentLevel.subjectLabels}
-                title={navigation.currentLevel.centerGoal}
-                viewMode={layout.viewMode}
-                onViewModeChange={layout.handleSetViewMode}
-                mandalaId={effectiveMandalaId}
-              />
-            ) : (
-              <CardListView
-                cards={search.isSearchActive ? search.results : cards.displayCards}
-                isLoading={
-                  search.isSearchActive ? search.isLoading : cards.isLoading || isNewMandalaActive
-                }
-                title={
-                  search.isSearchActive ? t('search.results', 'Search Results') : cards.displayTitle
-                }
-                viewMode={layout.viewMode}
-                listPanelRatio={layout.listPanelRatio}
-                mandalaId={effectiveMandalaId}
-                onViewModeChange={layout.handleSetViewMode}
-                onListPanelRatioChange={layout.handleSetListPanelRatio}
-                gridColumns={layout.gridColumns}
-                onGridColumnsChange={layout.handleSetGridColumns}
-                onCardClick={handleCardClick}
-                onCardDragStart={dragDrop.handleCardDragStart}
-                onMultiCardDragStart={dragDrop.handleMultiCardDragStart}
-                onSaveNote={cards.handleSaveNote}
-                onCardsReorder={cards.handleCardsReorder}
-                onDeleteCards={cards.handleDeleteCards}
-                onAddCard={navigation.selectedCellIndex != null ? handleAddCard : undefined}
-                onExternalUrlDrop={(url) => {
-                  if (navigation.selectedCellIndex != null) {
-                    cards.handleCardDrop(navigation.selectedCellIndex, url);
-                  } else {
-                    cards.handleScratchPadDrop(url);
-                  }
-                }}
-                onExternalFileDrop={(files) => {
-                  cards.handleScratchPadFileDrop(files);
-                }}
-                onSaveWatchPosition={cards.handleSaveWatchPosition}
-                watchPositionCache={modal.watchPositionCache}
-                panelSizeCache={modal.panelSizeCache}
-                enrichingCardIds={cards.enrichingCardIds}
-                failedEnrichCardIds={cards.failedEnrichCardIds}
-                onRetryEnrich={cards.retryEnrich}
-                sectorSubjects={navigation.currentLevel.subjects}
-                selectedCellIndex={navigation.selectedCellIndex}
-                onCellClick={navigation.handleCellClick}
-                totalCardCount={cards.totalCards}
-                cardsByCell={cards.cardsByCell}
-                isExternalCardDragActive={activeDragData?.type === 'card'}
-              />
-            )}
-          </div>
-
-          {/* Right docked ScratchPad */}
-          {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'right' && (
-            <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-l border-border/30 relative z-30 h-full">
-              <FloatingScratchPad {...scratchPadProps(false)} />
-            </div>
-          )}
-
-          {/* Video side panel (Mode B) — flex-shrink-0 so dashboard reflows */}
-          <VideoSidePanel />
-        </div>
+        </PanelGroup>
 
         {/* Bottom docked ScratchPad */}
         {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'bottom' && (

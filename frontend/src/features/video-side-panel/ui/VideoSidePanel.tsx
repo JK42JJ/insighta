@@ -1,5 +1,5 @@
 /**
- * Main video side panel — slides in from the right (560px).
+ * Main video side panel — resizable right panel.
  * Pure CSS div, NOT Radix Sheet (avoids Dialog conflicts).
  *
  * Design tokens: insighta-side-editor-mockup-v3.html
@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useVideoPanelStore } from '../model/useVideoPanelStore';
-import { PANEL_WIDTH_PX } from '../config';
+// Panel width managed by react-resizable-panels in IndexPage
 import { PanelVideoPlayer } from './PanelVideoPlayer';
 import { PanelVideoInfo } from './PanelVideoInfo';
 import { PanelTabs } from './PanelTabs';
@@ -70,13 +70,9 @@ export function VideoSidePanel() {
       role="complementary"
       aria-label="Video side panel"
       className={cn(
-        'flex-shrink-0 flex flex-col sticky top-0 h-screen bg-background',
-        'border-l border-[rgba(255,255,255,0.06)]',
+        'flex flex-col w-full h-full bg-background overflow-hidden',
         !isOpen && 'hidden'
       )}
-      style={{
-        width: `${PANEL_WIDTH_PX}px`,
-      }}
     >
       {/* Close button — overlaid on the video player area */}
       <button
