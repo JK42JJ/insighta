@@ -707,7 +707,11 @@ function AuthenticatedApp() {
         )}
 
         {/* Main Content Area — ResizablePanelGroup for resizable side panel */}
-        <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+        <ResizablePanelGroup
+          direction="horizontal"
+          className="flex-1 overflow-hidden"
+          autoSaveId="video-side-panel"
+        >
           <ResizablePanel defaultSize={isSidePanelOpen ? 65 : 100} minSize={50}>
             <div className="flex h-full overflow-hidden">
               {/* Left docked ScratchPad */}
