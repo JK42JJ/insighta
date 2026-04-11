@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { trackSkillActivated } from '@/shared/lib/posthog';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -273,6 +274,10 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
             if (!res.ok) throw new Error(`Skill toggle failed (${skillType}): ${res.status}`);
           });
         await Promise.all(allKeys.map(patchOne));
+
+        if (nextEnabled) {
+          trackSkillActivated({ mandala_id: mandalaId, skill_type: skillId });
+        }
 
         // Invalidate the cache key shared with useDashboard so the badge re-renders.
         await queryClient.invalidateQueries({

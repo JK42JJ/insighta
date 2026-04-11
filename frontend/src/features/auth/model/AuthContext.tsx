@@ -3,6 +3,7 @@ import { supabase } from '@/shared/integrations/supabase/client';
 import { subscribeAuth } from '@/shared/lib/auth-event-bus';
 import { apiClient } from '@/shared/lib/api-client';
 import { getAuthCache, setAuthCache, clearAuthCache } from '@/features/auth/lib/auth-cache';
+import { identifyUser, resetUser } from '@/shared/lib/posthog';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -112,6 +113,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           avatar: session.user.user_metadata?.avatar_url ?? null,
           tier: existing?.tier ?? 'free',
         });
+        identifyUser(session.user.id, {
+          email: session.user.email ?? undefined,
+          created_at: session.user.created_at,
+        });
       }
       // Ensure isTokenReady reflects token availability on auth transitions
       if (session?.access_token) {
@@ -119,6 +124,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } else if (event === 'SIGNED_OUT') {
         setIsTokenReady(false);
         clearAuthCache();
+        resetUser();
       }
     });
 

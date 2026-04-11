@@ -6,6 +6,7 @@ import { queryKeys } from '@/shared/config/query-client';
 
 import { apiClient } from '@/shared/lib/api-client';
 import { useMandalaStore } from '@/stores/mandalaStore';
+import { trackMandalaCreated } from '@/shared/lib/posthog';
 import {
   LINKED_SKILL_TOGGLES,
   type WizardState,
@@ -360,6 +361,11 @@ export function useWizard() {
       // 2. Select in store + mark as just-created (enables card polling)
       selectMandalaInStore(newMandalaId);
       setJustCreated(newMandalaId);
+      trackMandalaCreated({
+        mandala_id: newMandalaId,
+        template_id: state.selectedTemplate?.id,
+        language: detectGoalLanguage(state.goalInput),
+      });
 
       // 3. Refetch list to replace optimistic stub with full server data, then navigate
       await queryClient.refetchQueries({ queryKey: queryKeys.mandala.list() });

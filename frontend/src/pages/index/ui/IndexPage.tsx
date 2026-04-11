@@ -9,6 +9,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
+import { trackCardViewed } from '@/shared/lib/posthog';
 import { useShellStore, dndHandlersRef } from '@/stores/shellStore';
 import { DropZoneOverlay } from '@/widgets/header/ui/DropZoneOverlay';
 import { CardListView } from '@/widgets/card-list-view';
@@ -250,12 +251,15 @@ function AuthenticatedApp() {
 
   // Wire card click — dual mode: popup (default) or sidebar (expanded)
   const handleCardClick = (card: Parameters<typeof modal.openModal>[0]) => {
+    trackCardViewed({
+      mandala_id: ('mandala_id' in card ? (card.mandala_id as string) : undefined) ?? undefined,
+      card_id: card.id,
+      has_summary: !!('summary' in card && card.summary),
+    });
     const panel = useVideoPanelStore.getState();
     if (panel.mode === 'sidebar' && panel.isOpen) {
-      // Mode B: sidebar is open → swap card content, don't open modal
       panel.openInSidebar(card);
     } else {
-      // Mode A: default → open modal popup
       modal.openModal(card);
     }
   };

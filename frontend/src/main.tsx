@@ -4,10 +4,12 @@ import App from './app/App';
 import { reportWebVitals } from '@shared/lib/web-vitals';
 import { initAdapters } from '@/entities/content';
 import { initCardRenderers } from '@/entities/content';
+import { initPostHog } from '@/shared/lib/posthog';
 
 // Initialize registries before rendering
 initAdapters();
 initCardRenderers();
+initPostHog();
 
 if (import.meta.env.DEV) {
   import('@axe-core/react').then((axe) => {

@@ -8,6 +8,7 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { getAuthHeaders, getEdgeFunctionUrl } from '@/shared/lib/supabase-auth';
 import { useAuth } from '@/features/auth/model/useAuth';
+import { trackCardAdded } from '@/shared/lib/posthog';
 
 import type {
   LocalCard,
@@ -78,7 +79,12 @@ export function useLocalCardsAsInsight() {
   return {
     ...query,
     cards: query.data?.cards.map(localCardToInsightCard) ?? [],
-    subscription: query.data?.subscription ?? { tier: 'free', limit: DEFAULT_CARD_LIMIT, mandalaLimit: DEFAULT_MANDALA_LIMIT, used: 0 },
+    subscription: query.data?.subscription ?? {
+      tier: 'free',
+      limit: DEFAULT_CARD_LIMIT,
+      mandalaLimit: DEFAULT_MANDALA_LIMIT,
+      used: 0,
+    },
   };
 }
 
@@ -118,6 +124,13 @@ export function useAddLocalCard() {
         (card as LocalCard & { _isUpdate?: boolean })._isUpdate = true;
       }
       return card;
+    },
+    onSuccess: (card) => {
+      trackCardAdded({
+        mandala_id: card.mandala_id ?? undefined,
+        cell_index: card.cell_index ?? undefined,
+        source: 'manual',
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });

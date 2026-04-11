@@ -56,6 +56,7 @@
     "lowlight": "^3.3.0",
     "lucide-react": "^0.562.0",
     "next-themes": "^0.3.0",
+    "posthog-js": "^1.367.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-error-boundary": "^6.1.1",
