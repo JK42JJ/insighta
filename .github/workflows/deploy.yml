@@ -86,6 +86,7 @@ jobs:
             VITE_API_URL=/api
             VITE_SUPABASE_URL=${{ secrets.SUPABASE_URL }}
             VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            VITE_POSTHOG_KEY=${{ secrets.VITE_POSTHOG_KEY }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
