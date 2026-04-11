@@ -818,7 +818,7 @@ function AuthenticatedApp() {
           {/* Resizable Video side panel */}
           {isSidePanelOpen && (
             <>
-              <PanelResizeHandle className="w-1 cursor-col-resize bg-border/10" />
+              <PanelResizeHandle className="w-px cursor-col-resize bg-[rgba(255,255,255,0.06)]" />
               <Panel defaultSize={35} minSize={25} maxSize={50}>
                 <VideoSidePanel />
               </Panel>
