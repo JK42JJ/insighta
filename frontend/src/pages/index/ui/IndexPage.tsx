@@ -10,7 +10,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { trackCardViewed } from '@/shared/lib/posthog';
-import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
 import { useShellStore, dndHandlersRef } from '@/stores/shellStore';
 import { DropZoneOverlay } from '@/widgets/header/ui/DropZoneOverlay';
 import { CardListView } from '@/widgets/card-list-view';
@@ -706,9 +706,9 @@ function AuthenticatedApp() {
           />
         )}
 
-        {/* Main Content Area — PanelGroup for resizable side panel */}
-        <PanelGroup direction="horizontal" className="flex-1 overflow-hidden">
-          <Panel defaultSize={isSidePanelOpen ? 65 : 100} minSize={50}>
+        {/* Main Content Area — ResizablePanelGroup for resizable side panel */}
+        <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+          <ResizablePanel defaultSize={isSidePanelOpen ? 65 : 100} minSize={50}>
             <div className="flex h-full overflow-hidden">
               {/* Left docked ScratchPad */}
               {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'left' && (
@@ -813,18 +813,18 @@ function AuthenticatedApp() {
                 </div>
               )}
             </div>
-          </Panel>
+          </ResizablePanel>
 
           {/* Resizable Video side panel */}
           {isSidePanelOpen && (
             <>
-              <PanelResizeHandle className="w-px cursor-col-resize bg-[rgba(255,255,255,0.06)]" />
-              <Panel defaultSize={35} minSize={25} maxSize={50}>
+              <ResizableHandle />
+              <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
                 <VideoSidePanel />
-              </Panel>
+              </ResizablePanel>
             </>
           )}
-        </PanelGroup>
+        </ResizablePanelGroup>
 
         {/* Bottom docked ScratchPad */}
         {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'bottom' && (
