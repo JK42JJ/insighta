@@ -818,12 +818,7 @@ function AuthenticatedApp() {
           {/* Resizable Video side panel */}
           {isSidePanelOpen && (
             <>
-              <div
-                onPointerDown={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                <ResizableHandle className="bg-[rgba(255,255,255,0.06)]" />
-              </div>
+              <ResizableHandle className="bg-[rgba(255,255,255,0.06)]" data-no-dnd="true" />
               <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
                 <VideoSidePanel />
               </ResizablePanel>
