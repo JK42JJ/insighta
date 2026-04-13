@@ -78,6 +78,21 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
 
   const mandalas = listData?.mandalas ?? [];
 
+  // Defensive refetch: if selectedMandalaId is set (e.g., from wizard)
+  // but the mandala isn't in the cached list, trigger a single refetch.
+  const hasRefetchedRef = useRef(false);
+  useEffect(() => {
+    if (
+      selectedMandalaId &&
+      mandalas.length > 0 &&
+      !mandalas.some((m) => m.id === selectedMandalaId) &&
+      !hasRefetchedRef.current
+    ) {
+      hasRefetchedRef.current = true;
+      refetch();
+    }
+  }, [selectedMandalaId, mandalas, refetch]);
+
   const handleQuickCreate = () => {
     const title = quickCreateTitle.trim();
     if (!title || isCreating) return;
