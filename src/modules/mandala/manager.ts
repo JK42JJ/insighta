@@ -1007,11 +1007,17 @@ export class MandalaManager {
       clonedTitle = `${source.title} (cloned ${Date.now()})`;
     }
 
+    // Set as default if user has no existing mandalas (first mandala)
+    const existingCount = await this.prisma.user_mandalas.count({
+      where: { user_id: targetUserId },
+    });
+    const isDefault = existingCount === 0;
+
     const newMandala = await this.prisma.user_mandalas.create({
       data: {
         user_id: targetUserId,
         title: clonedTitle,
-        is_default: false,
+        is_default: isDefault,
         is_public: false,
       },
     });

@@ -361,6 +361,11 @@ export function useWizard() {
       // 2. Select in store + mark as just-created (enables card polling)
       selectMandalaInStore(newMandalaId);
       setJustCreated(newMandalaId);
+
+      // 3. Persist as default mandala on server (survives page refresh)
+      apiClient.updateMandala(newMandalaId, { isDefault: true }).catch(() => {
+        // Non-blocking — Zustand selection still works for current session
+      });
       trackMandalaCreated({
         mandala_id: newMandalaId,
         template_id: state.selectedTemplate?.id,
