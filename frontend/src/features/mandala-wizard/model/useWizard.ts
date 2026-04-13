@@ -602,6 +602,8 @@ export function useWizard() {
         subjects: template.subjects,
         subDetails: subDetailsKeyed,
         skills: state.skills,
+        centerLabel: template.centerLabel,
+        subLabels: template.subLabels,
       });
     } else {
       // DB template clone (keeps source_template_id linkage)

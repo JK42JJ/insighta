@@ -14,7 +14,9 @@ import {
 interface MandalaLevelData {
   levelKey: string;
   centerGoal: string;
+  centerLabel?: string;
   subjects: string[];
+  subjectLabels?: string[];
   position: number;
   depth: number;
   color?: string | null;
@@ -188,7 +190,9 @@ export class MandalaManager {
       parent_level_id: level.parentLevelKey ? (idsByKey.get(level.parentLevelKey) ?? null) : null,
       level_key: level.levelKey,
       center_goal: level.centerGoal,
+      center_label: level.centerLabel ?? null,
       subjects: level.subjects,
+      subject_labels: level.subjectLabels ?? [],
       position: level.position,
       depth: level.depth,
       color: level.color ?? null,

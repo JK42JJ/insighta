@@ -279,9 +279,25 @@ function extractJsonRobust(text: string): GeneratedMandala | null {
  * proper short labels via generateLabels (OpenRouter), since truncated
  * sub_goals look ugly in mini grid cells.
  */
-function enrichLabels(m: GeneratedMandala): GeneratedMandala {
+async function enrichLabels(m: GeneratedMandala): Promise<GeneratedMandala> {
   if (!m.center_label && m.center_goal) {
     m.center_label = m.center_goal.length > 20 ? m.center_goal.slice(0, 20) : m.center_goal;
+  }
+  if (!m.sub_labels || m.sub_labels.length === 0) {
+    try {
+      const lang = m.language === 'ko' || m.language === 'en' ? m.language : 'en';
+      const labels = await generateLabels({
+        center_goal: m.center_goal,
+        sub_goals: m.sub_goals,
+        language: lang,
+      });
+      m.center_label = labels.center_label;
+      m.sub_labels = labels.sub_labels;
+    } catch {
+      // Fallback: truncate (EN max 8, KO max 6)
+      const maxLen = m.language === 'ko' ? 6 : 8;
+      m.sub_labels = m.sub_goals.map((g) => g.slice(0, maxLen));
+    }
   }
   return m;
 }
@@ -394,7 +410,7 @@ export async function generateMandala(
     }
 
     // Post-process: auto-generate missing center_label / sub_labels
-    const mandala = enrichLabels(parsed);
+    const mandala = await enrichLabels(parsed);
 
     // Validate structure
     const validation = validateMandala(mandala);
@@ -522,7 +538,7 @@ ${langLabel}: ${lang}
     throw new MandalaGenError('Tier 3 fallback: failed to parse LLM output', 'PARSE_FAILED');
   }
 
-  const mandala = enrichLabels(parsed);
+  const mandala = await enrichLabels(parsed);
   const validation = validateMandala(mandala);
   if (!validation.valid) {
     throw new MandalaGenError(

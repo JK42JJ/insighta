@@ -644,12 +644,15 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       subjects: string[]; // 8 sub-goals
       subDetails?: Record<string, string[]>; // depth=1 actions keyed by subject index
       skills?: Record<string, boolean>;
+      centerLabel?: string;
+      subLabels?: string[];
     };
   }>('/create-with-data', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     const userId = getUserId(request, reply);
     if (!userId) return;
 
-    const { title, centerGoal, subjects, subDetails, skills } = request.body;
+    const { title, centerGoal, subjects, subDetails, skills, centerLabel, subLabels } =
+      request.body;
 
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
       return reply
@@ -669,7 +672,9 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const levels: Array<{
         levelKey: string;
         centerGoal: string;
+        centerLabel?: string;
         subjects: string[];
+        subjectLabels?: string[];
         position: number;
         depth: number;
         parentLevelKey?: string | null;
@@ -677,7 +682,9 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         {
           levelKey: 'root',
           centerGoal: centerGoal || title,
+          centerLabel: centerLabel || undefined,
           subjects,
+          subjectLabels: subLabels || undefined,
           position: 0,
           depth: 0,
           parentLevelKey: null,
@@ -705,27 +712,30 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       const result = await getMandalaManager().createMandala(userId, title, levels);
 
-      // Label generation moved to fire-and-forget (was blocking response ~2s).
-      setImmediate(() => {
-        void (async () => {
-          try {
-            const labels = await generateLabels({
-              center_goal: centerGoal || title,
-              sub_goals: subjects,
-            });
-            const prismaLabels = getPrismaClient();
-            await prismaLabels.user_mandala_levels.updateMany({
-              where: { mandala_id: result.id, depth: 0 },
-              data: {
-                center_label: labels.center_label,
-                subject_labels: labels.sub_labels,
-              },
-            });
-          } catch {
-            // Non-fatal — sidebar falls back to sub_goals.
-          }
-        })();
-      });
+      // Skip label generation if FE already provided labels (e.g., from AI generation).
+      // Otherwise fire-and-forget to generate them asynchronously.
+      if (!centerLabel || !subLabels || subLabels.length === 0) {
+        setImmediate(() => {
+          void (async () => {
+            try {
+              const labels = await generateLabels({
+                center_goal: centerGoal || title,
+                sub_goals: subjects,
+              });
+              const prismaLabels = getPrismaClient();
+              await prismaLabels.user_mandala_levels.updateMany({
+                where: { mandala_id: result.id, depth: 0 },
+                data: {
+                  center_label: labels.center_label,
+                  subject_labels: labels.sub_labels,
+                },
+              });
+            } catch {
+              // Non-fatal — sidebar falls back to sub_goals.
+            }
+          })();
+        });
+      }
 
       // Create skill config rows (CP357: video_discover defaults ON with auto_add=true)
       const prisma = getPrismaClient();

@@ -860,6 +860,8 @@ class ApiClient {
     subjects: string[];
     subDetails?: Record<string, string[]>;
     skills?: Record<string, boolean>;
+    centerLabel?: string;
+    subLabels?: string[];
   }): Promise<{ mandalaId: string }> {
     // CP358: prod create writes ~73 INSERTs through pgbouncer (us-west-2 ↔
     // Korea RTT ~250ms × 73 ≈ 18s). BE Prisma transaction timeout is 30s
