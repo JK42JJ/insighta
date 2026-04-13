@@ -143,7 +143,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           scopes: 'https://www.googleapis.com/auth/youtube.readonly',
           queryParams: {
             access_type: 'offline',
-            prompt: 'select_account',
+            prompt: 'consent',
           },
         },
       });
