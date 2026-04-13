@@ -372,8 +372,11 @@ export function useWizard() {
         language: detectGoalLanguage(state.goalInput),
       });
 
-      // 3. Refetch list to replace optimistic stub with full server data, then navigate
-      await queryClient.refetchQueries({ queryKey: queryKeys.mandala.list() });
+      // 3. Invalidate list cache so sidebar fetches fresh data on mount
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.mandala.list(),
+        refetchType: 'all',
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.mandala.quota() });
       navigate('/');
     },
