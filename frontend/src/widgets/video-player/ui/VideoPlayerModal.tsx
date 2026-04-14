@@ -135,28 +135,6 @@ export function VideoPlayerModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      {/* Prev/Next navigation arrows — positioned at viewport edges, OUTSIDE
-          the modal container. Never overlap the video player. */}
-      {isOpen && hasPrev && onPrev && (
-        <button
-          type="button"
-          onClick={onPrev}
-          aria-label={t('videoPlayer.prevCard', 'Previous card')}
-          className="fixed left-4 top-1/2 -translate-y-1/2 z-[60] flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-all hover:bg-black/70 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/30"
-        >
-          <ChevronLeft className="h-6 w-6" />
-        </button>
-      )}
-      {isOpen && hasNext && onNext && (
-        <button
-          type="button"
-          onClick={onNext}
-          aria-label={t('videoPlayer.nextCard', 'Next card')}
-          className="fixed right-4 top-1/2 -translate-y-1/2 z-[60] flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-all hover:bg-black/70 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/30"
-        >
-          <ChevronRight className="h-6 w-6" />
-        </button>
-      )}
       <DialogContent
         className="max-w-3xl w-[95vw] overflow-hidden p-0 flex flex-col outline-none border-0 focus:ring-0 focus:ring-offset-0 [&>button]:z-20 [&>button]:bg-black/60 [&>button]:text-white [&>button]:rounded-full [&>button]:p-1.5 [&>button]:opacity-90 [&>button]:hover:opacity-100 [&>button]:hover:bg-black/80 [&>button]:focus:ring-0 [&>button]:focus:ring-offset-0 [&>button]:right-2 [&>button]:top-2"
         aria-describedby="video-player-description"
@@ -169,6 +147,38 @@ export function VideoPlayerModal({
         <DialogDescription id="video-player-description" className="sr-only">
           {t('videoPlayer.memo')}
         </DialogDescription>
+
+        {/* Prev/Next navigation arrows — anchored to modal edges (absolute), OUTSIDE
+            the visible content area. -left-14/-right-14 places them just beyond the
+            modal container. e.stopPropagation prevents Radix outside-click close. */}
+        {hasPrev && onPrev && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPrev();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            aria-label={t('videoPlayer.prevCard', 'Previous card')}
+            className="absolute -left-14 top-1/2 -translate-y-1/2 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all hover:bg-black/80 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/30"
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </button>
+        )}
+        {hasNext && onNext && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNext();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            aria-label={t('videoPlayer.nextCard', 'Next card')}
+            className="absolute -right-14 top-1/2 -translate-y-1/2 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all hover:bg-black/80 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/30"
+          >
+            <ChevronRight className="h-6 w-6" />
+          </button>
+        )}
 
         {isYouTube && videoId ? (
           <ResizablePanelGroup
