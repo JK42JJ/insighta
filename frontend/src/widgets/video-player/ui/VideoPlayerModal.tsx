@@ -136,7 +136,7 @@ export function VideoPlayerModal({
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-w-3xl w-[95vw] overflow-hidden p-0 flex flex-col outline-none border-0 focus:ring-0 focus:ring-offset-0 [&>button]:z-20 [&>button]:bg-black/60 [&>button]:text-white [&>button]:rounded-full [&>button]:p-1.5 [&>button]:opacity-90 [&>button]:hover:opacity-100 [&>button]:hover:bg-black/80 [&>button]:focus:ring-0 [&>button]:focus:ring-offset-0 [&>button]:right-2 [&>button]:top-2"
+        className="max-w-3xl w-[95vw] p-0 flex flex-col outline-none border-0 focus:ring-0 focus:ring-offset-0 [&>button]:z-20 [&>button]:bg-black/60 [&>button]:text-white [&>button]:rounded-full [&>button]:p-1.5 [&>button]:opacity-90 [&>button]:hover:opacity-100 [&>button]:hover:bg-black/80 [&>button]:focus:ring-0 [&>button]:focus:ring-offset-0 [&>button]:right-2 [&>button]:top-2"
         aria-describedby="video-player-description"
         style={{
           border: 'none',
@@ -148,10 +148,12 @@ export function VideoPlayerModal({
           {t('videoPlayer.memo')}
         </DialogDescription>
 
-        {/* Prev/Next navigation arrows — wrapped in div to avoid DialogContent's
-            [&>button] selector which forces all direct button children to the
-            top-right corner (intended for the X close button only).
-            absolute -left-14/-right-14 places them just outside modal edges. */}
+        {/* Prev/Next navigation arrows — wrapped in div to escape DialogContent's
+            [&>button] selector. absolute -left-14/-right-14 places them just
+            outside modal edges. NOTE: DialogContent's overflow-hidden was
+            REMOVED — it was clipping these buttons (CSS overflow on parent
+            cuts off absolute children outside its box). troubleshooting.md:
+            CSS containing block + overflow patterns. */}
         {hasPrev && onPrev && (
           <div className="absolute -left-14 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
             <button
@@ -185,54 +187,58 @@ export function VideoPlayerModal({
           </div>
         )}
 
-        {isYouTube && videoId ? (
-          <ResizablePanelGroup
-            direction="vertical"
-            className="flex-1 min-h-0"
-            onLayout={handleLayout}
-          >
-            {/* Video Panel */}
-            <ResizablePanel defaultSize={cachedPanelSize} minSize={30}>
-              <YouTubePlayer
-                videoId={videoId}
-                startTime={startTime}
-                onPlayerReady={handlePlayerReady}
-                onSaveWatchPosition={handleSaveWatchPosition}
-                playerRef={playerRef}
-                className="h-full"
-              />
-            </ResizablePanel>
+        {/* Inner overflow wrapper to keep video/memo content rounded.
+            Replaces removed overflow-hidden on DialogContent. */}
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden rounded-lg">
+          {isYouTube && videoId ? (
+            <ResizablePanelGroup
+              direction="vertical"
+              className="flex-1 min-h-0"
+              onLayout={handleLayout}
+            >
+              {/* Video Panel */}
+              <ResizablePanel defaultSize={cachedPanelSize} minSize={30}>
+                <YouTubePlayer
+                  videoId={videoId}
+                  startTime={startTime}
+                  onPlayerReady={handlePlayerReady}
+                  onSaveWatchPosition={handleSaveWatchPosition}
+                  playerRef={playerRef}
+                  className="h-full"
+                />
+              </ResizablePanel>
 
-            {/* Resize Handle */}
-            <ResizableHandle
-              withHandle
-              className="opacity-0 hover:opacity-100 [&[data-resize-handle-state=drag]]:opacity-100 transition-opacity duration-200"
-            />
-
-            {/* Memo Panel */}
-            <ResizablePanel defaultSize={100 - cachedPanelSize} minSize={15}>
-              <MemoEditor
-                note={card.userNote ?? ''}
-                cardId={card.id}
-                videoId={videoId}
-                playerRef={playerRef}
-                playerReady={playerReady}
-                onSave={handleSave}
-                isYouTube
-                sourceTable={card.sourceTable}
-                videoSummary={card.videoSummary}
-                onEnrichStart={onEnrichStart}
-                onEnrichEnd={onEnrichEnd}
-                card={card}
-                onCloseModal={onClose}
+              {/* Resize Handle */}
+              <ResizableHandle
+                withHandle
+                className="opacity-0 hover:opacity-100 [&[data-resize-handle-state=drag]]:opacity-100 transition-opacity duration-200"
               />
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        ) : (
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            <ExternalLinkView card={card} onSave={handleSave} />
-          </div>
-        )}
+
+              {/* Memo Panel */}
+              <ResizablePanel defaultSize={100 - cachedPanelSize} minSize={15}>
+                <MemoEditor
+                  note={card.userNote ?? ''}
+                  cardId={card.id}
+                  videoId={videoId}
+                  playerRef={playerRef}
+                  playerReady={playerReady}
+                  onSave={handleSave}
+                  isYouTube
+                  sourceTable={card.sourceTable}
+                  videoSummary={card.videoSummary}
+                  onEnrichStart={onEnrichStart}
+                  onEnrichEnd={onEnrichEnd}
+                  card={card}
+                  onCloseModal={onClose}
+                />
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          ) : (
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <ExternalLinkView card={card} onSave={handleSave} />
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
