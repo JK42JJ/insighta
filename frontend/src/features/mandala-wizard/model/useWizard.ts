@@ -218,7 +218,7 @@ export function useWizard() {
 
     setState((prev) => ({
       ...prev,
-      currentStep: 2,
+      currentStep: 3,
       selectedTemplate: {
         id: urlTemplateMandala.id,
         title: urlTemplateMandala.title,
@@ -466,7 +466,6 @@ export function useWizard() {
     setState((prev) => ({
       ...prev,
       selectedTemplate: template,
-      currentStep: 2,
     }));
   }, []);
 
@@ -483,7 +482,7 @@ export function useWizard() {
     });
   }, []);
 
-  const goToStep = useCallback((step: 1 | 2) => {
+  const goToStep = useCallback((step: 1 | 2 | 3) => {
     setState((prev) => ({ ...prev, currentStep: step }));
   }, []);
 
@@ -586,7 +585,6 @@ export function useWizard() {
     setState((prev) => ({
       ...prev,
       selectedTemplate: template,
-      currentStep: 2,
     }));
   }, []);
 
@@ -616,7 +614,6 @@ export function useWizard() {
     setState((prev) => ({
       ...prev,
       selectedTemplate: template,
-      currentStep: 2,
     }));
   }, []);
 

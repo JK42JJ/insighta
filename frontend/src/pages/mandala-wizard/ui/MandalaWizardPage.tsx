@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Ban } from 'lucide-react';
@@ -12,19 +13,47 @@ import { useMandalaQuota } from '@/features/mandala';
 export default function MandalaWizardPage() {
   const { t } = useTranslation();
   const wizard = useWizard();
-  // Bug #4 fix: gate the entire wizard on mandala quota at MOUNT time.
-  // Previously the quota error surfaced at Step 3 "시작하기" click — users
-  // completed goal entry + template preview + skill selection only to be
-  // blocked at the end with "Mandala limit reached (3/3)". Check here so
-  // the user sees the block immediately and is directed to the upgrade
-  // path before investing any effort.
   const { data: quota, isLoading: quotaLoading } = useMandalaQuota();
   const quotaReached =
     !quotaLoading && quota?.limit !== null && quota?.limit !== undefined && quota.remaining === 0;
 
-  // Step 1 (Goal) uses wider layout for the 4-column card grid
-  const isGoalStep = wizard.currentStep === 1;
-  const containerClass = isGoalStep
+  // Step 1: goal input only → Go saves goal + moves to Step 2
+  const handleGoalGo = useCallback(
+    (goal: string) => {
+      wizard.setGoalInput(goal);
+      wizard.goToStep(2);
+    },
+    [wizard]
+  );
+
+  // Step 2: context → Continue triggers search+generate + moves to Step 3
+  const handleContextContinue = useCallback(() => {
+    wizard.submitGoal(wizard.goalInput);
+    wizard.goToStep(3);
+  }, [wizard]);
+
+  // Step 3: selecting a result → auto-complete (create mandala)
+  const handleSelectAndComplete = useCallback(
+    (...args: Parameters<typeof wizard.selectSearchResult>) => {
+      wizard.selectSearchResult(...args);
+      // complete() will be called after selectedTemplate is set
+      // Use setTimeout to ensure state update completes first
+      setTimeout(() => wizard.complete(), 0);
+    },
+    [wizard]
+  );
+
+  const handleSelectGeneratedAndComplete = useCallback(
+    (...args: Parameters<typeof wizard.selectGeneratedMandala>) => {
+      wizard.selectGeneratedMandala(...args);
+      setTimeout(() => wizard.complete(), 0);
+    },
+    [wizard]
+  );
+
+  // Step 3 (results) uses wider layout for the 4-column card grid
+  const isResultsStep = wizard.currentStep === 3;
+  const containerClass = isResultsStep
     ? 'mx-auto max-w-[1080px] px-6 py-10'
     : 'mx-auto max-w-[720px] px-6 py-10';
 
@@ -73,7 +102,48 @@ export default function MandalaWizardPage() {
 
       <WizardStepper currentStep={wizard.currentStep} />
 
+      {/* Step 1: Goal input only — no search/generate yet */}
       {wizard.currentStep === 1 && (
+        <WizardStepGoal
+          goalInput={wizard.goalInput}
+          searchResults={[]}
+          isSearching={false}
+          searchSucceeded={false}
+          isSearchSoftSlow={false}
+          isSearchFailed={false}
+          onRetrySearch={() => {}}
+          aiGenerated={null}
+          aiSource={null}
+          isGenerating={false}
+          isGenerateSoftSlow={false}
+          isGenerateFailed={false}
+          onRetryGenerate={() => {}}
+          generateError={null}
+          onSetGoalInput={wizard.setGoalInput}
+          onSubmitGoal={handleGoalGo}
+          onCancelGoal={wizard.cancelGoal}
+          onClearGoal={wizard.clearGoal}
+          onSelectSearchResult={() => {}}
+          onSelectGeneratedMandala={() => {}}
+          onCreateBlank={wizard.createBlank}
+        />
+      )}
+
+      {/* Step 2: Context (focus tags + target level) */}
+      {wizard.currentStep === 2 && (
+        <WizardStepContext
+          focusTags={wizard.focusTags}
+          targetLevel={wizard.targetLevel}
+          onSetFocusTags={wizard.setFocusTags}
+          onSetTargetLevel={wizard.setTargetLevel}
+          onComplete={handleContextContinue}
+          onBack={() => wizard.goToStep(1)}
+          isCreating={false}
+        />
+      )}
+
+      {/* Step 3: Results — search + generate fired, show results */}
+      {wizard.currentStep === 3 && (
         <WizardStepGoal
           goalInput={wizard.goalInput}
           searchResults={wizard.searchResults}
@@ -93,21 +163,9 @@ export default function MandalaWizardPage() {
           onSubmitGoal={wizard.submitGoal}
           onCancelGoal={wizard.cancelGoal}
           onClearGoal={wizard.clearGoal}
-          onSelectSearchResult={wizard.selectSearchResult}
-          onSelectGeneratedMandala={wizard.selectGeneratedMandala}
+          onSelectSearchResult={handleSelectAndComplete}
+          onSelectGeneratedMandala={handleSelectGeneratedAndComplete}
           onCreateBlank={wizard.createBlank}
-        />
-      )}
-
-      {wizard.currentStep === 2 && wizard.selectedTemplate && (
-        <WizardStepContext
-          focusTags={wizard.focusTags}
-          targetLevel={wizard.targetLevel}
-          onSetFocusTags={wizard.setFocusTags}
-          onSetTargetLevel={wizard.setTargetLevel}
-          onComplete={wizard.complete}
-          onBack={() => wizard.goToStep(1)}
-          isCreating={wizard.isCreating}
         />
       )}
 

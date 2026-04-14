@@ -1325,6 +1325,7 @@
     "steps": {
       "domain": "Goal",
       "context": "Context",
+      "select": "Select",
       "preview": "Preview",
       "skills": "Skills"
     },

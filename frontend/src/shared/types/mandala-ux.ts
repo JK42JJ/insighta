@@ -86,7 +86,7 @@ export interface GeneratedMandala {
 }
 
 export interface WizardState {
-  currentStep: 1 | 2;
+  currentStep: 1 | 2 | 3;
   selectedDomain: string | null;
   selectedTemplate: WizardTemplate | null;
   skills: Record<SkillType, boolean>;

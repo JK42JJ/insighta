@@ -1326,6 +1326,7 @@
     "steps": {
       "domain": "목표",
       "context": "컨텍스트",
+      "select": "선택",
       "preview": "미리보기",
       "skills": "스킬"
     },
