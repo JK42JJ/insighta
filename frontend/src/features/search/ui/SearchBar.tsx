@@ -87,7 +87,7 @@ export function SearchBar({
   return (
     <div className="relative w-full">
       <div className="relative flex items-center">
-        <Search className="absolute left-3 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Search className="absolute left-3 w-4 h-4 text-muted-foreground/50 pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
@@ -95,7 +95,7 @@ export function SearchBar({
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t('search.placeholder', 'Search cards... (⌘K)')}
-          className="w-full h-9 pl-9 pr-9 rounded-lg border border-border/50 bg-surface-mid/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-colors"
+          className="w-full h-9 pl-9 pr-9 rounded-lg border border-border/30 bg-surface-mid/50 text-sm text-foreground/80 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary/30 focus:text-foreground transition-colors"
           role="combobox"
           aria-expanded={isSearchActive}
           aria-haspopup="listbox"
