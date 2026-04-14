@@ -258,15 +258,18 @@ function AuthenticatedApp() {
   // Mandala change handling for sidebar:
   //  - If new mandala has cards → swap sidebar to first card (paused)
   //  - If new mandala has no cards → close sidebar
+  // IMPORTANT: only react to real mandala→mandala transitions (ID→differentID).
+  // Initial load (undefined→ID, null→ID) and unmount (ID→null) are NOT
+  // mandala changes — they happen on page refresh or auth transitions.
+  // Treating refresh as "mandala change" would close the persisted sidebar.
   const prevMandalaIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    // Initialize on first run
-    if (prevMandalaIdRef.current === undefined) {
-      prevMandalaIdRef.current = effectiveMandalaId;
-      return;
-    }
-    if (prevMandalaIdRef.current === effectiveMandalaId) return;
+    const prev = prevMandalaIdRef.current;
     prevMandalaIdRef.current = effectiveMandalaId;
+
+    // Skip non-transitions and initial/unmount transitions
+    if (prev === effectiveMandalaId) return;
+    if (!prev || !effectiveMandalaId) return; // null/undefined on either side
 
     if (!isSidePanelOpen) return; // Sidebar closed → nothing to do
 
