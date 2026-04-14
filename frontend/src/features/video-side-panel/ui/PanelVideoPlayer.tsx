@@ -19,6 +19,9 @@ export interface PanelVideoPlayerProps {
   /** Whether to auto-play on mount. False on persist-rehydrate (page refresh)
    *  to prevent unintended playback. Default: false (require explicit user action). */
   shouldAutoplay?: boolean;
+  /** Called when the player transitions to PLAYING state for the first time
+   *  (user clicked play in iframe). Used to enable subsequent autoplay. */
+  onUserPlayed?: () => void;
 }
 
 export function PanelVideoPlayer({
@@ -27,6 +30,7 @@ export function PanelVideoPlayer({
   playerRef,
   onReady,
   shouldAutoplay = false,
+  onUserPlayed,
 }: PanelVideoPlayerProps) {
   const youtubeId = getYouTubeVideoId(videoUrl);
   const internalPlayerRef = useRef<YTPlayer | null>(null);
@@ -58,6 +62,7 @@ export function PanelVideoPlayer({
     if (!youtubeId || playerReadyRef.current) return;
     if (!window.YT?.Player) return;
 
+    const userPlayedFiredRef = { current: false };
     const player = new window.YT.Player(iframeIdRef.current, {
       events: {
         onReady: (event: { target: YTPlayer }) => {
@@ -66,12 +71,20 @@ export function PanelVideoPlayer({
           setPlayer(event.target);
           onReady?.();
         },
+        onStateChange: (event: { data: number }) => {
+          // YT.PlayerState.PLAYING = 1
+          // First transition to PLAYING = user gesture confirmed
+          if (event.data === 1 && !userPlayedFiredRef.current) {
+            userPlayedFiredRef.current = true;
+            onUserPlayed?.();
+          }
+        },
       },
     });
 
     // Don't call setPlayer here — wait for onReady only
     void player;
-  }, [youtubeId, setPlayer, onReady]);
+  }, [youtubeId, setPlayer, onReady, onUserPlayed]);
 
   // Video switch: use loadVideoById (autoplay) or cueVideoById (paused)
   // depending on shouldAutoplay flag — keeps iframe stable across switches.

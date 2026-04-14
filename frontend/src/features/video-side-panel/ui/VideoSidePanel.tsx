@@ -34,6 +34,7 @@ export function VideoSidePanel({ onCollapseToPopup }: VideoSidePanelProps = {}) 
   const setTab = useVideoPanelStore((s) => s.setTab);
   const shouldAutoplay = useVideoPanelStore((s) => s.shouldAutoplay);
   const consumeAutoplay = useVideoPanelStore((s) => s.consumeAutoplay);
+  const markUserPlayed = useVideoPanelStore((s) => s.markUserPlayed);
 
   const playerRef = useRef<YTPlayer | null>(null);
   const playerReadyRef = useRef(false);
@@ -137,6 +138,7 @@ export function VideoSidePanel({ onCollapseToPopup }: VideoSidePanelProps = {}) 
             if (shouldAutoplay) consumeAutoplay();
           }}
           shouldAutoplay={shouldAutoplay}
+          onUserPlayed={markUserPlayed}
         />
       )}
 

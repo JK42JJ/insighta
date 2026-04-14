@@ -25,6 +25,9 @@ export interface VideoPanelState {
    *  (expand/openInSidebar). Reset to false on persist rehydration so refresh
    *  doesn't trigger autoplay. */
   shouldAutoplay: boolean;
+  /** Whether the user has ever clicked play inside the iframe in this session.
+   *  Once true, subsequent card switches autoplay. Reset on refresh. */
+  hasUserPlayedOnce: boolean;
 
   /** ↗ expand button in MemoEditor: close modal, open sidebar. */
   expandToSidebar: (card: InsightCard, startTime?: number) => void;
@@ -40,6 +43,9 @@ export interface VideoPanelState {
   /** Mark autoplay consumed — call after the iframe loads to prevent
    *  re-trigger on subsequent re-renders. */
   consumeAutoplay: () => void;
+  /** Mark that user has clicked play in the iframe (gesture confirmed).
+   *  Subsequent card switches will autoplay. */
+  markUserPlayed: () => void;
 }
 
 export const useVideoPanelStore = create<VideoPanelState>()(
@@ -51,6 +57,7 @@ export const useVideoPanelStore = create<VideoPanelState>()(
       activeTab: 'notes',
       startTime: 0,
       shouldAutoplay: false,
+      hasUserPlayedOnce: false,
 
       expandToSidebar: (card, startTime = 0) =>
         set({
@@ -59,10 +66,19 @@ export const useVideoPanelStore = create<VideoPanelState>()(
           card,
           activeTab: 'notes',
           startTime,
+          // Modal was already playing → user gesture established → autoplay safe
           shouldAutoplay: true,
+          hasUserPlayedOnce: true,
         }),
 
-      openInSidebar: (card) => set({ card, activeTab: 'notes', shouldAutoplay: true }),
+      // Card click while sidebar open: autoplay only if user has played before
+      // (Option C: respect browser autoplay policy — first play needs user gesture)
+      openInSidebar: (card) =>
+        set((state) => ({
+          card,
+          activeTab: 'notes',
+          shouldAutoplay: state.hasUserPlayedOnce,
+        })),
 
       swapCard: (card, autoplay = false) =>
         set({ card, activeTab: 'notes', shouldAutoplay: autoplay }),
@@ -72,6 +88,8 @@ export const useVideoPanelStore = create<VideoPanelState>()(
       setTab: (tab) => set({ activeTab: tab }),
 
       consumeAutoplay: () => set({ shouldAutoplay: false }),
+
+      markUserPlayed: () => set({ hasUserPlayedOnce: true }),
     }),
     {
       name: 'insighta-video-panel',
