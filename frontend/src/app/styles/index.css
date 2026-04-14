@@ -419,6 +419,22 @@
     }
   }
 
+  /* Card discovery progress animations */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fadeIn {
+    animation: fadeIn 400ms ease-out;
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 1; }
+  }
+  .animate-breathe {
+    animation: breathe 1.5s ease-in-out infinite;
+  }
+
 }
 
 @layer components {
@@ -877,4 +893,30 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+@keyframes insighta-breathe {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+@keyframes insighta-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.insighta-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted-foreground)) 0%,
+    hsl(var(--muted-foreground)) 40%,
+    hsl(var(--foreground)) 50%,
+    hsl(var(--muted-foreground)) 60%,
+    hsl(var(--muted-foreground)) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: insighta-shimmer 2s ease-in-out infinite;
 }

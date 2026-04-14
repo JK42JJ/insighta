@@ -441,6 +441,8 @@ model user_mandalas {
   pipeline_runs        mandala_pipeline_runs[]
 
   source_template_id String? @db.Uuid
+  focus_tags         String[]  @default([])
+  target_level       String    @default("standard") @db.VarChar(20)
 
   @@index([user_id], map: "idx_user_mandalas_user_id")
   @@index([is_public], map: "idx_user_mandalas_is_public")

@@ -444,7 +444,7 @@ export class MandalaManager {
         }
 
         await tx.user_mandalas.update({
-          where: { id: mandalaId },
+          where: { id: mandalaId, user_id: userId },
           data: {
             ...(data.title !== undefined && { title: data.title }),
             ...(data.isDefault !== undefined && { is_default: data.isDefault }),
@@ -456,7 +456,7 @@ export class MandalaManager {
         logger.info(`Mandala updated: userId=${userId}, mandalaId=${mandalaId}`);
 
         const result = await tx.user_mandalas.findUnique({
-          where: { id: mandalaId },
+          where: { id: mandalaId, user_id: userId },
           include: {
             levels: {
               orderBy: [{ depth: 'asc' }, { position: 'asc' }],
@@ -502,14 +502,14 @@ export class MandalaManager {
 
         // Touch updated_at on parent mandala
         await tx.user_mandalas.update({
-          where: { id: mandalaId },
+          where: { id: mandalaId, user_id: userId },
           data: { updated_at: new Date() },
         });
 
         logger.info(`Mandala levels updated: userId=${userId}, mandalaId=${mandalaId}`);
 
         const result = await tx.user_mandalas.findUnique({
-          where: { id: mandalaId },
+          where: { id: mandalaId, user_id: userId },
           include: {
             levels: {
               orderBy: [{ depth: 'asc' }, { position: 'asc' }],
@@ -598,7 +598,7 @@ export class MandalaManager {
 
         // Cascade deletes levels via Prisma relation onDelete: Cascade
         await tx.user_mandalas.delete({
-          where: { id: mandalaId },
+          where: { id: mandalaId, user_id: userId },
         });
       },
       { maxWait: 5_000, timeout: 30_000 }

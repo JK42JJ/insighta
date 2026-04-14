@@ -14,6 +14,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/u
 import { useShellStore, dndHandlersRef } from '@/stores/shellStore';
 import { DropZoneOverlay } from '@/widgets/header/ui/DropZoneOverlay';
 import { CardListView } from '@/widgets/card-list-view';
+import { CardDiscoveryProgress } from '@/widgets/card-list/ui/CardDiscoveryProgress';
 import { VideoPlayerModal } from '@/widgets/video-player/ui/VideoPlayerModal';
 import { VideoSidePanel, useVideoPanelStore } from '@/features/video-side-panel';
 import { FloatingScratchPad } from '@/widgets/scratch-pad/ui/FloatingScratchPad';
@@ -619,6 +620,7 @@ function AuthenticatedApp() {
       sectorSubjects: navigation.currentLevel.subjects,
       sectorLabels: navigation.currentLevel.subjectLabels,
       centerGoal: navigation.currentLevel.centerGoal,
+      centerLabel: navigation.currentLevel.centerLabel,
       selectedCellIndex: navigation.selectedCellIndex,
       onCellClick: navigation.handleCellClick,
       mandalaId: selectedMandalaId,
@@ -750,7 +752,11 @@ function AuthenticatedApp() {
                     scratchPadCards={cards.scratchPadCards}
                     cardsByCell={cards.cardsByCell}
                     totalCards={cards.totalCards}
-                    sectorSubjects={navigation.currentLevel.subjects}
+                    sectorSubjects={
+                      navigation.currentLevel.subjectLabels?.length
+                        ? navigation.currentLevel.subjectLabels
+                        : navigation.currentLevel.subjects
+                    }
                     sectorLabels={navigation.currentLevel.subjectLabels}
                     title={navigation.currentLevel.centerGoal}
                     viewMode={layout.viewMode}
@@ -758,55 +764,75 @@ function AuthenticatedApp() {
                     mandalaId={effectiveMandalaId}
                   />
                 ) : (
-                  <CardListView
-                    cards={search.isSearchActive ? search.results : cards.displayCards}
-                    isLoading={
-                      search.isSearchActive
-                        ? search.isLoading
-                        : cards.isLoading || isNewMandalaActive
-                    }
-                    title={
-                      search.isSearchActive
-                        ? t('search.results', 'Search Results')
-                        : cards.displayTitle
-                    }
-                    viewMode={layout.viewMode}
-                    listPanelRatio={layout.listPanelRatio}
-                    mandalaId={effectiveMandalaId}
-                    onViewModeChange={layout.handleSetViewMode}
-                    onListPanelRatioChange={layout.handleSetListPanelRatio}
-                    gridColumns={layout.gridColumns}
-                    onGridColumnsChange={layout.handleSetGridColumns}
-                    onCardClick={handleCardClick}
-                    onCardDragStart={dragDrop.handleCardDragStart}
-                    onMultiCardDragStart={dragDrop.handleMultiCardDragStart}
-                    onSaveNote={cards.handleSaveNote}
-                    onCardsReorder={cards.handleCardsReorder}
-                    onDeleteCards={cards.handleDeleteCards}
-                    onAddCard={navigation.selectedCellIndex != null ? handleAddCard : undefined}
-                    onExternalUrlDrop={(url) => {
-                      if (navigation.selectedCellIndex != null) {
-                        cards.handleCardDrop(navigation.selectedCellIndex, url);
-                      } else {
-                        cards.handleScratchPadDrop(url);
+                  <>
+                    {(() => {
+                      console.log('[DEBUG-SKELETON]', {
+                        isNewMandalaActive,
+                        totalCards: cards.totalCards,
+                        cardsIsLoading: cards.isLoading,
+                        displayCardsLen: cards.displayCards.length,
+                        justCreatedMandalaId,
+                        effectiveMandalaId,
+                      });
+                      return null;
+                    })()}
+                    {isNewMandalaActive && cards.totalCards === 0 && (
+                      <CardDiscoveryProgress isComplete={false} />
+                    )}
+                    <CardListView
+                      cards={search.isSearchActive ? search.results : cards.displayCards}
+                      isLoading={
+                        search.isSearchActive
+                          ? search.isLoading
+                          : cards.isLoading || (isNewMandalaActive && cards.totalCards === 0)
                       }
-                    }}
-                    onExternalFileDrop={(files) => {
-                      cards.handleScratchPadFileDrop(files);
-                    }}
-                    onSaveWatchPosition={cards.handleSaveWatchPosition}
-                    watchPositionCache={modal.watchPositionCache}
-                    panelSizeCache={modal.panelSizeCache}
-                    enrichingCardIds={cards.enrichingCardIds}
-                    failedEnrichCardIds={cards.failedEnrichCardIds}
-                    onRetryEnrich={cards.retryEnrich}
-                    sectorSubjects={navigation.currentLevel.subjects}
-                    selectedCellIndex={navigation.selectedCellIndex}
-                    onCellClick={navigation.handleCellClick}
-                    totalCardCount={cards.totalCards}
-                    cardsByCell={cards.cardsByCell}
-                    isExternalCardDragActive={activeDragData?.type === 'card'}
-                  />
+                      title={
+                        search.isSearchActive
+                          ? t('search.results', 'Search Results')
+                          : cards.displayTitle
+                      }
+                      viewMode={layout.viewMode}
+                      listPanelRatio={layout.listPanelRatio}
+                      mandalaId={effectiveMandalaId}
+                      onViewModeChange={layout.handleSetViewMode}
+                      onListPanelRatioChange={layout.handleSetListPanelRatio}
+                      gridColumns={layout.gridColumns}
+                      onGridColumnsChange={layout.handleSetGridColumns}
+                      onCardClick={handleCardClick}
+                      onCardDragStart={dragDrop.handleCardDragStart}
+                      onMultiCardDragStart={dragDrop.handleMultiCardDragStart}
+                      onSaveNote={cards.handleSaveNote}
+                      onCardsReorder={cards.handleCardsReorder}
+                      onDeleteCards={cards.handleDeleteCards}
+                      onAddCard={navigation.selectedCellIndex != null ? handleAddCard : undefined}
+                      onExternalUrlDrop={(url) => {
+                        if (navigation.selectedCellIndex != null) {
+                          cards.handleCardDrop(navigation.selectedCellIndex, url);
+                        } else {
+                          cards.handleScratchPadDrop(url);
+                        }
+                      }}
+                      onExternalFileDrop={(files) => {
+                        cards.handleScratchPadFileDrop(files);
+                      }}
+                      onSaveWatchPosition={cards.handleSaveWatchPosition}
+                      watchPositionCache={modal.watchPositionCache}
+                      panelSizeCache={modal.panelSizeCache}
+                      enrichingCardIds={cards.enrichingCardIds}
+                      failedEnrichCardIds={cards.failedEnrichCardIds}
+                      onRetryEnrich={cards.retryEnrich}
+                      sectorSubjects={
+                        navigation.currentLevel.subjectLabels?.length
+                          ? navigation.currentLevel.subjectLabels
+                          : navigation.currentLevel.subjects
+                      }
+                      selectedCellIndex={navigation.selectedCellIndex}
+                      onCellClick={navigation.handleCellClick}
+                      totalCardCount={cards.totalCards}
+                      cardsByCell={cards.cardsByCell}
+                      isExternalCardDragActive={activeDragData?.type === 'card'}
+                    />
+                  </>
                 )}
               </div>
 

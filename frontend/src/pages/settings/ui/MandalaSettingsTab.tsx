@@ -40,6 +40,7 @@ export function MandalaSettingsTab() {
   const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null);
   const [shareTarget, setShareTarget] = useState<{ id: string; title: string } | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data: mandalaListData, isLoading: isListLoading } = useMandalaList();
   const { data: quotaData } = useMandalaQuota();
@@ -77,11 +78,15 @@ export function MandalaSettingsTab() {
   };
 
   const handleDelete = async (id: string) => {
+    if (deletingId) return; // Prevent concurrent deletes — previous transaction must complete
+    setDeletingId(id);
     try {
       await deleteMandala.mutateAsync(id);
       toast({ title: t('mandalaSettings.deleted') });
     } catch {
       toast({ title: t('mandalaSettings.deleteFailed'), variant: 'destructive' });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -264,9 +269,12 @@ export function MandalaSettingsTab() {
                                 e.stopPropagation();
                                 handleDelete(mandala.id);
                               }}
+                              disabled={!!deletingId}
                               className="text-sm text-destructive focus:text-destructive"
                             >
-                              {t('common.delete')}
+                              {deletingId === mandala.id
+                                ? t('common.deleting', 'Deleting...')
+                                : t('common.delete')}
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>

@@ -4,6 +4,7 @@
  *
  * Produces columns:
  *   id, center_goal, center_label, domain, language, quality_score,
+ *   frame_type, trend_keywords, trend_date, tier, version, judge_score,  (V4 fields)
  *   sub_goal_1..8, sub_label_1..8,
  *   action_1_1..action_1_8, ..., action_8_1..action_8_8
  *
@@ -26,7 +27,10 @@ function escapeCsv(value: string): string {
 }
 
 function buildHeader(): string {
-  const cols = ['id', 'center_goal', 'center_label', 'domain', 'language', 'quality_score'];
+  const cols = [
+    'id', 'center_goal', 'center_label', 'domain', 'language', 'quality_score',
+    'frame_type', 'trend_keywords', 'trend_date', 'tier', 'version', 'judge_score',
+  ];
 
   for (let i = 1; i <= SUB_GOAL_COUNT; i++) {
     cols.push(`sub_goal_${i}`);
@@ -56,6 +60,13 @@ function entryToRow(entry: Record<string, unknown>, rowIndex: number): string {
     escapeCsv((entry.domain as string) || ''),
     escapeCsv((entry.language as string) || ''),
     String(entry.quality_score ?? ''),
+    // V4 fields (empty string for V3 entries without these)
+    escapeCsv((entry.frame_type as string) || ''),
+    escapeCsv(Array.isArray(entry.trend_keywords) ? (entry.trend_keywords as string[]).join('|') : ''),
+    escapeCsv((entry.trend_date as string) || ''),
+    escapeCsv((entry.tier as string) || ''),
+    escapeCsv((entry.version as string) || ''),
+    String(entry.judge_score ?? ''),
   ];
 
   // Sub-goals (1-indexed columns)

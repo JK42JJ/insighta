@@ -116,6 +116,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
     "@rive-app/canvas": "^2.35.3",
     "@types/bcrypt": "^6.0.0",
     "@types/jest": "^29.5.11",

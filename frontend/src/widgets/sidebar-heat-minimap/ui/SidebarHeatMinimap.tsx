@@ -13,6 +13,7 @@ interface SidebarHeatMinimapProps {
   /** 2-4 char short labels parallel to sectorSubjects. Falls back to sectorSubjects when missing. */
   sectorLabels?: string[];
   centerGoal: string;
+  centerLabel?: string | null;
   selectedCellIndex: number | null;
   onCellClick: (cellIndex: number, subject: string) => void;
   onSectorNamesChange?: (centerGoal: string, subjects: string[]) => void;
@@ -51,6 +52,7 @@ export function SidebarHeatMinimap({
   sectorSubjects,
   sectorLabels,
   centerGoal,
+  centerLabel,
   selectedCellIndex,
   onCellClick,
   onSectorNamesChange,
@@ -113,7 +115,7 @@ export function SidebarHeatMinimap({
       {/* Header with edit toggle + # toggle */}
       <div className="flex items-center justify-between px-3 pb-1">
         <span className="text-[9px] text-sidebar-foreground/60">
-          {centerGoal || t('minimap.goalPlaceholder')} {t('minimap.sectors')}
+          {centerLabel || centerGoal || t('minimap.goalPlaceholder')} {t('minimap.sectors')}
         </span>
         <div className="flex items-center gap-1">
           {/* Edit toggle */}
@@ -170,7 +172,7 @@ export function SidebarHeatMinimap({
           const label = isCenter
             ? isEditing
               ? editGoal
-              : centerGoal
+              : centerLabel || centerGoal
             : isEditing
               ? (editSubjects[subjectIndex] ?? '')
               : displayLabel;

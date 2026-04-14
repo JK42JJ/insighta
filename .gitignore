@@ -110,6 +110,7 @@ deploy/
 scripts/
 !scripts/ontology/
 !scripts/data/
+!scripts/dataset-v4/
 prompt/
 
 # Dev tool configs
@@ -130,6 +131,9 @@ frontend-v3/
 # memsearch (dev memory — local only)
 .memsearch/
 .memsearch.toml
+
+# V4 dataset JSONL (large — publish to HuggingFace, not git)
+data/dataset-v4/
 
 # Mandala LoRA / model artifacts (local only — large binaries)
 outputs/

@@ -57,6 +57,10 @@
 - 새 테이블은 반드시 Prisma 스키마에 포함 (CI/CD 배포 경로)
 - Prod DB URL: credentials.md에서만 복사 (추측/타이핑 금지)
 - 스키마 변경: `prisma db push` (로컬) -> PR 머지 -> CI/CD migrate (프로덕션)
+- **Prod DB에 테스트/시드 데이터 직접 INSERT 금지**
+- 템플릿 데이터는 JSONL 파일에서 런타임 읽기 (DB 상주 금지 방향)
+- seed 스크립트 실행 시 `--target local` 필수, prod는 `--target prod` 별도 확인
+- **Prod DB 변경 후 용량 확인 필수**: `SELECT pg_database_size(current_database())` (Free Plan 500MB)
 
 ### "Done" = Prod Verified (절대 규칙)
 - **빌드 통과 != 완료. Prod 실제 동작 확인이 "완료"의 조건.**

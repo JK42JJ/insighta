@@ -200,11 +200,15 @@ export default function MandalaCard({
             {isAiComplete && (
               <Sparkles className="h-2.5 w-2.5" strokeWidth={2.5} aria-hidden="true" />
             )}
-            {isAiLoading
-              ? t('wizard.goal.card.aiLoadingBadge', 'AI generating...')
-              : isAiComplete
-                ? t('wizard.goal.card.aiCompleteBadge', 'AI custom')
-                : domainLabel}
+            {isAiLoading ? (
+              <span className="insighta-shimmer-text">
+                {effectiveCenterLabel || t('wizard.goal.card.aiLoadingBadge', 'AI generating...')}
+              </span>
+            ) : isAiComplete ? (
+              t('wizard.goal.card.aiCompleteBadge', 'AI custom')
+            ) : (
+              domainLabel
+            )}
           </div>
         )}
         {!isLoading && (

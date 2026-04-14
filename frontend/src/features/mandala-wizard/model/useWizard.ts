@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { queryKeys } from '@/shared/config/query-client';
 
 import { apiClient } from '@/shared/lib/api-client';
+import { useAuth } from '@/features/auth/model/useAuth';
 import { useMandalaStore } from '@/stores/mandalaStore';
 import { trackMandalaCreated } from '@/shared/lib/posthog';
 import {
@@ -110,7 +111,8 @@ const DEFAULT_SKILLS: Record<SkillType, boolean> = {
 export function useWizard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { i18n } = useTranslation();
+  const { user } = useAuth();
+  useTranslation(); // i18n context required by child components
 
   const templateSlug = searchParams.get('template');
 
@@ -344,6 +346,7 @@ export function useWizard() {
               ...old.mandalas,
               {
                 id: newMandalaId,
+                userId: user?.id ?? '',
                 title: title ?? state.selectedTemplate?.centerGoal ?? 'New Mandala',
                 isDefault: false,
                 isPublic: false,
@@ -361,6 +364,12 @@ export function useWizard() {
       // 2. Select in store + mark as just-created (enables card polling)
       selectMandalaInStore(newMandalaId);
       setJustCreated(newMandalaId);
+      console.log(
+        '[DEBUG-WIZARD] setJustCreated called with:',
+        newMandalaId,
+        'store value:',
+        useMandalaStore.getState().justCreatedMandalaId
+      );
 
       // 3. Persist as default mandala on server (survives page refresh)
       apiClient.updateMandala(newMandalaId, { isDefault: true }).catch(() => {
@@ -380,7 +389,7 @@ export function useWizard() {
       queryClient.invalidateQueries({ queryKey: queryKeys.mandala.quota() });
       navigate('/');
     },
-    [navigate, selectMandalaInStore, setJustCreated, queryClient, state.selectedTemplate]
+    [navigate, selectMandalaInStore, setJustCreated, queryClient, state.selectedTemplate, user]
   );
 
   // Create from template mutation (for DB templates)
@@ -416,6 +425,8 @@ export function useWizard() {
       subjects: string[];
       subDetails?: Record<string, string[]>;
       skills?: Record<string, boolean>;
+      centerLabel?: string;
+      subLabels?: string[];
     }) => apiClient.createMandalaWithData(params),
     onSuccess: (data) => {
       goToUnifiedDashboard(data.mandalaId);
@@ -559,7 +570,11 @@ export function useWizard() {
     const subDetails: Record<number, string[]> = {};
     generated.sub_goals.forEach((_, idx) => {
       const key = `sub_goal_${idx + 1}`;
-      const actions = generated.actions[key] ?? generated.actions[generated.sub_goals[idx]] ?? [];
+      const actions =
+        generated.actions[key] ??
+        generated.actions[String(idx)] ??
+        generated.actions[generated.sub_goals[idx]] ??
+        [];
       subDetails[idx] = actions;
     });
     const template: WizardTemplate = {

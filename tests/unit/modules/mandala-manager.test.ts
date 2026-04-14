@@ -474,7 +474,7 @@ describe('MandalaManager', () => {
 
       expect(result.title).toBe('Updated');
       expect(mockTx.user_mandalas.update).toHaveBeenCalledWith({
-        where: { id: mockMandalaId },
+        where: { id: mockMandalaId, user_id: mockUserId },
         data: expect.objectContaining({ title: 'Updated' }),
       });
     });
@@ -569,7 +569,7 @@ describe('MandalaManager', () => {
       await manager.updateMandalaLevels(mockUserId, mockMandalaId, [mockLevelsInput[0]!]);
 
       expect(mockTx.user_mandalas.update).toHaveBeenCalledWith({
-        where: { id: mockMandalaId },
+        where: { id: mockMandalaId, user_id: mockUserId },
         data: { updated_at: expect.any(Date) },
       });
     });
@@ -598,7 +598,7 @@ describe('MandalaManager', () => {
       await manager.deleteMandala(mockUserId, mockMandalaId);
 
       expect(mockTx.user_mandalas.delete).toHaveBeenCalledWith({
-        where: { id: mockMandalaId },
+        where: { id: mockMandalaId, user_id: mockUserId },
       });
     });
 
@@ -1314,7 +1314,7 @@ describe('MandalaManager', () => {
       await expect(manager.deleteMandala(mockUserId, mockMandalaId)).resolves.toBeUndefined();
 
       expect(mockTx.user_mandalas.delete).toHaveBeenCalledWith({
-        where: { id: mockMandalaId },
+        where: { id: mockMandalaId, user_id: mockUserId },
       });
       // CP362 fix: transaction must use the extended timeout budget
       expect(capturedOptions).toEqual({ maxWait: 5_000, timeout: 30_000 });

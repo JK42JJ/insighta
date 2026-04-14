@@ -4,11 +4,12 @@
  *
  * Checks:
  *   1. Schema: required fields, correct types
- *   2. Dedup: no duplicate center_goal+domain+language within file
+ *   2. Dedup: no duplicate center_goal+domain+language(+frame_type) within file
  *   3. Quality: completeness score per entry
+ *   4. V4 fields (when --v4 flag is used): frame_type, tier, trend_keywords, version
  *
  * Usage:
- *   npx tsx scripts/data/validate-dataset.ts <path-to-jsonl>
+ *   npx tsx scripts/data/validate-dataset.ts <path-to-jsonl> [--v4]
  *
  * Exit codes:
  *   0 = all checks pass
@@ -17,6 +18,27 @@
 
 import * as fs from 'fs';
 import * as readline from 'readline';
+
+// ---------------------------------------------------------------------------
+// V4 constants (inline to avoid import path issues from scripts/data/)
+// ---------------------------------------------------------------------------
+
+const VALID_FRAME_TYPES = [
+  'comprehensive',
+  'vision',
+  'periodic',
+  'sequential',
+  'problem',
+  'skill',
+  'project',
+  'lifestyle',
+] as const;
+
+const VALID_TIERS = ['v3_legacy', 'tier1', 'tier2', 'tier3'] as const;
+
+// ---------------------------------------------------------------------------
+// Domain constants
+// ---------------------------------------------------------------------------
 
 const VALID_DOMAINS_KO = [
   '기술/개발',
@@ -61,12 +83,15 @@ interface QualityReport {
   duplicates: number;
   avgQualityScore: number;
   domainDistribution: Record<string, number>;
+  frameDistribution: Record<string, number>;
+  tierDistribution: Record<string, number>;
   errors: ValidationError[];
 }
 
 function validateEntry(
   entry: Record<string, unknown>,
   lineNum: number,
+  v4Mode: boolean,
 ): { errors: ValidationError[]; qualityScore: number } {
   const errors: ValidationError[] = [];
   let qualityPoints = 0;
@@ -148,11 +173,58 @@ function validateEntry(
     qualityPoints += 1;
   }
 
+  // 7. V4-specific field validation
+  if (v4Mode) {
+    // frame_type
+    qualityMax += 1;
+    const frameType = entry.frame_type as string;
+    if (!frameType) {
+      errors.push({ line: lineNum, field: 'frame_type', message: 'Missing required V4 field: frame_type' });
+    } else if (!(VALID_FRAME_TYPES as readonly string[]).includes(frameType)) {
+      errors.push({ line: lineNum, field: 'frame_type', message: `Invalid frame_type: "${frameType}"` });
+    } else {
+      qualityPoints += 1;
+    }
+
+    // tier
+    qualityMax += 1;
+    const tier = entry.tier as string;
+    if (!tier) {
+      errors.push({ line: lineNum, field: 'tier', message: 'Missing required V4 field: tier' });
+    } else if (!(VALID_TIERS as readonly string[]).includes(tier)) {
+      errors.push({ line: lineNum, field: 'tier', message: `Invalid tier: "${tier}"` });
+    } else {
+      qualityPoints += 1;
+    }
+
+    // trend_keywords
+    qualityMax += 1;
+    const trendKeywords = entry.trend_keywords;
+    if (!Array.isArray(trendKeywords)) {
+      errors.push({ line: lineNum, field: 'trend_keywords', message: 'Missing or invalid V4 field: trend_keywords (must be array)' });
+    } else {
+      qualityPoints += 1;
+      // Bonus quality for non-empty trend keywords
+      if (trendKeywords.length > 0) {
+        qualityMax += 1;
+        qualityPoints += 1;
+      }
+    }
+
+    // version
+    qualityMax += 1;
+    if (entry.version !== 'v4') {
+      errors.push({ line: lineNum, field: 'version', message: `Expected version "v4", got "${entry.version}"` });
+    } else {
+      qualityPoints += 1;
+    }
+  }
+
   const qualityScore = qualityMax > 0 ? qualityPoints / qualityMax : 0;
   return { errors, qualityScore };
 }
 
-async function validate(filePath: string): Promise<QualityReport> {
+async function validate(filePath: string, v4Mode: boolean): Promise<QualityReport> {
   const fileStream = fs.createReadStream(filePath);
   const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
@@ -163,6 +235,8 @@ async function validate(filePath: string): Promise<QualityReport> {
     duplicates: 0,
     avgQualityScore: 0,
     domainDistribution: {},
+    frameDistribution: {},
+    tierDistribution: {},
     errors: [],
   };
 
@@ -190,13 +264,16 @@ async function validate(filePath: string): Promise<QualityReport> {
 
     report.total++;
 
-    // Dedup check: center_goal + domain + language
-    const dedupKey = `${entry.center_goal}|${entry.domain}|${entry.language ?? ''}`;
+    // Dedup check: V4 includes frame_type in dedup key
+    const frameType = (entry.frame_type as string) || '';
+    const dedupKey = v4Mode
+      ? `${entry.center_goal}|${entry.domain}|${entry.language ?? ''}|${frameType}`
+      : `${entry.center_goal}|${entry.domain}|${entry.language ?? ''}`;
     if (seen.has(dedupKey)) {
       report.errors.push({
         line: lineNum,
         field: 'dedup',
-        message: `Duplicate: "${entry.center_goal}" in domain "${entry.domain}"`,
+        message: `Duplicate: "${entry.center_goal}" in domain "${entry.domain}"${v4Mode ? ` frame "${frameType}"` : ''}`,
       });
       report.duplicates++;
       report.failed++;
@@ -205,7 +282,7 @@ async function validate(filePath: string): Promise<QualityReport> {
     seen.add(dedupKey);
 
     // Validate entry
-    const { errors, qualityScore } = validateEntry(entry, lineNum);
+    const { errors, qualityScore } = validateEntry(entry, lineNum, v4Mode);
     totalQuality += qualityScore;
 
     if (errors.length > 0) {
@@ -218,6 +295,15 @@ async function validate(filePath: string): Promise<QualityReport> {
     // Domain distribution
     const domain = (entry.domain as string) || 'unknown';
     report.domainDistribution[domain] = (report.domainDistribution[domain] ?? 0) + 1;
+
+    // V4 distributions
+    if (frameType) {
+      report.frameDistribution[frameType] = (report.frameDistribution[frameType] ?? 0) + 1;
+    }
+    const tier = (entry.tier as string) || '';
+    if (tier) {
+      report.tierDistribution[tier] = (report.tierDistribution[tier] ?? 0) + 1;
+    }
   }
 
   report.avgQualityScore =
@@ -227,10 +313,12 @@ async function validate(filePath: string): Promise<QualityReport> {
 }
 
 async function main() {
-  const filePath = process.argv[2];
+  const args = process.argv.slice(2);
+  const v4Mode = args.includes('--v4');
+  const filePath = args.find((a) => !a.startsWith('--'));
 
   if (!filePath) {
-    console.error('Usage: npx tsx scripts/data/validate-dataset.ts <path-to-jsonl>');
+    console.error('Usage: npx tsx scripts/data/validate-dataset.ts <path-to-jsonl> [--v4]');
     process.exit(1);
   }
 
@@ -239,8 +327,8 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`Validating: ${filePath}\n`);
-  const report = await validate(filePath);
+  console.log(`Validating: ${filePath}${v4Mode ? ' [V4 mode]' : ''}\n`);
+  const report = await validate(filePath, v4Mode);
 
   // Output report
   console.log('=== Dataset Validation Report ===');
@@ -255,6 +343,27 @@ async function main() {
     (a, b) => b[1] - a[1],
   )) {
     console.log(`  ${domain}: ${count}`);
+  }
+
+  // V4 distributions
+  if (Object.keys(report.frameDistribution).length > 0) {
+    console.log('');
+    console.log('Frame Distribution:');
+    for (const [frame, count] of Object.entries(report.frameDistribution).sort(
+      (a, b) => b[1] - a[1],
+    )) {
+      console.log(`  ${frame}: ${count}`);
+    }
+  }
+
+  if (Object.keys(report.tierDistribution).length > 0) {
+    console.log('');
+    console.log('Tier Distribution:');
+    for (const [tier, count] of Object.entries(report.tierDistribution).sort(
+      (a, b) => b[1] - a[1],
+    )) {
+      console.log(`  ${tier}: ${count}`);
+    }
   }
 
   if (report.errors.length > 0) {

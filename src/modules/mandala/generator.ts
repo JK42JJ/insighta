@@ -53,7 +53,7 @@ const GENERATE_CACHE_MAX = 200;
 
 interface CachedGeneration {
   mandala: GeneratedMandala;
-  source: 'lora' | 'llm-fallback';
+  source: 'lora' | 'llm-fallback' | 'haiku';
 }
 
 const generationCache = new MemoryCache<CachedGeneration>({
@@ -293,10 +293,10 @@ async function enrichLabels(m: GeneratedMandala): Promise<GeneratedMandala> {
       });
       m.center_label = labels.center_label;
       m.sub_labels = labels.sub_labels;
-    } catch {
-      // Fallback: truncate (EN max 8, KO max 6)
-      const maxLen = m.language === 'ko' ? 6 : 8;
-      m.sub_labels = m.sub_goals.map((g) => g.slice(0, maxLen));
+    } catch (err) {
+      // Label generation failed — leave sub_labels empty.
+      // UI falls back to sub_goals. NEVER truncate sub_goals as labels.
+      logger.warn(`enrichLabels: sub_labels generation failed, leaving empty: ${err}`);
     }
   }
   return m;
@@ -409,6 +409,10 @@ export async function generateMandala(
       throw new MandalaGenError('Failed to parse generated mandala JSON', 'PARSE_FAILED');
     }
 
+    // HARD RULE: Always use the user's original goal as center_goal.
+    // LLMs/LoRA frequently rewrite/expand the goal despite prompt instructions.
+    parsed.center_goal = input.goal;
+
     // Post-process: auto-generate missing center_label / sub_labels
     const mandala = await enrichLabels(parsed);
 
@@ -461,21 +465,169 @@ export async function generateMandala(
   }
 }
 
-// ─── Tier 3 Fallback: Few-shot LLM generation via OpenRouter ───
+// ─── Primary Generator: Two-phase Haiku generation ───
+//
+// Phase 1 (user-facing, ~3s): Structure only — center + 8 sub_goals + labels
+// Phase 2 (background): Actions — 8×8 = 64 action items
+//
+// This split reduces user wait from ~25s to ~3s.
+
+const HAIKU_MODEL = 'anthropic/claude-haiku-4.5';
+const STRUCTURE_MAX_TOKENS = 500;
+const ACTIONS_MAX_TOKENS = 2_000;
 
 /**
- * Fallback generator: when LoRA fails, use embedding search for few-shot examples
- * and call OpenRouter LLM to generate the mandala.
+ * Phase 1: Generate mandala STRUCTURE only (center + sub_goals + labels).
+ * ~300 tokens output → ~2-3s. No actions — those come in Phase 2.
  */
-export async function generateMandalaWithFallback(
+export async function generateMandalaStructure(
+  input: MandalaGenerateInput
+): Promise<GeneratedMandala> {
+  const t0 = Date.now();
+  logger.info(`Mandala structure generation started: goal="${input.goal}"`);
+
+  const similar = await searchMandalasByGoal(input.goal, {
+    limit: 1,
+    threshold: 0.4,
+    language: input.language,
+  });
+
+  const t1 = Date.now();
+  logger.info(`[TIMING] structure-search: ${t1 - t0}ms`);
+
+  const lang = input.language ?? 'ko';
+  const domain = input.domain ?? 'general';
+
+  // Minimal few-shot: structure only (no actions)
+  const ref = similar[0];
+  const example = ref
+    ? `Reference:\n{"center_goal":"${ref.center_goal}","center_label":"${ref.center_label ?? ''}","sub_goals":${JSON.stringify((ref.sub_goals ?? []).slice(0, 4))},"sub_labels":${JSON.stringify((ref.sub_labels ?? []).slice(0, 4))}}\n\n`
+    : '';
+
+  const prompt =
+    lang === 'ko'
+      ? `만다라트 구조 생성 (actions 없이 구조만).
+
+규칙:
+- center_goal: 사용자가 입력한 목표를 그대로 사용. 절대 재작성/확장/축약하지 말 것.
+- center_label: center_goal의 2-4단어 요약 (최대 10자)
+- sub_goals: 8개 구체적 영역
+- sub_labels: 각 sub_goal의 짧은 약어 (최대 10자, 앞글자 자르기 금지)
+
+${example}JSON만 출력:
+{"center_goal":"...","center_label":"...","language":"ko","domain":"${domain}","sub_goals":["8개"],"sub_labels":["8개"]}
+
+목표: ${input.goal}`
+      : `Generate mandala structure (NO actions).
+
+RULES:
+- center_goal: Use the user's goal EXACTLY as given. NEVER rewrite, expand, or shorten it.
+- center_label: 2-4 word summary (max 15 chars)
+- sub_goals: 8 distinct, actionable areas
+- sub_labels: Short abbreviation per sub_goal (max 15 chars, NEVER truncate)
+
+${example}JSON only:
+{"center_goal":"...","center_label":"...","language":"en","domain":"${domain}","sub_goals":["8 items"],"sub_labels":["8 items"]}
+
+Goal: ${input.goal}`;
+
+  const provider = new OpenRouterGenerationProvider(HAIKU_MODEL);
+  const raw = await provider.generate(prompt, {
+    temperature: 0.7,
+    maxTokens: STRUCTURE_MAX_TOKENS,
+    format: 'json',
+  });
+
+  const t2 = Date.now();
+  logger.info(`[TIMING] structure-generate: ${t2 - t1}ms | total: ${t2 - t0}ms`);
+
+  const parsed = extractJsonRobust(raw);
+  if (!parsed) {
+    throw new MandalaGenError('Structure generation: failed to parse JSON', 'PARSE_FAILED');
+  }
+
+  if (!parsed.center_goal || !Array.isArray(parsed.sub_goals) || parsed.sub_goals.length !== 8) {
+    throw new MandalaGenError(
+      `Structure generation: invalid — sub_goals=${parsed.sub_goals?.length ?? 0}`,
+      'VALIDATION_FAILED'
+    );
+  }
+
+  // HARD RULE: Always use the user's original goal as center_goal.
+  // LLMs frequently rewrite/expand the goal despite prompt instructions.
+  // The user's input is the source of truth — never let LLM override it.
+  parsed.center_goal = input.goal;
+
+  // Ensure actions exists (empty — Phase 2 fills it)
+  if (!parsed.actions) parsed.actions = {};
+  if (!parsed.language) parsed.language = lang;
+  if (!parsed.domain) parsed.domain = domain;
+
+  return parsed;
+}
+
+/**
+ * Phase 2: Generate actions for all sub_goals (background, ~10-15s).
+ * Called after mandala creation — user doesn't wait for this.
+ */
+export async function generateMandalaActions(
+  subGoals: string[],
+  language: string = 'en'
+): Promise<Record<string, string[]>> {
+  const t0 = Date.now();
+  logger.info(`Mandala actions generation started: ${subGoals.length} sub_goals`);
+
+  const subList = subGoals.map((g, i) => `  ${i}. ${g}`).join('\n');
+
+  const prompt =
+    language === 'ko'
+      ? `각 하위 목표에 대해 8개의 구체적이고 측정 가능한 실행 단계를 생성.
+
+하위 목표:
+${subList}
+
+JSON만 출력:
+{"0":["8개 실행 단계"],"1":["8개"],...,"7":["8개"]}`
+      : `Generate 8 concrete, measurable action items for each sub_goal.
+
+Sub_goals:
+${subList}
+
+JSON only:
+{"0":["8 action items"],"1":["8 items"],...,"7":["8 items"]}`;
+
+  const provider = new OpenRouterGenerationProvider(HAIKU_MODEL);
+  const raw = await provider.generate(prompt, {
+    temperature: 0.7,
+    maxTokens: ACTIONS_MAX_TOKENS,
+    format: 'json',
+  });
+
+  const t1 = Date.now();
+  logger.info(`[TIMING] actions-generate: ${t1 - t0}ms`);
+
+  const parsed = extractJsonRobust(raw) as Record<string, string[]> | null;
+  if (!parsed) {
+    throw new MandalaGenError('Actions generation: failed to parse JSON', 'PARSE_FAILED');
+  }
+
+  return parsed;
+}
+
+/**
+ * Full mandala generator (legacy — kept for LoRA background + cache).
+ * Uses few-shot examples + generates everything in one shot (~20-25s).
+ */
+export async function generateMandalaWithHaiku(
   input: MandalaGenerateInput,
   externalSignal?: AbortSignal
 ): Promise<GeneratedMandala> {
-  logger.info(`Mandala fallback (Tier 3) started: goal="${input.goal}"`);
+  const t0 = Date.now();
+  logger.info(`Mandala generation (Haiku) started: goal="${input.goal}"`);
 
   // Step 1: Retrieve similar mandalas as few-shot examples
   const similar = await searchMandalasByGoal(input.goal, {
-    limit: 3,
+    limit: 1,
     threshold: 0.4,
     language: input.language,
   });
@@ -491,40 +643,51 @@ export async function generateMandalaWithFallback(
   const lang = input.language ?? 'ko';
   const domain = input.domain ?? 'general';
 
-  const systemInstruction =
+  const rules =
     lang === 'ko'
-      ? '당신은 만다라트 차트 전문가입니다. 주어진 목표에 대해 9x9 만다라트 차트를 JSON으로 생성합니다.'
-      : 'You are a Mandalart chart expert. Generate a 9x9 mandala chart in JSON for the given goal.';
+      ? `규칙:
+- center_goal: 사용자가 입력한 목표를 그대로 사용. 절대 재작성/확장/축약하지 말 것.
+- center_label: center_goal의 2-4단어 요약
+- sub_goals: center_goal 달성을 위한 8개 구체적 영역 (모호한 카테고리 금지)
+- sub_labels: 각 sub_goal의 짧은 약어 (최대 10자)
+  의미를 반드시 보존. 앞글자 자르기 절대 금지 (예: "자원관리" O, "자원 관" X)
+- actions: sub_goal당 8개 구체적이고 측정 가능한 실행 단계
+  각 action은 실행하고 체크할 수 있는 것이어야 함
 
-  const examplesHeader =
-    lang === 'ko'
-      ? '다음은 유사한 기존 만다라 참고 예시입니다:'
-      : 'Here are similar existing mandalas as reference examples:';
+출력: JSON만. 마크다운/설명 없음.
+{"center_goal":"...","center_label":"...","language":"ko",
+"domain":"${domain}","sub_goals":["8개"],"sub_labels":["8개"],
+"actions":{"0":["8개"],"1":["8개"],...,"7":["8개"]}}`
+      : `RULES:
+- center_goal: Use the user's goal EXACTLY as given. NEVER rewrite, expand, or shorten it.
+- center_label: 2-4 word summary of center_goal
+- sub_goals: 8 distinct areas that TOGETHER achieve the center goal. Must be specific and actionable, not vague categories
+- sub_labels: Short abbreviation for each sub_goal. EN max 15 chars. MUST capture meaning. NEVER truncate (e.g. "Understa" is WRONG). Example: "Understand Core Principles" → "Core Principles"
+- actions: 8 concrete, measurable steps per sub_goal. Each action must be something you can DO and CHECK OFF
 
-  const generateInstr =
-    lang === 'ko'
-      ? '아래 목표에 대해 새로운 만다라를 생성하세요. 반드시 아래 구조의 유효한 JSON 객체만 출력하세요:'
-      : 'Now generate a new mandala for the goal below. Output ONLY a valid JSON object with this exact structure:';
+OUTPUT: JSON only, no markdown, no explanation.
+{"center_goal":"...","center_label":"...","language":"en",
+"domain":"${domain}","sub_goals":["8 items"],"sub_labels":["8 items"],
+"actions":{"0":["8 items"],"1":["8 items"],...,"7":["8 items"]}}`;
+
+  const refHeader = lang === 'ko' ? '참고 예시:' : 'Reference example:';
 
   const goalLabel = lang === 'ko' ? '목표' : 'Goal';
-  const domainLabel = lang === 'ko' ? '도메인' : 'Domain';
-  const langLabel = lang === 'ko' ? '언어' : 'Language';
 
-  const prompt = `${systemInstruction}
+  const prompt = `${lang === 'ko' ? '만다라트 차트 전문가. 주어진 목표에 대해 만다라트 차트를 JSON으로 생성.' : 'You are a Mandalart chart expert. Generate a mandala chart in JSON.'}
 
-${examplesHeader}
+${rules}
 
+${refHeader}
 ${examples}
 
-${generateInstr}
-{"center_goal": "...", "center_label": "short label", "language": "${lang}", "domain": "${domain}", "sub_goals": ["8 items"], "actions": {"sub_goal_1": ["8 items per sub_goal"], ...}}
-
 ${goalLabel}: ${input.goal}
-${domainLabel}: ${domain}
-${langLabel}: ${lang}
 `;
 
-  const provider = new OpenRouterGenerationProvider();
+  const t1 = Date.now();
+  logger.info(`[TIMING] search: ${t1 - t0}ms`);
+
+  const provider = new OpenRouterGenerationProvider(HAIKU_MODEL);
   const raw = await provider.generate(prompt, {
     temperature: 0.7,
     maxTokens: NUM_PREDICT,
@@ -532,30 +695,40 @@ ${langLabel}: ${lang}
     signal: externalSignal,
   });
 
+  const t2 = Date.now();
+  logger.info(`[TIMING] haiku-generate: ${t2 - t1}ms`);
+
   const parsed = extractJsonRobust(raw);
   if (!parsed) {
-    logger.error(`Tier 3 fallback: failed to parse LLM JSON: ${raw.slice(0, 500)}`);
-    throw new MandalaGenError('Tier 3 fallback: failed to parse LLM output', 'PARSE_FAILED');
+    logger.error(`Haiku generation: failed to parse JSON: ${raw.slice(0, 500)}`);
+    throw new MandalaGenError('Haiku generation: failed to parse output', 'PARSE_FAILED');
   }
 
+  // HARD RULE: Always use the user's original goal as center_goal.
+  // LLMs frequently rewrite/expand the goal despite prompt instructions.
+  parsed.center_goal = input.goal;
+
   const mandala = await enrichLabels(parsed);
+  const t3 = Date.now();
+  logger.info(`[TIMING] enrichLabels: ${t3 - t2}ms | total: ${t3 - t0}ms`);
   const validation = validateMandala(mandala);
   if (!validation.valid) {
     throw new MandalaGenError(
-      `Tier 3 fallback: validation failed: ${validation.reason}`,
+      `Haiku generation: validation failed: ${validation.reason}`,
       'VALIDATION_FAILED'
     );
   }
 
   logger.info(
-    `Mandala fallback (Tier 3) complete: goal="${input.goal}" subs=${mandala.sub_goals.length} examples=${similar.length}`
+    `Mandala generation (Haiku) complete: goal="${input.goal}" subs=${mandala.sub_goals.length} examples=${similar.length}`
   );
   return mandala;
 }
 
-// ─── Label Generator (OpenRouter) ───
+// ─── Label Generator (Anthropic Claude Haiku) ───
 //
-// Used as a fallback when search results or AI-generated mandalas lack short labels.
+// Generates meaningful short labels from sub-goals using Claude Haiku.
+// NEVER truncates sub_goals — always generates new abbreviations via LLM.
 // Produces { center_label, sub_labels[] } from a goal + sub-goal list.
 
 export interface LabelGenerateInput {
@@ -570,14 +743,21 @@ export interface GeneratedLabels {
 }
 
 const LABEL_MAX_TOKENS = 800;
+const EN_SUB_LABEL_MAX = 15;
+const KO_SUB_LABEL_MAX = 10;
 
 function buildLabelPrompt(input: LabelGenerateInput): string {
-  const lang = input.language ?? 'ko';
+  const lang = input.language ?? 'en';
   const subList = input.sub_goals.map((g, i) => `  ${i + 1}. ${g}`).join('\n');
 
   if (lang === 'ko') {
-    return `다음 목표와 하위 목표들을 2-4글자 짧은 라벨로 변환해.
-center_label은 5글자 이내, sub_labels 각각은 2-4글자.
+    return `다음 목표와 하위 목표들의 핵심 의미를 담은 짧은 라벨을 생성해.
+
+규칙:
+- center_label: ${KO_SUB_LABEL_MAX}글자 이내
+- sub_labels: 각각 ${KO_SUB_LABEL_MAX}글자 이내
+- 원문 앞글자를 자르면 안 됨. 의미를 보존하는 새로운 약어를 만들어야 함
+- 예시: "자원 관리 능력 개발" → "자원관리" (O), "자원 관리" → (X 잘라쓰기)
 
 center_goal: "${input.center_goal}"
 sub_goals:
@@ -587,15 +767,22 @@ ${subList}
 { "center_label": "짧은라벨", "sub_labels": ["라벨1", "라벨2", ...] }`;
   }
 
-  return `Convert the following goal and sub-goals into short 2-4 character labels.
-center_label max 5 chars, each sub_label 2-4 chars.
+  return `Generate short, meaningful labels that capture the CORE MEANING of each sub-goal.
+
+Rules:
+- center_label: max ${EN_SUB_LABEL_MAX} characters
+- Each sub_label: max ${EN_SUB_LABEL_MAX} characters
+- NEVER truncate the original text. Create a NEW meaningful abbreviation.
+- Good: "Understand Core Principles" → "Core PM"
+- Good: "Master Resource Management" → "Resources"
+- Bad: "Understand Core Principles" → "Understa" (truncation = forbidden)
 
 center_goal: "${input.center_goal}"
 sub_goals:
 ${subList}
 
 Respond ONLY with JSON:
-{ "center_label": "shortLabel", "sub_labels": ["lbl1", "lbl2", ...] }`;
+{ "center_label": "shortLbl", "sub_labels": ["lbl1", "lbl2", ...] }`;
 }
 
 export async function generateLabels(input: LabelGenerateInput): Promise<GeneratedLabels> {
@@ -603,12 +790,16 @@ export async function generateLabels(input: LabelGenerateInput): Promise<Generat
     throw new MandalaGenError('center_goal and sub_goals are required', 'GENERATION_FAILED');
   }
 
+  const lang = input.language ?? 'en';
+  const maxLen = lang === 'ko' ? KO_SUB_LABEL_MAX : EN_SUB_LABEL_MAX;
+
   logger.info(
-    `Label generation started: goal="${input.center_goal}" subs=${input.sub_goals.length}`
+    `Label generation started (Haiku): goal="${input.center_goal}" subs=${input.sub_goals.length} lang=${lang}`
   );
 
   const prompt = buildLabelPrompt(input);
-  const provider = new OpenRouterGenerationProvider();
+  const LABEL_MODEL = 'anthropic/claude-haiku-4.5';
+  const provider = new OpenRouterGenerationProvider(LABEL_MODEL);
   const raw = await provider.generate(prompt, {
     temperature: 0.3,
     maxTokens: LABEL_MAX_TOKENS,
@@ -635,12 +826,14 @@ export async function generateLabels(input: LabelGenerateInput): Promise<Generat
     throw new MandalaGenError('Label generation: missing fields', 'VALIDATION_FAILED');
   }
 
-  // Trim to expected lengths defensively
-  parsed.center_label = parsed.center_label.slice(0, 8);
-  parsed.sub_labels = parsed.sub_labels.slice(0, input.sub_goals.length).map((l) => l.slice(0, 6));
+  // Enforce max length (trim if LLM exceeded, but never truncate to make labels)
+  parsed.center_label = parsed.center_label.slice(0, maxLen);
+  parsed.sub_labels = parsed.sub_labels
+    .slice(0, input.sub_goals.length)
+    .map((l) => l.slice(0, maxLen));
 
   logger.info(
-    `Label generation complete: center="${parsed.center_label}" subs=${parsed.sub_labels.length}`
+    `Label generation complete (Haiku): center="${parsed.center_label}" subs=[${parsed.sub_labels.join(', ')}]`
   );
   return parsed;
 }
@@ -664,35 +857,16 @@ export class MandalaGenError extends Error {
   }
 }
 
-// ─── Race Fallback (LoRA + LLM in parallel) ───
+// ─── Primary Generation Entrypoint ───
 //
-// Sequential pattern (old): LoRA → fail → start LLM → wait LLM. Worst case
-// = LoRA wall-time + LLM wall-time (~120s + 120s = 240s).
-//
-// Race pattern (new): start both immediately. LoRA gets a 30s budget; if it
-// produces a valid mandala in time, return it and abort the LLM. If LoRA is
-// late or invalid, return the LLM result that's already in flight — extra
-// wait ≈ 0 because LLM has been running the whole time.
-//
-//   t=0       LoRA start ─┐                           ┌── LLM cancelled (LoRA won)
-//             LLM start  ─┤                           │
-//   t=30s     ─────────── LoRA cut ─────────────       OR
-//   ...                                                ┌── return LLM (LoRA timed out / invalid)
-//   t=120s    ─────────── LLM result ───────────────   ┘
-//
-// Validation: LoRA result must pass validateMandala() (8 sub_goals + ≥56 actions).
-// On failure or timeout, the race resolves with the LLM result instead.
-//
-// Cancellation: when LoRA wins, the LLM AbortController fires and the
-// underlying OpenRouter fetch is cancelled (saves ~$0.0001 of compute).
-// When LoRA loses, the Ollama fetch is cancelled the same way.
-
-const LORA_RACE_BUDGET_MS = 30_000;
+// Previously a LoRA + LLM race (30s LoRA budget). Now a direct Haiku call
+// (~3s) — no race logic, no LoRA dependency. generateMandala() (LoRA) is
+// kept below for potential future background data collection.
 
 export interface RaceResult {
   mandala: GeneratedMandala;
-  source: 'lora' | 'llm-fallback';
-  /** Wall-clock duration in milliseconds (race start → resolved). */
+  source: 'lora' | 'llm-fallback' | 'haiku';
+  /** Wall-clock duration in milliseconds (generation start → resolved). */
   duration_ms: number;
 }
 
@@ -723,7 +897,7 @@ interface GenerationLogEntry {
   domain?: string;
   language: string;
   lora_won: boolean;
-  source_returned: 'lora' | 'llm-fallback' | 'failed';
+  source_returned: 'lora' | 'llm-fallback' | 'haiku' | 'failed';
   lora_output: GeneratedMandala | null;
   lora_duration_ms: number | null;
   lora_error: string | null;
@@ -804,125 +978,61 @@ export async function generateMandalaRace(
   const userId = options?.userId;
   const lang = input.language ?? 'ko';
 
-  // Only the LLM gets a controller. LoRA runs to completion even on race-loss
-  // so its output can be captured for fine-tuning + quality analysis (see
-  // generation_log table). The LoRA call has its own internal 600s upper bound.
-  const llmController = new AbortController();
+  // Phase 1: Structure only (~3s) — returned to user immediately
+  let haikuDurationMs: number | null = null;
+  let haikuError: string | null = null;
 
-  // Per-branch timing/error captured via closure so the background logger
-  // sees the final values once each promise settles.
-  const loraStart = Date.now();
-  let loraDurationMs: number | null = null;
-  let loraError: string | null = null;
-  const loraPromise: Promise<GeneratedMandala | null> = generateMandala(input)
-    .then((m) => {
-      loraDurationMs = Date.now() - loraStart;
-      return m;
-    })
-    .catch((err) => {
-      loraDurationMs = Date.now() - loraStart;
-      loraError = err instanceof Error ? err.message : String(err);
-      logger.warn(`Race: LoRA branch failed/invalid: ${loraError} goal="${input.goal}"`);
-      return null;
-    });
-
-  const llmStart = Date.now();
-  let llmDurationMs: number | null = null;
-  let llmError: string | null = null;
-  const llmPromise: Promise<GeneratedMandala | null> = generateMandalaWithFallback(
-    input,
-    llmController.signal
-  )
-    .then((m) => {
-      llmDurationMs = Date.now() - llmStart;
-      return m;
-    })
-    .catch((err) => {
-      llmDurationMs = Date.now() - llmStart;
-      llmError = err instanceof Error ? err.message : String(err);
-      if (llmController.signal.aborted) {
-        logger.info(`Race: LLM cancelled (LoRA won) goal="${input.goal}"`);
-      } else {
-        logger.warn(`Race: LLM branch failed: ${llmError} goal="${input.goal}"`);
-      }
-      return null;
-    });
-
-  // Race LoRA against a 30s timeout marker. If LoRA settles first (success
-  // OR failure), we get its outcome; if 30s elapses first, we treat LoRA as
-  // unavailable and fall through to the LLM that's already in flight.
-  type RaceTick = { kind: 'lora'; mandala: GeneratedMandala | null } | { kind: 'timeout' };
-
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<RaceTick>((resolve) => {
-    timeoutHandle = setTimeout(() => resolve({ kind: 'timeout' }), LORA_RACE_BUDGET_MS);
-  });
-  const loraTick = loraPromise.then<RaceTick>((m) => ({ kind: 'lora', mandala: m }));
-
-  const first = await Promise.race([loraTick, timeoutPromise]);
-  if (timeoutHandle) clearTimeout(timeoutHandle);
-
-  // ─── Case 1: LoRA won inside the 30s budget ───
-  if (first.kind === 'lora' && first.mandala) {
-    llmController.abort();
-    const dur = Date.now() - start;
-    logger.info(`Race: LoRA won goal="${input.goal}" duration=${(dur / 1000).toFixed(1)}s`);
-
-    // Background log: capture LoRA. LLM was cancelled mid-flight.
-    void logGenerationResult({
-      user_id: userId,
-      goal: input.goal,
-      domain: input.domain,
-      language: lang,
-      lora_won: true,
-      source_returned: 'lora',
-      lora_output: first.mandala,
-      lora_duration_ms: loraDurationMs,
-      lora_error: loraError,
-      llm_output: null,
-      llm_duration_ms: null,
-      llm_error: 'cancelled (LoRA won race)',
-    });
-
-    return { mandala: first.mandala, source: 'lora', duration_ms: dur };
-  }
-
-  // ─── Case 2: LoRA missed the budget or returned null/invalid → use LLM ───
-  // Critically: do NOT abort the LoRA fetch. We let it run to completion in
-  // the background so its output (even if late) feeds the quality log.
-  const reason = first.kind === 'timeout' ? 'timeout (30s)' : 'failed/invalid';
-  logger.info(`Race: LoRA ${reason}, awaiting LLM fallback goal="${input.goal}"`);
-
-  const llmMandala = await llmPromise;
-
-  // Background-await LoRA + log, regardless of LLM outcome. The user already
-  // has their result by this point; the log write is fire-and-forget so it
-  // never blocks the response.
-  const isFailed = llmMandala === null;
-  void loraPromise.then((loraData) => {
+  let mandala: GeneratedMandala;
+  try {
+    mandala = await generateMandalaStructure(input);
+    haikuDurationMs = Date.now() - start;
+  } catch (err) {
+    haikuDurationMs = Date.now() - start;
+    haikuError = err instanceof Error ? err.message : String(err);
     void logGenerationResult({
       user_id: userId,
       goal: input.goal,
       domain: input.domain,
       language: lang,
       lora_won: false,
-      source_returned: isFailed ? 'failed' : 'llm-fallback',
-      lora_output: loraData,
-      lora_duration_ms: loraDurationMs,
-      lora_error: loraError,
-      llm_output: llmMandala,
-      llm_duration_ms: llmDurationMs,
-      llm_error: llmError,
+      source_returned: 'failed',
+      lora_output: null,
+      lora_duration_ms: null,
+      lora_error: null,
+      llm_output: null,
+      llm_duration_ms: haikuDurationMs,
+      llm_error: haikuError,
     });
-  });
-
-  if (!llmMandala) {
-    throw new MandalaGenError('Both LoRA and LLM fallback failed', 'GENERATION_FAILED');
+    throw err;
   }
 
   const dur = Date.now() - start;
-  logger.info(`Race: LLM fallback won goal="${input.goal}" duration=${(dur / 1000).toFixed(1)}s`);
-  return { mandala: llmMandala, source: 'llm-fallback', duration_ms: dur };
+  logger.info(`Mandala structure done: goal="${input.goal}" duration=${(dur / 1000).toFixed(1)}s`);
+
+  // Background: LoRA — fire-and-forget for training data accumulation (v14)
+  void generateMandala(input)
+    .then((loraResult) => {
+      void logGenerationResult({
+        user_id: userId,
+        goal: input.goal,
+        domain: input.domain,
+        language: lang,
+        lora_won: false,
+        source_returned: 'haiku',
+        lora_output: loraResult,
+        lora_duration_ms: Date.now() - start,
+        lora_error: null,
+        llm_output: mandala,
+        llm_duration_ms: haikuDurationMs,
+        llm_error: null,
+      });
+    })
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(`LoRA background failed (non-fatal): ${msg}`);
+    });
+
+  return { mandala, source: 'haiku', duration_ms: dur };
 }
 
 // ─── Pre-warm ───

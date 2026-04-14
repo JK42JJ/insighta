@@ -1536,5 +1536,18 @@
       "Tech blog",
       "Demo video"
     ]
+  },
+  "discovery": {
+    "step1": "Reading your goals",
+    "step2": "Crafting search queries for each cell",
+    "step3": "Scanning YouTube",
+    "step4": "Aligning videos to your goals",
+    "step5": "Filtering out the noise",
+    "step6": "Placing content into cells",
+    "step7": "Building your learning path",
+    "step8": "Your mandala feed is ready.",
+    "aiStep1": "Understanding your goal",
+    "aiStep2": "Designing structure",
+    "aiStep3": "Almost there"
   }
 }

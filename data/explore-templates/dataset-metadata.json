@@ -27,12 +27,17 @@
     }
   ],
   "version": {
-    "current": "3.0.0",
+    "current": "4.0.0",
     "history": [
       {
         "version": "3.0.0",
         "date": "2026-04-02",
         "changes": "Initial v3 dataset — 1000 KO templates across 9 domains"
+      },
+      {
+        "version": "4.0.0",
+        "date": "2026-04-11",
+        "changes": "V4 expansion — 8 frame types, trend injection, 3-tier generation, v3_legacy migration"
       }
     ]
   },

@@ -50,8 +50,10 @@ export interface InsightCard {
 export interface MandalaLevel {
   id: string;
   centerGoal: string;
+  /** Short label for center goal. Falls back to centerGoal when missing. */
+  centerLabel?: string | null;
   subjects: string[];
-  /** 2-4 char short labels parallel to `subjects`. Optional — falls back to subjects when missing. */
+  /** Short labels parallel to `subjects`. Falls back to subjects when missing. */
   subjectLabels?: string[];
   parentId: string | null;
   parentCellIndex: number | null;

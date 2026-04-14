@@ -15,8 +15,14 @@ const REQUEST_TIMEOUT_MS = 120_000;
 
 export class OpenRouterGenerationProvider implements GenerationProvider {
   readonly name = 'openrouter';
+  private readonly modelOverride?: string;
+
+  constructor(modelOverride?: string) {
+    this.modelOverride = modelOverride;
+  }
+
   get model(): string {
-    return `openrouter/${config.openrouter.model}`;
+    return `openrouter/${this.modelOverride ?? config.openrouter.model}`;
   }
 
   async generate(prompt: string, options?: GenerateOptions): Promise<string> {
@@ -25,15 +31,22 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       throw new Error('OPENROUTER_API_KEY not configured');
     }
 
+    const activeModel = this.modelOverride ?? config.openrouter.model;
+
     const body: Record<string, unknown> = {
-      model: config.openrouter.model,
+      model: activeModel,
       messages: [{ role: 'user', content: prompt }],
       temperature: options?.temperature ?? 0.3,
       max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
-      // Disable thinking/reasoning mode — Qwen3 models consume token budget on reasoning,
-      // leaving content empty. See troubleshooting.md "Qwen3 thinking 모드 → 빈 응답".
-      reasoning: { enabled: false },
     };
+
+    // Disable thinking/reasoning mode for Qwen models only — Qwen3 consumes
+    // token budget on reasoning, leaving content empty.
+    // See troubleshooting.md "Qwen3 thinking 모드 → 빈 응답".
+    // Claude/Anthropic models do not support this field and will error if sent.
+    if (activeModel.includes('qwen')) {
+      body['reasoning'] = { enabled: false };
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -86,7 +99,15 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
 
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content: string; reasoning?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
     };
+
+    // Log token usage for performance analysis
+    if (data.usage) {
+      console.info(
+        `[OpenRouter] model=${activeModel} prompt=${data.usage.prompt_tokens} completion=${data.usage.completion_tokens} total=${data.usage.total_tokens}`
+      );
+    }
 
     const message = data.choices?.[0]?.message;
     const content = message?.content || message?.reasoning;

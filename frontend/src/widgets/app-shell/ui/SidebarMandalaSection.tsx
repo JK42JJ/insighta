@@ -22,6 +22,7 @@ export interface MinimapData {
   /** 2-4 char short labels parallel to sectorSubjects (subject_labels). */
   sectorLabels?: string[];
   centerGoal: string;
+  centerLabel?: string | null;
   selectedCellIndex: number | null;
   onCellClick: (cellIndex: number, subject: string) => void;
   mandalaId: string | null;
@@ -198,15 +199,17 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
   );
 
   const currentMandala = mandalas.find((m) => m.id === selectedMandalaId);
-  // Bug #3 fix: when selectedMandalaId is set but the mandala isn't in the
-  // list yet (fresh creation, list refetch in flight), show a placeholder
-  // instead of falling back to mandals[0] — the previous fallback cascaded
-  // to the OLD first mandala (e.g. "AI/ML Expert") and looked like a
-  // cross-mandala UI leak. The mandals[0] fallback only applies when there
-  // is no selection at all (first-time user path).
+  // Sidebar uses centerLabel (short) for readability — long titles get truncated with "..."
+  const getCenterLabel = (m: (typeof mandalas)[0] | undefined) => {
+    const rootLevel = m?.levels?.find((l: { depth: number }) => l.depth === 0);
+    const label = (rootLevel as { centerLabel?: string | null } | undefined)?.centerLabel;
+    return label || m?.title || '—';
+  };
   const currentTitle = selectedMandalaId
-    ? (currentMandala?.title ?? '…')
-    : (mandalas[0]?.title ?? '—');
+    ? currentMandala
+      ? getCenterLabel(currentMandala)
+      : '…'
+    : getCenterLabel(mandalas[0]);
 
   return (
     <div className="px-2 flex flex-col">
@@ -252,7 +255,7 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
                     isSelected && 'bg-accent font-medium'
                   )}
                 >
-                  <span className="truncate">{mandala.title}</span>
+                  <span className="truncate">{getCenterLabel(mandala)}</span>
                   {isSelected && <Check className="w-3.5 h-3.5 text-primary shrink-0 ml-2" />}
                 </button>
               );
@@ -322,6 +325,7 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
           sectorSubjects={minimapData.sectorSubjects}
           sectorLabels={minimapData.sectorLabels}
           centerGoal={minimapData.centerGoal}
+          centerLabel={minimapData.centerLabel}
           selectedCellIndex={minimapData.selectedCellIndex}
           onCellClick={minimapData.onCellClick}
           onExternalUrlDrop={minimapData.onExternalUrlDrop}

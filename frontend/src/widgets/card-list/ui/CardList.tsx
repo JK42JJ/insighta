@@ -261,8 +261,9 @@ export function CardList({
     [lastSelectedIndex, sortedCards, onCardClick]
   );
 
+  console.log('[DEBUG-CARDLIST]', { isLoading, cardsLen: cards.length, cachedCardCount });
   if (isLoading && cards.length === 0) {
-    return <CardSkeleton count={cachedCardCount ?? 6} />;
+    return <CardSkeleton count={cachedCardCount || 6} />;
   }
 
   if (cards.length === 0) {

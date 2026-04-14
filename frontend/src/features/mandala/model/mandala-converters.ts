@@ -12,6 +12,7 @@ export function apiLevelsToRecord(apiMandala: MandalaResponse): Record<string, M
     result[level.levelKey] = {
       id: level.levelKey,
       centerGoal: level.centerGoal,
+      centerLabel: level.centerLabel ?? null,
       subjects: level.subjects,
       subjectLabels: level.subjectLabels,
       parentId: parentLevel?.levelKey ?? null,
