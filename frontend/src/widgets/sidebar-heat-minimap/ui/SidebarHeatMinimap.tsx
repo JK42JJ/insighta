@@ -113,10 +113,7 @@ export function SidebarHeatMinimap({
   return (
     <div className="flex-shrink-0">
       {/* Header with edit toggle + # toggle */}
-      <div className="flex items-center justify-between px-3 pb-1">
-        <span className="text-[9px] text-sidebar-foreground/60">
-          {centerLabel || centerGoal || t('minimap.goalPlaceholder')} {t('minimap.sectors')}
-        </span>
+      <div className="flex items-center justify-end px-3 pb-1">
         <div className="flex items-center gap-1">
           {/* Edit toggle */}
           {onSectorNamesChange && (

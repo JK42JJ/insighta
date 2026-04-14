@@ -169,12 +169,12 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
       {/* Header row: "MY MANDALAS 투자 ▸" — 전체가 popover trigger */}
       <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
         <PopoverTrigger asChild>
-          <button className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-sidebar-accent rounded-lg transition-colors text-sm text-sidebar-foreground/70">
+          <button className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-sidebar-accent rounded-lg transition-colors text-sm font-medium text-sidebar-foreground/70">
             <LayoutGrid className="w-4 h-4 shrink-0" aria-hidden="true" />
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60 shrink-0">
-              {t('sidebar.myMandalas')}
+            <span className="shrink-0">{t('sidebar.myMandalas')}</span>
+            <span className="text-xs text-sidebar-foreground/50 truncate font-normal">
+              {currentTitle}
             </span>
-            <span className="text-[11px] text-sidebar-foreground/70 truncate">{currentTitle}</span>
             <ChevronRight
               className={cn(
                 'w-3 h-3 shrink-0 ml-auto text-sidebar-foreground/30 transition-transform duration-200',
