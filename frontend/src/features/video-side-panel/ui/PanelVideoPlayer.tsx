@@ -39,10 +39,12 @@ export function PanelVideoPlayer({
   const currentVideoIdRef = useRef<string | null>(null);
   const iframeIdRef = useRef(`panel-yt-${Date.now()}`);
   // Capture initial props at mount — embedSrc must NEVER change after mount,
-  // otherwise iframe reloads and playback stops. Subsequent autoplay/startTime
-  // changes are handled by player API (loadVideoById/seekTo), not iframe reload.
+  // otherwise iframe reloads and playback stops. ALL embedSrc inputs must be
+  // ref-cached: youtubeId, autoplay, startTime. Subsequent video switches use
+  // player.loadVideoById() API; subsequent autoplay/startTime changes use refs.
   const initialAutoplayRef = useRef(shouldAutoplay);
   const initialStartTimeRef = useRef(startTime);
+  const initialYoutubeIdRef = useRef(youtubeId);
 
   const setPlayer = useCallback(
     (p: YTPlayer | null) => {
@@ -150,8 +152,14 @@ export function PanelVideoPlayer({
 
   // embedSrc uses INITIAL prop values (captured in refs) — never recomputed
   // from current props, to prevent iframe reload on re-renders.
+  // CRITICAL: youtubeId must also be ref-cached. If embedSrc changes (different
+  // videoId in URL), browser reloads iframe. Subsequent loadVideoById calls
+  // can't reach the new iframe → second-card "stays paused" bug.
   const initialStart = initialStartTimeRef.current;
-  const embedSrc = `https://www.youtube.com/embed/${youtubeId}?autoplay=${initialAutoplayRef.current ? 1 : 0}&rel=0&modestbranding=1&enablejsapi=1${initialStart ? `&start=${Math.floor(initialStart)}` : ''}`;
+  const initialYoutubeId = initialYoutubeIdRef.current;
+  const embedSrc = initialYoutubeId
+    ? `https://www.youtube.com/embed/${initialYoutubeId}?autoplay=${initialAutoplayRef.current ? 1 : 0}&rel=0&modestbranding=1&enablejsapi=1${initialStart ? `&start=${Math.floor(initialStart)}` : ''}`
+    : '';
 
   return (
     <div className="relative w-full shrink-0 bg-black" style={{ aspectRatio: '16/9' }}>
