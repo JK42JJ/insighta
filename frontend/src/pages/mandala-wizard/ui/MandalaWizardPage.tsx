@@ -5,8 +5,7 @@ import {
   useWizard,
   WizardStepper,
   WizardStepGoal,
-  WizardStepPreview,
-  WizardStepSkills,
+  WizardStepContext,
 } from '@/features/mandala-wizard';
 import { useMandalaQuota } from '@/features/mandala';
 
@@ -101,19 +100,13 @@ export default function MandalaWizardPage() {
       )}
 
       {wizard.currentStep === 2 && wizard.selectedTemplate && (
-        <WizardStepPreview
-          template={wizard.selectedTemplate}
-          isLoadingDetail={wizard.isLoadingDetail}
-          onConfirm={() => wizard.goToStep(3)}
-          onBack={() => wizard.goToStep(1)}
-        />
-      )}
-
-      {wizard.currentStep === 3 && (
-        <WizardStepSkills
-          skills={wizard.skills}
-          onSetSkill={wizard.setSkill}
+        <WizardStepContext
+          focusTags={wizard.focusTags}
+          targetLevel={wizard.targetLevel}
+          onSetFocusTags={wizard.setFocusTags}
+          onSetTargetLevel={wizard.setTargetLevel}
           onComplete={wizard.complete}
+          onBack={() => wizard.goToStep(1)}
           isCreating={wizard.isCreating}
         />
       )}

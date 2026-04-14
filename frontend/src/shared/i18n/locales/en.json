@@ -1323,9 +1323,29 @@
   },
   "wizard": {
     "steps": {
-      "domain": "Domain",
+      "domain": "Goal",
+      "context": "Context",
       "preview": "Preview",
       "skills": "Skills"
+    },
+    "context": {
+      "title": "Anything else you'd like to focus on?",
+      "subtitle": "Add focus areas and select your target level. You can skip this step.",
+      "focusLabel": "Focus areas",
+      "focusPlaceholder": "e.g. ETF, budgeting, real estate",
+      "addTag": "Add",
+      "levelLabel": "Target level",
+      "level": {
+        "foundation": "Foundation",
+        "standard": "Standard",
+        "advanced": "Advanced"
+      },
+      "levelDesc": {
+        "foundation": "Step-by-step basics for beginners",
+        "standard": "Practical skills for everyday use",
+        "advanced": "Deep mastery and expert techniques"
+      },
+      "continue": "Continue"
     },
     "navigation": {
       "aria": "Wizard steps"
@@ -1548,6 +1568,9 @@
     "step8": "Your mandala feed is ready.",
     "aiStep1": "Understanding your goal",
     "aiStep2": "Designing structure",
-    "aiStep3": "Almost there"
+    "aiStep3": "Almost there",
+    "failed": "Video recommendations couldn't be loaded.",
+    "retry": "Retry",
+    "quotaReached": "Daily video search limit reached. Recommendations will be available tomorrow."
   }
 }

@@ -38,7 +38,15 @@ import {
   VIDEO_DISCOVER_KEYWORD_POOL_SIZE,
   VIDEO_DISCOVER_QUERIES_PER_CELL,
 } from './manifest';
-import { generateSearchQueriesRace } from './sources/llm-query-generator';
+import { parseQueriesResponse } from './sources/llm-query-generator';
+import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
+import {
+  buildSearchQueryPrompt,
+  SEARCH_QUERY_MODEL,
+  SEARCH_QUERY_TEMPERATURE,
+  SEARCH_QUERY_MAX_TOKENS,
+  type SearchQueryPromptInput,
+} from '@/prompts/search-query-generator';
 import { rerankBatch, type RerankCandidate } from './sources/llm-reranker';
 
 const log = logger.child({ module: 'video-discover' });
@@ -250,6 +258,10 @@ interface HydratedState {
    * cache-reuse path is producing stale/bad results.
    */
   cacheReuseDisabled: boolean;
+  /** Focus tags from wizard Step 2 (optional user context for search queries). */
+  focusTags: string[];
+  /** Target level: 'foundation' | 'standard' | 'advanced'. */
+  targetLevel: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -376,7 +388,7 @@ export const executor: SkillExecutor = {
     // 1. Verify mandala exists and belongs to the user
     const mandala = await db.user_mandalas.findFirst({
       where: { id: mandalaId, user_id: ctx.userId },
-      select: { id: true },
+      select: { id: true, focus_tags: true, target_level: true },
     });
     if (!mandala) {
       return { ok: false, reason: `Mandala ${mandalaId} not found or not owned by user` };
@@ -459,10 +471,9 @@ export const executor: SkillExecutor = {
                  LIMIT ${VIDEO_DISCOVER_KEYWORD_POOL_SIZE}`
     );
     if (keywordRows.length === 0) {
-      return {
-        ok: false,
-        reason: 'No keyword_scores rows with embeddings. Run trend-collector + iks-scorer first.',
-      };
+      // Phase 1: keyword_scores empty is no longer fatal — LLM search queries
+      // (prompt #3) can generate queries without keywords. IKS weight = 0.
+      log.warn('No keyword_scores rows with embeddings — proceeding without IKS scoring');
     }
 
     const keywords: KeywordRow[] = keywordRows
@@ -521,6 +532,8 @@ export const executor: SkillExecutor = {
       rerankDisabled,
       youtubeApiKey,
       cacheReuseDisabled,
+      focusTags: mandala.focus_tags ?? [],
+      targetLevel: mandala.target_level ?? 'standard',
     };
     return { ok: true, hydrated: hydrated as unknown as Record<string, unknown> };
   },
@@ -535,23 +548,31 @@ export const executor: SkillExecutor = {
     const expiresAt = new Date(createdAt.getTime() + VIDEO_DISCOVER_TTL_DAYS * MS_PER_DAY);
 
     // ── Step 1: For each cell, pick top keyword(s) by per_mandala_relevance ─
+    // Phase 1: keyword_scores may be empty (0 rows). When keywords exist,
+    // pair each cell with its best keyword(s) by cosine × IKS. When empty,
+    // create cell-only entries with a dummy keyword so the loop still runs
+    // — Haiku search query generation does not need keywords.
+    const DUMMY_KEYWORD: KeywordRow = { keyword: '', iksTotal: 0, domain: null, embedding: [] };
     const cellSelections: {
       cell: SubGoalCell;
       keyword: KeywordRow;
       perMandalaRelevance: number;
     }[] = [];
     for (const cell of state.subGoals) {
-      const scored = state.keywords
-        .map((kw) => {
-          const cos = dot(cell.embedding, kw.embedding);
-          // Combine cosine sim (per_mandala) with global IKS to break ties
-          const combined = cos * 0.7 + (kw.iksTotal / 100) * 0.3;
-          return { kw, cos, combined };
-        })
-        .sort((a, b) => b.combined - a.combined);
-      const top = scored.slice(0, VIDEO_DISCOVER_KEYWORDS_PER_CELL);
-      for (const t of top) {
-        cellSelections.push({ cell, keyword: t.kw, perMandalaRelevance: t.cos });
+      if (state.keywords.length === 0) {
+        cellSelections.push({ cell, keyword: DUMMY_KEYWORD, perMandalaRelevance: 0 });
+      } else {
+        const scored = state.keywords
+          .map((kw) => {
+            const cos = dot(cell.embedding, kw.embedding);
+            const combined = cos * 0.7 + (kw.iksTotal / 100) * 0.3;
+            return { kw, cos, combined };
+          })
+          .sort((a, b) => b.combined - a.combined);
+        const top = scored.slice(0, VIDEO_DISCOVER_KEYWORDS_PER_CELL);
+        for (const t of top) {
+          cellSelections.push({ cell, keyword: t.kw, perMandalaRelevance: t.cos });
+        }
       }
     }
 
@@ -622,6 +643,7 @@ export const executor: SkillExecutor = {
           fetchFn,
           relevanceLanguage: state.mandalaLanguage,
           regionCode,
+          publishedAfter: new Date(Date.now() - 365 * MS_PER_DAY).toISOString(),
         });
         searchCalls += 1;
         for (const item of items) pushCandidate(sel, item);
@@ -650,9 +672,9 @@ export const executor: SkillExecutor = {
     // Race telemetry per cell — winner provider (ollama/openrouter), durations,
     // and the number of cells where one provider beat the other. Logged at
     // the end of the cell loop and surfaced in the final result data.
-    let raceWinsOllama = 0;
-    let raceWinsOpenRouter = 0;
-    let raceBothFailed = 0;
+    const raceWinsOllama = 0;
+    const raceWinsOpenRouter = 0;
+    const raceBothFailed = 0;
 
     // CP360 Phase 1 — cross-run cache reuse telemetry.
     // cachedVideoIds: videos pushed from recommendation_cache (skip videos.list
@@ -785,27 +807,30 @@ export const executor: SkillExecutor = {
         let queries: string[] | null = null;
         if (!state.llmDisabled) {
           try {
-            const raceResult = await generateSearchQueriesRace({
-              subGoal: sel.cell.text,
+            // Phase 1: Haiku single call (replaces Ollama+OpenRouter race)
+            const promptInput: SearchQueryPromptInput = {
               centerGoal: state.centerGoal,
+              subGoal: sel.cell.text,
               language: state.mandalaLanguage,
-              baseUrl: state.llmUrl,
-              fetchImpl: fetchFn,
-              openRouterApiKey: state.openRouterApiKey,
-              openRouterModel: state.openRouterModel,
+              focusTags: state.focusTags,
+              targetLevel: state.targetLevel,
+            };
+            const prompt = buildSearchQueryPrompt(promptInput);
+            const provider = new OpenRouterGenerationProvider(SEARCH_QUERY_MODEL);
+            const raw = await provider.generate(prompt, {
+              temperature: SEARCH_QUERY_TEMPERATURE,
+              maxTokens: SEARCH_QUERY_MAX_TOKENS,
+              format: 'json',
             });
-            queries = raceResult.winner.queries;
+            queries = parseQueriesResponse(raw);
             if (queries && queries.length > VIDEO_DISCOVER_QUERIES_PER_CELL) {
               queries = queries.slice(0, VIDEO_DISCOVER_QUERIES_PER_CELL);
             }
-            if (raceResult.winner.provider === 'ollama') raceWinsOllama += 1;
-            else raceWinsOpenRouter += 1;
             llmQueryGenSuccess += 1;
           } catch (err) {
             llmQueryGenFailures += 1;
-            raceBothFailed += 1;
             log.warn(
-              `LLM race failed for cell ${sel.cell.cellIndex}: ${err instanceof Error ? err.message : String(err)}`
+              `Haiku query gen failed for cell ${sel.cell.cellIndex}: ${err instanceof Error ? err.message : String(err)}`
             );
             queries = null;
           }
@@ -815,7 +840,8 @@ export const executor: SkillExecutor = {
             await runSearch(sel, q);
           }
         } else {
-          await runSearch(sel, `${sel.cell.text} ${sel.keyword.keyword}`);
+          // Fallback: natural language concat (no keyword dependency)
+          await runSearch(sel, `${sel.cell.text} ${state.centerGoal}`);
         }
       })
     );
@@ -948,6 +974,8 @@ export const executor: SkillExecutor = {
     const beforeFilter = allCandidates.length;
     let droppedShorts = 0;
     let droppedBlocklist = 0;
+    let droppedLangMismatch = 0;
+    const hasKorean = (text: string) => /[가-힣]/.test(text);
     const survivedFix3 = allCandidates.filter((c) => {
       if (c.durationSec !== null && c.durationSec < MIN_DURATION_SEC) {
         droppedShorts += 1;
@@ -957,11 +985,20 @@ export const executor: SkillExecutor = {
         droppedBlocklist += 1;
         return false;
       }
+      // Phase 1: title-based language post-filter
+      if (state.mandalaLanguage === 'ko' && !hasKorean(c.title)) {
+        droppedLangMismatch += 1;
+        return false;
+      }
+      if (state.mandalaLanguage === 'en' && hasKorean(c.title)) {
+        droppedLangMismatch += 1;
+        return false;
+      }
       return true;
     });
     if (beforeFilter - survivedFix3.length > 0) {
       log.info(
-        `Fix 3 filter: dropped shorts=${droppedShorts} blocklist=${droppedBlocklist}, ${survivedFix3.length} remain`
+        `Fix 3 filter: dropped shorts=${droppedShorts} blocklist=${droppedBlocklist} lang_mismatch=${droppedLangMismatch}, ${survivedFix3.length} remain`
       );
     }
 
@@ -1337,6 +1374,8 @@ interface YouTubeSearchOpts {
    * to a region. Fix 1 (CP358) — was hardcoded 'KR' before.
    */
   regionCode?: string;
+  /** ISO 8601 date string for publishedAfter filter (e.g. '2025-04-14T00:00:00Z'). */
+  publishedAfter?: string;
 }
 
 async function youtubeSearch(opts: YouTubeSearchOpts): Promise<YouTubeSearchItem[]> {
@@ -1354,6 +1393,11 @@ async function youtubeSearch(opts: YouTubeSearchOpts): Promise<YouTubeSearchItem
   // post-filters by parsed duration after videos.list returns.
   url.searchParams.set('videoDuration', 'medium');
   url.searchParams.set('safeSearch', 'moderate');
+  // Phase 1 (wizard-redesign-v2): filter to recent 1 year at API level.
+  // Relaxed to 2 years in the per-cell fallback when results < 2.
+  if (opts.publishedAfter) {
+    url.searchParams.set('publishedAfter', opts.publishedAfter);
+  }
 
   // Dual-auth: API key preferred, OAuth Bearer fallback (CP360 quota relief)
   const headers: Record<string, string> = {};

@@ -1,17 +1,13 @@
 import { useTranslation } from 'react-i18next';
 
 interface WizardStepperProps {
-  currentStep: 1 | 2 | 3;
+  currentStep: 1 | 2;
 }
 
 export default function WizardStepper({ currentStep }: WizardStepperProps) {
   const { t } = useTranslation();
 
-  const STEP_LABELS = [
-    t('wizard.steps.domain'),
-    t('wizard.steps.preview'),
-    t('wizard.steps.skills'),
-  ] as const;
+  const STEP_LABELS = [t('wizard.steps.domain'), t('wizard.steps.context', 'Context')] as const;
 
   return (
     <div
@@ -19,7 +15,7 @@ export default function WizardStepper({ currentStep }: WizardStepperProps) {
       role="navigation"
       aria-label={t('wizard.navigation.aria')}
     >
-      {[1, 2, 3].map((step, idx) => (
+      {[1, 2].map((step, idx) => (
         <div key={step} className="contents">
           {idx > 0 && (
             <div

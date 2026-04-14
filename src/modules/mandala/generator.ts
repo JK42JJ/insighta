@@ -14,6 +14,18 @@ import { MemoryCache } from '../../utils/memory-cache';
 import { getPrismaClient } from '../database/client';
 import { searchMandalasByGoal, formatMandalasForFewShot } from './search';
 import { OpenRouterGenerationProvider } from '../llm/openrouter';
+import {
+  buildStructurePrompt,
+  STRUCTURE_MODEL,
+  STRUCTURE_TEMPERATURE,
+  STRUCTURE_MAX_TOKENS as PROMPT_STRUCTURE_MAX_TOKENS,
+} from '@/prompts/structure-generator';
+import {
+  buildActionsPrompt,
+  ACTIONS_MODEL,
+  ACTIONS_TEMPERATURE,
+  ACTIONS_MAX_TOKENS as PROMPT_ACTIONS_MAX_TOKENS,
+} from '@/prompts/actions-generator';
 
 // ─── Types ───
 
@@ -472,9 +484,7 @@ export async function generateMandala(
 //
 // This split reduces user wait from ~25s to ~3s.
 
-const HAIKU_MODEL = 'anthropic/claude-haiku-4.5';
-const STRUCTURE_MAX_TOKENS = 500;
-const ACTIONS_MAX_TOKENS = 2_000;
+const HAIKU_MODEL = 'anthropic/claude-haiku-4.5'; // Used by generateMandalaWithHaiku (legacy)
 
 /**
  * Phase 1: Generate mandala STRUCTURE only (center + sub_goals + labels).
@@ -500,41 +510,22 @@ export async function generateMandalaStructure(
 
   // Minimal few-shot: structure only (no actions)
   const ref = similar[0];
-  const example = ref
-    ? `Reference:\n{"center_goal":"${ref.center_goal}","center_label":"${ref.center_label ?? ''}","sub_goals":${JSON.stringify((ref.sub_goals ?? []).slice(0, 4))},"sub_labels":${JSON.stringify((ref.sub_labels ?? []).slice(0, 4))}}\n\n`
-    : '';
+  const reference = ref
+    ? `Reference:\n{"center_goal":"${ref.center_goal}","center_label":"${ref.center_label ?? ''}","sub_goals":${JSON.stringify((ref.sub_goals ?? []).slice(0, 4))},"sub_labels":${JSON.stringify((ref.sub_labels ?? []).slice(0, 4))}}`
+    : undefined;
 
-  const prompt =
-    lang === 'ko'
-      ? `만다라트 구조 생성 (actions 없이 구조만).
+  // Phase 2: prompt from src/prompts/structure-generator.ts
+  const prompt = buildStructurePrompt({
+    goal: input.goal,
+    domain,
+    language: lang,
+    reference,
+  });
 
-규칙:
-- center_goal: 사용자가 입력한 목표를 그대로 사용. 절대 재작성/확장/축약하지 말 것.
-- center_label: center_goal의 2-4단어 요약 (최대 10자)
-- sub_goals: 8개 구체적 영역
-- sub_labels: 각 sub_goal의 짧은 약어 (최대 10자, 앞글자 자르기 금지)
-
-${example}JSON만 출력:
-{"center_goal":"...","center_label":"...","language":"ko","domain":"${domain}","sub_goals":["8개"],"sub_labels":["8개"]}
-
-목표: ${input.goal}`
-      : `Generate mandala structure (NO actions).
-
-RULES:
-- center_goal: Use the user's goal EXACTLY as given. NEVER rewrite, expand, or shorten it.
-- center_label: 2-4 word summary (max 15 chars)
-- sub_goals: 8 distinct, actionable areas
-- sub_labels: Short abbreviation per sub_goal (max 15 chars, NEVER truncate)
-
-${example}JSON only:
-{"center_goal":"...","center_label":"...","language":"en","domain":"${domain}","sub_goals":["8 items"],"sub_labels":["8 items"]}
-
-Goal: ${input.goal}`;
-
-  const provider = new OpenRouterGenerationProvider(HAIKU_MODEL);
+  const provider = new OpenRouterGenerationProvider(STRUCTURE_MODEL);
   const raw = await provider.generate(prompt, {
-    temperature: 0.7,
-    maxTokens: STRUCTURE_MAX_TOKENS,
+    temperature: STRUCTURE_TEMPERATURE,
+    maxTokens: PROMPT_STRUCTURE_MAX_TOKENS,
     format: 'json',
   });
 
@@ -572,34 +563,27 @@ Goal: ${input.goal}`;
  */
 export async function generateMandalaActions(
   subGoals: string[],
-  language: string = 'en'
+  language: string = 'en',
+  centerGoal?: string,
+  focusTags?: string[],
+  targetLevel?: string
 ): Promise<Record<string, string[]>> {
   const t0 = Date.now();
   logger.info(`Mandala actions generation started: ${subGoals.length} sub_goals`);
 
-  const subList = subGoals.map((g, i) => `  ${i}. ${g}`).join('\n');
+  // Phase 2: prompt from src/prompts/actions-generator.ts
+  const prompt = buildActionsPrompt({
+    centerGoal: centerGoal ?? '',
+    subGoals,
+    language,
+    focusTags,
+    targetLevel,
+  });
 
-  const prompt =
-    language === 'ko'
-      ? `각 하위 목표에 대해 8개의 구체적이고 측정 가능한 실행 단계를 생성.
-
-하위 목표:
-${subList}
-
-JSON만 출력:
-{"0":["8개 실행 단계"],"1":["8개"],...,"7":["8개"]}`
-      : `Generate 8 concrete, measurable action items for each sub_goal.
-
-Sub_goals:
-${subList}
-
-JSON only:
-{"0":["8 action items"],"1":["8 items"],...,"7":["8 items"]}`;
-
-  const provider = new OpenRouterGenerationProvider(HAIKU_MODEL);
+  const provider = new OpenRouterGenerationProvider(ACTIONS_MODEL);
   const raw = await provider.generate(prompt, {
-    temperature: 0.7,
-    maxTokens: ACTIONS_MAX_TOKENS,
+    temperature: ACTIONS_TEMPERATURE,
+    maxTokens: PROMPT_ACTIONS_MAX_TOKENS,
     format: 'json',
   });
 

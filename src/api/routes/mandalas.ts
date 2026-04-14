@@ -818,7 +818,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         setImmediate(() => {
           void (async () => {
             try {
-              const actions = await generateMandalaActions(subjects, lang ?? 'en');
+              const actions = await generateMandalaActions(
+                subjects,
+                lang ?? 'en',
+                centerGoal || title,
+                focusTags,
+                targetLevel
+              );
               const prismaActions = getPrismaClient();
               for (const [idx, items] of Object.entries(actions)) {
                 const padded = [...(Array.isArray(items) ? items : [])];
@@ -1680,6 +1686,53 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         }
         throw err;
       }
+    }
+  );
+
+  /**
+   * POST /api/v1/mandalas/:id/trigger-pipeline — Manual pipeline re-trigger
+   * Used by the Retry button when card recommendations fail.
+   * Checks ownership + 5-min dedup gate to prevent quota abuse.
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/:id/trigger-pipeline',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const mandalaId = request.params.id;
+
+      // Ownership check
+      const db = getPrismaClient();
+      const mandala = await db.user_mandalas.findFirst({
+        where: { id: mandalaId, user_id: userId },
+        select: { id: true },
+      });
+      if (!mandala) {
+        return reply
+          .code(404)
+          .send({ status: 404, code: 'NOT_FOUND', message: 'Mandala not found' });
+      }
+
+      // 5-min dedup gate — prevent rapid re-triggers
+      const recentRun = await db.mandala_pipeline_runs.findFirst({
+        where: {
+          mandala_id: mandalaId,
+          created_at: { gte: new Date(Date.now() - 5 * 60 * 1000) },
+        },
+        orderBy: { created_at: 'desc' },
+      });
+      if (recentRun) {
+        return reply.code(429).send({
+          status: 429,
+          code: 'PIPELINE_COOLDOWN',
+          message: 'Pipeline was triggered recently. Please wait 5 minutes.',
+        });
+      }
+
+      triggerMandalaPostCreationAsync(userId, mandalaId, 'manual-retry');
+      return reply.send({ status: 200, message: 'Pipeline triggered' });
     }
   );
 

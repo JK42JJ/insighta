@@ -124,7 +124,16 @@ export async function executePipelineRun(runId: string): Promise<void> {
   if (!embeddingsReady) {
     await updateStep(runId, 1, 'running');
     try {
-      const result = await ensureMandalaEmbeddings(mandalaId);
+      const EMBEDDING_TIMEOUT_MS = 30_000;
+      const result = await Promise.race([
+        ensureMandalaEmbeddings(mandalaId),
+        new Promise<{ ok: false; reason: string }>((resolve) =>
+          setTimeout(
+            () => resolve({ ok: false, reason: `embedding timeout ${EMBEDDING_TIMEOUT_MS}ms` }),
+            EMBEDDING_TIMEOUT_MS
+          )
+        ),
+      ]);
       if (result.ok) {
         embeddingsReady = true;
         await updateStep(runId, 1, 'completed', result);

@@ -86,12 +86,16 @@ export interface GeneratedMandala {
 }
 
 export interface WizardState {
-  currentStep: 1 | 2 | 3;
+  currentStep: 1 | 2;
   selectedDomain: string | null;
   selectedTemplate: WizardTemplate | null;
   skills: Record<SkillType, boolean>;
   /** User-entered goal text for hybrid search+generation flow */
   goalInput: string;
+  /** Focus tags from Step 2 context (optional user refinement) */
+  focusTags: string[];
+  /** Target level: foundation, standard, advanced */
+  targetLevel: string;
 }
 
 // ─── Editor Types ───

@@ -117,11 +117,13 @@ export function useWizard() {
   const templateSlug = searchParams.get('template');
 
   const [state, setState] = useState<WizardState>({
-    currentStep: templateSlug ? 2 : 1,
+    currentStep: 1,
     selectedDomain: null,
     selectedTemplate: null,
     skills: { ...DEFAULT_SKILLS },
     goalInput: '',
+    focusTags: [],
+    targetLevel: 'standard',
   });
 
   // Fetch templates for selected domain
@@ -394,7 +396,12 @@ export function useWizard() {
 
   // Create from template mutation (for DB templates)
   const createMutation = useMutation({
-    mutationFn: (params: { templateId: string; skills: Record<string, boolean> }) =>
+    mutationFn: (params: {
+      templateId: string;
+      skills: Record<string, boolean>;
+      focusTags?: string[];
+      targetLevel?: string;
+    }) =>
       fetchWithAuth<CreateFromTemplateResponse>('/mandalas/create-from-template', {
         method: 'POST',
         body: JSON.stringify(params),
@@ -427,6 +434,8 @@ export function useWizard() {
       skills?: Record<string, boolean>;
       centerLabel?: string;
       subLabels?: string[];
+      focusTags?: string[];
+      targetLevel?: string;
     }) => apiClient.createMandalaWithData(params),
     onSuccess: (data) => {
       goToUnifiedDashboard(data.mandalaId);
@@ -466,8 +475,16 @@ export function useWizard() {
     });
   }, []);
 
-  const goToStep = useCallback((step: 1 | 2 | 3) => {
+  const goToStep = useCallback((step: 1 | 2) => {
     setState((prev) => ({ ...prev, currentStep: step }));
+  }, []);
+
+  const setFocusTags = useCallback((tags: string[]) => {
+    setState((prev) => ({ ...prev, focusTags: tags }));
+  }, []);
+
+  const setTargetLevel = useCallback((level: string) => {
+    setState((prev) => ({ ...prev, targetLevel: level }));
   }, []);
 
   // ─── Hybrid search + generate actions ───
@@ -619,12 +636,25 @@ export function useWizard() {
         skills: state.skills,
         centerLabel: template.centerLabel,
         subLabels: template.subLabels,
+        focusTags: state.focusTags.length > 0 ? state.focusTags : undefined,
+        targetLevel: state.targetLevel !== 'standard' ? state.targetLevel : undefined,
       });
     } else {
       // DB template clone (keeps source_template_id linkage)
-      createMutateRef.current({ templateId: template.id, skills: state.skills });
+      createMutateRef.current({
+        templateId: template.id,
+        skills: state.skills,
+        focusTags: state.focusTags.length > 0 ? state.focusTags : undefined,
+        targetLevel: state.targetLevel !== 'standard' ? state.targetLevel : undefined,
+      });
     }
-  }, [state.selectedTemplate, state.skills, createWithDataMutation]);
+  }, [
+    state.selectedTemplate,
+    state.skills,
+    state.focusTags,
+    state.targetLevel,
+    createWithDataMutation,
+  ]);
 
   return {
     ...state,
@@ -638,6 +668,8 @@ export function useWizard() {
     setSkill,
     goToStep,
     complete,
+    setFocusTags,
+    setTargetLevel,
     // Hybrid search + generate
     setGoalInput,
     submitGoal,

@@ -776,8 +776,8 @@ function AuthenticatedApp() {
                       });
                       return null;
                     })()}
-                    {isNewMandalaActive && cards.totalCards === 0 && (
-                      <CardDiscoveryProgress isComplete={false} />
+                    {isNewMandalaActive && cards.totalCards === 0 && effectiveMandalaId && (
+                      <CardDiscoveryProgress mandalaId={effectiveMandalaId} isComplete={false} />
                     )}
                     <CardListView
                       cards={search.isSearchActive ? search.results : cards.displayCards}

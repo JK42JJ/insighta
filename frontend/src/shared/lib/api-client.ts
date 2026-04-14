@@ -862,6 +862,8 @@ class ApiClient {
     skills?: Record<string, boolean>;
     centerLabel?: string;
     subLabels?: string[];
+    focusTags?: string[];
+    targetLevel?: string;
   }): Promise<{ mandalaId: string }> {
     // CP358: prod create writes ~73 INSERTs through pgbouncer (us-west-2 ↔
     // Korea RTT ~250ms × 73 ≈ 18s). BE Prisma transaction timeout is 30s
@@ -932,6 +934,19 @@ class ApiClient {
     }>;
   }> {
     return this.request('/mandalas/source-mappings');
+  }
+
+  async getPipelineStatus(mandalaId: string): Promise<{
+    status: string;
+    cardCount: number;
+    steps: Record<string, { status: string }>;
+    retryCount?: number;
+  }> {
+    return this.request(`/mandalas/${mandalaId}/pipeline-status`);
+  }
+
+  async triggerPipeline(mandalaId: string): Promise<{ status: number; message: string }> {
+    return this.request(`/mandalas/${mandalaId}/trigger-pipeline`, { method: 'POST' });
   }
 
   async createSourceMappings(
