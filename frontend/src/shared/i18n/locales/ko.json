@@ -1336,6 +1336,7 @@
       "focusLabel": "집중 영역",
       "focusPlaceholder": "예: ETF, 배당, 부동산, 절세",
       "addTag": "추가",
+      "optional": "선택",
       "levelLabel": "목표 수준",
       "level": {
         "foundation": "기초",

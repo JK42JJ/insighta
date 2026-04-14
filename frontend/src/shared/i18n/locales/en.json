@@ -1335,6 +1335,7 @@
       "focusLabel": "Focus areas",
       "focusPlaceholder": "e.g. ETF, budgeting, real estate",
       "addTag": "Add",
+      "optional": "optional",
       "levelLabel": "Target level",
       "level": {
         "foundation": "Foundation",

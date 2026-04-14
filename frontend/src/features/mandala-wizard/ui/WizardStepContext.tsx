@@ -1,11 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
 
 const TARGET_LEVELS = ['foundation', 'standard', 'advanced'] as const;
-type TargetLevel = (typeof TARGET_LEVELS)[number];
 
 interface WizardStepContextProps {
   focusTags: string[];
@@ -28,6 +27,7 @@ export default function WizardStepContext({
 }: WizardStepContextProps) {
   const { t } = useTranslation();
   const [tagInput, setTagInput] = useState('');
+  const isComposingRef = useRef(false);
 
   const addTag = useCallback(() => {
     const trimmed = tagInput.trim();
@@ -45,7 +45,7 @@ export default function WizardStepContext({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && !isComposingRef.current) {
         e.preventDefault();
         addTag();
       }
@@ -79,6 +79,12 @@ export default function WizardStepContext({
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              isComposingRef.current = false;
+            }}
             placeholder={t('wizard.context.focusPlaceholder', 'e.g. ETF, budgeting, real estate')}
             className="flex-1 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
             maxLength={30}
@@ -100,7 +106,7 @@ export default function WizardStepContext({
                 key={tag}
                 className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
               >
-                {tag}
+                #{tag}
                 <button
                   onClick={() => removeTag(tag)}
                   className="rounded-full p-0.5 hover:bg-primary/20 transition-colors"
@@ -114,35 +120,43 @@ export default function WizardStepContext({
         )}
       </div>
 
-      {/* Target Level */}
-      <div className="space-y-3">
-        <label className="text-sm font-semibold text-foreground/80">
+      {/* Target Level — compact, bottom, optional */}
+      <div className="space-y-1.5 pt-2">
+        <label className="text-xs text-muted-foreground">
           {t('wizard.context.levelLabel', 'Target level')}
+          <span className="ml-1 text-muted-foreground/50">
+            ({t('wizard.context.optional', 'optional')})
+          </span>
         </label>
-        <div className="flex gap-2">
-          {TARGET_LEVELS.map((level) => (
-            <button
-              key={level}
-              onClick={() => onSetTargetLevel(level)}
-              className={cn(
-                'flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all',
-                targetLevel === level
-                  ? 'border-primary bg-primary/10 text-primary shadow-sm'
-                  : 'border-border bg-surface-light text-muted-foreground hover:border-primary/30 hover:text-foreground'
-              )}
-            >
-              {t(`wizard.context.level.${level}`, level.charAt(0).toUpperCase() + level.slice(1))}
-            </button>
-          ))}
+        <div className="flex gap-1.5">
+          {TARGET_LEVELS.map((level) => {
+            const isSelected = targetLevel === level;
+            const desc = t(`wizard.context.levelDesc.${level}`, '');
+            return (
+              <button
+                key={level}
+                onClick={() => onSetTargetLevel(level)}
+                className={cn(
+                  'rounded-md border px-2.5 py-1 text-xs transition-all',
+                  isSelected
+                    ? 'border-primary/40 bg-primary/10 text-primary'
+                    : 'border-border/50 text-muted-foreground/70 hover:border-primary/30 hover:text-foreground'
+                )}
+                title={desc}
+              >
+                {t(`wizard.context.level.${level}`, level.charAt(0).toUpperCase() + level.slice(1))}
+              </button>
+            );
+          })}
+          <span className="self-center ml-1 text-[12px] text-muted-foreground/60">
+            {targetLevel === 'foundation' &&
+              t('wizard.context.levelDesc.foundation', 'Step-by-step basics for beginners')}
+            {targetLevel === 'standard' &&
+              t('wizard.context.levelDesc.standard', 'Practical skills for everyday use')}
+            {targetLevel === 'advanced' &&
+              t('wizard.context.levelDesc.advanced', 'Deep mastery and expert techniques')}
+          </span>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {targetLevel === 'foundation' &&
-            t('wizard.context.levelDesc.foundation', 'Step-by-step basics for beginners')}
-          {targetLevel === 'standard' &&
-            t('wizard.context.levelDesc.standard', 'Practical skills for everyday use')}
-          {targetLevel === 'advanced' &&
-            t('wizard.context.levelDesc.advanced', 'Deep mastery and expert techniques')}
-        </p>
       </div>
 
       {/* Actions */}
