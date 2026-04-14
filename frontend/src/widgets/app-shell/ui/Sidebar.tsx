@@ -215,20 +215,14 @@ export function Sidebar({
           to={item.to}
           onClick={handleClick}
           className={cn(
-            'relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
-            'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+            'relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
+            'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
-            active
-              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-              : 'text-sidebar-foreground/70',
             collapsed && 'justify-center px-2'
           )}
           aria-current={active ? 'page' : undefined}
           title={collapsed ? t(item.labelKey) : undefined}
         >
-          {active && (
-            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] bg-sidebar-primary rounded-r-sm" />
-          )}
           <Icon className={cn('shrink-0', collapsed ? 'w-5 h-5' : 'w-4 h-4')} aria-hidden="true" />
           {!collapsed && <span>{t(item.labelKey)}</span>}
         </Link>
