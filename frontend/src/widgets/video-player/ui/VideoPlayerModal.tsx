@@ -2,6 +2,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { InsightCard } from '@/entities/card/model/types';
+import { toast } from '@/shared/lib/use-toast';
 import { Dialog, DialogContent, DialogDescription } from '@/shared/ui/dialog';
 import { DEFAULT_VIDEO_PANEL_RATIO } from '@/pages/index/model/useVideoModal';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
@@ -66,17 +67,25 @@ export function VideoPlayerModal({
       ) {
         return;
       }
-      if (e.key === 'ArrowLeft' && hasPrev && onPrev) {
+      if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        onPrev();
-      } else if (e.key === 'ArrowRight' && hasNext && onNext) {
+        if (hasPrev && onPrev) {
+          onPrev();
+        } else {
+          toast({ title: t('videoPlayer.firstCard', 'First card') });
+        }
+      } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        onNext();
+        if (hasNext && onNext) {
+          onNext();
+        } else {
+          toast({ title: t('videoPlayer.lastCard', 'Last card') });
+        }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, hasPrev, hasNext, onPrev, onNext]);
+  }, [isOpen, hasPrev, hasNext, onPrev, onNext, t]);
 
   const handlePlayerReady = useCallback(() => {
     setPlayerReady(true);
@@ -148,43 +157,48 @@ export function VideoPlayerModal({
           {t('videoPlayer.memo')}
         </DialogDescription>
 
-        {/* Prev/Next navigation arrows — wrapped in div to escape DialogContent's
-            [&>button] selector. absolute -left-14/-right-14 places them just
-            outside modal edges. NOTE: DialogContent's overflow-hidden was
-            REMOVED — it was clipping these buttons (CSS overflow on parent
-            cuts off absolute children outside its box). troubleshooting.md:
-            CSS containing block + overflow patterns. */}
-        {hasPrev && onPrev && (
-          <div className="absolute -left-14 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPrev();
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              aria-label={t('videoPlayer.prevCard', 'Previous card')}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all hover:bg-black/80 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/30"
-            >
-              <ChevronLeft className="h-6 w-6" />
-            </button>
-          </div>
-        )}
-        {hasNext && onNext && (
-          <div className="absolute -right-14 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onNext();
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              aria-label={t('videoPlayer.nextCard', 'Next card')}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all hover:bg-black/80 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/30"
-            >
-              <ChevronRight className="h-6 w-6" />
-            </button>
-          </div>
+        {/* Prev/Next navigation arrows — always rendered when siblings exist.
+            Boundary clicks show a toast instead of navigating.
+            Subtle by default (opacity-30), full opacity on hover. */}
+        {(hasPrev || hasNext) && (
+          <>
+            <div className="absolute -left-14 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (hasPrev && onPrev) {
+                    onPrev();
+                  } else {
+                    toast({ title: t('videoPlayer.firstCard', 'First card') });
+                  }
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                aria-label={t('videoPlayer.prevCard', 'Previous card')}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white/70 backdrop-blur-sm opacity-30 transition-all hover:opacity-100 hover:bg-black/70 hover:text-white hover:scale-110 focus:outline-none"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="absolute -right-14 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (hasNext && onNext) {
+                    onNext();
+                  } else {
+                    toast({ title: t('videoPlayer.lastCard', 'Last card') });
+                  }
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                aria-label={t('videoPlayer.nextCard', 'Next card')}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white/70 backdrop-blur-sm opacity-30 transition-all hover:opacity-100 hover:bg-black/70 hover:text-white hover:scale-110 focus:outline-none"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            </div>
+          </>
         )}
 
         {/* Inner overflow wrapper to keep video/memo content rounded.
@@ -198,7 +212,11 @@ export function VideoPlayerModal({
             >
               {/* Video Panel */}
               <ResizablePanel defaultSize={cachedPanelSize} minSize={30}>
+                {/* key={videoId} forces re-mount on prev/next navigation.
+                    YouTubePlayer caches iframeId + embedUrl in useRef at mount
+                    time, so videoId changes don't trigger iframe reload. */}
                 <YouTubePlayer
+                  key={videoId}
                   videoId={videoId}
                   startTime={startTime}
                   onPlayerReady={handlePlayerReady}
