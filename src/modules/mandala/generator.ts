@@ -608,9 +608,9 @@ export async function generateMandalaWithHaiku(
   const t0 = Date.now();
   logger.info(`Mandala generation (Haiku) started: goal="${input.goal}"`);
 
-  // Step 1: Retrieve similar mandalas as few-shot examples
+  // Step 1: Retrieve similar mandalas as few-shot examples (3 examples — proven working in 04-12)
   const similar = await searchMandalasByGoal(input.goal, {
-    limit: 1,
+    limit: 3,
     threshold: 0.4,
     language: input.language,
   });
@@ -626,45 +626,39 @@ export async function generateMandalaWithHaiku(
   const lang = input.language ?? 'ko';
   const domain = input.domain ?? 'general';
 
-  const rules =
+  // Restored from 04-12 (commit 95cfd8e) — proven working prompt structure.
+  // sub_labels removed from prompt (handled by separate generateLabels call).
+  const systemInstruction =
     lang === 'ko'
-      ? `규칙:
-- center_goal: 사용자가 입력한 목표를 그대로 사용. 절대 재작성/확장/축약하지 말 것.
-- center_label: center_goal의 2-4단어 요약
-- sub_goals: center_goal 달성을 위한 8개 구체적 영역 (모호한 카테고리 금지)
-- sub_labels: 각 sub_goal의 짧은 약어 (최대 10자)
-  의미를 반드시 보존. 앞글자 자르기 절대 금지 (예: "자원관리" O, "자원 관" X)
-- actions: sub_goal당 8개 구체적이고 측정 가능한 실행 단계
-  각 action은 실행하고 체크할 수 있는 것이어야 함
+      ? '당신은 만다라트 차트 전문가입니다. 주어진 목표에 대해 9x9 만다라트 차트를 JSON으로 생성합니다.'
+      : 'You are a Mandalart chart expert. Generate a 9x9 mandala chart in JSON for the given goal.';
 
-출력: JSON만. 마크다운/설명 없음.
-{"center_goal":"...","center_label":"...","language":"ko",
-"domain":"${domain}","sub_goals":["8개"],"sub_labels":["8개"],
-"actions":{"0":["8개"],"1":["8개"],...,"7":["8개"]}}`
-      : `RULES:
-- center_goal: Use the user's goal EXACTLY as given. NEVER rewrite, expand, or shorten it.
-- center_label: 2-4 word summary of center_goal
-- sub_goals: 8 distinct areas that TOGETHER achieve the center goal. Must be specific and actionable, not vague categories
-- sub_labels: Short abbreviation for each sub_goal. EN max 15 chars. MUST capture meaning. NEVER truncate (e.g. "Understa" is WRONG). Example: "Understand Core Principles" → "Core Principles"
-- actions: 8 concrete, measurable steps per sub_goal. Each action must be something you can DO and CHECK OFF
+  const examplesHeader =
+    lang === 'ko'
+      ? '다음은 유사한 기존 만다라 참고 예시입니다:'
+      : 'Here are similar existing mandalas as reference examples:';
 
-OUTPUT: JSON only, no markdown, no explanation.
-{"center_goal":"...","center_label":"...","language":"en",
-"domain":"${domain}","sub_goals":["8 items"],"sub_labels":["8 items"],
-"actions":{"0":["8 items"],"1":["8 items"],...,"7":["8 items"]}}`;
-
-  const refHeader = lang === 'ko' ? '참고 예시:' : 'Reference example:';
+  const generateInstr =
+    lang === 'ko'
+      ? '아래 목표에 대해 새로운 만다라를 생성하세요. 반드시 아래 구조의 유효한 JSON 객체만 출력하세요:'
+      : 'Now generate a new mandala for the goal below. Output ONLY a valid JSON object with this exact structure:';
 
   const goalLabel = lang === 'ko' ? '목표' : 'Goal';
+  const domainLabel = lang === 'ko' ? '도메인' : 'Domain';
+  const langLabel = lang === 'ko' ? '언어' : 'Language';
 
-  const prompt = `${lang === 'ko' ? '만다라트 차트 전문가. 주어진 목표에 대해 만다라트 차트를 JSON으로 생성.' : 'You are a Mandalart chart expert. Generate a mandala chart in JSON.'}
+  const prompt = `${systemInstruction}
 
-${rules}
+${examplesHeader}
 
-${refHeader}
 ${examples}
 
+${generateInstr}
+{"center_goal": "...", "center_label": "short label", "language": "${lang}", "domain": "${domain}", "sub_goals": ["8 items"], "actions": {"sub_goal_1": ["8 items per sub_goal"], ...}}
+
 ${goalLabel}: ${input.goal}
+${domainLabel}: ${domain}
+${langLabel}: ${lang}
 `;
 
   const t1 = Date.now();
