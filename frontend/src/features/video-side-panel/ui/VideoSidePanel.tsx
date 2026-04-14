@@ -5,8 +5,10 @@
  * Design tokens: insighta-side-editor-mockup-v3.html
  */
 import { useCallback, useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
+import { X, Minimize2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { useTranslation } from 'react-i18next';
+import type { InsightCard } from '@/entities/card/model/types';
 import { useVideoPanelStore } from '../model/useVideoPanelStore';
 // Panel width managed by react-resizable-panels in IndexPage
 import { PanelVideoPlayer } from './PanelVideoPlayer';
@@ -17,7 +19,13 @@ import { PanelAISummary } from './PanelAISummary';
 import { PanelFooter } from './PanelFooter';
 import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
 
-export function VideoSidePanel() {
+interface VideoSidePanelProps {
+  /** Callback to collapse sidebar back to modal popup with the same card + position */
+  onCollapseToPopup?: (card: InsightCard) => void;
+}
+
+export function VideoSidePanel({ onCollapseToPopup }: VideoSidePanelProps = {}) {
+  const { t } = useTranslation();
   const isOpen = useVideoPanelStore((s) => s.isOpen);
   const card = useVideoPanelStore((s) => s.card);
   const activeTab = useVideoPanelStore((s) => s.activeTab);
@@ -76,21 +84,46 @@ export function VideoSidePanel() {
         !isOpen && 'hidden'
       )}
     >
-      {/* Close button — overlaid on the video player area */}
-      <button
-        type="button"
-        aria-label="Close panel"
-        onClick={closeSidebar}
-        className={cn(
-          'absolute top-2 right-2 z-10',
-          'flex h-7 w-7 items-center justify-center rounded-[6px]',
-          'bg-[rgba(0,0,0,0.45)] text-[rgba(255,255,255,0.6)]',
-          'backdrop-blur-[6px] transition-all duration-150',
-          'hover:bg-[rgba(0,0,0,0.65)] hover:text-white'
+      {/* Top-right action buttons — overlaid on the video player area */}
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+        {/* Collapse to popup button — captures current playback position */}
+        {onCollapseToPopup && card && (
+          <button
+            type="button"
+            aria-label={t('videoPlayer.collapseToPopup', 'Switch to popup')}
+            title={t('videoPlayer.collapseToPopup', 'Switch to popup')}
+            onClick={() => {
+              // Capture current time → close sidebar → reopen as modal
+              const currentTime = playerRef.current?.getCurrentTime?.() ?? 0;
+              const cardWithResume = { ...card, lastWatchPosition: Math.floor(currentTime) };
+              closeSidebar();
+              onCollapseToPopup(cardWithResume);
+            }}
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded-[6px]',
+              'bg-[rgba(0,0,0,0.45)] text-[rgba(255,255,255,0.6)]',
+              'backdrop-blur-[6px] transition-all duration-150',
+              'hover:bg-[rgba(0,0,0,0.65)] hover:text-white'
+            )}
+          >
+            <Minimize2 className="h-[13px] w-[13px]" />
+          </button>
         )}
-      >
-        <X className="h-[13px] w-[13px]" />
-      </button>
+        {/* Close button */}
+        <button
+          type="button"
+          aria-label="Close panel"
+          onClick={closeSidebar}
+          className={cn(
+            'flex h-7 w-7 items-center justify-center rounded-[6px]',
+            'bg-[rgba(0,0,0,0.45)] text-[rgba(255,255,255,0.6)]',
+            'backdrop-blur-[6px] transition-all duration-150',
+            'hover:bg-[rgba(0,0,0,0.65)] hover:text-white'
+          )}
+        >
+          <X className="h-[13px] w-[13px]" />
+        </button>
+      </div>
 
       {/* Video player — unmounts on close to stop audio; card kept for resume */}
       {isOpen && card && (

@@ -563,6 +563,7 @@
     "nextCard": "Next card",
     "firstCard": "First video",
     "lastCard": "Last video",
+    "collapseToPopup": "Switch to popup",
     "clickToWriteNote": "Click to write a note...",
     "memo": "Memo",
     "notePlaceholder": "Write a note... (Cmd+S to save, / to insert)",

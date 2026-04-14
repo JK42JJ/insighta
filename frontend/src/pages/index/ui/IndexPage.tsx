@@ -862,7 +862,13 @@ function AuthenticatedApp() {
             <>
               <ResizableHandle className="bg-[rgba(255,255,255,0.06)]" data-no-dnd="true" />
               <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
-                <VideoSidePanel />
+                <VideoSidePanel
+                  onCollapseToPopup={(cardWithResume) => {
+                    // Reopen as modal with same card and resume position
+                    const siblings = search.isSearchActive ? search.results : cards.displayCards;
+                    modal.openModal(cardWithResume, siblings);
+                  }}
+                />
               </ResizablePanel>
             </>
           )}
