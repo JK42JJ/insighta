@@ -64,6 +64,8 @@ interface CardListViewProps {
   onViewModeChange: (mode: ViewMode) => void;
   onListPanelRatioChange: (ratio: number) => void;
   onCardClick?: (card: InsightCard, sortedList?: InsightCard[]) => void;
+  /** Reduce card size by adding +1 column (e.g. when side panel is open) */
+  compactMode?: boolean;
   onCardDragStart?: (card: InsightCard) => void;
   onMultiCardDragStart?: (cards: InsightCard[]) => void;
   onSaveNote?: (id: string, note: string) => void;
@@ -126,13 +128,16 @@ export function CardListView({
   isExternalCardDragActive,
   gridColumns: gridColumnsProp,
   onGridColumnsChange,
+  compactMode = false,
 }: CardListViewProps) {
   const { t } = useTranslation();
   // Auto-responsive columns by CONTAINER width (reacts to side panel open/close).
   // Manual gridColumns prop ignored unless SHOW_GRID_SLIDER flag is on.
+  // compactMode adds +1 column to make cards smaller (e.g. when side panel is open).
   const containerRef = useRef<HTMLDivElement>(null);
   const responsiveColumns = useContainerColumns(containerRef);
-  const gridColumns = SHOW_GRID_SLIDER && gridColumnsProp ? gridColumnsProp : responsiveColumns;
+  const baseColumns = SHOW_GRID_SLIDER && gridColumnsProp ? gridColumnsProp : responsiveColumns;
+  const gridColumns = compactMode ? Math.min(baseColumns + 1, MAX_GRID_COLUMNS) : baseColumns;
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);

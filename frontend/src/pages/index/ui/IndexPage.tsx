@@ -733,7 +733,7 @@ function AuthenticatedApp() {
               <div
                 className={`flex-1 h-full px-4 py-4 ${modal.isModalOpen ? 'overflow-hidden' : 'overflow-y-auto scrollbar-pro'} ${
                   isSidePanelOpen
-                    ? 'opacity-40 transition-opacity duration-300 hover:opacity-100'
+                    ? 'opacity-40 grayscale transition-[opacity,filter] duration-300 hover:opacity-100 hover:grayscale-0'
                     : ''
                 }`}
               >
@@ -809,6 +809,7 @@ function AuthenticatedApp() {
                       onListPanelRatioChange={layout.handleSetListPanelRatio}
                       gridColumns={layout.gridColumns}
                       onGridColumnsChange={layout.handleSetGridColumns}
+                      compactMode={isSidePanelOpen}
                       onCardClick={handleCardClick}
                       onCardDragStart={dragDrop.handleCardDragStart}
                       onMultiCardDragStart={dragDrop.handleMultiCardDragStart}
