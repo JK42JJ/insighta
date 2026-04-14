@@ -73,16 +73,36 @@ export function PanelVideoPlayer({
     void player;
   }, [youtubeId, setPlayer, onReady]);
 
-  // Video switch: use loadVideoById instead of iframe remount
+  // Video switch: use loadVideoById (autoplay) or cueVideoById (paused)
+  // depending on shouldAutoplay flag — keeps iframe stable across switches.
   useEffect(() => {
     if (!youtubeId) return;
     if (!playerReadyRef.current || !internalPlayerRef.current) return;
     if (currentVideoIdRef.current === youtubeId) return;
 
-    // Different video — switch without remount
     currentVideoIdRef.current = youtubeId;
-    internalPlayerRef.current.loadVideoById(youtubeId, startTime ?? 0);
-  }, [youtubeId, startTime]);
+    const player = internalPlayerRef.current;
+    if (shouldAutoplay) {
+      // loadVideoById per YT API spec: loads AND plays
+      player.loadVideoById(youtubeId, startTime ?? 0);
+    } else {
+      // cueVideoById: loads but stays paused (poster shown)
+      // Fall back to loadVideoById if cue not available
+      const cueFn = (player as unknown as { cueVideoById?: (id: string, t?: number) => void })
+        .cueVideoById;
+      if (typeof cueFn === 'function') {
+        cueFn.call(player, youtubeId, startTime ?? 0);
+      } else {
+        player.loadVideoById(youtubeId, startTime ?? 0);
+        // Pause immediately if cue is unavailable
+        try {
+          (player as unknown as { pauseVideo?: () => void }).pauseVideo?.();
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [youtubeId, startTime, shouldAutoplay]);
 
   // Cleanup on unmount
   useEffect(() => {

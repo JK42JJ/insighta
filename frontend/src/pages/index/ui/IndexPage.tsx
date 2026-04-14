@@ -251,6 +251,41 @@ function AuthenticatedApp() {
   // 6. Video modal
   const modal = useVideoModal(cards.allMandalaCards, cards.scratchPadCards);
   const isSidePanelOpen = useVideoPanelStore((s) => s.isOpen);
+  const sidebarSwapCard = useVideoPanelStore((s) => s.swapCard);
+  const sidebarCloseSidebar = useVideoPanelStore((s) => s.closeSidebar);
+  const sidebarCard = useVideoPanelStore((s) => s.card);
+
+  // Mandala change handling for sidebar:
+  //  - If new mandala has cards → swap sidebar to first card (paused)
+  //  - If new mandala has no cards → close sidebar
+  const prevMandalaIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    // Initialize on first run
+    if (prevMandalaIdRef.current === undefined) {
+      prevMandalaIdRef.current = effectiveMandalaId;
+      return;
+    }
+    if (prevMandalaIdRef.current === effectiveMandalaId) return;
+    prevMandalaIdRef.current = effectiveMandalaId;
+
+    if (!isSidePanelOpen) return; // Sidebar closed → nothing to do
+
+    const firstCard = cards.displayCards[0];
+    if (!firstCard) {
+      // No cards in new mandala → close sidebar
+      sidebarCloseSidebar();
+    } else if (firstCard.id !== sidebarCard?.id) {
+      // Swap to first card of new mandala (stopped state)
+      sidebarSwapCard(firstCard, false);
+    }
+  }, [
+    effectiveMandalaId,
+    isSidePanelOpen,
+    cards.displayCards,
+    sidebarCard?.id,
+    sidebarSwapCard,
+    sidebarCloseSidebar,
+  ]);
 
   // Wire card click — dual mode: popup (default) or sidebar (expanded)
   // sortedList comes from CardListView (matches user-visible sort order)

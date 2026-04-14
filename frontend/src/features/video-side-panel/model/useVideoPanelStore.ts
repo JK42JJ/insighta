@@ -30,6 +30,9 @@ export interface VideoPanelState {
   expandToSidebar: (card: InsightCard, startTime?: number) => void;
   /** Card click while sidebar is open: swap content without closing. */
   openInSidebar: (card: InsightCard) => void;
+  /** Programmatic card swap (e.g. on mandala change) — autoplay defaults to false
+   *  so the new card loads in stopped state. */
+  swapCard: (card: InsightCard, autoplay?: boolean) => void;
   /** ✕ close sidebar → revert to popup mode. */
   closeSidebar: () => void;
   /** Switch between notes and AI summary tabs. */
@@ -60,6 +63,9 @@ export const useVideoPanelStore = create<VideoPanelState>()(
         }),
 
       openInSidebar: (card) => set({ card, activeTab: 'notes', shouldAutoplay: true }),
+
+      swapCard: (card, autoplay = false) =>
+        set({ card, activeTab: 'notes', shouldAutoplay: autoplay }),
 
       closeSidebar: () => set({ mode: 'popup', isOpen: false, shouldAutoplay: false }),
 
