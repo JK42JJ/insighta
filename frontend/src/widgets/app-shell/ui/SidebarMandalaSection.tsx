@@ -169,7 +169,8 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
       {/* Header row: "MY MANDALAS 투자 ▸" — 전체가 popover trigger */}
       <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
         <PopoverTrigger asChild>
-          <button className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-sidebar-accent rounded-lg transition-colors">
+          <button className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-sidebar-accent rounded-lg transition-colors text-sm text-sidebar-foreground/70">
+            <LayoutGrid className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60 shrink-0">
               {t('sidebar.myMandalas')}
             </span>
@@ -212,9 +213,9 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
       {/* Create Mandala button — moved out of popover, placed below MY MANDALAS header */}
       <button
         onClick={() => navigate('/mandalas/new')}
-        className="w-full flex items-center gap-2 px-3 py-1.5 mt-1 rounded-lg text-sm text-primary hover:bg-sidebar-accent transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2.5 mt-0.5 rounded-lg text-sm font-medium text-primary hover:bg-sidebar-accent transition-colors"
       >
-        <Wand2 className="w-3.5 h-3.5 shrink-0" />
+        <Wand2 className="w-4 h-4 shrink-0" aria-hidden="true" />
         {t('sidebar.createMandala', 'Create Mandala')}
       </button>
 
