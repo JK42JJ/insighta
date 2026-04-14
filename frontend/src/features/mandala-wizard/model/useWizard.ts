@@ -591,6 +591,7 @@ export function useWizard() {
   /** Select an AI-generated mandala (from Tier 2 or Tier 3) */
   const selectGeneratedMandala = useCallback((generated: GeneratedMandala) => {
     const subDetails: Record<number, string[]> = {};
+    let totalActions = 0;
     generated.sub_goals.forEach((_, idx) => {
       const key = `sub_goal_${idx + 1}`;
       const actions =
@@ -599,7 +600,14 @@ export function useWizard() {
         generated.actions[generated.sub_goals[idx]] ??
         [];
       subDetails[idx] = actions;
+      totalActions += actions.length;
     });
+    // Validate: AI-generated mandala MUST have actions populated (one-shot generation)
+    if (totalActions < 56) {
+      throw new Error(
+        `AI generated mandala is incomplete: ${totalActions}/64 actions (minimum 56). Please retry.`
+      );
+    }
     const template: WizardTemplate = {
       id: `ai-generated-${Date.now()}`,
       title: generated.center_goal,

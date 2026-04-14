@@ -5,7 +5,6 @@ import { triggerMandalaPostCreationAsync } from '../../modules/mandala/mandala-p
 import { getPrismaClient } from '../../modules/database/client';
 import {
   generateMandalaRace,
-  generateMandalaActions,
   generateLabels,
   getCachedMandala,
   setCachedMandala,
@@ -840,48 +839,10 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         skipDuplicates: true,
       });
 
-      // Background: generate actions if not provided (Phase 2 of two-phase generation)
-      // Check if subDetails has ACTUAL action data (non-empty arrays), not just empty arrays.
-      // FE sends {"0":[],"1":[],...} when structure-only generation returns actions={}.
-      const hasActions =
-        subDetails && Object.values(subDetails).some((arr) => Array.isArray(arr) && arr.length > 0);
-      if (!hasActions) {
-        const mandalaId = result.id;
-        const lang = request.body.language;
-        setImmediate(() => {
-          void (async () => {
-            try {
-              const actions = await generateMandalaActions(
-                subjects,
-                lang ?? 'en',
-                centerGoal || title,
-                focusTags,
-                targetLevel
-              );
-              const prismaActions = getPrismaClient();
-              for (const [idx, items] of Object.entries(actions)) {
-                const padded = [...(Array.isArray(items) ? items : [])];
-                while (padded.length < 8) padded.push('');
-                await prismaActions.user_mandala_levels.create({
-                  data: {
-                    mandala_id: mandalaId,
-                    level_key: `sub_${idx}`,
-                    center_goal: subjects[Number(idx)] ?? '',
-                    subjects: padded.slice(0, 8),
-                    position: Number(idx),
-                    depth: 1,
-                    parent_level_id: null,
-                  },
-                });
-              }
-              request.log.info(`Background actions generated for mandala ${mandalaId}`);
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
-              request.log.warn(`Background actions generation failed (non-fatal): ${msg}`);
-            }
-          })();
-        });
-      }
+      // Phase 2 revert: actions are now generated one-shot in generateMandalaWithHaiku
+      // (not fire-and-forget). FE receives mandala with 64 actions already populated
+      // and sends them via subDetails. No background actions generation needed.
+      // If FE sends empty subDetails, that's a FE bug — don't silently patch with LLM.
 
       // Fire-and-forget post-creation pipeline for the new mandala.
       // Opt-in via user_skill_config; safe if not enabled.

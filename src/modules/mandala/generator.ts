@@ -962,13 +962,15 @@ export async function generateMandalaRace(
   const userId = options?.userId;
   const lang = input.language ?? 'ko';
 
-  // Phase 1: Structure only (~3s) — returned to user immediately
+  // Full one-shot generation: structure + 64 actions (~20-25s)
+  // Reverted from Phase 2 2-stage split due to fire-and-forget actions
+  // reliability issues ("0/8" missing actions). Guarantees actions complete.
   let haikuDurationMs: number | null = null;
   let haikuError: string | null = null;
 
   let mandala: GeneratedMandala;
   try {
-    mandala = await generateMandalaStructure(input);
+    mandala = await generateMandalaWithHaiku(input);
     haikuDurationMs = Date.now() - start;
   } catch (err) {
     haikuDurationMs = Date.now() - start;
