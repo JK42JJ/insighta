@@ -1,14 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { LayoutGrid, Plus, RefreshCw, Loader2, ChevronRight, Check, Wand2 } from 'lucide-react';
+import { LayoutGrid, RefreshCw, ChevronRight, Check, Wand2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import {
-  useMandalaList,
-  useCreateMandala,
-  useSwitchMandala,
-  useUpdateSectorNames,
-} from '@/features/mandala';
+import { useMandalaList, useSwitchMandala, useUpdateSectorNames } from '@/features/mandala';
 import { toast } from '@/shared/lib/use-toast';
 import { Popover, PopoverTrigger, PopoverContent } from '@/shared/ui/popover';
 import { SidebarHeatMinimap } from '@/widgets/sidebar-heat-minimap';
@@ -43,7 +38,6 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
   const { data: listData, isLoading, isError, error, refetch } = useMandalaList();
 
   const navigate = useNavigate();
-  const createMandala = useCreateMandala();
   const switchMandala = useSwitchMandala();
   const updateSectorNames = useUpdateSectorNames();
 
@@ -61,10 +55,6 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
 
   const [loadingTooLong, setLoadingTooLong] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const [quickCreateMode, setQuickCreateMode] = useState(false);
-  const [quickCreateTitle, setQuickCreateTitle] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
-  const quickCreateRef = useRef<HTMLInputElement>(null);
 
   // 16s loading timeout — harmonized: DB 12s < HTTP 14s < UI 16s
   const LOADING_TIMEOUT_MS = 16_000;
@@ -93,43 +83,6 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
       refetch();
     }
   }, [selectedMandalaId, mandalas, refetch]);
-
-  const handleQuickCreate = () => {
-    const title = quickCreateTitle.trim();
-    if (!title || isCreating) return;
-    setIsCreating(true);
-    createMandala.mutate(title, {
-      onSuccess: (data) => {
-        const newId = data?.mandala?.id;
-        setQuickCreateMode(false);
-        setQuickCreateTitle('');
-        setPopoverOpen(false);
-        toast({ title: t('mandalaSettings.created') });
-        if (newId) {
-          navigate(`/mandalas/${newId}/edit`);
-        }
-      },
-      onError: () => {
-        toast({ title: t('mandalaSettings.quotaExceeded'), variant: 'destructive' });
-      },
-      onSettled: () => {
-        setIsCreating(false);
-      },
-    });
-  };
-
-  // Auto-focus quick create input
-  useEffect(() => {
-    if (quickCreateMode) setTimeout(() => quickCreateRef.current?.focus(), 0);
-  }, [quickCreateMode]);
-
-  // Reset quick create when popover closes
-  useEffect(() => {
-    if (!popoverOpen) {
-      setQuickCreateMode(false);
-      setQuickCreateTitle('');
-    }
-  }, [popoverOpen]);
 
   // Collapsed sidebar: icon button only
   if (collapsed) {
@@ -229,15 +182,7 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
             />
           </button>
         </PopoverTrigger>
-        <PopoverContent
-          side="bottom"
-          align="start"
-          sideOffset={4}
-          className="w-64 p-1"
-          onInteractOutside={(e) => {
-            if (quickCreateMode) e.preventDefault();
-          }}
-        >
+        <PopoverContent side="bottom" align="start" sideOffset={4} className="w-64 p-1">
           {/* Mandala list */}
           <div className="max-h-[240px] overflow-y-auto">
             {sortedMandalas.map((mandala) => {
@@ -261,57 +206,17 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
               );
             })}
           </div>
-
-          {/* Divider + Create options */}
-          <div className="border-t border-border mt-1 pt-1 space-y-0.5">
-            {/* Wizard create */}
-            <button
-              onClick={() => {
-                setPopoverOpen(false);
-                navigate('/mandalas/new');
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-primary hover:bg-accent transition-colors"
-            >
-              <Wand2 className="w-3.5 h-3.5 shrink-0" />
-              {t('sidebar.createWithWizard')}
-            </button>
-
-            {/* Blank create (inline quick-create) */}
-            {quickCreateMode ? (
-              <div className="flex items-center gap-1.5 px-3 py-2">
-                <input
-                  ref={quickCreateRef}
-                  type="text"
-                  placeholder={t('mandalas.quickCreatePlaceholder')}
-                  value={quickCreateTitle}
-                  onChange={(e) => setQuickCreateTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.nativeEvent.isComposing) return;
-                    if (e.key === 'Enter') handleQuickCreate();
-                    if (e.key === 'Escape') {
-                      setQuickCreateMode(false);
-                      setQuickCreateTitle('');
-                    }
-                  }}
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground text-foreground"
-                  disabled={isCreating}
-                />
-                {isCreating && (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-                )}
-              </div>
-            ) : (
-              <button
-                onClick={() => setQuickCreateMode(true)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5 shrink-0" />
-                {t('sidebar.createBlank')}
-              </button>
-            )}
-          </div>
         </PopoverContent>
       </Popover>
+
+      {/* Create Mandala button — moved out of popover, placed below MY MANDALAS header */}
+      <button
+        onClick={() => navigate('/mandalas/new')}
+        className="w-full flex items-center gap-2 px-3 py-1.5 mt-1 rounded-lg text-sm text-primary hover:bg-sidebar-accent transition-colors"
+      >
+        <Wand2 className="w-3.5 h-3.5 shrink-0" />
+        {t('sidebar.createMandala', 'Create Mandala')}
+      </button>
 
       {/* Divider */}
       <div className="my-2 mx-2">
