@@ -1503,6 +1503,10 @@
       "description": "You have reached the mandala limit for your plan ({{used}} / {{limit}}). Delete an existing mandala or upgrade to create more.",
       "backHome": "Back to home",
       "upgrade": "Upgrade plan"
+    },
+    "dailyLimitReached": {
+      "title": "Daily limit reached",
+      "description": "You have created {{used}} mandalas today (daily limit: {{limit}}). You can create more tomorrow."
     }
   },
   "editor": {

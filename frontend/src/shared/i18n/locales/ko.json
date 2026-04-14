@@ -1504,6 +1504,10 @@
       "description": "플랜의 만다라 한도에 도달했습니다 ({{used}} / {{limit}}). 기존 만다라를 삭제하거나 플랜을 업그레이드하세요.",
       "backHome": "홈으로",
       "upgrade": "플랜 업그레이드"
+    },
+    "dailyLimitReached": {
+      "title": "일일 생성 한도 도달",
+      "description": "오늘 {{used}}개의 만다라를 생성했습니다 (일일 한도: {{limit}}). 내일 다시 이용 가능합니다."
     }
   },
   "editor": {

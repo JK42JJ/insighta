@@ -767,11 +767,13 @@ class ApiClient {
     limit: number | null;
     tier: string;
     remaining: number | null;
+    daily: { limit: number; used: number; remaining: number; isAdmin: boolean };
   }> {
     const res = await this.request<{
       quota: { used: number; limit: number | null; tier: string; remaining: number | null };
+      daily: { limit: number; used: number; remaining: number; isAdmin: boolean };
     }>('/mandalas/quota');
-    return res.quota;
+    return { ...res.quota, daily: res.daily };
   }
 
   // ========================================

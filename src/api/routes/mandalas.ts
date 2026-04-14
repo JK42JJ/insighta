@@ -365,7 +365,25 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
     const quota = await getMandalaManager().getUserQuota(userId);
 
-    return reply.send({ quota });
+    // Daily mandala creation limit (per-day cap separate from total quota)
+    const DAILY_MANDALA_LIMIT = 5;
+    const adminCheck = await getPrismaClient().$queryRaw<Array<{ is_super_admin: boolean | null }>>`
+      SELECT is_super_admin FROM auth.users WHERE id = ${userId}::uuid
+    `;
+    const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const todayCount = await getPrismaClient().user_mandalas.count({
+      where: { user_id: userId, created_at: { gte: startOfDay } },
+    });
+    const daily = {
+      limit: DAILY_MANDALA_LIMIT,
+      used: todayCount,
+      remaining: isSuperAdmin ? Infinity : Math.max(0, DAILY_MANDALA_LIMIT - todayCount),
+      isAdmin: isSuperAdmin,
+    };
+
+    return reply.send({ quota, daily });
   });
 
   // ═══ Source-Mandala Mappings (must be before /:id routes) ═══
@@ -474,19 +492,25 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.code(400).send({ error: 'templateId is required' });
     }
 
-    // Daily mandala creation limit (Phase 0-5)
+    // Daily mandala creation limit (Phase 0-5) — admins bypass
     const DAILY_MANDALA_LIMIT = 5;
-    const startOfDay = new Date();
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    const todayCount = await getPrismaClient().user_mandalas.count({
-      where: { user_id: userId, created_at: { gte: startOfDay } },
-    });
-    if (todayCount >= DAILY_MANDALA_LIMIT) {
-      return reply.code(429).send({
-        status: 429,
-        code: 'DAILY_LIMIT_REACHED',
-        message: `Daily mandala creation limit reached (${todayCount}/${DAILY_MANDALA_LIMIT})`,
+    const adminCheck = await getPrismaClient().$queryRaw<Array<{ is_super_admin: boolean | null }>>`
+      SELECT is_super_admin FROM auth.users WHERE id = ${userId}::uuid
+    `;
+    const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
+    if (!isSuperAdmin) {
+      const startOfDay = new Date();
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const todayCount = await getPrismaClient().user_mandalas.count({
+        where: { user_id: userId, created_at: { gte: startOfDay } },
       });
+      if (todayCount >= DAILY_MANDALA_LIMIT) {
+        return reply.code(429).send({
+          status: 429,
+          code: 'DAILY_LIMIT_REACHED',
+          message: `Daily mandala creation limit reached (${todayCount}/${DAILY_MANDALA_LIMIT})`,
+        });
+      }
     }
 
     try {
@@ -703,19 +727,25 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       });
     }
 
-    // Daily mandala creation limit (Phase 0-5)
+    // Daily mandala creation limit (Phase 0-5) — admins bypass
     const DAILY_MANDALA_LIMIT = 5;
-    const startOfDay = new Date();
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    const todayCount = await getPrismaClient().user_mandalas.count({
-      where: { user_id: userId, created_at: { gte: startOfDay } },
-    });
-    if (todayCount >= DAILY_MANDALA_LIMIT) {
-      return reply.code(429).send({
-        status: 429,
-        code: 'DAILY_LIMIT_REACHED',
-        message: `Daily mandala creation limit reached (${todayCount}/${DAILY_MANDALA_LIMIT})`,
+    const adminCheck = await getPrismaClient().$queryRaw<Array<{ is_super_admin: boolean | null }>>`
+      SELECT is_super_admin FROM auth.users WHERE id = ${userId}::uuid
+    `;
+    const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
+    if (!isSuperAdmin) {
+      const startOfDay = new Date();
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const todayCount = await getPrismaClient().user_mandalas.count({
+        where: { user_id: userId, created_at: { gte: startOfDay } },
       });
+      if (todayCount >= DAILY_MANDALA_LIMIT) {
+        return reply.code(429).send({
+          status: 429,
+          code: 'DAILY_LIMIT_REACHED',
+          message: `Daily mandala creation limit reached (${todayCount}/${DAILY_MANDALA_LIMIT})`,
+        });
+      }
     }
 
     try {

@@ -16,6 +16,9 @@ export default function MandalaWizardPage() {
   const { data: quota, isLoading: quotaLoading } = useMandalaQuota();
   const quotaReached =
     !quotaLoading && quota?.limit !== null && quota?.limit !== undefined && quota.remaining === 0;
+  // Daily cap (per-day creation limit, separate from total quota). Admins bypass.
+  const dailyReached =
+    !quotaLoading && quota?.daily && !quota.daily.isAdmin && quota.daily.remaining === 0;
 
   // Step 1: goal input only → Go saves goal + moves to Step 2
   const handleGoalGo = useCallback(
@@ -56,6 +59,35 @@ export default function MandalaWizardPage() {
   const containerClass = isResultsStep
     ? 'mx-auto max-w-[1080px] px-6 py-10'
     : 'mx-auto max-w-[720px] px-6 py-10';
+
+  if (dailyReached) {
+    return (
+      <div className="mx-auto max-w-[720px] px-6 py-10">
+        <div className="mb-10 text-[10px] font-bold uppercase tracking-[2px] text-foreground/[0.08]">
+          /mandalas/new
+        </div>
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
+          <Ban className="mx-auto mb-4 h-10 w-10 text-destructive/70" strokeWidth={1.6} />
+          <h1 className="mb-2 text-[22px] font-bold tracking-tight">
+            {t('wizard.dailyLimitReached.title', 'Daily limit reached')}
+          </h1>
+          <p className="mx-auto mb-6 max-w-[420px] text-[14px] leading-relaxed text-muted-foreground">
+            {t(
+              'wizard.dailyLimitReached.description',
+              'You have created {{used}} mandalas today (daily limit: {{limit}}). You can create more tomorrow.',
+              { used: quota?.daily?.used ?? 0, limit: quota?.daily?.limit ?? 5 }
+            )}
+          </p>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-[13px] font-semibold text-foreground transition-colors hover:bg-foreground/[0.04]"
+          >
+            {t('wizard.quotaReached.backHome', 'Back to home')}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (quotaReached) {
     return (
