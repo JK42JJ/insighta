@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { InsightCard } from '@/entities/card/model/types';
 import { Dialog, DialogContent, DialogDescription } from '@/shared/ui/dialog';
 import { DEFAULT_VIDEO_PANEL_RATIO } from '@/pages/index/model/useVideoModal';
@@ -20,6 +21,14 @@ interface VideoPlayerModalProps {
   panelSizeCache?: Map<string, number>;
   onEnrichStart?: (cardId: string) => void;
   onEnrichEnd?: (cardId: string) => void;
+  /** Navigate to previous card in the displayed list */
+  onPrev?: () => void;
+  /** Navigate to next card in the displayed list */
+  onNext?: () => void;
+  /** Whether prev navigation is available */
+  hasPrev?: boolean;
+  /** Whether next navigation is available */
+  hasNext?: boolean;
 }
 
 export function VideoPlayerModal({
@@ -32,6 +41,10 @@ export function VideoPlayerModal({
   panelSizeCache,
   onEnrichStart,
   onEnrichEnd,
+  onPrev,
+  onNext,
+  hasPrev = false,
+  hasNext = false,
 }: VideoPlayerModalProps) {
   const { t } = useTranslation();
   const playerRef = useRef<YTPlayer | null>(null);
@@ -40,6 +53,30 @@ export function VideoPlayerModal({
   useEffect(() => {
     setPlayerReady(false);
   }, [card?.id]);
+
+  // Keyboard navigation: ← prev, → next (only when modal open)
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      // Don't intercept while typing in inputs/textareas/contenteditable
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === 'ArrowLeft' && hasPrev && onPrev) {
+        e.preventDefault();
+        onPrev();
+      } else if (e.key === 'ArrowRight' && hasNext && onNext) {
+        e.preventDefault();
+        onNext();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpen, hasPrev, hasNext, onPrev, onNext]);
 
   const handlePlayerReady = useCallback(() => {
     setPlayerReady(true);
@@ -98,6 +135,28 @@ export function VideoPlayerModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      {/* Prev/Next navigation arrows — positioned at viewport edges, OUTSIDE
+          the modal container. Never overlap the video player. */}
+      {isOpen && hasPrev && onPrev && (
+        <button
+          type="button"
+          onClick={onPrev}
+          aria-label={t('videoPlayer.prevCard', 'Previous card')}
+          className="fixed left-4 top-1/2 -translate-y-1/2 z-[60] flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-all hover:bg-black/70 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/30"
+        >
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+      )}
+      {isOpen && hasNext && onNext && (
+        <button
+          type="button"
+          onClick={onNext}
+          aria-label={t('videoPlayer.nextCard', 'Next card')}
+          className="fixed right-4 top-1/2 -translate-y-1/2 z-[60] flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-all hover:bg-black/70 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/30"
+        >
+          <ChevronRight className="h-6 w-6" />
+        </button>
+      )}
       <DialogContent
         className="max-w-3xl w-[95vw] overflow-hidden p-0 flex flex-col outline-none border-0 focus:ring-0 focus:ring-offset-0 [&>button]:z-20 [&>button]:bg-black/60 [&>button]:text-white [&>button]:rounded-full [&>button]:p-1.5 [&>button]:opacity-90 [&>button]:hover:opacity-100 [&>button]:hover:bg-black/80 [&>button]:focus:ring-0 [&>button]:focus:ring-offset-0 [&>button]:right-2 [&>button]:top-2"
         aria-describedby="video-player-description"

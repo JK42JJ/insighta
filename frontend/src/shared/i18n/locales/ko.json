@@ -560,6 +560,8 @@
     "other": "링크"
   },
   "videoPlayer": {
+    "prevCard": "이전 카드",
+    "nextCard": "다음 카드",
     "clickToWriteNote": "클릭하여 메모 작성...",
     "memo": "메모",
     "notePlaceholder": "메모 입력... (Cmd+S 저장, / 슬래시 커맨드)",

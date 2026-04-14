@@ -253,6 +253,7 @@ function AuthenticatedApp() {
   const isSidePanelOpen = useVideoPanelStore((s) => s.isOpen);
 
   // Wire card click — dual mode: popup (default) or sidebar (expanded)
+  // Pass current displayed card list for prev/next navigation in modal
   const handleCardClick = (card: Parameters<typeof modal.openModal>[0]) => {
     trackCardViewed({
       mandala_id: ('mandala_id' in card ? (card.mandala_id as string) : undefined) ?? undefined,
@@ -263,7 +264,9 @@ function AuthenticatedApp() {
     if (panel.mode === 'sidebar' && panel.isOpen) {
       panel.openInSidebar(card);
     } else {
-      modal.openModal(card);
+      // Pass siblings: filtered + sorted cards currently visible in the grid
+      const siblings = search.isSearchActive ? search.results : cards.displayCards;
+      modal.openModal(card, siblings);
     }
   };
 
@@ -873,6 +876,10 @@ function AuthenticatedApp() {
           panelSizeCache={modal.panelSizeCache}
           onEnrichStart={cards.markEnrichStart}
           onEnrichEnd={cards.markEnrichEnd}
+          onPrev={modal.goPrev}
+          onNext={modal.goNext}
+          hasPrev={modal.hasPrev}
+          hasNext={modal.hasNext}
         />
 
         {/* Mobile-only floating MandalaPanel */}

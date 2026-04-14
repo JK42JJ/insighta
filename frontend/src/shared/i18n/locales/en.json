@@ -559,6 +559,8 @@
     "other": "Link"
   },
   "videoPlayer": {
+    "prevCard": "Previous card",
+    "nextCard": "Next card",
     "clickToWriteNote": "Click to write a note...",
     "memo": "Memo",
     "notePlaceholder": "Write a note... (Cmd+S to save, / to insert)",

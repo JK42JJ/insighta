@@ -20,6 +20,33 @@ const MIN_GRID_COLUMNS = 2;
 const MAX_GRID_COLUMNS = 6;
 const COMPACT_THRESHOLD = 5;
 
+// Responsive grid columns by viewport width (auto-calculated, replaces manual slider)
+// Slider component is preserved below for future reuse but hidden via SHOW_GRID_SLIDER flag.
+const SHOW_GRID_SLIDER = false;
+const BREAKPOINT_4COL = 1400;
+const BREAKPOINT_3COL = 1024;
+const BREAKPOINT_2COL = 768;
+
+function getResponsiveColumns(width: number): number {
+  if (width >= BREAKPOINT_4COL) return 4;
+  if (width >= BREAKPOINT_3COL) return 3;
+  if (width >= BREAKPOINT_2COL) return 2;
+  return 1;
+}
+
+function useResponsiveGridColumns(): number {
+  const [cols, setCols] = useState(() =>
+    typeof window !== 'undefined' ? getResponsiveColumns(window.innerWidth) : 3
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const update = () => setCols(getResponsiveColumns(window.innerWidth));
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return cols;
+}
+
 interface CardListViewProps {
   cards: InsightCard[];
   isLoading?: boolean;
@@ -90,10 +117,14 @@ export function CardListView({
   totalCardCount,
   cardsByCell,
   isExternalCardDragActive,
-  gridColumns = 4,
+  gridColumns: gridColumnsProp,
   onGridColumnsChange,
 }: CardListViewProps) {
   const { t } = useTranslation();
+  // Auto-responsive columns by viewport width. Manual gridColumns prop ignored
+  // unless SHOW_GRID_SLIDER flag is on (slider preserved for future use).
+  const responsiveColumns = useResponsiveGridColumns();
+  const gridColumns = SHOW_GRID_SLIDER && gridColumnsProp ? gridColumnsProp : responsiveColumns;
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
@@ -205,9 +236,11 @@ export function CardListView({
     onCellClick?.(-1, '');
   }, [onCellClick]);
 
-  // Grid column slider element (inline in header)
+  // Grid column slider element (inline in header).
+  // Hidden by default — auto-responsive columns by viewport instead.
+  // Slider code preserved for future toggle via SHOW_GRID_SLIDER flag.
   const gridSliderElement =
-    onGridColumnsChange && effectiveViewMode === 'grid' ? (
+    SHOW_GRID_SLIDER && onGridColumnsChange && effectiveViewMode === 'grid' ? (
       <div className="hidden md:flex items-center gap-1.5">
         <LayoutGrid className="w-2.5 h-2.5 text-muted-foreground/60" />
         <Slider
