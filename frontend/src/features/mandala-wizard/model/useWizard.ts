@@ -356,7 +356,15 @@ export function useWizard() {
                 position: old.mandalas.length,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                levels: [],
+                levels: [
+                  {
+                    depth: 0,
+                    centerGoal: state.selectedTemplate?.centerGoal ?? title ?? '',
+                    centerLabel: state.selectedTemplate?.centerLabel ?? title ?? '',
+                    subjects: state.selectedTemplate?.subjects ?? [],
+                    subjectLabels: state.selectedTemplate?.subLabels ?? [],
+                  },
+                ],
               },
             ],
           };
