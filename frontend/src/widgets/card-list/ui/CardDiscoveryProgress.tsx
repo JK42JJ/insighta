@@ -99,7 +99,9 @@ export function CardDiscoveryProgress({
       <p
         key={currentStep}
         className="insighta-shimmer-text text-sm"
-        style={{ animation: 'insighta-fade-in 400ms ease-out' }}
+        style={{
+          animation: 'insighta-fade-in 400ms ease-out, insighta-shimmer 2s ease-in-out infinite',
+        }}
       >
         {t(stepKey)}
       </p>
