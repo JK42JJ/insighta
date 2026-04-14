@@ -161,7 +161,7 @@ interface ExtraProSkill {
   id: string;
   shortLabelKey: string;
   defaultLabel: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
 }
 const EXTRA_PRO_SKILLS: ReadonlyArray<ExtraProSkill> = [
   {
@@ -487,27 +487,30 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
                       background: isEnabled ? (color?.iconBg ?? OFF_ICON_BG) : OFF_ICON_BG,
                     }}
                   >
-                    {/* Glow dot (ON only) */}
+                    {/* Glow dot (ON only) — toned down */}
                     {isEnabled && (
                       <span
                         className="absolute -top-px -right-px w-[3px] h-[3px] rounded-full"
                         style={{
-                          background: '#34d399',
-                          boxShadow: '0 0 6px 1px rgba(52,211,153,0.6)',
+                          background: '#16a34a',
+                          boxShadow: '0 0 3px rgba(22,163,74,0.3)',
                         }}
                       />
                     )}
                     {isToggling ? (
-                      <Loader2 className="w-6 h-6 animate-spin text-sidebar-foreground/40" />
+                      <Loader2
+                        className="w-6 h-6 animate-spin text-sidebar-foreground/40"
+                        strokeWidth={1.5}
+                      />
                     ) : (
                       <span
                         className="transition-all duration-300"
                         style={{
                           color: isEnabled ? (color?.stroke ?? '#9394a0') : '#3a3b46',
-                          opacity: isEnabled ? 1 : 0.35,
+                          opacity: isEnabled ? 0.85 : 0.35,
                         }}
                       >
-                        <Icon className="w-6 h-6" />
+                        <Icon className="w-6 h-6" strokeWidth={1.5} />
                       </span>
                     )}
                   </div>
@@ -595,7 +598,7 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
                       border: '1px dashed rgba(251,191,36,0.15)',
                     }}
                   >
-                    <ProIcon className="w-6 h-6 text-[#3a3b46] opacity-25" />
+                    <ProIcon className="w-6 h-6 text-[#3a3b46] opacity-25" strokeWidth={1.5} />
                   </div>
 
                   {/* Label */}
