@@ -518,8 +518,8 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
                   {/* Label */}
                   <span
                     className={cn(
-                      'text-[10px] font-bold text-center tracking-tight transition-colors duration-300 antialiased',
-                      isEnabled ? 'text-[#ededf0]' : 'text-[#4e4f5c]'
+                      'text-[10px] font-medium text-center tracking-tight transition-colors duration-300 antialiased',
+                      isEnabled ? 'text-[#9ea0a8]' : 'text-[#4e4f5c]'
                     )}
                   >
                     {t(
