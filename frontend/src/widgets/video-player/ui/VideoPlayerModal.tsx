@@ -148,36 +148,41 @@ export function VideoPlayerModal({
           {t('videoPlayer.memo')}
         </DialogDescription>
 
-        {/* Prev/Next navigation arrows — anchored to modal edges (absolute), OUTSIDE
-            the visible content area. -left-14/-right-14 places them just beyond the
-            modal container. e.stopPropagation prevents Radix outside-click close. */}
+        {/* Prev/Next navigation arrows — wrapped in div to avoid DialogContent's
+            [&>button] selector which forces all direct button children to the
+            top-right corner (intended for the X close button only).
+            absolute -left-14/-right-14 places them just outside modal edges. */}
         {hasPrev && onPrev && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPrev();
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            aria-label={t('videoPlayer.prevCard', 'Previous card')}
-            className="absolute -left-14 top-1/2 -translate-y-1/2 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all hover:bg-black/80 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/30"
-          >
-            <ChevronLeft className="h-6 w-6" />
-          </button>
+          <div className="absolute -left-14 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPrev();
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              aria-label={t('videoPlayer.prevCard', 'Previous card')}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all hover:bg-black/80 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/30"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+          </div>
         )}
         {hasNext && onNext && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNext();
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            aria-label={t('videoPlayer.nextCard', 'Next card')}
-            className="absolute -right-14 top-1/2 -translate-y-1/2 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all hover:bg-black/80 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/30"
-          >
-            <ChevronRight className="h-6 w-6" />
-          </button>
+          <div className="absolute -right-14 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNext();
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              aria-label={t('videoPlayer.nextCard', 'Next card')}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all hover:bg-black/80 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/30"
+            >
+              <ChevronRight className="h-6 w-6" />
+            </button>
+          </div>
         )}
 
         {isYouTube && videoId ? (
