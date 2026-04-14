@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDroppable } from '@dnd-kit/core';
 import type { InsightCard } from '@/entities/card/model/types';
@@ -20,30 +20,37 @@ const MIN_GRID_COLUMNS = 2;
 const MAX_GRID_COLUMNS = 6;
 const COMPACT_THRESHOLD = 5;
 
-// Responsive grid columns by viewport width (auto-calculated, replaces manual slider)
+// Responsive grid columns by CONTAINER width (auto-calculated, replaces manual slider).
+// Reacts to side panel open/close — when main area shrinks, columns auto-reduce.
 // Slider component is preserved below for future reuse but hidden via SHOW_GRID_SLIDER flag.
 const SHOW_GRID_SLIDER = false;
-const BREAKPOINT_4COL = 1400;
-const BREAKPOINT_3COL = 1024;
-const BREAKPOINT_2COL = 768;
+const CONTAINER_4COL = 1200;
+const CONTAINER_3COL = 900;
+const CONTAINER_2COL = 600;
 
-function getResponsiveColumns(width: number): number {
-  if (width >= BREAKPOINT_4COL) return 4;
-  if (width >= BREAKPOINT_3COL) return 3;
-  if (width >= BREAKPOINT_2COL) return 2;
+function getColumnsForWidth(width: number): number {
+  if (width >= CONTAINER_4COL) return 4;
+  if (width >= CONTAINER_3COL) return 3;
+  if (width >= CONTAINER_2COL) return 2;
   return 1;
 }
 
-function useResponsiveGridColumns(): number {
-  const [cols, setCols] = useState(() =>
-    typeof window !== 'undefined' ? getResponsiveColumns(window.innerWidth) : 3
-  );
+function useContainerColumns(ref: React.RefObject<HTMLElement>): number {
+  const [cols, setCols] = useState(3);
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const update = () => setCols(getResponsiveColumns(window.innerWidth));
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, []);
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = entry.contentRect.width;
+        setCols(getColumnsForWidth(w));
+      }
+    });
+    observer.observe(el);
+    // Initial measurement
+    setCols(getColumnsForWidth(el.getBoundingClientRect().width));
+    return () => observer.disconnect();
+  }, [ref]);
   return cols;
 }
 
@@ -121,9 +128,10 @@ export function CardListView({
   onGridColumnsChange,
 }: CardListViewProps) {
   const { t } = useTranslation();
-  // Auto-responsive columns by viewport width. Manual gridColumns prop ignored
-  // unless SHOW_GRID_SLIDER flag is on (slider preserved for future use).
-  const responsiveColumns = useResponsiveGridColumns();
+  // Auto-responsive columns by CONTAINER width (reacts to side panel open/close).
+  // Manual gridColumns prop ignored unless SHOW_GRID_SLIDER flag is on.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const responsiveColumns = useContainerColumns(containerRef);
   const gridColumns = SHOW_GRID_SLIDER && gridColumnsProp ? gridColumnsProp : responsiveColumns;
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -301,9 +309,14 @@ export function CardListView({
 
   // Grid mode
   if (effectiveViewMode === 'grid') {
+    // Combine setGridAreaRef (DnD) and containerRef (ResizeObserver)
+    const setCombinedRef = (node: HTMLDivElement | null) => {
+      setGridAreaRef(node);
+      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    };
     return (
       <div
-        ref={setGridAreaRef}
+        ref={setCombinedRef}
         onDragOver={handleExternalDragOver}
         onDragLeave={handleExternalDragLeave}
         onDrop={handleExternalDrop}
