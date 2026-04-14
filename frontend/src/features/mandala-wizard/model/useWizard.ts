@@ -602,10 +602,10 @@ export function useWizard() {
       subDetails[idx] = actions;
       totalActions += actions.length;
     });
-    // Validate: AI-generated mandala MUST have actions populated (one-shot generation)
-    if (totalActions < 56) {
+    // Validate: AI-generated mandala MUST have all 64 actions (one-shot generation)
+    if (totalActions < 64) {
       throw new Error(
-        `AI generated mandala is incomplete: ${totalActions}/64 actions (minimum 56). Please retry.`
+        `AI generated mandala is incomplete: ${totalActions}/64 actions. Please retry.`
       );
     }
     const template: WizardTemplate = {

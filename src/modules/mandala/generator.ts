@@ -330,9 +330,8 @@ function validateMandala(m: GeneratedMandala): { valid: boolean; reason?: string
     (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0),
     0
   );
-  if (totalActions < 56) {
-    // Allow some flexibility (7/8 per sub_goal minimum)
-    return { valid: false, reason: `actions count: ${totalActions}/64 (minimum 56)` };
+  if (totalActions < 64) {
+    return { valid: false, reason: `actions count: ${totalActions}/64 (strict: 64 required)` };
   }
   return { valid: true };
 }
