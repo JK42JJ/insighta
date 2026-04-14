@@ -811,7 +811,10 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       });
 
       // Background: generate actions if not provided (Phase 2 of two-phase generation)
-      const hasActions = subDetails && Object.keys(subDetails).length > 0;
+      // Check if subDetails has ACTUAL action data (non-empty arrays), not just empty arrays.
+      // FE sends {"0":[],"1":[],...} when structure-only generation returns actions={}.
+      const hasActions =
+        subDetails && Object.values(subDetails).some((arr) => Array.isArray(arr) && arr.length > 0);
       if (!hasActions) {
         const mandalaId = result.id;
         const lang = request.body.language;
