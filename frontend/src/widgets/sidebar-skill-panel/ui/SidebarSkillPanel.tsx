@@ -602,14 +602,6 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
                   <span className="text-[11px] font-semibold text-[#3a3b46] text-center">
                     {t(`skills.${proSkill.shortLabelKey}`, proSkill.defaultLabel)}
                   </span>
-
-                  {/* Upgrade CTA */}
-                  <span
-                    className="text-[8px] mt-1 font-bold tracking-wide uppercase px-1.5 py-px rounded-[3px]"
-                    style={{ background: 'rgba(251,191,36,0.08)', color: '#fbbf24' }}
-                  >
-                    UPGRADE
-                  </span>
                 </button>
               );
             })}
