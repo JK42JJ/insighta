@@ -28,7 +28,10 @@ export function LabelFilterPillsV2({
   const isAllSelected = selectedIndex === null;
 
   return (
-    <div className="flex items-center gap-0 overflow-x-auto scrollbar-hide pb-1 mb-1.5">
+    <div
+      data-card-chrome
+      className="flex items-center gap-0 overflow-x-auto scrollbar-hide pb-1 mb-1.5"
+    >
       {/* All tab */}
       <button
         onClick={onAllClick}

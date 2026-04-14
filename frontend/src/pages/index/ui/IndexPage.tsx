@@ -733,7 +733,7 @@ function AuthenticatedApp() {
               <div
                 className={`flex-1 h-full px-4 py-4 ${modal.isModalOpen ? 'overflow-hidden' : 'overflow-y-auto scrollbar-pro'} ${
                   isSidePanelOpen
-                    ? '[&_[data-card-item]]:opacity-40 [&_[data-card-item]]:grayscale [&_[data-card-item]]:transition-[opacity,filter] [&_[data-card-item]]:duration-300 [&_[data-card-item]:hover]:opacity-100 [&_[data-card-item]:hover]:grayscale-0'
+                    ? '[&_[data-card-item]]:opacity-40 [&_[data-card-item]]:grayscale [&_[data-card-item]]:transition-[opacity,filter] [&_[data-card-item]]:duration-300 [&_[data-card-item]:hover]:opacity-100 [&_[data-card-item]:hover]:grayscale-0 [&_[data-card-chrome]]:opacity-40 [&_[data-card-chrome]]:grayscale [&_[data-card-chrome]]:transition-[opacity,filter] [&_[data-card-chrome]]:duration-300'
                     : ''
                 }`}
               >

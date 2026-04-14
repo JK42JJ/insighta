@@ -47,7 +47,7 @@ export function ContextHeader({
   const currentSortLabel = SORT_OPTIONS.find((o) => o.value === sortMode);
 
   return (
-    <div className="flex items-center justify-between mb-1">
+    <div data-card-chrome className="flex items-center justify-between mb-1">
       {/* Left: sector badge + title + count + selection */}
       <div className="flex items-center gap-2 min-w-0">
         <div className="flex items-center justify-center w-6 h-6 rounded bg-primary/10 text-primary text-[11px] font-semibold shrink-0">
