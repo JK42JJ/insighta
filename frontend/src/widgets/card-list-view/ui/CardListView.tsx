@@ -63,7 +63,7 @@ interface CardListViewProps {
   mandalaId?: string | null;
   onViewModeChange: (mode: ViewMode) => void;
   onListPanelRatioChange: (ratio: number) => void;
-  onCardClick?: (card: InsightCard) => void;
+  onCardClick?: (card: InsightCard, sortedList?: InsightCard[]) => void;
   onCardDragStart?: (card: InsightCard) => void;
   onMultiCardDragStart?: (cards: InsightCard[]) => void;
   onSaveNote?: (id: string, note: string) => void;
@@ -353,7 +353,7 @@ export function CardListView({
           title={title}
           gridColumns={gridColumns}
           compact={gridColumns >= COMPACT_THRESHOLD}
-          onCardClick={onCardClick}
+          onCardClick={onCardClick ? (card) => onCardClick(card, sortedCards) : undefined}
           onCardDragStart={onCardDragStart}
           onMultiCardDragStart={onMultiCardDragStart}
           onSaveNote={onSaveNote}
@@ -384,7 +384,7 @@ export function CardListView({
             cards={sortedCards}
             activeCardId={activeCard?.id ?? null}
             onCardSelect={handleCardSelect}
-            onCardClick={onCardClick}
+            onCardClick={onCardClick ? (card) => onCardClick(card, sortedCards) : undefined}
           />
         </div>
       </div>
@@ -408,7 +408,7 @@ export function CardListView({
               cards={sortedCards}
               activeCardId={activeCard?.id ?? null}
               onCardSelect={handleCardSelect}
-              onCardClick={onCardClick}
+              onCardClick={onCardClick ? (card) => onCardClick(card, sortedCards) : undefined}
             />
           </ResizablePanel>
           <ResizableHandle withHandle />

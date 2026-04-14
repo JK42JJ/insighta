@@ -253,8 +253,11 @@ function AuthenticatedApp() {
   const isSidePanelOpen = useVideoPanelStore((s) => s.isOpen);
 
   // Wire card click — dual mode: popup (default) or sidebar (expanded)
-  // Pass current displayed card list for prev/next navigation in modal
-  const handleCardClick = (card: Parameters<typeof modal.openModal>[0]) => {
+  // sortedList comes from CardListView (matches user-visible sort order)
+  const handleCardClick = (
+    card: Parameters<typeof modal.openModal>[0],
+    sortedList?: Parameters<typeof modal.openModal>[1]
+  ) => {
     trackCardViewed({
       mandala_id: ('mandala_id' in card ? (card.mandala_id as string) : undefined) ?? undefined,
       card_id: card.id,
@@ -264,8 +267,9 @@ function AuthenticatedApp() {
     if (panel.mode === 'sidebar' && panel.isOpen) {
       panel.openInSidebar(card);
     } else {
-      // Pass siblings: filtered + sorted cards currently visible in the grid
-      const siblings = search.isSearchActive ? search.results : cards.displayCards;
+      // Use the sorted list from CardListView (matches what user sees on screen).
+      // Fallback to displayCards if sortedList missing (defensive).
+      const siblings = sortedList ?? (search.isSearchActive ? search.results : cards.displayCards);
       modal.openModal(card, siblings);
     }
   };

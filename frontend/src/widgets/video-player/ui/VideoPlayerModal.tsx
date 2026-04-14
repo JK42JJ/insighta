@@ -175,7 +175,8 @@ export function VideoPlayerModal({
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
                 aria-label={t('videoPlayer.prevCard', 'Previous card')}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white/70 backdrop-blur-sm opacity-30 transition-all hover:opacity-100 hover:bg-black/70 hover:text-white hover:scale-110 focus:outline-none"
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white/70 backdrop-blur-sm opacity-30 transition-[opacity,background-color,color] duration-200 hover:opacity-100 hover:bg-black/70 hover:text-white focus:outline-none focus-visible:outline-none active:outline-none select-none"
               >
                 <ChevronLeft className="h-6 w-6" />
               </button>
@@ -193,7 +194,8 @@ export function VideoPlayerModal({
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
                 aria-label={t('videoPlayer.nextCard', 'Next card')}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white/70 backdrop-blur-sm opacity-30 transition-all hover:opacity-100 hover:bg-black/70 hover:text-white hover:scale-110 focus:outline-none"
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white/70 backdrop-blur-sm opacity-30 transition-[opacity,background-color,color] duration-200 hover:opacity-100 hover:bg-black/70 hover:text-white focus:outline-none focus-visible:outline-none active:outline-none select-none"
               >
                 <ChevronRight className="h-6 w-6" />
               </button>
