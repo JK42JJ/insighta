@@ -16,6 +16,9 @@ export interface PanelVideoPlayerProps {
   startTime?: number;
   playerRef?: React.MutableRefObject<YTPlayer | null>;
   onReady?: () => void;
+  /** Whether to auto-play on mount. False on persist-rehydrate (page refresh)
+   *  to prevent unintended playback. Default: false (require explicit user action). */
+  shouldAutoplay?: boolean;
 }
 
 export function PanelVideoPlayer({
@@ -23,6 +26,7 @@ export function PanelVideoPlayer({
   startTime,
   playerRef,
   onReady,
+  shouldAutoplay = false,
 }: PanelVideoPlayerProps) {
   const youtubeId = getYouTubeVideoId(videoUrl);
   const internalPlayerRef = useRef<YTPlayer | null>(null);
@@ -106,7 +110,7 @@ export function PanelVideoPlayer({
     );
   }
 
-  const embedSrc = `https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1&enablejsapi=1${startTime ? `&start=${Math.floor(startTime)}` : ''}`;
+  const embedSrc = `https://www.youtube.com/embed/${youtubeId}?autoplay=${shouldAutoplay ? 1 : 0}&rel=0&modestbranding=1&enablejsapi=1${startTime ? `&start=${Math.floor(startTime)}` : ''}`;
 
   return (
     <div className="relative w-full shrink-0 bg-black" style={{ aspectRatio: '16/9' }}>

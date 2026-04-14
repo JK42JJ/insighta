@@ -21,6 +21,10 @@ export interface VideoPanelState {
   activeTab: 'notes' | 'ai-summary';
   /** Video playback position to resume from (seconds). */
   startTime: number;
+  /** Whether the video should auto-play. True only on explicit user actions
+   *  (expand/openInSidebar). Reset to false on persist rehydration so refresh
+   *  doesn't trigger autoplay. */
+  shouldAutoplay: boolean;
 
   /** ↗ expand button in MemoEditor: close modal, open sidebar. */
   expandToSidebar: (card: InsightCard, startTime?: number) => void;
@@ -30,6 +34,9 @@ export interface VideoPanelState {
   closeSidebar: () => void;
   /** Switch between notes and AI summary tabs. */
   setTab: (tab: 'notes' | 'ai-summary') => void;
+  /** Mark autoplay consumed — call after the iframe loads to prevent
+   *  re-trigger on subsequent re-renders. */
+  consumeAutoplay: () => void;
 }
 
 export const useVideoPanelStore = create<VideoPanelState>()(
@@ -40,15 +47,25 @@ export const useVideoPanelStore = create<VideoPanelState>()(
       card: null,
       activeTab: 'notes',
       startTime: 0,
+      shouldAutoplay: false,
 
       expandToSidebar: (card, startTime = 0) =>
-        set({ mode: 'sidebar', isOpen: true, card, activeTab: 'notes', startTime }),
+        set({
+          mode: 'sidebar',
+          isOpen: true,
+          card,
+          activeTab: 'notes',
+          startTime,
+          shouldAutoplay: true,
+        }),
 
-      openInSidebar: (card) => set({ card, activeTab: 'notes' }),
+      openInSidebar: (card) => set({ card, activeTab: 'notes', shouldAutoplay: true }),
 
-      closeSidebar: () => set({ mode: 'popup', isOpen: false }),
+      closeSidebar: () => set({ mode: 'popup', isOpen: false, shouldAutoplay: false }),
 
       setTab: (tab) => set({ activeTab: tab }),
+
+      consumeAutoplay: () => set({ shouldAutoplay: false }),
     }),
     {
       name: 'insighta-video-panel',
@@ -58,6 +75,7 @@ export const useVideoPanelStore = create<VideoPanelState>()(
         card: state.card,
         activeTab: state.activeTab,
         // startTime intentionally excluded — don't resume playback on refresh
+        // shouldAutoplay intentionally excluded — refresh must NOT autoplay
       }),
     }
   )

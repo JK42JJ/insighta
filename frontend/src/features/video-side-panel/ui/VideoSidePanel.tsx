@@ -24,6 +24,8 @@ export function VideoSidePanel() {
   const startTime = useVideoPanelStore((s) => s.startTime);
   const closeSidebar = useVideoPanelStore((s) => s.closeSidebar);
   const setTab = useVideoPanelStore((s) => s.setTab);
+  const shouldAutoplay = useVideoPanelStore((s) => s.shouldAutoplay);
+  const consumeAutoplay = useVideoPanelStore((s) => s.consumeAutoplay);
 
   const playerRef = useRef<YTPlayer | null>(null);
   const playerReadyRef = useRef(false);
@@ -96,7 +98,12 @@ export function VideoSidePanel() {
           videoUrl={card.videoUrl}
           startTime={startTime}
           playerRef={playerRef}
-          onReady={handlePlayerReady}
+          onReady={() => {
+            handlePlayerReady();
+            // Mark autoplay consumed so subsequent re-renders don't re-trigger
+            if (shouldAutoplay) consumeAutoplay();
+          }}
+          shouldAutoplay={shouldAutoplay}
         />
       )}
 
