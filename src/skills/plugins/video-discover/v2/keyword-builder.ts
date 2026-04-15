@@ -77,7 +77,11 @@ export interface SearchQuery {
   cellIndex?: number | null;
 }
 
-export const MAX_QUERIES = 5;
+// Bumped 5 → 8 (2026-04-15) so Tier 2 has a deeper YouTube pool to draw
+// from when the local cache is empty and topics like "해외 리모트" return
+// few results per query. 8 × search.list (100 units) = 800 quota/mandala
+// — still well under the 10k/day budget for typical usage (≥12 mandalas).
+export const MAX_QUERIES = 8;
 export const MAX_QUERY_LENGTH = 100;
 
 const TARGET_LEVEL_KEYWORDS: Record<string, Record<KeywordLanguage, string>> = {
@@ -206,7 +210,10 @@ function buildRuleBasedQueries(input: KeywordBuilderInput, center: string): Sear
       out.push({ query: clip(`${center} ${map[input.language]}`), source: 'level' });
     }
   }
-  for (const { s, i } of pickDistinctiveSubGoalsWithIndex(input.subGoals, 2)) {
+  // 2 → 4 sub_goals (2026-04-15). Specific topics (e.g. "해외 리모트")
+  // produce few YouTube hits per query — broader sub_goal coverage gives
+  // Tier 2 a deeper pool to fill cells with.
+  for (const { s, i } of pickDistinctiveSubGoalsWithIndex(input.subGoals, 4)) {
     out.push({ query: clip(`${center} ${s}`), source: 'subgoal', cellIndex: i });
   }
   return out;

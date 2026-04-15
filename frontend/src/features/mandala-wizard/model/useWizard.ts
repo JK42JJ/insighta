@@ -637,49 +637,107 @@ export function useWizard() {
     }));
   }, []);
 
-  const complete = useCallback(() => {
-    const template = state.selectedTemplate;
-    if (!template) return;
+  /**
+   * Complete the wizard by creating the mandala.
+   *
+   * Accepts an optional `overrideTemplate` — the AI-generated flow uses this
+   * to avoid a React stale-closure race: previously the page called
+   * `selectGeneratedMandala(generated)` then `complete()`, relying on
+   * `state.selectedTemplate` to have been committed. setState is async so the
+   * first click saw the old (null) template and the mutation silently bailed;
+   * only the second click — after re-render — actually fired. Passing the
+   * template directly removes the dependency on state propagation.
+   */
+  const complete = useCallback(
+    (overrideTemplate?: WizardTemplate) => {
+      const template = overrideTemplate ?? state.selectedTemplate;
+      if (!template) return;
 
-    // UUID format check: DB templates have UUID; search results use their original UUID;
-    // AI-generated uses `ai-generated-{timestamp}` which is not a UUID.
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const isUuid = UUID_RE.test(template.id);
-    const hasRichData = template.subDetails && Object.keys(template.subDetails).length > 0;
+      // UUID format check: DB templates have UUID; search results use their original UUID;
+      // AI-generated uses `ai-generated-{timestamp}` which is not a UUID.
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const isUuid = UUID_RE.test(template.id);
+      const hasRichData = template.subDetails && Object.keys(template.subDetails).length > 0;
 
-    // If template has rich data (actions) OR is not a real DB UUID, use create-with-data
-    if (hasRichData || !isUuid) {
-      const subDetailsKeyed: Record<string, string[]> = {};
-      for (const [k, v] of Object.entries(template.subDetails ?? {})) {
-        subDetailsKeyed[String(k)] = v;
+      // If template has rich data (actions) OR is not a real DB UUID, use create-with-data
+      if (hasRichData || !isUuid) {
+        const subDetailsKeyed: Record<string, string[]> = {};
+        for (const [k, v] of Object.entries(template.subDetails ?? {})) {
+          subDetailsKeyed[String(k)] = v;
+        }
+        createWithDataMutation.mutate({
+          title: template.title,
+          centerGoal: template.centerGoal,
+          subjects: template.subjects,
+          subDetails: subDetailsKeyed,
+          skills: state.skills,
+          centerLabel: template.centerLabel,
+          subLabels: template.subLabels,
+          focusTags: state.focusTags.length > 0 ? state.focusTags : undefined,
+          targetLevel: state.targetLevel !== 'standard' ? state.targetLevel : undefined,
+        });
+      } else {
+        // DB template clone (keeps source_template_id linkage)
+        createMutateRef.current({
+          templateId: template.id,
+          skills: state.skills,
+          focusTags: state.focusTags.length > 0 ? state.focusTags : undefined,
+          targetLevel: state.targetLevel !== 'standard' ? state.targetLevel : undefined,
+        });
       }
-      createWithDataMutation.mutate({
-        title: template.title,
-        centerGoal: template.centerGoal,
-        subjects: template.subjects,
-        subDetails: subDetailsKeyed,
-        skills: state.skills,
-        centerLabel: template.centerLabel,
-        subLabels: template.subLabels,
-        focusTags: state.focusTags.length > 0 ? state.focusTags : undefined,
-        targetLevel: state.targetLevel !== 'standard' ? state.targetLevel : undefined,
+    },
+    [
+      state.selectedTemplate,
+      state.skills,
+      state.focusTags,
+      state.targetLevel,
+      createWithDataMutation,
+    ]
+  );
+
+  /**
+   * Atomic "select generated mandala + complete" for the AI custom flow.
+   * Constructs the template synchronously and hands it directly to
+   * `complete`, bypassing the setState→re-render round trip that caused
+   * the double-click bug.
+   */
+  const selectGeneratedAndComplete = useCallback(
+    (generated: GeneratedMandala) => {
+      const subDetails: Record<number, string[]> = {};
+      let totalActions = 0;
+      generated.sub_goals.forEach((_, idx) => {
+        const key = `sub_goal_${idx + 1}`;
+        const actions =
+          generated.actions[key] ??
+          generated.actions[String(idx)] ??
+          generated.actions[generated.sub_goals[idx]] ??
+          [];
+        subDetails[idx] = actions;
+        totalActions += actions.length;
       });
-    } else {
-      // DB template clone (keeps source_template_id linkage)
-      createMutateRef.current({
-        templateId: template.id,
-        skills: state.skills,
-        focusTags: state.focusTags.length > 0 ? state.focusTags : undefined,
-        targetLevel: state.targetLevel !== 'standard' ? state.targetLevel : undefined,
-      });
-    }
-  }, [
-    state.selectedTemplate,
-    state.skills,
-    state.focusTags,
-    state.targetLevel,
-    createWithDataMutation,
-  ]);
+      if (totalActions < 64) {
+        throw new Error(
+          `AI generated mandala is incomplete: ${totalActions}/64 actions. Please retry.`
+        );
+      }
+      const template: WizardTemplate = {
+        id: `ai-generated-${Date.now()}`,
+        title: generated.center_goal,
+        shareSlug: null,
+        likeCount: 0,
+        centerGoal: generated.center_goal,
+        centerLabel: generated.center_label,
+        subjects: generated.sub_goals,
+        subLabels: generated.sub_labels,
+        subDetails,
+      };
+      // Keep the state in sync so any downstream reads (error UI, etc.) see
+      // the selected template; but don't rely on it for the mutation.
+      setState((prev) => ({ ...prev, selectedTemplate: template }));
+      complete(template);
+    },
+    [complete]
+  );
 
   return {
     ...state,
@@ -704,6 +762,7 @@ export function useWizard() {
     isCreatingBlank: createBlankMutation.isPending,
     selectSearchResult,
     selectGeneratedMandala,
+    selectGeneratedAndComplete,
     searchResults: searchMutation.data ?? [],
     isSearching: searchMutation.isPending,
     // CP358: isSuccess gates the empty-state UI to eliminate the 1-frame

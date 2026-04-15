@@ -46,10 +46,12 @@ export default function MandalaWizardPage() {
     [wizard]
   );
 
+  // Delegate to the atomic wizard helper — it constructs the template and
+  // passes it directly to `complete`, avoiding the prior setState race that
+  // forced users to double-click the AI-custom card.
   const handleSelectGeneratedAndComplete = useCallback(
-    (...args: Parameters<typeof wizard.selectGeneratedMandala>) => {
-      wizard.selectGeneratedMandala(...args);
-      setTimeout(() => wizard.complete(), 0);
+    (...args: Parameters<typeof wizard.selectGeneratedAndComplete>) => {
+      wizard.selectGeneratedAndComplete(...args);
     },
     [wizard]
   );
