@@ -25,6 +25,7 @@ import { settingsRoutes } from './routes/settings';
 import { youtubeRoutes } from './routes/youtube';
 import { sharingRoutes } from './routes/sharing';
 import { skillRoutes } from './routes/skills';
+import { internalBatchVideoCollectorRoutes } from './routes/internal/batch-video-collector';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
@@ -279,6 +280,13 @@ export async function buildServer() {
 
       // Register admin routes (requires is_super_admin)
       await instance.register(adminRoutes, { prefix: '/admin' });
+
+      // Internal routes — protected by shared token (x-internal-token),
+      // used by GitHub Actions cron for batch jobs. Do NOT expose these
+      // to the browser; the token bypasses per-user auth.
+      await instance.register(internalBatchVideoCollectorRoutes, {
+        prefix: '/internal/skills',
+      });
     },
     { prefix: '/api/v1' }
   );

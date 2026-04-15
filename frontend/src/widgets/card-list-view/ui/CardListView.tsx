@@ -23,12 +23,25 @@ const COMPACT_THRESHOLD = 5;
 // Responsive grid columns by CONTAINER width (auto-calculated, replaces manual slider).
 // Reacts to side panel open/close — when main area shrinks, columns auto-reduce.
 // Slider component is preserved below for future reuse but hidden via SHOW_GRID_SLIDER flag.
+//
+// Breakpoints widened so the 2-column layout applies across the full range
+// that an open side panel typically leaves behind (~400–1100px of main
+// area). Previously cards dropped to 1-col below 600px, which made every
+// card read as a thumbnail strip when the video panel was expanded.
 const SHOW_GRID_SLIDER = false;
-const CONTAINER_4COL = 1200;
-const CONTAINER_3COL = 900;
-const CONTAINER_2COL = 600;
+const CONTAINER_5COL = 1600;
+const CONTAINER_4COL = 1300;
+const CONTAINER_3COL = 1050;
+// Aggressively low so 2-col holds even when the sidebar is expanded AND
+// the video side panel takes ~70% — e.g. 1280px viewport × 30% = ~384px
+// main area → minus padding leaves ~280px of card grid. We'd still rather
+// show two ~130px thumbnails than one strip. 1-col is only for the single
+// edge case of extreme horizontal compression (<260px, effectively never
+// reached in desktop layouts).
+const CONTAINER_2COL = 260;
 
 function getColumnsForWidth(width: number): number {
+  if (width >= CONTAINER_5COL) return 5;
   if (width >= CONTAINER_4COL) return 4;
   if (width >= CONTAINER_3COL) return 3;
   if (width >= CONTAINER_2COL) return 2;
@@ -133,11 +146,16 @@ export function CardListView({
   const { t } = useTranslation();
   // Auto-responsive columns by CONTAINER width (reacts to side panel open/close).
   // Manual gridColumns prop ignored unless SHOW_GRID_SLIDER flag is on.
-  // compactMode adds +1 column to make cards smaller (e.g. when side panel is open).
+  // Manual gridColumns prop ignored unless SHOW_GRID_SLIDER flag is on.
   const containerRef = useRef<HTMLDivElement>(null);
   const responsiveColumns = useContainerColumns(containerRef);
-  const baseColumns = SHOW_GRID_SLIDER && gridColumnsProp ? gridColumnsProp : responsiveColumns;
-  const gridColumns = compactMode ? Math.min(baseColumns + 1, MAX_GRID_COLUMNS) : baseColumns;
+  // Side-panel-open `compactMode` used to add +1 column to shrink cards —
+  // that made every card a tiny strip when the video panel was open, which
+  // was the opposite of what users want (they need to read titles in the
+  // narrowed grid). Now the responsive container width is the sole driver,
+  // so a narrower main area produces fewer, bigger cards.
+  void compactMode;
+  const gridColumns = SHOW_GRID_SLIDER && gridColumnsProp ? gridColumnsProp : responsiveColumns;
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);

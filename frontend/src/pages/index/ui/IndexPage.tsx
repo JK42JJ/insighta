@@ -759,7 +759,7 @@ function AuthenticatedApp() {
           className="flex-1 overflow-hidden"
           autoSaveId="video-side-panel"
         >
-          <ResizablePanel defaultSize={isSidePanelOpen ? 65 : 100} minSize={50}>
+          <ResizablePanel defaultSize={isSidePanelOpen ? 65 : 100} minSize={30}>
             <div className="flex h-full overflow-hidden">
               {/* Left docked ScratchPad */}
               {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'left' && (
@@ -899,7 +899,7 @@ function AuthenticatedApp() {
           {isSidePanelOpen && (
             <>
               <ResizableHandle className="bg-[rgba(255,255,255,0.06)]" data-no-dnd="true" />
-              <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
+              <ResizablePanel defaultSize={35} minSize={30} maxSize={70}>
                 <VideoSidePanel
                   onCollapseToPopup={(cardWithResume) => {
                     // Reopen as modal with same card and resume position

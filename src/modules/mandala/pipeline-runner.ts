@@ -24,7 +24,25 @@ import { maybeAutoAddRecommendations } from './auto-add-recommendations';
 const log = logger.child({ module: 'pipeline-runner' });
 
 const WIZARD_SKILL_TYPE = 'video_discover';
-const PLUGIN_SKILL_ID = 'video-discover';
+const PLUGIN_SKILL_ID_V1 = 'video-discover';
+const PLUGIN_SKILL_ID_V2 = 'video-discover-v2';
+const PLUGIN_SKILL_ID_V3 = 'video-discover-v3';
+
+/**
+ * Pick which video-discover executor to invoke, by env flag priority:
+ *   VIDEO_DISCOVER_V3=1 → v3 (Tier 1 cache + Tier 2 realtime fallback)
+ *   VIDEO_DISCOVER_V2=1 → v2 (realtime-only with relevance assignment)
+ *   else                → v1 (legacy, kept as rollback path)
+ *
+ * V3 transparently degrades to Tier 2 when video_pool is empty (cold start),
+ * so enabling V3 is safe even before the batch-video-collector has run.
+ */
+function resolveVideoDiscoverSkillId(): string {
+  if (process.env['VIDEO_DISCOVER_V3'] === '1') return PLUGIN_SKILL_ID_V3;
+  if (process.env['VIDEO_DISCOVER_V2'] === '1') return PLUGIN_SKILL_ID_V2;
+  return PLUGIN_SKILL_ID_V1;
+}
+
 const RECENT_DISCOVER_WINDOW_MS = 5 * 60 * 1000;
 
 type StepStatus = 'pending' | 'running' | 'completed' | 'skipped' | 'failed';
@@ -178,7 +196,8 @@ export async function executePipelineRun(runId: string): Promise<void> {
         const llm = await createGenerationProvider();
 
         const t0 = Date.now();
-        const result = await skillRegistry.execute(PLUGIN_SKILL_ID, {
+        const skillId = resolveVideoDiscoverSkillId();
+        const result = await skillRegistry.execute(skillId, {
           userId,
           mandalaId,
           tier,
