@@ -391,8 +391,20 @@ export function useWizard() {
         language: detectGoalLanguage(state.goalInput),
       });
 
-      // 3. Invalidate list cache so sidebar fetches fresh data on mount
-      await queryClient.invalidateQueries({
+      // 3. Fire-and-forget cache invalidation. Do NOT await —
+      //    - await blocks navigate for however long the refetch takes
+      //      (seen in prod at 20s+ when dependent queries pile on).
+      //    - the refetch result can also overwrite the optimistic stub
+      //      with a stale server list (the new mandala's DB transaction
+      //      hasn't propagated to the list endpoint yet), which then
+      //      makes SidebarMandalaSection render '…' because find() fails.
+      //
+      //    By skipping await we let navigate run immediately — the
+      //    sidebar mounts reading the optimistic stub and shows the title
+      //    right away. Background refetch updates the cache naturally,
+      //    and the sidebar's defensive retry (see SidebarMandalaSection)
+      //    handles the propagation lag window.
+      queryClient.invalidateQueries({
         queryKey: queryKeys.mandala.list(),
         refetchType: 'all',
       });

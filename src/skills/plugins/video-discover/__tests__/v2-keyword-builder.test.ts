@@ -150,35 +150,16 @@ describe('buildSearchQueries — rule-based path (no LLM)', () => {
   });
 });
 
-describe('buildSearchQueries — LLM path with mocked fetch', () => {
+describe('buildSearchQueries — LLM path (C+ OpenRouter Haiku)', () => {
   test('LLM result is appended after core, deduped, capped at MAX_QUERIES', async () => {
-    // Mock OpenRouter response shape per llm-query-generator parser
+    // C+ prompt expects a JSON array of queries as the raw response.
     const fakeQueries = ['mock-llm-query-1', 'mock-llm-query-2', 'mock-llm-query-3'];
-    const mockFetch: typeof fetch = (async (url: string) => {
-      // Race calls both Ollama and OpenRouter — match either path
-      if (typeof url === 'string' && url.includes('openrouter.ai')) {
-        return {
-          ok: true,
-          status: 200,
-          text: async () => '',
-          json: async () => ({
-            choices: [{ message: { content: JSON.stringify({ queries: fakeQueries }) } }],
-          }),
-        } as unknown as Response;
-      }
-      // Make Ollama fail fast so OpenRouter wins the race
-      return {
-        ok: false,
-        status: 500,
-        text: async () => 'mock-ollama-down',
-        json: async () => ({}),
-      } as unknown as Response;
-    }) as unknown as typeof fetch;
+    const generateImpl = async () => JSON.stringify(fakeQueries);
 
     const queries = await buildSearchQueries(baseInput, {
       openRouterApiKey: 'test-key',
       openRouterModel: 'test/model',
-      fetchImpl: mockFetch,
+      generateImpl,
     });
 
     expect(queries.length).toBeLessThanOrEqual(MAX_QUERIES);
@@ -188,19 +169,14 @@ describe('buildSearchQueries — LLM path with mocked fetch', () => {
   });
 
   test('LLM failure degrades silently to rule-based', async () => {
-    const mockFetch: typeof fetch = (async () => {
-      return {
-        ok: false,
-        status: 500,
-        text: async () => 'down',
-        json: async () => ({}),
-      } as unknown as Response;
-    }) as unknown as typeof fetch;
+    const generateImpl = async () => {
+      throw new Error('OpenRouter mock failure');
+    };
 
     const queries = await buildSearchQueries(baseInput, {
       openRouterApiKey: 'test-key',
       openRouterModel: 'test/model',
-      fetchImpl: mockFetch,
+      generateImpl,
     });
 
     expect(queries.length).toBeGreaterThan(0);

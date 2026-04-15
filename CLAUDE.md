@@ -104,6 +104,37 @@
 - recharts 도입 금지 (Insights) -> CSS + SVG
 - 컴포넌트 삭제 금지 -> `-legacy/`로 이동 + `@deprecated`
 
+### prisma db push Silent Fail 대응 (절대 규칙, LEVEL-3, 6회 재발 escalation)
+- **새 컬럼/테이블 추가 PR에는 반드시 raw SQL DDL을 함께 포함** (`prisma/migrations/<feature>/NNN_*.sql`).
+- **Supabase 환경에서 `prisma db push`는 auth 스키마 ownership 오류로 silent fail**.
+- 필수 체크리스트:
+  1. `prisma db push` 실행 결과 warning/error 없는지 확인.
+  2. Local `\d <table>`로 신규 컬럼 존재 검증.
+  3. Prod SSH → `psql "$DIRECT_URL" -c "\d <table>"`로 동일 검증.
+  4. 누락 시 raw SQL DDL 수동 적용 (local: `docker exec supabase-db-dev -e PGPASSWORD=... psql -U supabase_admin`, prod: `psql "$DIRECT_URL"`).
+  5. CI deploy.yml의 "Verify all tables exist" 통과 확인.
+
+### ALTER 직후 Postgrest Schema Reload (절대 규칙, LEVEL-2)
+- ALTER TABLE 실행 직후 아래 중 하나를 반드시 수행. 누락 시 Supabase client가 신규 컬럼을 silent drop.
+  - 로컬: `psql "$DATABASE_URL" -c "NOTIFY pgrst, 'reload schema'"` → `docker restart supabase-rest-dev`
+  - Prod: Supabase Dashboard → Settings → API → "Reload schema"
+- 검증: `curl http://localhost:8000/rest/v1/<table>?select=<new_column>`
+
+### 로컬 Supabase Edge Function 이중 구현 (LEVEL-2, 2026-04-15 발견)
+- 로컬 Supabase는 `main/index.ts` 단일 디스패처 구조. 개별 함수 파일은 로컬에서 실질 미사용.
+- Edge Function 수정 시 필수:
+  1. `supabase/functions/<fn>/index.ts` 수정 (prod 배포 소스).
+  2. `./scripts/sync-edge-functions.sh` 실행.
+  3. **`superbase/volumes/functions/main/index.ts` 안의 해당 섹션도 동일하게 수정**.
+  4. `docker restart supabase-functions-dev`.
+
+### Write Path 전수 검토 (새 컬럼/필드 추가 시 필수, LEVEL-3)
+- 새 컬럼 추가 PR은 해당 테이블의 모든 write path를 전수 검토해야 함.
+- 체크리스트:
+  1. `grep -n "\.from('<table>')" supabase/functions/ src/modules/` 로 모든 write path 찾기.
+  2. 각 path에 대해: write / preserve / no-op 결정.
+  3. PR 설명에 path별 결정 체크리스트 기록.
+
 ### Service != System
 - service domain: 사용자 기능 (mandala, resource, note, insight)
 - system domain: 개발 에이전트 (pattern, decision, problem)

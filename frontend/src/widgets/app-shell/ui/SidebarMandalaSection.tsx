@@ -69,19 +69,32 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
 
   const mandalas = listData?.mandalas ?? [];
 
-  // Defensive refetch: if selectedMandalaId is set (e.g., from wizard)
-  // but the mandala isn't in the cached list, trigger a single refetch.
-  const hasRefetchedRef = useRef(false);
+  // Defensive refetch: when selectedMandalaId is set (e.g. the wizard's
+  // optimistic stub was overwritten by a stale server list response) but
+  // the mandala isn't in the cached list, retry with linear backoff. The
+  // old single-shot `hasRefetchedRef` version locked us into '…' forever
+  // when the first retry also returned stale data (DB propagation lag
+  // between wizard POST and list endpoint). Now we retry up to 5 times
+  // spaced 0.5s/1s/1.5s/2s/2.5s apart — covers the common propagation
+  // window seen in prod without looping indefinitely.
+  const retryAttemptsRef = useRef(0);
+  const MAX_RETRIES = 5;
+  const RETRY_DELAY_MS = 500;
   useEffect(() => {
-    if (
-      selectedMandalaId &&
-      mandalas.length > 0 &&
-      !mandalas.some((m) => m.id === selectedMandalaId) &&
-      !hasRefetchedRef.current
-    ) {
-      hasRefetchedRef.current = true;
-      refetch();
+    if (!selectedMandalaId || mandalas.length === 0) return;
+    if (mandalas.some((m) => m.id === selectedMandalaId)) {
+      retryAttemptsRef.current = 0;
+      return;
     }
+    if (retryAttemptsRef.current >= MAX_RETRIES) return;
+    const handle = setTimeout(
+      () => {
+        retryAttemptsRef.current += 1;
+        refetch();
+      },
+      RETRY_DELAY_MS * (retryAttemptsRef.current + 1)
+    );
+    return () => clearTimeout(handle);
   }, [selectedMandalaId, mandalas, refetch]);
 
   // Collapsed sidebar: icon button only

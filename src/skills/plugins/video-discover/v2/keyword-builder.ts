@@ -16,7 +16,18 @@
  * 5 × search.list × 100 units = 500).
  */
 
-import { generateSearchQueriesRace, type RaceQueriesOpts } from '../sources/llm-query-generator';
+// C+ prompt + OpenRouter Haiku — same path as v1 executor. Previously this
+// file used `generateSearchQueriesRace` (Ollama/OpenRouter race with a simple
+// 2-6 word prompt) which produced low-quality queries and mixed unrelated
+// domains in prod (bug: "가족여행" → ArgoCD/NCT results, 2026-04-15).
+import { parseQueriesResponse } from '../sources/llm-query-generator';
+import {
+  buildSearchQueryPrompt,
+  SEARCH_QUERY_MODEL,
+  SEARCH_QUERY_TEMPERATURE,
+  SEARCH_QUERY_MAX_TOKENS,
+} from '@/prompts/search-query-generator';
+import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'video-discover/v2/keyword-builder' });
@@ -36,12 +47,20 @@ export interface KeywordBuilderOpts {
   openRouterApiKey?: string;
   /** OpenRouter model id (e.g. `qwen/qwen3-30b-a3b`). Required if apiKey set. */
   openRouterModel?: string;
-  /** Override Ollama URL (test injection). */
+  /** Override Ollama URL (legacy, unused after C+ switch — kept for callers). */
   baseUrl?: string;
-  /** Override Ollama model (test injection). */
+  /** Override Ollama model (legacy, unused after C+ switch — kept for callers). */
   ollamaModel?: string;
-  /** Inject fetch for tests. */
+  /** Inject fetch for tests (legacy; ignored by the C+ OpenRouter path). */
   fetchImpl?: typeof fetch;
+  /**
+   * Inject an LLM generator for tests so runLLMQueries can be exercised
+   * without hitting OpenRouter. When absent, the real provider is used.
+   */
+  generateImpl?: (
+    prompt: string,
+    options?: { temperature?: number; maxTokens?: number; format?: 'json' }
+  ) => Promise<string>;
 }
 
 export type QuerySource = 'core' | 'llm' | 'focus' | 'level' | 'subgoal';
@@ -113,23 +132,37 @@ export async function runLLMQueries(
   if (!center) return [];
   if (!opts.openRouterApiKey || !opts.openRouterModel) return [];
 
+  // Use the same C+ prompt (+ OpenRouter Haiku) as v1 for query quality
+  // parity. Previous Ollama/OpenRouter race with the simple 2–6 word prompt
+  // produced context-losing queries (see comment at top of file).
   const compositeAreaKeyword = buildCompositeAreaKeyword(input);
-  const raceOpts: RaceQueriesOpts = {
-    subGoal: compositeAreaKeyword,
+  const prompt = buildSearchQueryPrompt({
     centerGoal: center,
+    subGoal: compositeAreaKeyword,
     language: input.language,
-    openRouterApiKey: opts.openRouterApiKey,
-    openRouterModel: opts.openRouterModel,
-    baseUrl: opts.baseUrl,
-    model: opts.ollamaModel,
-    fetchImpl: opts.fetchImpl,
-  };
+    focusTags: input.focusTags,
+    targetLevel: input.targetLevel,
+  });
   try {
-    const result = await generateSearchQueriesRace(raceOpts);
-    return (result.winner.queries ?? []).map((q) => ({ query: clip(q), source: 'llm' as const }));
+    // Test injection takes precedence so unit tests don't reach OpenRouter.
+    // In real code, OpenRouterGenerationProvider reads OPENROUTER_API_KEY
+    // from central config.
+    const generate =
+      opts.generateImpl ??
+      (async (p: string, o?: { temperature?: number; maxTokens?: number; format?: 'json' }) => {
+        const provider = new OpenRouterGenerationProvider(SEARCH_QUERY_MODEL);
+        return provider.generate(p, o);
+      });
+    const raw = await generate(prompt, {
+      temperature: SEARCH_QUERY_TEMPERATURE,
+      maxTokens: SEARCH_QUERY_MAX_TOKENS,
+      format: 'json',
+    });
+    const queries = parseQueriesResponse(raw) ?? [];
+    return queries.slice(0, MAX_QUERIES).map((q) => ({ query: clip(q), source: 'llm' as const }));
   } catch (err) {
     log.warn(
-      `LLM query race failed: ${err instanceof Error ? err.message : String(err)} — falling back to rule-based`
+      `C+ LLM query failed: ${err instanceof Error ? err.message : String(err)} — falling back to rule-based`
     );
     return [];
   }
