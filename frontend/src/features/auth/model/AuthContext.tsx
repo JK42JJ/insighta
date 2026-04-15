@@ -140,11 +140,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/`,
-          scopes: 'https://www.googleapis.com/auth/youtube.readonly',
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
+          // Sign-in requests only the Supabase defaults (profile + email).
+          // YouTube access (youtube.readonly) is granted separately from
+          // Settings > Integrations via the youtube-auth Edge Function's
+          // incremental authorization flow.
         },
       });
 
