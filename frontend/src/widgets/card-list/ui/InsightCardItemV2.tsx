@@ -146,11 +146,12 @@ export function InsightCardItemV2({
   const hasNote = !!card.userNote?.trim();
   const isYouTube = card.linkType === 'youtube' || card.linkType === 'youtube-shorts';
 
-  // ── Meta segments (channel · views · date) ──
-  const metaSegments: string[] = [];
-  if (ytMeta.channelTitle) metaSegments.push(ytMeta.channelTitle);
-  if (views) metaSegments.push(views);
-  if (relDate) metaSegments.push(relDate);
+  // ── Footer meta: left = YouTube upload date, right = view count.
+  //    Channel name is intentionally dropped from the card footer per UX
+  //    direction — it was duplicating the thumbnail's YouTube badge and
+  //    pushing the more useful signals (recency + popularity) off-screen.
+  const footerLeft = relDate || null;
+  const footerRight = views || null;
 
   return (
     <Card
@@ -263,17 +264,11 @@ export function InsightCardItemV2({
         <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px]">
           {card.title}
         </h4>
-        {metaSegments.length > 0 && (
-          <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1 truncate">
-            {metaSegments.map((seg, i) => (
-              <span key={i} className="flex items-center gap-1">
-                {i > 0 && (
-                  <span className="w-[2px] h-[2px] rounded-full bg-muted-foreground/40 shrink-0" />
-                )}
-                <span className="truncate">{seg}</span>
-              </span>
-            ))}
-          </p>
+        {(footerLeft || footerRight) && (
+          <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+            <span className="truncate">{footerLeft ?? ''}</span>
+            <span className="shrink-0 ml-2">{footerRight ?? ''}</span>
+          </div>
         )}
       </div>
     </Card>

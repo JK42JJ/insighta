@@ -1627,3 +1627,104 @@ model scoring_weights {
   @@index([active], map: "idx_scoring_weights_active")
   @@schema("public")
 }
+
+/// Video pool cache — master list of pre-collected YouTube videos used by
+/// video-discover v3's Tier 1 cache matching. Populated daily by the
+/// batch-video-collector skill (Source A: trend keywords). Not user-scoped:
+/// one row per unique YouTube video, shared across all users.
+/// Uses pgvector (4096d) via separate video_pool_embeddings table. See
+/// docs/design/insighta-video-cache-layer-design.md for the full design.
+model video_pool {
+  video_id         String    @id @db.VarChar(20)
+  title            String
+  description      String?
+  channel_name     String?   @db.VarChar(200)
+  channel_id       String?   @db.VarChar(30)
+  view_count       BigInt    @default(0)
+  like_count       BigInt    @default(0)
+  duration_seconds Int?
+  published_at     DateTime? @db.Timestamptz(6)
+  thumbnail_url    String?
+  language         String    @db.VarChar(5)
+  /// 'gold' (>=100K views), 'silver' (>=10K), 'bronze' (>=1K). Tier 1
+  /// matching filters to gold+silver only; bronze is kept for diagnostics.
+  quality_tier     String    @default("bronze") @db.VarChar(10)
+  /// 'batch_trend' | 'batch_popular' | 'realtime_api' | 'user_add'
+  source           String    @db.VarChar(20)
+  cached_at        DateTime  @default(now()) @db.Timestamptz(6)
+  refreshed_at     DateTime  @default(now()) @db.Timestamptz(6)
+  /// Default TTL 30 days. Soft-delete via is_active=false once expired.
+  expires_at       DateTime  @default(dbgenerated("(now() + interval '30 days')")) @db.Timestamptz(6)
+  is_active        Boolean   @default(true)
+
+  embeddings  video_pool_embeddings[]
+  domain_tags video_pool_domain_tags[]
+
+  @@index([language, is_active, quality_tier], map: "idx_vpool_lang_active_tier")
+  @@index([expires_at], map: "idx_vpool_expires")
+  @@index([source], map: "idx_vpool_source")
+  @@index([refreshed_at], map: "idx_vpool_refreshed")
+  @@schema("public")
+}
+
+/// BGE-M3/Qwen3-equivalent embedding for each video. 4096d matches
+/// existing mandala_embeddings so cross-join cosine matching works without
+/// re-embedding user mandalas. IVFFlat index is created in raw SQL after
+/// rows accumulate (ivfflat needs training data); until then cosine uses
+/// brute-force `<=>` which is fine for the initial <5k pool size.
+model video_pool_embeddings {
+  id            String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  video_id      String                      @db.VarChar(20)
+  embedding     Unsupported("vector(4096)")
+  text_input    String?
+  model_version String                      @default("qwen3-embedding-8b") @db.VarChar(50)
+  created_at    DateTime                    @default(now()) @db.Timestamptz(6)
+
+  video_pool video_pool @relation(fields: [video_id], references: [video_id], onDelete: Cascade)
+
+  @@unique([video_id, model_version], map: "uq_vpool_emb_video_model")
+  @@index([video_id], map: "idx_vpool_emb_video")
+  @@schema("public")
+}
+
+/// One video ↔ many domains. Allows cross-domain matching when a mandala
+/// goal spans areas (e.g. "AI 대학원" tagged under Tech + Education).
+model video_pool_domain_tags {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  video_id        String   @db.VarChar(20)
+  domain          String   @db.VarChar(50)
+  relevance_score Float    @default(0.5)
+  /// Who tagged it — 'batch_trend', 'batch_popular', 'realtime', 'lora', 'user_add'
+  source          String   @db.VarChar(20)
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  video_pool video_pool @relation(fields: [video_id], references: [video_id], onDelete: Cascade)
+
+  @@unique([video_id, domain], map: "uq_vpool_tag_video_domain")
+  @@index([domain, relevance_score(sort: Desc)], map: "idx_vpool_tag_domain_score")
+  @@schema("public")
+}
+
+/// Audit log per batch-video-collector run. Populated by the skill; used
+/// for admin dashboards and weekly hit-rate analysis.
+model video_pool_collection_runs {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// 'daily_trend' | 'popular_goals' | 'refresh'
+  run_type         String    @db.VarChar(20)
+  started_at       DateTime  @default(now()) @db.Timestamptz(6)
+  ended_at         DateTime? @db.Timestamptz(6)
+  /// 'running' | 'success' | 'partial' | 'failed'
+  status           String    @default("running") @db.VarChar(20)
+  queries_executed Int       @default(0)
+  videos_found     Int       @default(0)
+  videos_new       Int       @default(0)
+  videos_updated   Int       @default(0)
+  videos_expired   Int       @default(0)
+  quota_used       Int       @default(0)
+  error            String?
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([started_at(sort: Desc)], map: "idx_vpool_runs_started")
+  @@index([status, run_type], map: "idx_vpool_runs_status_type")
+  @@schema("public")
+}

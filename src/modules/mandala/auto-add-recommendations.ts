@@ -192,6 +192,21 @@ export async function maybeAutoAddRecommendations(
         // Upsert the youtube_videos row first (recommendation_cache stores
         // the YouTube video id as varchar; user_video_states needs the
         // youtube_videos.id UUID FK).
+        // Pull through view_count / like_count / published_at so the card
+        // UI can show YouTube upload date + view count instead of falling
+        // back to the insighta-side created_at. like_ratio → like_count is
+        // approximated when rec.like_ratio is present (view_count * ratio)
+        // since recommendation_cache stores the ratio, not the raw count.
+        const publishedAt = rec.published_at ? new Date(rec.published_at) : null;
+        const viewCount =
+          typeof rec.view_count === 'number' && Number.isFinite(rec.view_count)
+            ? BigInt(Math.max(0, Math.trunc(rec.view_count)))
+            : null;
+        const likeCount =
+          rec.like_ratio != null && rec.view_count != null
+            ? BigInt(Math.max(0, Math.round(rec.view_count * rec.like_ratio)))
+            : null;
+
         const ytVideo = await db.youtube_videos.upsert({
           where: { youtube_video_id: rec.video_id },
           create: {
@@ -200,12 +215,20 @@ export async function maybeAutoAddRecommendations(
             thumbnail_url: rec.thumbnail,
             channel_title: rec.channel,
             duration_seconds: rec.duration_sec,
+            view_count: viewCount,
+            like_count: likeCount,
+            published_at: publishedAt,
           },
           update: {
             title: rec.title,
             thumbnail_url: rec.thumbnail,
             channel_title: rec.channel,
             duration_seconds: rec.duration_sec,
+            // Only overwrite metadata fields when we have a fresher value —
+            // don't clobber data with nulls from an older recommendation row.
+            ...(viewCount != null ? { view_count: viewCount } : {}),
+            ...(likeCount != null ? { like_count: likeCount } : {}),
+            ...(publishedAt != null ? { published_at: publishedAt } : {}),
           },
           select: { id: true },
         });

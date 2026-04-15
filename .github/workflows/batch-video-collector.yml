@@ -1,0 +1,71 @@
+name: batch-video-collector
+
+# Daily trigger for the video_pool cache collector (Source A: trend
+# keywords). The workflow just POSTs to the internal skill endpoint on
+# prod; all heavy lifting runs inside the API container.
+#
+# Trigger: 04:00 UTC (= 13:00 KST) daily.
+# Manual: `gh workflow run batch-video-collector.yml`.
+#
+# Secrets required:
+#   - INTERNAL_BATCH_TOKEN  — shared token matching the value in
+#                             prod `/opt/tubearchive/.env`.
+#   - DOMAIN                — already used by Deploy (e.g. insighta.one).
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Max trend keywords (default 180). Empty = use default.'
+        required: false
+        type: string
+      runType:
+        description: 'Run type (default daily_trend).'
+        required: false
+        default: 'daily_trend'
+        type: string
+
+jobs:
+  trigger:
+    name: Trigger collector
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check secrets
+        run: |
+          if [ -z "${{ secrets.INTERNAL_BATCH_TOKEN }}" ]; then
+            echo "::error::INTERNAL_BATCH_TOKEN is not configured"
+            exit 1
+          fi
+          if [ -z "${{ secrets.DOMAIN }}" ]; then
+            echo "::error::DOMAIN is not configured"
+            exit 1
+          fi
+
+      - name: Invoke batch-video-collector
+        env:
+          TOKEN: ${{ secrets.INTERNAL_BATCH_TOKEN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+          LIMIT: ${{ github.event.inputs.limit }}
+          RUN_TYPE: ${{ github.event.inputs.runType }}
+        run: |
+          BODY="{}"
+          if [ -n "$LIMIT" ] || [ -n "$RUN_TYPE" ]; then
+            BODY=$(jq -nc --arg l "$LIMIT" --arg r "$RUN_TYPE" '{limit: ($l | tonumber? // null), runType: ($r // null)} | with_entries(select(.value != null))')
+          fi
+          echo "POST → https://${DOMAIN}/api/v1/internal/skills/batch-video-collector/run"
+          echo "Body: $BODY"
+          RESPONSE=$(curl -sS --fail --show-error \
+            --max-time 900 \
+            -X POST "https://${DOMAIN}/api/v1/internal/skills/batch-video-collector/run" \
+            -H "content-type: application/json" \
+            -H "x-internal-token: $TOKEN" \
+            -d "$BODY")
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | jq -e '.success == true' >/dev/null || {
+            echo "::error::Collector returned success=false"
+            echo "$RESPONSE"
+            exit 1
+          }

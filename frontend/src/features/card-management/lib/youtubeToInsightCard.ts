@@ -41,9 +41,21 @@ export function convertToInsightCard(data: UserVideoStateWithVideo): InsightCard
 }
 
 /**
- * Creates UrlMetadata from YouTubeVideo
+ * Creates UrlMetadata from YouTubeVideo. Runtime extras beyond the
+ * canonical UrlMetadata fields (`channel_title`, `view_count`,
+ * `duration_seconds`, `published_at`) are tacked on so `InsightCardItemV2`
+ * can render the YouTube upload date and view count instead of falling
+ * back to insighta's created_at. These pass through as untyped keys —
+ * the card reader casts the metadata to a plain record before reading.
  */
 function createVideoMetadata(video: YouTubeVideo): UrlMetadata {
+  const extras: Record<string, unknown> = {};
+  if (video.channel_title) extras['channel_title'] = video.channel_title;
+  if (video.duration_seconds != null) extras['duration_seconds'] = video.duration_seconds;
+  if (video.view_count != null) extras['view_count'] = Number(video.view_count);
+  if (video.like_count != null) extras['like_count'] = Number(video.like_count);
+  if (video.published_at) extras['published_at'] = video.published_at;
+
   return {
     title: video.title,
     description: video.description || '',
@@ -51,7 +63,8 @@ function createVideoMetadata(video: YouTubeVideo): UrlMetadata {
     siteName: 'YouTube',
     author: video.channel_title || '',
     url: `https://www.youtube.com/watch?v=${video.youtube_video_id}`,
-  };
+    ...extras,
+  } as UrlMetadata;
 }
 
 /**

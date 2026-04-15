@@ -31,6 +31,15 @@
 
 ## Hard Rules
 
+### 🚨 LLM API 호출 금지 (예외 없음, 2026-04-15 재정 손실 사고)
+- **Anthropic API 직접 호출 금지** (Messages, Batch 모두)
+- **OpenRouter API 호출 금지**
+- 두 API는 **서비스(프로덕션) 전용**. 데이터셋 생성·실험·테스트 사용 절대 금지.
+- "크레딧 확인", "작은 테스트", "1건만", "샘플" 등 어떤 명목도 불가
+- 어떤 스크립트에서든 위 API 호출 코드 작성/실행 금지
+- 데이터셋 생성: **CC 콘솔 직접 생성(Write tool)만 허용**. LLM API 호출 없이 CC 자체 지식으로 생성.
+- 위반 시: 해당 세션 즉시 종료. 사고 기록은 `memory/troubleshooting.md` 참조.
+
 ### Credentials
 - NEVER guess secret names/API keys — read `memory/credentials.md`
 - GitHub Secrets name != env var name — check mapping in credentials.md
