@@ -117,6 +117,13 @@ Deno.serve(async (req) => {
         authUrl.searchParams.set('scope', SCOPES.join(' '));
         authUrl.searchParams.set('access_type', 'offline');
         authUrl.searchParams.set('prompt', 'consent');
+        // Incremental authorization — tells Google this is an additive
+        // scope grant on top of what the user already approved during
+        // login (profile + email). Paired with the login-side change that
+        // drops youtube.readonly from initial sign-in, this flow becomes
+        // the single canonical path for YouTube connection and lets users
+        // ship without forcing existing scope on everyone at sign-in.
+        authUrl.searchParams.set('include_granted_scopes', 'true');
         const signedState = await signState(state, user.id, supabaseServiceKey);
         authUrl.searchParams.set('state', signedState);
 
