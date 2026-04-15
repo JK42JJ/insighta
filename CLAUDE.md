@@ -71,6 +71,18 @@
 - seed 스크립트 실행 시 `--target local` 필수, prod는 `--target prod` 별도 확인
 - **Prod DB 변경 후 용량 확인 필수**: `SELECT pg_database_size(current_database())` (Free Plan 500MB)
 
+### prisma db push Silent Fail 대응 (절대 규칙, LEVEL-3, 6회 재발 escalation)
+- **새 컬럼/테이블 추가 PR에는 반드시 raw SQL DDL을 함께 포함** (`prisma/migrations/<feature>/NNN_*.sql` 경로).
+- **Supabase 환경에서 `prisma db push`는 auth 스키마 ownership 오류로 silent fail한다** — 새 public 테이블/컬럼이 조용히 드롭되고 Prisma는 "success"를 리턴.
+- 배포 직후 Prisma 스키마와 DB 실제 상태가 **자동으로 일치한다고 가정 금지**.
+- **필수 적용 체크리스트** (하나라도 누락 시 배포 금지):
+  1. `prisma db push` 실행 결과에 warning/error 없는지 확인.
+  2. Local DB에서 `\d <table>`로 모든 신규 컬럼 존재 검증.
+  3. Prod DB에서 SSH -> `psql "$DIRECT_URL" -c "\d <table>"`로 동일 검증.
+  4. 누락 발견 시 raw SQL DDL을 local + prod에 수동 적용 (`psql -f migrations/*.sql`). Local은 `docker exec supabase-db-dev -e PGPASSWORD=... psql -U supabase_admin` 경로.
+  5. 재검증 후 CI deploy.yml의 "Verify all tables exist" 스텝 통과 확인.
+- Silent fail 징후: FE에서 필드가 항상 null, 400/500 에러 없이 "모르겠다"만 표시, Edge Function upsert가 성공하는데 DB에 값이 없음.
+
 ### "Done" = Prod Verified (절대 규칙)
 - **빌드 통과 != 완료. Prod 실제 동작 확인이 "완료"의 조건.**
 - Local DB에만 테이블 생성 + Prod 미적용 금지

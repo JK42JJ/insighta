@@ -40,7 +40,10 @@ export const youtubeRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         });
       } catch (err: any) {
         if (err.message === 'YOUTUBE_NOT_CONNECTED') {
-          return reply.code(400).send({
+          // 403 (not 400) — the request itself is valid; the user simply
+          // hasn't granted YouTube access yet. FE uses the status code to
+          // show the "연결 필요" CTA without logging this as a client bug.
+          return reply.code(403).send({
             status: 'error',
             code: 'YOUTUBE_NOT_CONNECTED',
             message:
@@ -83,7 +86,10 @@ export const youtubeRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         });
       } catch (err: any) {
         if (err.message === 'YOUTUBE_NOT_CONNECTED') {
-          return reply.code(400).send({
+          // 403 (not 400) — the request itself is valid; the user simply
+          // hasn't granted YouTube access yet. FE uses the status code to
+          // show the "연결 필요" CTA without logging this as a client bug.
+          return reply.code(403).send({
             status: 'error',
             code: 'YOUTUBE_NOT_CONNECTED',
             message:
