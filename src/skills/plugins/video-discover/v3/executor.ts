@@ -367,6 +367,18 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   // Score enriched videos against deficit cell sub_goals only (other cells
   // already full from Tier 1). Uses local tokenize/jaccard so v3 has no
   // runtime dependency on v2's private helpers.
+  //
+  // Relevance gate is TWO-pronged to prevent cross-topic contamination
+  // (e.g. "한 달안에 토플 100점 달성"의 Reading 셀에 텝스/토익 영상이
+  // 붙는 현상, observed 2026-04-16):
+  //   1. Video must share at least one center-goal token — ensures
+  //      domain-level fit (e.g. 토플).
+  //   2. Video must share at least one cell sub_goal token — ensures
+  //      cell-level fit (e.g. reading).
+  // Videos meeting only one are dropped: that's how "영어 기출" TEPS
+  // material slipped into a TOEFL Reading cell (shared "영어" but no
+  // TOEFL/reading overlap).
+  const centerTokens = tokenize(input.state.centerGoal, input.state.language);
   const cellTokenSets = new Map<number, Set<string>>();
   for (const { cellIndex } of input.deficitCells) {
     cellTokenSets.set(
@@ -384,6 +396,12 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   for (const v of enriched) {
     if (input.existingVideoIds.has(v.videoId)) continue;
     const vTokens = tokenize(`${v.title} ${v.description ?? ''}`, input.state.language);
+
+    // Gate 1: must overlap the center goal.
+    const centerScore = jaccard(vTokens, centerTokens);
+    if (centerTokens.size > 0 && centerScore === 0) continue;
+
+    // Gate 2: must overlap at least one cell sub_goal.
     let bestCell = -1;
     let bestScore = 0;
     for (const [cellIndex, tokens] of cellTokenSets) {
@@ -393,9 +411,11 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
         bestCell = cellIndex;
       }
     }
-    // Respect query tag if present — deficit-cell relevance can use it.
     if (bestCell === -1 || bestScore < MIN_TIER2_RELEVANCE) continue;
-    scored.push({ video: v, cellIndex: bestCell, score: bestScore });
+    // Final score weights center + cell equally so cross-topic matches that
+    // only clear the center gate by a hair are ranked below tight matches.
+    const finalScore = (centerScore + bestScore) / 2;
+    scored.push({ video: v, cellIndex: bestCell, score: finalScore });
   }
 
   // Cap per cell using the deficit need + overall target remaining.
