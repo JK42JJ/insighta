@@ -15,6 +15,7 @@ const config: Config = {
     '^@/config/(.*)$': '<rootDir>/src/config/$1',
     '^@/utils/(.*)$': '<rootDir>/src/utils/$1',
     '^@/skills/(.*)$': '<rootDir>/src/skills/$1',
+    '^@/prompts/(.*)$': '<rootDir>/src/prompts/$1',
     '^@scalar/fastify-api-reference$': '<rootDir>/tests/__mocks__/scalar.ts',
   },
   transform: {
