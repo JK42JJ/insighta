@@ -158,7 +158,7 @@ export function CardListView({
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
-  const [sortMode, setSortMode] = useState<SortMode>('latest');
+  const [sortMode, setSortMode] = useState<SortMode>('relevance');
   const [isExternalDragOver, setIsExternalDragOver] = useState(false);
 
   // Native HTML5 external drag handlers (YouTube URL from browser etc.)
@@ -212,10 +212,16 @@ export function CardListView({
 
   const effectiveViewMode = viewMode === 'list-detail' && isMobile ? 'list' : viewMode;
 
-  // Sort cards based on sortMode
+  // Sort cards based on sortMode. 'relevance' is the default: it preserves
+  // server-side order (cell_index ASC, rec_score DESC from the API) so the
+  // caller sees the mandala filter's ranking instead of being overwritten
+  // by a client-side createdAt sort. The other modes are explicit user
+  // choices from the sort dropdown.
   const sortedCards = useMemo(() => {
     const arr = [...cards];
     switch (sortMode) {
+      case 'relevance':
+        return arr;
       case 'latest':
         return arr.sort((a, b) => {
           if (a.sortOrder !== undefined && b.sortOrder !== undefined)

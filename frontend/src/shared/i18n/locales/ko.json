@@ -508,6 +508,7 @@
     "all": "전체",
     "clearAll": "모두 해제",
     "noFilterResults": "선택한 필터에 맞는 카드가 없습니다",
+    "sortRelevance": "관련성 순",
     "sortLatest": "최신순",
     "sortOldest": "오래된순",
     "sortTitleAZ": "제목 A-Z",
