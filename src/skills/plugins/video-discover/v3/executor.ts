@@ -30,10 +30,10 @@ import type {
 
 import { manifest, V3_TARGET_PER_CELL, V3_NUM_CELLS, V3_TARGET_TOTAL } from './manifest';
 import { matchFromVideoPool, groupByCell } from './cache-matcher';
+import { applyMandalaFilter, MIN_SUB_RELEVANCE } from './mandala-filter';
 
 import {
   buildRuleBasedQueriesSync,
-  extractCoreKeyphrase,
   runLLMQueries,
   type KeywordLanguage,
   type SearchQuery,
@@ -52,10 +52,29 @@ const log = logger.child({ module: 'video-discover/v3/executor' });
 const TTL_DAYS = 7;
 const RECOMMENDATION_STATUS_PENDING = 'pending';
 const WEIGHT_VERSION = 3;
-const MIN_TIER2_RELEVANCE = 0.05;
+// Retained as a reference; the actual value now lives in mandala-filter.ts
+// (MIN_SUB_RELEVANCE). Both are 0.05 and kept in sync intentionally.
+void MIN_SUB_RELEVANCE;
 // How many search queries to attempt per deficit cell (rule-based + LLM
 // together; the LLM pass yields at most a handful for the whole mandala).
 const TIER2_MAX_QUERIES_PER_CELL = 2;
+
+/**
+ * Tier 1 (video_pool cache) is disabled by default (2026-04-16).
+ *
+ * The current pool holds ~1k rows dominated (~60%) by `user-derived`
+ * leftovers from past mandalas. At that scale embedding cosine (≥0.3)
+ * produces cross-topic hits — e.g. "하느님 자비의 기도" admitted into a
+ * "일일 습관 성장" mandala because both land near each other in the
+ * generic Korean self-help cluster. Until the pool reaches a useful
+ * scale (10⁵–10⁶ rows) and/or is replaced with a domain-tuned model,
+ * we skip Tier 1 entirely and route every request through Tier 2.
+ *
+ * The pgvector index, matchFromVideoPool function, and upsert path all
+ * remain intact. Flip this env flag (V3_ENABLE_TIER1_CACHE=true) to
+ * reactivate without a code change.
+ */
+const V3_ENABLE_TIER1_CACHE = process.env['V3_ENABLE_TIER1_CACHE'] === 'true';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -169,12 +188,14 @@ export const executor: SkillExecutor = {
     const state = ctx.state as unknown as HydratedState;
     const mandalaId = ctx.mandalaId!;
 
-    // ── Tier 1: video_pool cache ────────────────────────────────────────
-    const tier1Matches = await matchFromVideoPool({
-      mandalaId,
-      language: state.language,
-      perCell: V3_TARGET_PER_CELL,
-    });
+    // ── Tier 1: video_pool cache (disabled by default — see V3_ENABLE_TIER1_CACHE)
+    const tier1Matches = V3_ENABLE_TIER1_CACHE
+      ? await matchFromVideoPool({
+          mandalaId,
+          language: state.language,
+          perCell: V3_TARGET_PER_CELL,
+        })
+      : [];
     const tier1ByCell = groupByCell(tier1Matches, V3_NUM_CELLS);
     const tier1Total = tier1Matches.length;
 
@@ -365,68 +386,34 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   }
   if (enriched.length === 0) return { slots: [], queriesUsed };
 
-  // Score enriched videos against deficit cell sub_goals only (other cells
-  // already full from Tier 1). Uses local tokenize/jaccard so v3 has no
-  // runtime dependency on v2's private helpers.
-  //
-  // Relevance gate is TWO-pronged to prevent cross-topic contamination
-  // (e.g. "한 달안에 토플 100점 달성"의 Reading 셀에 텝스/토익 영상이
-  // 붙는 현상, observed 2026-04-16):
-  //   1. Video must share at least one center-goal token — ensures
-  //      domain-level fit (e.g. 토플).
-  //   2. Video must share at least one cell sub_goal token — ensures
-  //      cell-level fit (e.g. reading).
-  // Videos meeting only one are dropped: that's how "영어 기출" TEPS
-  // material slipped into a TOEFL Reading cell (shared "영어" but no
-  // TOEFL/reading overlap).
-  // Center tokens are drawn from the extracted core keyphrase (drops
-  // year prefixes, verbal endings, common particles) so the gate hinges
-  // on the domain-specific words only — e.g. "한 달안에 토플 100점
-  // 달성 하기" reduces to "토플" after noise is stripped, and a video
-  // must carry that token in its title to count as in-domain.
-  const centerCore = extractCoreKeyphrase(input.state.centerGoal, input.state.language);
-  const centerTokens = tokenize(centerCore, input.state.language);
-  const cellTokenSets = new Map<number, Set<string>>();
-  for (const { cellIndex } of input.deficitCells) {
-    cellTokenSets.set(
-      cellIndex,
-      tokenize(input.state.subGoals[cellIndex] ?? '', input.state.language)
-    );
-  }
-
+  // 9-axis mandala filter: the mandala itself (centerGoal + 8 sub_goals) is
+  // the filter. applyMandalaFilter routes each candidate to the best-fit
+  // sub_goal cell and drops off-domain candidates. This replaces the prior
+  // v3-internal two-gate (3368d34/ff35fcf) so Tier 1 and Tier 2 share the
+  // exact same filter logic — see mandala-filter.ts for the contract.
   interface ScoredCandidate {
     video: Enriched;
     cellIndex: number;
     score: number;
   }
+  const filterable = enriched.filter((v) => !input.existingVideoIds.has(v.videoId));
+  const byCell = applyMandalaFilter(filterable, {
+    centerGoal: input.state.centerGoal,
+    subGoals: input.state.subGoals,
+    language: input.state.language,
+  });
+
+  // Flatten into a single scored list (per-cell order preserved inside the
+  // map by applyMandalaFilter; overall sort happens again below because the
+  // cap-per-cell loop needs a global desc order to pick the best slots
+  // across cells fairly).
+  const deficitCellSet = new Set(input.deficitCells.map((c) => c.cellIndex));
   const scored: ScoredCandidate[] = [];
-  for (const v of enriched) {
-    if (input.existingVideoIds.has(v.videoId)) continue;
-
-    // Gate 1 uses TITLE ONLY against center goal. Descriptions frequently
-    // carry brand cross-references (e.g. a TEPS video's description
-    // mentioning "해커스 토플") that let unrelated videos sneak past a
-    // desc-inclusive gate. Title is the signal the user actually reads.
-    const titleTokens = tokenize(v.title, input.state.language);
-    const centerScore = jaccard(titleTokens, centerTokens);
-    if (centerTokens.size > 0 && centerScore === 0) continue;
-
-    // Gate 2 uses title + description against each cell's sub_goal —
-    // descriptions are fair game here because we're trying to assign to
-    // the best-fitting cell, not to filter domain membership.
-    const vTokens = tokenize(`${v.title} ${v.description ?? ''}`, input.state.language);
-    let bestCell = -1;
-    let bestScore = 0;
-    for (const [cellIndex, tokens] of cellTokenSets) {
-      const s = jaccard(vTokens, tokens);
-      if (s > bestScore) {
-        bestScore = s;
-        bestCell = cellIndex;
-      }
+  for (const [cellIndex, list] of byCell) {
+    if (!deficitCellSet.has(cellIndex)) continue;
+    for (const a of list) {
+      scored.push({ video: a.candidate, cellIndex, score: a.score });
     }
-    if (bestCell === -1 || bestScore < MIN_TIER2_RELEVANCE) continue;
-    const finalScore = (centerScore + bestScore) / 2;
-    scored.push({ video: v, cellIndex: bestCell, score: finalScore });
   }
 
   // Cap per cell using the deficit need + overall target remaining.
@@ -607,97 +594,4 @@ async function upsertSlots(
     }
   }
   return count;
-}
-
-// ============================================================================
-// Tokenization (duplicated from v2 — keeping v3 self-contained so v2 stays
-// untouched and rollback is trivial)
-// ============================================================================
-
-const KO_STOPWORDS = new Set([
-  '및',
-  '등',
-  '하기',
-  '되기',
-  '관련',
-  '방법',
-  '위한',
-  '통한',
-  '이상',
-  '이하',
-  '대해',
-  '으로',
-  '에서',
-  '에게',
-  '한다',
-  '있다',
-  '없다',
-  '그리고',
-  '하지만',
-  '또한',
-]);
-const EN_STOPWORDS = new Set([
-  'a',
-  'an',
-  'the',
-  'of',
-  'in',
-  'on',
-  'at',
-  'to',
-  'for',
-  'with',
-  'by',
-  'and',
-  'or',
-  'but',
-  'is',
-  'are',
-  'was',
-  'were',
-  'be',
-  'been',
-  'being',
-  'have',
-  'has',
-  'had',
-  'do',
-  'does',
-  'did',
-  'how',
-  'what',
-  'why',
-  'when',
-  'where',
-  'this',
-  'that',
-  'these',
-  'those',
-  'my',
-  'your',
-  'our',
-  'their',
-  'from',
-  'as',
-  'it',
-]);
-
-function tokenize(text: string, language: KeywordLanguage): Set<string> {
-  if (!text) return new Set();
-  const stops = language === 'ko' ? KO_STOPWORDS : EN_STOPWORDS;
-  const cleaned = text
-    .toLowerCase()
-    .replace(/&[a-z#0-9]+;/g, ' ')
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ');
-  const tokens = cleaned.split(/\s+/).filter((t) => t.length >= 2 && !stops.has(t));
-  return new Set(tokens);
-}
-
-function jaccard(videoTokens: Set<string>, cellTokens: Set<string>): number {
-  if (cellTokens.size === 0 || videoTokens.size === 0) return 0;
-  let hits = 0;
-  for (const t of cellTokens) {
-    if (videoTokens.has(t)) hits++;
-  }
-  return hits / cellTokens.size;
 }
