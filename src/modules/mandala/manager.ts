@@ -231,19 +231,22 @@ export class MandalaManager {
   }
 
   /**
-   * Checks if a mandala with the same title already exists for the user.
-   * Throws 'DUPLICATE_TITLE' if found.
+   * Title uniqueness check — DISABLED (2026-04-16).
+   *
+   * Users legitimately want to iterate on the same goal (e.g. create a
+   * new "한 달안에 토플 100점 달성" after an earlier attempt stalled)
+   * without being blocked by an earlier run of the wizard. There is no
+   * DB-level UNIQUE constraint — the old logic was a BE-only guard that
+   * accidentally prevented re-attempts. Kept as a no-op so callers
+   * (createMandala) keep compiling; if duplicate-detection is needed
+   * again it can live as an opt-in heuristic rather than a hard block.
+   *
+   * The `DUPLICATE_TITLE` error code paths in the route handlers are
+   * left intact — they're now unreachable from this flow but still
+   * protect future callers that might re-enable the check locally.
    */
-  async checkDuplicateTitle(userId: string, title: string): Promise<void> {
-    const existing = await this.prisma.user_mandalas.findFirst({
-      where: { user_id: userId, title: title.trim() },
-      select: { id: true },
-    });
-    if (existing) {
-      const err = new Error('DUPLICATE_TITLE') as Error & { existingId: string };
-      err.existingId = existing.id;
-      throw err;
-    }
+  async checkDuplicateTitle(_userId: string, _title: string): Promise<void> {
+    // Intentionally empty — duplicate titles are allowed.
   }
 
   /**

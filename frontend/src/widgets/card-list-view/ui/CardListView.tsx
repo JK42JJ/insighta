@@ -32,13 +32,12 @@ const SHOW_GRID_SLIDER = false;
 const CONTAINER_5COL = 1600;
 const CONTAINER_4COL = 1300;
 const CONTAINER_3COL = 1050;
-// Aggressively low so 2-col holds even when the sidebar is expanded AND
-// the video side panel takes ~70% — e.g. 1280px viewport × 30% = ~384px
-// main area → minus padding leaves ~280px of card grid. We'd still rather
-// show two ~130px thumbnails than one strip. 1-col is only for the single
-// edge case of extreme horizontal compression (<260px, effectively never
-// reached in desktop layouts).
-const CONTAINER_2COL = 260;
+// Minimum legible card width is ~220px (matches user screenshot showing
+// 2-col at ~460px container where thumbnails are still readable). Below
+// ~460px we collapse to 1 column to keep individual cards usable —
+// previously we held 2-col down to 260px which crushed each card to
+// ~120px, breaking UX when the video side panel opens wide.
+const CONTAINER_2COL = 460;
 
 function getColumnsForWidth(width: number): number {
   if (width >= CONTAINER_5COL) return 5;

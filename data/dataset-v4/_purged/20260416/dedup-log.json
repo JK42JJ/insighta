@@ -1,0 +1,66 @@
+[
+  {
+    "lang": "ko",
+    "keep": "미니멀한 일상 루틴으로 자유로운 여행 라이프스타일 구축하기",
+    "drop": "미니멀한 일상 루틴으로 자유로운 여행 라이프스타일 구축하기",
+    "keep_q": 90,
+    "drop_q": 85,
+    "source": "A-norm"
+  },
+  {
+    "lang": "ko",
+    "keep": "연금저축+IRP+ISA 3종 세트 최적화로 연간 세금 환급 300만원 확보",
+    "drop": "연금저축+IRP+ISA 3종 세트 최적화로 연간 세금 환급 200만원 확보",
+    "keep_q": 100,
+    "drop_q": 80,
+    "source": "A-norm"
+  },
+  {
+    "lang": "ko",
+    "keep": "영어 자격증 취득을 위한 체계적 학습 시스템 구축",
+    "drop": "영어 자격증 취득을 위한 체계적 학습 환경 구축",
+    "keep_q": 76,
+    "drop_q": 76,
+    "source": "A-norm"
+  },
+  {
+    "lang": "ko",
+    "keep": "리눅스마스터 2급 12주 단계별 합격",
+    "drop": "리눅스 마스터 2급 8주 단계별 합격",
+    "keep_q": 100,
+    "drop_q": 95,
+    "source": "A-norm"
+  },
+  {
+    "lang": "ko",
+    "keep": "1년 내 배당 성장주 중심 포트폴리오 구축하여 월 배당금 50만원 달성",
+    "drop": "1년 내 배당 성장주 포트폴리오 구축하여 월 배당금 50만원 달성",
+    "keep_q": 100,
+    "drop_q": 90,
+    "source": "A-norm"
+  },
+  {
+    "lang": "ko",
+    "keep": "매일 글쓰기 루틴",
+    "drop": "매일 명상 루틴",
+    "keep_q": 93,
+    "drop_q": 93,
+    "source": "A-norm"
+  },
+  {
+    "lang": "ko",
+    "keep": "개발자로서 지속 가능한 성장을 위한 일상 습관 체계 구축",
+    "drop": "개발자로서 지속가능한 성장을 위한 일상 습관 체계 구축하기",
+    "keep_q": 80,
+    "drop_q": 70,
+    "source": "A-norm"
+  },
+  {
+    "lang": "en",
+    "keep": "Negotiate a 30% Salary Increase and Promotion to D",
+    "drop": "Negotiate a 30% Salary Increase and Promotion to D",
+    "keep_q": 80,
+    "drop_q": 77,
+    "source": "A-norm"
+  }
+]
