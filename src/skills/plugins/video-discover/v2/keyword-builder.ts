@@ -77,11 +77,14 @@ export interface SearchQuery {
   cellIndex?: number | null;
 }
 
-// Bumped 5 → 8 (2026-04-15) so Tier 2 has a deeper YouTube pool to draw
-// from when the local cache is empty and topics like "해외 리모트" return
-// few results per query. 8 × search.list (100 units) = 800 quota/mandala
-// — still well under the 10k/day budget for typical usage (≥12 mandalas).
-export const MAX_QUERIES = 8;
+// Bumped 8 → 12 (2026-04-16) so the candidate pool is large enough for the
+// mandala filter to produce a natural per-cell distribution (rather than
+// mechanically 5-each). With 8 sub_goals each covered by a rule query +
+// core/focus/level heads, ~12 queries land the floor; the LLM pass adds
+// a few more on top up to the cap. 12 × search.list (100 units) = 1200
+// quota/mandala — still inside the 10k/day budget at ~8 mandalas/day.
+// Further growth is gated on the Step 2 seed dictionary + API quota uplift.
+export const MAX_QUERIES = 12;
 export const MAX_QUERY_LENGTH = 100;
 
 const TARGET_LEVEL_KEYWORDS: Record<string, Record<KeywordLanguage, string>> = {
@@ -210,10 +213,13 @@ function buildRuleBasedQueries(input: KeywordBuilderInput, center: string): Sear
       out.push({ query: clip(`${center} ${map[input.language]}`), source: 'level' });
     }
   }
-  // 2 → 4 sub_goals (2026-04-15). Specific topics (e.g. "해외 리모트")
-  // produce few YouTube hits per query — broader sub_goal coverage gives
-  // Tier 2 a deeper pool to fill cells with.
-  for (const { s, i } of pickDistinctiveSubGoalsWithIndex(input.subGoals, 4)) {
+  // 4 → 8 sub_goals (2026-04-16). With the 9-axis mandala filter, the
+  // candidate distribution across cells is only as balanced as the query
+  // coverage. Covering all 8 sub_goals guarantees every cell has at least
+  // one query seeded specifically for it. Niche cells can still come up
+  // empty if no relevant video exists — that is the intended honest
+  // behavior, not a symptom of missing queries.
+  for (const { s, i } of pickDistinctiveSubGoalsWithIndex(input.subGoals, 8)) {
     out.push({ query: clip(`${center} ${s}`), source: 'subgoal', cellIndex: i });
   }
   return out;
