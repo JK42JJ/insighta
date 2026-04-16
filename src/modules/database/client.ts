@@ -8,6 +8,7 @@ import { PrismaClient } from '@prisma/client';
 import { logger } from '../../utils/logger';
 import { DatabaseError } from '../../utils/errors';
 import { config } from '../../config';
+import { buildConnectionUrl, getPoolLimit } from './connection-url';
 
 /**
  * Prisma client instance (singleton)
@@ -19,7 +20,15 @@ let prismaInstance: PrismaClient | null = null;
  */
 export function getPrismaClient(): PrismaClient {
   if (!prismaInstance) {
+    // Override DATABASE_URL's connection_limit at client construction so the
+    // committed .env (CP358-protected) can stay at the conservative default
+    // while prod gets a larger pool. See connection-url.ts for the full
+    // rationale + the P2024 / wizard-10s-hang prod incident this addresses.
+    const poolLimit = getPoolLimit();
+    const url = buildConnectionUrl(process.env['DATABASE_URL'], poolLimit);
+
     prismaInstance = new PrismaClient({
+      datasources: { db: { url } },
       log: config.app.isDevelopment
         ? [
             { emit: 'event', level: 'query' },
@@ -31,6 +40,8 @@ export function getPrismaClient(): PrismaClient {
             { emit: 'event', level: 'warn' },
           ],
     });
+
+    logger.info('Prisma client initialized', { pool_limit: poolLimit });
 
     // Log queries in development
     if (config.app.isDevelopment) {
