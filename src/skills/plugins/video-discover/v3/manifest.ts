@@ -13,9 +13,24 @@
 import type { SkillManifest } from '@/skills/_shared/types';
 import { defineManifest } from '@/skills/_shared/runtime';
 
-export const V3_TARGET_PER_CELL = 5;
+/**
+ * Per-cell cap (not a target floor). With the 9-axis mandala filter,
+ * the per-cell distribution is determined by how many relevant videos
+ * actually exist for that sub_goal — it is not forced equal across
+ * cells. Some cells may come up empty (niche sub_goal), others may
+ * fill to this cap (mainstream sub_goal). 5 → 8 (2026-04-16): a larger
+ * cap gives the filter room to reflect the natural distribution
+ * instead of truncating popular cells.
+ */
+export const V3_TARGET_PER_CELL = 8;
 export const V3_NUM_CELLS = 8;
-export const V3_TARGET_TOTAL = V3_TARGET_PER_CELL * V3_NUM_CELLS; // 40
+/**
+ * Upper bound on total slots across the mandala. Used by the executor
+ * to decide when to skip Tier 2 (if Tier 1 alone hit this count). With
+ * Tier 1 disabled, total filling is driven entirely by what the filter
+ * admits from Tier 2, bounded per-cell by V3_TARGET_PER_CELL.
+ */
+export const V3_TARGET_TOTAL = V3_TARGET_PER_CELL * V3_NUM_CELLS; // 64
 
 export const manifest: SkillManifest = defineManifest({
   id: 'video-discover-v3',
