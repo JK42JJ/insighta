@@ -174,15 +174,19 @@ export const V2_TITLE_BLOCKLIST: ReadonlyArray<string> = [
  * Shorts are excluded from AI recommendations — users can add them
  * manually, but the discovery pipeline recommends long-form only.
  *
- * Null duration is treated as shorts (defensive drop). The prior
- * `durationSec !== null && durationSec <= 60` variant returned false
- * for null, letting videos past whenever `videos.list` enrichment
- * failed to populate contentDetails.duration. Observed in prod
- * 2026-04-16: a "더 이상 구입하지 않는 물건 3가지 #미니멀라이프"
- * shorts survived this hole and surfaced in a habit-building mandala.
+ * Threshold is 180 seconds (YouTube extended Shorts from 60s to 180s
+ * in October 2024). Prod 2026-04-17: a 110-second shorts titled
+ * "한의대수석으로 만들어준 공부법 #공부 #공부잘하는방법" surfaced in
+ * a "효율적인 학습법 탐색" mandala — duration passed the old 60s gate
+ * even though the video is clearly a short. The hashtag pattern also
+ * missed it because the title tagged `#공부` rather than `#shorts`.
+ *
+ * Null duration is treated as shorts (defensive drop). Videos.list
+ * occasionally omits `contentDetails.duration` for shorts specifically,
+ * so null → drop prevents that hole.
  */
 export function isShortsByDuration(durationSec: number | null): boolean {
-  return durationSec === null || durationSec <= 60;
+  return durationSec === null || durationSec <= 180;
 }
 
 /**
