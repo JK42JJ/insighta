@@ -101,10 +101,16 @@ describe('parseIsoDuration', () => {
 });
 
 describe('filters', () => {
-  test('isShortsByDuration — duration-based', () => {
+  test('isShortsByDuration — duration-based (180s threshold per 2024 YouTube policy)', () => {
     expect(isShortsByDuration(30)).toBe(true);
     expect(isShortsByDuration(60)).toBe(true);
-    expect(isShortsByDuration(61)).toBe(false);
+    // Prod bug 2026-04-17: 110s video "한의대수석으로 만들어준 공부법
+    // #공부" slipped past the old 60s gate because YouTube widened Shorts
+    // from 60s to 180s in October 2024. Now caught.
+    expect(isShortsByDuration(110)).toBe(true);
+    expect(isShortsByDuration(180)).toBe(true);
+    expect(isShortsByDuration(181)).toBe(false);
+    expect(isShortsByDuration(600)).toBe(false);
   });
 
   test('isShortsByDuration — null defensively treated as shorts', () => {
