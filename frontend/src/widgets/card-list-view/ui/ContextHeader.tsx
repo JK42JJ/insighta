@@ -10,7 +10,7 @@ import {
   DropdownMenuRadioItem,
 } from '@/shared/ui/dropdown-menu';
 
-export type SortMode = 'relevance' | 'latest' | 'oldest' | 'title-asc' | 'title-desc';
+export type SortMode = 'latest' | 'oldest' | 'title-asc' | 'title-desc';
 
 interface ContextHeaderProps {
   title: string;
@@ -25,7 +25,6 @@ interface ContextHeaderProps {
 }
 
 const SORT_OPTIONS: { value: SortMode; labelKey: string }[] = [
-  { value: 'relevance', labelKey: 'contextHeader.sortRelevance' },
   { value: 'latest', labelKey: 'contextHeader.sortLatest' },
   { value: 'oldest', labelKey: 'contextHeader.sortOldest' },
   { value: 'title-asc', labelKey: 'contextHeader.sortTitleAZ' },

@@ -790,41 +790,18 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         });
       }
 
-      // CP362 2026-04-17: prod wizard "Go → dashboard" hangs ~20s even after
-      // Prisma pool uplift (PR #402). Per-stage timing log emitted here so the
-      // next prod occurrence can be traced directly from docker logs instead
-      // of guessing. Dev is always near-0 because the DB is localhost.
-      const t0 = Date.now();
-      const tLog: Record<string, number> = {};
-
       const result = await getMandalaManager().createMandala(userId, title, levels);
-      tLog['createMandala'] = Date.now() - t0;
 
-      // Run the two follow-up writes in parallel — they are independent.
-      // Previously sequential: update() THEN createMany(). On a us-west-2
-      // connection the round-trips stack and the user waits. With pool>=2
-      // they can fly in parallel.
-      const t1 = Date.now();
-      const updateTask: Promise<unknown> =
-        focusTags?.length || targetLevel
-          ? getPrismaClient().user_mandalas.update({
-              where: { id: result.id, user_id: userId },
-              data: {
-                ...(focusTags?.length ? { focus_tags: focusTags } : {}),
-                ...(targetLevel ? { target_level: targetLevel } : {}),
-              },
-            })
-          : Promise.resolve();
-      const skillTask: Promise<unknown> = getPrismaClient().user_skill_config.createMany({
-        data: buildSkillConfigRows(
-          userId,
-          result.id,
-          (skills as Record<string, unknown> | null | undefined) ?? null
-        ),
-        skipDuplicates: true,
-      });
-      await Promise.all([updateTask, skillTask]);
-      tLog['parallelWrites'] = Date.now() - t1;
+      // Save focus_tags and target_level if provided
+      if (focusTags?.length || targetLevel) {
+        const updateData: { focus_tags?: string[]; target_level?: string } = {};
+        if (focusTags?.length) updateData.focus_tags = focusTags;
+        if (targetLevel) updateData.target_level = targetLevel;
+        await getPrismaClient().user_mandalas.update({
+          where: { id: result.id, user_id: userId },
+          data: updateData,
+        });
+      }
 
       // Skip label generation if FE already provided labels (e.g., from AI generation).
       // Otherwise fire-and-forget to generate them asynchronously.
@@ -851,6 +828,17 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         });
       }
 
+      // Create skill config rows (CP357: video_discover defaults ON with auto_add=true)
+      const prisma = getPrismaClient();
+      await prisma.user_skill_config.createMany({
+        data: buildSkillConfigRows(
+          userId,
+          result.id,
+          (skills as Record<string, unknown> | null | undefined) ?? null
+        ),
+        skipDuplicates: true,
+      });
+
       // Phase 2 revert: actions are now generated one-shot in generateMandalaWithHaiku
       // (not fire-and-forget). FE receives mandala with 64 actions already populated
       // and sends them via subDetails. No background actions generation needed.
@@ -859,9 +847,6 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       // Fire-and-forget post-creation pipeline for the new mandala.
       // Opt-in via user_skill_config; safe if not enabled.
       triggerMandalaPostCreationAsync(userId, result.id);
-
-      tLog['total'] = Date.now() - t0;
-      request.log.info({ mandalaId: result.id, timing_ms: tLog }, 'create-with-data timing');
 
       return reply.send({ status: 200, data: { mandalaId: result.id } });
     } catch (err) {
