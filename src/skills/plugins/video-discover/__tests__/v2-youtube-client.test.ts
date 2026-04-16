@@ -10,6 +10,7 @@ import {
   videosBatch,
   parseIsoDuration,
   isShortsByDuration,
+  titleIndicatesShorts,
   titleHitsBlocklist,
 } from '../v2/youtube-client';
 
@@ -100,11 +101,35 @@ describe('parseIsoDuration', () => {
 });
 
 describe('filters', () => {
-  test('isShortsByDuration', () => {
+  test('isShortsByDuration — duration-based', () => {
     expect(isShortsByDuration(30)).toBe(true);
     expect(isShortsByDuration(60)).toBe(true);
     expect(isShortsByDuration(61)).toBe(false);
-    expect(isShortsByDuration(null)).toBe(false);
+  });
+
+  test('isShortsByDuration — null defensively treated as shorts', () => {
+    // Prod bug 2026-04-16: `videos.list` sometimes returns an item
+    // without contentDetails.duration, so `parseIsoDuration` yields
+    // null. Previously this returned false (= "not shorts") and let
+    // a shorts video surface in a habit-building mandala. The safe
+    // answer when we cannot confirm long-form is to drop.
+    expect(isShortsByDuration(null)).toBe(true);
+  });
+
+  test('titleIndicatesShorts — hashtag markers only', () => {
+    expect(titleIndicatesShorts('더 이상 구입하지 않는 물건 3가지 #shorts')).toBe(true);
+    expect(titleIndicatesShorts('Study routine #Shorts #미니멀라이프')).toBe(true);
+    expect(titleIndicatesShorts('【shorts】 1분 스트레칭')).toBe(true);
+    expect(titleIndicatesShorts('「shorts」 tips')).toBe(true);
+  });
+
+  test('titleIndicatesShorts — does NOT match the plain word "short"', () => {
+    // Avoid false-positives on normal titles that happen to contain
+    // "short" as a word (e.g. "short book review"). Only true shorts
+    // hashtags/brackets count.
+    expect(titleIndicatesShorts('A short book review')).toBe(false);
+    expect(titleIndicatesShorts('short film director interview')).toBe(false);
+    expect(titleIndicatesShorts('')).toBe(false);
   });
 
   test('titleHitsBlocklist case-insensitive', () => {

@@ -39,6 +39,7 @@ import {
   videosBatch,
   parseIsoDuration,
   isShortsByDuration,
+  titleIndicatesShorts,
   titleHitsBlocklist,
   type YouTubeVideoStatsItem,
 } from './youtube-client';
@@ -234,9 +235,12 @@ export const executor: SkillExecutor = {
     }
     const candidates = enrichWithStats(pool, stats);
 
-    // 4. Pre-filter (shorts + blocklist)
+    // 4. Pre-filter (shorts duration + shorts title markers + blocklist)
     const filtered = candidates.filter(
-      (c) => !isShortsByDuration(c.durationSec) && !titleHitsBlocklist(c.title)
+      (c) =>
+        !isShortsByDuration(c.durationSec) &&
+        !titleIndicatesShorts(c.title) &&
+        !titleHitsBlocklist(c.title)
     );
 
     if (filtered.length === 0) {
