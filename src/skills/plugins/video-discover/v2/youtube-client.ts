@@ -170,8 +170,31 @@ export const V2_TITLE_BLOCKLIST: ReadonlyArray<string> = [
   '광고',
 ];
 
+/**
+ * Shorts are excluded from AI recommendations — users can add them
+ * manually, but the discovery pipeline recommends long-form only.
+ *
+ * Null duration is treated as shorts (defensive drop). The prior
+ * `durationSec !== null && durationSec <= 60` variant returned false
+ * for null, letting videos past whenever `videos.list` enrichment
+ * failed to populate contentDetails.duration. Observed in prod
+ * 2026-04-16: a "더 이상 구입하지 않는 물건 3가지 #미니멀라이프"
+ * shorts survived this hole and surfaced in a habit-building mandala.
+ */
 export function isShortsByDuration(durationSec: number | null): boolean {
-  return durationSec !== null && durationSec <= 60;
+  return durationSec === null || durationSec <= 60;
+}
+
+/**
+ * Secondary shorts signal based on title markers. Catches cases where
+ * duration is present and > 60s (unusual edit) but the title still
+ * carries #shorts-style tags. Scoped to literal hashtags / brackets
+ * so normal titles containing the word "short" (e.g. "short book
+ * review") are not affected.
+ */
+export function titleIndicatesShorts(title: string): boolean {
+  if (!title) return false;
+  return /#shorts\b|【\s*shorts?\s*】|「\s*shorts?\s*」/i.test(title);
 }
 
 export function titleHitsBlocklist(title: string): boolean {

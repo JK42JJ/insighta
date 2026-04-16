@@ -43,6 +43,7 @@ import {
   videosBatch,
   parseIsoDuration,
   isShortsByDuration,
+  titleIndicatesShorts,
   titleHitsBlocklist,
   type YouTubeVideoStatsItem,
 } from '../v2/youtube-client';
@@ -375,6 +376,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     const likeCount = s?.statistics?.likeCount ? parseInt(s.statistics.likeCount, 10) : null;
     const durationSec = parseIsoDuration(s?.contentDetails?.duration);
     if (isShortsByDuration(durationSec)) continue;
+    if (titleIndicatesShorts(p.title)) continue;
     if (titleHitsBlocklist(p.title)) continue;
     enriched.push({
       ...p,
