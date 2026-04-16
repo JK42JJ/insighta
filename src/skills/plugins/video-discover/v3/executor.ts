@@ -33,6 +33,7 @@ import { matchFromVideoPool, groupByCell } from './cache-matcher';
 
 import {
   buildRuleBasedQueriesSync,
+  extractCoreKeyphrase,
   runLLMQueries,
   type KeywordLanguage,
   type SearchQuery,
@@ -378,7 +379,13 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   // Videos meeting only one are dropped: that's how "영어 기출" TEPS
   // material slipped into a TOEFL Reading cell (shared "영어" but no
   // TOEFL/reading overlap).
-  const centerTokens = tokenize(input.state.centerGoal, input.state.language);
+  // Center tokens are drawn from the extracted core keyphrase (drops
+  // year prefixes, verbal endings, common particles) so the gate hinges
+  // on the domain-specific words only — e.g. "한 달안에 토플 100점
+  // 달성 하기" reduces to "토플" after noise is stripped, and a video
+  // must carry that token in its title to count as in-domain.
+  const centerCore = extractCoreKeyphrase(input.state.centerGoal, input.state.language);
+  const centerTokens = tokenize(centerCore, input.state.language);
   const cellTokenSets = new Map<number, Set<string>>();
   for (const { cellIndex } of input.deficitCells) {
     cellTokenSets.set(
@@ -395,13 +402,19 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   const scored: ScoredCandidate[] = [];
   for (const v of enriched) {
     if (input.existingVideoIds.has(v.videoId)) continue;
-    const vTokens = tokenize(`${v.title} ${v.description ?? ''}`, input.state.language);
 
-    // Gate 1: must overlap the center goal.
-    const centerScore = jaccard(vTokens, centerTokens);
+    // Gate 1 uses TITLE ONLY against center goal. Descriptions frequently
+    // carry brand cross-references (e.g. a TEPS video's description
+    // mentioning "해커스 토플") that let unrelated videos sneak past a
+    // desc-inclusive gate. Title is the signal the user actually reads.
+    const titleTokens = tokenize(v.title, input.state.language);
+    const centerScore = jaccard(titleTokens, centerTokens);
     if (centerTokens.size > 0 && centerScore === 0) continue;
 
-    // Gate 2: must overlap at least one cell sub_goal.
+    // Gate 2 uses title + description against each cell's sub_goal —
+    // descriptions are fair game here because we're trying to assign to
+    // the best-fitting cell, not to filter domain membership.
+    const vTokens = tokenize(`${v.title} ${v.description ?? ''}`, input.state.language);
     let bestCell = -1;
     let bestScore = 0;
     for (const [cellIndex, tokens] of cellTokenSets) {
@@ -412,8 +425,6 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
       }
     }
     if (bestCell === -1 || bestScore < MIN_TIER2_RELEVANCE) continue;
-    // Final score weights center + cell equally so cross-topic matches that
-    // only clear the center gate by a hair are ranked below tight matches.
     const finalScore = (centerScore + bestScore) / 2;
     scored.push({ video: v, cellIndex: bestCell, score: finalScore });
   }
