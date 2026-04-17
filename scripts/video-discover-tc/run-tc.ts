@@ -105,6 +105,31 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Log-normal jitter (Box-Muller → exp). Median ≈ (min+max)/2, heavy
+ * right tail keeps inter-request spacing human-ish and desynchronized
+ * across concurrent runners. Prevents burst patterns that YouTube's
+ * abuse heuristics flag even below the hard quota.
+ */
+function jitterMs(minMs = 1500, maxMs = 5000): number {
+  const mean = Math.log((minMs + maxMs) / 2);
+  const sigma = 0.4;
+  const u1 = Math.random();
+  const u2 = Math.random();
+  const z = Math.sqrt(-2 * Math.log(u1 || 1e-9)) * Math.cos(2 * Math.PI * u2);
+  const raw = Math.exp(mean + sigma * z);
+  return Math.max(minMs, Math.min(maxMs, Math.round(raw)));
+}
+
+/**
+ * Rough YouTube quota cost estimate for a TC round. We use these to stop
+ * early when the budget is reached, so a round cannot silently consume
+ * the full daily quota.
+ *   search.list = 100 units, videos.list = 1 unit per 50 ids.
+ * v3 Tier 2 uses at most MAX_QUERIES(12) search + 1 videos batch per mandala.
+ */
+const ESTIMATED_UNITS_PER_MANDALA = 12 * 100 + 1; // 1201
+
 async function main(): Promise<void> {
   const userEmail = process.env.USER_EMAIL ?? 'jamesjk4242@gmail.com';
   const envLabel = process.env.ENV_LABEL ?? 'unknown';
@@ -140,8 +165,26 @@ async function main(): Promise<void> {
   console.log(`[set]  ${TEST_SET.length} mandalas\n`);
 
   const results: TrialResult[] = [];
+  const totalSleepMsTracker = { value: 0 };
+  const consecutiveFailures = { count: 0 };
+  const CIRCUIT_BREAK_THRESHOLD = 3;
+  const QUOTA_BUDGET_UNITS = parseInt(process.env.YT_QUOTA_BUDGET_UNITS ?? '', 10);
+  // Default: stop after ~60% of a single-key daily quota (safety margin).
+  // Callers can set YT_QUOTA_BUDGET_UNITS=3000 etc. to be stricter.
+  const budget = Number.isFinite(QUOTA_BUDGET_UNITS) && QUOTA_BUDGET_UNITS > 0
+    ? QUOTA_BUDGET_UNITS
+    : 6000;
+  let unitsEstimated = 0;
 
   for (let i = 0; i < TEST_SET.length; i++) {
+    if (unitsEstimated >= budget) {
+      console.log(`[stop] estimated units ${unitsEstimated} ≥ budget ${budget} — stopping round early`);
+      break;
+    }
+    if (consecutiveFailures.count >= CIRCUIT_BREAK_THRESHOLD) {
+      console.log(`[stop] ${CIRCUIT_BREAK_THRESHOLD} consecutive tier2 failures — circuit breaker tripped`);
+      break;
+    }
     const tc = TEST_SET[i]!;
     console.log(`[${i + 1}/${TEST_SET.length}] "${tc.title}" (${tc.language})`);
     const result: TrialResult = {
@@ -281,17 +324,45 @@ async function main(): Promise<void> {
       console.log(
         `  ok mandala=${mandala.id.slice(0, 8)} status=${r?.status} rec=${result.recCount} pipe=${result.timings.pipelineTotalMs}ms`
       );
+
+      // Circuit breaker: any step2 that produced 0 recs *and* the pipeline
+      // flagged it partial/failed is a sustained-failure candidate. This
+      // is what tripped key_1 in the 2026-04-17 prod run — we bail early
+      // instead of burning the remaining keys down.
+      const s2 = r?.step2_result as { tier2_matches?: number } | null | undefined;
+      const tier2Zero = s2 && typeof s2.tier2_matches === 'number' && s2.tier2_matches === 0;
+      if (r?.status && r.status !== 'completed' && tier2Zero) {
+        consecutiveFailures.count++;
+      } else {
+        consecutiveFailures.count = 0;
+      }
+
+      // Cost bookkeeping — crude upper bound; reflects tier2_queries when
+      // present so dedup / early-exit paths are credited accurately.
+      const queriesRun =
+        (s2 as { tier2_queries?: number } | null | undefined)?.tier2_queries ??
+        12; // fallback to MAX_QUERIES
+      unitsEstimated += queriesRun * 100 + 1;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       result.error = msg;
       console.error(`  fail: ${msg}`);
+      consecutiveFailures.count++;
     }
     results.push(result);
 
-    // Rate limit breathing room (5min dedup gate applies to same mandala only
-    // so a 2s gap between fresh mandalas is safe; keeps YouTube search
-    // behaviour realistic without hammering).
-    await sleep(2000);
+    // Log-normal random sleep between mandalas. Purpose:
+    //   1. YouTube abuse heuristics penalise perfectly-regular cadences
+    //      even below hard quota — spread avoids that signal.
+    //   2. Gives Supabase pooler time to release connections between
+    //      back-to-back 9-level transactions.
+    //   3. `totalSleepMsTracker.value` is subtracted from the round's
+    //      wall-clock aggregate in the report (measurement purity).
+    if (i < TEST_SET.length - 1) {
+      const slept = jitterMs();
+      totalSleepMsTracker.value += slept;
+      await sleep(slept);
+    }
   }
 
   await pg.end();
@@ -301,25 +372,57 @@ async function main(): Promise<void> {
   fs.mkdirSync(outDir, { recursive: true });
   const ts = new Date().toISOString().replace(/[:.]/g, '-');
   const base = `${ts}-${envLabel}`;
+  const meta = {
+    envLabel,
+    userEmail,
+    totalSleepMs: totalSleepMsTracker.value,
+    unitsEstimated,
+    unitsBudget: budget,
+    circuitTripped: consecutiveFailures.count >= CIRCUIT_BREAK_THRESHOLD,
+    completedCount: results.length,
+    configuredCount: TEST_SET.length,
+  };
   const jsonFp = path.join(outDir, `${base}.json`);
-  fs.writeFileSync(jsonFp, JSON.stringify({ envLabel, userEmail, results }, null, 2));
+  fs.writeFileSync(jsonFp, JSON.stringify({ ...meta, results }, null, 2));
   console.log(`\n[written] ${jsonFp}`);
 
   const mdFp = path.join(outDir, `${base}.md`);
-  const md = formatMarkdown(envLabel, userEmail, results);
+  const md = formatMarkdown(envLabel, userEmail, results, meta);
   fs.writeFileSync(mdFp, md);
   console.log(`[written] ${mdFp}`);
+  console.log(
+    `[budget] units≈${unitsEstimated}/${budget}  sleep=${Math.round(totalSleepMsTracker.value / 1000)}s (excluded from timing metrics)`
+  );
 }
 
-function formatMarkdown(envLabel: string, userEmail: string, results: TrialResult[]): string {
+function formatMarkdown(
+  envLabel: string,
+  userEmail: string,
+  results: TrialResult[],
+  meta: {
+    totalSleepMs: number;
+    unitsEstimated: number;
+    unitsBudget: number;
+    circuitTripped: boolean;
+    completedCount: number;
+    configuredCount: number;
+  }
+): string {
   const lines: string[] = [];
   lines.push(`# Video-Discover TC — ${envLabel}`);
   lines.push('');
   lines.push(`- Generated: ${new Date().toISOString()}`);
   lines.push(`- User: ${userEmail}`);
-  lines.push(`- Cases: ${results.length}`);
+  lines.push(`- Cases: ${results.length} (configured ${meta.configuredCount})`);
   const ok = results.filter((r) => r.recCount > 0).length;
   lines.push(`- Success (rec > 0): ${ok}/${results.length}`);
+  lines.push(`- Units estimated: ${meta.unitsEstimated} / budget ${meta.unitsBudget}`);
+  lines.push(
+    `- Inter-mandala sleep: ${Math.round(meta.totalSleepMs / 1000)}s (excluded from timing aggregates)`
+  );
+  if (meta.circuitTripped) {
+    lines.push(`- ⚠ Circuit breaker tripped — stopped early`);
+  }
   lines.push('');
   lines.push('| # | title | lang | rec | pipe ms | step1 | step2 | step3 | status |');
   lines.push('|---|---|---|---|---|---|---|---|---|');
