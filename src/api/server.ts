@@ -1,7 +1,7 @@
 import Fastify, { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
-import rateLimit from '@fastify/rate-limit';
+import { registerRateLimit } from './plugins/rate-limit';
 import dotenv from 'dotenv';
 import { Prisma } from '@prisma/client';
 import { registerAuth } from './plugins/auth';
@@ -90,27 +90,16 @@ export async function buildServer() {
     crossOriginEmbedderPolicy: false,
   });
 
-  // Rate limiting (2026-04-17 redesign — incident: 100/15min global bucket
-  // caused "service death" when a user refreshed 13 times. The old design
-  // put GET and POST in the same bucket, so write-burst consumed the
-  // budget and blocked all reads for 15 minutes).
+  // Rate limiting — 3-tier architecture (see src/api/plugins/rate-limit.ts).
   //
-  // New design: global = false (no blanket limit on reads). Write endpoints
-  // opt in via route-level `config.rateLimit`. Reads are always available.
-  const isProd = process.env['NODE_ENV'] === 'production';
-  if (isProd) {
-    await fastify.register(rateLimit, {
-      global: false, // ← reads are free; writes opt in per-route
-      max: 300, // fallback for routes that don't set their own (generous)
-      timeWindow: '1 minute',
-      allowList: (req: { url: string }) => req.url.startsWith('/health'),
-      addHeaders: {
-        'x-ratelimit-limit': true,
-        'x-ratelimit-remaining': true,
-        'x-ratelimit-reset': true,
-      },
-    });
-  }
+  // Tier 1: global safety net (auth 200/min writes, unauth 30/min all)
+  // Tier 2: GET exempt for authenticated users (reads are free)
+  // Tier 3: per-endpoint budgets via route config (LLM, vector search, etc.)
+  //
+  // The plugin was written 2026-04-10 but never wired in. server.ts was
+  // using a raw 100/15min global bucket that killed the service when a
+  // user refreshed 13 times (2026-04-17 incident). Now activated.
+  await registerRateLimit(fastify);
 
   // ============================================================================
   // Authentication Plugin
