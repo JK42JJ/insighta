@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { trackSkillActivated } from '@/shared/lib/posthog';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -161,7 +160,7 @@ interface ExtraProSkill {
   id: string;
   shortLabelKey: string;
   defaultLabel: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
+  icon: React.ComponentType<{ className?: string }>;
 }
 const EXTRA_PRO_SKILLS: ReadonlyArray<ExtraProSkill> = [
   {
@@ -240,21 +239,6 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
       const currentEnabled = skillEnabledMap[skillId] ?? false;
       const nextEnabled = !currentEnabled;
       setTogglingSkillId(skillId);
-
-      // Optimistic update — immediately reflect toggle in UI
-      const dashboardKey = ['mandala', 'dashboard', mandalaId];
-      const previousData = queryClient.getQueryData<DashboardApiResponseShape>(dashboardKey);
-      const linked = LINKED_SKILL_TOGGLES[skillId] ?? [];
-      const allKeys = [skillId, ...linked];
-      queryClient.setQueryData<DashboardApiResponseShape>(dashboardKey, (old) => {
-        if (!old) return old;
-        const updatedSkills = { ...(old.skills ?? {}) };
-        for (const key of allKeys) {
-          updatedSkills[key] = nextEnabled;
-        }
-        return { ...old, skills: updatedSkills };
-      });
-
       try {
         await apiClient.tokenReady;
         const token = apiClient.getAccessToken();
@@ -262,6 +246,8 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
 
         // CP358 SSOT: linked toggles. e.g. recommend → also flip video_discover
         // so the BE pipeline lights up alongside the user-visible toggle.
+        const linked = LINKED_SKILL_TOGGLES[skillId] ?? [];
+        const allKeys = [skillId, ...linked];
         const patchOne = (skillType: string) =>
           fetch(`${baseUrl}/api/v1/mandalas/${mandalaId}/skills`, {
             method: 'PATCH',
@@ -275,19 +261,11 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
           });
         await Promise.all(allKeys.map(patchOne));
 
-        if (nextEnabled) {
-          trackSkillActivated({ mandala_id: mandalaId, skill_type: skillId });
-        }
-
         // Invalidate the cache key shared with useDashboard so the badge re-renders.
         await queryClient.invalidateQueries({
           queryKey: ['mandala', 'dashboard', mandalaId],
         });
       } catch (err) {
-        // Rollback optimistic update on error
-        if (previousData) {
-          queryClient.setQueryData(dashboardKey, previousData);
-        }
         const message = err instanceof Error ? err.message : undefined;
         toast({
           title: t('skills.toggleFailed', 'Toggle failed'),
@@ -487,30 +465,27 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
                       background: isEnabled ? (color?.iconBg ?? OFF_ICON_BG) : OFF_ICON_BG,
                     }}
                   >
-                    {/* Glow dot (ON only) — toned down */}
+                    {/* Glow dot (ON only) */}
                     {isEnabled && (
                       <span
                         className="absolute -top-px -right-px w-[3px] h-[3px] rounded-full"
                         style={{
-                          background: '#16a34a',
-                          boxShadow: '0 0 3px rgba(22,163,74,0.3)',
+                          background: '#34d399',
+                          boxShadow: '0 0 6px 1px rgba(52,211,153,0.6)',
                         }}
                       />
                     )}
                     {isToggling ? (
-                      <Loader2
-                        className="w-6 h-6 animate-spin text-sidebar-foreground/40"
-                        strokeWidth={1.5}
-                      />
+                      <Loader2 className="w-6 h-6 animate-spin text-sidebar-foreground/40" />
                     ) : (
                       <span
                         className="transition-all duration-300"
                         style={{
                           color: isEnabled ? (color?.stroke ?? '#9394a0') : '#3a3b46',
-                          opacity: isEnabled ? 0.85 : 0.35,
+                          opacity: isEnabled ? 1 : 0.35,
                         }}
                       >
-                        <Icon className="w-6 h-6" strokeWidth={1.5} />
+                        <Icon className="w-6 h-6" />
                       </span>
                     )}
                   </div>
@@ -518,8 +493,8 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
                   {/* Label */}
                   <span
                     className={cn(
-                      'text-[10px] font-medium text-center tracking-tight transition-colors duration-300 antialiased',
-                      isEnabled ? 'text-[#9ea0a8]' : 'text-[#4e4f5c]'
+                      'text-[10px] font-bold text-center tracking-tight transition-colors duration-300 antialiased',
+                      isEnabled ? 'text-[#ededf0]' : 'text-[#4e4f5c]'
                     )}
                   >
                     {t(
@@ -598,12 +573,20 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
                       border: '1px dashed rgba(251,191,36,0.15)',
                     }}
                   >
-                    <ProIcon className="w-6 h-6 text-[#3a3b46] opacity-25" strokeWidth={1.5} />
+                    <ProIcon className="w-6 h-6 text-[#3a3b46] opacity-25" />
                   </div>
 
                   {/* Label */}
                   <span className="text-[11px] font-semibold text-[#3a3b46] text-center">
                     {t(`skills.${proSkill.shortLabelKey}`, proSkill.defaultLabel)}
+                  </span>
+
+                  {/* Upgrade CTA */}
+                  <span
+                    className="text-[8px] mt-1 font-bold tracking-wide uppercase px-1.5 py-px rounded-[3px]"
+                    style={{ background: 'rgba(251,191,36,0.08)', color: '#fbbf24' }}
+                  >
+                    UPGRADE
                   </span>
                 </button>
               );
