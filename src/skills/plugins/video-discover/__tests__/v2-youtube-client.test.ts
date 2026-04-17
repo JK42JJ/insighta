@@ -12,6 +12,7 @@ import {
   isShortsByDuration,
   titleIndicatesShorts,
   titleHitsBlocklist,
+  resolveSearchApiKeys,
 } from '../v2/youtube-client';
 
 describe('searchVideos — auth contract', () => {
@@ -142,5 +143,105 @@ describe('filters', () => {
     expect(titleHitsBlocklist('Best VLog of 2024')).toBe(true);
     expect(titleHitsBlocklist('드라마 클립')).toBe(true);
     expect(titleHitsBlocklist('Korean grammar lesson')).toBe(false);
+  });
+});
+
+describe('resolveSearchApiKeys — env ordering', () => {
+  test('returns primary/secondary/tertiary in order', () => {
+    expect(
+      resolveSearchApiKeys({
+        YOUTUBE_API_KEY_SEARCH: 'k1',
+        YOUTUBE_API_KEY_SEARCH_2: 'k2',
+        YOUTUBE_API_KEY_SEARCH_3: 'k3',
+      })
+    ).toEqual(['k1', 'k2', 'k3']);
+  });
+
+  test('skips empty/whitespace keys', () => {
+    expect(
+      resolveSearchApiKeys({
+        YOUTUBE_API_KEY_SEARCH: 'k1',
+        YOUTUBE_API_KEY_SEARCH_2: '   ',
+        YOUTUBE_API_KEY_SEARCH_3: 'k3',
+      })
+    ).toEqual(['k1', 'k3']);
+  });
+
+  test('falls back to legacy YOUTUBE_API_KEY when no SEARCH_ keys', () => {
+    expect(resolveSearchApiKeys({ YOUTUBE_API_KEY: 'legacy' })).toEqual(['legacy']);
+  });
+
+  test('returns empty array when nothing is configured', () => {
+    expect(resolveSearchApiKeys({})).toEqual([]);
+  });
+});
+
+describe('searchVideos — key rotation on 403 quota', () => {
+  test('falls over to next key when primary returns 403 quotaExceeded', async () => {
+    let call = 0;
+    const urls: string[] = [];
+    const fetchFn = (async (url: string) => {
+      urls.push(url);
+      call++;
+      if (call === 1) {
+        return {
+          ok: false,
+          status: 403,
+          json: async () => ({
+            error: { code: 403, message: 'Daily Limit Exceeded. quotaExceeded.' },
+          }),
+        } as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ items: [{ id: { videoId: 'v1' }, snippet: { title: 't' } }] }),
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    const items = await searchVideos({
+      query: 'korean',
+      apiKey: ['KEY1', 'KEY2'],
+      fetchFn,
+    });
+    expect(items.length).toBe(1);
+    expect(urls[0]).toContain('key=KEY1');
+    expect(urls[1]).toContain('key=KEY2');
+  });
+
+  test('does NOT rotate on non-quota 403 (e.g., referer blocked)', async () => {
+    let call = 0;
+    const fetchFn = (async () => {
+      call++;
+      return {
+        ok: false,
+        status: 403,
+        json: async () => ({
+          error: { code: 403, message: 'Requests from referer <empty> are blocked.' },
+        }),
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    await expect(searchVideos({ query: 'x', apiKey: ['KEY1', 'KEY2'], fetchFn })).rejects.toThrow(
+      /referer/
+    );
+    // Only one call — did not rotate
+    expect(call).toBe(1);
+  });
+
+  test('throws if all keys quota-exhausted', async () => {
+    const fetchFn = (async () => {
+      return {
+        ok: false,
+        status: 403,
+        json: async () => ({
+          error: { code: 403, message: 'quotaExceeded' },
+        }),
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    await expect(searchVideos({ query: 'x', apiKey: ['A', 'B', 'C'], fetchFn })).rejects.toThrow(
+      /quota/
+    );
   });
 });
