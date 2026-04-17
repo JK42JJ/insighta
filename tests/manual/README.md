@@ -222,6 +222,7 @@ chmod +x tests/manual/test-caption-quality.sh
 
 ## 🔗 Related Documentation
 
+- **Continuous refresh test** (browser procedure): See `continuous-refresh-test.md` — Cmd+R hold / burst reload regression checklist + historical findings (BootShell, Phase A' rejection, SaaS comparison)
 - **E2E Tests**: See `tests/e2e/` for automated end-to-end testing
 - **Unit Tests**: See `tests/unit/` for Jest-based unit tests
 - **Phase 2 Implementation**: See `docs/phases/phase2/PHASE2_IMPLEMENTATION.md`

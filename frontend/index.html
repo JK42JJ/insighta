@@ -19,6 +19,54 @@
       html:not(.dark) #root:empty {
         background: hsl(0,0%,100%);
       }
+
+      /* Boot shell — visible from the moment HTML hits the browser until
+         React renders anything into #root. No JS dependency. Rolling this
+         back = delete this <style> block + the #boot-shell div below. */
+      #boot-shell {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        background: hsl(220, 16%, 8%);
+        z-index: 9999;
+        pointer-events: none;
+      }
+      html:not(.dark) #boot-shell {
+        background: hsl(0, 0%, 100%);
+      }
+      .boot-shell-brand {
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        font-weight: 600;
+        font-size: 28px;
+        letter-spacing: -0.02em;
+        color: hsl(0, 0%, 88%);
+      }
+      html:not(.dark) .boot-shell-brand {
+        color: hsl(220, 16%, 20%);
+      }
+      .boot-shell-pulse {
+        width: 48px;
+        height: 3px;
+        border-radius: 2px;
+        background: hsl(0, 0%, 35%);
+        animation: boot-shell-pulse 1.4s ease-in-out infinite;
+      }
+      html:not(.dark) .boot-shell-pulse {
+        background: hsl(220, 8%, 70%);
+      }
+      @keyframes boot-shell-pulse {
+        0%, 100% { opacity: 0.25; transform: scaleX(0.4); }
+        50%      { opacity: 1;    transform: scaleX(1); }
+      }
+      /* Hide the shell as soon as React renders anything into #root.
+         Chrome 105+, Safari 15.4+, Firefox 121+. JS fallback below. */
+      body:has(#root:not(:empty)) #boot-shell {
+        display: none;
+      }
     </style>
     <script>
       try {
@@ -30,6 +78,29 @@
   </head>
   <body>
     <div id="root"></div>
+
+    <div id="boot-shell" role="presentation" aria-hidden="true">
+      <div class="boot-shell-brand">Insighta</div>
+      <div class="boot-shell-pulse"></div>
+    </div>
+    <script>
+      /* Fallback removal for browsers without :has() support. MutationObserver
+         is universally available. Safe no-op if the shell is already hidden. */
+      (function () {
+        var root = document.getElementById('root');
+        var shell = document.getElementById('boot-shell');
+        if (!root || !shell) return;
+        if (root.childNodes.length > 0) { shell.remove(); return; }
+        var obs = new MutationObserver(function () {
+          if (root.childNodes.length > 0) {
+            shell.remove();
+            obs.disconnect();
+          }
+        });
+        obs.observe(root, { childList: true });
+      })();
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

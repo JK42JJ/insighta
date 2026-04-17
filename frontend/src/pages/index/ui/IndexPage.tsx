@@ -7,8 +7,8 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
+import { BootShell } from '@/shared/ui/BootShell';
 import { trackCardViewed } from '@/shared/lib/posthog';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
 import { useShellStore, dndHandlersRef } from '@/stores/shellStore';
@@ -50,22 +50,12 @@ const IndexPage = () => {
   const { isLoggedIn, isLoading: authLoading } = useAuth();
 
   if (authLoading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <BootShell />;
   }
 
   if (!isLoggedIn) {
     return (
-      <Suspense
-        fallback={
-          <div className="h-screen flex items-center justify-center bg-background">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
-        }
-      >
+      <Suspense fallback={<BootShell />}>
         <LandingPage />
       </Suspense>
     );
