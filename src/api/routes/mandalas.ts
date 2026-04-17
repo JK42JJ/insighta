@@ -481,89 +481,98 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       focusTags?: string[];
       targetLevel?: string;
     };
-  }>('/create-from-template', { onRequest: [fastify.authenticate] }, async (request, reply) => {
-    const userId = getUserId(request, reply);
-    if (!userId) return;
+  }>(
+    '/create-from-template',
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: { max: 3, timeWindow: '10 seconds' } },
+    },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
 
-    const { templateId, skills, focusTags, targetLevel } = request.body;
+      const { templateId, skills, focusTags, targetLevel } = request.body;
 
-    if (!templateId || typeof templateId !== 'string') {
-      return reply.code(400).send({ error: 'templateId is required' });
-    }
+      if (!templateId || typeof templateId !== 'string') {
+        return reply.code(400).send({ error: 'templateId is required' });
+      }
 
-    // Daily mandala creation limit (Phase 0-5) — admins bypass
-    const DAILY_MANDALA_LIMIT = 5;
-    const adminCheck = await getPrismaClient().$queryRaw<Array<{ is_super_admin: boolean | null }>>`
+      // Daily mandala creation limit (Phase 0-5) — admins bypass
+      const DAILY_MANDALA_LIMIT = 5;
+      const adminCheck = await getPrismaClient().$queryRaw<
+        Array<{ is_super_admin: boolean | null }>
+      >`
       SELECT is_super_admin FROM auth.users WHERE id = ${userId}::uuid
     `;
-    const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
-    if (!isSuperAdmin) {
-      const startOfDay = new Date();
-      startOfDay.setUTCHours(0, 0, 0, 0);
-      const todayCount = await getPrismaClient().user_mandalas.count({
-        where: { user_id: userId, created_at: { gte: startOfDay } },
-      });
-      if (todayCount >= DAILY_MANDALA_LIMIT) {
-        return reply.code(429).send({
-          status: 429,
-          code: 'DAILY_LIMIT_REACHED',
-          message: `Daily mandala creation limit reached (${todayCount}/${DAILY_MANDALA_LIMIT})`,
+      const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
+      if (!isSuperAdmin) {
+        const startOfDay = new Date();
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const todayCount = await getPrismaClient().user_mandalas.count({
+          where: { user_id: userId, created_at: { gte: startOfDay } },
         });
+        if (todayCount >= DAILY_MANDALA_LIMIT) {
+          return reply.code(429).send({
+            status: 429,
+            code: 'DAILY_LIMIT_REACHED',
+            message: `Daily mandala creation limit reached (${todayCount}/${DAILY_MANDALA_LIMIT})`,
+          });
+        }
+      }
+
+      try {
+        // Reuse existing clone logic
+        const result = await getMandalaManager().clonePublicMandala(templateId, userId);
+
+        // Set source_template_id, focus_tags, target_level on the cloned mandala
+        const prisma = getPrismaClient();
+        const updateData: {
+          source_template_id: string;
+          focus_tags?: string[];
+          target_level?: string;
+        } = {
+          source_template_id: templateId,
+        };
+        if (focusTags?.length) updateData.focus_tags = focusTags;
+        if (targetLevel) updateData.target_level = targetLevel;
+        await prisma.user_mandalas.update({
+          where: { id: result.mandalaId, user_id: userId },
+          data: updateData,
+        });
+
+        // Create skill config rows (CP357: video_discover defaults ON with auto_add=true)
+        await prisma.user_skill_config.createMany({
+          data: buildSkillConfigRows(
+            userId,
+            result.mandalaId,
+            (skills as Record<string, unknown> | null | undefined) ?? null
+          ),
+          skipDuplicates: true,
+        });
+
+        // Fire-and-forget post-creation pipeline for the cloned mandala.
+        // Opt-in via user_skill_config; safe if not enabled.
+        triggerMandalaPostCreationAsync(userId, result.mandalaId);
+
+        return reply.send({ mandalaId: result.mandalaId });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Create from template failed';
+        if (message === 'MANDALA_NOT_FOUND') {
+          return reply.code(404).send({ error: 'Template not found' });
+        }
+        if (message === 'Mandala quota exceeded') {
+          const anyErr = err as Error & { quota?: number; current?: number };
+          return reply.code(409).send({
+            error: 'Mandala quota exceeded',
+            quota: anyErr.quota,
+            current: anyErr.current,
+          });
+        }
+        request.log.error({ err, userId, templateId }, 'Failed to create from template');
+        return reply.code(500).send({ error: message });
       }
     }
-
-    try {
-      // Reuse existing clone logic
-      const result = await getMandalaManager().clonePublicMandala(templateId, userId);
-
-      // Set source_template_id, focus_tags, target_level on the cloned mandala
-      const prisma = getPrismaClient();
-      const updateData: {
-        source_template_id: string;
-        focus_tags?: string[];
-        target_level?: string;
-      } = {
-        source_template_id: templateId,
-      };
-      if (focusTags?.length) updateData.focus_tags = focusTags;
-      if (targetLevel) updateData.target_level = targetLevel;
-      await prisma.user_mandalas.update({
-        where: { id: result.mandalaId, user_id: userId },
-        data: updateData,
-      });
-
-      // Create skill config rows (CP357: video_discover defaults ON with auto_add=true)
-      await prisma.user_skill_config.createMany({
-        data: buildSkillConfigRows(
-          userId,
-          result.mandalaId,
-          (skills as Record<string, unknown> | null | undefined) ?? null
-        ),
-        skipDuplicates: true,
-      });
-
-      // Fire-and-forget post-creation pipeline for the cloned mandala.
-      // Opt-in via user_skill_config; safe if not enabled.
-      triggerMandalaPostCreationAsync(userId, result.mandalaId);
-
-      return reply.send({ mandalaId: result.mandalaId });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Create from template failed';
-      if (message === 'MANDALA_NOT_FOUND') {
-        return reply.code(404).send({ error: 'Template not found' });
-      }
-      if (message === 'Mandala quota exceeded') {
-        const anyErr = err as Error & { quota?: number; current?: number };
-        return reply.code(409).send({
-          error: 'Mandala quota exceeded',
-          quota: anyErr.quota,
-          current: anyErr.current,
-        });
-      }
-      request.log.error({ err, userId, templateId }, 'Failed to create from template');
-      return reply.code(500).send({ error: message });
-    }
-  });
+  );
 
   /**
    * GET /api/v1/mandalas/list - List all user mandalas with pagination
@@ -697,182 +706,191 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       focusTags?: string[];
       targetLevel?: string;
     };
-  }>('/create-with-data', { onRequest: [fastify.authenticate] }, async (request, reply) => {
-    const userId = getUserId(request, reply);
-    if (!userId) return;
+  }>(
+    '/create-with-data',
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: { max: 3, timeWindow: '10 seconds' } },
+    },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
 
-    const {
-      title,
-      centerGoal,
-      subjects,
-      subDetails,
-      skills,
-      centerLabel,
-      subLabels,
-      focusTags,
-      targetLevel,
-    } = request.body;
+      const {
+        title,
+        centerGoal,
+        subjects,
+        subDetails,
+        skills,
+        centerLabel,
+        subLabels,
+        focusTags,
+        targetLevel,
+      } = request.body;
 
-    if (!title || typeof title !== 'string' || title.trim().length === 0) {
-      return reply
-        .code(400)
-        .send({ status: 400, code: 'INVALID_INPUT', message: 'title is required' });
-    }
-    if (!Array.isArray(subjects) || subjects.length !== 8) {
-      return reply.code(400).send({
-        status: 400,
-        code: 'INVALID_INPUT',
-        message: 'subjects must be an array of 8 items',
-      });
-    }
+      if (!title || typeof title !== 'string' || title.trim().length === 0) {
+        return reply
+          .code(400)
+          .send({ status: 400, code: 'INVALID_INPUT', message: 'title is required' });
+      }
+      if (!Array.isArray(subjects) || subjects.length !== 8) {
+        return reply.code(400).send({
+          status: 400,
+          code: 'INVALID_INPUT',
+          message: 'subjects must be an array of 8 items',
+        });
+      }
 
-    // Daily mandala creation limit (Phase 0-5) — admins bypass
-    const DAILY_MANDALA_LIMIT = 5;
-    const adminCheck = await getPrismaClient().$queryRaw<Array<{ is_super_admin: boolean | null }>>`
+      // Daily mandala creation limit (Phase 0-5) — admins bypass
+      const DAILY_MANDALA_LIMIT = 5;
+      const adminCheck = await getPrismaClient().$queryRaw<
+        Array<{ is_super_admin: boolean | null }>
+      >`
       SELECT is_super_admin FROM auth.users WHERE id = ${userId}::uuid
     `;
-    const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
-    if (!isSuperAdmin) {
-      const startOfDay = new Date();
-      startOfDay.setUTCHours(0, 0, 0, 0);
-      const todayCount = await getPrismaClient().user_mandalas.count({
-        where: { user_id: userId, created_at: { gte: startOfDay } },
-      });
-      if (todayCount >= DAILY_MANDALA_LIMIT) {
-        return reply.code(429).send({
-          status: 429,
-          code: 'DAILY_LIMIT_REACHED',
-          message: `Daily mandala creation limit reached (${todayCount}/${DAILY_MANDALA_LIMIT})`,
+      const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
+      if (!isSuperAdmin) {
+        const startOfDay = new Date();
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const todayCount = await getPrismaClient().user_mandalas.count({
+          where: { user_id: userId, created_at: { gte: startOfDay } },
         });
-      }
-    }
-
-    try {
-      // Build levels: depth=0 root with 8 subjects, depth=1 for each subject with actions
-      const levels: Array<{
-        levelKey: string;
-        centerGoal: string;
-        centerLabel?: string;
-        subjects: string[];
-        subjectLabels?: string[];
-        position: number;
-        depth: number;
-        parentLevelKey?: string | null;
-      }> = [
-        {
-          levelKey: 'root',
-          centerGoal: centerGoal || title,
-          centerLabel: centerLabel || undefined,
-          subjects,
-          subjectLabels: subLabels || undefined,
-          position: 0,
-          depth: 0,
-          parentLevelKey: null,
-        },
-      ];
-
-      if (subDetails) {
-        subjects.forEach((_, idx) => {
-          const actions = subDetails[String(idx)] ?? subDetails[idx as unknown as string] ?? [];
-          if (Array.isArray(actions) && actions.length > 0) {
-            // Pad to 8 items if needed
-            const padded = [...actions];
-            while (padded.length < 8) padded.push('');
-            levels.push({
-              levelKey: `sub_${idx}`,
-              centerGoal: subjects[idx] ?? '',
-              subjects: padded.slice(0, 8),
-              position: idx,
-              depth: 1,
-              parentLevelKey: 'root',
-            });
-          }
-        });
+        if (todayCount >= DAILY_MANDALA_LIMIT) {
+          return reply.code(429).send({
+            status: 429,
+            code: 'DAILY_LIMIT_REACHED',
+            message: `Daily mandala creation limit reached (${todayCount}/${DAILY_MANDALA_LIMIT})`,
+          });
+        }
       }
 
-      const result = await getMandalaManager().createMandala(userId, title, levels);
+      try {
+        // Build levels: depth=0 root with 8 subjects, depth=1 for each subject with actions
+        const levels: Array<{
+          levelKey: string;
+          centerGoal: string;
+          centerLabel?: string;
+          subjects: string[];
+          subjectLabels?: string[];
+          position: number;
+          depth: number;
+          parentLevelKey?: string | null;
+        }> = [
+          {
+            levelKey: 'root',
+            centerGoal: centerGoal || title,
+            centerLabel: centerLabel || undefined,
+            subjects,
+            subjectLabels: subLabels || undefined,
+            position: 0,
+            depth: 0,
+            parentLevelKey: null,
+          },
+        ];
 
-      // Save focus_tags and target_level if provided
-      if (focusTags?.length || targetLevel) {
-        const updateData: { focus_tags?: string[]; target_level?: string } = {};
-        if (focusTags?.length) updateData.focus_tags = focusTags;
-        if (targetLevel) updateData.target_level = targetLevel;
-        await getPrismaClient().user_mandalas.update({
-          where: { id: result.id, user_id: userId },
-          data: updateData,
-        });
-      }
-
-      // Skip label generation if FE already provided labels (e.g., from AI generation).
-      // Otherwise fire-and-forget to generate them asynchronously.
-      if (!centerLabel || !subLabels || subLabels.length === 0) {
-        setImmediate(() => {
-          void (async () => {
-            try {
-              const labels = await generateLabels({
-                center_goal: centerGoal || title,
-                sub_goals: subjects,
+        if (subDetails) {
+          subjects.forEach((_, idx) => {
+            const actions = subDetails[String(idx)] ?? subDetails[idx as unknown as string] ?? [];
+            if (Array.isArray(actions) && actions.length > 0) {
+              // Pad to 8 items if needed
+              const padded = [...actions];
+              while (padded.length < 8) padded.push('');
+              levels.push({
+                levelKey: `sub_${idx}`,
+                centerGoal: subjects[idx] ?? '',
+                subjects: padded.slice(0, 8),
+                position: idx,
+                depth: 1,
+                parentLevelKey: 'root',
               });
-              const prismaLabels = getPrismaClient();
-              await prismaLabels.user_mandala_levels.updateMany({
-                where: { mandala_id: result.id, depth: 0 },
-                data: {
-                  center_label: labels.center_label,
-                  subject_labels: labels.sub_labels,
-                },
-              });
-            } catch {
-              // Non-fatal — sidebar falls back to sub_goals.
             }
-          })();
+          });
+        }
+
+        const result = await getMandalaManager().createMandala(userId, title, levels);
+
+        // Save focus_tags and target_level if provided
+        if (focusTags?.length || targetLevel) {
+          const updateData: { focus_tags?: string[]; target_level?: string } = {};
+          if (focusTags?.length) updateData.focus_tags = focusTags;
+          if (targetLevel) updateData.target_level = targetLevel;
+          await getPrismaClient().user_mandalas.update({
+            where: { id: result.id, user_id: userId },
+            data: updateData,
+          });
+        }
+
+        // Skip label generation if FE already provided labels (e.g., from AI generation).
+        // Otherwise fire-and-forget to generate them asynchronously.
+        if (!centerLabel || !subLabels || subLabels.length === 0) {
+          setImmediate(() => {
+            void (async () => {
+              try {
+                const labels = await generateLabels({
+                  center_goal: centerGoal || title,
+                  sub_goals: subjects,
+                });
+                const prismaLabels = getPrismaClient();
+                await prismaLabels.user_mandala_levels.updateMany({
+                  where: { mandala_id: result.id, depth: 0 },
+                  data: {
+                    center_label: labels.center_label,
+                    subject_labels: labels.sub_labels,
+                  },
+                });
+              } catch {
+                // Non-fatal — sidebar falls back to sub_goals.
+              }
+            })();
+          });
+        }
+
+        // Create skill config rows (CP357: video_discover defaults ON with auto_add=true)
+        const prisma = getPrismaClient();
+        await prisma.user_skill_config.createMany({
+          data: buildSkillConfigRows(
+            userId,
+            result.id,
+            (skills as Record<string, unknown> | null | undefined) ?? null
+          ),
+          skipDuplicates: true,
+        });
+
+        // Phase 2 revert: actions are now generated one-shot in generateMandalaWithHaiku
+        // (not fire-and-forget). FE receives mandala with 64 actions already populated
+        // and sends them via subDetails. No background actions generation needed.
+        // If FE sends empty subDetails, that's a FE bug — don't silently patch with LLM.
+
+        // Fire-and-forget post-creation pipeline for the new mandala.
+        // Opt-in via user_skill_config; safe if not enabled.
+        triggerMandalaPostCreationAsync(userId, result.id);
+
+        return reply.send({ status: 200, data: { mandalaId: result.id } });
+      } catch (err) {
+        const anyErr = err as Error & { quota?: number; current?: number };
+        if (anyErr.message === 'Mandala quota exceeded') {
+          return reply.code(429).send({
+            status: 429,
+            code: 'QUOTA_EXCEEDED',
+            message: `Mandala limit reached (${anyErr.current}/${anyErr.quota})`,
+          });
+        }
+        if (anyErr.message === 'DUPLICATE_TITLE') {
+          return reply.code(409).send({
+            status: 409,
+            code: 'DUPLICATE_TITLE',
+            message: 'A mandala with this title already exists',
+          });
+        }
+        request.log.error({ err, userId, title }, 'Failed to create mandala from data');
+        return reply.code(500).send({
+          status: 500,
+          code: 'CREATE_FAILED',
+          message: 'Failed to create mandala',
         });
       }
-
-      // Create skill config rows (CP357: video_discover defaults ON with auto_add=true)
-      const prisma = getPrismaClient();
-      await prisma.user_skill_config.createMany({
-        data: buildSkillConfigRows(
-          userId,
-          result.id,
-          (skills as Record<string, unknown> | null | undefined) ?? null
-        ),
-        skipDuplicates: true,
-      });
-
-      // Phase 2 revert: actions are now generated one-shot in generateMandalaWithHaiku
-      // (not fire-and-forget). FE receives mandala with 64 actions already populated
-      // and sends them via subDetails. No background actions generation needed.
-      // If FE sends empty subDetails, that's a FE bug — don't silently patch with LLM.
-
-      // Fire-and-forget post-creation pipeline for the new mandala.
-      // Opt-in via user_skill_config; safe if not enabled.
-      triggerMandalaPostCreationAsync(userId, result.id);
-
-      return reply.send({ status: 200, data: { mandalaId: result.id } });
-    } catch (err) {
-      const anyErr = err as Error & { quota?: number; current?: number };
-      if (anyErr.message === 'Mandala quota exceeded') {
-        return reply.code(429).send({
-          status: 429,
-          code: 'QUOTA_EXCEEDED',
-          message: `Mandala limit reached (${anyErr.current}/${anyErr.quota})`,
-        });
-      }
-      if (anyErr.message === 'DUPLICATE_TITLE') {
-        return reply.code(409).send({
-          status: 409,
-          code: 'DUPLICATE_TITLE',
-          message: 'A mandala with this title already exists',
-        });
-      }
-      request.log.error({ err, userId, title }, 'Failed to create mandala from data');
-      return reply.code(500).send({
-        status: 500,
-        code: 'CREATE_FAILED',
-        message: 'Failed to create mandala',
-      });
     }
-  });
+  );
 
   /**
    * POST /api/v1/mandalas/generate-labels - Generate short labels (center + sub) via OpenRouter
@@ -969,7 +987,10 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
    */
   fastify.post<{ Body: CreateMandalaBody }>(
     '/create',
-    { onRequest: [fastify.authenticate] },
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: { max: 3, timeWindow: '10 seconds' } },
+    },
     async (request, reply) => {
       const userId = getUserId(request, reply);
       if (!userId) return;

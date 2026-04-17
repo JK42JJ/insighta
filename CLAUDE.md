@@ -94,6 +94,14 @@
 - 상류부터 수정, UI는 마지막
 - 수정 후: `tsc --noEmit` + `npm run build` + 기능 검증
 
+### Pre-push Verification (절대 규칙, 2026-04-17 2회 연속 prod 장애)
+- **Frontend 코드 변경 시 `/verify` PASS 없이 `git push` / `gh pr create` 절대 금지.**
+- `tsc --noEmit` + `vitest` 통과 ≠ 런타임 정상. **브라우저 실행 확인 필수.**
+- "간단한 변경" 면제 없음 — PR #403 (2줄), PR #404 (2줄) 모두 "간단"이었고 둘 다 prod 장애.
+- PreToolUse hook (`scripts/verify-gate.sh`)이 frontend 변경 감지 시 push 차단.
+- `/verify` 실행 → PASS marker 생성 → hook이 marker 확인 후 통과 허용.
+- 위반 시: 장애 사고 기록 + troubleshooting.md LEVEL 승격.
+
 ### Testing (절대 규칙)
 - 새 함수/hook/API -> 단위 테스트 최소 1개. 버그 수정 -> regression test 1개.
 - 기존 테스트 삭제/skip 금지 — 테스트 실패 시 코드를 고쳐야 함
