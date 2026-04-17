@@ -30,7 +30,7 @@ import type {
 
 import { manifest, V3_TARGET_PER_CELL, V3_NUM_CELLS, V3_TARGET_TOTAL } from './manifest';
 import { matchFromVideoPool, groupByCell } from './cache-matcher';
-import { applyMandalaFilter, MIN_SUB_RELEVANCE } from './mandala-filter';
+import { applyMandalaFilterWithStats, MIN_SUB_RELEVANCE } from './mandala-filter';
 
 import {
   buildRuleBasedQueriesSync,
@@ -46,6 +46,7 @@ import {
   titleIndicatesShorts,
   titleHitsBlocklist,
   type YouTubeVideoStatsItem,
+  type YouTubeSearchItem,
 } from '../v2/youtube-client';
 
 const log = logger.child({ module: 'video-discover/v3/executor' });
@@ -224,6 +225,7 @@ export const executor: SkillExecutor = {
     // ── Tier 2: realtime fallback for deficit cells ────────────────────
     let tier2Count = 0;
     let tier2QueriesUsed = 0;
+    let tier2Debug: Tier2Debug | null = null;
     if (tier1Total < V3_TARGET_TOTAL) {
       const deficitCells: Array<{ cellIndex: number; need: number }> = [];
       for (let i = 0; i < V3_NUM_CELLS; i++) {
@@ -243,12 +245,17 @@ export const executor: SkillExecutor = {
       slots.push(...tier2Fill.slots);
       tier2Count = tier2Fill.slots.length;
       tier2QueriesUsed = tier2Fill.queriesUsed;
+      tier2Debug = tier2Fill.debug;
     }
 
     if (slots.length === 0) {
       return {
         status: 'failed',
-        data: { tier1_matches: 0, tier2_matches: 0 },
+        data: {
+          tier1_matches: 0,
+          tier2_matches: 0,
+          ...(tier2Debug ? { debug: tier2Debug } : {}),
+        },
         error: 'No recommendations from cache or realtime fallback',
         metrics: { duration_ms: Date.now() - t0 },
       };
@@ -270,6 +277,7 @@ export const executor: SkillExecutor = {
         cells_filled: new Set(slots.map((s) => s.cellIndex)).size,
         rows_upserted: upserts,
         target_met: finalTotal >= V3_TARGET_TOTAL,
+        ...(tier2Debug ? { debug: tier2Debug } : {}),
       },
       metrics: {
         duration_ms: wallMs,
@@ -292,13 +300,96 @@ interface Tier2Input {
   existingVideoIds: ReadonlySet<string>;
 }
 
+interface Tier2Debug {
+  timing: {
+    keywordRuleMs: number;
+    keywordLlmMs: number;
+    ruleSearchMs: number;
+    llmSearchMs: number;
+    videosBatchMs: number;
+    filterMs: number;
+    mandalaFilterMs: number;
+    scoringMs: number;
+    totalMs: number;
+  };
+  queries: Array<{ query: string; source: 'rule' | 'llm'; cellIndex: number | null }>;
+  perQueryCounts: Array<{ query: string; source: 'rule' | 'llm'; count: number; error?: string }>;
+  poolAfterDedupe: number;
+  droppedShortsDuration: number;
+  droppedShortsTitle: number;
+  droppedBlocklist: number;
+  afterFilter: number;
+  existingExcluded: number;
+  mandalaFilterInput: number;
+  mandalaFilterOutput: number;
+  mandalaFilterDroppedCenterGate: number;
+  mandalaFilterDroppedJaccard: number;
+  mandalaFilterCenterTokens: string[];
+  mandalaFilterSubGoalTokenCounts: number[];
+  perCellAssigned: Record<number, number>;
+  scoredCandidates: number;
+  finalSlots: number;
+  centerGoal: string;
+  subGoalsSample: string[];
+  llmQuotaHit: boolean;
+  ytSearchErrors: string[];
+}
+
 interface Tier2Output {
   slots: AssembledSlot[];
   queriesUsed: number;
+  /**
+   * Observability-only trace. Added 2026-04-17 to diagnose dev vs prod
+   * tier2_matches divergence. No behavior change. Serialized into
+   * step2_result.debug for read-side comparison.
+   */
+  debug: Tier2Debug;
+}
+
+function makeEmptyDebug(input: Tier2Input): Tier2Debug {
+  return {
+    timing: {
+      keywordRuleMs: 0,
+      keywordLlmMs: 0,
+      ruleSearchMs: 0,
+      llmSearchMs: 0,
+      videosBatchMs: 0,
+      filterMs: 0,
+      mandalaFilterMs: 0,
+      scoringMs: 0,
+      totalMs: 0,
+    },
+    queries: [],
+    perQueryCounts: [],
+    poolAfterDedupe: 0,
+    droppedShortsDuration: 0,
+    droppedShortsTitle: 0,
+    droppedBlocklist: 0,
+    afterFilter: 0,
+    existingExcluded: 0,
+    mandalaFilterInput: 0,
+    mandalaFilterOutput: 0,
+    mandalaFilterDroppedCenterGate: 0,
+    mandalaFilterDroppedJaccard: 0,
+    mandalaFilterCenterTokens: [],
+    mandalaFilterSubGoalTokenCounts: [],
+    perCellAssigned: {},
+    scoredCandidates: 0,
+    finalSlots: 0,
+    centerGoal: input.state.centerGoal,
+    subGoalsSample: [...input.state.subGoals],
+    llmQuotaHit: false,
+    ytSearchErrors: [],
+  };
 }
 
 async function runTier2(input: Tier2Input): Promise<Tier2Output> {
-  if (input.deficitCells.length === 0) return { slots: [], queriesUsed: 0 };
+  const t0 = Date.now();
+  const debug = makeEmptyDebug(input);
+  if (input.deficitCells.length === 0) {
+    debug.timing.totalMs = Date.now() - t0;
+    return { slots: [], queriesUsed: 0, debug };
+  }
 
   // Build queries targeting the deficit cells specifically. keyword-builder
   // already supports tagging by sub_goal index; here we narrow the
@@ -308,6 +399,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     deficitSubGoals[cellIndex] = input.state.subGoals[cellIndex] ?? '';
   }
 
+  const tKwRuleStart = Date.now();
   const ruleQueries = buildRuleBasedQueriesSync({
     centerGoal: input.state.centerGoal,
     subGoals: deficitSubGoals,
@@ -315,7 +407,9 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     targetLevel: input.state.targetLevel,
     language: input.state.language,
   });
+  debug.timing.keywordRuleMs = Date.now() - tKwRuleStart;
 
+  const tKwLlmStart = Date.now();
   const llmPromise = runLLMQueries(
     {
       centerGoal: input.state.centerGoal,
@@ -330,19 +424,49 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     }
   );
 
-  const rulePool = await runSearch(ruleQueries, input.apiKey, input.state.language);
+  const tRuleSearchStart = Date.now();
+  const ruleSearch = await runSearchTraced(ruleQueries, input.apiKey, input.state.language);
+  debug.timing.ruleSearchMs = Date.now() - tRuleSearchStart;
+  const rulePool = ruleSearch.pool;
+  for (const t of ruleSearch.perQuery) {
+    debug.perQueryCounts.push({ ...t, source: 'rule' });
+  }
+  for (const q of ruleQueries) {
+    debug.queries.push({ query: q.query, source: 'rule', cellIndex: q.cellIndex ?? null });
+  }
+  debug.ytSearchErrors.push(...ruleSearch.perQuery.filter((p) => p.error).map((p) => p.error!));
 
   const llmQueries = await llmPromise;
+  debug.timing.keywordLlmMs = Date.now() - tKwLlmStart;
+  debug.llmQuotaHit = llmQueries.length === 0 && Boolean(input.openRouterApiKey);
   const usedQueryTexts = new Set(ruleQueries.map((q) => q.query.toLowerCase()));
   const extraLLM = llmQueries.filter((q) => !usedQueryTexts.has(q.query.toLowerCase()));
-  const llmPool =
-    extraLLM.length > 0 ? await runSearch(extraLLM, input.apiKey, input.state.language) : [];
+  for (const q of extraLLM) {
+    debug.queries.push({ query: q.query, source: 'llm', cellIndex: q.cellIndex ?? null });
+  }
+
+  let llmPool: PoolItem[] = [];
+  if (extraLLM.length > 0) {
+    const tLlmSearchStart = Date.now();
+    const llmSearch = await runSearchTraced(extraLLM, input.apiKey, input.state.language);
+    debug.timing.llmSearchMs = Date.now() - tLlmSearchStart;
+    llmPool = llmSearch.pool;
+    for (const t of llmSearch.perQuery) {
+      debug.perQueryCounts.push({ ...t, source: 'llm' });
+    }
+    debug.ytSearchErrors.push(...llmSearch.perQuery.filter((p) => p.error).map((p) => p.error!));
+  }
 
   const queriesUsed = ruleQueries.length + extraLLM.length;
   const combined = dedupePool([...rulePool, ...llmPool]);
-  if (combined.length === 0) return { slots: [], queriesUsed };
+  debug.poolAfterDedupe = combined.length;
+  if (combined.length === 0) {
+    debug.timing.totalMs = Date.now() - t0;
+    return { slots: [], queriesUsed, debug };
+  }
 
   // videos.list batch for duration + viewCount
+  const tVideosBatchStart = Date.now();
   let stats: YouTubeVideoStatsItem[] = [];
   try {
     stats = await videosBatch({
@@ -350,12 +474,11 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
       apiKey: input.apiKey,
     });
   } catch (err) {
-    log.warn(
-      `videos.list failed (continuing w/o stats): ${
-        err instanceof Error ? err.message : String(err)
-      }`
-    );
+    const msg = err instanceof Error ? err.message : String(err);
+    log.warn(`videos.list failed (continuing w/o stats): ${msg}`);
+    debug.ytSearchErrors.push(`videos.list: ${msg}`);
   }
+  debug.timing.videosBatchMs = Date.now() - tVideosBatchStart;
   const statsById = new Map<string, YouTubeVideoStatsItem>();
   for (const s of stats) if (s.id) statsById.set(s.id, s);
 
@@ -369,15 +492,25 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     durationSec: number | null;
     publishedDate: Date | null;
   };
+  const tFilterStart = Date.now();
   const enriched: Enriched[] = [];
   for (const p of combined) {
     const s = statsById.get(p.videoId);
     const viewCount = s?.statistics?.viewCount ? parseInt(s.statistics.viewCount, 10) : null;
     const likeCount = s?.statistics?.likeCount ? parseInt(s.statistics.likeCount, 10) : null;
     const durationSec = parseIsoDuration(s?.contentDetails?.duration);
-    if (isShortsByDuration(durationSec)) continue;
-    if (titleIndicatesShorts(p.title)) continue;
-    if (titleHitsBlocklist(p.title)) continue;
+    if (isShortsByDuration(durationSec)) {
+      debug.droppedShortsDuration++;
+      continue;
+    }
+    if (titleIndicatesShorts(p.title)) {
+      debug.droppedShortsTitle++;
+      continue;
+    }
+    if (titleHitsBlocklist(p.title)) {
+      debug.droppedBlocklist++;
+      continue;
+    }
     enriched.push({
       ...p,
       viewCount: Number.isFinite(viewCount) ? viewCount : null,
@@ -386,7 +519,12 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
       publishedDate: p.publishedAt ? new Date(p.publishedAt) : null,
     });
   }
-  if (enriched.length === 0) return { slots: [], queriesUsed };
+  debug.timing.filterMs = Date.now() - tFilterStart;
+  debug.afterFilter = enriched.length;
+  if (enriched.length === 0) {
+    debug.timing.totalMs = Date.now() - t0;
+    return { slots: [], queriesUsed, debug };
+  }
 
   // 9-axis mandala filter: the mandala itself (centerGoal + 8 sub_goals) is
   // the filter. applyMandalaFilter routes each candidate to the best-fit
@@ -399,16 +537,28 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     score: number;
   }
   const filterable = enriched.filter((v) => !input.existingVideoIds.has(v.videoId));
-  const byCell = applyMandalaFilter(filterable, {
+  debug.existingExcluded = enriched.length - filterable.length;
+  debug.mandalaFilterInput = filterable.length;
+
+  const tMandalaFilterStart = Date.now();
+  const { byCell, stats: mfStats } = applyMandalaFilterWithStats(filterable, {
     centerGoal: input.state.centerGoal,
     subGoals: input.state.subGoals,
     language: input.state.language,
   });
+  debug.timing.mandalaFilterMs = Date.now() - tMandalaFilterStart;
+
+  debug.mandalaFilterOutput = mfStats.output;
+  debug.mandalaFilterDroppedCenterGate = mfStats.droppedByCenterGate;
+  debug.mandalaFilterDroppedJaccard = mfStats.droppedByJaccardBelowThreshold;
+  debug.mandalaFilterCenterTokens = mfStats.centerTokens;
+  debug.mandalaFilterSubGoalTokenCounts = mfStats.subGoalTokenCounts;
 
   // Flatten into a single scored list (per-cell order preserved inside the
   // map by applyMandalaFilter; overall sort happens again below because the
   // cap-per-cell loop needs a global desc order to pick the best slots
   // across cells fairly).
+  const tScoringStart = Date.now();
   const deficitCellSet = new Set(input.deficitCells.map((c) => c.cellIndex));
   const scored: ScoredCandidate[] = [];
   for (const [cellIndex, list] of byCell) {
@@ -417,6 +567,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
       scored.push({ video: a.candidate, cellIndex, score: a.score });
     }
   }
+  debug.scoredCandidates = scored.length;
 
   // Cap per cell using the deficit need + overall target remaining.
   const cellFilled = new Map<number, number>();
@@ -446,9 +597,15 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
       tier: 'realtime',
     });
   }
+  debug.timing.scoringMs = Date.now() - tScoringStart;
+  debug.finalSlots = slots.length;
+  for (const [cellIndex, n] of cellFilled) {
+    debug.perCellAssigned[cellIndex] = n;
+  }
+  debug.timing.totalMs = Date.now() - t0;
   void TIER2_MAX_QUERIES_PER_CELL; // referenced in docs; retained for future tuning
 
-  return { slots, queriesUsed };
+  return { slots, queriesUsed, debug };
 }
 
 // ============================================================================
@@ -465,12 +622,17 @@ interface PoolItem {
   cellIndexHint: number | null;
 }
 
-async function runSearch(
+interface SearchTrace {
+  pool: PoolItem[];
+  perQuery: Array<{ query: string; count: number; error?: string }>;
+}
+
+async function runSearchTraced(
   queries: ReadonlyArray<SearchQuery>,
   apiKey: string,
   language: KeywordLanguage
-): Promise<PoolItem[]> {
-  if (queries.length === 0) return [];
+): Promise<SearchTrace> {
+  if (queries.length === 0) return { pool: [], perQuery: [] };
   const regionCode = language === 'ko' ? 'KR' : 'US';
   const results = await Promise.all(
     queries.map(async (q) => {
@@ -481,21 +643,26 @@ async function runSearch(
           relevanceLanguage: language,
           regionCode,
         });
-        return { q, items };
+        return { q, items, error: undefined as string | undefined };
       } catch (err) {
-        log.warn(
-          `search.list failed for "${q.query}": ${err instanceof Error ? err.message : String(err)}`
-        );
-        return { q, items: [] };
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn(`search.list failed for "${q.query}": ${msg}`);
+        return { q, items: [] as YouTubeSearchItem[], error: msg };
       }
     })
   );
-  const out: PoolItem[] = [];
-  for (const { q, items } of results) {
+  const pool: PoolItem[] = [];
+  const perQuery: SearchTrace['perQuery'] = [];
+  for (const { q, items, error } of results) {
+    perQuery.push({
+      query: q.query,
+      count: items.length,
+      ...(error ? { error } : {}),
+    });
     for (const item of items) {
       const id = item.id?.videoId;
       if (!id) continue;
-      out.push({
+      pool.push({
         videoId: id,
         title: item.snippet?.title ?? '',
         description: item.snippet?.description ?? '',
@@ -506,7 +673,7 @@ async function runSearch(
       });
     }
   }
-  return out;
+  return { pool, perQuery };
 }
 
 function dedupePool(items: ReadonlyArray<PoolItem>): PoolItem[] {

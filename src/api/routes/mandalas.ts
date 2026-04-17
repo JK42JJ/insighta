@@ -713,6 +713,12 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       config: { rateLimit: { max: 3, timeWindow: '10 seconds' } },
     },
     async (request, reply) => {
+      // Observability: per-stage timing for dev/prod diagnostic comparison.
+      // Added 2026-04-17. No behavior change; emits Server-Timing header.
+      const t0 = Date.now();
+      const stages: Array<{ name: string; ms: number }> = [];
+      const stage = (name: string) => stages.push({ name, ms: Date.now() - t0 });
+
       const userId = getUserId(request, reply);
       if (!userId) return;
 
@@ -740,6 +746,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           message: 'subjects must be an array of 8 items',
         });
       }
+      stage('validation');
 
       // Daily mandala creation limit (Phase 0-5) — admins bypass
       const DAILY_MANDALA_LIMIT = 5;
@@ -763,6 +770,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           });
         }
       }
+      stage('quota_check');
 
       try {
         // Build levels: depth=0 root with 8 subjects, depth=1 for each subject with actions
@@ -808,6 +816,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         }
 
         const result = await getMandalaManager().createMandala(userId, title, levels);
+        stage('create_mandala');
 
         // Save focus_tags and target_level if provided
         if (focusTags?.length || targetLevel) {
@@ -818,6 +827,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             where: { id: result.id, user_id: userId },
             data: updateData,
           });
+          stage('focus_update');
         }
 
         // Skip label generation if FE already provided labels (e.g., from AI generation).
@@ -855,6 +865,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           ),
           skipDuplicates: true,
         });
+        stage('skill_config');
 
         // Phase 2 revert: actions are now generated one-shot in generateMandalaWithHaiku
         // (not fire-and-forget). FE receives mandala with 64 actions already populated
@@ -864,7 +875,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         // Fire-and-forget post-creation pipeline for the new mandala.
         // Opt-in via user_skill_config; safe if not enabled.
         triggerMandalaPostCreationAsync(userId, result.id);
+        stage('trigger_pipeline');
 
+        void reply.header('Server-Timing', stages.map((s) => `${s.name};dur=${s.ms}`).join(', '));
+        request.log.info(
+          { mandalaId: result.id, userId, stages, totalMs: Date.now() - t0 },
+          'create-with-data timing'
+        );
         return reply.send({ status: 200, data: { mandalaId: result.id } });
       } catch (err) {
         const anyErr = err as Error & { quota?: number; current?: number };

@@ -53,10 +53,31 @@ export interface MandalaFilterInput {
  * each list sorted by score desc. Drops candidates that fail the center
  * gate or don't clear MIN_SUB_RELEVANCE on any sub_goal.
  */
+/**
+ * Diagnostic stats from a single applyMandalaFilter run. No behavior impact.
+ * Mutated by `applyMandalaFilterWithStats`. Added 2026-04-17 for dev/prod
+ * divergence analysis.
+ */
+export interface MandalaFilterStats {
+  input: number;
+  output: number;
+  droppedByCenterGate: number;
+  droppedByJaccardBelowThreshold: number;
+  centerTokens: string[];
+  subGoalTokenCounts: number[];
+}
+
 export function applyMandalaFilter<T extends FilterCandidate>(
   candidates: ReadonlyArray<T>,
   input: MandalaFilterInput
 ): Map<number, ScoredAssignment<T>[]> {
+  return applyMandalaFilterWithStats(candidates, input).byCell;
+}
+
+export function applyMandalaFilterWithStats<T extends FilterCandidate>(
+  candidates: ReadonlyArray<T>,
+  input: MandalaFilterInput
+): { byCell: Map<number, ScoredAssignment<T>[]>; stats: MandalaFilterStats } {
   const centerCore = extractCoreKeyphrase(input.centerGoal, input.language);
   const centerTokens = tokenize(centerCore, input.language);
 
@@ -65,10 +86,22 @@ export function applyMandalaFilter<T extends FilterCandidate>(
   const byCell = new Map<number, ScoredAssignment<T>[]>();
   for (let i = 0; i < input.subGoals.length; i++) byCell.set(i, []);
 
+  const stats: MandalaFilterStats = {
+    input: candidates.length,
+    output: 0,
+    droppedByCenterGate: 0,
+    droppedByJaccardBelowThreshold: 0,
+    centerTokens: [...centerTokens],
+    subGoalTokenCounts: subGoalTokens.map((s) => s.size),
+  };
+
   for (const c of candidates) {
     const titleTokens = tokenize(c.title, input.language);
     const centerScore = substringOverlap(centerTokens, titleTokens);
-    if (centerTokens.size > 0 && centerScore === 0) continue;
+    if (centerTokens.size > 0 && centerScore === 0) {
+      stats.droppedByCenterGate++;
+      continue;
+    }
 
     const bodyTokens = tokenize(`${c.title} ${c.description ?? ''}`, input.language);
 
@@ -83,7 +116,10 @@ export function applyMandalaFilter<T extends FilterCandidate>(
         bestCell = i;
       }
     }
-    if (bestCell === -1 || bestScore < MIN_SUB_RELEVANCE) continue;
+    if (bestCell === -1 || bestScore < MIN_SUB_RELEVANCE) {
+      stats.droppedByJaccardBelowThreshold++;
+      continue;
+    }
 
     const final = 0.5 * centerScore + 0.5 * bestScore;
     byCell.get(bestCell)!.push({
@@ -93,12 +129,13 @@ export function applyMandalaFilter<T extends FilterCandidate>(
       centerScore,
       cellScore: bestScore,
     });
+    stats.output++;
   }
 
   for (const list of byCell.values()) {
     list.sort((a, b) => b.score - a.score);
   }
-  return byCell;
+  return { byCell, stats };
 }
 
 /**
