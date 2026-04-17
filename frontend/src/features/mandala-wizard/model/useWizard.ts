@@ -446,7 +446,7 @@ export function useWizard() {
 
   // Create with full data mutation (for search results + AI generated)
   const createWithDataMutation = useMutation({
-    mutationFn: (params: {
+    mutationFn: async (params: {
       title: string;
       centerGoal: string;
       subjects: string[];
@@ -456,8 +456,30 @@ export function useWizard() {
       subLabels?: string[];
       focusTags?: string[];
       targetLevel?: string;
-    }) => apiClient.createMandalaWithData(params),
+    }) => {
+      // Observability (2026-04-17): per-stage FE timing for dev/prod diagnostic.
+      // No behavior change — measurement-only.
+      const tSubmit = performance.now();
+      const result = await apiClient.createMandalaWithData(params);
+      const tResponse = performance.now();
+      // eslint-disable-next-line no-console
+      console.info('[wizard-timing]', {
+        event: 'createMandalaWithData',
+        submit_to_response_ms: Math.round(tResponse - tSubmit),
+        mandalaId: result.mandalaId,
+        title: params.title,
+      });
+      return { ...result, _tSubmit: tSubmit, _tResponse: tResponse };
+    },
     onSuccess: (data) => {
+      const tNavigateStart = performance.now();
+      // eslint-disable-next-line no-console
+      console.info('[wizard-timing]', {
+        event: 'navigate_start',
+        response_to_navigate_ms: Math.round(tNavigateStart - data._tResponse),
+        total_submit_to_navigate_ms: Math.round(tNavigateStart - data._tSubmit),
+        mandalaId: data.mandalaId,
+      });
       goToUnifiedDashboard(data.mandalaId);
     },
   });
