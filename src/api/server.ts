@@ -90,13 +90,20 @@ export async function buildServer() {
     crossOriginEmbedderPolicy: false,
   });
 
-  // Rate limiting — disabled in dev, 100/15min in prod
+  // Rate limiting (2026-04-17 redesign — incident: 100/15min global bucket
+  // caused "service death" when a user refreshed 13 times. The old design
+  // put GET and POST in the same bucket, so write-burst consumed the
+  // budget and blocked all reads for 15 minutes).
+  //
+  // New design: global = false (no blanket limit on reads). Write endpoints
+  // opt in via route-level `config.rateLimit`. Reads are always available.
   const isProd = process.env['NODE_ENV'] === 'production';
   if (isProd) {
     await fastify.register(rateLimit, {
-      max: parseInt(process.env['RATE_LIMIT_MAX'] || '100', 10),
-      timeWindow: process.env['RATE_LIMIT_WINDOW'] || '15 minutes',
-      allowList: (req) => req.url.startsWith('/health'),
+      global: false, // ← reads are free; writes opt in per-route
+      max: 300, // fallback for routes that don't set their own (generous)
+      timeWindow: '1 minute',
+      allowList: (req: { url: string }) => req.url.startsWith('/health'),
       addHeaders: {
         'x-ratelimit-limit': true,
         'x-ratelimit-remaining': true,

@@ -83,6 +83,7 @@ interface WizardStepGoalProps {
   onSelectSearchResult: (result: MandalaSearchResult) => void;
   onSelectGeneratedMandala: (generated: GeneratedMandala) => void;
   onCreateBlank: () => void;
+  isCreatingBlank?: boolean;
 }
 
 export default function WizardStepGoal({
@@ -105,6 +106,7 @@ export default function WizardStepGoal({
   onSelectSearchResult,
   onSelectGeneratedMandala,
   onCreateBlank,
+  isCreatingBlank = false,
 }: WizardStepGoalProps) {
   const { t, i18n } = useTranslation();
   const [localGoal, setLocalGoal] = useState(goalInput);
@@ -375,9 +377,12 @@ export default function WizardStepGoal({
         <button
           type="button"
           onClick={onCreateBlank}
-          className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-transparent px-5 py-2.5 text-[13px] font-semibold text-muted-foreground transition-all duration-[180ms] hover:border-foreground/10 hover:bg-foreground/[0.02] hover:text-foreground"
+          disabled={isCreatingBlank}
+          className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-transparent px-5 py-2.5 text-[13px] font-semibold text-muted-foreground transition-all duration-[180ms] hover:border-foreground/10 hover:bg-foreground/[0.02] hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {t('wizard.domain.createBlank', 'Create from scratch')} &rarr;
+          {isCreatingBlank
+            ? t('wizard.domain.creating', 'Creating...')
+            : t('wizard.domain.createBlank', 'Start from scratch →')}
         </button>
       </div>
     </div>

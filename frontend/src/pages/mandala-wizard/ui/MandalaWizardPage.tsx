@@ -160,6 +160,7 @@ export default function MandalaWizardPage() {
           onSelectSearchResult={() => {}}
           onSelectGeneratedMandala={() => {}}
           onCreateBlank={wizard.createBlank}
+          isCreatingBlank={wizard.isCreatingBlank}
         />
       )}
 
@@ -200,6 +201,7 @@ export default function MandalaWizardPage() {
           onSelectSearchResult={handleSelectAndComplete}
           onSelectGeneratedMandala={handleSelectGeneratedAndComplete}
           onCreateBlank={wizard.createBlank}
+          isCreatingBlank={wizard.isCreatingBlank}
         />
       )}
 
