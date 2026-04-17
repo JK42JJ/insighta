@@ -661,14 +661,6 @@ export function useWizard() {
 
       // If template has rich data (actions) OR is not a real DB UUID, use create-with-data
       if (hasRichData || !isUuid) {
-        // Navigate to dashboard IMMEDIATELY — don't block the UI while the
-        // server spends 10-20s creating mandala rows + embedding generation.
-        // The user sees the existing dashboard; when the mutation succeeds
-        // onSuccess calls goToUnifiedDashboard which injects the new mandala
-        // into the cache + store and selects it. Second navigate('/') is a
-        // no-op since we're already there.
-        navigate('/');
-
         const subDetailsKeyed: Record<string, string[]> = {};
         for (const [k, v] of Object.entries(template.subDetails ?? {})) {
           subDetailsKeyed[String(k)] = v;
@@ -685,10 +677,7 @@ export function useWizard() {
           targetLevel: state.targetLevel !== 'standard' ? state.targetLevel : undefined,
         });
       } else {
-        // DB template clone — also navigate first for consistency, even
-        // though clone is typically fast (1-2s). On prod with pgbouncer RTT
-        // it can still add perceivable delay.
-        navigate('/');
+        // DB template clone (keeps source_template_id linkage)
         createMutateRef.current({
           templateId: template.id,
           skills: state.skills,
