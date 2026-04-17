@@ -45,6 +45,7 @@ import {
   isShortsByDuration,
   titleIndicatesShorts,
   titleHitsBlocklist,
+  resolveSearchApiKeys,
   type YouTubeVideoStatsItem,
   type YouTubeSearchItem,
 } from '../v2/youtube-client';
@@ -117,8 +118,8 @@ export const executor: SkillExecutor = {
     if (!ctx.mandalaId) return { ok: false, reason: 'mandala_id is required' };
     if (!ctx.userId) return { ok: false, reason: 'userId is required' };
 
-    const apiKey = ctx.env?.['YOUTUBE_API_KEY_SEARCH'] ?? '';
-    if (!apiKey) {
+    const apiKeys = resolveSearchApiKeys(ctx.env ?? {});
+    if (apiKeys.length === 0) {
       return {
         ok: false,
         reason: 'YOUTUBE_API_KEY_SEARCH is not configured. v3 requires the server API key.',
@@ -184,7 +185,7 @@ export const executor: SkillExecutor = {
 
   async execute(ctx: ExecuteContext): Promise<ExecuteResult> {
     const t0 = Date.now();
-    const apiKey = ctx.env?.['YOUTUBE_API_KEY_SEARCH'] ?? '';
+    const apiKeys = resolveSearchApiKeys(ctx.env ?? {});
     const openRouterApiKey = ctx.env?.['OPENROUTER_API_KEY'];
     const openRouterModel = ctx.env?.['OPENROUTER_MODEL'] ?? 'qwen/qwen3-30b-a3b';
     const state = ctx.state as unknown as HydratedState;
@@ -237,7 +238,7 @@ export const executor: SkillExecutor = {
       const tier2Fill = await runTier2({
         deficitCells,
         state,
-        apiKey,
+        apiKeys,
         openRouterApiKey: openRouterApiKey || undefined,
         openRouterModel,
         existingVideoIds: new Set(slots.map((s) => s.videoId)),
@@ -294,7 +295,8 @@ export const executor: SkillExecutor = {
 interface Tier2Input {
   deficitCells: Array<{ cellIndex: number; need: number }>;
   state: HydratedState;
-  apiKey: string;
+  /** Ordered API keys — rotated on quota (403) errors. */
+  apiKeys: string[];
   openRouterApiKey?: string;
   openRouterModel: string;
   existingVideoIds: ReadonlySet<string>;
@@ -425,7 +427,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   );
 
   const tRuleSearchStart = Date.now();
-  const ruleSearch = await runSearchTraced(ruleQueries, input.apiKey, input.state.language);
+  const ruleSearch = await runSearchTraced(ruleQueries, input.apiKeys, input.state.language);
   debug.timing.ruleSearchMs = Date.now() - tRuleSearchStart;
   const rulePool = ruleSearch.pool;
   for (const t of ruleSearch.perQuery) {
@@ -448,7 +450,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   let llmPool: PoolItem[] = [];
   if (extraLLM.length > 0) {
     const tLlmSearchStart = Date.now();
-    const llmSearch = await runSearchTraced(extraLLM, input.apiKey, input.state.language);
+    const llmSearch = await runSearchTraced(extraLLM, input.apiKeys, input.state.language);
     debug.timing.llmSearchMs = Date.now() - tLlmSearchStart;
     llmPool = llmSearch.pool;
     for (const t of llmSearch.perQuery) {
@@ -471,7 +473,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   try {
     stats = await videosBatch({
       videoIds: combined.map((p) => p.videoId),
-      apiKey: input.apiKey,
+      apiKey: input.apiKeys,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -629,7 +631,7 @@ interface SearchTrace {
 
 async function runSearchTraced(
   queries: ReadonlyArray<SearchQuery>,
-  apiKey: string,
+  apiKeys: string[],
   language: KeywordLanguage
 ): Promise<SearchTrace> {
   if (queries.length === 0) return { pool: [], perQuery: [] };
@@ -639,7 +641,7 @@ async function runSearchTraced(
       try {
         const items = await searchVideos({
           query: q.query,
-          apiKey,
+          apiKey: apiKeys,
           relevanceLanguage: language,
           regionCode,
         });
