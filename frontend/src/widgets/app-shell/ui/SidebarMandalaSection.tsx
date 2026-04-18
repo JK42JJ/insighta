@@ -34,6 +34,7 @@ interface SidebarMandalaSectionProps {
 export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandalaSectionProps) {
   const selectedMandalaId = useMandalaStore((s) => s.selectedMandalaId);
   const selectMandala = useMandalaStore((s) => s.selectMandala);
+  const pendingMandala = useMandalaStore((s) => s.pendingMandala);
   const { t } = useTranslation();
   const { data: listData, isLoading, isError, error, refetch } = useMandalaList();
 
@@ -171,10 +172,16 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
     const label = (rootLevel as { centerLabel?: string | null } | undefined)?.centerLabel;
     return label || m?.title || '—';
   };
+  // Fallback for the list-cache propagation window; avoids rendering a bare "…".
+  const pendingTitle =
+    pendingMandala?.originalInputs?.centerLabel?.trim() ||
+    pendingMandala?.originalInputs?.title?.trim() ||
+    pendingMandala?.originalInputs?.centerGoal?.trim() ||
+    null;
   const currentTitle = selectedMandalaId
     ? currentMandala
       ? getCenterLabel(currentMandala)
-      : '…'
+      : (pendingTitle ?? t('sidebar.mandalaLoading', 'Finishing setup…'))
     : getCenterLabel(mandalas[0]);
 
   return (

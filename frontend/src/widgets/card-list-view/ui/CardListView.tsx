@@ -212,20 +212,45 @@ export function CardListView({
 
   const effectiveViewMode = viewMode === 'list-detail' && isMobile ? 'list' : viewMode;
 
-  // Sort cards based on sortMode
+  // "latest"/"oldest" rank by source publish date (YouTube upload), not createdAt.
   const sortedCards = useMemo(() => {
     const arr = [...cards];
+    const getPublishedMs = (c: (typeof cards)[number]): number => {
+      const fromField = c.publishedAt ? new Date(c.publishedAt).getTime() : NaN;
+      if (Number.isFinite(fromField)) return fromField;
+      const metaPublished = (c.metadata as unknown as Record<string, unknown> | undefined)?.[
+        'published_at'
+      ];
+      if (typeof metaPublished === 'string') {
+        const t = new Date(metaPublished).getTime();
+        if (Number.isFinite(t)) return t;
+      }
+      const createdMs = new Date(c.createdAt).getTime();
+      return Number.isFinite(createdMs) ? createdMs : NaN;
+    };
     switch (sortMode) {
       case 'latest':
         return arr.sort((a, b) => {
-          if (a.sortOrder !== undefined && b.sortOrder !== undefined)
-            return a.sortOrder - b.sortOrder;
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          const ma = getPublishedMs(a);
+          const mb = getPublishedMs(b);
+          const aHas = Number.isFinite(ma);
+          const bHas = Number.isFinite(mb);
+          if (aHas && !bHas) return -1;
+          if (!aHas && bHas) return 1;
+          if (!aHas && !bHas) return 0;
+          return mb - ma;
         });
       case 'oldest':
-        return arr.sort(
-          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
+        return arr.sort((a, b) => {
+          const ma = getPublishedMs(a);
+          const mb = getPublishedMs(b);
+          const aHas = Number.isFinite(ma);
+          const bHas = Number.isFinite(mb);
+          if (aHas && !bHas) return -1;
+          if (!aHas && bHas) return 1;
+          if (!aHas && !bHas) return 0;
+          return ma - mb;
+        });
       case 'title-asc':
         return arr.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
       case 'title-desc':

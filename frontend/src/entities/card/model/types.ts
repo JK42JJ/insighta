@@ -35,6 +35,8 @@ export interface InsightCard {
   userNote: string;
   createdAt: Date;
   updatedAt?: Date;
+  /** Source-material publish date (YouTube upload, article date), NOT createdAt. */
+  publishedAt?: Date | null;
   cellIndex: number;
   levelId: string; // Which mandala level this card belongs to
   mandalaId?: string | null; // Which mandala this card belongs to
