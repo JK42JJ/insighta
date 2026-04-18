@@ -7,7 +7,11 @@ import { useTranslation } from 'react-i18next';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import { linkTypeToSourceType } from '@/entities/content';
 import { LazyImage } from '@/shared/ui/lazy-image';
-import { upgradeYouTubeThumbnail, handleThumbnailError } from '@/shared/lib/image-utils';
+import {
+  upgradeYouTubeThumbnail,
+  handleThumbnailError,
+  handleThumbnailLoad,
+} from '@/shared/lib/image-utils';
 
 interface DraggableCardProps {
   card: InsightCard;
@@ -83,6 +87,7 @@ export function DraggableCard({ card, onClick, compact = false }: DraggableCardP
           src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
           alt={card.title}
           onError={handleThumbnailError}
+          onLoad={handleThumbnailLoad}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 to-transparent" />
         <h3

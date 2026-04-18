@@ -8,7 +8,11 @@ import { GripVertical, StickyNote, Play, Loader2, RotateCw, NotepadText } from '
 import { CompactNotePreview } from '@/shared/ui/CompactNotePreview';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
-import { upgradeYouTubeThumbnail, handleThumbnailError } from '@/shared/lib/image-utils';
+import {
+  upgradeYouTubeThumbnail,
+  handleThumbnailError,
+  handleThumbnailLoad,
+} from '@/shared/lib/image-utils';
 import { useCardFlipSetting } from '@/shared/lib/useCardFlipSetting';
 import type { SummaryRating } from '@/features/card-management/model/useSummaryRating';
 
@@ -159,6 +163,7 @@ export function InsightCardItem({
               className="w-full h-full object-cover"
               loading="lazy"
               onError={handleThumbnailError}
+              onLoad={handleThumbnailLoad}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
 

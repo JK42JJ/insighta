@@ -1,5 +1,5 @@
 import { Play } from 'lucide-react';
-import { handleThumbnailError } from '@/shared/lib/image-utils';
+import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
 import type { RecommendationItem } from '../model/useRecommendations';
 
 interface FeedCardProps {
@@ -44,6 +44,7 @@ export function FeedCard({ item, onClick }: FeedCardProps) {
             alt=""
             className="w-full h-full object-cover"
             onError={handleThumbnailError}
+            onLoad={handleThumbnailLoad}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-[9px] text-muted-foreground">

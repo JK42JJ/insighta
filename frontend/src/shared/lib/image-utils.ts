@@ -34,6 +34,17 @@ export function getYouTubeFallback(url: string | undefined): string | undefined 
 const YT_FALLBACK_CHAIN = ['maxresdefault', 'sddefault', 'hqdefault', 'mqdefault', 'default'];
 
 /**
+ * YouTube returns a 120×90 grey "..." placeholder (HTTP 200, not 404) for
+ * deleted / private / region-blocked videos. Detect by the exact dimensions
+ * — the canonical quality tiers are all wider than 120px for real thumbs.
+ */
+const YT_PLACEHOLDER_WIDTH = 120;
+const YT_PLACEHOLDER_HEIGHT = 90;
+export function isYouTubePlaceholder(img: HTMLImageElement): boolean {
+  return img.naturalWidth === YT_PLACEHOLDER_WIDTH && img.naturalHeight === YT_PLACEHOLDER_HEIGHT;
+}
+
+/**
  * onError handler: walks the full YouTube quality chain, then falls back to local placeholder.
  */
 export function handleThumbnailError(e: { currentTarget: HTMLImageElement }): void {
@@ -51,6 +62,29 @@ export function handleThumbnailError(e: { currentTarget: HTMLImageElement }): vo
   // All YouTube qualities exhausted or non-YouTube image — local placeholder
   img.src = '/placeholder.svg';
 }
+
+/**
+ * onLoad handler: catches the "video unavailable" grey placeholder that
+ * YouTube serves with HTTP 200 (so onError never fires). Replaces it with
+ * the local placeholder so the card matches the "no image" style instead
+ * of showing YouTube's unrecognisable grey dots.
+ */
+export function handleThumbnailLoad(e: { currentTarget: HTMLImageElement }): void {
+  const img = e.currentTarget;
+  if (img.src.endsWith('/placeholder.svg')) return;
+  if (isYouTubePlaceholder(img)) {
+    img.src = '/placeholder.svg';
+  }
+}
+
+/**
+ * Bundled error + load handlers for any <img> that may render a YouTube
+ * thumbnail. Spread into the element: `<img src={...} {...thumbnailImgHandlers} />`.
+ */
+export const thumbnailImgHandlers = {
+  onError: handleThumbnailError,
+  onLoad: handleThumbnailLoad,
+} as const;
 
 export function generateThumbnailSrcSet(thumbnailUrl: string | undefined): string | undefined {
   if (!thumbnailUrl || !isYouTubeThumbnail(thumbnailUrl)) return undefined;

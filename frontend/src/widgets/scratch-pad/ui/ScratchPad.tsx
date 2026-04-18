@@ -4,7 +4,7 @@ import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 import { Lightbulb, Plus, ExternalLink } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { handleThumbnailError } from '@/shared/lib/image-utils';
+import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
 import {
   format,
   differenceInHours,
@@ -142,7 +142,9 @@ export function ScratchPad({
       className={cn(
         'relative px-4 py-3 rounded-xl transition-all duration-300',
         'bg-surface-light border border-border/40',
-        isDropTarget ? 'border-2 border-dashed border-primary bg-primary/5 scale-[1.01]' : 'hover:border-border/60'
+        isDropTarget
+          ? 'border-2 border-dashed border-primary bg-primary/5 scale-[1.01]'
+          : 'hover:border-border/60'
       )}
       style={{ boxShadow: isDropTarget ? 'var(--shadow-lg)' : 'var(--shadow-sm)' }}
       onDragOver={handleDragOver}
@@ -270,6 +272,7 @@ export function ScratchPad({
                           alt={card.title}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                           onError={handleThumbnailError}
+                          onLoad={handleThumbnailLoad}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 

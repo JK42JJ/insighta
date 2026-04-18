@@ -3,7 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
 import type { InsightCard } from '@/entities/card/model/types';
 import { SourceTypeBadge, SourceMetaInfo } from '@/entities/content';
-import { generateProxySrc, handleThumbnailError } from '@/shared/lib/image-utils';
+import {
+  generateProxySrc,
+  handleThumbnailError,
+  handleThumbnailLoad,
+} from '@/shared/lib/image-utils';
 import { CompactNotePreview } from '@/shared/ui/CompactNotePreview';
 
 interface ListViewItemProps {
@@ -56,6 +60,7 @@ export const ListViewItem = memo(function ListViewItem({
             className="w-full h-full object-cover"
             loading="lazy"
             onError={handleThumbnailError}
+            onLoad={handleThumbnailLoad}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
@@ -68,7 +73,12 @@ export const ListViewItem = memo(function ListViewItem({
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{card.title || t('cards.untitled')}</p>
         {card.userNote || card.videoSummary ? (
-          <CompactNotePreview note={card.userNote} maxLines={1} className="truncate" videoSummary={card.videoSummary} />
+          <CompactNotePreview
+            note={card.userNote}
+            maxLines={1}
+            className="truncate"
+            videoSummary={card.videoSummary}
+          />
         ) : (
           <p className="text-xs text-muted-foreground truncate">{t('insightCard.noMemo')}</p>
         )}

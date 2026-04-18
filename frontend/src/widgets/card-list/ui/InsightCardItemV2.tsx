@@ -5,7 +5,11 @@ import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
 import { GripVertical, NotepadText, Loader2, RotateCw } from 'lucide-react';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
-import { upgradeYouTubeThumbnail, handleThumbnailError } from '@/shared/lib/image-utils';
+import {
+  upgradeYouTubeThumbnail,
+  handleThumbnailError,
+  handleThumbnailLoad,
+} from '@/shared/lib/image-utils';
 
 // ── Constants ──────────────────────────────────────────────
 
@@ -189,6 +193,7 @@ export function InsightCardItemV2({
           className="w-full h-full object-cover"
           loading="lazy"
           onError={handleThumbnailError}
+          onLoad={handleThumbnailLoad}
         />
 
         {/* Top-left: Quality badge */}

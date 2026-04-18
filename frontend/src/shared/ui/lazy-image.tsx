@@ -16,6 +16,7 @@ export function LazyImage({
   srcSet,
   sizes,
   onError,
+  onLoad,
   ...props
 }: LazyImageProps) {
   const [loaded, setLoaded] = useState(false);
@@ -35,7 +36,10 @@ export function LazyImage({
           'w-full h-full object-cover transition-opacity duration-300',
           loaded ? 'opacity-100' : 'opacity-0'
         )}
-        onLoad={() => setLoaded(true)}
+        onLoad={(e) => {
+          setLoaded(true);
+          onLoad?.(e);
+        }}
         onError={(e) => {
           setError(true);
           setLoaded(true);

@@ -7,7 +7,7 @@ import { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Network, Loader2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { handleThumbnailError } from '@/shared/lib/image-utils';
+import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
 import { useGraphData } from './useGraphData';
 import { useGraphViewStore } from './useGraphViewStore';
 import { GraphCanvas } from './GraphCanvas';
@@ -99,7 +99,9 @@ export function GraphView({ mandalaId }: GraphViewProps) {
       <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
         <Network className="w-10 h-10 opacity-30" />
         <p className="text-sm">{t('graph.empty', 'No knowledge nodes yet.')}</p>
-        <p className="text-xs opacity-60">{t('graph.emptyHint', 'Save cards and create mandalas to build your knowledge graph.')}</p>
+        <p className="text-xs opacity-60">
+          {t('graph.emptyHint', 'Save cards and create mandalas to build your knowledge graph.')}
+        </p>
       </div>
     );
   }
@@ -150,9 +152,10 @@ export function GraphView({ mandalaId }: GraphViewProps) {
       {selectedNode && (
         <NodeDetailOverlay
           node={selectedNode}
-          linkCount={data.links.filter(
-            (l) => l.source === selectedNode.id || l.target === selectedNode.id
-          ).length}
+          linkCount={
+            data.links.filter((l) => l.source === selectedNode.id || l.target === selectedNode.id)
+              .length
+          }
           onClose={() => store.selectNode(null)}
         />
       )}
@@ -173,7 +176,8 @@ function NodeDetailOverlay({
 }) {
   const { t } = useTranslation();
   const url = typeof node.properties.url === 'string' ? node.properties.url : null;
-  const thumbnail = typeof node.properties.thumbnail === 'string' ? node.properties.thumbnail : null;
+  const thumbnail =
+    typeof node.properties.thumbnail === 'string' ? node.properties.thumbnail : null;
 
   return (
     <div className="absolute bottom-4 left-4 right-4 bg-surface-base/95 backdrop-blur-sm border rounded-lg shadow-lg p-4 animate-fade-in max-w-md">
@@ -185,9 +189,7 @@ function NodeDetailOverlay({
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wider">
               {node.type}
             </span>
-            <span className="text-[10px] text-muted-foreground">
-              {node.category}
-            </span>
+            <span className="text-[10px] text-muted-foreground">{node.category}</span>
             <span className="text-[10px] text-muted-foreground">
               {linkCount} {t('graph.connections', 'connections')}
             </span>
@@ -210,6 +212,7 @@ function NodeDetailOverlay({
               alt=""
               className="mt-2 rounded h-16 object-cover"
               onError={handleThumbnailError}
+              onLoad={handleThumbnailLoad}
             />
           )}
           {node.type === 'goal' && node.properties.level_key && (

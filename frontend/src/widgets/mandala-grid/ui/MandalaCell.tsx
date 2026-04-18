@@ -2,7 +2,11 @@ import { memo, useMemo, useState, useCallback } from 'react';
 import { cn } from '@/shared/lib/utils';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { GripVertical, Plus, Play, FileText, Link as LinkIcon } from 'lucide-react';
-import { generateProxySrc, handleThumbnailError } from '@/shared/lib/image-utils';
+import {
+  generateProxySrc,
+  handleThumbnailError,
+  handleThumbnailLoad,
+} from '@/shared/lib/image-utils';
 import { InsightCard } from '@/entities/card/model/types';
 import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 import { useTranslation } from 'react-i18next';
@@ -89,6 +93,7 @@ function TileTooltipContent({
             className="w-full aspect-video object-cover"
             loading="lazy"
             onError={handleThumbnailError}
+            onLoad={handleThumbnailLoad}
           />
           {/* Bottom gradient fade */}
           <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/40 to-transparent" />
@@ -160,6 +165,7 @@ function MiniThumbnail({
               className="w-full h-full object-cover"
               loading="lazy"
               onError={handleThumbnailError}
+              onLoad={handleThumbnailLoad}
             />
           ) : (
             <div
@@ -628,9 +634,15 @@ export const MandalaCell = memo(
                 animation: 'card-silhouette-pulse 1.5s ease-in-out infinite',
               }}
             >
-              <Play className="text-primary/40" style={{ width: 'clamp(12px, 3cqi, 20px)', height: 'clamp(12px, 3cqi, 20px)' }} />
+              <Play
+                className="text-primary/40"
+                style={{ width: 'clamp(12px, 3cqi, 20px)', height: 'clamp(12px, 3cqi, 20px)' }}
+              />
             </div>
-            <span className="text-primary-foreground/80 font-medium" style={{ fontSize: 'clamp(7px, 2cqi, 10px)' }}>
+            <span
+              className="text-primary-foreground/80 font-medium"
+              style={{ fontSize: 'clamp(7px, 2cqi, 10px)' }}
+            >
               {t('mandala.dropHere')}
             </span>
           </div>

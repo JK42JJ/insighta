@@ -100,6 +100,15 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
     return () => clearTimeout(handle);
   }, [selectedMandalaId, mandalas, refetch]);
 
+  // Clear lastOptimisticTitle once the real mandala appears in the list cache.
+  // MUST live above every early-return below — React requires consistent hook order.
+  useEffect(() => {
+    if (!lastOptimisticTitle) return;
+    if (mandalas.some((m) => m.id === lastOptimisticTitle.id)) {
+      setLastOptimisticTitle(null);
+    }
+  }, [mandalas, lastOptimisticTitle, setLastOptimisticTitle]);
+
   // Collapsed sidebar: icon button only
   if (collapsed) {
     return (
@@ -189,13 +198,6 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
       ? getCenterLabel(currentMandala)
       : (pendingTitle ?? t('sidebar.mandalaLoading', 'Finishing setup…'))
     : getCenterLabel(mandalas[0]);
-
-  useEffect(() => {
-    if (!lastOptimisticTitle) return;
-    if (mandalas.some((m) => m.id === lastOptimisticTitle.id)) {
-      setLastOptimisticTitle(null);
-    }
-  }, [mandalas, lastOptimisticTitle, setLastOptimisticTitle]);
 
   return (
     <div className="px-2 flex flex-col">
