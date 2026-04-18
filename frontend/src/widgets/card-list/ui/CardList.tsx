@@ -100,17 +100,10 @@ export function CardList({
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  // Sort cards: by sortOrder if available, otherwise by createdAt (newest first)
-  const sortedCards = useMemo(() => {
-    return [...cards].sort((a, b) => {
-      if (a.sortOrder !== undefined && b.sortOrder !== undefined) {
-        return a.sortOrder - b.sortOrder;
-      }
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return dateB - dateA;
-    });
-  }, [cards]);
+  // Cards arrive already sorted by the host (CardListView applies the user's
+  // sortMode chip). Re-sorting here would override publishedAt ranking with
+  // sortOrder / createdAt and was the cause of "5d ago in the middle".
+  const sortedCards = cards;
 
   // Reset visible count when card list changes (e.g., cell switch)
   const cardListKey = useMemo(() => cards.map((c) => c.id).join(','), [cards]);
