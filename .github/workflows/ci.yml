@@ -62,6 +62,25 @@ jobs:
         run: cd frontend && npm install --no-package-lock --no-audit
       - run: cd frontend && npx vitest run
 
+  hardcode-audit:
+    name: Hardcode Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/audit/hardcode-audit.ts
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardcode-audit-report
+          path: reports/hardcode-audit/latest.json
+          retention-days: 30
+
   # Combined: test-backend + build-api (saves 1 npm ci)
   test-and-build-api:
     name: Test Backend & Build API
