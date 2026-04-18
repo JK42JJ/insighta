@@ -71,6 +71,8 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Install ripgrep
+        run: sudo apt-get install -y ripgrep
       - run: npm ci
       - run: npx tsx scripts/audit/hardcode-audit.ts
       - name: Upload audit report

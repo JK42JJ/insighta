@@ -17,6 +17,8 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Install ripgrep
+        run: sudo apt-get install -y ripgrep
       - run: npm ci
       - name: Run audit (non-blocking)
         id: audit
