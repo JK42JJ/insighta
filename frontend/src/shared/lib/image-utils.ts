@@ -64,17 +64,26 @@ export function handleThumbnailError(e: { currentTarget: HTMLImageElement }): vo
 }
 
 /**
- * onLoad handler: catches the "video unavailable" grey placeholder that
- * YouTube serves with HTTP 200 (so onError never fires). Replaces it with
- * the local placeholder so the card matches the "no image" style instead
- * of showing YouTube's unrecognisable grey dots.
+ * onLoad handler: when a 120×90 grey image loads successfully, walk down
+ * the quality chain first — older videos often lack `maxresdefault` /
+ * `sddefault` and YouTube substitutes that placeholder even when the
+ * video itself is fine. Only after exhausting the chain do we give up
+ * and use the local placeholder (true "video unavailable" case).
  */
 export function handleThumbnailLoad(e: { currentTarget: HTMLImageElement }): void {
   const img = e.currentTarget;
   if (img.src.endsWith('/placeholder.svg')) return;
-  if (isYouTubePlaceholder(img)) {
-    img.src = '/placeholder.svg';
+  if (!isYouTubePlaceholder(img)) return;
+
+  const src = img.src;
+  const currentIdx = YT_FALLBACK_CHAIN.findIndex((q) => src.includes(q));
+  if (currentIdx >= 0 && currentIdx < YT_FALLBACK_CHAIN.length - 1) {
+    const next = YT_FALLBACK_CHAIN[currentIdx + 1];
+    img.src = src.replace(YT_FALLBACK_CHAIN[currentIdx], next);
+    return;
   }
+
+  img.src = '/placeholder.svg';
 }
 
 /**
