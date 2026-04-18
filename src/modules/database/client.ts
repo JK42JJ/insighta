@@ -71,14 +71,27 @@ export function getPrismaClient(): PrismaClient {
     // container logs aggregator picks it up (winston in this codebase writes
     // to file only — docker logs was empty when we needed to verify
     // connection_limit and pool settings on 2026-04-18).
-    console.info(
-      '[prisma-init]',
-      JSON.stringify({
-        pool_limit: poolLimit,
-        slow_query_ms: slowQueryMs,
-        url_scheme: url.split('?')[0],
-      })
-    );
+    //
+    // IMPORTANT: redact the userinfo (user:password) section before logging.
+    // A prior version printed `url.split('?')[0]` which still contained the
+    // password between `://` and `@` — leaked to docker stdout. Now we parse
+    // out only host/port/db/scheme. Password rotation + this redaction is
+    // the 2026-04-18 hotfix.
+    const initPayload: Record<string, unknown> = {
+      pool_limit: poolLimit,
+      slow_query_ms: slowQueryMs,
+    };
+    try {
+      const parsed = new URL(url);
+      initPayload['host'] = parsed.host;
+      initPayload['database'] = parsed.pathname.replace(/^\//, '') || null;
+      initPayload['protocol'] = parsed.protocol.replace(':', '');
+    } catch {
+      // Malformed URL — omit host/db fields entirely rather than risk
+      // leaking the raw URL.
+      initPayload['url_parse_ok'] = false;
+    }
+    console.info('[prisma-init]', JSON.stringify(initPayload));
 
     // Log queries in development (existing winston path)
     if (config.app.isDevelopment) {
