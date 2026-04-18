@@ -23,6 +23,15 @@ export const DEFAULT_POOL_LIMIT = 5;
 export const MAX_POOL_LIMIT = 50;
 
 /**
+ * PgBouncer Transaction Mode pooler port (Supabase convention).
+ * Queries routed here MUST disable Prisma prepared-statement caching
+ * (`pgbouncer=true`) because the underlying Postgres connection rotates
+ * per txn.
+ */
+export const PGBOUNCER_TRANSACTION_POOLER_PORT = 6543;
+export const PGBOUNCER_FLAG = 'pgbouncer=true';
+
+/**
  * Read the pool size from env, falling back to DEFAULT_POOL_LIMIT if unset
  * or out of range. Accepts [1, MAX_POOL_LIMIT].
  */
@@ -47,17 +56,17 @@ export function buildConnectionUrl(rawUrl: string | undefined, poolLimit: number
   if (!url) return url;
 
   // Auto-add pgbouncer=true when URL points at Supabase transaction-mode
-  // pooler (port 6543). Prisma caches prepared statements by name per
-  // connection; pgbouncer's transaction mode rotates the underlying pg
-  // connection per txn, so statement names resolve to gone-connections
-  // and queries fail with `26000: prepared statement "sNN" does not
-  // exist`. Observed in prod 2026-04-18 after password rotation when
-  // the new secret omitted the flag. Safe to add at construction time
-  // regardless of whether the user already included it — regex below
-  // checks first.
-  if (/:6543\//.test(url) && !/[?&]pgbouncer=/.test(url)) {
+  // pooler. Prisma caches prepared statements by name per connection;
+  // pgbouncer's transaction mode rotates the underlying pg connection
+  // per txn, so statement names resolve to gone-connections and queries
+  // fail with `26000: prepared statement "sNN" does not exist`.
+  // Observed in prod 2026-04-18 after password rotation when the new
+  // secret omitted the flag. Safe to add at construction time regardless
+  // of whether the user already included it — regex below checks first.
+  const transactionPoolerPortRegex = new RegExp(`:${PGBOUNCER_TRANSACTION_POOLER_PORT}\\/`);
+  if (transactionPoolerPortRegex.test(url) && !/[?&]pgbouncer=/.test(url)) {
     const sep = url.includes('?') ? '&' : '?';
-    url = `${url}${sep}pgbouncer=true`;
+    url = `${url}${sep}${PGBOUNCER_FLAG}`;
   }
 
   if (/[?&]connection_limit=\d+/.test(url)) {
