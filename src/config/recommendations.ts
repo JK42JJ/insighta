@@ -26,9 +26,14 @@ export const RECOMMENDATION_DEFAULT_MODE = 'auto' as const;
 // CP357 lands the recommendation_cache → user_video_states selective-replace
 // pipeline. Auto-add is opt-in via user_skill_config.config.auto_add (default
 // true for new mandalas via the wizard fallback in src/api/routes/mandalas.ts).
-
-/** Number of auto-recommended videos placed per cell on each refresh. */
-export const AUTO_ADD_PER_CELL = 3;
+//
+// 2026-04-18: `AUTO_ADD_PER_CELL = 3` was removed. The upstream pipeline
+// (mandala-filter + V3_TARGET_PER_CELL / V3_TARGET_TOTAL) already caps the
+// per-cell count on its own; layering a second hard cap here produced
+// visible "cards too sparse" UX on cells that had 4–8 legit candidates.
+// auto-add now inserts every fresh recommendation_cache row into
+// user_video_states (minus those already linked to this user's
+// youtube_videos). Preservation of user-touched rows is unchanged.
 
 /**
  * Default value used by the wizard fallback when a mandala is created

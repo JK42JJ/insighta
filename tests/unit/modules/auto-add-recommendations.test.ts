@@ -8,7 +8,8 @@
  *   - auto_added=true + watch_pos > 0      → preserved
  *   - auto_added=true + is_in_ideation=true → preserved (manual scratchpad)
  *   - auto_added=false                     → never deleted
- *   - cell already at AUTO_ADD_PER_CELL preserved → no insert
+ *   - every fresh rec in recommendation_cache → inserted (2026-04-18: no per-cell cap)
+ *   - rec already linked to this user's youtube_videos → skipped (no duplicate)
  *   - idempotent: same recs upserted twice → no duplicate user_video_states
  *
  * Mocks Prisma at module load. The eviction `deleteMany` predicate is
@@ -184,8 +185,11 @@ describe('maybeAutoAddRecommendations — selective replace invariants', () => {
     }
   });
 
-  it('skips insert when cell is already at full preserve count', async () => {
-    // 3 preserved rows in cell 0 → 0 slots → no insert
+  it('inserts every fresh recommendation regardless of preserve count (2026-04-18)', async () => {
+    // 3 preserved rows in cell 0 — pre-2026-04-18 this would have capped the
+    // insert to 0. After the AUTO_ADD_PER_CELL removal, every rec in
+    // recommendation_cache is inserted (unique-constraint dedup still
+    // prevents duplicates).
     mockUserVideoStateCount.mockImplementation(({ where }) =>
       Promise.resolve(where.cell_index === 0 ? 3 : 0)
     );
@@ -195,11 +199,14 @@ describe('maybeAutoAddRecommendations — selective replace invariants', () => {
     const cell0Inserts = mockUserVideoStateUpsert.mock.calls.filter(
       (c) => c[0]?.create?.cell_index === 0
     );
-    expect(cell0Inserts).toHaveLength(0);
+    // All three recs for cell 0 (v1, v2, v3) are attempted.
+    expect(cell0Inserts).toHaveLength(3);
   });
 
-  it('inserts only the remaining slots when partial preservation', async () => {
-    // 1 preserved row in cell 0 → 2 slots → top 2 recs
+  it('inserts every fresh rec when some cell rows are preserved (partial)', async () => {
+    // Post-2026-04-18: partial preservation no longer shrinks the insert
+    // count. 1 preserved + 3 recs → 3 inserts (preserved row is separately
+    // retained by the DELETE predicate; all 3 fresh recs go in).
     mockUserVideoStateCount.mockImplementation(({ where }) =>
       Promise.resolve(where.cell_index === 0 ? 1 : 0)
     );
@@ -209,14 +216,12 @@ describe('maybeAutoAddRecommendations — selective replace invariants', () => {
     const cell0Inserts = mockUserVideoStateUpsert.mock.calls.filter(
       (c) => c[0]?.create?.cell_index === 0
     );
-    expect(cell0Inserts).toHaveLength(2);
-    // top 2 by score = v1, v2
-    expect(mockYoutubeVideosUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { youtube_video_id: 'v1' } })
-    );
-    expect(mockYoutubeVideosUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { youtube_video_id: 'v2' } })
-    );
+    expect(cell0Inserts).toHaveLength(3);
+    for (const vid of ['v1', 'v2', 'v3']) {
+      expect(mockYoutubeVideosUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { youtube_video_id: vid } })
+      );
+    }
   });
 
   it('marks inserted rows with auto_added=true on create', async () => {
@@ -251,7 +256,9 @@ describe('maybeAutoAddRecommendations — edge: skip recs whose video already ex
       { youtube_video_id: 'v1' },
       { youtube_video_id: 'v2' },
     ]);
-    // 1 preserved row in cell 0 → slots = 2, but only v3 is "fresh".
+    // Post-2026-04-18: preservation no longer affects insert count. Only
+    // the dedup filter matters — v1/v2 already linked to this user's
+    // youtube_videos, so only v3 is inserted.
     mockUserVideoStateCount.mockImplementation(({ where }) =>
       Promise.resolve(where.cell_index === 0 ? 1 : 0)
     );
@@ -282,8 +289,10 @@ describe('maybeAutoAddRecommendations — bookkeeping', () => {
   });
 
   it('skips status update when nothing was inserted', async () => {
+    // Post-2026-04-18: "no insert" is produced only when every candidate
+    // video is already linked to this user's youtube_videos (dedup filter).
     mockRecCacheFindMany.mockResolvedValue([makeRec(0, 0.9, 'v1')]);
-    mockUserVideoStateCount.mockResolvedValue(3); // all slots full
+    mockYoutubeVideosFindMany.mockResolvedValue([{ youtube_video_id: 'v1' }]);
     await maybeAutoAddRecommendations(USER, MANDALA);
     expect(mockRecCacheUpdateMany).not.toHaveBeenCalled();
   });

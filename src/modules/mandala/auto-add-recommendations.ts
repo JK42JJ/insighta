@@ -2,8 +2,20 @@
  * auto-add-recommendations
  *
  * After video-discover populates recommendation_cache, this module places
- * the top-N recs per cell into user_video_states so the dashboard cells
- * are pre-filled when the user lands on the main view.
+ * ALL fresh recommendations per cell into user_video_states so the dashboard
+ * cells are pre-filled when the user lands on the main view. The upstream
+ * video-discover pipeline already enforces per-cell/total caps
+ * (mandala-filter + V3_TARGET_PER_CELL + V3_TARGET_TOTAL); any cap applied
+ * here would be a second, uncoordinated trim that shrinks cells which legit
+ * have 4–8 candidates.
+ *
+ * History:
+ *   - CP357: introduced with an `AUTO_ADD_PER_CELL = 3` hard cap.
+ *   - 2026-04-18: user report surfaced that the cap caused "14 장" to appear
+ *     for a mandala whose recommendation_cache had 40 rows. The cap was
+ *     removed per product direction ("최종 필터를 통해서 추천되는 것이 맞아").
+ *     Preservation of user-touched rows remains unchanged — those rows
+ *     still survive every refresh.
  *
  * Eviction policy (selective replace) — see
  * docs/design/insighta-trend-recommendation-engine.md §14:
@@ -21,10 +33,12 @@
  *   move) promotes that row to permanent — it survives every refresh.
  *   Manual rows (auto_added=false) are NEVER touched by this module.
  *
- * Slot math per cell:
- *   preserved = COUNT(rows in this cell with user trace)
- *   slots     = max(0, AUTO_ADD_PER_CELL - preserved)
- *   → INSERT up to `slots` fresh recs from recommendation_cache (top score)
+ * Insert per cell (post-2026-04-18):
+ *   → DELETE untouched auto_added rows in the cell
+ *   → INSERT every rec from recommendation_cache for the cell, minus those
+ *     whose video_id is already linked to this user's youtube_videos
+ *     (dedup — otherwise upsert silently consumes the unique constraint
+ *     without producing a fresh row)
  *
  * Idempotency: relies on UserVideoState's @@unique([user_id, videoId]).
  * Re-running on the same recommendation_cache produces no duplicates.
@@ -37,7 +51,7 @@
 
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
-import { AUTO_ADD_PER_CELL, VIDEO_DISCOVER_SKILL_TYPE } from '@/config/recommendations';
+import { VIDEO_DISCOVER_SKILL_TYPE } from '@/config/recommendations';
 
 const log = logger.child({ module: 'auto-add-recommendations' });
 
@@ -107,17 +121,17 @@ export async function maybeAutoAddRecommendations(
     return { ok: false, reason: 'no pending recommendation_cache rows' };
   }
 
-  // Group by cell_index, keep top AUTO_ADD_PER_CELL per cell.
+  // Group by cell_index. No per-cell cap (2026-04-18): the upstream
+  // pipeline already sets V3_TARGET_PER_CELL / V3_TARGET_TOTAL, so every
+  // row surfaced here is already filter-approved.
   const recsByCell = new Map<number, typeof recs>();
   for (const r of recs) {
     if (r.cell_index == null || r.cell_index < 0 || r.cell_index >= CELLS_PER_MANDALA) {
       continue;
     }
     const list = recsByCell.get(r.cell_index) ?? [];
-    if (list.length < AUTO_ADD_PER_CELL) {
-      list.push(r);
-      recsByCell.set(r.cell_index, list);
-    }
+    list.push(r);
+    recsByCell.set(r.cell_index, list);
   }
 
   let totalPreserved = 0;
@@ -158,30 +172,24 @@ export async function maybeAutoAddRecommendations(
     totalPreserved += preservedCount;
     totalDeleted += deleted.count;
 
-    const slots = Math.max(0, AUTO_ADD_PER_CELL - preservedCount);
-    if (slots === 0) continue;
+    const allRecsForCell = recsByCell.get(cellIndex) ?? [];
+    if (allRecsForCell.length === 0) continue;
 
     // Skip recs whose video already exists in user_video_states for this
-    // user (e.g. preserved rows whose video_id collides with top recs).
+    // user (e.g. preserved rows whose video_id collides with incoming recs).
     // Without this filter, an upsert would hit the unique constraint and
-    // run UPDATE, silently consuming a slot without adding a new row.
-    const allRecsForCell = recsByCell.get(cellIndex) ?? [];
+    // run UPDATE, silently producing an apparent-add without a new row.
     const candidateVideoIds = allRecsForCell.map((r) => r.video_id);
-    const existingYtRecords =
-      candidateVideoIds.length > 0
-        ? await db.youtube_videos.findMany({
-            where: {
-              youtube_video_id: { in: candidateVideoIds },
-              userState: { some: { user_id: userId } },
-            },
-            select: { youtube_video_id: true },
-          })
-        : [];
+    const existingYtRecords = await db.youtube_videos.findMany({
+      where: {
+        youtube_video_id: { in: candidateVideoIds },
+        userState: { some: { user_id: userId } },
+      },
+      select: { youtube_video_id: true },
+    });
     const existingVideoIdSet = new Set(existingYtRecords.map((r) => r.youtube_video_id));
 
-    const cellRecs = allRecsForCell
-      .filter((r) => !existingVideoIdSet.has(r.video_id))
-      .slice(0, slots);
+    const cellRecs = allRecsForCell.filter((r) => !existingVideoIdSet.has(r.video_id));
     if (cellRecs.length === 0) continue;
 
     for (let i = 0; i < cellRecs.length; i++) {
