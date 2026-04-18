@@ -167,6 +167,19 @@
 - 당시 프로젝트엔 이미 `src/config/index.ts` 의 zod schema 존재 + `MS_PER_DAY` 는 **6개 파일 중복 선언** (admin/stats, video-discover/executor, iks-scorer, trend-collector, v3/executor 등).
 - 사용자 지적: "죄다 하드코딩", "전체 코드베이스 차원의 분석이 아닌 부분적 단편 조치". → 전 파일 일괄 정리 + config 모듈 + 중앙 상수로 재작업.
 
+### Non-secret config 는 Secret 에 두지 않는다 (절대 규칙, LEVEL-1, CP392)
+- GitHub Secrets / `deploy.yml` sync 는 **민감정보 전용** — DB URL, API key, token, SSH key 등.
+- Tuning knob (weight, threshold, TTL, feature flag) 은 Secret 아님. (a) 코드 default, (b) `docker-compose.yml` env, (c) admin UI + DB runtime_config 중 하나로.
+- 새 env 추가 전 **2 질문 테스트**: (1) 값을 stdout/log 에 찍어도 괜찮은가, (2) open-source PR 에 그대로 포함해도 되는가. 둘 다 yes → Secret 아님.
+- 상세: `memory/architecture.md` "Configuration Architecture: Secrets vs Config", `memory/work-efficiency.md` "Secret vs Config 2-question test". 근거: CP392 `V3_RECENCY_*` 를 Secret 으로 sync 하려다 사용자 `"이게 왜 시크릿이야?"` catch.
+
+### 계획 → 승인 → 실행 (절대 규칙, LEVEL-2, CP388→CP391→CP392)
+- 모든 side-effect 작업 (Write, Edit, git, gh, ssh, install, docker) **전에** plan 제시: 파일 경로 + diff 요지 + 롤백 방법.
+- 사용자 명시 승인 ("해", "ok", "실행", "approved") 수신 후에만 실행. 제안·질문형 ("~어때?", "~해볼까?") 은 실행 트리거 아님.
+- Read-only 명령 (`ls`, `grep`, `git status`, `cat`) 은 plan 불필요.
+- 범위 이탈 ("이왕이면 이것도") 발견 시 별도 plan.
+- 위반 4회 (CP391×2, CP392×2) 후 CLAUDE.md 본문 승격. 상세: `memory/feedback_plan_before_execute.md`.
+
 ### Coding Conventions -> [상세: docs/CODING_CONVENTIONS.md]
 - 기존 코드 수정 시 해당 파일 Phase 1 위반도 함께 수정 (점진적 개선)
 
