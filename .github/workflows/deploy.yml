@@ -171,14 +171,11 @@ jobs:
           YT_SEARCH_KEY_3: ${{ secrets.YOUTUBE_API_KEY_SEARCH_3 }}
           DB_URL: ${{ secrets.DATABASE_URL }}
           DB_DIRECT: ${{ secrets.DIRECT_URL }}
-          V3_RECENCY_WEIGHT: ${{ secrets.V3_RECENCY_WEIGHT }}
-          V3_RECENCY_HALF_LIFE_MONTHS: ${{ secrets.V3_RECENCY_HALF_LIFE_MONTHS }}
-          V3_PUBLISHED_AFTER_DAYS: ${{ secrets.V3_PUBLISHED_AFTER_DAYS }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,DB_URL,DB_DIRECT,V3_RECENCY_WEIGHT,V3_RECENCY_HALF_LIFE_MONTHS,V3_PUBLISHED_AFTER_DAYS
+          envs: OR_KEY,OR_MODEL,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,DB_URL,DB_DIRECT
           script: |
             set -e
             cd /opt/tubearchive
@@ -207,17 +204,6 @@ jobs:
             fi
             if [ -n "${YT_SEARCH_KEY_3}" ]; then
               grep -q '^YOUTUBE_API_KEY_SEARCH_3=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_3=.*|YOUTUBE_API_KEY_SEARCH_3=${YT_SEARCH_KEY_3}|" .env || echo "YOUTUBE_API_KEY_SEARCH_3=${YT_SEARCH_KEY_3}" >> .env
-            fi
-            # CP391 — video-discover v3 recency knobs (src/skills/plugins/video-discover/v3/config.ts).
-            # Unsetting any of these returns v3 to the pre-CP391 baseline (pure-lexical scoring, no publishedAfter cutoff).
-            if [ -n "${V3_RECENCY_WEIGHT}" ]; then
-              grep -q '^V3_RECENCY_WEIGHT=' .env 2>/dev/null && sed -i "s|^V3_RECENCY_WEIGHT=.*|V3_RECENCY_WEIGHT=${V3_RECENCY_WEIGHT}|" .env || echo "V3_RECENCY_WEIGHT=${V3_RECENCY_WEIGHT}" >> .env
-            fi
-            if [ -n "${V3_RECENCY_HALF_LIFE_MONTHS}" ]; then
-              grep -q '^V3_RECENCY_HALF_LIFE_MONTHS=' .env 2>/dev/null && sed -i "s|^V3_RECENCY_HALF_LIFE_MONTHS=.*|V3_RECENCY_HALF_LIFE_MONTHS=${V3_RECENCY_HALF_LIFE_MONTHS}|" .env || echo "V3_RECENCY_HALF_LIFE_MONTHS=${V3_RECENCY_HALF_LIFE_MONTHS}" >> .env
-            fi
-            if [ -n "${V3_PUBLISHED_AFTER_DAYS}" ]; then
-              grep -q '^V3_PUBLISHED_AFTER_DAYS=' .env 2>/dev/null && sed -i "s|^V3_PUBLISHED_AFTER_DAYS=.*|V3_PUBLISHED_AFTER_DAYS=${V3_PUBLISHED_AFTER_DAYS}|" .env || echo "V3_PUBLISHED_AFTER_DAYS=${V3_PUBLISHED_AFTER_DAYS}" >> .env
             fi
             chmod 600 .env
 
