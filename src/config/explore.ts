@@ -5,6 +5,8 @@
  * Do NOT hardcode explore values elsewhere — import from this module.
  */
 
+import { MS_PER_HOUR } from '@/utils/time-constants';
+
 export const EXPLORE_SOURCES = ['all', 'template', 'community'] as const;
 export type ExploreSource = (typeof EXPLORE_SOURCES)[number];
 
@@ -24,4 +26,4 @@ export const EXPLORE_DEFAULT_PAGE_SIZE = 24;
 export const MAX_PAGINATION_LIMIT = 100;
 
 /** Cache TTL for explore results in milliseconds (1 hour — templates are near-immutable) */
-export const EXPLORE_CACHE_TTL_MS = 60 * 60 * 1000;
+export const EXPLORE_CACHE_TTL_MS = MS_PER_HOUR;

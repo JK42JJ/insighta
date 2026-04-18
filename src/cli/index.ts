@@ -30,6 +30,7 @@ import { registerAuthCommands } from './commands/auth';
 import { registerPlaylistCommands } from './commands/playlists';
 import { registerSchedulerCommands } from './commands/scheduler';
 import { registerEnrichCommands } from './commands/enrich';
+import { MS_PER_HOUR, MS_PER_DAY } from '@/utils/time-constants';
 
 const program = new Command();
 
@@ -658,9 +659,9 @@ function parseInterval(interval: string): number {
     case 'm':
       return value * 60 * 1000; // minutes to ms
     case 'h':
-      return value * 60 * 60 * 1000; // hours to ms
+      return value * MS_PER_HOUR; // hours to ms
     case 'd':
-      return value * 24 * 60 * 60 * 1000; // days to ms
+      return value * MS_PER_DAY; // days to ms
     default:
       throw new Error('Invalid interval unit. Use m (minutes), h (hours), or d (days)');
   }

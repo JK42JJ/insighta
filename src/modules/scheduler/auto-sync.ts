@@ -17,6 +17,7 @@ import { getSchedulerManager, ScheduleInfo } from './manager';
 import { getPrismaClient } from '../database';
 import { logger } from '../../utils/logger';
 import { SyncStatus } from '../../types/enums';
+import { MS_PER_HOUR, MS_PER_DAY } from '@/utils/time-constants';
 
 /**
  * Scheduler status information
@@ -401,7 +402,7 @@ export class AutoSyncScheduler {
     // Parse common cron patterns
     const parts = cronExpression.trim().split(/\s+/);
 
-    const DEFAULT_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+    const DEFAULT_SYNC_INTERVAL_MS = 6 * MS_PER_HOUR; // 6 hours
     const MIN_SYNC_INTERVAL_MS = 60 * 1000; // 1 minute
 
     if (parts.length !== 5) {
@@ -424,27 +425,27 @@ export class AutoSyncScheduler {
     // Every N hours: 0 */N * * *
     if (minute === '0' && hour?.startsWith('*/')) {
       const hours = parseInt(hour.substring(2), 10);
-      return hours * 60 * 60 * 1000;
+      return hours * MS_PER_HOUR;
     }
 
     // Every N days: 0 0 */N * *
     if (minute === '0' && hour === '0' && dayOfMonth?.startsWith('*/')) {
       const days = parseInt(dayOfMonth.substring(2), 10);
-      return days * 24 * 60 * 60 * 1000;
+      return days * MS_PER_DAY;
     }
 
     // Weekly: M H * * N (check before daily to avoid matching weekly as daily)
     if (!minute?.includes('*') && !hour?.includes('*') && dayOfWeek !== '*') {
-      return 7 * 24 * 60 * 60 * 1000;
+      return 7 * MS_PER_DAY;
     }
 
     // Daily at specific time: M H * * *
     if (!minute?.includes('*') && !hour?.includes('*') && dayOfMonth === '*') {
-      return 24 * 60 * 60 * 1000;
+      return MS_PER_DAY;
     }
 
     // Default to 6 hours for complex patterns
-    return 6 * 60 * 60 * 1000;
+    return 6 * MS_PER_HOUR;
   }
 
   /**

@@ -25,6 +25,7 @@ import {
 import { logger } from '../../utils/logger';
 import { getPrismaClient } from '../../modules/database';
 import { getMood } from '../../modules/mandala/mood';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 /**
  * Analytics routes plugin
@@ -263,7 +264,7 @@ export const analyticsRoutes: FastifyPluginCallback = (fastify, _opts, done) => 
     }
     const userId = request.user.userId;
     const prisma = getPrismaClient();
-    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const oneWeekAgo = new Date(Date.now() - 7 * MS_PER_DAY);
 
     const userMandalas = await prisma.user_mandalas.findMany({
       where: { user_id: userId },

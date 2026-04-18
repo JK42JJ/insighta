@@ -95,6 +95,10 @@ interface CreateFromTemplateResponse {
 // linked system skill (video_discover) is also ON via setSkill linkage
 // when "recommend" lands. trend_collector + iks_scorer are cron-only
 // system plugins; they have no per-mandala row, so they're omitted.
+// Covers the DB → list-endpoint propagation window so the refetch doesn't
+// race with the optimistic stub.
+const WIZARD_LIST_INVALIDATE_DELAY_MS = 3_000;
+
 const DEFAULT_SKILLS: Record<SkillType, boolean> = {
   newsletter: true,
   report: true,
@@ -392,24 +396,14 @@ export function useWizard() {
       // longer calls trackMandalaCreated because the AI-custom path invokes
       // it with a client-generated tempId, which would poison analytics.
 
-      // 3. Fire-and-forget cache invalidation. Do NOT await —
-      //    - await blocks navigate for however long the refetch takes
-      //      (seen in prod at 20s+ when dependent queries pile on).
-      //    - the refetch result can also overwrite the optimistic stub
-      //      with a stale server list (the new mandala's DB transaction
-      //      hasn't propagated to the list endpoint yet), which then
-      //      makes SidebarMandalaSection render '…' because find() fails.
-      //
-      //    By skipping await we let navigate run immediately — the
-      //    sidebar mounts reading the optimistic stub and shows the title
-      //    right away. Background refetch updates the cache naturally,
-      //    and the sidebar's defensive retry (see SidebarMandalaSection)
-      //    handles the propagation lag window.
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.mandala.list(),
-        refetchType: 'all',
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.quota() });
+      // Deferred so the list refetch doesn't race with the DB propagation window.
+      setTimeout(() => {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.mandala.list(),
+          refetchType: 'all',
+        });
+        queryClient.invalidateQueries({ queryKey: queryKeys.mandala.quota() });
+      }, WIZARD_LIST_INVALIDATE_DELAY_MS);
       navigate('/');
     },
     [navigate, selectMandalaInStore, setJustCreated, queryClient, state.selectedTemplate, user]

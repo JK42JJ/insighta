@@ -1,5 +1,6 @@
 import { getPrismaClient } from '../database/client';
 import { logger } from '../../utils/logger';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 interface MoodSignals {
   weeklySessionCount: number;
@@ -42,8 +43,8 @@ export async function getMood(
 ): Promise<{ state: MoodState; signals: MoodSignals; updatedAt: string }> {
   const prisma = getPrismaClient();
   const now = new Date();
-  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+  const oneWeekAgo = new Date(now.getTime() - 7 * MS_PER_DAY);
+  const twoWeeksAgo = new Date(now.getTime() - 14 * MS_PER_DAY);
 
   try {
     const [activityLogs, totalCardsResult, recentCards] = await Promise.all([
@@ -96,7 +97,7 @@ export async function getMood(
     // Days since last activity
     const lastActivity = activityLogs[0]?.created_at;
     const daysSinceLastActivity = lastActivity
-      ? Math.floor((now.getTime() - new Date(lastActivity).getTime()) / (24 * 60 * 60 * 1000))
+      ? Math.floor((now.getTime() - new Date(lastActivity).getTime()) / MS_PER_DAY)
       : 999;
 
     const signals: MoodSignals = {

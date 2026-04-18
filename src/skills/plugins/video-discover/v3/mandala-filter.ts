@@ -36,39 +36,64 @@
  */
 
 import { extractCoreKeyphrase, type KeywordLanguage } from '../v2/keyword-builder';
+import { MS_PER_MONTH_AVG } from '@/utils/time-constants';
 
-/** Minimum jaccard overlap with a sub_goal for a candidate to be routed. */
 export const MIN_SUB_RELEVANCE = 0.05;
 
-/** Shape the filter needs — any candidate source (pool, search, future). */
+export const DEFAULT_RECENCY_WEIGHT = 0;
+
+// 18mo half-life: 1y → 0.63, 3y → 0.25, 6y → 0.06.
+export const DEFAULT_RECENCY_HALF_LIFE_MONTHS = 18;
+
 export interface FilterCandidate {
   videoId: string;
   title: string;
   description: string | null;
+  publishedAt?: Date | null;
 }
 
 export interface ScoredAssignment<T extends FilterCandidate> {
   candidate: T;
   cellIndex: number;
-  /** Final score, range 0..1, used for per-cell ranking. */
   score: number;
-  /** Gate 1 component. */
   centerScore: number;
-  /** Gate 2 component (best sub_goal jaccard). */
   cellScore: number;
+  recencyScore: number;
 }
 
 export interface MandalaFilterInput {
   centerGoal: string;
   subGoals: ReadonlyArray<string>; // length 8
   language: KeywordLanguage;
-  /**
-   * User-declared focus tags from the wizard (e.g. "박문호", "뇌과학").
-   * When present, any candidate whose title lexically contains at least one
-   * focus tag bypasses the center-substring gate. Optional so callers that
-   * don't have access to the user's tags (e.g. cache-matcher) keep working.
-   */
   focusTags?: ReadonlyArray<string>;
+  recencyWeight?: number;
+  recencyHalfLifeMonths?: number;
+  now?: Date;
+}
+
+export interface ScoreWeights {
+  wCenter: number;
+  wCell: number;
+  wRecency: number;
+}
+
+export function buildScoreWeights(recencyWeight: number): ScoreWeights {
+  if (!(recencyWeight > 0)) return { wCenter: 0.5, wCell: 0.5, wRecency: 0 };
+  const clamped = Math.min(recencyWeight, 1);
+  const remaining = 1 - clamped;
+  return { wCenter: 0.5 * remaining, wCell: 0.5 * remaining, wRecency: clamped };
+}
+
+export function computeRecencyScore(
+  publishedAt: Date | null | undefined,
+  now: Date,
+  halfLifeMonths: number
+): number {
+  if (!publishedAt) return 0;
+  const ageMs = now.getTime() - publishedAt.getTime();
+  if (ageMs <= 0) return 1;
+  const ageMonths = ageMs / MS_PER_MONTH_AVG;
+  return Math.pow(0.5, ageMonths / halfLifeMonths);
 }
 
 /**
@@ -90,8 +115,12 @@ export interface MandalaFilterStats {
   subGoalTokenCounts: number[];
   /** How many candidates passed the gate via focusTag match (2026-04-18). */
   passedByFocusTag?: number;
-  /** Effective focus tokens fed into the OR gate (for diagnostic). */
   focusTokens?: string[];
+  recency?: {
+    weight: number;
+    halfLifeMonths: number;
+    missingPublishedAt: number;
+  };
 }
 
 export function applyMandalaFilter<T extends FilterCandidate>(
@@ -117,6 +146,17 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     for (const t of tokenize(raw, input.language)) focusTokens.add(t);
   }
 
+  const recencyWeightRaw = input.recencyWeight ?? DEFAULT_RECENCY_WEIGHT;
+  const recencyWeight = Number.isFinite(recencyWeightRaw)
+    ? Math.max(0, Math.min(1, recencyWeightRaw))
+    : 0;
+  const halfLifeMonths = Math.max(
+    1,
+    input.recencyHalfLifeMonths ?? DEFAULT_RECENCY_HALF_LIFE_MONTHS
+  );
+  const weights = buildScoreWeights(recencyWeight);
+  const now = input.now ?? new Date();
+
   const byCell = new Map<number, ScoredAssignment<T>[]>();
   for (let i = 0; i < input.subGoals.length; i++) byCell.set(i, []);
 
@@ -129,6 +169,11 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     subGoalTokenCounts: subGoalTokens.map((s) => s.size),
     passedByFocusTag: 0,
     focusTokens: [...focusTokens],
+    recency: {
+      weight: recencyWeight,
+      halfLifeMonths,
+      missingPublishedAt: 0,
+    },
   };
 
   for (const c of candidates) {
@@ -168,13 +213,21 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
       continue;
     }
 
-    const final = 0.5 * centerScore + 0.5 * bestScore;
+    const recencyScore =
+      weights.wRecency > 0 ? computeRecencyScore(c.publishedAt, now, halfLifeMonths) : 0;
+    if (weights.wRecency > 0 && !c.publishedAt && stats.recency) {
+      stats.recency.missingPublishedAt++;
+    }
+
+    const final =
+      weights.wCenter * centerScore + weights.wCell * bestScore + weights.wRecency * recencyScore;
     byCell.get(bestCell)!.push({
       candidate: c,
       cellIndex: bestCell,
       score: final,
       centerScore,
       cellScore: bestScore,
+      recencyScore,
     });
     stats.output++;
   }

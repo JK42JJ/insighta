@@ -58,11 +58,11 @@ import {
 } from './sources/suggest';
 import { LEARNING_SEED_TERMS, type LearningSeed } from './seed-terms';
 import { loadDynamicSeedsFromMandalas, mergeSeeds } from './dynamic-seeds';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 const log = logger.child({ module: 'trend-collector' });
 
 const KEYWORD_MAX_LENGTH = 255;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_OLLAMA_URL = 'http://100.91.173.17:11434';
 const SUGGEST_PARALLELISM = 3; // be polite to the unofficial endpoint
 

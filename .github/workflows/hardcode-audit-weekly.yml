@@ -1,0 +1,47 @@
+name: Hardcode Audit (Weekly)
+
+# Weekly trend report complementing the per-PR gate in ci.yml.
+
+on:
+  schedule:
+    - cron: '0 18 * * 1' # Mon 18:00 UTC = Tue 03:00 KST
+  workflow_dispatch: {}
+
+jobs:
+  audit:
+    name: Hardcode Audit (trend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install ripgrep
+        run: sudo apt-get install -y ripgrep
+      - run: npm ci
+      - name: Run audit (non-blocking)
+        id: audit
+        continue-on-error: true
+        run: npx tsx scripts/audit/hardcode-audit.ts
+      - name: Summarize
+        if: always()
+        run: |
+          echo "## Hardcode audit — $(date -u +%Y-%m-%d)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat reports/hardcode-audit/latest.json >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '### Baseline' >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat reports/hardcode-audit/baseline.json >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload trend artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardcode-audit-weekly-${{ github.run_id }}
+          path: reports/hardcode-audit/
+          retention-days: 180

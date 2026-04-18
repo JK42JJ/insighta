@@ -166,6 +166,17 @@
 - 3단계+ 상대 경로 import 금지 -> `@/` alias 사용
 - `docs/CODING_CONVENTIONS.md` 준수. Phase 1 즉시 적용.
 
+### 하드코딩 + 단편 조치 금지 (절대 규칙, LEVEL-3)
+- 업무 로직에 `process.env[...]` 직접 읽기, 파일별 `MS_PER_DAY` 재선언, 인라인 env 파서 금지 → `src/config/**` · `<plugin>/config.ts` (zod) · `src/utils/time-constants.ts` 사용.
+- 수정 전 `Grep` 으로 동일 패턴 전수 검색 → 발견한 중복은 **같은 PR 에서 일괄 정리**. 단일 파일 부분 조치 금지.
+- 신규 env default = "기존 동작" (unset = no-op). code revert 없이 flag off 로 롤백 가능해야.
+- 측정: `scripts/audit/hardcode-audit.ts` (5 룰). CI job `hardcode-audit` 가 PR 마다 baseline 초과 시 FAIL. baseline 은 **감소 방향으로만** 수정.
+
+**근거 (CP391 2026-04-18):**
+- v3 recency fix 중 `executor.ts` 에 `V3_RECENCY_WEIGHT`, `V3_PUBLISHED_AFTER_DAYS` env 를 `parseFloatEnv / parseIntEnv` inline helper + `MS_PER_DAY` 재선언으로 처리.
+- 당시 프로젝트엔 이미 `src/config/index.ts` 의 zod schema 존재 + `MS_PER_DAY` 는 **6개 파일 중복 선언** (admin/stats, video-discover/executor, iks-scorer, trend-collector, v3/executor 등).
+- 사용자 지적: "죄다 하드코딩", "전체 코드베이스 차원의 분석이 아닌 부분적 단편 조치". → 전 파일 일괄 정리 + config 모듈 + 중앙 상수로 재작업.
+
 ### Coding Conventions -> [상세: docs/CODING_CONVENTIONS.md]
 - 기존 코드 수정 시 해당 파일 Phase 1 위반도 함께 수정 (점진적 개선)
 

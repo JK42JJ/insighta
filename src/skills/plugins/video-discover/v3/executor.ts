@@ -28,9 +28,15 @@ import type {
   ExecuteResult,
 } from '@/skills/_shared/types';
 
+import { MS_PER_DAY } from '@/utils/time-constants';
 import { manifest, V3_TARGET_PER_CELL, V3_NUM_CELLS, V3_TARGET_TOTAL } from './manifest';
 import { matchFromVideoPool, groupByCell } from './cache-matcher';
-import { applyMandalaFilterWithStats, MIN_SUB_RELEVANCE } from './mandala-filter';
+import {
+  applyMandalaFilterWithStats,
+  MIN_SUB_RELEVANCE,
+  type FilterCandidate,
+} from './mandala-filter';
+import { v3Config } from './config';
 
 import {
   buildRuleBasedQueriesSync,
@@ -61,23 +67,6 @@ void MIN_SUB_RELEVANCE;
 // How many search queries to attempt per deficit cell (rule-based + LLM
 // together; the LLM pass yields at most a handful for the whole mandala).
 const TIER2_MAX_QUERIES_PER_CELL = 2;
-
-/**
- * Tier 1 (video_pool cache) is disabled by default (2026-04-16).
- *
- * The current pool holds ~1k rows dominated (~60%) by `user-derived`
- * leftovers from past mandalas. At that scale embedding cosine (≥0.3)
- * produces cross-topic hits — e.g. "하느님 자비의 기도" admitted into a
- * "일일 습관 성장" mandala because both land near each other in the
- * generic Korean self-help cluster. Until the pool reaches a useful
- * scale (10⁵–10⁶ rows) and/or is replaced with a domain-tuned model,
- * we skip Tier 1 entirely and route every request through Tier 2.
- *
- * The pgvector index, matchFromVideoPool function, and upsert path all
- * remain intact. Flip this env flag (V3_ENABLE_TIER1_CACHE=true) to
- * reactivate without a code change.
- */
-const V3_ENABLE_TIER1_CACHE = process.env['V3_ENABLE_TIER1_CACHE'] === 'true';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -191,8 +180,8 @@ export const executor: SkillExecutor = {
     const state = ctx.state as unknown as HydratedState;
     const mandalaId = ctx.mandalaId!;
 
-    // ── Tier 1: video_pool cache (disabled by default — see V3_ENABLE_TIER1_CACHE)
-    const tier1Matches = V3_ENABLE_TIER1_CACHE
+    // ── Tier 1: video_pool cache (disabled by default — see v3Config.enableTier1Cache)
+    const tier1Matches = v3Config.enableTier1Cache
       ? await matchFromVideoPool({
           mandalaId,
           language: state.language,
@@ -542,16 +531,24 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   debug.existingExcluded = enriched.length - filterable.length;
   debug.mandalaFilterInput = filterable.length;
 
+  type FilterInput = FilterCandidate & { videoId: string };
+  const filterInputs: FilterInput[] = filterable.map((v) => ({
+    videoId: v.videoId,
+    title: v.title,
+    description: v.description ?? null,
+    publishedAt: v.publishedDate,
+  }));
+  const enrichedById = new Map<string, Enriched>();
+  for (const v of filterable) enrichedById.set(v.videoId, v);
+
   const tMandalaFilterStart = Date.now();
-  const { byCell, stats: mfStats } = applyMandalaFilterWithStats(filterable, {
+  const { byCell, stats: mfStats } = applyMandalaFilterWithStats(filterInputs, {
     centerGoal: input.state.centerGoal,
     subGoals: input.state.subGoals,
     language: input.state.language,
-    // 2026-04-18 bug #414 fix — propagate user's focusTags so "박문호 강연"
-    // videos bypass the center-substring gate. Without this, wizard focus
-    // tags were silently dropped at the filter even though the search
-    // query layer correctly used them to fetch the pool.
     focusTags: input.state.focusTags,
+    recencyWeight: v3Config.recencyWeight,
+    recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
   });
   debug.timing.mandalaFilterMs = Date.now() - tMandalaFilterStart;
 
@@ -571,7 +568,9 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   for (const [cellIndex, list] of byCell) {
     if (!deficitCellSet.has(cellIndex)) continue;
     for (const a of list) {
-      scored.push({ video: a.candidate, cellIndex, score: a.score });
+      const enrichedVideo = enrichedById.get(a.candidate.videoId);
+      if (!enrichedVideo) continue;
+      scored.push({ video: enrichedVideo, cellIndex, score: a.score });
     }
   }
   debug.scoredCandidates = scored.length;
@@ -641,6 +640,10 @@ async function runSearchTraced(
 ): Promise<SearchTrace> {
   if (queries.length === 0) return { pool: [], perQuery: [] };
   const regionCode = language === 'ko' ? 'KR' : 'US';
+  const publishedAfter =
+    v3Config.publishedAfterDays > 0
+      ? new Date(Date.now() - v3Config.publishedAfterDays * MS_PER_DAY).toISOString()
+      : undefined;
   const results = await Promise.all(
     queries.map(async (q) => {
       try {
@@ -649,6 +652,7 @@ async function runSearchTraced(
           apiKey: apiKeys,
           relevanceLanguage: language,
           regionCode,
+          ...(publishedAfter ? { publishedAfter } : {}),
         });
         return { q, items, error: undefined as string | undefined };
       } catch (err) {
@@ -705,7 +709,7 @@ async function upsertSlots(
   subGoals: ReadonlyArray<string>
 ): Promise<number> {
   const db = getPrismaClient();
-  const expiresAt = new Date(Date.now() + TTL_DAYS * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + TTL_DAYS * MS_PER_DAY);
   let count = 0;
 
   for (const slot of slots) {

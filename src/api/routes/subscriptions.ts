@@ -7,6 +7,7 @@
 
 import { FastifyPluginCallback } from 'fastify';
 import { getPrismaClient } from '../../modules/database';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 const RECENT_UPDATES_DAYS = 7;
 
@@ -20,7 +21,7 @@ export const subscriptionRoutes: FastifyPluginCallback = (fastify, _opts, done) 
     }
     const userId = request.user.userId;
     const prisma = getPrismaClient();
-    const since = new Date(Date.now() - RECENT_UPDATES_DAYS * 24 * 60 * 60 * 1000);
+    const since = new Date(Date.now() - RECENT_UPDATES_DAYS * MS_PER_DAY);
 
     const subscriptions = await prisma.mandala_subscriptions.findMany({
       where: { subscriber_id: userId },

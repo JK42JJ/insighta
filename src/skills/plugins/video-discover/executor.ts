@@ -48,9 +48,9 @@ import {
   type SearchQueryPromptInput,
 } from '@/prompts/search-query-generator';
 import { rerankBatch, type RerankCandidate } from './sources/llm-reranker';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 const log = logger.child({ module: 'video-discover' });
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
 /**
@@ -164,7 +164,7 @@ const MIN_VIEW_COUNT_RELAX_FRESH = 1_000;
  * Kill switch: VIDEO_DISCOVER_DISABLE_CACHE_REUSE=1
  */
 const CACHE_LOOKBACK_DAYS = 7;
-const CACHE_LOOKBACK_MS = CACHE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+const CACHE_LOOKBACK_MS = CACHE_LOOKBACK_DAYS * MS_PER_DAY;
 const MIN_CACHE_HITS_PER_CELL = 3;
 /** How many rows to read per cell-cache lookup (avoids loading everything). */
 const CACHE_LOOKUP_LIMIT = 20;

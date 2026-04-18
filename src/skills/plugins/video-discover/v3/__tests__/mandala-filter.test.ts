@@ -4,10 +4,23 @@
  * cell. Covers the prod-observed contamination cases from 2026-04-16.
  */
 
-import { applyMandalaFilter, MIN_SUB_RELEVANCE, type FilterCandidate } from '../mandala-filter';
+import {
+  applyMandalaFilter,
+  applyMandalaFilterWithStats,
+  buildScoreWeights,
+  computeRecencyScore,
+  DEFAULT_RECENCY_HALF_LIFE_MONTHS,
+  MIN_SUB_RELEVANCE,
+  type FilterCandidate,
+} from '../mandala-filter';
 
-function cand(videoId: string, title: string, description = ''): FilterCandidate {
-  return { videoId, title, description };
+function cand(
+  videoId: string,
+  title: string,
+  description = '',
+  publishedAt: Date | null = null
+): FilterCandidate {
+  return { videoId, title, description, publishedAt };
 }
 
 describe('applyMandalaFilter — center gate (Gate 1)', () => {
@@ -281,5 +294,122 @@ describe('applyMandalaFilter — empty input and edge cases', () => {
 
   test('MIN_SUB_RELEVANCE threshold is public and 0.05', () => {
     expect(MIN_SUB_RELEVANCE).toBe(0.05);
+  });
+});
+
+describe('recency weighting (2026-04-18, env-gated)', () => {
+  const BASE_INPUT = {
+    centerGoal: '턱걸이 20개',
+    subGoals: [
+      '기초체력 점검',
+      '등근육 강화',
+      '팔이두근 발달',
+      '어깨안정성',
+      '코어안정화',
+      '점진적 과부하',
+      '영양체중관리',
+      '회복 부상 예방',
+    ],
+    language: 'ko' as const,
+  };
+
+  const NOW = new Date('2026-04-18T00:00:00Z');
+
+  test('recencyWeight=0 keeps legacy 0.5/0.5 weights (baseline invariant)', () => {
+    const weights = buildScoreWeights(0);
+    expect(weights).toEqual({ wCenter: 0.5, wCell: 0.5, wRecency: 0 });
+  });
+
+  test('recencyWeight>0 scales center+cell down proportionally, sums to 1', () => {
+    const w = buildScoreWeights(0.2);
+    expect(w.wRecency).toBe(0.2);
+    expect(w.wCenter).toBeCloseTo(0.4, 6);
+    expect(w.wCell).toBeCloseTo(0.4, 6);
+    expect(w.wCenter + w.wCell + w.wRecency).toBeCloseTo(1, 6);
+  });
+
+  test('computeRecencyScore: 0 when publishedAt null; 1 for future; halves at halfLife', () => {
+    expect(computeRecencyScore(null, NOW, 18)).toBe(0);
+    expect(computeRecencyScore(undefined, NOW, 18)).toBe(0);
+    // future date
+    const future = new Date(NOW.getTime() + 1000 * 60 * 60 * 24);
+    expect(computeRecencyScore(future, NOW, 18)).toBe(1);
+    // exactly one half-life (18 months ≈ 540 days)
+    const oneHalfLife = new Date(NOW.getTime() - 18 * 30 * 24 * 60 * 60 * 1000);
+    expect(computeRecencyScore(oneHalfLife, NOW, 18)).toBeCloseTo(0.5, 3);
+  });
+
+  test('with recencyWeight=0 → old video matching lexically still wins (baseline preserved)', () => {
+    // Both candidates have identical lexical match. Old has zero recency
+    // advantage in baseline mode.
+    const oldVid = cand(
+      'old',
+      '턱걸이 등근육 강화 루틴',
+      '턱걸이 등근육 팔이두근 발달',
+      new Date('2018-04-18T00:00:00Z')
+    );
+    const newVid = cand(
+      'new',
+      '턱걸이 등근육 강화 루틴',
+      '턱걸이 등근육 팔이두근 발달',
+      new Date('2025-10-18T00:00:00Z')
+    );
+    const { byCell } = applyMandalaFilterWithStats([oldVid, newVid], {
+      ...BASE_INPUT,
+      recencyWeight: 0,
+      now: NOW,
+    });
+    // All cells combined: both should be present with equal score.
+    const flat = Array.from(byCell.values()).flat();
+    expect(flat).toHaveLength(2);
+    expect(flat[0]!.score).toBeCloseTo(flat[1]!.score, 6);
+  });
+
+  test('with recencyWeight=0.15 → new video outranks equal-lexical old video', () => {
+    const oldVid = cand(
+      'old',
+      '턱걸이 등근육 강화 루틴',
+      '턱걸이 등근육 팔이두근 발달',
+      new Date('2018-04-18T00:00:00Z')
+    );
+    const newVid = cand(
+      'new',
+      '턱걸이 등근육 강화 루틴',
+      '턱걸이 등근육 팔이두근 발달',
+      new Date('2025-10-18T00:00:00Z')
+    );
+    const { byCell } = applyMandalaFilterWithStats([oldVid, newVid], {
+      ...BASE_INPUT,
+      recencyWeight: 0.15,
+      now: NOW,
+    });
+    // Both land in the same cell, sorted by score desc
+    const allCells = Array.from(byCell.values()).filter((list) => list.length > 0);
+    expect(allCells).toHaveLength(1);
+    const [list] = allCells;
+    expect(list!.length).toBeGreaterThanOrEqual(2);
+    expect(list![0]!.candidate.videoId).toBe('new');
+    expect(list![1]!.candidate.videoId).toBe('old');
+    // Observability: recencyScore stored on every assignment
+    expect(list![0]!.recencyScore).toBeGreaterThan(list![1]!.recencyScore);
+  });
+
+  test('stats.recency captures weight, halfLife, and missingPublishedAt count', () => {
+    const withDate = cand('withDate', '턱걸이 등근육 강화', '', new Date('2024-04-18T00:00:00Z'));
+    const noDate = cand('noDate', '턱걸이 등근육 강화', '', null);
+    const { stats } = applyMandalaFilterWithStats([withDate, noDate], {
+      ...BASE_INPUT,
+      recencyWeight: 0.15,
+      recencyHalfLifeMonths: 24,
+      now: NOW,
+    });
+    expect(stats.recency).toBeDefined();
+    expect(stats.recency!.weight).toBe(0.15);
+    expect(stats.recency!.halfLifeMonths).toBe(24);
+    expect(stats.recency!.missingPublishedAt).toBe(1);
+  });
+
+  test('DEFAULT_RECENCY_HALF_LIFE_MONTHS is 18', () => {
+    expect(DEFAULT_RECENCY_HALF_LIFE_MONTHS).toBe(18);
   });
 });

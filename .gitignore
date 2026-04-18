@@ -144,3 +144,7 @@ openclaw/memory/
 .claude/commands/_deprecated/
 .env.bak
 .env.bak2
+
+# Hardcode audit — keep baseline.json, ignore per-run reports
+reports/hardcode-audit/report-*.json
+reports/hardcode-audit/latest.json

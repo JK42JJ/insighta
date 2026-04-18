@@ -6,6 +6,7 @@
  */
 
 import { getPrismaClient } from '../database';
+import { MS_PER_HOUR } from '@/utils/time-constants';
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 const MAX_RESULTS = 50;
@@ -18,7 +19,7 @@ const MAX_RESULTS = 50;
  * maybe once a week). 6-hour TTL protects YouTube quota (100 units/call for
  * subscriptions) while keeping data reasonably fresh.
  */
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const CACHE_TTL_MS = 6 * MS_PER_HOUR; // 6 hours
 const responseCache = new Map<string, { data: unknown; expiry: number }>();
 
 function getCached<T>(key: string): T | null {
