@@ -1,13 +1,13 @@
-import { loadV3Config } from '../config';
+import { DEFAULT_PUBLISHED_AFTER_DAYS, loadV3Config } from '../config';
 import { DEFAULT_RECENCY_HALF_LIFE_MONTHS, DEFAULT_RECENCY_WEIGHT } from '../mandala-filter';
 
 describe('loadV3Config', () => {
-  test('empty env → baseline (Tier 1 off, recency weight 0, no publishedAfter)', () => {
+  test('empty env → activated defaults (Tier 1 off, recency on, 3yr cutoff)', () => {
     expect(loadV3Config({})).toEqual({
       enableTier1Cache: false,
       recencyWeight: DEFAULT_RECENCY_WEIGHT,
       recencyHalfLifeMonths: DEFAULT_RECENCY_HALF_LIFE_MONTHS,
-      publishedAfterDays: 0,
+      publishedAfterDays: DEFAULT_PUBLISHED_AFTER_DAYS,
     });
   });
 
@@ -45,8 +45,13 @@ describe('loadV3Config', () => {
   test('V3_PUBLISHED_AFTER_DAYS accepts non-negative integer', () => {
     expect(loadV3Config({ V3_PUBLISHED_AFTER_DAYS: '1095' }).publishedAfterDays).toBe(1095);
     expect(loadV3Config({ V3_PUBLISHED_AFTER_DAYS: '0' }).publishedAfterDays).toBe(0);
-    expect(loadV3Config({ V3_PUBLISHED_AFTER_DAYS: '-5' }).publishedAfterDays).toBe(0);
-    expect(loadV3Config({ V3_PUBLISHED_AFTER_DAYS: 'garbage' }).publishedAfterDays).toBe(0);
+    // invalid → entire schema fails → error fallback returns the activated default
+    expect(loadV3Config({ V3_PUBLISHED_AFTER_DAYS: '-5' }).publishedAfterDays).toBe(
+      DEFAULT_PUBLISHED_AFTER_DAYS
+    );
+    expect(loadV3Config({ V3_PUBLISHED_AFTER_DAYS: 'garbage' }).publishedAfterDays).toBe(
+      DEFAULT_PUBLISHED_AFTER_DAYS
+    );
   });
 
   test('combined: realistic CP391 rollout config', () => {

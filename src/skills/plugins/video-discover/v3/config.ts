@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { DEFAULT_RECENCY_HALF_LIFE_MONTHS, DEFAULT_RECENCY_WEIGHT } from './mandala-filter';
 
+export const DEFAULT_PUBLISHED_AFTER_DAYS = 1095;
+
 export type V3EnvInput = Record<string, string | undefined>;
 
 const booleanFlag = z.preprocess(
@@ -28,7 +30,7 @@ const nonNegativeInt = z
     (v) => (v == null || v === '' ? undefined : Number(v)),
     z.number().finite().int().nonnegative().optional()
   )
-  .transform((v) => v ?? 0);
+  .transform((v) => v ?? DEFAULT_PUBLISHED_AFTER_DAYS);
 
 export const v3EnvSchema = z.object({
   V3_ENABLE_TIER1_CACHE: booleanFlag.optional().default(false as unknown as string),
@@ -56,7 +58,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       enableTier1Cache: false,
       recencyWeight: DEFAULT_RECENCY_WEIGHT,
       recencyHalfLifeMonths: DEFAULT_RECENCY_HALF_LIFE_MONTHS,
-      publishedAfterDays: 0,
+      publishedAfterDays: DEFAULT_PUBLISHED_AFTER_DAYS,
     };
   }
   return {

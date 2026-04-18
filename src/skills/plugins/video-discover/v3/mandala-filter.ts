@@ -40,7 +40,7 @@ import { MS_PER_MONTH_AVG } from '@/utils/time-constants';
 
 export const MIN_SUB_RELEVANCE = 0.05;
 
-export const DEFAULT_RECENCY_WEIGHT = 0;
+export const DEFAULT_RECENCY_WEIGHT = 0.15;
 
 // 18mo half-life: 1y → 0.63, 3y → 0.25, 6y → 0.06.
 export const DEFAULT_RECENCY_HALF_LIFE_MONTHS = 18;
