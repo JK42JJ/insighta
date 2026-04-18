@@ -50,12 +50,15 @@ interface MandalaUIStore {
    * early return in fireCreateMandala).
    */
   pendingMandala: PendingMandala | null;
+  /** id → title for the most recent wizard create; kept until the mandala appears in the list cache. */
+  lastOptimisticTitle: { id: string; title: string } | null;
   selectMandala: (id: string | null) => void;
   setCurrentLevel: (id: string) => void;
   setSelectedCell: (index: number | null) => void;
   setJustCreated: (id: string | null) => void;
   setPendingMandala: (p: PendingMandala | null) => void;
   clearPendingMandala: () => void;
+  setLastOptimisticTitle: (v: { id: string; title: string } | null) => void;
   /** Reset all state to initial values — called on auth transitions */
   reset: () => void;
 }
@@ -66,6 +69,7 @@ const INITIAL_STATE = {
   selectedCellIndex: null,
   justCreatedMandalaId: null,
   pendingMandala: null,
+  lastOptimisticTitle: null,
 } as const;
 
 export const useMandalaStore = create<MandalaUIStore>((set) => ({
@@ -76,6 +80,7 @@ export const useMandalaStore = create<MandalaUIStore>((set) => ({
   setJustCreated: (id) => set({ justCreatedMandalaId: id }),
   setPendingMandala: (p) => set({ pendingMandala: p }),
   clearPendingMandala: () => set({ pendingMandala: null }),
+  setLastOptimisticTitle: (v) => set({ lastOptimisticTitle: v }),
   reset: () => set({ ...INITIAL_STATE }),
 }));
 

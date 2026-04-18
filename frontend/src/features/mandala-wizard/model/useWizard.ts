@@ -339,6 +339,13 @@ export function useWizard() {
   // replaces the stub with full server data.
   const goToUnifiedDashboard = useCallback(
     async (newMandalaId: string, title?: string) => {
+      const effectiveTitle = title ?? state.selectedTemplate?.centerGoal ?? 'New Mandala';
+      // Persist id→title so the sidebar can render a real name while the
+      // list cache's optimistic stub is still racing with the server refetch.
+      useMandalaStore.getState().setLastOptimisticTitle({
+        id: newMandalaId,
+        title: effectiveTitle,
+      });
       // 1. Optimistic: inject minimal mandala into list cache
       queryClient.setQueryData(
         queryKeys.mandala.list(),
@@ -354,7 +361,7 @@ export function useWizard() {
               {
                 id: newMandalaId,
                 userId: user?.id ?? '',
-                title: title ?? state.selectedTemplate?.centerGoal ?? 'New Mandala',
+                title: effectiveTitle,
                 isDefault: false,
                 isPublic: false,
                 shareSlug: null,
@@ -528,12 +535,18 @@ export function useWizard() {
         // 3b. Reconcile store. If the user is still focused on the tempId view,
         //     swap in-place (silent); if they navigated elsewhere since submit,
         //     surface a toast rather than yank their view.
-        const currentSelected = useMandalaStore.getState().selectedMandalaId;
+        const storeState = useMandalaStore.getState();
+        const currentSelected = storeState.selectedMandalaId;
         const silentSwap = currentSelected === tempId;
+        const prevOptimistic = storeState.lastOptimisticTitle;
         useMandalaStore.setState({
           selectedMandalaId: silentSwap ? result.mandalaId : currentSelected,
           justCreatedMandalaId: result.mandalaId,
           pendingMandala: null,
+          lastOptimisticTitle:
+            prevOptimistic && prevOptimistic.id === tempId
+              ? { id: result.mandalaId, title: prevOptimistic.title }
+              : prevOptimistic,
         });
 
         if (!silentSwap) {

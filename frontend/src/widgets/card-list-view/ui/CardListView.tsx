@@ -212,7 +212,10 @@ export function CardListView({
 
   const effectiveViewMode = viewMode === 'list-detail' && isMobile ? 'list' : viewMode;
 
-  // "latest"/"oldest" rank by source publish date (YouTube upload), not createdAt.
+  // "latest"/"oldest" rank by source publish date (YouTube upload) ONLY.
+  // Cards without a publish date sort to the end instead of inheriting
+  // `createdAt` — otherwise newly-cached items inherit "today" and leak
+  // into the "Latest" band above genuinely-recent uploads.
   const sortedCards = useMemo(() => {
     const arr = [...cards];
     const getPublishedMs = (c: (typeof cards)[number]): number => {
@@ -225,8 +228,7 @@ export function CardListView({
         const t = new Date(metaPublished).getTime();
         if (Number.isFinite(t)) return t;
       }
-      const createdMs = new Date(c.createdAt).getTime();
-      return Number.isFinite(createdMs) ? createdMs : NaN;
+      return NaN;
     };
     switch (sortMode) {
       case 'latest':

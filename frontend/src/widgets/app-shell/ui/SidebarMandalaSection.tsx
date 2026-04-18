@@ -35,6 +35,8 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
   const selectedMandalaId = useMandalaStore((s) => s.selectedMandalaId);
   const selectMandala = useMandalaStore((s) => s.selectMandala);
   const pendingMandala = useMandalaStore((s) => s.pendingMandala);
+  const lastOptimisticTitle = useMandalaStore((s) => s.lastOptimisticTitle);
+  const setLastOptimisticTitle = useMandalaStore((s) => s.setLastOptimisticTitle);
   const { t } = useTranslation();
   const { data: listData, isLoading, isError, error, refetch } = useMandalaList();
 
@@ -172,17 +174,28 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
     const label = (rootLevel as { centerLabel?: string | null } | undefined)?.centerLabel;
     return label || m?.title || '—';
   };
-  // Fallback for the list-cache propagation window; avoids rendering a bare "…".
+  // Fallback chain while the list cache catches up with the server write.
+  // pendingMandala covers the AI-custom path; lastOptimisticTitle covers the
+  // DB-template path where no pendingMandala is set.
   const pendingTitle =
     pendingMandala?.originalInputs?.centerLabel?.trim() ||
     pendingMandala?.originalInputs?.title?.trim() ||
     pendingMandala?.originalInputs?.centerGoal?.trim() ||
-    null;
+    (lastOptimisticTitle?.id === selectedMandalaId
+      ? lastOptimisticTitle.title.trim() || null
+      : null);
   const currentTitle = selectedMandalaId
     ? currentMandala
       ? getCenterLabel(currentMandala)
       : (pendingTitle ?? t('sidebar.mandalaLoading', 'Finishing setup…'))
     : getCenterLabel(mandalas[0]);
+
+  useEffect(() => {
+    if (!lastOptimisticTitle) return;
+    if (mandalas.some((m) => m.id === lastOptimisticTitle.id)) {
+      setLastOptimisticTitle(null);
+    }
+  }, [mandalas, lastOptimisticTitle, setLastOptimisticTitle]);
 
   return (
     <div className="px-2 flex flex-col">
