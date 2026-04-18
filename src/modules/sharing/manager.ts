@@ -6,6 +6,7 @@
 
 import { getPrismaClient } from '../database';
 import crypto from 'crypto';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 const SHARE_CODE_LENGTH = 8;
 
@@ -53,9 +54,7 @@ export async function createShareLink(
   }
 
   const shareCode = generateShareCode();
-  const expiresAt = expiresInDays
-    ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
-    : null;
+  const expiresAt = expiresInDays ? new Date(Date.now() + expiresInDays * MS_PER_DAY) : null;
 
   const share = await prisma.mandala_shares.create({
     data: {

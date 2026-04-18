@@ -2,9 +2,9 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { db } from '@/modules/database/client';
 import { createSuccessResponse } from '../../schemas/common.schema';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 const DEFAULT_ACTIVITY_RANGE_DAYS = 6;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export async function adminStatsRoutes(fastify: FastifyInstance) {
   const adminAuth = { onRequest: [fastify.authenticate, fastify.authenticateAdmin] };

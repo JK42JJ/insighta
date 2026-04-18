@@ -25,6 +25,7 @@ import { getPrismaClient } from '@/modules/database';
 import { Prisma } from '@prisma/client';
 import { logger } from '@/utils/logger';
 import { manifest, IKS_SCORER_DEFAULT_SOURCES, IKS_SCORER_TTL_DAYS } from './manifest';
+import { MS_PER_DAY } from '@/utils/time-constants';
 import { computeIksResult, type SignalForScoring, type IksWeights } from './scoring';
 import {
   embedBatch,
@@ -35,7 +36,6 @@ import {
 } from './embedding';
 
 const log = logger.child({ module: 'iks-scorer' });
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 interface HydratedState {
   sources: readonly string[];

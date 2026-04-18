@@ -26,6 +26,7 @@ import {
   ACTIONS_TEMPERATURE,
   ACTIONS_MAX_TOKENS as PROMPT_ACTIONS_MAX_TOKENS,
 } from '@/prompts/actions-generator';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 // ─── Types ───
 
@@ -60,7 +61,7 @@ const TEMPERATURE = 0.7;
 // Cache key: `${language}:${normalizedGoal}` — exact match only.
 // (Future: embedding-based cosine ≥ 0.9 hit — issue tracked separately.)
 
-const GENERATE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const GENERATE_CACHE_TTL_MS = MS_PER_DAY; // 24h
 const GENERATE_CACHE_MAX = 200;
 
 interface CachedGeneration {

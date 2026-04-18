@@ -11,6 +11,7 @@ import { FastifyPluginCallback } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '../../modules/database';
 import { createErrorResponse, ErrorCode } from '../schemas/common.schema';
+import { MS_PER_HOUR } from '@/utils/time-constants';
 
 const SNAPSHOT_EXPIRY_HOURS = 24;
 
@@ -159,7 +160,7 @@ export const snapshotRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const userId = request.user.userId;
     const prisma = getPrismaClient();
 
-    const expiryThreshold = new Date(Date.now() - SNAPSHOT_EXPIRY_HOURS * 60 * 60 * 1000);
+    const expiryThreshold = new Date(Date.now() - SNAPSHOT_EXPIRY_HOURS * MS_PER_HOUR);
 
     const snapshots = await prisma.card_snapshots.findMany({
       where: {

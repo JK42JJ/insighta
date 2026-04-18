@@ -27,6 +27,7 @@ import type {
 } from '@/skills/_shared/types';
 
 import { manifest, V2_TARGET_TOTAL, V2_TARGET_PER_CELL, V2_NUM_CELLS } from './manifest';
+import { MS_PER_DAY } from '@/utils/time-constants';
 import {
   buildRuleBasedQueriesSync,
   runLLMQueries,
@@ -619,7 +620,7 @@ async function upsertRecommendations(
   scoreByVideoId: Map<string, number>
 ): Promise<number> {
   const db = getPrismaClient();
-  const expiresAt = new Date(Date.now() + TTL_DAYS * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + TTL_DAYS * MS_PER_DAY);
   let count = 0;
 
   for (const a of assignments) {

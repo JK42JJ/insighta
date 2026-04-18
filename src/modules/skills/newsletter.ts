@@ -21,6 +21,7 @@ import { config } from '@/config/index';
 import { TIER_LIMITS, type Tier } from '@/config/quota';
 import { queryMandalaCards, type SkillCard } from './card-query';
 import { transporter } from './mailer';
+import { MS_PER_DAY } from '@/utils/time-constants';
 import type { InsightaSkill, SkillContext, SkillResult, SkillPreview } from './types';
 
 const log = logger.child({ module: 'NewsletterSkill' });
@@ -169,7 +170,7 @@ export class NewsletterSkill implements InsightaSkill {
   // ============================================================================
 
   private async curate(userId: string, mandalaId: string, topN: number): Promise<SkillCard[]> {
-    const since = new Date(Date.now() - CURATION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const since = new Date(Date.now() - CURATION_WINDOW_DAYS * MS_PER_DAY);
 
     // Unified card query — local + synced from shared module
     const allCards = await queryMandalaCards({
