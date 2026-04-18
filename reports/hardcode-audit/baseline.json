@@ -1,5 +1,5 @@
 {
-  "ms-per-day-reseclared": 0,
+  "ms-per-day-redeclared": 0,
   "process-env-direct-read": 35,
   "inline-env-parser": 0,
   "raw-ms-per-day-literal": 0,

@@ -20,7 +20,7 @@ const BASELINE_PATH = resolve(REPORT_DIR, 'baseline.json');
 
 const RULES: RuleDef[] = [
   {
-    id: 'ms-per-day-reseclared',
+    id: 'ms-per-day-redeclared',
     description: 'MS_PER_DAY / MS_PER_HOUR / MS_PER_MINUTE redeclared outside time-constants',
     pattern: String.raw`^\s*(?:export\s+)?const\s+MS_PER_(?:DAY|HOUR|MINUTE|SECOND)\s*=`,
     allowedFileGlobs: ['src/utils/time-constants.ts'],
