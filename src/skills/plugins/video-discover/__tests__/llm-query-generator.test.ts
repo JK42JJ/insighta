@@ -4,11 +4,11 @@
  * Pins the contract that matters for the executor:
  *   - parseQueriesResponse handles raw JSON, markdown-fenced JSON, object wrappers
  *   - parseQueriesResponse rejects empty / unparseable / non-string entries
- *   - parseQueriesResponse caps at MAX_QUERIES (3) and filters short noise
+ *   - parseQueriesResponse caps at MAX_QUERIES (8) and filters short noise
  *   - generateSearchQueries throws LlmQueryGenError on transport failure
  *   - generateSearchQueries throws LlmQueryGenError on Ollama HTTP error
  *   - generateSearchQueries throws LlmQueryGenError on empty content
- *   - happy path returns up to 3 cleaned queries
+ *   - happy path returns up to 8 cleaned queries
  *
  * The Ollama URL/model are NEVER hit — fetchImpl is mocked per test.
  */
@@ -72,10 +72,10 @@ describe('parseQueriesResponse', () => {
     expect(out).toEqual(['q1', 'q2']);
   });
 
-  it('truncates to MAX_QUERIES (3) when the model returns more', () => {
-    const out = parseQueriesResponse('["q1", "q2", "q3", "q4", "q5"]');
-    expect(out).toHaveLength(3);
-    expect(out).toEqual(['q1', 'q2', 'q3']);
+  it('truncates to MAX_QUERIES (8) when the model returns more', () => {
+    const out = parseQueriesResponse('["q1","q2","q3","q4","q5","q6","q7","q8","q9","q10"]');
+    expect(out).toHaveLength(8);
+    expect(out).toEqual(['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8']);
   });
 
   it('filters out entries shorter than MIN_QUERY_LENGTH (2)', () => {

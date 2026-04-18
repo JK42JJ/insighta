@@ -77,14 +77,20 @@ export interface SearchQuery {
   cellIndex?: number | null;
 }
 
-// Bumped 8 → 12 (2026-04-16) so the candidate pool is large enough for the
-// mandala filter to produce a natural per-cell distribution (rather than
-// mechanically 5-each). With 8 sub_goals each covered by a rule query +
-// core/focus/level heads, ~12 queries land the floor; the LLM pass adds
-// a few more on top up to the cap. 12 × search.list (100 units) = 1200
-// quota/mandala — still inside the 10k/day budget at ~8 mandalas/day.
-// Further growth is gated on the Step 2 seed dictionary + API quota uplift.
-export const MAX_QUERIES = 12;
+// History:
+//   - 8 (initial)
+//   - 8 → 12 (2026-04-16 PR #400): candidate pool large enough for the
+//     mandala filter to produce a natural per-cell distribution.
+//   - 12 → 20 (2026-04-18, recall-expansion PR): user report on niche
+//     domain ("GraphDB 전문가") had only 17 finalSlots because 12 queries
+//     produced too small a pool for cells 5–7 to ever find candidates.
+//     The pool roughly scales with queries × ~50 results/query (YouTube
+//     search.list max), so 20 queries target ~1000 raw videos → 400–600
+//     post-shorts-filter → enough for all 8 cells to find niche matches.
+//     20 × search.list (100 units) = 2000 quota/mandala → ~15 mandalas/day
+//     across 3 keys (PR #411 rotation). Still in budget for current usage.
+//     Further growth gated on Step 2 seed dictionary + API quota uplift.
+export const MAX_QUERIES = 20;
 export const MAX_QUERY_LENGTH = 100;
 
 const TARGET_LEVEL_KEYWORDS: Record<string, Record<KeywordLanguage, string>> = {

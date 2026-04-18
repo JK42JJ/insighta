@@ -42,8 +42,16 @@ const OLLAMA_REQUEST_TIMEOUT_MS = 30_000;
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_REQUEST_TIMEOUT_MS = 30_000;
 const OPENROUTER_MAX_TOKENS = 256;
-/** Hard cap on the number of queries returned to the caller. */
-const MAX_QUERIES = 3;
+/**
+ * Hard cap on the number of queries the LLM can expand into. History:
+ *   - 3 (initial): conservative, every LLM call returned 3 queries.
+ *   - 3 → 8 (2026-04-18, recall-expansion PR): niche-domain mandalas
+ *     benefit from a wider set of LLM-paraphrased queries so cells 5–7
+ *     (that rule-based queries don't easily reach) get candidates.
+ *     Downstream keyword-builder's MAX_QUERIES (20) still dedupes/caps
+ *     the combined rule+LLM output, so 8 is a ceiling not a floor.
+ */
+const MAX_QUERIES = 8;
 /** Minimum length of a usable query (filters single-character noise). */
 const MIN_QUERY_LENGTH = 2;
 

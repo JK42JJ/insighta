@@ -18,11 +18,19 @@ import { defineManifest } from '@/skills/_shared/runtime';
  * the per-cell distribution is determined by how many relevant videos
  * actually exist for that sub_goal — it is not forced equal across
  * cells. Some cells may come up empty (niche sub_goal), others may
- * fill to this cap (mainstream sub_goal). 5 → 8 (2026-04-16): a larger
- * cap gives the filter room to reflect the natural distribution
- * instead of truncating popular cells.
+ * fill to this cap (mainstream sub_goal).
+ *
+ * History:
+ *   - 5 (initial)
+ *   - 5 → 8 (2026-04-16 PR #400): larger cap lets popular cells reflect
+ *     their natural distribution instead of being truncated.
+ *   - 8 → 12 (2026-04-18, recall-expansion PR): user report on niche
+ *     domain mandala ("GraphDB 전문가") had only 17 total slots because
+ *     the upstream query count (MAX_QUERIES = 12) produced a pool too
+ *     small for popular cells to reach 8. Raising this in tandem with
+ *     MAX_QUERIES 12→20 gives cells room to absorb the wider pool.
  */
-export const V3_TARGET_PER_CELL = 8;
+export const V3_TARGET_PER_CELL = 12;
 export const V3_NUM_CELLS = 8;
 /**
  * Upper bound on total slots across the mandala. Used by the executor
@@ -30,7 +38,7 @@ export const V3_NUM_CELLS = 8;
  * Tier 1 disabled, total filling is driven entirely by what the filter
  * admits from Tier 2, bounded per-cell by V3_TARGET_PER_CELL.
  */
-export const V3_TARGET_TOTAL = V3_TARGET_PER_CELL * V3_NUM_CELLS; // 64
+export const V3_TARGET_TOTAL = V3_TARGET_PER_CELL * V3_NUM_CELLS; // 96
 
 export const manifest: SkillManifest = defineManifest({
   id: 'video-discover-v3',

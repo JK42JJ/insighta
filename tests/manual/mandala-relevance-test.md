@@ -41,9 +41,10 @@ Expected (post-PR #398 baseline):
 | Key | Expected | Notes |
 |-----|----------|-------|
 | `V3_ENABLE_TIER1_CACHE` | unset or `false` | Tier 1 cache disabled by default |
-| `V3_TARGET_PER_CELL` | 8 (cap) | PR #400 renamed floor→cap |
-| `V3_TARGET_TOTAL` | 64 | PR #400 |
-| `MAX_QUERIES` | 12 | PR #400 |
+| `V3_TARGET_PER_CELL` | 12 (cap) | 2026-04-18 recall-expansion (was 8 post-PR #400) |
+| `V3_TARGET_TOTAL` | 96 | derived (12 × 8 cells) |
+| `MAX_QUERIES` (keyword-builder) | 20 | 2026-04-18 recall-expansion (was 12 post-PR #400) |
+| `MAX_QUERIES` (llm-query-generator) | 8 | 2026-04-18 recall-expansion (was 3) |
 | `YOUTUBE_API_KEY_SEARCH` | set | primary key |
 | `YOUTUBE_API_KEY_SEARCH_2` | set | rotation slot 2 (PR #411) |
 | `YOUTUBE_API_KEY_SEARCH_3` | set | rotation slot 3 (PR #411) |
