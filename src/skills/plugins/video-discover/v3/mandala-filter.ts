@@ -17,6 +17,22 @@
  * Final score = 0.5 · centerScore + 0.5 · bestCellScore ∈ [0, 1].
  * The downstream consumer sorts per-cell score desc and takes top-N.
  * Empty cells stay empty — we never fill with garbage.
+ *
+ * 2026-04-18 amendments — "뇌" / focus-tag bug (Issue #414):
+ *   - `tokenize` had `t.length >= 2` which silently dropped 1-char Korean
+ *     meaningful tokens (뇌, 책, 돈, 법, 길, 꿈). Ex: "AI 시대의 뇌 활용법"
+ *     tokens became ["ai","시대의","활용법"] — missing the real subject.
+ *   - `focus_tags` from the wizard never reached the filter; "박문호 강연"
+ *     videos collected by the focus query were dropped at the center gate
+ *     because their titles contain neither "ai" nor "시대의" nor "활용법".
+ *   - Fixes: (1) 1-char Hangul allowed in tokenize; (2) focusTags are an
+ *     OR condition with the center gate (explicit user intent can bypass
+ *     center substring). Non-focus candidates still use the pre-existing
+ *     "any overlap > 0" rule, so the change is strictly permissive — it
+ *     only adds candidates to the pool, never removes them. Raising the
+ *     center threshold to drop "ai-only" noise is left to a future scoring
+ *     pass because the same threshold would also drop legitimate
+ *     single-token hits like "한식" in "요리 입문자 한식 마스터".
  */
 
 import { extractCoreKeyphrase, type KeywordLanguage } from '../v2/keyword-builder';
@@ -46,6 +62,13 @@ export interface MandalaFilterInput {
   centerGoal: string;
   subGoals: ReadonlyArray<string>; // length 8
   language: KeywordLanguage;
+  /**
+   * User-declared focus tags from the wizard (e.g. "박문호", "뇌과학").
+   * When present, any candidate whose title lexically contains at least one
+   * focus tag bypasses the center-substring gate. Optional so callers that
+   * don't have access to the user's tags (e.g. cache-matcher) keep working.
+   */
+  focusTags?: ReadonlyArray<string>;
 }
 
 /**
@@ -65,6 +88,10 @@ export interface MandalaFilterStats {
   droppedByJaccardBelowThreshold: number;
   centerTokens: string[];
   subGoalTokenCounts: number[];
+  /** How many candidates passed the gate via focusTag match (2026-04-18). */
+  passedByFocusTag?: number;
+  /** Effective focus tokens fed into the OR gate (for diagnostic). */
+  focusTokens?: string[];
 }
 
 export function applyMandalaFilter<T extends FilterCandidate>(
@@ -83,6 +110,13 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
 
   const subGoalTokens: Set<string>[] = input.subGoals.map((sg) => tokenize(sg, input.language));
 
+  // Build focus-tag tokens. Each tag is tokenised individually so a
+  // multi-word tag ("뇌과학 기초") contributes all its component tokens.
+  const focusTokens = new Set<string>();
+  for (const raw of input.focusTags ?? []) {
+    for (const t of tokenize(raw, input.language)) focusTokens.add(t);
+  }
+
   const byCell = new Map<number, ScoredAssignment<T>[]>();
   for (let i = 0; i < input.subGoals.length; i++) byCell.set(i, []);
 
@@ -93,12 +127,25 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     droppedByJaccardBelowThreshold: 0,
     centerTokens: [...centerTokens],
     subGoalTokenCounts: subGoalTokens.map((s) => s.size),
+    passedByFocusTag: 0,
+    focusTokens: [...focusTokens],
   };
 
   for (const c of candidates) {
     const titleTokens = tokenize(c.title, input.language);
     const centerScore = substringOverlap(centerTokens, titleTokens);
-    if (centerTokens.size > 0 && centerScore === 0) {
+    const focusMatched = focusTokens.size > 0 && substringOverlap(focusTokens, titleTokens) > 0;
+
+    // Center gate — OR of (focus-tag match) and (center overlap > 0).
+    // Focus-tag match bypasses the center gate entirely: if the user
+    // explicitly said "박문호" we trust that signal over lexical centerGoal
+    // overlap, so "박문호 교수의 뇌 과학 강연" passes even without "AI 시대의"
+    // in the title. Non-focus candidates keep the original "any overlap"
+    // rule so this change is purely additive on the permissive side — the
+    // pre-existing pool of retained candidates is unchanged.
+    if (focusMatched) {
+      stats.passedByFocusTag = (stats.passedByFocusTag ?? 0) + 1;
+    } else if (centerTokens.size > 0 && centerScore === 0) {
       stats.droppedByCenterGate++;
       continue;
     }
@@ -213,6 +260,12 @@ const EN_STOPWORDS = new Set([
   'it',
 ]);
 
+// Hangul Syllables block (U+AC00–U+D7A3) — Korean pre-composed syllables.
+// Used to allow 1-char meaningful tokens ("뇌", "책", "돈", "법", "길")
+// that the old `length >= 2` rule silently dropped. Non-Korean 1-char
+// tokens (a, e, i) remain filtered to preserve noise reduction.
+const HANGUL_CHAR_RE = /^[\uAC00-\uD7A3]$/;
+
 function tokenize(text: string, language: KeywordLanguage): Set<string> {
   if (!text) return new Set();
   const stops = language === 'ko' ? KO_STOPWORDS : EN_STOPWORDS;
@@ -220,6 +273,8 @@ function tokenize(text: string, language: KeywordLanguage): Set<string> {
     .toLowerCase()
     .replace(/&[a-z#0-9]+;/g, ' ')
     .replace(/[^\p{L}\p{N}\s]/gu, ' ');
-  const tokens = cleaned.split(/\s+/).filter((t) => t.length >= 2 && !stops.has(t));
+  const tokens = cleaned
+    .split(/\s+/)
+    .filter((t) => !stops.has(t) && (t.length >= 2 || HANGUL_CHAR_RE.test(t)));
   return new Set(tokens);
 }
