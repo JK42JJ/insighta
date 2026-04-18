@@ -124,16 +124,6 @@
 - recharts 도입 금지 (Insights) -> CSS + SVG
 - 컴포넌트 삭제 금지 -> `-legacy/`로 이동 + `@deprecated`
 
-### prisma db push Silent Fail 대응 (절대 규칙, LEVEL-3, 6회 재발 escalation)
-- **새 컬럼/테이블 추가 PR에는 반드시 raw SQL DDL을 함께 포함** (`prisma/migrations/<feature>/NNN_*.sql`).
-- **Supabase 환경에서 `prisma db push`는 auth 스키마 ownership 오류로 silent fail**.
-- 필수 체크리스트:
-  1. `prisma db push` 실행 결과 warning/error 없는지 확인.
-  2. Local `\d <table>`로 신규 컬럼 존재 검증.
-  3. Prod SSH → `psql "$DIRECT_URL" -c "\d <table>"`로 동일 검증.
-  4. 누락 시 raw SQL DDL 수동 적용 (local: `docker exec supabase-db-dev -e PGPASSWORD=... psql -U supabase_admin`, prod: `psql "$DIRECT_URL"`).
-  5. CI deploy.yml의 "Verify all tables exist" 통과 확인.
-
 ### ALTER 직후 Postgrest Schema Reload (절대 규칙, LEVEL-2)
 - ALTER TABLE 실행 직후 아래 중 하나를 반드시 수행. 누락 시 Supabase client가 신규 컬럼을 silent drop.
   - 로컬: `psql "$DATABASE_URL" -c "NOTIFY pgrst, 'reload schema'"` → `docker restart supabase-rest-dev`
