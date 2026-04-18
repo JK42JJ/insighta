@@ -43,8 +43,22 @@ export function getPoolLimit(
  * yet, `&` otherwise). Returns empty input unchanged.
  */
 export function buildConnectionUrl(rawUrl: string | undefined, poolLimit: number): string {
-  const url = rawUrl ?? '';
+  let url = rawUrl ?? '';
   if (!url) return url;
+
+  // Auto-add pgbouncer=true when URL points at Supabase transaction-mode
+  // pooler (port 6543). Prisma caches prepared statements by name per
+  // connection; pgbouncer's transaction mode rotates the underlying pg
+  // connection per txn, so statement names resolve to gone-connections
+  // and queries fail with `26000: prepared statement "sNN" does not
+  // exist`. Observed in prod 2026-04-18 after password rotation when
+  // the new secret omitted the flag. Safe to add at construction time
+  // regardless of whether the user already included it — regex below
+  // checks first.
+  if (/:6543\//.test(url) && !/[?&]pgbouncer=/.test(url)) {
+    const sep = url.includes('?') ? '&' : '?';
+    url = `${url}${sep}pgbouncer=true`;
+  }
 
   if (/[?&]connection_limit=\d+/.test(url)) {
     return url.replace(/([?&]connection_limit=)\d+/, `$1${poolLimit}`);
