@@ -166,6 +166,17 @@
 - 3단계+ 상대 경로 import 금지 -> `@/` alias 사용
 - `docs/CODING_CONVENTIONS.md` 준수. Phase 1 즉시 적용.
 
+### 외부 AI 리뷰 봇 재설치 금지 (절대 규칙)
+- **Kilo Code Review / Devin AI Integration** — 제거됨 (CP391). 재설치 금지.
+- 이유: (1) 실제 검토는 `/check` + `/verify` + CI 로 완결, (2) 외부 비용·credit 소진 이슈, (3) findings 가 외부 app 에만 존재하여 PR 맥락 단절.
+- 필요 시 대체: project 내 built-in review workflow 확장. 외부 SaaS 금지.
+
+### 추측·거짓·버그 은폐 금지 (절대 규칙, LEVEL-3)
+- **추측 금지** — 포트·경로·동작·API 시그니처 모르면 코드/설정을 읽어서 확인. "대충 맞을 것" 으로 답변/구현 금지.
+- **거짓말 금지** — 안 돌려본 테스트를 "pass" 라 쓰지 말고, 검증 안 한 단정문 금지. 모르면 "모른다" + 확인 방법 제시.
+- **버그 은폐 금지** — lint/tsc/test 경고를 **침묵시키는 조치** (eslint-disable, `_` prefix 일괄 적용, `any` 캐스팅, try/catch 삼키기, skip/xdescribe) 는 원인 진단 없이 금지. 각 경고 한 건씩 원인 파악 → (a) 실제 수정, (b) 의도 확인 후 정당성 기록, (c) Issue 파일링 중 하나. 일괄 silencing 은 잠재 버그를 영구 은폐.
+- 본 규칙 위반 시 해당 조치 즉시 revert + 재접근.
+
 ### 하드코딩 + 단편 조치 금지 (절대 규칙, LEVEL-3)
 - 업무 로직에 `process.env[...]` 직접 읽기, 파일별 `MS_PER_DAY` 재선언, 인라인 env 파서 금지 → `src/config/**` · `<plugin>/config.ts` (zod) · `src/utils/time-constants.ts` 사용.
 - 수정 전 `Grep` 으로 동일 패턴 전수 검색 → 발견한 중복은 **같은 PR 에서 일괄 정리**. 단일 파일 부분 조치 금지.
