@@ -1,5 +1,5 @@
-import { useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Ban } from 'lucide-react';
 import {
@@ -9,10 +9,42 @@ import {
   WizardStepContext,
 } from '@/features/mandala-wizard';
 import { useMandalaQuota } from '@/features/mandala';
+import type { PendingMandalaInputs } from '@/stores/mandalaStore';
+
+/**
+ * Shape pushed by `fireCreateMandala` on failure via
+ * `navigate('/mandalas/new', { state: { restoreInputs, errorMessage } })`.
+ */
+interface RestoreState {
+  restoreInputs?: PendingMandalaInputs;
+  errorMessage?: string;
+}
 
 export default function MandalaWizardPage() {
   const { t } = useTranslation();
   const wizard = useWizard();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Re-hydrate wizard inputs after a background create failed and bounced the
+  // user back here. We consume the navigation state exactly once and then
+  // strip it so a subsequent refresh does not re-trigger the restore.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    const restore = (location.state as RestoreState | null)?.restoreInputs;
+    if (!restore) return;
+    restoredRef.current = true;
+    // Goal text: users identify their own wizard by this field. Focus tags and
+    // target level are cheap to restore; the AI-generated preview is NOT
+    // restored because it was the output of a separate LLM call and the user
+    // will re-run it intentionally on retry.
+    wizard.setGoalInput(restore.centerGoal || restore.title);
+    if (restore.focusTags?.length) wizard.setFocusTags(restore.focusTags);
+    if (restore.targetLevel) wizard.setTargetLevel(restore.targetLevel);
+    // Clear the navigation state so page refresh doesn't repeat the restore.
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location, navigate, wizard]);
   const { data: quota, isLoading: quotaLoading } = useMandalaQuota();
   const quotaReached =
     !quotaLoading && quota?.limit !== null && quota?.limit !== undefined && quota.remaining === 0;
