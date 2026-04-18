@@ -2,12 +2,11 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import { queryKeys } from '@/shared/config/query-client';
 
 import { apiClient } from '@/shared/lib/api-client';
 import { useAuth } from '@/features/auth/model/useAuth';
-import { useMandalaStore, type PendingMandalaInputs } from '@/stores/mandalaStore';
+import { useMandalaStore } from '@/stores/mandalaStore';
 import { trackMandalaCreated } from '@/shared/lib/posthog';
 import {
   LINKED_SKILL_TOGGLES,
@@ -386,11 +385,11 @@ export function useWizard() {
       apiClient.updateMandala(newMandalaId, { isDefault: true }).catch(() => {
         // Non-blocking — Zustand selection still works for current session
       });
-      // Posthog tracking is now done by each caller at the moment a *real*
-      // mandalaId is known (createMutation.onSuccess for DB templates,
-      // fireCreateMandala success branch for AI custom). This function no
-      // longer calls trackMandalaCreated because the AI-custom path invokes
-      // it with a client-generated tempId, which would poison analytics.
+      trackMandalaCreated({
+        mandala_id: newMandalaId,
+        template_id: state.selectedTemplate?.id,
+        language: detectGoalLanguage(state.goalInput),
+      });
 
       // 3. Fire-and-forget cache invalidation. Do NOT await —
       //    - await blocks navigate for however long the refetch takes
@@ -428,11 +427,6 @@ export function useWizard() {
         body: JSON.stringify(params),
       }),
     onSuccess: (data) => {
-      trackMandalaCreated({
-        mandala_id: data.mandalaId,
-        template_id: state.selectedTemplate?.id,
-        language: detectGoalLanguage(state.goalInput),
-      });
       goToUnifiedDashboard(data.mandalaId);
     },
   });
@@ -450,167 +444,45 @@ export function useWizard() {
     },
   });
 
-  // Optimistic-first wizard submission (CP389 — Task #3 implementation).
-  //
-  // Supersedes the old `createWithDataMutation` useMutation. The old flow awaited
-  // the server (15–25s on prod) before navigating, which users reported as
-  // "click does nothing then suddenly jumps to dashboard" (Issue #413,
-  // 0417010 report). This implementation:
-  //
-  //   1. Generates a client-side tempId + optimistic list entry + navigate('/')
-  //      before the network call — perceived latency < 100ms.
-  //   2. Runs the actual POST as a bare promise (NOT useMutation), so the
-  //      continuation is mount-independent — avoids the CP386 PR #404 pitfall
-  //      where `useMutation.onSuccess` silently dropped after the wizard
-  //      component unmounted.
-  //   3. On success: swaps tempId → realId in the TanStack Query cache + Zustand
-  //      store. If the user is still focused on the tempId view, the swap is
-  //      silent; if they navigated elsewhere, a 7s toast with a "보기" action
-  //      links back to the new mandala.
-  //   4. On failure: rolls back the optimistic entry, restores the wizard
-  //      inputs via `navigate('/mandalas/new', { state: { restoreInputs } })`,
-  //      and surfaces a toast. The user never loses their wizard state.
-  //
-  // See `docs/design/wizard-skeleton-bg-fill.md` for the broader server-side
-  // fix (endpoint split); this hook is the UX-layer interim.
-  const setPendingMandala = useMandalaStore((s) => s.setPendingMandala);
-  const clearPendingMandala = useMandalaStore((s) => s.clearPendingMandala);
-  const pendingMandala = useMandalaStore((s) => s.pendingMandala);
-
-  type FireCreateMandalaParams = PendingMandalaInputs;
-
-  const fireCreateMandala = useCallback(
-    async (params: FireCreateMandalaParams) => {
-      // Duplicate-click guard. The wizard button is also `disabled` when
-      // pendingMandala != null, but this early-return guarantees safety even
-      // if a child component races around that prop.
-      if (useMandalaStore.getState().pendingMandala != null) return;
-
-      const tempId =
-        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID()
-          : `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-      // 1. Optimistic: cache inject + store select + navigate ("instant nav")
-      setPendingMandala({
-        tempId,
-        startedAt: Date.now(),
-        originalInputs: params,
-      });
+  // Create with full data mutation (for search results + AI generated)
+  const createWithDataMutation = useMutation({
+    mutationFn: async (params: {
+      title: string;
+      centerGoal: string;
+      subjects: string[];
+      subDetails?: Record<string, string[]>;
+      skills?: Record<string, boolean>;
+      centerLabel?: string;
+      subLabels?: string[];
+      focusTags?: string[];
+      targetLevel?: string;
+    }) => {
+      // Observability (2026-04-17): per-stage FE timing for dev/prod diagnostic.
+      // No behavior change — measurement-only.
       const tSubmit = performance.now();
-      void goToUnifiedDashboard(tempId, params.title);
-
-      // 2. Background server call — NOT inside useMutation so component unmount
-      //    does not kill the continuation (CP386 PR #404 regression class).
-      try {
-        const result = await apiClient.createMandalaWithData(params);
-        const tResponse = performance.now();
-        console.info('[wizard-timing]', {
-          event: 'createMandalaWithData',
-          submit_to_response_ms: Math.round(tResponse - tSubmit),
-          tempId,
-          mandalaId: result.mandalaId,
-          title: params.title,
-        });
-
-        // 3a. Swap tempId → real id in the mandala list cache.
-        queryClient.setQueryData(
-          queryKeys.mandala.list(),
-          (
-            old:
-              | { mandalas: Array<{ id: string } & Record<string, unknown>>; total: number }
-              | undefined
-          ) => {
-            if (!old) return old;
-            return {
-              ...old,
-              mandalas: old.mandalas.map((m) =>
-                m.id === tempId ? { ...m, id: result.mandalaId } : m
-              ),
-            };
-          }
-        );
-
-        // 3b. Reconcile store. If the user is still focused on the tempId view,
-        //     swap in-place (silent); if they navigated elsewhere since submit,
-        //     surface a toast rather than yank their view.
-        const currentSelected = useMandalaStore.getState().selectedMandalaId;
-        const silentSwap = currentSelected === tempId;
-        useMandalaStore.setState({
-          selectedMandalaId: silentSwap ? result.mandalaId : currentSelected,
-          justCreatedMandalaId: result.mandalaId,
-          pendingMandala: null,
-        });
-
-        if (!silentSwap) {
-          toast.success(`'${params.title}' 만다라가 완성되었습니다`, {
-            duration: 7_000,
-            action: {
-              label: '보기',
-              onClick: () => {
-                useMandalaStore.getState().selectMandala(result.mandalaId);
-              },
-            },
-          });
-        }
-
-        // 3c. Fire-and-forget background updates (same as the old onSuccess).
-        apiClient.updateMandala(result.mandalaId, { isDefault: true }).catch(() => {
-          // Non-blocking — Zustand selection still works for current session.
-        });
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.mandala.list(),
-          refetchType: 'all',
-        });
-        queryClient.invalidateQueries({ queryKey: queryKeys.mandala.quota() });
-        trackMandalaCreated({
-          mandala_id: result.mandalaId,
-          template_id: state.selectedTemplate?.id,
-          language: detectGoalLanguage(state.goalInput),
-        });
-      } catch (err) {
-        // 4. Rollback: remove optimistic entry, clear store selection if it
-        //    pointed at tempId, restore wizard inputs via navigation state.
-        queryClient.setQueryData(
-          queryKeys.mandala.list(),
-          (old: { mandalas: Array<{ id: string }>; total: number } | undefined) => {
-            if (!old) return old;
-            const filtered = old.mandalas.filter((m) => m.id !== tempId);
-            return {
-              ...old,
-              total: Math.max(0, old.total - (old.mandalas.length - filtered.length)),
-              mandalas: filtered,
-            };
-          }
-        );
-        const s = useMandalaStore.getState();
-        useMandalaStore.setState({
-          selectedMandalaId: s.selectedMandalaId === tempId ? null : s.selectedMandalaId,
-          justCreatedMandalaId: s.justCreatedMandalaId === tempId ? null : s.justCreatedMandalaId,
-          pendingMandala: null,
-        });
-
-        const message = err instanceof Error && err.message ? err.message : '만다라 생성 실패';
-        toast.error(`${message} — 입력값은 유지됩니다`);
-        // Return the user to the wizard with their inputs intact.
-        navigate('/mandalas/new', {
-          replace: true,
-          state: { restoreInputs: params, errorMessage: message },
-        });
-      } finally {
-        clearPendingMandala();
-      }
+      const result = await apiClient.createMandalaWithData(params);
+      const tResponse = performance.now();
+      // eslint-disable-next-line no-console
+      console.info('[wizard-timing]', {
+        event: 'createMandalaWithData',
+        submit_to_response_ms: Math.round(tResponse - tSubmit),
+        mandalaId: result.mandalaId,
+        title: params.title,
+      });
+      return { ...result, _tSubmit: tSubmit, _tResponse: tResponse };
     },
-    [
-      navigate,
-      queryClient,
-      goToUnifiedDashboard,
-      setPendingMandala,
-      clearPendingMandala,
-      state.selectedTemplate,
-      state.goalInput,
-    ]
-  );
+    onSuccess: (data) => {
+      const tNavigateStart = performance.now();
+      // eslint-disable-next-line no-console
+      console.info('[wizard-timing]', {
+        event: 'navigate_start',
+        response_to_navigate_ms: Math.round(tNavigateStart - data._tResponse),
+        total_submit_to_navigate_ms: Math.round(tNavigateStart - data._tSubmit),
+        mandalaId: data.mandalaId,
+      });
+      goToUnifiedDashboard(data.mandalaId);
+    },
+  });
 
   // Stable ref for createMutation.mutate (avoid infinite loops)
   const createMutateRef = useRef(createMutation.mutate);
@@ -815,7 +687,7 @@ export function useWizard() {
         for (const [k, v] of Object.entries(template.subDetails ?? {})) {
           subDetailsKeyed[String(k)] = v;
         }
-        void fireCreateMandala({
+        createWithDataMutation.mutate({
           title: template.title,
           centerGoal: template.centerGoal,
           subjects: template.subjects,
@@ -836,7 +708,13 @@ export function useWizard() {
         });
       }
     },
-    [state.selectedTemplate, state.skills, state.focusTags, state.targetLevel, fireCreateMandala]
+    [
+      state.selectedTemplate,
+      state.skills,
+      state.focusTags,
+      state.targetLevel,
+      createWithDataMutation,
+    ]
   );
 
   /**
@@ -888,8 +766,8 @@ export function useWizard() {
     templates: templates ?? [],
     isLoadingTemplates,
     isLoadingDetail,
-    isCreating: createMutation.isPending || pendingMandala != null,
-    createError: createMutation.error ?? null,
+    isCreating: createMutation.isPending || createWithDataMutation.isPending,
+    createError: createMutation.error ?? createWithDataMutation.error,
     selectDomain,
     selectTemplate,
     setSkill,

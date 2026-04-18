@@ -547,11 +547,6 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     centerGoal: input.state.centerGoal,
     subGoals: input.state.subGoals,
     language: input.state.language,
-    // 2026-04-18 bug #414 fix — propagate user's focusTags so "박문호 강연"
-    // videos bypass the center-substring gate. Without this, wizard focus
-    // tags were silently dropped at the filter even though the search
-    // query layer correctly used them to fetch the pool.
-    focusTags: input.state.focusTags,
   });
   debug.timing.mandalaFilterMs = Date.now() - tMandalaFilterStart;
 

@@ -140,36 +140,8 @@ function AuthenticatedApp() {
     return null;
   }, [selectedMandalaId, storeSelectedMandalaId, mandalaListData]);
 
-  // Pending mandala (optimistic UI during background wizard submit — CP389).
-  // When the user just clicked "create" in the wizard we navigate here
-  // immediately with a client-generated tempId. The server row does not
-  // exist yet, so useMandalaQuery would 404. We short-circuit by passing
-  // null to the query (so it no-ops to EMPTY_ROOT_LEVELS) and synthesise
-  // the depth-0 level from the pendingMandala inputs the wizard captured.
-  const pendingMandala = useMandalaStore((s) => s.pendingMandala);
-  const isViewingPending = !!pendingMandala && effectiveMandalaId === pendingMandala.tempId;
-
   // 3. Mandala data from DB (by selected mandala ID)
-  const { mandalaLevels: queryMandalaLevels } = useMandalaQuery(
-    isViewingPending ? null : effectiveMandalaId
-  );
-
-  const mandalaLevels = useMemo(() => {
-    if (!isViewingPending || !pendingMandala) return queryMandalaLevels;
-    const inputs = pendingMandala.originalInputs;
-    return {
-      root: {
-        id: 'root',
-        centerGoal: inputs.centerGoal || inputs.title,
-        centerLabel: inputs.centerLabel ?? inputs.title,
-        subjects: inputs.subjects,
-        subjectLabels: inputs.subLabels,
-        parentId: null,
-        parentCellIndex: null,
-        cards: [],
-      },
-    } as typeof queryMandalaLevels;
-  }, [isViewingPending, pendingMandala, queryMandalaLevels]);
+  const { mandalaLevels: queryMandalaLevels } = useMandalaQuery(effectiveMandalaId);
 
   // 4. Refs to break circular dependency: navigation <-> card orchestrator
   const moveCardsRef = useRef<(...args: unknown[]) => void>(() => {});
@@ -177,7 +149,7 @@ function AuthenticatedApp() {
 
   // 5. Mandala navigation (wired to card orchestrator via refs)
   const navigation = useMandalaNavigation({
-    initialLevels: mandalaLevels,
+    initialLevels: queryMandalaLevels,
     mandalaId: effectiveMandalaId,
     onMoveCardsForSubLevel: (from, to, idx) => moveCardsRef.current(from, to, idx),
     onSwapCardsForReorder: (swapped, levelId) => swapCardsRef.current(swapped, levelId),
