@@ -1316,8 +1316,10 @@ describe('MandalaManager', () => {
       expect(mockTx.user_mandalas.delete).toHaveBeenCalledWith({
         where: { id: mockMandalaId, user_id: mockUserId },
       });
-      // CP362 fix: transaction must use the extended timeout budget
-      expect(capturedOptions).toEqual({ maxWait: 5_000, timeout: 30_000 });
+      // 2026-04-18: TX_TIMEOUT_MS raised to 60_000ms (was 30_000 from
+      // CP358) after prod P2028 incidents. See manager.ts TX_TIMEOUT_MS
+      // history block for the 23s-tx-average observation that forced this.
+      expect(capturedOptions).toEqual({ maxWait: 5_000, timeout: 60_000 });
     });
 
     test('should throw Mandala not found for a non-existent mandala (CP362 #385)', async () => {

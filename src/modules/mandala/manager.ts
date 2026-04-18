@@ -11,6 +11,27 @@ import {
   type ExploreSort,
 } from '@/config/explore';
 
+/**
+ * Interactive transaction budget for mandala write paths.
+ *
+ * History:
+ *   - CP358 (2026-04-16): 5_000 → 30_000ms. 30s chosen vs observed
+ *     cold-connection worst case 30,731ms.
+ *   - 2026-04-18 incident A: prod P2028 at 32,323ms. Not deployed
+ *     (stashed as `cp389.1-unsent`).
+ *   - 2026-04-18 incident B (req-1f): prod P2028 at 31,339ms, single
+ *     retry succeeded with `create_mandala` stage = 23,902ms. The 30s
+ *     budget is a rolling dice — transactions routinely consume 22-25s
+ *     and occasionally exceed. Raising to 60_000ms to align with the FE
+ *     client timeout. **This is a stopgap.** The real issue is that the
+ *     transaction itself averages 23s for ~3 RTTs, which is 50-100×
+ *     above the expected ~300ms. Instrumentation added below (per-query
+ *     timing in `createMandala`) is the next step to identify which
+ *     query stalls. If future deploys hit the 60s ceiling, escalate to
+ *     endpoint split (`docs/design/wizard-skeleton-bg-fill.md`).
+ */
+export const TX_TIMEOUT_MS = 60_000;
+
 interface MandalaLevelData {
   levelKey: string;
   centerGoal: string;
@@ -332,10 +353,21 @@ export class MandalaManager {
     title: string,
     levels: MandalaLevelData[]
   ): Promise<MandalaWithLevels> {
+    // Per-step wall-clock timing so P2028 incidents have a data-driven
+    // root cause trail. Emitted via console.info at function exit so the
+    // pino/Fastify logger that writes to docker stdout captures the row.
+    // Kept outside the winston logger on purpose — winston writes to file
+    // in this codebase and docker logs were blank when we needed them.
+    const tFnStart = Date.now();
+    const timings: Record<string, number> = {};
+
     // Step 0: Duplicate title check (CP362 #386)
+    const tDup = Date.now();
     await this.checkDuplicateTitle(userId, title);
+    timings['dup_check'] = Date.now() - tDup;
 
     // Step 1: Read queries outside transaction (parallel)
+    const tParallel = Date.now();
     const [subscription, adminCheck, count, maxPositionResult] = await Promise.all([
       this.prisma.user_subscriptions.findUnique({
         where: { user_id: userId },
@@ -352,6 +384,7 @@ export class MandalaManager {
         _max: { position: true },
       }),
     ]);
+    timings['parallel_reads'] = Date.now() - tParallel;
 
     // Step 2: Quota validation (in-memory)
     const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
@@ -373,50 +406,72 @@ export class MandalaManager {
     const isDefault = count === 0;
     const position = (maxPositionResult._max.position ?? -1) + 1;
 
-    // Step 3: Transaction for writes only.
-    //
-    // CP358: createLevels writes 1 root + 8 child + ~64 actions = ~73 INSERTs
-    // through pgbouncer in us-west-2. Default Prisma transaction timeout is
-    // 5000ms which is insufficient for prod RTT (~80ms × 73 = 5.8s minimum,
-    // up to 18s on cold connections). Bumping `maxWait` + `timeout` to 30s
-    // covers worst-case wall time. This is the root cause of CP358 prod
-    // "Failed to create mandala" P2028 errors. CLAUDE.md hard rule candidate.
-    return await this.prisma.$transaction(
-      async (tx) => {
-        const mandala = await tx.user_mandalas.create({
-          data: {
-            user_id: userId,
-            title,
-            is_default: isDefault,
-            position,
-          },
-        });
-
-        await this.createLevels(tx as any, mandala.id, levels);
-
-        logger.info(`Mandala created: userId=${userId}, mandalaId=${mandala.id}, tier=${tier}`);
-
-        const result = await tx.user_mandalas.findUnique({
-          where: { id: mandala.id },
-          include: {
-            levels: {
-              orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+    // Step 3: Transaction for writes only. Budget lives in TX_TIMEOUT_MS
+    // at the top of this file — see history comment there.
+    try {
+      const tTx = Date.now();
+      const result = await this.prisma.$transaction(
+        async (tx) => {
+          const tMandalaCreate = Date.now();
+          const mandala = await tx.user_mandalas.create({
+            data: {
+              user_id: userId,
+              title,
+              is_default: isDefault,
+              position,
             },
-          },
-        });
+          });
+          timings['tx_mandala_create'] = Date.now() - tMandalaCreate;
 
-        if (!result) {
-          throw new Error('Failed to create mandala');
+          const tLevels = Date.now();
+          await this.createLevels(tx as any, mandala.id, levels);
+          timings['tx_levels_createMany'] = Date.now() - tLevels;
+
+          logger.info(`Mandala created: userId=${userId}, mandalaId=${mandala.id}, tier=${tier}`);
+
+          const tFind = Date.now();
+          const result = await tx.user_mandalas.findUnique({
+            where: { id: mandala.id },
+            include: {
+              levels: {
+                orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+              },
+            },
+          });
+          timings['tx_find_unique'] = Date.now() - tFind;
+
+          if (!result) {
+            throw new Error('Failed to create mandala');
+          }
+
+          return this.mapMandala(result);
+        },
+        {
+          maxWait: 5_000,
+          timeout: TX_TIMEOUT_MS,
         }
-
-        return this.mapMandala(result);
-      },
-      {
-        // 30s budget covers prod RTT × ~73 INSERTs with safety margin.
-        maxWait: 5_000,
-        timeout: 30_000,
-      }
-    );
+      );
+      timings['tx_total'] = Date.now() - tTx;
+      timings['total'] = Date.now() - tFnStart;
+      console.info(
+        '[mandala-create-timing]',
+        JSON.stringify({ userId, title, outcome: 'ok', ...timings })
+      );
+      return result;
+    } catch (err) {
+      timings['total'] = Date.now() - tFnStart;
+      console.info(
+        '[mandala-create-timing]',
+        JSON.stringify({
+          userId,
+          title,
+          outcome: 'error',
+          error: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+          ...timings,
+        })
+      );
+      throw err;
+    }
   }
 
   /**
@@ -475,7 +530,7 @@ export class MandalaManager {
       },
       {
         maxWait: 5_000,
-        timeout: 30_000,
+        timeout: TX_TIMEOUT_MS,
       }
     );
   }
@@ -526,7 +581,7 @@ export class MandalaManager {
 
         return this.mapMandala(result);
       },
-      { maxWait: 5_000, timeout: 30_000 }
+      { maxWait: 5_000, timeout: TX_TIMEOUT_MS }
     );
   }
 
@@ -604,7 +659,7 @@ export class MandalaManager {
           where: { id: mandalaId, user_id: userId },
         });
       },
-      { maxWait: 5_000, timeout: 30_000 }
+      { maxWait: 5_000, timeout: TX_TIMEOUT_MS }
     );
 
     logger.info(`Mandala deleted: userId=${userId}, mandalaId=${mandalaId}`);
@@ -732,7 +787,7 @@ export class MandalaManager {
       },
       {
         maxWait: 5_000,
-        timeout: 30_000,
+        timeout: TX_TIMEOUT_MS,
       }
     );
   }

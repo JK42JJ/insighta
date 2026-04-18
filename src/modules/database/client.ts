@@ -16,6 +16,25 @@ import { buildConnectionUrl, getPoolLimit } from './connection-url';
 let prismaInstance: PrismaClient | null = null;
 
 /**
+ * Slow-query logging threshold for prod diagnostics (2026-04-18).
+ *
+ * When > 0, Prisma emits a `query` event per SQL and the listener below
+ * logs only the rows whose `duration` meets or exceeds this threshold
+ * (ms). Set to 0 to fully disable the listener + the underlying event
+ * emission (zero overhead path). Default 1000 so the next P2028 incident
+ * leaves a SQL-level trail in `docker logs`. Override at runtime via the
+ * `PRISMA_SLOW_QUERY_LOG_MS` env var — no redeploy needed to disable.
+ */
+const DEFAULT_SLOW_QUERY_MS = 1000;
+
+function getSlowQueryThresholdMs(): number {
+  const raw = process.env['PRISMA_SLOW_QUERY_LOG_MS'];
+  if (raw === undefined) return DEFAULT_SLOW_QUERY_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_SLOW_QUERY_MS;
+}
+
+/**
  * Get Prisma client instance
  */
 export function getPrismaClient(): PrismaClient {
@@ -26,6 +45,15 @@ export function getPrismaClient(): PrismaClient {
     // rationale + the P2024 / wizard-10s-hang prod incident this addresses.
     const poolLimit = getPoolLimit();
     const url = buildConnectionUrl(process.env['DATABASE_URL'], poolLimit);
+    const slowQueryMs = getSlowQueryThresholdMs();
+
+    const prodLog: Array<{ emit: 'event'; level: 'query' | 'error' | 'warn' }> = [
+      { emit: 'event', level: 'error' },
+      { emit: 'event', level: 'warn' },
+    ];
+    if (slowQueryMs > 0) {
+      prodLog.push({ emit: 'event', level: 'query' });
+    }
 
     prismaInstance = new PrismaClient({
       datasources: { db: { url } },
@@ -35,15 +63,24 @@ export function getPrismaClient(): PrismaClient {
             { emit: 'event', level: 'error' },
             { emit: 'event', level: 'warn' },
           ]
-        : [
-            { emit: 'event', level: 'error' },
-            { emit: 'event', level: 'warn' },
-          ],
+        : prodLog,
     });
 
     logger.info('Prisma client initialized', { pool_limit: poolLimit });
+    // Mirror the init line to docker stdout via pino-compatible JSON so the
+    // container logs aggregator picks it up (winston in this codebase writes
+    // to file only — docker logs was empty when we needed to verify
+    // connection_limit and pool settings on 2026-04-18).
+    console.info(
+      '[prisma-init]',
+      JSON.stringify({
+        pool_limit: poolLimit,
+        slow_query_ms: slowQueryMs,
+        url_scheme: url.split('?')[0],
+      })
+    );
 
-    // Log queries in development
+    // Log queries in development (existing winston path)
     if (config.app.isDevelopment) {
       prismaInstance.$on('query' as never, (e: any) => {
         logger.debug('Database query', {
@@ -51,6 +88,23 @@ export function getPrismaClient(): PrismaClient {
           params: e.params,
           duration: e.duration,
         });
+      });
+    }
+
+    // Prod slow-query listener. Only registered when the threshold is > 0
+    // (guarded above via prodLog so event emission is also skipped).
+    if (!config.app.isDevelopment && slowQueryMs > 0) {
+      prismaInstance.$on('query' as never, (e: any) => {
+        const durationMs = typeof e?.duration === 'number' ? e.duration : 0;
+        if (durationMs < slowQueryMs) return;
+        console.info(
+          '[prisma-slow-query]',
+          JSON.stringify({
+            duration_ms: durationMs,
+            target: typeof e?.target === 'string' ? e.target : undefined,
+            query: String(e?.query ?? '').slice(0, 250),
+          })
+        );
       });
     }
 
