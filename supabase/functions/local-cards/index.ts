@@ -255,29 +255,57 @@ Deno.serve(async (req) => {
         const cards = cardsResult.data || [];
 
         // Enrich YouTube cards with video_summaries (LEFT JOIN equivalent)
-        const youtubeUrls = cards
-          .filter((c: Record<string, unknown>) => c.link_type === 'youtube' || c.link_type === 'youtube-shorts')
-          .map((c: Record<string, unknown>) => c.url as string);
+        const youtubeCards = cards.filter(
+          (c: Record<string, unknown>) => c.link_type === 'youtube' || c.link_type === 'youtube-shorts'
+        );
+        const youtubeUrls = youtubeCards.map((c: Record<string, unknown>) => c.url as string);
+        const youtubeVideoIds = youtubeCards
+          .map((c: Record<string, unknown>) => c.video_id as string | null)
+          .filter((id): id is string => !!id);
 
         let summaryMap = new Map<string, Record<string, unknown>>();
-        if (youtubeUrls.length > 0) {
-          const { data: summaries } = await supabase
-            .from('video_summaries')
-            .select('url, summary_en, summary_ko, tags, model')
-            .in('url', youtubeUrls);
+        let videoMetaMap = new Map<string, { published_at: string | null; duration_seconds: number | null }>();
+        if (youtubeUrls.length > 0 || youtubeVideoIds.length > 0) {
+          const [summariesRes, videosRes] = await Promise.all([
+            youtubeUrls.length > 0
+              ? supabase
+                  .from('video_summaries')
+                  .select('url, summary_en, summary_ko, tags, model')
+                  .in('url', youtubeUrls)
+              : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+            youtubeVideoIds.length > 0
+              ? supabase
+                  .from('youtube_videos')
+                  .select('youtube_video_id, published_at, duration_seconds')
+                  .in('youtube_video_id', youtubeVideoIds)
+              : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+          ]);
 
-          if (summaries) {
-            for (const s of summaries) {
-              summaryMap.set(s.url, s);
-            }
+          const summaries = (summariesRes as { data?: Record<string, unknown>[] }).data ?? [];
+          for (const s of summaries) summaryMap.set(s.url as string, s);
+
+          const videos = (videosRes as { data?: Record<string, unknown>[] }).data ?? [];
+          for (const v of videos) {
+            videoMetaMap.set(v.youtube_video_id as string, {
+              published_at: (v.published_at as string | null) ?? null,
+              duration_seconds: (v.duration_seconds as number | null) ?? null,
+            });
           }
         }
 
         const enrichedCards = cards.map((card: Record<string, unknown>) => {
           const summary = summaryMap.get(card.url as string);
-          return summary
-            ? { ...card, video_summary: summary }
-            : card;
+          const videoMeta = card.video_id ? videoMetaMap.get(card.video_id as string) : undefined;
+          return {
+            ...card,
+            ...(summary ? { video_summary: summary } : {}),
+            ...(videoMeta
+              ? {
+                  published_at: videoMeta.published_at,
+                  duration_seconds: videoMeta.duration_seconds,
+                }
+              : {}),
+          };
         });
 
         return new Response(

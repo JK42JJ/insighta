@@ -43,6 +43,9 @@ export interface LocalCard {
   created_at: string;
   updated_at: string;
   video_summary?: VideoSummary;
+  /** YouTube upload date, joined from youtube_videos by video_id. Null for non-YouTube cards or YouTube cards not yet enriched. */
+  published_at?: string | null;
+  duration_seconds?: number | null;
 }
 
 /**
@@ -100,6 +103,13 @@ export interface LimitExceededError {
  * Helper function to convert LocalCard to InsightCard format
  */
 export function localCardToInsightCard(card: LocalCard): InsightCard {
+  const publishedAt = card.published_at ? new Date(card.published_at) : null;
+  const hasMetadataTitle = !!card.metadata_title;
+  const hasVideoExtras = card.published_at != null || card.duration_seconds != null;
+  const metadataExtras: Record<string, unknown> = {};
+  if (card.published_at) metadataExtras['published_at'] = card.published_at;
+  if (card.duration_seconds != null) metadataExtras['duration_seconds'] = card.duration_seconds;
+
   return {
     id: card.id,
     videoUrl: card.url,
@@ -108,21 +118,24 @@ export function localCardToInsightCard(card: LocalCard): InsightCard {
     userNote: card.user_note || '',
     createdAt: new Date(card.created_at),
     updatedAt: new Date(card.updated_at),
+    publishedAt,
     cellIndex: card.cell_index,
     levelId: card.level_id,
     mandalaId: card.mandala_id,
     sortOrder: card.sort_order ?? undefined,
     linkType: card.link_type,
-    metadata: card.metadata_title
-      ? {
-          title: card.metadata_title,
-          description: card.metadata_description || '',
-          image: card.metadata_image || '',
-          siteName: '',
-          author: '',
-          url: card.url,
-        }
-      : undefined,
+    metadata:
+      hasMetadataTitle || hasVideoExtras
+        ? ({
+            title: card.metadata_title || card.title || '',
+            description: card.metadata_description || '',
+            image: card.metadata_image || '',
+            siteName: '',
+            author: '',
+            url: card.url,
+            ...metadataExtras,
+          } as InsightCard['metadata'])
+        : undefined,
     videoSummary: card.video_summary,
     sourceTable: 'user_local_cards',
   };
