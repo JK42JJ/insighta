@@ -28,6 +28,11 @@ import type {
   ExecuteResult,
 } from '@/skills/_shared/types';
 
+import {
+  applySemanticRerank,
+  getSemanticRank,
+  type SemanticRerankTrace,
+} from '@/modules/video-dictionary';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { manifest, V3_TARGET_PER_CELL, V3_NUM_CELLS, V3_TARGET_TOTAL } from './manifest';
 import { matchFromVideoPool, groupByCell } from './cache-matcher';
@@ -80,7 +85,7 @@ interface HydratedState {
   targetLevel: string;
 }
 
-interface AssembledSlot {
+export interface AssembledSlot {
   videoId: string;
   title: string;
   description: string | null;
@@ -251,10 +256,14 @@ export const executor: SkillExecutor = {
       };
     }
 
-    // ── Upsert recommendation_cache ────────────────────────────────────
-    const upserts = await upsertSlots(ctx.userId, mandalaId, slots, state.subGoals);
+    // ── Semantic rerank (D36, synthesis spec §4.2 — off by default) ────
+    const rerankedSlots = await maybeApplySemanticRerank(slots, mandalaId);
+    const semanticTrace: SemanticRerankTrace | null = rerankedSlots.trace;
 
-    const finalTotal = slots.length;
+    // ── Upsert recommendation_cache ────────────────────────────────────
+    const upserts = await upsertSlots(ctx.userId, mandalaId, rerankedSlots.slots, state.subGoals);
+
+    const finalTotal = rerankedSlots.slots.length;
     const wallMs = Date.now() - t0;
 
     return {
@@ -264,10 +273,11 @@ export const executor: SkillExecutor = {
         tier2_matches: tier2Count,
         tier2_queries: tier2QueriesUsed,
         total_recommendations: finalTotal,
-        cells_filled: new Set(slots.map((s) => s.cellIndex)).size,
+        cells_filled: new Set(rerankedSlots.slots.map((s) => s.cellIndex)).size,
         rows_upserted: upserts,
         target_met: finalTotal >= V3_TARGET_TOTAL,
         ...(tier2Debug ? { debug: tier2Debug } : {}),
+        ...(semanticTrace ? { semantic_rerank: semanticTrace } : {}),
       },
       metrics: {
         duration_ms: wallMs,
@@ -276,6 +286,47 @@ export const executor: SkillExecutor = {
     };
   },
 };
+
+// ============================================================================
+// Semantic rerank — D36 per synthesis spec §4.2 (off unless V3_ENABLE_SEMANTIC_RERANK=true)
+// ============================================================================
+
+interface MaybeRerankOutput {
+  slots: AssembledSlot[];
+  trace: SemanticRerankTrace | null;
+}
+
+/**
+ * If the feature flag is on, blend pre-filter `score` with pgvector cosine
+ * against `video_chunk_embeddings`. Cell-targeted per §4.2. Missing embeddings
+ * pass through unchanged — no penalty.
+ */
+export async function maybeApplySemanticRerank(
+  slots: AssembledSlot[],
+  mandalaId: string
+): Promise<MaybeRerankOutput> {
+  if (!v3Config.enableSemanticRerank || slots.length === 0) {
+    return { slots, trace: null };
+  }
+
+  const cellAssignments = new Map(slots.map((s) => [s.videoId, s.cellIndex]));
+  const ranks = await getSemanticRank({
+    mandalaId,
+    videoIds: slots.map((s) => s.videoId),
+    cellAssignments,
+  });
+
+  const { slots: reranked, trace } = applySemanticRerank(slots, ranks, {
+    alpha: v3Config.semanticAlpha,
+    beta: v3Config.semanticBeta,
+  });
+
+  log.info(
+    `semantic rerank: mandala=${mandalaId} in=${trace.candidatesIn} scored=${trace.candidatesScored} avgCos=${trace.avgCosine.toFixed(3)}`
+  );
+
+  return { slots: reranked, trace };
+}
 
 // ============================================================================
 // Tier 2: deficit-cell realtime fill

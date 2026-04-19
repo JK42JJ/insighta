@@ -1,13 +1,18 @@
+import { DEFAULT_SEMANTIC_ALPHA, DEFAULT_SEMANTIC_BETA } from '@/modules/video-dictionary';
+
 import { DEFAULT_PUBLISHED_AFTER_DAYS, loadV3Config } from '../config';
 import { DEFAULT_RECENCY_HALF_LIFE_MONTHS, DEFAULT_RECENCY_WEIGHT } from '../mandala-filter';
 
 describe('loadV3Config', () => {
-  test('empty env → activated defaults (Tier 1 off, recency on, 3yr cutoff)', () => {
+  test('empty env → activated defaults (Tier 1 off, recency on, 3yr cutoff, semantic off)', () => {
     expect(loadV3Config({})).toEqual({
       enableTier1Cache: false,
       recencyWeight: DEFAULT_RECENCY_WEIGHT,
       recencyHalfLifeMonths: DEFAULT_RECENCY_HALF_LIFE_MONTHS,
       publishedAfterDays: DEFAULT_PUBLISHED_AFTER_DAYS,
+      enableSemanticRerank: false,
+      semanticAlpha: DEFAULT_SEMANTIC_ALPHA,
+      semanticBeta: DEFAULT_SEMANTIC_BETA,
     });
   });
 
@@ -66,6 +71,29 @@ describe('loadV3Config', () => {
       recencyWeight: 0.15,
       recencyHalfLifeMonths: 18,
       publishedAfterDays: 1095,
+      enableSemanticRerank: false,
+      semanticAlpha: DEFAULT_SEMANTIC_ALPHA,
+      semanticBeta: DEFAULT_SEMANTIC_BETA,
     });
+  });
+
+  test('V3_ENABLE_SEMANTIC_RERANK parses boolean flag', () => {
+    expect(loadV3Config({ V3_ENABLE_SEMANTIC_RERANK: 'true' }).enableSemanticRerank).toBe(true);
+    expect(loadV3Config({ V3_ENABLE_SEMANTIC_RERANK: '  TRUE  ' }).enableSemanticRerank).toBe(true);
+    expect(loadV3Config({ V3_ENABLE_SEMANTIC_RERANK: 'false' }).enableSemanticRerank).toBe(false);
+    expect(loadV3Config({ V3_ENABLE_SEMANTIC_RERANK: '' }).enableSemanticRerank).toBe(false);
+  });
+
+  test('V3_SEMANTIC_ALPHA / _BETA parse valid [0,1] values', () => {
+    expect(loadV3Config({ V3_SEMANTIC_ALPHA: '0.75' }).semanticAlpha).toBeCloseTo(0.75, 6);
+    expect(loadV3Config({ V3_SEMANTIC_BETA: '0.25' }).semanticBeta).toBeCloseTo(0.25, 6);
+    expect(loadV3Config({ V3_SEMANTIC_ALPHA: '0' }).semanticAlpha).toBe(0);
+    expect(loadV3Config({ V3_SEMANTIC_BETA: '1' }).semanticBeta).toBe(1);
+  });
+
+  test('invalid V3_SEMANTIC_ALPHA → baseline (entire config falls back)', () => {
+    expect(loadV3Config({ V3_SEMANTIC_ALPHA: '1.5' }).semanticAlpha).toBe(DEFAULT_SEMANTIC_ALPHA);
+    expect(loadV3Config({ V3_SEMANTIC_ALPHA: '-0.1' }).semanticAlpha).toBe(DEFAULT_SEMANTIC_ALPHA);
+    expect(loadV3Config({ V3_SEMANTIC_BETA: 'NaN' }).semanticBeta).toBe(DEFAULT_SEMANTIC_BETA);
   });
 });
