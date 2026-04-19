@@ -291,6 +291,47 @@ jobs:
               sleep 5
             done
 
+            # CP395 — post-deploy Redis smoke test. Catches silent auth
+            # failures (e.g. CRLF-contaminated passwords, ACL render errors)
+            # that leave the container healthy but unusable.
+            echo "Redis ACL smoke test..."
+            REDIS_SMOKE_ADMIN_PW=$(grep '^REDIS_ADMIN_PASSWORD=' .env | cut -d= -f2- | tr -d '\r\n')
+            REDIS_SMOKE_COLL_PW=$(grep '^REDIS_COLLECTOR_PASSWORD=' .env | cut -d= -f2- | tr -d '\r\n')
+            REDIS_SMOKE_READ_PW=$(grep '^REDIS_INSIGHTA_PASSWORD=' .env | cut -d= -f2- | tr -d '\r\n')
+            REDIS_SMOKE_UPS_PW=$(grep '^REDIS_INSIGHTA_UPSERT_PASSWORD=' .env | cut -d= -f2- | tr -d '\r\n')
+            for attempt in 1 2 3 4 5; do
+              if docker exec insighta-redis redis-cli --user admin -a "$REDIS_SMOKE_ADMIN_PW" --no-auth-warning ping 2>/dev/null | grep -q PONG; then
+                break
+              fi
+              if [ "$attempt" = "5" ]; then
+                echo "Redis admin auth failed after 5 attempts"
+                docker logs --tail 30 insighta-redis
+                exit 1
+              fi
+              sleep 2
+            done
+            ACL_COUNT=$(docker exec insighta-redis redis-cli --user admin -a "$REDIS_SMOKE_ADMIN_PW" --no-auth-warning ACL LIST | wc -l)
+            if [ "$ACL_COUNT" != "5" ]; then
+              echo "Redis ACL LIST returned $ACL_COUNT rows, expected 5 (default off + 4 on)"
+              exit 1
+            fi
+            for U_PW in "collector:$REDIS_SMOKE_COLL_PW" "insighta:$REDIS_SMOKE_READ_PW" "insighta-upsert:$REDIS_SMOKE_UPS_PW"; do
+              USR="${U_PW%%:*}"; PW="${U_PW#*:}"
+              if ! docker exec insighta-redis redis-cli --user "$USR" -a "$PW" --no-auth-warning ping 2>/dev/null | grep -q PONG; then
+                echo "Redis user '$USR' auth failed"
+                exit 1
+              fi
+            done
+            # Tailscale bind check — 6379 must listen on Tailscale IP only.
+            REDIS_SMOKE_TSIP=$(grep '^INSIGHTA_TAILSCALE_IP=' .env | cut -d= -f2- | tr -d '\r\n')
+            BIND_OK=$(ss -tlnp 2>/dev/null | grep ":6379 " | grep -c "$REDIS_SMOKE_TSIP" || true)
+            if [ "$BIND_OK" = "0" ]; then
+              echo "Redis port 6379 not bound to Tailscale IP ($REDIS_SMOKE_TSIP) — check compose port mapping"
+              ss -tlnp | grep ":6379 " || echo "(no 6379 listener)"
+              exit 1
+            fi
+            echo "Redis smoke test OK — 4 users authenticate, bound to Tailscale iface."
+
             # Cleanup old images
             docker image prune -f
 
