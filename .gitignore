@@ -26,11 +26,12 @@ data/*.db-journal
 *.sqlite3
 prisma/dev.db
 prisma/data/
-prisma/migrations/
+prisma/migrations/*
 !prisma/migrations/.gitkeep
 !prisma/migrations/ontology/
 !prisma/migrations/video_discover/
 !prisma/migrations/manual/
+!prisma/migrations/video_chunk_embeddings/
 
 # Logs
 logs/

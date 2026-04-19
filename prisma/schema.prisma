@@ -332,75 +332,75 @@ model sso_providers {
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model users {
-  instance_id                 String?                @db.Uuid
-  id                          String                 @id @db.Uuid
-  aud                         String?                @db.VarChar(255)
-  role                        String?                @db.VarChar(255)
-  email                       String?                @db.VarChar(255)
-  encrypted_password          String?                @db.VarChar(255)
-  email_confirmed_at          DateTime?              @db.Timestamptz(6)
-  invited_at                  DateTime?              @db.Timestamptz(6)
-  confirmation_token          String?                @db.VarChar(255)
-  confirmation_sent_at        DateTime?              @db.Timestamptz(6)
-  recovery_token              String?                @db.VarChar(255)
-  recovery_sent_at            DateTime?              @db.Timestamptz(6)
-  email_change_token_new      String?                @db.VarChar(255)
-  email_change                String?                @db.VarChar(255)
-  email_change_sent_at        DateTime?              @db.Timestamptz(6)
-  last_sign_in_at             DateTime?              @db.Timestamptz(6)
-  raw_app_meta_data           Json?
-  raw_user_meta_data          Json?
-  is_super_admin              Boolean?
-  created_at                  DateTime?              @db.Timestamptz(6)
-  updated_at                  DateTime?              @db.Timestamptz(6)
-  phone                       String?                @unique
-  phone_confirmed_at          DateTime?              @db.Timestamptz(6)
-  phone_change                String?                @default("")
-  phone_change_token          String?                @default("") @db.VarChar(255)
-  phone_change_sent_at        DateTime?              @db.Timestamptz(6)
-  confirmed_at                DateTime?              @default(dbgenerated("LEAST(email_confirmed_at, phone_confirmed_at)")) @db.Timestamptz(6)
-  email_change_token_current  String?                @default("") @db.VarChar(255)
-  email_change_confirm_status Int?                   @default(0) @db.SmallInt
-  banned_until                DateTime?              @db.Timestamptz(6)
-  reauthentication_token      String?                @default("") @db.VarChar(255)
-  reauthentication_sent_at    DateTime?              @db.Timestamptz(6)
-  is_sso_user                 Boolean                @default(false)
-  deleted_at                  DateTime?              @db.Timestamptz(6)
-  is_anonymous                Boolean                @default(false)
-  identities                  identities[]
-  mfa_factors                 mfa_factors[]
-  oauth_authorizations        oauth_authorizations[]
-  oauth_consents              oauth_consents[]
-  one_time_tokens             one_time_tokens[]
-  sessions                    sessions[]
-  user_local_cards            user_local_cards[]
-  user_mandalas               user_mandalas[]
-  mandala_subscriptions       mandala_subscriptions[]
-  content_entities            content_entities[]
-  user_subscriptions          user_subscriptions[]
-  user_ui_preferences         user_ui_preferences[]
-  user_llm_keys               user_llm_keys[]
-  UserVideoState              UserVideoState[]
-  youtube_playlists              youtube_playlists[]
-  source_mandala_mappings     source_mandala_mappings[]
-  youtube_sync_settings          youtube_sync_settings[]
-  youtube_channels               youtube_channels[]
-  youtube_subscriptions          youtube_subscriptions[]
-  youtube_watch_history          youtube_watch_history[]
-  youtube_watch_history_imports  youtube_watch_history_imports[]
-  card_snapshots                 card_snapshots[]
-  bot_usage_log                  bot_usage_log[]
-  bot_approval_tokens            bot_approval_tokens[]
-  newsletter_settings            newsletter_settings?
-  newsletter_logs                newsletter_logs[]
-  skill_runs                     skill_runs[]
-  pipeline_runs                  mandala_pipeline_runs[]
-  skill_outputs                  skill_outputs[]
-  mandala_likes                  mandala_likes[]
-  skill_configs                  user_skill_config[]
-  recommendation_cache           recommendation_cache[]
-  recommendation_feedback        recommendation_feedback[]
-  generation_log                 generation_log[]
+  instance_id                   String?                         @db.Uuid
+  id                            String                          @id @db.Uuid
+  aud                           String?                         @db.VarChar(255)
+  role                          String?                         @db.VarChar(255)
+  email                         String?                         @db.VarChar(255)
+  encrypted_password            String?                         @db.VarChar(255)
+  email_confirmed_at            DateTime?                       @db.Timestamptz(6)
+  invited_at                    DateTime?                       @db.Timestamptz(6)
+  confirmation_token            String?                         @db.VarChar(255)
+  confirmation_sent_at          DateTime?                       @db.Timestamptz(6)
+  recovery_token                String?                         @db.VarChar(255)
+  recovery_sent_at              DateTime?                       @db.Timestamptz(6)
+  email_change_token_new        String?                         @db.VarChar(255)
+  email_change                  String?                         @db.VarChar(255)
+  email_change_sent_at          DateTime?                       @db.Timestamptz(6)
+  last_sign_in_at               DateTime?                       @db.Timestamptz(6)
+  raw_app_meta_data             Json?
+  raw_user_meta_data            Json?
+  is_super_admin                Boolean?
+  created_at                    DateTime?                       @db.Timestamptz(6)
+  updated_at                    DateTime?                       @db.Timestamptz(6)
+  phone                         String?                         @unique
+  phone_confirmed_at            DateTime?                       @db.Timestamptz(6)
+  phone_change                  String?                         @default("")
+  phone_change_token            String?                         @default("") @db.VarChar(255)
+  phone_change_sent_at          DateTime?                       @db.Timestamptz(6)
+  confirmed_at                  DateTime?                       @default(dbgenerated("LEAST(email_confirmed_at, phone_confirmed_at)")) @db.Timestamptz(6)
+  email_change_token_current    String?                         @default("") @db.VarChar(255)
+  email_change_confirm_status   Int?                            @default(0) @db.SmallInt
+  banned_until                  DateTime?                       @db.Timestamptz(6)
+  reauthentication_token        String?                         @default("") @db.VarChar(255)
+  reauthentication_sent_at      DateTime?                       @db.Timestamptz(6)
+  is_sso_user                   Boolean                         @default(false)
+  deleted_at                    DateTime?                       @db.Timestamptz(6)
+  is_anonymous                  Boolean                         @default(false)
+  identities                    identities[]
+  mfa_factors                   mfa_factors[]
+  oauth_authorizations          oauth_authorizations[]
+  oauth_consents                oauth_consents[]
+  one_time_tokens               one_time_tokens[]
+  sessions                      sessions[]
+  user_local_cards              user_local_cards[]
+  user_mandalas                 user_mandalas[]
+  mandala_subscriptions         mandala_subscriptions[]
+  content_entities              content_entities[]
+  user_subscriptions            user_subscriptions[]
+  user_ui_preferences           user_ui_preferences[]
+  user_llm_keys                 user_llm_keys[]
+  UserVideoState                UserVideoState[]
+  youtube_playlists             youtube_playlists[]
+  source_mandala_mappings       source_mandala_mappings[]
+  youtube_sync_settings         youtube_sync_settings[]
+  youtube_channels              youtube_channels[]
+  youtube_subscriptions         youtube_subscriptions[]
+  youtube_watch_history         youtube_watch_history[]
+  youtube_watch_history_imports youtube_watch_history_imports[]
+  card_snapshots                card_snapshots[]
+  bot_usage_log                 bot_usage_log[]
+  bot_approval_tokens           bot_approval_tokens[]
+  newsletter_settings           newsletter_settings?
+  newsletter_logs               newsletter_logs[]
+  skill_runs                    skill_runs[]
+  pipeline_runs                 mandala_pipeline_runs[]
+  skill_outputs                 skill_outputs[]
+  mandala_likes                 mandala_likes[]
+  skill_configs                 user_skill_config[]
+  recommendation_cache          recommendation_cache[]
+  recommendation_feedback       recommendation_feedback[]
+  generation_log                generation_log[]
 
   @@index([instance_id])
   @@index([is_anonymous])
@@ -410,39 +410,39 @@ model users {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model user_mandalas {
-  id         String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id    String                @db.Uuid
-  title      String                @default("My Mandala")
-  is_default Boolean               @default(true)
-  is_public    Boolean               @default(false)
-  is_template  Boolean               @default(false)
-  domain       String?
-  language     String?               @db.VarChar(10)
-  like_count   Int                   @default(0)
-  clone_count  Int                   @default(0)
-  share_slug   String?               @unique
-  position     Int                   @default(0)
-  created_at   DateTime              @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime              @default(now()) @db.Timestamptz(6)
-  users            users                      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  levels           user_mandala_levels[]
-  videoStates      UserVideoState[]
-  localCards       user_local_cards[]
-  subscriptions    mandala_subscriptions[]
-  activity_logs    mandala_activity_log[]
-  contentEntities  content_entities[]
-  sourceMappings   source_mandala_mappings[]
+  id              String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String                    @db.Uuid
+  title           String                    @default("My Mandala")
+  is_default      Boolean                   @default(true)
+  is_public       Boolean                   @default(false)
+  is_template     Boolean                   @default(false)
+  domain          String?
+  language        String?                   @db.VarChar(10)
+  like_count      Int                       @default(0)
+  clone_count     Int                       @default(0)
+  share_slug      String?                   @unique
+  position        Int                       @default(0)
+  created_at      DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime                  @default(now()) @db.Timestamptz(6)
+  users           users                     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  levels          user_mandala_levels[]
+  videoStates     UserVideoState[]
+  localCards      user_local_cards[]
+  subscriptions   mandala_subscriptions[]
+  activity_logs   mandala_activity_log[]
+  contentEntities content_entities[]
+  sourceMappings  source_mandala_mappings[]
 
-  mandala_shares   mandala_shares[]
-  skill_outputs    skill_outputs[]
-  mandala_likes    mandala_likes[]
-  skill_configs    user_skill_config[]
+  mandala_shares       mandala_shares[]
+  skill_outputs        skill_outputs[]
+  mandala_likes        mandala_likes[]
+  skill_configs        user_skill_config[]
   recommendation_cache recommendation_cache[]
   pipeline_runs        mandala_pipeline_runs[]
 
-  source_template_id String? @db.Uuid
-  focus_tags         String[]  @default([])
-  target_level       String    @default("standard") @db.VarChar(20)
+  source_template_id String?  @db.Uuid
+  focus_tags         String[] @default([])
+  target_level       String   @default("standard") @db.VarChar(20)
 
   @@index([user_id], map: "idx_user_mandalas_user_id")
   @@index([is_public], map: "idx_user_mandalas_is_public")
@@ -456,13 +456,13 @@ model user_mandalas {
 
 /// Mandala share links — controls visibility, expiry, and PIN protection
 model mandala_shares {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  mandala_id  String    @db.Uuid
-  share_code  String    @unique
-  mode        String    @default("view") // 'view' | 'view_cards' | 'clone'
-  pin_hash    String?
-  expires_at  DateTime? @db.Timestamptz(6)
-  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mandala_id String    @db.Uuid
+  share_code String    @unique
+  mode       String    @default("view") // 'view' | 'view_cards' | 'clone'
+  pin_hash   String?
+  expires_at DateTime? @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
 
   mandala user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -487,21 +487,21 @@ model mandala_likes {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model user_mandala_levels {
-  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  mandala_id      String               @db.Uuid
-  parent_level_id String?              @db.Uuid
+  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mandala_id      String                @db.Uuid
+  parent_level_id String?               @db.Uuid
   level_key       String
-  center_goal     String               @default("")
+  center_goal     String                @default("")
   center_label    String?
-  subjects        String[]             @default([])
-  subject_labels  String[]             @default([])
-  position        Int                  @default(0)
-  depth           Int                  @default(0)
+  subjects        String[]              @default([])
+  subject_labels  String[]              @default([])
+  position        Int                   @default(0)
+  depth           Int                   @default(0)
   color           String?
-  created_at      DateTime             @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime             @default(now()) @db.Timestamptz(6)
-  mandala         user_mandalas        @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  parent          user_mandala_levels? @relation("level_hierarchy", fields: [parent_level_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  created_at      DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime              @default(now()) @db.Timestamptz(6)
+  mandala         user_mandalas         @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  parent          user_mandala_levels?  @relation("level_hierarchy", fields: [parent_level_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   children        user_mandala_levels[] @relation("level_hierarchy")
 
   @@unique([mandala_id, level_key])
@@ -510,15 +510,15 @@ model user_mandala_levels {
 }
 
 model source_mandala_mappings {
-  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id     String        @db.Uuid
-  source_type String        // 'playlist', 'channel', 'hashtag'
-  source_id   String        // youtube_playlist_id or channel_id
-  mandala_id  String        @db.Uuid
-  created_at  DateTime      @default(now()) @db.Timestamptz(6)
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String   @db.Uuid
+  source_type String // 'playlist', 'channel', 'hashtag'
+  source_id   String // youtube_playlist_id or channel_id
+  mandala_id  String   @db.Uuid
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
 
-  user    users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  mandala user_mandalas  @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user    users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  mandala user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([user_id, source_type, source_id, mandala_id])
   @@index([user_id], map: "idx_source_mandala_mappings_user_id")
@@ -674,15 +674,15 @@ model user_ui_preferences {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model user_llm_keys {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id        String   @db.Uuid
-  provider       String   @db.VarChar(50)
-  encrypted_key  String
-  status         String   @default("active") @db.VarChar(20)
-  priority       Int      @default(0)
-  created_at     DateTime @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime @default(now()) @db.Timestamptz(6)
-  users          users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String   @db.Uuid
+  provider      String   @db.VarChar(50)
+  encrypted_key String
+  status        String   @default("active") @db.VarChar(20)
+  priority      Int      @default(0)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
+  users         users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([user_id, provider])
   @@index([user_id], map: "idx_user_llm_keys_user_id")
@@ -737,24 +737,47 @@ model youtube_playlists {
 /// Mandala embeddings for vector search (Explore recommendations).
 /// Uses pgvector extension. 18009 rows in Prod (2026-04-04).
 model mandala_embeddings {
-  id             BigInt                   @id @default(autoincrement())
+  id             BigInt                       @id @default(autoincrement())
   mandala_id     String
   level          Int
   sub_goal_index Int?
   text           String?
   embedding      Unsupported("vector(4096)")?
-  language       String?                  @default("ko")
+  language       String?                      @default("ko")
   domain         String?
   center_goal    String?
   center_label   String?
   sub_goal       String?
   sub_label      String?
-  created_at     DateTime?                @default(now()) @db.Timestamptz(6)
+  created_at     DateTime?                    @default(now()) @db.Timestamptz(6)
 
   @@index([mandala_id], map: "idx_me_mid")
   @@index([level], map: "idx_me_lvl")
   @@index([language], map: "idx_me_lang")
   @@index([domain], map: "idx_me_dom")
+  @@schema("public")
+}
+
+/// Video transcript chunk embeddings for semantic mandala-filter.
+/// Populated by the external video-dictionary collector (mac mini) via the
+/// same Ollama qwen3-embedding:8b model that produces mandala_embeddings, so
+/// the two vector spaces are directly comparable by cosine similarity.
+/// See /cursor/video-dictionary/docs/design/semantic-rating.md (CP396).
+/// HNSW cosine index is declared in the raw SQL migration, not here.
+model video_chunk_embeddings {
+  id            BigInt                      @id @default(autoincrement())
+  video_id      String
+  chunk_idx     Int                         @db.SmallInt
+  text          String
+  start_time    Float                       @db.Real
+  end_time      Float                       @db.Real
+  token_count   Int                         @db.SmallInt
+  embedding     Unsupported("vector(4096)")
+  model_version String                      @default("qwen3-embedding:8b:Q4_K_M")
+  created_at    DateTime?                   @default(now()) @db.Timestamptz(6)
+
+  @@unique([video_id, chunk_idx], map: "video_chunk_embeddings_video_chunk_key")
+  @@index([video_id], map: "video_chunk_embeddings_video_id_idx")
   @@schema("public")
 }
 
@@ -821,19 +844,19 @@ model youtube_videos {
 }
 
 model youtube_channels {
-  id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id              String                  @db.Uuid
-  youtube_channel_id   String
-  title                String
-  description          String?
-  thumbnail_url        String?
-  subscriber_count     BigInt?
-  video_count          BigInt?
-  custom_url           String?
-  subscribed_at        DateTime?               @db.Timestamptz(6)
-  created_at           DateTime                @default(now()) @db.Timestamptz(6)
-  updated_at           DateTime                @default(now()) @db.Timestamptz(6)
-  users                users                   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id               String                  @db.Uuid
+  youtube_channel_id    String
+  title                 String
+  description           String?
+  thumbnail_url         String?
+  subscriber_count      BigInt?
+  video_count           BigInt?
+  custom_url            String?
+  subscribed_at         DateTime?               @db.Timestamptz(6)
+  created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime                @default(now()) @db.Timestamptz(6)
+  users                 users                   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   youtube_subscriptions youtube_subscriptions[]
 
   @@unique([user_id, youtube_channel_id])
@@ -842,16 +865,16 @@ model youtube_channels {
 }
 
 model youtube_subscriptions {
-  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id         String            @db.Uuid
-  channel_id      String            @db.Uuid
-  is_active       Boolean           @default(true)
-  sync_new_videos Boolean           @default(false)
-  last_synced_at  DateTime?         @db.Timestamptz(6)
-  created_at      DateTime          @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
-  users           users             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  channel         youtube_channels  @relation(fields: [channel_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String           @db.Uuid
+  channel_id      String           @db.Uuid
+  is_active       Boolean          @default(true)
+  sync_new_videos Boolean          @default(false)
+  last_synced_at  DateTime?        @db.Timestamptz(6)
+  created_at      DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime         @default(now()) @db.Timestamptz(6)
+  users           users            @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  channel         youtube_channels @relation(fields: [channel_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([user_id, channel_id])
   @@index([user_id], map: "idx_youtube_subscriptions_user_id")
@@ -860,16 +883,16 @@ model youtube_subscriptions {
 }
 
 model youtube_watch_history {
-  id          String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id     String                        @db.Uuid
-  video_id    String                        @db.Uuid
-  watched_at  DateTime                      @db.Timestamptz(6)
-  source      String                        @default("manual")
-  import_id   String?                       @db.Uuid
-  created_at  DateTime                      @default(now()) @db.Timestamptz(6)
-  users       users                         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  video       youtube_videos                @relation(fields: [video_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  import      youtube_watch_history_imports? @relation(fields: [import_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  id         String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String                         @db.Uuid
+  video_id   String                         @db.Uuid
+  watched_at DateTime                       @db.Timestamptz(6)
+  source     String                         @default("manual")
+  import_id  String?                        @db.Uuid
+  created_at DateTime                       @default(now()) @db.Timestamptz(6)
+  users      users                          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  video      youtube_videos                 @relation(fields: [video_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  import     youtube_watch_history_imports? @relation(fields: [import_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@unique([user_id, video_id, watched_at])
   @@index([user_id], map: "idx_youtube_watch_history_user_id")
@@ -1213,14 +1236,14 @@ model bot_usage_log {
 }
 
 model card_snapshots {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id        String   @db.Uuid
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String    @db.Uuid
   reason         String
   snapshot_data  Json
-  status         String   @default("pending")
-  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  status         String    @default("pending")
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
   rolled_back_at DateTime? @db.Timestamptz(6)
-  user           users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user           users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id], map: "idx_card_snapshots_user_id")
   @@index([status], map: "idx_card_snapshots_status")
@@ -1228,11 +1251,11 @@ model card_snapshots {
 }
 
 model admin_audit_log {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  admin_id    String   @db.Uuid
-  action      String   @db.VarChar(100)
-  target_type String   @db.VarChar(50)
-  target_id   String?  @db.Uuid
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  admin_id    String    @db.Uuid
+  action      String    @db.VarChar(100)
+  target_type String    @db.VarChar(50)
+  target_id   String?   @db.Uuid
   old_value   Json?
   new_value   Json?
   created_at  DateTime? @default(now()) @db.Timestamptz(6)
@@ -1367,11 +1390,11 @@ model skill_runs {
 /// Tracks mandala post-creation pipeline runs with per-step status/timestamp.
 /// Enables resume-from-failure, audit trail, and future Temporal migration.
 model mandala_pipeline_runs {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  mandala_id     String    @db.Uuid
-  user_id        String    @db.Uuid
-  status         String    @default("pending") @db.VarChar(20) // pending | running | completed | failed | partial
-  trigger        String    @default("wizard") @db.VarChar(20)  // wizard | update | manual | retry
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mandala_id String @db.Uuid
+  user_id    String @db.Uuid
+  status     String @default("pending") @db.VarChar(20) // pending | running | completed | failed | partial
+  trigger    String @default("wizard") @db.VarChar(20) // wizard | update | manual | retry
 
   step1_status     String?   @db.VarChar(20)
   step1_started_at DateTime? @db.Timestamptz(6)
@@ -1407,19 +1430,19 @@ model mandala_pipeline_runs {
 
 /// Skill output storage — generated content from skill executions
 model skill_outputs {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id     String    @db.Uuid
-  mandala_id  String    @db.Uuid
-  skill_type  String    @db.VarChar(50)
-  title       String
-  content     String
-  cell_scope  Int[]
-  card_count  Int?
-  model_used  String?   @db.VarChar(100)
-  created_at  DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime  @default(now()) @db.Timestamptz(6)
-  users       users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  mandala     user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade)
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String        @db.Uuid
+  mandala_id String        @db.Uuid
+  skill_type String        @db.VarChar(50)
+  title      String
+  content    String
+  cell_scope Int[]
+  card_count Int?
+  model_used String?       @db.VarChar(100)
+  created_at DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at DateTime      @default(now()) @db.Timestamptz(6)
+  users      users         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  mandala    user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade)
 
   @@index([user_id, mandala_id], map: "idx_skill_outputs_user_mandala")
   @@index([created_at(sort: Desc)], map: "idx_skill_outputs_created_at")
@@ -1454,17 +1477,17 @@ model user_skill_config {
 /// Layer 1: External trend signals (YouTube, Naver, Google Trends, HN)
 /// Aggregated nightly via trend-collector skill.
 model trend_signals {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  source      String   @db.VarChar(50)
-  domain      String?  @db.VarChar(100)
-  keyword     String   @db.VarChar(255)
-  raw_score   Float
-  norm_score  Float
-  velocity    Float    @default(0)
-  metadata    Json     @default("{}")
-  language    String   @default("ko") @db.VarChar(10)
-  fetched_at  DateTime @default(now()) @db.Timestamptz(6)
-  expires_at  DateTime @db.Timestamptz(6)
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source     String   @db.VarChar(50)
+  domain     String?  @db.VarChar(100)
+  keyword    String   @db.VarChar(255)
+  raw_score  Float
+  norm_score Float
+  velocity   Float    @default(0)
+  metadata   Json     @default("{}")
+  language   String   @default("ko") @db.VarChar(10)
+  fetched_at DateTime @default(now()) @db.Timestamptz(6)
+  expires_at DateTime @db.Timestamptz(6)
 
   @@unique([source, keyword, language])
   @@index([keyword], map: "idx_trend_signals_keyword")
@@ -1476,10 +1499,10 @@ model trend_signals {
 /// Layer 2: Insighta Keyword Score (IKS) — 6-axis weighted score
 /// Recomputed by IKS-scorer skill from trend_signals.
 model keyword_scores {
-  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  keyword             String   @db.VarChar(255)
-  domain              String?  @db.VarChar(100)
-  language            String   @default("ko") @db.VarChar(10)
+  id                  String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  keyword             String                       @db.VarChar(255)
+  domain              String?                      @db.VarChar(100)
+  language            String                       @default("ko") @db.VarChar(10)
   iks_total           Float
   search_demand       Float?
   competition         Float?
@@ -1487,9 +1510,9 @@ model keyword_scores {
   goal_relevance      Float?
   learning_value      Float?
   content_performance Float?
-  weight_version      Int      @default(1)
-  scored_at           DateTime @default(now()) @db.Timestamptz(6)
-  expires_at          DateTime @db.Timestamptz(6)
+  weight_version      Int                          @default(1)
+  scored_at           DateTime                     @default(now()) @db.Timestamptz(6)
+  expires_at          DateTime                     @db.Timestamptz(6)
   /// Phase 2b: Qwen3-Embedding-8B vector for the keyword text.
   /// Stored once by iks-scorer so Phase 3 video-discover can compute
   /// per-mandala similarity without re-calling Mac Mini Ollama at recommendation time.
@@ -1506,34 +1529,34 @@ model keyword_scores {
 /// Layer 3: Recommendation cache — per (user, mandala, video) with TTL
 /// Generated by video-discover skill.
 model recommendation_cache {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id         String   @db.Uuid
-  mandala_id      String   @db.Uuid
-  cell_index      Int?
-  keyword         String   @db.VarChar(255)
-  domain          String?  @db.VarChar(100)
-  video_id        String   @db.VarChar(64)
-  title           String
-  thumbnail       String?
-  channel         String?  @db.VarChar(255)
-  channel_subs    Int?
-  view_count      Int?
-  like_ratio      Float?
-  duration_sec    Int?
-  rec_score       Float
-  iks_score       Float?
-  trend_keywords  Json     @default("[]")
-  rec_reason      String?
-  status          String   @default("pending") @db.VarChar(20)
-  weight_version  Int      @default(1)
-  created_at      DateTime @default(now()) @db.Timestamptz(6)
-  expires_at      DateTime @db.Timestamptz(6)
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String    @db.Uuid
+  mandala_id     String    @db.Uuid
+  cell_index     Int?
+  keyword        String    @db.VarChar(255)
+  domain         String?   @db.VarChar(100)
+  video_id       String    @db.VarChar(64)
+  title          String
+  thumbnail      String?
+  channel        String?   @db.VarChar(255)
+  channel_subs   Int?
+  view_count     Int?
+  like_ratio     Float?
+  duration_sec   Int?
+  rec_score      Float
+  iks_score      Float?
+  trend_keywords Json      @default("[]")
+  rec_reason     String?
+  status         String    @default("pending") @db.VarChar(20)
+  weight_version Int       @default(1)
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at     DateTime  @db.Timestamptz(6)
   /// YouTube publishedAt (CP360 — experiment #3). Persisted for post-hoc
   /// freshness auditing. Nullable because older rows predate this column.
-  published_at    DateTime? @db.Timestamptz(6)
+  published_at   DateTime? @db.Timestamptz(6)
 
-  users    users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  mandala  user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users    users                     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  mandala  user_mandalas             @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   feedback recommendation_feedback[]
 
   @@unique([user_id, mandala_id, video_id])
@@ -1568,15 +1591,15 @@ model recommendation_feedback {
 /// so its output can feed fine-tuning data + LoRA-vs-LLM quality analysis.
 /// See: docs/design/insighta-trend-recommendation-engine.md (eval pipeline)
 model generation_log {
-  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id                 String?   @db.Uuid
-  goal                    String
-  domain                  String?   @db.VarChar(100)
-  language                String    @default("ko") @db.VarChar(10)
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id  String? @db.Uuid
+  goal     String
+  domain   String? @db.VarChar(100)
+  language String  @default("ko") @db.VarChar(10)
 
   // Race outcome
-  lora_won                Boolean
-  source_returned         String    @db.VarChar(20)
+  lora_won        Boolean
+  source_returned String  @db.VarChar(20)
 
   // LoRA branch (captured even when race-lost)
   lora_output             Json?
@@ -1588,12 +1611,12 @@ model generation_log {
   lora_error              String?
 
   // LLM branch (null only when LoRA won and LLM was cancelled mid-flight)
-  llm_output              Json?
-  llm_duration_ms         Int?
-  llm_valid               Boolean?
-  llm_error               String?
+  llm_output      Json?
+  llm_duration_ms Int?
+  llm_valid       Boolean?
+  llm_error       String?
 
-  created_at              DateTime  @default(now()) @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
 
   users users? @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
