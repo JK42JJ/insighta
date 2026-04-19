@@ -257,9 +257,13 @@ jobs:
 
             cd /opt/tubearchive
 
-            # Pull latest images
+            # Pull latest images (prebuilt services only — api, frontend ship
+            # from GHCR). redis is built locally on EC2 from ./docker/redis/
+            # per CP395; attempting to pull it fails because the tag does not
+            # exist in any registry.
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml pull api frontend
+            docker compose -f docker-compose.prod.yml build redis
 
             # Save current image digests for rollback
             docker compose -f docker-compose.prod.yml images -q > /tmp/previous-images.txt 2>/dev/null || true
