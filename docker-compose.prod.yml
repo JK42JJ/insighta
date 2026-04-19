@@ -45,6 +45,46 @@ services:
       - insighta-network
 
   # ---------------------------------------------------------------------------
+  # Redis — video dictionary serving (CP395). Published only on the host's
+  # Tailscale interface; not exposed on public SG.
+  # ---------------------------------------------------------------------------
+  redis:
+    build:
+      context: ./docker/redis
+      dockerfile: Dockerfile
+    image: insighta-redis:local
+    container_name: insighta-redis
+    restart: unless-stopped
+    ports:
+      - "${INSIGHTA_TAILSCALE_IP}:6379:6379"
+    env_file:
+      - .env
+    environment:
+      - REDIS_ADMIN_PASSWORD
+      - REDIS_COLLECTOR_PASSWORD
+      - REDIS_INSIGHTA_PASSWORD
+      - REDIS_INSIGHTA_UPSERT_PASSWORD
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --user admin -a \"$$REDIS_ADMIN_PASSWORD\" ping | grep -q PONG"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 2200M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - insighta-network
+
+  # ---------------------------------------------------------------------------
   # Frontend (React/Vite with Nginx)
   # ---------------------------------------------------------------------------
   frontend:
@@ -83,6 +123,8 @@ volumes:
   cache_data:
     driver: local
   logs_data:
+    driver: local
+  redis_data:
     driver: local
 
 # =============================================================================

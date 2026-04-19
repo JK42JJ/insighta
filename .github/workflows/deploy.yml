@@ -161,6 +161,20 @@ jobs:
           target: "/opt/tubearchive/"
           overwrite: true
 
+      # CP395 — Redis container is built locally on EC2 from source files in
+      # docker/redis/. Ship the directory alongside the compose file so the
+      # `build:` directive in docker-compose.prod.yml can resolve.
+      - name: Copy docker/redis/ to EC2
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker/redis/*"
+          target: "/opt/tubearchive/docker/redis/"
+          overwrite: true
+          strip_components: 2
+
       - name: Ensure LLM keys in .env
         uses: appleboy/ssh-action@v1
         env:
@@ -171,11 +185,16 @@ jobs:
           YT_SEARCH_KEY_3: ${{ secrets.YOUTUBE_API_KEY_SEARCH_3 }}
           DB_URL: ${{ secrets.DATABASE_URL }}
           DB_DIRECT: ${{ secrets.DIRECT_URL }}
+          REDIS_ADMIN_PW: ${{ secrets.REDIS_ADMIN_PASSWORD }}
+          REDIS_COLLECTOR_PW: ${{ secrets.REDIS_COLLECTOR_PASSWORD }}
+          REDIS_INSIGHTA_PW: ${{ secrets.REDIS_INSIGHTA_PASSWORD }}
+          REDIS_INSIGHTA_UPSERT_PW: ${{ secrets.REDIS_INSIGHTA_UPSERT_PASSWORD }}
+          TAILSCALE_IP: ${{ secrets.INSIGHTA_TAILSCALE_IP }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,DB_URL,DB_DIRECT
+          envs: OR_KEY,OR_MODEL,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP
           script: |
             set -e
             cd /opt/tubearchive
@@ -204,6 +223,26 @@ jobs:
             fi
             if [ -n "${YT_SEARCH_KEY_3}" ]; then
               grep -q '^YOUTUBE_API_KEY_SEARCH_3=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_3=.*|YOUTUBE_API_KEY_SEARCH_3=${YT_SEARCH_KEY_3}|" .env || echo "YOUTUBE_API_KEY_SEARCH_3=${YT_SEARCH_KEY_3}" >> .env
+            fi
+            # CP395 — Redis (video dictionary) ACL passwords + Tailscale IP.
+            # Passwords consumed by docker/redis/entrypoint.sh via envsubst
+            # into redis.acl at container start. TAILSCALE_IP used by
+            # docker-compose.prod.yml to bind 6379 on Tailscale interface
+            # only (no public SG change).
+            if [ -n "${REDIS_ADMIN_PW}" ]; then
+              grep -q '^REDIS_ADMIN_PASSWORD=' .env 2>/dev/null && sed -i "s|^REDIS_ADMIN_PASSWORD=.*|REDIS_ADMIN_PASSWORD=${REDIS_ADMIN_PW}|" .env || echo "REDIS_ADMIN_PASSWORD=${REDIS_ADMIN_PW}" >> .env
+            fi
+            if [ -n "${REDIS_COLLECTOR_PW}" ]; then
+              grep -q '^REDIS_COLLECTOR_PASSWORD=' .env 2>/dev/null && sed -i "s|^REDIS_COLLECTOR_PASSWORD=.*|REDIS_COLLECTOR_PASSWORD=${REDIS_COLLECTOR_PW}|" .env || echo "REDIS_COLLECTOR_PASSWORD=${REDIS_COLLECTOR_PW}" >> .env
+            fi
+            if [ -n "${REDIS_INSIGHTA_PW}" ]; then
+              grep -q '^REDIS_INSIGHTA_PASSWORD=' .env 2>/dev/null && sed -i "s|^REDIS_INSIGHTA_PASSWORD=.*|REDIS_INSIGHTA_PASSWORD=${REDIS_INSIGHTA_PW}|" .env || echo "REDIS_INSIGHTA_PASSWORD=${REDIS_INSIGHTA_PW}" >> .env
+            fi
+            if [ -n "${REDIS_INSIGHTA_UPSERT_PW}" ]; then
+              grep -q '^REDIS_INSIGHTA_UPSERT_PASSWORD=' .env 2>/dev/null && sed -i "s|^REDIS_INSIGHTA_UPSERT_PASSWORD=.*|REDIS_INSIGHTA_UPSERT_PASSWORD=${REDIS_INSIGHTA_UPSERT_PW}|" .env || echo "REDIS_INSIGHTA_UPSERT_PASSWORD=${REDIS_INSIGHTA_UPSERT_PW}" >> .env
+            fi
+            if [ -n "${TAILSCALE_IP}" ]; then
+              grep -q '^INSIGHTA_TAILSCALE_IP=' .env 2>/dev/null && sed -i "s|^INSIGHTA_TAILSCALE_IP=.*|INSIGHTA_TAILSCALE_IP=${TAILSCALE_IP}|" .env || echo "INSIGHTA_TAILSCALE_IP=${TAILSCALE_IP}" >> .env
             fi
             chmod 600 .env
 

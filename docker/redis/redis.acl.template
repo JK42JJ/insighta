@@ -1,0 +1,5 @@
+user default off
+user admin on >${REDIS_ADMIN_PASSWORD} ~* &* +@all
+user collector on >${REDIS_COLLECTOR_PASSWORD} ~video:* ~topic:* ~channel:* ~trend:* ~whitelist:* ~blacklist:* ~phase0:meta:* +get +set +hset +hgetall +hexists +exists +del +expire +sadd +smembers +sismember +zadd +zrange +copy +dbsize +scan +multi +exec +select +ping
+user insighta on >${REDIS_INSIGHTA_PASSWORD} ~video:* ~topic:* ~channel:* ~trend:* -@all +get +hgetall +hmget +hexists +exists +smembers +sismember +zrange +scan +select +ping
+user insighta-upsert on >${REDIS_INSIGHTA_UPSERT_PASSWORD} ~video:* -@all +hset +hget +hexists +exists +expire +select +ping

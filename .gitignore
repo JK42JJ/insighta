@@ -82,8 +82,10 @@ frontend/.env.*.local
 *.tar
 docker-compose*.yml
 !docker-compose.prod.yml
-docker/
+docker/*
 !docker/entrypoint.sh
+!docker/redis/
+!docker/redis/**
 # Dockerfile — NOT ignored (deploy 필수)
 
 # SSH Keys (NEVER commit)
