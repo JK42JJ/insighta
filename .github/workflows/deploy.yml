@@ -189,7 +189,7 @@ jobs:
           REDIS_COLLECTOR_PW: ${{ secrets.REDIS_COLLECTOR_PASSWORD }}
           REDIS_INSIGHTA_PW: ${{ secrets.REDIS_INSIGHTA_PASSWORD }}
           REDIS_INSIGHTA_UPSERT_PW: ${{ secrets.REDIS_INSIGHTA_UPSERT_PASSWORD }}
-          TAILSCALE_IP: ${{ secrets.INSIGHTA_TAILSCALE_IP }}
+          TAILSCALE_IP: ${{ vars.INSIGHTA_TAILSCALE_IP }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
