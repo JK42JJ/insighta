@@ -330,7 +330,15 @@ jobs:
               ss -tlnp | grep ":6379 " || echo "(no 6379 listener)"
               exit 1
             fi
-            echo "Redis smoke test OK — 4 users authenticate, bound to Tailscale iface."
+            # CP411 follow-up (20d) — verify end-to-end consumer path: the
+            # insighta ACL user must be able to SMEMBERS the whitelist key.
+            # Catches regressions in `docker/redis/redis.acl.template` keys
+            # pattern or command grant list. Empty set is a valid PASS.
+            if ! docker exec insighta-redis redis-cli --user insighta -a "$REDIS_SMOKE_READ_PW" --no-auth-warning SMEMBERS whitelist:channels > /dev/null 2>&1; then
+              echo "Redis insighta user cannot SMEMBERS whitelist:channels — check ACL keys pattern"
+              exit 1
+            fi
+            echo "Redis smoke test OK — 4 users authenticate, bound to Tailscale iface, insighta→whitelist SMEMBERS OK."
 
             # Cleanup old images
             docker image prune -f
