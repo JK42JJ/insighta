@@ -66,6 +66,7 @@ function makeSlot(videoId: string, cellIndex: number, score: number): AssembledS
     title: `title ${videoId}`,
     description: null,
     channelName: null,
+    channelId: null,
     thumbnail: null,
     viewCount: null,
     likeCount: null,

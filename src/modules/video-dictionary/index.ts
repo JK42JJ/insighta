@@ -21,3 +21,14 @@ export {
   DEFAULT_SEMANTIC_ALPHA,
   DEFAULT_SEMANTIC_BETA,
 } from './constants';
+export {
+  getChannelWhitelist,
+  filterByWhitelist,
+  resetWhitelistCacheForTesting,
+  WHITELIST_CHANNELS_KEY,
+  WHITELIST_CACHE_TTL_MS,
+  type WhitelistGateSlot,
+  type WhitelistGateOptions,
+  type WhitelistGateTrace,
+  type WhitelistGateResult,
+} from './whitelist';

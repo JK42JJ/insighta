@@ -31,7 +31,10 @@ import type {
 import {
   applySemanticRerank,
   getSemanticRank,
+  filterByWhitelist,
+  getChannelWhitelist,
   type SemanticRerankTrace,
+  type WhitelistGateTrace,
 } from '@/modules/video-dictionary';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { manifest, V3_TARGET_PER_CELL, V3_NUM_CELLS, V3_TARGET_TOTAL } from './manifest';
@@ -90,6 +93,7 @@ export interface AssembledSlot {
   title: string;
   description: string | null;
   channelName: string | null;
+  channelId: string | null;
   thumbnail: string | null;
   viewCount: number | null;
   likeCount: number | null;
@@ -205,6 +209,7 @@ export const executor: SkillExecutor = {
           title: m.title,
           description: m.description,
           channelName: m.channelName,
+          channelId: m.channelId,
           thumbnail: m.thumbnail,
           viewCount: m.viewCount,
           likeCount: m.likeCount,
@@ -260,10 +265,14 @@ export const executor: SkillExecutor = {
     const rerankedSlots = await maybeApplySemanticRerank(slots, mandalaId);
     const semanticTrace: SemanticRerankTrace | null = rerankedSlots.trace;
 
-    // ── Upsert recommendation_cache ────────────────────────────────────
-    const upserts = await upsertSlots(ctx.userId, mandalaId, rerankedSlots.slots, state.subGoals);
+    // ── Dual whitelist gate (dual-whitelist.md §3.2 — off by default) ──
+    const gatedSlots = await maybeApplyWhitelistGate(rerankedSlots.slots);
+    const whitelistTrace: WhitelistGateTrace | null = gatedSlots.trace;
 
-    const finalTotal = rerankedSlots.slots.length;
+    // ── Upsert recommendation_cache ────────────────────────────────────
+    const upserts = await upsertSlots(ctx.userId, mandalaId, gatedSlots.slots, state.subGoals);
+
+    const finalTotal = gatedSlots.slots.length;
     const wallMs = Date.now() - t0;
 
     return {
@@ -273,11 +282,12 @@ export const executor: SkillExecutor = {
         tier2_matches: tier2Count,
         tier2_queries: tier2QueriesUsed,
         total_recommendations: finalTotal,
-        cells_filled: new Set(rerankedSlots.slots.map((s) => s.cellIndex)).size,
+        cells_filled: new Set(gatedSlots.slots.map((s) => s.cellIndex)).size,
         rows_upserted: upserts,
         target_met: finalTotal >= V3_TARGET_TOTAL,
         ...(tier2Debug ? { debug: tier2Debug } : {}),
         ...(semanticTrace ? { semantic_rerank: semanticTrace } : {}),
+        ...(whitelistTrace ? { whitelist_gate: whitelistTrace } : {}),
       },
       metrics: {
         duration_ms: wallMs,
@@ -326,6 +336,51 @@ export async function maybeApplySemanticRerank(
   );
 
   return { slots: reranked, trace };
+}
+
+// ============================================================================
+// Dual whitelist gate — collection-side design doc §3.2 (off unless V3_ENABLE_WHITELIST_GATE=true)
+// ============================================================================
+
+interface MaybeWhitelistOutput {
+  slots: AssembledSlot[];
+  trace: WhitelistGateTrace | null;
+}
+
+/**
+ * If the feature flag is on, drop slots whose `channelId` is not in the
+ * Redis-backed whitelist. Missing channel IDs (legacy video_pool rows with
+ * null channel_id) are treated as non-whitelisted when the gate applies.
+ * Empty-whitelist + flag-on falls back to passthrough with a warn log
+ * (dual-whitelist.md §3.2 Q1); Redis unavailability fails open to the
+ * same inclusive state via `getChannelWhitelist()` (Q2).
+ */
+export async function maybeApplyWhitelistGate(
+  slots: AssembledSlot[]
+): Promise<MaybeWhitelistOutput> {
+  if (!v3Config.enableWhitelistGate) {
+    return { slots, trace: null };
+  }
+  const whitelist = await getChannelWhitelist();
+  const gateInput = slots.map((s) => ({
+    ...s,
+    channelId: s.channelId ?? '',
+  }));
+  const { slots: kept, trace } = filterByWhitelist(gateInput, whitelist, {
+    enabled: true,
+  });
+  // Strip the empty-string coercion back to null for downstream callers.
+  const restored = kept.map((s) => {
+    const { channelId, ...rest } = s;
+    return {
+      ...(rest as Omit<AssembledSlot, 'channelId'>),
+      channelId: channelId === '' ? null : channelId,
+    };
+  });
+  log.info(
+    `whitelist gate: input=${trace.inputCount} kept=${trace.keptCount} dropped=${trace.droppedCount} reason=${trace.reason}`
+  );
+  return { slots: restored, trace };
 }
 
 // ============================================================================
@@ -644,6 +699,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
       title: sc.video.title,
       description: sc.video.description,
       channelName: sc.video.channelTitle,
+      channelId: sc.video.channelId,
       thumbnail: sc.video.thumbnail,
       viewCount: sc.video.viewCount,
       likeCount: sc.video.likeCount,
@@ -674,6 +730,7 @@ interface PoolItem {
   title: string;
   description: string;
   channelTitle: string | null;
+  channelId: string | null;
   thumbnail: string | null;
   publishedAt: string | null;
   cellIndexHint: number | null;
@@ -729,6 +786,7 @@ async function runSearchTraced(
         title: item.snippet?.title ?? '',
         description: item.snippet?.description ?? '',
         channelTitle: item.snippet?.channelTitle ?? null,
+        channelId: item.snippet?.channelId ?? null,
         thumbnail: item.snippet?.thumbnails?.high?.url ?? null,
         publishedAt: item.snippet?.publishedAt ?? null,
         cellIndexHint: q.cellIndex ?? null,

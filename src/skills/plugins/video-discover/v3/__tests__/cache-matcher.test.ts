@@ -6,6 +6,7 @@ function m(cellIndex: number, videoId: string, score: number): CachedMatch {
     title: `video ${videoId}`,
     description: null,
     channelName: null,
+    channelId: null,
     thumbnail: null,
     viewCount: null,
     likeCount: null,

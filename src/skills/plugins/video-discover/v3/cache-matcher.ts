@@ -29,6 +29,7 @@ export interface CachedMatch {
   title: string;
   description: string | null;
   channelName: string | null;
+  channelId: string | null;
   thumbnail: string | null;
   viewCount: number | null;
   likeCount: number | null;
@@ -50,6 +51,7 @@ interface MatchRow {
   title: string;
   description: string | null;
   channel_name: string | null;
+  channel_id: string | null;
   thumbnail_url: string | null;
   view_count: bigint | null;
   like_count: bigint | null;
@@ -88,6 +90,7 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
         vp.title,
         vp.description,
         vp.channel_name,
+        vp.channel_id,
         vp.thumbnail_url,
         vp.view_count,
         vp.like_count,
@@ -126,6 +129,7 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
     title: r.title,
     description: r.description,
     channelName: r.channel_name,
+    channelId: r.channel_id,
     thumbnail: r.thumbnail_url,
     viewCount: r.view_count == null ? null : Number(r.view_count),
     likeCount: r.like_count == null ? null : Number(r.like_count),
