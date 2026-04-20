@@ -242,6 +242,72 @@ export const playlistRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   );
 
   /**
+   * POST /api/v1/playlists/sync-all - Sync every playlist owned by the
+   * authenticated user. Sequential execution (respects per-user write
+   * rate limit). Failures per playlist are captured in the result row
+   * and do NOT abort the remaining syncs.
+   *
+   * Response shape matches the FE contract in
+   * `frontend/src/features/youtube-sync/model/useYouTubeSync.ts:useSyncAllPlaylists`
+   * — `data.results: Array<{ playlistId, status, itemsAdded }>`, where
+   * `status ∈ { 'completed', 'failed' }`.
+   */
+  fastify.post<{
+    Reply: {
+      results: Array<{
+        playlistId: string;
+        status: 'completed' | 'failed';
+        itemsAdded: number;
+        error?: string;
+      }>;
+    };
+  }>('/sync-all', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    if (!request.user || !('userId' in request.user)) {
+      throw new Error('Unauthorized');
+    }
+    const userId = request.user.userId;
+
+    const { playlists } = await getManager().listPlaylists({ userId });
+
+    logger.info('Syncing all playlists for user', {
+      userId,
+      count: playlists.length,
+    });
+
+    const results: Array<{
+      playlistId: string;
+      status: 'completed' | 'failed';
+      itemsAdded: number;
+      error?: string;
+    }> = [];
+
+    for (const playlist of playlists) {
+      try {
+        const result = await getSync().syncPlaylist(playlist.id);
+        results.push({
+          playlistId: playlist.id,
+          status: 'completed',
+          itemsAdded: result.itemsAdded,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.warn('Playlist sync failed during sync-all', {
+          playlistId: playlist.id,
+          error: message,
+        });
+        results.push({
+          playlistId: playlist.id,
+          status: 'failed',
+          itemsAdded: 0,
+          error: message,
+        });
+      }
+    }
+
+    return reply.code(200).send({ results });
+  });
+
+  /**
    * POST /api/v1/playlists/:id/sync - Sync playlist
    */
   fastify.post<{ Params: SyncPlaylistParams; Reply: { result: SyncResultResponse } }>(

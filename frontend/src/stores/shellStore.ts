@@ -20,9 +20,16 @@ interface ShellStore {
   minimapData: MinimapData | null;
   searchBarElement: React.ReactNode | null;
   onNavigateHome: (() => void) | null;
+  /**
+   * Issue #389: per-mandala "Newly Synced" card count. Drives the sidebar
+   * dot+count indicator. Empty record when no mandala has mapping-synced
+   * unplaced cards.
+   */
+  newlySyncedCountByMandala: Record<string, number>;
   setMinimapData: (data: MinimapData | null) => void;
   setSearchBarElement: (el: React.ReactNode | null) => void;
   setOnNavigateHome: (fn: (() => void) | null) => void;
+  setNewlySyncedCountByMandala: (counts: Record<string, number>) => void;
   clearShell: () => void;
 }
 
@@ -30,8 +37,16 @@ export const useShellStore = create<ShellStore>((set) => ({
   minimapData: null,
   searchBarElement: null,
   onNavigateHome: null,
+  newlySyncedCountByMandala: {},
   setMinimapData: (data) => set({ minimapData: data }),
   setSearchBarElement: (el) => set({ searchBarElement: el }),
   setOnNavigateHome: (fn) => set({ onNavigateHome: fn }),
-  clearShell: () => set({ minimapData: null, searchBarElement: null, onNavigateHome: null }),
+  setNewlySyncedCountByMandala: (counts) => set({ newlySyncedCountByMandala: counts }),
+  clearShell: () =>
+    set({
+      minimapData: null,
+      searchBarElement: null,
+      onNavigateHome: null,
+      newlySyncedCountByMandala: {},
+    }),
 }));

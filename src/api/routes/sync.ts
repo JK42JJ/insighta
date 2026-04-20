@@ -8,6 +8,7 @@ import { FastifyPluginCallback } from 'fastify';
 import { getPlaylistManager } from '../../modules/playlist';
 import { getSchedulerManager } from '../../modules/scheduler';
 import { getPrismaClient } from '../../modules/database';
+import { MS_PER_HOUR } from '../../utils/time-constants';
 import {
   GetSyncStatusParamsSchema,
   GetSyncHistoryQuerySchema,
@@ -37,6 +38,17 @@ import {
   type ScheduleResponse,
 } from '../schemas/sync.schema';
 import { logger } from '../../utils/logger';
+
+// Plan 2 — canonical sync_interval string → interval_ms mapping.
+// 'manual' has no numeric interval; callers should treat it as
+// "disable all schedules" and not push it into `interval_ms`.
+const INTERVAL_STRING_TO_MS: Record<string, number | undefined> = {
+  '1h': 1 * MS_PER_HOUR,
+  '6h': 6 * MS_PER_HOUR,
+  '12h': 12 * MS_PER_HOUR,
+  '24h': 24 * MS_PER_HOUR,
+  manual: undefined,
+};
 
 /**
  * Sync routes plugin
@@ -245,6 +257,142 @@ export const syncRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.code(200).send({ sync: response });
     }
   );
+
+  /**
+   * POST /api/v1/sync/settings (Plan 2) — update user-level sync settings
+   * AND propagate the change to per-playlist cron schedules in one call.
+   *
+   * Fixes two pre-existing gaps:
+   *   - Bug A: the Edge Function that previously handled update-settings
+   *     only wrote `youtube_sync_settings`, leaving `sync_schedules.interval_ms`
+   *     at its hardcoded 6h default. The UI dropdown was purely cosmetic.
+   *   - Bug B: `auto_sync_enabled` was never respected by the scheduler.
+   *     Now this route flips every schedule's `enabled` flag for the user
+   *     when the toggle changes, and the cron callback also checks the
+   *     flag at execution time (defense-in-depth).
+   *
+   * `syncInterval='manual'` disables every schedule but preserves the
+   * last interval for the eventual re-enable.
+   */
+  fastify.post<{
+    Body: {
+      syncInterval?: '1h' | '6h' | '12h' | '24h' | 'manual';
+      autoSyncEnabled?: boolean;
+      autoSummaryEnabled?: boolean;
+    };
+    Reply: {
+      success: true;
+      schedulesUpdated: number;
+      appliedInterval: string | null;
+      autoSyncEnabled: boolean;
+    };
+  }>('/settings', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    if (!request.user || !('userId' in request.user)) {
+      throw new Error('Unauthorized');
+    }
+    const userId = request.user.userId;
+    const { syncInterval, autoSyncEnabled, autoSummaryEnabled } = request.body ?? {};
+
+    const VALID_INTERVALS = ['1h', '6h', '12h', '24h', 'manual'] as const;
+    if (syncInterval !== undefined && !VALID_INTERVALS.includes(syncInterval)) {
+      return reply.code(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: `syncInterval must be one of: ${VALID_INTERVALS.join(', ')}`,
+          timestamp: new Date().toISOString(),
+          path: request.url,
+        },
+        // cast to satisfy Reply type; error path doesn't use success shape
+      } as never);
+    }
+
+    const db = getDb();
+
+    // 1) Upsert settings. Only write fields that were supplied so
+    //    partial updates from either toggle don't clobber siblings.
+    const updates: Record<string, unknown> = { updated_at: new Date() };
+    if (syncInterval !== undefined) updates['sync_interval'] = syncInterval;
+    if (autoSyncEnabled !== undefined) updates['auto_sync_enabled'] = autoSyncEnabled;
+    if (autoSummaryEnabled !== undefined) updates['auto_summary_enabled'] = autoSummaryEnabled;
+
+    const existing = await db.youtube_sync_settings.findUnique({ where: { user_id: userId } });
+    if (existing) {
+      await db.youtube_sync_settings.update({
+        where: { user_id: userId },
+        data: updates,
+      });
+    } else {
+      await db.youtube_sync_settings.create({
+        data: {
+          user_id: userId,
+          sync_interval: syncInterval ?? 'manual',
+          auto_sync_enabled: autoSyncEnabled ?? false,
+          auto_summary_enabled: autoSummaryEnabled ?? true,
+        },
+      });
+    }
+
+    // 2) Determine the effective interval + enabled pair to push into
+    //    sync_schedules. If the caller only toggled autoSyncEnabled we
+    //    keep the previously-stored interval.
+    const settingsAfter = await db.youtube_sync_settings.findUnique({
+      where: { user_id: userId },
+      select: { sync_interval: true, auto_sync_enabled: true },
+    });
+    const effectiveInterval = settingsAfter?.sync_interval ?? 'manual';
+    const effectiveAutoSync = settingsAfter?.auto_sync_enabled ?? false;
+    const intervalMs = INTERVAL_STRING_TO_MS[effectiveInterval];
+    const scheduleEnabled = effectiveAutoSync && effectiveInterval !== 'manual';
+
+    // 3) Propagate to every user playlist schedule. Only touch schedules
+    //    that actually need changing to minimize cron churn.
+    const playlists = await db.youtube_playlists.findMany({
+      where: { user_id: userId },
+      select: { id: true },
+    });
+
+    let schedulesUpdated = 0;
+    if (playlists.length > 0) {
+      const scheduler = getScheduler();
+      for (const pl of playlists) {
+        try {
+          const existingSchedule = await scheduler.getSchedule(pl.id);
+          if (!existingSchedule) continue;
+
+          const needsIntervalUpdate =
+            intervalMs !== undefined && existingSchedule.interval !== intervalMs;
+          const needsEnabledUpdate = existingSchedule.enabled !== scheduleEnabled;
+          if (!needsIntervalUpdate && !needsEnabledUpdate) continue;
+
+          await scheduler.updateSchedule(pl.id, {
+            ...(needsIntervalUpdate && intervalMs !== undefined ? { interval: intervalMs } : {}),
+            ...(needsEnabledUpdate ? { enabled: scheduleEnabled } : {}),
+          });
+          schedulesUpdated++;
+        } catch (err) {
+          logger.warn('Failed to propagate sync settings to schedule (continuing)', {
+            playlistId: pl.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
+
+    logger.info('Sync settings updated', {
+      userId,
+      syncInterval: syncInterval ?? null,
+      autoSyncEnabled: autoSyncEnabled ?? null,
+      autoSummaryEnabled: autoSummaryEnabled ?? null,
+      schedulesUpdated,
+    });
+
+    return reply.code(200).send({
+      success: true as const,
+      schedulesUpdated,
+      appliedInterval: effectiveInterval,
+      autoSyncEnabled: effectiveAutoSync,
+    });
+  });
 
   /**
    * GET /api/v1/sync/schedule - List schedules

@@ -107,6 +107,12 @@ interface CardListViewProps {
   gridColumns?: number;
   /** Grid column change handler */
   onGridColumnsChange?: (columns: number) => void;
+  /**
+   * Issue #389: cards synced from a mapped source but not yet placed into
+   * a cell (mandala_id set, cell_index<0, is_in_ideation=false). The
+   * "Newly Synced" pill is hidden when this list is empty.
+   */
+  newlySyncedCards?: InsightCard[];
 }
 
 export function CardListView({
@@ -141,6 +147,7 @@ export function CardListView({
   gridColumns: gridColumnsProp,
   onGridColumnsChange,
   compactMode = false,
+  newlySyncedCards,
 }: CardListViewProps) {
   const { t } = useTranslation();
   // Auto-responsive columns by CONTAINER width (reacts to side panel open/close).
@@ -160,6 +167,28 @@ export function CardListView({
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>('latest');
   const [isExternalDragOver, setIsExternalDragOver] = useState(false);
+  // Issue #389: Newly Synced pill is mutually exclusive with All/sector pills.
+  // Kept as local state (rather than lifting to parent) because the filter is
+  // a pure view concern that doesn't persist across navigations — the pill
+  // only appears when the current mandala has mapping-synced unplaced cards.
+  const [isNewlySyncedActive, setIsNewlySyncedActive] = useState(false);
+  const newlySyncedCount = newlySyncedCards?.length ?? 0;
+
+  // Auto-exit the Newly Synced view when the source list drains to 0 (user
+  // placed the last card via D&D). Prevents an empty-with-no-exit state.
+  useEffect(() => {
+    if (isNewlySyncedActive && newlySyncedCount === 0) {
+      setIsNewlySyncedActive(false);
+    }
+  }, [isNewlySyncedActive, newlySyncedCount]);
+
+  // Exit Newly Synced whenever a sector pill (or a cell-click elsewhere in
+  // the app) selects a real cell — keeps the two views mutually exclusive.
+  useEffect(() => {
+    if (selectedCellIndex !== null && selectedCellIndex >= 0 && isNewlySyncedActive) {
+      setIsNewlySyncedActive(false);
+    }
+  }, [selectedCellIndex, isNewlySyncedActive]);
 
   // Native HTML5 external drag handlers (YouTube URL from browser etc.)
   const handleExternalDragOver = useCallback(
@@ -212,12 +241,17 @@ export function CardListView({
 
   const effectiveViewMode = viewMode === 'list-detail' && isMobile ? 'list' : viewMode;
 
+  // Issue #389: when the Newly Synced pill is active, swap the card source
+  // to the unplaced mapping-synced cards. Otherwise keep the parent-filtered
+  // `cards` flow (All / sector pills / search) intact.
+  const effectiveCards = isNewlySyncedActive && newlySyncedCards ? newlySyncedCards : cards;
+
   // "latest"/"oldest" rank by source publish date (YouTube upload) ONLY.
   // Cards without a publish date sort to the end instead of inheriting
   // `createdAt` — otherwise newly-cached items inherit "today" and leak
   // into the "Latest" band above genuinely-recent uploads.
   const sortedCards = useMemo(() => {
-    const arr = [...cards];
+    const arr = [...effectiveCards];
     const getPublishedMs = (c: (typeof cards)[number]): number => {
       const fromField = c.publishedAt ? new Date(c.publishedAt).getTime() : NaN;
       if (Number.isFinite(fromField)) return fromField;
@@ -260,7 +294,7 @@ export function CardListView({
       default:
         return arr;
     }
-  }, [cards, sortMode]);
+  }, [effectiveCards, sortMode]);
 
   // Sector card counts (0-7)
   const sectorCounts = useMemo(() => {
@@ -290,6 +324,12 @@ export function CardListView({
   }, [selectedCardIds, onDeleteCards]);
 
   const handleAllClick = useCallback(() => {
+    setIsNewlySyncedActive(false);
+    onCellClick?.(-1, '');
+  }, [onCellClick]);
+
+  const handleNewlySyncedClick = useCallback(() => {
+    setIsNewlySyncedActive(true);
     onCellClick?.(-1, '');
   }, [onCellClick]);
 
@@ -312,11 +352,12 @@ export function CardListView({
       </div>
     ) : null;
 
-  // Context header
+  // Context header — count reflects whatever list the view is rendering,
+  // so it tracks the Newly Synced pill too.
   const contextHeaderElement = (
     <ContextHeader
       title={title}
-      totalCardCount={cards.length}
+      totalCardCount={effectiveCards.length}
       viewMode={effectiveViewMode}
       onViewModeChange={onViewModeChange}
       selectedCardIds={selectedCardIds}
@@ -336,6 +377,9 @@ export function CardListView({
       sectorCounts={sectorCounts}
       onSectorClick={(idx, subject) => onCellClick?.(idx, subject)}
       onAllClick={handleAllClick}
+      newlySyncedCount={newlySyncedCount}
+      isNewlySyncedSelected={isNewlySyncedActive}
+      onNewlySyncedClick={handleNewlySyncedClick}
     />
   );
 

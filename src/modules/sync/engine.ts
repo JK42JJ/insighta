@@ -20,6 +20,96 @@ import { logger, logSyncOperation } from '../../utils/logger';
 import { executeTransaction } from '../database/client';
 import { getErrorRecoveryManager, RecoveryStrategy } from '../../utils/error-recovery';
 
+// Issue #389: constants used by the source_mandala_mappings propagation path.
+// Matches the VALID_SOURCE_TYPES contract in src/api/routes/mandalas.ts.
+const SOURCE_TYPE_PLAYLIST = 'playlist' as const;
+const NEWLY_SYNCED_IS_IN_IDEATION = false;
+
+/**
+ * Transaction-scoped subset of the Prisma client needed by
+ * {@link propagateSourceMandalaMapping}. Declared as a minimal interface so
+ * unit tests can pass in a focused mock instead of the full TransactionClient.
+ */
+export interface SourceMandalaMappingTx {
+  source_mandala_mappings: {
+    findFirst(args: {
+      where: { user_id: string; source_type: string; source_id: string };
+      orderBy?: { created_at: 'asc' | 'desc' };
+    }): Promise<{ mandala_id: string } | null>;
+  };
+  userVideoState: {
+    updateMany(args: {
+      where: { user_id: string; videoId: { in: string[] } };
+      data: { mandala_id: string; is_in_ideation: boolean };
+    }): Promise<{ count: number }>;
+  };
+}
+
+/**
+ * Issue #389: propagate source_mandala_mappings → user_video_states after
+ * a sync has inserted new rows. If a mapping exists for
+ * (user, source_type='playlist', source_id=youtubePlaylistId), stamp
+ * `mandala_id` onto the newly created rows and set `is_in_ideation=false`
+ * so they leave the global Ideation palette and appear in the target
+ * mandala's "Newly Synced" tab. No mapping → legacy behavior preserved
+ * (rows stay in Ideation with mandala_id=NULL).
+ *
+ * Multi-mapping note: the source_mandala_mappings table's uniqueness
+ * constraint (user_id, source_type, source_id, mandala_id) allows a
+ * single source to map to multiple mandalas, but UserVideoState's
+ * (user_id, videoId) uniqueness limits us to one mandala per row.
+ * Phase 1 picks the oldest mapping (deterministic first-wins). A true
+ * multi-mandala fanout is deferred to a future iteration.
+ *
+ * Skips cleanly when {@link newVideoIds} is empty.
+ */
+export async function propagateSourceMandalaMapping(
+  tx: SourceMandalaMappingTx,
+  opts: {
+    userId: string;
+    playlistId: string;
+    youtubePlaylistId: string;
+    newVideoIds: string[];
+  }
+): Promise<{ mapped: boolean; mandalaId: string | null; videosMapped: number }> {
+  if (opts.newVideoIds.length === 0) {
+    return { mapped: false, mandalaId: null, videosMapped: 0 };
+  }
+
+  const mapping = await tx.source_mandala_mappings.findFirst({
+    where: {
+      user_id: opts.userId,
+      source_type: SOURCE_TYPE_PLAYLIST,
+      source_id: opts.youtubePlaylistId,
+    },
+    orderBy: { created_at: 'asc' },
+  });
+
+  if (!mapping) {
+    return { mapped: false, mandalaId: null, videosMapped: 0 };
+  }
+
+  const { count: videosMapped } = await tx.userVideoState.updateMany({
+    where: {
+      user_id: opts.userId,
+      videoId: { in: opts.newVideoIds },
+    },
+    data: {
+      mandala_id: mapping.mandala_id,
+      is_in_ideation: NEWLY_SYNCED_IS_IN_IDEATION,
+    },
+  });
+
+  logger.info('Applied source→mandala mapping to synced videos', {
+    playlistId: opts.playlistId,
+    youtubePlaylistId: opts.youtubePlaylistId,
+    mandalaId: mapping.mandala_id,
+    videosMapped,
+  });
+
+  return { mapped: true, mandalaId: mapping.mandala_id, videosMapped };
+}
+
 /**
  * Sync result
  */
@@ -248,6 +338,13 @@ export class SyncEngine {
               logger.info('Created user_video_states', {
                 playlistId: playlist.id,
                 count: newStates.length,
+              });
+
+              await propagateSourceMandalaMapping(tx, {
+                userId: playlist.user_id,
+                playlistId: playlist.id,
+                youtubePlaylistId: playlist.youtube_playlist_id,
+                newVideoIds: newStates.map((s) => s.videoId),
               });
             }
           }

@@ -6,7 +6,11 @@ import { CSS } from '@dnd-kit/utilities';
 import { InsightCard } from '@/entities/card/model/types';
 import { type DragData, type DropData, cardDragId } from '@/shared/lib/dnd';
 import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
-import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
+import {
+  handleThumbnailError,
+  handleThumbnailLoad,
+  upgradeYouTubeThumbnail,
+} from '@/shared/lib/image-utils';
 import {
   Lightbulb,
   Plus,
@@ -866,7 +870,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                   style={{ boxShadow: 'var(--shadow-sm)' }}
                 >
                   <img
-                    src={card.thumbnail}
+                    src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
                     alt={card.title}
                     draggable={false}
                     className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
@@ -1172,7 +1176,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                                   style={{ boxShadow: 'var(--shadow-xs)' }}
                                 >
                                   <img
-                                    src={card.thumbnail}
+                                    src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
                                     alt={card.title}
                                     draggable={false}
                                     className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"

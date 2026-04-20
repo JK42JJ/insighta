@@ -4,7 +4,11 @@ import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 import { Lightbulb, Plus, ExternalLink } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
+import {
+  handleThumbnailError,
+  handleThumbnailLoad,
+  upgradeYouTubeThumbnail,
+} from '@/shared/lib/image-utils';
 import {
   format,
   differenceInHours,
@@ -268,7 +272,7 @@ export function ScratchPad({
                         style={{ boxShadow: 'var(--shadow-sm)' }}
                       >
                         <img
-                          src={card.thumbnail}
+                          src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
                           alt={card.title}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                           onError={handleThumbnailError}

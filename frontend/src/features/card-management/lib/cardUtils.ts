@@ -138,3 +138,39 @@ export function isCardInMandala(card: InsightCard): boolean {
     card.levelId !== 'scratchpad'
   );
 }
+
+/**
+ * Issue #389: a card is "newly synced" when a `source_mandala_mappings`
+ * entry caused the sync engine to stamp `mandala_id` on it, but no cell
+ * placement has happened yet. These cards live in the target mandala's
+ * "Newly Synced" tab until the user drops them into a cell.
+ *
+ * Predicate:
+ *   - `isInIdeation === false` (out of the global Ideation palette)
+ *   - `cellIndex < 0` or missing (unplaced)
+ *   - `mandalaId` is truthy (has a mapped home mandala)
+ *   - if `mandalaId` is supplied, filters to that mandala only
+ */
+export function isNewlySyncedCard(card: InsightCard, mandalaId?: string | null): boolean {
+  if (card.isInIdeation !== false) return false;
+  if (typeof card.cellIndex === 'number' && card.cellIndex >= 0) return false;
+  if (!card.mandalaId) return false;
+  if (mandalaId && card.mandalaId !== mandalaId) return false;
+  return true;
+}
+
+/**
+ * Count newly-synced cards per mandala. Cards without a `mandalaId` or
+ * that fail {@link isNewlySyncedCard} are ignored. Mandalas with count 0
+ * are omitted from the result — consumers can treat a missing key as 0.
+ */
+export function countNewlySyncedByMandala(cards: InsightCard[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const c of cards) {
+    if (!isNewlySyncedCard(c)) continue;
+    const key = c.mandalaId;
+    if (!key) continue;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}

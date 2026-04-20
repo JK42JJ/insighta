@@ -349,6 +349,29 @@ export class AutoSyncScheduler {
     try {
       logger.info('Starting scheduled sync job', { playlistId });
 
+      // Bug B (Plan 2): respect the user-level auto_sync_enabled toggle.
+      // sync_schedules.enabled is per-playlist; auto_sync_enabled is
+      // per-user and wasn't previously consulted at execution time. Skip
+      // cleanly when the user has globally opted out.
+      const db = getPrismaClient();
+      const playlistRow = await db.youtube_playlists.findUnique({
+        where: { id: playlistId },
+        select: { user_id: true },
+      });
+      if (playlistRow) {
+        const settings = await db.youtube_sync_settings.findUnique({
+          where: { user_id: playlistRow.user_id },
+          select: { auto_sync_enabled: true },
+        });
+        if (settings && settings.auto_sync_enabled === false) {
+          logger.debug('Skipping scheduled sync — user opted out of auto-sync', {
+            playlistId,
+            userId: playlistRow.user_id,
+          });
+          return;
+        }
+      }
+
       // Check quota availability before syncing
       const { remaining } = await this.quotaManager.getTodayUsage();
 

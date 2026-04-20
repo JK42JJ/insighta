@@ -59,7 +59,13 @@
     "lastSync": "마지막 동기화",
     "selectedCount": "{{count}}개 선택",
     "bulkAssign": "만다라 일괄 지정",
-    "mandalaApplyNote": "이 세션에서 추가하는 모든 소스에 적용됩니다. 개별 매핑은 소스 카드의 만다라 pill에서 변경하세요."
+    "mandalaApplyNote": "이 세션에서 추가하는 모든 소스에 적용됩니다. 개별 매핑은 소스 카드의 만다라 pill에서 변경하세요.",
+    "syncFailed": "동기화 실패",
+    "syncFailedDesc": "동기화 중 오류가 발생했습니다: {{reason}}",
+    "syncAllFailedDesc": "{{failed}}개 소스 동기화 실패 ({{total}}개 시도)",
+    "reconnectNeeded": "YouTube 재연결 필요",
+    "reconnectNeededDesc": "YouTube 인증이 만료되었습니다. 설정 > 연결된 서비스에서 다시 연결해 주세요.",
+    "openSettings": "설정으로 이동"
   },
   "explore": {
     "title": "만다라트 탐색",
@@ -274,6 +280,12 @@
     "syncCompletionDesc": "YouTube 동기화 완료 시 알림",
     "aiInsightReady": "AI 인사이트 준비 완료",
     "aiInsightReadyDesc": "AI 요약이 준비되면 알림",
+    "syncIntervalUpdated": "동기화 간격이 변경되었습니다",
+    "syncIntervalUpdatedDesc": "간격: {{interval}}. {{count}}개 플레이리스트에 즉시 반영됨.",
+    "autoSyncOn": "백그라운드 동기화 켜짐",
+    "autoSyncOff": "백그라운드 동기화 꺼짐",
+    "autoSyncToggleDesc": "{{count}}개 플레이리스트에 반영됨.",
+    "syncSettingsFailed": "동기화 설정 업데이트 실패",
     "exportData": "데이터 내보내기",
     "exportDataDesc": "모든 데이터를 JSON으로 다운로드",
     "exportBtn": "JSON 내보내기",

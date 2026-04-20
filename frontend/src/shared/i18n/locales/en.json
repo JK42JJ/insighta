@@ -59,7 +59,13 @@
     "lastSync": "Last sync",
     "selectedCount": "{{count}} selected",
     "bulkAssign": "Assign Mandala",
-    "mandalaApplyNote": "Applies to all sources added in this session. For individual mapping, use the mandala pills on each source card."
+    "mandalaApplyNote": "Applies to all sources added in this session. For individual mapping, use the mandala pills on each source card.",
+    "syncFailed": "Sync failed",
+    "syncFailedDesc": "An error occurred during sync: {{reason}}",
+    "syncAllFailedDesc": "{{failed}} of {{total}} sources failed to sync",
+    "reconnectNeeded": "YouTube reconnection required",
+    "reconnectNeededDesc": "Your YouTube credentials have expired. Please reconnect in Settings > Connected Services.",
+    "openSettings": "Open Settings"
   },
   "explore": {
     "title": "Explore Mandalas",
@@ -273,6 +279,12 @@
     "syncCompletionDesc": "Notify when YouTube sync completes",
     "aiInsightReady": "AI insight ready",
     "aiInsightReadyDesc": "Notify when AI summary is available",
+    "syncIntervalUpdated": "Sync interval updated",
+    "syncIntervalUpdatedDesc": "Interval: {{interval}}. Applied to {{count}} playlist(s) immediately.",
+    "autoSyncOn": "Background sync enabled",
+    "autoSyncOff": "Background sync disabled",
+    "autoSyncToggleDesc": "Applied to {{count}} playlist(s).",
+    "syncSettingsFailed": "Failed to update sync settings",
     "exportData": "Export Data",
     "exportDataDesc": "Download all your data as JSON",
     "exportBtn": "Export JSON",

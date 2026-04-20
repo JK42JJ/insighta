@@ -16,7 +16,12 @@ import {
 } from '@/features/youtube-sync/model/useYouTubeSync';
 import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
 import { convertToInsightCards } from '@/features/card-management/lib/youtubeToInsightCard';
-import { detectCardSource, getCardById } from '@/features/card-management/lib/cardUtils';
+import {
+  detectCardSource,
+  getCardById,
+  isNewlySyncedCard,
+  countNewlySyncedByMandala,
+} from '@/features/card-management/lib/cardUtils';
 import {
   createMockCards,
   createCardFromUrl,
@@ -47,6 +52,9 @@ export interface UseCardOrchestratorReturn {
   totalCards: number;
   displayCards: InsightCard[];
   displayTitle: string;
+  // Issue #389: mapping-synced, not yet placed into a cell.
+  newlySyncedCards: InsightCard[];
+  newlySyncedCountByMandala: Record<string, number>;
   // Derived arrays (needed by external hooks)
   syncedCards: InsightCard[];
   persistedLocalCards: InsightCard[];
@@ -131,7 +139,7 @@ export function useCardOrchestrator(
     async (
       cardId: string,
       videoUrl?: string,
-      sourceTable: 'user_local_cards' | 'user_video_states' = 'user_local_cards',
+      sourceTable: 'user_local_cards' | 'user_video_states' = 'user_local_cards'
     ): Promise<boolean> => {
       try {
         // Step 1: Try to fetch transcript via Edge Function (Deno Deploy, not EC2)
@@ -141,7 +149,7 @@ export function useCardOrchestrator(
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
             const transcriptRes = await fetch(
               `${supabaseUrl}/functions/v1/fetch-transcript?video_id=${encodeURIComponent(videoUrl)}`,
-              { headers: await getAuthHeaders() },
+              { headers: await getAuthHeaders() }
             );
             if (transcriptRes.ok) {
               const data = await transcriptRes.json();
@@ -174,7 +182,7 @@ export function useCardOrchestrator(
         return false;
       }
     },
-    [queryClient],
+    [queryClient]
   );
 
   // Auto-enrichment for YouTube cards — respects autoSummaryEnabled setting
@@ -183,7 +191,7 @@ export function useCardOrchestrator(
     async (
       cardId: string,
       videoUrl?: string,
-      sourceTable: 'user_local_cards' | 'user_video_states' = 'user_local_cards',
+      sourceTable: 'user_local_cards' | 'user_video_states' = 'user_local_cards'
     ) => {
       if (!autoSummaryEnabled) return;
       setEnrichingCardIds((prev) => new Set(prev).add(cardId));
@@ -211,15 +219,21 @@ export function useCardOrchestrator(
         return next;
       });
     },
-    [autoSummaryEnabled, executeEnrich],
+    [autoSummaryEnabled, executeEnrich]
   );
 
   // Manual retry for failed enrichment
   const retryEnrich = useCallback(
-    (cardId: string, videoUrl?: string, sourceTable: 'user_local_cards' | 'user_video_states' = 'user_local_cards') => {
-      triggerAutoEnrich(cardId, videoUrl, sourceTable).catch(() => {/* handled internally */});
+    (
+      cardId: string,
+      videoUrl?: string,
+      sourceTable: 'user_local_cards' | 'user_video_states' = 'user_local_cards'
+    ) => {
+      triggerAutoEnrich(cardId, videoUrl, sourceTable).catch(() => {
+        /* handled internally */
+      });
     },
-    [triggerAutoEnrich],
+    [triggerAutoEnrich]
   );
 
   // Convert video states to InsightCards
@@ -281,10 +295,28 @@ export function useCardOrchestrator(
     [syncedCards]
   );
 
+  // Issue #389: "Newly Synced" cards — mapped to a mandala via
+  // source_mandala_mappings but not yet placed into a specific cell.
+  // Predicate centralized in cardUtils.isNewlySyncedCard.
+  const newlySyncedCards = useMemo(
+    () => syncedCards.filter((c) => isNewlySyncedCard(c, mandalaId)),
+    [syncedCards, mandalaId]
+  );
+
+  // Global per-mandala counts — drives sidebar dot+count indicator.
+  // Not scoped to the current mandala so every mandala item can display
+  // its own count without extra queries.
+  const newlySyncedCountByMandala = useMemo(
+    () => countNewlySyncedByMandala(syncedCards),
+    [syncedCards]
+  );
+
   // Merged scratchpad (deduplicate by normalized URL)
   const scratchPadCards = useMemo(() => {
     const persistedUrls = new Set(persistedLocalCards.map((c) => normalizeUrl(c.videoUrl)));
-    const filteredPending = pendingLocalCards.filter((c) => !persistedUrls.has(normalizeUrl(c.videoUrl)));
+    const filteredPending = pendingLocalCards.filter(
+      (c) => !persistedUrls.has(normalizeUrl(c.videoUrl))
+    );
     const merged = [...ideationVideoCards, ...scratchpadLocalCards, ...filteredPending];
     const seen = new Set<string>();
     return merged.filter((card) => {
@@ -456,7 +488,16 @@ export function useCardOrchestrator(
         }
       }
     },
-    [handleFileUpload, currentLevelId, currentLevel.subjects, toast, addLocalCard, queryClient, t, mandalaId]
+    [
+      handleFileUpload,
+      currentLevelId,
+      currentLevel.subjects,
+      toast,
+      addLocalCard,
+      queryClient,
+      t,
+      mandalaId,
+    ]
   );
 
   // File drop for scratchpad
@@ -547,13 +588,18 @@ export function useCardOrchestrator(
         if ('_isUpdate' in result && result._isUpdate) {
           toast({
             title: t('index.cardUpdated', 'Card updated'),
-            description: t('index.cardUpdatedDesc', 'This URL already existed. Card position updated.'),
+            description: t(
+              'index.cardUpdatedDesc',
+              'This URL already existed. Card position updated.'
+            ),
           });
         }
 
         // Fire-and-forget: trigger AI enrichment for YouTube cards
         if (linkType === 'youtube' || linkType === 'youtube-shorts') {
-          triggerAutoEnrich(result.id, url).catch(() => {/* non-critical */});
+          triggerAutoEnrich(result.id, url).catch(() => {
+            /* non-critical */
+          });
         }
       } catch (error) {
         setPendingLocalCards((prev) => prev.filter((c) => c.id !== tempCard.id));
@@ -652,7 +698,9 @@ export function useCardOrchestrator(
         // Fire-and-forget: trigger AI enrichment for each imported YouTube card
         const importedCards: Array<{ id: string; url: string }> = data.cards || [];
         for (const card of importedCards) {
-          triggerAutoEnrich(card.id, card.url).catch(() => {/* non-critical */});
+          triggerAutoEnrich(card.id, card.url).catch(() => {
+            /* non-critical */
+          });
         }
       } catch (error) {
         toast({
@@ -683,7 +731,9 @@ export function useCardOrchestrator(
       // Multi-card drop
       if (multiCardIds && multiCardIds.length > 0) {
         if (!mandalaId) {
-          console.warn('[CardOrchestrator] mandalaId is null during multi-card drop — waiting for mandala selection');
+          console.warn(
+            '[CardOrchestrator] mandalaId is null during multi-card drop — waiting for mandala selection'
+          );
           toast({
             title: t('common.error'),
             description: t('index.mandalaNotReady'),
@@ -742,7 +792,9 @@ export function useCardOrchestrator(
       // Single card drop
       if (cardId) {
         if (!mandalaId) {
-          console.warn('[CardOrchestrator] mandalaId is null during single card drop — waiting for mandala selection');
+          console.warn(
+            '[CardOrchestrator] mandalaId is null during single card drop — waiting for mandala selection'
+          );
           toast({
             title: t('common.error'),
             description: t('index.mandalaNotReady'),
@@ -835,7 +887,9 @@ export function useCardOrchestrator(
 
         // Guard: mandalaId must be set before adding cards to mandala cells
         if (!mandalaId) {
-          console.warn('[CardOrchestrator] mandalaId is null during card drop — waiting for mandala selection');
+          console.warn(
+            '[CardOrchestrator] mandalaId is null during card drop — waiting for mandala selection'
+          );
           toast({
             title: t('common.error'),
             description: t('index.mandalaNotReady'),
@@ -868,7 +922,11 @@ export function useCardOrchestrator(
 
           const newCard = createCardFromUrl(url, cellIndex, currentLevelId);
           if (!newCard) {
-            toast({ title: t('index.invalidUrl'), description: 'This URL cannot be saved as a card.', variant: 'destructive' });
+            toast({
+              title: t('index.invalidUrl'),
+              description: 'This URL cannot be saved as a card.',
+              variant: 'destructive',
+            });
             return;
           }
           setPendingLocalCards((prev) => [...prev, newCard]);
@@ -967,7 +1025,11 @@ export function useCardOrchestrator(
 
         const newCard = createCardFromUrl(url, -1, 'scratchpad');
         if (!newCard) {
-          toast({ title: t('index.invalidUrl'), description: 'This URL cannot be saved as a card.', variant: 'destructive' });
+          toast({
+            title: t('index.invalidUrl'),
+            description: 'This URL cannot be saved as a card.',
+            variant: 'destructive',
+          });
           return;
         }
         setPendingLocalCards((prev) => [...prev, newCard]);
@@ -984,7 +1046,18 @@ export function useCardOrchestrator(
         });
       }
     },
-    [isLoggedIn, navigate, toast, canAddCard, subscription, t, persistUrlCard, handlePlaylistDrop, persistedLocalCards, pendingLocalCards]
+    [
+      isLoggedIn,
+      navigate,
+      toast,
+      canAddCard,
+      subscription,
+      t,
+      persistUrlCard,
+      handlePlaylistDrop,
+      persistedLocalCards,
+      pendingLocalCards,
+    ]
   );
 
   // Move card from mandala back to scratchpad
@@ -1291,6 +1364,8 @@ export function useCardOrchestrator(
     displayTitle,
     isLoading: isLocalCardsLoading,
     syncedCards,
+    newlySyncedCards,
+    newlySyncedCountByMandala,
     persistedLocalCards,
     pendingLocalCards,
     addPendingCard: (card: InsightCard) => setPendingLocalCards((prev) => [...prev, card]),
@@ -1313,6 +1388,11 @@ export function useCardOrchestrator(
     failedEnrichCardIds,
     retryEnrich,
     markEnrichStart: (cardId: string) => setEnrichingCardIds((prev) => new Set(prev).add(cardId)),
-    markEnrichEnd: (cardId: string) => setEnrichingCardIds((prev) => { const next = new Set(prev); next.delete(cardId); return next; }),
+    markEnrichEnd: (cardId: string) =>
+      setEnrichingCardIds((prev) => {
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      }),
   };
 }

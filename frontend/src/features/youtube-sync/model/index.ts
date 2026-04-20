@@ -10,6 +10,7 @@ export {
   useUpdateVideoState,
   useSyncAllPlaylists,
   useYouTubeSync,
+  isYouTubeReauthError,
 } from './useYouTubeSync';
 
 export {

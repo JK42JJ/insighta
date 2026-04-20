@@ -651,6 +651,7 @@ function AuthenticatedApp() {
   const setMinimapData = useShellStore((s) => s.setMinimapData);
   const setSearchBarElement = useShellStore((s) => s.setSearchBarElement);
   const setOnNavigateHome = useShellStore((s) => s.setOnNavigateHome);
+  const setNewlySyncedCountByMandala = useShellStore((s) => s.setNewlySyncedCountByMandala);
   const clearShell = useShellStore((s) => s.clearShell);
 
   // cleanup on unmount only
@@ -700,6 +701,12 @@ function AuthenticatedApp() {
     selectedMandalaId,
     setMinimapData,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Issue #389: push per-mandala "Newly Synced" counts to the shell store
+  // so the sidebar mandala list can render the dot+count indicator.
+  useEffect(() => {
+    setNewlySyncedCountByMandala(cards.newlySyncedCountByMandala);
+  }, [cards.newlySyncedCountByMandala, setNewlySyncedCountByMandala]);
 
   // searchBar — useMemo with primitive deps only
   const searchBarMemo = useMemo(
@@ -899,6 +906,7 @@ function AuthenticatedApp() {
                       totalCardCount={cards.totalCards}
                       cardsByCell={cards.cardsByCell}
                       isExternalCardDragActive={activeDragData?.type === 'card'}
+                      newlySyncedCards={cards.newlySyncedCards}
                     />
                   </>
                 )}

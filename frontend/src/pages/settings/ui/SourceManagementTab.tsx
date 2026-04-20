@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { Plus, RefreshCw, Loader2, Search, ChevronDown } from 'lucide-react';
-import { useYouTubeSync } from '@/features/youtube-sync/model/useYouTubeSync';
+import { useYouTubeSync, isYouTubeReauthError } from '@/features/youtube-sync/model/useYouTubeSync';
 import {
   useMandalaList,
   useSourceMappings,
@@ -10,6 +11,8 @@ import {
   useDeleteSourceMapping,
 } from '@/features/mandala';
 import { apiClient } from '@/shared/lib/api-client';
+import { useToast } from '@/shared/lib/use-toast';
+import { ToastAction } from '@/shared/ui/toast';
 import { SourceCard } from './SourceCard';
 import { AddSourceModal } from './AddSourceModal';
 import { cn } from '@/shared/lib/utils';
@@ -19,7 +22,46 @@ type SortType = 'name' | 'date' | 'videos';
 
 export function SourceManagementTab() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [, setSearchParams] = useSearchParams();
+  const { toast } = useToast();
   const ytSync = useYouTubeSync();
+
+  // Same error-surfacing helper as SourceManagementTabV2. Keeps V1/V2 in
+  // lockstep until one of them is retired.
+  const openConnectedServicesTab = () => {
+    setSearchParams({ tab: 'services' });
+    navigate('/settings?tab=services');
+  };
+  const surfaceSyncError = (err: unknown, reason: string) => {
+    const message = err instanceof Error ? err.message : String(err);
+    if (isYouTubeReauthError(err)) {
+      toast({
+        title: t('sources.reconnectNeeded', 'YouTube reconnection required'),
+        description: t(
+          'sources.reconnectNeededDesc',
+          'Your YouTube credentials have expired. Please reconnect in Settings > Connected Services.'
+        ),
+        variant: 'destructive',
+        action: (
+          <ToastAction
+            altText={t('sources.openSettings', 'Open Settings')}
+            onClick={openConnectedServicesTab}
+          >
+            {t('sources.openSettings', 'Open Settings')}
+          </ToastAction>
+        ),
+      });
+      return;
+    }
+    toast({
+      title: t('sources.syncFailed', 'Sync failed'),
+      description: t('sources.syncFailedDesc', 'An error occurred during sync: {{reason}}', {
+        reason: message || reason,
+      }),
+      variant: 'destructive',
+    });
+  };
   const [filter, setFilter] = useState<FilterType>('all');
   const [mandalaFilter, setMandalaFilter] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -135,10 +177,14 @@ export function SourceManagementTab() {
     });
   };
 
-  const handleSync = async (id: string) => {
+  const handleSync = async (id: string): Promise<{ ok: boolean; error?: unknown }> => {
     setSyncingIds((prev) => new Set(prev).add(id));
     try {
       await ytSync.syncPlaylist(id);
+      return { ok: true };
+    } catch (err) {
+      surfaceSyncError(err, 'syncPlaylist');
+      return { ok: false, error: err };
     } finally {
       setSyncingIds((prev) => {
         const next = new Set(prev);
@@ -239,8 +285,31 @@ export function SourceManagementTab() {
 
   const handleSyncAll = async () => {
     const activeSources = filtered.filter((s) => !s.isPaused);
+    let failed = 0;
+    let reauthHit = false;
     for (const source of activeSources) {
-      await handleSync(source.id);
+      const res = await handleSync(source.id);
+      if (!res.ok) {
+        failed += 1;
+        if (isYouTubeReauthError(res.error)) {
+          reauthHit = true;
+          break;
+        }
+      }
+    }
+    if (!reauthHit && failed > 0) {
+      toast({
+        title: t('sources.syncFailed', 'Sync failed'),
+        description: t(
+          'sources.syncAllFailedDesc',
+          '{{failed}} of {{total}} sources failed to sync',
+          {
+            failed,
+            total: activeSources.length,
+          }
+        ),
+        variant: 'destructive',
+      });
     }
   };
 
