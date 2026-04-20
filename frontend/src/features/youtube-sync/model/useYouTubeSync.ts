@@ -258,7 +258,14 @@ export function useResumePlaylist() {
 }
 
 /**
- * Hook to update sync settings (still via Edge Function -- no Backend API equivalent yet)
+ * Hook to update sync settings.
+ *
+ * Plan 2: migrated from the `update-settings` Edge Function to the new
+ * `POST /api/v1/sync/settings` BE route. The EF only wrote
+ * `youtube_sync_settings`; the BE route additionally propagates the
+ * change to `sync_schedules.interval_ms` and re-registers cron jobs
+ * via `SchedulerManager.updateSchedule` so the UI dropdown is no
+ * longer cosmetic.
  */
 export function useUpdateSyncSettings() {
   const queryClient = useQueryClient();
@@ -269,14 +276,20 @@ export function useUpdateSyncSettings() {
     autoSummaryEnabled?: boolean;
   };
 
+  type UpdateSettingsResult = {
+    schedulesUpdated: number;
+    appliedInterval: SyncInterval | null;
+    autoSyncEnabled: boolean;
+  };
+
   return useMutation({
     mutationFn: async ({
       syncInterval,
       autoSyncEnabled,
       autoSummaryEnabled,
-    }: UpdateSettingsVars): Promise<void> => {
+    }: UpdateSettingsVars): Promise<UpdateSettingsResult> => {
       const headers = await getAuthHeaders();
-      const response = await fetch(ytSyncUrl('update-settings'), {
+      const response = await fetch('/api/v1/sync/settings', {
         method: 'POST',
         headers,
         body: JSON.stringify({ syncInterval, autoSyncEnabled, autoSummaryEnabled }),
@@ -284,8 +297,14 @@ export function useUpdateSyncSettings() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to update settings');
+        throw new Error(error?.error?.message || error?.error || 'Failed to update settings');
       }
+      const data = await response.json();
+      return {
+        schedulesUpdated: data.schedulesUpdated ?? 0,
+        appliedInterval: (data.appliedInterval ?? null) as SyncInterval | null,
+        autoSyncEnabled: data.autoSyncEnabled ?? false,
+      };
     },
     onMutate: async (vars: UpdateSettingsVars) => {
       await queryClient.cancelQueries({ queryKey: ['youtube', 'auth', 'status'] });
@@ -508,6 +527,33 @@ export function useYouTubeSearch() {
       return data.videos ?? [];
     },
   });
+}
+
+/**
+ * Classifier for sync errors that signal the user's YouTube OAuth
+ * refresh_token is no longer accepted by Google (invalid_grant) or the
+ * credentials row is missing. Callers should respond by prompting the
+ * user to reconnect YouTube in Settings instead of showing a generic
+ * "sync failed" toast.
+ *
+ * Matches the known failure messages surfaced by the BE layer:
+ *   - `src/modules/auth/token-manager.ts:268` → InvalidCredentialsError
+ *     with reason "Refresh token expired or revoked" or
+ *     "Token refresh failed".
+ *   - `src/api/routes/youtube.ts:50,96` → "YouTube account not connected
+ *     or token expired. Please reconnect via Settings."
+ *   - Raw `invalid_grant` string from the Google OAuth response.
+ */
+export function isYouTubeReauthError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message.toLowerCase();
+  return (
+    msg.includes('invalid_grant') ||
+    msg.includes('refresh token expired') ||
+    msg.includes('token refresh failed') ||
+    msg.includes('youtube account not connected') ||
+    msg.includes('token expired')
+  );
 }
 
 /**

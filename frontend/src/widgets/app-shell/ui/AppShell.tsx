@@ -35,6 +35,7 @@ export function AppShell({ children }: AppShellProps) {
   const minimapData = useShellStore((s) => s.minimapData);
   const searchBarElement = useShellStore((s) => s.searchBarElement);
   const onNavigateHome = useShellStore((s) => s.onNavigateHome);
+  const newlySyncedCountByMandala = useShellStore((s) => s.newlySyncedCountByMandala);
   const { isLoggedIn } = useAuth();
   const { t } = useTranslation();
   const sensors = useDndSensors();
@@ -120,6 +121,7 @@ export function AppShell({ children }: AppShellProps) {
               onToggleCollapse={handleToggleCollapse}
               onNavigateHome={onNavigateHome ?? undefined}
               minimapData={minimapData ?? undefined}
+              newlySyncedCountByMandala={newlySyncedCountByMandala}
               settingsMode={isSettingsRoute}
             />
           )}

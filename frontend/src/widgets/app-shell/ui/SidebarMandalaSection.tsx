@@ -29,9 +29,20 @@ const SWITCH_DEBOUNCE_MS = 300;
 interface SidebarMandalaSectionProps {
   collapsed: boolean;
   minimapData?: MinimapData;
+  /**
+   * Issue #389: per-mandala "Newly Synced" card count (videos synced from a
+   * mapped source but not yet placed into a cell). Rendered as `● N`
+   * next to each mandala row in the popover. Entries with count 0 are
+   * omitted entirely — no indicator shown.
+   */
+  newlySyncedCountByMandala?: Record<string, number>;
 }
 
-export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandalaSectionProps) {
+export function SidebarMandalaSection({
+  collapsed,
+  minimapData,
+  newlySyncedCountByMandala,
+}: SidebarMandalaSectionProps) {
   const selectedMandalaId = useMandalaStore((s) => s.selectedMandalaId);
   const selectMandala = useMandalaStore((s) => s.selectMandala);
   const pendingMandala = useMandalaStore((s) => s.pendingMandala);
@@ -223,6 +234,7 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
           <div className="max-h-[240px] overflow-y-auto">
             {sortedMandalas.map((mandala) => {
               const isSelected = mandala.id === selectedMandalaId;
+              const newlySyncedCount = newlySyncedCountByMandala?.[mandala.id] ?? 0;
               return (
                 <button
                   key={mandala.id}
@@ -237,7 +249,20 @@ export function SidebarMandalaSection({ collapsed, minimapData }: SidebarMandala
                   )}
                 >
                   <span className="truncate">{getCenterLabel(mandala)}</span>
-                  {isSelected && <Check className="w-3.5 h-3.5 text-primary shrink-0 ml-2" />}
+                  <span className="flex items-center gap-2 shrink-0 ml-2">
+                    {newlySyncedCount > 0 && (
+                      <span
+                        className="flex items-center gap-1 text-[11px] text-primary font-medium"
+                        aria-label={t('sidebar.newlySyncedAria', '{{count}} newly synced', {
+                          count: newlySyncedCount,
+                        })}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary" aria-hidden="true" />
+                        {newlySyncedCount}
+                      </span>
+                    )}
+                    {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
+                  </span>
                 </button>
               );
             })}

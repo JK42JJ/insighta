@@ -14,6 +14,15 @@ interface LabelFilterPillsV2Props {
   onSectorClick: (cellIndex: number, subject: string) => void;
   /** Called when All pill is clicked (deselect sector) */
   onAllClick: () => void;
+  /**
+   * Issue #389: count of synced videos mapped to this mandala but not yet
+   * placed into a cell. Pill is hidden entirely when 0.
+   */
+  newlySyncedCount?: number;
+  /** True when the "Newly Synced" pill is the active filter. */
+  isNewlySyncedSelected?: boolean;
+  /** Called when the "Newly Synced" pill is clicked. */
+  onNewlySyncedClick?: () => void;
 }
 
 export function LabelFilterPillsV2({
@@ -23,9 +32,13 @@ export function LabelFilterPillsV2({
   sectorCounts,
   onSectorClick,
   onAllClick,
+  newlySyncedCount = 0,
+  isNewlySyncedSelected = false,
+  onNewlySyncedClick,
 }: LabelFilterPillsV2Props) {
   const { t } = useTranslation();
-  const isAllSelected = selectedIndex === null;
+  const isAllSelected = selectedIndex === null && !isNewlySyncedSelected;
+  const showNewlySynced = newlySyncedCount > 0 && typeof onNewlySyncedClick === 'function';
 
   return (
     <div
@@ -53,7 +66,7 @@ export function LabelFilterPillsV2({
 
       {/* 8 sector tabs */}
       {sectors.map((sector, idx) => {
-        const isActive = selectedIndex === idx;
+        const isActive = selectedIndex === idx && !isNewlySyncedSelected;
         const count = sectorCounts[idx] ?? 0;
         return (
           <button
@@ -76,6 +89,34 @@ export function LabelFilterPillsV2({
           </button>
         );
       })}
+
+      {/* Issue #389: "Newly Synced" tab — appended at the end, hidden when 0.
+          Visually distinguished from the All/sector pills with the primary
+          accent (leading dot + tinted text) so it echoes the sidebar
+          dot+count indicator that surfaces the same per-mandala count. */}
+      {showNewlySynced && (
+        <button
+          onClick={onNewlySyncedClick}
+          className={cn(
+            'relative shrink-0 mr-3 pb-1 text-[11px] font-medium transition-colors bg-transparent border-none cursor-pointer inline-flex items-center gap-1',
+            isNewlySyncedSelected
+              ? 'text-[var(--ind,#818cf8)] font-bold'
+              : 'text-[var(--ind,#818cf8)]/80 hover:text-[var(--ind,#818cf8)]'
+          )}
+        >
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-[var(--ind,#818cf8)] shrink-0"
+            aria-hidden="true"
+          />
+          {t('labelFilter.newlySynced', 'Newly Synced')}
+          <span className="ml-[2px] text-[10px] font-medium text-[var(--ind,#818cf8)]/70">
+            {newlySyncedCount}
+          </span>
+          {isNewlySyncedSelected && (
+            <span className="absolute bottom-[-2px] left-0 right-0 h-[2px] bg-[var(--ind,#818cf8)] rounded-full" />
+          )}
+        </button>
+      )}
     </div>
   );
 }

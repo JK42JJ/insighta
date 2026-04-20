@@ -1,13 +1,16 @@
 import { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw, Loader2 } from 'lucide-react';
-import { useYouTubeSync } from '@/features/youtube-sync/model/useYouTubeSync';
+import { useYouTubeSync, isYouTubeReauthError } from '@/features/youtube-sync/model/useYouTubeSync';
 import {
   useMandalaList,
   useSourceMappings,
   useCreateSourceMappings,
   useDeleteSourceMapping,
 } from '@/features/mandala';
+import { useToast } from '@/shared/lib/use-toast';
+import { ToastAction } from '@/shared/ui/toast';
 import { SourceCardV2 } from './SourceCardV2';
 import { AddSourceModalV2 } from './AddSourceModalV2';
 import { BulkActionBar } from './BulkActionBar';
@@ -20,7 +23,50 @@ type SortId = 'name' | 'videos' | 'date';
 
 export function SourceManagementTabV2() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [, setSearchParams] = useSearchParams();
+  const { toast } = useToast();
   const ytSync = useYouTubeSync();
+
+  // Open Settings → Connected Services tab (scoped query param).
+  const openConnectedServicesTab = () => {
+    setSearchParams({ tab: 'services' });
+    navigate('/settings?tab=services');
+  };
+
+  // Emit a regression-aware error toast for sync failures. OAuth
+  // refresh_token rejection (invalid_grant / token expired) gets a
+  // dedicated reconnect CTA; everything else falls back to a generic
+  // toast that surfaces the server message.
+  const surfaceSyncError = (err: unknown, reason: string) => {
+    const message = err instanceof Error ? err.message : String(err);
+    if (isYouTubeReauthError(err)) {
+      toast({
+        title: t('sources.reconnectNeeded', 'YouTube reconnection required'),
+        description: t(
+          'sources.reconnectNeededDesc',
+          'Your YouTube credentials have expired. Please reconnect in Settings > Connected Services.'
+        ),
+        variant: 'destructive',
+        action: (
+          <ToastAction
+            altText={t('sources.openSettings', 'Open Settings')}
+            onClick={openConnectedServicesTab}
+          >
+            {t('sources.openSettings', 'Open Settings')}
+          </ToastAction>
+        ),
+      });
+      return;
+    }
+    toast({
+      title: t('sources.syncFailed', 'Sync failed'),
+      description: t('sources.syncFailedDesc', 'An error occurred during sync: {{reason}}', {
+        reason: message || reason,
+      }),
+      variant: 'destructive',
+    });
+  };
 
   const [typeFilter, setTypeFilter] = useState<FilterType>('all');
   const [mandalaFilter, setMandalaFilter] = useState<string | null>(null);
@@ -141,10 +187,17 @@ export function SourceManagementTabV2() {
   };
 
   // Handlers
-  const handleSync = async (id: string) => {
+  const handleSync = async (id: string): Promise<{ ok: boolean; error?: unknown }> => {
     setSyncingIds((prev) => new Set(prev).add(id));
     try {
       await ytSync.syncPlaylist(id);
+      return { ok: true };
+    } catch (err) {
+      // Reauth errors propagate so handleSyncAll can bail out early
+      // (rather than retrying each playlist against the same dead token).
+      // Individual-button callers surface the toast here directly.
+      surfaceSyncError(err, 'syncPlaylist');
+      return { ok: false, error: err };
     } finally {
       setSyncingIds((prev) => {
         const n = new Set(prev);
@@ -247,10 +300,38 @@ export function SourceManagementTabV2() {
   const handleSyncAll = async () => {
     setIsSyncingAll(true);
     const active = filtered.filter((s) => !s.isPaused);
-    for (const s of active) {
-      await handleSync(s.id);
+    let failed = 0;
+    let reauthHit = false;
+    try {
+      for (const s of active) {
+        const res = await handleSync(s.id);
+        if (!res.ok) {
+          failed += 1;
+          // If the refresh_token is rejected, every subsequent playlist
+          // will fail the same way — stop the loop and rely on the
+          // reconnect toast surfaced inside handleSync.
+          if (isYouTubeReauthError(res.error)) {
+            reauthHit = true;
+            break;
+          }
+        }
+      }
+      // Summary toast for mixed-outcome bulk runs (skip when reauth hit
+      // since that toast already dominates).
+      if (!reauthHit && failed > 0) {
+        toast({
+          title: t('sources.syncFailed', 'Sync failed'),
+          description: t(
+            'sources.syncAllFailedDesc',
+            '{{failed}} of {{total}} sources failed to sync',
+            { failed, total: active.length }
+          ),
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setIsSyncingAll(false);
     }
-    setIsSyncingAll(false);
   };
 
   const FILTER_OPTIONS = [

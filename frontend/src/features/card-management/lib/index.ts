@@ -5,6 +5,8 @@ export {
   getCardById,
   isCardInIdeation,
   isCardInMandala,
+  isNewlySyncedCard,
+  countNewlySyncedByMandala,
 } from './cardUtils';
 export type { CardSource } from './cardUtils';
 

@@ -112,6 +112,8 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   onNavigateHome?: () => void;
   minimapData?: MinimapData;
+  /** Issue #389: per-mandala "Newly Synced" card count for the sidebar dot+count indicator. */
+  newlySyncedCountByMandala?: Record<string, number>;
   settingsMode?: boolean;
 }
 
@@ -129,6 +131,7 @@ export function Sidebar({
   onToggleCollapse,
   onNavigateHome,
   minimapData,
+  newlySyncedCountByMandala,
   settingsMode = false,
 }: SidebarProps) {
   const { t } = useTranslation();
@@ -289,7 +292,11 @@ export function Sidebar({
               </div>
             )}
           >
-            <SidebarMandalaSection collapsed={collapsed} minimapData={minimapData} />
+            <SidebarMandalaSection
+              collapsed={collapsed}
+              minimapData={minimapData}
+              newlySyncedCountByMandala={newlySyncedCountByMandala}
+            />
           </ErrorBoundary>
         </nav>
 

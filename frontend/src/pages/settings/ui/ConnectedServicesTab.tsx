@@ -5,21 +5,69 @@ import { Switch } from '@/shared/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { useYouTubeAuth } from '@/features/youtube-sync/model/useYouTubeAuth';
 import { useUpdateSyncSettings } from '@/features/youtube-sync/model/useYouTubeSync';
+import { useToast } from '@/shared/lib/use-toast';
 import { YouTubeConnectionCard } from './YouTubeConnectionCard';
 import { LlmKeysSettingsTab } from './LlmKeysSettingsTab';
 import type { SyncInterval } from '@/entities/youtube/model/types';
 
 export function ConnectedServicesTab() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const ytAuth = useYouTubeAuth();
   const updateSettings = useUpdateSyncSettings();
 
+  // UX guard (Plan 2): surface the propagation result so the user knows
+  // the dropdown is no longer cosmetic. For interval changes we report
+  // the new interval + how many cron schedules were re-registered.
   const handleSyncIntervalChange = (value: string) => {
-    updateSettings.mutate({ syncInterval: value as SyncInterval });
+    updateSettings.mutate(
+      { syncInterval: value as SyncInterval },
+      {
+        onSuccess: (result) => {
+          const intervalLabel = value === 'manual' ? t('youtube.syncManual', 'Manual') : value;
+          toast({
+            title: t('settings.syncIntervalUpdated', 'Sync interval updated'),
+            description: t(
+              'settings.syncIntervalUpdatedDesc',
+              'Interval: {{interval}}. Applied to {{count}} playlist(s) immediately.',
+              { interval: intervalLabel, count: result.schedulesUpdated }
+            ),
+          });
+        },
+        onError: (err) => {
+          toast({
+            title: t('settings.syncSettingsFailed', 'Failed to update sync settings'),
+            description: err instanceof Error ? err.message : String(err),
+            variant: 'destructive',
+          });
+        },
+      }
+    );
   };
 
   const handleAutoSyncToggle = (checked: boolean) => {
-    updateSettings.mutate({ autoSyncEnabled: checked });
+    updateSettings.mutate(
+      { autoSyncEnabled: checked },
+      {
+        onSuccess: (result) => {
+          toast({
+            title: checked
+              ? t('settings.autoSyncOn', 'Background sync enabled')
+              : t('settings.autoSyncOff', 'Background sync disabled'),
+            description: t('settings.autoSyncToggleDesc', 'Applied to {{count}} playlist(s).', {
+              count: result.schedulesUpdated,
+            }),
+          });
+        },
+        onError: (err) => {
+          toast({
+            title: t('settings.syncSettingsFailed', 'Failed to update sync settings'),
+            description: err instanceof Error ? err.message : String(err),
+            variant: 'destructive',
+          });
+        },
+      }
+    );
   };
 
   const handleAutoSummaryToggle = (checked: boolean) => {
