@@ -56,6 +56,7 @@ export const v3EnvSchema = z.object({
   V3_ENABLE_SEMANTIC_RERANK: booleanFlag.optional().default(false as unknown as string),
   V3_SEMANTIC_ALPHA: semanticAlpha,
   V3_SEMANTIC_BETA: semanticBeta,
+  V3_ENABLE_WHITELIST_GATE: booleanFlag.optional().default(false as unknown as string),
 });
 
 export interface V3Config {
@@ -66,6 +67,7 @@ export interface V3Config {
   enableSemanticRerank: boolean;
   semanticAlpha: number;
   semanticBeta: number;
+  enableWhitelistGate: boolean;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -77,6 +79,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_ENABLE_SEMANTIC_RERANK: env['V3_ENABLE_SEMANTIC_RERANK'],
     V3_SEMANTIC_ALPHA: env['V3_SEMANTIC_ALPHA'],
     V3_SEMANTIC_BETA: env['V3_SEMANTIC_BETA'],
+    V3_ENABLE_WHITELIST_GATE: env['V3_ENABLE_WHITELIST_GATE'],
   });
   if (!parsed.success) {
     return {
@@ -87,6 +90,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       enableSemanticRerank: false,
       semanticAlpha: DEFAULT_SEMANTIC_ALPHA,
       semanticBeta: DEFAULT_SEMANTIC_BETA,
+      enableWhitelistGate: false,
     };
   }
   return {
@@ -97,6 +101,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     enableSemanticRerank: parsed.data.V3_ENABLE_SEMANTIC_RERANK,
     semanticAlpha: parsed.data.V3_SEMANTIC_ALPHA,
     semanticBeta: parsed.data.V3_SEMANTIC_BETA,
+    enableWhitelistGate: parsed.data.V3_ENABLE_WHITELIST_GATE,
   };
 }
 

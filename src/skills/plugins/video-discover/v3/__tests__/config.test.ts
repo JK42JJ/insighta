@@ -13,6 +13,7 @@ describe('loadV3Config', () => {
       enableSemanticRerank: false,
       semanticAlpha: DEFAULT_SEMANTIC_ALPHA,
       semanticBeta: DEFAULT_SEMANTIC_BETA,
+      enableWhitelistGate: false,
     });
   });
 
@@ -74,6 +75,7 @@ describe('loadV3Config', () => {
       enableSemanticRerank: false,
       semanticAlpha: DEFAULT_SEMANTIC_ALPHA,
       semanticBeta: DEFAULT_SEMANTIC_BETA,
+      enableWhitelistGate: false,
     });
   });
 
