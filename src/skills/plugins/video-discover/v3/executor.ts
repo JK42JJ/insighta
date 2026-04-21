@@ -36,6 +36,7 @@ import {
   type SemanticRerankTrace,
   type WhitelistGateTrace,
 } from '@/modules/video-dictionary';
+import { notifyCardAdded, type CardPayload } from '@/modules/recommendations/publisher';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { manifest, V3_TARGET_PER_CELL, V3_NUM_CELLS, V3_TARGET_TOTAL } from './manifest';
 import { matchFromVideoPool, groupByCell } from './cache-matcher';
@@ -848,7 +849,7 @@ async function upsertSlots(
   for (const slot of slots) {
     const keyword = (subGoals[slot.cellIndex] ?? '').slice(0, 255);
     try {
-      await db.recommendation_cache.upsert({
+      const row = await db.recommendation_cache.upsert({
         where: {
           user_id_mandala_id_video_id: {
             user_id: userId,
@@ -898,6 +899,40 @@ async function upsertSlots(
         },
       });
       count++;
+
+      // Phase 1 slice 2 (SSE streaming): push the freshly-upserted card
+      // to any SSE subscriber for this mandala. Non-fatal — notification
+      // delivery is best-effort, persistence has already succeeded above.
+      try {
+        const payload: CardPayload = {
+          id: row.id,
+          videoId: row.video_id,
+          title: row.title,
+          channel: row.channel,
+          thumbnail: row.thumbnail,
+          durationSec: row.duration_sec,
+          recScore: row.rec_score,
+          cellIndex: row.cell_index ?? slot.cellIndex,
+          // cellLabel is derived at read-time in /recommendations (from
+          // mandala levels). The SSE consumer resolves it client-side
+          // from the already-loaded mandala state to avoid a DB round-
+          // trip per notification.
+          cellLabel: null,
+          keyword: row.keyword ?? keyword,
+          source: row.weight_version === 0 ? 'manual' : 'auto_recommend',
+          recReason: row.rec_reason,
+        };
+        notifyCardAdded(mandalaId, payload);
+      } catch (notifyErr) {
+        // EventEmitter.emit can only throw if a listener throws
+        // synchronously, which would be a listener bug. Log and move
+        // on — the row is persisted regardless.
+        log.warn(
+          `notifyCardAdded failed for ${slot.videoId}: ${
+            notifyErr instanceof Error ? notifyErr.message : String(notifyErr)
+          }`
+        );
+      }
     } catch (err) {
       log.warn(
         `recommendation_cache upsert failed for ${slot.videoId}: ${

@@ -24,6 +24,7 @@ import {
   RECOMMENDATION_DEFAULT_MODE,
 } from '../../config/recommendations';
 import { MemoryCache } from '../../utils/memory-cache';
+import { cardPublisher, type CardPayload } from '../../modules/recommendations/publisher';
 
 // Explore results cache — templates are near-immutable, 10-min TTL
 const exploreCache = new MemoryCache({ defaultTTLMs: EXPLORE_CACHE_TTL_MS, maxEntries: 100 });
@@ -1817,6 +1818,100 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         retryCount: run.retry_count,
         createdAt: run.created_at,
         completedAt: run.completed_at,
+      });
+    }
+  );
+
+  /**
+   * GET /api/v1/mandalas/:id/videos/stream — SSE card stream
+   *
+   * Phase 1 slice 2 (post-SGNL-parity audit): clients subscribe to
+   * live card events for a mandala. Each time the v3 executor
+   * upserts a row into recommendation_cache, `notifyCardAdded`
+   * publishes a `card_added` event which this handler forwards as
+   * a Server-Sent Event. First card visible ~1-2s instead of
+   * waiting for the whole discover pipeline to complete.
+   *
+   * Events:
+   *   - `card_added`  — one recommendation_cache row (CardPayload)
+   *   - `heartbeat`   — every 20s; keeps ALB / CDN from idle-closing
+   *   - `end`         — server explicitly closes; client stops
+   *                     listening and may fall back to polling
+   *                     `/recommendations` for stragglers.
+   *
+   * Fallback: on SSE failure (browser unsupported, network, server
+   * down), the client should gracefully degrade to the existing
+   * `GET /recommendations` polling path. This handler is purely
+   * additive — the read-only `/recommendations` endpoint continues
+   * to serve the canonical recommendation_cache view.
+   *
+   * Auth: requires the same ownership check as /recommendations.
+   * Non-owners receive 404.
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/videos/stream',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const mandalaId = request.params.id;
+      const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
+      if (!mandala) {
+        return reply.code(404).send({ error: 'Mandala not found' });
+      }
+
+      // Tell Fastify we're taking over the socket for a long-lived
+      // SSE stream. Without hijack(), Fastify would try to send a
+      // JSON body on handler return and double-close the response.
+      // `void` suppresses the eslint no-floating-promises check —
+      // hijack() is synchronous but typed as returning the reply.
+      void reply.hijack();
+
+      const raw = reply.raw;
+      raw.setHeader('Content-Type', 'text/event-stream');
+      raw.setHeader('Cache-Control', 'no-cache');
+      raw.setHeader('Connection', 'keep-alive');
+      // Disables buffering on nginx + some CDNs so events flush
+      // immediately instead of after N bytes.
+      raw.setHeader('X-Accel-Buffering', 'no');
+      raw.statusCode = 200;
+      // Initial retry hint + comment so the stream is open for
+      // EventSource (it waits for the first \n\n before firing
+      // `open`).
+      raw.write('retry: 5000\n\n');
+      raw.write(`: connected mandala=${mandalaId}\n\n`);
+
+      const write = (event: string, data: unknown): void => {
+        if (raw.destroyed) return;
+        raw.write(`event: ${event}\n`);
+        raw.write(`data: ${JSON.stringify(data)}\n\n`);
+      };
+
+      const unsubscribe = cardPublisher.subscribe(mandalaId, (payload: CardPayload) => {
+        write('card_added', payload);
+      });
+
+      const heartbeatInterval = setInterval(() => {
+        if (raw.destroyed) return;
+        raw.write(`event: heartbeat\ndata: {"ts":${Date.now()}}\n\n`);
+      }, 20_000);
+
+      const cleanup = (): void => {
+        unsubscribe();
+        clearInterval(heartbeatInterval);
+      };
+
+      request.raw.on('close', cleanup);
+      request.raw.on('error', cleanup);
+
+      // Keep the handler promise pending until the client
+      // disconnects, otherwise Fastify resolves the route and some
+      // middleware stacks interpret that as "response done" even
+      // after hijack(). This await resolves in cleanup when the
+      // close listener fires.
+      await new Promise<void>((resolve) => {
+        request.raw.once('close', resolve);
       });
     }
   );
