@@ -37,6 +37,19 @@ services:
       # like "모닝루틴" pass the gate for goals containing "루틴으로".
       # Revert: delete this line and redeploy — code default takes over.
       - V3_CENTER_GATE_MODE=subword
+      # Wizard redesign Phase 1 activation (2026-04-22).
+      # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
+      # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
+      # existing 18,009 mandala_embeddings rows are reused as-is. See
+      # docs/design/wizard-service-redesign-2026-04-22.md §7 Phase 1
+      # for the Phase 1 verification gate + rollback triggers.
+      # Revert: delete this line and redeploy — code default 'ollama'
+      # restores the pre-Phase-1 behavior bit-identically.
+      - MANDALA_EMBED_PROVIDER=openrouter
+      # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
+      # code. Uncomment + override here ONLY if the exact OpenRouter
+      # model id string differs (verify at https://openrouter.ai/models).
+      # - OPENROUTER_EMBED_MODEL=qwen/qwen3-embedding-8b
     volumes:
       - cache_data:/app/cache
       - logs_data:/app/logs
