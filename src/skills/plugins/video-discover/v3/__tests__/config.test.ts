@@ -1,10 +1,14 @@
 import { DEFAULT_SEMANTIC_ALPHA, DEFAULT_SEMANTIC_BETA } from '@/modules/video-dictionary';
 
-import { DEFAULT_PUBLISHED_AFTER_DAYS, loadV3Config } from '../config';
+import {
+  DEFAULT_PUBLISHED_AFTER_DAYS,
+  DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
+  loadV3Config,
+} from '../config';
 import { DEFAULT_RECENCY_HALF_LIFE_MONTHS, DEFAULT_RECENCY_WEIGHT } from '../mandala-filter';
 
 describe('loadV3Config', () => {
-  test('empty env → activated defaults (Tier 1 off, recency on, 3yr cutoff, semantic off)', () => {
+  test('empty env → activated defaults (Tier 1 off, recency on, 3yr cutoff, semantic off, yt timeout 1s)', () => {
     expect(loadV3Config({})).toEqual({
       enableTier1Cache: false,
       recencyWeight: DEFAULT_RECENCY_WEIGHT,
@@ -14,6 +18,7 @@ describe('loadV3Config', () => {
       semanticAlpha: DEFAULT_SEMANTIC_ALPHA,
       semanticBeta: DEFAULT_SEMANTIC_BETA,
       enableWhitelistGate: false,
+      youtubeSearchTimeoutMs: DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
     });
   });
 
@@ -76,7 +81,28 @@ describe('loadV3Config', () => {
       semanticAlpha: DEFAULT_SEMANTIC_ALPHA,
       semanticBeta: DEFAULT_SEMANTIC_BETA,
       enableWhitelistGate: false,
+      youtubeSearchTimeoutMs: DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
     });
+  });
+
+  test('V3_YOUTUBE_SEARCH_TIMEOUT_MS parses positive integer', () => {
+    expect(loadV3Config({ V3_YOUTUBE_SEARCH_TIMEOUT_MS: '500' }).youtubeSearchTimeoutMs).toBe(500);
+    expect(loadV3Config({ V3_YOUTUBE_SEARCH_TIMEOUT_MS: '2000' }).youtubeSearchTimeoutMs).toBe(
+      2000
+    );
+  });
+
+  test('invalid V3_YOUTUBE_SEARCH_TIMEOUT_MS → baseline (entire config falls back)', () => {
+    // zero / negative / non-int / garbage → entire schema fails → fallback
+    expect(loadV3Config({ V3_YOUTUBE_SEARCH_TIMEOUT_MS: '0' }).youtubeSearchTimeoutMs).toBe(
+      DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS
+    );
+    expect(loadV3Config({ V3_YOUTUBE_SEARCH_TIMEOUT_MS: '-500' }).youtubeSearchTimeoutMs).toBe(
+      DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS
+    );
+    expect(loadV3Config({ V3_YOUTUBE_SEARCH_TIMEOUT_MS: 'garbage' }).youtubeSearchTimeoutMs).toBe(
+      DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS
+    );
   });
 
   test('V3_ENABLE_SEMANTIC_RERANK parses boolean flag', () => {

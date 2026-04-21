@@ -59,6 +59,15 @@ export interface SearchOpts {
   /** ISO timestamp; results limited to videos published after. Optional. */
   publishedAfter?: string;
   fetchFn?: typeof fetch;
+  /**
+   * Per-call timeout in milliseconds. When set, the underlying fetch is
+   * aborted once the timeout elapses and an Error with message starting
+   * with "search.list timeout" is thrown. Callers using
+   * `Promise.allSettled` treat this as a partial-result signal (empty
+   * items for the timed-out query) rather than a pipeline failure.
+   * Unset / 0 → no timeout (legacy behavior).
+   */
+  timeoutMs?: number;
 }
 
 /**
@@ -112,7 +121,26 @@ async function searchVideosOne(
   url.searchParams.set('safeSearch', 'moderate');
 
   const fetchFn = opts.fetchFn ?? fetch;
-  const res = await fetchFn(url.toString());
+  const timeoutMs = opts.timeoutMs;
+  const controller = typeof timeoutMs === 'number' && timeoutMs > 0 ? new AbortController() : null;
+  const timer =
+    controller && typeof timeoutMs === 'number' && timeoutMs > 0
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : null;
+  let res: Response;
+  try {
+    res = await fetchFn(url.toString(), controller ? { signal: controller.signal } : {});
+  } catch (err) {
+    if (
+      controller?.signal.aborted ||
+      (err instanceof Error && (err.name === 'AbortError' || /aborted|abort/i.test(err.message)))
+    ) {
+      throw new Error(`search.list timeout after ${timeoutMs}ms`);
+    }
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   if (!res.ok) {
     let msg = '';
     try {

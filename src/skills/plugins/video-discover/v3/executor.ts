@@ -752,7 +752,16 @@ async function runSearchTraced(
     v3Config.publishedAfterDays > 0
       ? new Date(Date.now() - v3Config.publishedAfterDays * MS_PER_DAY).toISOString()
       : undefined;
-  const results = await Promise.all(
+  // Phase 1 slice 1 (post-SGNL-parity audit): Promise.allSettled instead
+  // of Promise.all, combined with a per-call timeout passed into the
+  // YouTube client (`timeoutMs`). Rationale: before this change the
+  // entire fan-out blocked on the slowest YouTube API response (p95
+  // tail). Now each call has a hard cutoff; slow calls abort and
+  // surface as `{ items: [], error: 'timeout ...' }`, matching the
+  // existing error-handling contract so downstream pool assembly and
+  // perQuery tracing are unaffected. Tail latency no longer dominates
+  // wall clock.
+  const settled = await Promise.allSettled(
     queries.map(async (q) => {
       try {
         const items = await searchVideos({
@@ -760,6 +769,7 @@ async function runSearchTraced(
           apiKey: apiKeys,
           relevanceLanguage: language,
           regionCode,
+          timeoutMs: v3Config.youtubeSearchTimeoutMs,
           ...(publishedAfter ? { publishedAfter } : {}),
         });
         return { q, items, error: undefined as string | undefined };
@@ -770,6 +780,20 @@ async function runSearchTraced(
       }
     })
   );
+  const results = settled.map((r, idx) => {
+    if (r.status === 'fulfilled') return r.value;
+    // Defensive: the inner try/catch already converts errors to the
+    // fulfilled shape, so a rejected settle result would indicate a
+    // bug in the inner map fn (sync throw before the try). Surface it
+    // as an empty-items entry so the outer pipeline still completes.
+    const reason = r.reason instanceof Error ? r.reason.message : String(r.reason);
+    log.warn(`search.list settled=rejected for "${queries[idx]?.query ?? '?'}": ${reason}`);
+    return {
+      q: queries[idx]!,
+      items: [] as YouTubeSearchItem[],
+      error: reason,
+    };
+  });
   const pool: PoolItem[] = [];
   const perQuery: SearchTrace['perQuery'] = [];
   for (const { q, items, error } of results) {
