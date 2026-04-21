@@ -1,4 +1,11 @@
 export { useWizard } from './model/useWizard';
+export { useWizardStream } from './model/useWizardStream';
+export type {
+  UseWizardStreamResult,
+  WizardStreamStatus,
+  WizardTemplate,
+  MandalaStructure,
+} from './model/useWizardStream';
 export { default as WizardStepper } from './ui/WizardStepper';
 export { default as WizardStepDomain } from './ui/WizardStepDomain';
 export { default as WizardStepGoal } from './ui/WizardStepGoal';
