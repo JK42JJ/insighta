@@ -52,6 +52,7 @@
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { VIDEO_DISCOVER_SKILL_TYPE } from '@/config/recommendations';
+import { notifyCardAdded, type CardPayload } from '@/modules/recommendations/publisher';
 
 const log = logger.child({ module: 'auto-add-recommendations' });
 
@@ -274,6 +275,37 @@ export async function maybeAutoAddRecommendations(
         });
 
         totalInserted += 1;
+
+        // P2 (2026-04-21): stream the card to any subscriber on this
+        // mandala's channel so the main grid (cardsByCell) can append
+        // it live, matching the behaviour that already works for the
+        // recommendation_cache publisher path. Non-fatal — persistence
+        // has already succeeded above. EventEmitter.emit can only
+        // throw synchronously if a listener throws; wrap it so a
+        // misbehaving subscriber cannot take down auto-add.
+        try {
+          const payload: CardPayload = {
+            id: rec.id,
+            videoId: rec.video_id,
+            title: rec.title,
+            channel: rec.channel,
+            thumbnail: rec.thumbnail,
+            durationSec: rec.duration_sec,
+            recScore: rec.rec_score,
+            cellIndex,
+            cellLabel: null,
+            keyword: rec.keyword ?? '',
+            source: rec.weight_version === 0 ? 'manual' : 'auto_recommend',
+            recReason: rec.rec_reason,
+          };
+          notifyCardAdded(mandalaId, payload);
+        } catch (notifyErr) {
+          log.warn(
+            `auto-add notifyCardAdded failed for video=${rec.video_id}: ${
+              notifyErr instanceof Error ? notifyErr.message : String(notifyErr)
+            }`
+          );
+        }
       } catch (err) {
         log.warn(
           `auto-add upsert failed for video=${rec.video_id} cell=${cellIndex}: ${err instanceof Error ? err.message : String(err)}`
