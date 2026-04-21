@@ -27,7 +27,19 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
-        registerType: 'prompt',
+        // 2026-04-22 (Phase 2 re-scoped): switched from 'prompt' to
+        // 'autoUpdate' so newly-deployed JS bundles take over on the
+        // user's next navigation instead of waiting for an explicit
+        // "Reload" prompt that users never accept. This was the root
+        // cause of `wizard-stream` receiving 0 prod calls after the
+        // 2026-04-21 wizard redesign deploy — users stayed on the old
+        // cached bundle that still hit the 21-28s legacy path.
+        //
+        // `autoUpdate` writes a SKIP_WAITING message to the new worker
+        // when it activates; the worker registration snippet in main.tsx
+        // scopes the takeover to page navigations so a user typing into
+        // the wizard is not reloaded mid-session.
+        registerType: 'autoUpdate',
         includeAssets: ['vite.svg'],
         manifest: {
           name: 'Insighta',
@@ -46,16 +58,16 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+          // 2026-04-22 (Phase 2 re-scoped): removed the `/api/*`
+          // StaleWhileRevalidate runtime cache. Serving stale API
+          // responses is incorrect for mandala-create / wizard-stream
+          // / card endpoints — users were seeing stale recommendations
+          // and creation responses. Fonts stay cached because they are
+          // immutable binary assets.
+          cleanupOutdatedCaches: true,
+          clientsClaim: true,
+          skipWaiting: true,
           runtimeCaching: [
-            {
-              urlPattern: /^https?:\/\/.*\/api\//,
-              handler: 'StaleWhileRevalidate',
-              options: {
-                cacheName: 'api-cache',
-                expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 },
-                cacheableResponse: { statuses: [0, 200] },
-              },
-            },
             {
               urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
               handler: 'CacheFirst',

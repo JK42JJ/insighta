@@ -17,6 +17,24 @@ if (import.meta.env.DEV) {
   });
 }
 
+// Service worker auto-update (Phase 2 re-scoped, 2026-04-22).
+//
+// VitePWA `registerType: 'autoUpdate'` emits a virtual module that we
+// can import lazily to register the worker with `immediate: true`.
+// Combined with the workbox `skipWaiting` + `clientsClaim` flags in
+// vite.config.ts, a freshly-deployed JS bundle activates on the next
+// page navigation (not mid-session), which prevents input loss during
+// wizard entry while still guaranteeing no user stays pinned to an
+// old cached bundle indefinitely.
+//
+// DEV imports the no-op stub so hot reload keeps working; the real SW
+// only runs in production builds.
+if (!import.meta.env.DEV) {
+  import('virtual:pwa-register').then(({ registerSW }) => {
+    registerSW({ immediate: true });
+  });
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

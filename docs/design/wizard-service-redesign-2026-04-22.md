@@ -245,30 +245,39 @@ Files touched:
 
 **Rollback mechanism**: set queue throttle to 0 via config; no service flow impact.
 
-### Phase 2 — Service generation path migration
+### Phase 2 — PWA auto-update + wizard-stream activation
 
-**Axis**: **Speed primary** (target: structure generation p95 21-28s → <8s). Accuracy secondary (structure schema validation rate).
+**Axis**: **Speed primary** (target: user-visible wizard wait 21-28s → ~3-5s by switching users from legacy one-shot path to already-deployed streaming path).
 
-Scope: replace V2 with OpenRouter LLM.
+**Re-scope note (2026-04-22 post-merge, v6)**: Original Phase 2 proposed migrating mac-mini mandala-gen to OpenRouter. Code audit on `feat/phase2-openrouter-generate` branch showed all user-blocking LLM paths ALREADY use OpenRouter:
+- `generateMandalaStructure` → OpenRouter STRUCTURE_MODEL
+- `generateMandalaActions` → OpenRouter ACTIONS_MODEL
+- `generateMandalaWithHaiku` (primary for legacy wizard) → OpenRouter `claude-haiku-4.5`
+- `generateMandala` (mac mini) is only called as `void` fire-and-forget in `generateMandalaRace` for LoRA training-data accumulation — non-blocking, matches user's "mac mini = R&D accumulator" rule.
 
-Files touched:
-- `src/modules/mandala/generator.ts` — swap fetch target from mac mini Ollama to OpenRouter chat completion
-- Pick OpenRouter model: keep existing `qwen/qwen3-30b-a3b` (already configured in prod), or move to Claude Haiku / Sonnet. Phase-0 latency/quality data informs this.
-- Retain the split-generation pattern (structure-only streams first, actions fill in async) — already in wizard-stream route
+So the 21-28s S2 symptom is **OpenRouter Haiku one-shot (1902 tokens) latency**, not mac mini. The `wizard-stream` route already routes through the fast `generateMandalaStructure` path (~3s), but users cannot reach that code because VitePWA `registerType: 'prompt'` keeps them on the old cached JS bundle. Phase 2 redirected to fix that.
+
+Scope:
+- `frontend/vite.config.ts` — `registerType: 'prompt'` → `'autoUpdate'`
+- `frontend/src/main.tsx` — adjust `registerSW` call so the new worker takes over at next navigation (not mid-session)
+- Remove `/api/*` from workbox `runtimeCaching` — API responses must not be stale-served from the service worker
+- No backend code change
 
 **Verification gate**:
-- `structure_ready` SSE event time p95 < 8s (was 21-28s)
-- Structure JSON schema validation pass rate ≥ 99% over 24h
-- "actions 0/8" failure rate on async path < 1% (matches pre-PR#429 one-shot rate)
-- User-visible: wizard completes + navigates within 10s of goal submission
+- Post-deploy: `POST /api/v1/mandalas/wizard-stream` call count rises from 0 to >0 in prod within 24h (proves users are now on the new bundle)
+- Wizard user-visible wait p95 < 10s (structure_ready event time captured server-side)
+- No increase in `/api/*` 5xx rate over 24h (confirms SW cache change didn't break anything)
 
 **Rollback triggers (any one fires → revert within 24h)**:
-- `structure_ready` p95 ≥ 15s
-- Structure schema validation pass rate < 95%
-- "actions 0/8" rate ≥ 5%
-- Any user-reported "wizard stuck / broken" within 48h of deploy
+- Wizard-stream call count stays 0 after 24h (SW update didn't propagate)
+- Any user-reported "wizard broken / stuck" within 48h
+- Prod 5xx rate on `/api/*` increases > 1pp vs pre-deploy baseline (SW-cache-induced)
 
-**Rollback mechanism**: same flag pattern as Phase 1 — `MANDALA_GEN_PROVIDER=ollama` re-routes.
+**Rollback mechanism**: revert the frontend PR (1 commit). SW will self-expire its cached assets on next deploy; worst case a user hard-refresh.
+
+### Phase 2' (deferred) — Optional cleanup: isolate mac-mini LoRA fire-and-forget
+
+Not in this redesign's critical path. `generateMandala` + `prewarmMandalaModel` are already correctly isolated behaviorally (R&D-only). A future cleanup PR may move them from `generator.ts` into a separate `legacy-lora-background.ts` module for code clarity, but this is cosmetic — no functional change. Deferred.
 
 ### Phase 2b — Mac mini concurrent generation queue  *(immediately after Phase 2 verification)*
 
@@ -393,6 +402,7 @@ Phase 0 may use synthetic fixtures for model comparison. Phase 1-3 acceptance us
 - 2026-04-22 (v3) — Phase 0 revised: original empirical-sweep plan violated CLAUDE.md rule on OpenRouter API usage ("데이터셋 생성·실험·테스트 사용 절대 금지"). Replaced with documented-benchmark review (no API calls). Empirical measurement happens during Phase 1 deploy's verification gate. Added Appendix A — candidate model comparison.
 - 2026-04-22 (v4) — Phase 4 reclassified. User clarified: mac mini "동시에 호출되어 후처리로 데이터를 쌓아서 이후 모델/임베딩 개선" — concurrent collection is day-1 architecture, not deferred backburner. Phase 4 split into **Phase 1b** (concurrent embedding queue) and **Phase 2b** (concurrent generation queue), each deployed immediately after its paired service-path phase is verified.
 - 2026-04-22 (v5) — Model decision recorded in Appendix A.6. Primary: `qwen3-embedding-8B` via OpenRouter (user confirmed availability). Fallback order: Cohere multi-v3 → openai-3-small → openai-3-large. Existing 18,009 `mandala_embeddings` rows reused as-is (same family, same 4096d). Updated A.1 candidate set to mark qwen3-8B primary; updated A.2 quality ranking; updated A.3 operational table with latency+cost estimates and compatibility row; rewrote A.4 recommendation; converted A.6 from "decision required" to "decisions recorded". Resolved §11 Q1 and Q4.
+- 2026-04-22 (v6) — Phase 2 re-scoped. Phase 1 (PR #440) merged as `d87f0e3`. Follow-up audit on `feat/phase2-openrouter-generate` revealed that all user-blocking LLM paths already use OpenRouter (STRUCTURE_MODEL, ACTIONS_MODEL, claude-haiku-4.5); mac-mini `generateMandala` is already a `void` fire-and-forget LoRA-data accumulator (matches user's R&D rule). Original "replace mac-mini generate with OpenRouter" target is therefore invalid. The real S2 lever is user activation: wizard-stream route is deployed but VitePWA `registerType: 'prompt'` keeps users on the old cached bundle. New Phase 2 = PWA auto-update + workbox `/api/*` cache removal. Phase 2' (cosmetic isolation of mac-mini LoRA) deferred.
 
 ---
 
