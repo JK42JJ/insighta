@@ -8,8 +8,18 @@ import {
   WizardStepGoal,
   WizardStepContext,
 } from '@/features/mandala-wizard';
+import { MandalaWizardStreamView } from './MandalaWizardStreamView';
 import { useMandalaQuota } from '@/features/mandala';
 import type { PendingMandalaInputs } from '@/stores/mandalaStore';
+
+/**
+ * Feature flag: when set to a falsy string ('false'), the page mounts
+ * the legacy `useWizard` flow (template + AI pick, 3-step UX).
+ * Otherwise it mounts the streaming flow built on POST /wizard-stream.
+ * Default = streaming ON for new users; ops flip this off in an env
+ * if the streaming path regresses.
+ */
+const WIZARD_STREAMING_ENABLED = import.meta.env.VITE_WIZARD_STREAMING_ENABLED !== 'false';
 
 /**
  * Shape pushed by `fireCreateMandala` on failure via
@@ -21,6 +31,14 @@ interface RestoreState {
 }
 
 export default function MandalaWizardPage() {
+  // Flag-gated streaming path. Early return so the legacy hook
+  // + state below never run when streaming is active (zero risk
+  // of double-fetching, double-state, or state-desync between
+  // the two flows).
+  if (WIZARD_STREAMING_ENABLED) {
+    return <MandalaWizardStreamView />;
+  }
+
   const { t } = useTranslation();
   const wizard = useWizard();
   const location = useLocation();
