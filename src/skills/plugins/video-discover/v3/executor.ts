@@ -656,6 +656,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     focusTags: input.state.focusTags,
     recencyWeight: v3Config.recencyWeight,
     recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
+    centerGateMode: v3Config.centerGateMode,
   });
   debug.timing.mandalaFilterMs = Date.now() - tMandalaFilterStart;
 

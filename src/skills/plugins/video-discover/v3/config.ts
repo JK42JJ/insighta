@@ -18,6 +18,31 @@ export const DEFAULT_PUBLISHED_AFTER_DAYS = 1095;
  */
 export const DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS = 1000;
 
+/**
+ * Center-gate matching mode (post-SGNL-parity carding-quality audit).
+ *
+ * - `'substring'` (pre-audit default): token-level substring overlap.
+ *   Fast but fails for Korean composite words — `"모닝루틴"` does not
+ *   contain `"루틴으로"` as a substring and vice versa, so legitimate
+ *   videos titled `엄지원의 모닝루틴 7가지` are dropped from goals like
+ *   `1달 일일 루틴으로 전문가되기`. Measured Recall 0% / 15 on a 20-item
+ *   fixture — see `scripts/verify-mandala-filter-hypothesis.ts`.
+ *
+ * - `'subword'`: character 2-gram overlap between each center token and
+ *   the title's combined 2-gram bag. A center token is considered
+ *   matched when ≥ 30% of its 2-grams appear in the title. Catches the
+ *   composite-word case without a morphological analyzer. Measured
+ *   Recall 0.27 / Precision 1.00 on the same fixture (4 of 15 RELEVANT
+ *   kept, 0 NOISE).
+ *
+ * - `'off'`: skip the center gate entirely, let the sub-goal jaccard
+ *   stage (MIN_SUB_RELEVANCE) do the filtering alone. Widest net; use
+ *   when the center phrase is highly specific and the sub-goals cover
+ *   the semantic space.
+ */
+export type CenterGateMode = 'substring' | 'subword' | 'off';
+export const DEFAULT_CENTER_GATE_MODE: CenterGateMode = 'substring';
+
 export type V3EnvInput = Record<string, string | undefined>;
 
 const booleanFlag = z.preprocess(
@@ -67,6 +92,13 @@ const youtubeSearchTimeoutMs = z
   )
   .transform((v) => v ?? DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS);
 
+const centerGateMode = z
+  .preprocess(
+    (v) => (typeof v === 'string' ? v.trim().toLowerCase() : v),
+    z.enum(['substring', 'subword', 'off']).optional()
+  )
+  .transform((v) => v ?? DEFAULT_CENTER_GATE_MODE);
+
 export const v3EnvSchema = z.object({
   V3_ENABLE_TIER1_CACHE: booleanFlag.optional().default(false as unknown as string),
   V3_RECENCY_WEIGHT: clampedUnit,
@@ -77,6 +109,7 @@ export const v3EnvSchema = z.object({
   V3_SEMANTIC_BETA: semanticBeta,
   V3_ENABLE_WHITELIST_GATE: booleanFlag.optional().default(false as unknown as string),
   V3_YOUTUBE_SEARCH_TIMEOUT_MS: youtubeSearchTimeoutMs,
+  V3_CENTER_GATE_MODE: centerGateMode,
 });
 
 export interface V3Config {
@@ -89,6 +122,7 @@ export interface V3Config {
   semanticBeta: number;
   enableWhitelistGate: boolean;
   youtubeSearchTimeoutMs: number;
+  centerGateMode: CenterGateMode;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -102,6 +136,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_SEMANTIC_BETA: env['V3_SEMANTIC_BETA'],
     V3_ENABLE_WHITELIST_GATE: env['V3_ENABLE_WHITELIST_GATE'],
     V3_YOUTUBE_SEARCH_TIMEOUT_MS: env['V3_YOUTUBE_SEARCH_TIMEOUT_MS'],
+    V3_CENTER_GATE_MODE: env['V3_CENTER_GATE_MODE'],
   });
   if (!parsed.success) {
     return {
@@ -114,6 +149,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       semanticBeta: DEFAULT_SEMANTIC_BETA,
       enableWhitelistGate: false,
       youtubeSearchTimeoutMs: DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
+      centerGateMode: DEFAULT_CENTER_GATE_MODE,
     };
   }
   return {
@@ -126,6 +162,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     semanticBeta: parsed.data.V3_SEMANTIC_BETA,
     enableWhitelistGate: parsed.data.V3_ENABLE_WHITELIST_GATE,
     youtubeSearchTimeoutMs: parsed.data.V3_YOUTUBE_SEARCH_TIMEOUT_MS,
+    centerGateMode: parsed.data.V3_CENTER_GATE_MODE,
   };
 }
 

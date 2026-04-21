@@ -413,3 +413,88 @@ describe('recency weighting (2026-04-18, env-gated)', () => {
     expect(DEFAULT_RECENCY_HALF_LIFE_MONTHS).toBe(18);
   });
 });
+
+// ---------------------------------------------------------------------------
+// CenterGateMode — subword + off (Phase-1 carding-quality audit)
+// ---------------------------------------------------------------------------
+
+describe('applyMandalaFilter — centerGateMode', () => {
+  // Goal with Korean particles; substring mode drops composite-word
+  // matches like "모닝루틴" ↔ "루틴으로". Subword mode catches them.
+  const input = {
+    centerGoal: '1달 일일 루틴으로 전문가되기',
+    subGoals: [
+      '전문 분야 선정 및 학습 계획 수립',
+      '매일 집중 학습 시간 확보 및 루틴화',
+      '실무 프로젝트 진행 및 포트폴리오 구축',
+      '전문 커뮤니티 참여 및 네트워킹',
+      '월간 집중 전문화',
+      '지식 체계화 및 아웃풋 생산',
+      '피드백 수집 및 개선 사이클',
+      '일일 진도 추적 및 동기 유지',
+    ],
+    language: 'ko' as const,
+  };
+
+  const composite = cand('c1', '엄지원의 모닝루틴 7가지', '아침 루틴 7가지 방법');
+  const noise = cand('n1', 'iPhone 16 프로 리뷰', '아이폰 16 스마트폰 리뷰');
+
+  test('substring mode (default) drops "모닝루틴" — regression baseline', () => {
+    const { stats } = applyMandalaFilterWithStats([composite], input);
+    expect(stats.droppedByCenterGate).toBe(1);
+    expect(stats.centerGateMode).toBe('substring');
+  });
+
+  test('subword mode keeps composite "모닝루틴" via char 2-gram overlap with "루틴으로"', () => {
+    const { byCell, stats } = applyMandalaFilterWithStats([composite], {
+      ...input,
+      centerGateMode: 'subword',
+    });
+    expect(stats.droppedByCenterGate).toBe(0);
+    expect(stats.centerGateMode).toBe('subword');
+    // Without sub-goal jaccard hits the candidate still drops at
+    // gate 2. That's expected — the point of this test is the gate-1
+    // pass.
+    const anyKept = Array.from(byCell.values()).some((list) => list.length > 0);
+    // jaccard on composite title ("모닝루틴 7가지 / 아침 루틴 7가지")
+    // vs sub-goal tokens may be 0, so output may still be empty. The
+    // stats check above is the assertion that matters.
+    void anyKept;
+  });
+
+  test('subword mode still rejects unrelated noise ("iPhone 리뷰")', () => {
+    const { stats } = applyMandalaFilterWithStats([noise], {
+      ...input,
+      centerGateMode: 'subword',
+    });
+    expect(stats.droppedByCenterGate).toBe(1);
+  });
+
+  test('off mode skips the gate entirely — both composite and noise pass to jaccard stage', () => {
+    const { stats } = applyMandalaFilterWithStats([composite, noise], {
+      ...input,
+      centerGateMode: 'off',
+    });
+    expect(stats.droppedByCenterGate).toBe(0);
+    expect(stats.centerGateMode).toBe('off');
+    // Downstream: jaccard drops noise but may also drop composite if
+    // no sub-goal token overlaps. This test verifies the gate itself
+    // was skipped, not what jaccard does next.
+  });
+
+  test('subword mode is token-aware: unrelated 2-gram collisions below threshold are still dropped', () => {
+    // Title shares a single 2-gram ("전문") with center token "전문가"
+    // → matched 2-grams of "전문가": {전문, 문가} → 1/2 = 0.5 ≥ 0.3
+    //   so this one actually matches (acceptable recall bias).
+    // Title sharing only "전" + nothing else has 0 bigram overlap.
+    const onlyChar = cand('ch', '전국민 명절 인사', '');
+    const { stats } = applyMandalaFilterWithStats([onlyChar], {
+      ...input,
+      centerGateMode: 'subword',
+    });
+    // Expect this to drop — no 2-gram matches any center token above
+    // the 0.3 floor. If this starts passing, SUBWORD_MIN_CENTER_MATCH
+    // has drifted too low and noise will leak.
+    expect(stats.droppedByCenterGate).toBe(1);
+  });
+});

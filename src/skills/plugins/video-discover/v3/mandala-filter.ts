@@ -37,6 +37,7 @@
 
 import { extractCoreKeyphrase, type KeywordLanguage } from '../v2/keyword-builder';
 import { MS_PER_MONTH_AVG } from '@/utils/time-constants';
+import type { CenterGateMode } from './config';
 
 export const MIN_SUB_RELEVANCE = 0.05;
 
@@ -44,6 +45,19 @@ export const DEFAULT_RECENCY_WEIGHT = 0.15;
 
 // 18mo half-life: 1y → 0.63, 3y → 0.25, 6y → 0.06.
 export const DEFAULT_RECENCY_HALF_LIFE_MONTHS = 18;
+
+/**
+ * Character-bigram threshold for the `'subword'` center-gate mode.
+ * A center token is considered matched when this fraction (or more)
+ * of its 2-grams appear in the title's combined 2-gram bag.
+ *
+ * 0.3 picked from the fixture sweep in
+ * `scripts/verify-mandala-filter-hypothesis.ts` — 0.3 keeps composite
+ * matches like `"모닝루틴"` ↔ `"루틴으로"` (2 shared 2-grams of 3)
+ * while rejecting single-character incidental overlaps. Lower values
+ * start letting NOISE through.
+ */
+export const SUBWORD_MIN_CENTER_MATCH = 0.3;
 
 export interface FilterCandidate {
   videoId: string;
@@ -69,6 +83,12 @@ export interface MandalaFilterInput {
   recencyWeight?: number;
   recencyHalfLifeMonths?: number;
   now?: Date;
+  /**
+   * Center-gate matching mode. See `v3/config.ts::CenterGateMode`.
+   * Defaults to `'substring'` (pre-audit behavior) when omitted so
+   * callers that haven't opted in keep the old logic bit-identical.
+   */
+  centerGateMode?: CenterGateMode;
 }
 
 export interface ScoreWeights {
@@ -121,6 +141,8 @@ export interface MandalaFilterStats {
     halfLifeMonths: number;
     missingPublishedAt: number;
   };
+  /** Which mode was applied this run. Useful for prod A/B logs. */
+  centerGateMode?: CenterGateMode;
 }
 
 export function applyMandalaFilter<T extends FilterCandidate>(
@@ -136,6 +158,12 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
 ): { byCell: Map<number, ScoredAssignment<T>[]>; stats: MandalaFilterStats } {
   const centerCore = extractCoreKeyphrase(input.centerGoal, input.language);
   const centerTokens = tokenize(centerCore, input.language);
+  const mode: CenterGateMode = input.centerGateMode ?? 'substring';
+
+  // Precompute per-center-token 2-grams once so the subword path is
+  // O(title-tokens × centerTokens) per candidate, not per pair.
+  const centerTokenGrams: Array<{ token: string; grams: Set<string> }> =
+    mode === 'subword' ? [...centerTokens].map((t) => ({ token: t, grams: charBigrams(t) })) : [];
 
   const subGoalTokens: Set<string>[] = input.subGoals.map((sg) => tokenize(sg, input.language));
 
@@ -174,11 +202,23 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
       halfLifeMonths,
       missingPublishedAt: 0,
     },
+    centerGateMode: mode,
   };
 
   for (const c of candidates) {
     const titleTokens = tokenize(c.title, input.language);
-    const centerScore = substringOverlap(centerTokens, titleTokens);
+    // Center score per mode:
+    //   substring — legacy, token-level substring overlap
+    //   subword   — char 2-gram overlap per center token, 30% floor
+    //   off       — 1 always (gate disabled)
+    let centerScore: number;
+    if (mode === 'off') {
+      centerScore = 1;
+    } else if (mode === 'subword') {
+      centerScore = subwordOverlap(centerTokenGrams, titleTokens);
+    } else {
+      centerScore = substringOverlap(centerTokens, titleTokens);
+    }
     const focusMatched = focusTokens.size > 0 && substringOverlap(focusTokens, titleTokens) > 0;
 
     // Center gate — OR of (focus-tag match) and (center overlap > 0).
@@ -188,9 +228,12 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     // in the title. Non-focus candidates keep the original "any overlap"
     // rule so this change is purely additive on the permissive side — the
     // pre-existing pool of retained candidates is unchanged.
+    //
+    // Mode 'off' short-circuits to centerScore=1 above, so the gate
+    // never fires regardless of tokens.
     if (focusMatched) {
       stats.passedByFocusTag = (stats.passedByFocusTag ?? 0) + 1;
-    } else if (centerTokens.size > 0 && centerScore === 0) {
+    } else if (mode !== 'off' && centerTokens.size > 0 && centerScore === 0) {
       stats.droppedByCenterGate++;
       continue;
     }
@@ -256,6 +299,55 @@ function substringOverlap(centerTokens: Set<string>, titleTokens: Set<string>): 
     }
   }
   return hits / centerTokens.size;
+}
+
+/**
+ * Character 2-grams of the input string, ignoring non-letter / non-
+ * digit characters. Exported shape for tests only.
+ *
+ * Why bigrams: Korean composite words (`"모닝루틴"`, `"비밀루틴"`) share
+ * meaningful character sequences (`"루틴"`) with their root. Token-
+ * level substring can't detect this because neither `"모닝루틴"` nor
+ * `"루틴으로"` contains the other. Bigrams on each string produce
+ * overlapping sets:
+ *   `"루틴으로"` → {루틴, 틴으, 으로}
+ *   `"모닝루틴"` → {모닝, 닝루, 루틴}
+ *   shared   → {루틴}
+ * which lets the gate fire on semantically-related composite forms.
+ */
+export function charBigrams(s: string): Set<string> {
+  const grams = new Set<string>();
+  const str = s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+  for (let i = 0; i + 2 <= str.length; i++) grams.add(str.slice(i, i + 2));
+  return grams;
+}
+
+/**
+ * Subword-aware center-gate score. For each center token, count it as
+ * "matched" when at least `SUBWORD_MIN_CENTER_MATCH` of its 2-grams
+ * appear in the title's combined 2-gram bag. Returns matched-tokens
+ * / total-center-tokens ∈ [0, 1].
+ */
+function subwordOverlap(
+  centerTokenGrams: ReadonlyArray<{ token: string; grams: Set<string> }>,
+  titleTokens: Set<string>
+): number {
+  if (centerTokenGrams.length === 0) return 0;
+  // Build the union of 2-grams from all title tokens. Per-token 2-grams
+  // are cheaper than a full-string 2-gram because we avoid bridging
+  // across word boundaries that the user never spoke together.
+  const titleGrams = new Set<string>();
+  for (const tt of titleTokens) {
+    for (const g of charBigrams(tt)) titleGrams.add(g);
+  }
+  let matched = 0;
+  for (const { grams } of centerTokenGrams) {
+    if (grams.size === 0) continue;
+    let hits = 0;
+    for (const g of grams) if (titleGrams.has(g)) hits++;
+    if (hits / grams.size >= SUBWORD_MIN_CENTER_MATCH) matched++;
+  }
+  return matched / centerTokenGrams.length;
 }
 
 function jaccard(bodyTokens: Set<string>, subGoalTokens: Set<string>): number {

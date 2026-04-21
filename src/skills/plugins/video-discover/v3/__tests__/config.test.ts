@@ -1,6 +1,7 @@
 import { DEFAULT_SEMANTIC_ALPHA, DEFAULT_SEMANTIC_BETA } from '@/modules/video-dictionary';
 
 import {
+  DEFAULT_CENTER_GATE_MODE,
   DEFAULT_PUBLISHED_AFTER_DAYS,
   DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
   loadV3Config,
@@ -8,7 +9,7 @@ import {
 import { DEFAULT_RECENCY_HALF_LIFE_MONTHS, DEFAULT_RECENCY_WEIGHT } from '../mandala-filter';
 
 describe('loadV3Config', () => {
-  test('empty env → activated defaults (Tier 1 off, recency on, 3yr cutoff, semantic off, yt timeout 1s)', () => {
+  test('empty env → activated defaults (Tier 1 off, recency on, 3yr cutoff, semantic off, yt timeout 1s, center-gate substring)', () => {
     expect(loadV3Config({})).toEqual({
       enableTier1Cache: false,
       recencyWeight: DEFAULT_RECENCY_WEIGHT,
@@ -19,6 +20,7 @@ describe('loadV3Config', () => {
       semanticBeta: DEFAULT_SEMANTIC_BETA,
       enableWhitelistGate: false,
       youtubeSearchTimeoutMs: DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
+      centerGateMode: DEFAULT_CENTER_GATE_MODE,
     });
   });
 
@@ -82,6 +84,7 @@ describe('loadV3Config', () => {
       semanticBeta: DEFAULT_SEMANTIC_BETA,
       enableWhitelistGate: false,
       youtubeSearchTimeoutMs: DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
+      centerGateMode: DEFAULT_CENTER_GATE_MODE,
     });
   });
 
@@ -123,5 +126,19 @@ describe('loadV3Config', () => {
     expect(loadV3Config({ V3_SEMANTIC_ALPHA: '1.5' }).semanticAlpha).toBe(DEFAULT_SEMANTIC_ALPHA);
     expect(loadV3Config({ V3_SEMANTIC_ALPHA: '-0.1' }).semanticAlpha).toBe(DEFAULT_SEMANTIC_ALPHA);
     expect(loadV3Config({ V3_SEMANTIC_BETA: 'NaN' }).semanticBeta).toBe(DEFAULT_SEMANTIC_BETA);
+  });
+
+  test('V3_CENTER_GATE_MODE accepts the three enum values, case-insensitive + trimmed', () => {
+    expect(loadV3Config({ V3_CENTER_GATE_MODE: 'substring' }).centerGateMode).toBe('substring');
+    expect(loadV3Config({ V3_CENTER_GATE_MODE: 'subword' }).centerGateMode).toBe('subword');
+    expect(loadV3Config({ V3_CENTER_GATE_MODE: 'off' }).centerGateMode).toBe('off');
+    expect(loadV3Config({ V3_CENTER_GATE_MODE: '  SUBWORD  ' }).centerGateMode).toBe('subword');
+  });
+
+  test('invalid V3_CENTER_GATE_MODE → baseline default (substring)', () => {
+    expect(loadV3Config({ V3_CENTER_GATE_MODE: 'garbage' }).centerGateMode).toBe(
+      DEFAULT_CENTER_GATE_MODE
+    );
+    expect(loadV3Config({ V3_CENTER_GATE_MODE: '' }).centerGateMode).toBe(DEFAULT_CENTER_GATE_MODE);
   });
 });
