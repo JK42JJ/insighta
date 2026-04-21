@@ -245,3 +245,81 @@ describe('searchVideos — key rotation on 403 quota', () => {
     );
   });
 });
+
+describe('searchVideos — timeout (Phase 1 slice 1)', () => {
+  test('aborts when fetch exceeds timeoutMs → throws "search.list timeout"', async () => {
+    // Slow fetch that respects AbortSignal — simulates a genuine
+    // network tail. When the controller aborts, reject with the
+    // DOMException-shaped error that `fetch` surfaces in real code.
+    const fetchFn = ((_url: string, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal as AbortSignal | undefined;
+        if (signal) {
+          const onAbort = () => {
+            const err = new Error('The operation was aborted.');
+            (err as Error & { name: string }).name = 'AbortError';
+            reject(err);
+          };
+          if (signal.aborted) onAbort();
+          else signal.addEventListener('abort', onAbort, { once: true });
+        }
+        // Never resolves on its own — only abort finishes this promise.
+      });
+    }) as unknown as typeof fetch;
+
+    const start = Date.now();
+    await expect(searchVideos({ query: 'x', apiKey: 'K', fetchFn, timeoutMs: 50 })).rejects.toThrow(
+      /search\.list timeout after 50ms/
+    );
+    const elapsed = Date.now() - start;
+    // Generous upper bound — CI runners can jitter. Main assertion is
+    // "didn't hang forever".
+    expect(elapsed).toBeLessThan(2000);
+  });
+
+  test('omitting timeoutMs → legacy behavior (no AbortController created)', async () => {
+    let sawSignal = false;
+    const fetchFn = (async (_url: string, init?: RequestInit) => {
+      if (init?.signal) sawSignal = true;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ items: [] }),
+      } as Response;
+    }) as unknown as typeof fetch;
+    await searchVideos({ query: 'x', apiKey: 'K', fetchFn });
+    expect(sawSignal).toBe(false);
+  });
+
+  test('timeoutMs=0 → treated as no-timeout (falsy branch)', async () => {
+    let sawSignal = false;
+    const fetchFn = (async (_url: string, init?: RequestInit) => {
+      if (init?.signal) sawSignal = true;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ items: [] }),
+      } as Response;
+    }) as unknown as typeof fetch;
+    await searchVideos({ query: 'x', apiKey: 'K', fetchFn, timeoutMs: 0 });
+    expect(sawSignal).toBe(false);
+  });
+
+  test('fast fetch before timeout → resolves normally, no timeout error', async () => {
+    const fetchFn = (async () => {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ items: [{ id: { videoId: 'abc' } }] }),
+      } as Response;
+    }) as unknown as typeof fetch;
+    const items = await searchVideos({
+      query: 'x',
+      apiKey: 'K',
+      fetchFn,
+      timeoutMs: 5000,
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]?.id?.videoId).toBe('abc');
+  });
+});

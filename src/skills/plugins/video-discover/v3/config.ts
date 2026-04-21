@@ -6,6 +6,18 @@ import { DEFAULT_RECENCY_HALF_LIFE_MONTHS, DEFAULT_RECENCY_WEIGHT } from './mand
 
 export const DEFAULT_PUBLISHED_AFTER_DAYS = 1095;
 
+/**
+ * Per-call timeout for YouTube search.list in v3 discovery.
+ *
+ * 1000ms is empirically below the p95 of normal YouTube Data API
+ * latency from our EC2 region → any call exceeding this is on the
+ * tail and would otherwise bottleneck the entire Promise.allSettled
+ * fan-out (`v3/executor.ts:755`). Tail calls are cut and treated as
+ * `partial` results (missing items, not a pipeline failure). See
+ * Phase 1 slice 1 rationale in the PR description.
+ */
+export const DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS = 1000;
+
 export type V3EnvInput = Record<string, string | undefined>;
 
 const booleanFlag = z.preprocess(
@@ -48,6 +60,13 @@ const semanticBeta = z
   )
   .transform((v) => v ?? DEFAULT_SEMANTIC_BETA);
 
+const youtubeSearchTimeoutMs = z
+  .preprocess(
+    (v) => (v == null || v === '' ? undefined : Number(v)),
+    z.number().finite().int().positive().optional()
+  )
+  .transform((v) => v ?? DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS);
+
 export const v3EnvSchema = z.object({
   V3_ENABLE_TIER1_CACHE: booleanFlag.optional().default(false as unknown as string),
   V3_RECENCY_WEIGHT: clampedUnit,
@@ -57,6 +76,7 @@ export const v3EnvSchema = z.object({
   V3_SEMANTIC_ALPHA: semanticAlpha,
   V3_SEMANTIC_BETA: semanticBeta,
   V3_ENABLE_WHITELIST_GATE: booleanFlag.optional().default(false as unknown as string),
+  V3_YOUTUBE_SEARCH_TIMEOUT_MS: youtubeSearchTimeoutMs,
 });
 
 export interface V3Config {
@@ -68,6 +88,7 @@ export interface V3Config {
   semanticAlpha: number;
   semanticBeta: number;
   enableWhitelistGate: boolean;
+  youtubeSearchTimeoutMs: number;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -80,6 +101,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_SEMANTIC_ALPHA: env['V3_SEMANTIC_ALPHA'],
     V3_SEMANTIC_BETA: env['V3_SEMANTIC_BETA'],
     V3_ENABLE_WHITELIST_GATE: env['V3_ENABLE_WHITELIST_GATE'],
+    V3_YOUTUBE_SEARCH_TIMEOUT_MS: env['V3_YOUTUBE_SEARCH_TIMEOUT_MS'],
   });
   if (!parsed.success) {
     return {
@@ -91,6 +113,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       semanticAlpha: DEFAULT_SEMANTIC_ALPHA,
       semanticBeta: DEFAULT_SEMANTIC_BETA,
       enableWhitelistGate: false,
+      youtubeSearchTimeoutMs: DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
     };
   }
   return {
@@ -102,6 +125,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     semanticAlpha: parsed.data.V3_SEMANTIC_ALPHA,
     semanticBeta: parsed.data.V3_SEMANTIC_BETA,
     enableWhitelistGate: parsed.data.V3_ENABLE_WHITELIST_GATE,
+    youtubeSearchTimeoutMs: parsed.data.V3_YOUTUBE_SEARCH_TIMEOUT_MS,
   };
 }
 
