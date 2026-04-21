@@ -173,6 +173,17 @@
 - 새 env 추가 전 **2 질문 테스트**: (1) 값을 stdout/log 에 찍어도 괜찮은가, (2) open-source PR 에 그대로 포함해도 되는가. 둘 다 yes → Secret 아님.
 - 상세: `memory/architecture.md` "Configuration Architecture: Secrets vs Config", `memory/work-efficiency.md` "Secret vs Config 2-question test". 근거: CP392 `V3_RECENCY_*` 를 Secret 으로 sync 하려다 사용자 `"이게 왜 시크릿이야?"` catch.
 
+### 추측 전 소스 읽기 (절대 규칙, LEVEL-3, CP391→CP396→CP412→CP413, recurrence 4)
+- 진단·수정·스크립트 작성 **전에**, 관련 파일의 실제 소스 내용을 1회 이상 읽어서 확인한다. 에러 메시지 · 문서 · 기억 · 패턴에만 의존해서 코드를 쓰지 않는다.
+- 확인 대상 예:
+  - 라이브러리 버그 진단 → `pip download <pkg>==<ver> --no-deps --no-binary=:all: -d /tmp/X && tar xzf ... && cat ...` 로 실제 설치되는 소스 읽기. 버전 핀을 추측하지 말 것.
+  - 설정 값 / 환경변수 이름 → `.env` · `deploy.yml` · `config.py` 를 `awk -F= '/^PREFIX/ {print $1}'` 등으로 **키만** 나열해서 실제 이름 확인. 값 노출 없는 discovery 먼저.
+  - Enum / 토픽 slug / 디스패처 키 → 해당 모듈의 `SET_T` · `REGISTRY` · 등 dict 를 직접 `grep` 로 확인. 기억에 의존해서 타이핑하지 말 것.
+  - 호스트 · IP → `tailscale status | grep <keyword>` · `gh secret list` · `ssh <alias> echo ok` 로 사전 검증. hostname 추측 금지.
+- 위반 시 패턴: 잘못된 버전 핀 / 잘못된 토픽 slug / 잘못된 hostname / 값 leak 을 유발하는 `sed` 마스킹 regex / 존재하지 않는 함수 이름으로 만든 grep.
+- **발생 시 즉시 재작업**: 추측으로 만들어진 코드/명령은 삭제하고 소스 read → 재구성. 부분 수정으로 봉합 금지.
+- 근거: CP391 (`transformers<4.30` 추측 pin), CP396 (`cut -d= -f2` base64 drop), CP412 (`sed mask regex` 반대 방향 → 4 redis 비번 leak), CP413 (`kpop-choreo` / `recipe` fabricated slug → pilot seed 실패). 4회 재발 → memory-only feedback file 3회 enforcement 실패 증명 → LEVEL-3 승격.
+
 ### 계획 → 승인 → 실행 (절대 규칙, LEVEL-2, CP388→CP391→CP392)
 - 모든 side-effect 작업 (Write, Edit, git, gh, ssh, install, docker) **전에** plan 제시: 파일 경로 + diff 요지 + 롤백 방법.
 - 사용자 명시 승인 ("해", "ok", "실행", "approved") 수신 후에만 실행. 제안·질문형 ("~어때?", "~해볼까?") 은 실행 트리거 아님.
