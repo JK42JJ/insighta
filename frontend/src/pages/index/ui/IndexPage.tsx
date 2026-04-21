@@ -27,6 +27,7 @@ import { useMandalaQuery, useMandalaList } from '@/features/mandala';
 import { useMandalaStore } from '@/stores/mandalaStore';
 import { youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
+import { useVideoStream } from '@/features/recommendation-feed/model/useVideoStream';
 import { useSearchCards, SearchBar } from '@/features/search';
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
 import { useLayoutPreferences } from '../model/useLayoutPreferences';
@@ -206,6 +207,29 @@ function AuthenticatedApp() {
     },
     navigation.selectedCellIndex
   );
+
+  // 5b. SSE card stream — subscribe to `recommendation_cache` +
+  // `user_video_states` notifications (Slices 2 + #438) so the main
+  // grid refreshes as each card is persisted, instead of waiting for
+  // the 5s polling tick. Each new card in the stream invalidates the
+  // localCards + userVideoStates queries; React Query then refetches
+  // and cardOrchestrator re-renders with the new rows. Cheap — no
+  // new schema, no render loop risk (invalidate is a no-op if the
+  // subscriber is mid-request).
+  const cardStream = useVideoStream(effectiveMandalaId);
+  const cardStreamCountRef = useRef(0);
+  useEffect(() => {
+    if (cardStream.cards.length > cardStreamCountRef.current) {
+      cardStreamCountRef.current = cardStream.cards.length;
+      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+    }
+    // Reset the counter when the subscribed mandala changes so a
+    // cross-mandala navigation does not miss the first event.
+    if (cardStream.cards.length === 0 && cardStreamCountRef.current !== 0) {
+      cardStreamCountRef.current = 0;
+    }
+  }, [cardStream.cards.length, queryClient]);
 
   // 5c. Post-creation card polling: when a mandala was just created via wizard,
   // poll for cards every 5s until they appear or 90s timeout.
