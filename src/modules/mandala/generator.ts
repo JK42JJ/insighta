@@ -297,6 +297,13 @@ async function enrichLabels(m: GeneratedMandala): Promise<GeneratedMandala> {
     m.center_label = m.center_goal.length > 20 ? m.center_goal.slice(0, 20) : m.center_goal;
   }
   if (!m.sub_labels || m.sub_labels.length === 0) {
+    // Phase 1 slice 3: log the fallback hit so the metric is observable
+    // in prod. Structure-phase should provide sub_labels under the new
+    // 700-token budget; hitting this branch means either the model
+    // still truncated or the response was malformed. Rate should drop
+    // materially vs pre-slice-3 baseline.
+    logger.info('[TIMING] enrichLabels: fallback triggered (sub_labels missing in structure)');
+    const fallbackStart = Date.now();
     try {
       const lang = m.language === 'ko' || m.language === 'en' ? m.language : 'en';
       const labels = await generateLabels({
@@ -306,11 +313,14 @@ async function enrichLabels(m: GeneratedMandala): Promise<GeneratedMandala> {
       });
       m.center_label = labels.center_label;
       m.sub_labels = labels.sub_labels;
+      logger.info(`[TIMING] enrichLabels: fallback succeeded in ${Date.now() - fallbackStart}ms`);
     } catch (err) {
       // Label generation failed — leave sub_labels empty.
       // UI falls back to sub_goals. NEVER truncate sub_goals as labels.
       logger.warn(`enrichLabels: sub_labels generation failed, leaving empty: ${err}`);
     }
+  } else {
+    logger.info('[TIMING] enrichLabels: skipped (sub_labels present from structure)');
   }
   return m;
 }
@@ -554,7 +564,64 @@ export async function generateMandalaStructure(
   if (!parsed.language) parsed.language = lang;
   if (!parsed.domain) parsed.domain = domain;
 
+  // Phase 1 slice 3: normalize + trim structure-provided labels.
+  const { hadSubLabels } = normalizeStructureLabels(parsed, lang);
+  logger.info(
+    `[TIMING] structure-labels-present: ${hadSubLabels ? 'yes' : 'no'} ` +
+      `(center_label=${Boolean(parsed.center_label)})`
+  );
+
   return parsed;
+}
+
+/**
+ * Phase 1 slice 3 — Normalize and trim labels coming back from
+ * `generateMandalaStructure`.
+ *
+ * The structure prompt already asks for `center_label` + `sub_labels`
+ * as part of its JSON schema, but prior to slice 3 the response token
+ * budget (500) was tight enough that labels sometimes got truncated or
+ * dropped silently, forcing a second LLM round-trip through
+ * `enrichLabels → generateLabels`. With the 700-token budget the full
+ * label array should arrive reliably.
+ *
+ * Contract:
+ * - If `sub_labels` is a full-length string array, each element is
+ *   sliced to the language-appropriate max (KO 10, EN 15).
+ * - If `sub_labels` is partial / malformed, it is deleted so the
+ *   downstream `enrichLabels` fallback can regenerate cleanly. We
+ *   explicitly avoid "fix partial labels" paths — one bad label in a
+ *   grid of eight reads worse to users than a clean regeneration.
+ * - `center_label`, if present, is sliced to the same language limit.
+ *
+ * Pure function over the parsed object (mutates in place). Returns
+ * `{ hadSubLabels }` so the caller can emit telemetry without
+ * re-checking.
+ *
+ * Exported for unit testing — the `generateMandalaStructure` path
+ * that calls it requires an OpenRouter mock for full coverage; this
+ * seam keeps the label normalization testable on its own.
+ */
+export function normalizeStructureLabels(
+  parsed: { center_label?: unknown; sub_labels?: unknown; sub_goals: unknown[] },
+  lang: 'ko' | 'en'
+): { hadSubLabels: boolean } {
+  const labelMaxLen = lang === 'ko' ? 10 : 15;
+  if (typeof parsed.center_label === 'string') {
+    parsed.center_label = parsed.center_label.slice(0, labelMaxLen);
+  } else if (parsed.center_label !== undefined) {
+    delete parsed.center_label;
+  }
+  const hadSubLabels =
+    Array.isArray(parsed.sub_labels) &&
+    parsed.sub_labels.length === parsed.sub_goals.length &&
+    parsed.sub_labels.every((l) => typeof l === 'string' && l.length > 0);
+  if (hadSubLabels) {
+    parsed.sub_labels = (parsed.sub_labels as string[]).map((l) => l.slice(0, labelMaxLen));
+  } else {
+    delete parsed.sub_labels;
+  }
+  return { hadSubLabels };
 }
 
 /**
