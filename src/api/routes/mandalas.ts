@@ -26,6 +26,7 @@ import {
 } from '../../config/recommendations';
 import { MemoryCache } from '../../utils/memory-cache';
 import { cardPublisher, type CardPayload } from '../../modules/recommendations/publisher';
+import { generateMandalaActions } from '../../modules/mandala/generator';
 
 // Explore results cache — templates are near-immutable, 10-min TTL
 const exploreCache = new MemoryCache({ defaultTTLMs: EXPLORE_CACHE_TTL_MS, maxEntries: 100 });
@@ -730,14 +731,123 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           return null;
         });
 
+      // P0-beta: after structure completes, save the mandala + fire
+      // the post-creation pipeline (which dispatches the v3 discover
+      // skill). Subscribe to cardPublisher for the new mandala so
+      // each `recommendation_cache.upsert` streams as a `card_added`
+      // event.
+      let mandalaId: string | null = null;
+      let unsubscribe: (() => void) | null = null;
+
       try {
-        await Promise.all([templatePromise, structurePromise]);
-        write('complete', { duration_ms: Date.now() - t0 });
+        const [_templates, structure] = await Promise.all([templatePromise, structurePromise]);
+
+        if (structure && !closed) {
+          // Build levels from the structure: 1 root + 8 sub-goals.
+          const levels: MandalaLevelBody[] = [
+            {
+              levelKey: 'root',
+              centerGoal: structure.center_goal,
+              subjects: [],
+              position: 0,
+              depth: 0,
+            },
+            ...structure.sub_goals.map((sg, i) => ({
+              levelKey: `cell-${i}`,
+              centerGoal: sg,
+              subjects: [],
+              position: i,
+              depth: 1,
+              parentLevelKey: 'root',
+            })),
+          ];
+
+          const tSaveStart = Date.now();
+          try {
+            const manager = getMandalaManager();
+            const saved = await manager.createMandala(userId, structure.center_goal, levels);
+            mandalaId = saved.id;
+            write('mandala_saved', {
+              mandalaId: saved.id,
+              duration_ms: Date.now() - tSaveStart,
+            });
+
+            // Subscribe BEFORE triggering the post-creation pipeline
+            // so we don't miss the early card_added events.
+            unsubscribe = cardPublisher.subscribe(saved.id, (payload: CardPayload) => {
+              write('card_added', payload);
+            });
+
+            // Fire-and-forget: v3 discover skill runs async and
+            // upserts into recommendation_cache, each upsert calls
+            // notifyCardAdded(mandalaId, payload) → our subscriber
+            // above → SSE card_added.
+            triggerMandalaPostCreationAsync(userId, saved.id);
+
+            // Fire-and-forget: generate 64 actions in background.
+            // The post-creation pipeline does NOT need actions, so
+            // actions fill in later as a separate concern. Retry 1x
+            // on failure; log + continue if both attempts fail (no
+            // silent 0/8 — the UI must surface the failure state
+            // downstream).
+            void (async () => {
+              const attemptActions = async (): Promise<Record<string, string[]> | null> => {
+                try {
+                  return await generateMandalaActions(
+                    structure.sub_goals,
+                    lang,
+                    structure.center_goal,
+                    undefined,
+                    undefined
+                  );
+                } catch (err) {
+                  request.log.warn(
+                    { err, mandalaId: saved.id },
+                    'wizard-stream: actions generation attempt failed'
+                  );
+                  return null;
+                }
+              };
+              const actions = (await attemptActions()) ?? (await attemptActions());
+              if (!closed && actions) {
+                write('actions_ready', { actions });
+              } else if (!closed && !actions) {
+                write('actions_error', {
+                  message: 'actions generation failed after retry',
+                });
+              }
+            })();
+          } catch (saveErr) {
+            const msg = saveErr instanceof Error ? saveErr.message : String(saveErr);
+            request.log.error({ err: saveErr, userId }, 'wizard-stream: save failed');
+            write('save_error', { message: msg });
+          }
+        }
+
+        // Keep the stream open until the client disconnects OR a
+        // 90s hard ceiling (covers skill run + a few buffer
+        // seconds). After close, subscribers get cleaned up.
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(() => {
+            if (!closed) {
+              write('complete', {
+                duration_ms: Date.now() - t0,
+                mandalaId,
+              });
+            }
+            resolve();
+          }, 90_000);
+          request.raw.once('close', () => {
+            clearTimeout(timer);
+            resolve();
+          });
+        });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         request.log.error({ err, userId, goal }, 'wizard-stream: orchestrator failed');
         write('error', { message: msg });
       } finally {
+        if (unsubscribe) unsubscribe();
         if (!raw.destroyed) raw.end();
       }
     }
