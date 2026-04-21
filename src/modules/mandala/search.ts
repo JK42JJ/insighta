@@ -57,13 +57,31 @@ const EMBED_TIMEOUT_MS = 30_000;
 /** UUID of the system-templates@insighta.one user that owns all explore templates */
 const SYSTEM_TEMPLATES_USER_ID = '00000000-0000-0000-0000-000000000001';
 
-// ─── Embedding (Ollama /api/embed) ───
+// ─── Embedding (provider-switched) ───
 
 /**
- * Embed a goal text using qwen3-embedding:8b on Mac Mini Ollama.
- * Returns 4096-dimensional vector matching mandala_embeddings table.
+ * Embed a goal text.
+ *
+ * Routes by `config.mandalaEmbed.provider`:
+ *   - 'ollama' (default): legacy Mac-mini Ollama path at MANDALA_GEN_URL
+ *     with qwen3-embedding:8b. Kept bit-identical so flag-off rollback
+ *     returns to pre-Phase-1 behaviour.
+ *   - 'openrouter' (Phase 1, 2026-04-22): OpenRouter-hosted same-family
+ *     Qwen3-Embedding-8B. Eliminates the mac-mini dependency on the
+ *     wizard critical path. Dim remains 4096 so existing vector(4096)
+ *     table and 18k rows are reusable.
+ *
+ * Both return a same-dim vector matching mandala_embeddings.
  */
 export async function embedGoalForMandala(goalText: string): Promise<number[]> {
+  const provider = config.mandalaEmbed.provider;
+  if (provider === 'openrouter') {
+    return embedViaOpenRouter(goalText);
+  }
+  return embedViaOllama(goalText);
+}
+
+async function embedViaOllama(goalText: string): Promise<number[]> {
   const url = config.mandalaGen.url;
   const model = config.mandalaGen.embedModel;
   const expectedDim = config.mandalaGen.embedDimension;
@@ -122,6 +140,86 @@ export async function embedGoalForMandala(goalText: string): Promise<number[]> {
       );
     }
     throw new MandalaSearchError(message, 'EMBED_FAILED');
+  }
+}
+
+/**
+ * OpenRouter embedding client (Phase 1).
+ *
+ * Uses the OpenAI-compatible /embeddings endpoint on OpenRouter. Provider
+ * routing and rate-limits are OpenRouter's responsibility; this client only
+ * translates the standard schema to our internal vector shape + enforces
+ * the same dim check as the Ollama path.
+ *
+ * On auth/network/timeout failure, throws MandalaSearchError with a code
+ * aligned with the Ollama path so upstream handlers don't need to special
+ * case.
+ */
+async function embedViaOpenRouter(goalText: string): Promise<number[]> {
+  const baseUrl = config.mandalaEmbed.openRouterBaseUrl;
+  const model = config.mandalaEmbed.openRouterModel;
+  const expectedDim = config.mandalaEmbed.openRouterDimension;
+  const apiKey = config.openrouter.apiKey;
+
+  if (!apiKey) {
+    throw new MandalaSearchError('OPENROUTER_API_KEY not configured', 'SERVICE_UNAVAILABLE');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${baseUrl}/embeddings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ model, input: goalText, encoding_format: 'float' }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const body = await response.text();
+      const code =
+        response.status === 401
+          ? 'SERVICE_UNAVAILABLE'
+          : response.status === 429
+            ? 'RATE_LIMITED'
+            : 'SERVICE_UNAVAILABLE';
+      throw new MandalaSearchError(
+        `OpenRouter embed API error ${response.status}: ${body.slice(0, 200)}`,
+        code
+      );
+    }
+
+    const data = (await response.json()) as {
+      data?: Array<{ embedding?: number[] }>;
+    };
+    const vector = data.data?.[0]?.embedding;
+
+    if (!vector || vector.length === 0) {
+      throw new MandalaSearchError('OpenRouter returned empty embedding', 'EMBED_FAILED');
+    }
+
+    if (vector.length !== expectedDim) {
+      throw new MandalaSearchError(
+        `OpenRouter embedding dimension mismatch: got ${vector.length}, expected ${expectedDim}`,
+        'DIMENSION_MISMATCH'
+      );
+    }
+
+    return vector;
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof MandalaSearchError) throw err;
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new MandalaSearchError('OpenRouter embed request timed out', 'TIMEOUT');
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    throw new MandalaSearchError(`OpenRouter embed failed: ${message}`, 'EMBED_FAILED');
   }
 }
 
@@ -391,6 +489,7 @@ export type MandalaSearchErrorCode =
   | 'SERVICE_UNAVAILABLE'
   | 'EMBED_FAILED'
   | 'DIMENSION_MISMATCH'
+  | 'RATE_LIMITED'
   | 'TIMEOUT';
 
 export class MandalaSearchError extends Error {

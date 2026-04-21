@@ -61,6 +61,12 @@ const envSchema = z.object({
   MANDALA_EMBED_MODEL: z.string().default('qwen3-embedding:8b'),
   MANDALA_EMBED_DIMENSION: z.coerce.number().default(4096),
 
+  // Mandala embedding provider switch (Phase 1, 2026-04-22).
+  // 'ollama' keeps the legacy Mac-mini path bit-identical. 'openrouter' routes
+  // the service-flow embedGoalForMandala call through OpenRouter instead.
+  // Default = ollama so flag-off = pre-Phase-1 behaviour (CLAUDE.md C5).
+  MANDALA_EMBED_PROVIDER: z.enum(['ollama', 'openrouter']).default('ollama'),
+
   // LLM Provider
   OLLAMA_URL: z.string().default('http://localhost:11434'),
   OLLAMA_EMBED_MODEL: z.string().default('nomic-embed-text'),
@@ -70,6 +76,14 @@ const envSchema = z.object({
   // OpenRouter
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_MODEL: z.string().default('qwen/qwen3.5-9b'),
+  // OpenRouter embedding endpoint (Phase 1). Same OPENROUTER_API_KEY is
+  // reused for auth. Base URL is OpenAI-compatible; model id is exact
+  // string as listed on the OpenRouter model catalogue. Dim must match
+  // the vector(N) column on mandala_embeddings — 4096 is correct for
+  // the Qwen3-Embedding-8B family currently in use.
+  OPENROUTER_EMBED_BASE_URL: z.string().default('https://openrouter.ai/api/v1'),
+  OPENROUTER_EMBED_MODEL: z.string().default('qwen/qwen3-embedding-8b'),
+  OPENROUTER_EMBED_DIMENSION: z.coerce.number().default(4096),
 
   // Gmail SMTP Relay (IP-authenticated via EC2)
   GMAIL_SMTP_HOST: z.string().default('smtp-relay.gmail.com'),
@@ -165,6 +179,15 @@ export const config = {
     model: env.MANDALA_GEN_MODEL,
     embedModel: env.MANDALA_EMBED_MODEL,
     embedDimension: env.MANDALA_EMBED_DIMENSION,
+  },
+
+  // Mandala embedding provider + OpenRouter embed endpoint (Phase 1,
+  // 2026-04-22). See docs/design/wizard-service-redesign-2026-04-22.md.
+  mandalaEmbed: {
+    provider: env.MANDALA_EMBED_PROVIDER,
+    openRouterBaseUrl: env.OPENROUTER_EMBED_BASE_URL,
+    openRouterModel: env.OPENROUTER_EMBED_MODEL,
+    openRouterDimension: env.OPENROUTER_EMBED_DIMENSION,
   },
 
   // LLM Provider
