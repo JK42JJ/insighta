@@ -13,13 +13,18 @@ import { useMandalaQuota } from '@/features/mandala';
 import type { PendingMandalaInputs } from '@/stores/mandalaStore';
 
 /**
- * Feature flag: when set to a falsy string ('false'), the page mounts
- * the legacy `useWizard` flow (template + AI pick, 3-step UX).
- * Otherwise it mounts the streaming flow built on POST /wizard-stream.
- * Default = streaming ON for new users; ops flip this off in an env
- * if the streaming path regresses.
+ * Feature flag: legacy `useWizard` flow (template + AI pick, 3-step UX)
+ * is the default. Set `VITE_WIZARD_STREAMING_ENABLED=true` at build time
+ * to mount the streaming flow built on POST /wizard-stream.
+ *
+ * Default flipped 2026-04-22 after critical incident: the streaming view
+ * (MandalaWizardStreamView) is deliberately narrow — no stepper, no
+ * template-pick, no focus tags, no sidebar navigation. When activated via
+ * PR #441 (PWA autoUpdate), users got stuck on a wizard page with no way
+ * back to the dashboard. Until streaming view reaches feature parity with
+ * the legacy wizard, keep the default off.
  */
-const WIZARD_STREAMING_ENABLED = import.meta.env.VITE_WIZARD_STREAMING_ENABLED !== 'false';
+const WIZARD_STREAMING_ENABLED = import.meta.env.VITE_WIZARD_STREAMING_ENABLED === 'true';
 
 /**
  * Shape pushed by `fireCreateMandala` on failure via
