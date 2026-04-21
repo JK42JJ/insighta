@@ -30,6 +30,13 @@ services:
       - REDIS_HOST=${INSIGHTA_TAILSCALE_IP}
       - REDIS_PORT=6379
       - REDIS_USER=insighta
+      # Phase-1 slice 5 followup (2026-04-21) — activate subword center-gate.
+      # Tuning knob, not a secret (per CLAUDE.md CP392 rule). Default in
+      # code is 'substring' (pre-audit). Flipping to 'subword' here
+      # enables char-2-gram composite-word matching so Korean titles
+      # like "모닝루틴" pass the gate for goals containing "루틴으로".
+      # Revert: delete this line and redeploy — code default takes over.
+      - V3_CENTER_GATE_MODE=subword
     volumes:
       - cache_data:/app/cache
       - logs_data:/app/logs
