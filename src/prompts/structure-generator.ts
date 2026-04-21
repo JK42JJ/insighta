@@ -9,7 +9,25 @@
 
 export const STRUCTURE_MODEL = 'anthropic/claude-haiku-4.5';
 export const STRUCTURE_TEMPERATURE = 0.7;
-export const STRUCTURE_MAX_TOKENS = 500;
+/**
+ * Token budget for the structure response.
+ *
+ * Raised from 500 → 700 in Phase 1 slice 3 (post-SGNL-parity audit).
+ * The JSON schema this prompt asks for includes center_goal (~15 tok)
+ * + center_label (~5) + 8 sub_goals (~360 combined) + 8 sub_labels
+ * (~100) + language/domain/overhead (~40) ≈ 520 tokens.
+ *
+ * At 500 the model was hitting the ceiling and silently dropping the
+ * sub_labels array from the response. The caller's enrichLabels path
+ * then observed `sub_labels.length === 0` and dispatched a SECOND
+ * LLM call to regenerate labels — doubling the mandala-generation
+ * foreground latency for user-visible path.
+ *
+ * 700 gives ~180 tokens of headroom, which in practice eliminates the
+ * truncation-induced fallback. The label-generation fallback still
+ * exists in enrichLabels() for genuine content-quality failures.
+ */
+export const STRUCTURE_MAX_TOKENS = 700;
 
 export interface StructurePromptInput {
   goal: string;
