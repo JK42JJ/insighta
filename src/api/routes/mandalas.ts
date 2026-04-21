@@ -5,6 +5,7 @@ import { triggerMandalaPostCreationAsync } from '../../modules/mandala/mandala-p
 import { getPrismaClient } from '../../modules/database/client';
 import {
   generateMandalaRace,
+  generateMandalaStructure,
   generateLabels,
   getCachedMandala,
   setCachedMandala,
@@ -620,6 +621,127 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     // OpenRouter directly. No model warm-up required.
     return reply.send({ status: 'skipped', reason: 'LoRA prewarm disabled — using Haiku' });
   });
+
+  /**
+   * POST /api/v1/mandalas/wizard-stream — parallel wizard SSE endpoint
+   *
+   * P0 (2026-04-21 redesign) — additive, flag-gated via client choice.
+   * Existing POST /generate + GET /:id/recommendations endpoints are
+   * untouched. Frontend opts in by calling this endpoint; default
+   * legacy path is preserved.
+   *
+   * Contract: on `goal` submission, the handler fires two independent
+   * LLM/pgvector tasks in parallel and streams SSE events as each
+   * completes:
+   *   - `template_found`   — pgvector similarity result (300-1000ms)
+   *   - `structure_ready`  — Haiku structure-only generation (2-5s)
+   *   - `error`            — terminal, connection closes
+   *   - `complete`         — all streamed stages done
+   *
+   * Design constraint: DO NOT add new logic. This endpoint is a thin
+   * parallel orchestrator over `searchMandalasByGoal` +
+   * `generateMandalaStructure` — both already in production use.
+   *
+   * Subsequent phases:
+   *   P0-beta: add mandala save + post-creation pipeline trigger.
+   *   P1:      frontend useWizardStream hook + flag-gated UI.
+   */
+  fastify.post<{
+    Body: { goal: string; language?: 'ko' | 'en' };
+  }>(
+    '/wizard-stream',
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const { goal, language = 'ko' } = request.body;
+      if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
+        return reply.code(400).send({
+          status: 400,
+          code: 'INVALID_INPUT',
+          message: 'goal is required',
+        });
+      }
+
+      const trimmedGoal = goal.trim();
+      const lang: 'ko' | 'en' = language === 'en' ? 'en' : 'ko';
+
+      void reply.hijack();
+      const raw = reply.raw;
+      raw.setHeader('Content-Type', 'text/event-stream');
+      raw.setHeader('Cache-Control', 'no-cache');
+      raw.setHeader('Connection', 'keep-alive');
+      raw.setHeader('X-Accel-Buffering', 'no');
+      raw.statusCode = 200;
+      raw.write('retry: 5000\n\n');
+      raw.write(`: connected goal-length=${trimmedGoal.length}\n\n`);
+
+      let closed = false;
+      const write = (event: string, data: unknown): void => {
+        if (closed || raw.destroyed) return;
+        raw.write(`event: ${event}\n`);
+        raw.write(`data: ${JSON.stringify(data)}\n\n`);
+      };
+      request.raw.on('close', () => {
+        closed = true;
+      });
+
+      // Parallel fan-out: template search + structure generation.
+      // Both take `goal` as their only dependency, so neither waits on
+      // the other. Wall-clock becomes max() of the two rather than
+      // their sum.
+      const t0 = Date.now();
+      const templatePromise = searchMandalasByGoal(trimmedGoal, {
+        limit: 4,
+        threshold: 0.3,
+        language: lang,
+      })
+        .then((templates) => {
+          write('template_found', {
+            templates,
+            duration_ms: Date.now() - t0,
+          });
+          return templates;
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          write('template_error', { message: msg, duration_ms: Date.now() - t0 });
+          return [];
+        });
+
+      const structurePromise = generateMandalaStructure({
+        goal: trimmedGoal,
+        language: lang,
+      })
+        .then((structure) => {
+          write('structure_ready', {
+            structure,
+            duration_ms: Date.now() - t0,
+          });
+          return structure;
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          write('structure_error', { message: msg, duration_ms: Date.now() - t0 });
+          return null;
+        });
+
+      try {
+        await Promise.all([templatePromise, structurePromise]);
+        write('complete', { duration_ms: Date.now() - t0 });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        request.log.error({ err, userId, goal }, 'wizard-stream: orchestrator failed');
+        write('error', { message: msg });
+      } finally {
+        if (!raw.destroyed) raw.end();
+      }
+    }
+  );
 
   /**
    * POST /api/v1/mandalas/generate - AI-generate a mandala from a goal using v13 model
