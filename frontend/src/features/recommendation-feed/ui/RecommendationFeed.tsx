@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Sparkles } from 'lucide-react';
 import { useRecommendations, type RecommendationItem } from '../model/useRecommendations';
+import { useVideoStream } from '../model/useVideoStream';
 import { FeedCard } from './FeedCard';
 
 interface RecommendationFeedProps {
@@ -36,9 +37,31 @@ type CellFilter = 'all' | number;
 export function RecommendationFeed({ mandalaId, subLabels, cardsByCell }: RecommendationFeedProps) {
   const { t } = useTranslation();
   const { recommendations, isLoading, isError, refetch } = useRecommendations(mandalaId);
+  const stream = useVideoStream(mandalaId);
   const [filter, setFilter] = useState<CellFilter>('all');
 
-  const items = recommendations?.items ?? [];
+  // Merge polled and streamed items. Polling carries the
+  // authoritative cache view (including older rows and cellLabel
+  // resolved server-side); the SSE stream adds live-arriving rows
+  // the polling hasn't fetched yet. Dedupe by id — stream events
+  // win position (they arrived first in time).
+  const items = useMemo<RecommendationItem[]>(() => {
+    const polled = recommendations?.items ?? [];
+    if (stream.cards.length === 0) return polled;
+    const seen = new Set<string>();
+    const merged: RecommendationItem[] = [];
+    for (const s of stream.cards) {
+      if (seen.has(s.id)) continue;
+      seen.add(s.id);
+      merged.push(s);
+    }
+    for (const p of polled) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      merged.push(p);
+    }
+    return merged;
+  }, [recommendations?.items, stream.cards]);
 
   // Per-cell counts: prefer rec items, fall back to existing user cards count.
   const counts = useMemo(() => {
