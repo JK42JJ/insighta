@@ -19,12 +19,15 @@
  *    depend on actions existing.
  */
 
+import { randomUUID } from 'node:crypto';
+
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { generateMandalaActions } from './generator';
 
 const log = logger.child({ module: 'fill-missing-actions' });
 
+const EXPECTED_SUB_GOAL_COUNT = 8;
 const EXPECTED_ACTIONS_PER_CELL = 8;
 const MIN_ACTIONS_TO_CONSIDER_FILLED = 8;
 
@@ -51,7 +54,7 @@ export async function fillMissingActionsIfNeeded(mandalaId: string): Promise<{
     return { ok: false, action: 'skipped-not-found' };
   }
 
-  const levels = await db.user_mandala_levels.findMany({
+  let levels = await db.user_mandala_levels.findMany({
     where: { mandala_id: mandalaId, depth: 1 },
     orderBy: { position: 'asc' },
     select: { id: true, center_goal: true, subjects: true, position: true },
@@ -59,11 +62,55 @@ export async function fillMissingActionsIfNeeded(mandalaId: string): Promise<{
 
   const rootLevel = await db.user_mandala_levels.findFirst({
     where: { mandala_id: mandalaId, depth: 0 },
-    select: { center_goal: true },
+    select: { id: true, center_goal: true, subjects: true },
   });
   if (!rootLevel) {
     log.warn(`fill-missing-actions: root level missing for mandala=${mandalaId}`);
     return { ok: false, action: 'skipped-not-found' };
+  }
+
+  // Recovery path: legacy mandalas created before the `/create-with-data`
+  // depth=1 scaffold fix have depth=0 only. Scaffold 8 empty depth=1 rows
+  // from root.subjects so the fill can proceed. Safe on first write — all
+  // rows arrive together via createMany; schema validation enforces unique
+  // (mandala_id, depth, position). If a concurrent writer inserted rows
+  // between read and write, the createMany will fail and the caller's
+  // next poll will see the now-populated levels.
+  if (levels.length === 0) {
+    const rootSubjects = Array.isArray(rootLevel.subjects)
+      ? rootLevel.subjects.filter((s): s is string => typeof s === 'string')
+      : [];
+    if (rootSubjects.length < EXPECTED_SUB_GOAL_COUNT) {
+      log.warn(
+        `fill-missing-actions: root has ${rootSubjects.length}/${EXPECTED_SUB_GOAL_COUNT} subjects — cannot scaffold depth=1 for mandala=${mandalaId}`
+      );
+      return { ok: false, action: 'skipped-not-found', reason: 'root has < 8 subjects' };
+    }
+    log.info(
+      `fill-missing-actions: scaffolding ${EXPECTED_SUB_GOAL_COUNT} depth=1 rows for legacy mandala=${mandalaId}`
+    );
+    const scaffoldData = rootSubjects.slice(0, EXPECTED_SUB_GOAL_COUNT).map((subject, idx) => ({
+      id: randomUUID(),
+      mandala_id: mandalaId,
+      parent_level_id: rootLevel.id,
+      level_key: `sub_${idx}`,
+      center_goal: subject,
+      subjects: [] as string[],
+      position: idx,
+      depth: 1,
+    }));
+    try {
+      await db.user_mandala_levels.createMany({ data: scaffoldData });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn(`fill-missing-actions: scaffold createMany failed for ${mandalaId}: ${msg}`);
+      return { ok: false, action: 'failed', reason: `scaffold failed: ${msg}` };
+    }
+    levels = await db.user_mandala_levels.findMany({
+      where: { mandala_id: mandalaId, depth: 1 },
+      orderBy: { position: 'asc' },
+      select: { id: true, center_goal: true, subjects: true, position: true },
+    });
   }
 
   const needsFill = levels.filter(

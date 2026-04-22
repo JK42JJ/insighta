@@ -1057,24 +1057,43 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           },
         ];
 
-        if (subDetails) {
-          subjects.forEach((_, idx) => {
-            const actions = subDetails[String(idx)] ?? subDetails[idx as unknown as string] ?? [];
-            if (Array.isArray(actions) && actions.length > 0) {
-              // Pad to 8 items if needed
-              const padded = [...actions];
-              while (padded.length < 8) padded.push('');
-              levels.push({
-                levelKey: `sub_${idx}`,
-                centerGoal: subjects[idx] ?? '',
-                subjects: padded.slice(0, 8),
-                position: idx,
-                depth: 1,
-                parentLevelKey: 'root',
-              });
-            }
+        // Always create 8 depth=1 scaffold rows regardless of whether
+        // subDetails (actions) arrived with this request. The Phase 1
+        // wizard flow (wizard-stream previewOnly=true, CP415) ships the
+        // structure ahead of actions, and actions arrive asynchronously
+        // — fill-missing-actions later needs a depth=1 row per cell to
+        // write into. Previously, the bug skipped the push when
+        // subDetails was absent or empty, so depth=1 rows never existed,
+        // leaving mandalas permanently stuck at 0/64 actions.
+        //
+        // If subDetails is provided (legacy one-shot flow), merge the
+        // actions into the matching row; otherwise store empty subjects
+        // as a scaffold for the async fill path.
+        subjects.forEach((subject, idx) => {
+          const rawActions =
+            subDetails?.[String(idx)] ?? subDetails?.[idx as unknown as string] ?? [];
+          const provided = Array.isArray(rawActions) ? rawActions : [];
+          // Scaffold with [] when no actions were provided so the async
+          // fill-missing-actions job can detect the cell (subjects.length
+          // < 8 gate). When partial actions were provided, keep legacy
+          // behavior of padding to 8 with empty strings.
+          let cellSubjects: string[];
+          if (provided.length === 0) {
+            cellSubjects = [];
+          } else {
+            const padded = [...provided];
+            while (padded.length < 8) padded.push('');
+            cellSubjects = padded.slice(0, 8);
+          }
+          levels.push({
+            levelKey: `sub_${idx}`,
+            centerGoal: subject ?? '',
+            subjects: cellSubjects,
+            position: idx,
+            depth: 1,
+            parentLevelKey: 'root',
           });
-        }
+        });
 
         const result = await getMandalaManager().createMandala(userId, title, levels);
         stage('create_mandala');
@@ -1128,10 +1147,17 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         });
         stage('skill_config');
 
-        // Phase 2 revert: actions are now generated one-shot in generateMandalaWithHaiku
-        // (not fire-and-forget). FE receives mandala with 64 actions already populated
-        // and sends them via subDetails. No background actions generation needed.
-        // If FE sends empty subDetails, that's a FE bug — don't silently patch with LLM.
+        // Action population has two supported flows:
+        //  - Legacy one-shot: FE runs `generateMandalaWithHaiku` and sends
+        //    all 64 actions via `subDetails` — saved directly.
+        //  - Phase 1 (CP415): FE takes the `wizard-stream?previewOnly=true`
+        //    structure and calls `/create-with-data` without `subDetails`.
+        //    `fill-missing-actions` (invoked by `triggerMandalaPostCreationAsync`)
+        //    populates the depth=1 rows asynchronously in the background.
+        //
+        // Either way, depth=1 scaffold rows are always created above so the
+        // async fill path has a target to write into. An empty `subDetails`
+        // is expected under the Phase 1 flow and is not a bug.
 
         // Fire-and-forget post-creation pipeline for the new mandala.
         // Opt-in via user_skill_config; safe if not enabled.
