@@ -30,17 +30,7 @@ import { defineManifest } from '@/skills/_shared/runtime';
  *     small for popular cells to reach 8. Raising this in tandem with
  *     MAX_QUERIES 12→20 gives cells room to absorb the wider pool.
  */
-// CP416 (2026-04-22) — product target revised 96 → **24 cards total**.
-// User directive during live latency measurement: 템플릿 7s / AI custom
-// 21s / dashboard 60s+ → "서비스 불가" 진단. 96-card target was the
-// quadruple of what the first viewport (dashboard CardList PAGE_SIZE=24)
-// actually renders, and the over-collection was amplifying downstream
-// latency (more queries, more filter work, more upserts). 3/cell × 8
-// cells = 24 aligns the pipeline target with actual UX consumption.
-//
-// Rollback: restore 12 and the matching V3_MAX_QUERIES=20 — both were
-// the pre-CP416 post-CP391 tuning, no schema change required.
-export const V3_TARGET_PER_CELL = 3;
+export const V3_TARGET_PER_CELL = 12;
 export const V3_NUM_CELLS = 8;
 /**
  * Upper bound on total slots across the mandala. Used by the executor
@@ -48,7 +38,7 @@ export const V3_NUM_CELLS = 8;
  * Tier 1 disabled, total filling is driven entirely by what the filter
  * admits from Tier 2, bounded per-cell by V3_TARGET_PER_CELL.
  */
-export const V3_TARGET_TOTAL = V3_TARGET_PER_CELL * V3_NUM_CELLS; // 24
+export const V3_TARGET_TOTAL = V3_TARGET_PER_CELL * V3_NUM_CELLS; // 96
 
 export const manifest: SkillManifest = defineManifest({
   id: 'video-discover-v3',
