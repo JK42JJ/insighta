@@ -34,6 +34,8 @@ export interface MandalaGenerateInput {
   goal: string;
   domain?: string;
   language?: 'ko' | 'en';
+  focusTags?: string[];
+  targetLevel?: string;
 }
 
 export interface GeneratedMandala {
@@ -530,6 +532,8 @@ export async function generateMandalaStructure(
     domain,
     language: lang,
     reference,
+    focusTags: input.focusTags,
+    targetLevel: input.targetLevel,
   });
 
   const provider = new OpenRouterGenerationProvider(STRUCTURE_MODEL);

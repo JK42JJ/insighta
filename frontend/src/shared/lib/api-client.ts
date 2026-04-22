@@ -879,6 +879,161 @@ class ApiClient {
     return res.data;
   }
 
+  /**
+   * Phase 1 (2026-04-22) — wizard-stream preview.
+   *
+   * Calls `POST /api/v1/mandalas/wizard-stream` with `previewOnly: true`
+   * and streams the SSE response until `structure_ready` or `complete`
+   * fires. Returns a shape drop-in compatible with `generateMandala` so
+   * the legacy `useWizard` hook can replace its `generateMutation`
+   * mutationFn without any UI component change.
+   *
+   * Key differences vs `generateMandala`:
+   * - Backend uses `generateMandalaStructure` (structure-only ~3s) not
+   *   the one-shot Haiku path (~21-28s).
+   * - `actions` come back empty. The legacy wizard has its own "actions
+   *   arrive from post-creation pipeline after save" fallback, so empty
+   *   actions here are valid.
+   * - `source` is always `'wizard-stream'`.
+   *
+   * On SSE parse / HTTP / structure_error, throws — the legacy hook's
+   * existing error handling (soft-slow + failed flags) engages the
+   * same way it did with the one-shot path.
+   */
+  async streamWizardPreview(
+    goal: string,
+    options?: {
+      language?: 'ko' | 'en';
+      focusTags?: string[];
+      targetLevel?: string;
+      signal?: AbortSignal;
+      onTemplateFound?: (
+        templates: Array<{
+          mandala_id: string;
+          center_goal: string;
+          center_label: string | null;
+          domain: string | null;
+          language: string | null;
+          similarity: number;
+          sub_goals: string[];
+          sub_labels: string[];
+          sub_actions: Record<number, string[]>;
+        }>
+      ) => void;
+    }
+  ): Promise<{
+    mandala: {
+      center_goal: string;
+      center_label: string;
+      language: string;
+      domain: string;
+      sub_goals: string[];
+      sub_labels?: string[];
+      actions: Record<string, string[]>;
+    };
+    source: 'wizard-stream';
+    template_duration_ms?: number;
+    structure_duration_ms?: number;
+  }> {
+    const token = await this.getFreshToken();
+    if (!token) throw new Error('Not authenticated');
+
+    const res = await fetch(`${this.baseUrl}/api/v1/mandalas/wizard-stream`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
+      body: JSON.stringify({
+        goal,
+        language: options?.language,
+        previewOnly: true,
+        focus_tags: options?.focusTags,
+        target_level: options?.targetLevel,
+      }),
+      signal: options?.signal,
+    });
+
+    if (!res.ok || !res.body) {
+      throw new Error(`wizard-stream HTTP ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let structure: Awaited<ReturnType<ApiClient['streamWizardPreview']>>['mandala'] | null = null;
+    let templateDurationMs: number | undefined;
+    let structureDurationMs: number | undefined;
+
+    const parseBlock = (block: string): { event: string; data: string } | null => {
+      const lines = block.split('\n');
+      let event = '';
+      let data = '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) event = line.slice(7).trim();
+        else if (line.startsWith('data: ')) data += line.slice(6);
+      }
+      if (!event) return null;
+      return { event, data };
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() ?? '';
+        for (const block of blocks) {
+          if (!block || block.startsWith(':')) continue;
+          const parsed = parseBlock(block);
+          if (!parsed) continue;
+          const payload = parsed.data ? JSON.parse(parsed.data) : {};
+          if (parsed.event === 'template_found') {
+            templateDurationMs = payload.duration_ms;
+            if (Array.isArray(payload.templates) && options?.onTemplateFound) {
+              options.onTemplateFound(payload.templates);
+            }
+          } else if (parsed.event === 'structure_ready') {
+            structureDurationMs = payload.duration_ms;
+            structure = payload.structure;
+          } else if (
+            parsed.event === 'error' ||
+            parsed.event === 'structure_error' ||
+            parsed.event === 'save_error'
+          ) {
+            throw new Error(payload.message || `wizard-stream ${parsed.event}`);
+          } else if (parsed.event === 'complete') {
+            // terminal — exit outer loop
+            return finalize();
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    return finalize();
+
+    function finalize(): {
+      mandala: NonNullable<typeof structure>;
+      source: 'wizard-stream';
+      template_duration_ms?: number;
+      structure_duration_ms?: number;
+    } {
+      if (!structure) {
+        throw new Error('wizard-stream closed without structure_ready');
+      }
+      return {
+        mandala: structure,
+        source: 'wizard-stream',
+        template_duration_ms: templateDurationMs,
+        structure_duration_ms: structureDurationMs,
+      };
+    }
+  }
+
   async searchMandalasByGoal(
     goal: string,
     options?: { limit?: number; threshold?: number; language?: string; signal?: AbortSignal }

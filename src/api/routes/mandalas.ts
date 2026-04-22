@@ -648,7 +648,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
    *   P1:      frontend useWizardStream hook + flag-gated UI.
    */
   fastify.post<{
-    Body: { goal: string; language?: 'ko' | 'en' };
+    Body: {
+      goal: string;
+      language?: 'ko' | 'en';
+      previewOnly?: boolean;
+      focus_tags?: string[];
+      target_level?: string;
+    };
   }>(
     '/wizard-stream',
     {
@@ -659,7 +665,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const userId = getUserId(request, reply);
       if (!userId) return;
 
-      const { goal, language = 'ko' } = request.body;
+      const {
+        goal,
+        language = 'ko',
+        previewOnly = false,
+        focus_tags: focusTags,
+        target_level: targetLevel,
+      } = request.body;
       if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
         return reply.code(400).send({
           status: 400,
@@ -717,6 +729,8 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const structurePromise = generateMandalaStructure({
         goal: trimmedGoal,
         language: lang,
+        focusTags,
+        targetLevel,
       })
         .then((structure) => {
           write('structure_ready', {
@@ -741,6 +755,20 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       try {
         const [_templates, structure] = await Promise.all([templatePromise, structurePromise]);
+
+        // Phase 1 preview mode (2026-04-22): the legacy `useWizard` hook
+        // calls this route with `previewOnly: true` to replace the slow
+        // one-shot Haiku `/mandalas/generate` call with the faster
+        // structure-only path. When preview mode is active we emit the
+        // template + structure events (already done above via the
+        // parallel promises) and short-circuit before the save + post-
+        // creation pipeline. The user's "완료" click in the legacy
+        // wizard Step 3 still drives the real save via the existing
+        // `createMandalaWithData` flow — no changes to that path.
+        if (previewOnly) {
+          write('complete', { duration_ms: Date.now() - t0, previewOnly: true });
+          return;
+        }
 
         if (structure && !closed) {
           // Build levels from the structure: 1 root + 8 sub-goals.

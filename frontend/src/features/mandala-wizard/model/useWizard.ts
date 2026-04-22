@@ -250,13 +250,48 @@ export function useWizard() {
       }),
   });
 
-  // ─── Tier 2: LoRA AI generation (background, ~80s) ───
+  // ─── Tier 2: AI generation ───
+  //
+  // Phase 1 (2026-04-22): primary path is now `apiClient.streamWizardPreview`,
+  // which calls `POST /mandalas/wizard-stream` with `previewOnly: true`.
+  // Backend uses the structure-only path (~3s) instead of the one-shot
+  // Haiku (~21-28s), shaving ~20s off the wizard Step 2 wait.
+  //
+  // On any SSE / HTTP failure we fall back to the legacy `generateMandala`
+  // call so a user-visible regression never occurs — the slow path still
+  // works even if OpenRouter / wizard-stream is degraded.
+  //
+  // The legacy hook consumers ingest a `{ mandala, source }` shape. The
+  // mapping preserves it bit-identically; `actions` come back as `{}` from
+  // the preview path and the post-creation pipeline fills them in after
+  // `createMandalaWithData`.
   const generateMutation = useMutation({
-    mutationFn: (goal: string) =>
-      apiClient.generateMandala(goal, {
-        language: detectGoalLanguage(goal),
-        signal: goalAbortRef.current?.signal,
-      }),
+    mutationFn: async (goal: string) => {
+      const lang = detectGoalLanguage(goal);
+      try {
+        const res = await apiClient.streamWizardPreview(goal, {
+          language: lang,
+          focusTags: state.focusTags,
+          targetLevel: state.targetLevel,
+          signal: goalAbortRef.current?.signal,
+        });
+        if (import.meta.env.DEV) {
+          console.info('[wizard-preview]', {
+            source: res.source,
+            template_ms: res.template_duration_ms,
+            structure_ms: res.structure_duration_ms,
+          });
+        }
+        return { mandala: res.mandala, source: 'llm-fallback' as const };
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') throw err;
+        console.warn('[wizard-preview] fallback to legacy generate:', err);
+        return apiClient.generateMandala(goal, {
+          language: lang,
+          signal: goalAbortRef.current?.signal,
+        });
+      }
+    },
   });
 
   // ─── Delay detection — CP361 Issue #375 ───
@@ -293,7 +328,11 @@ export function useWizard() {
   //       Phased progress labels (see WizardStepGoal) keep the user
   //       oriented during the long wait.
   const SEARCH_DELAY_MS = 8000;
-  const GENERATE_DELAY_MS = 60000;
+  // Phase 1 (2026-04-22): structure-only preview path normally returns in
+  // ~3s. Lowered from 60000 so the soft-slow hint actually surfaces if the
+  // stream takes longer than expected (e.g. OpenRouter latency spike) but
+  // without firing on healthy responses. 10s gives ~3x headroom.
+  const GENERATE_DELAY_MS = 10000;
 
   const [isSearchSoftSlow, setIsSearchSoftSlow] = useState(false);
   const [isGenerateSoftSlow, setIsGenerateSoftSlow] = useState(false);
