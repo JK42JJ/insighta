@@ -19,6 +19,17 @@ export const DEFAULT_PUBLISHED_AFTER_DAYS = 1095;
 export const DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS = 1000;
 
 /**
+ * Runtime ceiling for YouTube search queries issued per video-discover
+ * call (rule-based + LLM combined). CP416 Phase 3 direction: with the
+ * semantic center gate doing recall, 3-5 broad queries replace the
+ * 20 narrow queries of the lexical-gate era. Default stays at 20 for
+ * safety; flip `V3_MAX_QUERIES=5` in prod once semantic mode telemetry
+ * looks healthy. Hard upper bound remains `MAX_QUERIES = 20` in
+ * `v2/keyword-builder.ts` (this value is clamped to that ceiling).
+ */
+export const DEFAULT_MAX_QUERIES = 20;
+
+/**
  * Center-gate matching mode (post-SGNL-parity carding-quality audit).
  *
  * - `'substring'` (pre-audit default): token-level substring overlap.
@@ -39,8 +50,18 @@ export const DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS = 1000;
  *   stage (MIN_SUB_RELEVANCE) do the filtering alone. Widest net; use
  *   when the center phrase is highly specific and the sub-goals cover
  *   the semantic space.
+ *
+ * - `'semantic'` (CP416 Phase 3): cosine similarity between the center
+ *   goal embedding and each candidate's title embedding (4096d qwen3-
+ *   embedding:8b, same space as `mandala_embeddings`). A candidate
+ *   passes when cosine ≥ `SEMANTIC_MIN_COSINE` (default 0.35). Intended
+ *   to replace lexical gates: language-agnostic, catches paraphrases
+ *   ("루틴으로 전문가되기" ↔ "하루 습관 형성하는 법"). Requires
+ *   `centerEmbedding` + `candidateEmbeddings` on the filter input —
+ *   callers that omit embeddings fall back to `'substring'` behavior
+ *   for safety (mandala-filter.ts enforces).
  */
-export type CenterGateMode = 'substring' | 'subword' | 'off';
+export type CenterGateMode = 'substring' | 'subword' | 'off' | 'semantic';
 export const DEFAULT_CENTER_GATE_MODE: CenterGateMode = 'substring';
 
 export type V3EnvInput = Record<string, string | undefined>;
@@ -92,10 +113,17 @@ const youtubeSearchTimeoutMs = z
   )
   .transform((v) => v ?? DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS);
 
+const maxQueries = z
+  .preprocess(
+    (v) => (v == null || v === '' ? undefined : Number(v)),
+    z.number().finite().int().positive().optional()
+  )
+  .transform((v) => v ?? DEFAULT_MAX_QUERIES);
+
 const centerGateMode = z
   .preprocess(
     (v) => (typeof v === 'string' ? v.trim().toLowerCase() : v),
-    z.enum(['substring', 'subword', 'off']).optional()
+    z.enum(['substring', 'subword', 'off', 'semantic']).optional()
   )
   .transform((v) => v ?? DEFAULT_CENTER_GATE_MODE);
 
@@ -110,6 +138,7 @@ export const v3EnvSchema = z.object({
   V3_ENABLE_WHITELIST_GATE: booleanFlag.optional().default(false as unknown as string),
   V3_YOUTUBE_SEARCH_TIMEOUT_MS: youtubeSearchTimeoutMs,
   V3_CENTER_GATE_MODE: centerGateMode,
+  V3_MAX_QUERIES: maxQueries,
 });
 
 export interface V3Config {
@@ -123,6 +152,7 @@ export interface V3Config {
   enableWhitelistGate: boolean;
   youtubeSearchTimeoutMs: number;
   centerGateMode: CenterGateMode;
+  maxQueries: number;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -137,6 +167,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_ENABLE_WHITELIST_GATE: env['V3_ENABLE_WHITELIST_GATE'],
     V3_YOUTUBE_SEARCH_TIMEOUT_MS: env['V3_YOUTUBE_SEARCH_TIMEOUT_MS'],
     V3_CENTER_GATE_MODE: env['V3_CENTER_GATE_MODE'],
+    V3_MAX_QUERIES: env['V3_MAX_QUERIES'],
   });
   if (!parsed.success) {
     return {
@@ -150,6 +181,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       enableWhitelistGate: false,
       youtubeSearchTimeoutMs: DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
       centerGateMode: DEFAULT_CENTER_GATE_MODE,
+      maxQueries: DEFAULT_MAX_QUERIES,
     };
   }
   return {
@@ -163,6 +195,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     enableWhitelistGate: parsed.data.V3_ENABLE_WHITELIST_GATE,
     youtubeSearchTimeoutMs: parsed.data.V3_YOUTUBE_SEARCH_TIMEOUT_MS,
     centerGateMode: parsed.data.V3_CENTER_GATE_MODE,
+    maxQueries: parsed.data.V3_MAX_QUERIES,
   };
 }
 

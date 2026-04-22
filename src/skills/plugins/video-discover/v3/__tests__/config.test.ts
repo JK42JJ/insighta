@@ -2,6 +2,7 @@ import { DEFAULT_SEMANTIC_ALPHA, DEFAULT_SEMANTIC_BETA } from '@/modules/video-d
 
 import {
   DEFAULT_CENTER_GATE_MODE,
+  DEFAULT_MAX_QUERIES,
   DEFAULT_PUBLISHED_AFTER_DAYS,
   DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
   loadV3Config,
@@ -21,6 +22,7 @@ describe('loadV3Config', () => {
       enableWhitelistGate: false,
       youtubeSearchTimeoutMs: DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
       centerGateMode: DEFAULT_CENTER_GATE_MODE,
+      maxQueries: DEFAULT_MAX_QUERIES,
     });
   });
 
@@ -85,6 +87,7 @@ describe('loadV3Config', () => {
       enableWhitelistGate: false,
       youtubeSearchTimeoutMs: DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
       centerGateMode: DEFAULT_CENTER_GATE_MODE,
+      maxQueries: DEFAULT_MAX_QUERIES,
     });
   });
 
@@ -128,11 +131,13 @@ describe('loadV3Config', () => {
     expect(loadV3Config({ V3_SEMANTIC_BETA: 'NaN' }).semanticBeta).toBe(DEFAULT_SEMANTIC_BETA);
   });
 
-  test('V3_CENTER_GATE_MODE accepts the three enum values, case-insensitive + trimmed', () => {
+  test('V3_CENTER_GATE_MODE accepts the four enum values, case-insensitive + trimmed', () => {
     expect(loadV3Config({ V3_CENTER_GATE_MODE: 'substring' }).centerGateMode).toBe('substring');
     expect(loadV3Config({ V3_CENTER_GATE_MODE: 'subword' }).centerGateMode).toBe('subword');
     expect(loadV3Config({ V3_CENTER_GATE_MODE: 'off' }).centerGateMode).toBe('off');
+    expect(loadV3Config({ V3_CENTER_GATE_MODE: 'semantic' }).centerGateMode).toBe('semantic');
     expect(loadV3Config({ V3_CENTER_GATE_MODE: '  SUBWORD  ' }).centerGateMode).toBe('subword');
+    expect(loadV3Config({ V3_CENTER_GATE_MODE: ' Semantic ' }).centerGateMode).toBe('semantic');
   });
 
   test('invalid V3_CENTER_GATE_MODE → baseline default (substring)', () => {
@@ -140,5 +145,18 @@ describe('loadV3Config', () => {
       DEFAULT_CENTER_GATE_MODE
     );
     expect(loadV3Config({ V3_CENTER_GATE_MODE: '' }).centerGateMode).toBe(DEFAULT_CENTER_GATE_MODE);
+  });
+
+  test('V3_MAX_QUERIES parses positive integer (broad-queries mode)', () => {
+    expect(loadV3Config({ V3_MAX_QUERIES: '5' }).maxQueries).toBe(5);
+    expect(loadV3Config({ V3_MAX_QUERIES: '1' }).maxQueries).toBe(1);
+    expect(loadV3Config({ V3_MAX_QUERIES: '20' }).maxQueries).toBe(20);
+  });
+
+  test('invalid V3_MAX_QUERIES → baseline (entire config falls back)', () => {
+    expect(loadV3Config({ V3_MAX_QUERIES: '0' }).maxQueries).toBe(DEFAULT_MAX_QUERIES);
+    expect(loadV3Config({ V3_MAX_QUERIES: '-3' }).maxQueries).toBe(DEFAULT_MAX_QUERIES);
+    expect(loadV3Config({ V3_MAX_QUERIES: 'garbage' }).maxQueries).toBe(DEFAULT_MAX_QUERIES);
+    expect(loadV3Config({ V3_MAX_QUERIES: '' }).maxQueries).toBe(DEFAULT_MAX_QUERIES);
   });
 });

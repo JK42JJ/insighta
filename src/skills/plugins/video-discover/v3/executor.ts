@@ -46,6 +46,7 @@ import {
   type FilterCandidate,
 } from './mandala-filter';
 import { v3Config } from './config';
+import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
 
 import {
   buildRuleBasedQueriesSync,
@@ -406,6 +407,7 @@ interface Tier2Debug {
     llmSearchMs: number;
     videosBatchMs: number;
     filterMs: number;
+    semanticGateEmbedMs: number;
     mandalaFilterMs: number;
     scoringMs: number;
     totalMs: number;
@@ -453,6 +455,7 @@ function makeEmptyDebug(input: Tier2Input): Tier2Debug {
       llmSearchMs: 0,
       videosBatchMs: 0,
       filterMs: 0,
+      semanticGateEmbedMs: 0,
       mandalaFilterMs: 0,
       scoringMs: 0,
       totalMs: 0,
@@ -498,13 +501,16 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   }
 
   const tKwRuleStart = Date.now();
-  const ruleQueries = buildRuleBasedQueriesSync({
-    centerGoal: input.state.centerGoal,
-    subGoals: deficitSubGoals,
-    focusTags: input.state.focusTags,
-    targetLevel: input.state.targetLevel,
-    language: input.state.language,
-  });
+  const ruleQueries = buildRuleBasedQueriesSync(
+    {
+      centerGoal: input.state.centerGoal,
+      subGoals: deficitSubGoals,
+      focusTags: input.state.focusTags,
+      targetLevel: input.state.targetLevel,
+      language: input.state.language,
+    },
+    v3Config.maxQueries
+  );
   debug.timing.keywordRuleMs = Date.now() - tKwRuleStart;
 
   const tKwLlmStart = Date.now();
@@ -519,6 +525,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     {
       openRouterApiKey: input.openRouterApiKey,
       openRouterModel: input.openRouterModel,
+      maxQueries: v3Config.maxQueries,
     }
   );
 
@@ -648,6 +655,38 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   const enrichedById = new Map<string, Enriched>();
   for (const v of filterable) enrichedById.set(v.videoId, v);
 
+  // Semantic gate prep: when centerGateMode === 'semantic', embed the
+  // center goal + all candidate titles in ONE batch (N+1 texts) and pass
+  // both into the filter. On failure the filter's internal safety
+  // fallback downgrades to 'substring' behavior (mandala-filter.ts).
+  let centerEmbedding: number[] | undefined;
+  let candidateEmbeddings: Map<string, number[]> | undefined;
+  if (v3Config.centerGateMode === 'semantic' && filterInputs.length > 0) {
+    const tSemEmbedStart = Date.now();
+    const texts: string[] = [input.state.centerGoal, ...filterInputs.map((f) => f.title)];
+    try {
+      const vectors = await embedBatch(texts);
+      if (vectors.length === texts.length) {
+        centerEmbedding = vectors[0];
+        candidateEmbeddings = new Map<string, number[]>();
+        for (let i = 0; i < filterInputs.length; i++) {
+          const vec = vectors[i + 1];
+          const id = filterInputs[i]?.videoId;
+          if (vec && id) candidateEmbeddings.set(id, vec);
+        }
+      } else {
+        log.warn(
+          `semantic gate embed vector mismatch: got ${vectors.length}/${texts.length} — falling back to substring`
+        );
+      }
+    } catch (err) {
+      log.warn(
+        `semantic gate embed failed: ${err instanceof Error ? err.message : String(err)} — falling back to substring`
+      );
+    }
+    debug.timing.semanticGateEmbedMs = Date.now() - tSemEmbedStart;
+  }
+
   const tMandalaFilterStart = Date.now();
   const { byCell, stats: mfStats } = applyMandalaFilterWithStats(filterInputs, {
     centerGoal: input.state.centerGoal,
@@ -657,6 +696,8 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     recencyWeight: v3Config.recencyWeight,
     recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
     centerGateMode: v3Config.centerGateMode,
+    centerEmbedding,
+    candidateEmbeddings,
   });
   debug.timing.mandalaFilterMs = Date.now() - tMandalaFilterStart;
 
