@@ -127,6 +127,23 @@ const centerGateMode = z
   )
   .transform((v) => v ?? DEFAULT_CENTER_GATE_MODE);
 
+export const DEFAULT_MIN_VIEW_COUNT = 1000;
+export const DEFAULT_MIN_VIEWS_PER_DAY = 10;
+
+const minViewCount = z
+  .preprocess(
+    (v) => (v == null || v === '' ? undefined : Number(v)),
+    z.number().finite().int().nonnegative().optional()
+  )
+  .transform((v) => v ?? DEFAULT_MIN_VIEW_COUNT);
+
+const minViewsPerDay = z
+  .preprocess(
+    (v) => (v == null || v === '' ? undefined : Number(v)),
+    z.number().finite().nonnegative().optional()
+  )
+  .transform((v) => v ?? DEFAULT_MIN_VIEWS_PER_DAY);
+
 export const v3EnvSchema = z.object({
   V3_ENABLE_TIER1_CACHE: booleanFlag.optional().default(false as unknown as string),
   V3_RECENCY_WEIGHT: clampedUnit,
@@ -139,6 +156,9 @@ export const v3EnvSchema = z.object({
   V3_YOUTUBE_SEARCH_TIMEOUT_MS: youtubeSearchTimeoutMs,
   V3_CENTER_GATE_MODE: centerGateMode,
   V3_MAX_QUERIES: maxQueries,
+  V3_ENABLE_QUALITY_GATE: booleanFlag.optional().default(false as unknown as string),
+  V3_MIN_VIEW_COUNT: minViewCount,
+  V3_MIN_VIEWS_PER_DAY: minViewsPerDay,
 });
 
 export interface V3Config {
@@ -153,6 +173,9 @@ export interface V3Config {
   youtubeSearchTimeoutMs: number;
   centerGateMode: CenterGateMode;
   maxQueries: number;
+  enableQualityGate: boolean;
+  minViewCount: number;
+  minViewsPerDay: number;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -168,6 +191,9 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_YOUTUBE_SEARCH_TIMEOUT_MS: env['V3_YOUTUBE_SEARCH_TIMEOUT_MS'],
     V3_CENTER_GATE_MODE: env['V3_CENTER_GATE_MODE'],
     V3_MAX_QUERIES: env['V3_MAX_QUERIES'],
+    V3_ENABLE_QUALITY_GATE: env['V3_ENABLE_QUALITY_GATE'],
+    V3_MIN_VIEW_COUNT: env['V3_MIN_VIEW_COUNT'],
+    V3_MIN_VIEWS_PER_DAY: env['V3_MIN_VIEWS_PER_DAY'],
   });
   if (!parsed.success) {
     return {
@@ -182,6 +208,9 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       youtubeSearchTimeoutMs: DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
       centerGateMode: DEFAULT_CENTER_GATE_MODE,
       maxQueries: DEFAULT_MAX_QUERIES,
+      enableQualityGate: false,
+      minViewCount: DEFAULT_MIN_VIEW_COUNT,
+      minViewsPerDay: DEFAULT_MIN_VIEWS_PER_DAY,
     };
   }
   return {
@@ -196,6 +225,9 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     youtubeSearchTimeoutMs: parsed.data.V3_YOUTUBE_SEARCH_TIMEOUT_MS,
     centerGateMode: parsed.data.V3_CENTER_GATE_MODE,
     maxQueries: parsed.data.V3_MAX_QUERIES,
+    enableQualityGate: parsed.data.V3_ENABLE_QUALITY_GATE,
+    minViewCount: parsed.data.V3_MIN_VIEW_COUNT,
+    minViewsPerDay: parsed.data.V3_MIN_VIEWS_PER_DAY,
   };
 }
 

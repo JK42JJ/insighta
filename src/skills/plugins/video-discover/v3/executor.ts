@@ -46,6 +46,7 @@ import {
   type FilterCandidate,
 } from './mandala-filter';
 import { v3Config } from './config';
+import { filterByQualityGate } from './quality-gate';
 import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
 
 import {
@@ -410,6 +411,7 @@ interface Tier2Debug {
     semanticGateEmbedMs: number;
     mandalaFilterMs: number;
     scoringMs: number;
+    qualityGateMs: number;
     totalMs: number;
   };
   queries: Array<{ query: string; source: 'rule' | 'llm'; cellIndex: number | null }>;
@@ -418,6 +420,7 @@ interface Tier2Debug {
   droppedShortsDuration: number;
   droppedShortsTitle: number;
   droppedBlocklist: number;
+  droppedQuality: number;
   afterFilter: number;
   existingExcluded: number;
   mandalaFilterInput: number;
@@ -458,6 +461,7 @@ function makeEmptyDebug(input: Tier2Input): Tier2Debug {
       semanticGateEmbedMs: 0,
       mandalaFilterMs: 0,
       scoringMs: 0,
+      qualityGateMs: 0,
       totalMs: 0,
     },
     queries: [],
@@ -466,6 +470,7 @@ function makeEmptyDebug(input: Tier2Input): Tier2Debug {
     droppedShortsDuration: 0,
     droppedShortsTitle: 0,
     droppedBlocklist: 0,
+    droppedQuality: 0,
     afterFilter: 0,
     existingExcluded: 0,
     mandalaFilterInput: 0,
@@ -626,6 +631,21 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   }
   debug.timing.filterMs = Date.now() - tFilterStart;
   debug.afterFilter = enriched.length;
+
+  // Tier 2 quality gate — pure filter, flag-controlled. See quality-gate.ts.
+  if (v3Config.enableQualityGate) {
+    const tQualStart = Date.now();
+    const gated = filterByQualityGate(enriched, {
+      enabled: true,
+      minViewCount: v3Config.minViewCount,
+      minViewsPerDay: v3Config.minViewsPerDay,
+    });
+    enriched.length = 0;
+    enriched.push(...gated.kept);
+    debug.droppedQuality = gated.droppedCount;
+    debug.timing.qualityGateMs = Date.now() - tQualStart;
+  }
+
   if (enriched.length === 0) {
     debug.timing.totalMs = Date.now() - t0;
     return { slots: [], queriesUsed, debug };
