@@ -866,6 +866,14 @@ class ApiClient {
     subLabels?: string[];
     focusTags?: string[];
     targetLevel?: string;
+    /**
+     * CP416 Phase C: ask the server to mark the new mandala as the
+     * user's default inside the create transaction. Eliminates the
+     * earlier "silent demotion race" where a fire-and-forget
+     * updateMandala({isDefault:true}) could fail and leave the user
+     * on the old default mandala.
+     */
+    setAsDefault?: boolean;
   }): Promise<{ mandalaId: string }> {
     // CP358: prod create writes ~73 INSERTs through pgbouncer (us-west-2 ↔
     // Korea RTT ~250ms × 73 ≈ 18s). BE Prisma transaction timeout is 30s

@@ -543,7 +543,16 @@ export function useWizard() {
       // 2. Background server call — NOT inside useMutation so component unmount
       //    does not kill the continuation (CP386 PR #404 regression class).
       try {
-        const result = await apiClient.createMandalaWithData(params);
+        // CP416 Phase C: ask the server to set this mandala as the
+        // user's default atomically. Replaces the earlier fire-and-
+        // forget `updateMandala({isDefault:true})` post-create call
+        // that raced with the response and silently dropped on
+        // failure — leaving the user looking at the prior default
+        // in the dashboard after a successful wizard submit.
+        const result = await apiClient.createMandalaWithData({
+          ...params,
+          setAsDefault: true,
+        });
         const tResponse = performance.now();
         console.info('[wizard-timing]', {
           event: 'createMandalaWithData',
@@ -600,10 +609,13 @@ export function useWizard() {
           });
         }
 
-        // 3c. Fire-and-forget background updates (same as the old onSuccess).
-        apiClient.updateMandala(result.mandalaId, { isDefault: true }).catch(() => {
-          // Non-blocking — Zustand selection still works for current session.
-        });
+        // CP416 Phase C: the old fire-and-forget
+        //   apiClient.updateMandala(result.mandalaId, { isDefault: true })
+        // is deleted. setAsDefault=true in createMandalaWithData above
+        // promotes the new mandala to default inside the same create
+        // transaction. Removing the post-create call eliminates the
+        // silent-swallow race that caused new mandalas to sometimes
+        // stay with is_default=false.
         queryClient.invalidateQueries({
           queryKey: queryKeys.mandala.list(),
           refetchType: 'all',
