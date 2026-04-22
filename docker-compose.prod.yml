@@ -40,7 +40,16 @@ services:
       # (mandala-filter.ts guard) — Ollama downtime does not break the gate.
       # Revert: set to 'subword' / 'substring' or delete this line (code
       # default 'substring' takes over) and redeploy.
-      - V3_CENTER_GATE_MODE=semantic
+      #
+      # CP418 (2026-04-23): rolled back from 'semantic' to 'subword' after
+      # prod regression. `step2_result.debug.timing.semanticGateEmbedMs`
+      # measured 36~56s per request (= 90%+ of total v3 run time) because
+      # `embedBatch` received [centerGoal, ...hundreds of candidate titles]
+      # as a single batch against mac mini Ollama `qwen3-embedding:8b`.
+      # Re-enable path: (a) pool >= 10k rows (Phase 3B), (b) candidate
+      # top-N cap before embed (e.g. top 30), (c) domain-tuned embedding.
+      # See docs/design/realtime-search-pipeline.md (Phase 3A).
+      - V3_CENTER_GATE_MODE=subword
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
