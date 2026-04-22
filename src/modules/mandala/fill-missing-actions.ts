@@ -23,13 +23,32 @@ import { randomUUID } from 'node:crypto';
 
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
-import { generateMandalaActions } from './generator';
+import { generateMandala, generateMandalaActions } from './generator';
 
 const log = logger.child({ module: 'fill-missing-actions' });
 
 const EXPECTED_SUB_GOAL_COUNT = 8;
 const EXPECTED_ACTIONS_PER_CELL = 8;
 const MIN_ACTIONS_TO_CONSIDER_FILLED = 8;
+
+/**
+ * Minimum action-uniqueness rate for a LoRA output to be accepted.
+ * LoRA's known failure mode is repetition ("학습하기, 학습하기, ...")
+ * — unique-rate below this suggests that mode and we fall back to the
+ * OpenRouter Haiku path. Picked conservatively; tune after telemetry.
+ */
+const MIN_ACTION_UNIQUE_RATE = 0.7;
+
+function computeActionUniqueRate(actions: Record<string, string[]>): number {
+  const all: string[] = [];
+  for (const arr of Object.values(actions)) {
+    if (Array.isArray(arr)) {
+      for (const a of arr) all.push(a.trim().toLowerCase());
+    }
+  }
+  if (all.length === 0) return 0;
+  return new Set(all).size / all.length;
+}
 
 /**
  * Read depth=1 rows, detect ones with empty / partial subjects, call
@@ -125,22 +144,78 @@ export async function fillMissingActionsIfNeeded(mandalaId: string): Promise<{
   const focusTags = Array.isArray(mandala.focus_tags) ? mandala.focus_tags : undefined;
   const targetLevel = mandala.target_level ?? undefined;
 
-  log.info(`[${mandalaId}] generating actions for ${needsFill.length}/${levels.length} cells`);
+  log.info(
+    `[${mandalaId}] generating actions for ${needsFill.length}/${levels.length} cells (primary: LoRA, fallback: Haiku)`
+  );
 
-  let actions: Record<string, string[]>;
+  // Primary: Mac Mini LoRA via `generateMandala` (one-shot full mandala).
+  // LoRA is purpose-trained on the mandala domain (2 months of background
+  // training-data accumulation, v14) so action quality is substantially
+  // better than generic Haiku prompting. We consume only the `actions`
+  // field from the LoRA output — `sub_goals` are already locked by the
+  // wizard, LoRA must not rewrite them.
+  //
+  // Fallback: OpenRouter Haiku via `generateMandalaActions` (action-only
+  // prompt). Used when LoRA fails / times out / fails quality gate
+  // (repetition-mode detection via action unique-rate).
+  let actions: Record<string, string[]> | null = null;
+  let sourceUsed: 'lora' | 'haiku-fallback' = 'lora';
+  const centerGoal = rootLevel.center_goal ?? '';
+
+  const loraStart = Date.now();
   try {
-    actions = await generateMandalaActions(
-      subGoals,
+    const loraMandala = await generateMandala({
+      goal: centerGoal,
       language,
-      rootLevel.center_goal ?? '',
       focusTags,
-      targetLevel
+      targetLevel,
+    });
+    const loraActions = loraMandala?.actions ?? {};
+    const totalActions = Object.values(loraActions).reduce(
+      (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0),
+      0
     );
+    const uniqueRate = computeActionUniqueRate(loraActions);
+    const loraMs = Date.now() - loraStart;
+    const expectedTotal = EXPECTED_SUB_GOAL_COUNT * EXPECTED_ACTIONS_PER_CELL;
+
+    if (totalActions < expectedTotal) {
+      log.warn(
+        `[${mandalaId}] LoRA returned ${totalActions}/${expectedTotal} actions (ms=${loraMs}) — falling back to Haiku`
+      );
+    } else if (uniqueRate < MIN_ACTION_UNIQUE_RATE) {
+      log.warn(
+        `[${mandalaId}] LoRA unique-rate ${uniqueRate.toFixed(2)} < ${MIN_ACTION_UNIQUE_RATE} (repetition mode, ms=${loraMs}) — falling back to Haiku`
+      );
+    } else {
+      actions = loraActions;
+      log.info(
+        `[${mandalaId}] LoRA accepted: ${totalActions} actions, unique-rate ${uniqueRate.toFixed(2)}, ms=${loraMs}`
+      );
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.warn(`[${mandalaId}] generateMandalaActions threw: ${msg}`);
-    return { ok: false, action: 'failed', reason: msg };
+    log.warn(`[${mandalaId}] LoRA threw: ${msg} — falling back to Haiku`);
   }
+
+  if (!actions) {
+    sourceUsed = 'haiku-fallback';
+    try {
+      actions = await generateMandalaActions(
+        subGoals,
+        language,
+        centerGoal,
+        focusTags,
+        targetLevel
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn(`[${mandalaId}] Haiku fallback also threw: ${msg}`);
+      return { ok: false, action: 'failed', reason: `lora+haiku both failed: ${msg}` };
+    }
+  }
+
+  log.info(`[${mandalaId}] actions source=${sourceUsed}`);
 
   // Update each depth=1 level's subjects. Key layout from the prompt is
   // `sub_goal_1`..`sub_goal_8`; fall back to index-keyed lookups per the

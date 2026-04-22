@@ -16,6 +16,7 @@ const mockFindManyLevels = jest.fn();
 const mockFindFirstRoot = jest.fn();
 const mockCreateManyLevels = jest.fn();
 const mockUpdateLevel = jest.fn();
+const mockGenerateMandala = jest.fn();
 const mockGenerateMandalaActions = jest.fn();
 
 jest.mock('@/modules/database', () => ({
@@ -31,6 +32,7 @@ jest.mock('@/modules/database', () => ({
 }));
 
 jest.mock('../../../src/modules/mandala/generator', () => ({
+  generateMandala: mockGenerateMandala,
   generateMandalaActions: mockGenerateMandalaActions,
 }));
 
@@ -68,6 +70,17 @@ function mockActionsFor(subGoals: string[]): Record<string, string[]> {
   return actions;
 }
 
+function mockLoraMandalaFor(subGoals: string[]) {
+  return {
+    center_goal: '30일 ultra learning 습관 만들기',
+    center_label: '',
+    language: 'ko',
+    domain: 'general',
+    sub_goals: subGoals,
+    actions: mockActionsFor(subGoals),
+  };
+}
+
 describe('fillMissingActionsIfNeeded', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -82,6 +95,9 @@ describe('fillMissingActionsIfNeeded', () => {
       center_goal: '30일 ultra learning 습관 만들기',
       subjects: SUB_GOALS,
     });
+    // Default: LoRA succeeds with a valid 64-action, high-unique-rate output.
+    // Individual tests override to exercise fallback paths.
+    mockGenerateMandala.mockResolvedValue(mockLoraMandalaFor(SUB_GOALS));
     mockGenerateMandalaActions.mockResolvedValue(mockActionsFor(SUB_GOALS));
     mockUpdateLevel.mockImplementation(async () => ({}));
     mockCreateManyLevels.mockImplementation(async () => ({ count: 8 }));
@@ -119,19 +135,19 @@ describe('fillMissingActionsIfNeeded', () => {
       expect(scaffoldCall.data[i].position).toBe(i);
     }
 
-    // After scaffold, generate + fill runs
-    expect(mockGenerateMandalaActions).toHaveBeenCalledWith(
-      SUB_GOALS,
-      'ko',
-      '30일 ultra learning 습관 만들기',
-      undefined,
-      undefined
-    );
+    // After scaffold, LoRA (primary) runs and fills — Haiku fallback not called
+    expect(mockGenerateMandala).toHaveBeenCalledWith({
+      goal: '30일 ultra learning 습관 만들기',
+      language: 'ko',
+      focusTags: undefined,
+      targetLevel: undefined,
+    });
+    expect(mockGenerateMandalaActions).not.toHaveBeenCalled();
     expect(mockUpdateLevel).toHaveBeenCalledTimes(8);
     expect(result).toEqual({ ok: true, action: 'filled', cellsFilled: 8 });
   });
 
-  test('standard path: depth=1 rows already scaffolded with empty subjects', async () => {
+  test('standard path: LoRA fills all 8 cells, Haiku fallback untouched', async () => {
     mockFindManyLevels.mockResolvedValueOnce(
       SUB_GOALS.map((sg, idx) => ({
         id: `level-${idx}`,
@@ -144,9 +160,117 @@ describe('fillMissingActionsIfNeeded', () => {
     const result = await fillMissingActionsIfNeeded(MANDALA_ID);
 
     expect(mockCreateManyLevels).not.toHaveBeenCalled(); // no scaffold
-    expect(mockGenerateMandalaActions).toHaveBeenCalledTimes(1);
+    expect(mockGenerateMandala).toHaveBeenCalledTimes(1);
+    expect(mockGenerateMandalaActions).not.toHaveBeenCalled();
     expect(mockUpdateLevel).toHaveBeenCalledTimes(8);
     expect(result).toEqual({ ok: true, action: 'filled', cellsFilled: 8 });
+  });
+
+  test('LoRA throws → Haiku fallback fills the cells', async () => {
+    mockFindManyLevels.mockResolvedValueOnce(
+      SUB_GOALS.map((sg, idx) => ({
+        id: `level-${idx}`,
+        center_goal: sg,
+        subjects: [],
+        position: idx,
+      }))
+    );
+    mockGenerateMandala.mockRejectedValueOnce(new Error('ollama timeout'));
+
+    const result = await fillMissingActionsIfNeeded(MANDALA_ID);
+
+    expect(mockGenerateMandala).toHaveBeenCalledTimes(1);
+    expect(mockGenerateMandalaActions).toHaveBeenCalledWith(
+      SUB_GOALS,
+      'ko',
+      '30일 ultra learning 습관 만들기',
+      undefined,
+      undefined
+    );
+    expect(mockUpdateLevel).toHaveBeenCalledTimes(8);
+    expect(result).toEqual({ ok: true, action: 'filled', cellsFilled: 8 });
+  });
+
+  test('LoRA returns < 64 actions → Haiku fallback used', async () => {
+    mockFindManyLevels.mockResolvedValueOnce(
+      SUB_GOALS.map((sg, idx) => ({
+        id: `level-${idx}`,
+        center_goal: sg,
+        subjects: [],
+        position: idx,
+      }))
+    );
+    // LoRA returns only 5 sub_goals' worth of actions (40 total < 64)
+    const partialActions: Record<string, string[]> = {};
+    for (let i = 0; i < 5; i++) {
+      partialActions[`sub_goal_${i + 1}`] = Array.from(
+        { length: 8 },
+        (_, j) => `partial-${i}-${j}`
+      );
+    }
+    mockGenerateMandala.mockResolvedValueOnce({
+      center_goal: 'x',
+      center_label: '',
+      language: 'ko',
+      domain: 'general',
+      sub_goals: SUB_GOALS,
+      actions: partialActions,
+    });
+
+    const result = await fillMissingActionsIfNeeded(MANDALA_ID);
+
+    expect(mockGenerateMandala).toHaveBeenCalledTimes(1);
+    expect(mockGenerateMandalaActions).toHaveBeenCalledTimes(1);
+    expect(result.action).toBe('filled');
+  });
+
+  test('LoRA repetition mode (low unique-rate) → Haiku fallback used', async () => {
+    mockFindManyLevels.mockResolvedValueOnce(
+      SUB_GOALS.map((sg, idx) => ({
+        id: `level-${idx}`,
+        center_goal: sg,
+        subjects: [],
+        position: idx,
+      }))
+    );
+    // All 64 actions identical → unique-rate = 1/64 ≈ 0.016, below 0.7 floor
+    const repetitive: Record<string, string[]> = {};
+    SUB_GOALS.forEach((_, idx) => {
+      repetitive[`sub_goal_${idx + 1}`] = Array(8).fill('학습하기');
+    });
+    mockGenerateMandala.mockResolvedValueOnce({
+      center_goal: 'x',
+      center_label: '',
+      language: 'ko',
+      domain: 'general',
+      sub_goals: SUB_GOALS,
+      actions: repetitive,
+    });
+
+    const result = await fillMissingActionsIfNeeded(MANDALA_ID);
+
+    expect(mockGenerateMandala).toHaveBeenCalledTimes(1);
+    expect(mockGenerateMandalaActions).toHaveBeenCalledTimes(1);
+    expect(result.action).toBe('filled');
+  });
+
+  test('LoRA + Haiku both throw → failed', async () => {
+    mockFindManyLevels.mockResolvedValueOnce(
+      SUB_GOALS.map((sg, idx) => ({
+        id: `level-${idx}`,
+        center_goal: sg,
+        subjects: [],
+        position: idx,
+      }))
+    );
+    mockGenerateMandala.mockRejectedValueOnce(new Error('lora down'));
+    mockGenerateMandalaActions.mockRejectedValueOnce(new Error('haiku 500'));
+
+    const result = await fillMissingActionsIfNeeded(MANDALA_ID);
+
+    expect(result.ok).toBe(false);
+    expect(result.action).toBe('failed');
+    expect(result.reason).toContain('haiku 500');
   });
 
   test('skipped-full when all cells already have 8 subjects', async () => {
@@ -162,6 +286,7 @@ describe('fillMissingActionsIfNeeded', () => {
     const result = await fillMissingActionsIfNeeded(MANDALA_ID);
 
     expect(mockCreateManyLevels).not.toHaveBeenCalled();
+    expect(mockGenerateMandala).not.toHaveBeenCalled();
     expect(mockGenerateMandalaActions).not.toHaveBeenCalled();
     expect(mockUpdateLevel).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true, action: 'skipped-full' });
@@ -178,6 +303,7 @@ describe('fillMissingActionsIfNeeded', () => {
     const result = await fillMissingActionsIfNeeded(MANDALA_ID);
 
     expect(mockCreateManyLevels).not.toHaveBeenCalled();
+    expect(mockGenerateMandala).not.toHaveBeenCalled();
     expect(mockGenerateMandalaActions).not.toHaveBeenCalled();
     expect(result.ok).toBe(false);
     expect(result.action).toBe('skipped-not-found');
@@ -189,6 +315,7 @@ describe('fillMissingActionsIfNeeded', () => {
 
     const result = await fillMissingActionsIfNeeded(MANDALA_ID);
 
+    expect(mockGenerateMandala).not.toHaveBeenCalled();
     expect(mockGenerateMandalaActions).not.toHaveBeenCalled();
     expect(result.ok).toBe(false);
     expect(result.action).toBe('failed');
