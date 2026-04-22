@@ -1527,7 +1527,16 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
     }
 
-    // Read pending, unexpired recs ordered by cell then score
+    // Read pending, unexpired recs ordered by **relevance first, cell second**.
+    // CP416 Phase A (2026-04-22): user directive requires relevance-desc
+    // sort across all cells, with cell_index as a stable tie-break only.
+    // Previous order ([cell_index asc, rec_score desc]) clustered cards by
+    // cell, which forced the worst card of cell 0 ahead of the best card
+    // of cell 1 — opposite of what relevance-first viewing wants.
+    //
+    // The `idx_recommendation_cache_rec_score_desc` index on rec_score
+    // already exists (see `schema.prisma`), so the re-ordered query hits
+    // the index for the primary sort.
     const rows = await prisma.recommendation_cache.findMany({
       where: {
         user_id: userId,
@@ -1536,7 +1545,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         expires_at: { gt: new Date() },
         ...(cellIndexFilter !== undefined ? { cell_index: cellIndexFilter } : {}),
       },
-      orderBy: [{ cell_index: 'asc' }, { rec_score: 'desc' }],
+      orderBy: [{ rec_score: 'desc' }, { cell_index: 'asc' }],
       take: RECOMMENDATION_FETCH_LIMIT,
     });
 
