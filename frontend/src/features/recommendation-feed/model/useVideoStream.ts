@@ -124,7 +124,14 @@ export function useVideoStream(mandalaId: string | null | undefined): UseVideoSt
           if (!payload?.id) return;
           if (seenRef.current.has(payload.id)) return;
           seenRef.current.add(payload.id);
-          setCards((prev) => [...prev, payload]);
+          // CP416 Phase A (2026-04-22): sort by relevance (recScore desc)
+          // on arrival, not append order. User directive requires the
+          // most-relevant cards to float to the top as they arrive.
+          // Higher-score cards arriving later bubble up; lower-score
+          // arrivals slot underneath. Binary insert — O(log n) search,
+          // O(n) array splice; negligible at dashboard scale (<= 24-96
+          // cards per mandala).
+          setCards((prev) => insertByScoreDesc(prev, payload));
         } catch {
           // Ignore malformed event — the next event will come
           // through cleanly. Don't flip to error state for a
@@ -162,4 +169,31 @@ export function useVideoStream(mandalaId: string | null | undefined): UseVideoSt
   }, [mandalaId]);
 
   return { cards, status, error };
+}
+
+/**
+ * Insert `item` into the sorted `list` so the result stays ordered by
+ * `recScore` DESC. Ties: earlier-arriving item stays first (stable).
+ * Exported for testing.
+ */
+export function insertByScoreDesc(
+  list: RecommendationItem[],
+  item: RecommendationItem
+): RecommendationItem[] {
+  const s = item.recScore;
+  let lo = 0;
+  let hi = list.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    // First index where the existing card's score < s (we want to
+    // slot before it). Tie-break: keep existing above the incoming
+    // (stable arrival-time for equal scores).
+    const existing = list[mid];
+    if (existing !== undefined && existing.recScore < s) {
+      hi = mid;
+    } else {
+      lo = mid + 1;
+    }
+  }
+  return [...list.slice(0, lo), item, ...list.slice(lo)];
 }
