@@ -48,6 +48,9 @@ const USER_ID = '00000000-0000-0000-0000-000000000001';
 function makeLevels(n = 3) {
   return Array.from({ length: n }, (_, i) => ({
     id: `level-${i}`,
+    level_key: `sub_${i}`,
+    depth: 1,
+    mandala_id: MANDALA_ID,
     center_goal: `goal-${i}`,
     subjects: [`s-${i}-0`, `s-${i}-1`, ''], // include one empty to exercise skip
   }));
@@ -59,7 +62,7 @@ describe('syncOntologyEdges', () => {
     mockExecuteRaw.mockResolvedValue(0);
   });
 
-  test('happy path — sector/goal/topic nodes all present, multi-row INSERTs fire twice', async () => {
+  test('happy path — goal+topic nodes upserted first, then edges', async () => {
     const levels = makeLevels(3);
     mockFindUniqueMandala.mockResolvedValue({
       user_id: USER_ID,
@@ -75,17 +78,24 @@ describe('syncOntologyEdges', () => {
           { id: `topic-${l.id}-1`, topic_key: `${l.id}:s-${l.id.slice(-1)}-1` },
         ])
       );
+    // CP416 Lever A+ (Phase D): sync now upserts goal + topic nodes
+    // before edges. Four executeRaw calls: goal nodes, topic nodes,
+    // goal edges, topic edges — in that order.
     mockExecuteRaw
+      .mockResolvedValueOnce(3) // goal nodes upserted
+      .mockResolvedValueOnce(6) // topic nodes upserted
       .mockResolvedValueOnce(3) // goal edges inserted
       .mockResolvedValueOnce(6); // topic edges inserted
 
     const result = await syncOntologyEdges(MANDALA_ID);
 
     expect(result.ok).toBe(true);
+    expect(result.goalNodesUpserted).toBe(3);
+    expect(result.topicNodesUpserted).toBe(6);
     expect(result.goalEdgesCreated).toBe(3);
     expect(result.topicEdgesCreated).toBe(6);
     expect(mockQueryRaw).toHaveBeenCalledTimes(3);
-    expect(mockExecuteRaw).toHaveBeenCalledTimes(2);
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(4);
   });
 
   test('mandala not found → ok=false, no inserts', async () => {
@@ -106,6 +116,8 @@ describe('syncOntologyEdges', () => {
 
     expect(result).toMatchObject({
       ok: true,
+      goalNodesUpserted: 0,
+      topicNodesUpserted: 0,
       goalEdgesCreated: 0,
       topicEdgesCreated: 0,
     });
@@ -127,7 +139,12 @@ describe('syncOntologyEdges', () => {
         { id: 'topic-0-0', topic_key: 'level-0:s-0-0' },
         { id: 'topic-0-1', topic_key: 'level-0:s-0-1' },
       ]);
-    mockExecuteRaw.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+    // node upsert (goal + topic) then edges (goal + topic)
+    mockExecuteRaw
+      .mockResolvedValueOnce(2) // goal nodes upserted
+      .mockResolvedValueOnce(4) // topic nodes upserted
+      .mockResolvedValueOnce(1) // goal edges created (only level-0 had sector+goal)
+      .mockResolvedValueOnce(2); // topic edges (only level-0)
 
     const result = await syncOntologyEdges(MANDALA_ID);
 
@@ -140,8 +157,22 @@ describe('syncOntologyEdges', () => {
 
   test('empty center_goal on a level → no goal edge for that level', async () => {
     const levels = [
-      { id: 'level-0', center_goal: '', subjects: ['s-0-0'] },
-      { id: 'level-1', center_goal: 'g-1', subjects: ['s-1-0'] },
+      {
+        id: 'level-0',
+        level_key: 'sub_0',
+        depth: 1,
+        mandala_id: MANDALA_ID,
+        center_goal: '',
+        subjects: ['s-0-0'],
+      },
+      {
+        id: 'level-1',
+        level_key: 'sub_1',
+        depth: 1,
+        mandala_id: MANDALA_ID,
+        center_goal: 'g-1',
+        subjects: ['s-1-0'],
+      },
     ];
     mockFindUniqueMandala.mockResolvedValue({ user_id: USER_ID, levels });
     mockQueryRaw
@@ -157,15 +188,18 @@ describe('syncOntologyEdges', () => {
         { id: 'topic-0', topic_key: 'level-0:s-0-0' },
         { id: 'topic-1', topic_key: 'level-1:s-1-0' },
       ]);
-    mockExecuteRaw.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+    // nodes (goal + topic) then edges (goal + topic)
+    mockExecuteRaw
+      .mockResolvedValueOnce(1) // goal nodes upserted (only level-1's non-empty center_goal)
+      .mockResolvedValueOnce(2) // topic nodes upserted (one per non-empty subject)
+      .mockResolvedValueOnce(1) // goal edges
+      .mockResolvedValueOnce(2); // topic edges
 
     const result = await syncOntologyEdges(MANDALA_ID);
 
     expect(result.ok).toBe(true);
     // level-0 center_goal is empty → only level-1 contributes a goal edge
-    // Our multi-row INSERT call sends 1 tuple; executeRaw mock returns 1
     expect(result.goalEdgesCreated).toBe(1);
-    // Both levels contribute topic edges (subjects non-empty)
     expect(result.topicEdgesCreated).toBe(2);
   });
 
@@ -175,15 +209,31 @@ describe('syncOntologyEdges', () => {
     await expect(syncOntologyEdges(MANDALA_ID)).resolves.toMatchObject({
       ok: false,
       reason: 'db down',
+      goalNodesUpserted: 0,
+      topicNodesUpserted: 0,
       goalEdgesCreated: 0,
       topicEdgesCreated: 0,
     });
   });
 
-  test('all subjects empty on every level → zero topic edges, goal edges still fire', async () => {
+  test('all subjects empty on every level → zero topic nodes/edges, goal still fires', async () => {
     const levels = [
-      { id: 'level-0', center_goal: 'g-0', subjects: ['', '', ''] },
-      { id: 'level-1', center_goal: 'g-1', subjects: [] as string[] },
+      {
+        id: 'level-0',
+        level_key: 'sub_0',
+        depth: 1,
+        mandala_id: MANDALA_ID,
+        center_goal: 'g-0',
+        subjects: ['', '', ''],
+      },
+      {
+        id: 'level-1',
+        level_key: 'sub_1',
+        depth: 1,
+        mandala_id: MANDALA_ID,
+        center_goal: 'g-1',
+        subjects: [] as string[],
+      },
     ];
     mockFindUniqueMandala.mockResolvedValue({ user_id: USER_ID, levels });
     mockQueryRaw
@@ -195,16 +245,20 @@ describe('syncOntologyEdges', () => {
         { id: 'goal-0', level_id: 'level-0' },
         { id: 'goal-1', level_id: 'level-1' },
       ]);
-    mockExecuteRaw.mockResolvedValueOnce(2);
+    mockExecuteRaw
+      .mockResolvedValueOnce(2) // goal nodes upserted
+      .mockResolvedValueOnce(2); // goal edges (topic step is skipped entirely when empty)
 
     const result = await syncOntologyEdges(MANDALA_ID);
 
     expect(result.ok).toBe(true);
+    expect(result.goalNodesUpserted).toBe(2);
+    expect(result.topicNodesUpserted).toBe(0);
     expect(result.goalEdgesCreated).toBe(2);
     expect(result.topicEdgesCreated).toBe(0);
-    // Topic query is skipped entirely when the tuple set is empty
+    // Topic lookup + INSERT skipped entirely when tuple set empty
     expect(mockQueryRaw).toHaveBeenCalledTimes(2);
-    expect(mockExecuteRaw).toHaveBeenCalledTimes(1);
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(2);
   });
 
   test('durationMs always included', async () => {

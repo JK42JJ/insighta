@@ -82,10 +82,12 @@ export function triggerMandalaPostCreationAsync(
       const { syncOntologyEdges } = await import('@/modules/ontology/sync-edges');
       const result = await syncOntologyEdges(mandalaId);
       log.info(
-        `ontology-edges sync for mandala=${mandalaId}: ${JSON.stringify({
+        `ontology sync for mandala=${mandalaId}: ${JSON.stringify({
           ok: result.ok,
-          goal: result.goalEdgesCreated,
-          topic: result.topicEdgesCreated,
+          goalNodes: result.goalNodesUpserted,
+          topicNodes: result.topicNodesUpserted,
+          goalEdges: result.goalEdgesCreated,
+          topicEdges: result.topicEdgesCreated,
           ms: result.durationMs,
         })}`
       );
