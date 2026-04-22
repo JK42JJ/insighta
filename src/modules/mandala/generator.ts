@@ -51,9 +51,18 @@ export interface GeneratedMandala {
 // ─── Constants ───
 
 const MANDALA_GEN_TIMEOUT_MS = 600_000; // 10 min upper bound (Mac Mini M4 typical ~80s)
-// Empirically v13 outputs ~1100-1700 tokens for a full mandala. 2500 gives a comfortable margin
-// without wasting time on speculative buffer (was 5000 — over-allocated by 3x).
-const NUM_PREDICT = 2_500;
+// CP416 (2026-04-22) — raised 2500 → 5000 after prod regression: LoRA
+// `done_reason: "length"` observed (eval_count=2500 exact cap) while
+// producing Korean-dense mandalas, JSON truncated mid-object so the
+// outer `validateMandala` strict 64/64 check threw every call. 5000
+// matches the `mandala-gen:latest` modelfile default (PARAMETER
+// num_predict 5000) so overriding at the client only tightens — here
+// we align with the model's own budget. Korean JSON for 8 sub_goals
+// + 64 actions + 8 labels typically fits in 3500-4500 tokens; 5000
+// preserves the prior "comfortable margin" intent. Context window on
+// the model is 4096 per `ollama show` — but `num_predict` is the
+// generation budget, not the context length.
+const NUM_PREDICT = 5_000;
 const TEMPERATURE = 0.7;
 
 // ─── In-memory result cache ───
