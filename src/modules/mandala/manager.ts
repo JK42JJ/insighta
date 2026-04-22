@@ -351,7 +351,8 @@ export class MandalaManager {
   async createMandala(
     userId: string,
     title: string,
-    levels: MandalaLevelData[]
+    levels: MandalaLevelData[],
+    options: { promoteToDefault?: boolean } = {}
   ): Promise<MandalaWithLevels> {
     // Per-step wall-clock timing so P2028 incidents have a data-driven
     // root cause trail. Emitted via console.info at function exit so the
@@ -403,7 +404,15 @@ export class MandalaManager {
       throw err;
     }
 
-    const isDefault = count === 0;
+    // CP416 Phase C (2026-04-22): `promoteToDefault` lets the wizard
+    // path atomically demote the existing default and promote the new
+    // mandala inside the same transaction, instead of relying on a
+    // fire-and-forget `updateMandala({isDefault:true}).catch(swallow)`
+    // after the insert. The old pattern raced with the response and
+    // silently dropped on failure, leaving the new mandala
+    // `is_default=false` and the user looking at the previous default
+    // in the dashboard.
+    const isDefault = count === 0 || options.promoteToDefault === true;
     const position = (maxPositionResult._max.position ?? -1) + 1;
 
     // Step 3: Transaction for writes only. Budget lives in TX_TIMEOUT_MS
@@ -412,6 +421,15 @@ export class MandalaManager {
       const tTx = Date.now();
       const result = await this.prisma.$transaction(
         async (tx) => {
+          // Phase C: if the caller asked for promoteToDefault AND there
+          // is already at least one existing mandala, demote the others
+          // in the same tx so at most one row ever has is_default=true.
+          if (options.promoteToDefault === true && count > 0) {
+            await tx.user_mandalas.updateMany({
+              where: { user_id: userId, is_default: true },
+              data: { is_default: false },
+            });
+          }
           const tMandalaCreate = Date.now();
           const mandala = await tx.user_mandalas.create({
             data: {

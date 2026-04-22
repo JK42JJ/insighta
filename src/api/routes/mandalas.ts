@@ -966,6 +966,15 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       language?: string;
       focusTags?: string[];
       targetLevel?: string;
+      /**
+       * CP416 Phase C (2026-04-22): when true, the created mandala is
+       * marked `is_default=true` atomically in the same transaction and
+       * the previous default is demoted. Wizard sends this so the user
+       * lands on the newly-created mandala in the dashboard instead of
+       * the prior default. Defaults to false to preserve explicit
+       * caller semantics for other (non-wizard) call paths.
+       */
+      setAsDefault?: boolean;
     };
   }>(
     '/create-with-data',
@@ -993,6 +1002,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         subLabels,
         focusTags,
         targetLevel,
+        setAsDefault,
       } = request.body;
 
       if (!title || typeof title !== 'string' || title.trim().length === 0) {
@@ -1095,7 +1105,9 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           });
         });
 
-        const result = await getMandalaManager().createMandala(userId, title, levels);
+        const result = await getMandalaManager().createMandala(userId, title, levels, {
+          promoteToDefault: setAsDefault === true,
+        });
         stage('create_mandala');
 
         // Save focus_tags and target_level if provided
