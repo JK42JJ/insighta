@@ -810,10 +810,19 @@ export function useWizard() {
       subDetails[idx] = actions;
       totalActions += actions.length;
     });
-    // Validate: AI-generated mandala MUST have all 64 actions (one-shot generation)
+    // Phase 1 (2026-04-22): wizard-stream previewOnly returns structure
+    // without actions (empty `{}`) so the user sees Step 2 in ~3s instead
+    // of ~21-28s. The 64-action validation that used to throw here was a
+    // one-shot-Haiku-era safety net — with the split path, actions are
+    // filled in by the post-creation pipeline (see
+    // `src/modules/mandala/fill-missing-actions.ts`). Empty action arrays
+    // are therefore a valid in-flight state; downstream consumers
+    // (`fireCreateMandala` → `createMandalaWithData` → post-creation) tolerate them.
+    // Kept a debug log to surface genuine regressions (e.g. zero actions
+    // when source === 'lora' which still does one-shot).
     if (totalActions < 64) {
-      throw new Error(
-        `AI generated mandala is incomplete: ${totalActions}/64 actions. Please retry.`
+      console.debug(
+        `[useWizard] preview actions: ${totalActions}/64 — fill runs in post-creation pipeline`
       );
     }
     const template: WizardTemplate = {
@@ -906,8 +915,10 @@ export function useWizard() {
         totalActions += actions.length;
       });
       if (totalActions < 64) {
-        throw new Error(
-          `AI generated mandala is incomplete: ${totalActions}/64 actions. Please retry.`
+        // Phase 1 (2026-04-22): same note as selectGeneratedMandala.
+        // Empty actions are valid in-flight; post-creation pipeline fills.
+        console.debug(
+          `[useWizard] submitFromWizard: ${totalActions}/64 — fill runs in post-creation pipeline`
         );
       }
       const template: WizardTemplate = {
