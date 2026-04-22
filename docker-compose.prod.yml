@@ -50,6 +50,15 @@ services:
       # Revert: delete this line and redeploy — code default 'ollama'
       # restores the pre-Phase-1 behavior bit-identically.
       - MANDALA_EMBED_PROVIDER=openrouter
+      # CP416 (2026-04-22) — restore the LoRA action-fill path. Without
+      # this, generateMandala() called config.mandalaGen.model=undefined,
+      # Ollama /api/generate returned 400, LoRA threw, and the Haiku
+      # fallback shipped short truncated JSON → 0 cellsFilled on prod
+      # mandala 70ef45d9. Mac mini Ollama has `mandala-gen:latest`
+      # loaded (verified via /api/tags). Non-secret per CP392: model
+      # tag is stdout-safe / open-source-safe. Revert: delete this
+      # line → LoRA auto-falls back to Haiku (pre-fix state).
+      - MANDALA_GEN_MODEL=mandala-gen:latest
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).
