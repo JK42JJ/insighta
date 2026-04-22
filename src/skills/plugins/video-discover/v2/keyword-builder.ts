@@ -61,6 +61,13 @@ export interface KeywordBuilderOpts {
     prompt: string,
     options?: { temperature?: number; maxTokens?: number; format?: 'json' }
   ) => Promise<string>;
+  /**
+   * Runtime cap on the number of queries emitted. Clamped to
+   * `[1, MAX_QUERIES]`. Used by v3 to toggle "broad queries" mode
+   * (3-5 queries) via `V3_MAX_QUERIES` once the semantic gate covers
+   * recall. Defaults to `MAX_QUERIES` (20) for backward compat.
+   */
+  maxQueries?: number;
 }
 
 export type QuerySource = 'core' | 'llm' | 'focus' | 'level' | 'subgoal';
@@ -113,10 +120,10 @@ export async function buildSearchQueries(
   if (!center) return [];
 
   const candidates: SearchQuery[] = [
-    ...buildRuleBasedQueriesSync(input),
+    ...buildRuleBasedQueriesSync(input, opts.maxQueries),
     ...(await runLLMQueries(input, opts)),
   ];
-  return dedupeAndCap(candidates);
+  return dedupeAndCap(candidates, opts.maxQueries);
 }
 
 /**
@@ -124,13 +131,16 @@ export async function buildSearchQueries(
  * executor to start YouTube search immediately without waiting for the LLM.
  * Always returns ≥1 entry as long as centerGoal is non-empty.
  */
-export function buildRuleBasedQueriesSync(input: KeywordBuilderInput): SearchQuery[] {
+export function buildRuleBasedQueriesSync(
+  input: KeywordBuilderInput,
+  maxQueries?: number
+): SearchQuery[] {
   const center = input.centerGoal.trim();
   if (!center) return [];
   const out: SearchQuery[] = [];
   out.push({ query: clip(extractCoreKeyphrase(center, input.language)), source: 'core' });
   for (const q of buildRuleBasedQueries(input, center)) out.push(q);
-  return dedupeAndCap(out);
+  return dedupeAndCap(out, maxQueries);
 }
 
 /**
@@ -172,7 +182,8 @@ export async function runLLMQueries(
       format: 'json',
     });
     const queries = parseQueriesResponse(raw) ?? [];
-    return queries.slice(0, MAX_QUERIES).map((q) => ({ query: clip(q), source: 'llm' as const }));
+    const cap = resolveMaxQueries(opts.maxQueries);
+    return queries.slice(0, cap).map((q) => ({ query: clip(q), source: 'llm' as const }));
   } catch (err) {
     log.warn(
       `C+ LLM query failed: ${err instanceof Error ? err.message : String(err)} — falling back to rule-based`
@@ -318,7 +329,8 @@ function pickDistinctiveSubGoalsWithIndex(
   return cleaned.slice(0, n);
 }
 
-function dedupeAndCap(candidates: SearchQuery[]): SearchQuery[] {
+function dedupeAndCap(candidates: SearchQuery[], maxQueries?: number): SearchQuery[] {
+  const cap = resolveMaxQueries(maxQueries);
   const seen = new Set<string>();
   const out: SearchQuery[] = [];
   for (const c of candidates) {
@@ -326,7 +338,12 @@ function dedupeAndCap(candidates: SearchQuery[]): SearchQuery[] {
     if (!norm || seen.has(norm)) continue;
     seen.add(norm);
     out.push(c);
-    if (out.length >= MAX_QUERIES) break;
+    if (out.length >= cap) break;
   }
   return out;
+}
+
+function resolveMaxQueries(requested: number | undefined): number {
+  if (!Number.isFinite(requested) || !requested || requested <= 0) return MAX_QUERIES;
+  return Math.min(Math.floor(requested), MAX_QUERIES);
 }

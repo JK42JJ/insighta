@@ -41,6 +41,19 @@ import type { CenterGateMode } from './config';
 
 export const MIN_SUB_RELEVANCE = 0.05;
 
+/**
+ * Cosine-similarity threshold for the `'semantic'` center-gate mode.
+ * A candidate passes when cosine(centerEmbedding, titleEmbedding) ≥ this.
+ *
+ * 0.35 chosen as a permissive floor — qwen3-embedding:8b in-domain pairs
+ * typically score 0.5-0.8 (e.g. `"하루 루틴으로 전문가되기"` ↔
+ * `"모닝 루틴 7가지"` ≈ 0.62), cross-domain unrelated pairs score
+ * 0.05-0.20 (e.g. `"하루 루틴"` ↔ `"ArgoCD 설치"` ≈ 0.12). 0.35 admits
+ * paraphrases that the subword 2-gram gate (recall 0.27) dropped while
+ * keeping clear off-domain noise out. Tune via env once telemetry lands.
+ */
+export const SEMANTIC_MIN_COSINE = 0.35;
+
 export const DEFAULT_RECENCY_WEIGHT = 0.15;
 
 // 18mo half-life: 1y → 0.63, 3y → 0.25, 6y → 0.06.
@@ -89,6 +102,24 @@ export interface MandalaFilterInput {
    * callers that haven't opted in keep the old logic bit-identical.
    */
   centerGateMode?: CenterGateMode;
+  /**
+   * Center goal embedding (4096d qwen3-embedding:8b). Required when
+   * `centerGateMode === 'semantic'`. When omitted in semantic mode the
+   * filter falls back to `'substring'` behavior for safety.
+   */
+  centerEmbedding?: ReadonlyArray<number>;
+  /**
+   * Per-candidate title embeddings, keyed by videoId (same 4096d space
+   * as `centerEmbedding`). Candidates missing an entry are treated as
+   * `centerScore = 0` in semantic mode — they still pass if matched via
+   * focusTag, otherwise are dropped by the center gate.
+   */
+  candidateEmbeddings?: ReadonlyMap<string, ReadonlyArray<number>>;
+  /**
+   * Override for `SEMANTIC_MIN_COSINE` so admins/tests can tune the
+   * threshold without code changes. Clamped to [0, 1].
+   */
+  semanticMinCosine?: number;
 }
 
 export interface ScoreWeights {
@@ -158,7 +189,18 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
 ): { byCell: Map<number, ScoredAssignment<T>[]>; stats: MandalaFilterStats } {
   const centerCore = extractCoreKeyphrase(input.centerGoal, input.language);
   const centerTokens = tokenize(centerCore, input.language);
-  const mode: CenterGateMode = input.centerGateMode ?? 'substring';
+  const requestedMode: CenterGateMode = input.centerGateMode ?? 'substring';
+
+  // Safety fallback: `'semantic'` requires a center embedding. Callers that
+  // opt into the mode but failed to provide one degrade to `'substring'`
+  // rather than silently dropping every candidate.
+  const mode: CenterGateMode =
+    requestedMode === 'semantic' && !input.centerEmbedding ? 'substring' : requestedMode;
+
+  const semanticMinCosineRaw = input.semanticMinCosine ?? SEMANTIC_MIN_COSINE;
+  const semanticMinCosine = Number.isFinite(semanticMinCosineRaw)
+    ? Math.max(0, Math.min(1, semanticMinCosineRaw))
+    : SEMANTIC_MIN_COSINE;
 
   // Precompute per-center-token 2-grams once so the subword path is
   // O(title-tokens × centerTokens) per candidate, not per pair.
@@ -211,11 +253,23 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     //   substring — legacy, token-level substring overlap
     //   subword   — char 2-gram overlap per center token, 30% floor
     //   off       — 1 always (gate disabled)
+    //   semantic  — cosine(centerEmbedding, titleEmbedding), 0 when missing
     let centerScore: number;
     if (mode === 'off') {
       centerScore = 1;
     } else if (mode === 'subword') {
       centerScore = subwordOverlap(centerTokenGrams, titleTokens);
+    } else if (mode === 'semantic') {
+      const titleVec = input.candidateEmbeddings?.get(c.videoId);
+      // Fallback to substring is handled at mode resolution above when
+      // centerEmbedding is missing entirely; here we only guard the
+      // per-candidate vector.
+      if (!titleVec || !input.centerEmbedding) {
+        centerScore = 0;
+      } else {
+        const cos = cosineSimilarity(input.centerEmbedding, titleVec);
+        centerScore = cos >= semanticMinCosine ? cos : 0;
+      }
     } else {
       centerScore = substringOverlap(centerTokens, titleTokens);
     }
@@ -233,7 +287,11 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     // never fires regardless of tokens.
     if (focusMatched) {
       stats.passedByFocusTag = (stats.passedByFocusTag ?? 0) + 1;
-    } else if (mode !== 'off' && centerTokens.size > 0 && centerScore === 0) {
+    } else if (
+      mode !== 'off' &&
+      centerScore === 0 &&
+      (mode === 'semantic' || centerTokens.size > 0)
+    ) {
       stats.droppedByCenterGate++;
       continue;
     }
@@ -355,6 +413,30 @@ function jaccard(bodyTokens: Set<string>, subGoalTokens: Set<string>): number {
   let hits = 0;
   for (const t of subGoalTokens) if (bodyTokens.has(t)) hits++;
   return hits / subGoalTokens.size;
+}
+
+/**
+ * Cosine similarity between two equal-length numeric vectors. Returns 0
+ * for length mismatch or zero-magnitude inputs (treating them as "no
+ * signal"). Clamped to [0, 1] so a freshly-generated vector with tiny
+ * negative noise on a paraphrase pair doesn't under-cut the threshold.
+ */
+export function cosineSimilarity(a: ReadonlyArray<number>, b: ReadonlyArray<number>): number {
+  if (a.length === 0 || a.length !== b.length) return 0;
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    const ai = a[i] ?? 0;
+    const bi = b[i] ?? 0;
+    dot += ai * bi;
+    na += ai * ai;
+    nb += bi * bi;
+  }
+  if (na === 0 || nb === 0) return 0;
+  const raw = dot / (Math.sqrt(na) * Math.sqrt(nb));
+  if (!Number.isFinite(raw)) return 0;
+  return Math.max(0, Math.min(1, raw));
 }
 
 const KO_STOPWORDS = new Set([

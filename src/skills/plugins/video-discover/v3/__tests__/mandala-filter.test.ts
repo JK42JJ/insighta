@@ -9,8 +9,10 @@ import {
   applyMandalaFilterWithStats,
   buildScoreWeights,
   computeRecencyScore,
+  cosineSimilarity,
   DEFAULT_RECENCY_HALF_LIFE_MONTHS,
   MIN_SUB_RELEVANCE,
+  SEMANTIC_MIN_COSINE,
   type FilterCandidate,
 } from '../mandala-filter';
 
@@ -496,5 +498,171 @@ describe('applyMandalaFilter — centerGateMode', () => {
     // the 0.3 floor. If this starts passing, SUBWORD_MIN_CENTER_MATCH
     // has drifted too low and noise will leak.
     expect(stats.droppedByCenterGate).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CenterGateMode — semantic (Phase 3, CP416)
+// ---------------------------------------------------------------------------
+
+describe('cosineSimilarity helper', () => {
+  test('identical vectors → 1.0', () => {
+    expect(cosineSimilarity([1, 0, 0], [1, 0, 0])).toBe(1);
+  });
+
+  test('orthogonal vectors → 0', () => {
+    expect(cosineSimilarity([1, 0, 0], [0, 1, 0])).toBe(0);
+  });
+
+  test('negative dot clamps to 0 (opposite direction)', () => {
+    expect(cosineSimilarity([1, 0], [-1, 0])).toBe(0);
+  });
+
+  test('length mismatch → 0 (safety)', () => {
+    expect(cosineSimilarity([1, 2, 3], [1, 2])).toBe(0);
+  });
+
+  test('zero-magnitude vector → 0 (avoid NaN)', () => {
+    expect(cosineSimilarity([0, 0, 0], [1, 2, 3])).toBe(0);
+  });
+
+  test('partial overlap produces value in (0, 1)', () => {
+    const s = cosineSimilarity([1, 1, 0], [1, 0, 0]);
+    expect(s).toBeGreaterThan(0);
+    expect(s).toBeLessThan(1);
+  });
+});
+
+describe('applyMandalaFilter — centerGateMode: "semantic"', () => {
+  const input = {
+    centerGoal: '1달 일일 루틴으로 전문가되기',
+    subGoals: [
+      '전문 분야 선정 및 학습 계획 수립',
+      '매일 집중 학습 시간 확보 및 루틴화',
+      '실무 프로젝트 진행 및 포트폴리오 구축',
+      '전문 커뮤니티 참여 및 네트워킹',
+      '월간 집중 전문화',
+      '지식 체계화 및 아웃풋 생산',
+      '피드백 수집 및 개선 사이클',
+      '일일 진도 추적 및 동기 유지',
+    ],
+    language: 'ko' as const,
+  };
+
+  // Synthetic 8-dim vectors: semantic neighborhood modeled as near-axis
+  // alignment. Keeps tests hermetic (no Ollama) while exercising the
+  // threshold / fallback / gate-drop branches.
+  const centerVec = [1, 0.2, 0, 0, 0, 0, 0, 0];
+  const paraphraseVec = [0.9, 0.3, 0, 0, 0, 0, 0, 0]; // cosine ≈ 0.99
+  const unrelatedVec = [0, 0, 1, 0, 0, 0, 0, 0]; // cosine = 0
+  const borderlineVec = [0.3, 0.05, 0.95, 0, 0, 0, 0, 0]; // cosine ≈ 0.31 (below 0.35 default)
+
+  const paraphrase = cand('p1', '하루 습관 형성하는 법');
+  const unrelated = cand('u1', 'iPhone 16 프로 리뷰');
+  const borderline = cand('b1', '정보처리기능사 필기 22강');
+
+  test('paraphrase passes gate (cosine ≈ 0.99 > 0.35)', () => {
+    const { stats } = applyMandalaFilterWithStats([paraphrase], {
+      ...input,
+      centerGateMode: 'semantic',
+      centerEmbedding: centerVec,
+      candidateEmbeddings: new Map([['p1', paraphraseVec]]),
+    });
+    expect(stats.droppedByCenterGate).toBe(0);
+    expect(stats.centerGateMode).toBe('semantic');
+  });
+
+  test('unrelated dropped at gate (cosine = 0)', () => {
+    const { stats } = applyMandalaFilterWithStats([unrelated], {
+      ...input,
+      centerGateMode: 'semantic',
+      centerEmbedding: centerVec,
+      candidateEmbeddings: new Map([['u1', unrelatedVec]]),
+    });
+    expect(stats.droppedByCenterGate).toBe(1);
+  });
+
+  test('borderline below SEMANTIC_MIN_COSINE (0.35) dropped', () => {
+    const { stats } = applyMandalaFilterWithStats([borderline], {
+      ...input,
+      centerGateMode: 'semantic',
+      centerEmbedding: centerVec,
+      candidateEmbeddings: new Map([['b1', borderlineVec]]),
+    });
+    // Keep the test pinned to the constant so threshold drift is visible.
+    expect(SEMANTIC_MIN_COSINE).toBeCloseTo(0.35, 2);
+    expect(stats.droppedByCenterGate).toBe(1);
+  });
+
+  test('semanticMinCosine override admits borderline candidate', () => {
+    const { stats } = applyMandalaFilterWithStats([borderline], {
+      ...input,
+      centerGateMode: 'semantic',
+      centerEmbedding: centerVec,
+      candidateEmbeddings: new Map([['b1', borderlineVec]]),
+      semanticMinCosine: 0.1,
+    });
+    expect(stats.droppedByCenterGate).toBe(0);
+  });
+
+  test('missing centerEmbedding → safety fallback to substring mode', () => {
+    const { stats } = applyMandalaFilterWithStats([paraphrase], {
+      ...input,
+      centerGateMode: 'semantic',
+      // centerEmbedding intentionally omitted
+      candidateEmbeddings: new Map([['p1', paraphraseVec]]),
+    });
+    // Mode reported should reflect the effective mode, not the requested one.
+    expect(stats.centerGateMode).toBe('substring');
+  });
+
+  test('missing per-candidate embedding → dropped at gate (0 score, not matched)', () => {
+    const { stats } = applyMandalaFilterWithStats([paraphrase, unrelated], {
+      ...input,
+      centerGateMode: 'semantic',
+      centerEmbedding: centerVec,
+      // only paraphrase has a vector; unrelated has none
+      candidateEmbeddings: new Map([['p1', paraphraseVec]]),
+    });
+    // unrelated has no vector → centerScore stays 0 → dropped at gate.
+    // paraphrase still passes gate 1. Gate 2 (jaccard on sub-goals) may
+    // still drop it downstream — that's independent of the gate-1 branch
+    // we're testing here.
+    expect(stats.droppedByCenterGate).toBeGreaterThanOrEqual(1);
+  });
+
+  test('EN fixture: paraphrase admitted, off-domain dropped', () => {
+    const enInput = {
+      centerGoal: 'Master React hooks in 30 days',
+      subGoals: [
+        'useState patterns',
+        'useEffect cleanup',
+        'useMemo cost analysis',
+        'useCallback stability',
+        'custom hooks design',
+        'context optimization',
+        'concurrent rendering',
+        'testing hooks',
+      ],
+      language: 'en' as const,
+    };
+    const enCenterVec = [1, 0.2, 0, 0];
+    const enParaphraseVec = [0.88, 0.4, 0, 0]; // cosine > 0.35
+    const enNoiseVec = [0, 0, 1, 0];
+
+    const { stats } = applyMandalaFilterWithStats(
+      [cand('e1', 'Learn React hooks fast'), cand('e2', 'Latest iPhone 16 Pro review')],
+      {
+        ...enInput,
+        centerGateMode: 'semantic',
+        centerEmbedding: enCenterVec,
+        candidateEmbeddings: new Map<string, number[]>([
+          ['e1', enParaphraseVec],
+          ['e2', enNoiseVec],
+        ]),
+      }
+    );
+    expect(stats.centerGateMode).toBe('semantic');
+    expect(stats.droppedByCenterGate).toBe(1); // noise only; paraphrase passes
   });
 });
