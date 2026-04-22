@@ -30,13 +30,17 @@ services:
       - REDIS_HOST=${INSIGHTA_TAILSCALE_IP}
       - REDIS_PORT=6379
       - REDIS_USER=insighta
-      # Phase-1 slice 5 followup (2026-04-21) — activate subword center-gate.
-      # Tuning knob, not a secret (per CLAUDE.md CP392 rule). Default in
-      # code is 'substring' (pre-audit). Flipping to 'subword' here
-      # enables char-2-gram composite-word matching so Korean titles
-      # like "모닝루틴" pass the gate for goals containing "루틴으로".
-      # Revert: delete this line and redeploy — code default takes over.
-      - V3_CENTER_GATE_MODE=subword
+      # CP416 Phase 3 (2026-04-22) — activate semantic center-gate.
+      # Cosine similarity over qwen3-embedding:8b (4096d, same space as
+      # mandala_embeddings). Replaces the 2026-04-21 'subword' activation
+      # whose char-2-gram recall (0.27) surfaced as the "2 cards" symptom
+      # — embedding-based recall admits paraphrase/composite-word pairs
+      # that the lexical gate dropped. Tuning knob, not a secret (CP392).
+      # Safety: code auto-fallbacks to 'substring' when embedBatch throws
+      # (mandala-filter.ts guard) — Ollama downtime does not break the gate.
+      # Revert: set to 'subword' / 'substring' or delete this line (code
+      # default 'substring' takes over) and redeploy.
+      - V3_CENTER_GATE_MODE=semantic
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
