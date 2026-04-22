@@ -70,5 +70,29 @@ export function triggerMandalaPostCreationAsync(
         `fill-missing-actions crashed for user=${userId} mandala=${mandalaId}: ${err instanceof Error ? err.message : String(err)}`
       );
     });
+
+    // Lever A (CP416) — ontology edge sync moved out of the create txn.
+    // Triggers `trg_goal_edge` / `trg_topic_edges` were dropped by
+    // migration 011 because their per-row sub-queries (~210 total for a
+    // 9-level mandala) were the primary cause of the 7s wizard save.
+    // Edges land ~100-500ms after commit via `syncOntologyEdges`; no
+    // wizard/dashboard reader depends on them synchronously. See
+    // `docs/design/ontology-trigger-defer.md`.
+    (async () => {
+      const { syncOntologyEdges } = await import('@/modules/ontology/sync-edges');
+      const result = await syncOntologyEdges(mandalaId);
+      log.info(
+        `ontology-edges sync for mandala=${mandalaId}: ${JSON.stringify({
+          ok: result.ok,
+          goal: result.goalEdgesCreated,
+          topic: result.topicEdgesCreated,
+          ms: result.durationMs,
+        })}`
+      );
+    })().catch((err) => {
+      log.warn(
+        `sync-ontology-edges crashed for user=${userId} mandala=${mandalaId}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    });
   });
 }

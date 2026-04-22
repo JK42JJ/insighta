@@ -566,6 +566,12 @@ export class MandalaManager {
 
         logger.info(`Mandala levels updated: userId=${userId}, mandalaId=${mandalaId}`);
 
+        // Lever A (CP416) — ontology edges are synced fire-and-forget
+        // post-commit. See `sync-edges.ts` + `ontology-trigger-defer.md`.
+        // Scheduled after the tx resolves so failures don't roll back
+        // the primary update.
+        void this.scheduleOntologyEdgeSync(mandalaId);
+
         const result = await tx.user_mandalas.findUnique({
           where: { id: mandalaId, user_id: userId },
           include: {
@@ -1190,7 +1196,33 @@ export class MandalaManager {
       },
     });
 
+    // Lever A (CP416) — ontology edges post-commit sync (fire-and-forget).
+    void this.scheduleOntologyEdgeSync(mandala.id);
+
     return mandala.id;
+  }
+
+  /**
+   * Fire-and-forget helper that imports and calls `syncOntologyEdges`.
+   * Lazily loaded so the ontology module graph is not resolved by tests
+   * that don't touch it. Never throws; logs on failure. See CP416 Lever
+   * A (`docs/design/ontology-trigger-defer.md`).
+   */
+  private scheduleOntologyEdgeSync(mandalaId: string): void {
+    void (async () => {
+      try {
+        const { syncOntologyEdges } = await import('@/modules/ontology/sync-edges');
+        const result = await syncOntologyEdges(mandalaId);
+        if (!result.ok) {
+          logger.warn(
+            `ontology-edges sync not ok for mandala=${mandalaId}: reason=${result.reason ?? 'unknown'}`
+          );
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn(`ontology-edges sync threw for mandala=${mandalaId}: ${msg}`);
+      }
+    })();
   }
 
   // ─── Subscription methods (Story #85-B) ───
