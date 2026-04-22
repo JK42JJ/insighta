@@ -1,8 +1,13 @@
 name: CI
 
 on:
-  push:
-    branches-ignore: [main]
+  # Feature-branch push used to fire here (branches-ignore: [main]), which
+  # caused every PR to see two CI runs: one from the push event and one
+  # from the subsequent pull_request event. The concurrency group below
+  # does not dedupe them because push and pull_request produce different
+  # github.ref values. PR coverage via pull_request already validates
+  # feature branches, and deploy.yml re-invokes this workflow via
+  # `workflow_call` on main merge, so the push trigger was redundant.
   pull_request:
     branches: [main]
   workflow_call:
