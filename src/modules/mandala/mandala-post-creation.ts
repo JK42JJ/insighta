@@ -36,6 +36,13 @@ export function triggerMandalaPostCreationAsync(
   trigger: string = 'wizard'
 ): void {
   setImmediate(() => {
+    // Phase 1 (2026-04-22): run the main pipeline (embeddings → discover →
+    // auto-add) in parallel with missing-actions fill. The two tracks are
+    // independent — actions populate `user_mandala_levels.subjects` while
+    // the pipeline drives `recommendation_cache`. Both fire-and-forget;
+    // failures in one do not stall the other. User's "최고의 카드 빠르게"
+    // priority puts the pipeline on the faster path (cards) while actions
+    // fill in progressively for the edit view.
     (async () => {
       const runId = await createPipelineRun(mandalaId, userId, trigger);
       log.info(`Pipeline run created: ${runId} mandala=${mandalaId} trigger=${trigger}`);
@@ -43,6 +50,24 @@ export function triggerMandalaPostCreationAsync(
     })().catch((err) => {
       log.warn(
         `post-creation pipeline crashed for user=${userId} mandala=${mandalaId}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    });
+
+    (async () => {
+      // Lazy require so that test-time module graphs that do not need the
+      // generator / OpenRouter imports (e.g. `mandala-post-creation.test.ts`
+      // which mocks only a narrow surface) are not forced to resolve them.
+      const { fillMissingActionsIfNeeded } = await import('./fill-missing-actions');
+      const result = await fillMissingActionsIfNeeded(mandalaId);
+      log.info(
+        `actions-fill result for mandala=${mandalaId}: ${JSON.stringify({
+          action: result.action,
+          cellsFilled: result.cellsFilled ?? 0,
+        })}`
+      );
+    })().catch((err) => {
+      log.warn(
+        `fill-missing-actions crashed for user=${userId} mandala=${mandalaId}: ${err instanceof Error ? err.message : String(err)}`
       );
     });
   });
