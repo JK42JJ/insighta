@@ -3,6 +3,8 @@ import { DEFAULT_SEMANTIC_ALPHA, DEFAULT_SEMANTIC_BETA } from '@/modules/video-d
 import {
   DEFAULT_CENTER_GATE_MODE,
   DEFAULT_MAX_QUERIES,
+  DEFAULT_MIN_VIEW_COUNT,
+  DEFAULT_MIN_VIEWS_PER_DAY,
   DEFAULT_PUBLISHED_AFTER_DAYS,
   DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
   loadV3Config,
@@ -10,7 +12,7 @@ import {
 import { DEFAULT_RECENCY_HALF_LIFE_MONTHS, DEFAULT_RECENCY_WEIGHT } from '../mandala-filter';
 
 describe('loadV3Config', () => {
-  test('empty env → activated defaults (Tier 1 off, recency on, 3yr cutoff, semantic off, yt timeout 1s, center-gate substring)', () => {
+  test('empty env → activated defaults (Tier 1 off, recency on, 3yr cutoff, semantic off, yt timeout 1s, center-gate substring, quality gate off)', () => {
     expect(loadV3Config({})).toEqual({
       enableTier1Cache: false,
       recencyWeight: DEFAULT_RECENCY_WEIGHT,
@@ -23,6 +25,9 @@ describe('loadV3Config', () => {
       youtubeSearchTimeoutMs: DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
       centerGateMode: DEFAULT_CENTER_GATE_MODE,
       maxQueries: DEFAULT_MAX_QUERIES,
+      enableQualityGate: false,
+      minViewCount: DEFAULT_MIN_VIEW_COUNT,
+      minViewsPerDay: DEFAULT_MIN_VIEWS_PER_DAY,
     });
   });
 
@@ -88,7 +93,28 @@ describe('loadV3Config', () => {
       youtubeSearchTimeoutMs: DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
       centerGateMode: DEFAULT_CENTER_GATE_MODE,
       maxQueries: DEFAULT_MAX_QUERIES,
+      enableQualityGate: false,
+      minViewCount: DEFAULT_MIN_VIEW_COUNT,
+      minViewsPerDay: DEFAULT_MIN_VIEWS_PER_DAY,
     });
+  });
+
+  test('quality gate envs — enabled + custom thresholds', () => {
+    const cfg = loadV3Config({
+      V3_ENABLE_QUALITY_GATE: 'true',
+      V3_MIN_VIEW_COUNT: '500',
+      V3_MIN_VIEWS_PER_DAY: '5',
+    });
+    expect(cfg.enableQualityGate).toBe(true);
+    expect(cfg.minViewCount).toBe(500);
+    expect(cfg.minViewsPerDay).toBe(5);
+  });
+
+  test('quality gate envs — unset → flag off, defaults applied', () => {
+    const cfg = loadV3Config({});
+    expect(cfg.enableQualityGate).toBe(false);
+    expect(cfg.minViewCount).toBe(DEFAULT_MIN_VIEW_COUNT);
+    expect(cfg.minViewsPerDay).toBe(DEFAULT_MIN_VIEWS_PER_DAY);
   });
 
   test('V3_YOUTUBE_SEARCH_TIMEOUT_MS parses positive integer', () => {
