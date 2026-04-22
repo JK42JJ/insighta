@@ -59,6 +59,15 @@ services:
       # tag is stdout-safe / open-source-safe. Revert: delete this
       # line → LoRA auto-falls back to Haiku (pre-fix state).
       - MANDALA_GEN_MODEL=mandala-gen:latest
+      # CP416 (2026-04-22) — cap YouTube search queries at 5 (default in
+      # code is 20). With V3_TARGET_PER_CELL lowered 12→3 (total 96→24),
+      # the narrow-query path no longer needs 20 queries to saturate a
+      # bigger pool. 5 queries × ~50 results each × shorts filter still
+      # yields plenty (observed pool-after-shorts = 71 / filter-output
+      # = 21 under 15 queries; 5 queries should comfortably clear 24
+      # target). Quota drop: 2000 → 500 units/mandala. Revert: delete
+      # this line (code default V3_MAX_QUERIES=20 restores).
+      - V3_MAX_QUERIES=5
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).
