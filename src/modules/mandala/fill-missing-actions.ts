@@ -21,9 +21,14 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { Prisma } from '@prisma/client';
+
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
-import { generateMandala, generateMandalaActions } from './generator';
+// `generateMandalaActions` kept imported for the commented-out Haiku
+// fallback revive path below (CP416 policy). Silence unused-import lint.
+import { generateMandala, generateMandalaActions as _generateMandalaActions } from './generator';
+void _generateMandalaActions;
 
 const log = logger.child({ module: 'fill-missing-actions' });
 
@@ -145,24 +150,29 @@ export async function fillMissingActionsIfNeeded(mandalaId: string): Promise<{
   const targetLevel = mandala.target_level ?? undefined;
 
   log.info(
-    `[${mandalaId}] generating actions for ${needsFill.length}/${levels.length} cells (primary: LoRA, fallback: Haiku)`
+    `[${mandalaId}] generating actions for ${needsFill.length}/${levels.length} cells (LoRA-only policy, CP416)`
   );
 
-  // Primary: Mac Mini LoRA via `generateMandala` (one-shot full mandala).
-  // LoRA is purpose-trained on the mandala domain (2 months of background
-  // training-data accumulation, v14) so action quality is substantially
-  // better than generic Haiku prompting. We consume only the `actions`
-  // field from the LoRA output — `sub_goals` are already locked by the
-  // wizard, LoRA must not rewrite them.
+  // Policy (CP416 user directive, 2026-04-22): **LoRA-first, 100% target.**
+  //   - Mac Mini LoRA (`generateMandala`) handles action generation alone.
+  //   - OpenRouter Haiku fallback is kept in source for emergency revival
+  //     but NOT called at runtime (cost concern).
+  //   - Every LoRA failure is logged to `generation_log` so failure cases
+  //     become retraining data for the next LoRA fine-tune.
+  //     See `memory/project_lora_first_policy.md` +
+  //     `memory/feedback_lora_failure_as_training_data.md`.
   //
-  // Fallback: OpenRouter Haiku via `generateMandalaActions` (action-only
-  // prompt). Used when LoRA fails / times out / fails quality gate
-  // (repetition-mode detection via action unique-rate).
+  // Revive Haiku ONLY after explicit user approval (cost sign-off). When
+  // reviving, uncomment the `haiku-fallback` block below and the export of
+  // `generateMandalaActions` from this module's imports.
   let actions: Record<string, string[]> | null = null;
-  let sourceUsed: 'lora' | 'haiku-fallback' = 'lora';
   const centerGoal = rootLevel.center_goal ?? '';
+  let loraErrorForCaller: string | null = null;
 
   const loraStart = Date.now();
+  let loraRawOutput: Record<string, unknown> | null = null;
+  let loraFailureReason: string | null = null;
+
   try {
     const loraMandala = await generateMandala({
       goal: centerGoal,
@@ -170,6 +180,7 @@ export async function fillMissingActionsIfNeeded(mandalaId: string): Promise<{
       focusTags,
       targetLevel,
     });
+    loraRawOutput = loraMandala as unknown as Record<string, unknown>;
     const loraActions = loraMandala?.actions ?? {};
     const totalActions = Object.values(loraActions).reduce(
       (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0),
@@ -180,13 +191,11 @@ export async function fillMissingActionsIfNeeded(mandalaId: string): Promise<{
     const expectedTotal = EXPECTED_SUB_GOAL_COUNT * EXPECTED_ACTIONS_PER_CELL;
 
     if (totalActions < expectedTotal) {
-      log.warn(
-        `[${mandalaId}] LoRA returned ${totalActions}/${expectedTotal} actions (ms=${loraMs}) — falling back to Haiku`
-      );
+      loraFailureReason = `incomplete-actions: ${totalActions}/${expectedTotal}`;
+      log.warn(`[${mandalaId}] LoRA ${loraFailureReason} (ms=${loraMs})`);
     } else if (uniqueRate < MIN_ACTION_UNIQUE_RATE) {
-      log.warn(
-        `[${mandalaId}] LoRA unique-rate ${uniqueRate.toFixed(2)} < ${MIN_ACTION_UNIQUE_RATE} (repetition mode, ms=${loraMs}) — falling back to Haiku`
-      );
+      loraFailureReason = `repetition-mode: unique-rate ${uniqueRate.toFixed(2)} < ${MIN_ACTION_UNIQUE_RATE}`;
+      log.warn(`[${mandalaId}] LoRA ${loraFailureReason} (ms=${loraMs})`);
     } else {
       actions = loraActions;
       log.info(
@@ -195,11 +204,79 @@ export async function fillMissingActionsIfNeeded(mandalaId: string): Promise<{
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.warn(`[${mandalaId}] LoRA threw: ${msg} — falling back to Haiku`);
+    loraFailureReason = `throw: ${msg}`;
+    log.warn(`[${mandalaId}] LoRA threw: ${msg}`);
   }
 
-  if (!actions) {
-    sourceUsed = 'haiku-fallback';
+  // Persist failure case for retraining. Fire-and-forget — never blocks
+  // the fill path. `generation_log` has the columns we need (lora_output /
+  // lora_error / lora_duration_ms / lora_sub_goals / lora_actions_total /
+  // lora_action_unique_rate). raw_prompt / raw_response_text are a CP417
+  // schema extension candidate.
+  if (loraFailureReason) {
+    const loraMs = Date.now() - loraStart;
+    void (async () => {
+      try {
+        // Type-narrowed projections from the raw LoRA output so Prisma's
+        // typed `.create` data accepts the values.
+        const subGoalsLen: number | null = Array.isArray(loraRawOutput?.['sub_goals'])
+          ? (loraRawOutput['sub_goals'] as unknown[]).length
+          : null;
+        let actionsTotal: number | null = null;
+        if (loraRawOutput?.['actions'] && typeof loraRawOutput['actions'] === 'object') {
+          const actionsObj = loraRawOutput['actions'] as Record<string, unknown>;
+          actionsTotal = Object.values(actionsObj).reduce<number>(
+            (sum, v) => sum + (Array.isArray(v) ? v.length : 0),
+            0
+          );
+        }
+        const uniqueRateLog = loraRawOutput?.['actions']
+          ? computeActionUniqueRate(loraRawOutput['actions'] as Record<string, string[]>)
+          : null;
+
+        await db.generation_log.create({
+          data: {
+            user_id: null,
+            goal: centerGoal.slice(0, 500),
+            domain: null,
+            language,
+            lora_won: false,
+            source_returned: 'failed',
+            ...(loraRawOutput != null
+              ? { lora_output: loraRawOutput as Prisma.InputJsonValue }
+              : {}),
+            lora_duration_ms: loraMs,
+            lora_valid: false,
+            lora_sub_goals: subGoalsLen,
+            lora_actions_total: actionsTotal,
+            lora_action_unique_rate: uniqueRateLog,
+            // `[mandala=<uuid>]` prefix is load-bearing — `scripts/retry-action-fill.ts`
+            // does NOT parse this (it scans user_mandala_levels directly), but
+            // ops scripts / admin queries grep this token to correlate failures
+            // with specific mandalas. Keep the exact format.
+            lora_error: `[mandala=${mandalaId}] ${loraFailureReason}`.slice(0, 2000),
+            llm_duration_ms: null,
+            llm_error: null,
+          },
+        });
+        log.info(
+          `[${mandalaId}] LoRA failure logged to generation_log (reason=${loraFailureReason.slice(0, 60)})`
+        );
+      } catch (logErr) {
+        const msg = logErr instanceof Error ? logErr.message : String(logErr);
+        log.warn(`[${mandalaId}] generation_log insert failed: ${msg}`);
+      }
+    })();
+  }
+
+  // Haiku fallback — disabled by CP416 policy (cost). Revive condition:
+  // explicit user approval after a LoRA outage that exceeds acceptable
+  // action-fill downtime. To revive:
+  //   1. Uncomment the block below.
+  //   2. Ensure `generateMandalaActions` stays imported from ./generator.
+  //   3. Add a log line `actions source=haiku-fallback` so the revive is
+  //      observable in prod logs.
+  /* if (!actions) {
     try {
       actions = await generateMandalaActions(
         subGoals,
@@ -208,14 +285,24 @@ export async function fillMissingActionsIfNeeded(mandalaId: string): Promise<{
         focusTags,
         targetLevel
       );
+      log.info(`[${mandalaId}] actions source=haiku-fallback (REVIVED)`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn(`[${mandalaId}] Haiku fallback also threw: ${msg}`);
       return { ok: false, action: 'failed', reason: `lora+haiku both failed: ${msg}` };
     }
+  } */
+
+  if (!actions) {
+    loraErrorForCaller = loraFailureReason ?? 'lora returned null';
+    return {
+      ok: false,
+      action: 'failed',
+      reason: `lora-only policy; lora failed: ${loraErrorForCaller}`,
+    };
   }
 
-  log.info(`[${mandalaId}] actions source=${sourceUsed}`);
+  log.info(`[${mandalaId}] actions source=lora`);
 
   // Update each depth=1 level's subjects. Key layout from the prompt is
   // `sub_goal_1`..`sub_goal_8`; fall back to index-keyed lookups per the
