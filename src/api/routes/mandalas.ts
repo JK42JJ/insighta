@@ -2183,6 +2183,64 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         raw.write(`data: ${JSON.stringify(data)}\n\n`);
       };
 
+      // CP416 Phase B (2026-04-22): emit the backlog of already-upserted
+      // recommendation_cache rows before attaching the live subscriber.
+      // Without this, a client connecting after the wizard-stream
+      // pipeline has already finished (e.g. user navigating to dashboard
+      // a few seconds post-creation) would see an empty stream until the
+      // next upsert fires — and the initial `useRecommendations` poll
+      // carries a 5-minute stale-time window that can delay the backlog
+      // arrival further.
+      //
+      // Ordering: `rec_score DESC, cell_index ASC` matches the
+      // canonical /recommendations ordering set by CP416 Phase A so the
+      // client sees the same relevance-first sort whether it's hitting
+      // the poll or the stream backlog.
+      //
+      // Build a `cellIndex → cellLabel` lookup the same way
+      // /recommendations does, so the payload shape is identical to the
+      // live push path.
+      const childLevelsForStream = ((mandala as any).levels ?? []).filter(
+        (l: any) => l.depth === 1
+      );
+      const cellLabelByPosition = new Map<number, string>();
+      for (const child of childLevelsForStream) {
+        if (typeof child.position === 'number' && child.centerGoal) {
+          cellLabelByPosition.set(child.position, child.centerGoal);
+        }
+      }
+
+      const backlogRows = await getPrismaClient().recommendation_cache.findMany({
+        where: {
+          user_id: userId,
+          mandala_id: mandalaId,
+          status: RECOMMENDATION_DEFAULT_STATUS,
+          expires_at: { gt: new Date() },
+        },
+        orderBy: [{ rec_score: 'desc' }, { cell_index: 'asc' }],
+        take: RECOMMENDATION_FETCH_LIMIT,
+      });
+
+      for (const row of backlogRows) {
+        const payload: CardPayload = {
+          id: row.id,
+          videoId: row.video_id,
+          title: row.title,
+          channel: row.channel,
+          thumbnail: row.thumbnail,
+          durationSec: row.duration_sec,
+          recScore: row.rec_score,
+          cellIndex: row.cell_index ?? -1,
+          cellLabel:
+            row.cell_index != null ? (cellLabelByPosition.get(row.cell_index) ?? null) : null,
+          keyword: row.keyword,
+          source: row.weight_version === 0 ? 'manual' : 'auto_recommend',
+          recReason: row.rec_reason,
+        };
+        write('card_added', payload);
+      }
+      write('backlog_done', { count: backlogRows.length });
+
       const unsubscribe = cardPublisher.subscribe(mandalaId, (payload: CardPayload) => {
         write('card_added', payload);
       });

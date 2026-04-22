@@ -40,14 +40,21 @@ export function RecommendationFeed({ mandalaId, subLabels, cardsByCell }: Recomm
   const stream = useVideoStream(mandalaId);
   const [filter, setFilter] = useState<CellFilter>('all');
 
-  // Merge polled and streamed items. Polling carries the
-  // authoritative cache view (including older rows and cellLabel
-  // resolved server-side); the SSE stream adds live-arriving rows
-  // the polling hasn't fetched yet. Dedupe by id — stream events
-  // win position (they arrived first in time).
+  // Merge polled and streamed items into a single relevance-ordered
+  // list. Both sources carry `recScore` and arrive in the same domain
+  // ordering (CP416 Phase A: /recommendations and the SSE stream both
+  // emit `recScore DESC, cellIndex ASC`). Dedupe by id, preferring the
+  // stream copy when both have a row — the stream is fed directly by
+  // the pipeline so its payload can't be staler than polling.
+  //
+  // A final combined-sort pass guarantees that when we have some ids
+  // only from polling and some only from streaming, the merged list is
+  // still sorted by score rather than a split "stream-block then
+  // polled-block". Phase B (2026-04-22) — prior merge appended block
+  // by block which created visible stripes in the UI.
   const items = useMemo<RecommendationItem[]>(() => {
     const polled = recommendations?.items ?? [];
-    if (stream.cards.length === 0) return polled;
+    if (stream.cards.length === 0 && polled.length === 0) return [];
     const seen = new Set<string>();
     const merged: RecommendationItem[] = [];
     for (const s of stream.cards) {
@@ -60,6 +67,12 @@ export function RecommendationFeed({ mandalaId, subLabels, cardsByCell }: Recomm
       seen.add(p.id);
       merged.push(p);
     }
+    merged.sort((a, b) => {
+      if (b.recScore !== a.recScore) return b.recScore - a.recScore;
+      const ai = a.cellIndex ?? Number.MAX_SAFE_INTEGER;
+      const bi = b.cellIndex ?? Number.MAX_SAFE_INTEGER;
+      return ai - bi;
+    });
     return merged;
   }, [recommendations?.items, stream.cards]);
 
