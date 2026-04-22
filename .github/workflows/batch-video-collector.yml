@@ -4,7 +4,15 @@ name: batch-video-collector
 # keywords). The workflow just POSTs to the internal skill endpoint on
 # prod; all heavy lifting runs inside the API container.
 #
-# Trigger: 04:00 UTC (= 13:00 KST) daily.
+# Trigger: 07:30 UTC (= 00:30 PT PDT = 16:30 KST) daily — just after
+# the YouTube Data API quota resets at 00:00 Pacific Time. Previous
+# schedule (04:00 UTC) ran during the last 3 hours before reset; at
+# that point user-facing v3 discover traffic had usually drained the
+# shared `YOUTUBE_API_KEY_SEARCH` quota, so batch ran with 0-200 units
+# remaining and either failed immediately or partial-exhausted mid-run
+# (`videos_new=0` in 6 of 7 prior runs — see video_pool_collection_runs
+# diagnostic in CP417 /retro).
+#
 # Manual: `gh workflow run batch-video-collector.yml`.
 #
 # Secrets required:
@@ -14,7 +22,7 @@ name: batch-video-collector
 
 on:
   schedule:
-    - cron: '0 4 * * *'
+    - cron: '30 7 * * *'
   workflow_dispatch:
     inputs:
       limit:
