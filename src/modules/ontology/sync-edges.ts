@@ -37,6 +37,8 @@ const log = logger.child({ module: 'ontology/sync-edges' });
 
 export interface SyncOntologyEdgesResult {
   ok: boolean;
+  goalNodesUpserted: number;
+  topicNodesUpserted: number;
   goalEdgesCreated: number;
   topicEdgesCreated: number;
   durationMs: number;
@@ -45,6 +47,9 @@ export interface SyncOntologyEdgesResult {
 
 interface LevelRow {
   id: string;
+  level_key: string | null;
+  depth: number;
+  mandala_id: string;
   center_goal: string | null;
   subjects: string[] | null;
 }
@@ -75,7 +80,14 @@ export async function syncOntologyEdges(mandalaId: string): Promise<SyncOntology
         user_id: true,
         levels: {
           where: { depth: { gte: 1 } },
-          select: { id: true, center_goal: true, subjects: true },
+          select: {
+            id: true,
+            level_key: true,
+            depth: true,
+            mandala_id: true,
+            center_goal: true,
+            subjects: true,
+          },
         },
       },
     });
@@ -83,6 +95,8 @@ export async function syncOntologyEdges(mandalaId: string): Promise<SyncOntology
     if (!mandala) {
       return {
         ok: false,
+        goalNodesUpserted: 0,
+        topicNodesUpserted: 0,
         goalEdgesCreated: 0,
         topicEdgesCreated: 0,
         durationMs: Date.now() - t0,
@@ -94,7 +108,115 @@ export async function syncOntologyEdges(mandalaId: string): Promise<SyncOntology
     const levels = (mandala.levels ?? []) as LevelRow[];
 
     if (levels.length === 0) {
-      return { ok: true, goalEdgesCreated: 0, topicEdgesCreated: 0, durationMs: Date.now() - t0 };
+      return {
+        ok: true,
+        goalNodesUpserted: 0,
+        topicNodesUpserted: 0,
+        goalEdgesCreated: 0,
+        topicEdgesCreated: 0,
+        durationMs: Date.now() - t0,
+      };
+    }
+
+    // CP416 Lever A+ (2026-04-22): node creation used to be handled by
+    // 008 shadow triggers `trg_sync_goal` + `trg_sync_topics`. Migration
+    // 012 drops those triggers because per-row execution inside the
+    // wizard $transaction added ~99 queries to tx_levels_createMany.
+    // This module now batch-inserts the missing goal + topic nodes in
+    // two multi-row ON CONFLICT DO NOTHING statements before the edges
+    // are wired up. The `source_ref` shape and `type` values mirror
+    // the trigger's exact output (see 008_service_shadow_triggers.sql
+    // for reference).
+
+    // --- Step 1: batch insert goal nodes (one per non-empty center_goal) ---
+    const goalNodeRows = levels.filter((l) => (l.center_goal ?? '').trim().length > 0);
+
+    let goalNodesUpserted = 0;
+    if (goalNodeRows.length > 0) {
+      const titles = goalNodeRows.map((l) => (l.center_goal ?? '').slice(0, 2000));
+      const levelKeys = goalNodeRows.map((l) => l.level_key ?? '');
+      const depths = goalNodeRows.map((l) => l.depth);
+      const mandalaIds = goalNodeRows.map((l) => l.mandala_id);
+      const refIds = goalNodeRows.map((l) => l.id);
+      const result = await db.$executeRaw<number>(Prisma.sql`
+        INSERT INTO ontology.nodes (user_id, type, title, properties, source_ref)
+        SELECT ${userId}::uuid, 'goal', t, jsonb_build_object(
+                 'level_key', lk,
+                 'depth', d::int,
+                 'mandala_id', mid::uuid
+               ),
+               jsonb_build_object('table', 'user_mandala_levels_goal', 'id', rid)
+          FROM unnest(
+                 ${titles}::text[],
+                 ${levelKeys}::text[],
+                 ${depths}::int[],
+                 ${mandalaIds}::text[],
+                 ${refIds}::text[]
+               ) AS u(t, lk, d, mid, rid)
+        ON CONFLICT ((source_ref->>'table'), (source_ref->>'id'))
+          WHERE source_ref IS NOT NULL
+        DO UPDATE
+          SET title = EXCLUDED.title,
+              properties = EXCLUDED.properties,
+              updated_at = now()
+      `);
+      goalNodesUpserted = typeof result === 'number' ? result : 0;
+    }
+
+    // --- Step 2: batch insert topic nodes (one per non-empty subject) ---
+    interface TopicNodeRow {
+      levelId: string;
+      subject: string;
+      levelKey: string;
+      depth: number;
+      mandalaId: string;
+    }
+    const topicNodeRows: TopicNodeRow[] = [];
+    for (const level of levels) {
+      for (const subject of level.subjects ?? []) {
+        if (!subject) continue;
+        topicNodeRows.push({
+          levelId: level.id,
+          subject,
+          levelKey: level.level_key ?? '',
+          depth: level.depth,
+          mandalaId: level.mandala_id,
+        });
+      }
+    }
+
+    let topicNodesUpserted = 0;
+    if (topicNodeRows.length > 0) {
+      const titles = topicNodeRows.map((r) => r.subject.slice(0, 2000));
+      const levelKeys = topicNodeRows.map((r) => r.levelKey);
+      const depths = topicNodeRows.map((r) => r.depth);
+      const mandalaIds = topicNodeRows.map((r) => r.mandalaId);
+      // source_ref.id for topics is `"<level-id>:<subject>"` — matches
+      // the 008 trigger shape so the edges lookup by the same key.
+      const refIds = topicNodeRows.map((r) => `${r.levelId}:${r.subject}`);
+      const result = await db.$executeRaw<number>(Prisma.sql`
+        INSERT INTO ontology.nodes (user_id, type, title, properties, source_ref)
+        SELECT ${userId}::uuid, 'topic', t, jsonb_build_object(
+                 'level_key', lk,
+                 'depth', d::int,
+                 'mandala_id', mid::uuid
+               ),
+               jsonb_build_object('table', 'user_mandala_levels_topic', 'id', rid)
+          FROM unnest(
+                 ${titles}::text[],
+                 ${levelKeys}::text[],
+                 ${depths}::int[],
+                 ${mandalaIds}::text[],
+                 ${refIds}::text[]
+               ) AS u(t, lk, d, mid, rid)
+        ON CONFLICT ((source_ref->>'table'), (source_ref->>'id'))
+          WHERE source_ref IS NOT NULL
+        DO UPDATE
+          SET title = EXCLUDED.title,
+              properties = EXCLUDED.properties,
+              updated_at = now()
+      `);
+      topicNodesUpserted = typeof result === 'number' ? result : 0;
     }
 
     const levelIds = levels.map((l) => l.id);
@@ -205,21 +327,27 @@ export async function syncOntologyEdges(mandalaId: string): Promise<SyncOntology
 
     const durationMs = Date.now() - t0;
     log.info(
-      `sync-edges for mandala=${mandalaId}: goal=${goalEdgesCreated}/${goalEdgeTuples.length} ` +
-        `topic=${topicEdgesCreated}/${topicEdgeTuples.length} ms=${durationMs}`
+      `sync-ontology for mandala=${mandalaId}: ` +
+        `goalNodes=${goalNodesUpserted} topicNodes=${topicNodesUpserted} ` +
+        `goalEdges=${goalEdgesCreated}/${goalEdgeTuples.length} ` +
+        `topicEdges=${topicEdgesCreated}/${topicEdgeTuples.length} ms=${durationMs}`
     );
 
     return {
       ok: true,
+      goalNodesUpserted,
+      topicNodesUpserted,
       goalEdgesCreated,
       topicEdgesCreated,
       durationMs,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.warn(`sync-edges failed for mandala=${mandalaId}: ${msg}`);
+    log.warn(`sync-ontology failed for mandala=${mandalaId}: ${msg}`);
     return {
       ok: false,
+      goalNodesUpserted: 0,
+      topicNodesUpserted: 0,
       goalEdgesCreated: 0,
       topicEdgesCreated: 0,
       durationMs: Date.now() - t0,
