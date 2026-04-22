@@ -54,6 +54,9 @@ const mockPrisma: any = {
     findMany: jest.fn(),
     count: jest.fn(),
   },
+  mandala_create_timings: {
+    create: jest.fn().mockResolvedValue({ id: 'timing-1' }),
+  },
   userVideoState: {
     updateMany: jest.fn(),
   },
@@ -393,6 +396,79 @@ describe('MandalaManager', () => {
           position: 3,
         }),
       });
+    });
+
+    test('CP420 γ — should persist create timings on ok path with mandala_id', async () => {
+      stubStep1Reads({ tier: 'free', count: 0 });
+      const mockTx = createMockTx();
+      mockTx.user_mandalas.create.mockResolvedValue({ id: 'new-mandala', user_id: mockUserId });
+      mockTx.user_mandala_levels.createMany.mockResolvedValue({ count: 2 });
+      mockTx.user_mandalas.findUnique.mockResolvedValue({
+        ...mockRawMandala,
+        id: 'new-mandala',
+      });
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockTx));
+      mockPrisma.mandala_create_timings.create.mockClear();
+
+      await manager.createMandala(mockUserId, 'My Mandala', mockLevelsInput);
+
+      // Fire-and-forget — may resolve after test body, but create should
+      // have been synchronously called during createMandala return path.
+      expect(mockPrisma.mandala_create_timings.create).toHaveBeenCalledTimes(1);
+      const call = mockPrisma.mandala_create_timings.create.mock.calls[0][0];
+      expect(call.data.mandala_id).toBe('new-mandala');
+      expect(call.data.user_id).toBe(mockUserId);
+      expect(call.data.outcome).toBe('ok');
+      expect(call.data.error).toBeNull();
+      // timings should include at least pre-tx keys + tx_total/total for ok path
+      expect(call.data.timings).toEqual(
+        expect.objectContaining({
+          dup_check: expect.any(Number),
+          parallel_reads: expect.any(Number),
+          tx_total: expect.any(Number),
+          total: expect.any(Number),
+        })
+      );
+    });
+
+    test('CP420 γ — should persist create timings on error path with null mandala_id', async () => {
+      stubStep1Reads({ tier: 'free', count: 0 });
+      const mockTx = createMockTx();
+      const txError = new Error('simulated tx failure');
+      mockTx.user_mandalas.create.mockRejectedValue(txError);
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockTx));
+      mockPrisma.mandala_create_timings.create.mockClear();
+
+      await expect(manager.createMandala(mockUserId, 'Err', mockLevelsInput)).rejects.toThrow(
+        'simulated tx failure'
+      );
+
+      expect(mockPrisma.mandala_create_timings.create).toHaveBeenCalledTimes(1);
+      const call = mockPrisma.mandala_create_timings.create.mock.calls[0][0];
+      expect(call.data.mandala_id).toBeNull();
+      expect(call.data.user_id).toBe(mockUserId);
+      expect(call.data.outcome).toBe('error');
+      expect(call.data.error).toContain('simulated tx failure');
+    });
+
+    test('CP420 γ — persist failure must not block caller (fire-and-forget)', async () => {
+      stubStep1Reads({ tier: 'free', count: 0 });
+      const mockTx = createMockTx();
+      mockTx.user_mandalas.create.mockResolvedValue({ id: 'm-ff', user_id: mockUserId });
+      mockTx.user_mandala_levels.createMany.mockResolvedValue({ count: 0 });
+      mockTx.user_mandalas.findUnique.mockResolvedValue({ ...mockRawMandala, id: 'm-ff' });
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockTx));
+      mockPrisma.mandala_create_timings.create.mockRejectedValueOnce(new Error('db down'));
+
+      // Primary result must not throw even if persistence fails.
+      const result = await manager.createMandala(mockUserId, 'FF', mockLevelsInput);
+      expect(result.id).toBe('m-ff');
+
+      // Allow microtask queue to drain so the .catch handler runs.
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Reset mock so later tests don't inherit the mockRejectedValueOnce.
+      mockPrisma.mandala_create_timings.create.mockResolvedValue({ id: 'timing-ok' });
     });
 
     test('should use pro quota for pro tier', async () => {

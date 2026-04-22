@@ -345,6 +345,46 @@ export class MandalaManager {
   }
 
   /**
+   * CP420 γ (Path B step 1): Persist createMandala per-step timings
+   * to `mandala_create_timings` table. Fire-and-forget after tx commit
+   * (ok path) or inside catch (error path) — does NOT affect the M7
+   * measurement being recorded.
+   *
+   * Rationale: console.info '[mandala-create-timing]' logs are only
+   * retained in docker stdout (~48h). DB persistence enables CP421+
+   * Lever A++ DROP pre/post M7 comparison (n≥3) via SELECT.
+   *
+   * Failure is logged via logger.error (non-blocking, never re-thrown)
+   * per work-efficiency.md line 298 convention.
+   */
+  private persistCreateTiming(params: {
+    mandalaId: string | null;
+    userId: string;
+    outcome: 'ok' | 'error';
+    timings: Record<string, number>;
+    error?: string;
+  }): void {
+    this.prisma.mandala_create_timings
+      .create({
+        data: {
+          mandala_id: params.mandalaId,
+          user_id: params.userId,
+          outcome: params.outcome,
+          timings: params.timings as Prisma.InputJsonValue,
+          error: params.error ?? null,
+        },
+      })
+      .catch((err) => {
+        logger.error('mandala_create_timings persist failed (non-blocking)', {
+          err,
+          mandalaId: params.mandalaId,
+          userId: params.userId,
+          outcome: params.outcome,
+        });
+      });
+  }
+
+  /**
    * Creates a new mandala with tier-based quota enforcement.
    * The quota check and insert are atomic inside a transaction.
    */
@@ -475,19 +515,33 @@ export class MandalaManager {
         '[mandala-create-timing]',
         JSON.stringify({ userId, title, outcome: 'ok', ...timings })
       );
+      this.persistCreateTiming({
+        mandalaId: result.id,
+        userId,
+        outcome: 'ok',
+        timings,
+      });
       return result;
     } catch (err) {
       timings['total'] = Date.now() - tFnStart;
+      const errMsg = err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500);
       console.info(
         '[mandala-create-timing]',
         JSON.stringify({
           userId,
           title,
           outcome: 'error',
-          error: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+          error: errMsg.slice(0, 200),
           ...timings,
         })
       );
+      this.persistCreateTiming({
+        mandalaId: null,
+        userId,
+        outcome: 'error',
+        timings,
+        error: errMsg,
+      });
       throw err;
     }
   }

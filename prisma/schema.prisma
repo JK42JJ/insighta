@@ -439,6 +439,7 @@ model user_mandalas {
   skill_configs        user_skill_config[]
   recommendation_cache recommendation_cache[]
   pipeline_runs        mandala_pipeline_runs[]
+  create_timings       mandala_create_timings[]
 
   source_template_id String?  @db.Uuid
   focus_tags         String[] @default([])
@@ -451,6 +452,27 @@ model user_mandalas {
   @@index([domain], map: "idx_user_mandalas_domain")
   @@index([like_count], map: "idx_user_mandalas_like_count")
   @@index([language], map: "idx_user_mandalas_language")
+  @@schema("public")
+}
+
+/// CP420 γ: wizard mandala create per-step timing persistence.
+/// Populated by `src/modules/mandala/manager.ts` createMandala as
+/// fire-and-forget after tx commit (ok path) OR after catch (error path).
+/// Enables Lever A++ DROP pre/post M7 comparison (n≥3) via SELECT.
+/// mandala_id nullable: tx rollback 시 mandala row 미생성이므로 error outcome 은 null.
+model mandala_create_timings {
+  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mandala_id String?        @db.Uuid
+  user_id    String         @db.Uuid
+  outcome    String         @db.VarChar(10) // 'ok' | 'error'
+  timings    Json
+  error      String?
+  created_at DateTime       @default(now()) @db.Timestamptz(6)
+  mandala    user_mandalas? @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([mandala_id], map: "idx_mandala_create_timings_mandala_id")
+  @@index([created_at(sort: Desc)], map: "idx_mandala_create_timings_created_at_desc")
+  @@index([outcome, created_at(sort: Desc)], map: "idx_mandala_create_timings_outcome_created_at")
   @@schema("public")
 }
 
