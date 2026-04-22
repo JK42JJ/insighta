@@ -201,6 +201,12 @@ jobs:
             # Add OPENROUTER keys if missing, update if present
             grep -q '^OPENROUTER_API_KEY=' .env 2>/dev/null && sed -i "s|^OPENROUTER_API_KEY=.*|OPENROUTER_API_KEY=${OR_KEY}|" .env || echo "OPENROUTER_API_KEY=${OR_KEY}" >> .env
             grep -q '^OPENROUTER_MODEL=' .env 2>/dev/null && sed -i "s|^OPENROUTER_MODEL=.*|OPENROUTER_MODEL=${OR_MODEL}|" .env || echo "OPENROUTER_MODEL=${OR_MODEL}" >> .env
+            # CP416 Phase 3 — activate v3 semantic center gate (cosine over
+            # qwen3-embedding:8b). Replaces lexical gate recall 0.27 that
+            # surfaced the "2 cards" symptom. Non-secret tuning knob per
+            # CP392: stdout-safe + open-source-safe → hardcoded here, not
+            # GH Secret. Rollback: change value to "substring" or delete row.
+            grep -q '^V3_CENTER_GATE_MODE=' .env 2>/dev/null && sed -i "s|^V3_CENTER_GATE_MODE=.*|V3_CENTER_GATE_MODE=semantic|" .env || echo "V3_CENTER_GATE_MODE=semantic" >> .env
             # 2026-04-18 — sync DB URLs from GitHub Secrets so password
             # rotations propagate to prod .env without manual SSH. Was
             # blocking deploy after Supabase password rotation (container
