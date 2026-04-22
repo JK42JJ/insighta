@@ -32,6 +32,7 @@ prisma/migrations/*
 !prisma/migrations/video_discover/
 !prisma/migrations/manual/
 !prisma/migrations/video_chunk_embeddings/
+!prisma/migrations/mandala-timings/
 
 # Logs
 logs/
