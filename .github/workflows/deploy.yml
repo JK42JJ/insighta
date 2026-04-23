@@ -118,8 +118,16 @@ jobs:
           DATABASE_URL: ${{ secrets.DIRECT_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
       - name: Install PostgreSQL client (for custom SQL runner)
+        # PGDG apt repo setup — postgresql-client-17 is not in Ubuntu 24.04
+        # default repos. Block mirrored from .github/workflows/db-integrity-check.yml
+        # and backup.yml which have been running this pattern on green daily.
         run: |
-          sudo apt-get update
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17
       - name: Apply custom SQL migrations (raw DDL fallback)
         run: bash scripts/apply-custom-sql.sh
