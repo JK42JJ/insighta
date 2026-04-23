@@ -111,10 +111,13 @@ supabase/
 deploy/
 
 # Local dev tools & prompts
-scripts/
+# Note: `scripts/*` (not `scripts/`) so individual-file negates below work;
+# a directory-level exclude would block subfile re-inclusion per gitignore spec.
+scripts/*
 !scripts/ontology/
 !scripts/data/
 !scripts/dataset-v4/
+!scripts/apply-custom-sql.sh
 prompt/
 
 # Dev tool configs
