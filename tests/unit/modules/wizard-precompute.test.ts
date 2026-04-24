@@ -263,8 +263,9 @@ describe('wizard-precompute — consumePrecompute', () => {
     expect(mockExecuteRaw).not.toHaveBeenCalled();
   });
 
-  test('status≠done → reason=not-done', async () => {
-    mockFindUnique.mockResolvedValueOnce({
+  test('status=running throughout budget → miss (not-done) after poll timeout', async () => {
+    // Always returns running — simulate precompute that doesn't finish in 5s.
+    mockFindUnique.mockResolvedValue({
       session_id: SESSION,
       user_id: USER,
       goal: 'g',
@@ -272,14 +273,72 @@ describe('wizard-precompute — consumePrecompute', () => {
       expires_at: FUTURE,
       discover_result: null,
     });
+    const t0 = Date.now();
     const r = await consumePrecompute({
       sessionId: SESSION,
       userId: USER,
       mandalaId: MANDALA,
       centerGoal: 'g',
     });
+    const elapsed = Date.now() - t0;
     expect(r.consumed).toBe(false);
     expect(r.reason).toBe('not-done');
+    // Should have polled for close to 5s before giving up.
+    expect(elapsed).toBeGreaterThanOrEqual(4500);
+    expect(elapsed).toBeLessThan(7000);
+  }, 15_000);
+
+  test('status=running → done within budget → consume succeeds', async () => {
+    // First read: running. Subsequent reads: done.
+    mockFindUnique
+      .mockResolvedValueOnce({
+        session_id: SESSION,
+        user_id: USER,
+        goal: 'g',
+        status: 'running',
+        expires_at: FUTURE,
+        discover_result: null,
+      })
+      .mockResolvedValue({
+        session_id: SESSION,
+        user_id: USER,
+        goal: 'g',
+        status: 'done',
+        expires_at: FUTURE,
+        discover_result: { slots: [makeSlot(0, 'v1')] },
+      });
+    const r = await consumePrecompute({
+      sessionId: SESSION,
+      userId: USER,
+      mandalaId: MANDALA,
+      centerGoal: 'g',
+    });
+    expect(r.consumed).toBe(true);
+    expect(r.cardsInserted).toBe(1);
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(1);
+  }, 15_000);
+
+  test('status=failed → reason=not-done (no poll, immediate miss)', async () => {
+    mockFindUnique.mockResolvedValueOnce({
+      session_id: SESSION,
+      user_id: USER,
+      goal: 'g',
+      status: 'failed',
+      expires_at: FUTURE,
+      discover_result: null,
+    });
+    const t0 = Date.now();
+    const r = await consumePrecompute({
+      sessionId: SESSION,
+      userId: USER,
+      mandalaId: MANDALA,
+      centerGoal: 'g',
+    });
+    const elapsed = Date.now() - t0;
+    expect(r.consumed).toBe(false);
+    expect(r.reason).toBe('not-done');
+    // Failed should NOT trigger poll — returns fast.
+    expect(elapsed).toBeLessThan(500);
   });
 
   test('expired → reason=expired', async () => {
