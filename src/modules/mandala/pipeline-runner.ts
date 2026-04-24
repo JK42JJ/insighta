@@ -179,6 +179,15 @@ export async function executePipelineRun(runId: string): Promise<void> {
 
   // ── Step 2: Video Discover (opt-in gated) ───────────────────
   let discoverSuccess = run.step2_status === 'completed';
+  // Track intra-run skip separately: `run.step2_status` is a snapshot taken
+  // at pipeline entry (line ~128) and stays stale after an `updateStep(...,
+  // 'skipped', ...)` call below. Without this flag, step3's "was step2
+  // skipped?" check reads the snapshot and misroutes an intra-run skip
+  // into the "discover failed" branch — auto-add is then never called
+  // (CP426 prod incident: wizard-precompute pre-populates rec_cache →
+  // step2 skips with "recent discover within 5min window" → user sees
+  // empty cards).
+  let step2Skipped = run.step2_status === 'skipped';
 
   if (!discoverSuccess) {
     await updateStep(runId, 2, 'running');
@@ -186,6 +195,7 @@ export async function executePipelineRun(runId: string): Promise<void> {
       const skipReason = await checkDiscoverPreconditions(userId, mandalaId);
       if (skipReason) {
         await updateStep(runId, 2, 'skipped', { reason: skipReason });
+        step2Skipped = true;
         log.info(`[${runId}] step2 skipped: ${skipReason}`);
       } else {
         const sub = await db.user_subscriptions.findUnique({
@@ -223,7 +233,7 @@ export async function executePipelineRun(runId: string): Promise<void> {
 
   // ── Step 3: Auto-Add Recommendations ────────────────────────
   if (run.step3_status !== 'completed') {
-    if (!discoverSuccess && run.step2_status !== 'skipped') {
+    if (!discoverSuccess && !step2Skipped) {
       // Step 2 failed (not skipped) → skip step 3
       await updateStep(runId, 3, 'skipped', null, 'discover failed');
     } else {
