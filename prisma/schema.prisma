@@ -1352,9 +1352,13 @@ model video_rich_summaries {
   quality_score Float?
   quality_flag  String?  @default("pending") @db.VarChar(20)
   model         String?  @db.VarChar(50)
+  /// CP423: user who triggered this generation. NULL for pre-CP423 rows
+  /// (backfilled via migrations/video_rich_summaries/001_add_user_id.sql).
+  user_id       String?  @db.Uuid
   created_at    DateTime @default(now()) @db.Timestamptz(6)
   updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
+  @@index([user_id, updated_at(sort: Desc)], map: "idx_vrs_user_updated_at")
   @@schema("public")
 }
 

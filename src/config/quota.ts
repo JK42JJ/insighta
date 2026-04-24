@@ -64,6 +64,12 @@ export interface TierLimitConfig {
   mandalas: number | null;
   cards: number | null;
   aiSummaries: number | null;
+  /**
+   * Rich summary generations per calendar month (CP423).
+   * Tracks LLM-expensive long-form (chapters/quotes/tl_dr) generations.
+   * `null` = unlimited. Separate from `aiSummaries` (short summary quota).
+   */
+  richSummaries: number | null;
   weeklyReports: number | null;
   skills: SkillLimits;
 }
@@ -74,6 +80,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
     mandalas: 3,
     cards: 150,
     aiSummaries: 150,
+    richSummaries: 30,
     weeklyReports: 10,
     skills: {
       newsletter: {
@@ -112,6 +119,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
     mandalas: 20,
     cards: 1_000,
     aiSummaries: 1_000,
+    richSummaries: 200,
     weeklyReports: null,
     skills: {
       newsletter: {
@@ -150,6 +158,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
     mandalas: null,
     cards: null,
     aiSummaries: null,
+    richSummaries: null,
     weeklyReports: null,
     skills: {
       newsletter: {
@@ -172,6 +181,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
     mandalas: null,
     cards: null,
     aiSummaries: null,
+    richSummaries: null,
     weeklyReports: null,
     skills: {
       newsletter: {

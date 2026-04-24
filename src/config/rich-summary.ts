@@ -26,27 +26,23 @@ const captionSourceSchema = z.preprocess(
 export const richSummaryEnvSchema = z.object({
   RICH_SUMMARY_ENABLED: boolFlag.default(false as unknown as string),
   RICH_SUMMARY_CAPTION_SOURCE: captionSourceSchema.default('disabled'),
-  RICH_SUMMARY_POOL_GOLD_EAGER: boolFlag.default(false as unknown as string),
 });
 
 export interface RichSummaryConfig {
   enabled: boolean;
   captionSource: RichSummaryCaptionSource;
-  poolGoldEager: boolean;
 }
 
 export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): RichSummaryConfig {
   const parsed = richSummaryEnvSchema.safeParse({
     RICH_SUMMARY_ENABLED: env['RICH_SUMMARY_ENABLED'],
     RICH_SUMMARY_CAPTION_SOURCE: env['RICH_SUMMARY_CAPTION_SOURCE'],
-    RICH_SUMMARY_POOL_GOLD_EAGER: env['RICH_SUMMARY_POOL_GOLD_EAGER'],
   });
   if (!parsed.success) {
-    return { enabled: false, captionSource: 'disabled', poolGoldEager: false };
+    return { enabled: false, captionSource: 'disabled' };
   }
   return {
     enabled: parsed.data.RICH_SUMMARY_ENABLED,
     captionSource: parsed.data.RICH_SUMMARY_CAPTION_SOURCE,
-    poolGoldEager: parsed.data.RICH_SUMMARY_POOL_GOLD_EAGER,
   };
 }

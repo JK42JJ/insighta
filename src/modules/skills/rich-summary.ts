@@ -13,6 +13,7 @@ import { createGenerationProvider } from '@/modules/llm';
 import { logger } from '@/utils/logger';
 import { checkSummaryQuality, type RichSummary } from './summary-gate';
 import { loadRichSummaryConfig } from '@/config/rich-summary';
+import { assertRichSummaryQuota } from './rich-summary-quota';
 import { Prisma } from '@prisma/client';
 
 export interface RichSummarySegment {
@@ -100,6 +101,7 @@ export interface RichSummaryResult {
 export async function enrichRichSummary(
   videoId: string,
   options: {
+    userId: string;
     title: string;
     description?: string;
     transcript?: string;
@@ -123,7 +125,7 @@ export async function enrichRichSummary(
     };
   }
 
-  // Check if already exists with passing quality
+  // Check if already exists with passing quality (cache hit → does NOT consume quota)
   const existing = await prisma.video_rich_summaries.findUnique({
     where: { video_id: videoId },
   });
@@ -138,6 +140,15 @@ export async function enrichRichSummary(
       model: existing.model,
     };
   }
+
+  // CP423: enforce per-user monthly quota before LLM call.
+  const quota = await assertRichSummaryQuota(prisma, options.userId);
+  log.info('Rich summary quota check passed', {
+    userId: options.userId,
+    tier: quota.tier,
+    used: quota.used,
+    limit: quota.limit,
+  });
 
   const generationProvider = await createGenerationProvider();
   const generate = (prompt: string, opts?: { format?: 'json' | 'text'; temperature?: number }) =>
@@ -169,6 +180,7 @@ export async function enrichRichSummary(
           qualityScore: result.score,
           qualityFlag: 'pass',
           model: generationProvider.model,
+          userId: options.userId,
         });
 
         log.info('Rich summary generated (pass)', {
@@ -220,6 +232,7 @@ export async function enrichRichSummary(
     qualityScore: 0,
     qualityFlag: 'low',
     model: generationProvider.model,
+    userId: options.userId,
   });
 
   log.info('Rich summary fallback to one_liner', { videoId });
@@ -247,6 +260,7 @@ async function upsertRichSummary(
     qualityScore: number;
     qualityFlag: string;
     model: string | null;
+    userId: string;
   }
 ): Promise<void> {
   const structuredJson = data.structured
@@ -261,6 +275,7 @@ async function upsertRichSummary(
       quality_score: data.qualityScore,
       quality_flag: data.qualityFlag,
       model: data.model,
+      user_id: data.userId,
       updated_at: new Date(),
     },
     create: {
@@ -271,6 +286,7 @@ async function upsertRichSummary(
       quality_score: data.qualityScore,
       quality_flag: data.qualityFlag,
       model: data.model,
+      user_id: data.userId,
     },
   });
 }

@@ -7,11 +7,10 @@ import { loadRichSummaryConfig } from '../../../src/config/rich-summary';
 
 describe('loadRichSummaryConfig', () => {
   describe('defaults (unset env)', () => {
-    it('returns {enabled:false, captionSource:disabled, poolGoldEager:false}', () => {
+    it('returns {enabled:false, captionSource:disabled}', () => {
       const cfg = loadRichSummaryConfig({});
       expect(cfg.enabled).toBe(false);
       expect(cfg.captionSource).toBe('disabled');
-      expect(cfg.poolGoldEager).toBe(false);
     });
   });
 
@@ -56,21 +55,20 @@ describe('loadRichSummaryConfig', () => {
   });
 
   describe('combined (production-realistic)', () => {
-    it('enabled + disabled source + eager on', () => {
+    it('enabled + disabled source', () => {
       const cfg = loadRichSummaryConfig({
         RICH_SUMMARY_ENABLED: 'true',
         RICH_SUMMARY_CAPTION_SOURCE: 'disabled',
-        RICH_SUMMARY_POOL_GOLD_EAGER: '1',
       });
-      expect(cfg).toEqual({ enabled: true, captionSource: 'disabled', poolGoldEager: true });
+      expect(cfg).toEqual({ enabled: true, captionSource: 'disabled' });
     });
 
-    it('enabled + mac_mini + eager off', () => {
+    it('enabled + mac_mini', () => {
       const cfg = loadRichSummaryConfig({
         RICH_SUMMARY_ENABLED: 'true',
         RICH_SUMMARY_CAPTION_SOURCE: 'mac_mini',
       });
-      expect(cfg).toEqual({ enabled: true, captionSource: 'mac_mini', poolGoldEager: false });
+      expect(cfg).toEqual({ enabled: true, captionSource: 'mac_mini' });
     });
   });
 });

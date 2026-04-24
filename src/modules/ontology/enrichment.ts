@@ -366,7 +366,21 @@ Important: Respond in English. Do NOT start summary with "This video" or "The vi
  */
 export async function enrichVideo(
   videoId: string,
-  options?: { transcript?: string; force?: boolean; title?: string; url?: string }
+  options?: {
+    transcript?: string;
+    force?: boolean;
+    title?: string;
+    url?: string;
+    /**
+     * CP423: when true AND userId present, trigger rich-summary generation
+     * as a follow-on step. Must be set explicitly by the caller — no automatic
+     * cascade from pool enrichment or system-triggered enrichVideo calls.
+     * Rich summary triggers are restricted to (a) createMandala card placement
+     * and (b) explicit user ADD actions.
+     */
+    withRichSummary?: boolean;
+    userId?: string;
+  }
 ): Promise<VideoSummaryResult> {
   const prisma = getPrismaClient();
 
@@ -500,20 +514,26 @@ export async function enrichVideo(
 
   logger.info('Video summary saved', { videoId, tagsCount: tags.length, model: modelName });
 
-  // 5. Generate rich summary (non-fatal — video_summaries already saved)
-  //    CP422 P1: flag-gated. When RICH_SUMMARY_ENABLED=false, enrichRichSummary() no-ops.
-  try {
-    await enrichRichSummary(videoId, {
-      title,
-      description: options?.url,
-      transcript,
-      segments: richSummarySegments,
-    });
-  } catch (err) {
-    logger.warn('Rich summary generation failed (non-fatal)', {
-      videoId,
-      error: err instanceof Error ? err.message : String(err),
-    });
+  // 5. Generate rich summary — CP423 explicit trigger only.
+  //    Requires both options.withRichSummary=true AND options.userId.
+  //    Automatic cascade removed: rich summary fires only from createMandala
+  //    card placement and explicit user ADD endpoints.
+  if (options?.withRichSummary && options.userId) {
+    try {
+      await enrichRichSummary(videoId, {
+        userId: options.userId,
+        title,
+        description: options?.url,
+        transcript,
+        segments: richSummarySegments,
+      });
+    } catch (err) {
+      logger.warn('Rich summary generation failed (non-fatal)', {
+        videoId,
+        userId: options.userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   return {
