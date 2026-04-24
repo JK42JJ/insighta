@@ -16,21 +16,18 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { skillRegistry } from '@/modules/skills/registry';
 import { createGenerationProvider } from '@/modules/llm';
+import { getInternalBatchToken, getInternalUserId } from '@/config/internal-auth';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'api/internal/batch-video-collector' });
 
 const SKILL_ID = 'batch-video-collector';
-// Bot user ID used to attribute scheduled/internal skill runs. Stored in
-// env so prod/dev can point to different service accounts. Falls back to a
-// stable UUID string literal if unset (fails preflight which is fine).
-const DEFAULT_INTERNAL_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 export const internalBatchVideoCollectorRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Body: { limit?: number; runType?: string };
   }>('/batch-video-collector/run', async (request, reply) => {
-    const expected = process.env['INTERNAL_BATCH_TOKEN'];
+    const expected = getInternalBatchToken();
     if (!expected) {
       log.warn('INTERNAL_BATCH_TOKEN not set — refusing to run');
       return reply.code(503).send({ error: 'internal trigger not configured' });
@@ -41,7 +38,7 @@ export const internalBatchVideoCollectorRoutes: FastifyPluginAsync = async (fast
       return reply.code(401).send({ error: 'invalid internal token' });
     }
 
-    const userId = process.env['INSIGHTA_BOT_USER_ID']?.trim() || DEFAULT_INTERNAL_USER_ID;
+    const userId = getInternalUserId();
 
     try {
       const llm = await createGenerationProvider();

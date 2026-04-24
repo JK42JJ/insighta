@@ -1,6 +1,6 @@
 {
   "ms-per-day-redeclared": 0,
-  "process-env-direct-read": 35,
+  "process-env-direct-read": 33,
   "inline-env-parser": 0,
   "raw-ms-per-day-literal": 0,
   "raw-ms-per-hour-literal": 0
