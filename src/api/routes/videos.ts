@@ -510,50 +510,6 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   });
 
   /**
-   * POST /api/v1/mandalas/:id/rich-summary-trigger — CP423 Trigger 1 entrypoint.
-   *
-   * Called by the wizard completion orchestrator (FE) after cards are placed
-   * into the newly-created mandala. Reads the user's cards for that mandala
-   * and enqueues one enrich-video job per unique video_id with
-   * withRichSummary=true. Respects per-tier monthly quota (enforced inside
-   * enrichRichSummary before LLM call).
-   *
-   * Idempotent: repeated calls are safe — enrichRichSummary cache-hits on
-   * existing passing rows and does not consume quota for cache hits.
-   *
-   * Note: route lives under /videos because that's where enrich-related
-   * handlers already aggregate. A future refactor may move it under
-   * /mandalas/:id/... once the mandala routes module is restructured.
-   */
-  fastify.post<{ Params: { id: string } }>(
-    '/mandalas/:id/rich-summary-trigger',
-    { onRequest: [fastify.authenticate] },
-    async (request, reply) => {
-      if (!request.user || !('userId' in request.user)) {
-        return reply.code(401).send({ status: 'error', error: 'Unauthorized' });
-      }
-      const userId = request.user.userId;
-      const { id: mandalaId } = request.params;
-      if (!mandalaId) {
-        return reply.code(400).send({ status: 'error', error: 'mandalaId required' });
-      }
-      // Verify ownership before enqueueing anything
-      const owned = await getPrismaClient().user_mandalas.findFirst({
-        where: { id: mandalaId, user_id: userId },
-        select: { id: true },
-      });
-      if (!owned) {
-        return reply.code(404).send({ status: 'error', error: 'Mandala not found' });
-      }
-
-      const { enqueueRichSummaryForMandalaCards } =
-        await import('../../modules/skills/rich-summary-trigger');
-      const result = await enqueueRichSummaryForMandalaCards({ userId, mandalaId });
-      return reply.code(202).send({ status: 'ok', data: result });
-    }
-  );
-
-  /**
    * GET /api/v1/videos/:id/rich-summary - Return cached rich summary (chapters/quotes/tl_dr).
    * CP422 P1: read-only lookup by YouTube video_id (11 chars).
    *   - 200: cached RichSummary JSON

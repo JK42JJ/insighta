@@ -2352,5 +2352,40 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     }
   );
 
+  /**
+   * POST /api/v1/mandalas/:id/rich-summary-trigger — CP423 Trigger 1 entrypoint.
+   *
+   * Called fire-and-forget by the wizard after mandala creation. Reads the
+   * user's cards for that mandala and enqueues enrich-video jobs with
+   * withRichSummary=true. Idempotent: repeated calls are safe.
+   *
+   * Previously lived under videoRoutes (/videos prefix) causing a URL
+   * mismatch — FE called /mandalas/:id/... but route resolved to
+   * /videos/mandalas/:id/... → silent 404. Moved here CP426.
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/:id/rich-summary-trigger',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const { id: mandalaId } = request.params;
+
+      const owned = await getPrismaClient().user_mandalas.findFirst({
+        where: { id: mandalaId, user_id: userId },
+        select: { id: true },
+      });
+      if (!owned) {
+        return reply.code(404).send({ status: 'error', error: 'Mandala not found' });
+      }
+
+      const { enqueueRichSummaryForMandalaCards } =
+        await import('../../modules/skills/rich-summary-trigger');
+      const result = await enqueueRichSummaryForMandalaCards({ userId, mandalaId });
+      return reply.code(202).send({ status: 'ok', data: result });
+    }
+  );
+
   done();
 };

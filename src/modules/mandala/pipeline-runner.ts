@@ -245,6 +245,19 @@ export async function executePipelineRun(runId: string): Promise<void> {
           log.info(
             `[${runId}] step3 completed: ${result.rowsInserted} inserted, ${result.rowsPreserved} preserved`
           );
+          // Step 3b: enqueue rich summary for newly-placed cards.
+          // Fire-and-forget — cards now exist in user_video_states.
+          setImmediate(() => {
+            void import('../skills/rich-summary-trigger')
+              .then(({ enqueueRichSummaryForMandalaCards }) =>
+                enqueueRichSummaryForMandalaCards({ userId, mandalaId })
+              )
+              .then((r) => log.info(`[${runId}] rich-summary trigger: enqueued=${r.enqueued}`))
+              .catch((err) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                log.warn(`[${runId}] rich-summary trigger failed (non-fatal): ${msg}`);
+              });
+          });
         } else {
           await updateStep(runId, 3, 'completed', result); // not-applicable ≠ failed
           log.info(`[${runId}] step3 skipped: ${result.reason}`);

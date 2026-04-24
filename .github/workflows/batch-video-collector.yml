@@ -52,6 +52,24 @@ jobs:
             exit 1
           fi
 
+      - name: Run trend-collector (populates trend_signals)
+        env:
+          TOKEN: ${{ secrets.INTERNAL_BATCH_TOKEN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+        run: |
+          echo "POST → https://${DOMAIN}/api/v1/internal/skills/trend-collector/run"
+          TREND_RESPONSE=$(curl -sS --fail --show-error \
+            --max-time 300 \
+            -X POST "https://${DOMAIN}/api/v1/internal/skills/trend-collector/run" \
+            -H "content-type: application/json" \
+            -H "x-internal-token: $TOKEN" \
+            -d '{}')
+          echo "Trend response: $TREND_RESPONSE"
+          echo "$TREND_RESPONSE" | jq -e '.success == true' >/dev/null || {
+            echo "::warning::trend-collector returned success=false — batch may fail"
+            echo "$TREND_RESPONSE"
+          }
+
       - name: Invoke batch-video-collector
         env:
           TOKEN: ${{ secrets.INTERNAL_BATCH_TOKEN }}

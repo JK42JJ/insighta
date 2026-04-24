@@ -86,6 +86,17 @@ services:
       # Table: mandala_wizard_precompute (10min TTL, pg_cron sweep */5 min).
       # Revert: delete this line → feature no-ops.
       - WIZARD_PRECOMPUTE_ENABLED=true
+      # CP426 (2026-04-25) — Switch pipeline executor from v1 (3 recs/cell,
+      # max 24 with channel diversity drop → ~5 actual) to v3 (12/cell target,
+      # 96 max). v3 degrades gracefully to Tier 2 when video_pool is empty.
+      # Revert: delete this line → falls back to v1.
+      - VIDEO_DISCOVER_V3=1
+      # CP426 (2026-04-25) — Fix Korean recall in center gate. Default
+      # 'substring' has 0% recall on Korean composite words (e.g. "모닝루틴"
+      # vs "루틴으로"). 'subword' uses char 2-gram overlap: 27% recall,
+      # 100% precision on fixture. See v3/config.ts for mode docs.
+      # Revert: delete this line → falls back to 'substring'.
+      - V3_CENTER_GATE_MODE=subword
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).

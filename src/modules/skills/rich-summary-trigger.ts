@@ -32,16 +32,32 @@ export async function enqueueRichSummaryForMandalaCards(params: {
 }): Promise<{ enqueued: number; skipped: number }> {
   const prisma = getPrismaClient();
 
-  const cards = await prisma.user_local_cards.findMany({
-    where: {
-      user_id: params.userId,
-      mandala_id: params.mandalaId,
-      video_id: { not: null },
-    },
-    select: { video_id: true, title: true, url: true },
-  });
+  // Query both tables: user_local_cards (manual/note cards) and
+  // user_video_states (pipeline auto-added cards). The pipeline writes
+  // to user_video_states, so querying only user_local_cards would miss
+  // all recommendation-based cards — the common case.
+  const [localCards, videoStates] = await Promise.all([
+    prisma.user_local_cards.findMany({
+      where: {
+        user_id: params.userId,
+        mandala_id: params.mandalaId,
+        video_id: { not: null },
+      },
+      select: { video_id: true, title: true, url: true },
+    }),
+    prisma.userVideoState.findMany({
+      where: {
+        user_id: params.userId,
+        mandala_id: params.mandalaId,
+      },
+      select: {
+        videoId: true,
+        video: { select: { youtube_video_id: true, title: true } },
+      },
+    }),
+  ]);
 
-  if (cards.length === 0) {
+  if (localCards.length === 0 && videoStates.length === 0) {
     log.info('No video cards placed in mandala — rich summary trigger no-op', {
       userId: params.userId,
       mandalaId: params.mandalaId,
@@ -49,12 +65,23 @@ export async function enqueueRichSummaryForMandalaCards(params: {
     return { enqueued: 0, skipped: 0 };
   }
 
-  // Dedupe by video_id (same video can appear in multiple cells).
+  // Dedupe by YouTube video ID. user_local_cards stores it directly;
+  // user_video_states references youtube_videos via UUID join.
   const uniqueByVideo = new Map<string, { title: string | null; url: string }>();
-  for (const c of cards) {
+  for (const c of localCards) {
     if (!c.video_id) continue;
     if (!uniqueByVideo.has(c.video_id)) {
       uniqueByVideo.set(c.video_id, { title: c.title, url: c.url });
+    }
+  }
+  for (const v of videoStates) {
+    const ytId = v.video?.youtube_video_id;
+    if (!ytId) continue;
+    if (!uniqueByVideo.has(ytId)) {
+      uniqueByVideo.set(ytId, {
+        title: v.video?.title ?? null,
+        url: `https://www.youtube.com/watch?v=${ytId}`,
+      });
     }
   }
 
