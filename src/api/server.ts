@@ -26,6 +26,7 @@ import { youtubeRoutes } from './routes/youtube';
 import { sharingRoutes } from './routes/sharing';
 import { skillRoutes } from './routes/skills';
 import { internalBatchVideoCollectorRoutes } from './routes/internal/batch-video-collector';
+import { internalTrendCollectorRoutes } from './routes/internal/trend-collector';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
@@ -281,6 +282,9 @@ export async function buildServer() {
       // used by GitHub Actions cron for batch jobs. Do NOT expose these
       // to the browser; the token bypasses per-user auth.
       await instance.register(internalBatchVideoCollectorRoutes, {
+        prefix: '/internal/skills',
+      });
+      await instance.register(internalTrendCollectorRoutes, {
         prefix: '/internal/skills',
       });
     },
