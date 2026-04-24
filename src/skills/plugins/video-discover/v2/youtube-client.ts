@@ -196,27 +196,26 @@ export async function videosBatch(opts: VideosBatchOpts): Promise<YouTubeVideoSt
   if (keys.length === 0 || keys.every((k) => !k)) {
     throw new Error('videosBatch: server API key is required (v2 does not accept OAuth)');
   }
-  const out: YouTubeVideoStatsItem[] = [];
+  const chunks: string[][] = [];
   for (let i = 0; i < opts.videoIds.length; i += VIDEOS_LIST_MAX_IDS_PER_CALL) {
-    const chunk = opts.videoIds.slice(i, i + VIDEOS_LIST_MAX_IDS_PER_CALL);
-    let lastErr: unknown = null;
-    let chunkOut: YouTubeVideoStatsItem[] | null = null;
-    for (const key of keys) {
-      if (!key) continue;
-      try {
-        chunkOut = await videosBatchSingle(chunk, key, opts.fetchFn);
-        break;
-      } catch (err) {
-        lastErr = err;
-        if (!isVideosBatchQuotaError(err)) throw err;
-      }
-    }
-    if (chunkOut === null) {
-      throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
-    }
-    out.push(...chunkOut);
+    chunks.push(opts.videoIds.slice(i, i + VIDEOS_LIST_MAX_IDS_PER_CALL));
   }
-  return out;
+  const results = await Promise.all(
+    chunks.map(async (chunk) => {
+      let lastErr: unknown = null;
+      for (const key of keys) {
+        if (!key) continue;
+        try {
+          return await videosBatchSingle(chunk, key, opts.fetchFn);
+        } catch (err) {
+          lastErr = err;
+          if (!isVideosBatchQuotaError(err)) throw err;
+        }
+      }
+      throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+    })
+  );
+  return results.flat();
 }
 
 async function videosBatchSingle(

@@ -91,13 +91,12 @@ services:
       # 96 max). v3 degrades gracefully to Tier 2 when video_pool is empty.
       # Revert: delete this line → falls back to v1.
       - VIDEO_DISCOVER_V3=1
-      # CP426 (2026-04-25) — Fix Korean recall in center gate. Default
-      # 'substring' has 0% recall on Korean composite words. 'semantic'
-      # uses cosine similarity (qwen3-embedding:8b) — language-agnostic,
-      # catches paraphrases. v3 executor embeds center goal + candidates
-      # automatically when this mode is set (CP416 Phase 3 infra).
-      # Revert: delete this line → falls back to 'substring'.
-      - V3_CENTER_GATE_MODE=semantic
+      # CP426 (2026-04-25) — semantic center gate ROLLED BACK. Runtime
+      # embedding of YouTube search results (hundreds per request) is a
+      # design error: correct targets are user-interacted videos, not
+      # search candidates. Falls back to default 'substring' until
+      # user-video embedding pipeline is implemented.
+      # - V3_CENTER_GATE_MODE=semantic
       # CP426 (2026-04-25) — Cap YouTube search fan-out for precompute path.
       # Default 20 queries × 2s/query = 40s; 8 queries (one per cell) ≈ 16s.
       # Combined with POLL_BUDGET_MS=15s, precompute completes within budget.

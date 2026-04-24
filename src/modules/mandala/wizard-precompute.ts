@@ -288,66 +288,65 @@ export async function consumePrecompute(
   // so the unique (user_id, mandala_id, video_id) constraint silently dedupes
   // if somehow the row already exists.
   const expiresAt = new Date(Date.now() + TTL_DAYS * MS_PER_DAY);
-  let inserted = 0;
-  for (const slot of slots) {
-    try {
-      await db.$executeRaw(
-        Prisma.sql`
-          INSERT INTO public.recommendation_cache (
-            user_id, mandala_id, cell_index, keyword, video_id, title,
-            thumbnail, channel, channel_subs, view_count, like_ratio,
-            duration_sec, rec_score, rec_reason, weight_version, status, expires_at
-          )
-          VALUES (
-            ${input.userId}::uuid,
-            ${input.mandalaId}::uuid,
-            ${slot.cellIndex},
-            ${''},
-            ${slot.videoId},
-            ${slot.title},
-            ${slot.thumbnail},
-            ${slot.channelName},
-            ${null},
-            ${slot.viewCount ? BigInt(slot.viewCount) : null},
-            ${null},
-            ${slot.durationSec},
-            ${slot.score},
-            ${'realtime'},
-            ${WEIGHT_VERSION},
-            ${RECOMMENDATION_STATUS_PENDING},
-            ${expiresAt}
-          )
-          ON CONFLICT (user_id, mandala_id, video_id) DO NOTHING
-        `
-      );
-      inserted += 1;
-
-      // Publish card_added on the same bus the legacy pipeline uses. Dashboard
-      // SSE subscribers receive these identically whether they came from
-      // precompute consume or post-creation v3 executor.
-      const payload: CardPayload = {
-        id: randomUUID(),
-        videoId: slot.videoId,
-        title: slot.title,
-        channel: slot.channelName ?? null,
-        thumbnail: slot.thumbnail ?? null,
-        durationSec: slot.durationSec ?? null,
-        recScore: slot.score,
-        cellIndex: slot.cellIndex,
-        cellLabel: null,
-        keyword: '',
-        source: 'auto_recommend',
-        recReason: 'realtime',
-      };
-      notifyCardAdded(input.mandalaId, payload);
-    } catch (err) {
-      log.warn(
-        `precompute consume upsert failed: session=${input.sessionId} video=${slot.videoId} error=${
-          err instanceof Error ? err.message : String(err)
-        }`
-      );
-    }
-  }
+  const slotResults = await Promise.all(
+    slots.map(async (slot) => {
+      try {
+        await db.$executeRaw(
+          Prisma.sql`
+            INSERT INTO public.recommendation_cache (
+              user_id, mandala_id, cell_index, keyword, video_id, title,
+              thumbnail, channel, channel_subs, view_count, like_ratio,
+              duration_sec, rec_score, rec_reason, weight_version, status, expires_at
+            )
+            VALUES (
+              ${input.userId}::uuid,
+              ${input.mandalaId}::uuid,
+              ${slot.cellIndex},
+              ${''},
+              ${slot.videoId},
+              ${slot.title},
+              ${slot.thumbnail},
+              ${slot.channelName},
+              ${null},
+              ${slot.viewCount ? BigInt(slot.viewCount) : null},
+              ${null},
+              ${slot.durationSec},
+              ${slot.score},
+              ${'realtime'},
+              ${WEIGHT_VERSION},
+              ${RECOMMENDATION_STATUS_PENDING},
+              ${expiresAt}
+            )
+            ON CONFLICT (user_id, mandala_id, video_id) DO NOTHING
+          `
+        );
+        const payload: CardPayload = {
+          id: randomUUID(),
+          videoId: slot.videoId,
+          title: slot.title,
+          channel: slot.channelName ?? null,
+          thumbnail: slot.thumbnail ?? null,
+          durationSec: slot.durationSec ?? null,
+          recScore: slot.score,
+          cellIndex: slot.cellIndex,
+          cellLabel: null,
+          keyword: '',
+          source: 'auto_recommend',
+          recReason: 'realtime',
+        };
+        notifyCardAdded(input.mandalaId, payload);
+        return true;
+      } catch (err) {
+        log.warn(
+          `precompute consume upsert failed: session=${input.sessionId} video=${slot.videoId} error=${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+        return false;
+      }
+    })
+  );
+  const inserted = slotResults.filter(Boolean).length;
 
   // Mark consumed.
   await db.mandala_wizard_precompute.update({

@@ -193,125 +193,102 @@ export async function maybeAutoAddRecommendations(
     const cellRecs = allRecsForCell.filter((r) => !existingVideoIdSet.has(r.video_id));
     if (cellRecs.length === 0) continue;
 
-    for (let i = 0; i < cellRecs.length; i++) {
-      const rec = cellRecs[i];
-      if (!rec) continue;
+    const insertResults = await Promise.all(
+      cellRecs.map(async (rec, i) => {
+        if (!rec) return false;
+        try {
+          const publishedAt = rec.published_at ? new Date(rec.published_at) : null;
+          const viewCount =
+            typeof rec.view_count === 'number' && Number.isFinite(rec.view_count)
+              ? BigInt(Math.max(0, Math.trunc(rec.view_count)))
+              : null;
+          const likeCount =
+            rec.like_ratio != null && rec.view_count != null
+              ? BigInt(Math.max(0, Math.round(rec.view_count * rec.like_ratio)))
+              : null;
 
-      try {
-        // Upsert the youtube_videos row first (recommendation_cache stores
-        // the YouTube video id as varchar; user_video_states needs the
-        // youtube_videos.id UUID FK).
-        // Pull through view_count / like_count / published_at so the card
-        // UI can show YouTube upload date + view count instead of falling
-        // back to the insighta-side created_at. like_ratio → like_count is
-        // approximated when rec.like_ratio is present (view_count * ratio)
-        // since recommendation_cache stores the ratio, not the raw count.
-        const publishedAt = rec.published_at ? new Date(rec.published_at) : null;
-        const viewCount =
-          typeof rec.view_count === 'number' && Number.isFinite(rec.view_count)
-            ? BigInt(Math.max(0, Math.trunc(rec.view_count)))
-            : null;
-        const likeCount =
-          rec.like_ratio != null && rec.view_count != null
-            ? BigInt(Math.max(0, Math.round(rec.view_count * rec.like_ratio)))
-            : null;
+          const ytVideo = await db.youtube_videos.upsert({
+            where: { youtube_video_id: rec.video_id },
+            create: {
+              youtube_video_id: rec.video_id,
+              title: rec.title,
+              thumbnail_url: rec.thumbnail,
+              channel_title: rec.channel,
+              duration_seconds: rec.duration_sec,
+              view_count: viewCount,
+              like_count: likeCount,
+              published_at: publishedAt,
+            },
+            update: {
+              title: rec.title,
+              thumbnail_url: rec.thumbnail,
+              channel_title: rec.channel,
+              duration_seconds: rec.duration_sec,
+              ...(viewCount != null ? { view_count: viewCount } : {}),
+              ...(likeCount != null ? { like_count: likeCount } : {}),
+              ...(publishedAt != null ? { published_at: publishedAt } : {}),
+            },
+            select: { id: true },
+          });
 
-        const ytVideo = await db.youtube_videos.upsert({
-          where: { youtube_video_id: rec.video_id },
-          create: {
-            youtube_video_id: rec.video_id,
-            title: rec.title,
-            thumbnail_url: rec.thumbnail,
-            channel_title: rec.channel,
-            duration_seconds: rec.duration_sec,
-            view_count: viewCount,
-            like_count: likeCount,
-            published_at: publishedAt,
-          },
-          update: {
-            title: rec.title,
-            thumbnail_url: rec.thumbnail,
-            channel_title: rec.channel,
-            duration_seconds: rec.duration_sec,
-            // Only overwrite metadata fields when we have a fresher value —
-            // don't clobber data with nulls from an older recommendation row.
-            ...(viewCount != null ? { view_count: viewCount } : {}),
-            ...(likeCount != null ? { like_count: likeCount } : {}),
-            ...(publishedAt != null ? { published_at: publishedAt } : {}),
-          },
-          select: { id: true },
-        });
-
-        // Upsert user_video_state for this user × video. If the user already
-        // has any state row for this video (e.g. saw it manually before),
-        // we update mandala/cell/level binding but DO NOT clobber user_note,
-        // is_watched, or watch_position_seconds.
-        await db.userVideoState.upsert({
-          where: {
-            user_id_videoId: {
+          await db.userVideoState.upsert({
+            where: {
+              user_id_videoId: {
+                user_id: userId,
+                videoId: ytVideo.id,
+              },
+            },
+            create: {
               user_id: userId,
               videoId: ytVideo.id,
+              mandala_id: mandalaId,
+              cell_index: cellIndex,
+              level_id: ROOT_LEVEL_ID,
+              is_in_ideation: false,
+              sort_order: i,
+              auto_added: true,
             },
-          },
-          create: {
-            user_id: userId,
-            videoId: ytVideo.id,
-            mandala_id: mandalaId,
-            cell_index: cellIndex,
-            level_id: ROOT_LEVEL_ID,
-            is_in_ideation: false,
-            sort_order: i,
-            auto_added: true,
-          },
-          update: {
-            // Do not touch user_note / is_watched / watch_position_seconds.
-            mandala_id: mandalaId,
-            cell_index: cellIndex,
-            level_id: ROOT_LEVEL_ID,
-            sort_order: i,
-            // Don't downgrade an already-manual row to auto.
-            // (auto_added stays whatever it was.)
-          },
-        });
+            update: {
+              mandala_id: mandalaId,
+              cell_index: cellIndex,
+              level_id: ROOT_LEVEL_ID,
+              sort_order: i,
+            },
+          });
 
-        totalInserted += 1;
-
-        // P2 (2026-04-21): stream the card to any subscriber on this
-        // mandala's channel so the main grid (cardsByCell) can append
-        // it live, matching the behaviour that already works for the
-        // recommendation_cache publisher path. Non-fatal — persistence
-        // has already succeeded above. EventEmitter.emit can only
-        // throw synchronously if a listener throws; wrap it so a
-        // misbehaving subscriber cannot take down auto-add.
-        try {
-          const payload: CardPayload = {
-            id: rec.id,
-            videoId: rec.video_id,
-            title: rec.title,
-            channel: rec.channel,
-            thumbnail: rec.thumbnail,
-            durationSec: rec.duration_sec,
-            recScore: rec.rec_score,
-            cellIndex,
-            cellLabel: null,
-            keyword: rec.keyword ?? '',
-            source: rec.weight_version === 0 ? 'manual' : 'auto_recommend',
-            recReason: rec.rec_reason,
-          };
-          notifyCardAdded(mandalaId, payload);
-        } catch (notifyErr) {
+          try {
+            const payload: CardPayload = {
+              id: rec.id,
+              videoId: rec.video_id,
+              title: rec.title,
+              channel: rec.channel,
+              thumbnail: rec.thumbnail,
+              durationSec: rec.duration_sec,
+              recScore: rec.rec_score,
+              cellIndex,
+              cellLabel: null,
+              keyword: rec.keyword ?? '',
+              source: rec.weight_version === 0 ? 'manual' : 'auto_recommend',
+              recReason: rec.rec_reason,
+            };
+            notifyCardAdded(mandalaId, payload);
+          } catch (notifyErr) {
+            log.warn(
+              `auto-add notifyCardAdded failed for video=${rec.video_id}: ${
+                notifyErr instanceof Error ? notifyErr.message : String(notifyErr)
+              }`
+            );
+          }
+          return true;
+        } catch (err) {
           log.warn(
-            `auto-add notifyCardAdded failed for video=${rec.video_id}: ${
-              notifyErr instanceof Error ? notifyErr.message : String(notifyErr)
-            }`
+            `auto-add upsert failed for video=${rec.video_id} cell=${cellIndex}: ${err instanceof Error ? err.message : String(err)}`
           );
+          return false;
         }
-      } catch (err) {
-        log.warn(
-          `auto-add upsert failed for video=${rec.video_id} cell=${cellIndex}: ${err instanceof Error ? err.message : String(err)}`
-        );
-      }
-    }
+      })
+    );
+    totalInserted += insertResults.filter(Boolean).length;
   }
 
   // Mark the consumed recommendation_cache rows as 'shown' so future
