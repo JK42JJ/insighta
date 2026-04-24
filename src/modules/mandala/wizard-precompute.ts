@@ -32,6 +32,7 @@ import {
   type EphemeralDiscoverResult,
 } from '@/skills/plugins/video-discover/v3/executor';
 import { notifyCardAdded, type CardPayload } from '@/modules/recommendations/publisher';
+import { MS_PER_DAY } from '@/utils/time-constants';
 import { randomUUID } from 'crypto';
 
 const log = logger.child({ module: 'wizard-precompute' });
@@ -39,7 +40,6 @@ const log = logger.child({ module: 'wizard-precompute' });
 const TTL_DAYS = 7; // recommendation_cache TTL when we upsert at consume-time.
 const RECOMMENDATION_STATUS_PENDING = 'pending';
 const WEIGHT_VERSION = 3;
-const MS_PER_DAY = 86_400_000;
 
 // ---------------------------------------------------------------------------
 // startPrecompute — /wizard-stream fire-and-forget entry
