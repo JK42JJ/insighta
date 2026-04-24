@@ -77,6 +77,15 @@ services:
       # inside enrichRichSummary via rich-summary-quota module.
       # Revert: delete this line → feature no-ops.
       - RICH_SUMMARY_ENABLED=true
+      # CP424.2 (2026-04-24) — Wizard Precompute Pipeline.
+      # Per docs/design/precompute-pipeline.md. Step 1 goal → /wizard-stream
+      # fires fire-and-forget `runDiscoverEphemeral` keyed by session_id →
+      # Step 3 save (/create-with-data) consumes result into recommendation_cache
+      # + cardPublisher.notify → dashboard first card ≤1s. Miss → legacy
+      # post-creation pipeline fallback (backward-compat preserved).
+      # Table: mandala_wizard_precompute (10min TTL, pg_cron sweep */5 min).
+      # Revert: delete this line → feature no-ops.
+      - WIZARD_PRECOMPUTE_ENABLED=true
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).
