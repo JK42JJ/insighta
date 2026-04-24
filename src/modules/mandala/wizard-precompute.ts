@@ -213,7 +213,7 @@ export async function consumePrecompute(
   if (!input.sessionId) return { consumed: false, reason: 'no-session-id' };
 
   const db = getPrismaClient();
-  const row = await db.mandala_wizard_precompute.findUnique({
+  let row = await db.mandala_wizard_precompute.findUnique({
     where: { session_id: input.sessionId },
   });
 
@@ -224,6 +224,37 @@ export async function consumePrecompute(
     );
     return { consumed: false, reason: 'wrong-user' };
   }
+
+  // CP424.2 race handling: fast user clicks Step 3 save while startPrecompute
+  // is still mid-flight (status='pending' | 'running'). Design doc's "Step 2
+  // review 5-20s" assumption is structurally wrong — don't depend on user
+  // dwelling. Poll up to POLL_BUDGET_MS for the row to transition out of
+  // running. If still running when budget exhausts → miss, legacy fallback.
+  // Tier 2 discover observed 4.6s on first prod hit; 5s budget covers p95
+  // with small margin, user perceives as part of existing save latency.
+  const POLL_BUDGET_MS = 5_000;
+  const POLL_INTERVAL_MS = 250;
+  if (row.status === 'pending' || row.status === 'running') {
+    const pollStart = Date.now();
+    while (
+      Date.now() - pollStart < POLL_BUDGET_MS &&
+      (row.status === 'pending' || row.status === 'running')
+    ) {
+      await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      const refreshed = await db.mandala_wizard_precompute.findUnique({
+        where: { session_id: input.sessionId },
+      });
+      if (!refreshed) {
+        // Row vanished mid-poll (TTL sweep racing — unlikely within 5s).
+        return { consumed: false, reason: 'not-found' };
+      }
+      row = refreshed;
+    }
+    log.info(
+      `precompute poll-wait end: session=${input.sessionId} final_status=${row.status} waited_ms=${Date.now() - pollStart}`
+    );
+  }
+
   if (row.status !== 'done') return { consumed: false, reason: 'not-done' };
   if (row.expires_at.getTime() < Date.now()) return { consumed: false, reason: 'expired' };
 
