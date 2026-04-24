@@ -2,11 +2,12 @@
 
 ## 세션 시작 필수 로드 (매 세션 첫 번째 액션)
 
-아래 4개 파일을 읽기 전에는 어떤 작업도 시작하지 않는다:
+아래 5개 파일을 읽기 전에는 어떤 작업도 시작하지 않는다:
 - `.claude/agents/DELEGATION.md`
 - `memory/work-efficiency.md`
 - `memory/feedback-speed-agents.md`
 - `memory/troubleshooting.md`
+- `docs/architecture/system-core.md` (canonical architecture, CP425+)
 
 ## 팀 에이전트 강제 규칙
 
@@ -179,6 +180,24 @@
 - v3 recency fix 중 `executor.ts` 에 `V3_RECENCY_WEIGHT`, `V3_PUBLISHED_AFTER_DAYS` env 를 `parseFloatEnv / parseIntEnv` inline helper + `MS_PER_DAY` 재선언으로 처리.
 - 당시 프로젝트엔 이미 `src/config/index.ts` 의 zod schema 존재 + `MS_PER_DAY` 는 **6개 파일 중복 선언** (admin/stats, video-discover/executor, iks-scorer, trend-collector, v3/executor 등).
 - 사용자 지적: "죄다 하드코딩", "전체 코드베이스 차원의 분석이 아닌 부분적 단편 조치". → 전 파일 일괄 정리 + config 모듈 + 중앙 상수로 재작업.
+
+### 양질 × 최소 latency 분리 불가 (절대 규칙, LEVEL-2, CP425)
+- **프로젝트 코어 철학**: "양질의 데이터를 최소 시간으로 제공". latency / quality 중 한 축만 개선하는 PR 금지.
+- pipeline 변경 PR 은 **두 축 모두 측정 지표** 제시 필수:
+  - latency: e2e 응답시간 (wizard-stream → 첫 카드 SSE), server wall, DB query p95 중 최소 1
+  - quality: `quality_tier` 분포, `quality_gate` pass rate, cosine_sim 분포, 사용자 thumbs-up 중 최소 1
+- 한 축만 개선하고 다른 축은 "동일" 이면 본문에 **무변화 증명** 기재. 증명 없으면 regression 가능성 있는 PR 으로 간주.
+- 근거 (CP422→424.2 2026-04-23~24): rich_summary (quality) 와 wizard_precompute (latency) 를 병렬로 진행하면서 상호 영향 미검토. 사용자: "개선이 아니라 리그레션 진행 중일 가능성".
+
+### Canonical path 우선 (절대 규칙, LEVEL-2, CP425)
+- **새 table / cache / serving path 제안 전** `docs/architecture/system-core.md` §"Canonical vs Legacy Module Map" + §"Canonical Extension 체크리스트" 확인 필수.
+- 4-question gate (모두 YES 여야 새 path 머지 허용):
+  1. 기존 canonical 로 해결 불가 이유가 **구조적 한계** 인가 **운영 실패** 인가?
+  2. canonical path 와 duplicate 하는 데이터가 있는가?
+  3. 있다면 TTL 또는 canonical 수렴 계획이 명시되어 있는가?
+  4. 이 shortcut 이 legacy 로 남지 않는 회수 조건은 무엇인가?
+- YES 시 `system-core.md` §Map 에 Legacy / Shortcut row 추가 **후에만** 머지.
+- 근거 (CP424.2): `mandala_wizard_precompute` Postgres shortcut 추가 시 Redis-primary dictionary 설계 의도 미검토. canonical vs shortcut 구분이 코드베이스에 명문화되지 않아 재발 가능.
 
 ### Non-secret config 는 Secret 에 두지 않는다 (절대 규칙, LEVEL-1, CP392)
 - GitHub Secrets / `deploy.yml` sync 는 **민감정보 전용** — DB URL, API key, token, SSH key 등.

@@ -148,6 +148,15 @@ Known repeat-offense patterns. Check changed files for these risks. If any match
 - Check: Repo version is source-of-truth; any intentional prod-only divergence must be moved to env var indirection (not docker-compose literal).
 - Reference: troubleshooting.md "Deploy Copy docker-compose.prod.yml to EC2 step overwrites prod compose" (CP419 regression).
 
+**[6m] Architectural cross-ref — canonical vs shortcut (CP425)**
+- Trigger: new file under `src/skills/plugins/*`, `src/modules/*`, `prisma/migrations/*`, or `docs/design/*` that introduces a table / cache / executor / pipeline.
+- Check:
+  1. `docs/architecture/system-core.md` §"Canonical vs Legacy Module Map" 에 해당 layer 가 있는가?
+  2. 새 path 가 **canonical 확장** 인가 **shortcut/parallel** 인가? 본문에 명시.
+  3. Shortcut 인 경우: CLAUDE.md §"Canonical path 우선" 4-question gate 답변 + `system-core.md` §Map 에 Legacy row 추가됐는가?
+  4. 품질-latency 분리 불가 원칙 (CLAUDE.md §"양질 × 최소 latency") 준수 — 두 축 측정 지표 제시되었는가?
+- Reference: `docs/architecture/system-core.md`, CLAUDE.md §양질 × 최소 latency / §Canonical path 우선 (CP425). 근거: CP424.2 `mandala_wizard_precompute` shortcut 이 Redis-primary dictionary 설계 의도 미검토 상태로 머지된 사건.
+
 Promotion policy: an item is added here when it appears in troubleshooting.md at LEVEL-2+, OR at LEVEL-1 with high prod impact (user frustration / outage / data corruption). Items retired when counter drops or pattern becomes impossible by design.
 
 ## Output Format
