@@ -1,0 +1,125 @@
+{
+  "description": "Real LoRA output captured from prod (2026-04-24 CP424) via direct generateMandala call on insighta-api. Goal: '영어 회화 실력 향상'. Demonstrates the silent-zero bug: LoRA returns Korean sub_goal text as action keys (not sub_goal_1..8) plus extraneous 'sub_goals'/'actions' nested metadata. fill-missing-actions.ts keyA/B/C matching fails → cellsFilled=0 → silent 'filled' success. Fixture frozen to reproduce the exact prod failure mode in unit tests.",
+  "captured_at": "2026-04-24T02:40:00Z",
+  "goal": "영어 회화 실력 향상",
+  "output": {
+    "center_goal": "영어 회화 실력 향상",
+    "domain": "language_learning",
+    "language": "ko",
+    "center_label": "영어 회화",
+    "sub_goals": [
+      "영어 학습 동기부여 시스템 구축",
+      "영어 회화 러닝",
+      "영어 문법 학습",
+      "영어 듣기 훈련",
+      "영어 읽기 훈련",
+      "영어 쓰기 훈련",
+      "영어 문화/의사소통 학습",
+      "학습 성과 측정 및 성장 기록"
+    ],
+    "sub_labels": ["동기부여", "회화", "문법", "듣기", "읽기", "쓰기", "문화", "측정"],
+    "actions": {
+      "영어 학습 동기부여 시스템 구축": [
+        "[HIGH] 매일 아침 15분 영어 학습 루틴 확립",
+        "주 2회 영어 학습 동기부여 영상 30분",
+        "월 1회 영어 회화 실력 진도 분석",
+        "주 1회 영어 학습 성취감 기록",
+        "매일 저녁 5분 오늘의 성취 기록",
+        "월 1회 영어 학습 프로그램 점검",
+        "분기 1회 학습 목표 재설정",
+        "주 1회 학습 환경 정리"
+      ],
+      "영어 회화 러닝": [
+        "매일 30분 영어 회화 앱 사용",
+        "주 3회 원어민 튜터 세션 60분",
+        "주 1회 회화 모임 참석",
+        "매일 shadowing 15분",
+        "매주 회화 주제 1개 마스터",
+        "월 1회 speaking 테스트",
+        "매일 발음 교정 10분",
+        "주 2회 role-play 연습"
+      ],
+      "영어 문법 학습": [
+        "매일 문법 1개념 학습 15분",
+        "주 3회 문법 드릴 문제 20개",
+        "월 1회 문법 종합 테스트",
+        "주 1회 오답 노트 정리",
+        "매일 예문 5개 작성",
+        "월 1회 문법서 review",
+        "주 2회 쓰기로 문법 적용",
+        "분기 1회 문법 총정리"
+      ],
+      "영어 듣기 훈련": [
+        "매일 팟캐스트 20분",
+        "주 3회 영상 자막 없이 시청",
+        "매일 dictation 10분",
+        "주 2회 뉴스 청취",
+        "월 1회 듣기 테스트",
+        "매주 영상 1편 완벽 이해",
+        "매일 shadowing 10분",
+        "주 1회 accent 구분 훈련"
+      ],
+      "영어 읽기 훈련": [
+        "매일 영자 신문 15분",
+        "주 1회 원서 1챕터",
+        "매일 어휘 10개 암기",
+        "주 3회 독해 문제 풀이",
+        "월 1회 독서 후기 작성",
+        "매일 속독 훈련 10분",
+        "주 2회 academic article",
+        "분기 1회 독서 목록 update"
+      ],
+      "영어 쓰기 훈련": [
+        "매일 영어 일기 10분",
+        "주 2회 에세이 1편",
+        "월 1회 첨삭 받기",
+        "주 1회 이메일 작성 연습",
+        "매일 문장 5개 암기",
+        "주 3회 번역 연습",
+        "월 1회 작문 대회 참가",
+        "분기 1회 포트폴리오 정리"
+      ],
+      "영어 문화/의사소통 학습": [
+        "주 1회 영미권 영화 시청",
+        "월 1회 문화 강의 수강",
+        "주 2회 관용어 10개 학습",
+        "매주 body language 연구",
+        "월 1회 국제 교류 참가",
+        "주 1회 비즈니스 영어",
+        "매일 slang 1개 학습",
+        "분기 1회 문화 비교 에세이"
+      ],
+      "학습 성과 측정 및 성장 기록": [
+        "주 1회 학습 시간 집계",
+        "월 1회 실력 자가 평가",
+        "분기 1회 공인시험 응시",
+        "매일 학습 로그 기록",
+        "주 1회 강점/약점 분석",
+        "월 1회 목표 달성률 확인",
+        "매주 학습 성과 post",
+        "분기 1회 멘토 피드백"
+      ],
+      "sub_goals": [
+        "meta_entry_should_be_ignored_by_matcher"
+      ],
+      "actions": [
+        "nested_actions_duplicate_metadata_key"
+      ]
+    }
+  },
+  "expected_observed_behavior": {
+    "totalActions_count": 80,
+    "totalActions_gte_64_passes_validation": true,
+    "unique_rate": 1.0,
+    "unique_rate_gte_0_7_passes_validation": true,
+    "actions_key_count": 10,
+    "standard_sub_goal_N_keys_present": false,
+    "korean_text_keys_present": true,
+    "nested_metadata_keys_present": ["sub_goals", "actions"],
+    "fill_missing_actions_matching_keyA_sub_goal_1": false,
+    "fill_missing_actions_matching_keyB_0": false,
+    "fill_missing_actions_matching_keyC_subGoal_text_if_exact_match": "only_if_DB_sub_goals_match_exact_text",
+    "cellsFilled_when_DB_subGoals_differ": 0,
+    "silent_success_returned": "{ ok: true, action: 'filled', cellsFilled: 0 }"
+  }
+}

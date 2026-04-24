@@ -116,7 +116,47 @@ function buildPrompt(input: MandalaGenerateInput): string {
   const inputMeta =
     lang === 'ko' ? `도메인: ${domain}\n언어: ${lang}` : `Domain: ${domain}\nLanguage: ${lang}`;
 
-  return `### Instruction:\n${instruction}\n### Input:\n${inputMeta}\n### Output:\n`;
+  // CP424: explicit JSON schema + action-key contract. Prior prompt had no
+  // schema, so the LoRA model fell back to training-data priors and produced
+  // Korean sub_goal-text keys (+ extraneous nested 'sub_goals'/'actions'
+  // metadata). fill-missing-actions could not map those to levels → silent
+  // cellsFilled=0. Locking the key format here is the upstream fix; validateMandala
+  // enforces it before accepting the output.
+  const schemaDirective =
+    lang === 'ko'
+      ? [
+          '### Output format (엄격한 JSON):',
+          '{"center_goal":"...","center_label":"...","sub_goals":["..."×8],"sub_labels":["..."×8],',
+          '"actions":{"sub_goal_1":["..."×8],"sub_goal_2":["..."×8],"sub_goal_3":["..."×8],',
+          '"sub_goal_4":["..."×8],"sub_goal_5":["..."×8],"sub_goal_6":["..."×8],',
+          '"sub_goal_7":["..."×8],"sub_goal_8":["..."×8]}}',
+          '',
+          'CRITICAL: "actions" 딕셔너리의 key 는 반드시 "sub_goal_1" ~ "sub_goal_8" 문자열만 사용하세요.',
+          'sub_goal 텍스트 자체를 key 로 사용하지 마세요 (NOT the sub_goal texts). 키 순서는 sub_goals[0] → "sub_goal_1", sub_goals[1] → "sub_goal_2", … sub_goals[7] → "sub_goal_8" 로 고정됩니다.',
+          '"actions" 안에 "sub_goals" 나 "actions" 같은 중첩 메타데이터 키를 넣지 마세요.',
+        ].join('\n')
+      : [
+          '### Output format (strict JSON):',
+          '{"center_goal":"...","center_label":"...","sub_goals":["..."×8],"sub_labels":["..."×8],',
+          '"actions":{"sub_goal_1":["..."×8],"sub_goal_2":["..."×8],"sub_goal_3":["..."×8],',
+          '"sub_goal_4":["..."×8],"sub_goal_5":["..."×8],"sub_goal_6":["..."×8],',
+          '"sub_goal_7":["..."×8],"sub_goal_8":["..."×8]}}',
+          '',
+          'CRITICAL: The "actions" dictionary keys MUST be literally "sub_goal_1" through "sub_goal_8".',
+          'Do NOT use the sub_goal texts themselves as keys (NOT the sub_goal texts). The key order is fixed: sub_goals[0] → "sub_goal_1", sub_goals[1] → "sub_goal_2", … sub_goals[7] → "sub_goal_8".',
+          'Do NOT nest "sub_goals" or "actions" metadata keys inside the "actions" dictionary.',
+        ].join('\n');
+
+  return `### Instruction:\n${instruction}\n### Input:\n${inputMeta}\n${schemaDirective}\n### Output:\n`;
+}
+
+/**
+ * Test-only export of buildPrompt so unit tests can assert the prompt contains
+ * the CP424 schema directive. Kept as a separate named export so production
+ * call sites continue using the module-private `buildPrompt`.
+ */
+export function buildPromptForTest(input: MandalaGenerateInput): string {
+  return buildPrompt(input);
 }
 
 // ─── Robust JSON Parser v4.1 (Devin, 5/5 PASS) ───
@@ -354,6 +394,21 @@ function validateMandala(m: GeneratedMandala): { valid: boolean; reason?: string
   );
   if (totalActions < 64) {
     return { valid: false, reason: `actions count: ${totalActions}/64 (strict: 64 required)` };
+  }
+  // CP424 action key contract: must literally be sub_goal_1..sub_goal_8. Prior
+  // model behavior (Korean sub_goal-text keys) silently broke fill-missing-actions
+  // mapping. Reject here so the caller logs to generation_log and the next LoRA
+  // call gets a chance, instead of silently producing cellsFilled=0.
+  const requiredKeys = Array.from({ length: 8 }, (_, i) => `sub_goal_${i + 1}`);
+  const actionKeysWithArrays = Object.keys(m.actions).filter((k) =>
+    Array.isArray((m.actions as Record<string, unknown>)[k])
+  );
+  const missingKeys = requiredKeys.filter((k) => !actionKeysWithArrays.includes(k));
+  if (missingKeys.length > 0) {
+    return {
+      valid: false,
+      reason: `action keys must be sub_goal_1..sub_goal_8; missing: ${missingKeys.join(',')} (observed: ${actionKeysWithArrays.slice(0, 3).join(',')}${actionKeysWithArrays.length > 3 ? '...' : ''})`,
+    };
   }
   return { valid: true };
 }

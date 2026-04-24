@@ -337,4 +337,206 @@ describe('fillMissingActionsIfNeeded', () => {
     expect(mockFindManyLevels).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: false, action: 'skipped-not-found' });
   });
+
+  // ==========================================================================
+  // CP424 regression tests — silent-zero fix + LoRA schema contract
+  //
+  // Background: fill-missing-actions silently returned `{ok:true, action:'filled',
+  // cellsFilled:0}` when LoRA produced 64+ actions with a key format that neither
+  // keyA (sub_goal_1..8), keyB (0..7), nor keyC (level.center_goal text) matched.
+  // Prod observed this for 4+ mandalas. Root cause: LoRA prompt did not specify
+  // an explicit JSON schema, so the model used Korean sub_goal text as keys. The
+  // matching loop then fell through to `?? null` on every cell, cellsFilled
+  // remained 0, yet the function returned action='filled'. Dashboard saw empty
+  // subjects with no observable failure.
+  //
+  // These tests lock the invariant: `action === 'filled'` ⇒ `cellsFilled > 0`.
+  // Mismatch MUST surface as `action === 'failed'`.
+  // ==========================================================================
+
+  const realLoraOutputFixture =
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../fixtures/lora-real-output.json') as {
+      output: {
+        center_goal: string;
+        sub_goals: string[];
+        actions: Record<string, string[] | string[]>;
+      };
+    };
+
+  test('CP424 T1: silent-zero (cellsFilled=0 despite LoRA success) must return action=failed', async () => {
+    // Setup: 8 depth=1 rows with empty subjects.
+    mockFindManyLevels.mockResolvedValueOnce(
+      SUB_GOALS.map((sg, idx) => ({
+        id: `level-${idx}`,
+        center_goal: sg,
+        subjects: [],
+        position: idx,
+      }))
+    );
+
+    // LoRA returns 64 unique actions but with keys that do NOT match
+    // sub_goal_N / index / center_goal text patterns.
+    const nonMatchingKeys: Record<string, string[]> = {};
+    for (let i = 0; i < 8; i++) {
+      nonMatchingKeys[`action_bucket_${i}`] = Array.from(
+        { length: 8 },
+        (_, j) => `mismatched-key-action-${i}-${j}`
+      );
+    }
+    mockGenerateMandala.mockResolvedValueOnce({
+      center_goal: SUB_GOALS[0],
+      center_label: '',
+      language: 'ko',
+      domain: 'general',
+      sub_goals: SUB_GOALS,
+      actions: nonMatchingKeys,
+    });
+
+    const result = await fillMissingActionsIfNeeded(MANDALA_ID);
+
+    // Invariant: cellsFilled=0 MUST NOT be action='filled'.
+    expect(mockUpdateLevel).not.toHaveBeenCalled();
+    expect(result.ok).toBe(false);
+    expect(result.action).toBe('failed');
+    expect(result.reason).toMatch(/key|match|mismatch/i);
+  });
+
+  test('CP424 T2: real LoRA output (Korean-text keys + 14-key metadata nesting) MUST NOT silently pass', async () => {
+    // Fixture sourced from real prod LoRA call on 2026-04-24 (tests/fixtures/
+    // lora-real-output.json). Demonstrates the observed failure mode:
+    //   - 8 Korean sub_goal-text keys + 2 extraneous metadata keys ('sub_goals',
+    //     'actions') nested inside the top-level actions dict
+    //   - totalActions = 80 (passes >= 64 threshold)
+    //   - unique rate ~ 1.0 (passes >= 0.7 threshold)
+    // DB levels use fixture.sub_goals, so keyC (center_goal text) SHOULD match.
+    // This test locks in that even in the "lucky" keyC-matches case, the guard
+    // still catches downstream mismatches (e.g., if the DB had slightly drifted
+    // sub_goals). We use altered DB sub_goals to force full mismatch.
+
+    const fixtureSubGoals = realLoraOutputFixture.output.sub_goals;
+    const driftedDbSubGoals = fixtureSubGoals.map((sg, i) => `${sg}_drift_${i}`);
+
+    mockFindManyLevels.mockResolvedValueOnce(
+      driftedDbSubGoals.map((sg, idx) => ({
+        id: `level-${idx}`,
+        center_goal: sg,
+        subjects: [],
+        position: idx,
+      }))
+    );
+
+    mockFindFirstRoot.mockResolvedValue({
+      id: ROOT_LEVEL_ID,
+      center_goal: realLoraOutputFixture.output.center_goal,
+      subjects: driftedDbSubGoals,
+    });
+
+    mockGenerateMandala.mockResolvedValueOnce({
+      ...realLoraOutputFixture.output,
+      center_label: '',
+    } as unknown as Parameters<typeof mockGenerateMandala.mockResolvedValueOnce>[0]);
+
+    const result = await fillMissingActionsIfNeeded(MANDALA_ID);
+
+    // None of keyA (sub_goal_N), keyB (position), keyC (drifted center_goal)
+    // match. Silent-zero would return action='filled', cellsFilled=0.
+    // Fix MUST return action='failed'.
+    expect(mockUpdateLevel).not.toHaveBeenCalled();
+    expect(result.ok).toBe(false);
+    expect(result.action).toBe('failed');
+  });
+
+  test('CP424 T3: LoRA non-idempotent — regenerates sub_goals differing from DB subjects, must fail not silent', async () => {
+    // DB has center_goal "A1..A8"; LoRA regenerates "B1..B8" and keys actions
+    // by its own sub_goals text. keyC mismatches. keyA/B also mismatch.
+    const dbSubGoals = Array.from({ length: 8 }, (_, i) => `DB-subgoal-A${i + 1}`);
+    const loraSubGoals = Array.from({ length: 8 }, (_, i) => `LoRA-subgoal-B${i + 1}`);
+
+    mockFindManyLevels.mockResolvedValueOnce(
+      dbSubGoals.map((sg, idx) => ({
+        id: `level-${idx}`,
+        center_goal: sg,
+        subjects: [],
+        position: idx,
+      }))
+    );
+    mockFindFirstRoot.mockResolvedValue({
+      id: ROOT_LEVEL_ID,
+      center_goal: 'root',
+      subjects: dbSubGoals,
+    });
+
+    const loraActions: Record<string, string[]> = {};
+    for (const sg of loraSubGoals) {
+      loraActions[sg] = Array.from({ length: 8 }, (_, j) => `lora-act-${sg}-${j}`);
+    }
+    mockGenerateMandala.mockResolvedValueOnce({
+      center_goal: 'lora-center',
+      center_label: '',
+      language: 'ko',
+      domain: 'general',
+      sub_goals: loraSubGoals,
+      actions: loraActions,
+    });
+
+    const result = await fillMissingActionsIfNeeded(MANDALA_ID);
+
+    expect(mockUpdateLevel).not.toHaveBeenCalled();
+    expect(result.ok).toBe(false);
+    expect(result.action).toBe('failed');
+  });
+
+  test('CP424 T4: LoRA schema anomaly (nested sub_goals/actions metadata in actions dict) is detected', async () => {
+    mockFindManyLevels.mockResolvedValueOnce(
+      SUB_GOALS.map((sg, idx) => ({
+        id: `level-${idx}`,
+        center_goal: sg,
+        subjects: [],
+        position: idx,
+      }))
+    );
+
+    const actionsWithMetadataPollution: Record<string, string[]> = {
+      meta_key_alpha: Array.from({ length: 8 }, (_, j) => `alpha-${j}`),
+      meta_key_beta: Array.from({ length: 8 }, (_, j) => `beta-${j}`),
+      // More filler to pass totalActions >= 64 without any matching key.
+    };
+    for (let i = 0; i < 6; i++) {
+      actionsWithMetadataPollution[`random_bucket_${i}`] = Array.from(
+        { length: 8 },
+        (_, j) => `bucket-${i}-${j}`
+      );
+    }
+    // Simulate nested metadata keys (sub_goals, actions) that appeared in real
+    // prod LoRA output.
+    (actionsWithMetadataPollution as unknown as Record<string, unknown>)['sub_goals'] = [
+      'nested meta',
+    ];
+    (actionsWithMetadataPollution as unknown as Record<string, unknown>)['actions'] = [
+      'nested meta',
+    ];
+
+    mockGenerateMandala.mockResolvedValueOnce({
+      center_goal: 'goal',
+      center_label: '',
+      language: 'ko',
+      domain: 'general',
+      sub_goals: SUB_GOALS,
+      actions: actionsWithMetadataPollution,
+    });
+
+    const result = await fillMissingActionsIfNeeded(MANDALA_ID);
+
+    // totalActions >= 64 passes validation, but NO key matches any level.
+    // Silent-zero would mask this. Fix MUST surface as failed.
+    expect(mockUpdateLevel).not.toHaveBeenCalled();
+    expect(result.ok).toBe(false);
+    expect(result.action).toBe('failed');
+  });
+
+  // CP424 T5 is implemented in tests/unit/modules/lora-prompt-schema.test.ts
+  // as a separate file to avoid the @prisma/client mock collision that occurs
+  // when jest.requireActual tries to load src/modules/mandala/generator.ts
+  // (which imports PrismaClient transitively via database/client.ts).
 });
