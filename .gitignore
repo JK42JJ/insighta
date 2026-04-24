@@ -34,6 +34,7 @@ prisma/migrations/*
 !prisma/migrations/video_chunk_embeddings/
 !prisma/migrations/mandala-timings/
 !prisma/migrations/video_rich_summaries/
+!prisma/migrations/wizard-precompute/
 
 # Logs
 logs/

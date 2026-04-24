@@ -476,6 +476,33 @@ model mandala_create_timings {
   @@schema("public")
 }
 
+/// Wizard precompute — stages v3 discover results between Step 1 (goal input)
+/// and Step 3 (save), keyed by client-generated session_id. Consumed at save
+/// time to populate recommendation_cache immediately → dashboard first card ≤1s.
+/// TTL 10min, pg_cron sweep every 5min (migration 001 handles scheduling).
+model mandala_wizard_precompute {
+  session_id          String   @id @db.Uuid
+  user_id             String   @db.Uuid
+  goal                String
+  language            String   @db.VarChar(5)
+  focus_tags          String[] @default([])
+  target_level        String?  @db.VarChar(30)
+  /// 'pending' | 'running' | 'done' | 'failed' | 'consumed'
+  status              String   @default("pending") @db.VarChar(20)
+  discover_result     Json?
+  error_message       String?
+  consumed_mandala_id String?  @db.Uuid
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  consumed_at         DateTime? @db.Timestamptz(6)
+  expires_at          DateTime @default(dbgenerated("(now() + interval '10 minutes')")) @db.Timestamptz(6)
+
+  @@index([user_id, created_at(sort: Desc)], map: "idx_precompute_user_created")
+  @@index([expires_at], map: "idx_precompute_expires")
+  @@index([status], map: "idx_precompute_status")
+  @@schema("public")
+}
+
 /// Mandala share links — controls visibility, expiry, and PIN protection
 model mandala_shares {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid

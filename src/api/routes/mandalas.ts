@@ -654,6 +654,11 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       previewOnly?: boolean;
       focus_tags?: string[];
       target_level?: string;
+      // CP424.2 wizard precompute: client-generated UUID for correlating
+      // /wizard-stream pre-compute with /create-with-data consume. Optional —
+      // when absent, precompute is skipped (backward-compat). Flag-gated by
+      // WIZARD_PRECOMPUTE_ENABLED at the trigger site.
+      session_id?: string;
     };
   }>(
     '/wizard-stream',
@@ -671,6 +676,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         previewOnly = false,
         focus_tags: focusTags,
         target_level: targetLevel,
+        session_id: sessionId,
       } = request.body;
       if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
         return reply.code(400).send({
@@ -737,6 +743,32 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             structure,
             duration_ms: Date.now() - t0,
           });
+          // CP424.2 wizard precompute trigger — fire-and-forget after structure
+          // resolves so we have real sub_goals. No await: the wizard SSE stream
+          // is not blocked by discover latency (Tier 2 YouTube search ~5-15s).
+          // Feature-flag + session_id gated inside startPrecompute; callers pass
+          // unconditionally.
+          if (sessionId && Array.isArray(structure.sub_goals) && structure.sub_goals.length === 8) {
+            setImmediate(() => {
+              // eslint-disable-next-line @typescript-eslint/no-floating-promises
+              import('../../modules/mandala/wizard-precompute').then(({ startPrecompute }) =>
+                startPrecompute({
+                  sessionId,
+                  userId,
+                  goal: structure.center_goal,
+                  language: lang,
+                  focusTags: focusTags ?? [],
+                  targetLevel,
+                  subGoals: structure.sub_goals,
+                }).catch((err) => {
+                  request.log.warn(
+                    { err, sessionId, userId },
+                    'wizard-precompute startPrecompute threw (fire-and-forget)'
+                  );
+                })
+              );
+            });
+          }
           return structure;
         })
         .catch((err: unknown) => {
@@ -975,6 +1007,15 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
        * caller semantics for other (non-wizard) call paths.
        */
       setAsDefault?: boolean;
+      /**
+       * CP424.2 wizard precompute: the same UUID sent to /wizard-stream at
+       * Step 1. When present AND WIZARD_PRECOMPUTE_ENABLED AND row status=done,
+       * we consume it into recommendation_cache and skip the legacy
+       * post-creation discover path (still fires fill-missing-actions etc).
+       * Miss (not-found / expired / not-done / goal-mismatch) → fallback to
+       * full `triggerMandalaPostCreationAsync` (legacy behavior).
+       */
+      session_id?: string;
     };
   }>(
     '/create-with-data',
@@ -1003,6 +1044,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         focusTags,
         targetLevel,
         setAsDefault,
+        session_id: sessionId,
       } = request.body;
 
       if (!title || typeof title !== 'string' || title.trim().length === 0) {
@@ -1170,6 +1212,35 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         // Either way, depth=1 scaffold rows are always created above so the
         // async fill path has a target to write into. An empty `subDetails`
         // is expected under the Phase 1 flow and is not a bug.
+
+        // CP424.2 wizard precompute consume — if flag enabled + session_id
+        // present + row status=done + goal matches, copy pre-computed slots
+        // into recommendation_cache under the new mandala_id and fire
+        // card_added events. Miss → no-op; post-creation pipeline fills the
+        // gap below (legacy behavior). On hit, pipeline-runner's checkDiscoverPreconditions
+        // will still see existing rec_cache rows and skip step 2 (video-discover)
+        // via the existing dedup-window guard; steps 1/3/4/5 still run.
+        if (sessionId) {
+          try {
+            const { consumePrecompute } = await import('../../modules/mandala/wizard-precompute');
+            const outcome = await consumePrecompute({
+              sessionId,
+              userId,
+              mandalaId: result.id,
+              centerGoal: centerGoal ?? title,
+            });
+            stage('precompute_consume');
+            request.log.info(
+              { mandalaId: result.id, sessionId, userId, outcome },
+              'wizard-precompute consume outcome'
+            );
+          } catch (err) {
+            request.log.warn(
+              { err, sessionId, userId, mandalaId: result.id },
+              'wizard-precompute consumePrecompute threw (non-fatal, falling through)'
+            );
+          }
+        }
 
         // Fire-and-forget post-creation pipeline for the new mandala.
         // Opt-in via user_skill_config; safe if not enabled.
