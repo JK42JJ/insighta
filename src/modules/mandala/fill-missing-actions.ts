@@ -190,11 +190,30 @@ export async function fillMissingActionsIfNeeded(mandalaId: string): Promise<{
     const loraMs = Date.now() - loraStart;
     const expectedTotal = EXPECTED_SUB_GOAL_COUNT * EXPECTED_ACTIONS_PER_CELL;
 
+    // CP424: action key contract check — must contain sub_goal_1..sub_goal_8
+    // literal keys. Prior model behavior (Korean sub_goal-text keys) produced
+    // 78+ actions with 100% unique rate yet mapped to 0 cells in the loop
+    // below (silent-zero bug). Reject upstream so generation_log captures the
+    // failure as training signal.
+    const requiredActionKeys = Array.from(
+      { length: EXPECTED_SUB_GOAL_COUNT },
+      (_, i) => `sub_goal_${i + 1}`
+    );
+    const actionKeysWithArrayValues = Object.keys(loraActions).filter((k) =>
+      Array.isArray((loraActions as Record<string, unknown>)[k])
+    );
+    const missingRequiredKeys = requiredActionKeys.filter(
+      (k) => !actionKeysWithArrayValues.includes(k)
+    );
+
     if (totalActions < expectedTotal) {
       loraFailureReason = `incomplete-actions: ${totalActions}/${expectedTotal}`;
       log.warn(`[${mandalaId}] LoRA ${loraFailureReason} (ms=${loraMs})`);
     } else if (uniqueRate < MIN_ACTION_UNIQUE_RATE) {
       loraFailureReason = `repetition-mode: unique-rate ${uniqueRate.toFixed(2)} < ${MIN_ACTION_UNIQUE_RATE}`;
+      log.warn(`[${mandalaId}] LoRA ${loraFailureReason} (ms=${loraMs})`);
+    } else if (missingRequiredKeys.length > 0) {
+      loraFailureReason = `key-mismatch: missing required sub_goal_N keys [${missingRequiredKeys.join(',')}]; observed=[${actionKeysWithArrayValues.slice(0, 3).join(',')}${actionKeysWithArrayValues.length > 3 ? ',...' : ''}]`;
       log.warn(`[${mandalaId}] LoRA ${loraFailureReason} (ms=${loraMs})`);
     } else {
       actions = loraActions;
@@ -333,5 +352,23 @@ export async function fillMissingActionsIfNeeded(mandalaId: string): Promise<{
   }
 
   log.info(`[${mandalaId}] actions fill complete: ${cellsFilled}/${levels.length} cells`);
+
+  // CP424 silent-zero guard — defense in depth. Upstream key-format check
+  // (LoRA acceptance) should already reject mismatched keys, but if every
+  // cell still somehow skipped (e.g., actions is an object but all arrays
+  // empty after filter), surface as failed so dashboard doesn't render an
+  // empty mandala with no observable error.
+  if (cellsFilled === 0 && needsFill.length > 0) {
+    log.warn(
+      `[${mandalaId}] silent-zero guard: 0 cells matched despite ${needsFill.length} needing fill — treating as failed`
+    );
+    return {
+      ok: false,
+      action: 'failed',
+      reason: `lora-key-mismatch: 0/${needsFill.length} cells matched any key pattern`,
+      cellsFilled: 0,
+    };
+  }
+
   return { ok: true, action: 'filled', cellsFilled };
 }
