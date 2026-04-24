@@ -103,9 +103,12 @@ describe('fillMissingActionsIfNeeded', () => {
       subjects: SUB_GOALS,
     });
     // Default: LoRA succeeds with a valid 64-action, high-unique-rate output.
-    // Individual tests override to exercise fallback paths.
+    // Haiku default rejects — happy-path tests override explicitly to
+    // exercise the CP426-revived fallback.
     mockGenerateMandala.mockResolvedValue(mockLoraMandalaFor(SUB_GOALS));
-    mockGenerateMandalaActions.mockResolvedValue(mockActionsFor(SUB_GOALS));
+    mockGenerateMandalaActions.mockRejectedValue(
+      new Error('haiku default mock — override in fallback-success tests')
+    );
     mockUpdateLevel.mockImplementation(async () => ({}));
     mockCreateManyLevels.mockImplementation(async () => ({ count: 8 }));
     mockGenLogCreate.mockImplementation(async () => ({}));
@@ -175,7 +178,7 @@ describe('fillMissingActionsIfNeeded', () => {
     expect(result).toEqual({ ok: true, action: 'filled', cellsFilled: 8 });
   });
 
-  test('LoRA throws → logs failure to generation_log and returns failed (no Haiku)', async () => {
+  test('LoRA throws + Haiku throws → both-failed (CP426 fallback revival)', async () => {
     mockFindManyLevels.mockResolvedValueOnce(
       SUB_GOALS.map((sg, idx) => ({
         id: `level-${idx}`,
@@ -185,6 +188,7 @@ describe('fillMissingActionsIfNeeded', () => {
       }))
     );
     mockGenerateMandala.mockRejectedValueOnce(new Error('ollama timeout'));
+    // Haiku default mock (beforeEach) rejects — no override needed.
 
     const result = await fillMissingActionsIfNeeded(MANDALA_ID);
     // Fire-and-forget log runs on next tick — flush microtasks.
@@ -192,16 +196,43 @@ describe('fillMissingActionsIfNeeded', () => {
     await new Promise((r) => setImmediate(r));
 
     expect(mockGenerateMandala).toHaveBeenCalledTimes(1);
-    expect(mockGenerateMandalaActions).not.toHaveBeenCalled();
+    expect(mockGenerateMandalaActions).toHaveBeenCalledTimes(1);
     expect(mockUpdateLevel).not.toHaveBeenCalled();
     expect(result.ok).toBe(false);
     expect(result.action).toBe('failed');
-    expect(result.reason).toContain('lora-only policy');
+    expect(result.reason).toContain('lora+haiku both failed');
     expect(mockGenLogCreate).toHaveBeenCalledTimes(1);
     const logEntry = mockGenLogCreate.mock.calls[0]![0].data;
     expect(logEntry.lora_error).toContain(`[mandala=${MANDALA_ID}]`);
     expect(logEntry.lora_error).toContain('throw');
     expect(logEntry.source_returned).toBe('failed');
+    expect(logEntry.lora_valid).toBe(false);
+  });
+
+  test('LoRA throws + Haiku succeeds → filled via Haiku fallback (CP426 revival)', async () => {
+    mockFindManyLevels.mockResolvedValueOnce(
+      SUB_GOALS.map((sg, idx) => ({
+        id: `level-${idx}`,
+        center_goal: sg,
+        subjects: [],
+        position: idx,
+      }))
+    );
+    mockGenerateMandala.mockRejectedValueOnce(new Error('ollama timeout'));
+    mockGenerateMandalaActions.mockResolvedValueOnce(mockActionsFor(SUB_GOALS));
+
+    const result = await fillMissingActionsIfNeeded(MANDALA_ID);
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    expect(mockGenerateMandala).toHaveBeenCalledTimes(1);
+    expect(mockGenerateMandalaActions).toHaveBeenCalledTimes(1);
+    expect(mockUpdateLevel).toHaveBeenCalledTimes(8);
+    expect(result).toEqual({ ok: true, action: 'filled', cellsFilled: 8 });
+    // LoRA failure is still logged to generation_log for retraining data.
+    expect(mockGenLogCreate).toHaveBeenCalledTimes(1);
+    const logEntry = mockGenLogCreate.mock.calls[0]![0].data;
+    expect(logEntry.lora_error).toContain('throw');
     expect(logEntry.lora_valid).toBe(false);
   });
 
@@ -234,10 +265,13 @@ describe('fillMissingActionsIfNeeded', () => {
     await new Promise((r) => setImmediate(r));
     await new Promise((r) => setImmediate(r));
 
-    expect(mockGenerateMandalaActions).not.toHaveBeenCalled();
+    // Post-CP426: Haiku fallback runs (default rejects), so result surfaces
+    // as lora+haiku both-failed. LoRA's specific failure reason stays in
+    // generation_log for retraining signal.
+    expect(mockGenerateMandalaActions).toHaveBeenCalledTimes(1);
     expect(result.ok).toBe(false);
     expect(result.action).toBe('failed');
-    expect(result.reason).toContain('incomplete-actions');
+    expect(result.reason).toContain('lora+haiku both failed');
     expect(mockGenLogCreate).toHaveBeenCalledTimes(1);
     const logEntry = mockGenLogCreate.mock.calls[0]![0].data;
     expect(logEntry.lora_actions_total).toBe(40);
@@ -270,12 +304,15 @@ describe('fillMissingActionsIfNeeded', () => {
     await new Promise((r) => setImmediate(r));
     await new Promise((r) => setImmediate(r));
 
-    expect(mockGenerateMandalaActions).not.toHaveBeenCalled();
+    // Post-CP426: Haiku fallback runs (default rejects). 'repetition-mode'
+    // stays in generation_log; result.reason reflects both-failed.
+    expect(mockGenerateMandalaActions).toHaveBeenCalledTimes(1);
     expect(result.ok).toBe(false);
     expect(result.action).toBe('failed');
-    expect(result.reason).toContain('repetition-mode');
+    expect(result.reason).toContain('lora+haiku both failed');
     expect(mockGenLogCreate).toHaveBeenCalledTimes(1);
     const logEntry = mockGenLogCreate.mock.calls[0]![0].data;
+    expect(logEntry.lora_error).toContain('repetition-mode');
     expect(logEntry.lora_action_unique_rate).toBeLessThan(0.7);
   });
 
@@ -396,10 +433,19 @@ describe('fillMissingActionsIfNeeded', () => {
     const result = await fillMissingActionsIfNeeded(MANDALA_ID);
 
     // Invariant: cellsFilled=0 MUST NOT be action='filled'.
+    // Post-CP426: LoRA key-mismatch triggers Haiku fallback (default rejects),
+    // so result surfaces as both-failed. LoRA key-mismatch detail is in the
+    // generation_log entry.
     expect(mockUpdateLevel).not.toHaveBeenCalled();
     expect(result.ok).toBe(false);
     expect(result.action).toBe('failed');
-    expect(result.reason).toMatch(/key|match|mismatch/i);
+    expect(result.reason).toMatch(/key|match|mismatch|both failed/i);
+    // Fire-and-forget log runs on next tick — flush microtasks.
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+    expect(mockGenLogCreate).toHaveBeenCalledTimes(1);
+    const logEntry = mockGenLogCreate.mock.calls[0]![0].data;
+    expect(logEntry.lora_error).toMatch(/key|match|mismatch/i);
   });
 
   test('CP424 T2: real LoRA output (Korean-text keys + 14-key metadata nesting) MUST NOT silently pass', async () => {
