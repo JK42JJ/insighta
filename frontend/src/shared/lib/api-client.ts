@@ -68,6 +68,40 @@ interface Note {
   updatedAt: string;
 }
 
+export interface VideoRichSummaryChapter {
+  start_sec: number;
+  title: string;
+}
+
+export interface VideoRichSummaryQuote {
+  timestamp_sec: number;
+  text: string;
+}
+
+export interface VideoRichSummaryStructured {
+  core_argument?: string;
+  key_points?: string[];
+  evidence?: string[];
+  actionables?: string[];
+  prerequisites?: string[];
+  bias_signals?: string[];
+  content_type?: string;
+  depth_level?: string;
+  chapters?: VideoRichSummaryChapter[];
+  quotes?: VideoRichSummaryQuote[];
+  tl_dr_ko?: string;
+  tl_dr_en?: string;
+}
+
+export interface VideoRichSummaryResponse {
+  videoId: string;
+  oneLiner: string | null;
+  structured: VideoRichSummaryStructured | null;
+  qualityScore: number | null;
+  model: string | null;
+  updatedAt: string;
+}
+
 interface ClawbotConfig {
   cronExpression: string;
   threshold: number;
@@ -503,6 +537,44 @@ class ApiClient {
 
   async getVideo(id: string): Promise<Video> {
     return this.request<Video>(`/videos/${id}`);
+  }
+
+  /**
+   * CP425 — read cached AI rich summary for a YouTube video.
+   *
+   * Returns null on 404 (no passing row) so callers can show an empty-state
+   * instead of throwing. Other errors (401/5xx) propagate.
+   */
+  async getVideoRichSummary(videoId: string): Promise<VideoRichSummaryResponse | null> {
+    try {
+      const res = await this.request<{ data: VideoRichSummaryResponse }>(
+        `/videos/${videoId}/rich-summary`
+      );
+      return res.data;
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.statusCode === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * CP425 Trigger 1 — fire-and-forget rich-summary enqueue for all videos
+   * in a newly-created mandala. Server enqueues one enrich-video job per
+   * unique video_id with withRichSummary=true. Respects per-tier quota.
+   *
+   * Idempotent: repeated calls are safe (server cache-hits on existing
+   * passing rows and does not consume quota for cache hits).
+   *
+   * Errors (quota / auth / 5xx) are swallowed by the caller's void
+   * pattern — this never blocks the wizard save UX.
+   */
+  async triggerMandalaRichSummary(mandalaId: string): Promise<void> {
+    await this.request<{ status: 'ok'; data: unknown }>(
+      `/mandalas/${mandalaId}/rich-summary-trigger`,
+      { method: 'POST', body: JSON.stringify({}) }
+    );
   }
 
   async getPlaylistVideos(playlistId: string): Promise<Video[]> {
