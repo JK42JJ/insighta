@@ -92,11 +92,12 @@ services:
       # Revert: delete this line → falls back to v1.
       - VIDEO_DISCOVER_V3=1
       # CP426 (2026-04-25) — Fix Korean recall in center gate. Default
-      # 'substring' has 0% recall on Korean composite words (e.g. "모닝루틴"
-      # vs "루틴으로"). 'subword' uses char 2-gram overlap: 27% recall,
-      # 100% precision on fixture. See v3/config.ts for mode docs.
+      # 'substring' has 0% recall on Korean composite words. 'semantic'
+      # uses cosine similarity (qwen3-embedding:8b) — language-agnostic,
+      # catches paraphrases. v3 executor embeds center goal + candidates
+      # automatically when this mode is set (CP416 Phase 3 infra).
       # Revert: delete this line → falls back to 'substring'.
-      - V3_CENTER_GATE_MODE=subword
+      - V3_CENTER_GATE_MODE=semantic
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).
