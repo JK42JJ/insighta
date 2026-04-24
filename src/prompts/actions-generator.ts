@@ -9,7 +9,7 @@
 
 export const ACTIONS_MODEL = 'anthropic/claude-haiku-4.5';
 export const ACTIONS_TEMPERATURE = 0.7;
-export const ACTIONS_MAX_TOKENS = 2500;
+export const ACTIONS_MAX_TOKENS = 4096;
 
 export interface ActionsPromptInput {
   centerGoal: string;
