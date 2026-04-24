@@ -1220,6 +1220,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         // gap below (legacy behavior). On hit, pipeline-runner's checkDiscoverPreconditions
         // will still see existing rec_cache rows and skip step 2 (video-discover)
         // via the existing dedup-window guard; steps 1/3/4/5 still run.
+        let precomputeHit = false;
         if (sessionId) {
           try {
             const { consumePrecompute } = await import('../../modules/mandala/wizard-precompute');
@@ -1229,6 +1230,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               mandalaId: result.id,
               centerGoal: centerGoal ?? title,
             });
+            precomputeHit = outcome.consumed === true;
             stage('precompute_consume');
             request.log.info(
               { mandalaId: result.id, sessionId, userId, outcome },
@@ -1242,10 +1244,16 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           }
         }
 
-        // Fire-and-forget post-creation pipeline for the new mandala.
-        // Opt-in via user_skill_config; safe if not enabled.
-        triggerMandalaPostCreationAsync(userId, result.id);
-        stage('trigger_pipeline');
+        if (!precomputeHit) {
+          triggerMandalaPostCreationAsync(userId, result.id);
+          stage('trigger_pipeline');
+        } else {
+          stage('trigger_pipeline_skipped');
+          request.log.info(
+            { mandalaId: result.id, userId },
+            'post-creation pipeline skipped — precompute hit covers video discovery'
+          );
+        }
 
         void reply.header('Server-Timing', stages.map((s) => `${s.name};dur=${s.ms}`).join(', '));
         request.log.info(

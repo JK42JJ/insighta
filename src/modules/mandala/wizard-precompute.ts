@@ -232,7 +232,7 @@ export async function consumePrecompute(
   // running. If still running when budget exhausts → miss, legacy fallback.
   // Tier 2 discover observed 4.6s on first prod hit; 5s budget covers p95
   // with small margin, user perceives as part of existing save latency.
-  const POLL_BUDGET_MS = 5_000;
+  const POLL_BUDGET_MS = 15_000;
   const POLL_INTERVAL_MS = 250;
   if (row.status === 'pending' || row.status === 'running') {
     const pollStart = Date.now();

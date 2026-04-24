@@ -98,6 +98,11 @@ services:
       # automatically when this mode is set (CP416 Phase 3 infra).
       # Revert: delete this line → falls back to 'substring'.
       - V3_CENTER_GATE_MODE=semantic
+      # CP426 (2026-04-25) — Cap YouTube search fan-out for precompute path.
+      # Default 20 queries × 2s/query = 40s; 8 queries (one per cell) ≈ 16s.
+      # Combined with POLL_BUDGET_MS=15s, precompute completes within budget.
+      # Revert: delete this line → falls back to 20 (DEFAULT_MAX_QUERIES).
+      - V3_MAX_QUERIES=8
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).
