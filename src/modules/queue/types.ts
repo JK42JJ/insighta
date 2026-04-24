@@ -25,6 +25,13 @@ export interface EnrichVideoPayload {
   url: string;
   /** 'user' = high priority, 'batch' = normal */
   source: 'user' | 'batch';
+  /**
+   * CP423: opt-in rich summary generation after short summary completes.
+   * Requires userId. Triggered only by createMandala card placement or
+   * explicit user ADD endpoints (not by system/batch flows).
+   */
+  withRichSummary?: boolean;
+  userId?: string;
 }
 
 export interface BatchScanPayload {

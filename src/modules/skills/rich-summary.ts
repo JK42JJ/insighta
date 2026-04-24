@@ -12,7 +12,20 @@ import { getPrismaClient } from '@/modules/database/client';
 import { createGenerationProvider } from '@/modules/llm';
 import { logger } from '@/utils/logger';
 import { checkSummaryQuality, type RichSummary } from './summary-gate';
+import { loadRichSummaryConfig } from '@/config/rich-summary';
+import { assertRichSummaryQuota } from './rich-summary-quota';
 import { Prisma } from '@prisma/client';
+
+export interface RichSummarySegment {
+  start_sec: number;
+  text: string;
+}
+
+function formatSegmentsBlock(segments: RichSummarySegment[] | undefined): string {
+  if (!segments || segments.length === 0) return '';
+  const capped = segments.slice(0, TIMESTAMPED_SEGMENTS_LIMIT);
+  return capped.map((s) => `[${Math.round(s.start_sec)}s] ${s.text}`).join('\n');
+}
 
 const log = logger.child({ module: 'RichSummary' });
 
@@ -20,9 +33,10 @@ const MAX_RETRIES = 1;
 const TRANSCRIPT_CHUNK_SIZE = 3000;
 const DESCRIPTION_CHUNK_SIZE = 1000;
 const DESCRIPTION_PROMPT_LIMIT = 500;
+const TIMESTAMPED_SEGMENTS_LIMIT = 120; // cap timestamped lines passed to LLM
 
 // ---------------------------------------------------------------------------
-// Prompts (from handoff Step 3)
+// Prompts (CP422 P1: extended with chapters/quotes/tl_dr)
 // ---------------------------------------------------------------------------
 
 const RICH_SUMMARY_PROMPT = `You are a learning content analysis expert.
@@ -31,6 +45,7 @@ Analyze the following YouTube video information and respond ONLY in JSON. Do not
 Video title: {title}
 Video description: {description}
 Transcript summary: {transcript_chunk}
+Timestamped segments (may be empty): {segments_block}
 
 Respond with the following JSON structure:
 {{
@@ -45,11 +60,21 @@ Respond with the following JSON structure:
   "mandala_fit": {{
     "suggested_topics": ["keyword1", "keyword2"],
     "relevance_rationale": "One line explanation"
-  }}
+  }},
+  "chapters": [{{"start_sec": 0, "title": "Chapter title"}}],
+  "quotes": [{{"timestamp_sec": 120, "text": "Notable verbatim quote (1-2 sentences)"}}],
+  "tl_dr_ko": "200자 이내 한글 요약",
+  "tl_dr_en": "200-char English summary"
 }}
 
 content_type allowed values: tutorial, opinion, research, news, entertainment
-depth_level allowed values: beginner, intermediate, advanced`;
+depth_level allowed values: beginner, intermediate, advanced
+
+Rules for chapters/quotes (CP422 P1):
+- If "Timestamped segments" above is empty, return chapters as [] and quotes as [] (empty arrays).
+- When segments are provided, derive 3-8 chapters spanning the video's duration; use segment start_sec values (integers).
+- Quotes: pick 1-3 verbatim highlights with their exact timestamp_sec from segments.
+- tl_dr_ko + tl_dr_en are ALWAYS required even when segments are empty (fall back to title + description).`;
 
 const ONE_LINER_PROMPT = `Summarize the following YouTube video in one Korean sentence (under 30 characters).
 Video title: {title}
@@ -76,14 +101,31 @@ export interface RichSummaryResult {
 export async function enrichRichSummary(
   videoId: string,
   options: {
+    userId: string;
     title: string;
     description?: string;
     transcript?: string;
+    segments?: RichSummarySegment[];
   }
 ): Promise<RichSummaryResult> {
   const prisma = getPrismaClient();
+  const config = loadRichSummaryConfig();
 
-  // Check if already exists with passing quality
+  if (!config.enabled) {
+    log.info('Rich summary feature disabled (RICH_SUMMARY_ENABLED=false) — skipping', {
+      videoId,
+    });
+    return {
+      videoId,
+      oneLiner: null,
+      structured: null,
+      qualityScore: 0,
+      qualityFlag: 'failed',
+      model: null,
+    };
+  }
+
+  // Check if already exists with passing quality (cache hit → does NOT consume quota)
   const existing = await prisma.video_rich_summaries.findUnique({
     where: { video_id: videoId },
   });
@@ -99,6 +141,15 @@ export async function enrichRichSummary(
     };
   }
 
+  // CP423: enforce per-user monthly quota before LLM call.
+  const quota = await assertRichSummaryQuota(prisma, options.userId);
+  log.info('Rich summary quota check passed', {
+    userId: options.userId,
+    tier: quota.tier,
+    used: quota.used,
+    limit: quota.limit,
+  });
+
   const generationProvider = await createGenerationProvider();
   const generate = (prompt: string, opts?: { format?: 'json' | 'text'; temperature?: number }) =>
     generationProvider.generate(prompt, opts);
@@ -106,13 +157,15 @@ export async function enrichRichSummary(
   const transcriptChunk = options.transcript
     ? options.transcript.slice(0, TRANSCRIPT_CHUNK_SIZE)
     : (options.description ?? '').slice(0, DESCRIPTION_CHUNK_SIZE);
+  const segmentsBlock = formatSegmentsBlock(options.segments);
 
   // Attempt structured summary generation (with retry)
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const prompt = RICH_SUMMARY_PROMPT.replace('{title}', options.title)
         .replace('{description}', (options.description ?? '').slice(0, DESCRIPTION_PROMPT_LIMIT))
-        .replace('{transcript_chunk}', transcriptChunk);
+        .replace('{transcript_chunk}', transcriptChunk)
+        .replace('{segments_block}', segmentsBlock);
 
       const raw = await generate(prompt, { format: 'json', temperature: 0.3 });
       const structured = JSON.parse(raw.trim()) as RichSummary;
@@ -127,6 +180,7 @@ export async function enrichRichSummary(
           qualityScore: result.score,
           qualityFlag: 'pass',
           model: generationProvider.model,
+          userId: options.userId,
         });
 
         log.info('Rich summary generated (pass)', {
@@ -178,6 +232,7 @@ export async function enrichRichSummary(
     qualityScore: 0,
     qualityFlag: 'low',
     model: generationProvider.model,
+    userId: options.userId,
   });
 
   log.info('Rich summary fallback to one_liner', { videoId });
@@ -205,6 +260,7 @@ async function upsertRichSummary(
     qualityScore: number;
     qualityFlag: string;
     model: string | null;
+    userId: string;
   }
 ): Promise<void> {
   const structuredJson = data.structured
@@ -219,6 +275,7 @@ async function upsertRichSummary(
       quality_score: data.qualityScore,
       quality_flag: data.qualityFlag,
       model: data.model,
+      user_id: data.userId,
       updated_at: new Date(),
     },
     create: {
@@ -229,6 +286,7 @@ async function upsertRichSummary(
       quality_score: data.qualityScore,
       quality_flag: data.qualityFlag,
       model: data.model,
+      user_id: data.userId,
     },
   });
 }
