@@ -51,6 +51,13 @@
 - probe / stdin-pipe 용도는 script 의 IP update 부분 (lines 9-43) 만 별도 실행 후 기존 `cat ... | ssh insighta-ec2 "docker exec -i ..."` 패턴 유지.
 - 상세: `memory/credentials.md` §L7.
 
+### SECURITY carryover blocking (절대 규칙, LEVEL-3, CP422 Rule H promotion)
+- **SECURITY 류 carryover (credential rotation / permission revoke / exposed secret cleanup) 가 3 session 연속 user-deferred 시, 다음 `/init` 에서 blocking question 으로 surface. 답 없이 새 개선 작업 진입 금지.**
+- 근거: Supabase DB password rotation **9 session 이월** (CP412→CP421). Memory Active Rule H (CP416 승인) 은 3-session trigger 였으나 CP417~CP421 5 session 에서 surface 0회 → memory-only enforcement 실패 증명.
+- Blocking question 형식: "SECURITY carryover `<항목>` 을 (a) 지금 실행 / (b) 세션 끝 defer (N+1회차 carryover) / (c) 공식 defer with target 날짜 — 중 어느 것인가?"
+- `/init` Phase 6a-3 (Open Requests 체크) 에서 carryover counter ≥ 3 인 SECURITY item 감지 → 출력 상단에 🚨 BLOCKING section 삽입 → 답 수신 후에만 "Ready" 선언.
+- 연장 의사결정 (c) 시 `retrospective.md` Rule Evolution Log 에 날짜 + 사유 + target-by-date 기록 의무.
+
 ### .env 불변 (절대 규칙, CP358)
 - **`.env`, `.env.local`, `.env.production` 파일을 수정/교체/삭제하는 행위 절대 금지.**
 - prod 스크립트 실행 시 환경변수는 **CLI 인라인 주입으로만**:
