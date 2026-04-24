@@ -161,7 +161,7 @@ export function VideoSidePanel({ onCollapseToPopup }: VideoSidePanelProps = {}) 
             videoUrl={card?.videoUrl}
           />
         ) : (
-          <PanelAISummary videoSummary={card?.videoSummary} />
+          <PanelAISummary videoSummary={card?.videoSummary} videoUrl={card?.videoUrl} />
         )}
       </div>
 

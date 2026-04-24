@@ -85,4 +85,8 @@ export const queryKeys = {
   uiPreferences: {
     all: ['ui-preferences'] as const,
   },
+  video: {
+    all: ['video'] as const,
+    richSummary: (videoId: string) => [...queryKeys.video.all, 'rich-summary', videoId] as const,
+  },
 } as const;

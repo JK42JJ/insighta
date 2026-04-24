@@ -647,6 +647,13 @@ export function useWizard() {
           template_id: state.selectedTemplate?.id,
           language: detectGoalLanguage(state.goalInput),
         });
+
+        // CP425 Trigger 1 — fire-and-forget rich-summary enqueue for the
+        // freshly-created mandala's cards. Errors are swallowed: quota /
+        // auth / server failures must never block the wizard completion UX.
+        void apiClient.triggerMandalaRichSummary(result.mandalaId).catch((err) => {
+          console.warn('[wizard] rich-summary trigger failed (non-fatal)', err);
+        });
       } catch (err) {
         // 4. Rollback: remove optimistic entry, clear store selection if it
         //    pointed at tempId, restore wizard inputs via navigation state.
