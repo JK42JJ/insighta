@@ -45,6 +45,12 @@
 - GitHub Secrets name != env var name — check mapping in credentials.md
 - 새 시크릿 추가 시: credentials.md에 먼저 기록 -> 코드 작성
 
+### EC2 SSH 접근 (절대 규칙, LEVEL-2 recurrence=2, CP389 → CP422)
+- **`ssh insighta-ec2` timeout 시 raw ssh 재시도 금지. 즉시 `scripts/ssh-connect.sh` 사용.**
+- 근거: port 22 ingress 가 SG `sg-079aa1ca6855e587b` 에서 IP-allow-listed. IP 변경 시 timeout. 스크립트가 public IP 감지 → SG ingress 자동 교체 → 연결.
+- probe / stdin-pipe 용도는 script 의 IP update 부분 (lines 9-43) 만 별도 실행 후 기존 `cat ... | ssh insighta-ec2 "docker exec -i ..."` 패턴 유지.
+- 상세: `memory/credentials.md` §L7.
+
 ### .env 불변 (절대 규칙, CP358)
 - **`.env`, `.env.local`, `.env.production` 파일을 수정/교체/삭제하는 행위 절대 금지.**
 - prod 스크립트 실행 시 환경변수는 **CLI 인라인 주입으로만**:
