@@ -91,17 +91,12 @@ services:
       # 96 max). v3 degrades gracefully to Tier 2 when video_pool is empty.
       # Revert: delete this line → falls back to v1.
       - VIDEO_DISCOVER_V3=1
-      # CP426 (2026-04-25) — semantic center gate ROLLED BACK. Runtime
-      # embedding of YouTube search results (hundreds per request) is a
-      # design error: correct targets are user-interacted videos, not
-      # search candidates. Falls back to default 'substring' until
-      # user-video embedding pipeline is implemented.
-      # - V3_CENTER_GATE_MODE=semantic
-      # CP426 (2026-04-25) — Cap YouTube search fan-out for precompute path.
-      # Default 20 queries × 2s/query = 40s; 8 queries (one per cell) ≈ 16s.
-      # Combined with POLL_BUDGET_MS=15s, precompute completes within budget.
-      # Revert: delete this line → falls back to 20 (DEFAULT_MAX_QUERIES).
-      - V3_MAX_QUERIES=8
+      # CP426 (2026-04-25) — Center gate OFF for Korean. 'substring' has
+      # 0% recall on Korean composite words, 'semantic' embeds hundreds of
+      # candidates at runtime (design error). 'off' skips the center gate
+      # entirely — mandala filter's sub-goal scoring handles relevance.
+      # Revert: delete this line → falls back to 'substring'.
+      - V3_CENTER_GATE_MODE=off
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).
