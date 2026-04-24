@@ -240,6 +240,12 @@ export function useWizard() {
   // Stored in a ref so cancel() can reach the current controller across renders.
   const goalAbortRef = useRef<AbortController | null>(null);
 
+  // CP424.2 wizard precompute — client-generated UUID correlating the
+  // /wizard-stream preview request with the subsequent /create-with-data save.
+  // Regenerated on every new goal submission so stale server rows are naturally
+  // ignored (TTL 10min + goal-match check on server).
+  const precomputeSessionIdRef = useRef<string | null>(null);
+
   // ─── Tier 1: Embedding search (instant) ───
   const searchMutation = useMutation({
     mutationFn: (goal: string) =>
@@ -268,12 +274,22 @@ export function useWizard() {
   const generateMutation = useMutation({
     mutationFn: async (goal: string) => {
       const lang = detectGoalLanguage(goal);
+      // CP424.2: mint a fresh sessionId for each new generation so server-side
+      // precompute rows for prior goals don't get consumed against the new
+      // mandala. crypto.randomUUID() is widely available in modern browsers;
+      // fallback to Math.random-based id in the rare case it isn't.
+      const sessionId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `fallback-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      precomputeSessionIdRef.current = sessionId;
       try {
         const res = await apiClient.streamWizardPreview(goal, {
           language: lang,
           focusTags: state.focusTags,
           targetLevel: state.targetLevel,
           signal: goalAbortRef.current?.signal,
+          sessionId,
         });
         if (import.meta.env.DEV) {
           console.info('[wizard-preview]', {
@@ -552,6 +568,11 @@ export function useWizard() {
         const result = await apiClient.createMandalaWithData({
           ...params,
           setAsDefault: true,
+          // CP424.2: pass the sessionId from streamWizardPreview so the server
+          // can consume the precomputed discover result. When flag disabled or
+          // id missing, server falls through to the legacy post-creation
+          // pipeline (backward-compat).
+          session_id: precomputeSessionIdRef.current ?? undefined,
         });
         const tResponse = performance.now();
         console.info('[wizard-timing]', {

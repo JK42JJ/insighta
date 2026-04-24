@@ -58,6 +58,7 @@ APPLY_FILES=(
   "prisma/migrations/mandala-timings/001_create_table.sql"
   "prisma/migrations/video_chunk_embeddings/001_create_table.sql"
   "prisma/migrations/video_rich_summaries/001_add_user_id.sql"
+  "prisma/migrations/wizard-precompute/001_table.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "

@@ -83,7 +83,7 @@ const TIER2_MAX_QUERIES_PER_CELL = 2;
 // Types
 // ---------------------------------------------------------------------------
 
-interface HydratedState {
+export interface HydratedState {
   centerGoal: string;
   subGoals: string[]; // length 8
   language: KeywordLanguage;
@@ -1004,4 +1004,95 @@ async function upsertSlots(
     }
   }
   return count;
+}
+
+// ---------------------------------------------------------------------------
+// CP424.2 Wizard Precompute — ephemeral discovery (no mandala_id)
+// ---------------------------------------------------------------------------
+//
+// Design: docs/design/precompute-pipeline.md (CP417 draft).
+// Called by /wizard-stream at Step 1 via setImmediate fire-and-forget.
+// Produces the same AssembledSlot[] shape as `executor.execute` but:
+//   - Tier 1 (video_pool KNN) disabled — no mandala_id to scope candidates,
+//     and flag-gated off in prod anyway (V3_ENABLE_TIER1_CACHE=false default).
+//   - No upsertSlots — caller persists to mandala_wizard_precompute.discover_result
+//     as JSON, then copies to recommendation_cache at consume-time (/create-with-data).
+//   - No cardPublisher.notify — no mandala_id to publish under. Notify fires
+//     at consume-time when mandala row exists.
+//   - Semantic rerank + whitelist gate skipped (both require mandala_id); can be
+//     revisited in a follow-up if precompute quality warrants.
+//
+// Result shape mirrors Tier2Output + metadata so caller stores it intact.
+
+export interface EphemeralDiscoverInput {
+  centerGoal: string;
+  subGoals: string[]; // length 8
+  language: KeywordLanguage;
+  focusTags: string[];
+  targetLevel: string;
+  env: NodeJS.ProcessEnv;
+}
+
+export interface EphemeralDiscoverResult {
+  slots: AssembledSlot[];
+  queriesUsed: number;
+  tier1_matches: 0;
+  tier2_matches: number;
+  duration_ms: number;
+  debug: Tier2Debug;
+}
+
+/**
+ * Run v3 Tier 2 discovery with an ephemeral hydrated state (no mandala_id
+ * required). Intended for wizard precompute path: caller hydrates state from
+ * client-provided goal + inferred/echoed sub_goals at Step 1, stores result in
+ * mandala_wizard_precompute table, consumes at Step 3 save.
+ *
+ * Throws:
+ *   - `Error('YOUTUBE_API_KEY_SEARCH is not configured')` if no API keys
+ *
+ * Caller responsibility:
+ *   - Catch errors and persist them to precompute.error_message
+ *   - Never call with a sub_goals array shorter than V3_NUM_CELLS; the queries
+ *     will silently skip empty cells.
+ */
+export async function runDiscoverEphemeral(
+  input: EphemeralDiscoverInput
+): Promise<EphemeralDiscoverResult> {
+  const t0 = Date.now();
+  const apiKeys = resolveSearchApiKeys(input.env);
+  if (apiKeys.length === 0) {
+    throw new Error('YOUTUBE_API_KEY_SEARCH is not configured');
+  }
+  const openRouterApiKey = input.env['OPENROUTER_API_KEY'];
+  const openRouterModel = input.env['OPENROUTER_MODEL'] ?? 'qwen/qwen3-30b-a3b';
+
+  const deficitCells = Array.from({ length: V3_NUM_CELLS }, (_, i) => ({
+    cellIndex: i,
+    need: V3_TARGET_PER_CELL,
+  }));
+
+  const tier2 = await runTier2({
+    deficitCells,
+    state: {
+      centerGoal: input.centerGoal,
+      subGoals: input.subGoals,
+      language: input.language,
+      focusTags: input.focusTags,
+      targetLevel: input.targetLevel,
+    },
+    apiKeys,
+    openRouterApiKey: openRouterApiKey || undefined,
+    openRouterModel,
+    existingVideoIds: new Set(),
+  });
+
+  return {
+    slots: tier2.slots,
+    queriesUsed: tier2.queriesUsed,
+    tier1_matches: 0,
+    tier2_matches: tier2.slots.length,
+    duration_ms: Date.now() - t0,
+    debug: tier2.debug,
+  };
 }

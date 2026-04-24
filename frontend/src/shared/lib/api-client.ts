@@ -874,6 +874,14 @@ class ApiClient {
      * on the old default mandala.
      */
     setAsDefault?: boolean;
+    /**
+     * CP424.2 wizard precompute: the same UUID sent to streamWizardPreview
+     * at Step 1. Server looks up the precomputed discover result and copies
+     * it into recommendation_cache under the new mandala_id. Miss → server
+     * falls back to the legacy post-creation pipeline. Flag-gated on the
+     * server (WIZARD_PRECOMPUTE_ENABLED, default false).
+     */
+    session_id?: string;
   }): Promise<{ mandalaId: string }> {
     // CP358: prod create writes ~73 INSERTs through pgbouncer (us-west-2 ↔
     // Korea RTT ~250ms × 73 ≈ 18s). BE Prisma transaction timeout is 30s
@@ -915,6 +923,14 @@ class ApiClient {
       focusTags?: string[];
       targetLevel?: string;
       signal?: AbortSignal;
+      /**
+       * CP424.2 wizard precompute: client-generated UUID that correlates this
+       * preview request with the subsequent `/create-with-data` save. When
+       * provided AND WIZARD_PRECOMPUTE_ENABLED on server, server kicks off a
+       * background `runDiscoverEphemeral` whose result is consumed at save
+       * time. Omit → precompute skipped (backward-compat, legacy behavior).
+       */
+      sessionId?: string;
       onTemplateFound?: (
         templates: Array<{
           mandala_id: string;
@@ -959,6 +975,7 @@ class ApiClient {
         previewOnly: true,
         focus_tags: options?.focusTags,
         target_level: options?.targetLevel,
+        session_id: options?.sessionId,
       }),
       signal: options?.signal,
     });
