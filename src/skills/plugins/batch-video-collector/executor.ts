@@ -20,6 +20,8 @@
 import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database';
 import { Prisma } from '@prisma/client';
+import { enqueueEnrichVideo } from '@/modules/queue/handlers/enrich-video';
+import { loadRichSummaryConfig } from '@/config/rich-summary';
 import type {
   SkillExecutor,
   PreflightContext,
@@ -476,6 +478,27 @@ async function upsertAll(
       });
       if (prior) videosUpdated += 1;
       else videosNew += 1;
+
+      // CP422 P1: eager enrich for new gold-tier videos (flag-gated).
+      //   Skips when RICH_SUMMARY_ENABLED=false OR RICH_SUMMARY_POOL_GOLD_EAGER=false.
+      //   Non-fatal — pool upsert must not block on queue enqueue.
+      if (!prior && v.tier === 'gold') {
+        const rsConfig = loadRichSummaryConfig();
+        if (rsConfig.enabled && rsConfig.poolGoldEager) {
+          try {
+            await enqueueEnrichVideo({
+              videoId: v.videoId,
+              title: v.title,
+              url: `https://www.youtube.com/watch?v=${v.videoId}`,
+              source: 'batch',
+            });
+          } catch (err) {
+            log.warn(
+              `pool eager enrich enqueue failed for video=${v.videoId}: ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        }
+      }
 
       // embedding (optional — only if we have a matching vector)
       const vec = embeddings[idx];

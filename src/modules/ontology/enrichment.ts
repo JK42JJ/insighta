@@ -2,7 +2,8 @@ import { getPrismaClient } from '../database/client';
 import { getCaptionExtractor } from '../caption/extractor';
 import { createGenerationProvider } from '../llm';
 import { embedNode } from './embedding';
-import { enrichRichSummary } from '../skills/rich-summary';
+import { enrichRichSummary, type RichSummarySegment } from '../skills/rich-summary';
+import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { logger } from '../../utils/logger';
 
 // ============================================================================
@@ -400,26 +401,44 @@ export async function enrichVideo(
   }
 
   // 2. Get transcript (or fallback to YouTube metadata)
+  //    CP422 P1: captionExtractor direct prod call is gated by RICH_SUMMARY_CAPTION_SOURCE.
+  //    - 'prod_direct' → existing behavior (call youtube-transcript from insighta-api)
+  //    - 'disabled'    → skip caption fetch entirely, fallback to metadata-enriched summary
+  //    - 'mac_mini'    → NOT IMPLEMENTED yet (Phase 2); throws to force explicit wiring
   let transcript: string;
   let transcriptSegments = 0;
   let isMetadataEnriched = false;
+  let richSummarySegments: RichSummarySegment[] | undefined;
+  const richSummaryConfig = loadRichSummaryConfig();
 
   if (options?.transcript) {
     transcript = options.transcript;
     logger.info('Using client-provided transcript', { videoId, length: transcript.length });
-  } else {
+  } else if (richSummaryConfig.captionSource === 'prod_direct') {
     const captionExtractor = getCaptionExtractor();
     const captionResult = await captionExtractor.extractCaptions(videoId);
     if (captionResult.success && captionResult.caption) {
       transcript = captionResult.caption.fullText;
       transcriptSegments = captionResult.caption.segments?.length ?? 0;
+      richSummarySegments = captionResult.caption.segments?.map((s) => ({
+        start_sec: s.start,
+        text: s.text,
+      }));
     } else {
-      // Fallback: build metadata-enriched context from YouTube Data API
       logger.info('Captions unavailable, falling back to metadata-enriched summary', { videoId });
       const metadata = await fetchVideoMetadata(prisma, videoId);
       transcript = buildMetadataTranscript(metadata);
       isMetadataEnriched = true;
     }
+  } else if (richSummaryConfig.captionSource === 'mac_mini') {
+    logger.error('Mac Mini caption bridge not implemented — Phase 2 work', { videoId });
+    throw new Error('CAPTION_SOURCE_MAC_MINI_NOT_IMPLEMENTED');
+  } else {
+    // 'disabled' — caption fetch skipped entirely
+    logger.info('Caption fetch disabled by config; using metadata-enriched summary', { videoId });
+    const metadata = await fetchVideoMetadata(prisma, videoId);
+    transcript = buildMetadataTranscript(metadata);
+    isMetadataEnriched = true;
   }
 
   // 3. Generate bilingual summary
@@ -482,11 +501,13 @@ export async function enrichVideo(
   logger.info('Video summary saved', { videoId, tagsCount: tags.length, model: modelName });
 
   // 5. Generate rich summary (non-fatal — video_summaries already saved)
+  //    CP422 P1: flag-gated. When RICH_SUMMARY_ENABLED=false, enrichRichSummary() no-ops.
   try {
     await enrichRichSummary(videoId, {
       title,
       description: options?.url,
       transcript,
+      segments: richSummarySegments,
     });
   } catch (err) {
     logger.warn('Rich summary generation failed (non-fatal)', {

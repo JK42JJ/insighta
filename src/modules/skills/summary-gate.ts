@@ -29,6 +29,16 @@ export interface GateResult {
   reasons: string[];
 }
 
+export interface RichSummaryChapter {
+  start_sec: number;
+  title: string;
+}
+
+export interface RichSummaryQuote {
+  timestamp_sec: number;
+  text: string;
+}
+
 export interface RichSummary {
   core_argument?: string;
   key_points?: string[];
@@ -42,6 +52,11 @@ export interface RichSummary {
     suggested_topics?: string[];
     relevance_rationale?: string;
   };
+  // --- CP422 P1 additions (optional; empty when caption source unavailable) ---
+  chapters?: RichSummaryChapter[];
+  quotes?: RichSummaryQuote[];
+  tl_dr_ko?: string;
+  tl_dr_en?: string;
 }
 
 // ============================================================================

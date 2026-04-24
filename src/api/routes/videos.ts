@@ -509,6 +509,48 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     }
   });
 
+  /**
+   * GET /api/v1/videos/:id/rich-summary - Return cached rich summary (chapters/quotes/tl_dr).
+   * CP422 P1: read-only lookup by YouTube video_id (11 chars).
+   *   - 200: cached RichSummary JSON
+   *   - 404: no passing row (caller may show short summary fallback in UI)
+   * Generation itself is gated by RICH_SUMMARY_ENABLED and happens via enrichVideo() /
+   * pool gold-tier eager hook. This endpoint does NOT trigger generation.
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/rich-summary',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const { id } = request.params;
+      if (!id || id.length > 20) {
+        return reply.code(400).send({ status: 'error', error: 'invalid video id' });
+      }
+      const row = await getPrismaClient().video_rich_summaries.findUnique({
+        where: { video_id: id },
+      });
+      if (!row || row.quality_flag !== 'pass') {
+        return reply.code(404).send({
+          status: 'error',
+          code: 'RICH_SUMMARY_NOT_FOUND',
+          message: row
+            ? `Rich summary exists but quality_flag=${row.quality_flag}`
+            : 'No rich summary available for this video',
+        });
+      }
+      return reply.code(200).send({
+        status: 'ok',
+        data: {
+          videoId: row.video_id,
+          oneLiner: row.one_liner,
+          structured: row.structured,
+          qualityScore: row.quality_score,
+          model: row.model,
+          updatedAt: row.updated_at.toISOString(),
+        },
+      });
+    }
+  );
+
   fastify.log.info('Video routes registered');
 
   done();
