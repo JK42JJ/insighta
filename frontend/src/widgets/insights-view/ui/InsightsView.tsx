@@ -395,7 +395,7 @@ export function InsightsView({
                   {card.title}
                 </span>
                 <span className="text-[9px] text-muted-foreground shrink-0 tabular-nums">
-                  {formatRelativeDate(card.updatedAt ?? card.createdAt)}
+                  {formatRelativeDate(card.publishedAt ?? card.createdAt)}
                 </span>
               </div>
             ))}

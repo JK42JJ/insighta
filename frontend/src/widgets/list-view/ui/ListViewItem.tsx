@@ -89,7 +89,7 @@ export const ListViewItem = memo(function ListViewItem({
       <div className="flex-shrink-0 flex items-center gap-2">
         {card.linkType && <SourceTypeBadge linkType={card.linkType} />}
         <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {formatRelativeDate(card.createdAt)}
+          {formatRelativeDate(card.publishedAt ?? card.createdAt)}
         </span>
       </div>
     </div>
