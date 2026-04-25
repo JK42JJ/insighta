@@ -996,6 +996,7 @@ async function upsertSlots(
           keyword: row.keyword ?? keyword,
           source: row.weight_version === 0 ? 'manual' : 'auto_recommend',
           recReason: row.rec_reason,
+          publishedAt: row.published_at?.toISOString() ?? null,
         };
         notifyCardAdded(mandalaId, payload);
       } catch (notifyErr) {

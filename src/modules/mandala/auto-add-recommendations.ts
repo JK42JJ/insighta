@@ -270,6 +270,7 @@ export async function maybeAutoAddRecommendations(
               keyword: rec.keyword ?? '',
               source: rec.weight_version === 0 ? 'manual' : 'auto_recommend',
               recReason: rec.rec_reason,
+              publishedAt: rec.published_at?.toISOString() ?? null,
             };
             notifyCardAdded(mandalaId, payload);
           } catch (notifyErr) {

@@ -296,7 +296,8 @@ export async function consumePrecompute(
             INSERT INTO public.recommendation_cache (
               user_id, mandala_id, cell_index, keyword, video_id, title,
               thumbnail, channel, channel_subs, view_count, like_ratio,
-              duration_sec, rec_score, rec_reason, weight_version, status, expires_at
+              duration_sec, rec_score, rec_reason, weight_version, status, expires_at,
+              published_at
             )
             VALUES (
               ${input.userId}::uuid,
@@ -315,7 +316,8 @@ export async function consumePrecompute(
               ${'realtime'},
               ${WEIGHT_VERSION},
               ${RECOMMENDATION_STATUS_PENDING},
-              ${expiresAt}
+              ${expiresAt},
+              ${slot.publishedAt}
             )
             ON CONFLICT (user_id, mandala_id, video_id) DO NOTHING
           `
@@ -333,6 +335,7 @@ export async function consumePrecompute(
           keyword: '',
           source: 'auto_recommend',
           recReason: 'realtime',
+          publishedAt: slot.publishedAt?.toISOString() ?? null,
         };
         notifyCardAdded(input.mandalaId, payload);
         return true;

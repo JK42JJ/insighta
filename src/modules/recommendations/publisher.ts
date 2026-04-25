@@ -45,6 +45,7 @@ export interface CardPayload {
   keyword: string;
   source: 'auto_recommend' | 'manual';
   recReason: string | null;
+  publishedAt: string | null;
 }
 
 /** Unsubscribe callback returned by `subscribe`. Idempotent. */

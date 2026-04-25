@@ -1643,6 +1643,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       keyword: row.keyword,
       source: row.weight_version === 0 ? ('manual' as const) : ('auto_recommend' as const),
       recReason: row.rec_reason,
+      publishedAt: row.published_at?.toISOString() ?? null,
     }));
 
     const firstRow = rows[0];
@@ -2317,6 +2318,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           keyword: row.keyword,
           source: row.weight_version === 0 ? 'manual' : 'auto_recommend',
           recReason: row.rec_reason,
+          publishedAt: row.published_at?.toISOString() ?? null,
         };
         write('card_added', payload);
       }
