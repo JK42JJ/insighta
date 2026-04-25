@@ -208,6 +208,11 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     mode === 'subword' ? [...centerTokens].map((t) => ({ token: t, grams: charBigrams(t) })) : [];
 
   const subGoalTokens: Set<string>[] = input.subGoals.map((sg) => tokenize(sg, input.language));
+  const subGoalGrams: Set<string>[] = subGoalTokens.map((tokens) => {
+    const grams = new Set<string>();
+    for (const t of tokens) for (const g of charBigrams(t)) grams.add(g);
+    return grams;
+  });
 
   // Build focus-tag tokens. Each tag is tokenised individually so a
   // multi-word tag ("뇌과학 기초") contributes all its component tokens.
@@ -297,13 +302,18 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     }
 
     const bodyTokens = tokenize(`${c.title} ${c.description ?? ''}`, input.language);
+    const bodyGrams = new Set<string>();
+    for (const t of bodyTokens) for (const g of charBigrams(t)) bodyGrams.add(g);
 
     let bestCell = -1;
     let bestScore = 0;
     for (let i = 0; i < subGoalTokens.length; i++) {
       const sg = subGoalTokens[i];
       if (!sg) continue;
-      const s = jaccard(bodyTokens, sg);
+      const exact = jaccard(bodyTokens, sg);
+      const sgGrams = subGoalGrams[i];
+      const bigram = sgGrams && sgGrams.size > 0 ? bigramOverlap(bodyGrams, sgGrams) : 0;
+      const s = Math.max(exact, bigram);
       if (s > bestScore) {
         bestScore = s;
         bestCell = i;
@@ -413,6 +423,13 @@ function jaccard(bodyTokens: Set<string>, subGoalTokens: Set<string>): number {
   let hits = 0;
   for (const t of subGoalTokens) if (bodyTokens.has(t)) hits++;
   return hits / subGoalTokens.size;
+}
+
+function bigramOverlap(bodyGrams: Set<string>, sgGrams: Set<string>): number {
+  if (sgGrams.size === 0 || bodyGrams.size === 0) return 0;
+  let hits = 0;
+  for (const g of sgGrams) if (bodyGrams.has(g)) hits++;
+  return hits / sgGrams.size;
 }
 
 /**

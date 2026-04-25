@@ -78,6 +78,7 @@ void MIN_SUB_RELEVANCE;
 // How many search queries to attempt per deficit cell (rule-based + LLM
 // together; the LLM pass yields at most a handful for the whole mandala).
 const TIER2_MAX_QUERIES_PER_CELL = 2;
+const MAX_PER_CHANNEL_PER_CELL = 2;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -747,6 +748,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   // Cap per cell using the deficit need + overall target remaining.
   const cellFilled = new Map<number, number>();
   const pickedVideoIds = new Set<string>();
+  const channelPerCell = new Map<number, Map<string, number>>();
   scored.sort((a, b) => b.score - a.score);
   const slots: AssembledSlot[] = [];
   for (const sc of scored) {
@@ -755,6 +757,13 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     const already = cellFilled.get(sc.cellIndex) ?? 0;
     if (already >= need) continue;
     if (pickedVideoIds.has(sc.video.videoId)) continue;
+    if (sc.video.channelId) {
+      if (!channelPerCell.has(sc.cellIndex)) channelPerCell.set(sc.cellIndex, new Map());
+      const cellMap = channelPerCell.get(sc.cellIndex)!;
+      const cnt = cellMap.get(sc.video.channelId) ?? 0;
+      if (cnt >= MAX_PER_CHANNEL_PER_CELL) continue;
+      cellMap.set(sc.video.channelId, cnt + 1);
+    }
     pickedVideoIds.add(sc.video.videoId);
     cellFilled.set(sc.cellIndex, already + 1);
     slots.push({
@@ -825,13 +834,17 @@ async function runSearchTraced(
   // perQuery tracing are unaffected. Tail latency no longer dominates
   // wall clock.
   const settled = await Promise.allSettled(
-    queries.map(async (q) => {
+    queries.map(async (q, idx) => {
       try {
+        const order: 'relevance' | 'viewCount' | 'date' | undefined =
+          idx % 5 === 3 ? 'viewCount' : idx % 5 === 4 ? 'date' : undefined;
+        const queryLang = language === 'ko' && idx % 5 === 2 ? 'en' : language;
         const items = await searchVideos({
           query: q.query,
           apiKey: apiKeys,
-          relevanceLanguage: language,
+          relevanceLanguage: queryLang,
           regionCode,
+          order,
           timeoutMs: v3Config.youtubeSearchTimeoutMs,
           ...(publishedAfter ? { publishedAfter } : {}),
         });

@@ -68,6 +68,8 @@ export interface SearchOpts {
    * Unset / 0 → no timeout (legacy behavior).
    */
   timeoutMs?: number;
+  /** YouTube search order. Default (undefined) = 'relevance'. */
+  order?: 'relevance' | 'viewCount' | 'date';
 }
 
 /**
@@ -117,6 +119,9 @@ async function searchVideosOne(
   }
   if (opts.publishedAfter) {
     url.searchParams.set('publishedAfter', opts.publishedAfter);
+  }
+  if (opts.order && opts.order !== 'relevance') {
+    url.searchParams.set('order', opts.order);
   }
   url.searchParams.set('safeSearch', 'moderate');
 

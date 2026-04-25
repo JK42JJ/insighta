@@ -97,6 +97,9 @@ services:
       # entirely — mandala filter's sub-goal scoring handles relevance.
       # Revert: delete this line → falls back to 'substring'.
       - V3_CENTER_GATE_MODE=off
+      # QW-2/QW-4 (CP426): recency 편향 감소 + search timeout 확장
+      - V3_RECENCY_WEIGHT=0.05
+      - V3_YOUTUBE_SEARCH_TIMEOUT_MS=3000
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).
