@@ -7,7 +7,6 @@ import { DEFAULT_TIER, getMandalaLimit, type Tier } from '@/config/quota';
 import {
   EXPLORE_PAGE_LIMIT,
   EXPLORE_DEFAULT_PAGE_SIZE,
-  MAX_PAGINATION_LIMIT,
   type ExploreSource,
   type ExploreSort,
 } from '@/config/explore';
@@ -317,8 +316,9 @@ export class MandalaManager {
     options?: { page?: number; limit?: number }
   ): Promise<ListMandalasResult> {
     const page = options?.page ?? 1;
-    const limit = options?.limit ?? MAX_PAGINATION_LIMIT;
-    const skip = (page - 1) * limit;
+    const hasLimit = options?.limit != null;
+    const limit = options?.limit ?? 0;
+    const skip = hasLimit ? (page - 1) * limit : 0;
 
     const [mandalas, total] = await Promise.all([
       this.prisma.user_mandalas.findMany({
@@ -329,8 +329,7 @@ export class MandalaManager {
           },
         },
         orderBy: [{ is_default: 'desc' }, { created_at: 'desc' }],
-        skip,
-        take: limit,
+        ...(hasLimit ? { skip, take: limit } : {}),
       }),
       this.prisma.user_mandalas.count({
         where: { user_id: userId },
@@ -340,8 +339,8 @@ export class MandalaManager {
     return {
       mandalas: mandalas.map((m) => this.mapMandala(m)),
       total,
-      page,
-      limit,
+      page: hasLimit ? page : 1,
+      limit: hasLimit ? limit : total,
     };
   }
 
