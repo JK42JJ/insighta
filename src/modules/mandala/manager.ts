@@ -7,6 +7,7 @@ import { DEFAULT_TIER, getMandalaLimit, type Tier } from '@/config/quota';
 import {
   EXPLORE_PAGE_LIMIT,
   EXPLORE_DEFAULT_PAGE_SIZE,
+  MAX_PAGINATION_LIMIT,
   type ExploreSource,
   type ExploreSort,
 } from '@/config/explore';
@@ -316,7 +317,7 @@ export class MandalaManager {
     options?: { page?: number; limit?: number }
   ): Promise<ListMandalasResult> {
     const page = options?.page ?? 1;
-    const limit = options?.limit ?? 20;
+    const limit = options?.limit ?? MAX_PAGINATION_LIMIT;
     const skip = (page - 1) * limit;
 
     const [mandalas, total] = await Promise.all([
@@ -327,7 +328,7 @@ export class MandalaManager {
             orderBy: [{ depth: 'asc' }, { position: 'asc' }],
           },
         },
-        orderBy: [{ is_default: 'desc' }, { position: 'asc' }, { created_at: 'desc' }],
+        orderBy: [{ is_default: 'desc' }, { created_at: 'desc' }],
         skip,
         take: limit,
       }),
