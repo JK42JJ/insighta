@@ -1124,84 +1124,94 @@ export class MandalaManager {
    */
   async clonePublicMandala(
     sourceMandalaId: string,
-    targetUserId: string
+    targetUserId: string,
+    options?: {
+      sourceTemplateId?: string;
+      focusTags?: string[];
+      targetLevel?: string;
+    }
   ): Promise<{ mandalaId: string; title: string }> {
-    const source = await this.prisma.user_mandalas.findFirst({
-      where: {
-        id: sourceMandalaId,
-        OR: [{ is_public: true }, { is_template: true }],
-      },
-    });
+    // Parallel pre-checks: source lookup + duplicate title + existing count
+    const [source, existingCount] = await Promise.all([
+      this.prisma.user_mandalas.findFirst({
+        where: {
+          id: sourceMandalaId,
+          OR: [{ is_public: true }, { is_template: true }],
+        },
+        select: { id: true, title: true },
+      }),
+      this.prisma.user_mandalas.count({
+        where: { user_id: targetUserId },
+      }),
+    ]);
 
     if (!source) {
       throw new Error('MANDALA_NOT_FOUND');
     }
 
-    // CP362 #386: deduplicate cloned title
-    let clonedTitle = `${source.title} (cloned)`;
+    const baseTitle = `${source.title} (cloned)`;
     const existing = await this.prisma.user_mandalas.findFirst({
-      where: { user_id: targetUserId, title: clonedTitle },
+      where: { user_id: targetUserId, title: baseTitle },
       select: { id: true },
     });
-    if (existing) {
-      clonedTitle = `${source.title} (cloned ${Date.now()})`;
-    }
+    const clonedTitle = existing ? `${source.title} (cloned ${Date.now()})` : baseTitle;
 
-    // Set as default if user has no existing mandalas (first mandala)
-    const existingCount = await this.prisma.user_mandalas.count({
-      where: { user_id: targetUserId },
-    });
-    const isDefault = existingCount === 0;
-
+    // Create mandala with all metadata in a single INSERT
     const newMandala = await this.prisma.user_mandalas.create({
       data: {
         user_id: targetUserId,
         title: clonedTitle,
-        is_default: isDefault,
+        is_default: existingCount === 0,
         is_public: false,
+        source_template_id: options?.sourceTemplateId ?? null,
+        focus_tags: options?.focusTags ?? [],
+        target_level: options?.targetLevel ?? 'standard',
       },
     });
 
-    // Clone levels with two-pass parent mapping (reuses sharing/manager pattern)
-    const sourceLevels = await this.prisma.user_mandala_levels.findMany({
-      where: { mandala_id: sourceMandalaId },
-      orderBy: { level_key: 'asc' },
-    });
+    // Batch clone: INSERT...SELECT + UPDATE parent_level_id via CTE (2 queries instead of 18)
+    const cloneResult = await this.prisma.$queryRaw<Array<{ levels_cloned: bigint }>>`
+      WITH source_levels AS (
+        SELECT id, level_key, center_goal, center_label, subjects, subject_labels,
+               depth, color, position, parent_level_id
+        FROM public.user_mandala_levels
+        WHERE mandala_id = ${sourceMandalaId}::uuid
+      ),
+      inserted AS (
+        INSERT INTO public.user_mandala_levels
+          (mandala_id, level_key, center_goal, center_label, subjects, subject_labels, depth, color, position)
+        SELECT ${newMandala.id}::uuid, level_key, center_goal, center_label, subjects, subject_labels,
+               depth, color, position
+        FROM source_levels
+        RETURNING id, level_key
+      ),
+      id_map AS (
+        SELECT i.id AS new_id, s.id AS old_id, s.parent_level_id AS old_parent_id
+        FROM inserted i
+        JOIN source_levels s USING (level_key)
+      ),
+      parent_fix AS (
+        UPDATE public.user_mandala_levels t
+        SET parent_level_id = p.new_id
+        FROM id_map c
+        JOIN id_map p ON c.old_parent_id = p.old_id
+        WHERE t.id = c.new_id AND c.old_parent_id IS NOT NULL
+        RETURNING t.id
+      )
+      SELECT (SELECT count(*) FROM inserted) AS levels_cloned
+    `;
 
-    const idMap = new Map<string, string>();
+    logger.info(
+      `clonePublicMandala batch: source=${sourceMandalaId} new=${newMandala.id} levels=${cloneResult[0]?.levels_cloned ?? 0}`
+    );
 
-    for (const level of sourceLevels) {
-      const newLevel = await this.prisma.user_mandala_levels.create({
-        data: {
-          mandala_id: newMandala.id,
-          level_key: level.level_key,
-          center_goal: level.center_goal,
-          center_label: level.center_label,
-          subjects: level.subjects,
-          subject_labels: level.subject_labels,
-          depth: level.depth,
-          color: level.color,
-          position: level.position,
-          parent_level_id: null,
-        },
-      });
-      idMap.set(level.id, newLevel.id);
-    }
-
-    for (const level of sourceLevels) {
-      if (level.parent_level_id && idMap.has(level.parent_level_id)) {
-        await this.prisma.user_mandala_levels.update({
-          where: { id: idMap.get(level.id)! },
-          data: { parent_level_id: idMap.get(level.parent_level_id)! },
-        });
-      }
-    }
-
-    // Atomic increment clone_count on source
-    await this.prisma.user_mandalas.update({
-      where: { id: sourceMandalaId },
-      data: { clone_count: { increment: 1 } },
-    });
+    // Increment clone_count on source (fire-and-forget — non-critical)
+    void this.prisma.user_mandalas
+      .update({
+        where: { id: sourceMandalaId },
+        data: { clone_count: { increment: 1 } },
+      })
+      .catch(() => {});
 
     return { mandalaId: newMandala.id, title: newMandala.title };
   }

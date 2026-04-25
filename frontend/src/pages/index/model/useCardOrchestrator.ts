@@ -114,7 +114,7 @@ export function useCardOrchestrator(
   const queryClient = useQueryClient();
 
   // YouTube sync
-  const { data: allVideoStates } = useAllVideoStates();
+  const { data: allVideoStates, isLoading: isVideoStatesLoading } = useAllVideoStates();
   const updateVideoState = useUpdateVideoState();
   const { autoSummaryEnabled } = useYouTubeAuth();
 
@@ -1386,7 +1386,7 @@ export function useCardOrchestrator(
     totalCards,
     displayCards,
     displayTitle,
-    isLoading: isLocalCardsLoading,
+    isLoading: isLocalCardsLoading || isVideoStatesLoading,
     syncedCards,
     newlySyncedCards,
     newlySyncedCountByMandala,

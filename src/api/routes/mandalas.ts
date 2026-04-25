@@ -500,47 +500,36 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         return reply.code(400).send({ error: 'templateId is required' });
       }
 
-      // Daily mandala creation limit (Phase 0-5) — admins bypass
+      // Daily mandala creation limit (Phase 0-5) — parallel admin + quota check
       const DAILY_MANDALA_LIMIT = 5;
-      const adminCheck = await getPrismaClient().$queryRaw<
-        Array<{ is_super_admin: boolean | null }>
-      >`
-      SELECT is_super_admin FROM auth.users WHERE id = ${userId}::uuid
-    `;
-      const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
-      if (!isSuperAdmin) {
-        const startOfDay = new Date();
-        startOfDay.setUTCHours(0, 0, 0, 0);
-        const todayCount = await getPrismaClient().user_mandalas.count({
+      const prisma = getPrismaClient();
+      const startOfDay = new Date();
+      startOfDay.setUTCHours(0, 0, 0, 0);
+
+      const [adminCheck, todayCount] = await Promise.all([
+        prisma.$queryRaw<Array<{ is_super_admin: boolean | null }>>`
+          SELECT is_super_admin FROM auth.users WHERE id = ${userId}::uuid
+        `,
+        prisma.user_mandalas.count({
           where: { user_id: userId, created_at: { gte: startOfDay } },
+        }),
+      ]);
+
+      const isSuperAdmin = adminCheck[0]?.is_super_admin === true;
+      if (!isSuperAdmin && todayCount >= DAILY_MANDALA_LIMIT) {
+        return reply.code(429).send({
+          status: 429,
+          code: 'DAILY_LIMIT_REACHED',
+          message: `Daily mandala creation limit reached (${todayCount}/${DAILY_MANDALA_LIMIT})`,
         });
-        if (todayCount >= DAILY_MANDALA_LIMIT) {
-          return reply.code(429).send({
-            status: 429,
-            code: 'DAILY_LIMIT_REACHED',
-            message: `Daily mandala creation limit reached (${todayCount}/${DAILY_MANDALA_LIMIT})`,
-          });
-        }
       }
 
       try {
-        // Reuse existing clone logic
-        const result = await getMandalaManager().clonePublicMandala(templateId, userId);
-
-        // Set source_template_id, focus_tags, target_level on the cloned mandala
-        const prisma = getPrismaClient();
-        const updateData: {
-          source_template_id: string;
-          focus_tags?: string[];
-          target_level?: string;
-        } = {
-          source_template_id: templateId,
-        };
-        if (focusTags?.length) updateData.focus_tags = focusTags;
-        if (targetLevel) updateData.target_level = targetLevel;
-        await prisma.user_mandalas.update({
-          where: { id: result.mandalaId, user_id: userId },
-          data: updateData,
+        // Clone with metadata in a single pass (no separate update needed)
+        const result = await getMandalaManager().clonePublicMandala(templateId, userId, {
+          sourceTemplateId: templateId,
+          focusTags: focusTags?.length ? focusTags : undefined,
+          targetLevel,
         });
 
         // Create skill config rows (CP357: video_discover defaults ON with auto_add=true)
@@ -554,7 +543,6 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         });
 
         // Fire-and-forget post-creation pipeline for the cloned mandala.
-        // Opt-in via user_skill_config; safe if not enabled.
         triggerMandalaPostCreationAsync(userId, result.mandalaId);
 
         return reply.send({ mandalaId: result.mandalaId });

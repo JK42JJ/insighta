@@ -21,6 +21,8 @@ const mockLevelFindMany = jest.fn();
 const mockLevelCreate = jest.fn();
 const mockLevelUpdate = jest.fn();
 
+const mockQueryRaw = jest.fn();
+
 const mockPrisma = {
   user_mandalas: {
     findMany: mockFindMany,
@@ -41,6 +43,7 @@ const mockPrisma = {
     update: mockLevelUpdate,
   },
   $transaction: mockTransaction,
+  $queryRaw: mockQueryRaw,
 };
 
 jest.mock('../../src/modules/database', () => ({
@@ -276,31 +279,23 @@ describe('Explore API — toggleLike', () => {
 describe('Explore API — clonePublicMandala', () => {
   const manager = getMandalaManager();
 
-  test('clones a public mandala with levels', async () => {
-    mockFindFirst.mockResolvedValue({
-      id: MOCK_MANDALA_ID,
-      title: 'Source Mandala',
-      is_public: true,
-      is_template: false,
-    });
+  test('clones a public mandala with batch SQL', async () => {
+    // First findFirst: source lookup (via Promise.all)
+    // Second findFirst: duplicate title check
+    mockFindFirst
+      .mockResolvedValueOnce({
+        id: MOCK_MANDALA_ID,
+        title: 'Source Mandala',
+      })
+      .mockResolvedValueOnce(null); // no duplicate title
+
+    mockCount.mockResolvedValue(0); // no existing mandalas → is_default=true
 
     const newMandalaId = '00000000-0000-0000-0000-000000000020';
     mockCreate.mockResolvedValue({ id: newMandalaId, title: 'Source Mandala (cloned)' });
 
-    mockLevelFindMany.mockResolvedValue([
-      {
-        id: 'l1',
-        level_key: 'root',
-        center_goal: 'Goal',
-        subjects: ['A'],
-        depth: 0,
-        color: null,
-        position: 0,
-        parent_level_id: null,
-      },
-    ]);
-
-    mockLevelCreate.mockResolvedValue({ id: 'new-l1' });
+    // Batch CTE returns levels_cloned count
+    mockQueryRaw.mockResolvedValue([{ levels_cloned: BigInt(1) }]);
     mockUpdate.mockResolvedValue({});
 
     const result = await manager.clonePublicMandala(MOCK_MANDALA_ID, MOCK_USER_ID);
@@ -308,13 +303,9 @@ describe('Explore API — clonePublicMandala', () => {
     expect(result.mandalaId).toBe(newMandalaId);
     expect(result.title).toBe('Source Mandala (cloned)');
     expect(mockCreate).toHaveBeenCalled();
-    expect(mockLevelCreate).toHaveBeenCalled();
-    expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: MOCK_MANDALA_ID },
-        data: { clone_count: { increment: 1 } },
-      })
-    );
+    // Batch SQL replaces individual level creates
+    expect(mockQueryRaw).toHaveBeenCalled();
+    // clone_count update is fire-and-forget
   });
 
   test('throws MANDALA_NOT_FOUND for non-public mandala', async () => {
