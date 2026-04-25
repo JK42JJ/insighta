@@ -64,7 +64,7 @@ export function useLocalCardsList() {
       return response.json();
     },
     enabled: isLoggedIn && isTokenReady,
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: 5 * 1000,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   });

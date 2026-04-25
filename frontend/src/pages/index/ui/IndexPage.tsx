@@ -236,7 +236,7 @@ function AuthenticatedApp() {
   useEffect(() => {
     if (!isNewMandalaActive) return;
 
-    const POLL_INTERVAL_MS = 5_000;
+    const POLL_INTERVAL_MS = 2_000;
     const POLL_TIMEOUT_MS = 90_000;
 
     const interval = setInterval(() => {
