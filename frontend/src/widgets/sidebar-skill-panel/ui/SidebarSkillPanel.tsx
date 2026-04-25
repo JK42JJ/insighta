@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { trackSkillActivated } from '@/shared/lib/posthog';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { formatRelativeDate } from '@/shared/lib/format-date';
 import {
   ChevronDown,
   ChevronRight,
@@ -633,16 +634,6 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
 // ---------------------------------------------------------------------------
 
 // Skill type labels are now in i18n: skills.typeNewsletter, skills.typeReport, etc.
-
-function formatRelativeDate(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
 
 function SkillOutputHistory({
   outputs,

@@ -10,6 +10,7 @@ import {
   handleThumbnailError,
   handleThumbnailLoad,
 } from '@/shared/lib/image-utils';
+import { formatRelativeDate } from '@/shared/lib/format-date';
 
 // ── Constants ──────────────────────────────────────────────
 
@@ -24,11 +25,6 @@ const VIEW_COUNT_THOUSAND = 1_000;
 
 const RELATIVE_MINUTE_SEC = 60;
 const RELATIVE_HOUR_SEC = 3600;
-const RELATIVE_DAY_MS = 86_400_000;
-const RELATIVE_WEEK_DAYS = 7;
-const RELATIVE_MONTH_DAYS = 30;
-const RELATIVE_YEAR_DAYS = 365;
-
 // ── Helpers ────────────────────────────────────────────────
 
 function formatDuration(sec: number | null | undefined): string | null {
@@ -46,19 +42,6 @@ function formatViewCount(count: number | null | undefined): string | null {
   if (count >= VIEW_COUNT_MILLION) return `${(count / VIEW_COUNT_MILLION).toFixed(1)}M`;
   if (count >= VIEW_COUNT_THOUSAND) return `${(count / VIEW_COUNT_THOUSAND).toFixed(1)}K`;
   return String(count);
-}
-
-function formatRelativeDate(dateStr: string | null | undefined): string | null {
-  if (!dateStr) return null;
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return null;
-  const diffMs = Date.now() - date.getTime();
-  const diffDays = Math.floor(diffMs / RELATIVE_DAY_MS);
-  if (diffDays < 1) return 'Today';
-  if (diffDays < RELATIVE_WEEK_DAYS) return `${diffDays}d ago`;
-  if (diffDays < RELATIVE_MONTH_DAYS) return `${Math.floor(diffDays / RELATIVE_WEEK_DAYS)}w ago`;
-  if (diffDays < RELATIVE_YEAR_DAYS) return `${Math.floor(diffDays / RELATIVE_MONTH_DAYS)}mo ago`;
-  return `${Math.floor(diffDays / RELATIVE_YEAR_DAYS)}y ago`;
 }
 
 function getQualityBadge(
