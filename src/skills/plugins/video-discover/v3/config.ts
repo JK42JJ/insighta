@@ -4,7 +4,7 @@ import { DEFAULT_SEMANTIC_ALPHA, DEFAULT_SEMANTIC_BETA } from '@/modules/video-d
 
 import { DEFAULT_RECENCY_HALF_LIFE_MONTHS, DEFAULT_RECENCY_WEIGHT } from './mandala-filter';
 
-export const DEFAULT_PUBLISHED_AFTER_DAYS = 1095;
+export const DEFAULT_PUBLISHED_AFTER_DAYS = 0;
 
 /**
  * Per-call timeout for YouTube search.list in v3 discovery.
