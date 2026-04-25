@@ -31,6 +31,8 @@ import {
   extractYouTubePlaylistId,
   fetchUrlMetadata,
 } from '@/shared/data/mockData';
+import type { RecommendationItem } from '@/features/recommendation-feed/model/useRecommendations';
+import { recommendationToInsightCard } from '@/features/recommendation-feed/lib/recommendationToInsightCard';
 import { uploadFile, detectFileType, isSupportedFileType } from '@/shared/lib/fileUpload';
 import { getAuthHeaders, getEdgeFunctionUrl } from '@/shared/lib/supabase-auth';
 import { normalizeUrl } from '@/shared/lib/url-normalize';
@@ -41,6 +43,7 @@ interface UseCardOrchestratorDeps {
   currentLevelId: string;
   currentLevel: { subjects: string[]; centerGoal: string };
   mandalaId: string | null;
+  streamCards?: RecommendationItem[];
 }
 
 export interface UseCardOrchestratorReturn {
@@ -100,7 +103,7 @@ export interface UseCardOrchestratorReturn {
  * manipulation handlers.
  */
 export function useCardOrchestrator(
-  { currentLevelId, currentLevel, mandalaId }: UseCardOrchestratorDeps,
+  { currentLevelId, currentLevel, mandalaId, streamCards }: UseCardOrchestratorDeps,
   selectedCellIndex: number | null,
   onCardClickExternal?: (card: InsightCard) => void
 ): UseCardOrchestratorReturn {
@@ -339,10 +342,24 @@ export function useCardOrchestrator(
     );
   }, [pendingLocalCards, mandalaLocalCards]);
 
+  // SSE stream cards converted to InsightCard format (recommendation_cache backlog)
+  const streamMandalaCards = useMemo(() => {
+    if (!streamCards?.length || !mandalaId) return [];
+    return streamCards
+      .filter((r) => r.cellIndex != null && r.cellIndex >= 0)
+      .map((r) => recommendationToInsightCard(r, mandalaId));
+  }, [streamCards, mandalaId]);
+
   // All mandala cards (deduplicate by normalized URL)
+  // Persisted cards first so they win dedup over stream placeholders
   const allMandalaCards = useMemo(() => {
     if (!isLoggedIn) return demoCards;
-    const merged = [...mandalaLocalCards, ...mandalaVideoCards, ...pendingMandalaCards];
+    const merged = [
+      ...mandalaLocalCards,
+      ...mandalaVideoCards,
+      ...pendingMandalaCards,
+      ...streamMandalaCards,
+    ];
     const seen = new Set<string>();
     return merged.filter((card) => {
       const key = normalizeUrl(card.videoUrl);
@@ -350,7 +367,14 @@ export function useCardOrchestrator(
       seen.add(key);
       return true;
     });
-  }, [isLoggedIn, demoCards, mandalaLocalCards, mandalaVideoCards, pendingMandalaCards]);
+  }, [
+    isLoggedIn,
+    demoCards,
+    mandalaLocalCards,
+    mandalaVideoCards,
+    pendingMandalaCards,
+    streamMandalaCards,
+  ]);
 
   // Cards grouped by cell index
   const cardsByCell = useMemo(() => {

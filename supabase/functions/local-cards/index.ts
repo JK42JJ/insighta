@@ -237,7 +237,7 @@ Deno.serve(async (req) => {
         // Parallel fetch: subscription + cards
         let cardsQuery = supabase
           .from('user_local_cards')
-          .select('*')
+          .select('id, url, title, thumbnail, link_type, user_note, cell_index, level_id, mandala_id, sort_order, video_id, created_at, updated_at')
           .eq('user_id', user.id)
           .order('sort_order', { ascending: true });
 

@@ -198,24 +198,11 @@ function AuthenticatedApp() {
     useMandalaStore.getState().setSelectedCell(navigation.selectedCellIndex);
   }, [navigation.selectedCellIndex]);
 
-  // 5. Card orchestrator (needs navigation state)
-  const cards = useCardOrchestrator(
-    {
-      currentLevelId: navigation.currentLevelId,
-      currentLevel: navigation.currentLevel,
-      mandalaId: effectiveMandalaId,
-    },
-    navigation.selectedCellIndex
-  );
-
-  // 5b. SSE card stream — subscribe to `recommendation_cache` +
-  // `user_video_states` notifications (Slices 2 + #438) so the main
-  // grid refreshes as each card is persisted, instead of waiting for
-  // the 5s polling tick. Each new card in the stream invalidates the
-  // localCards + userVideoStates queries; React Query then refetches
-  // and cardOrchestrator re-renders with the new rows. Cheap — no
-  // new schema, no render loop risk (invalidate is a no-op if the
-  // subscriber is mid-request).
+  // 5a. SSE card stream — subscribe to `recommendation_cache` +
+  // `user_video_states` notifications. Stream cards are fed directly
+  // into the card orchestrator so the grid renders recommendation_cache
+  // backlog immediately, without waiting for maybeAutoAddRecommendations
+  // to copy them into user_video_states (~15-30s pipeline delay).
   const cardStream = useVideoStream(effectiveMandalaId);
   const cardStreamCountRef = useRef(0);
   useEffect(() => {
@@ -224,12 +211,21 @@ function AuthenticatedApp() {
       queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
       queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
     }
-    // Reset the counter when the subscribed mandala changes so a
-    // cross-mandala navigation does not miss the first event.
     if (cardStream.cards.length === 0 && cardStreamCountRef.current !== 0) {
       cardStreamCountRef.current = 0;
     }
   }, [cardStream.cards.length, queryClient]);
+
+  // 5b. Card orchestrator (needs navigation state + stream cards)
+  const cards = useCardOrchestrator(
+    {
+      currentLevelId: navigation.currentLevelId,
+      currentLevel: navigation.currentLevel,
+      mandalaId: effectiveMandalaId,
+      streamCards: cardStream.cards,
+    },
+    navigation.selectedCellIndex
+  );
 
   // 5c. Post-creation card polling: when a mandala was just created via wizard,
   // poll for cards every 5s until they appear or 90s timeout.

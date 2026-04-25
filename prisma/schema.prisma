@@ -650,6 +650,7 @@ model video_summaries {
   created_at          DateTime @default(now()) @db.Timestamptz(6)
   updated_at          DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
+  @@index([url], map: "idx_video_summaries_url")
   @@schema("public")
 }
 
