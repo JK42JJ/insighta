@@ -42,6 +42,7 @@ import {
   searchVideos,
   videosBatch,
   parseIsoDuration,
+  resolveSearchApiKeys,
   VIDEOS_LIST_MAX_IDS_PER_CALL,
   type YouTubeSearchItem,
   type YouTubeVideoStatsItem,
@@ -60,7 +61,7 @@ const DESC_SNIPPET_LEN = 200;
 const DEFAULT_RUN_TYPE = 'daily_trend';
 
 interface HydratedState {
-  apiKey: string;
+  apiKeys: string[];
   ollamaUrl: string;
   limit: number;
   offset: number;
@@ -106,8 +107,8 @@ export const executor: SkillExecutor = {
       return { ok: false, reason: `Missing required env: ${missing.join(', ')}` };
     }
 
-    const apiKey = ctx.env['YOUTUBE_API_KEY_SEARCH'] ?? '';
-    if (!apiKey) {
+    const apiKeys = resolveSearchApiKeys(ctx.env);
+    if (apiKeys.length === 0) {
       return {
         ok: false,
         reason: 'YOUTUBE_API_KEY_SEARCH is required (server API key only, not user OAuth)',
@@ -129,7 +130,7 @@ export const executor: SkillExecutor = {
         ? parseInt(envOffset, 10)
         : computeRotationOffset(Date.now(), limit, BATCH_COLLECTOR_ROTATION_DAYS);
 
-    const state: HydratedState = { apiKey, ollamaUrl, limit, offset, runType };
+    const state: HydratedState = { apiKeys, ollamaUrl, limit, offset, runType };
     return { ok: true, hydrated: state as unknown as Record<string, unknown> };
   },
 
@@ -177,7 +178,7 @@ export const executor: SkillExecutor = {
       const hitsByVideoId = new Map<string, SearchHit>();
       const queriesExecuted = await searchAllKeywords(
         keywords,
-        state.apiKey,
+        state.apiKeys,
         hitsByVideoId,
         (units) => {
           quotaUsed += units;
@@ -215,7 +216,7 @@ export const executor: SkillExecutor = {
       const allIds = Array.from(hitsByVideoId.keys());
       let stats: YouTubeVideoStatsItem[] = [];
       try {
-        stats = await videosBatch({ videoIds: allIds, apiKey: state.apiKey });
+        stats = await videosBatch({ videoIds: allIds, apiKey: state.apiKeys });
         quotaUsed += Math.ceil(allIds.length / VIDEOS_LIST_MAX_IDS_PER_CALL);
       } catch (err) {
         log.warn(
@@ -367,7 +368,7 @@ function buildEmbedText(v: EnrichedVideo): string {
 
 async function searchAllKeywords(
   keywords: TrendKeyword[],
-  apiKey: string,
+  apiKeys: string[],
   hitsByVideoId: Map<string, SearchHit>,
   onQuotaUsed: (units: number) => void,
   onQuotaExhausted: () => void
@@ -381,7 +382,7 @@ async function searchAllKeywords(
         try {
           const items = await searchVideos({
             query: kw.keyword,
-            apiKey,
+            apiKey: apiKeys,
             maxResults: BATCH_COLLECTOR_SEARCH_MAX_RESULTS,
             relevanceLanguage: kw.language || 'ko',
             regionCode: (kw.language || 'ko') === 'en' ? 'US' : 'KR',
