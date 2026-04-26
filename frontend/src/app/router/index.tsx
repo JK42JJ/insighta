@@ -27,6 +27,7 @@ const TermsPage = lazy(() => import('@/pages/terms'));
 const ExplorePage = lazy(() => import('@/pages/explore'));
 const PricingPage = lazy(() => import('@/pages/pricing'));
 // TemplatesPage removed — /templates redirects to /explore (Phase 5)
+const LearningPage = lazy(() => import('@/pages/learning'));
 const HelpPage = lazy(() => import('@/pages/help'));
 const NotFoundPage = lazy(() => import('@/pages/not-found'));
 const LandingPage = lazy(() => import('@/pages/landing'));
@@ -79,6 +80,14 @@ export function AppRouter() {
           element={
             <ProtectedRoute>
               <MandalaDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/learning/:mandalaId/:videoId"
+          element={
+            <ProtectedRoute>
+              <LearningPage />
             </ProtectedRoute>
           }
         />

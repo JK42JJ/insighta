@@ -16,6 +16,7 @@ import { DropZoneOverlay } from '@/widgets/header/ui/DropZoneOverlay';
 import { CardListView } from '@/widgets/card-list-view';
 import { CardDiscoveryProgress } from '@/widgets/card-list/ui/CardDiscoveryProgress';
 import { VideoPlayerModal } from '@/widgets/video-player/ui/VideoPlayerModal';
+import { getYouTubeVideoId } from '@/widgets/video-player/model/youtube-api';
 import { VideoSidePanel, useVideoPanelStore } from '@/features/video-side-panel';
 import { FloatingScratchPad } from '@/widgets/scratch-pad/ui/FloatingScratchPad';
 import { MandalaPanel } from '@/widgets/mandala-panel';
@@ -339,12 +340,17 @@ function AuthenticatedApp() {
       card_id: card.id,
       has_summary: !!('summary' in card && card.summary),
     });
+
+    const ytId = getYouTubeVideoId(card.videoUrl);
+    if (card.mandalaId && ytId) {
+      navigate(`/learning/${card.mandalaId}/${ytId}`);
+      return;
+    }
+
     const panel = useVideoPanelStore.getState();
     if (panel.mode === 'sidebar' && panel.isOpen) {
       panel.openInSidebar(card);
     } else {
-      // Use the sorted list from CardListView (matches what user sees on screen).
-      // Fallback to displayCards if sortedList missing (defensive).
       const siblings = sortedList ?? (search.isSearchActive ? search.results : cards.displayCards);
       modal.openModal(card, siblings);
     }

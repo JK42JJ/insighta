@@ -25,7 +25,7 @@ function getInitialCollapsed(): boolean {
 }
 
 /** Routes that render the full sidebar layout */
-const SIDEBAR_ROUTES = ['/', '/mandalas'];
+const SIDEBAR_ROUTES = ['/', '/mandalas', '/learning'];
 
 /** Routes where sidebar is explicitly hidden (full-width content) */
 const NO_SIDEBAR_ROUTES = ['/mandalas/new'];
@@ -117,7 +117,11 @@ export function AppShell({ children }: AppShellProps) {
         <div className="flex-1 flex overflow-hidden">
           {showSidebar && (
             <Sidebar
-              collapsed={isSettingsRoute ? false : sidebarCollapsed}
+              collapsed={
+                isSettingsRoute || location.pathname.startsWith('/learning')
+                  ? false
+                  : sidebarCollapsed
+              }
               onToggleCollapse={handleToggleCollapse}
               onNavigateHome={onNavigateHome ?? undefined}
               minimapData={minimapData ?? undefined}

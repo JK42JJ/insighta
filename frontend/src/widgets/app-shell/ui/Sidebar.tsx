@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams, useMatch } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Home,
@@ -18,6 +18,7 @@ import {
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { SidebarMandalaSection, type MinimapData } from './SidebarMandalaSection';
+import { SidebarLearningSection } from './SidebarLearningSection';
 import { ErrorBoundary } from 'react-error-boundary';
 import { RefreshCw } from 'lucide-react';
 
@@ -142,6 +143,9 @@ export function Sidebar({
   const widthRef = useRef(sidebarWidth);
   widthRef.current = sidebarWidth;
 
+  const learningMatch = useMatch('/learning/:mandalaId/:videoId');
+  const isLearningRoute = Boolean(learningMatch);
+
   const isActive = (path: string, exact?: boolean) => {
     if (exact) return location.pathname === path;
     return location.pathname.startsWith(path);
@@ -256,11 +260,13 @@ export function Sidebar({
       }}
       aria-label={t('sidebar.navigation')}
     >
-      {/* App Panel */}
+      {/* App Panel (dashboard) */}
       <div
         className={cn(
           'absolute inset-0 flex flex-col transition-all duration-300 ease-in-out',
-          settingsMode ? '-translate-x-full opacity-0' : 'translate-x-0 opacity-100'
+          settingsMode || isLearningRoute
+            ? '-translate-x-full opacity-0 pointer-events-none'
+            : 'translate-x-0 opacity-100'
         )}
       >
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto scrollbar-none">
@@ -325,11 +331,43 @@ export function Sidebar({
         </div>
       </div>
 
+      {/* Learning Panel */}
+      <div
+        className={cn(
+          'absolute inset-0 flex flex-col transition-all duration-300 ease-in-out',
+          isLearningRoute && !settingsMode
+            ? 'translate-x-0 opacity-100'
+            : 'translate-x-full opacity-0 pointer-events-none'
+        )}
+      >
+        <div className="px-4 pt-4 pb-2">
+          <button
+            onClick={handleBackToApp}
+            className="flex items-center gap-2 text-sm font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors mb-3"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {t('settings.backToApp', 'Back to app')}
+          </button>
+        </div>
+
+        <nav className="flex-1 px-0 pb-4 overflow-y-auto scrollbar-none">
+          {learningMatch && (
+            <SidebarLearningSection
+              mandalaId={learningMatch.params.mandalaId!}
+              currentVideoId={learningMatch.params.videoId}
+              collapsed={collapsed}
+            />
+          )}
+        </nav>
+      </div>
+
       {/* Settings Panel */}
       <div
         className={cn(
           'absolute inset-0 flex flex-col transition-all duration-300 ease-in-out',
-          settingsMode ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
+          settingsMode
+            ? 'translate-x-0 opacity-100'
+            : 'translate-x-full opacity-0 pointer-events-none'
         )}
       >
         <div className="px-4 pt-4 pb-2">

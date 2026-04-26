@@ -925,3 +925,48 @@
   -webkit-text-fill-color: transparent;
   animation: insighta-shimmer 2s ease-in-out infinite;
 }
+
+/* CopilotKit — theme variable mapping (Research Canvas pattern) */
+.copilotkit-chat-wrapper {
+  --copilot-kit-primary-color: hsl(var(--foreground)) !important;
+  --copilot-kit-contrast-color: hsl(var(--background)) !important;
+  --copilot-kit-background-color: hsl(var(--background)) !important;
+  --copilot-kit-input-background-color: hsl(var(--card)) !important;
+  --copilot-kit-secondary-color: hsl(var(--card)) !important;
+  --copilot-kit-secondary-contrast-color: hsl(var(--card-foreground)) !important;
+  --copilot-kit-separator-color: hsl(var(--border)) !important;
+  --copilot-kit-muted-color: hsl(var(--muted-foreground)) !important;
+}
+
+.copilotkit-chat-wrapper .copilotKitHeader {
+  display: none;
+}
+
+.copilotkit-chat-wrapper .copilotKitMessages {
+  overflow-y: auto !important;
+}
+
+.copilotkit-chat-wrapper .poweredBy {
+  display: none !important;
+}
+
+.copilotkit-chat-wrapper .copilotKitInput {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.copilotkit-chat-wrapper .copilotKitInput > textarea {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.copilotkit-chat-wrapper .copilotKitButton {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.copilotkit-chat-wrapper .suggestion {
+  border-color: hsl(var(--border)) !important;
+}

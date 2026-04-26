@@ -22,6 +22,8 @@ export interface PanelVideoPlayerProps {
   /** Called when the player transitions to PLAYING state for the first time
    *  (user clicked play in iframe). Used to enable subsequent autoplay. */
   onUserPlayed?: () => void;
+  /** Called on every play/pause state change. True = playing, false = paused. */
+  onPlayStateChange?: (isPlaying: boolean) => void;
 }
 
 export function PanelVideoPlayer({
@@ -31,6 +33,7 @@ export function PanelVideoPlayer({
   onReady,
   shouldAutoplay = false,
   onUserPlayed,
+  onPlayStateChange,
 }: PanelVideoPlayerProps) {
   const youtubeId = getYouTubeVideoId(videoUrl);
   const internalPlayerRef = useRef<YTPlayer | null>(null);
@@ -74,11 +77,15 @@ export function PanelVideoPlayer({
           onReady?.();
         },
         onStateChange: (event: { data: number }) => {
-          // YT.PlayerState.PLAYING = 1
-          // First transition to PLAYING = user gesture confirmed
-          if (event.data === 1 && !userPlayedFiredRef.current) {
-            userPlayedFiredRef.current = true;
-            onUserPlayed?.();
+          // YT.PlayerState.PLAYING = 1, PAUSED = 2
+          if (event.data === 1) {
+            if (!userPlayedFiredRef.current) {
+              userPlayedFiredRef.current = true;
+              onUserPlayed?.();
+            }
+            onPlayStateChange?.(true);
+          } else if (event.data === 2) {
+            onPlayStateChange?.(false);
           }
         },
       },
