@@ -1,18 +1,16 @@
 /**
- * video-discover v3 — executor (Tier 1 cache + Tier 2 realtime fallback)
+ * video-discover v3 — executor
  *
  * Flow:
  *   preflight — validate mandala + level=1 embeddings present
- *   execute   — 1. matchFromVideoPool → Tier 1 cached results
+ *   execute   — 0. RedisProvider (video-dictionary, priority 1)
+ *               1. matchFromVideoPool → Tier 1 cached results
  *               2. Compute per-cell deficit
- *               3. If any deficit, run Tier 2:
- *                    - build queries for deficit cells only
- *                    - YouTube search (server key, parallel)
- *                    - videos.list batch → quality gate
- *                    - Jaccard relevance per deficit cell
- *                    - Fill deficit slots (sorted by score)
- *               4. Upsert recommendation_cache (source='cache'|'realtime',
- *                  weight_version=3)
+ *               3. If any deficit, run Tier 2 (YouTube realtime)
+ *               4. Upsert recommendation_cache
+ *
+ * Redis runs first and independently of YouTube quota. Even if all
+ * YouTube keys are 403, Redis results still produce cards.
  *
  * Coexists with v1/v2. Routing via VIDEO_DISCOVER_V3=1 in pipeline-runner.
  */
@@ -66,6 +64,8 @@ import {
   type YouTubeVideoStatsItem,
   type YouTubeSearchItem,
 } from '../v2/youtube-client';
+import { RedisProvider } from './providers/redis-provider';
+import type { CellDefinition } from './providers/types';
 
 const log = logger.child({ module: 'video-discover/v3/executor' });
 
@@ -193,7 +193,64 @@ export const executor: SkillExecutor = {
     const state = ctx.state as unknown as HydratedState;
     const mandalaId = ctx.mandalaId!;
 
+    // ── Tier 0: Redis video-dictionary (always runs, quota-independent) ─
+    const slots: AssembledSlot[] = [];
+    let redisMatchCount = 0;
+    const redisProvider = new RedisProvider();
+    const redisHealth = await redisProvider.health();
+    if (redisHealth.available) {
+      const cells: CellDefinition[] = state.subGoals.map((sg, i) => ({
+        cellIndex: i,
+        subGoal: sg,
+        keywords: [],
+      }));
+      try {
+        const redisResult = await redisProvider.match({
+          mandalaId,
+          userId: ctx.userId,
+          cells,
+          budget: V3_TARGET_TOTAL,
+          excludeVideoIds: new Set<string>(),
+          language: state.language,
+          centerGoal: state.centerGoal,
+          focusTags: state.focusTags,
+        });
+        for (const c of redisResult.candidates) {
+          slots.push({
+            videoId: c.videoId,
+            title: c.title,
+            description: c.description,
+            channelName: c.channelTitle,
+            channelId: c.channelId,
+            thumbnail: c.thumbnailUrl,
+            viewCount: c.viewCount,
+            likeCount: c.likeCount,
+            durationSec: c.durationSec,
+            publishedAt: c.publishedAt,
+            cellIndex: c.cellIndex,
+            score: c.relevanceScore,
+            tier: 'cache',
+          });
+        }
+        redisMatchCount = redisResult.candidates.length;
+        log.info(
+          `[redis] mandala=${mandalaId} candidates=${redisMatchCount} latencyMs=${redisResult.meta.latencyMs}`
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn(`[redis] match failed (non-fatal): ${msg}`);
+      }
+    } else {
+      log.info(`[redis] unavailable: ${redisHealth.lastError}`);
+    }
+
     // ── Tier 1: video_pool cache (disabled by default — see v3Config.enableTier1Cache)
+    const redisByCell = new Map<number, number>();
+    for (const s of slots) {
+      redisByCell.set(s.cellIndex, (redisByCell.get(s.cellIndex) ?? 0) + 1);
+    }
+    const existingVideoIds = new Set(slots.map((s) => s.videoId));
+
     const tier1Matches = v3Config.enableTier1Cache
       ? await matchFromVideoPool({
           mandalaId,
@@ -202,12 +259,10 @@ export const executor: SkillExecutor = {
         })
       : [];
     const tier1ByCell = groupByCell(tier1Matches, V3_NUM_CELLS);
-    const tier1Total = tier1Matches.length;
-
-    // Assemble Tier 1 slots with known metadata.
-    const slots: AssembledSlot[] = [];
+    let tier1Total = 0;
     for (const [cellIndex, cached] of tier1ByCell) {
       for (const m of cached) {
+        if (existingVideoIds.has(m.videoId)) continue;
         slots.push({
           videoId: m.videoId,
           title: m.title,
@@ -223,6 +278,8 @@ export const executor: SkillExecutor = {
           score: m.score,
           tier: 'cache',
         });
+        existingVideoIds.add(m.videoId);
+        tier1Total++;
       }
     }
 
@@ -230,10 +287,15 @@ export const executor: SkillExecutor = {
     let tier2Count = 0;
     let tier2QueriesUsed = 0;
     let tier2Debug: Tier2Debug | null = null;
-    if (tier1Total < V3_TARGET_TOTAL) {
+    const totalHave = slots.length;
+    if (totalHave < V3_TARGET_TOTAL) {
+      const slotsByCell = new Map<number, number>();
+      for (const s of slots) {
+        slotsByCell.set(s.cellIndex, (slotsByCell.get(s.cellIndex) ?? 0) + 1);
+      }
       const deficitCells: Array<{ cellIndex: number; need: number }> = [];
       for (let i = 0; i < V3_NUM_CELLS; i++) {
-        const have = tier1ByCell.get(i)?.length ?? 0;
+        const have = slotsByCell.get(i) ?? 0;
         const need = Math.max(0, V3_TARGET_PER_CELL - have);
         if (need > 0) deficitCells.push({ cellIndex: i, need });
       }
@@ -244,7 +306,7 @@ export const executor: SkillExecutor = {
         apiKeys,
         openRouterApiKey: openRouterApiKey || undefined,
         openRouterModel,
-        existingVideoIds: new Set(slots.map((s) => s.videoId)),
+        existingVideoIds,
       });
       slots.push(...tier2Fill.slots);
       tier2Count = tier2Fill.slots.length;
@@ -256,11 +318,12 @@ export const executor: SkillExecutor = {
       return {
         status: 'failed',
         data: {
+          redis_matches: redisMatchCount,
           tier1_matches: 0,
           tier2_matches: 0,
           ...(tier2Debug ? { debug: tier2Debug } : {}),
         },
-        error: 'No recommendations from cache or realtime fallback',
+        error: 'No recommendations from Redis, cache, or realtime fallback',
         metrics: { duration_ms: Date.now() - t0 },
       };
     }
@@ -282,6 +345,7 @@ export const executor: SkillExecutor = {
     return {
       status: 'success',
       data: {
+        redis_matches: redisMatchCount,
         tier1_matches: tier1Total,
         tier2_matches: tier2Count,
         tier2_queries: tier2QueriesUsed,
