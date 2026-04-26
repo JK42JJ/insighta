@@ -1114,10 +1114,10 @@ export interface EphemeralDiscoverInput {
 export interface EphemeralDiscoverResult {
   slots: AssembledSlot[];
   queriesUsed: number;
-  tier1_matches: 0;
+  tier0_matches: number;
   tier2_matches: number;
   duration_ms: number;
-  debug: Tier2Debug;
+  debug?: Tier2Debug;
 }
 
 /**
@@ -1145,32 +1145,104 @@ export async function runDiscoverEphemeral(
   const openRouterApiKey = input.env['OPENROUTER_API_KEY'];
   const openRouterModel = input.env['OPENROUTER_MODEL'] ?? 'qwen/qwen3-30b-a3b';
 
-  const deficitCells = Array.from({ length: V3_NUM_CELLS }, (_, i) => ({
-    cellIndex: i,
-    need: V3_TARGET_PER_CELL,
-  }));
+  // ── Tier 0: Redis video-dictionary (same as execute(), quota-independent) ─
+  const redisSlots: AssembledSlot[] = [];
+  const redisProvider = new RedisProvider();
+  const redisHealth = await redisProvider.health();
+  if (redisHealth.available) {
+    const cells: CellDefinition[] = input.subGoals.map((sg, i) => ({
+      cellIndex: i,
+      subGoal: sg,
+      keywords: [],
+    }));
+    try {
+      const redisResult = await redisProvider.match({
+        mandalaId: 'ephemeral',
+        userId: 'precompute',
+        cells,
+        budget: V3_TARGET_TOTAL,
+        excludeVideoIds: new Set<string>(),
+        language: input.language,
+        centerGoal: input.centerGoal,
+        focusTags: input.focusTags,
+      });
+      for (const c of redisResult.candidates) {
+        redisSlots.push({
+          videoId: c.videoId,
+          title: c.title,
+          description: c.description,
+          channelName: c.channelTitle,
+          channelId: c.channelId,
+          thumbnail: c.thumbnailUrl,
+          viewCount: c.viewCount,
+          likeCount: c.likeCount,
+          durationSec: c.durationSec,
+          publishedAt: c.publishedAt,
+          cellIndex: c.cellIndex,
+          score: c.relevanceScore,
+          tier: 'cache',
+        });
+      }
+      log.info(
+        `[redis][ephemeral] candidates=${redisResult.candidates.length} latencyMs=${redisResult.meta.latencyMs}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn(`[redis][ephemeral] match failed (non-fatal): ${msg}`);
+    }
+  } else {
+    log.info(`[redis][ephemeral] unavailable: ${redisHealth.lastError}`);
+  }
 
-  const tier2 = await runTier2({
-    deficitCells,
-    state: {
-      centerGoal: input.centerGoal,
-      subGoals: input.subGoals,
-      language: input.language,
-      focusTags: input.focusTags,
-      targetLevel: input.targetLevel,
-    },
-    apiKeys,
-    openRouterApiKey: openRouterApiKey || undefined,
-    openRouterModel,
-    existingVideoIds: new Set(),
-  });
+  // ── Compute per-cell deficit after Redis ─
+  const redisByCell = new Map<number, number>();
+  for (const s of redisSlots) {
+    redisByCell.set(s.cellIndex, (redisByCell.get(s.cellIndex) ?? 0) + 1);
+  }
+  const existingVideoIds = new Set(redisSlots.map((s) => s.videoId));
+
+  const deficitCells: { cellIndex: number; need: number }[] = [];
+  for (let i = 0; i < V3_NUM_CELLS; i++) {
+    const have = redisByCell.get(i) ?? 0;
+    const need = V3_TARGET_PER_CELL - have;
+    if (need > 0) {
+      deficitCells.push({ cellIndex: i, need });
+    }
+  }
+
+  // ── Tier 2: YouTube realtime (only for deficit cells) ─
+  let tier2Slots: AssembledSlot[] = [];
+  let queriesUsed = 0;
+  let tier2Debug: Tier2Debug | undefined;
+
+  if (deficitCells.length > 0) {
+    const tier2 = await runTier2({
+      deficitCells,
+      state: {
+        centerGoal: input.centerGoal,
+        subGoals: input.subGoals,
+        language: input.language,
+        focusTags: input.focusTags,
+        targetLevel: input.targetLevel,
+      },
+      apiKeys,
+      openRouterApiKey: openRouterApiKey || undefined,
+      openRouterModel,
+      existingVideoIds,
+    });
+    tier2Slots = tier2.slots;
+    queriesUsed = tier2.queriesUsed;
+    tier2Debug = tier2.debug;
+  }
+
+  const allSlots = [...redisSlots, ...tier2Slots];
 
   return {
-    slots: tier2.slots,
-    queriesUsed: tier2.queriesUsed,
-    tier1_matches: 0,
-    tier2_matches: tier2.slots.length,
+    slots: allSlots,
+    queriesUsed,
+    tier0_matches: redisSlots.length,
+    tier2_matches: tier2Slots.length,
     duration_ms: Date.now() - t0,
-    debug: tier2.debug,
+    debug: tier2Debug,
   };
 }
