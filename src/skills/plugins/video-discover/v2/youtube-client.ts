@@ -72,21 +72,24 @@ export interface SearchOpts {
   order?: 'relevance' | 'viewCount' | 'date';
 }
 
+const MAX_SEARCH_KEY_SLOTS = 10;
+
 /**
  * Resolve API keys from env, preserving insertion order:
- *   YOUTUBE_API_KEY_SEARCH  (primary)
- *   YOUTUBE_API_KEY_SEARCH_2
- *   YOUTUBE_API_KEY_SEARCH_3
+ *   YOUTUBE_API_KEY_SEARCH    (slot 1)
+ *   YOUTUBE_API_KEY_SEARCH_2  (slot 2)
+ *   …
+ *   YOUTUBE_API_KEY_SEARCH_N  (up to MAX_SEARCH_KEY_SLOTS)
  * Falls back to YOUTUBE_API_KEY when no SEARCH_ keys are present (legacy).
  */
 export function resolveSearchApiKeys(env: Readonly<Record<string, string | undefined>>): string[] {
   const keys: string[] = [];
   const primary = env['YOUTUBE_API_KEY_SEARCH']?.trim();
-  const secondary = env['YOUTUBE_API_KEY_SEARCH_2']?.trim();
-  const tertiary = env['YOUTUBE_API_KEY_SEARCH_3']?.trim();
   if (primary) keys.push(primary);
-  if (secondary) keys.push(secondary);
-  if (tertiary) keys.push(tertiary);
+  for (let i = 2; i <= MAX_SEARCH_KEY_SLOTS; i++) {
+    const k = env[`YOUTUBE_API_KEY_SEARCH_${i}`]?.trim();
+    if (k) keys.push(k);
+  }
   if (keys.length === 0) {
     const legacy = env['YOUTUBE_API_KEY']?.trim();
     if (legacy) keys.push(legacy);

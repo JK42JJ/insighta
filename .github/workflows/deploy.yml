@@ -200,6 +200,9 @@ jobs:
           YT_SEARCH_KEY: ${{ secrets.YOUTUBE_API_KEY_SEARCH }}
           YT_SEARCH_KEY_2: ${{ secrets.YOUTUBE_API_KEY_SEARCH_2 }}
           YT_SEARCH_KEY_3: ${{ secrets.YOUTUBE_API_KEY_SEARCH_3 }}
+          YT_SEARCH_KEY_4: ${{ secrets.YOUTUBE_API_KEY_SEARCH_4 }}
+          YT_SEARCH_KEY_5: ${{ secrets.YOUTUBE_API_KEY_SEARCH_5 }}
+          YT_SEARCH_KEY_6: ${{ secrets.YOUTUBE_API_KEY_SEARCH_6 }}
           DB_URL: ${{ secrets.DATABASE_URL }}
           DB_DIRECT: ${{ secrets.DIRECT_URL }}
           REDIS_ADMIN_PW: ${{ secrets.REDIS_ADMIN_PASSWORD }}
@@ -211,7 +214,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP
+          envs: OR_KEY,OR_MODEL,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP
           script: |
             set -e
             cd /opt/tubearchive
@@ -246,6 +249,15 @@ jobs:
             fi
             if [ -n "${YT_SEARCH_KEY_3}" ]; then
               grep -q '^YOUTUBE_API_KEY_SEARCH_3=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_3=.*|YOUTUBE_API_KEY_SEARCH_3=${YT_SEARCH_KEY_3}|" .env || echo "YOUTUBE_API_KEY_SEARCH_3=${YT_SEARCH_KEY_3}" >> .env
+            fi
+            if [ -n "${YT_SEARCH_KEY_4}" ]; then
+              grep -q '^YOUTUBE_API_KEY_SEARCH_4=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_4=.*|YOUTUBE_API_KEY_SEARCH_4=${YT_SEARCH_KEY_4}|" .env || echo "YOUTUBE_API_KEY_SEARCH_4=${YT_SEARCH_KEY_4}" >> .env
+            fi
+            if [ -n "${YT_SEARCH_KEY_5}" ]; then
+              grep -q '^YOUTUBE_API_KEY_SEARCH_5=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_5=.*|YOUTUBE_API_KEY_SEARCH_5=${YT_SEARCH_KEY_5}|" .env || echo "YOUTUBE_API_KEY_SEARCH_5=${YT_SEARCH_KEY_5}" >> .env
+            fi
+            if [ -n "${YT_SEARCH_KEY_6}" ]; then
+              grep -q '^YOUTUBE_API_KEY_SEARCH_6=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_6=.*|YOUTUBE_API_KEY_SEARCH_6=${YT_SEARCH_KEY_6}|" .env || echo "YOUTUBE_API_KEY_SEARCH_6=${YT_SEARCH_KEY_6}" >> .env
             fi
             # CP395 — Redis (video dictionary) ACL passwords + Tailscale IP.
             # Passwords consumed by docker/redis/entrypoint.sh via envsubst
