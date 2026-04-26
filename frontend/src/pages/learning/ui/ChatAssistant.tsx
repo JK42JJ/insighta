@@ -11,6 +11,21 @@ interface ChatAssistantProps {
   videoId: string;
 }
 
+const CHAT_INSTRUCTIONS = `당신은 Insighta의 학습 어시스턴트입니다. 사용자가 시청 중인 YouTube 영상의 내용을 기반으로 학습을 돕습니다.
+
+## 역할
+- 영상 내용에 대한 질문에 정확하게 답변
+- 핵심 개념을 쉽게 설명
+- 실생활 적용 방안 제시
+- 추가 학습 방향 추천
+
+## 규칙
+- 영상 내용 범위 내에서 답변. 확실하지 않으면 솔직하게 "영상에서 다루지 않은 내용입니다"라고 답변
+- 한국어로 대화하되, 사용자가 영어로 질문하면 영어로 답변
+- 답변은 간결하고 구조적으로 (bullet points, 번호 목록 활용)
+- 전문 용어는 쉬운 설명을 함께 제공
+- 학습자의 이해도를 높이는 데 집중`;
+
 function buildSuggestions(
   structured: { key_points?: string[]; core_argument?: string; actionables?: string[] } | null
 ) {
@@ -67,6 +82,7 @@ function ChatPanel({ videoId }: { videoId: string }) {
       <CopilotChat
         className="h-full"
         labels={chatLabels}
+        instructions={CHAT_INSTRUCTIONS}
         suggestions={suggestions.length > 0 ? suggestions : undefined}
         onThumbsUp={() => toast(t('learning.feedbackSaved'))}
         onThumbsDown={() => toast(t('learning.feedbackSaved'))}

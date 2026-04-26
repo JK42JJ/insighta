@@ -85,6 +85,15 @@ const envSchema = z.object({
   OPENROUTER_EMBED_MODEL: z.string().default('qwen/qwen3-embedding-8b'),
   OPENROUTER_EMBED_DIMENSION: z.coerce.number().default(4096),
 
+  // Gemini
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-1.5-flash'),
+
+  // Chatbot
+  CHATBOT_PROVIDER: z.enum(['gemini', 'openrouter', 'local']).default('gemini'),
+  CHATBOT_MODEL: z.string().optional(),
+  CHATBOT_LOCAL_URL: z.string().default('http://localhost:11434/v1'),
+
   // Gmail SMTP Relay (IP-authenticated via EC2)
   GMAIL_SMTP_HOST: z.string().default('smtp-relay.gmail.com'),
   GMAIL_SMTP_PORT: z.coerce.number().default(587),
@@ -206,6 +215,19 @@ export const config = {
   openrouter: {
     apiKey: env.OPENROUTER_API_KEY,
     model: env.OPENROUTER_MODEL,
+  },
+
+  // Gemini
+  gemini: {
+    apiKey: env.GEMINI_API_KEY,
+    model: env.GEMINI_MODEL,
+  },
+
+  // Chatbot (CopilotKit runtime)
+  chatbot: {
+    provider: env.CHATBOT_PROVIDER as 'gemini' | 'openrouter' | 'local',
+    model: env.CHATBOT_MODEL,
+    localUrl: env.CHATBOT_LOCAL_URL,
   },
 
   // Gmail SMTP Relay (IP-authenticated, no password)

@@ -25,6 +25,7 @@ import { settingsRoutes } from './routes/settings';
 import { youtubeRoutes } from './routes/youtube';
 import { sharingRoutes } from './routes/sharing';
 import { skillRoutes } from './routes/skills';
+import { copilotKitRoutes } from './routes/copilotkit';
 import { internalBatchVideoCollectorRoutes } from './routes/internal/batch-video-collector';
 import { internalTrendCollectorRoutes } from './routes/internal/trend-collector';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
@@ -274,6 +275,9 @@ export async function buildServer() {
 
       // Register skills routes (SkillRegistry — newsletter, report, etc.)
       await instance.register(skillRoutes, { prefix: '/skills' });
+
+      // Register CopilotKit runtime routes (AI chatbot)
+      await instance.register(copilotKitRoutes, { prefix: '/copilotkit' });
 
       // Register admin routes (requires is_super_admin)
       await instance.register(adminRoutes, { prefix: '/admin' });
