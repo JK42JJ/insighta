@@ -3,8 +3,8 @@
 # =============================================================================
 FROM node:20-alpine AS builder
 
-# Install build dependencies for native modules (bcrypt)
-RUN apk add --no-cache python3 make g++ libc6-compat
+# Install build dependencies for native modules (bcrypt) + OpenSSL for Prisma engine detection
+RUN apk add --no-cache python3 make g++ libc6-compat openssl
 
 WORKDIR /app
 
@@ -22,7 +22,7 @@ COPY src ./src
 # Build TypeScript
 RUN npm run build
 
-# Generate Prisma client
+# Generate Prisma client (openssl installed above so engine targets correct OpenSSL version)
 RUN npx prisma generate
 
 # =============================================================================
@@ -59,14 +59,10 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
-# Copy Prisma schema from builder
+# Copy Prisma schema and generated client from builder.
+# Builder has openssl installed so engine binary matches runner's OpenSSL version.
 COPY --from=builder /app/prisma ./prisma
-
-# Regenerate Prisma client with runner's OpenSSL version.
-# `prisma` CLI is a devDependency — copy from builder to avoid npx fetching latest (7.x breaking change).
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
-RUN node node_modules/prisma/build/index.js generate
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy package.json for runtime
 COPY package.json ./
