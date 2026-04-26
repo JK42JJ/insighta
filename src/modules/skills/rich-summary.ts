@@ -11,9 +11,11 @@
 import { getPrismaClient } from '@/modules/database/client';
 import { createGenerationProvider } from '@/modules/llm';
 import { logger } from '@/utils/logger';
-import { checkSummaryQuality, type RichSummary } from './summary-gate';
+import { checkSummaryQuality } from './summary-gate';
+import { isV2Summary, type RichSummary } from './rich-summary-types';
 import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { assertRichSummaryQuota } from './rich-summary-quota';
+import { bridgeRichSummaryToKG } from '@/modules/ontology/kg-bridge';
 import { Prisma } from '@prisma/client';
 
 export interface RichSummarySegment {
@@ -36,45 +38,64 @@ const DESCRIPTION_PROMPT_LIMIT = 500;
 const TIMESTAMPED_SEGMENTS_LIMIT = 120; // cap timestamped lines passed to LLM
 
 // ---------------------------------------------------------------------------
-// Prompts (CP422 P1: extended with chapters/quotes/tl_dr)
+// Prompts — v2 (KG Bridge + Learning Interface, #500)
 // ---------------------------------------------------------------------------
 
-const RICH_SUMMARY_PROMPT = `You are a learning content analysis expert.
-Analyze the following YouTube video information and respond ONLY in JSON. Do not output any other text.
+const RICH_SUMMARY_V2_PROMPT = `You are a learning content analysis expert.
+Analyze the following YouTube video and respond ONLY in valid JSON. No other text.
 
 Video title: {title}
 Video description: {description}
 Transcript summary: {transcript_chunk}
 Timestamped segments (may be empty): {segments_block}
 
-Respond with the following JSON structure:
+Respond with this exact JSON structure:
 {{
-  "core_argument": "Core thesis of this video (1 sentence, 10-100 chars)",
-  "key_points": ["Key point 1", "Key point 2", "Key point 3"],
-  "evidence": ["Evidence/data presented (empty array if none)"],
+  "core_argument": "Core thesis of this video (1 sentence, 10-150 chars)",
+  "entities": [
+    {{"name": "Entity name", "type": "concept"}},
+    {{"name": "Person name", "type": "person"}}
+  ],
+  "atoms": [
+    {{"text": "Atomic insight or fact (1-2 sentences)", "timestamp_sec": 120, "entity_refs": ["Entity name"]}},
+    {{"text": "Another insight", "entity_refs": []}}
+  ],
+  "sections": [
+    {{
+      "from_sec": 0,
+      "to_sec": 102,
+      "title": "Section title",
+      "summary": "What this section covers (1 sentence)",
+      "relevance_pct": 65,
+      "key_points": [
+        {{"text": "Key point from this section", "timestamp_sec": 45}}
+      ]
+    }}
+  ],
   "actionables": ["Immediately actionable items after watching"],
   "prerequisites": ["Required prior knowledge (empty array if none)"],
-  "bias_signals": ["Commercial intent expressions", "Exaggerated/definitive expressions", "Unsourced claims"],
+  "bias_signals": ["Commercial intent", "Exaggerated claims", "Unsourced claims"],
   "content_type": "tutorial",
   "depth_level": "beginner",
   "mandala_fit": {{
     "suggested_topics": ["keyword1", "keyword2"],
     "relevance_rationale": "One line explanation"
   }},
-  "chapters": [{{"start_sec": 0, "title": "Chapter title"}}],
-  "quotes": [{{"timestamp_sec": 120, "text": "Notable verbatim quote (1-2 sentences)"}}],
   "tl_dr_ko": "200자 이내 한글 요약",
   "tl_dr_en": "200-char English summary"
 }}
 
-content_type allowed values: tutorial, opinion, research, news, entertainment
-depth_level allowed values: beginner, intermediate, advanced
+Field rules:
+- entities: Extract 2-8 key concepts/people/tools/frameworks/organizations mentioned. type must be one of: concept, person, tool, framework, organization. Deduplicate by name (case-insensitive).
+- atoms: Extract 3-8 atomic insights or facts. Each atom is a standalone claim. entity_refs links to entity names. timestamp_sec is optional (use when derivable from segments).
+- sections: Divide the video into 3-8 logical sections. from_sec/to_sec are integers from segment timestamps. relevance_pct (0-100) indicates how relevant this section is to the video's core argument. Each section has 1-3 key_points.
+- content_type: tutorial | opinion | research | news | entertainment
+- depth_level: beginner | intermediate | advanced
 
-Rules for chapters/quotes (CP422 P1):
-- If "Timestamped segments" above is empty, return chapters as [] and quotes as [] (empty arrays).
-- When segments are provided, derive 3-8 chapters spanning the video's duration; use segment start_sec values (integers).
-- Quotes: pick 1-3 verbatim highlights with their exact timestamp_sec from segments.
-- tl_dr_ko + tl_dr_en are ALWAYS required even when segments are empty (fall back to title + description).`;
+When "Timestamped segments" is empty:
+- sections: return 1 section covering the whole video (from_sec: 0, to_sec: 0) with key_points from title/description. Set relevance_pct to 50.
+- atoms: derive from title + description without timestamp_sec.
+- tl_dr_ko + tl_dr_en are ALWAYS required (fall back to title + description).`;
 
 const ONE_LINER_PROMPT = `Summarize the following YouTube video in one Korean sentence (under 30 characters).
 Video title: {title}
@@ -162,7 +183,7 @@ export async function enrichRichSummary(
   // Attempt structured summary generation (with retry)
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const prompt = RICH_SUMMARY_PROMPT.replace('{title}', options.title)
+      const prompt = RICH_SUMMARY_V2_PROMPT.replace('{title}', options.title)
         .replace('{description}', (options.description ?? '').slice(0, DESCRIPTION_PROMPT_LIMIT))
         .replace('{transcript_chunk}', transcriptChunk)
         .replace('{segments_block}', segmentsBlock);
@@ -188,6 +209,20 @@ export async function enrichRichSummary(
           score: result.score,
           attempt,
         });
+
+        // KG Bridge: auto-convert v2 summaries to ontology nodes/edges (#506)
+        if (isV2Summary(structured)) {
+          setImmediate(() => {
+            bridgeRichSummaryToKG(videoId, options.userId, structured)
+              .then((bridgeResult) => log.info('KG Bridge completed', { videoId, ...bridgeResult }))
+              .catch((err: unknown) => {
+                log.warn('KG Bridge failed (non-fatal)', {
+                  videoId,
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              });
+          });
+        }
 
         return {
           videoId,

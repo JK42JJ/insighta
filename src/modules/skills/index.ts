@@ -32,6 +32,6 @@ import '@/skills/index';
 
 export { skillRegistry };
 export { checkSkillQuota } from './quota-checker';
-export { checkSummaryQuality } from './summary-gate';
+export { checkSummaryQuality, isV2Summary } from './summary-gate';
 export type { InsightaSkill, SkillContext, SkillResult, SkillPreview, SkillTrigger } from './types';
-export type { GateResult, RichSummary } from './summary-gate';
+export type { GateResult, RichSummary, RichSummaryV1, RichSummaryV2 } from './summary-gate';

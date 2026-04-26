@@ -110,9 +110,12 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
     }
 
     const message = data.choices?.[0]?.message;
-    const content = message?.content || message?.reasoning;
+    const content = message?.content;
     if (!content) {
-      throw new Error('OpenRouter returned empty response');
+      const hasReasoning = !!message?.reasoning;
+      throw new Error(
+        `OpenRouter returned empty content${hasReasoning ? ' (reasoning-only response detected — CoT leakage blocked)' : ''}`
+      );
     }
 
     return content;
