@@ -268,7 +268,7 @@ src/skills/plugins/
 - **goal_relevance** 계산은 키워드 변경 시마다 계산 → 일 호출량 큼
 - **결정 필요**: Mac Mini 재활용? 또는 prod EC2에 동일 모델 별도 서빙?
   - Mac Mini: cost $0, 의존성 (집 인터넷, Tailscale uptime)
-  - EC2: t2.micro로는 8B 불가 → GPU 인스턴스 필요 ($)
+  - EC2: t3.medium (4 GiB RAM, no GPU)로는 8B 불가 → GPU 인스턴스 필요 ($)
 
 ### Q3. YouTube Data API Quota 산정
 - 현재 quota 소비처: video metadata, captions, search

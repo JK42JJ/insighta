@@ -44,7 +44,7 @@
 [insighta.one] ──DNS──▶ [44.231.152.49]
     │
     ▼
-[EC2 t2.micro (Ubuntu 22.04, us-west-2)]
+[EC2 t3.medium (Ubuntu 22.04, us-west-2)]
     │
     ├── Host Nginx (SSL 종단, 리버스 프록시)
     │     ├── /api/*        → 127.0.0.1:3000 (API 컨테이너)
@@ -91,7 +91,7 @@
 | **배포** | Docker, GitHub Actions, GHCR | - |
 | **웹서버** | Nginx (Host) + Nginx (Frontend container) | - |
 | **SSL** | Let's Encrypt (Certbot) | - |
-| **인프라** | AWS EC2 t2.micro (Ubuntu 22.04) | - |
+| **인프라** | AWS EC2 t3.medium (Ubuntu 22.04) | - |
 
 ### 네트워크 구조
 
@@ -113,7 +113,7 @@ Internet → :443 (Nginx SSL) → :3000 (API) / :8081 (Frontend)
 
 | 항목 | 값 |
 |------|-----|
-| 인스턴스 타입 | t2.micro |
+| 인스턴스 타입 | t3.medium |
 | OS | Ubuntu 22.04 LTS |
 | Region | us-west-2 (Oregon) |
 | Elastic IP | 44.231.152.49 |

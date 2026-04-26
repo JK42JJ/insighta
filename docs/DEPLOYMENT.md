@@ -43,7 +43,7 @@ This document covers the complete process for deploying Insighta to production o
                                     |-- DB Migration (Prisma)
                                     `-- SSH Deploy -> EC2
 
-[insighta.one] -> [Elastic IP] -> [EC2 t2.micro]
+[insighta.one] -> [Elastic IP] -> [EC2 t3.medium]
                                       |-- Nginx (SSL termination, port 443/80)
                                       |-- Docker: API (Fastify, port 3000)
                                       `-- Docker: Frontend (Nginx, port 8081)
@@ -110,11 +110,11 @@ postgresql://postgres.[ref]:[password]@aws-0-us-west-2.pooler.supabase.com:6543/
 | Setting | Value |
 |---|---|
 | AMI | Ubuntu Server 22.04 LTS (HVM), SSD Volume Type |
-| Instance type | t2.micro (Free Tier eligible) |
+| Instance type | t3.medium (2 vCPUs, 4 GiB RAM) |
 | Key pair | RSA, download as `.pem` format |
 | Storage | 20 GiB gp2 (the default 8 GiB is insufficient for Docker) |
 
-> Note: `t3.micro` is **not** Free Tier eligible. Use `t2.micro`.
+> Note: `t3.medium` provides 4 GiB RAM, sufficient for Docker builds and Temporal workers.
 
 **Security Group inbound rules:**
 
@@ -199,7 +199,7 @@ The script performs the following steps in order:
 3. Adds the `ubuntu` user to the `docker` group
 4. Installs Nginx and enables it as a systemd service
 5. Installs Certbot and the Nginx plugin for Let's Encrypt
-6. Creates a 2 GiB swap file at `/swapfile` (t2.micro has only 1 GiB RAM; swap is required for Docker builds)
+6. Creates a 2 GiB swap file at `/swapfile` (t3.medium has 4 GiB RAM; swap provides additional safety margin for Docker builds)
 7. Sets `vm.swappiness=10` to minimize swap usage under normal conditions
 8. Creates `/home/ubuntu/insighta` and `/var/www/certbot`
 9. Configures UFW firewall to allow SSH and `Nginx Full` (ports 80 and 443)
@@ -584,9 +584,9 @@ docker logs insighta-api --tail 50
 
 Common causes: missing or incorrect environment variables in `/opt/insighta/.env`.
 
-### Out of memory on t2.micro
+### Out of memory on t3.medium
 
-The t2.micro instance has 1 GiB of RAM. The setup script allocates a 2 GiB swap file to compensate. If the system runs out of memory:
+The t3.medium instance has 4 GiB of RAM. The setup script allocates a 2 GiB swap file as additional safety margin. If the system runs out of memory:
 
 ```bash
 # Check current memory and swap usage
@@ -639,14 +639,12 @@ All services below are free within their respective free tier or public tier lim
 | Service | Cost | Notes |
 |---|---|---|
 | Supabase Cloud (Free) | $0/mo | 500 MB database, 50,000 MAU |
-| AWS EC2 t2.micro | $0/mo | Free Tier: 12 months from account creation |
+| AWS EC2 t3.medium | ~$30.37/mo | 2 vCPUs, 4 GiB RAM, on-demand us-west-2 |
 | AWS Elastic IP | $0/mo | Free when associated with a running instance |
 | GHCR (Public) | $0/mo | Free for public repositories |
 | GitHub Actions | $0/mo | Free for public repos; 2,000 min/mo for private repos |
 | Domain registration | ~$10-15/yr | Varies by registrar and TLD |
-| **Total** | **~$1/mo** | Within Free Tier period |
-
-After the 12-month AWS Free Tier period ends, an EC2 t2.micro instance costs approximately $8.50/month on-demand in us-west-2.
+| **Total** | **~$31/mo** | Primarily EC2 on-demand cost |
 
 ---
 

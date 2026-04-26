@@ -33,7 +33,7 @@ Internet
 [insighta.one] --DNS A--> [44.231.152.49] (Elastic IP)
                                 |
                     +-----------+----------+
-                    |  EC2 t2.micro        |
+                    |  EC2 t3.medium       |
                     |  Ubuntu 22.04 LTS    |
                     |  us-west-2           |
                     |                      |
@@ -180,14 +180,14 @@ Current infrastructure runs at minimal cost within the AWS Free Tier period. Cos
 
 | Item | Current | Phase 1 (Terraform IaC) | Phase 2 (Monitoring) |
 |------|---------|-------------------------|----------------------|
-| EC2 t2.micro (on-demand, post-free-tier) | ~$8.50/mo | $0 added | $0 added |
+| EC2 t3.medium (on-demand) | ~$30.37/mo | $0 added | $0 added |
 | S3 remote state | $0 | +$0.05/mo | $0 added |
 | DynamoDB state locking | $0 | +$0.25/mo | $0 added |
 | CloudWatch metrics/alarms | $0 | $0 | +$3-5/mo |
-| **Total** | **~$8.50/mo** | **~$8.80/mo** | **~$12-14/mo** |
+| **Total** | **~$30.37/mo** | **~$30.67/mo** | **~$34-36/mo** |
 
 Notes:
-- EC2 t2.micro is free for 12 months from account creation. After that, the on-demand price in us-west-2 is approximately $8.50/month.
+- EC2 t3.medium (2 vCPUs, 4 GiB RAM) on-demand price in us-west-2 is approximately $30.37/month.
 - Elastic IP is free while associated with a running instance.
 - GHCR and GitHub Actions are free for public repositories.
 - Supabase Cloud Free tier: 500 MB database, 50,000 MAU. No cost at current scale.
@@ -652,7 +652,7 @@ When the application grows beyond a single administrator's manual oversight capa
 - Run as Docker containers on EC2 alongside the application
 - Fastify exposes a `/metrics` endpoint (requires `fastify-metrics` plugin)
 - Grafana dashboards for request rate, error rate, response time, resource usage
-- Suitable when t2.micro is replaced with a larger instance type
+- Now feasible on t3.medium (4 GiB RAM)
 
 **Alerting channels to configure:**
 
@@ -946,7 +946,7 @@ Option B (Prometheus + Grafana, self-hosted):
 - Add a `monitoring` service to `docker-compose.prod.yml`
 - Expose a `/metrics` endpoint from the Fastify API
 - Grafana dashboards for request rate, P95 latency, error rate, container resource usage
-- Prerequisite: upgrade EC2 from t2.micro to t3.small or larger to accommodate additional memory use
+- EC2 t3.medium (4 GiB RAM) has sufficient memory to run Prometheus + Grafana alongside the application
 
 **Minimum alerting targets regardless of option:**
 - HTTP 5xx error rate > 1% over 5 minutes
@@ -1059,7 +1059,7 @@ python main.py  # FastAPI on port 8000
 - qwen3.5:9b latency: 8-42s per request (Apple Silicon, no GPU)
 - nomic-embed-text has poor semantic clustering vs Gemini (spread 0.00 vs 0.34)
 - Cannot mix embedding providers in same pgvector table — re-embed required on switch
-- Ollama not available on EC2 (t2.micro, no GPU) — local dev only for now
+- Ollama not available on EC2 (t3.medium, no GPU) — local dev only for now
 
 **Roadmap:**
 

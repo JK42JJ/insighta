@@ -400,11 +400,11 @@ registerPlugin(helloWorld);
 ## 11. Open Questions
 
 ### Q1. Temporal 클러스터 어디에 띄울까
-- 현재 EC2 t2.micro 단일 인스턴스. Temporal Server는 메모리 1GB+ 필요.
+- 현재 EC2 t3.medium (4 GiB RAM) 단일 인스턴스. Temporal Server 메모리 1GB+ 요건 충족.
 - 옵션 (a) Temporal Cloud (paid, ~$200/mo for starter)
-- 옵션 (b) EC2 인스턴스 업그레이드 (t3.small → ~$20/mo) + self-host
+- 옵션 (b) EC2 t3.medium에서 self-host (메모리 충분, 추가 비용 $0)
 - 옵션 (c) Phase 1을 일단 Layer A(in-process)로 시작하고 Temporal은 Phase 2~3으로 미루기
-- **잠정 권장**: (c) — Layer A에서 cron + try/catch로 출발, 안정화 후 Temporal 도입. trend-collector preflight/execute/deliver 분리 자체는 지금 적용해두면 마이그레이션 비용 거의 없음.
+- **잠정 권장**: (c) → (b) 순서 — Layer A에서 cron + try/catch로 출발, 안정화 후 t3.medium에서 Temporal self-host. trend-collector preflight/execute/deliver 분리 자체는 지금 적용해두면 마이그레이션 비용 거의 없음.
 
 ### Q2. Table-ownership guard 구현 위치
 - Prisma client wrapper로 만들면 tsc가 못 잡고 런타임에만 throw

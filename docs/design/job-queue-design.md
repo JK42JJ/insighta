@@ -35,7 +35,7 @@ API Server (main process)
 
 ## Recommendation: pg-boss
 
-**Rationale**: Insighta runs on free-tier infrastructure (single EC2 t2.micro). Adding Redis is an unnecessary cost. pg-boss uses the existing Supabase Postgres as its backing store — zero additional infra cost.
+**Rationale**: Insighta runs on a single EC2 t3.medium instance. pg-boss uses the existing Supabase Postgres as its backing store — zero additional infra cost.
 
 **Key pg-boss features matching our requirements**:
 - Job persistence across restarts (Postgres-backed)
