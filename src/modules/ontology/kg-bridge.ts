@@ -16,6 +16,7 @@ import { getOntologyManager } from './manager';
 import { embedNode } from './embedding';
 import { logger } from '@/utils/logger';
 import type { RichSummaryV2 } from '@/modules/skills/rich-summary-types';
+import { Prisma } from '@prisma/client';
 
 const log = logger.child({ module: 'KGBridge' });
 
@@ -94,14 +95,16 @@ export async function bridgeRichSummaryToKG(
     }
   }
 
-  // 2. Create TAGGED_WITH edges (resource → topic)
+  // 2. Collect edges for bulk INSERT
+  const pendingEdges: Array<{ source_id: string; target_id: string; relation: string }> = [];
+
+  // TAGGED_WITH edges (resource → topic)
   for (const [, topicId] of topicNodeIds) {
-    const created = await safeCreateEdge(manager, userId, {
+    pendingEdges.push({
       source_id: resourceNode.id,
       target_id: topicId,
       relation: 'TAGGED_WITH',
     });
-    if (created) result.edgesCreated++;
   }
 
   // 3. Process atoms + core_argument → insight nodes
@@ -147,24 +150,22 @@ export async function bridgeRichSummaryToKG(
       result.embeddingsQueued++;
 
       // DERIVED_FROM edge (resource → insight)
-      const edgeCreated = await safeCreateEdge(manager, userId, {
+      pendingEdges.push({
         source_id: resourceNode.id,
         target_id: node.id,
         relation: 'DERIVED_FROM',
       });
-      if (edgeCreated) result.edgesCreated++;
 
       // REFERENCES edges (insight → topic) for matching entity_refs
       for (const ref of insight.entityRefs) {
         const normalizedRef = ref.trim().toLowerCase();
         const topicId = topicNodeIds.get(normalizedRef);
         if (topicId) {
-          const refEdge = await safeCreateEdge(manager, userId, {
+          pendingEdges.push({
             source_id: node.id,
             target_id: topicId,
             relation: 'REFERENCES',
           });
-          if (refEdge) result.edgesCreated++;
         }
       }
     } catch (err) {
@@ -173,6 +174,11 @@ export async function bridgeRichSummaryToKG(
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  // 4. Bulk INSERT all edges (single query, skip duplicates)
+  if (pendingEdges.length > 0) {
+    result.edgesCreated = await bulkCreateEdges(prisma, userId, pendingEdges);
   }
 
   log.info('KG Bridge completed', result);
@@ -235,23 +241,31 @@ async function findInsightBySourceRef(
   return rows[0] ?? null;
 }
 
-async function safeCreateEdge(
-  manager: ReturnType<typeof getOntologyManager>,
+async function bulkCreateEdges(
+  prisma: ReturnType<typeof getPrismaClient>,
   userId: string,
-  input: { source_id: string; target_id: string; relation: string }
-): Promise<boolean> {
+  edges: Array<{ source_id: string; target_id: string; relation: string }>
+): Promise<number> {
+  if (edges.length === 0) return 0;
+
+  const valueFragments = edges.map(
+    (e) =>
+      Prisma.sql`(${userId}::uuid, ${e.source_id}::uuid, ${e.target_id}::uuid, ${e.relation}, 1.0, '{}'::jsonb)`
+  );
+
   try {
-    await manager.createEdge(userId, input);
-    return true;
+    const inserted = await prisma.$executeRaw`
+      INSERT INTO ontology.edges (user_id, source_id, target_id, relation, weight, properties)
+      VALUES ${Prisma.join(valueFragments)}
+      ON CONFLICT ON CONSTRAINT unique_edge DO NOTHING
+    `;
+    return inserted;
   } catch (err) {
-    if (err instanceof Error && err.message.includes('unique_edge')) {
-      return false;
-    }
-    log.warn('Failed to create edge', {
-      ...input,
+    log.warn('Bulk edge insert failed', {
+      count: edges.length,
       error: err instanceof Error ? err.message : String(err),
     });
-    return false;
+    return 0;
   }
 }
 
