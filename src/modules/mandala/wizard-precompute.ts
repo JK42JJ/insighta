@@ -317,7 +317,7 @@ export async function consumePrecompute(
               ${WEIGHT_VERSION},
               ${RECOMMENDATION_STATUS_PENDING},
               ${expiresAt},
-              ${slot.publishedAt}
+              ${slot.publishedAt != null ? new Date(String(slot.publishedAt)) : null}
             )
             ON CONFLICT (user_id, mandala_id, video_id) DO NOTHING
           `
@@ -335,7 +335,10 @@ export async function consumePrecompute(
           keyword: '',
           source: 'auto_recommend',
           recReason: 'realtime',
-          publishedAt: slot.publishedAt?.toISOString() ?? null,
+          publishedAt:
+            typeof slot.publishedAt === 'string'
+              ? slot.publishedAt
+              : (slot.publishedAt?.toISOString() ?? null),
         };
         notifyCardAdded(input.mandalaId, payload);
         return true;

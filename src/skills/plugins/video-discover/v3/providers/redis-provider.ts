@@ -188,7 +188,8 @@ function matchCellsToSlugs(cells: CellDefinition[], allSlugs: string[]): Map<num
     for (const slug of allSlugs) {
       const slugParts = slug.split('-').filter((p) => p.length > 1);
       const overlap = slugParts.filter((part) => allTokens.has(part.toLowerCase()));
-      if (overlap.length > 0) {
+      const minOverlap = slugParts.length === 1 ? 1 : 2;
+      if (overlap.length >= minOverlap) {
         matched.push(slug);
       }
     }
