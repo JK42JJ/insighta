@@ -74,7 +74,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
         <div className="relative min-h-0 flex-1 overflow-hidden pb-[35px]">
           <ChatAssistant videoId={videoId} />
           <p className="absolute bottom-2 left-0 w-full text-center text-[10px] text-muted-foreground/60">
-            Chatbot can make mistakes. Please double-check responses.
+            {t('learning.chatDisclaimer')}
           </p>
         </div>
       )}

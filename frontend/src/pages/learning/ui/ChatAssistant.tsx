@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CopilotKit } from '@copilotkit/react-core';
 import { CopilotChat } from '@copilotkit/react-ui';
 import '@copilotkit/react-ui/styles.css';
@@ -9,12 +10,6 @@ import type { CopilotChatLabels } from '@copilotkit/react-ui';
 interface ChatAssistantProps {
   videoId: string;
 }
-
-const CHAT_LABELS: CopilotChatLabels = {
-  title: '학습 어시스턴트',
-  initial: '이 영상에 대해 질문하세요',
-  placeholder: '영상 내용에 대해 질문하세요...',
-};
 
 function buildSuggestions(
   structured: { key_points?: string[]; core_argument?: string; actionables?: string[] } | null
@@ -49,9 +44,16 @@ function buildSuggestions(
 }
 
 function ChatPanel({ videoId }: { videoId: string }) {
+  const { t } = useTranslation();
   const { richSummary } = useRichSummary(videoId);
   const suggestions = buildSuggestions(richSummary?.structured ?? null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const chatLabels: CopilotChatLabels = {
+    title: t('learning.chatTitle'),
+    initial: t('learning.chatInitial'),
+    placeholder: t('learning.chatPlaceholder'),
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -64,10 +66,10 @@ function ChatPanel({ videoId }: { videoId: string }) {
     <div ref={wrapperRef} className="copilotkit-chat-wrapper h-full">
       <CopilotChat
         className="h-full"
-        labels={CHAT_LABELS}
+        labels={chatLabels}
         suggestions={suggestions.length > 0 ? suggestions : undefined}
-        onThumbsUp={() => toast('피드백 저장됨')}
-        onThumbsDown={() => toast('피드백 저장됨')}
+        onThumbsUp={() => toast(t('learning.feedbackSaved'))}
+        onThumbsDown={() => toast(t('learning.feedbackSaved'))}
       />
     </div>
   );

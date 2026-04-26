@@ -1597,5 +1597,20 @@
     "failed": "영상 추천을 불러오지 못했습니다.",
     "retry": "다시 시도",
     "quotaReached": "일일 영상 검색 한도에 도달했습니다. 내일 다시 이용 가능합니다."
+  },
+  "learning": {
+    "tabNotes": "노트",
+    "tabChatbot": "AI 챗봇",
+    "tabSummary": "AI 요약",
+    "goal": "학습 목표",
+    "videoCount": "{{count}}개 영상",
+    "noVideos": "아직 영상이 없습니다",
+    "chatTitle": "학습 어시스턴트",
+    "chatInitial": "이 영상에 대해 질문하세요",
+    "chatPlaceholder": "영상 내용에 대해 질문하세요...",
+    "feedbackSaved": "피드백 저장됨",
+    "chatDisclaimer": "챗봇은 실수할 수 있습니다. 답변을 다시 확인하세요.",
+    "reportPreparing": "보고서 작성 준비중 ...",
+    "contentCollecting": "콘텐츠 수집 중..."
   }
 }

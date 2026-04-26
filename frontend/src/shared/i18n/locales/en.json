@@ -1596,5 +1596,20 @@
     "failed": "Video recommendations couldn't be loaded.",
     "retry": "Retry",
     "quotaReached": "Daily video search limit reached. Recommendations will be available tomorrow."
+  },
+  "learning": {
+    "tabNotes": "Notes",
+    "tabChatbot": "AI Chatbot",
+    "tabSummary": "AI Summary",
+    "goal": "Learning Goal",
+    "videoCount": "{{count}} videos",
+    "noVideos": "No videos yet",
+    "chatTitle": "Learning Assistant",
+    "chatInitial": "Ask questions about this video",
+    "chatPlaceholder": "Ask about the video content...",
+    "feedbackSaved": "Feedback saved",
+    "chatDisclaimer": "Chatbot can make mistakes. Please double-check responses.",
+    "reportPreparing": "Preparing report...",
+    "contentCollecting": "Collecting content..."
   }
 }

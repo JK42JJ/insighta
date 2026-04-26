@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ChevronRight } from 'lucide-react';
 import { useLocalCards } from '@/features/card-management/model';
 import { useLearningStore } from '../model/useLearningStore';
@@ -12,6 +13,7 @@ interface LeftPanelProps {
 }
 
 export function LeftPanel({ mandalaId, centerGoal, subGoals, currentVideoId }: LeftPanelProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const selectedCell = useLearningStore((s) => s.selectedCellIndex);
   const setSelectedCell = useLearningStore((s) => s.setSelectedCell);
@@ -41,10 +43,10 @@ export function LeftPanel({ mandalaId, centerGoal, subGoals, currentVideoId }: L
       {/* Header */}
       <div className="shrink-0 border-b border-[hsl(var(--border))] px-4 py-3">
         <h2 className="text-[13px] font-bold text-[hsl(var(--foreground))] leading-snug">
-          {centerGoal || '학습 목표'}
+          {centerGoal || t('learning.goal')}
         </h2>
         <p className="mt-0.5 text-[11px] text-[hsl(var(--muted-foreground))]">
-          {mandalaCards.length}개 영상
+          {t('learning.videoCount', { count: mandalaCards.length })}
         </p>
       </div>
 
@@ -121,7 +123,7 @@ export function LeftPanel({ mandalaId, centerGoal, subGoals, currentVideoId }: L
 
                 {isSelected && cellCards.length === 0 && (
                   <p className="px-4 pl-9 py-2 text-[11px] text-[hsl(var(--muted-foreground))]">
-                    아직 영상이 없습니다
+                    {t('learning.noVideos')}
                   </p>
                 )}
               </div>

@@ -50,8 +50,7 @@ export function SidebarLearningSection({ mandalaId, collapsed }: SidebarLearning
           {centerGoal || t('sidebar.learning', 'Learning')}
         </h3>
         <p className="mt-0.5 text-[11px] text-sidebar-foreground/50">
-          {mandalaCards.length}
-          {t('learning.videoCount', '개 영상')}
+          {t('learning.videoCount', { count: mandalaCards.length })}
         </p>
       </div>
 
