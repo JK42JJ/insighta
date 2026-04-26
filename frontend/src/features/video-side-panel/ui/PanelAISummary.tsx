@@ -88,6 +88,15 @@ interface RichSummaryBlockProps {
 }
 
 function RichSummaryBlock({ structured }: RichSummaryBlockProps) {
+  const isV2 = Array.isArray(structured.sections) && structured.sections.length > 0;
+
+  if (isV2) {
+    return <RichSummaryV2Block structured={structured} />;
+  }
+  return <RichSummaryV1Block structured={structured} />;
+}
+
+function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
   const tlDr = structured.tl_dr_ko || structured.tl_dr_en || null;
   const keyPoints = structured.key_points ?? [];
   const actionables = structured.actionables ?? [];
@@ -160,6 +169,111 @@ function RichSummaryBlock({ structured }: RichSummaryBlockProps) {
             ))}
           </ul>
         </section>
+      )}
+    </div>
+  );
+}
+
+function RichSummaryV2Block({ structured }: RichSummaryBlockProps) {
+  const tlDr = structured.tl_dr_ko || structured.tl_dr_en || null;
+  const sections = structured.sections ?? [];
+  const entities = structured.entities ?? [];
+
+  return (
+    <div className="space-y-4">
+      {tlDr && (
+        <section>
+          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
+            핵심 요약
+          </h3>
+          <p className="rounded-r-[6px] border-l-2 border-[#818cf8] bg-[rgba(99,102,241,0.06)] px-[14px] py-[10px] text-[13px] leading-[1.65] text-[#ededf0]">
+            {tlDr}
+          </p>
+        </section>
+      )}
+
+      {sections.length > 0 && (
+        <section>
+          <h3 className="mb-[8px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
+            구간별 분석
+          </h3>
+          <div className="space-y-1">
+            {sections.map((sec, idx) => (
+              <SectionRow key={idx} section={sec} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {entities.length > 0 && (
+        <section>
+          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
+            주요 개념
+          </h3>
+          <div className="flex flex-wrap gap-x-1 gap-y-[3px]">
+            {entities.map((ent) => (
+              <span
+                key={ent.name}
+                className="inline-block rounded-[4px] bg-[rgba(129,140,248,0.08)] px-[7px] py-[2px] text-[10px] font-semibold text-[#818cf8]"
+              >
+                {ent.name}
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+interface SectionData {
+  from_sec: number;
+  to_sec: number;
+  title: string;
+  summary?: string;
+  relevance_pct: number;
+  key_points?: Array<{ text: string; timestamp_sec?: number }>;
+}
+
+function SectionRow({ section }: { section: SectionData }) {
+  const relevanceColor =
+    section.relevance_pct >= 75
+      ? 'text-[#2dd4bf]'
+      : section.relevance_pct >= 50
+        ? 'text-[#f59e0b]'
+        : 'text-[#94a3b8]';
+
+  return (
+    <div className="rounded-[6px] transition-colors hover:bg-[rgba(255,255,255,0.02)]">
+      <div className="flex items-center gap-3 px-3 py-[10px]">
+        <div className="w-[76px] shrink-0">
+          <span className="font-mono text-[10px] text-[#818cf8]">
+            {formatSeconds(section.from_sec)} — {formatSeconds(section.to_sec)}
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[12px] font-semibold leading-[1.35] text-[rgba(237,237,240,0.92)]">
+            {section.title}
+          </p>
+          {section.summary && (
+            <p className="mt-[2px] text-[11px] text-[#4e4f5c]">{section.summary}</p>
+          )}
+        </div>
+        <div className="flex shrink-0 flex-col items-center gap-[1px]">
+          <span className={`font-mono text-[12px] font-bold ${relevanceColor}`}>
+            {section.relevance_pct}%
+          </span>
+          <span className="text-[7px] uppercase tracking-[0.05em] text-[#4e4f5c]">관련도</span>
+        </div>
+      </div>
+      {section.key_points && section.key_points.length > 0 && (
+        <div className="space-y-[5px] px-3 pb-[10px] pl-[90px]">
+          {section.key_points.map((kp, i) => (
+            <p key={i} className="text-[11px] leading-[1.5] text-[rgba(237,237,240,0.72)]">
+              • {kp.text}
+            </p>
+          ))}
+        </div>
       )}
     </div>
   );
