@@ -23,11 +23,11 @@ services:
       - NODE_ENV=production
       - API_HOST=0.0.0.0
       - API_PORT=3000
-      # CP411 follow-up (PR #426 / BACKLOG 20d) — serving-side Redis read for
-      # dual-whitelist consumer. Host is the EC2 Tailscale IP (same value as
-      # the redis service port bind); port/user are static and non-secret.
+      # Redis host: Docker service name resolves via bridge network DNS.
+      # Was Tailscale IP (${INSIGHTA_TAILSCALE_IP}) but Docker bridge
+      # containers cannot reach the host's Tailscale interface.
       # REDIS_INSIGHTA_PASSWORD is supplied via env_file .env.
-      - REDIS_HOST=${INSIGHTA_TAILSCALE_IP}
+      - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_USER=insighta
       # CP416 Phase 3 (2026-04-22) — activate semantic center-gate.
