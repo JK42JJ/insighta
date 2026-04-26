@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Ban } from 'lucide-react';
+import { ArrowLeft, Ban } from 'lucide-react';
 import {
   useWizard,
   WizardStepper,
@@ -185,9 +185,13 @@ export default function MandalaWizardPage() {
 
   return (
     <div className={containerClass}>
-      <div className="mb-10 text-[10px] font-bold uppercase tracking-[2px] text-foreground/[0.08]">
-        /mandalas/new
-      </div>
+      <Link
+        to="/"
+        className="mb-6 inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        {t('settings.backToApp', 'Back to app')}
+      </Link>
 
       <WizardStepper currentStep={wizard.currentStep} />
 
