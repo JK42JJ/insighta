@@ -1008,11 +1008,29 @@ This cost is only justified when the application generates revenue or serves a u
 | Generation (local) | Ollama + qwen3.5:9b | Available (limited) |
 | Intent Router | FunctionGemma 270M-it (288MB) | Downloaded |
 
+**Mac Mini (james-macmini) — Ollama Host:**
+
+| Item | Value |
+|------|-------|
+| Tailscale hostname | `james-macmini` |
+| Tailscale IP | `100.91.173.17` |
+| SSH alias | `ssh macmini` |
+| Ollama port | `11434` |
+| Active models | `qwen3-embedding:8b` (4096d), `mandala-gen` (4B Q8) |
+| Dependency | Wizard template search (embedding), mandala AI generation |
+
 **Ollama Management:**
 
 ```bash
-# Start Ollama (macOS — runs as background service)
-ollama serve
+# --- On Mac Mini (ssh macmini) ---
+
+# Start Ollama bound to all interfaces (required for Tailscale access)
+# IMPORTANT: default ollama serve binds to 127.0.0.1 only — Tailscale cannot reach it.
+OLLAMA_HOST=0.0.0.0 ollama serve
+
+# To persist OLLAMA_HOST across reboots, add to ~/.zshrc:
+#   export OLLAMA_HOST=0.0.0.0
+# Then Ollama.app or `ollama serve` will pick it up automatically.
 
 # Check status
 curl -s http://localhost:11434/api/tags | jq '.models[].name'
@@ -1020,27 +1038,44 @@ curl -s http://localhost:11434/api/tags | jq '.models[].name'
 # Available models
 ollama list
 
-# Pull new model
-ollama pull nomic-embed-text
-ollama pull qwen3.5:9b
+# --- From dev machine (MacBook Pro) ---
 
-# Test embedding
-curl -s http://localhost:11434/api/embed \
-  -d '{"model":"nomic-embed-text","input":"test text"}' | jq '.embeddings[0] | length'
+# Verify Ollama reachable via Tailscale
+curl -s http://100.91.173.17:11434/api/tags | jq '.models[].name'
 
-# Test generation
-curl -s http://localhost:11434/api/generate \
-  -d '{"model":"qwen3.5:9b","prompt":"hello","stream":false}' | jq '.response'
+# Test embedding (used by wizard template search)
+curl -s http://100.91.173.17:11434/api/embed \
+  -d '{"model":"qwen3-embedding:8b","input":"test text"}' | jq '.embeddings[0] | length'
 ```
 
-**Environment Variables (planned, #251):**
+**Mac Mini Troubleshooting:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Wizard template search timeout | Mac Mini offline or Ollama down | `ssh macmini` → check `pgrep ollama` → restart with `OLLAMA_HOST=0.0.0.0 ollama serve` |
+| Tailscale shows "offline" | macOS auto-updated and rebooted | Power on Mac Mini, open Tailscale app manually |
+| Ollama running but unreachable via Tailscale | Bound to 127.0.0.1 | `pkill ollama && OLLAMA_HOST=0.0.0.0 nohup ollama serve > /tmp/ollama.log 2>&1 &` |
+| Auto-update rebooted Mac Mini | macOS automatic updates | Disable: `sudo softwareupdate --schedule off` + `sudo pmset -a autorestart 0` |
+
+**Disable macOS Auto-Update (run once on Mac Mini):**
 
 ```bash
-# .env
-OLLAMA_URL=http://localhost:11434
-OLLAMA_EMBED_MODEL=nomic-embed-text
-OLLAMA_GENERATE_MODEL=qwen3.5:9b
-LLM_PROVIDER=auto  # auto | gemini | ollama
+sudo softwareupdate --schedule off
+sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticCheckEnabled -bool false
+sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload -bool false
+sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticallyInstallMacOSUpdates -bool false
+sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall -bool false
+sudo pmset -a autorestart 0
+```
+
+**Environment Variables:**
+
+```bash
+# .env (on dev machine)
+MANDALA_GEN_URL=http://100.91.173.17:11434  # Mac Mini via Tailscale
+MANDALA_EMBED_PROVIDER=ollama               # or 'openrouter' as fallback
+MANDALA_EMBED_MODEL=qwen3-embedding:8b
+MANDALA_EMBED_DIMENSION=4096
 ```
 
 **FunctionGemma (planned, #255):**

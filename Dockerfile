@@ -9,7 +9,7 @@ RUN apk add --no-cache python3 make g++ libc6-compat
 WORKDIR /app
 
 # Copy package files for layer caching
-COPY package*.json ./
+COPY package*.json .npmrc ./
 COPY prisma ./prisma/
 
 # Install all dependencies (including devDependencies for build)
@@ -34,7 +34,7 @@ RUN apk add --no-cache libc6-compat
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 
 # Install production dependencies only (skip prepare script for husky)
 RUN npm ci --omit=dev --ignore-scripts
