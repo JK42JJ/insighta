@@ -59,11 +59,9 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
-# Copy Prisma schema (not the generated client - we'll regenerate it)
+# Copy Prisma schema and generated client from builder (same alpine platform)
 COPY --from=builder /app/prisma ./prisma
-
-# Regenerate Prisma client with correct OpenSSL version for this platform
-RUN npx prisma generate
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy package.json for runtime
 COPY package.json ./
