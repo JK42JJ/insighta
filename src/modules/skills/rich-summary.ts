@@ -214,7 +214,7 @@ export async function enrichRichSummary(
         if (isV2Summary(structured)) {
           setImmediate(() => {
             bridgeRichSummaryToKG(videoId, options.userId, structured)
-              .then((bridgeResult) => log.info('KG Bridge completed', { videoId, ...bridgeResult }))
+              .then((bridgeResult) => log.info('KG Bridge completed', bridgeResult))
               .catch((err: unknown) => {
                 log.warn('KG Bridge failed (non-fatal)', {
                   videoId,

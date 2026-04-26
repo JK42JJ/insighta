@@ -117,6 +117,7 @@ export async function bridgeRichSummaryToKG(
 
   for (let i = 0; i < (structured.atoms?.length ?? 0); i++) {
     const atom = structured.atoms[i];
+    if (!atom) continue;
     insightTexts.push({
       text: atom.text,
       entityRefs: atom.entity_refs ?? [],
@@ -174,7 +175,7 @@ export async function bridgeRichSummaryToKG(
     }
   }
 
-  log.info('KG Bridge completed', { videoId, ...result });
+  log.info('KG Bridge completed', result);
   return result;
 }
 
