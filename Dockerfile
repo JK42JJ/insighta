@@ -66,7 +66,7 @@ COPY --from=builder /app/prisma ./prisma
 # `prisma` CLI is a devDependency — copy from builder to avoid npx fetching latest (7.x breaking change).
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
-RUN npx prisma generate
+RUN node node_modules/prisma/build/index.js generate
 
 # Copy package.json for runtime
 COPY package.json ./
