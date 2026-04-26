@@ -57,6 +57,7 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
+          maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
           // 2026-04-22 (Phase 2 re-scoped): removed the `/api/*`
           // StaleWhileRevalidate runtime cache. Serving stale API

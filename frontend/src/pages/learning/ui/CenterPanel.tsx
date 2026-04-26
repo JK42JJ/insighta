@@ -26,7 +26,7 @@ export function CenterPanel({
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
   return (
-    <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
+    <div className="flex flex-1 min-w-0 flex-col overflow-hidden px-10">
       <div className="shrink-0">
         <PanelVideoPlayer
           videoUrl={videoUrl}
