@@ -136,12 +136,12 @@ export class RedisProvider implements VideoProvider {
         candidates.push({
           videoId,
           title: data.title ?? '',
-          description: null,
+          description: data.description_excerpt ?? null,
           channelId: data.channel_id ?? null,
           channelTitle: data.channel_title ?? null,
-          durationSec: data.duration_sec ? Number(data.duration_sec) : null,
+          durationSec: parseDuration(data),
           publishedAt: data.published_at ? new Date(data.published_at) : null,
-          thumbnailUrl: data.thumbnail_url ?? null,
+          thumbnailUrl: extractThumbnail(data),
           viewCount: data.view_count ? Number(data.view_count) : null,
           likeCount: data.like_count ? Number(data.like_count) : null,
           relevanceScore: 0.5,
@@ -218,10 +218,13 @@ interface VideoHash {
   channel_id?: string;
   channel_title?: string;
   duration_sec?: string;
+  duration_seconds?: string;
   published_at?: string;
   thumbnail_url?: string;
+  thumbnail_urls?: string;
   view_count?: string;
   like_count?: string;
+  description_excerpt?: string;
 }
 
 async function bulkFetchVideos(
@@ -256,6 +259,22 @@ async function bulkFetchVideos(
 // ============================================================================
 // Helpers
 // ============================================================================
+
+function extractThumbnail(data: VideoHash): string | null {
+  if (data.thumbnail_url) return data.thumbnail_url;
+  if (!data.thumbnail_urls) return null;
+  try {
+    const parsed = JSON.parse(data.thumbnail_urls);
+    return parsed.high ?? parsed.standard ?? parsed.medium ?? parsed.default ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function parseDuration(data: VideoHash): number | null {
+  const raw = data.duration_seconds ?? data.duration_sec;
+  return raw ? Number(raw) : null;
+}
 
 function emptyResult(startMs: number): MatchResult {
   return {
