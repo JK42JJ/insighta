@@ -1610,6 +1610,12 @@
     "chatPlaceholder": "영상 내용에 대해 질문하세요...",
     "feedbackSaved": "피드백 저장됨",
     "chatDisclaimer": "챗봇은 실수할 수 있습니다. 답변을 다시 확인하세요.",
+    "suggestSummarize": "영상 요약",
+    "suggestSummarizeMsg": "이 영상의 핵심 내용을 타임스탬프와 함께 요약해줘.",
+    "suggestRelated": "관련 콘텐츠 추천",
+    "suggestRelatedMsg": "이 영상을 본 후 더 탐구하면 좋을 관련 주제나 콘텐츠를 추천해줘.",
+    "suggestQuiz": "퀴즈 내줘",
+    "suggestQuizMsg": "이 영상의 핵심 개념을 바탕으로 퀴즈를 내줘.",
     "reportPreparing": "보고서 작성 준비중 ...",
     "contentCollecting": "콘텐츠 수집 중..."
   }

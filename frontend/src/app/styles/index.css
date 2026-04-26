@@ -938,8 +938,9 @@
   --copilot-kit-muted-color: hsl(var(--muted-foreground)) !important;
 }
 
-.copilotkit-chat-wrapper .copilotKitHeader {
-  display: none;
+.copilotkit-chat-wrapper .copilotKitHeader,
+.copilotkit-chat-wrapper .usage-banner {
+  display: none !important;
 }
 
 .copilotkit-chat-wrapper .copilotKitMessages {
@@ -969,4 +970,18 @@
 
 .copilotkit-chat-wrapper .suggestion {
   border-color: hsl(var(--border)) !important;
+}
+
+.chat-ts {
+  color: hsl(var(--primary));
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+}
+.chat-ts:hover {
+  opacity: 0.7;
 }

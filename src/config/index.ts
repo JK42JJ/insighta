@@ -90,8 +90,8 @@ const envSchema = z.object({
   GEMINI_MODEL: z.string().default('gemini-1.5-flash'),
 
   // Chatbot
-  CHATBOT_PROVIDER: z.enum(['gemini', 'openrouter', 'local']).default('gemini'),
-  CHATBOT_MODEL: z.string().optional(),
+  CHATBOT_PROVIDER: z.enum(['gemini', 'openrouter', 'local']).default('openrouter'),
+  CHATBOT_MODEL: z.string().default('google/gemini-2.5-flash'),
   CHATBOT_LOCAL_URL: z.string().default('http://localhost:11434/v1'),
 
   // Gmail SMTP Relay (IP-authenticated via EC2)

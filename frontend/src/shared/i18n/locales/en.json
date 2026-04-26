@@ -1609,6 +1609,12 @@
     "chatPlaceholder": "Ask about the video content...",
     "feedbackSaved": "Feedback saved",
     "chatDisclaimer": "Chatbot can make mistakes. Please double-check responses.",
+    "suggestSummarize": "Summarize the video",
+    "suggestSummarizeMsg": "Summarize this video with key points and timestamps.",
+    "suggestRelated": "Recommend related content",
+    "suggestRelatedMsg": "What related topics or content should I explore after this video?",
+    "suggestQuiz": "Quiz me",
+    "suggestQuizMsg": "Give me a quiz based on the key concepts from this video.",
     "reportPreparing": "Preparing report...",
     "contentCollecting": "Collecting content..."
   }

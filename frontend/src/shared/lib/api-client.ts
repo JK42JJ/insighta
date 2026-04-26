@@ -609,6 +609,21 @@ class ApiClient {
     });
   }
 
+  async getRichNote(cardId: string): Promise<{ note: unknown; updatedAt: string } | null> {
+    try {
+      return await this.request<{ note: unknown; updatedAt: string }>(`/rich-notes/${cardId}`);
+    } catch {
+      return null;
+    }
+  }
+
+  async saveRichNote(cardId: string, note: unknown): Promise<{ updatedAt: string }> {
+    return this.request<{ updatedAt: string }>(`/rich-notes/${cardId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ note }),
+    });
+  }
+
   // ========================================
   // Sync Endpoints
   // ========================================

@@ -169,7 +169,10 @@ export function PanelVideoPlayer({
     : '';
 
   return (
-    <div className="relative w-full shrink-0 bg-black" style={{ aspectRatio: '16/9' }}>
+    <div
+      className="relative w-full shrink-0 overflow-hidden rounded-lg bg-black"
+      style={{ aspectRatio: '16/9' }}
+    >
       <iframe
         ref={iframeRef}
         id={iframeIdRef.current}

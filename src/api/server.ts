@@ -277,7 +277,7 @@ export async function buildServer() {
       await instance.register(skillRoutes, { prefix: '/skills' });
 
       // Register CopilotKit runtime routes (AI chatbot)
-      await instance.register(copilotKitRoutes, { prefix: '/copilotkit' });
+      await instance.register(copilotKitRoutes, { prefix: '/chat' });
 
       // Register admin routes (requires is_super_admin)
       await instance.register(adminRoutes, { prefix: '/admin' });

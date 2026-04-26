@@ -1,11 +1,13 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NotebookPen, Bot } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { PanelNoteEditor } from '@/features/video-side-panel/ui/PanelNoteEditor';
 import { ChatAssistant } from './ChatAssistant';
 import { useMandalaCards } from '../model/useMandalaCards';
+import { apiClient } from '@/shared/lib/api-client';
 import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
+import type { TiptapDoc } from '@/features/video-side-panel/lib/note-parser';
 
 interface RightPanelProps {
   mandalaId: string;
@@ -26,6 +28,37 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
   });
 
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  const [richNote, setRichNote] = useState<TiptapDoc | null>(null);
+  const [noteLoaded, setNoteLoaded] = useState(false);
+  const prevCardIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!currentCard?.id || prevCardIdRef.current === currentCard.id) return;
+    prevCardIdRef.current = currentCard.id;
+    setNoteLoaded(false);
+    setRichNote(null);
+    apiClient
+      .getRichNote(currentCard.id)
+      .then((res) => {
+        if (res?.note) setRichNote(res.note as TiptapDoc);
+      })
+      .finally(() => setNoteLoaded(true));
+  }, [currentCard?.id]);
+
+  const noteContent = richNote ?? currentCard?.userNote ?? '';
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const handleDocChange = useCallback(
+    (doc: unknown) => {
+      if (!currentCard?.id) return;
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        apiClient.saveRichNote(currentCard.id, doc).catch(() => {});
+      }, 1500);
+    },
+    [currentCard?.id]
+  );
 
   const handleSeek = useCallback(
     (seconds: number) => {
@@ -59,25 +92,33 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
         ))}
       </div>
 
-      {activeTab === 'notes' && (
-        <div className="flex flex-1 flex-col overflow-y-auto scrollbar-pro px-4 py-3.5">
+      <div
+        className={cn(
+          'flex flex-1 flex-col overflow-y-auto scrollbar-pro px-4 py-3.5',
+          activeTab !== 'notes' && 'hidden'
+        )}
+      >
+        {(noteLoaded || !currentCard?.id) && (
           <PanelNoteEditor
-            initialContent={currentCard?.userNote ?? ''}
-            onDocChange={() => {}}
+            initialContent={noteContent}
+            onDocChange={handleDocChange}
             onTimestampClick={handleSeek}
             playerRef={playerRef}
             videoUrl={videoUrl}
           />
-        </div>
-      )}
-      {activeTab === 'chatbot' && (
-        <div className="relative min-h-0 flex-1 overflow-hidden pb-[35px]">
-          <ChatAssistant videoId={videoId} />
-          <p className="absolute bottom-2 left-0 w-full text-center text-[10px] text-muted-foreground/60">
-            {t('learning.chatDisclaimer')}
-          </p>
-        </div>
-      )}
+        )}
+      </div>
+      <div
+        className={cn(
+          'relative min-h-0 flex-1 overflow-hidden pb-[35px]',
+          activeTab !== 'chatbot' && 'hidden'
+        )}
+      >
+        <ChatAssistant videoId={videoId} onSeek={handleSeek} />
+        <p className="absolute bottom-2 left-0 w-full text-center text-[10px] text-muted-foreground/60">
+          {t('learning.chatDisclaimer')}
+        </p>
+      </div>
     </div>
   );
 }
