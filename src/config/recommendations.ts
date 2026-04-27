@@ -10,7 +10,7 @@
  */
 
 /** Max items returned by GET /api/v1/mandalas/:id/recommendations. */
-export const RECOMMENDATION_FETCH_LIMIT = 80;
+export const RECOMMENDATION_FETCH_LIMIT = 200;
 
 /** Default cache row status considered "active" (not yet acted on or expired). */
 export const RECOMMENDATION_DEFAULT_STATUS = 'pending' as const;
