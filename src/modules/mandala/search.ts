@@ -46,11 +46,28 @@ const DEFAULT_LIMIT = 5;
 // CP358: Lowered from 0.5 to 0.3 after prod cosine sim measurement showed
 // "행복한 가족" → top match was 0.4166 against 1001 KO templates. dev's
 // data distribution clustered tighter; prod's broader template set produces
-// lower max sim values, so 0.5 always returned []. Minimum results below
-// also guarantees we never return an empty list when ANY data exists.
-const DEFAULT_THRESHOLD = 0.3;
-/** When threshold filter would return 0 rows, fall back to top-N regardless. */
-const MIN_RESULTS_GUARANTEE = 3;
+// lower max sim values, so 0.5 always returned []. Raised back to 0.4 after
+// MIN_RESULTS_GUARANTEE fallback was removed — fallback caused "수학" → "주짓수"
+// (0.05 cosine similarity) because it returned top-N without any floor.
+const DEFAULT_THRESHOLD = 0.4;
+/**
+ * Absolute lower bound on cosine similarity — results below this are always
+ * dropped even if the caller explicitly set a lower threshold. Set to 0.4
+ * after Issue #543 1-E prod measurement on 1306 KO+EN center-goal embeddings:
+ * for the "수학 올림피아드" template (used as a proxy for the user's "수학"
+ * search), nearest-neighbor distribution was top-1 0.47, top-15 in the
+ * 0.40-0.49 band, then 843 rows in the 0.25-0.39 band — so a 0.25 floor
+ * passed essentially every template. Raising to 0.4 keeps the top-15
+ * semantically-relevant results and drops the long tail of "barely closer
+ * than random" matches that produced the "수학 → 주짓수" report.
+ */
+const HARD_SIMILARITY_FLOOR = 0.4;
+/**
+ * Soft results target used only for logging/metrics. No longer controls
+ * query behaviour — removed fallback (CP358 MIN_RESULTS_GUARANTEE) because
+ * it caused irrelevant results when no good matches existed.
+ */
+const SOFT_RESULTS_TARGET = 3;
 const MAX_LIMIT = 20;
 const EMBED_TIMEOUT_MS = 30_000;
 
@@ -243,8 +260,6 @@ export async function searchMandalasByGoal(
   const queryVector = await embedGoalForMandala(goalText);
   const embeddingStr = `[${queryVector.join(',')}]`;
 
-  logger.info(`Mandala search: goal="${goalText}" limit=${limit} threshold=${threshold}`);
-
   const prisma = getPrismaClient();
 
   // Step 1: Top N unique mandalas by cosine similarity.
@@ -299,46 +314,18 @@ export async function searchMandalasByGoal(
     LIMIT ${limit}
   `;
 
-  // CP358 min-results guarantee: if the threshold filter returned fewer than
-  // MIN_RESULTS_GUARANTEE rows, retry WITHOUT the threshold filter so the
-  // user always sees the closest matches. UX rule: showing 3 imperfect
-  // matches > showing nothing.
-  if (topRows.length < MIN_RESULTS_GUARANTEE) {
-    const fallbackConditions: Prisma.Sql[] = [
-      Prisma.sql`level = 1`,
-      Prisma.sql`sub_goal_index IS NULL`,
-      Prisma.sql`embedding IS NOT NULL`,
-    ];
-    if (options.language) {
-      fallbackConditions.push(Prisma.sql`language = ${options.language}`);
-    }
-    const fallbackWhere = Prisma.join(fallbackConditions, ' AND ');
-    logger.info(
-      `Mandala search fallback: threshold ${threshold} produced ${topRows.length} rows for "${goalText}", retrying without threshold`
-    );
-    topRows = await prisma.$queryRaw<TopRow[]>`
-      WITH ranked AS (
-        SELECT
-          mandala_id::text AS mandala_id,
-          center_goal,
-          center_label,
-          domain,
-          language,
-          1 - (embedding <=> ${embeddingStr}::vector) AS similarity,
-          ROW_NUMBER() OVER (
-            PARTITION BY mandala_id
-            ORDER BY embedding <=> ${embeddingStr}::vector
-          ) AS rn
-        FROM mandala_embeddings
-        WHERE ${fallbackWhere}
-      )
-      SELECT mandala_id, center_goal, center_label, domain, language, similarity
-      FROM ranked
-      WHERE rn = 1
-      ORDER BY similarity DESC
-      LIMIT ${limit}
-    `;
-  }
+  // Apply the hard similarity floor as a post-filter safety belt.
+  // The SQL WHERE clause already filters by `threshold`, but a caller may
+  // pass a lower threshold than HARD_SIMILARITY_FLOOR. This guard ensures
+  // we never return results with cosine similarity below the floor regardless
+  // of what the caller requested.
+  topRows = topRows.filter((r) => Number(r.similarity) >= HARD_SIMILARITY_FLOOR);
+
+  logger.info(
+    `Mandala search: threshold=${threshold} floor=${HARD_SIMILARITY_FLOOR} ` +
+      `goal="${goalText}" results=${topRows.length} ` +
+      `(soft_target=${SOFT_RESULTS_TARGET})`
+  );
 
   if (topRows.length === 0) {
     return [];
