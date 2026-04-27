@@ -377,7 +377,7 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       SELECT id, properties
       FROM ontology.nodes
       WHERE user_id = ${userId}::uuid
-        AND source_ref->>'table' = 'user_local_cards'
+        AND source_ref->>'table' IN ('user_local_cards', 'user_video_states')
         AND source_ref->>'id' = ${card_id}
       LIMIT 1
     `;
@@ -417,7 +417,7 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
              (properties->>'summary_rating')::int AS rating
       FROM ontology.nodes
       WHERE user_id = ${userId}::uuid
-        AND source_ref->>'table' = 'user_local_cards'
+        AND source_ref->>'table' IN ('user_local_cards', 'user_video_states')
         AND properties->>'summary_rating' IS NOT NULL
     `;
 
