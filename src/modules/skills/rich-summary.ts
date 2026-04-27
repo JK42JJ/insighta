@@ -16,6 +16,7 @@ import { isV2Summary, type RichSummary } from './rich-summary-types';
 import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { assertRichSummaryQuota } from './rich-summary-quota';
 import { bridgeRichSummaryToKG } from '@/modules/ontology/kg-bridge';
+import { computeSpecificity } from '@/modules/quality-metrics';
 import { Prisma } from '@prisma/client';
 
 export interface RichSummarySegment {
@@ -209,6 +210,30 @@ export async function enrichRichSummary(
           score: result.score,
           attempt,
         });
+
+        // Quality metrics: compute M1 + M3 specificity and persist (non-fatal)
+        const metrics = computeSpecificity(
+          options.title,
+          structured as unknown as Record<string, unknown>
+        );
+        if (metrics) {
+          prisma.video_rich_summaries
+            .update({
+              where: { video_id: videoId },
+              data: {
+                m1_title_overlap: metrics.m1TitleOverlap,
+                m3_timestamp_null_ratio: metrics.m3TimestampNullRatio,
+                m3_timestamp_pattern: metrics.m3TimestampPattern,
+                specificity_score: metrics.specificityScore,
+              },
+            })
+            .catch((err: unknown) => {
+              log.error('Failed to save quality metrics', {
+                videoId,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            });
+        }
 
         // KG Bridge: auto-convert v2 summaries to ontology nodes/edges (#506)
         if (isV2Summary(structured)) {

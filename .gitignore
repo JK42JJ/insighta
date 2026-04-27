@@ -36,6 +36,7 @@ prisma/migrations/*
 !prisma/migrations/video_rich_summaries/
 !prisma/migrations/wizard-precompute/
 !prisma/migrations/llm_call_logs/
+!prisma/migrations/quality_metrics/
 
 # Logs
 logs/
