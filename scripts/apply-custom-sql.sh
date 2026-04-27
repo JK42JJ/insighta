@@ -56,6 +56,7 @@ APPLY_FILES=(
   "prisma/migrations/ontology/012_drop_goal_topic_node_triggers.sql"
   "prisma/migrations/ontology/013_drop_trg_structural_edges_level.sql"
   "prisma/migrations/ontology/014_fix_trigger_seq_scans.sql"
+  "prisma/migrations/ontology/016_mentions_similar_to_relation_types.sql"
   "prisma/migrations/mandala-timings/001_create_table.sql"
   "prisma/migrations/video_chunk_embeddings/001_create_table.sql"
   "prisma/migrations/video_rich_summaries/001_add_user_id.sql"

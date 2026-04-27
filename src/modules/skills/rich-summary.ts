@@ -216,9 +216,11 @@ export async function enrichRichSummary(
             bridgeRichSummaryToKG(videoId, options.userId, structured)
               .then((bridgeResult) => log.info('KG Bridge completed', bridgeResult))
               .catch((err: unknown) => {
-                log.warn('KG Bridge failed (non-fatal)', {
+                log.error('KG Bridge failed (non-fatal)', {
                   videoId,
+                  userId: options.userId,
                   error: err instanceof Error ? err.message : String(err),
+                  stack: err instanceof Error ? err.stack : undefined,
                 });
               });
           });

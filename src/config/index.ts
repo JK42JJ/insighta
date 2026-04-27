@@ -94,6 +94,9 @@ const envSchema = z.object({
   CHATBOT_MODEL: z.string().default('google/gemini-2.5-flash'),
   CHATBOT_LOCAL_URL: z.string().default('http://localhost:11434/v1'),
 
+  // KG Bridge
+  KG_BRIDGE_SIMILAR_TO_THRESHOLD: z.coerce.number().default(0.7),
+
   // Gmail SMTP Relay (IP-authenticated via EC2)
   GMAIL_SMTP_HOST: z.string().default('smtp-relay.gmail.com'),
   GMAIL_SMTP_PORT: z.coerce.number().default(587),
@@ -228,6 +231,11 @@ export const config = {
     provider: env.CHATBOT_PROVIDER as 'gemini' | 'openrouter' | 'local',
     model: env.CHATBOT_MODEL,
     localUrl: env.CHATBOT_LOCAL_URL,
+  },
+
+  // KG Bridge
+  kgBridge: {
+    similarToThreshold: env.KG_BRIDGE_SIMILAR_TO_THRESHOLD,
   },
 
   // Gmail SMTP Relay (IP-authenticated, no password)
