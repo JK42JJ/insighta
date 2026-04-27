@@ -84,7 +84,36 @@ describe('checkTimestamps', () => {
     expect(result.nullRatio).toBe(0);
   });
 
-  it('returns mixed with correct null ratio when some timestamps are null', () => {
+  it('returns uniform_fake when non-null timestamps are uniformly spaced despite nulls', () => {
+    // Sample 4 pattern: [120, 180, 240, 300, 360, 420, 480, None]
+    const atoms = [
+      { timestamp_sec: 120 },
+      { timestamp_sec: 180 },
+      { timestamp_sec: 240 },
+      { timestamp_sec: 300 },
+      { timestamp_sec: 360 },
+      { timestamp_sec: 420 },
+      { timestamp_sec: 480 },
+      { timestamp_sec: null },
+    ];
+    const result = checkTimestamps(atoms);
+    expect(result.pattern).toBe('uniform_fake');
+    expect(result.nullRatio).toBeCloseTo(0.125);
+  });
+
+  it('returns mixed when non-null timestamps vary and some are null', () => {
+    const atoms = [
+      { timestamp_sec: 5 },
+      { timestamp_sec: null },
+      { timestamp_sec: 91 },
+      { timestamp_sec: 200 },
+    ];
+    const result = checkTimestamps(atoms);
+    expect(result.pattern).toBe('mixed');
+    expect(result.nullRatio).toBeCloseTo(0.25);
+  });
+
+  it('returns insufficient when fewer than 3 non-null timestamps', () => {
     const atoms = [
       { timestamp_sec: 30 },
       { timestamp_sec: null },
@@ -92,7 +121,7 @@ describe('checkTimestamps', () => {
       { timestamp_sec: null },
     ];
     const result = checkTimestamps(atoms);
-    expect(result.pattern).toBe('mixed');
+    expect(result.pattern).toBe('insufficient');
     expect(result.nullRatio).toBeCloseTo(0.5);
   });
 

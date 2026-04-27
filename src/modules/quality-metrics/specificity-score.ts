@@ -25,12 +25,14 @@ export interface SpecificityResult {
  * uniform_fake = 0 (timestamps exist but are fabricated).
  * real = 1 (timestamps are varied, likely genuine).
  * mixed = complement of null ratio.
+ * insufficient = 0.25 (too few non-null to judge confidently).
  * all_null / no_atoms = 0.
  */
 function timestampPatternScore(result: TimestampCheckResult): number {
   if (result.pattern === 'uniform_fake') return 0;
   if (result.pattern === 'real') return 1;
   if (result.pattern === 'mixed') return 1 - result.nullRatio;
+  if (result.pattern === 'insufficient') return 0.25;
   // all_null or no_atoms
   return 0;
 }
