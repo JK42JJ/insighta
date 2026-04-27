@@ -11,7 +11,7 @@
 import { getPrismaClient } from '@/modules/database/client';
 import { createGenerationProvider } from '@/modules/llm';
 import { logger } from '@/utils/logger';
-import { checkSummaryQuality } from './summary-gate';
+import { checkSummaryQuality, validateOneLiner } from './summary-gate';
 import { isV2Summary, type RichSummary } from './rich-summary-types';
 import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { assertRichSummaryQuota } from './rich-summary-quota';
@@ -37,6 +37,8 @@ const TRANSCRIPT_CHUNK_SIZE = 3000;
 const DESCRIPTION_CHUNK_SIZE = 1000;
 const DESCRIPTION_PROMPT_LIMIT = 500;
 const TIMESTAMPED_SEGMENTS_LIMIT = 120; // cap timestamped lines passed to LLM
+// V2 schema responses can reach ~1000-1350 tokens; 1024 caused silent truncation.
+const RICH_SUMMARY_MAX_TOKENS = 4096;
 
 // ---------------------------------------------------------------------------
 // Prompts — v2 (KG Bridge + Learning Interface, #500)
@@ -173,8 +175,10 @@ export async function enrichRichSummary(
   });
 
   const generationProvider = await createGenerationProvider();
-  const generate = (prompt: string, opts?: { format?: 'json' | 'text'; temperature?: number }) =>
-    generationProvider.generate(prompt, opts);
+  const generate = (
+    prompt: string,
+    opts?: { format?: 'json' | 'text'; temperature?: number; maxTokens?: number }
+  ) => generationProvider.generate(prompt, opts);
 
   const transcriptChunk = options.transcript
     ? options.transcript.slice(0, TRANSCRIPT_CHUNK_SIZE)
@@ -189,12 +193,25 @@ export async function enrichRichSummary(
         .replace('{transcript_chunk}', transcriptChunk)
         .replace('{segments_block}', segmentsBlock);
 
-      const raw = await generate(prompt, { format: 'json', temperature: 0.3 });
+      const raw = await generate(prompt, {
+        format: 'json',
+        temperature: 0.3,
+        maxTokens: RICH_SUMMARY_MAX_TOKENS,
+      });
       const structured = JSON.parse(raw.trim()) as RichSummary;
       const result = checkSummaryQuality(structured);
 
       if (result.passed) {
-        const oneLiner = structured.core_argument ?? '';
+        const rawOneLiner = structured.core_argument ?? '';
+        const oneLinerCheck = validateOneLiner(rawOneLiner);
+        if (!oneLinerCheck.valid) {
+          log.warn('one_liner validation failed — storing empty string', {
+            videoId,
+            reason: oneLinerCheck.reason,
+            length: rawOneLiner.length,
+          });
+        }
+        const oneLiner = oneLinerCheck.valid ? rawOneLiner : '';
 
         await upsertRichSummary(prisma, videoId, {
           oneLiner,
