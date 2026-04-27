@@ -79,6 +79,15 @@ describe('calculateCost — pricing table lookup', () => {
     expect(cost).not.toBeNull();
   });
 
+  it('returns correct cost for anthropic/claude-haiku-4.5 (mandala generator)', () => {
+    // inputPerToken=0.000001, outputPerToken=0.000005
+    // 2000 input + 700 output (structure prompt) = 0.000001*2000 + 0.000005*700
+    //   = 0.002 + 0.0035 = 0.0055
+    const cost = calculateCost('anthropic/claude-haiku-4.5', 2000, 700);
+    expect(cost).not.toBeNull();
+    expect(cost!).toBeCloseTo(0.0055, 8);
+  });
+
   it('returns null for unknown model', () => {
     const cost = calculateCost('unknown/model-xyz', 1000, 500);
     expect(cost).toBeNull();

@@ -67,6 +67,15 @@ export const LLM_PRICING: Record<string, LLMPricing> = {
     source: 'openrouter.ai/api/v1/models',
   },
 
+  // --- OpenRouter: Anthropic family (sourced 2026-04-27) ---
+  // Used by mandala generator (structure, actions, labels, legacy full-gen)
+  // and search query generator — 5 call sites total.
+  'anthropic/claude-haiku-4.5': {
+    inputPerToken: 0.000001,
+    outputPerToken: 0.000005,
+    source: 'openrouter.ai/api/v1/models (2026-04-27)',
+  },
+
   // --- Ollama: Local inference (zero cost) ---
   // config.ollama.generateModel default = 'qwen3.5:9b'
   'qwen3.5:9b': {
