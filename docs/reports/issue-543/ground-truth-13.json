@@ -1,0 +1,93 @@
+[
+  {
+    "domain": "수학",
+    "query": "수학",
+    "expected_mandala_id": "734eab51-efeb-41a4-8edc-3f18c543bf14",
+    "expected_center_goal": "1년 내 AI 활용 맞춤형 학습 플랫폼 개발하여 중학생 수학 성적 향상 효과 실증",
+    "language": "ko"
+  },
+  {
+    "domain": "음악",
+    "query": "피아노",
+    "expected_mandala_id": "0c427a28-3c0d-4edf-90e1-14b22811cfb4",
+    "expected_center_goal": "성인 피아노 입문하여 1년 내 쇼팽 녹턴 1곡 완성 후 소규모 리사이틀 개최",
+    "language": "ko"
+  },
+  {
+    "domain": "운동",
+    "query": "근력 운동",
+    "expected_mandala_id": "442886eb-deac-48db-9759-9df2c2e3f81e",
+    "expected_center_goal": "6개월 내 근력 운동 입문으로 3대 운동 합계 200kg 달성",
+    "language": "ko"
+  },
+  {
+    "domain": "프로그래밍",
+    "query": "Rust",
+    "expected_mandala_id": "74a55afb-f7f6-4909-95c2-c8e4fa75c28c",
+    "expected_center_goal": "Build a real-time multiplayer game engine in Rust and publish to Steam",
+    "language": "en"
+  },
+  {
+    "domain": "요리",
+    "query": "요리",
+    "expected_mandala_id": "c85a5852-0542-4ed0-882b-ab39008e7094",
+    "expected_center_goal": "6개월 내 유튜브 요리 채널 구독자 1만명 달성",
+    "language": "ko"
+  },
+  {
+    "domain": "영어",
+    "query": "영어 회화",
+    "expected_mandala_id": "0f9dba32-b526-4b29-bac6-9e377b11d7ce",
+    "expected_center_goal": "6개월 내 성인 대상 실용 영어 회화 온라인 클래스 설계 후 수강생 200명 확보",
+    "language": "ko"
+  },
+  {
+    "domain": "창업",
+    "query": "스타트업",
+    "expected_mandala_id": "faddfb30-9599-42d0-b01f-80159846a461",
+    "expected_center_goal": "기후테크 스타트업 공동창업 후 프리시드 투자 유치 및 MVP 출시",
+    "language": "ko"
+  },
+  {
+    "domain": "투자",
+    "query": "부동산 투자",
+    "expected_mandala_id": "8899c825-59ad-4be5-a020-315e98949564",
+    "expected_center_goal": "부동산 경매 투자로 1년 내 수익형 물건 2건 낙찰",
+    "language": "ko"
+  },
+  {
+    "domain": "글쓰기",
+    "query": "소설 글쓰기",
+    "expected_mandala_id": "8fe94f6c-5175-4099-a8a4-f77bce50a80c",
+    "expected_center_goal": "1년 내 소설 1편 완성 후 문학 공모전 3곳 응모",
+    "language": "ko"
+  },
+  {
+    "domain": "디자인",
+    "query": "디자인",
+    "expected_mandala_id": "837aca5b-7ed1-4e3a-abe3-a8744251bc17",
+    "expected_center_goal": "아침 루틴 디자인 90일 챌린지로 생산성 2배 향상 시스템 완성",
+    "language": "ko"
+  },
+  {
+    "domain": "멘토링",
+    "query": "청소년 멘토링",
+    "expected_mandala_id": "084ebd24-1d47-4485-a6bd-8b2bdc5036ab",
+    "expected_center_goal": "1년 내 청소년 멘토링 프로그램 운영하여 멘티 50명 진로 탐색 지원 완료",
+    "language": "ko"
+  },
+  {
+    "domain": "일본어",
+    "query": "일본어",
+    "expected_mandala_id": "91542314-37bc-40be-8baf-7f08175d0ab0",
+    "expected_center_goal": "일본 소도시 한 달 살기 완수 후 일본어 JLPT N3 합격",
+    "language": "ko"
+  },
+  {
+    "domain": "건강",
+    "query": "건강",
+    "expected_mandala_id": "55b8fab1-5a80-4512-8756-f786a1fe4bd6",
+    "expected_center_goal": "Swift/SwiftUI로 iOS 건강 관리 앱 출시 후 앱스토어 헬스 카테고리 100위 진입",
+    "language": "ko"
+  }
+]
