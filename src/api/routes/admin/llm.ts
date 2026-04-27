@@ -4,6 +4,7 @@ import { createEmbeddingProvider, createGenerationProvider, resetProviders } fro
 import { isOllamaAvailable } from '@/modules/llm/ollama';
 import { config } from '@/config/index';
 import { createSuccessResponse } from '../../schemas/common.schema';
+import { db } from '@/modules/database/client';
 
 interface OpenRouterHealthResult {
   available: boolean;
@@ -47,6 +48,16 @@ const UpdateLlmBodySchema = z.object({
   provider: z.enum(['auto', 'gemini', 'ollama', 'openrouter']),
   openrouter_model: z.string().optional(),
 });
+
+const UsageQuerySchema = z.object({
+  period: z.enum(['daily', 'weekly', 'monthly']).default('daily'),
+  days: z.coerce.number().int().min(1).max(365).default(30),
+});
+
+type DailyRow = { date: string; total_cost: number; total_calls: number; avg_latency_ms: number };
+type ModelRow = { model: string; total_cost: number; total_calls: number };
+type ModuleRow = { module: string; total_cost: number; total_calls: number };
+type BlockedRow = { count: number };
 
 export async function adminLlmRoutes(fastify: FastifyInstance) {
   const adminAuth = { onRequest: [fastify.authenticate, fastify.authenticateAdmin] };
@@ -109,6 +120,87 @@ export async function adminLlmRoutes(fastify: FastifyInstance) {
         active: {
           embedding: { provider: embeddingProvider.name },
           generation: { provider: generationProvider.name, model: generationProvider.model },
+        },
+      })
+    );
+  });
+
+  // GET /api/v1/admin/llm/usage — LLM cost and call aggregates
+  fastify.get('/usage', adminAuth, async (request: FastifyRequest, reply: FastifyReply) => {
+    const query = UsageQuerySchema.parse(request.query);
+    const { period, days } = query;
+
+    // Build date-truncation expression based on period
+    const truncUnit = period === 'monthly' ? 'month' : period === 'weekly' ? 'week' : 'day';
+
+    const [dailyRows, modelRows, moduleRows, blockedRows] = await Promise.all([
+      // Aggregated by date/week/month
+      db.$queryRawUnsafe<DailyRow[]>(`
+        SELECT
+          DATE_TRUNC('${truncUnit}', created_at)::date::text AS date,
+          COALESCE(SUM(cost_usd), 0)::float                  AS total_cost,
+          COUNT(*)::int                                       AS total_calls,
+          COALESCE(AVG(latency_ms), 0)::int                  AS avg_latency_ms
+        FROM llm_call_logs
+        WHERE created_at >= NOW() - INTERVAL '${days} days'
+        GROUP BY DATE_TRUNC('${truncUnit}', created_at)
+        ORDER BY DATE_TRUNC('${truncUnit}', created_at) DESC
+      `),
+
+      // Aggregated by model
+      db.$queryRawUnsafe<ModelRow[]>(`
+        SELECT
+          model,
+          COALESCE(SUM(cost_usd), 0)::float AS total_cost,
+          COUNT(*)::int                      AS total_calls
+        FROM llm_call_logs
+        WHERE created_at >= NOW() - INTERVAL '${days} days'
+        GROUP BY model
+        ORDER BY total_cost DESC
+      `),
+
+      // Aggregated by module
+      db.$queryRawUnsafe<ModuleRow[]>(`
+        SELECT
+          module,
+          COALESCE(SUM(cost_usd), 0)::float AS total_cost,
+          COUNT(*)::int                      AS total_calls
+        FROM llm_call_logs
+        WHERE created_at >= NOW() - INTERVAL '${days} days'
+        GROUP BY module
+        ORDER BY total_cost DESC
+      `),
+
+      // Blocked calls today
+      db.$queryRawUnsafe<BlockedRow[]>(`
+        SELECT COUNT(*)::int AS count
+        FROM llm_call_logs
+        WHERE created_at >= CURRENT_DATE
+          AND status = 'blocked'
+      `),
+    ]);
+
+    // Daily cost total for warnings section
+    const [todayRow] = await db.$queryRaw<[{ total: number }]>`
+      SELECT COALESCE(SUM(cost_usd), 0)::float AS total
+      FROM llm_call_logs
+      WHERE created_at >= CURRENT_DATE
+        AND status = 'success'
+    `;
+    const dailyUsed = todayRow?.total ?? 0;
+    const dailyLimitStr = process.env['LLM_DAILY_COST_LIMIT_USD'];
+    const dailyLimit = dailyLimitStr ? parseFloat(dailyLimitStr) : null;
+
+    return reply.send(
+      createSuccessResponse({
+        period,
+        data: dailyRows,
+        by_model: modelRows,
+        by_module: moduleRows,
+        warnings: {
+          daily_limit: Number.isFinite(dailyLimit) ? dailyLimit : null,
+          daily_used: dailyUsed,
+          blocked_calls_today: blockedRows[0]?.count ?? 0,
         },
       })
     );

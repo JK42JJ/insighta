@@ -35,6 +35,7 @@ prisma/migrations/*
 !prisma/migrations/mandala-timings/
 !prisma/migrations/video_rich_summaries/
 !prisma/migrations/wizard-precompute/
+!prisma/migrations/llm_call_logs/
 
 # Logs
 logs/
