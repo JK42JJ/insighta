@@ -9,6 +9,7 @@
  *   L5 — User rate limit: 100 calls/hour per user_id → throttle
  */
 
+import { config } from '@/config/index';
 import { getPrismaClient } from '@/modules/database/client';
 import { calculateCost } from '@/config/llm-pricing';
 import { logger } from '@/utils/logger';
@@ -123,11 +124,7 @@ export function checkSingleCallCost(
 // ---------------------------------------------------------------------------
 
 export async function checkDailyCostLimit(): Promise<DailyCostCheckResult> {
-  const limitStr = process.env['LLM_DAILY_COST_LIMIT_USD'];
-  const limit =
-    limitStr && Number.isFinite(parseFloat(limitStr))
-      ? parseFloat(limitStr)
-      : DAILY_BLOCK_USD_DEFAULT;
+  const limit = config.llm.dailyCostLimitUsd ?? DAILY_BLOCK_USD_DEFAULT;
 
   const prisma = getPrismaClient();
   const result = await prisma.$queryRaw<[{ total: number }]>`
@@ -167,11 +164,7 @@ export async function checkDailyCostLimit(): Promise<DailyCostCheckResult> {
 // ---------------------------------------------------------------------------
 
 export async function checkMonthlyCostLimit(): Promise<MonthlyCostCheckResult> {
-  const limitStr = process.env['LLM_MONTHLY_COST_LIMIT_USD'];
-  const limit =
-    limitStr && Number.isFinite(parseFloat(limitStr))
-      ? parseFloat(limitStr)
-      : MONTHLY_THROTTLE_USD_DEFAULT;
+  const limit = config.llm.monthlyCostLimitUsd ?? MONTHLY_THROTTLE_USD_DEFAULT;
 
   const prisma = getPrismaClient();
   const result = await prisma.$queryRaw<[{ total: number }]>`

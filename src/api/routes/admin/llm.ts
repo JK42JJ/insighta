@@ -188,8 +188,7 @@ export async function adminLlmRoutes(fastify: FastifyInstance) {
         AND status = 'success'
     `;
     const dailyUsed = todayRow?.total ?? 0;
-    const dailyLimitStr = process.env['LLM_DAILY_COST_LIMIT_USD'];
-    const dailyLimit = dailyLimitStr ? parseFloat(dailyLimitStr) : null;
+    const dailyLimit = config.llm.dailyCostLimitUsd ?? null;
 
     return reply.send(
       createSuccessResponse({

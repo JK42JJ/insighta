@@ -7,7 +7,10 @@
  *   3. logLLMCall() — does not throw when Prisma is unavailable (mock)
  *
  * No server boot required — all tests are unit-level or use mocked Prisma.
+ * ENCRYPTION_SECRET is set below so config validation passes in CI.
  */
+process.env['ENCRYPTION_SECRET'] ??=
+  'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 export {};
 
 // ---------------------------------------------------------------------------
@@ -30,6 +33,34 @@ jest.mock('../../src/modules/database/client', () => ({
   withRetry: jest.fn((fn: () => unknown) => fn()),
   executeTransaction: jest.fn(),
   testDatabaseConnection: jest.fn(),
+}));
+
+const mockChildLogger = {
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn(),
+  child: jest.fn().mockReturnThis(),
+};
+
+jest.mock('../../src/utils/logger', () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    child: jest.fn(() => mockChildLogger),
+  },
+}));
+
+jest.mock('../../src/config/index', () => ({
+  config: {
+    llm: {
+      provider: 'auto',
+      dailyCostLimitUsd: undefined,
+      monthlyCostLimitUsd: undefined,
+    },
+  },
 }));
 
 // ---------------------------------------------------------------------------
