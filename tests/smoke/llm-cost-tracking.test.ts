@@ -241,11 +241,136 @@ describe('logLLMCall — does not throw on DB failure', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Environment report — always runs
+// Group 4: checkDailyCostLimit — aggregate gate
 // ---------------------------------------------------------------------------
 
-describe('LLM cost tracking environment check', () => {
-  it('reports test suite capability', () => {
-    expect(true).toBe(true);
+describe('checkDailyCostLimit — L2 daily aggregate', () => {
+  let checkDailyCostLimit: () => Promise<{
+    allowed: boolean;
+    dailyTotal: number;
+    limit: number;
+    warning?: string;
+  }>;
+
+  beforeAll(async () => {
+    const mod = await import('../../src/modules/llm/cost-gate');
+    checkDailyCostLimit = mod.checkDailyCostLimit;
+  });
+
+  it('blocks when daily total >= $10 default limit', async () => {
+    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
+      .fn()
+      .mockResolvedValue([{ total: 12.5 }]);
+    const result = await checkDailyCostLimit();
+    expect(result.allowed).toBe(false);
+    expect(result.dailyTotal).toBe(12.5);
+    expect(result.limit).toBe(10);
+    expect(result.warning).toMatch(/blocked/i);
+  });
+
+  it('warns when daily total >= $5 but under limit', async () => {
+    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
+      .fn()
+      .mockResolvedValue([{ total: 7.0 }]);
+    const result = await checkDailyCostLimit();
+    expect(result.allowed).toBe(true);
+    expect(result.dailyTotal).toBe(7.0);
+    expect(result.warning).toMatch(/warning/i);
+  });
+
+  it('allows when daily total is under $5', async () => {
+    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
+      .fn()
+      .mockResolvedValue([{ total: 2.0 }]);
+    const result = await checkDailyCostLimit();
+    expect(result.allowed).toBe(true);
+    expect(result.warning).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 5: checkMonthlyCostLimit — L3 monthly aggregate
+// ---------------------------------------------------------------------------
+
+describe('checkMonthlyCostLimit — L3 monthly aggregate', () => {
+  let checkMonthlyCostLimit: () => Promise<{
+    allowed: boolean;
+    monthlyTotal: number;
+    limit: number;
+    throttled?: boolean;
+    warning?: string;
+  }>;
+
+  beforeAll(async () => {
+    const mod = await import('../../src/modules/llm/cost-gate');
+    checkMonthlyCostLimit = mod.checkMonthlyCostLimit;
+  });
+
+  it('throttles when monthly total >= $50 default limit', async () => {
+    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
+      .fn()
+      .mockResolvedValue([{ total: 55.0 }]);
+    const result = await checkMonthlyCostLimit();
+    expect(result.allowed).toBe(false);
+    expect(result.throttled).toBe(true);
+    expect(result.warning).toMatch(/throttled/i);
+  });
+
+  it('alerts when monthly total >= $30 but under limit', async () => {
+    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
+      .fn()
+      .mockResolvedValue([{ total: 35.0 }]);
+    const result = await checkMonthlyCostLimit();
+    expect(result.allowed).toBe(true);
+    expect(result.warning).toMatch(/alert/i);
+  });
+
+  it('allows when monthly total under $30', async () => {
+    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
+      .fn()
+      .mockResolvedValue([{ total: 10.0 }]);
+    const result = await checkMonthlyCostLimit();
+    expect(result.allowed).toBe(true);
+    expect(result.warning).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 6: checkUserRateLimit — L5 per-user
+// ---------------------------------------------------------------------------
+
+describe('checkUserRateLimit — L5 user rate', () => {
+  let checkUserRateLimit: (
+    userId: string | null
+  ) => Promise<{ allowed: boolean; callCount: number; limit: number; warning?: string }>;
+
+  beforeAll(async () => {
+    const mod = await import('../../src/modules/llm/cost-gate');
+    checkUserRateLimit = mod.checkUserRateLimit;
+  });
+
+  it('allows null userId without DB query', async () => {
+    const result = await checkUserRateLimit(null);
+    expect(result.allowed).toBe(true);
+    expect(result.callCount).toBe(0);
+  });
+
+  it('throttles user with 100+ calls in last hour', async () => {
+    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
+      .fn()
+      .mockResolvedValue([{ cnt: 120 }]);
+    const result = await checkUserRateLimit('user-abc-123');
+    expect(result.allowed).toBe(false);
+    expect(result.callCount).toBe(120);
+    expect(result.warning).toMatch(/throttled/i);
+  });
+
+  it('allows user under rate limit', async () => {
+    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
+      .fn()
+      .mockResolvedValue([{ cnt: 42 }]);
+    const result = await checkUserRateLimit('user-abc-123');
+    expect(result.allowed).toBe(true);
+    expect(result.callCount).toBe(42);
   });
 });
