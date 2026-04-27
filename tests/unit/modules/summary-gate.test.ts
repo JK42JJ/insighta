@@ -5,7 +5,11 @@
  * Interface contract: check(summary) → { score, passed, action, reasons }
  */
 
-import { checkSummaryQuality, type RichSummary } from '../../../src/modules/skills/summary-gate';
+import {
+  checkSummaryQuality,
+  validateOneLiner,
+  type RichSummary,
+} from '../../../src/modules/skills/summary-gate';
 
 // ============================================================================
 // Fixtures
@@ -175,5 +179,77 @@ describe('checkSummaryQuality', () => {
       expect(['use', 'retry', 'fallback']).toContain(result.action);
       expect(Array.isArray(result.reasons)).toBe(true);
     });
+  });
+});
+
+// ============================================================================
+// validateOneLiner
+// ============================================================================
+
+describe('validateOneLiner', () => {
+  it('returns valid:true for a normal short string', () => {
+    const result = validateOneLiner('Node.js로 REST API 구축하는 법을 배웁니다');
+    expect(result.valid).toBe(true);
+    expect(result.reason).toBeUndefined();
+  });
+
+  it('returns valid:true for undefined (empty is allowed)', () => {
+    const result = validateOneLiner(undefined);
+    expect(result.valid).toBe(true);
+  });
+
+  it('returns valid:true for empty string (empty is allowed)', () => {
+    const result = validateOneLiner('');
+    expect(result.valid).toBe(true);
+  });
+
+  it('returns valid:false with reason one_liner_overflow when length > 200', () => {
+    // 201-char string
+    const longString = 'a'.repeat(201);
+    const result = validateOneLiner(longString);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('one_liner_overflow');
+  });
+
+  it('returns valid:true for a string of exactly 200 chars (boundary)', () => {
+    // Use a realistic sentence repeated to hit exactly 200 chars.
+    // Cannot use 'a'.repeat(200) — that triggers the repeated-char hallucination pattern.
+    const unit = 'Node.js로 REST API를 구축하는 실용 가이드입니다. ';
+    const boundary = unit.repeat(Math.ceil(200 / unit.length)).slice(0, 200);
+    expect(boundary.length).toBe(200);
+    const result = validateOneLiner(boundary);
+    expect(result.valid).toBe(true);
+  });
+
+  it('returns valid:false with reason one_liner_cot_leakage for <think> pattern', () => {
+    const result = validateOneLiner('<think>Let me analyze this video carefully</think>');
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('one_liner_cot_leakage');
+  });
+
+  it('returns valid:false with reason one_liner_cot_leakage for reasoning preamble', () => {
+    const result = validateOneLiner('Let me start by summarizing the content here');
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('one_liner_cot_leakage');
+  });
+
+  it('returns valid:false with reason one_liner_hallucination for "as an AI" pattern', () => {
+    const result = validateOneLiner('As an AI, I think this video covers machine learning basics');
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('one_liner_hallucination');
+  });
+
+  it('returns valid:false with reason one_liner_hallucination for Korean apology', () => {
+    const result = validateOneLiner('죄송합니다 이 영상은 요약이 어렵습니다');
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('one_liner_hallucination');
+  });
+
+  it('length check takes priority over CoT check (overflow detected first)', () => {
+    // >200 chars AND contains CoT pattern — overflow reported first
+    const overflowWithCoT = 'Let me start: ' + 'a'.repeat(200);
+    const result = validateOneLiner(overflowWithCoT);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('one_liner_overflow');
   });
 });

@@ -20,6 +20,7 @@ export { isV2Summary };
 // ============================================================================
 
 const PASS_THRESHOLD = 0.7;
+const ONE_LINER_MAX_LENGTH = 200;
 
 const HALLUCINATION_PATTERNS = [
   /as an ai/i,
@@ -45,6 +46,48 @@ const COT_LEAKAGE_PATTERNS = [
 const VALID_CONTENT_TYPES = new Set(['tutorial', 'opinion', 'research', 'news', 'entertainment']);
 
 const VALID_DEPTH_LEVELS = new Set(['beginner', 'intermediate', 'advanced']);
+
+// ============================================================================
+// one_liner validation
+// ============================================================================
+
+/**
+ * Validate the one_liner string extracted from core_argument.
+ *
+ * PR 3-3 confirmed: all passing rows have one_liner <= 142 chars (max observed).
+ * The 200-char threshold is therefore safe — no retroactive impact on pass rows.
+ *
+ * @returns `{ valid: true }` when the string passes all checks.
+ * @returns `{ valid: false, reason }` on the first failing check.
+ */
+export function validateOneLiner(oneLiner: string | undefined): {
+  valid: boolean;
+  reason?: string;
+} {
+  // Empty / undefined is allowed — handled upstream (empty one_liner stored as '')
+  if (!oneLiner) return { valid: true };
+
+  // Length check — CoT leakage typically produces 2000+ char "sentences"
+  if (oneLiner.length > ONE_LINER_MAX_LENGTH) {
+    return { valid: false, reason: 'one_liner_overflow' };
+  }
+
+  // CoT leakage — same patterns used for full structured validation
+  for (const pattern of COT_LEAKAGE_PATTERNS) {
+    if (pattern.test(oneLiner)) {
+      return { valid: false, reason: 'one_liner_cot_leakage' };
+    }
+  }
+
+  // Hallucination signals
+  for (const pattern of HALLUCINATION_PATTERNS) {
+    if (pattern.test(oneLiner)) {
+      return { valid: false, reason: 'one_liner_hallucination' };
+    }
+  }
+
+  return { valid: true };
+}
 
 // ============================================================================
 // Score weights
