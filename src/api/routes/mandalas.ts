@@ -703,13 +703,14 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       // their sum.
       const t0 = Date.now();
       const templatePromise = searchMandalasByGoal(trimmedGoal, {
-        limit: 4,
-        threshold: 0.3,
+        limit: 5,
+        threshold: 0.4,
         language: lang,
       })
         .then((templates) => {
           write('template_found', {
             templates,
+            hasResults: templates.length > 0,
             duration_ms: Date.now() - t0,
           });
           return templates;
