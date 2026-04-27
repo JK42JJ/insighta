@@ -88,6 +88,25 @@ describe('calculateCost — pricing table lookup', () => {
     expect(cost!).toBeCloseTo(0.0055, 8);
   });
 
+  it('returns correct cost for anthropic/claude-sonnet-4 (4/14 incident model)', () => {
+    // inputPerToken=0.000003, outputPerToken=0.000015
+    // 2000 input + 1000 output = 0.000003*2000 + 0.000015*1000
+    //   = 0.006 + 0.015 = 0.021
+    const cost = calculateCost('anthropic/claude-sonnet-4', 2000, 1000);
+    expect(cost).not.toBeNull();
+    expect(cost!).toBeCloseTo(0.021, 8);
+  });
+
+  it('computes 4/14 burst scenario: 1.93K Sonnet calls ≈ $48', () => {
+    // 1930 calls × avg 2K input + 1K output per call
+    const perCall = calculateCost('anthropic/claude-sonnet-4', 2000, 1000)!;
+    const totalBurst = perCall * 1930;
+    // Should be ~$40.5 (0.021 × 1930). Dashboard showed ~$48 so
+    // actual token counts were likely higher, but order of magnitude matches.
+    expect(totalBurst).toBeGreaterThan(30);
+    expect(totalBurst).toBeLessThan(60);
+  });
+
   it('returns null for unknown model', () => {
     const cost = calculateCost('unknown/model-xyz', 1000, 500);
     expect(cost).toBeNull();
@@ -381,5 +400,59 @@ describe('checkUserRateLimit — L5 user rate', () => {
     const result = await checkUserRateLimit('user-abc-123');
     expect(result.allowed).toBe(true);
     expect(result.callCount).toBe(42);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 7: 4/14 incident replay — gate coverage verification
+// ---------------------------------------------------------------------------
+
+describe('4/14 incident replay — which gates catch Sonnet burst', () => {
+  let checkSingleCallCost: (
+    model: string,
+    inputTokens: number,
+    outputTokens: number
+  ) => { allowed: boolean; estimatedCost: number | null; warning?: string };
+  let checkDailyCostLimit: () => Promise<{
+    allowed: boolean;
+    dailyTotal: number;
+    limit: number;
+    warning?: string;
+  }>;
+  let checkUserRateLimit: (
+    userId: string | null
+  ) => Promise<{ allowed: boolean; callCount: number; limit: number; warning?: string }>;
+
+  beforeAll(async () => {
+    const gate = await import('../../src/modules/llm/cost-gate');
+    checkSingleCallCost = gate.checkSingleCallCost;
+    checkDailyCostLimit = gate.checkDailyCostLimit;
+    checkUserRateLimit = gate.checkUserRateLimit;
+  });
+
+  it('L1: single Sonnet call ($0.021) passes — under $0.50 warn', () => {
+    const result = checkSingleCallCost('anthropic/claude-sonnet-4', 2000, 1000);
+    expect(result.allowed).toBe(true);
+    expect(result.warning).toBeUndefined();
+    expect(result.estimatedCost!).toBeCloseTo(0.021, 4);
+  });
+
+  it('L2: daily total $40+ blocks at $10 limit — catches burst by call ~476', async () => {
+    // After ~476 calls: 476 × $0.021 = $10.0 → L2 blocks
+    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
+      .fn()
+      .mockResolvedValue([{ total: 40.53 }]);
+    const result = await checkDailyCostLimit();
+    expect(result.allowed).toBe(false);
+    expect(result.warning).toMatch(/blocked/i);
+  });
+
+  it('L5: 1930 calls in 1 hour blocks at 100/hr — catches burst by call ~100', async () => {
+    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
+      .fn()
+      .mockResolvedValue([{ cnt: 1930 }]);
+    const result = await checkUserRateLimit('dataset-script');
+    expect(result.allowed).toBe(false);
+    expect(result.warning).toMatch(/throttled/i);
   });
 });

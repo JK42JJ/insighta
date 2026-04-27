@@ -68,8 +68,11 @@ export const LLM_PRICING: Record<string, LLMPricing> = {
   },
 
   // --- OpenRouter: Anthropic family (sourced 2026-04-27) ---
-  // Used by mandala generator (structure, actions, labels, legacy full-gen)
-  // and search query generator — 5 call sites total.
+  'anthropic/claude-sonnet-4': {
+    inputPerToken: 0.000003,
+    outputPerToken: 0.000015,
+    source: 'openrouter.ai/api/v1/models (2026-04-27)',
+  },
   'anthropic/claude-haiku-4.5': {
     inputPerToken: 0.000001,
     outputPerToken: 0.000005,
