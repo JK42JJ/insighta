@@ -975,113 +975,256 @@ function dedupePool(items: ReadonlyArray<PoolItem>): PoolItem[] {
 // Upsert — single pass for Tier 1 + Tier 2 slots
 // ============================================================================
 
+/**
+ * Row shape returned by the batch INSERT … RETURNING query.
+ * Only the columns needed to build the SSE CardPayload are selected.
+ */
+interface UpsertedRow {
+  id: string;
+  video_id: string;
+  title: string;
+  channel: string | null;
+  thumbnail: string | null;
+  duration_sec: number | null;
+  rec_score: number;
+  cell_index: number | null;
+  keyword: string;
+  weight_version: number;
+  rec_reason: string | null;
+  published_at: Date | null;
+}
+
+/**
+ * Batch-upsert all slots in a single SQL round-trip using
+ * INSERT … ON CONFLICT … DO UPDATE … RETURNING.
+ *
+ * Falls back to per-row Prisma upserts if the batch statement fails,
+ * so a SQL dialect mismatch or constraint surprise does not block the
+ * entire run.
+ *
+ * The SSE notification (notifyCardAdded) fires for every successfully
+ * persisted row — identical behaviour to the previous loop implementation.
+ */
 async function upsertSlots(
   userId: string,
   mandalaId: string,
   slots: ReadonlyArray<AssembledSlot>,
   subGoals: ReadonlyArray<string>
 ): Promise<number> {
+  if (slots.length === 0) return 0;
+
   const db = getPrismaClient();
   const expiresAt = new Date(Date.now() + TTL_DAYS * MS_PER_DAY);
-  let count = 0;
 
-  for (const slot of slots) {
-    const keyword = (subGoals[slot.cellIndex] ?? '').slice(0, 255);
-    try {
-      const row = await db.recommendation_cache.upsert({
-        where: {
-          user_id_mandala_id_video_id: {
+  // ------------------------------------------------------------------
+  // Build per-slot derived values once so we don't recompute inside loops
+  // ------------------------------------------------------------------
+  const prepared = slots.map((slot) => ({
+    slot,
+    keyword: (subGoals[slot.cellIndex] ?? '').slice(0, 255),
+    likeRatio:
+      slot.likeCount != null && slot.viewCount && slot.viewCount > 0
+        ? Math.min(slot.likeCount / slot.viewCount, 1)
+        : null,
+    recScore: Math.max(0, Math.min(1, slot.score)),
+  }));
+
+  // ------------------------------------------------------------------
+  // Attempt: single batch INSERT … ON CONFLICT … DO UPDATE … RETURNING
+  // ------------------------------------------------------------------
+  let upsertedRows: UpsertedRow[] | null = null;
+  try {
+    // Build a VALUES list: one Prisma.sql fragment per row, then join.
+    const valueFragments = prepared.map(
+      ({ slot, keyword, likeRatio, recScore }) =>
+        Prisma.sql`(
+        ${userId}::uuid,
+        ${mandalaId}::uuid,
+        ${slot.cellIndex}::int,
+        ${keyword}::varchar(255),
+        ${slot.videoId}::varchar(64),
+        ${slot.title},
+        ${slot.thumbnail},
+        ${slot.channelName?.slice(0, 255) ?? null}::varchar(255),
+        ${slot.viewCount}::int,
+        ${likeRatio}::float8,
+        ${slot.durationSec}::int,
+        ${recScore}::float8,
+        ${slot.tier},
+        ${RECOMMENDATION_STATUS_PENDING}::varchar(20),
+        ${WEIGHT_VERSION}::int,
+        ${expiresAt}::timestamptz,
+        ${slot.publishedAt}::timestamptz
+      )`
+    );
+
+    upsertedRows = await db.$queryRaw<UpsertedRow[]>`
+      INSERT INTO recommendation_cache (
+        user_id, mandala_id, cell_index, keyword, video_id,
+        title, thumbnail, channel, view_count, like_ratio,
+        duration_sec, rec_score, rec_reason, status, weight_version,
+        expires_at, published_at
+      )
+      VALUES ${Prisma.join(valueFragments)}
+      ON CONFLICT (user_id, mandala_id, video_id) DO UPDATE SET
+        cell_index     = EXCLUDED.cell_index,
+        keyword        = EXCLUDED.keyword,
+        title          = EXCLUDED.title,
+        thumbnail      = EXCLUDED.thumbnail,
+        channel        = EXCLUDED.channel,
+        view_count     = EXCLUDED.view_count,
+        like_ratio     = EXCLUDED.like_ratio,
+        duration_sec   = EXCLUDED.duration_sec,
+        rec_score      = EXCLUDED.rec_score,
+        rec_reason     = EXCLUDED.rec_reason,
+        weight_version = EXCLUDED.weight_version,
+        expires_at     = EXCLUDED.expires_at,
+        published_at   = EXCLUDED.published_at
+      RETURNING
+        id, video_id, title, channel, thumbnail, duration_sec,
+        rec_score, cell_index, keyword, weight_version, rec_reason,
+        published_at
+    `;
+  } catch (batchErr) {
+    log.warn(
+      `recommendation_cache batch upsert failed (${slots.length} slots), falling back to per-row: ${
+        batchErr instanceof Error ? batchErr.message : String(batchErr)
+      }`
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // Fallback: per-row Prisma upserts (preserves pre-existing behaviour)
+  // ------------------------------------------------------------------
+  if (upsertedRows === null) {
+    let count = 0;
+    for (const { slot, keyword, likeRatio, recScore } of prepared) {
+      try {
+        const row = await db.recommendation_cache.upsert({
+          where: {
+            user_id_mandala_id_video_id: {
+              user_id: userId,
+              mandala_id: mandalaId,
+              video_id: slot.videoId,
+            },
+          },
+          create: {
             user_id: userId,
             mandala_id: mandalaId,
+            cell_index: slot.cellIndex,
+            keyword,
             video_id: slot.videoId,
+            title: slot.title,
+            thumbnail: slot.thumbnail,
+            channel: slot.channelName?.slice(0, 255) ?? null,
+            view_count: slot.viewCount,
+            like_ratio: likeRatio,
+            duration_sec: slot.durationSec,
+            rec_score: recScore,
+            rec_reason: slot.tier,
+            status: RECOMMENDATION_STATUS_PENDING,
+            weight_version: WEIGHT_VERSION,
+            expires_at: expiresAt,
+            published_at: slot.publishedAt,
           },
-        },
-        create: {
-          user_id: userId,
-          mandala_id: mandalaId,
-          cell_index: slot.cellIndex,
-          keyword,
-          video_id: slot.videoId,
-          title: slot.title,
-          thumbnail: slot.thumbnail,
-          channel: slot.channelName?.slice(0, 255) ?? null,
-          view_count: slot.viewCount,
-          like_ratio:
-            slot.likeCount != null && slot.viewCount && slot.viewCount > 0
-              ? Math.min(slot.likeCount / slot.viewCount, 1)
-              : null,
-          duration_sec: slot.durationSec,
-          rec_score: Math.max(0, Math.min(1, slot.score)),
-          rec_reason: slot.tier,
-          status: RECOMMENDATION_STATUS_PENDING,
-          weight_version: WEIGHT_VERSION,
-          expires_at: expiresAt,
-          published_at: slot.publishedAt,
-        },
-        update: {
-          cell_index: slot.cellIndex,
-          keyword,
-          title: slot.title,
-          thumbnail: slot.thumbnail,
-          channel: slot.channelName?.slice(0, 255) ?? null,
-          view_count: slot.viewCount,
-          like_ratio:
-            slot.likeCount != null && slot.viewCount && slot.viewCount > 0
-              ? Math.min(slot.likeCount / slot.viewCount, 1)
-              : null,
-          duration_sec: slot.durationSec,
-          rec_score: Math.max(0, Math.min(1, slot.score)),
-          rec_reason: slot.tier,
-          weight_version: WEIGHT_VERSION,
-          expires_at: expiresAt,
-          published_at: slot.publishedAt,
-        },
-      });
-      count++;
+          update: {
+            cell_index: slot.cellIndex,
+            keyword,
+            title: slot.title,
+            thumbnail: slot.thumbnail,
+            channel: slot.channelName?.slice(0, 255) ?? null,
+            view_count: slot.viewCount,
+            like_ratio: likeRatio,
+            duration_sec: slot.durationSec,
+            rec_score: recScore,
+            rec_reason: slot.tier,
+            weight_version: WEIGHT_VERSION,
+            expires_at: expiresAt,
+            published_at: slot.publishedAt,
+          },
+        });
+        count++;
 
-      // Phase 1 slice 2 (SSE streaming): push the freshly-upserted card
-      // to any SSE subscriber for this mandala. Non-fatal — notification
-      // delivery is best-effort, persistence has already succeeded above.
-      try {
-        const payload: CardPayload = {
-          id: row.id,
-          videoId: row.video_id,
-          title: row.title,
-          channel: row.channel,
-          thumbnail: row.thumbnail,
-          durationSec: row.duration_sec,
-          recScore: row.rec_score,
-          cellIndex: row.cell_index ?? slot.cellIndex,
-          // cellLabel is derived at read-time in /recommendations (from
-          // mandala levels). The SSE consumer resolves it client-side
-          // from the already-loaded mandala state to avoid a DB round-
-          // trip per notification.
-          cellLabel: null,
-          keyword: row.keyword ?? keyword,
-          source: row.weight_version === 0 ? 'manual' : 'auto_recommend',
-          recReason: row.rec_reason,
-          publishedAt: row.published_at?.toISOString() ?? null,
-        };
-        notifyCardAdded(mandalaId, payload);
-      } catch (notifyErr) {
-        // EventEmitter.emit can only throw if a listener throws
-        // synchronously, which would be a listener bug. Log and move
-        // on — the row is persisted regardless.
+        // Phase 1 slice 2 (SSE streaming) — best-effort, non-fatal.
+        try {
+          const payload: CardPayload = {
+            id: row.id,
+            videoId: row.video_id,
+            title: row.title,
+            channel: row.channel,
+            thumbnail: row.thumbnail,
+            durationSec: row.duration_sec,
+            recScore: row.rec_score,
+            cellIndex: row.cell_index ?? slot.cellIndex,
+            cellLabel: null,
+            keyword: row.keyword ?? keyword,
+            source: row.weight_version === 0 ? 'manual' : 'auto_recommend',
+            recReason: row.rec_reason,
+            publishedAt: row.published_at?.toISOString() ?? null,
+          };
+          notifyCardAdded(mandalaId, payload);
+        } catch (notifyErr) {
+          log.warn(
+            `notifyCardAdded failed for ${slot.videoId}: ${
+              notifyErr instanceof Error ? notifyErr.message : String(notifyErr)
+            }`
+          );
+        }
+      } catch (err) {
         log.warn(
-          `notifyCardAdded failed for ${slot.videoId}: ${
-            notifyErr instanceof Error ? notifyErr.message : String(notifyErr)
+          `recommendation_cache upsert failed for ${slot.videoId}: ${
+            err instanceof Error ? err.message : String(err)
           }`
         );
       }
-    } catch (err) {
+    }
+    return count;
+  }
+
+  // ------------------------------------------------------------------
+  // Batch succeeded — fire SSE notifications for each returned row
+  // ------------------------------------------------------------------
+  const slotByVideoId = new Map(
+    prepared.map(({ slot, keyword }) => [slot.videoId, { slot, keyword }])
+  );
+
+  for (const row of upsertedRows) {
+    const entry = slotByVideoId.get(row.video_id);
+    const fallbackCellIndex = entry?.slot.cellIndex ?? 0;
+    const fallbackKeyword = entry?.keyword ?? row.keyword;
+
+    // Phase 1 slice 2 (SSE streaming) — best-effort, non-fatal.
+    try {
+      const payload: CardPayload = {
+        id: row.id,
+        videoId: row.video_id,
+        title: row.title,
+        channel: row.channel,
+        thumbnail: row.thumbnail,
+        durationSec: row.duration_sec,
+        recScore: row.rec_score,
+        cellIndex: row.cell_index ?? fallbackCellIndex,
+        // cellLabel is derived at read-time in /recommendations (from
+        // mandala levels). The SSE consumer resolves it client-side
+        // from the already-loaded mandala state to avoid a DB round-
+        // trip per notification.
+        cellLabel: null,
+        keyword: row.keyword ?? fallbackKeyword,
+        source: row.weight_version === 0 ? 'manual' : 'auto_recommend',
+        recReason: row.rec_reason,
+        publishedAt: row.published_at?.toISOString() ?? null,
+      };
+      notifyCardAdded(mandalaId, payload);
+    } catch (notifyErr) {
       log.warn(
-        `recommendation_cache upsert failed for ${slot.videoId}: ${
-          err instanceof Error ? err.message : String(err)
+        `notifyCardAdded failed for ${row.video_id}: ${
+          notifyErr instanceof Error ? notifyErr.message : String(notifyErr)
         }`
       );
     }
   }
-  return count;
+
+  return upsertedRows.length;
 }
 
 // ---------------------------------------------------------------------------
