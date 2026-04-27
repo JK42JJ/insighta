@@ -6,6 +6,7 @@
  */
 
 import type { EmbeddingProvider, GenerationProvider, GenerateOptions } from './provider';
+import { logLLMCall } from './call-logger';
 
 const GEMINI_EMBED_MODEL = 'gemini-embedding-001';
 const GEMINI_EMBED_DIMENSION = 768;
@@ -54,6 +55,7 @@ export class GeminiGenerationProvider implements GenerationProvider {
   readonly model = `gemini/${GEMINI_GENERATE_MODEL}`;
 
   async generate(prompt: string, options?: GenerateOptions): Promise<string> {
+    const startTime = Date.now();
     const apiKey = getApiKey();
 
     const body: Record<string, unknown> = {
@@ -69,25 +71,64 @@ export class GeminiGenerationProvider implements GenerationProvider {
       genConfig['responseMimeType'] = 'application/json';
     }
 
-    const response = await fetch(`${GEMINI_GENERATE_URL}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${GEMINI_GENERATE_URL}?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      logLLMCall({
+        module: 'gemini',
+        model: this.model,
+        latencyMs: Date.now() - startTime,
+        status: 'error',
+        errorMessage: err instanceof Error ? err.message : String(err),
+      }).catch(() => {});
+      throw err;
+    }
 
     if (!response.ok) {
       const errorBody = await response.text();
+      logLLMCall({
+        module: 'gemini',
+        model: this.model,
+        latencyMs: Date.now() - startTime,
+        status: 'error',
+        errorMessage: `API error ${response.status}: ${errorBody.slice(0, 200)}`,
+      }).catch(() => {});
       throw new Error(`Gemini generation API error ${response.status}: ${errorBody}`);
     }
 
     const data = (await response.json()) as {
       candidates?: Array<{ content: { parts: Array<{ text: string }> } }>;
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
     };
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
+      logLLMCall({
+        module: 'gemini',
+        model: this.model,
+        inputTokens: data.usageMetadata?.promptTokenCount,
+        outputTokens: data.usageMetadata?.candidatesTokenCount,
+        latencyMs: Date.now() - startTime,
+        status: 'error',
+        errorMessage: 'Empty response returned',
+      }).catch(() => {});
       throw new Error('Gemini returned empty response');
     }
+
+    // Fire-and-forget cost log
+    logLLMCall({
+      module: 'gemini',
+      model: this.model,
+      inputTokens: data.usageMetadata?.promptTokenCount,
+      outputTokens: data.usageMetadata?.candidatesTokenCount,
+      latencyMs: Date.now() - startTime,
+      status: 'success',
+    }).catch(() => {});
 
     return text;
   }

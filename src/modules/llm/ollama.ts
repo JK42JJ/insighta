@@ -7,6 +7,7 @@
 
 import type { EmbeddingProvider, GenerationProvider, GenerateOptions } from './provider';
 import { config } from '../../config';
+import { logLLMCall } from './call-logger';
 
 const OLLAMA_EMBED_DIMENSION = 768;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
@@ -55,6 +56,8 @@ export class OllamaGenerationProvider implements GenerationProvider {
   }
 
   async generate(prompt: string, options?: GenerateOptions): Promise<string> {
+    const startTime = Date.now();
+
     // Use /api/chat with think:false to disable qwen3 thinking mode.
     // Thinking mode consumes tokens internally and returns empty response.
     const body: Record<string, unknown> = {
@@ -76,23 +79,66 @@ export class OllamaGenerationProvider implements GenerationProvider {
       body['format'] = 'json';
     }
 
-    const response = await fetch(`${this.baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      logLLMCall({
+        module: 'ollama',
+        model: this.model,
+        latencyMs: Date.now() - startTime,
+        status: 'error',
+        errorMessage: err instanceof Error ? err.message : String(err),
+      }).catch(() => {});
+      throw err;
+    }
 
     if (!response.ok) {
       const errorBody = await response.text();
+      logLLMCall({
+        module: 'ollama',
+        model: this.model,
+        latencyMs: Date.now() - startTime,
+        status: 'error',
+        errorMessage: `API error ${response.status}: ${errorBody.slice(0, 200)}`,
+      }).catch(() => {});
       throw new Error(`Ollama generate API error ${response.status}: ${errorBody}`);
     }
 
-    const data = (await response.json()) as { message?: { content: string } };
+    // Ollama /api/chat response includes prompt_eval_count and eval_count for token usage
+    const data = (await response.json()) as {
+      message?: { content: string };
+      prompt_eval_count?: number;
+      eval_count?: number;
+    };
     const content = data.message?.content;
 
     if (!content) {
+      logLLMCall({
+        module: 'ollama',
+        model: this.model,
+        inputTokens: data.prompt_eval_count,
+        outputTokens: data.eval_count,
+        latencyMs: Date.now() - startTime,
+        status: 'error',
+        errorMessage: 'Empty response returned',
+      }).catch(() => {});
       throw new Error('Ollama returned empty response');
     }
+
+    // Fire-and-forget cost log (Ollama = local inference, zero cost)
+    logLLMCall({
+      module: 'ollama',
+      model: this.model,
+      inputTokens: data.prompt_eval_count,
+      outputTokens: data.eval_count,
+      latencyMs: Date.now() - startTime,
+      status: 'success',
+    }).catch(() => {});
 
     return content;
   }

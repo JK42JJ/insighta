@@ -72,6 +72,8 @@ const envSchema = z.object({
   OLLAMA_EMBED_MODEL: z.string().default('nomic-embed-text'),
   OLLAMA_GENERATE_MODEL: z.string().default('qwen3.5:9b'),
   LLM_PROVIDER: z.enum(['gemini', 'ollama', 'openrouter', 'auto']).default('auto'),
+  LLM_DAILY_COST_LIMIT_USD: z.coerce.number().optional(),
+  LLM_MONTHLY_COST_LIMIT_USD: z.coerce.number().optional(),
 
   // OpenRouter
   OPENROUTER_API_KEY: z.string().optional(),
@@ -205,6 +207,8 @@ export const config = {
   // LLM Provider
   llm: {
     provider: env.LLM_PROVIDER,
+    dailyCostLimitUsd: env.LLM_DAILY_COST_LIMIT_USD,
+    monthlyCostLimitUsd: env.LLM_MONTHLY_COST_LIMIT_USD,
   },
 
   // Ollama (local inference)

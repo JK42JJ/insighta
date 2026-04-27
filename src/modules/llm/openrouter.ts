@@ -8,6 +8,7 @@
 
 import type { GenerationProvider, GenerateOptions } from './provider';
 import { config } from '../../config';
+import { logLLMCall } from './call-logger';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MAX_TOKENS = 1024;
@@ -26,6 +27,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
   }
 
   async generate(prompt: string, options?: GenerateOptions): Promise<string> {
+    const startTime = Date.now();
     const apiKey = config.openrouter.apiKey;
     if (!apiKey) {
       throw new Error('OPENROUTER_API_KEY not configured');
@@ -39,6 +41,14 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       temperature: options?.temperature ?? 0.3,
       max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
     };
+
+    // JSON mode: instruct the model to return valid JSON only.
+    // OpenRouter requires explicit response_format to enforce JSON output —
+    // unlike Ollama (body['format']='json') and Gemini (responseMimeType),
+    // OpenRouter silently drops format hints unless this field is present.
+    if (options?.format === 'json') {
+      body['response_format'] = { type: 'json_object' };
+    }
 
     // Disable thinking/reasoning mode for Qwen models only — Qwen3 consumes
     // token budget on reasoning, leaving content empty.
@@ -77,13 +87,35 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
         signal: controller.signal,
       });
     } catch (err) {
+      const latencyMs = Date.now() - startTime;
       if ((err as Error).name === 'AbortError') {
         // Distinguish "external cancel" from internal timeout for clearer logs.
         if (externalSignal?.aborted) {
+          logLLMCall({
+            module: 'openrouter',
+            model: this.model,
+            latencyMs,
+            status: 'error',
+            errorMessage: 'Request cancelled by external signal',
+          }).catch(() => {});
           throw new Error('OpenRouter request cancelled by external signal');
         }
+        logLLMCall({
+          module: 'openrouter',
+          model: this.model,
+          latencyMs,
+          status: 'error',
+          errorMessage: `Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`,
+        }).catch(() => {});
         throw new Error(`OpenRouter request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
       }
+      logLLMCall({
+        module: 'openrouter',
+        model: this.model,
+        latencyMs,
+        status: 'error',
+        errorMessage: err instanceof Error ? err.message : String(err),
+      }).catch(() => {});
       throw err;
     } finally {
       clearTimeout(timeout);
@@ -94,6 +126,13 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
 
     if (!response.ok) {
       const errorBody = await response.text();
+      logLLMCall({
+        module: 'openrouter',
+        model: this.model,
+        latencyMs: Date.now() - startTime,
+        status: 'error',
+        errorMessage: `API error ${response.status}: ${errorBody.slice(0, 200)}`,
+      }).catch(() => {});
       throw new Error(`OpenRouter API error ${response.status}: ${errorBody}`);
     }
 
@@ -102,7 +141,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
     };
 
-    // Log token usage for performance analysis
+    // Log token usage for performance analysis (existing behaviour preserved)
     if (data.usage) {
       console.info(
         `[OpenRouter] model=${activeModel} prompt=${data.usage.prompt_tokens} completion=${data.usage.completion_tokens} total=${data.usage.total_tokens}`
@@ -113,10 +152,31 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
     const content = message?.content;
     if (!content) {
       const hasReasoning = !!message?.reasoning;
+      logLLMCall({
+        module: 'openrouter',
+        model: this.model,
+        inputTokens: data.usage?.prompt_tokens,
+        outputTokens: data.usage?.completion_tokens,
+        latencyMs: Date.now() - startTime,
+        status: 'error',
+        errorMessage: hasReasoning
+          ? 'Empty content: reasoning-only response (CoT leakage blocked)'
+          : 'Empty content returned',
+      }).catch(() => {});
       throw new Error(
         `OpenRouter returned empty content${hasReasoning ? ' (reasoning-only response detected — CoT leakage blocked)' : ''}`
       );
     }
+
+    // Fire-and-forget cost log — errors handled inside logLLMCall
+    logLLMCall({
+      module: 'openrouter',
+      model: this.model,
+      inputTokens: data.usage?.prompt_tokens,
+      outputTokens: data.usage?.completion_tokens,
+      latencyMs: Date.now() - startTime,
+      status: 'success',
+    }).catch(() => {});
 
     return content;
   }
