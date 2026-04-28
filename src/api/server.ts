@@ -39,6 +39,10 @@ import {
 import { getClawbot } from '../modules/scheduler/clawbot';
 import { initJobQueue, getJobQueue } from '../modules/queue';
 import { getAutoSyncScheduler } from '../modules/scheduler/auto-sync';
+import {
+  startRichSummaryV2Cron,
+  stopRichSummaryV2Cron,
+} from '../modules/scheduler/rich-summary-v2-cron';
 
 // Load environment variables
 dotenv.config();
@@ -492,6 +496,15 @@ export async function startServer() {
       fastify.log.warn({ err }, 'AutoSyncScheduler init failed (non-fatal)');
     }
 
+    // CP437 — Rich Summary v2 cron (prod-runtime backfill of v2 columns).
+    // Default OFF; flip RICH_SUMMARY_V2_CRON_ENABLED=true once Track A is
+    // ready to absorb the LLM call volume.
+    try {
+      startRichSummaryV2Cron();
+    } catch (err) {
+      fastify.log.warn({ err }, 'RichSummaryV2Cron init failed (non-fatal)');
+    }
+
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
@@ -507,6 +520,11 @@ export async function startServer() {
       }
       try {
         await getAutoSyncScheduler().stop();
+      } catch {
+        /* ignore */
+      }
+      try {
+        stopRichSummaryV2Cron();
       } catch {
         /* ignore */
       }
