@@ -382,5 +382,47 @@ export async function consumePrecompute(
       `slots=${slots.length} inserted=${inserted}`
   );
 
+  // CP436 PR-Y0c (Issue #543) — kick auto-add inline so user_video_states
+  // populates without waiting for pipeline-runner step3.
+  //
+  // Why this exists: pipeline-runner step1 (ensureMandalaEmbeddings) blocks
+  // step3 (maybeAutoAdd) and step1 currently takes ~30s end-to-end on prod
+  // (Mac-mini Ollama down → OpenRouter fallback). Wizard finalize returns
+  // in ~1.3s (CP436 PR-Y0a) but the dashboard shows 0 cards for the entire
+  // 30s window because user_video_states is empty until step3 fires.
+  //
+  // The recommendation_cache rows are already INSERTed above (status='pending'),
+  // so calling maybeAutoAddRecommendations here promotes them straight into
+  // user_video_states + flips status='shown' so the later step3 call
+  // (post-step1) sees an empty 'pending' set and no-ops cleanly.
+  //
+  // Race / dedup safety:
+  //   - userVideoState upsert (auto-add-recommendations.ts:234) keys on
+  //     @@unique([user_id, videoId]) → idempotent
+  //   - status='shown' UPDATE (auto-add-recommendations.ts:299-307) prevents
+  //     step3 from re-processing the same rows
+  //   - user_skill_config opt-in gate is identical (skill_type='video_discover',
+  //     enabled=true, config.auto_add!=false) — same opt-in posture as today
+  //
+  // Failure handling: log.warn + swallow. The caller (`/create-with-data`)
+  // does NOT depend on auto-add success for save success; pipeline-runner
+  // step3 will retry the same logic ~30s later as a safety net.
+  try {
+    const { maybeAutoAddRecommendations } = await import('./auto-add-recommendations');
+    const autoAddResult = await maybeAutoAddRecommendations(input.userId, input.mandalaId);
+    log.info(
+      `precompute consume → auto-add inline: ok=${autoAddResult.ok}` +
+        (autoAddResult.ok
+          ? ` inserted=${autoAddResult.rowsInserted ?? 0} preserved=${autoAddResult.rowsPreserved ?? 0}`
+          : ` reason=${autoAddResult.reason ?? 'unknown'}`)
+    );
+  } catch (err) {
+    log.warn(
+      `precompute consume → auto-add inline threw (non-fatal — pipeline-runner step3 will retry): ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
+
   return { consumed: true, cardsInserted: inserted, slotsCount: slots.length };
 }

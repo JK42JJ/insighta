@@ -48,6 +48,13 @@ jest.mock('@/modules/recommendations/publisher', () => ({
   notifyCardAdded: mockNotifyCardAdded,
 }));
 
+// CP436 PR-Y0c — consumePrecompute now invokes maybeAutoAddRecommendations
+// inline (dynamic import). Mock as a jest.fn so we can assert call shape.
+const mockMaybeAutoAdd = jest.fn().mockResolvedValue({ ok: true, rowsInserted: 0 });
+jest.mock('@/modules/mandala/auto-add-recommendations', () => ({
+  maybeAutoAddRecommendations: mockMaybeAutoAdd,
+}));
+
 jest.mock('@/config/wizard-precompute', () => ({
   loadWizardPrecomputeConfig: mockLoadConfig,
 }));
@@ -418,6 +425,7 @@ describe('wizard-precompute — consumePrecompute', () => {
       expires_at: FUTURE,
       discover_result: { slots },
     });
+    mockMaybeAutoAdd.mockClear();
 
     const r = await consumePrecompute({
       sessionId: SESSION,
@@ -436,6 +444,35 @@ describe('wizard-precompute — consumePrecompute', () => {
     expect(lastUpdate.data.status).toBe('consumed');
     expect(lastUpdate.data.consumed_mandala_id).toBe(MANDALA);
     expect(lastUpdate.data.consumed_at).toBeInstanceOf(Date);
+    // CP436 PR-Y0c: maybeAutoAddRecommendations called inline after consume
+    // so user_video_states populates without waiting for pipeline-runner step3.
+    expect(mockMaybeAutoAdd).toHaveBeenCalledTimes(1);
+    expect(mockMaybeAutoAdd).toHaveBeenCalledWith(USER, MANDALA);
+  });
+
+  test('PR-Y0c: maybeAutoAdd thrown error is non-fatal (consume still succeeds)', async () => {
+    const slots = [makeSlot(0, 'v1')];
+    mockFindUnique.mockResolvedValueOnce({
+      session_id: SESSION,
+      user_id: USER,
+      goal: 'g',
+      status: 'done',
+      expires_at: FUTURE,
+      discover_result: { slots },
+    });
+    mockMaybeAutoAdd.mockRejectedValueOnce(new Error('simulated DB blip'));
+
+    const r = await consumePrecompute({
+      sessionId: SESSION,
+      userId: USER,
+      mandalaId: MANDALA,
+      centerGoal: 'g',
+    });
+
+    expect(r.consumed).toBe(true);
+    expect(r.cardsInserted).toBe(1);
+    // pipeline-runner step3 still retries the same logic ~30s later
+    expect(mockMaybeAutoAdd).toHaveBeenCalledTimes(1);
   });
 
   test('case-insensitive + trimmed goal match (resilient to minor client edits)', async () => {
