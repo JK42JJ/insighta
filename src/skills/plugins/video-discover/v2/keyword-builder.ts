@@ -236,8 +236,16 @@ function buildRuleBasedQueries(input: KeywordBuilderInput, center: string): Sear
   // one query seeded specifically for it. Niche cells can still come up
   // empty if no relevant video exists — that is the intended honest
   // behavior, not a symptom of missing queries.
+  //
+  // Issue #543 (2026-04-28): the sub_goal text is condensed to a 2-noun
+  // phrase via `extractCoreKeyword` before concatenation. Mandala-gen
+  // emits Haiku-natural sentences for sub_goals (e.g. "최적의 공부 환경
+  // 구축 및 방해 요소 제거", 22 chars), which when concatenated to the
+  // centerGoal produced 30+ char broad-match queries that recalled
+  // cross-domain noise (Google One AI 프로젝트 → Nvidia NIM / Intel oneAPI).
   for (const { s, i } of pickDistinctiveSubGoalsWithIndex(input.subGoals, 8)) {
-    out.push({ query: clip(`${center} ${s}`), source: 'subgoal', cellIndex: i });
+    const coreKw = extractCoreKeyword(s, input.language);
+    out.push({ query: clip(`${center} ${coreKw}`), source: 'subgoal', cellIndex: i });
   }
   return out;
 }
@@ -307,6 +315,108 @@ export function extractCoreKeyphrase(phrase: string, language: KeywordLanguage):
   const tokens = s.split(/\s+/).filter((t) => t && !EN_STOPWORDS.has(t));
   s = tokens.join(' ').trim();
   return s.length > 0 ? s : original;
+}
+
+// Korean stopword sets used by `extractCoreKeyword` to condense a sub_goal
+// natural-language sentence into a short keyword phrase. Three layers:
+//   1. KO_VERBAL_ENDINGS — drop the entire token if it ends with one of these
+//      (e.g. "정의하기" → drop, "향상시키기" → drop).
+//   2. KO_POSTPOSITION_ENDINGS — strip the suffix from the token (multi-char
+//      only; single-char particles like "을/를" are skipped to avoid false
+//      strips on nouns ending in those characters).
+//   3. KO_STOPWORDS_EXACT — drop the token outright on exact match
+//      (light verbs, modifiers, conjunctions).
+const KO_VERBAL_ENDINGS = [
+  '시작하기',
+  '달성하기',
+  '강화하기',
+  '개선하기',
+  '시키기',
+  '높이기',
+  '늘리기',
+  '줄이기',
+  '익히기',
+  '배우기',
+  '만들기',
+  '되기',
+  '하기',
+  '정하고',
+];
+const KO_POSTPOSITION_ENDINGS = ['으로', '에서', '에게', '부터', '까지'];
+const KO_STOPWORDS_EXACT = new Set<string>([
+  '및',
+  '또는',
+  '으로',
+  '에서',
+  '에게',
+  '부터',
+  '까지',
+  '이며',
+  '하여',
+  '구축',
+  '제거',
+  '향상',
+  '극대화',
+  '활용',
+  '정의',
+  '통해',
+  '위한',
+  '위해',
+  '명확히',
+  '효율적인',
+  '최적의',
+  '매일',
+  '꾸준히',
+  '체계적으로',
+]);
+
+/**
+ * Condense a sub_goal natural-language phrase into a short 2-noun keyword
+ * for YouTube search. Issue #543: prod incident showed sentences like "최적의
+ * 공부 환경 구축 및 방해 요소 제거" (22 chars) when concatenated with the
+ * centerGoal produced broad-match queries that recalled cross-domain noise.
+ *
+ * Strategy:
+ *   - Drop tokens that match exact stopwords (modifiers, conjunctions).
+ *   - Drop tokens that end with a verbal ending (whole token, e.g. 정의하기).
+ *   - Strip multi-char postposition suffixes (으로/에서/...).
+ *   - Take the first 2 surviving tokens, cap at 10 chars.
+ *   - Empty fallback → `extractCoreKeyphrase` (centerGoal logic).
+ *
+ * English / non-Hangul input passes through `extractCoreKeyphrase('en')` —
+ * the centerGoal-targeted stopword set is good enough for short sub_goals.
+ */
+export function extractCoreKeyword(subGoal: string, language: KeywordLanguage): string {
+  const original = subGoal.trim();
+  if (!original) return '';
+  if (language === 'en' || !/[가-힯]/u.test(original)) {
+    return extractCoreKeyphrase(original, 'en');
+  }
+  const tokens = original.split(/\s+/u).filter(Boolean);
+  const kept: string[] = [];
+  for (const raw of tokens) {
+    if (KO_STOPWORDS_EXACT.has(raw)) continue;
+    let endsWithVerbal = false;
+    for (const ve of KO_VERBAL_ENDINGS) {
+      if (raw.endsWith(ve)) {
+        endsWithVerbal = true;
+        break;
+      }
+    }
+    if (endsWithVerbal) continue;
+    let stripped = raw;
+    for (const pp of KO_POSTPOSITION_ENDINGS) {
+      if (raw.length > pp.length + 1 && raw.endsWith(pp)) {
+        stripped = raw.slice(0, -pp.length);
+        break;
+      }
+    }
+    if (stripped) kept.push(stripped);
+  }
+  let result = kept.slice(0, 2).join(' ').trim();
+  if (!result) return extractCoreKeyphrase(original, 'ko');
+  if (result.length > 10) result = result.slice(0, 10).trim();
+  return result;
 }
 
 /** Shortest sub_goals first (≤30 chars). Stable on ties. */
