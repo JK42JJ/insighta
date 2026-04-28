@@ -108,6 +108,16 @@ services:
       # embedBatch call ([centerGoal, ...top30titles]) stays in a single
       # OpenRouter/Ollama request. Cap > 50 would cross the chunk boundary.
       - V3_SEMANTIC_MAX_CANDIDATES=30
+      # CP436 PR-Y0d (Issue #543) — bypass mandala-filter and trust YouTube's
+      # search.list ranking. User feedback (2026-04-28): the 9-axis filter
+      # actively degraded card quality vs the original YouTube-only path
+      # (e.g. "Google One AI 프로젝트" → 109 token-overlap matches in Nvidia
+      # NIM / MLOps / Intel oneAPI…). With this flag, candidates emit in
+      # YouTube's native order, distributed to cells via cellIndexHint set
+      # by v2/keyword-builder. centerGateMode and semantic cap above stay
+      # configured but become no-ops for the Tier 2 path while this is true.
+      # Revert: delete this line → re-enable applyMandalaFilter.
+      - V3_USE_YOUTUBE_RANKING_ONLY=true
       # QW-2/QW-4 (CP426): recency 편향 감소 + search timeout 확장
       - V3_RECENCY_WEIGHT=0.05
       - V3_YOUTUBE_SEARCH_TIMEOUT_MS=3000

@@ -29,6 +29,7 @@ describe('loadV3Config', () => {
       minViewCount: DEFAULT_MIN_VIEW_COUNT,
       minViewsPerDay: DEFAULT_MIN_VIEWS_PER_DAY,
       semanticMaxCandidates: 30, // PR-Y0b2 default
+      useYoutubeRankingOnly: false, // PR-Y0d default
     });
   });
 
@@ -98,6 +99,7 @@ describe('loadV3Config', () => {
       minViewCount: DEFAULT_MIN_VIEW_COUNT,
       minViewsPerDay: DEFAULT_MIN_VIEWS_PER_DAY,
       semanticMaxCandidates: 30, // PR-Y0b2 default
+      useYoutubeRankingOnly: false, // PR-Y0d default
     });
   });
 

@@ -153,6 +153,33 @@ export const DEFAULT_MIN_VIEWS_PER_DAY = 10;
  */
 export const DEFAULT_SEMANTIC_MAX_CANDIDATES = 30;
 
+/**
+ * Bypass mandala-filter and trust YouTube's own search.list ranking
+ * (Issue #543, CP436 PR-Y0d).
+ *
+ * Default `false` keeps the existing 9-axis filter pipeline (token-overlap
+ * + sub_goal jaccard + recency + optional semantic gate). Pre-CP436 prod
+ * traffic showed that the filter actively degraded card quality for many
+ * goals: candidates were re-ranked by token overlap on a tokenizer that
+ * admits "AI" alone, discarding the strong topical-relevance signal that
+ * YouTube already encodes in `search.list` order.
+ *
+ * When `true`, the executor skips applyMandalaFilter and emits enriched
+ * candidates in the order returned by YouTube. Cell assignment uses the
+ * per-cell query's `cellIndexHint` (set in v2/keyword-builder), so cards
+ * land in the cell whose query produced them. Score is a descending
+ * cursor that preserves arrival order in the global desc sort that picks
+ * cards across cells.
+ *
+ * Trade-offs:
+ *   + restores YouTube's native relevance ranking
+ *   + avoids the "Google One AI 프로젝트 → Nvidia NIM" lexical false-positive
+ *   - no defense against mandala-irrelevant titles that YouTube ranks high
+ *     (best mitigated by tightening keyword-builder queries instead of
+ *     re-scoring downstream)
+ */
+export const DEFAULT_USE_YOUTUBE_RANKING_ONLY = false;
+
 const minViewCount = z
   .preprocess(
     (v) => (v == null || v === '' ? undefined : Number(v)),
@@ -190,6 +217,7 @@ export const v3EnvSchema = z.object({
   V3_MIN_VIEW_COUNT: minViewCount,
   V3_MIN_VIEWS_PER_DAY: minViewsPerDay,
   V3_SEMANTIC_MAX_CANDIDATES: semanticMaxCandidates,
+  V3_USE_YOUTUBE_RANKING_ONLY: booleanFlag.optional().default(false as unknown as string),
 });
 
 export interface V3Config {
@@ -208,6 +236,7 @@ export interface V3Config {
   minViewCount: number;
   minViewsPerDay: number;
   semanticMaxCandidates: number;
+  useYoutubeRankingOnly: boolean;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -227,6 +256,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_MIN_VIEW_COUNT: env['V3_MIN_VIEW_COUNT'],
     V3_MIN_VIEWS_PER_DAY: env['V3_MIN_VIEWS_PER_DAY'],
     V3_SEMANTIC_MAX_CANDIDATES: env['V3_SEMANTIC_MAX_CANDIDATES'],
+    V3_USE_YOUTUBE_RANKING_ONLY: env['V3_USE_YOUTUBE_RANKING_ONLY'],
   });
   if (!parsed.success) {
     return {
@@ -245,6 +275,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       minViewCount: DEFAULT_MIN_VIEW_COUNT,
       minViewsPerDay: DEFAULT_MIN_VIEWS_PER_DAY,
       semanticMaxCandidates: DEFAULT_SEMANTIC_MAX_CANDIDATES,
+      useYoutubeRankingOnly: DEFAULT_USE_YOUTUBE_RANKING_ONLY,
     };
   }
   return {
@@ -263,6 +294,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     minViewCount: parsed.data.V3_MIN_VIEW_COUNT,
     minViewsPerDay: parsed.data.V3_MIN_VIEWS_PER_DAY,
     semanticMaxCandidates: parsed.data.V3_SEMANTIC_MAX_CANDIDATES,
+    useYoutubeRankingOnly: parsed.data.V3_USE_YOUTUBE_RANKING_ONLY,
   };
 }
 
