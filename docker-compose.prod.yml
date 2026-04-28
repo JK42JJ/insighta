@@ -100,6 +100,18 @@ services:
       # QW-2/QW-4 (CP426): recency 편향 감소 + search timeout 확장
       - V3_RECENCY_WEIGHT=0.05
       - V3_YOUTUBE_SEARCH_TIMEOUT_MS=3000
+      # CP436 PR-Y0b1 (Issue #543) — Tier 1 video_pool semantic match ON.
+      # Without this flag, executor.ts:254 short-circuits the pgvector path:
+      #   `tier1Matches = v3Config.enableTier1Cache ? matchFromVideoPool(...) : []`
+      # leaving only RedisProvider (lexical) + YouTubeProvider in the orchestrator
+      # chain. That path produced "Google One 129장 무관" because lexical token
+      # matching admits "AI 일반" video for any AI-mention sub_goal.
+      # PoolProvider uses raw pgvector cosine on `video_pool_embeddings` (3,121
+      # rows in prod 2026-04-28) and bypasses mandala-filter, so the CP418
+      # rollback path (V3_CENTER_GATE_MODE=semantic embed-on-titles 56s blocking)
+      # does NOT apply here. Cap unchanged: V3_TARGET_PER_CELL=8.
+      # Revert: delete this line → executor reverts to empty tier1 array.
+      - V3_ENABLE_TIER1_CACHE=true
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).
