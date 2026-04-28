@@ -121,6 +121,31 @@ services:
       # QW-2/QW-4 (CP426): recency 편향 감소 + search timeout 확장
       - V3_RECENCY_WEIGHT=0.05
       - V3_YOUTUBE_SEARCH_TIMEOUT_MS=3000
+      # CP436 PR-Y0g (Issue #543) — Tier 0 RedisProvider kill switch.
+      # Prod incident: mandala 1ee990a9 ("감정 컨트롤 하기") produced 96 cards
+      # in cell 2 alone, 100% rec_reason='cache' from RedisProvider. Domain
+      # breakdown:
+      #   ~30 한글 속기, ~30 마케팅/홍보, ~25 자각몽/루시드드림, ~5 한복.
+      # Zero of the 96 were emotion-management content.
+      #
+      # Root cause: redis-provider.ts:179-203 matches sub_goal tokens against
+      # topic-slug parts via simple overlap (≥1 for single-token slugs, ≥2
+      # otherwise), then admits up to 30 videos per matched slug with
+      # `relevanceScore` HARDCODED to 0.5 (no quality gate). Korean tokens
+      # are broad enough that any sub_goal hits multiple unrelated slugs.
+      # The 96-budget was exhausted by cell 2's first matched slugs, leaving
+      # cells 0/1/3/4/5/6/7 with 0 cards each.
+      #
+      # With Y0g default `false`, executor.ts:200-260 + executor.ts:1341-1389
+      # skip RedisProvider. Combined with Y0e (Tier 1 off), effective pipeline
+      # is Tier 2 YouTube only — matches CP436 user feedback "초기 youtube-only
+      # 가 가장 좋음".
+      #
+      # Re-enable path: V3_ENABLE_REDIS_PROVIDER=true ONLY after a quality
+      # gate is in place (semantic cosine threshold + raised minOverlap +
+      # MAX_VIDEOS_PER_TOPIC ≤ 5). Do NOT re-enable without that gate.
+      # Default = false; this line is a redundancy/clarity guard.
+      - V3_ENABLE_REDIS_PROVIDER=false
       # CP436 PR-Y0e (Issue #543) — Tier 1 video_pool cache REVERTED to off.
       # Original Y0b1 enabled PoolProvider (pgvector cosine on 3,121
       # video_pool_embeddings rows) hoping to add semantic recall to

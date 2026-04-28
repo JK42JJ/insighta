@@ -193,55 +193,64 @@ export const executor: SkillExecutor = {
     const state = ctx.state as unknown as HydratedState;
     const mandalaId = ctx.mandalaId!;
 
-    // ── Tier 0: Redis video-dictionary (always runs, quota-independent) ─
+    // ── Tier 0: Redis video-dictionary (gated by v3Config.enableRedisProvider; default off)
+    // CP436 PR-Y0g (Issue #543): Tier 0 was always-on with no quality gate. Prod
+    // incident on mandala 1ee990a9 ("감정 컨트롤 하기") admitted 96 cards in cell 2,
+    // 100% from RedisProvider, with cross-domain noise (속기/마케팅/자각몽/한복) and
+    // hardcoded score 0.5. Re-enable only after a quality gate (semantic cosine
+    // threshold or strict minOverlap raise) is in place — see config.ts comment.
     const slots: AssembledSlot[] = [];
     let redisMatchCount = 0;
-    const redisProvider = new RedisProvider();
-    const redisHealth = await redisProvider.health();
-    if (redisHealth.available) {
-      const cells: CellDefinition[] = state.subGoals.map((sg, i) => ({
-        cellIndex: i,
-        subGoal: sg,
-        keywords: [],
-      }));
-      try {
-        const redisResult = await redisProvider.match({
-          mandalaId,
-          userId: ctx.userId,
-          cells,
-          budget: V3_TARGET_TOTAL,
-          excludeVideoIds: new Set<string>(),
-          language: state.language,
-          centerGoal: state.centerGoal,
-          focusTags: state.focusTags,
-        });
-        for (const c of redisResult.candidates) {
-          slots.push({
-            videoId: c.videoId,
-            title: c.title,
-            description: c.description,
-            channelName: c.channelTitle,
-            channelId: c.channelId,
-            thumbnail: c.thumbnailUrl,
-            viewCount: c.viewCount,
-            likeCount: c.likeCount,
-            durationSec: c.durationSec,
-            publishedAt: c.publishedAt,
-            cellIndex: c.cellIndex,
-            score: c.relevanceScore,
-            tier: 'cache',
+    if (v3Config.enableRedisProvider) {
+      const redisProvider = new RedisProvider();
+      const redisHealth = await redisProvider.health();
+      if (redisHealth.available) {
+        const cells: CellDefinition[] = state.subGoals.map((sg, i) => ({
+          cellIndex: i,
+          subGoal: sg,
+          keywords: [],
+        }));
+        try {
+          const redisResult = await redisProvider.match({
+            mandalaId,
+            userId: ctx.userId,
+            cells,
+            budget: V3_TARGET_TOTAL,
+            excludeVideoIds: new Set<string>(),
+            language: state.language,
+            centerGoal: state.centerGoal,
+            focusTags: state.focusTags,
           });
+          for (const c of redisResult.candidates) {
+            slots.push({
+              videoId: c.videoId,
+              title: c.title,
+              description: c.description,
+              channelName: c.channelTitle,
+              channelId: c.channelId,
+              thumbnail: c.thumbnailUrl,
+              viewCount: c.viewCount,
+              likeCount: c.likeCount,
+              durationSec: c.durationSec,
+              publishedAt: c.publishedAt,
+              cellIndex: c.cellIndex,
+              score: c.relevanceScore,
+              tier: 'cache',
+            });
+          }
+          redisMatchCount = redisResult.candidates.length;
+          log.info(
+            `[redis] mandala=${mandalaId} candidates=${redisMatchCount} latencyMs=${redisResult.meta.latencyMs}`
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          log.warn(`[redis] match failed (non-fatal): ${msg}`);
         }
-        redisMatchCount = redisResult.candidates.length;
-        log.info(
-          `[redis] mandala=${mandalaId} candidates=${redisMatchCount} latencyMs=${redisResult.meta.latencyMs}`
-        );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.warn(`[redis] match failed (non-fatal): ${msg}`);
+      } else {
+        log.info(`[redis] unavailable: ${redisHealth.lastError}`);
       }
     } else {
-      log.info(`[redis] unavailable: ${redisHealth.lastError}`);
+      log.info(`[redis] disabled by V3_ENABLE_REDIS_PROVIDER=false (Y0g)`);
     }
 
     // ── Tier 1: video_pool cache (disabled by default — see v3Config.enableTier1Cache)
@@ -1338,53 +1347,57 @@ export async function runDiscoverEphemeral(
   const openRouterApiKey = input.env['OPENROUTER_API_KEY'];
   const openRouterModel = input.env['OPENROUTER_MODEL'] ?? 'qwen/qwen3-30b-a3b';
 
-  // ── Tier 0: Redis video-dictionary (same as execute(), quota-independent) ─
+  // ── Tier 0: Redis video-dictionary (gated by v3Config.enableRedisProvider; default off, Y0g) ─
   const redisSlots: AssembledSlot[] = [];
-  const redisProvider = new RedisProvider();
-  const redisHealth = await redisProvider.health();
-  if (redisHealth.available) {
-    const cells: CellDefinition[] = input.subGoals.map((sg, i) => ({
-      cellIndex: i,
-      subGoal: sg,
-      keywords: [],
-    }));
-    try {
-      const redisResult = await redisProvider.match({
-        mandalaId: 'ephemeral',
-        userId: 'precompute',
-        cells,
-        budget: V3_TARGET_TOTAL,
-        excludeVideoIds: new Set<string>(),
-        language: input.language,
-        centerGoal: input.centerGoal,
-        focusTags: input.focusTags,
-      });
-      for (const c of redisResult.candidates) {
-        redisSlots.push({
-          videoId: c.videoId,
-          title: c.title,
-          description: c.description,
-          channelName: c.channelTitle,
-          channelId: c.channelId,
-          thumbnail: c.thumbnailUrl,
-          viewCount: c.viewCount,
-          likeCount: c.likeCount,
-          durationSec: c.durationSec,
-          publishedAt: c.publishedAt,
-          cellIndex: c.cellIndex,
-          score: c.relevanceScore,
-          tier: 'cache',
+  if (v3Config.enableRedisProvider) {
+    const redisProvider = new RedisProvider();
+    const redisHealth = await redisProvider.health();
+    if (redisHealth.available) {
+      const cells: CellDefinition[] = input.subGoals.map((sg, i) => ({
+        cellIndex: i,
+        subGoal: sg,
+        keywords: [],
+      }));
+      try {
+        const redisResult = await redisProvider.match({
+          mandalaId: 'ephemeral',
+          userId: 'precompute',
+          cells,
+          budget: V3_TARGET_TOTAL,
+          excludeVideoIds: new Set<string>(),
+          language: input.language,
+          centerGoal: input.centerGoal,
+          focusTags: input.focusTags,
         });
+        for (const c of redisResult.candidates) {
+          redisSlots.push({
+            videoId: c.videoId,
+            title: c.title,
+            description: c.description,
+            channelName: c.channelTitle,
+            channelId: c.channelId,
+            thumbnail: c.thumbnailUrl,
+            viewCount: c.viewCount,
+            likeCount: c.likeCount,
+            durationSec: c.durationSec,
+            publishedAt: c.publishedAt,
+            cellIndex: c.cellIndex,
+            score: c.relevanceScore,
+            tier: 'cache',
+          });
+        }
+        log.info(
+          `[redis][ephemeral] candidates=${redisResult.candidates.length} latencyMs=${redisResult.meta.latencyMs}`
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn(`[redis][ephemeral] match failed (non-fatal): ${msg}`);
       }
-      log.info(
-        `[redis][ephemeral] candidates=${redisResult.candidates.length} latencyMs=${redisResult.meta.latencyMs}`
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn(`[redis][ephemeral] match failed (non-fatal): ${msg}`);
+    } else {
+      log.info(`[redis][ephemeral] unavailable: ${redisHealth.lastError}`);
     }
   } else {
-    log.info(`[redis][ephemeral] unavailable: ${redisHealth.lastError}`);
+    log.info(`[redis][ephemeral] disabled by V3_ENABLE_REDIS_PROVIDER=false (Y0g)`);
   }
 
   // ── Compute per-cell deficit after Redis ─

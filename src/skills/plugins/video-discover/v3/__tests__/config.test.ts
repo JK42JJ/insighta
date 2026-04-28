@@ -30,6 +30,7 @@ describe('loadV3Config', () => {
       minViewsPerDay: DEFAULT_MIN_VIEWS_PER_DAY,
       semanticMaxCandidates: 30, // PR-Y0b2 default
       useYoutubeRankingOnly: false, // PR-Y0d default
+      enableRedisProvider: false, // PR-Y0g default (kill switch)
     });
   });
 
@@ -100,6 +101,7 @@ describe('loadV3Config', () => {
       minViewsPerDay: DEFAULT_MIN_VIEWS_PER_DAY,
       semanticMaxCandidates: 30, // PR-Y0b2 default
       useYoutubeRankingOnly: false, // PR-Y0d default
+      enableRedisProvider: false, // PR-Y0g default (kill switch)
     });
   });
 
@@ -188,5 +190,16 @@ describe('loadV3Config', () => {
     expect(loadV3Config({ V3_MAX_QUERIES: '-3' }).maxQueries).toBe(DEFAULT_MAX_QUERIES);
     expect(loadV3Config({ V3_MAX_QUERIES: 'garbage' }).maxQueries).toBe(DEFAULT_MAX_QUERIES);
     expect(loadV3Config({ V3_MAX_QUERIES: '' }).maxQueries).toBe(DEFAULT_MAX_QUERIES);
+  });
+
+  test('V3_ENABLE_REDIS_PROVIDER kill switch (PR-Y0g, default false)', () => {
+    // Default: kill switch ON (Tier 0 disabled)
+    expect(loadV3Config({}).enableRedisProvider).toBe(false);
+    // Explicit re-enable
+    expect(loadV3Config({ V3_ENABLE_REDIS_PROVIDER: 'true' }).enableRedisProvider).toBe(true);
+    expect(loadV3Config({ V3_ENABLE_REDIS_PROVIDER: '  TRUE  ' }).enableRedisProvider).toBe(true);
+    // Explicit off / empty / unset all collapse to default false
+    expect(loadV3Config({ V3_ENABLE_REDIS_PROVIDER: 'false' }).enableRedisProvider).toBe(false);
+    expect(loadV3Config({ V3_ENABLE_REDIS_PROVIDER: '' }).enableRedisProvider).toBe(false);
   });
 });

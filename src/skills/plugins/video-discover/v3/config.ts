@@ -180,6 +180,32 @@ export const DEFAULT_SEMANTIC_MAX_CANDIDATES = 30;
  */
 export const DEFAULT_USE_YOUTUBE_RANKING_ONLY = false;
 
+/**
+ * Tier 0 RedisProvider kill switch (Issue #543, CP436 PR-Y0g).
+ *
+ * Default `false` — Tier 0 is OFF. Pre-Y0g default was always-on with no
+ * gate; prod incident on mandala 1ee990a9 ("감정 컨트롤 하기") produced 96
+ * cards in cell 2 alone, sourced 100% from RedisProvider. Domain breakdown:
+ *   ~30 한글 속기, ~30 마케팅/홍보, ~25 자각몽/루시드드림, ~5 한복.
+ * Zero of the 96 were emotion-management content. Root cause:
+ *   redis-provider.ts:179-203 matches sub_goal tokens against topic-slug
+ *   parts via simple overlap (≥1 for single-token slugs, ≥2 otherwise),
+ *   then admits up to 30 videos per matched slug with `relevanceScore`
+ *   hardcoded to 0.5. Korean tokenization is broad enough that any
+ *   sub_goal hits multiple unrelated slugs by accident.
+ *
+ * When `true`: re-enables the lexical Tier 0 path (do NOT flip without
+ * adding a quality gate first — semantic cosine threshold or strict
+ * minOverlap raise). Suggested re-enable path documented in
+ * docs/design/v3-tier0-quality-gate.md (TBD).
+ *
+ * When `false` (default): Tier 0 is bypassed in both `executor.ts` main
+ * and `runDiscoverEphemeral` paths. Tier 1 (video_pool) is also off via
+ * V3_ENABLE_TIER1_CACHE → effective pipeline is YouTube-only (Tier 2),
+ * matching user feedback "초기 youtube-only 가 가장 좋음" (CP436).
+ */
+export const DEFAULT_ENABLE_REDIS_PROVIDER = false;
+
 const minViewCount = z
   .preprocess(
     (v) => (v == null || v === '' ? undefined : Number(v)),
@@ -218,6 +244,7 @@ export const v3EnvSchema = z.object({
   V3_MIN_VIEWS_PER_DAY: minViewsPerDay,
   V3_SEMANTIC_MAX_CANDIDATES: semanticMaxCandidates,
   V3_USE_YOUTUBE_RANKING_ONLY: booleanFlag.optional().default(false as unknown as string),
+  V3_ENABLE_REDIS_PROVIDER: booleanFlag.optional().default(false as unknown as string),
 });
 
 export interface V3Config {
@@ -237,6 +264,7 @@ export interface V3Config {
   minViewsPerDay: number;
   semanticMaxCandidates: number;
   useYoutubeRankingOnly: boolean;
+  enableRedisProvider: boolean;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -257,6 +285,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_MIN_VIEWS_PER_DAY: env['V3_MIN_VIEWS_PER_DAY'],
     V3_SEMANTIC_MAX_CANDIDATES: env['V3_SEMANTIC_MAX_CANDIDATES'],
     V3_USE_YOUTUBE_RANKING_ONLY: env['V3_USE_YOUTUBE_RANKING_ONLY'],
+    V3_ENABLE_REDIS_PROVIDER: env['V3_ENABLE_REDIS_PROVIDER'],
   });
   if (!parsed.success) {
     return {
@@ -276,6 +305,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       minViewsPerDay: DEFAULT_MIN_VIEWS_PER_DAY,
       semanticMaxCandidates: DEFAULT_SEMANTIC_MAX_CANDIDATES,
       useYoutubeRankingOnly: DEFAULT_USE_YOUTUBE_RANKING_ONLY,
+      enableRedisProvider: DEFAULT_ENABLE_REDIS_PROVIDER,
     };
   }
   return {
@@ -295,6 +325,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     minViewsPerDay: parsed.data.V3_MIN_VIEWS_PER_DAY,
     semanticMaxCandidates: parsed.data.V3_SEMANTIC_MAX_CANDIDATES,
     useYoutubeRankingOnly: parsed.data.V3_USE_YOUTUBE_RANKING_ONLY,
+    enableRedisProvider: parsed.data.V3_ENABLE_REDIS_PROVIDER,
   };
 }
 
