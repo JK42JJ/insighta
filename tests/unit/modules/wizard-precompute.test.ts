@@ -264,7 +264,9 @@ describe('wizard-precompute — consumePrecompute', () => {
   });
 
   test('status=running throughout budget → miss (not-done) after poll timeout', async () => {
-    // Always returns running — simulate precompute that doesn't finish in 5s.
+    // Always returns running — simulate precompute that doesn't finish in 1s.
+    // CP436 (Issue #543): POLL_BUDGET_MS reduced 15_000 → 1_000 for sub-1s
+    // wizard finalize SLO. Misses fall back to triggerMandalaPostCreationAsync.
     mockFindUnique.mockResolvedValue({
       session_id: SESSION,
       user_id: USER,
@@ -283,10 +285,12 @@ describe('wizard-precompute — consumePrecompute', () => {
     const elapsed = Date.now() - t0;
     expect(r.consumed).toBe(false);
     expect(r.reason).toBe('not-done');
-    // Should have polled for close to 5s before giving up.
-    expect(elapsed).toBeGreaterThanOrEqual(4500);
-    expect(elapsed).toBeLessThan(7000);
-  }, 15_000);
+    // Should give up within ~1s (POLL_BUDGET_MS=1000). Lower bound allows
+    // for the polling interval (250ms) to catch the budget-exhausted state
+    // on its next tick. Upper bound guards against budget creep.
+    expect(elapsed).toBeGreaterThanOrEqual(800);
+    expect(elapsed).toBeLessThan(1500);
+  }, 5_000);
 
   test('status=running → done within budget → consume succeeds', async () => {
     // First read: running. Subsequent reads: done.

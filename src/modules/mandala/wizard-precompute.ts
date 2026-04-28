@@ -225,14 +225,27 @@ export async function consumePrecompute(
     return { consumed: false, reason: 'wrong-user' };
   }
 
-  // CP424.2 race handling: fast user clicks Step 3 save while startPrecompute
-  // is still mid-flight (status='pending' | 'running'). Design doc's "Step 2
-  // review 5-20s" assumption is structurally wrong — don't depend on user
-  // dwelling. Poll up to POLL_BUDGET_MS for the row to transition out of
-  // running. If still running when budget exhausts → miss, legacy fallback.
-  // Tier 2 discover observed 4.6s on first prod hit; 5s budget covers p95
-  // with small margin, user perceives as part of existing save latency.
-  const POLL_BUDGET_MS = 15_000;
+  // CP436 (Issue #543) — POLL_BUDGET_MS reduced 15_000 → 1_000.
+  //
+  // Original CP424.2 rationale (kept for context): poll while precompute
+  // is still mid-flight so consumePrecompute can hit even when user clicks
+  // Step 3 sooner than discover finishes. 15s covered p95 of Tier 2.
+  //
+  // Why 1s: user spec — `/create-with-data` ≤1s response is mandatory for
+  // wizard-dashboard SLO. Polling up to 15s blocked the response on
+  // precompute fairness, exceeding spec by 15×. Sub-1s budget aligns the
+  // hit window with the Tier 1 envelope only — Tier 2 misses immediately
+  // fall back to `triggerMandalaPostCreationAsync` (mandala-post-creation.ts:33),
+  // which fires the same v3 discover async and streams cards through
+  // cardPublisher → /videos/stream SSE backlog (mandalas.ts:2284-2316).
+  //
+  // Trade-off: precompute hit-rate drops for the slow-Tier-2 cases; SSE
+  // path absorbs the latency without blocking save. Net wizard finalize
+  // p99 ≤1s when precompute is done | running-but-fast | not-needed.
+  //
+  // Tracking: log.info on poll-wait end captures `final_status` +
+  // `waited_ms` so we can quantify miss reasons in prod log post-deploy.
+  const POLL_BUDGET_MS = 1_000;
   const POLL_INTERVAL_MS = 250;
   if (row.status === 'pending' || row.status === 'running') {
     const pollStart = Date.now();
