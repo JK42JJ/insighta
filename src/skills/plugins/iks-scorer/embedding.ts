@@ -22,6 +22,8 @@
 import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database';
 import { Prisma } from '@prisma/client';
+import { config } from '@/config/index';
+import { logLLMCall } from '@/modules/llm/call-logger';
 
 const log = logger.child({ module: 'iks-scorer/embedding' });
 
@@ -30,6 +32,9 @@ export const QWEN3_EMBED_DIMENSION = 4096;
 export const MAC_MINI_OLLAMA_DEFAULT_URL = 'http://100.91.173.17:11434';
 const HEALTH_CHECK_TIMEOUT_MS = 3000;
 const EMBED_TIMEOUT_MS = 60000;
+
+/** OpenRouter cost-logger module label (Issue #543 fallback path). */
+const OPENROUTER_FALLBACK_MODULE = 'iks-embed-fallback';
 /**
  * Embed chunk size — Mac Mini M4 handles ~50 texts in ~10s comfortably.
  * 456 texts in one call exceeds 60s timeout. Chunking gives predictable
@@ -112,7 +117,40 @@ export async function embedBatch(
   return out;
 }
 
+/**
+ * Issue #543 — provider-routed embed entry.
+ *
+ *   IKS_EMBED_PROVIDER=openrouter  → skip Mac-mini, go straight to OpenRouter
+ *   IKS_EMBED_PROVIDER=ollama      → try Mac-mini, on fetch/HTTP error fall
+ *                                    back to OpenRouter (same OPENROUTER_*
+ *                                    config as embedGoalForMandala)
+ *
+ * The fallback path keeps this codebase's auto-add chain alive when the
+ * Mac-mini host is unreachable (CP436 prod incident: pipeline-runner
+ * step1 ensureMandalaEmbeddings threw → step2/3 skipped → 0 cards in
+ * dashboard while recommendation_cache had 74 rows).
+ */
 async function embedOneChunk(texts: string[], opts: EmbeddingClientOptions): Promise<number[][]> {
+  const provider = config.iksEmbed.provider;
+  if (provider === 'openrouter') {
+    return embedOneChunkViaOpenRouter(texts, opts);
+  }
+  // 'ollama' (default): Mac-mini first, OpenRouter fallback on transport/HTTP error.
+  try {
+    return await embedOneChunkViaOllama(texts, opts);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    log.warn(
+      `Ollama embed failed (chunk size=${texts.length}), falling back to OpenRouter: ${reason}`
+    );
+    return embedOneChunkViaOpenRouter(texts, opts);
+  }
+}
+
+async function embedOneChunkViaOllama(
+  texts: string[],
+  opts: EmbeddingClientOptions
+): Promise<number[][]> {
   const baseUrl = opts.baseUrl ?? MAC_MINI_OLLAMA_DEFAULT_URL;
   const model = opts.model ?? QWEN3_EMBED_MODEL;
   const fetchFn = opts.fetchImpl ?? fetch;
@@ -164,6 +202,118 @@ async function embedOneChunk(texts: string[], opts: EmbeddingClientOptions): Pro
   }
 
   return data.embeddings;
+}
+
+/**
+ * OpenRouter embed (OpenAI-compatible /embeddings). Used either as primary
+ * (provider='openrouter') or as fallback when Ollama is unreachable.
+ *
+ * Reuses the same `OPENROUTER_EMBED_*` config that powers
+ * `embedGoalForMandala`'s `embedViaOpenRouter` path — same model
+ * (`qwen/qwen3-embedding-8b`, 4096d) so vectors stay co-comparable with
+ * existing `mandala_embeddings` rows produced by Mac-mini Ollama.
+ *
+ * Each call is fire-and-forget logged to `llm_call_logs` (cost tracking
+ * lands as input_tokens=null when token counts aren't returned by the
+ * provider — pricing fallback handles that).
+ */
+async function embedOneChunkViaOpenRouter(
+  texts: string[],
+  opts: EmbeddingClientOptions
+): Promise<number[][]> {
+  const apiKey = config.openrouter.apiKey;
+  if (!apiKey) {
+    throw new EmbeddingError('OPENROUTER_API_KEY not configured (cannot fall back from Ollama)');
+  }
+
+  const baseUrl = opts.baseUrl ?? config.mandalaEmbed.openRouterBaseUrl;
+  const model = opts.model ?? config.mandalaEmbed.openRouterModel;
+  const expectedDim = config.mandalaEmbed.openRouterDimension;
+  const fetchFn = opts.fetchImpl ?? fetch;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS);
+  const t0 = Date.now();
+
+  let res: Response;
+  try {
+    res = await fetchFn(`${baseUrl}/embeddings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ model, input: texts }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    const reason = err instanceof Error ? err.message : String(err);
+    void logLLMCall({
+      module: OPENROUTER_FALLBACK_MODULE,
+      model: `openrouter/${model}`,
+      latencyMs: Date.now() - t0,
+      status: 'error',
+      errorMessage: reason,
+    });
+    throw new EmbeddingError(`OpenRouter embed call failed: ${reason}`);
+  }
+  clearTimeout(timer);
+
+  if (!res.ok) {
+    let body = '';
+    try {
+      body = await res.text();
+    } catch {
+      // ignore
+    }
+    const errMsg = `OpenRouter embed HTTP ${res.status}: ${body.slice(0, 200)}`;
+    void logLLMCall({
+      module: OPENROUTER_FALLBACK_MODULE,
+      model: `openrouter/${model}`,
+      latencyMs: Date.now() - t0,
+      status: 'error',
+      errorMessage: errMsg,
+    });
+    throw new EmbeddingError(errMsg, res.status);
+  }
+
+  const data = (await res.json()) as {
+    data?: Array<{ embedding?: number[] }>;
+    usage?: { prompt_tokens?: number; total_tokens?: number };
+    error?: { message?: string };
+  };
+  if (data.error) {
+    throw new EmbeddingError(`OpenRouter embed error: ${data.error.message ?? 'unknown'}`);
+  }
+
+  const items = data.data ?? [];
+  if (items.length !== texts.length) {
+    throw new EmbeddingError(
+      `OpenRouter embed returned ${items.length} vectors, expected ${texts.length}`
+    );
+  }
+
+  const vectors: number[][] = [];
+  for (const item of items) {
+    const vec = item.embedding;
+    if (!vec || vec.length !== expectedDim) {
+      throw new EmbeddingError(
+        `OpenRouter embedding dimension mismatch: got ${vec?.length ?? 0}, expected ${expectedDim}`
+      );
+    }
+    vectors.push(vec);
+  }
+
+  void logLLMCall({
+    module: OPENROUTER_FALLBACK_MODULE,
+    model: `openrouter/${model}`,
+    inputTokens: data.usage?.prompt_tokens,
+    latencyMs: Date.now() - t0,
+    status: 'success',
+  });
+
+  return vectors;
 }
 
 // ============================================================================

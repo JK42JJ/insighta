@@ -67,6 +67,16 @@ const envSchema = z.object({
   // Default = ollama so flag-off = pre-Phase-1 behaviour (CLAUDE.md C5).
   MANDALA_EMBED_PROVIDER: z.enum(['ollama', 'openrouter']).default('ollama'),
 
+  // IKS-scorer / shared embedBatch provider switch (Issue #543, 2026-04-28).
+  // Distinct from MANDALA_EMBED_PROVIDER: governs the multi-text batch
+  // path used by ensureMandalaEmbeddings, v3 executor semantic gate,
+  // iks-scorer, batch-video-collector, and v2 video-embedder.
+  //   'ollama'     → Mac-mini Ollama first; on transport/HTTP failure,
+  //                  auto-fallback to OpenRouter same-model embeddings.
+  //   'openrouter' → skip Mac-mini entirely (use when Mac-mini blocked).
+  // Reuses OPENROUTER_EMBED_BASE_URL / _MODEL / _DIMENSION below.
+  IKS_EMBED_PROVIDER: z.enum(['ollama', 'openrouter']).default('ollama'),
+
   // LLM Provider
   OLLAMA_URL: z.string().default('http://localhost:11434'),
   OLLAMA_EMBED_MODEL: z.string().default('nomic-embed-text'),
@@ -202,6 +212,12 @@ export const config = {
     openRouterBaseUrl: env.OPENROUTER_EMBED_BASE_URL,
     openRouterModel: env.OPENROUTER_EMBED_MODEL,
     openRouterDimension: env.OPENROUTER_EMBED_DIMENSION,
+  },
+
+  // IKS / batch embed provider (Issue #543). Reuses the OpenRouter embed
+  // endpoint config from mandalaEmbed.* — only `provider` differs.
+  iksEmbed: {
+    provider: env.IKS_EMBED_PROVIDER,
   },
 
   // LLM Provider
