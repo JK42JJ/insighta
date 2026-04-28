@@ -65,6 +65,7 @@ jest.mock('@/skills/plugins/video-discover/v3/config', () => ({
     enableTier1Cache: false,
     enableSemanticRerank: false,
     enableWhitelistGate: false,
+    enableRedisProvider: false,
     maxQueries: 2,
   },
 }));

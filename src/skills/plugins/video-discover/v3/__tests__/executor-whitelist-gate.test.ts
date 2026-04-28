@@ -46,6 +46,7 @@ jest.mock('../config', () => ({
     semanticAlpha: 0.6,
     semanticBeta: 0.4,
     enableWhitelistGate: false, // overridden per-test
+    enableRedisProvider: false, // PR-Y0g default
   },
   DEFAULT_PUBLISHED_AFTER_DAYS: 1095,
 }));
