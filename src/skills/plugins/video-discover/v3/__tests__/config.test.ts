@@ -28,6 +28,7 @@ describe('loadV3Config', () => {
       enableQualityGate: false,
       minViewCount: DEFAULT_MIN_VIEW_COUNT,
       minViewsPerDay: DEFAULT_MIN_VIEWS_PER_DAY,
+      semanticMaxCandidates: 30, // PR-Y0b2 default
     });
   });
 
@@ -96,6 +97,7 @@ describe('loadV3Config', () => {
       enableQualityGate: false,
       minViewCount: DEFAULT_MIN_VIEW_COUNT,
       minViewsPerDay: DEFAULT_MIN_VIEWS_PER_DAY,
+      semanticMaxCandidates: 30, // PR-Y0b2 default
     });
   });
 

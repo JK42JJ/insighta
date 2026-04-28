@@ -130,6 +130,29 @@ const centerGateMode = z
 export const DEFAULT_MIN_VIEW_COUNT = 1000;
 export const DEFAULT_MIN_VIEWS_PER_DAY = 10;
 
+/**
+ * Semantic-mode embedding candidate cap (Issue #543, CP436 PR-Y0b2).
+ *
+ * When `V3_CENTER_GATE_MODE=semantic`, the executor calls
+ * `embedBatch([centerGoal, ...candidateTitles])` with one entry per
+ * candidate. Without a cap, hundreds of titles enter a single
+ * Mac-mini Ollama call (CP418 prod incident: 56s blocking).
+ *
+ * 30 keeps the embed call to ≤ 31 texts (center + 30 titles), well
+ * under embedding.ts:DEFAULT_EMBED_CHUNK_SIZE = 50, so only one
+ * provider round-trip happens per wizard finalize. Combined with
+ * PR #550's OpenRouter fallback this stays in the 5-10s wall budget
+ * even when Mac-mini is down.
+ *
+ * Trade-off: candidates beyond the cap arrive at applyMandalaFilter
+ * without candidateEmbeddings entries — they are dropped by the
+ * semantic-mode center gate (mandala-filter.ts:272-273 returns
+ * centerScore=0 → droppedByCenterGate). This is by design: when
+ * scoring isn't possible we err on the side of dropping rather than
+ * letting unmeasured candidates through.
+ */
+export const DEFAULT_SEMANTIC_MAX_CANDIDATES = 30;
+
 const minViewCount = z
   .preprocess(
     (v) => (v == null || v === '' ? undefined : Number(v)),
@@ -143,6 +166,13 @@ const minViewsPerDay = z
     z.number().finite().nonnegative().optional()
   )
   .transform((v) => v ?? DEFAULT_MIN_VIEWS_PER_DAY);
+
+const semanticMaxCandidates = z
+  .preprocess(
+    (v) => (v == null || v === '' ? undefined : Number(v)),
+    z.number().finite().int().min(1).max(200).optional()
+  )
+  .transform((v) => v ?? DEFAULT_SEMANTIC_MAX_CANDIDATES);
 
 export const v3EnvSchema = z.object({
   V3_ENABLE_TIER1_CACHE: booleanFlag.optional().default(false as unknown as string),
@@ -159,6 +189,7 @@ export const v3EnvSchema = z.object({
   V3_ENABLE_QUALITY_GATE: booleanFlag.optional().default(false as unknown as string),
   V3_MIN_VIEW_COUNT: minViewCount,
   V3_MIN_VIEWS_PER_DAY: minViewsPerDay,
+  V3_SEMANTIC_MAX_CANDIDATES: semanticMaxCandidates,
 });
 
 export interface V3Config {
@@ -176,6 +207,7 @@ export interface V3Config {
   enableQualityGate: boolean;
   minViewCount: number;
   minViewsPerDay: number;
+  semanticMaxCandidates: number;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -194,6 +226,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_ENABLE_QUALITY_GATE: env['V3_ENABLE_QUALITY_GATE'],
     V3_MIN_VIEW_COUNT: env['V3_MIN_VIEW_COUNT'],
     V3_MIN_VIEWS_PER_DAY: env['V3_MIN_VIEWS_PER_DAY'],
+    V3_SEMANTIC_MAX_CANDIDATES: env['V3_SEMANTIC_MAX_CANDIDATES'],
   });
   if (!parsed.success) {
     return {
@@ -211,6 +244,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       enableQualityGate: false,
       minViewCount: DEFAULT_MIN_VIEW_COUNT,
       minViewsPerDay: DEFAULT_MIN_VIEWS_PER_DAY,
+      semanticMaxCandidates: DEFAULT_SEMANTIC_MAX_CANDIDATES,
     };
   }
   return {
@@ -228,6 +262,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     enableQualityGate: parsed.data.V3_ENABLE_QUALITY_GATE,
     minViewCount: parsed.data.V3_MIN_VIEW_COUNT,
     minViewsPerDay: parsed.data.V3_MIN_VIEWS_PER_DAY,
+    semanticMaxCandidates: parsed.data.V3_SEMANTIC_MAX_CANDIDATES,
   };
 }
 

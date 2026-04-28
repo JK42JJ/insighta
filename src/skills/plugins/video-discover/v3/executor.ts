@@ -741,22 +741,40 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   for (const v of filterable) enrichedById.set(v.videoId, v);
 
   // Semantic gate prep: when centerGateMode === 'semantic', embed the
-  // center goal + all candidate titles in ONE batch (N+1 texts) and pass
-  // both into the filter. On failure the filter's internal safety
+  // center goal + a CAPPED slice of candidate titles in ONE batch and pass
+  // the result into the filter. On failure the filter's internal safety
   // fallback downgrades to 'substring' behavior (mandala-filter.ts).
+  //
+  // CP436 PR-Y0b2 (Issue #543): cap the candidate slice at
+  // `v3Config.semanticMaxCandidates` (default 30) so the embedBatch call
+  // never blows past embedding.ts:DEFAULT_EMBED_CHUNK_SIZE = 50 in a single
+  // request. Pre-cap, prod sometimes saw hundreds of titles in one call,
+  // which CP418 logged as a 56s blocking incident on Mac-mini Ollama. With
+  // PR #550's OpenRouter fallback the call still succeeds, but tail latency
+  // hurts user-visible "first card" SLO. Cap keeps it ≤ 31 texts (center
+  // + 30 titles) → single chunk → ~5-10s wall.
+  //
+  // Candidates beyond the cap arrive at applyMandalaFilter without
+  // candidateEmbeddings entries — semantic mode treats them as
+  // centerScore=0 (mandala-filter.ts:272-273) and the center gate drops
+  // them. By design: when scoring isn't possible, err on dropping rather
+  // than admitting unmeasured candidates.
   let centerEmbedding: number[] | undefined;
   let candidateEmbeddings: Map<string, number[]> | undefined;
   if (v3Config.centerGateMode === 'semantic' && filterInputs.length > 0) {
     const tSemEmbedStart = Date.now();
-    const texts: string[] = [input.state.centerGoal, ...filterInputs.map((f) => f.title)];
+    const cap = v3Config.semanticMaxCandidates;
+    const cappedFilterInputs = filterInputs.slice(0, cap);
+    const overflow = Math.max(0, filterInputs.length - cap);
+    const texts: string[] = [input.state.centerGoal, ...cappedFilterInputs.map((f) => f.title)];
     try {
       const vectors = await embedBatch(texts);
       if (vectors.length === texts.length) {
         centerEmbedding = vectors[0];
         candidateEmbeddings = new Map<string, number[]>();
-        for (let i = 0; i < filterInputs.length; i++) {
+        for (let i = 0; i < cappedFilterInputs.length; i++) {
           const vec = vectors[i + 1];
-          const id = filterInputs[i]?.videoId;
+          const id = cappedFilterInputs[i]?.videoId;
           if (vec && id) candidateEmbeddings.set(id, vec);
         }
       } else {
@@ -770,6 +788,10 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
       );
     }
     debug.timing.semanticGateEmbedMs = Date.now() - tSemEmbedStart;
+    log.info(
+      `semantic gate: candidates=${filterInputs.length} capped=${cappedFilterInputs.length} ` +
+        `overflow=${overflow} cap=${cap} embedMs=${debug.timing.semanticGateEmbedMs}`
+    );
   }
 
   const tMandalaFilterStart = Date.now();
