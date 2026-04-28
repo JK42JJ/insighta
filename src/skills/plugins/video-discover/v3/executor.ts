@@ -795,40 +795,68 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   }
 
   const tMandalaFilterStart = Date.now();
-  const { byCell, stats: mfStats } = applyMandalaFilterWithStats(filterInputs, {
-    centerGoal: input.state.centerGoal,
-    subGoals: input.state.subGoals,
-    language: input.state.language,
-    focusTags: input.state.focusTags,
-    recencyWeight: v3Config.recencyWeight,
-    recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
-    centerGateMode: v3Config.centerGateMode,
-    centerEmbedding,
-    candidateEmbeddings,
-  });
-  debug.timing.mandalaFilterMs = Date.now() - tMandalaFilterStart;
-
-  debug.mandalaFilterOutput = mfStats.output;
-  debug.mandalaFilterDroppedCenterGate = mfStats.droppedByCenterGate;
-  debug.mandalaFilterDroppedJaccard = mfStats.droppedByJaccardBelowThreshold;
-  debug.mandalaFilterCenterTokens = mfStats.centerTokens;
-  debug.mandalaFilterSubGoalTokenCounts = mfStats.subGoalTokenCounts;
-
-  // Flatten into a single scored list (per-cell order preserved inside the
-  // map by applyMandalaFilter; overall sort happens again below because the
-  // cap-per-cell loop needs a global desc order to pick the best slots
-  // across cells fairly).
-  const tScoringStart = Date.now();
   const deficitCellSet = new Set(input.deficitCells.map((c) => c.cellIndex));
   const scored: ScoredCandidate[] = [];
-  for (const [cellIndex, list] of byCell) {
-    if (!deficitCellSet.has(cellIndex)) continue;
-    for (const a of list) {
-      const enrichedVideo = enrichedById.get(a.candidate.videoId);
-      if (!enrichedVideo) continue;
-      scored.push({ video: enrichedVideo, cellIndex, score: a.score });
+
+  if (v3Config.useYoutubeRankingOnly) {
+    // CP436 PR-Y0d (Issue #543) — bypass mandala-filter, trust YouTube's
+    // native search.list ranking. Each enriched candidate keeps the
+    // cellIndexHint set by v2/keyword-builder (the per-cell query that
+    // produced it), so cards land in the cell whose query they came from.
+    // Score is a descending cursor that preserves arrival order through
+    // the global desc sort that picks cards across cells.
+    let scoreCursor = 1.0;
+    const STEP = 0.01;
+    const MIN_SCORE = 0.01;
+    let kept = 0;
+    let droppedNotInDeficit = 0;
+    for (const v of filterable) {
+      const cellIndex = v.cellIndexHint ?? 0;
+      if (!deficitCellSet.has(cellIndex)) {
+        droppedNotInDeficit++;
+        continue;
+      }
+      scored.push({ video: enrichedById.get(v.videoId)!, cellIndex, score: scoreCursor });
+      scoreCursor = Math.max(MIN_SCORE, scoreCursor - STEP);
+      kept++;
+    }
+    debug.timing.mandalaFilterMs = Date.now() - tMandalaFilterStart;
+    debug.mandalaFilterOutput = kept;
+    debug.mandalaFilterDroppedCenterGate = 0;
+    debug.mandalaFilterDroppedJaccard = droppedNotInDeficit;
+    debug.mandalaFilterCenterTokens = [];
+    debug.mandalaFilterSubGoalTokenCounts = [];
+    log.info(`youtube-ranking-only: kept=${kept} dropped_not_in_deficit=${droppedNotInDeficit}`);
+  } else {
+    const { byCell, stats: mfStats } = applyMandalaFilterWithStats(filterInputs, {
+      centerGoal: input.state.centerGoal,
+      subGoals: input.state.subGoals,
+      language: input.state.language,
+      focusTags: input.state.focusTags,
+      recencyWeight: v3Config.recencyWeight,
+      recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
+      centerGateMode: v3Config.centerGateMode,
+      centerEmbedding,
+      candidateEmbeddings,
+    });
+    debug.timing.mandalaFilterMs = Date.now() - tMandalaFilterStart;
+
+    debug.mandalaFilterOutput = mfStats.output;
+    debug.mandalaFilterDroppedCenterGate = mfStats.droppedByCenterGate;
+    debug.mandalaFilterDroppedJaccard = mfStats.droppedByJaccardBelowThreshold;
+    debug.mandalaFilterCenterTokens = mfStats.centerTokens;
+    debug.mandalaFilterSubGoalTokenCounts = mfStats.subGoalTokenCounts;
+
+    for (const [cellIndex, list] of byCell) {
+      if (!deficitCellSet.has(cellIndex)) continue;
+      for (const a of list) {
+        const enrichedVideo = enrichedById.get(a.candidate.videoId);
+        if (!enrichedVideo) continue;
+        scored.push({ video: enrichedVideo, cellIndex, score: a.score });
+      }
     }
   }
+  const tScoringStart = Date.now();
   debug.scoredCandidates = scored.length;
 
   // Cap per cell using the deficit need + overall target remaining.
