@@ -77,6 +77,22 @@ services:
       # inside enrichRichSummary via rich-summary-quota module.
       # Revert: delete this line → feature no-ops.
       - RICH_SUMMARY_ENABLED=true
+      # CP437 (2026-04-29) — Operator flip: enable v2 layered cron.
+      # Default in code is `false` — cron stays dormant unless this env is
+      # explicitly true. With this set, `startRichSummaryV2Cron()` schedules
+      # the daily 17:00 UTC tick (= 02:00 KST) per
+      # `RICH_SUMMARY_V2_CRON_SCHEDULE` (also default-able here).
+      #
+      # Behavior:
+      #   - Each tick picks `RICH_SUMMARY_V2_BATCH_SIZE` candidates (default 50)
+      #     via Track A (v1 regen) → Track B (new generation).
+      #   - Serial LLM calls (1 in-flight) so the user-facing wizard path
+      #     keeps OpenRouter rate-limit headroom.
+      #   - Failures: 1 retry, then quality_flag='low' permanent (spec §7-D).
+      # Tuning knob, not a secret (CP392 2-question test passes).
+      # Revert: set to false or delete this line → cron stops at next process
+      # restart (no in-flight call is interrupted).
+      - RICH_SUMMARY_V2_CRON_ENABLED=true
       # CP424.2 (2026-04-24) — Wizard Precompute Pipeline.
       # Per docs/design/precompute-pipeline.md. Step 1 goal → /wizard-stream
       # fires fire-and-forget `runDiscoverEphemeral` keyed by session_id →
