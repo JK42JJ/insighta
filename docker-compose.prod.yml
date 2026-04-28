@@ -91,12 +91,23 @@ services:
       # 96 max). v3 degrades gracefully to Tier 2 when video_pool is empty.
       # Revert: delete this line → falls back to v1.
       - VIDEO_DISCOVER_V3=1
-      # CP426 (2026-04-25) — Center gate OFF for Korean. 'substring' has
-      # 0% recall on Korean composite words, 'semantic' embeds hundreds of
-      # candidates at runtime (design error). 'off' skips the center gate
-      # entirely — mandala filter's sub-goal scoring handles relevance.
-      # Revert: delete this line → falls back to 'substring'.
-      - V3_CENTER_GATE_MODE=off
+      # CP436 PR-Y0b2 (2026-04-28, Issue #543) — Center gate flipped back to
+      # 'semantic'. 'off' admitted lexical token-overlap matches that
+      # produced "Google One AI 프로젝트 시작하기" → 129 무관 카드,
+      # "건강습관 만들기" → 109 무관 카드 (CP436 prod incident).
+      #
+      # CP418 56s blocking (semantic embed-on-titles) is mitigated by:
+      #   1. V3_SEMANTIC_MAX_CANDIDATES=30 below (caps single-batch size)
+      #   2. embedding.ts:DEFAULT_EMBED_CHUNK_SIZE=50 (single chunk for 31 texts)
+      #   3. PR #550 OpenRouter fallback (Mac-mini outage absorbed)
+      # Combined: semantic gate completes in ~5-10s vs 56s pre-mitigation.
+      #
+      # Revert: set to 'off' (or delete this line — code default 'substring').
+      - V3_CENTER_GATE_MODE=semantic
+      # CP436 PR-Y0b2 — semantic gate candidate cap. ≤ 30 ensures the
+      # embedBatch call ([centerGoal, ...top30titles]) stays in a single
+      # OpenRouter/Ollama request. Cap > 50 would cross the chunk boundary.
+      - V3_SEMANTIC_MAX_CANDIDATES=30
       # QW-2/QW-4 (CP426): recency 편향 감소 + search timeout 확장
       - V3_RECENCY_WEIGHT=0.05
       - V3_YOUTUBE_SEARCH_TIMEOUT_MS=3000
