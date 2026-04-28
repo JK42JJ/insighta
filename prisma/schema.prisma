@@ -1389,11 +1389,23 @@ model video_rich_summaries {
   m3_timestamp_null_ratio Float?
   m3_timestamp_pattern    String?  @db.VarChar(20)
   specificity_score       Float?
+  /// CP437 (2026-04-29) — v2 schema columns.
+  /// Raw SQL DDL: prisma/migrations/rich-summary-v2/002_v2_columns.sql
+  /// Reader (rich-summary-reader.ts, separate PR) branches on template_version.
+  template_version        String   @default("v1") @db.VarChar(10)
+  source_language         String?  @db.VarChar(5)
+  core                    Json?
+  analysis                Json?
+  segments                Json?
+  translations            Json?
+  lora                    Json?
+  completeness            Float?
   created_at              DateTime @default(now()) @db.Timestamptz(6)
   updated_at              DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@index([user_id, updated_at(sort: Desc)], map: "idx_vrs_user_updated_at")
   @@index([specificity_score], map: "idx_vrs_specificity")
+  @@index([template_version], map: "idx_video_rich_summaries_template_version")
   @@schema("public")
 }
 
