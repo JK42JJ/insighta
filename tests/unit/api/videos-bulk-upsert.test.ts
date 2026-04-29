@@ -123,7 +123,11 @@ describe('POST /internal/videos/bulk-upsert', () => {
   });
 
   test('counts duplicate-by-DB conflict as skipped_duplicate', async () => {
-    mockQueryRaw.mockResolvedValueOnce([{ inserted: true }]).mockResolvedValueOnce([]); // conflict — RETURNING produces 0 rows on DO NOTHING
+    // CP438: ON CONFLICT DO UPDATE — RETURNING (xmax = 0) is now false
+    // for a conflict (formerly DO NOTHING returned []).
+    mockQueryRaw
+      .mockResolvedValueOnce([{ inserted: true }])
+      .mockResolvedValueOnce([{ inserted: false }]);
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST',
@@ -140,6 +144,66 @@ describe('POST /internal/videos/bulk-upsert', () => {
     const body = JSON.parse(res.body) as { inserted: number; skipped_duplicate: number };
     expect(body.inserted).toBe(1);
     expect(body.skipped_duplicate).toBe(1);
+    await app.close();
+  });
+
+  test('source field passes through valid values + null on unknown', async () => {
+    mockQueryRaw.mockResolvedValue([{ inserted: true }]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/internal/videos/bulk-upsert',
+      headers: HEADERS,
+      payload: {
+        videos: [
+          {
+            youtube_video_id: 's1',
+            title: 'cat mostpop video',
+            duration_seconds: 600,
+            source: 'category_mostpopular',
+          },
+          {
+            youtube_video_id: 's2',
+            title: 'naver kw video',
+            duration_seconds: 600,
+            source: 'naver_keyword',
+          },
+          {
+            youtube_video_id: 's3',
+            title: 'mostpop video',
+            duration_seconds: 600,
+            source: 'youtube_mostpopular',
+          },
+          {
+            youtube_video_id: 's4',
+            title: 'domain kw video',
+            duration_seconds: 600,
+            source: 'domain_keyword',
+          },
+          {
+            youtube_video_id: 'sx',
+            title: 'unknown source video',
+            duration_seconds: 600,
+            source: 'bogus_value',
+          },
+          { youtube_video_id: 'sn', title: 'no source video', duration_seconds: 600 },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { inserted: number };
+    expect(body.inserted).toBe(6);
+    // verify the SQL invocations bound the expected source values.
+    // mockQueryRaw is called once per pass — the 10th positional arg is `source`.
+    const calls = mockQueryRaw.mock.calls;
+    expect(calls.length).toBe(6);
+    // Prisma.sql template — first arg is the templated TemplateStringsArray
+    // followed by ordered values; we just check that 'bogus_value' was
+    // normalized to null and other valid values passed through.
+    const firstSql = JSON.stringify(calls[0]);
+    expect(firstSql).toContain('category_mostpopular');
+    const fifthSql = JSON.stringify(calls[4]);
+    expect(fifthSql).not.toContain('bogus_value');
     await app.close();
   });
 

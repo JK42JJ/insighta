@@ -16,6 +16,10 @@ export interface VideoMeta {
   thumbnail_url?: string | null;
   published_at?: string | null;
   default_language?: string | null;
+  /** CP438 collector pipeline source. The orchestrator tags each
+   *  video before POST; bulk-upsert endpoint stores it on the
+   *  youtube_videos.source column. */
+  source?: string | null;
 }
 
 export interface SourceResult {

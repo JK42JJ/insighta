@@ -62,6 +62,22 @@ interface VideoMeta {
   thumbnail_url?: string | null;
   published_at?: string | null;
   default_language?: string | null;
+  /** CP438 collector pipeline source (column added 2026-04-29). */
+  source?: string | null;
+}
+
+/** Whitelist of allowed values for `source` per CP438 spec. */
+const ALLOWED_SOURCES: ReadonlySet<string> = new Set([
+  'category_mostpopular',
+  'naver_keyword',
+  'youtube_mostpopular',
+  'domain_keyword',
+]);
+
+function normalizeSource(s: unknown): string | null {
+  if (typeof s !== 'string') return null;
+  const trimmed = s.trim();
+  return ALLOWED_SOURCES.has(trimmed) ? trimmed : null;
 }
 
 interface BulkUpsertBody {
@@ -112,7 +128,12 @@ function applyQualityGate(videos: VideoMeta[]): FilterResult {
         continue;
       }
     }
-    pass.push({ ...v, youtube_video_id: id, title });
+    pass.push({
+      ...v,
+      youtube_video_id: id,
+      title,
+      source: normalizeSource(v.source),
+    });
   }
   return { pass, filtered };
 }
@@ -145,10 +166,14 @@ export const internalVideosBulkUpsertRoutes: FastifyPluginAsync = async (fastify
 
     if (pass.length > 0) {
       const prisma = getPrismaClient();
-      // ON CONFLICT (youtube_video_id) DO NOTHING — the table has the
-      // unique constraint already. RETURNING xmax = 0 distinguishes
-      // freshly-inserted vs no-op rows so we can report inserted vs
-      // skipped accurately in a single round-trip per video.
+      // ON CONFLICT (youtube_video_id) DO UPDATE — CP438 introduced
+      // `source` and we want re-submits to update that attribution
+      // (a video re-discovered via a different pipeline path keeps the
+      // most-recent source). Everything else stays read-only on
+      // conflict so a stale collector dump can't overwrite freshly
+      // fetched metadata from another path. RETURNING (xmax = 0) AS
+      // inserted distinguishes a fresh INSERT (xmax=0) from an UPDATE
+      // (xmax!=0) in a single round-trip per video.
       for (const v of pass) {
         try {
           const result = await prisma.$queryRaw<{ inserted: boolean }[]>(Prisma.sql`
@@ -161,7 +186,8 @@ export const internalVideosBulkUpsertRoutes: FastifyPluginAsync = async (fastify
                 like_count,
                 thumbnail_url,
                 published_at,
-                default_language
+                default_language,
+                source
               )
               VALUES (
                 ${v.youtube_video_id},
@@ -172,9 +198,11 @@ export const internalVideosBulkUpsertRoutes: FastifyPluginAsync = async (fastify
                 ${v.like_count ?? null},
                 ${v.thumbnail_url ?? null},
                 ${v.published_at ? new Date(v.published_at) : null},
-                ${v.default_language ?? null}
+                ${v.default_language ?? null},
+                ${v.source ?? null}
               )
-              ON CONFLICT (youtube_video_id) DO NOTHING
+              ON CONFLICT (youtube_video_id) DO UPDATE
+                SET source = COALESCE(EXCLUDED.source, youtube_videos.source)
               RETURNING (xmax = 0) AS inserted
             `);
           if (result.length > 0 && result[0]!.inserted) {
