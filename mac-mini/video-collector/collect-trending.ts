@@ -47,6 +47,7 @@ import { collectDomainKeywords } from './sources/domain-keywords';
 import { collectNaverDataLab } from './sources/naver-datalab';
 import { collectGoogleTrends } from './sources/google-trends-spawn';
 import { fetchVideoMetadata } from './sources/youtube-metadata';
+import { pConcurrencyMap } from './sources/concurrency';
 import type { VideoMeta } from './sources/types';
 import { spawn } from 'node:child_process';
 import { resolve as resolvePath, dirname } from 'node:path';
@@ -67,6 +68,8 @@ interface EnvConfig {
   uvProjectDir: string;
   targetTotal: number;
   dryRun: boolean;
+  s2Concurrency: number;
+  s4Concurrency: number;
 }
 
 function readEnv(): EnvConfig {
@@ -90,8 +93,10 @@ function readEnv(): EnvConfig {
     ytdlpBin: get('YTDLP_BIN') ?? '/opt/homebrew/bin/yt-dlp',
     uvBin: get('UV_BIN') ?? '/opt/homebrew/bin/uv',
     uvProjectDir: get('UV_PROJECT_DIR') ?? '/Users/jamesjk/code/video-dictionary',
-    targetTotal: parseInt(get('COLLECT_TARGET_TOTAL') ?? '175', 10),
+    targetTotal: parseInt(get('COLLECT_TARGET_TOTAL') ?? '1000', 10),
     dryRun: get('COLLECT_DRY_RUN') === '1',
+    s2Concurrency: parseInt(get('S2_CONCURRENCY') ?? '10', 10),
+    s4Concurrency: parseInt(get('S4_CONCURRENCY') ?? '10', 10),
   };
 }
 
@@ -160,13 +165,21 @@ async function main(): Promise<void> {
     domainKeywords: target - Math.round(target * 0.4) - Math.round(target * 0.25) - Math.round(target * 0.2),
   };
 
-  console.log('[collect-trending] target=%d budgets=%o', target, budgets);
+  console.log(
+    '[collect-trending] target=%d s2_conc=%d s4_conc=%d budgets=%o',
+    target,
+    env.s2Concurrency,
+    env.s4Concurrency,
+    budgets,
+  );
 
-  // Source 1 — yt-dlp trending feed (KR + US, dedup'd)
+  // Source 1 — yt-dlp trending feed (KR + US, dedup'd).
+  // limitPerRegion is overshot 25% to absorb cross-region dedup; the
+  // trending feed cap is YouTube-side (~200 ids per region max).
   const s1 = await collectYtdlpTrending({
     ytdlpBin: env.ytdlpBin,
     webshareProxy: env.webshareProxy,
-    limitPerRegion: Math.ceil(budgets.ytdlpTrending / 2 + 10), // overshoot for dedup
+    limitPerRegion: Math.min(200, Math.ceil((budgets.ytdlpTrending / 2) * 1.25)),
     timeoutMs: 60_000,
   });
   console.log('[s1 ytdlp_trending] %o', s1.diagnostics);
@@ -196,31 +209,37 @@ async function main(): Promise<void> {
     s2Keywords.push(...gt.keywords);
     s2Diagnostics = { ...s2Diagnostics, google_trends: gt.diagnostics };
   }
-  // Run yt-dlp search per keyword.
-  const s2Ids: string[] = [];
+  // Run yt-dlp search per keyword (concurrency=env.s2Concurrency).
   const perKw = Math.max(2, Math.ceil(budgets.naverGT / Math.max(1, s2Keywords.length)));
-  for (const kw of s2Keywords) {
-    const ids = await ytsearchYtdlp(kw, perKw, env.ytdlpBin, env.webshareProxy, 30_000);
-    s2Ids.push(...ids);
-  }
+  const s2Per = await pConcurrencyMap(s2Keywords, env.s2Concurrency, async (kw) =>
+    ytsearchYtdlp(kw, perKw, env.ytdlpBin, env.webshareProxy, 30_000),
+  );
+  const s2Ids: string[] = s2Per.flat();
   const s2Dedup = Array.from(new Set(s2Ids));
   console.log('[s2 naver+gt] keywords=%d ids=%d (dedup) %o', s2Keywords.length, s2Dedup.length, s2Diagnostics);
 
-  // Source 3 — YouTube mostPopular (full metadata in result)
+  // Source 3 — YouTube mostPopular (full metadata in result).
+  // mostPopular is hard-capped at 50 results per call; for budgets > 100
+  // we still pull 50 per region (KR + US = 100 max). Server-side dedupe
+  // handles overflow.
   const s3 = await collectMostPopular({
     apiKey: env.youtubeApiKey,
-    maxResultsPerRegion: Math.min(50, Math.ceil(budgets.mostPopular / 2 + 5)),
+    maxResultsPerRegion: 50,
     regions: ['KR', 'US'],
   });
   console.log('[s3 mostPopular] %o', s3.diagnostics);
 
-  // Source 4 — 9-domain × 5 keyword search (top 50% per cell)
+  // Source 4 — 9-domain × 5 keyword search (top 50% per cell, concurrency=env.s4Concurrency).
+  // For TARGET_TOTAL=1000 the budget is 150; with searchPerKeyword=10 (top 5)
+  // and 45 keywords we collect ~225 raw, dedup to ~180 — covers budget with margin.
+  const s4SearchPerKw = budgets.domainKeywords > 100 ? 10 : 4;
   const s4 = await collectDomainKeywords({
     ytdlpBin: env.ytdlpBin,
     webshareProxy: env.webshareProxy,
-    searchPerKeyword: 4,
+    searchPerKeyword: s4SearchPerKw,
     timeoutMs: 30_000,
     keywordsFile: resolvePath(here, 'keyword-templates.json'),
+    concurrency: env.s4Concurrency,
   });
   console.log('[s4 domain_keywords] %o', { ...s4.diagnostics, per_keyword: '<omitted>' });
 

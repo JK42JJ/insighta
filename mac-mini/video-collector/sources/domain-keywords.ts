@@ -12,6 +12,7 @@ import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 
+import { pConcurrencyMap } from './concurrency';
 import type { SourceResult } from './types';
 
 interface DomainKeywordsOptions {
@@ -21,6 +22,8 @@ interface DomainKeywordsOptions {
   searchPerKeyword: number;
   timeoutMs: number;
   keywordsFile: string;
+  /** Parallel keyword searches (CP438 — default 10, matches WebShare slots). */
+  concurrency: number;
 }
 
 interface KeywordTemplate {
@@ -65,23 +68,30 @@ export async function collectDomainKeywords(
 ): Promise<SourceResult> {
   const raw = readFileSync(resolvePath(opts.keywordsFile), 'utf8');
   const tmpl = JSON.parse(raw) as KeywordTemplate;
+  const keepTop = Math.max(1, Math.floor(opts.searchPerKeyword / 2));
+
+  // Flatten domain × keywords into one list for bounded-concurrency search.
+  const flat: { domain: string; keyword: string }[] = [];
+  for (const [domain, keywords] of Object.entries(tmpl.domains)) {
+    for (const kw of keywords) flat.push({ domain, keyword: kw });
+  }
+
+  const results = await pConcurrencyMap(flat, opts.concurrency, async ({ domain, keyword }) => {
+    try {
+      const ids = await runYtdlpSearch(keyword, opts.searchPerKeyword, opts);
+      return { domain, keyword, ids: ids.slice(0, keepTop), error: null as string | null };
+    } catch (e) {
+      return { domain, keyword, ids: [] as string[], error: (e as Error).message };
+    }
+  });
+
   const allIds: string[] = [];
   const perKeyword: Record<string, number> = {};
   const errors: string[] = [];
-  const keepTop = Math.max(1, Math.floor(opts.searchPerKeyword / 2));
-
-  for (const [domain, keywords] of Object.entries(tmpl.domains)) {
-    for (const kw of keywords) {
-      try {
-        const ids = await runYtdlpSearch(kw, opts.searchPerKeyword, opts);
-        const top = ids.slice(0, keepTop);
-        allIds.push(...top);
-        perKeyword[`${domain}:${kw}`] = top.length;
-      } catch (e) {
-        errors.push(`${domain}:${kw}: ${(e as Error).message}`);
-        perKeyword[`${domain}:${kw}`] = 0;
-      }
-    }
+  for (const r of results) {
+    allIds.push(...r.ids);
+    perKeyword[`${r.domain}:${r.keyword}`] = r.ids.length;
+    if (r.error) errors.push(`${r.domain}:${r.keyword}: ${r.error}`);
   }
   const dedup = Array.from(new Set(allIds));
   return {
@@ -94,6 +104,7 @@ export async function collectDomainKeywords(
       results_post_dedup: dedup.length,
       per_keyword: perKeyword,
       errors,
+      concurrency: opts.concurrency,
     },
   };
 }

@@ -5,19 +5,22 @@ to Insighta's `/api/v1/internal/videos/bulk-upsert`. The endpoint applies
 a server-side quality gate (duration / title length / blocklist) and
 dedupes via `ON CONFLICT (youtube_video_id) DO NOTHING`.
 
-## Source mix (default target = 175 videos/run)
+## Source mix (default target = 1000 videos/run)
 
 | Slot | Pct | Source                                   | Output    |
 |------|-----|------------------------------------------|-----------|
 | S1   | 40% | yt-dlp trending feed (KR + US)           | bare IDs  |
-| S2   | 25% | Naver DataLab → keywords → yt-dlp search | bare IDs  |
+| S2   | 25% | Naver DataLab → keywords → yt-dlp search (concurrency=10) | bare IDs |
 | S2b  |  -  | Google Trends (pytrends) fallback when Naver < 8 keywords | bare IDs |
 | S3   | 20% | YouTube Data API `chart=mostPopular`     | full meta |
-| S4   | 15% | 9-domain × 5 trendy keywords (top 50% per cell) | bare IDs |
+| S4   | 15% | 9-domain × 5 trendy keywords, top 50% per cell (concurrency=10) | bare IDs |
 
 Bare IDs are enriched via YouTube Data API `videos.list` (50/call,
-1 quota/call). 175-video run consumes ~3-4 quota plus the per-source
-calls.
+1 quota/call). 1000-video run consumes ~20 quota + WebShare proxy
+calls. With concurrency=10 the wall-clock is **~3 min/run** (vs ~10 min
+sequential). YouTube hard-caps `chart=mostPopular` at 50 results per
+region, so S3 returns ≤100 per run regardless of budget; the rest of
+the slot is absorbed by upstream sources via dedupe.
 
 ## Hard Rules
 
@@ -50,8 +53,10 @@ WEBSHARE_USERNAME=...
 WEBSHARE_PASSWORD=...
 
 # Optional knobs:
-COLLECT_TARGET_TOTAL=175       # default
+COLLECT_TARGET_TOTAL=1000      # default (was 175 before CP438 phase 2)
 COLLECT_DRY_RUN=1              # set to skip POST (debug)
+S2_CONCURRENCY=10              # parallel yt-dlp search for Naver/Trends keywords
+S4_CONCURRENCY=10              # parallel yt-dlp search for 9-domain × 5 keywords
 YTDLP_BIN=/opt/homebrew/bin/yt-dlp
 UV_BIN=/opt/homebrew/bin/uv
 UV_PROJECT_DIR=/Users/jamesjk/code/video-dictionary
@@ -67,22 +72,28 @@ set -a && source /Users/jamesjk/code/video-dictionary/.env && set +a
 npx tsx mac-mini/video-collector/collect-trending.ts
 ```
 
-Expected output (truncated):
+Expected output (target=1000, concurrency=10, truncated):
 
 ```
-[collect-trending] target=175 budgets={ ytdlpTrending: 70, naverGT: 44, mostPopular: 35, domainKeywords: 26 }
-[s1 ytdlp_trending] { kr_count: 50, us_count: 50, dedup_count: 95, errors: [] }
-[s2 naver+gt] keywords=12 ids=44 (dedup) { naver: { groups_returned: 9, top_groups: [...] } }
-[s3 mostPopular] { per_region: { KR: 50, US: 50 }, dedup_count: 88, errors: [] }
-[s4 domain_keywords] { keywords_total: 45, results_pre_dedup: 90, results_post_dedup: 78, ... }
-[aggregate] s1=70 s2=44 s3=35 s4=26 → enrich_input=140 enriched=138 total=173
-[post] batch 0 { received: 173, inserted: 145, skipped_duplicate: 0, skipped_filter: 28, db_errors: 0, filter_breakdown: {...} }
-[done] { posted: 173, inserted: 145, skipped_filter: 28, skipped_duplicate: 0, db_errors: 0 }
+[collect-trending] target=1000 s2_conc=10 s4_conc=10 budgets={ ytdlpTrending: 400, naverGT: 250, mostPopular: 200, domainKeywords: 150 }
+[s1 ytdlp_trending] { kr_count: 200, us_count: 200, dedup_count: 380, errors: [] }
+[s2 naver+gt] keywords=14 ids=240 (dedup) { naver: { ... } }
+[s3 mostPopular] { per_region: { KR: 50, US: 50 }, dedup_count: 95, errors: [] }
+[s4 domain_keywords] { keywords_total: 45, results_pre_dedup: 225, results_post_dedup: 180, concurrency: 10 }
+[aggregate] s1=400 s2=250 s3=95 s4=150 → enrich_input=800 enriched=780 total=875
+[post] batch 0 { received: 200, inserted: 165, skipped_duplicate: 0, skipped_filter: 35, ... }
+[post] batch 1 { received: 200, inserted: 168, skipped_duplicate: 0, skipped_filter: 32, ... }
+[post] batch 2 { received: 200, inserted: 162, skipped_duplicate: 5, skipped_filter: 33, ... }
+[post] batch 3 { received: 200, inserted: 160, skipped_duplicate: 8, skipped_filter: 32, ... }
+[post] batch 4 { received: 75, inserted: 60, skipped_duplicate: 3, skipped_filter: 12, ... }
+[done] { posted: 875, inserted: 715, skipped_filter: 144, skipped_duplicate: 16, db_errors: 0 }
 ```
 
 ## Cron (CP438 phase 2 — after stable)
 
-Once the manual flow is stable, schedule via launchd:
+Twice-daily schedule (08:00 + 20:00 KST) reaches ~2000 unique videos
+in ~1-2 days; after that the trending feed dedup ratio rises and
+yields drop. Use `StartCalendarInterval` array for two daily fires:
 
 ```xml
 <!-- ~/Library/LaunchAgents/com.insighta.video-collector.plist -->
@@ -96,7 +107,10 @@ Once the manual flow is stable, schedule via launchd:
     <string>set -a; source /Users/jamesjk/code/video-dictionary/.env; set +a; cd /Users/jamesjk/code/insighta && npx tsx mac-mini/video-collector/collect-trending.ts >> /Users/jamesjk/Library/Logs/insighta-video-collector.log 2>&1</string>
   </array>
   <key>StartCalendarInterval</key>
-  <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+  <array>
+    <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
 </dict>
 </plist>
 ```
