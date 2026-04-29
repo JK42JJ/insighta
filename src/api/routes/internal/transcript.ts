@@ -28,6 +28,7 @@ import {
   scoreCompleteness,
   V2ValidationError,
 } from '@/modules/skills/rich-summary-v2-prompt';
+import { bridgeV2ToOntology } from '@/modules/ontology/v2-bridge';
 import { Prisma as PrismaCli } from '@prisma/client';
 import { logger } from '@/utils/logger';
 
@@ -186,11 +187,30 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         completeness: score.score,
         domain: summary.core.domain,
       });
+
+      // CP437 — auto-bridge to ontology (no LLM, no embedding).
+      // Fire-and-forget; failure is non-fatal so the upsert response stays
+      // fast and the bridge can be retried out-of-band if needed.
+      let bridgeResult: Awaited<ReturnType<typeof bridgeV2ToOntology>> | null = null;
+      try {
+        bridgeResult = await bridgeV2ToOntology({
+          videoId,
+          layered: summary,
+          segments: (body.segments as never) ?? null,
+        });
+      } catch (err) {
+        log.warn('v2-bridge failed (non-fatal)', {
+          videoId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+
       return reply.code(200).send({
         kind: 'pass',
         videoId,
         completeness: score.score,
         domain: summary.core.domain,
+        ...(bridgeResult ? { ontology: bridgeResult } : {}),
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
