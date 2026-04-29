@@ -23,6 +23,12 @@ import { Prisma } from '@prisma/client';
 import { getInternalBatchToken } from '@/config/internal-auth';
 import { getPrismaClient } from '@/modules/database/client';
 import { generateRichSummaryV2 } from '@/modules/skills/rich-summary-v2-generator';
+import {
+  validateV2Layered,
+  scoreCompleteness,
+  V2ValidationError,
+} from '@/modules/skills/rich-summary-v2-prompt';
+import { Prisma as PrismaCli } from '@prisma/client';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'api/internal/transcript' });
@@ -77,6 +83,148 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
       LIMIT ${Prisma.raw(String(limit))}
     `);
       return reply.code(200).send({ videos: rows });
+    }
+  );
+
+  /**
+   * CC-direct upsert (CP437, 2026-04-29 user directive).
+   *
+   * Bypasses any LLM call — accepts a pre-built v2 layered JSON authored
+   * by Claude Code (the conversation context) reading transcripts. This
+   * is the only path that can populate `template_version='v2'` without
+   * a service-API call (Hard Rule compliance — no OpenRouter, no
+   * Anthropic API).
+   *
+   *   POST /api/v1/internal/v2-summary/upsert-direct
+   *   Body: {
+   *     videoId,
+   *     core: {...},
+   *     analysis: {...},
+   *     lora: {...},
+   *     segments?: {...},
+   *     sourceLanguage?: 'ko' | 'en',
+   *     stampTranscriptFetchedAt?: boolean
+   *   }
+   *
+   * Validation: runs `validateV2Layered` + `scoreCompleteness` to refuse
+   * malformed payloads (returns 422 on failure). Authoring side (CC)
+   * therefore must produce valid JSON that meets the same schema.
+   */
+  fastify.post<{
+    Body: {
+      videoId?: string;
+      core?: unknown;
+      analysis?: unknown;
+      lora?: unknown;
+      segments?: unknown;
+      sourceLanguage?: string;
+      stampTranscriptFetchedAt?: boolean;
+    };
+  }>('/v2-summary/upsert-direct', async (request, reply) => {
+    const expected = getInternalBatchToken();
+    if (!expected) return reply.code(503).send({ error: 'internal trigger not configured' });
+    const got = request.headers['x-internal-token'];
+    if (typeof got !== 'string' || got !== expected) {
+      return reply.code(401).send({ error: 'invalid internal token' });
+    }
+    const body = request.body ?? {};
+    const videoId = typeof body.videoId === 'string' ? body.videoId.trim() : '';
+    if (!videoId) return reply.code(400).send({ error: 'videoId required' });
+
+    let summary;
+    try {
+      summary = validateV2Layered({ core: body.core, analysis: body.analysis, lora: body.lora });
+    } catch (err) {
+      const path = err instanceof V2ValidationError ? err.path : '';
+      const msg = err instanceof Error ? err.message : String(err);
+      return reply.code(422).send({ error: 'validation_failed', path, message: msg });
+    }
+    const score = scoreCompleteness(summary);
+    if (!score.passed) {
+      return reply.code(422).send({
+        error: 'completeness_below_threshold',
+        score: score.score,
+        reasons: score.reasons,
+      });
+    }
+
+    const prisma = getPrismaClient();
+    const now = new Date();
+    try {
+      await prisma.video_rich_summaries.update({
+        where: { video_id: videoId },
+        data: {
+          template_version: 'v2',
+          core: summary.core as unknown as PrismaCli.InputJsonValue,
+          analysis: summary.analysis as unknown as PrismaCli.InputJsonValue,
+          lora: summary.lora as unknown as PrismaCli.InputJsonValue,
+          ...(body.segments ? { segments: body.segments as PrismaCli.InputJsonValue } : {}),
+          completeness: score.score,
+          quality_flag: 'pass',
+          model: 'claude-code-direct',
+          ...(body.sourceLanguage === 'ko' || body.sourceLanguage === 'en'
+            ? { source_language: body.sourceLanguage }
+            : {}),
+          updated_at: now,
+        },
+      });
+      if (body.stampTranscriptFetchedAt) {
+        await prisma.youtube_videos
+          .update({
+            where: { youtube_video_id: videoId },
+            data: { transcript_fetched_at: now },
+          })
+          .catch((err) =>
+            log.warn('transcript_fetched_at stamp failed (non-fatal)', {
+              videoId,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          );
+      }
+      log.info('v2-summary direct upsert', {
+        videoId,
+        completeness: score.score,
+        domain: summary.core.domain,
+      });
+      return reply.code(200).send({
+        kind: 'pass',
+        videoId,
+        completeness: score.score,
+        domain: summary.core.domain,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error('v2-summary direct upsert failed', { videoId, error: msg });
+      if (msg.includes('Record to update not found')) {
+        return reply.code(404).send({ error: 'video_rich_summaries row not found', videoId });
+      }
+      return reply.code(500).send({ error: msg });
+    }
+  });
+
+  /**
+   * Reset specific videos back to template_version='v1' so they can be
+   * re-authored with transcript context (CP437 user directive 2026-04-29).
+   * Body: { videoIds: string[] }
+   */
+  fastify.post<{ Body: { videoIds?: string[] } }>(
+    '/v2-summary/reset-to-v1',
+    async (request, reply) => {
+      const expected = getInternalBatchToken();
+      if (!expected) return reply.code(503).send({ error: 'internal trigger not configured' });
+      const got = request.headers['x-internal-token'];
+      if (typeof got !== 'string' || got !== expected) {
+        return reply.code(401).send({ error: 'invalid internal token' });
+      }
+      const ids = Array.isArray(request.body?.videoIds) ? request.body.videoIds : [];
+      if (ids.length === 0) return reply.code(400).send({ error: 'videoIds[] required' });
+      const prisma = getPrismaClient();
+      const result = await prisma.video_rich_summaries.updateMany({
+        where: { video_id: { in: ids }, template_version: 'v2' },
+        data: { template_version: 'v1', completeness: null },
+      });
+      log.info('v2-summary reset-to-v1', { count: result.count, requested: ids.length });
+      return reply.code(200).send({ reset: result.count, requested: ids.length });
     }
   );
 
