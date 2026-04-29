@@ -48,6 +48,19 @@ export interface V2GenerationInput {
    * `'system'` user. For now, fall back to `null` (column is nullable).
    */
   userId?: string | null;
+  /**
+   * Optional transcript text supplied by the Mac Mini transcript pipeline
+   * (yt-dlp memory-only, never persisted). When present, the prompt
+   * instructs the LLM to prefer transcript-derived evidence. Caller is
+   * responsible for the legal directive: NEVER store the raw transcript
+   * in any column.
+   */
+  transcript?: string;
+  /**
+   * When true, the generator stamps `youtube_videos.transcript_fetched_at`
+   * to NOW() after a successful pass. Set by the Mac Mini route only.
+   */
+  stampTranscriptFetchedAt?: boolean;
 }
 
 export async function generateRichSummaryV2(
@@ -86,6 +99,7 @@ export async function generateRichSummaryV2(
     description: ytRow.description ?? '',
     channel: ytRow.channel_title ?? '',
     language,
+    transcript: input.transcript,
   });
 
   const provider = await createGenerationProvider();
@@ -153,11 +167,29 @@ export async function generateRichSummaryV2(
         },
       });
 
+      // Stamp transcript_fetched_at on the video row when the Mac Mini
+      // pipeline successfully fed a transcript through. Persisting only
+      // the timestamp — the transcript text is never written to DB.
+      if (input.stampTranscriptFetchedAt) {
+        try {
+          await prisma.youtube_videos.update({
+            where: { youtube_video_id: input.videoId },
+            data: { transcript_fetched_at: new Date() },
+          });
+        } catch (err) {
+          log.warn('transcript_fetched_at stamp failed (non-fatal)', {
+            videoId: input.videoId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
       log.info('v2 generated', {
         videoId: input.videoId,
         attempt,
         completeness: score.score,
         domain: summary.core.domain,
+        withTranscript: Boolean(input.transcript && input.transcript.length > 0),
       });
       return { kind: 'pass', videoId: input.videoId, completeness: score.score };
     } catch (err) {

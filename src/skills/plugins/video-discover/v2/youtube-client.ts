@@ -45,6 +45,51 @@ interface YouTubeVideosResponse {
   error?: { code: number; message: string };
 }
 
+/**
+ * Full metadata response shape (CP437) — videos.list with
+ * parts=snippet,contentDetails,statistics,topicDetails.
+ *
+ * Spec note (2026-04-29 user directive): we collect commentCount (numeric
+ * quality signal) but never call commentThreads.list / comments.list.
+ * Comment text / pinned comments are out of scope; transcript path
+ * (rich-summary v2) is the canonical text source.
+ */
+export interface YouTubeVideoFullMetadata {
+  id?: string;
+  snippet?: {
+    title?: string;
+    description?: string;
+    channelTitle?: string;
+    channelId?: string;
+    publishedAt?: string;
+    thumbnails?: {
+      high?: { url?: string };
+      standard?: { url?: string };
+      default?: { url?: string };
+    };
+    tags?: string[];
+    defaultLanguage?: string;
+    defaultAudioLanguage?: string;
+  };
+  contentDetails?: {
+    duration?: string;
+    caption?: string;
+  };
+  statistics?: {
+    viewCount?: string;
+    likeCount?: string;
+    commentCount?: string;
+  };
+  topicDetails?: {
+    topicCategories?: string[];
+  };
+}
+
+interface YouTubeVideosFullResponse {
+  items?: YouTubeVideoFullMetadata[];
+  error?: { code: number; message: string };
+}
+
 export interface SearchOpts {
   query: string;
   /**
@@ -251,6 +296,95 @@ async function videosBatchSingle(
   const body = (await res.json()) as YouTubeVideosResponse;
   if (body.error) throw new Error(`videos.list error: ${body.error.message}`);
   return body.items ?? [];
+}
+
+// ============================================================================
+// Full-metadata batch (CP437) — backfill cron uses this
+// ============================================================================
+
+export interface VideosBatchFullOpts {
+  videoIds: string[];
+  apiKey: string | string[];
+  fetchFn?: typeof fetch;
+}
+
+export async function videosBatchFullMetadata(
+  opts: VideosBatchFullOpts
+): Promise<YouTubeVideoFullMetadata[]> {
+  if (opts.videoIds.length === 0) return [];
+  const keys = Array.isArray(opts.apiKey) ? opts.apiKey : [opts.apiKey];
+  if (keys.length === 0 || keys.every((k) => !k)) {
+    throw new Error('videosBatchFullMetadata: server API key is required');
+  }
+  const chunks: string[][] = [];
+  for (let i = 0; i < opts.videoIds.length; i += VIDEOS_LIST_MAX_IDS_PER_CALL) {
+    chunks.push(opts.videoIds.slice(i, i + VIDEOS_LIST_MAX_IDS_PER_CALL));
+  }
+  const results = await Promise.all(
+    chunks.map(async (chunk) => {
+      let lastErr: unknown = null;
+      for (const key of keys) {
+        if (!key) continue;
+        try {
+          return await videosBatchFullSingle(chunk, key, opts.fetchFn);
+        } catch (err) {
+          lastErr = err;
+          if (!isVideosBatchQuotaError(err)) throw err;
+        }
+      }
+      throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+    })
+  );
+  return results.flat();
+}
+
+async function videosBatchFullSingle(
+  videoIds: string[],
+  apiKey: string,
+  fetchFn?: typeof fetch
+): Promise<YouTubeVideoFullMetadata[]> {
+  const url = new URL(`${YOUTUBE_API_BASE}/videos`);
+  // 4 parts. videos.list quota = 1 unit per call regardless of part count.
+  // We deliberately do NOT request `commentThreads` here — comment text
+  // is out of scope per the 2026-04-29 user directive.
+  url.searchParams.set('part', 'snippet,contentDetails,statistics,topicDetails');
+  url.searchParams.set('id', videoIds.join(','));
+  url.searchParams.set('key', apiKey);
+
+  const f = fetchFn ?? fetch;
+  const res = await f(url.toString());
+  if (!res.ok) {
+    let msg = '';
+    try {
+      const body = (await res.json()) as YouTubeVideosFullResponse;
+      msg = body.error?.message ?? '';
+    } catch {
+      // ignore
+    }
+    throw new Error(`videos.list HTTP ${res.status}${msg ? ` — ${msg}` : ''}`);
+  }
+  const body = (await res.json()) as YouTubeVideosFullResponse;
+  if (body.error) throw new Error(`videos.list error: ${body.error.message}`);
+  return body.items ?? [];
+}
+
+/**
+ * Convert a YouTube `topicDetails.topicCategories` URL (Wikipedia) to a
+ * lowercase slug. Examples:
+ *   https://en.wikipedia.org/wiki/Health   → 'health'
+ *   https://en.wikipedia.org/wiki/Lifestyle_(sociology) → 'lifestyle'
+ *   https://en.wikipedia.org/wiki/Mind     → 'mind'
+ *
+ * Strips trailing `_(disambig)` parens, replaces underscores with empty
+ * (so multi-word topics collapse), lowercases.
+ */
+export function topicCategoryUrlToSlug(url: string): string {
+  const m = url.match(/\/wiki\/([^?#]+)/);
+  if (!m) return '';
+  const raw = decodeURIComponent(m[1] ?? '').trim();
+  // Drop trailing parenthetical disambiguation: "Lifestyle_(sociology)" → "Lifestyle"
+  const noDisamb = raw.replace(/_\([^)]*\)$/u, '');
+  return noDisamb.replace(/_/g, '').toLowerCase();
 }
 
 /**
