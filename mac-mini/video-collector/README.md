@@ -9,11 +9,16 @@ dedupes via `ON CONFLICT (youtube_video_id) DO NOTHING`.
 
 | Slot | Pct | Source                                   | Output    |
 |------|-----|------------------------------------------|-----------|
-| S1   | 40% | yt-dlp trending feed (KR + US)           | bare IDs  |
-| S2   | 25% | Naver DataLab → keywords → yt-dlp search (concurrency=10) | bare IDs |
-| S2b  |  -  | Google Trends (pytrends) fallback when Naver < 8 keywords | bare IDs |
-| S3   | 20% | YouTube Data API `chart=mostPopular`     | full meta |
+| S1   | 40% | YT Data API `mostPopular` per `videoCategoryId` (10 cats × KR/US) | full meta |
+| S2   | 25% | Naver DataLab (split 5+4 groups) → keywords → yt-dlp search (concurrency=10) | bare IDs |
+| S3   | 20% | YT Data API `chart=mostPopular` generic (KR + US, max 50/region) | full meta |
 | S4   | 15% | 9-domain × 5 trendy keywords, top 50% per cell (concurrency=10) | bare IDs |
+
+**Note (CP438 smoke 2026-04-29)**: yt-dlp `/feed/trending` was retired
+because YouTube discontinued the public trending URL (now redirects to
+home). Google Trends fallback was retired because pytrends
+`trending_searches()` returns 404. Both source slots are absorbed into
+the YT Data API path.
 
 Bare IDs are enriched via YouTube Data API `videos.list` (50/call,
 1 quota/call). 1000-video run consumes ~20 quota + WebShare proxy
@@ -55,11 +60,9 @@ WEBSHARE_PASSWORD=...
 # Optional knobs:
 COLLECT_TARGET_TOTAL=1000      # default (was 175 before CP438 phase 2)
 COLLECT_DRY_RUN=1              # set to skip POST (debug)
-S2_CONCURRENCY=10              # parallel yt-dlp search for Naver/Trends keywords
+S2_CONCURRENCY=10              # parallel yt-dlp search for Naver keywords
 S4_CONCURRENCY=10              # parallel yt-dlp search for 9-domain × 5 keywords
 YTDLP_BIN=/opt/homebrew/bin/yt-dlp
-UV_BIN=/opt/homebrew/bin/uv
-UV_PROJECT_DIR=/Users/jamesjk/code/video-dictionary
 ```
 
 ## Manual run (CP438 phase 1 — pre-cron)
