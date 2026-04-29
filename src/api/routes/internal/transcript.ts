@@ -32,6 +32,16 @@ import {
 import { bridgeV2ToOntology } from '@/modules/ontology/v2-bridge';
 import { Prisma as PrismaCli } from '@prisma/client';
 import { logger } from '@/utils/logger';
+import { computeV2Quality } from '@/modules/metrics/v2-quality-metrics';
+import { recordPipelineEvent } from '@/modules/metrics/pipeline-events';
+import { config } from '@/config/index';
+
+/**
+ * Round id stamped onto every pipeline_events payload — sourced from the
+ * zod-validated `PIPELINE_EVENTS_ROUND` env via `src/config/`. Increment
+ * the env value when starting a new measurement batch.
+ */
+const PIPELINE_EVENTS_ROUND = config.pipelineEvents.round;
 
 const log = logger.child({ module: 'api/internal/transcript' });
 
@@ -205,6 +215,38 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         });
       } catch (err) {
         log.warn('v2-bridge failed (non-fatal)', {
+          videoId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      // CP437 — paper §6.2 measurement: per-event quality metrics. Pulls
+      // the title from youtube_videos so M1 (title-word recall in atoms)
+      // can be computed; falls back to summary.core.one_liner when absent.
+      try {
+        const segments = body.segments as
+          | { atoms?: Array<{ text?: string; timestamp_sec?: number | null }> }
+          | undefined;
+        const titleRow = await prisma.$queryRaw<{ title: string | null }[]>(Prisma.sql`
+          SELECT title FROM youtube_videos WHERE youtube_video_id = ${videoId} LIMIT 1
+        `);
+        const title = titleRow[0]?.title ?? summary.core.one_liner ?? '';
+        const quality = computeV2Quality({ title, atoms: segments?.atoms ?? [] });
+        await recordPipelineEvent({
+          stage: 'rich_summary_v2',
+          videoId,
+          payload: {
+            M1: quality.M1,
+            M3_class: quality.M3_class,
+            M3_score: quality.M3_score,
+            S: quality.S,
+            null_ratio: quality.null_ratio,
+            round: PIPELINE_EVENTS_ROUND,
+            meta: quality.meta,
+          },
+        });
+      } catch (err) {
+        log.warn('pipeline_events emit failed (non-fatal)', {
           videoId,
           error: err instanceof Error ? err.message : String(err),
         });

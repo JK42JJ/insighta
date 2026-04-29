@@ -1861,3 +1861,17 @@ model llm_call_logs {
   @@index([model])
   @@schema("public")
 }
+
+/// Per-event quality measurement (CP437 paper §6.2).
+/// payload shape (rich_summary_v2 stage): { M1, M3_class, M3_score, S, round }
+model pipeline_events {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stage      String
+  video_id   String
+  payload    Json     @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([stage, video_id])
+  @@index([created_at(sort: Desc)])
+  @@schema("public")
+}

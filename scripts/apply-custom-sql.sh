@@ -61,6 +61,7 @@ APPLY_FILES=(
   "prisma/migrations/video_chunk_embeddings/001_create_table.sql"
   "prisma/migrations/video_rich_summaries/001_add_user_id.sql"
   "prisma/migrations/wizard-precompute/001_table.sql"
+  "prisma/migrations/pipeline-events/001_create_pipeline_events.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
