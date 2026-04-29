@@ -115,6 +115,7 @@ export const RICH_SUMMARY_V2_LAYERED_PROMPT = `You are a learning content analys
 Video title: {title}
 Video description: {description}
 Channel: {channel}
+Transcript (when available; empty otherwise): {transcript_block}
 
 Respond with this exact JSON structure (no extra keys, no comments):
 {{
@@ -162,7 +163,8 @@ Field rules:
 
 Output rules:
 - Return JSON only — no markdown fences, no commentary, no chain-of-thought.
-- Use {language} consistently across every string field (Korean if 'ko', English if 'en').`;
+- Use {language} consistently across every string field (Korean if 'ko', English if 'en').
+- When the Transcript block is non-empty, prefer transcript content over description/title for evidence in qa_pairs.a and analysis.core_argument. When empty, fall back to title + description.`;
 
 // ============================================================================
 // Prompt fill helper
@@ -173,13 +175,32 @@ export interface PromptInput {
   description: string;
   channel: string;
   language: 'ko' | 'en';
+  /**
+   * Optional transcript text. When provided, the LLM is instructed to
+   * prefer transcript-derived evidence over description/title. The
+   * transcript is truncated to TRANSCRIPT_MAX_CHARS to stay within
+   * provider token limits.
+   */
+  transcript?: string;
 }
+
+/**
+ * Hard limit on transcript chars passed to the LLM. ~6,000 Korean chars ≈
+ * ~3,000 tokens — leaves room for system prompt + JSON output budget under
+ * 4,096 max tokens.
+ */
+export const TRANSCRIPT_MAX_CHARS = 6000;
 
 export function buildV2Prompt(input: PromptInput): string {
   const languageLabel = input.language === 'ko' ? 'Korean' : 'English';
+  const transcriptBlock =
+    input.transcript && input.transcript.length > 0
+      ? input.transcript.slice(0, TRANSCRIPT_MAX_CHARS)
+      : '(no transcript)';
   return RICH_SUMMARY_V2_LAYERED_PROMPT.replace(/\{title\}/g, input.title.slice(0, 200))
     .replace(/\{description\}/g, input.description.slice(0, 800))
     .replace(/\{channel\}/g, input.channel.slice(0, 80))
+    .replace(/\{transcript_block\}/g, transcriptBlock)
     .replace(/\{language\}/g, input.language)
     .replace(/\{language_label\}/g, languageLabel);
 }

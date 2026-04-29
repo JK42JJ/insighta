@@ -28,6 +28,7 @@ import { skillRoutes } from './routes/skills';
 import { copilotKitRoutes } from './routes/copilotkit';
 import { internalBatchVideoCollectorRoutes } from './routes/internal/batch-video-collector';
 import { internalTrendCollectorRoutes } from './routes/internal/trend-collector';
+import { internalTranscriptRoutes } from './routes/internal/transcript';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
@@ -43,6 +44,10 @@ import {
   startRichSummaryV2Cron,
   stopRichSummaryV2Cron,
 } from '../modules/scheduler/rich-summary-v2-cron';
+import {
+  startYouTubeMetadataCron,
+  stopYouTubeMetadataCron,
+} from '../modules/scheduler/youtube-metadata-cron';
 
 // Load environment variables
 dotenv.config();
@@ -295,6 +300,10 @@ export async function buildServer() {
       await instance.register(internalTrendCollectorRoutes, {
         prefix: '/internal/skills',
       });
+      // CP437 — Mac Mini transcript pipeline (yt-dlp memory-only).
+      await instance.register(internalTranscriptRoutes, {
+        prefix: '/internal',
+      });
     },
     { prefix: '/api/v1' }
   );
@@ -505,6 +514,15 @@ export async function startServer() {
       fastify.log.warn({ err }, 'RichSummaryV2Cron init failed (non-fatal)');
     }
 
+    // CP437 — YouTube metadata backfill cron (videos.list parts expansion).
+    // Default OFF; flip YOUTUBE_METADATA_BACKFILL_ENABLED=true once the
+    // 6 new columns are ready to receive data.
+    try {
+      startYouTubeMetadataCron();
+    } catch (err) {
+      fastify.log.warn({ err }, 'YouTubeMetadataCron init failed (non-fatal)');
+    }
+
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
@@ -525,6 +543,11 @@ export async function startServer() {
       }
       try {
         stopRichSummaryV2Cron();
+      } catch {
+        /* ignore */
+      }
+      try {
+        stopYouTubeMetadataCron();
       } catch {
         /* ignore */
       }

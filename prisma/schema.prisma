@@ -881,6 +881,18 @@ model youtube_videos {
   published_at           DateTime?                @db.Timestamptz(6)
   view_count             BigInt?
   like_count             BigInt?
+  /// CP437 (2026-04-29) — full metadata expansion.
+  /// Raw SQL DDL: prisma/migrations/youtube-metadata-v2/001_add_fields.sql
+  /// Populated by youtube-metadata-cron + new save paths in collectors.
+  comment_count          BigInt?
+  tags                   String[]
+  topic_categories       String[]
+  has_caption            Boolean?
+  default_language       String?                  @db.VarChar(10)
+  metadata_fetched_at    DateTime?                @db.Timestamptz(6)
+  /// CP437 transcript pipeline (Mac Mini yt-dlp). Stamped on summary
+  /// success; transcript text itself is never persisted.
+  transcript_fetched_at  DateTime?                @db.Timestamptz(6)
   created_at             DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
   userState              UserVideoState[]
@@ -890,6 +902,8 @@ model youtube_videos {
   youtube_playlist_items youtube_playlist_items[]
   youtube_watch_history  youtube_watch_history[]
 
+  @@index([metadata_fetched_at], map: "idx_youtube_videos_metadata_fetched_at")
+  @@index([transcript_fetched_at], map: "idx_youtube_videos_transcript_fetched_at")
   @@schema("public")
 }
 
