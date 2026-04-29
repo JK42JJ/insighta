@@ -29,6 +29,7 @@ import { copilotKitRoutes } from './routes/copilotkit';
 import { internalBatchVideoCollectorRoutes } from './routes/internal/batch-video-collector';
 import { internalTrendCollectorRoutes } from './routes/internal/trend-collector';
 import { internalTranscriptRoutes } from './routes/internal/transcript';
+import { internalVideosBulkUpsertRoutes } from './routes/internal/videos-bulk-upsert';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
@@ -302,6 +303,10 @@ export async function buildServer() {
       });
       // CP437 — Mac Mini transcript pipeline (yt-dlp memory-only).
       await instance.register(internalTranscriptRoutes, {
+        prefix: '/internal',
+      });
+      // CP438 — Mac Mini new-collector bulk video metadata upsert.
+      await instance.register(internalVideosBulkUpsertRoutes, {
         prefix: '/internal',
       });
     },
