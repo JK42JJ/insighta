@@ -25,6 +25,7 @@ import { getPrismaClient } from '@/modules/database/client';
 import { generateRichSummaryV2 } from '@/modules/skills/rich-summary-v2-generator';
 import {
   validateV2Layered,
+  validateV2Segments,
   scoreCompleteness,
   V2ValidationError,
 } from '@/modules/skills/rich-summary-v2-prompt';
@@ -135,6 +136,10 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
     let summary;
     try {
       summary = validateV2Layered({ core: body.core, analysis: body.analysis, lora: body.lora });
+      // Strict key whitelist on segments — catches start_sec/end_sec/ts_sec
+      // class typos at the API boundary so the bridge never silently stores
+      // 0/null (CP437 incident).
+      validateV2Segments(body.segments);
     } catch (err) {
       const path = err instanceof V2ValidationError ? err.path : '';
       const msg = err instanceof Error ? err.message : String(err);
