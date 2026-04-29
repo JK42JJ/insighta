@@ -12,6 +12,7 @@
 function stripVtt(vtt: string): string {
   const lines = vtt.split(/\r?\n/);
   const out: string[] = [];
+  let prev = '';
   for (const line of lines) {
     const t = line.trim();
     if (!t) continue;
@@ -21,7 +22,9 @@ function stripVtt(vtt: string): string {
     if (/^Kind:|^Language:/i.test(t)) continue;
     const stripped = t.replace(/<[^>]+>/g, '').trim();
     if (stripped.length === 0) continue;
+    if (stripped === prev) continue;
     out.push(stripped);
+    prev = stripped;
   }
   return out.join(' ');
 }
@@ -77,5 +80,20 @@ Language: ko
   test('handles \\r\\n line endings (Windows-style)', () => {
     const vtt = 'WEBVTT\r\n\r\n00:00:00.000 --> 00:00:02.000\r\nhello world\r\n';
     expect(stripVtt(vtt)).toBe('hello world');
+  });
+
+  test('dedupes consecutive identical lines (YouTube auto-subs overlap)', () => {
+    const vtt = `WEBVTT
+
+00:00:00.000 --> 00:00:02.000
+첫 번째 자막
+
+00:00:02.000 --> 00:00:04.000
+첫 번째 자막
+
+00:00:04.000 --> 00:00:06.000
+두 번째 자막
+`;
+    expect(stripVtt(vtt)).toBe('첫 번째 자막 두 번째 자막');
   });
 });

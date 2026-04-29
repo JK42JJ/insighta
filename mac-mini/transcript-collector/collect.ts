@@ -1,24 +1,38 @@
 /**
  * Mac Mini transcript collector (CP437, 2026-04-29).
  *
- * Runs ON the Mac Mini (NOT on EC2). Hits the EC2 internal API to:
- *   1. Pull a batch of candidate video IDs (`has_caption=true,
- *      transcript_fetched_at IS NULL`).
- *   2. Pipe yt-dlp stdout (auto-subs, vtt) into memory.
- *   3. Strip VTT timing → plain text.
- *   4. POST the transcript to /transcript/summarize. EC2 calls
- *      generateRichSummaryV2() with it and stamps transcript_fetched_at.
- *   5. Discard the transcript text immediately.
+ * Runs ON the Mac Mini (NOT on EC2). Fetches candidate video IDs from EC2,
+ * pulls Korean (or English) auto-captions via yt-dlp, strips VTT timing,
+ * and writes the cleaned transcript text to a local staging directory for
+ * later CC-direct review.
  *
- * Legal directive: the transcript NEVER touches disk on either side.
- * yt-dlp is invoked with `-o -` (stdout) and the response stream is
- * collected into a buffer in process memory only.
+ *   1. GET  /api/v1/internal/transcript/candidates?limit=N
+ *      → list of (youtube_video_id, default_language, has_caption)
+ *   2. yt-dlp into a per-run tmp dir (the `-o -` stdout pattern does NOT
+ *      work for VTT subs — yt-dlp writes nothing to stdout in that mode,
+ *      so we write to disk and read back).
+ *   3. Strip VTT timing → plain text.
+ *   4. Write the cleaned transcript to `${OUTPUT_DIR}/<video_id>.txt`
+ *      and a one-line metadata row to `${OUTPUT_DIR}/_index.csv`.
+ *   5. NO POST to EC2 — CC reads transcripts manually, authors v2 layered
+ *      JSON, and POSTs to `/v2-summary/upsert-direct` (Hard Rule: no LLM
+ *      API call from Mac Mini, server, or any auto path).
+ *
+ * Lifetime: transcripts are written to disk on Mac Mini only and live
+ * until CC consumes them; the operator (or a separate cleanup cron) is
+ * responsible for `rm -rf` after CC has authored the v2 JSON. The original
+ * "NEVER touches disk" directive is relaxed because authoring v2 from
+ * transcripts requires CC to read full text — which means the file must
+ * persist long enough to be read.
  *
  * Bot 절대 규칙: this script never opens a Postgres connection. It only
- * speaks HTTP to the EC2 API.
+ * speaks HTTP to the EC2 candidates endpoint, then operates locally.
  */
 
 import { spawn } from 'node:child_process';
+import { mkdirSync, writeFileSync, appendFileSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 interface Candidate {
   youtube_video_id: string;
@@ -29,18 +43,6 @@ interface Candidate {
 interface CandidatesResponse {
   videos: Candidate[];
 }
-
-interface SummarizeOutcomePass {
-  kind: 'pass';
-  videoId: string;
-  completeness: number;
-}
-interface SummarizeOutcomeOther {
-  kind: 'low' | 'skip';
-  videoId: string;
-  reason?: string;
-}
-type SummarizeOutcome = SummarizeOutcomePass | SummarizeOutcomeOther;
 
 const env = process.env;
 
@@ -55,6 +57,7 @@ const PER_VIDEO_TIMEOUT_MS = Math.max(
   Number(env['TRANSCRIPT_YTDLP_TIMEOUT_MS'] ?? '60000') || 60_000
 );
 const YTDLP_BIN = (env['YTDLP_BIN'] ?? 'yt-dlp').trim();
+const OUTPUT_DIR = (env['TRANSCRIPT_OUTPUT_DIR'] ?? '/tmp/insighta-transcripts').trim();
 
 if (!API_URL) {
   console.error('INSIGHTA_API_URL env required');
@@ -78,13 +81,15 @@ async function fetchCandidates(): Promise<Candidate[]> {
 }
 
 /**
- * Run yt-dlp and capture the auto-generated subtitle to stdout. Saves
- * NOTHING to disk (`-o -` and `--skip-download`).
- *
- * Returns plain text (VTT timing stripped) or null when no captions are
- * actually available (yt-dlp succeeds but produces empty output).
+ * Run yt-dlp into a fresh tmp dir, return the cleaned transcript text.
+ * yt-dlp does NOT pipe VTT subs to stdout when `-o -` is used (it writes
+ * nothing in that mode), so we route output through disk and read back.
+ * The tmp dir is removed before this function returns.
  */
 async function fetchTranscript(videoId: string, language: 'ko' | 'en'): Promise<string | null> {
+  const sessionDir = join(tmpdir(), `insighta-yt-${process.pid}-${Date.now()}`);
+  mkdirSync(sessionDir, { recursive: true });
+
   const args = [
     '--skip-download',
     '--write-auto-sub',
@@ -95,12 +100,12 @@ async function fetchTranscript(videoId: string, language: 'ko' | 'en'): Promise<
     '--quiet',
     '--no-warnings',
     '-o',
-    '-',
+    `${sessionDir}/%(id)s`,
     `https://www.youtube.com/watch?v=${videoId}`,
   ];
+
   return new Promise((resolve, reject) => {
     const child = spawn(YTDLP_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    const chunks: Buffer[] = [];
     let stderr = '';
     let done = false;
     const timer = setTimeout(() => {
@@ -111,10 +116,14 @@ async function fetchTranscript(videoId: string, language: 'ko' | 'en'): Promise<
       } catch {
         /* ignore */
       }
+      try {
+        rmSync(sessionDir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
       reject(new Error(`yt-dlp timeout after ${PER_VIDEO_TIMEOUT_MS}ms for ${videoId}`));
     }, PER_VIDEO_TIMEOUT_MS);
 
-    child.stdout.on('data', (b: Buffer) => chunks.push(b));
     child.stderr.on('data', (b: Buffer) => {
       stderr += b.toString('utf-8');
     });
@@ -122,6 +131,11 @@ async function fetchTranscript(videoId: string, language: 'ko' | 'en'): Promise<
       if (done) return;
       done = true;
       clearTimeout(timer);
+      try {
+        rmSync(sessionDir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
       reject(err);
     });
     child.on('close', (code) => {
@@ -129,10 +143,28 @@ async function fetchTranscript(videoId: string, language: 'ko' | 'en'): Promise<
       done = true;
       clearTimeout(timer);
       if (code !== 0) {
+        try {
+          rmSync(sessionDir, { recursive: true, force: true });
+        } catch {
+          /* ignore */
+        }
         reject(new Error(`yt-dlp exit ${code} for ${videoId}: ${stderr.slice(0, 200)}`));
         return;
       }
-      const raw = Buffer.concat(chunks).toString('utf-8');
+      // yt-dlp writes `<sessionDir>/<videoId>.<lang>.vtt`. Read it, strip,
+      // then delete the tmp dir. We do not keep the raw VTT file.
+      const vttPath = join(sessionDir, `${videoId}.${language}.vtt`);
+      let raw = '';
+      try {
+        raw = readFileSync(vttPath, 'utf-8');
+      } catch {
+        // No VTT → no captions. Empty result.
+      }
+      try {
+        rmSync(sessionDir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
       const text = stripVtt(raw);
       resolve(text.length > 0 ? text : null);
     });
@@ -148,6 +180,7 @@ async function fetchTranscript(videoId: string, language: 'ko' | 'en'): Promise<
 export function stripVtt(vtt: string): string {
   const lines = vtt.split(/\r?\n/);
   const out: string[] = [];
+  let prev = '';
   for (const line of lines) {
     const t = line.trim();
     if (!t) continue;
@@ -158,30 +191,11 @@ export function stripVtt(vtt: string): string {
     // Strip inline tags like <00:00:01.000><c> ... </c>
     const stripped = t.replace(/<[^>]+>/g, '').trim();
     if (stripped.length === 0) continue;
+    if (stripped === prev) continue;
     out.push(stripped);
+    prev = stripped;
   }
   return out.join(' ');
-}
-
-async function postSummary(
-  videoId: string,
-  transcript: string,
-  language: 'ko' | 'en'
-): Promise<SummarizeOutcome> {
-  const url = `${API_URL.replace(/\/$/, '')}/api/v1/internal/transcript/summarize`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-internal-token': INTERNAL_TOKEN,
-    },
-    body: JSON.stringify({ videoId, transcript, language }),
-  });
-  if (res.status === 401 || res.status === 503) {
-    throw new Error(`summarize HTTP ${res.status}`);
-  }
-  const data = (await res.json()) as SummarizeOutcome;
-  return data;
 }
 
 async function pickLanguage(c: Candidate): Promise<'ko' | 'en'> {
@@ -189,10 +203,17 @@ async function pickLanguage(c: Candidate): Promise<'ko' | 'en'> {
   return 'ko';
 }
 
+/** Append a one-line metadata row so an operator can see what was fetched. */
+function indexAppend(line: string): void {
+  appendFileSync(join(OUTPUT_DIR, '_index.csv'), line + '\n', 'utf-8');
+}
+
 async function main(): Promise<void> {
+  mkdirSync(OUTPUT_DIR, { recursive: true });
   console.log(
-    `[transcript-collector] start — API=${API_URL} batch=${BATCH_SIZE} ytdlp=${YTDLP_BIN}`
+    `[transcript-collector] start — API=${API_URL} batch=${BATCH_SIZE} ytdlp=${YTDLP_BIN} out=${OUTPUT_DIR}`
   );
+
   let candidates: Candidate[];
   try {
     candidates = await fetchCandidates();
@@ -203,8 +224,8 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   console.log(`[transcript-collector] picked ${candidates.length} candidates`);
-  let pass = 0;
-  let low = 0;
+
+  let saved = 0;
   let skip = 0;
   let errors = 0;
   for (const c of candidates) {
@@ -217,32 +238,25 @@ async function main(): Promise<void> {
       console.warn(
         `[${c.youtube_video_id}] yt-dlp failed: ${err instanceof Error ? err.message : String(err)}`
       );
+      indexAppend(`${new Date().toISOString()},${c.youtube_video_id},${lang},error`);
       continue;
     }
     if (!transcript) {
       skip += 1;
-      console.log(`[${c.youtube_video_id}] no captions (yt-dlp empty) — skipping`);
+      console.log(`[${c.youtube_video_id}] no captions — skipping`);
+      indexAppend(`${new Date().toISOString()},${c.youtube_video_id},${lang},no_captions`);
       continue;
     }
-    try {
-      const outcome = await postSummary(c.youtube_video_id, transcript, lang);
-      if (outcome.kind === 'pass') pass += 1;
-      else if (outcome.kind === 'low') low += 1;
-      else skip += 1;
-      // Discard transcript explicitly: variable goes out of scope here, but
-      // mark for clarity that no further use is allowed.
-      transcript = null;
-    } catch (err) {
-      errors += 1;
-      console.warn(
-        `[${c.youtube_video_id}] summarize failed: ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
+    const txtPath = join(OUTPUT_DIR, `${c.youtube_video_id}.txt`);
+    writeFileSync(txtPath, transcript, 'utf-8');
+    saved += 1;
+    console.log(`[${c.youtube_video_id}] saved ${transcript.length} chars → ${txtPath}`);
+    indexAppend(`${new Date().toISOString()},${c.youtube_video_id},${lang},saved,${transcript.length}`);
   }
   console.log(
-    `[transcript-collector] done — pass=${pass} low=${low} skip=${skip} errors=${errors}`
+    `[transcript-collector] done — saved=${saved} skip=${skip} errors=${errors}. Awaiting CC review (no auto POST).`
   );
-  process.exit(errors > 0 && pass === 0 ? 1 : 0);
+  process.exit(errors > 0 && saved === 0 ? 1 : 0);
 }
 
 main().catch((err) => {
