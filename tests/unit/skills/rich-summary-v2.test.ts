@@ -5,6 +5,7 @@
 import {
   buildV2Prompt,
   validateV2Layered,
+  validateV2Segments,
   scoreCompleteness,
   V2ValidationError,
   PASS_THRESHOLD,
@@ -247,5 +248,65 @@ describe('readRichSummary template_version branch', () => {
     );
     expect(adapted.core).toBeNull();
     expect(adapted.analysis).not.toBeNull();
+  });
+});
+
+describe('validateV2Segments — strict key whitelist (CP437 SSOT)', () => {
+  test('accepts null/undefined segments (optional field)', () => {
+    expect(() => validateV2Segments(null)).not.toThrow();
+    expect(() => validateV2Segments(undefined)).not.toThrow();
+  });
+
+  test('accepts valid sections + atoms shape', () => {
+    expect(() =>
+      validateV2Segments({
+        sections: [{ idx: 0, title: 's0', from_sec: 0, to_sec: 60, summary: 'x' }],
+        atoms: [{ idx: 0, type: 'fact', text: 'a0', timestamp_sec: 30 }],
+      })
+    ).not.toThrow();
+  });
+
+  test("rejects forbidden 'start_sec' with rename hint", () => {
+    expect(() =>
+      validateV2Segments({
+        sections: [{ idx: 0, title: 's', start_sec: 0, to_sec: 60 }],
+      })
+    ).toThrow(/forbidden key 'start_sec'.*from_sec/);
+  });
+
+  test("rejects forbidden 'end_sec' with rename hint", () => {
+    expect(() =>
+      validateV2Segments({
+        sections: [{ idx: 0, title: 's', from_sec: 0, end_sec: 60 }],
+      })
+    ).toThrow(/forbidden key 'end_sec'.*to_sec/);
+  });
+
+  test("rejects forbidden 'ts_sec' on atom with rename hint", () => {
+    expect(() =>
+      validateV2Segments({
+        atoms: [{ idx: 0, type: 'fact', text: 'a', ts_sec: 30 }],
+      })
+    ).toThrow(/forbidden key 'ts_sec'.*timestamp_sec/);
+  });
+
+  test('rejects unknown section key', () => {
+    expect(() =>
+      validateV2Segments({
+        sections: [{ idx: 0, title: 's', from_sec: 0, to_sec: 60, weird_field: 1 }],
+      })
+    ).toThrow(/unknown key 'weird_field'/);
+  });
+
+  test('throws V2ValidationError with structured path', () => {
+    try {
+      validateV2Segments({
+        atoms: [{ idx: 0, type: 'fact', text: 'a', ts_sec: 30 }],
+      });
+      throw new Error('expected to throw');
+    } catch (e) {
+      expect(e).toBeInstanceOf(V2ValidationError);
+      expect((e as V2ValidationError).path).toBe('segments.atoms[0].ts_sec');
+    }
   });
 });

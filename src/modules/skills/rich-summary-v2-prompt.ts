@@ -367,6 +367,109 @@ export function validateV2Layered(parsed: unknown): RichSummaryV2Layered {
 }
 
 // ============================================================================
+// Segments validator — strict key whitelist (CP437 SSOT enforcement)
+// ============================================================================
+
+/**
+ * Allowed keys for segments.sections[i] and segments.atoms[i].
+ *
+ * SSOT (insighta-ontology-data-architecture.md §5.4):
+ *   sections — `idx`, `title`, `from_sec`, `to_sec`, `summary`, `key_points` (optional)
+ *   atoms    — `idx`, `type`, `text`, `timestamp_sec`, `entity_refs` (optional)
+ *
+ * Common typos are explicitly listed in `FORBIDDEN_*` so the error message
+ * tells the author exactly what to rename. The previous incident had bridge
+ * silently storing 0/null when the JSON used `start_sec`/`end_sec`/`ts_sec`
+ * because bridge accepted unknown keys without erroring.
+ */
+const ALLOWED_SECTION_KEYS = new Set([
+  'idx',
+  'title',
+  'from_sec',
+  'to_sec',
+  'summary',
+  'key_points',
+  'relevance_pct',
+]);
+const ALLOWED_ATOM_KEYS = new Set(['idx', 'type', 'text', 'timestamp_sec', 'entity_refs']);
+const FORBIDDEN_SECTION_RENAMES: Record<string, string> = {
+  start_sec: 'from_sec',
+  end_sec: 'to_sec',
+};
+const FORBIDDEN_ATOM_RENAMES: Record<string, string> = {
+  ts_sec: 'timestamp_sec',
+};
+
+/**
+ * Validate `segments` (optional, when present in `upsert-direct` body) —
+ * throws `V2ValidationError` on first unknown key. Pass-through when null
+ * or undefined (segments are optional).
+ *
+ * Catches the field-name mismatch class of bugs at the API boundary so
+ * downstream bridge code never sees `start_sec`/`ts_sec` etc.
+ */
+export function validateV2Segments(segments: unknown): void {
+  if (segments === null || segments === undefined) return;
+  if (typeof segments !== 'object') {
+    throw new V2ValidationError('segments must be an object', 'segments');
+  }
+  const seg = segments as Record<string, unknown>;
+
+  if (seg['sections'] !== undefined) {
+    if (!Array.isArray(seg['sections'])) {
+      throw new V2ValidationError('segments.sections must be an array', 'segments.sections');
+    }
+    seg['sections'].forEach((s, i) => {
+      if (!s || typeof s !== 'object') {
+        throw new V2ValidationError(
+          'segments.sections[i] must be an object',
+          `segments.sections[${i}]`
+        );
+      }
+      for (const key of Object.keys(s as Record<string, unknown>)) {
+        if (FORBIDDEN_SECTION_RENAMES[key]) {
+          throw new V2ValidationError(
+            `forbidden key '${key}' — SSOT requires '${FORBIDDEN_SECTION_RENAMES[key]}' (insighta-ontology-data-architecture.md §5.4)`,
+            `segments.sections[${i}].${key}`
+          );
+        }
+        if (!ALLOWED_SECTION_KEYS.has(key)) {
+          throw new V2ValidationError(
+            `unknown key '${key}' (allowed: ${[...ALLOWED_SECTION_KEYS].join(', ')})`,
+            `segments.sections[${i}].${key}`
+          );
+        }
+      }
+    });
+  }
+
+  if (seg['atoms'] !== undefined) {
+    if (!Array.isArray(seg['atoms'])) {
+      throw new V2ValidationError('segments.atoms must be an array', 'segments.atoms');
+    }
+    seg['atoms'].forEach((a, i) => {
+      if (!a || typeof a !== 'object') {
+        throw new V2ValidationError('segments.atoms[i] must be an object', `segments.atoms[${i}]`);
+      }
+      for (const key of Object.keys(a as Record<string, unknown>)) {
+        if (FORBIDDEN_ATOM_RENAMES[key]) {
+          throw new V2ValidationError(
+            `forbidden key '${key}' — SSOT requires '${FORBIDDEN_ATOM_RENAMES[key]}' (insighta-ontology-data-architecture.md §5.4)`,
+            `segments.atoms[${i}].${key}`
+          );
+        }
+        if (!ALLOWED_ATOM_KEYS.has(key)) {
+          throw new V2ValidationError(
+            `unknown key '${key}' (allowed: ${[...ALLOWED_ATOM_KEYS].join(', ')})`,
+            `segments.atoms[${i}].${key}`
+          );
+        }
+      }
+    });
+  }
+}
+
+// ============================================================================
 // Completeness scorer (10 × 0.1 weights, total 1.0; ≥ 0.7 = pass)
 // ============================================================================
 
