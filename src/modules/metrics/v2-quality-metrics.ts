@@ -24,8 +24,16 @@
  * a backfill script.
  */
 
+/**
+ * Korean particles (조사) attached to title content words. Single-character
+ * particles that are also valid content nouns (도 = degree, 나 = I/me) are
+ * INTENTIONALLY EXCLUDED — without morphological analysis we'd kill content
+ * tokens like "의도" (intent → strip 도 → "의" → stopword filter drop).
+ * The ambiguous-strip cost for these particles is small (e.g. "오늘도"
+ * staying as "오늘도" instead of "오늘") compared to the content lost when
+ * we keep them.
+ */
 export const STOPWORDS_KO: ReadonlySet<string> = new Set([
-  // Korean particles (조사) commonly attached to title content words
   '은',
   '는',
   '이',
@@ -41,7 +49,6 @@ export const STOPWORDS_KO: ReadonlySet<string> = new Set([
   '와',
   '과',
   '의',
-  '도',
   '로',
   '으로',
   '만',
@@ -56,7 +63,6 @@ export const STOPWORDS_KO: ReadonlySet<string> = new Set([
   '마다',
   '씩',
   '이나',
-  '나',
   '이며',
   '며',
   '이자',
@@ -65,7 +71,43 @@ export const STOPWORDS_KO: ReadonlySet<string> = new Set([
 ]);
 
 const MIN_ATOMS_REAL = 3;
+/**
+ * General minimum content-token length. Korean single-syllable nouns
+ * (돈/책/물/산/길 etc) are common content words but only 1 char wide,
+ * so we apply the 2-char threshold conditionally — see `isKoreanChar`.
+ */
 const TITLE_MIN_TOKEN_LEN = 2;
+const TITLE_MIN_TOKEN_LEN_KO = 1;
+
+/** Hangul (가-힣) + CJK ideographs → treated as Korean. */
+function isKoreanChar(ch: string): boolean {
+  const c = ch.charCodeAt(0);
+  return (c >= 0xac00 && c <= 0xd7a3) || (c >= 0x4e00 && c <= 0x9fff);
+}
+
+function isKoreanToken(token: string): boolean {
+  for (const ch of token) {
+    if (isKoreanChar(ch)) return true;
+  }
+  return false;
+}
+
+/**
+ * Decode the small set of HTML entities that appear in YouTube titles
+ * pulled via the Data API. Without this, `&#39;나&#39;` tokenizes to
+ * `['39','나']` instead of `['나']`, which destroys M1 recall.
+ */
+function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
 
 export type M3Class = 'all_null' | 'uniform_fake' | 'insufficient' | 'mixed' | 'real';
 
@@ -101,16 +143,20 @@ export interface V2QualityInput {
  * as-is. Returns null when the post-strip stem is too short to count.
  */
 function stripKoreanParticle(token: string): string | null {
-  if (token.length < TITLE_MIN_TOKEN_LEN) return null;
+  // Use Korean-aware min length so single-syllable nouns survive.
+  const minLen = isKoreanToken(token) ? TITLE_MIN_TOKEN_LEN_KO : TITLE_MIN_TOKEN_LEN;
+  if (token.length < minLen) return null;
   // Sort stopwords by length desc so '으로' wins over '로'
   const candidates = [...STOPWORDS_KO].sort((a, b) => b.length - a.length);
   for (const sw of candidates) {
     if (token.length > sw.length && token.endsWith(sw)) {
       const stem = token.slice(0, token.length - sw.length);
-      // If the stripped stem is too short (e.g. '의도' → '도'), the suffix
-      // was likely the second character of a content word, not a particle.
-      // Keep the original token in that case so we don't drop content.
-      if (stem.length < TITLE_MIN_TOKEN_LEN) return token;
+      // If the stripped stem is too short for its language class (e.g.
+      // '의도' → '도' is too short for Korean meaningful content), the
+      // suffix was likely the second character of a content word, not a
+      // particle. Keep the original token in that case.
+      const stemMin = isKoreanToken(stem) ? TITLE_MIN_TOKEN_LEN_KO : TITLE_MIN_TOKEN_LEN;
+      if (stem.length < stemMin) return token;
       return stem;
     }
   }
@@ -118,16 +164,23 @@ function stripKoreanParticle(token: string): string | null {
 }
 
 /**
- * Tokenize title into content tokens. Splits on whitespace + Korean/Latin
- * boundary characters, lowercases Latin, drops single-char tokens, strips
- * particles from each.
+ * Tokenize title into content tokens. Pipeline:
+ *   1. HTML-entity decode (`&#39;` → `'` etc) so YouTube-encoded titles
+ *      tokenize on the actual content characters.
+ *   2. Lowercase (Latin only).
+ *   3. Split on whitespace + punctuation, including the Korean vertical
+ *      bar `ㅣ` (U+3163) and full-width pipe `｜` (U+FF5C) which appear in
+ *      titles like "투자 전략ㅣ지식인초대석".
+ *   4. Drop tokens shorter than the language-aware min (Korean=1, EN=2).
+ *   5. Strip particles, dedupe, drop pure-stopword tokens.
  */
 export function extractTitleTokens(title: string): string[] {
   if (!title) return [];
-  const raw = title
+  const decoded = decodeHtmlEntities(title);
+  const raw = decoded
     .toLowerCase()
-    .split(/[\s\-_·,/()[\]{}<>!?@#$%^&*+=|\\~`"'.;:]+/u)
-    .filter((t) => t.length >= TITLE_MIN_TOKEN_LEN);
+    .split(/[\s\-_·,/()[\]{}<>!?@#$%^&*+=|\\~`"'.;:ㅣ｜]+/u)
+    .filter((t) => t.length >= (isKoreanToken(t) ? TITLE_MIN_TOKEN_LEN_KO : TITLE_MIN_TOKEN_LEN));
   const out = new Set<string>();
   for (const t of raw) {
     const stem = stripKoreanParticle(t);
