@@ -194,10 +194,12 @@ async function main(): Promise<void> {
   let s2Keywords: string[] = [];
   let s2Diagnostics: Record<string, unknown> = {};
   if (env.naverClientId && env.naverClientSecret) {
+    // topN=9 → all 9 Insighta domains covered (CP438 smoke 2: top4 left
+    // 5 domains unrepresented in S2, hurting cross-domain diversity).
     const naver = await collectNaverDataLab({
       clientId: env.naverClientId,
       clientSecret: env.naverClientSecret,
-      topN: 4,
+      topN: 9,
     });
     s2Keywords = naver.keywords;
     s2Diagnostics = { naver: naver.diagnostics };
