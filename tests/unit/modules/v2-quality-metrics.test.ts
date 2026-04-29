@@ -20,16 +20,60 @@ describe('extractTitleTokens — Korean particle stripping', () => {
     expect(t).toEqual(expect.arrayContaining(['introducing', 'claude', 'code']));
   });
 
-  test('drops single-char tokens', () => {
+  test('drops single-char English tokens (KO single-char retained)', () => {
+    // English: 'A', 'B' dropped (TITLE_MIN_TOKEN_LEN=2).
+    // Korean: '가', '나' kept (TITLE_MIN_TOKEN_LEN_KO=1) — but '가' is in
+    // STOPWORDS_KO so it's filtered. '나' was removed from stopwords for
+    // ambiguity reasons (1인칭 vs particle), so it stays.
     const t = extractTitleTokens('A B 가 나');
-    expect(t).toEqual([]);
+    expect(t).toEqual(['나']);
   });
 
   test("'으로' and '로' both stripped (longest-suffix wins)", () => {
     const t = extractTitleTokens('어원으로 푸는 삼각함수');
     expect(t).toContain('어원');
-    expect(t).toContain('푸는');
+    // '푸는' → strip 는 → '푸' (KO single-char, retained).
+    // For M1 substring-match scoring this still hits '푸시', '푸른' etc;
+    // the aggressive-strip residue noise is acceptable as the dominant
+    // mode is 단음절 명사 ('돈', '책', '길') recall (CP437 RCA).
+    expect(t).toContain('푸');
     expect(t).toContain('삼각함수');
+  });
+
+  test('decodes HTML entities (&#39; &quot; &amp;) before tokenizing', () => {
+    const t = extractTitleTokens('&#39;나&#39;라는 것이 있나? &quot;사랑&quot; &amp; 행복');
+    expect(t).toContain('나');
+    expect(t).toContain('사랑');
+    expect(t).toContain('행복');
+    expect(t).not.toContain('39'); // entity numeric should not leak as token
+    expect(t).not.toContain('quot');
+    expect(t).not.toContain('amp');
+  });
+
+  test("Korean vertical bar 'ㅣ' splits as punctuation", () => {
+    const t = extractTitleTokens('투자 전략ㅣ지식인초대석');
+    expect(t).toContain('투자');
+    expect(t).toContain('전략');
+    expect(t).toContain('지식인초대석');
+    expect(t).not.toContain('전략ㅣ지식인초대석');
+  });
+
+  test('Korean single-syllable nouns are kept (TITLE_MIN_TOKEN_LEN_KO=1)', () => {
+    const t = extractTitleTokens('적은 돈을 큰 돈으로 불리는');
+    // '돈을' → strip '을' → '돈' (KO single-syllable, kept) ← key recall win
+    // '돈으로' → strip '으로' → '돈' (kept)
+    // '큰' → length 1 KO content, kept
+    // '적은' → strip '은' → '적' (kept; verb-adjective stem residue)
+    // '불리는' → strip '는' → '불리' (kept)
+    expect(t).toContain('돈');
+    expect(t).toContain('큰');
+    expect(t).toContain('적');
+    expect(t).toContain('불리');
+  });
+
+  test('English single-char tokens still dropped (no false positives)', () => {
+    const t = extractTitleTokens('A B C abc');
+    expect(t).toEqual(['abc']);
   });
 });
 
