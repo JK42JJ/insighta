@@ -19,7 +19,11 @@ export interface VideoMeta {
 }
 
 export interface SourceResult {
-  source: 'ytdlp_trending' | 'naver_datalab' | 'google_trends' | 'youtube_mostpopular' | 'domain_keywords';
+  source:
+    | 'category_mostpopular'
+    | 'naver_datalab'
+    | 'youtube_mostpopular'
+    | 'domain_keywords';
   region?: 'KR' | 'US' | 'global';
   /** Already-enriched rows (from sources that return metadata directly). */
   videos: VideoMeta[];
