@@ -67,7 +67,6 @@ interface CandidateRow {
   yv_title: string | null;
   yv_description: string | null;
   yv_channel_title: string | null;
-  yv_channel_id: string | null;
   yv_view_count: bigint | null;
   yv_like_count: bigint | null;
   yv_duration_seconds: number | null;
@@ -122,7 +121,6 @@ export async function promoteV2ToVideoPool(opts: PromoteOptions = {}): Promise<P
       yv.title              AS yv_title,
       yv.description        AS yv_description,
       yv.channel_title      AS yv_channel_title,
-      yv.channel_id         AS yv_channel_id,
       yv.view_count         AS yv_view_count,
       yv.like_count         AS yv_like_count,
       yv.duration_seconds   AS yv_duration_seconds,
@@ -215,7 +213,6 @@ export async function promoteV2ToVideoPool(opts: PromoteOptions = {}): Promise<P
       const titleSafe = c.yv_title.slice(0, 5000);
       const descSafe = c.yv_description ? c.yv_description.slice(0, 5000) : null;
       const channelSafe = c.yv_channel_title ? c.yv_channel_title.slice(0, 200) : null;
-      const channelIdSafe = c.yv_channel_id ? c.yv_channel_id.slice(0, 30) : null;
       const langSafe = (c.yv_default_language ?? c.source_language ?? 'ko').slice(0, 5);
 
       await prisma.video_pool.create({
@@ -224,7 +221,10 @@ export async function promoteV2ToVideoPool(opts: PromoteOptions = {}): Promise<P
           title: titleSafe,
           description: descSafe,
           channel_name: channelSafe,
-          channel_id: channelIdSafe,
+          // channel_id intentionally null — youtube_videos table doesn't
+          // store the channel UC* id (only channel_title). Could be
+          // backfilled later via a separate metadata-enrich pass.
+          channel_id: null,
           view_count: c.yv_view_count ?? BigInt(0),
           like_count: c.yv_like_count ?? BigInt(0),
           duration_seconds: c.yv_duration_seconds,

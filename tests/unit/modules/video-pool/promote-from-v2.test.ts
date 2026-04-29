@@ -33,7 +33,6 @@ const baseRow = {
   yv_title: 'Title',
   yv_description: null,
   yv_channel_title: null,
-  yv_channel_id: null,
   yv_view_count: BigInt(100),
   yv_like_count: BigInt(10),
   yv_duration_seconds: 600,
