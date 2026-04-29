@@ -35,6 +35,7 @@ import { logger } from '@/utils/logger';
 import { computeV2Quality } from '@/modules/metrics/v2-quality-metrics';
 import { recordPipelineEvent } from '@/modules/metrics/pipeline-events';
 import { config } from '@/config/index';
+import { promoteV2ToVideoPool } from '@/modules/video-pool/promote-from-v2';
 
 /**
  * Round id stamped onto every pipeline_events payload — sourced from the
@@ -258,6 +259,31 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
           error: err instanceof Error ? err.message : String(err),
         });
       }
+
+      // CP438 — auto-promote this v2 row into video_pool so the recommender
+      // can surface it. Non-blocking: any error here is logged + recorded
+      // to pipeline_events (`stage='promote_from_v2'`) but never breaks
+      // the upsert response. Limit=1 so a single upsert triggers a single
+      // promotion (subsequent v2 backlog is drained by the cron path).
+      setImmediate(() => {
+        promoteV2ToVideoPool({ limit: 1, dryRun: false })
+          .then((result) => {
+            log.info('post-upsert promote done', {
+              videoId,
+              ...result,
+              errors: result.errors.length,
+            });
+          })
+          .catch(async (err) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            log.warn('post-upsert promote failed (non-fatal)', { videoId, error: msg });
+            await recordPipelineEvent({
+              stage: 'promote_from_v2',
+              videoId,
+              payload: { error: msg.slice(0, 500), round: PIPELINE_EVENTS_ROUND },
+            }).catch(() => {});
+          });
+      });
 
       return reply.code(200).send({
         kind: 'pass',
