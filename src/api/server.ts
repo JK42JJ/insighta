@@ -30,6 +30,7 @@ import { internalBatchVideoCollectorRoutes } from './routes/internal/batch-video
 import { internalTrendCollectorRoutes } from './routes/internal/trend-collector';
 import { internalTranscriptRoutes } from './routes/internal/transcript';
 import { internalVideosBulkUpsertRoutes } from './routes/internal/videos-bulk-upsert';
+import { internalVideoPoolPromoteRoutes } from './routes/internal/video-pool-promote';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
@@ -307,6 +308,11 @@ export async function buildServer() {
       });
       // CP438 — Mac Mini new-collector bulk video metadata upsert.
       await instance.register(internalVideosBulkUpsertRoutes, {
+        prefix: '/internal',
+      });
+      // CP438 — promote v2 layered summaries into video_pool (batched,
+      // embedding via Mac Mini Ollama, INSERT only).
+      await instance.register(internalVideoPoolPromoteRoutes, {
         prefix: '/internal',
       });
     },
