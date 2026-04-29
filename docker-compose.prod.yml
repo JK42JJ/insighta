@@ -120,6 +120,11 @@ services:
       # CP437 (2026-04-29) — DISABLED per user directive: 무조건적인 API 사용금지.
       # YouTube Data API 호출 차단. 메타데이터는 Mac Mini yt-dlp 경유로만 진행.
       - YOUTUBE_METADATA_BACKFILL_ENABLED=false
+      # CP437 (2026-04-29) — pipeline_events round id (paper §6.2 measurement).
+      # Round 1 = initial 20 CC-direct samples (avg_M1=0.174, avg_S=0.546).
+      # Round 2 = first 1,507-video Mac-Mini-driven batch.
+      # Increment on each new measurement batch. Tuning knob, not a secret.
+      - PIPELINE_EVENTS_ROUND=2
       # CP424.2 (2026-04-24) — Wizard Precompute Pipeline.
       # Per docs/design/precompute-pipeline.md. Step 1 goal → /wizard-stream
       # fires fire-and-forget `runDiscoverEphemeral` keyed by session_id →
