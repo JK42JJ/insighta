@@ -113,6 +113,10 @@ const envSchema = z.object({
   GMAIL_SMTP_HOST: z.string().default('smtp-relay.gmail.com'),
   GMAIL_SMTP_PORT: z.coerce.number().default(587),
   GMAIL_SMTP_FROM: z.string().default('noreply@insighta.one'),
+
+  // Pipeline events — round id stamped on each measurement event (paper §6.2).
+  // Increment when starting a new measurement batch.
+  PIPELINE_EVENTS_ROUND: z.coerce.number().int().min(1).default(1),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -263,6 +267,11 @@ export const config = {
     smtpHost: env.GMAIL_SMTP_HOST,
     smtpPort: env.GMAIL_SMTP_PORT,
     smtpFrom: env.GMAIL_SMTP_FROM,
+  },
+
+  // Pipeline events (paper §6.2 measurement)
+  pipelineEvents: {
+    round: env.PIPELINE_EVENTS_ROUND,
   },
 
   // YouTube API costs (in quota units)

@@ -34,13 +34,14 @@ import { Prisma as PrismaCli } from '@prisma/client';
 import { logger } from '@/utils/logger';
 import { computeV2Quality } from '@/modules/metrics/v2-quality-metrics';
 import { recordPipelineEvent } from '@/modules/metrics/pipeline-events';
+import { config } from '@/config/index';
 
 /**
- * Round id stamped onto every pipeline_events payload — must be incremented
- * when starting a new measurement batch (Round 1 = initial 20 CC-direct
- * samples; Round 2 = first 1,507-video Mac-Mini-driven batch; etc).
+ * Round id stamped onto every pipeline_events payload — sourced from the
+ * zod-validated `PIPELINE_EVENTS_ROUND` env via `src/config/`. Increment
+ * the env value when starting a new measurement batch.
  */
-const PIPELINE_EVENTS_ROUND = Number(process.env['PIPELINE_EVENTS_ROUND'] ?? '1') || 1;
+const PIPELINE_EVENTS_ROUND = config.pipelineEvents.round;
 
 const log = logger.child({ module: 'api/internal/transcript' });
 
