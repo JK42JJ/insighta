@@ -197,6 +197,13 @@ async function upsertVideoResource(
   videoId: string,
   layered: RichSummaryV2Layered
 ): Promise<string> {
+  const title = layered.core.one_liner;
+  const props = JSON.stringify({
+    domain: layered.core.domain,
+    depth_level: layered.core.depth_level,
+    content_type: layered.core.content_type,
+  });
+  const sourceRef = JSON.stringify({ table: 'youtube_videos', id: videoId });
   const existing = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
     SELECT id FROM ontology.nodes
     WHERE type = 'video_resource'
@@ -204,19 +211,25 @@ async function upsertVideoResource(
       AND source_ref->>'id' = ${videoId}
     LIMIT 1
   `);
-  if (existing.length > 0) return existing[0]!.id;
+  if (existing.length > 0) {
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE ontology.nodes
+      SET title = ${title},
+          properties = ${props}::jsonb,
+          source_ref = ${sourceRef}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${existing[0]!.id}::uuid
+    `);
+    return existing[0]!.id;
+  }
   const inserted = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
     INSERT INTO ontology.nodes (user_id, type, title, properties, source_ref, domain)
     VALUES (
       ${userId}::uuid,
       'video_resource',
-      ${layered.core.one_liner},
-      ${JSON.stringify({
-        domain: layered.core.domain,
-        depth_level: layered.core.depth_level,
-        content_type: layered.core.content_type,
-      })}::jsonb,
-      ${JSON.stringify({ table: 'youtube_videos', id: videoId })}::jsonb,
+      ${title},
+      ${props}::jsonb,
+      ${sourceRef}::jsonb,
       'service'
     )
     RETURNING id
@@ -229,20 +242,34 @@ async function upsertConcept(
   userId: string,
   concept: KeyConcept
 ): Promise<string> {
+  const props = JSON.stringify({ definition: concept.definition });
+  const sourceRef = JSON.stringify({
+    table: 'video_rich_summaries.key_concepts',
+    term: concept.term,
+  });
   const existing = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
     SELECT id FROM ontology.nodes
     WHERE type = 'concept' AND title = ${concept.term}
     LIMIT 1
   `);
-  if (existing.length > 0) return existing[0]!.id;
+  if (existing.length > 0) {
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE ontology.nodes
+      SET properties = ${props}::jsonb,
+          source_ref = ${sourceRef}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${existing[0]!.id}::uuid
+    `);
+    return existing[0]!.id;
+  }
   const inserted = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
     INSERT INTO ontology.nodes (user_id, type, title, properties, source_ref, domain)
     VALUES (
       ${userId}::uuid,
       'concept',
       ${concept.term},
-      ${JSON.stringify({ definition: concept.definition })}::jsonb,
-      ${JSON.stringify({ table: 'video_rich_summaries.key_concepts', term: concept.term })}::jsonb,
+      ${props}::jsonb,
+      ${sourceRef}::jsonb,
       'service'
     )
     RETURNING id
@@ -257,6 +284,17 @@ async function upsertSection(
   idx: number,
   section: V2Section
 ): Promise<string> {
+  const title = section.title ?? `Section ${idx}`;
+  const props = JSON.stringify({
+    from_sec: section.from_sec ?? 0,
+    to_sec: section.to_sec ?? 0,
+    summary: section.summary ?? '',
+  });
+  const sourceRef = JSON.stringify({
+    table: 'video_rich_summaries.sections',
+    video_id: videoId,
+    idx,
+  });
   const existing = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
     SELECT id FROM ontology.nodes
     WHERE type = 'section_node'
@@ -265,23 +303,25 @@ async function upsertSection(
       AND source_ref->>'idx' = ${String(idx)}
     LIMIT 1
   `);
-  if (existing.length > 0) return existing[0]!.id;
+  if (existing.length > 0) {
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE ontology.nodes
+      SET title = ${title},
+          properties = ${props}::jsonb,
+          source_ref = ${sourceRef}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${existing[0]!.id}::uuid
+    `);
+    return existing[0]!.id;
+  }
   const inserted = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
     INSERT INTO ontology.nodes (user_id, type, title, properties, source_ref, domain)
     VALUES (
       ${userId}::uuid,
       'section_node',
-      ${section.title ?? `Section ${idx}`},
-      ${JSON.stringify({
-        from_sec: section.from_sec ?? 0,
-        to_sec: section.to_sec ?? 0,
-        summary: section.summary ?? '',
-      })}::jsonb,
-      ${JSON.stringify({
-        table: 'video_rich_summaries.sections',
-        video_id: videoId,
-        idx,
-      })}::jsonb,
+      ${title},
+      ${props}::jsonb,
+      ${sourceRef}::jsonb,
       'service'
     )
     RETURNING id
@@ -296,6 +336,20 @@ async function upsertAtom(
   idx: number,
   atom: V2Atom
 ): Promise<string> {
+  const title = (atom.text ?? '').slice(0, 200);
+  const props = JSON.stringify({
+    text: atom.text ?? '',
+    timestamp_sec: atom.timestamp_sec ?? null,
+  });
+  const sourceRef = JSON.stringify({
+    table: 'video_rich_summaries.atoms',
+    video_id: videoId,
+    idx,
+    anchor:
+      typeof atom.timestamp_sec === 'number'
+        ? { kind: 'atom', idx, timestamp_sec: atom.timestamp_sec }
+        : null,
+  });
   const existing = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
     SELECT id FROM ontology.nodes
     WHERE type = 'atom_node'
@@ -304,26 +358,25 @@ async function upsertAtom(
       AND source_ref->>'idx' = ${String(idx)}
     LIMIT 1
   `);
-  if (existing.length > 0) return existing[0]!.id;
+  if (existing.length > 0) {
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE ontology.nodes
+      SET title = ${title},
+          properties = ${props}::jsonb,
+          source_ref = ${sourceRef}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${existing[0]!.id}::uuid
+    `);
+    return existing[0]!.id;
+  }
   const inserted = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
     INSERT INTO ontology.nodes (user_id, type, title, properties, source_ref, domain)
     VALUES (
       ${userId}::uuid,
       'atom_node',
-      ${(atom.text ?? '').slice(0, 200)},
-      ${JSON.stringify({
-        text: atom.text ?? '',
-        timestamp_sec: atom.timestamp_sec ?? null,
-      })}::jsonb,
-      ${JSON.stringify({
-        table: 'video_rich_summaries.atoms',
-        video_id: videoId,
-        idx,
-        anchor:
-          typeof atom.timestamp_sec === 'number'
-            ? { kind: 'atom', idx, timestamp_sec: atom.timestamp_sec }
-            : null,
-      })}::jsonb,
+      ${title},
+      ${props}::jsonb,
+      ${sourceRef}::jsonb,
       'service'
     )
     RETURNING id
@@ -338,6 +391,13 @@ async function upsertAction(
   idx: number,
   text: string
 ): Promise<string> {
+  const title = text.slice(0, 200);
+  const props = JSON.stringify({ text });
+  const sourceRef = JSON.stringify({
+    table: 'video_rich_summaries.actionables',
+    video_id: videoId,
+    idx,
+  });
   const existing = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
     SELECT id FROM ontology.nodes
     WHERE type = 'action_node'
@@ -346,19 +406,25 @@ async function upsertAction(
       AND source_ref->>'idx' = ${String(idx)}
     LIMIT 1
   `);
-  if (existing.length > 0) return existing[0]!.id;
+  if (existing.length > 0) {
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE ontology.nodes
+      SET title = ${title},
+          properties = ${props}::jsonb,
+          source_ref = ${sourceRef}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${existing[0]!.id}::uuid
+    `);
+    return existing[0]!.id;
+  }
   const inserted = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
     INSERT INTO ontology.nodes (user_id, type, title, properties, source_ref, domain)
     VALUES (
       ${userId}::uuid,
       'action_node',
-      ${text.slice(0, 200)},
-      ${JSON.stringify({ text })}::jsonb,
-      ${JSON.stringify({
-        table: 'video_rich_summaries.actionables',
-        video_id: videoId,
-        idx,
-      })}::jsonb,
+      ${title},
+      ${props}::jsonb,
+      ${sourceRef}::jsonb,
       'service'
     )
     RETURNING id

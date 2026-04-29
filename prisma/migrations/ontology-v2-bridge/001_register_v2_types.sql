@@ -19,14 +19,18 @@ INSERT INTO ontology.object_types (code, label, category, description, is_active
   ('action_node',    'Action',          'action',       'Actionable extracted from rich-summary v2 analysis.actionables', true, 'service')
 ON CONFLICT (code) DO NOTHING;
 
+-- Note: ontology.relation_types.inverse is NOT NULL. Symmetric relations
+-- (RELATES_TO) self-pair like the existing RELATED_TO/SIMILAR_TO; directional
+-- relations get a paired inverse code that we may or may not register
+-- separately (only the forward edge is written by the v2-bridge code path).
 INSERT INTO ontology.relation_types (code, label, inverse, description, is_active, domain) VALUES
-  ('RELEVANT_TO',   'Relevant To',     NULL, 'Video resource is relevant to goal (mandala_fit.suggested_goals match)', true, 'service'),
-  ('COVERS',        'Covers',          NULL, 'Video resource covers a concept (analysis.key_concepts)', true, 'service'),
-  ('HAS_SECTION',   'Has Section',     NULL, 'Video resource has a section (segments.sections)', true, 'service'),
-  ('HAS_ATOM',      'Has Atom',        NULL, 'Video resource (or section) has an atom (segments.atoms)', true, 'service'),
-  ('SUGGESTS',      'Suggests',        NULL, 'Video resource suggests an action (analysis.actionables)', true, 'service'),
-  ('ENABLES',       'Enables',         NULL, 'Concept enables a goal (downstream graph reasoning)', true, 'service'),
-  ('RELATES_TO',    'Relates To',      NULL, 'General relation between rich-summary nodes (kept distinct from existing RELATED_TO per CP437 spec)', true, 'service')
+  ('RELEVANT_TO',   'Relevant To',  'ATTRACTS',     'Video resource is relevant to goal (mandala_fit.suggested_goals match)', true, 'service'),
+  ('COVERS',        'Covers',       'COVERED_BY',   'Video resource covers a concept (analysis.key_concepts)', true, 'service'),
+  ('HAS_SECTION',   'Has Section',  'SECTION_OF',   'Video resource has a section (segments.sections)', true, 'service'),
+  ('HAS_ATOM',      'Has Atom',     'ATOM_OF',      'Video resource (or section) has an atom (segments.atoms)', true, 'service'),
+  ('SUGGESTS',      'Suggests',     'SUGGESTED_BY', 'Video resource suggests an action (analysis.actionables)', true, 'service'),
+  ('ENABLES',       'Enables',      'ENABLED_BY',   'Concept enables a goal (downstream graph reasoning)', true, 'service'),
+  ('RELATES_TO',    'Relates To',   'RELATES_TO',   'General relation between rich-summary nodes (kept distinct from existing RELATED_TO per CP437 spec)', true, 'service')
 ON CONFLICT (code) DO NOTHING;
 
 COMMIT;
