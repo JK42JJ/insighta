@@ -71,15 +71,17 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         MAX_CANDIDATE_LIMIT
       );
 
-      // Candidate selector (CP437 v2-driver — Round 2 expansion):
-      //   yv.transcript_fetched_at IS NULL  — not yet processed
-      //   vrs.template_version = 'v1'       — needs v2 upgrade (Round 2 target)
-      //   has_caption tolerance: not enforced. The column is NULL on the
-      //     entire prod table (5,875/5,875) because the YT-API backfill
-      //     cron is OFF per the no-API Hard Rule. yt-dlp on Mac Mini is
-      //     the truth source — it fetches successfully when captions exist
-      //     and writes a no_captions row otherwise. Filtering on the stale
-      //     has_caption column would zero out the candidate list.
+      // Candidate selector (CP438 — v2-author batch driver):
+      //   vrs.template_version = 'v1'       — needs v2 upgrade
+      //   transcript_fetched_at: NOT a filter (CP437 left it as gate, but
+      //     legacy transcript-collector cron stamped 1,520/1,521 v1 rows
+      //     without producing v2 — gating on it eliminated them as
+      //     candidates and dropped the pool to 1. Removed so CC v2-author
+      //     can revisit them. process-one.sh will re-run yt-dlp; if no
+      //     captions it skips and the row stays as v1).
+      //   has_caption tolerance: not enforced (column is NULL on the
+      //     entire prod table because the YT-API backfill cron is OFF per
+      //     the no-API Hard Rule).
       //   ordered by bookmark presence then view_count (high-engagement first).
       const prisma = getPrismaClient();
       const rows = await prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
@@ -95,8 +97,7 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         JOIN youtube_videos yv2 ON yv2.id = uvs.video_id
         GROUP BY yv2.youtube_video_id
       ) book ON book.youtube_video_id = yv.youtube_video_id
-      WHERE yv.transcript_fetched_at IS NULL
-        AND vrs.template_version = 'v1'
+      WHERE vrs.template_version = 'v1'
       ORDER BY
         (COALESCE(book.bookmark_count, 0) > 0) DESC,
         yv.view_count DESC NULLS LAST
