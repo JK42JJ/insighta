@@ -92,7 +92,9 @@ services:
       # Tuning knob, not a secret (CP392 2-question test passes).
       # Revert: set to false or delete this line → cron stops at next process
       # restart (no in-flight call is interrupted).
-      - RICH_SUMMARY_V2_CRON_ENABLED=true
+      # CP437 (2026-04-29) — DISABLED per user directive: 무조건적인 API 사용금지.
+      # OpenRouter 호출 차단. v2 요약은 CC 콘솔(claude-code-direct) 경유로만 진행.
+      - RICH_SUMMARY_V2_CRON_ENABLED=false
       # CP437 (2026-04-29) — Operator flip: enable YouTube metadata backfill cron.
       # Default in code is `false` — cron stays dormant unless this env is
       # explicitly true. With this set, `startYouTubeMetadataCron()` schedules
@@ -115,7 +117,9 @@ services:
       #
       # Revert: set to false or delete this line → cron stops at next process
       # restart (no in-flight call is interrupted).
-      - YOUTUBE_METADATA_BACKFILL_ENABLED=true
+      # CP437 (2026-04-29) — DISABLED per user directive: 무조건적인 API 사용금지.
+      # YouTube Data API 호출 차단. 메타데이터는 Mac Mini yt-dlp 경유로만 진행.
+      - YOUTUBE_METADATA_BACKFILL_ENABLED=false
       # CP424.2 (2026-04-24) — Wizard Precompute Pipeline.
       # Per docs/design/precompute-pipeline.md. Step 1 goal → /wizard-stream
       # fires fire-and-forget `runDiscoverEphemeral` keyed by session_id →
