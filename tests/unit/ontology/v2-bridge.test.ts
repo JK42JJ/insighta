@@ -59,6 +59,14 @@ describe('v2-bridge module purity (Hard Rule no-API)', () => {
     expect(SOURCE).toMatch(/if \(existing\.length > 0\) return false/);
   });
 
+  test('node upserts UPDATE properties on existing match (not just return)', () => {
+    // Sections / atoms / actions / video_resource / concept upserts must
+    // refresh properties + source_ref when an existing row is found, not
+    // simply return the id (otherwise re-POST cannot correct field values).
+    const updateMatches = SOURCE.match(/UPDATE ontology\.nodes\s+SET\s+/g) ?? [];
+    expect(updateMatches.length).toBeGreaterThanOrEqual(5);
+  });
+
   test('findGoalNodesByExactTitle uses exact title match (no fuzzy)', () => {
     expect(SOURCE).toMatch(/title = \$\{title\}/);
     // No actual embedding/similarity function invocation. (Comments may
