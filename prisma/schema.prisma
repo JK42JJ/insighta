@@ -893,6 +893,11 @@ model youtube_videos {
   /// CP437 transcript pipeline (Mac Mini yt-dlp). Stamped on summary
   /// success; transcript text itself is never persisted.
   transcript_fetched_at  DateTime?                @db.Timestamptz(6)
+  /// CP438 (2026-04-29) collector pipeline source.
+  /// Values: 'category_mostpopular' | 'naver_keyword' | 'youtube_mostpopular' | 'domain_keyword'.
+  /// Pre-CP438 legacy rows stay NULL (소급 불가).
+  /// Raw SQL DDL: prisma/migrations/collector-source/001_add_source.sql
+  source                 String?                  @db.VarChar(30)
   created_at             DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
   userState              UserVideoState[]
@@ -904,6 +909,7 @@ model youtube_videos {
 
   @@index([metadata_fetched_at], map: "idx_youtube_videos_metadata_fetched_at")
   @@index([transcript_fetched_at], map: "idx_youtube_videos_transcript_fetched_at")
+  @@index([source], map: "idx_youtube_videos_source")
   @@schema("public")
 }
 

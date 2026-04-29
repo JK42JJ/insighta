@@ -251,22 +251,41 @@ async function main(): Promise<void> {
 
   // Insertion order = priority. s1+s3 first (full metadata, dedupe
   // basis); s2+s4 IDs filtered to non-overlap, then enriched.
+  // CP438: each video tagged with source — first-occurrence wins so
+  // priority order is S1 > S3 > S2 > S4 for cross-source overlaps.
   const seen = new Set<string>();
+  const idSourceMap = new Map<string, string>();
   const directVideos: VideoMeta[] = [];
-  for (const v of [...s1Videos, ...s3Videos]) {
+  for (const v of s1Videos) {
     if (seen.has(v.youtube_video_id)) continue;
     seen.add(v.youtube_video_id);
-    directVideos.push(v);
+    idSourceMap.set(v.youtube_video_id, 'category_mostpopular');
+    directVideos.push({ ...v, source: 'category_mostpopular' });
   }
-  const idsToEnrich = [...s2Take, ...s4Take].filter((id) => {
-    if (seen.has(id)) return false;
+  for (const v of s3Videos) {
+    if (seen.has(v.youtube_video_id)) continue;
+    seen.add(v.youtube_video_id);
+    idSourceMap.set(v.youtube_video_id, 'youtube_mostpopular');
+    directVideos.push({ ...v, source: 'youtube_mostpopular' });
+  }
+  const idsToEnrich: string[] = [];
+  for (const id of s2Take) {
+    if (seen.has(id)) continue;
     seen.add(id);
-    return true;
-  });
+    idSourceMap.set(id, 'naver_keyword');
+    idsToEnrich.push(id);
+  }
+  for (const id of s4Take) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    idSourceMap.set(id, 'domain_keyword');
+    idsToEnrich.push(id);
+  }
 
   let enriched: VideoMeta[] = [];
   if (idsToEnrich.length > 0) {
-    enriched = await fetchVideoMetadata(idsToEnrich, env.youtubeApiKey);
+    const rows = await fetchVideoMetadata(idsToEnrich, env.youtubeApiKey);
+    enriched = rows.map((r) => ({ ...r, source: idSourceMap.get(r.youtube_video_id) ?? null }));
   }
   const allVideos: VideoMeta[] = [...directVideos, ...enriched];
 
