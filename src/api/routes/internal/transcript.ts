@@ -79,6 +79,11 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
       //     candidates while 5,462 fresh videos were silently invisible.
       //   vrs.video_id IS NULL    — fresh yv with no summary → author v2 fresh
       //   vrs.template_version='v1' — existing v1 row → upgrade to v2
+      //   duration_seconds > 180  — drop YouTube Shorts / music clips. Top
+      //     view_count rows skew heavily to <60s viral content with no
+      //     captions or only [Music]/[Applause] fillers; first MacBook batch
+      //     (CP438 2026-04-30) hit 7/11 no_caption from these. NULL allowed
+      //     (collector batches that did not capture duration get a pass).
       //   transcript_fetched_at: NOT a filter (CP437/CP438 both dropped it).
       //   has_caption: NOT a filter (column always NULL — YT-API backfill OFF).
       //   ordered by bookmark presence then view_count (high-engagement first).
@@ -96,7 +101,8 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         JOIN youtube_videos yv2 ON yv2.id = uvs.video_id
         GROUP BY yv2.youtube_video_id
       ) book ON book.youtube_video_id = yv.youtube_video_id
-      WHERE vrs.video_id IS NULL OR vrs.template_version = 'v1'
+      WHERE (vrs.video_id IS NULL OR vrs.template_version = 'v1')
+        AND (yv.duration_seconds IS NULL OR yv.duration_seconds > 180)
       ORDER BY
         (COALESCE(book.bookmark_count, 0) > 0) DESC,
         yv.view_count DESC NULLS LAST

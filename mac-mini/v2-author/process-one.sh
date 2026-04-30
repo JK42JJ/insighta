@@ -43,38 +43,49 @@ if [ ${#TRANSCRIPT} -lt 200 ]; then
 fi
 
 # 3. Build prompt + invoke claude -p
+# Schema synced to src/modules/skills/rich-summary-v2-prompt.ts SSOT (CP438):
+#   content_type:  tutorial | lecture | vlog | interview | documentary | review (NOT explainer/case_study/discussion/news)
+#   one_liner:     ≤ 20 chars (NOT 40)
+#   qa context:    video | mandala_cell | mandala_mesh (NOT general)
+#   PASS_THRESHOLD = 0.7; MIN_KEY_CONCEPTS=3, MIN_ACTIONABLES=3, MIN_QA_PAIRS_L1=5
+# Drift prior to this fix caused completeness penalty + occasional 422 reject.
 PROMPT_HEADER='You are a JSON authoring tool for Insighta. Author a strict v2 layered JSON for the YouTube video below from its transcript.
 
 Schema (no extra keys, no markdown fences, JSON only):
 {
   "core": {
-    "one_liner": string (under 40 chars, ko or en),
+    "one_liner": string (≤ 20 chars, in source language),
     "domain": "tech"|"learning"|"health"|"business"|"finance"|"social"|"creative"|"lifestyle"|"mind",
     "depth_level": "beginner"|"intermediate"|"advanced",
-    "content_type": "tutorial"|"explainer"|"case_study"|"review"|"discussion"|"vlog"|"news",
+    "content_type": "tutorial"|"lecture"|"vlog"|"interview"|"documentary"|"review",
     "target_audience": string
   },
   "analysis": {
-    "core_argument": string (1 sentence, hand-authored summary),
-    "key_concepts": [{"term": string, "definition": string}, ...],
-    "actionables": [string, ...],
-    "mandala_fit": {"suggested_goals": [string, ...], "relevance_rationale": string},
+    "core_argument": string (2-3 sentences capturing the central thesis),
+    "key_concepts": [{"term": string, "definition": string}, ... 3-5 entries],
+    "actionables": [string, ... 3-5 entries, each a single imperative sentence],
+    "mandala_fit": {"suggested_goals": [string, ... 2-4 phrases], "relevance_rationale": string},
     "bias_signals": {"has_ad": bool, "is_sponsored": bool, "subjectivity_level": "low"|"medium"|"high", "notes": string},
     "prerequisites": string
   },
   "segments": {
-    "sections": [{"idx": int, "title": string, "from_sec": int, "to_sec": int, "summary": string}, ...],
-    "atoms": [{"idx": int, "type": "fact"|"tip"|"argument", "text": string, "timestamp_sec": int}, ...]
+    "sections": [{"idx": int, "title": string, "from_sec": int, "to_sec": int, "summary": string}, ... 4+ entries],
+    "atoms": [{"idx": int, "type": "fact"|"tip"|"argument", "text": string, "timestamp_sec": int}, ... 4+ entries]
   },
   "lora": {
-    "qa_pairs": [{"level": 1|2|3, "q": string, "a": string, "context": "video"|"general"}, ...]
+    "qa_pairs": [{"level": 1, "q": string, "a": string, "context": "video"}, ... 5-7 entries, all level=1, all context="video"]
   }
 }
 
 Rules:
-- completeness must be ≥0.9: 4+ key_concepts, 4+ actionables, 4+ sections, 4+ atoms, 4+ qa_pairs.
+- core.one_liner: ≤ 20 chars, no quotes, no trailing punctuation.
+- core.domain MUST be one of the 9 slugs above.
+- core.content_type MUST be one of the 6 enum values above.
+- analysis.actionables: each a single imperative sentence the viewer can do today.
+- lora.qa_pairs: 5-7 entries, all level=1, all context="video".
 - timestamp_sec / from_sec / to_sec are integers in seconds (NOT mm:ss).
-- Output JSON only — no preamble, no markdown.
+- Use the source language consistently across every string field.
+- Output JSON only — no preamble, no markdown fences, no commentary.
 '
 
 CLAUDE_BIN="${CLAUDE_BIN:-$(which claude 2>/dev/null || echo "$HOME/.npm-global/bin/claude")}"
