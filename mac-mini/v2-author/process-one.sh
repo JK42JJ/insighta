@@ -79,8 +79,14 @@ Rules:
 
 CLAUDE_BIN="${CLAUDE_BIN:-$(which claude 2>/dev/null || echo "$HOME/.npm-global/bin/claude")}"
 
+# `claude -p` MUST authenticate via the user's CC subscription (OAuth in
+# keychain). If ANTHROPIC_API_KEY is set in the environment, claude CLI
+# uses that API key path instead — and the prod ANTHROPIC_API_KEY env on
+# Mac Mini has no active billing → "Invalid API key · Fix external API
+# key" returned and every call silently fails. Strip the env so OAuth
+# wins (CP438 — 2026-04-30 batch incident: 1,527/1,540 invalid_json).
 V2_JSON=$(printf '%s\n\nVideo: %s\nLanguage: %s\nTranscript:\n%s\n' "$PROMPT_HEADER" "$VID" "$LANG" "$TRANSCRIPT" \
-  | "$CLAUDE_BIN" -p 2>"$LOG_DIR/$VID.claude.err")
+  | env -u ANTHROPIC_API_KEY "$CLAUDE_BIN" -p 2>"$LOG_DIR/$VID.claude.err")
 
 # Strip optional markdown fences if claude added them despite instructions.
 V2_JSON=$(printf '%s' "$V2_JSON" | sed -e 's/^```json//' -e 's/^```//' -e 's/```$//' | sed '/^$/d')
