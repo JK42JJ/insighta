@@ -72,16 +72,15 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
       );
 
       // Candidate selector (CP438 — v2-author batch driver):
-      //   vrs.template_version = 'v1'       — needs v2 upgrade
-      //   transcript_fetched_at: NOT a filter (CP437 left it as gate, but
-      //     legacy transcript-collector cron stamped 1,520/1,521 v1 rows
-      //     without producing v2 — gating on it eliminated them as
-      //     candidates and dropped the pool to 1. Removed so CC v2-author
-      //     can revisit them. process-one.sh will re-run yt-dlp; if no
-      //     captions it skips and the row stays as v1).
-      //   has_caption tolerance: not enforced (column is NULL on the
-      //     entire prod table because the YT-API backfill cron is OFF per
-      //     the no-API Hard Rule).
+      //   LEFT JOIN video_rich_summaries — include yv rows w/ no summary at
+      //     all (newly collected by Mac Mini collect-trending.ts since
+      //     CP438; in prod 5,462 / 7,009 rows on 2026-04-30). INNER JOIN
+      //     was the original CP437 bug — only 1,503 v1 rows surfaced as
+      //     candidates while 5,462 fresh videos were silently invisible.
+      //   vrs.video_id IS NULL    — fresh yv with no summary → author v2 fresh
+      //   vrs.template_version='v1' — existing v1 row → upgrade to v2
+      //   transcript_fetched_at: NOT a filter (CP437/CP438 both dropped it).
+      //   has_caption: NOT a filter (column always NULL — YT-API backfill OFF).
       //   ordered by bookmark presence then view_count (high-engagement first).
       const prisma = getPrismaClient();
       const rows = await prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
@@ -90,14 +89,14 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         yv.default_language,
         yv.has_caption
       FROM youtube_videos yv
-      JOIN video_rich_summaries vrs ON vrs.video_id = yv.youtube_video_id
+      LEFT JOIN video_rich_summaries vrs ON vrs.video_id = yv.youtube_video_id
       LEFT JOIN (
         SELECT yv2.youtube_video_id, COUNT(*) AS bookmark_count
         FROM user_video_states uvs
         JOIN youtube_videos yv2 ON yv2.id = uvs.video_id
         GROUP BY yv2.youtube_video_id
       ) book ON book.youtube_video_id = yv.youtube_video_id
-      WHERE vrs.template_version = 'v1'
+      WHERE vrs.video_id IS NULL OR vrs.template_version = 'v1'
       ORDER BY
         (COALESCE(book.bookmark_count, 0) > 0) DESC,
         yv.view_count DESC NULLS LAST
@@ -176,9 +175,12 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
     const prisma = getPrismaClient();
     const now = new Date();
     try {
-      await prisma.video_rich_summaries.update({
+      // upsert (not update) — selector (LEFT JOIN, vrs.video_id IS NULL)
+      // surfaces newly-collected yv rows that have no summary yet, so this
+      // path must INSERT as well as UPDATE.
+      await prisma.video_rich_summaries.upsert({
         where: { video_id: videoId },
-        data: {
+        update: {
           template_version: 'v2',
           core: summary.core as unknown as PrismaCli.InputJsonValue,
           analysis: summary.analysis as unknown as PrismaCli.InputJsonValue,
@@ -190,6 +192,23 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
           ...(body.sourceLanguage === 'ko' || body.sourceLanguage === 'en'
             ? { source_language: body.sourceLanguage }
             : {}),
+          updated_at: now,
+        },
+        create: {
+          video_id: videoId,
+          tier_required: 'free',
+          template_version: 'v2',
+          core: summary.core as unknown as PrismaCli.InputJsonValue,
+          analysis: summary.analysis as unknown as PrismaCli.InputJsonValue,
+          lora: summary.lora as unknown as PrismaCli.InputJsonValue,
+          ...(body.segments ? { segments: body.segments as PrismaCli.InputJsonValue } : {}),
+          completeness: score.score,
+          quality_flag: 'pass',
+          model: 'claude-code-direct',
+          ...(body.sourceLanguage === 'ko' || body.sourceLanguage === 'en'
+            ? { source_language: body.sourceLanguage }
+            : {}),
+          created_at: now,
           updated_at: now,
         },
       });
