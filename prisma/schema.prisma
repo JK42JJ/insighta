@@ -893,6 +893,13 @@ model youtube_videos {
   /// CP437 transcript pipeline (Mac Mini yt-dlp). Stamped on summary
   /// success; transcript text itself is never persisted.
   transcript_fetched_at  DateTime?                @db.Timestamptz(6)
+  /// CP438+1 (2026-05-03) — stamp on no_caption / claude_invalid_json so
+  /// the candidates selector can skip recently-attempted videos and avoid
+  /// the stale-no_caption resurfacing loop documented in
+  /// docs/runbook/cp438-resume-handoff.md §4. 7-day cooldown allows
+  /// catching late-added captions while preventing per-batch resurface.
+  /// Raw SQL DDL: prisma/migrations/transcript-attempted/001_add_column.sql
+  transcript_attempted_at DateTime?               @db.Timestamptz(6)
   /// CP438 (2026-04-29) collector pipeline source.
   /// Values: 'category_mostpopular' | 'naver_keyword' | 'youtube_mostpopular' | 'domain_keyword'.
   /// Pre-CP438 legacy rows stay NULL (소급 불가).
@@ -909,6 +916,7 @@ model youtube_videos {
 
   @@index([metadata_fetched_at], map: "idx_youtube_videos_metadata_fetched_at")
   @@index([transcript_fetched_at], map: "idx_youtube_videos_transcript_fetched_at")
+  @@index([transcript_attempted_at], map: "idx_youtube_videos_transcript_attempted_at")
   @@index([source], map: "idx_youtube_videos_source")
   @@schema("public")
 }

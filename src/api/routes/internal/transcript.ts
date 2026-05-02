@@ -71,7 +71,7 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         MAX_CANDIDATE_LIMIT
       );
 
-      // Candidate selector (CP438 — v2-author batch driver):
+      // Candidate selector (CP438+1 — v2-author batch driver):
       //   LEFT JOIN video_rich_summaries — include yv rows w/ no summary at
       //     all (newly collected by Mac Mini collect-trending.ts since
       //     CP438; in prod 5,462 / 7,009 rows on 2026-04-30). INNER JOIN
@@ -84,6 +84,12 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
       //     captions or only [Music]/[Applause] fillers; first MacBook batch
       //     (CP438 2026-04-30) hit 7/11 no_caption from these. NULL allowed
       //     (collector batches that did not capture duration get a pass).
+      //   transcript_attempted_at IS NULL OR < NOW()-7days — CP438+1: skip
+      //     videos already attempted in past 7 days (no_caption / invalid_json
+      //     stamps via /transcript/mark-attempted). Eliminates the stale
+      //     no_caption resurfacing loop (runbook §4); without this filter,
+      //     200-batch returned 0 pass on r10 because the same music/shorts
+      //     skew videos kept reappearing.
       //   transcript_fetched_at: NOT a filter (CP437/CP438 both dropped it).
       //   has_caption: NOT a filter (column always NULL — YT-API backfill OFF).
       //   ordered by bookmark presence then view_count (high-engagement first).
@@ -103,12 +109,46 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
       ) book ON book.youtube_video_id = yv.youtube_video_id
       WHERE (vrs.video_id IS NULL OR vrs.template_version = 'v1')
         AND (yv.duration_seconds IS NULL OR yv.duration_seconds > 180)
+        AND (yv.transcript_attempted_at IS NULL
+             OR yv.transcript_attempted_at < NOW() - INTERVAL '7 days')
       ORDER BY
         (COALESCE(book.bookmark_count, 0) > 0) DESC,
         yv.view_count DESC NULLS LAST
       LIMIT ${Prisma.raw(String(limit))}
     `);
       return reply.code(200).send({ videos: rows });
+    }
+  );
+
+  /**
+   * CP438+1 (2026-05-03): mark a video as transcript-attempted so the
+   * candidates selector excludes it for the 7-day cooldown window. Called
+   * by mac-mini/v2-author/process-one.sh on every no_caption /
+   * claude_invalid_json exit path. Fire-and-forget from the worker side.
+   */
+  fastify.post<{ Body: { videoId?: string } }>(
+    '/transcript/mark-attempted',
+    async (request, reply) => {
+      const expected = getInternalBatchToken();
+      if (!expected) return reply.code(503).send({ error: 'internal trigger not configured' });
+      const got = request.headers['x-internal-token'];
+      if (typeof got !== 'string' || got !== expected) {
+        return reply.code(401).send({ error: 'invalid internal token' });
+      }
+      const videoId = typeof request.body?.videoId === 'string' ? request.body.videoId.trim() : '';
+      if (!videoId) return reply.code(400).send({ error: 'videoId required' });
+      const prisma = getPrismaClient();
+      try {
+        const result = await prisma.youtube_videos.updateMany({
+          where: { youtube_video_id: videoId },
+          data: { transcript_attempted_at: new Date() },
+        });
+        return reply.code(200).send({ ok: true, updated: result.count });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn('mark-attempted failed', { videoId, error: msg });
+        return reply.code(500).send({ error: msg });
+      }
     }
   );
 
