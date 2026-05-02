@@ -17,6 +17,18 @@ PROXY="http://${WEBSHARE_USERNAME}:${WEBSHARE_PASSWORD}@${WEBSHARE_HOST}:${WEBSH
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
+# CP438+1 (2026-05-03): stamp transcript_attempted_at on videos we tried but
+# could not author (no_caption / claude_invalid_json) so the candidates
+# selector excludes them for 7-day cooldown. Fire-and-forget — never block
+# the per-video pipeline on the mark request.
+mark_attempted() {
+  curl -sS --max-time 5 \
+    -X POST "${INSIGHTA_API_URL%/}/api/v1/internal/transcript/mark-attempted" \
+    -H "x-internal-token: ${INTERNAL_BATCH_TOKEN}" \
+    -H 'content-type: application/json' \
+    --data "{\"videoId\":\"$1\"}" >/dev/null 2>&1 || true
+}
+
 # 1. yt-dlp auto-subs
 "$YTDLP_BIN" \
   --write-auto-subs --sub-format vtt --sub-lang "$LANG" --skip-download \
@@ -27,6 +39,7 @@ trap 'rm -rf "$TMP"' EXIT
 VTT=$(ls "$TMP"/*.vtt 2>/dev/null | head -1)
 if [ -z "$VTT" ]; then
   echo "[$VID] no_caption" | tee "$LOG_DIR/$VID.log"
+  mark_attempted "$VID"
   exit 1
 fi
 
@@ -39,6 +52,7 @@ TRANSCRIPT=$(awk '
 
 if [ ${#TRANSCRIPT} -lt 200 ]; then
   echo "[$VID] no_caption (transcript too short: ${#TRANSCRIPT} chars)" | tee "$LOG_DIR/$VID.log"
+  mark_attempted "$VID"
   exit 1
 fi
 
@@ -105,6 +119,7 @@ V2_JSON=$(printf '%s' "$V2_JSON" | sed -e 's/^```json//' -e 's/^```//' -e 's/```
 if ! printf '%s' "$V2_JSON" | jq -e . >/dev/null 2>&1; then
   echo "[$VID] claude_invalid_json" | tee "$LOG_DIR/$VID.log"
   printf '%s' "$V2_JSON" | head -c 500 > "$LOG_DIR/$VID.invalid.json"
+  mark_attempted "$VID"
   exit 2
 fi
 
