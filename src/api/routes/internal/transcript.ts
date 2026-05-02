@@ -71,7 +71,7 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         MAX_CANDIDATE_LIMIT
       );
 
-      // Candidate selector (CP438+1 — v2-author batch driver):
+      // Candidate selector (CP438+1 Q5 — v2-author batch driver):
       //   LEFT JOIN video_rich_summaries — include yv rows w/ no summary at
       //     all (newly collected by Mac Mini collect-trending.ts since
       //     CP438; in prod 5,462 / 7,009 rows on 2026-04-30). INNER JOIN
@@ -79,20 +79,26 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
       //     candidates while 5,462 fresh videos were silently invisible.
       //   vrs.video_id IS NULL    — fresh yv with no summary → author v2 fresh
       //   vrs.template_version='v1' — existing v1 row → upgrade to v2
-      //   duration_seconds > 180  — drop YouTube Shorts / music clips. Top
-      //     view_count rows skew heavily to <60s viral content with no
-      //     captions or only [Music]/[Applause] fillers; first MacBook batch
-      //     (CP438 2026-04-30) hit 7/11 no_caption from these. NULL allowed
-      //     (collector batches that did not capture duration get a pass).
-      //   transcript_attempted_at IS NULL OR < NOW()-7days — CP438+1: skip
-      //     videos already attempted in past 7 days (no_caption / invalid_json
-      //     stamps via /transcript/mark-attempted). Eliminates the stale
-      //     no_caption resurfacing loop (runbook §4); without this filter,
-      //     200-batch returned 0 pass on r10 because the same music/shorts
-      //     skew videos kept reappearing.
+      //   duration_seconds NOT NULL AND > 180 — CP438+1 Q5: NULL duration
+      //     is the LIVE-stream signal (한국경제TV LIVE / 매일경제TV LIVE
+      //     surfaced as top candidates with NULL duration + extreme view
+      //     count). Drop NULL to block LIVE. The > 180 cutoff drops
+      //     shorts / music clips. Trade-off: a few collector batches that
+      //     didn't capture duration drop too — acceptable as LIVE
+      //     poisoning was 100% of NULL-duration top-pool.
+      //   transcript_attempted_at IS NULL OR < NOW()-7days — CP438+1:
+      //     skip videos already attempted in past 7 days. Eliminates the
+      //     stale no_caption resurfacing loop (runbook §4).
       //   transcript_fetched_at: NOT a filter (CP437/CP438 both dropped it).
       //   has_caption: NOT a filter (column always NULL — YT-API backfill OFF).
-      //   ordered by bookmark presence then view_count (high-engagement first).
+      //   ORDER BY view_count ASC — CP438+1 Q5: ASC (low view first)
+      //     inverts the music/MV skew. Top of the pool with view_count
+      //     DESC was 90% Korean music videos / LIVE streams (KATSEYE /
+      //     BOL4 / Tayna / 가호 OST) which all lacked transcribable auto-
+      //     captions. After 4 consecutive 0-pass batches under DESC,
+      //     switching to ASC surfaces lecture / tutorial / interview
+      //     content (historic 30-40% pass rate). Bookmark presence still
+      //     wins (user signal > view sort).
       const prisma = getPrismaClient();
       const rows = await prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
       SELECT
@@ -108,12 +114,13 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         GROUP BY yv2.youtube_video_id
       ) book ON book.youtube_video_id = yv.youtube_video_id
       WHERE (vrs.video_id IS NULL OR vrs.template_version = 'v1')
-        AND (yv.duration_seconds IS NULL OR yv.duration_seconds > 180)
+        AND yv.duration_seconds IS NOT NULL
+        AND yv.duration_seconds > 180
         AND (yv.transcript_attempted_at IS NULL
              OR yv.transcript_attempted_at < NOW() - INTERVAL '7 days')
       ORDER BY
         (COALESCE(book.bookmark_count, 0) > 0) DESC,
-        yv.view_count DESC NULLS LAST
+        yv.view_count ASC NULLS LAST
       LIMIT ${Prisma.raw(String(limit))}
     `);
       return reply.code(200).send({ videos: rows });
