@@ -1,7 +1,9 @@
 #!/bin/bash
-# Process ONE video: yt-dlp transcript → claude -p (v2 schema) → POST upsert-direct.
+# Process ONE video: transcript fetch → claude -p (v2 schema) → POST upsert-direct.
 # Args: $1 = youtube_video_id  $2 = source_language (ko|en)
-# Env: INSIGHTA_API_URL / INTERNAL_BATCH_TOKEN / WEBSHARE_* (sourced by caller)
+# Env: INSIGHTA_API_URL / INTERNAL_BATCH_TOKEN
+#      TRANSCRIPT_FETCHER (default 'ytapi'; 'ytdlp' for legacy WebShare path)
+#      For ytdlp path: WEBSHARE_* required.
 # Exit 0 = pass, 1 = no_caption, 2 = claude_invalid_json, 3 = upsert_failed
 # stdout: single line "[<vid>] <result>" suitable for batch.sh aggregation.
 
@@ -12,8 +14,8 @@ LANG="${2:-ko}"
 LOG_DIR="${V2_LOG_DIR:-/tmp/insighta-v2-batch}"
 mkdir -p "$LOG_DIR"
 
-YTDLP_BIN="${YTDLP_BIN:-/opt/homebrew/bin/yt-dlp}"
-PROXY="http://${WEBSHARE_USERNAME}:${WEBSHARE_PASSWORD}@${WEBSHARE_HOST}:${WEBSHARE_PORT}"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TRANSCRIPT_FETCHER="${TRANSCRIPT_FETCHER:-ytapi}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
@@ -29,26 +31,38 @@ mark_attempted() {
     --data "{\"videoId\":\"$1\"}" >/dev/null 2>&1 || true
 }
 
-# 1. yt-dlp auto-subs
-"$YTDLP_BIN" \
-  --write-auto-subs --sub-format vtt --sub-lang "$LANG" --skip-download \
-  --proxy "$PROXY" --socket-timeout 20 \
-  -o "$TMP/%(id)s.%(ext)s" \
-  "https://www.youtube.com/watch?v=$VID" >"$TMP/ytdlp.log" 2>&1 || true
-
-VTT=$(ls "$TMP"/*.vtt 2>/dev/null | head -1)
-if [ -z "$VTT" ]; then
-  echo "[$VID] no_caption" | tee "$LOG_DIR/$VID.log"
-  mark_attempted "$VID"
-  exit 1
+# 1. Transcript fetch — youtube-transcript-api (default) or yt-dlp (legacy).
+if [ "$TRANSCRIPT_FETCHER" = "ytapi" ]; then
+  # Direct YouTube web-client API. No proxy required.
+  TRANSCRIPT=$(python3 "$DIR/fetch-transcript.py" "$VID" "$LANG" 2>"$LOG_DIR/$VID.fetch.err")
+  FETCH_RC=$?
+  if [ $FETCH_RC -ne 0 ] || [ -z "$TRANSCRIPT" ]; then
+    REASON=$(head -c 120 "$LOG_DIR/$VID.fetch.err" 2>/dev/null | tr '\n' ' ')
+    echo "[$VID] no_caption ($REASON)" | tee "$LOG_DIR/$VID.log"
+    mark_attempted "$VID"
+    exit 1
+  fi
+else
+  # Legacy yt-dlp + WebShare path. Used when TRANSCRIPT_FETCHER=ytdlp.
+  YTDLP_BIN="${YTDLP_BIN:-/opt/homebrew/bin/yt-dlp}"
+  PROXY="http://${WEBSHARE_USERNAME}:${WEBSHARE_PASSWORD}@${WEBSHARE_HOST}:${WEBSHARE_PORT}"
+  "$YTDLP_BIN" \
+    --write-auto-subs --sub-format vtt --sub-lang "$LANG" --skip-download \
+    --proxy "$PROXY" --socket-timeout 20 \
+    -o "$TMP/%(id)s.%(ext)s" \
+    "https://www.youtube.com/watch?v=$VID" >"$TMP/ytdlp.log" 2>&1 || true
+  VTT=$(ls "$TMP"/*.vtt 2>/dev/null | head -1)
+  if [ -z "$VTT" ]; then
+    echo "[$VID] no_caption" | tee "$LOG_DIR/$VID.log"
+    mark_attempted "$VID"
+    exit 1
+  fi
+  TRANSCRIPT=$(awk '
+    /^WEBVTT/ || /^Kind:/ || /^Language:/ || /^[0-9]+:[0-9]+/ || /-->/ || /^align:/ || /^position:/ { next }
+    /^$/ { next }
+    { gsub(/<[^>]*>/, ""); gsub(/&nbsp;/, " "); print }
+  ' "$VTT" | awk '!seen[$0]++' | head -c 30000)
 fi
-
-# 2. Strip VTT timing → plain text. Dedupe consecutive identical lines (auto-caps cue artifacts).
-TRANSCRIPT=$(awk '
-  /^WEBVTT/ || /^Kind:/ || /^Language:/ || /^[0-9]+:[0-9]+/ || /-->/ || /^align:/ || /^position:/ { next }
-  /^$/ { next }
-  { gsub(/<[^>]*>/, ""); gsub(/&nbsp;/, " "); print }
-' "$VTT" | awk '!seen[$0]++' | head -c 30000)
 
 if [ ${#TRANSCRIPT} -lt 200 ]; then
   echo "[$VID] no_caption (transcript too short: ${#TRANSCRIPT} chars)" | tee "$LOG_DIR/$VID.log"

@@ -55,8 +55,34 @@ interface CandidateRow {
   has_caption: boolean | null;
 }
 
+/**
+ * CP438+1 Q6 (2026-05-03): domain-targeted title-keyword pre-filter.
+ * Used by `?domains=social,creative` to bias candidates toward
+ * under-represented core.domain buckets. The actual core.domain is
+ * decided by the v2 author (Claude) AFTER transcript fetch — this
+ * pre-filter only raises the prior of getting a row with the desired
+ * domain by matching common Korean keywords in the title. Heuristic.
+ */
+const DOMAIN_TITLE_KEYWORDS: Record<string, string[]> = {
+  social: ['사회', '정치', '커뮤니티', '소통', '인간관계', '뉴스', '갈등', '토론', '관계', '심리'],
+  creative: [
+    '디자인',
+    '작곡',
+    '글쓰기',
+    '영화',
+    '예술',
+    '공예',
+    '사진',
+    '작가',
+    '그림',
+    '일러스트',
+    '색채',
+  ],
+  // Add more domain buckets here as needed.
+};
+
 export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get<{ Querystring: { limit?: string } }>(
+  fastify.get<{ Querystring: { limit?: string; domains?: string } }>(
     '/transcript/candidates',
     async (request, reply) => {
       const expected = getInternalBatchToken();
@@ -70,6 +96,25 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         Math.max(Number.isFinite(limitRaw) ? Math.floor(limitRaw) : DEFAULT_CANDIDATE_LIMIT, 1),
         MAX_CANDIDATE_LIMIT
       );
+
+      // Domain-targeted title pre-filter (CP438+1 Q6). When `domains` query
+      // param is set (e.g. ?domains=social,creative), only return candidates
+      // whose title matches at least one keyword for the requested domains.
+      const domainsParam =
+        typeof request.query.domains === 'string' ? request.query.domains.trim() : '';
+      const domainKeywords = domainsParam
+        ? domainsParam
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .flatMap((d) => DOMAIN_TITLE_KEYWORDS[d] ?? [])
+        : [];
+      const domainTitleFilter =
+        domainKeywords.length > 0
+          ? Prisma.sql`AND yv.title ILIKE ANY(ARRAY[${Prisma.join(
+              domainKeywords.map((k) => `%${k}%`)
+            )}]::text[])`
+          : Prisma.empty;
 
       // Candidate selector (CP438+1 Q5 — v2-author batch driver):
       //   LEFT JOIN video_rich_summaries — include yv rows w/ no summary at
@@ -118,6 +163,7 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         AND yv.duration_seconds > 180
         AND (yv.transcript_attempted_at IS NULL
              OR yv.transcript_attempted_at < NOW() - INTERVAL '7 days')
+        ${domainTitleFilter}
       ORDER BY
         (COALESCE(book.bookmark_count, 0) > 0) DESC,
         yv.view_count ASC NULLS LAST

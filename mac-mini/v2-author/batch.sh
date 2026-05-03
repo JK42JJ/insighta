@@ -1,10 +1,15 @@
 #!/bin/bash
-# v2-author batch dispatcher (CP438).
+# v2-author batch dispatcher (CP438+1).
 # Args: $1 = N (default 10) — number of candidates to author this batch.
 # Concurrency: 5 (tunable via V2_CONCURRENCY env).
+# Env (optional):
+#   DOMAINS — comma-separated domain slugs (e.g. "social,creative") to
+#     bias the candidates selector toward under-represented buckets.
+#   TRANSCRIPT_FETCHER — 'ytapi' (default, no proxy) or 'ytdlp' (legacy).
 #
-# Pipeline per video: process-one.sh handles yt-dlp → claude -p → upsert-direct.
-# Auto-promote to video_pool fires inside the upsert-direct route (PR #588 hook).
+# Pipeline per video: process-one.sh handles transcript fetch → claude -p →
+# upsert-direct. Auto-promote to video_pool fires inside the upsert-direct
+# route (PR #588 hook).
 
 set -uo pipefail
 
@@ -14,25 +19,29 @@ source "$DIR/../openclaw-handlers/_bootstrap.sh"
 
 N="${1:-10}"
 CONC="${V2_CONCURRENCY:-5}"
+DOMAINS="${DOMAINS:-}"
+TRANSCRIPT_FETCHER="${TRANSCRIPT_FETCHER:-ytapi}"
 V2_LOG_DIR="${V2_LOG_DIR:-/tmp/insighta-v2-batch}"
 mkdir -p "$V2_LOG_DIR"
 TS="$(date +%Y%m%d-%H%M%S)"
 SUMMARY="$V2_LOG_DIR/summary-$TS.log"
 
-export V2_LOG_DIR INSIGHTA_API_URL INTERNAL_BATCH_TOKEN \
+export V2_LOG_DIR INSIGHTA_API_URL INTERNAL_BATCH_TOKEN TRANSCRIPT_FETCHER \
   WEBSHARE_HOST WEBSHARE_PORT WEBSHARE_USERNAME WEBSHARE_PASSWORD \
   YTDLP_BIN CLAUDE_BIN
 
 CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.npm-global/bin/claude}"
 export CLAUDE_BIN
 
-echo "[v2-batch] target=$N concurrency=$CONC log_dir=$V2_LOG_DIR" | tee "$SUMMARY"
+echo "[v2-batch] target=$N concurrency=$CONC fetcher=$TRANSCRIPT_FETCHER domains=${DOMAINS:-(any)} log_dir=$V2_LOG_DIR" | tee "$SUMMARY"
 echo "[v2-batch] start=$(date -u +%FT%TZ)" | tee -a "$SUMMARY"
 
 # 1. Fetch candidates
-CANDS_JSON=$(curl -sS \
-  "${INSIGHTA_API_URL%/}/api/v1/internal/transcript/candidates?limit=$N" \
-  -H "x-internal-token: ${INTERNAL_BATCH_TOKEN}")
+CAND_URL="${INSIGHTA_API_URL%/}/api/v1/internal/transcript/candidates?limit=$N"
+if [ -n "$DOMAINS" ]; then
+  CAND_URL="${CAND_URL}&domains=$(printf '%s' "$DOMAINS" | jq -sRr @uri)"
+fi
+CANDS_JSON=$(curl -sS "$CAND_URL" -H "x-internal-token: ${INTERNAL_BATCH_TOKEN}")
 COUNT=$(printf '%s' "$CANDS_JSON" | jq -r '.videos | length' 2>/dev/null || echo 0)
 
 if [ "$COUNT" = "0" ] || [ -z "$COUNT" ]; then
