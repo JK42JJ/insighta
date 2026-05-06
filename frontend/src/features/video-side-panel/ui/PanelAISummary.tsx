@@ -12,6 +12,7 @@
  *
  * Design tokens: insighta-side-editor-mockup-v3.html
  */
+import { useParams, Link } from 'react-router-dom';
 import type { VideoSummary } from '@/entities/card/model/types';
 import { getYouTubeVideoId } from '@/widgets/video-player/model/youtube-api';
 import type {
@@ -29,6 +30,7 @@ export interface PanelAISummaryProps {
 }
 
 export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) {
+  const { mandalaId } = useParams<{ mandalaId: string }>();
   const youtubeId = videoUrl ? getYouTubeVideoId(videoUrl) : null;
   const { richSummary, isLoading: isRichLoading } = useRichSummary(youtubeId);
 
@@ -57,6 +59,7 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
           segments={richSummary.segments ?? null}
           lora={richSummary.lora ?? null}
           youtubeId={youtubeId}
+          mandalaId={mandalaId ?? null}
         />
       )}
       {hasLegacyRich && richSummary?.structured && (
@@ -322,6 +325,7 @@ interface RichSummaryV2NewBlockProps {
   segments: VideoRichSummarySegments | null;
   lora: VideoRichSummaryLora | null;
   youtubeId: string | null;
+  mandalaId: string | null;
 }
 
 function RichSummaryV2NewBlock({
@@ -330,6 +334,7 @@ function RichSummaryV2NewBlock({
   segments,
   lora,
   youtubeId,
+  mandalaId,
 }: RichSummaryV2NewBlockProps) {
   const oneLiner = core?.one_liner ?? null;
   const coreArg = analysis?.core_argument ?? null;
@@ -341,9 +346,12 @@ function RichSummaryV2NewBlock({
   const subjectivity = analysis?.bias_signals?.subjectivity_level ?? null;
   const hasAd = analysis?.bias_signals?.has_ad === true;
 
-  const tsUrl = (sec: number | undefined) =>
-    youtubeId && Number.isFinite(sec)
-      ? `https://www.youtube.com/watch?v=${youtubeId}&t=${Math.floor(sec ?? 0)}s`
+  // CP438+1: in-page seek via ?t=N param (LearningPage useEffect picks it up
+  // and calls playerRef.current.seekTo). Falls back to null if mandalaId
+  // missing (rare — side panel always renders inside Learning route).
+  const tsUrl = (sec: number | undefined): string | null =>
+    mandalaId && youtubeId && Number.isFinite(sec)
+      ? `/learning/${mandalaId}/${youtubeId}?t=${Math.floor(sec ?? 0)}`
       : null;
 
   return (
@@ -506,14 +514,12 @@ function AtomRow({ atom, jumpUrl }: { atom: VideoRichSummaryAtom; jumpUrl: strin
       <span className="flex-1">
         {atom.text}
         {jumpUrl && Number.isFinite(atom.timestamp_sec) && (
-          <a
-            href={jumpUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            to={jumpUrl}
             className="ml-2 inline-flex items-center gap-0.5 rounded-[3px] bg-[rgba(129,140,248,0.1)] px-[5px] py-[1px] font-mono text-[10px] text-[#818cf8] hover:bg-[rgba(129,140,248,0.2)]"
           >
             ▶ {formatSeconds(atom.timestamp_sec ?? 0)}
-          </a>
+          </Link>
         )}
       </span>
     </li>

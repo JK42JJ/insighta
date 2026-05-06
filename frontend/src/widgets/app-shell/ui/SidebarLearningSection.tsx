@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronRight, BookOpen, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
@@ -107,7 +108,7 @@ export function SidebarLearningSection({ mandalaId, collapsed }: SidebarLearning
               {isExpanded && (
                 <div className="px-3 pl-8 py-2">
                   {bookChapter ? (
-                    <BookChapterPreview chapter={bookChapter} />
+                    <BookChapterPreview chapter={bookChapter} mandalaId={mandalaId} />
                   ) : (
                     <div className="flex items-center gap-1.5 text-[11px] text-sidebar-foreground/40">
                       <Sparkles className="w-3 h-3 shrink-0" />
@@ -130,10 +131,17 @@ export function SidebarLearningSection({ mandalaId, collapsed }: SidebarLearning
 
 /**
  * CP438+1 — In-sidebar preview of a book chapter (PoC).
- * Shows section titles + atom count + jump-to-video links. Click on an
- * atom timestamp opens the YouTube source at the moment in a new tab.
+ * Shows section titles + atom count + jump-to-video links. Atom
+ * timestamp clicks navigate same-tab to /learning/:mandala/:vid?t=N
+ * which LearningPage handles via the seekTo effect (no new YouTube tab).
  */
-function BookChapterPreview({ chapter }: { chapter: MandalaBookChapter }) {
+function BookChapterPreview({
+  chapter,
+  mandalaId,
+}: {
+  chapter: MandalaBookChapter;
+  mandalaId: string;
+}) {
   const sections = chapter.sections ?? [];
 
   return (
@@ -167,16 +175,14 @@ function BookChapterPreview({ chapter }: { chapter: MandalaBookChapter }) {
                         {atom.text.slice(0, 60)}
                         {atom.text.length > 60 ? '…' : ''}
                         {atom.vid && Number.isFinite(atom.ts) && (
-                          <a
-                            href={`https://www.youtube.com/watch?v=${atom.vid}&t=${Math.floor(atom.ts ?? 0)}s`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <Link
+                            to={`/learning/${mandalaId}/${atom.vid}?t=${Math.floor(atom.ts ?? 0)}`}
                             className="ml-1 inline-block rounded-[3px] bg-[rgba(129,140,248,0.15)] px-1 font-mono text-[9px] text-[#818cf8]"
                             onClick={(e) => e.stopPropagation()}
                           >
                             ▶ {Math.floor((atom.ts ?? 0) / 60)}:
                             {String(Math.floor((atom.ts ?? 0) % 60)).padStart(2, '0')}
-                          </a>
+                          </Link>
                         )}
                       </span>
                     </li>
