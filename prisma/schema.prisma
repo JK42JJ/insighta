@@ -440,6 +440,7 @@ model user_mandalas {
   recommendation_cache recommendation_cache[]
   pipeline_runs        mandala_pipeline_runs[]
   create_timings       mandala_create_timings[]
+  book                 mandala_books?
 
   source_template_id String?  @db.Uuid
   focus_tags         String[] @default([])
@@ -603,6 +604,25 @@ model mandala_activity_log {
 
   @@index([mandala_id, created_at(sort: Desc)], map: "idx_mandala_activity_log_mandala_created")
   @@index([user_id], map: "idx_mandala_activity_log_user_id")
+  @@schema("public")
+}
+
+/// CP438+1 (2026-05-06) — Mandala "book index" PoC.
+/// Stores a generated book (chapters + sections + atoms + qa pairs) as a
+/// single jsonb blob keyed by mandala_id. PoC keeps the schema minimal —
+/// section-level confirm flow + cross-video dedup are deferred to P5
+/// (book_chapters/book_sections/book_atoms split tables).
+/// Raw SQL DDL: prisma/migrations/book-poc/001_add_table.sql
+model mandala_books {
+  mandala_id   String        @id @db.Uuid
+  book_json    Json          @db.JsonB
+  version      Int           @default(1)
+  source_videos Int          @default(0)
+  source_atoms Int           @default(0)
+  generated_at DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  mandala      user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
   @@schema("public")
 }
 
