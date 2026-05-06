@@ -1,6 +1,6 @@
 #!/bin/bash
 # Process ONE video: transcript fetch → claude -p (v2 schema) → POST upsert-direct.
-# Args: $1 = youtube_video_id  $2 = source_language (ko|en)
+# Args: $1 = youtube_video_id  $2 = source_language (ko|en)  $3 = duration_sec (optional, for prompt + clamp)
 # Env: INSIGHTA_API_URL / INTERNAL_BATCH_TOKEN
 #      TRANSCRIPT_FETCHER (default 'ytapi'; 'ytdlp' for legacy WebShare path)
 #      For ytdlp path: WEBSHARE_* required.
@@ -11,6 +11,7 @@ set -uo pipefail
 
 VID="$1"
 LANG="${2:-ko}"
+DURATION_SEC="${3:-0}"
 LOG_DIR="${V2_LOG_DIR:-/tmp/insighta-v2-batch}"
 mkdir -p "$LOG_DIR"
 
@@ -57,10 +58,38 @@ else
     mark_attempted "$VID"
     exit 1
   fi
+  # CP438+1 fix: capture the cue start time and prefix the next text
+  # line with [mm:ss]. Prior version dropped both the timestamp line and
+  # the `-->` separator entirely, leaving the LLM with no timing source
+  # — which forced it to hallucinate timestamp_sec values past video
+  # duration (1103/7496 atoms = 14.7% over-duration on legacy data).
   TRANSCRIPT=$(awk '
-    /^WEBVTT/ || /^Kind:/ || /^Language:/ || /^[0-9]+:[0-9]+/ || /-->/ || /^align:/ || /^position:/ { next }
+    BEGIN { last_ts = "" }
+    /^WEBVTT/ || /^Kind:/ || /^Language:/ || /^align:/ || /^position:/ { next }
+    /-->/ {
+      # Cue header line: 00:01:23.456 --> 00:01:25.789
+      match($0, /^([0-9]+):([0-9]+):([0-9]+)/, m)
+      if (m[1] != "") {
+        sec = m[1] * 3600 + m[2] * 60 + m[3]
+      } else {
+        match($0, /^([0-9]+):([0-9]+)/, m2)
+        sec = m2[1] * 60 + m2[2]
+      }
+      mm = int(sec / 60); ss = sec % 60
+      last_ts = sprintf("[%d:%02d]", mm, ss)
+      next
+    }
+    /^[0-9]+$/ { next }
     /^$/ { next }
-    { gsub(/<[^>]*>/, ""); gsub(/&nbsp;/, " "); print }
+    {
+      gsub(/<[^>]*>/, ""); gsub(/&nbsp;/, " ")
+      if (last_ts != "") {
+        print last_ts " " $0
+        last_ts = ""
+      } else {
+        print $0
+      }
+    }
   ' "$VTT" | awk '!seen[$0]++' | head -c 30000)
 fi
 
@@ -112,6 +141,14 @@ Rules:
 - analysis.actionables: each a single imperative sentence the viewer can do today.
 - lora.qa_pairs: 5-7 entries, all level=1, all context="video".
 - timestamp_sec / from_sec / to_sec are integers in seconds (NOT mm:ss).
+- TIMESTAMP RULE (critical, CP438+1): The transcript below is annotated with
+  [mm:ss] markers at the start of every cue. Atom timestamp_sec MUST be
+  derived from the [mm:ss] marker that contains the source phrase — convert
+  to seconds (mm*60 + ss). Section from_sec/to_sec must come from the
+  earliest/latest [mm:ss] marker spanned. NEVER invent round numbers
+  (1:00, 5:00, 7:00, etc.) without a matching marker. Atom timestamp_sec
+  MUST be ≤ video duration ('"${DURATION_SEC}"' s); if a candidate exceeds
+  it, drop the atom rather than emit it.
 - Use the source language consistently across every string field.
 - Output JSON only — no preamble, no markdown fences, no commentary.
 '

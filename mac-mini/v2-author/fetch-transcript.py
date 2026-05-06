@@ -36,7 +36,18 @@ def main() -> int:
     lang = sys.argv[2] if len(sys.argv) > 2 else "ko"
     try:
         result = YouTubeTranscriptApi().fetch(vid, languages=[lang])
-        text = " ".join(s.text for s in result.snippets)
+        # CP438+1 fix: preserve cue start times so the LLM can use them as
+        # the source of `timestamp_sec`. Prior version dropped `s.start`
+        # entirely, forcing the model to hallucinate timestamps and
+        # produce values past the video duration (1103/7496 atoms = 14.7%
+        # were over-duration before this fix).
+        parts = []
+        for s in result.snippets:
+            sec = int(s.start) if hasattr(s, "start") else 0
+            mm = sec // 60
+            ss = sec % 60
+            parts.append(f"[{mm}:{ss:02d}] {s.text}")
+        text = "\n".join(parts)
     except Exception as e:  # noqa: BLE001 — surface every failure mode
         sys.stderr.write(f"{type(e).__name__}: {e}\n")
         return 1

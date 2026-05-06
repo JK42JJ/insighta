@@ -53,6 +53,7 @@ interface CandidateRow {
   youtube_video_id: string;
   default_language: string | null;
   has_caption: boolean | null;
+  duration_sec: number | null;
 }
 
 /**
@@ -165,7 +166,8 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
       SELECT
         yv.youtube_video_id,
         yv.default_language,
-        yv.has_caption
+        yv.has_caption,
+        yv.duration_seconds AS duration_sec
       FROM youtube_videos yv
       LEFT JOIN video_rich_summaries vrs ON vrs.video_id = yv.youtube_video_id
       LEFT JOIN (
@@ -289,6 +291,67 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
 
     const prisma = getPrismaClient();
     const now = new Date();
+
+    // CP438+1: clamp atom timestamp_sec / section from_sec/to_sec to video
+    // duration. Even with the new prompt rule + transcript [mm:ss] markers,
+    // the LLM occasionally still emits values past the duration. Silent
+    // clamp + log keeps the row useful (text + type stay) instead of 422
+    // rejecting the whole row.
+    let clampedAtomCount = 0;
+    let clampedSectionCount = 0;
+    let durationSec: number | null = null;
+    let mutatedSegments: unknown = body.segments;
+    try {
+      const yvRow = await prisma.$queryRawUnsafe<{ duration_seconds: number | null }[]>(
+        'SELECT duration_seconds FROM youtube_videos WHERE youtube_video_id = $1 LIMIT 1',
+        videoId
+      );
+      durationSec = yvRow[0]?.duration_seconds ?? null;
+    } catch {
+      // duration unknown — skip clamp; fall back to legacy behavior
+      durationSec = null;
+    }
+    if (
+      typeof durationSec === 'number' &&
+      durationSec > 0 &&
+      body.segments &&
+      typeof body.segments === 'object'
+    ) {
+      const cap = Math.max(0, durationSec - 1);
+      const segCopy = JSON.parse(JSON.stringify(body.segments)) as {
+        atoms?: Array<{ timestamp_sec?: number | null }>;
+        sections?: Array<{ from_sec?: number | null; to_sec?: number | null }>;
+      };
+      if (Array.isArray(segCopy.atoms)) {
+        for (const a of segCopy.atoms) {
+          if (typeof a.timestamp_sec === 'number' && a.timestamp_sec > cap) {
+            a.timestamp_sec = cap;
+            clampedAtomCount++;
+          }
+        }
+      }
+      if (Array.isArray(segCopy.sections)) {
+        for (const s of segCopy.sections) {
+          if (typeof s.from_sec === 'number' && s.from_sec > cap) {
+            s.from_sec = cap;
+            clampedSectionCount++;
+          }
+          if (typeof s.to_sec === 'number' && s.to_sec > cap) {
+            s.to_sec = cap;
+            clampedSectionCount++;
+          }
+        }
+      }
+      mutatedSegments = segCopy;
+      if (clampedAtomCount > 0 || clampedSectionCount > 0) {
+        log.warn('v2 timestamp clamp', {
+          videoId,
+          duration_seconds: durationSec,
+          clamped_atoms: clampedAtomCount,
+          clamped_sections: clampedSectionCount,
+        });
+      }
+    }
     try {
       // upsert (not update) — selector (LEFT JOIN, vrs.video_id IS NULL)
       // surfaces newly-collected yv rows that have no summary yet, so this
@@ -300,7 +363,7 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
           core: summary.core as unknown as PrismaCli.InputJsonValue,
           analysis: summary.analysis as unknown as PrismaCli.InputJsonValue,
           lora: summary.lora as unknown as PrismaCli.InputJsonValue,
-          ...(body.segments ? { segments: body.segments as PrismaCli.InputJsonValue } : {}),
+          ...(mutatedSegments ? { segments: mutatedSegments as PrismaCli.InputJsonValue } : {}),
           completeness: score.score,
           quality_flag: 'pass',
           model: 'claude-code-direct',
@@ -316,7 +379,7 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
           core: summary.core as unknown as PrismaCli.InputJsonValue,
           analysis: summary.analysis as unknown as PrismaCli.InputJsonValue,
           lora: summary.lora as unknown as PrismaCli.InputJsonValue,
-          ...(body.segments ? { segments: body.segments as PrismaCli.InputJsonValue } : {}),
+          ...(mutatedSegments ? { segments: mutatedSegments as PrismaCli.InputJsonValue } : {}),
           completeness: score.score,
           quality_flag: 'pass',
           model: 'claude-code-direct',

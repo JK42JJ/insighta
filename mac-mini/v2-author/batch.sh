@@ -51,8 +51,10 @@ fi
 echo "[v2-batch] candidates fetched: $COUNT" | tee -a "$SUMMARY"
 
 # 2. Dispatch concurrently via xargs -P. Each worker = process-one.sh.
-PAIRS=$(printf '%s' "$CANDS_JSON" | jq -r '.videos[] | "\(.youtube_video_id) \(.default_language // "ko")"')
-echo "$PAIRS" | xargs -n 2 -P "$CONC" -I {} bash -c 'eval set -- {}; "'"$DIR"'/process-one.sh" "$1" "$2"' || true
+# CP438+1: forward duration_sec (3rd arg) so process-one.sh can inject it
+# into the prompt (timestamp ≤ duration rule).
+PAIRS=$(printf '%s' "$CANDS_JSON" | jq -r '.videos[] | "\(.youtube_video_id) \(.default_language // "ko") \(.duration_sec // 0)"')
+echo "$PAIRS" | xargs -n 3 -P "$CONC" -I {} bash -c 'eval set -- {}; "'"$DIR"'/process-one.sh" "$1" "$2" "$3"' || true
 
 # 3. Aggregate per-video result lines.
 PASS=$(grep -h ' pass ' "$V2_LOG_DIR"/*.log 2>/dev/null | wc -l | tr -d ' ')
