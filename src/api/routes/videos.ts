@@ -543,6 +543,14 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           videoId: row.video_id,
           oneLiner: row.one_liner,
           structured: row.structured,
+          // CP438+1: expose v2 layered jsonb (CP437 schema). FE V2NewBlock
+          // renders these directly when `core` is non-null.
+          templateVersion: row.template_version ?? null,
+          completeness: row.completeness ?? null,
+          core: row.core ?? null,
+          analysis: row.analysis ?? null,
+          segments: row.segments ?? null,
+          lora: row.lora ?? null,
           qualityScore: row.quality_score,
           model: row.model,
           updatedAt: row.updated_at.toISOString(),
