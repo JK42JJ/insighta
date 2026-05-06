@@ -440,6 +440,7 @@ model user_mandalas {
   recommendation_cache recommendation_cache[]
   pipeline_runs        mandala_pipeline_runs[]
   create_timings       mandala_create_timings[]
+  book                 mandala_books?
 
   source_template_id String?  @db.Uuid
   focus_tags         String[] @default([])
