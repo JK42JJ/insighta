@@ -1,5 +1,5 @@
-import { useRef, useCallback, useState, useLayoutEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useRef, useCallback, useState, useLayoutEffect, useEffect } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { VideoStrip } from './VideoStrip';
 import { CenterPanel } from './CenterPanel';
 import { RightPanel } from './RightPanel';
@@ -7,6 +7,9 @@ import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
 
 export default function LearningPage() {
   const { mandalaId, videoId } = useParams<{ mandalaId: string; videoId: string }>();
+  const [searchParams] = useSearchParams();
+  const tParam = searchParams.get('t');
+  const targetSec = tParam ? Math.max(0, Math.floor(Number(tParam))) : null;
   const playerRef = useRef<YTPlayer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const playbackMapRef = useRef(new Map<string, number>());
@@ -24,6 +27,26 @@ export default function LearningPage() {
     }
     prevVideoIdRef.current = videoId;
   }, [videoId]);
+
+  // CP438+1: ?t=N query param drives in-page seek. When the user clicks
+  // an atom timestamp link in the sidebar/panel, the same-video case
+  // doesn't unmount CenterPanel — useEffect on tParam fires seekTo on
+  // the live player. The different-video case loads via startTime below.
+  useEffect(() => {
+    if (targetSec === null || !Number.isFinite(targetSec)) return;
+    if (!videoId) return;
+    // Override resume position so reload-on-video-change also lands here.
+    playbackMapRef.current.set(videoId, targetSec);
+    const player = playerRef.current;
+    if (!player) return;
+    try {
+      player.seekTo(targetSec, true);
+      player.playVideo?.();
+      setIsPlaying(true);
+    } catch {
+      // player not ready yet — startTime fallback handles it on mount
+    }
+  }, [tParam, targetSec, videoId]);
 
   const handleUserPlayed = useCallback(() => {
     setIsPlaying(true);
