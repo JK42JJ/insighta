@@ -263,6 +263,23 @@
 
   body {
     @apply bg-background text-foreground font-sans;
+    /* CP438+1: unify Korean rendering across panels (sidebar / center /
+     * chatbot). Korean glyphs were falling back inconsistently because
+     * Source Sans Pro is Latin-only — the chatbot panel uses system
+     * Korean while the sidebar/center used different fallbacks per
+     * browser. Pin the Korean-first stack so every panel renders the
+     * same Apple SD Gothic Neo / Pretendard family. */
+    font-family:
+      -apple-system,
+      BlinkMacSystemFont,
+      "Apple SD Gothic Neo",
+      Pretendard,
+      "Noto Sans KR",
+      "Source Sans Pro",
+      "Segoe UI",
+      Roboto,
+      system-ui,
+      sans-serif;
   }
 
   /* Skip navigation link — visible on focus only */
