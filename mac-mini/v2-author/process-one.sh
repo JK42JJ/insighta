@@ -17,6 +17,24 @@ mkdir -p "$LOG_DIR"
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TRANSCRIPT_FETCHER="${TRANSCRIPT_FETCHER:-ytapi}"
+
+# CP438+2 (PR #604, 2026-05-06): transcript cache policy.
+# Why: prior runs discarded transcripts after upsert, so any future schema /
+# prompt fix (e.g. PR #603 timestamp marker preservation) required a fresh
+# YouTube fetch — burning WebShare quota / triggering IpBlocked. Cache the
+# transcript on local disk; delete only when the API confirms the v2 row
+# passed (kind=pass + completeness >= 0.7). Failed runs keep the cache so
+# claude -p can be re-invoked for free.
+#
+# Legal boundary (vs src/api/routes/internal/transcript.ts:16-17 "NEVER
+# persisted"): the directive prohibits DB / cloud persistence. A short-lived
+# Mac-Mini-local cache file with explicit delete-on-validation + 30d TTL
+# (cleanup-transcript-cache.sh) is not persistence. Cache dir is chmod 700.
+TRANSCRIPT_CACHE_DIR="${TRANSCRIPT_CACHE_DIR:-$HOME/.insighta/transcript-cache}"
+mkdir -p "$TRANSCRIPT_CACHE_DIR"
+chmod 700 "$TRANSCRIPT_CACHE_DIR" 2>/dev/null || true
+CACHE_FILE="$TRANSCRIPT_CACHE_DIR/$VID.txt"
+KEEP_UNTIL_M3="${KEEP_UNTIL_M3:-0}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
@@ -32,8 +50,12 @@ mark_attempted() {
     --data "{\"videoId\":\"$1\"}" >/dev/null 2>&1 || true
 }
 
-# 1. Transcript fetch — youtube-transcript-api (default) or yt-dlp (legacy).
-if [ "$TRANSCRIPT_FETCHER" = "ytapi" ]; then
+# 1. Transcript fetch — cache-first; ytapi (default) or yt-dlp (legacy) on miss.
+CACHE_HIT=0
+if [ -f "$CACHE_FILE" ] && [ "$(wc -c <"$CACHE_FILE" | tr -d ' ')" -ge 200 ]; then
+  TRANSCRIPT=$(cat "$CACHE_FILE")
+  CACHE_HIT=1
+elif [ "$TRANSCRIPT_FETCHER" = "ytapi" ]; then
   # Direct YouTube web-client API. No proxy required.
   TRANSCRIPT=$(python3 "$DIR/fetch-transcript.py" "$VID" "$LANG" 2>"$LOG_DIR/$VID.fetch.err")
   FETCH_RC=$?
@@ -97,6 +119,14 @@ if [ ${#TRANSCRIPT} -lt 200 ]; then
   echo "[$VID] no_caption (transcript too short: ${#TRANSCRIPT} chars)" | tee "$LOG_DIR/$VID.log"
   mark_attempted "$VID"
   exit 1
+fi
+
+# CP438+2: persist freshly-fetched transcript so subsequent claude -p
+# re-runs (timestamp / schema fixes) skip the YouTube fetch entirely.
+# Cache hits don't re-write (mtime preserved → TTL accurate).
+if [ "$CACHE_HIT" = "0" ]; then
+  printf '%s' "$TRANSCRIPT" > "$CACHE_FILE"
+  chmod 600 "$CACHE_FILE" 2>/dev/null || true
 fi
 
 # 3. Build prompt + invoke claude -p
@@ -187,11 +217,20 @@ RESP=$(printf '%s' "$PAYLOAD" | curl -sS \
 
 if printf '%s' "$RESP" | jq -e '.kind == "pass"' >/dev/null 2>&1; then
   COMP=$(printf '%s' "$RESP" | jq -r '.completeness')
-  echo "[$VID] pass completeness=$COMP" | tee "$LOG_DIR/$VID.log"
+  # CP438+2: validation passed (kind=pass + completeness >= 0.7 enforced by
+  # API). Drop the cached transcript — a future re-run would mean re-pulling
+  # from YouTube, but a passed v2 row is the validation event we wait for.
+  # Override with KEEP_UNTIL_M3=1 to retain until manual M3='real' review.
+  COMP_NUM=$(printf '%s' "$COMP" | awk '{print ($1+0)}')
+  if [ "$KEEP_UNTIL_M3" != "1" ] && awk -v c="$COMP_NUM" 'BEGIN{exit !(c>=0.7)}'; then
+    rm -f "$CACHE_FILE"
+  fi
+  echo "[$VID] pass completeness=$COMP cache_hit=$CACHE_HIT" | tee "$LOG_DIR/$VID.log"
   exit 0
 else
+  # Failure path retains the cache for cheap re-processing.
   ERR=$(printf '%s' "$RESP" | jq -r '.error // "unknown"' 2>/dev/null || echo "unparseable")
-  echo "[$VID] upsert_failed err=$ERR" | tee "$LOG_DIR/$VID.log"
+  echo "[$VID] upsert_failed err=$ERR cache_hit=$CACHE_HIT" | tee "$LOG_DIR/$VID.log"
   printf '%s' "$RESP" | head -c 500 >> "$LOG_DIR/$VID.log"
   exit 3
 fi
