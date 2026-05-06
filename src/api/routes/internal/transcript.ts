@@ -64,7 +64,23 @@ interface CandidateRow {
  * domain by matching common Korean keywords in the title. Heuristic.
  */
 const DOMAIN_TITLE_KEYWORDS: Record<string, string[]> = {
-  social: ['사회', '정치', '커뮤니티', '소통', '인간관계', '뉴스', '갈등', '토론', '관계', '심리'],
+  // CP438+1 v2 — '뉴스' removed (caught all economic/political news → 38/48 batch
+  // misclassified as 'finance' instead of 'social'). Kept narrow social-only
+  // terms; added sociology-specific seeds (젠더/세대/시민/연대).
+  social: [
+    '사회',
+    '정치',
+    '커뮤니티',
+    '소통',
+    '인간관계',
+    '갈등',
+    '토론',
+    '관계',
+    '젠더',
+    '세대',
+    '시민',
+    '연대',
+  ],
   creative: [
     '디자인',
     '작곡',
