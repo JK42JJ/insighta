@@ -91,12 +91,96 @@ export interface VideoRichSummaryStructured {
   quotes?: VideoRichSummaryQuote[];
   tl_dr_ko?: string;
   tl_dr_en?: string;
+  // Legacy v2 (CP425) schema kept for backwards compat. New v2 (CP437+)
+  // uses the layered jsonb fields below.
+  sections?: Array<{
+    from_sec: number;
+    to_sec: number;
+    title: string;
+    summary?: string;
+    relevance_pct: number;
+    key_points?: Array<{ text: string; timestamp_sec?: number }>;
+  }>;
+  entities?: Array<{ name: string }>;
+}
+
+/**
+ * CP438+1: v2 layered jsonb schema (CP437 generator). Each is null for
+ * v1 rows or when the v2 author has not run yet.
+ */
+export interface VideoRichSummaryCore {
+  one_liner?: string;
+  domain?: string;
+  depth_level?: string;
+  content_type?: string;
+  target_audience?: string;
+}
+
+export interface VideoRichSummaryKeyConcept {
+  term: string;
+  definition: string;
+}
+
+export interface VideoRichSummaryAnalysis {
+  core_argument?: string;
+  key_concepts?: VideoRichSummaryKeyConcept[];
+  actionables?: string[];
+  mandala_fit?: {
+    suggested_goals?: string[];
+    relevance_rationale?: string;
+  };
+  bias_signals?: {
+    has_ad?: boolean;
+    is_sponsored?: boolean;
+    subjectivity_level?: string;
+    notes?: string;
+  };
+  prerequisites?: string;
+}
+
+export interface VideoRichSummarySection {
+  idx?: number;
+  title: string;
+  from_sec: number;
+  to_sec: number;
+  summary?: string;
+}
+
+export interface VideoRichSummaryAtom {
+  idx?: number;
+  type?: 'fact' | 'tip' | 'argument' | string;
+  text: string;
+  timestamp_sec?: number;
+}
+
+export interface VideoRichSummarySegments {
+  sections?: VideoRichSummarySection[];
+  atoms?: VideoRichSummaryAtom[];
+}
+
+export interface VideoRichSummaryQAPair {
+  level?: number;
+  q: string;
+  a: string;
+  context?: string;
+}
+
+export interface VideoRichSummaryLora {
+  qa_pairs?: VideoRichSummaryQAPair[];
 }
 
 export interface VideoRichSummaryResponse {
   videoId: string;
   oneLiner: string | null;
   structured: VideoRichSummaryStructured | null;
+  // CP438+1: layered v2 jsonb fields. Present when template_version='v2' AND
+  // CP437 generator authored the row. NULL on v1 rows.
+  templateVersion?: string | null;
+  completeness?: number | null;
+  core?: VideoRichSummaryCore | null;
+  analysis?: VideoRichSummaryAnalysis | null;
+  segments?: VideoRichSummarySegments | null;
+  lora?: VideoRichSummaryLora | null;
   qualityScore: number | null;
   model: string | null;
   updatedAt: string;
