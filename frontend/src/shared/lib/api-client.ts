@@ -186,6 +186,53 @@ export interface VideoRichSummaryResponse {
   updatedAt: string;
 }
 
+/**
+ * CP438+1 PoC — Mandala book index response shape.
+ * Server stores the entire generated book as a single jsonb blob keyed
+ * by mandala_id. PoC schema; will split into normalized tables in P5.
+ */
+export interface MandalaBookAtom {
+  vid: string;
+  ts: number;
+  text: string;
+  type?: string;
+}
+
+export interface MandalaBookSection {
+  title: string;
+  narrative?: string;
+  atoms?: MandalaBookAtom[];
+  qa?: Array<{ q: string; a: string }>;
+}
+
+export interface MandalaBookChapter {
+  ch: number;
+  title: string;
+  intro?: string;
+  sections: MandalaBookSection[];
+}
+
+export interface MandalaBookData {
+  mandala_id: string;
+  mandala_title: string;
+  generated_at: string;
+  source_videos: number;
+  source_atoms: number;
+  estimated_pages?: number;
+  chapters: MandalaBookChapter[];
+  stats?: Record<string, unknown>;
+}
+
+export interface MandalaBookResponse {
+  mandalaId: string;
+  version: number;
+  sourceVideos: number;
+  sourceAtoms: number;
+  generatedAt: string;
+  updatedAt: string;
+  book: MandalaBookData;
+}
+
 interface ClawbotConfig {
   cronExpression: string;
   threshold: number;
@@ -634,6 +681,23 @@ class ApiClient {
       const res = await this.request<{ data: VideoRichSummaryResponse }>(
         `/videos/${videoId}/rich-summary`
       );
+      return res.data;
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.statusCode === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * CP438+1 PoC — fetch the generated book index for a mandala.
+   * Returns null on 404 (book has not been generated yet — sidebar
+   * fallback to "보고서 작성 준비중...").
+   */
+  async getMandalaBook(mandalaId: string): Promise<MandalaBookResponse | null> {
+    try {
+      const res = await this.request<{ data: MandalaBookResponse }>(`/mandalas/${mandalaId}/book`);
       return res.data;
     } catch (err) {
       if (err instanceof ApiHttpError && err.statusCode === 404) {

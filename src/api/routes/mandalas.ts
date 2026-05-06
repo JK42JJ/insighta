@@ -2376,5 +2376,86 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     }
   );
 
+  /**
+   * GET /api/v1/mandalas/:id/book — CP438+1 PoC.
+   *
+   * Returns the generated book index (chapters + sections + atoms + qa)
+   * for the mandala. PoC stores the entire book as a single jsonb blob
+   * keyed by mandala_id (mandala_books table). Read-only for now —
+   * generation is offline (CC console authored, then upserted via
+   * scripts/book-poc/import-eng-mandala.ts or similar).
+   *
+   * Auth: mandala owner OR public mandala (is_public=true).
+   * Response:
+   *   200 { status: 'ok', data: { mandalaId, version, sourceVideos,
+   *         sourceAtoms, generatedAt, updatedAt, book: <jsonb> } }
+   *   404 RICH_SUMMARY_NOT_FOUND when no book row exists yet
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/book',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const { id: mandalaId } = request.params;
+
+      // Auth: owner or public mandala.
+      const mandala = await getPrismaClient().user_mandalas.findFirst({
+        where: {
+          id: mandalaId,
+          OR: [{ user_id: userId }, { is_public: true }],
+        },
+        select: { id: true, title: true },
+      });
+      if (!mandala) {
+        return reply.code(404).send({ status: 'error', error: 'Mandala not found' });
+      }
+
+      // Raw query — Prisma client model name `mandala_books` may not be
+      // present in every deploy if regen lags behind.
+      const rows = await getPrismaClient().$queryRawUnsafe<
+        Array<{
+          mandala_id: string;
+          book_json: unknown;
+          version: number;
+          source_videos: number;
+          source_atoms: number;
+          generated_at: Date;
+          updated_at: Date;
+        }>
+      >(
+        `SELECT mandala_id, book_json, version, source_videos, source_atoms,
+                generated_at, updated_at
+         FROM mandala_books
+         WHERE mandala_id = $1::uuid
+         LIMIT 1`,
+        mandalaId
+      );
+
+      if (!rows[0]) {
+        return reply.code(404).send({
+          status: 'error',
+          code: 'BOOK_NOT_FOUND',
+          message: 'No book has been generated for this mandala yet',
+        });
+      }
+
+      const row = rows[0];
+      return reply.code(200).send({
+        status: 'ok',
+        data: {
+          mandalaId: row.mandala_id,
+          version: row.version,
+          sourceVideos: row.source_videos,
+          sourceAtoms: row.source_atoms,
+          generatedAt: row.generated_at.toISOString(),
+          updatedAt: row.updated_at.toISOString(),
+          book: row.book_json,
+        },
+      });
+    }
+  );
+
   done();
 };

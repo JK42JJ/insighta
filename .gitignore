@@ -38,6 +38,7 @@ prisma/migrations/*
 !prisma/migrations/llm_call_logs/
 !prisma/migrations/quality_metrics/
 !prisma/migrations/transcript-attempted/
+!prisma/migrations/book-poc/
 
 # Logs
 logs/

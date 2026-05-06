@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { ChevronRight, BookOpen, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
+import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useMandalaCards } from '@/pages/learning/model/useMandalaCards';
 import type { InsightCard } from '@/entities/card/model/types';
+import type { MandalaBookChapter } from '@/shared/lib/api-client';
 import { cn } from '@/shared/lib/utils';
 
 interface SidebarLearningSectionProps {
@@ -22,6 +24,14 @@ export function SidebarLearningSection({ mandalaId, collapsed }: SidebarLearning
   const subGoals = rootLevel?.subjects ?? [];
 
   const { cards: mandalaCards } = useMandalaCards(mandalaId);
+  // CP438+1 — book index PoC; non-null when a book has been generated.
+  const { book: bookResponse } = useMandalaBook(mandalaId);
+  const bookChaptersByIdx = new Map<number, MandalaBookChapter>();
+  if (bookResponse?.book?.chapters) {
+    for (const ch of bookResponse.book.chapters) {
+      bookChaptersByIdx.set(ch.ch, ch);
+    }
+  }
 
   const cardsByCell = new Map<number, InsightCard[]>();
   for (const card of mandalaCards) {
@@ -62,6 +72,9 @@ export function SidebarLearningSection({ mandalaId, collapsed }: SidebarLearning
         {subGoals.map((goal, idx) => {
           const cellCards = cardsByCell.get(idx + 1) ?? [];
           const isExpanded = selectedCell === idx + 1;
+          // CP438+1 — book chapter `ch` is 0-based but cellIndex is 1-based.
+          const bookChapter = bookChaptersByIdx.get(idx);
+          const sectionCount = bookChapter?.sections?.length ?? 0;
 
           return (
             <div key={idx}>
@@ -78,29 +91,107 @@ export function SidebarLearningSection({ mandalaId, collapsed }: SidebarLearning
                   className={cn('h-3 w-3 shrink-0 transition-transform', isExpanded && 'rotate-90')}
                 />
                 <span className="flex-1 truncate text-[12px] font-medium">{goal}</span>
-                {cellCards.length > 0 && (
-                  <span className="shrink-0 rounded-full bg-sidebar-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-sidebar-primary">
-                    {cellCards.length}
+                {sectionCount > 0 ? (
+                  <span className="shrink-0 rounded-full bg-[rgba(45,212,191,0.15)] px-1.5 py-0.5 text-[10px] font-semibold text-[#2dd4bf]">
+                    📖 {sectionCount}
                   </span>
+                ) : (
+                  cellCards.length > 0 && (
+                    <span className="shrink-0 rounded-full bg-sidebar-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-sidebar-primary">
+                      {cellCards.length}
+                    </span>
+                  )
                 )}
               </button>
 
               {isExpanded && (
                 <div className="px-3 pl-8 py-2">
-                  <div className="flex items-center gap-1.5 text-[11px] text-sidebar-foreground/40">
-                    <Sparkles className="w-3 h-3 shrink-0" />
-                    <span>
-                      {cellCards.length > 0
-                        ? t('learning.reportPreparing', '보고서 작성 준비중 ...')
-                        : t('learning.contentCollecting', '콘텐츠 수집 중...')}
-                    </span>
-                  </div>
+                  {bookChapter ? (
+                    <BookChapterPreview chapter={bookChapter} />
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-[11px] text-sidebar-foreground/40">
+                      <Sparkles className="w-3 h-3 shrink-0" />
+                      <span>
+                        {cellCards.length > 0
+                          ? t('learning.reportPreparing', '보고서 작성 준비중 ...')
+                          : t('learning.contentCollecting', '콘텐츠 수집 중...')}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * CP438+1 — In-sidebar preview of a book chapter (PoC).
+ * Shows section titles + atom count + jump-to-video links. Click on an
+ * atom timestamp opens the YouTube source at the moment in a new tab.
+ */
+function BookChapterPreview({ chapter }: { chapter: MandalaBookChapter }) {
+  const sections = chapter.sections ?? [];
+
+  return (
+    <div className="space-y-2">
+      {chapter.intro && (
+        <p className="text-[11px] leading-[1.5] text-sidebar-foreground/50">{chapter.intro}</p>
+      )}
+      <ul className="space-y-2">
+        {sections.map((sec, sIdx) => {
+          const atoms = sec.atoms ?? [];
+          return (
+            <li
+              key={sIdx}
+              className="rounded-[6px] border border-sidebar-border bg-sidebar-accent/30 px-2 py-2"
+            >
+              <p className="text-[11px] font-semibold text-sidebar-foreground/80">{sec.title}</p>
+              {sec.narrative && (
+                <p className="mt-1 text-[10px] leading-[1.45] text-sidebar-foreground/55">
+                  {sec.narrative}
+                </p>
+              )}
+              {atoms.length > 0 && (
+                <ul className="mt-1.5 space-y-0.5">
+                  {atoms.slice(0, 5).map((atom, aIdx) => (
+                    <li
+                      key={aIdx}
+                      className="flex gap-1 text-[10px] leading-[1.4] text-sidebar-foreground/60"
+                    >
+                      <span className="shrink-0 text-sidebar-foreground/40">·</span>
+                      <span className="flex-1">
+                        {atom.text.slice(0, 60)}
+                        {atom.text.length > 60 ? '…' : ''}
+                        {atom.vid && Number.isFinite(atom.ts) && (
+                          <a
+                            href={`https://www.youtube.com/watch?v=${atom.vid}&t=${Math.floor(atom.ts ?? 0)}s`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-1 inline-block rounded-[3px] bg-[rgba(129,140,248,0.15)] px-1 font-mono text-[9px] text-[#818cf8]"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            ▶ {Math.floor((atom.ts ?? 0) / 60)}:
+                            {String(Math.floor((atom.ts ?? 0) % 60)).padStart(2, '0')}
+                          </a>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                  {atoms.length > 5 && (
+                    <li className="text-[10px] text-sidebar-foreground/40">
+                      +{atoms.length - 5} more
+                    </li>
+                  )}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
