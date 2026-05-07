@@ -65,9 +65,15 @@ interface CandidateRow {
  * domain by matching common Korean keywords in the title. Heuristic.
  */
 const DOMAIN_TITLE_KEYWORDS: Record<string, string[]> = {
-  // CP438+1 v2 — '뉴스' removed (caught all economic/political news → 38/48 batch
-  // misclassified as 'finance' instead of 'social'). Kept narrow social-only
-  // terms; added sociology-specific seeds (젠더/세대/시민/연대).
+  // CP438+2 (PR #605, 2026-05-07): expanded for LoRA training-data balance.
+  // Original v1 narrow lists were correct heuristics for "stay-on-topic" but
+  // exhausted the social/creative pool within the 7-day cooldown window
+  // (every matching video became `transcript_attempted_at`-stamped). Added
+  // lifestyle/mind/business/health buckets that previously fell back to []
+  // (silent miss → 0 candidates returned for those biases). Bucket
+  // assignment is heuristic — final core.domain is decided by the v2
+  // author. Some keywords (e.g. '인테리어') reasonably belong to multiple
+  // buckets; placement is whichever bucket needed the volume more.
   social: [
     '사회',
     '정치',
@@ -81,6 +87,18 @@ const DOMAIN_TITLE_KEYWORDS: Record<string, string[]> = {
     '세대',
     '시민',
     '연대',
+    '친구',
+    '연애',
+    '결혼',
+    '가족',
+    '모임',
+    '공감',
+    '사회생활',
+    '대화법',
+    '화법',
+    '설득',
+    '심리학',
+    'MBTI',
   ],
   creative: [
     '디자인',
@@ -94,8 +112,66 @@ const DOMAIN_TITLE_KEYWORDS: Record<string, string[]> = {
     '그림',
     '일러스트',
     '색채',
+    '음악',
+    '편집',
+    '영상편집',
+    '연출',
+    '시나리오',
+    '크리에이터',
   ],
-  // Add more domain buckets here as needed.
+  lifestyle: [
+    '여행',
+    '요리',
+    '레시피',
+    '취미',
+    '패션',
+    '뷰티',
+    '인테리어',
+    '반려',
+    '캠핑',
+    '홈트',
+    '미니멀',
+    '루틴',
+    '일상',
+    '살림',
+  ],
+  mind: [
+    '명상',
+    '마음',
+    '스트레스',
+    '심리',
+    '불안',
+    '우울',
+    '치유',
+    '챌린지',
+    '동기부여',
+    '자존감',
+    '마인드',
+  ],
+  business: [
+    '창업',
+    '스타트업',
+    '경영',
+    '마케팅',
+    '협상',
+    '리더십',
+    '조직',
+    '매출',
+    '퍼널',
+    '퍼스널 브랜딩',
+  ],
+  health: [
+    '건강',
+    '다이어트',
+    '영양',
+    '운동',
+    '수면',
+    '면역',
+    '체력',
+    '스트레칭',
+    '요가',
+    '홈트레이닝',
+  ],
 };
 
 export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
