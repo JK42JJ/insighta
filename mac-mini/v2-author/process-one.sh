@@ -197,6 +197,28 @@ V2_JSON=$(printf '%s\n\nVideo: %s\nLanguage: %s\nTranscript:\n%s\n' "$PROMPT_HEA
 # Strip optional markdown fences if claude added them despite instructions.
 V2_JSON=$(printf '%s' "$V2_JSON" | sed -e 's/^```json//' -e 's/^```//' -e 's/```$//' | sed '/^$/d')
 
+# CP438+2 (PR #606, 2026-05-07): OAuth/limit guard. When the user's CC
+# subscription hits its 5h usage cap or the keychain token expires, the
+# `claude -p` response is a plain-text error like:
+#   "You've hit your limit · resets 3pm (Asia/Seoul)"
+#   "Not logged in · Please run /login"
+# Without this guard those responses fall through to the JSON parser,
+# fail with `claude_invalid_json`, and `mark_attempted "$VID"` stamps a
+# 7-day cooldown on the row — even though the row's transcript was fine
+# and would author cleanly with a working OAuth. 2026-05-07 incident:
+# 81 social-domain candidates burned this way during a 12-13:00 KST
+# OAuth-cap window, all locked out for 7 days, blocking the LoRA
+# training-data floor. Detect early; do NOT mark_attempted; exit with
+# code 4 so batch.sh can stop spawning new workers.
+if printf '%s' "$V2_JSON" | grep -qE "hit your limit|Not logged in|Please run /login"; then
+  REASON=$(printf '%s' "$V2_JSON" | head -c 200 | tr '\n' ' ')
+  echo "[$VID] oauth_limit ($REASON)" | tee "$LOG_DIR/$VID.log"
+  printf '%s' "$V2_JSON" | head -c 500 > "$LOG_DIR/$VID.oauth.txt"
+  # Touch a sentinel file so batch.sh can SIGTERM in-flight workers.
+  : > "$LOG_DIR/.oauth_limit_hit"
+  exit 4
+fi
+
 if ! printf '%s' "$V2_JSON" | jq -e . >/dev/null 2>&1; then
   echo "[$VID] claude_invalid_json" | tee "$LOG_DIR/$VID.log"
   printf '%s' "$V2_JSON" | head -c 500 > "$LOG_DIR/$VID.invalid.json"
