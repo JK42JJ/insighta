@@ -148,6 +148,26 @@ Known repeat-offense patterns. Check changed files for these risks. If any match
 - Check: Repo version is source-of-truth; any intentional prod-only divergence must be moved to env var indirection (not docker-compose literal).
 - Reference: troubleshooting.md "Deploy Copy docker-compose.prod.yml to EC2 step overwrites prod compose" (CP419 regression).
 
+**[6m] Bulk UPDATE/reset column-scope matrix not presented**
+- Trigger: any script or query that runs `UPDATE ... SET <col> = NULL` (or DELETE) on ≥ 50 rows of a user-data table.
+- Check: Pre-flight produced a per-column matrix (오염/살릴 수 있음/액션) presented to the user AND latest daily backup timestamp was confirmed (`s3://insighta-backups/db/YYYY/MM/`) AND a 1-10 row sample commit was verified before full commit.
+- Reference: troubleshooting.md "CP438+2: Reset/destructive bulk UPDATE 컬럼별 scope 미제시" (LEVEL-2 fast-track, 590 row NULL incident with `lora.qa_pairs` self-contradiction; 19 row permanent loss; 564/583 partial recovery from S3).
+
+**[6n] SQL/ORM JOIN cardinality not row-count-diff verified**
+- Trigger: any PR touching SQL or Prisma `select` / `where` / `from` with a JOIN/INNER JOIN/LEFT JOIN clause change.
+- Check: `COUNT(*)` for left-table / matched / left-only / right-only computed AND the cardinality model (1:1 / 1:N / N:M) is explicitly stated in the PR description; `ship` blocked if expected vs actual diff exceeds modeled boundary.
+- Reference: troubleshooting.md Regression Watchlist "Selector/JOIN 변경 → prod row count diff 사전 측정" (LEVEL-2, counter=2, CP438 INNER JOIN 6th recurrence; 5462 video unblock by LEFT JOIN fix in PR #593).
+
+**[6o] macOS shell awk dialect (BSD vs gawk) compat**
+- Trigger: any shell script using `awk match($0, /pattern/, m)` 3-argument form, or `gensub` / `gawk` extensions, intended to run on macOS Mac Mini or BSD systems.
+- Check: POSIX-only awk (`split` + `sub` 2-argument form) used; `shellcheck` does NOT lint awk dialects, so manual review + 1 smoke run on the actual target host required.
+- Reference: troubleshooting.md "CP439: macOS gawk→BSD awk 3-arg match() silent fail" (LEVEL-1, 25/25 batch silent failure on Mac Mini, awk syntax error swallowed).
+
+**[6p] Subprocess wrapping OAuth/limit pre-grep before mark_attempted**
+- Trigger: any subprocess wrapper (e.g., `claude -p`, `gh api`) where the parent script `jq`/`mark_attempted` stamps the response without first checking for OAuth/limit error strings (`hit your limit`, `Not logged in`, `resets [0-9]`).
+- Check: error-string grep precedes any success/failure stamping; OAuth/limit responses produce a distinct exit code (e.g., exit 4 oauth, exit 5 limit) and a sentinel file (`.oauth_limit_hit`) so cooldown locks are NOT applied to videos that were never actually attempted.
+- Reference: troubleshooting.md "CP439: claude -p OAuth/limit 응답이 mark_attempted 도장 → 7-day cooldown poison" (LEVEL-1, 81 social-domain candidates 7-day locked without ever being attempted; PR #606 fix `f61ad69`).
+
 Promotion policy: an item is added here when it appears in troubleshooting.md at LEVEL-2+, OR at LEVEL-1 with high prod impact (user frustration / outage / data corruption). Items retired when counter drops or pattern becomes impossible by design.
 
 ## Output Format

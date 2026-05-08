@@ -8,6 +8,11 @@
             "type": "command",
             "command": "bash scripts/verify-gate.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/ssh-ec2-guard.sh",
+            "timeout": 5
           }
         ]
       }

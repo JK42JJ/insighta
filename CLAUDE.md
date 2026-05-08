@@ -45,11 +45,16 @@
 - GitHub Secrets name != env var name — check mapping in credentials.md
 - 새 시크릿 추가 시: credentials.md에 먼저 기록 -> 코드 작성
 
-### EC2 SSH 접근 (절대 규칙, LEVEL-2 recurrence=2, CP389 → CP422)
-- **`ssh insighta-ec2` timeout 시 raw ssh 재시도 금지. 즉시 `scripts/ssh-connect.sh` 사용.**
-- 근거: port 22 ingress 가 SG `sg-079aa1ca6855e587b` 에서 IP-allow-listed. IP 변경 시 timeout. 스크립트가 public IP 감지 → SG ingress 자동 교체 → 연결.
-- probe / stdin-pipe 용도는 script 의 IP update 부분 (lines 9-43) 만 별도 실행 후 기존 `cat ... | ssh insighta-ec2 "docker exec -i ..."` 패턴 유지.
-- 상세: `memory/credentials.md` §L7.
+### EC2 SSH 접근 (절대 규칙, LEVEL-3 recurrence=3, CP389 → CP422 → CP438+1, hook-enforced)
+- **Direct `ssh insighta-ec2 ...` 금지.** PreToolUse hook (`scripts/hooks/ssh-ec2-guard.sh`) 가 실행 시점에 차단. 3회 재발 끝에 memory-only enforcement 포기, hook 으로 승격.
+- **Canonical entry points** (hook 통과):
+  1. **Automation / pipe / docker exec**: `bash scripts/ssh-connect.sh "<command>"` — Tailscale 우선 → 실패 시 SG ingress 자동 갱신 → public IP fallback. command mode 에서 stdin forward.
+  2. **Interactive**: `bash scripts/ssh-connect.sh`
+  3. **Tailscale fast path** (daemon up 시): `ssh insighta-ec2-ts <command>` — `~/.ssh/config` alias, SG dance 불필요.
+  4. **SG update only (no connect)**: `bash scripts/ssh-connect.sh --update-sg`
+- `scp` 도 동일 차단: `ubuntu@44.231.152.49:` / `insighta-ec2:` 대상 hook block. Tailscale IP `100.102.124.23` 직사용 또는 `--update-sg` 선행.
+- 근거: port 22 ingress = SG `sg-079aa1ca6855e587b` IP-allow-listed. IP 변경 시 timeout.
+- 상세: `memory/credentials.md` §L7. Rollback: `.claude/settings.local.json` 에서 hook entry 제거.
 
 ### SECURITY carryover blocking (절대 규칙, LEVEL-3, CP422 Rule H promotion)
 - **SECURITY 류 carryover (credential rotation / permission revoke / exposed secret cleanup) 가 3 session 연속 user-deferred 시, 다음 `/init` 에서 blocking question 으로 surface. 답 없이 새 개선 작업 진입 금지.**
