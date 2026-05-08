@@ -386,18 +386,21 @@ function AuthenticatedApp() {
   // CP442 — outside-click closes the IdeaSpot popup. The trigger button is
   // tagged with data-idea-spot-trigger so its own click (which toggles the
   // state via onClick) isn't treated as an outside event. Listener is only
-  // armed while the popup is open to avoid global mousedown overhead.
+  // armed while the popup is open to avoid global click overhead.
+  // CP446 — uses `click` (not `mousedown`) so a card-drag's mousedown can't
+  // false-trigger the close: `click` only fires when mousedown + mouseup
+  // happen on the same element, which never holds during D&D.
   useEffect(() => {
     if (!scratchPadOpen) return;
-    const handleMouseDown = (e: MouseEvent) => {
+    const handleClick = (e: MouseEvent) => {
       const target = e.target as Node | null;
       if (!target) return;
       if (target instanceof Element && target.closest('[data-idea-spot-trigger]')) return;
       if (scratchPadWrapperRef.current?.contains(target)) return;
       setScratchPadOpen(false);
     };
-    document.addEventListener('mousedown', handleMouseDown);
-    return () => document.removeEventListener('mousedown', handleMouseDown);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
   }, [scratchPadOpen]);
 
   // 드래그 시작 시점의 selectedCardIds 스냅샷 — 드래그 중 selection 변경에 영향받지 않도록
