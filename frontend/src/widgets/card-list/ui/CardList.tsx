@@ -36,11 +36,15 @@ interface CardListProps {
 }
 
 // Wrapper to make each card slot a droppable for reorder.
-// CP445 — `isOver` is now sourced from `useDroppable` directly (was previously
-// a prop hard-coded to `false` at the call site, so per-cell hover emphasis
-// never lit up). Active color tightened to handoff spec.
+// CP446 — `useDroppable` is kept (the parent's `card-slot` drop branch in
+// IndexPage.handleDragEnd still routes reorder/move drops through it), but
+// the per-card `isOver` outline (dashed indigo border + scale-up) is
+// intentionally OFF. User feedback: while moving a card, hovering over
+// other cards lit each one up in turn — distracting noise. The
+// CardListView grid-area dashed overlay + the mandala-cell isOver
+// emphasis already give enough drop-target signal.
 function CardSlot({ card, children }: { card: InsightCard; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef } = useDroppable({
     id: cardSlotDropId(card.id),
     data: { type: 'card-slot' as const, cardId: card.id },
   });
@@ -50,10 +54,7 @@ function CardSlot({ card, children }: { card: InsightCard; children: React.React
       ref={setNodeRef}
       data-card-item
       data-card-id={card.id}
-      className={cn(
-        'w-full transition-all duration-200 rounded-2xl relative',
-        isOver && 'border-2 border-dashed border-primary/80 bg-primary/10 scale-[1.02]'
-      )}
+      className="w-full rounded-2xl relative"
     >
       {children}
     </div>
