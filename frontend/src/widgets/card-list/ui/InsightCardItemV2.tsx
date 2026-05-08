@@ -161,14 +161,17 @@ export function InsightCardItemV2({
         className
       )}
     >
-      {/* CP445 — Drag handle visible on hover; sole drag-trigger for the card. */}
+      {/* CP445 — Drag-handle hit zone covers the top 40px strip of the card,
+           but pointer-events flip on only when the card is hovered so a non-
+           hovered card body still routes onClick → learning page. The 24×24
+           grip icon is the only visible affordance. */}
       {canDrag && (
         <div
           {...listeners}
           data-dnd-handle
-          className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+          className="absolute top-0 left-0 right-0 h-10 z-10 cursor-grab active:cursor-grabbing pointer-events-none group-hover:pointer-events-auto"
         >
-          <div className="w-6 h-6 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded">
+          <div className="absolute top-2 left-2 w-6 h-6 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded opacity-0 group-hover:opacity-100 transition-opacity">
             <GripVertical className="w-5 h-5 text-white/70" aria-hidden="true" />
           </div>
         </div>
