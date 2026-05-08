@@ -166,7 +166,7 @@ export function Sidebar({
         >
           {/* Minimap — fixed (outside scroll container, CP441 handoff §1) */}
           {!collapsed && minimapData && (
-            <div className="shrink-0 px-2 pt-2 pb-3">
+            <div className="shrink-0 px-1 pt-2 pb-3">
               <SidebarHeatMinimap
                 cardsByCell={minimapData.cardsByCell}
                 sectorSubjects={minimapData.sectorSubjects}
@@ -199,7 +199,7 @@ export function Sidebar({
           )}
 
           {/* Mandala fold list — scrollable */}
-          <nav className="flex-1 min-h-0 overflow-y-auto scrollbar-none px-2 pb-2">
+          <nav className="flex-1 min-h-0 overflow-y-auto scrollbar-none px-1 pb-2">
             <ErrorBoundary
               fallbackRender={({ resetErrorBoundary }) => (
                 <div className="px-2 space-y-0.5">

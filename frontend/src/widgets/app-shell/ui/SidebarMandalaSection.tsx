@@ -108,20 +108,20 @@ export function SidebarMandalaSection({
 
   if (isLoading) {
     return (
-      <div className="px-2">
-        <div className="px-3 py-2 text-[13px] font-medium text-sidebar-foreground/60">
+      <div className="px-1">
+        <div className="px-1.5 py-2 text-[13px] font-medium text-sidebar-foreground/60">
           {t('sidebar.myMandalas')}
         </div>
         {loadingTooLong ? (
           <button
             onClick={() => refetch()}
-            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors duration-150"
+            className="w-full flex items-center gap-2 px-1.5 py-2 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors duration-150"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             {t('common.loadFailed')}
           </button>
         ) : (
-          <div className="px-3 py-2 animate-pulse">
+          <div className="px-1.5 py-2 animate-pulse">
             <div className="h-4 bg-sidebar-accent/30 rounded w-3/4" />
           </div>
         )}
@@ -132,8 +132,8 @@ export function SidebarMandalaSection({
   if (isError) {
     if (error) console.warn('[SidebarMandalaSection] Failed to load mandalas:', error);
     return (
-      <div className="px-2">
-        <div className="px-3 py-2 text-[13px] font-medium text-sidebar-foreground/60">
+      <div className="px-1">
+        <div className="px-1.5 py-2 text-[13px] font-medium text-sidebar-foreground/60">
           {t('sidebar.myMandalas')}
         </div>
         <button
@@ -158,11 +158,11 @@ export function SidebarMandalaSection({
   };
 
   return (
-    <div className="px-2 flex flex-col">
+    <div className="px-1 flex flex-col">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-bold text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors duration-150"
+        className="w-full flex items-center gap-1.5 px-1.5 py-2 rounded-lg text-[13px] font-bold text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors duration-150"
         aria-expanded={open}
       >
         <span className="flex-1 text-left">{t('sidebar.myMandalas')}</span>
@@ -185,7 +185,7 @@ export function SidebarMandalaSection({
                 key={mandala.id}
                 onClick={() => handleMandalaSelect(mandala.id)}
                 className={cn(
-                  'w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[13px] text-left transition-colors duration-150',
+                  'w-full flex items-center gap-2 px-1.5 py-1.5 rounded-md text-[13px] text-left transition-colors duration-150',
                   'hover:bg-sidebar-accent',
                   isSelected
                     ? 'font-semibold text-sidebar-primary'

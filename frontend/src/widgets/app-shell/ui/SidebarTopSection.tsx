@@ -138,7 +138,7 @@ export function SidebarTopSection({
   }
 
   return (
-    <div className="shrink-0 flex flex-col gap-2 pt-4 pb-2 px-2">
+    <div className="shrink-0 flex flex-col gap-2 pt-4 pb-2 px-1">
       <div className="flex items-center gap-2.5">
         <Link
           to="/"
@@ -177,7 +177,7 @@ export function SidebarTopSection({
       <button
         type="button"
         onClick={() => navigate('/mandalas/new')}
-        className="mt-2 flex items-center gap-2 h-9 px-3 rounded-md text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        className="mt-2 flex items-center gap-2 h-9 px-1.5 rounded-md text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
       >
         <CirclePlus className="w-5 h-5 shrink-0" aria-hidden="true" />
         <span>{t('sidebar.newMandalaCta', '새 만다라')}</span>
@@ -189,7 +189,7 @@ export function SidebarTopSection({
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="flex items-center gap-2 h-9 px-3 rounded-md text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            className="flex items-center gap-2 h-9 px-1.5 rounded-md text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           >
             {moreOpen ? (
               <ChevronUp className="w-5 h-5 shrink-0" aria-hidden="true" />
