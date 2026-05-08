@@ -1170,7 +1170,7 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "openMenu": "Open menu",
-    "searchPlaceholder": "Search...",
+    "searchPlaceholder": "Search (⌘K)",
     "searchMandalas": "Search mandalas...",
     "sortRecent": "Recently added",
     "noResults": "No results",

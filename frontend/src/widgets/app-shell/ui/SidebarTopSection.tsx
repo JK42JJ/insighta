@@ -1,16 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  CirclePlus,
-  ChevronDown,
-  ChevronUp,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Search,
-} from 'lucide-react';
+import { CirclePlus, ChevronDown, ChevronUp, PanelLeft, Search } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/shared/ui/popover';
 import { Dialog, DialogContent } from '@/shared/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
 import { SidebarSkillPanel } from '@/widgets/sidebar-skill-panel';
 import { useMandalaStore } from '@/stores/mandalaStore';
 
@@ -43,74 +37,103 @@ export function SidebarTopSection({
       'flex items-center justify-center w-8 h-8 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring';
 
     return (
-      <div className="shrink-0 flex flex-col items-center gap-1.5 pt-3 pb-2 px-2">
-        {/* CP441 — ChatGPT pattern: logo at rest, swaps to expand toggle on hover. */}
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          aria-label={t('sidebar.expand', 'Expand sidebar')}
-          title={t('sidebar.expand', 'Expand sidebar')}
-          className="group relative flex items-center justify-center w-8 h-8 rounded-md hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-        >
-          <img
-            src={`${import.meta.env.BASE_URL}logo.png`}
-            alt="Insighta"
-            className="w-[22px] h-[22px] rounded-md dark:invert transition-opacity duration-150 group-hover:opacity-0"
-          />
-          <PanelLeftOpen
-            className="absolute inset-0 m-auto w-4 h-4 text-sidebar-foreground/70 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-            aria-hidden="true"
-          />
-        </button>
+      // CP446 — collapsed icon stack wrapped in a single TooltipProvider so
+      // every action surfaces a localized hover label (i18n driven). Native
+      // `title` attributes removed to avoid double-tooltips.
+      <TooltipProvider delayDuration={250}>
+        <div className="shrink-0 flex flex-col items-center gap-1.5 pt-3 pb-2 px-2">
+          {/* CP441 — ChatGPT pattern: logo at rest, swaps to toggle on hover. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                aria-label={t('sidebar.expand', 'Expand sidebar')}
+                className="group relative flex items-center justify-center w-8 h-8 rounded-md hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              >
+                <img
+                  src={`${import.meta.env.BASE_URL}logo.png`}
+                  alt="Insighta"
+                  className="w-[22px] h-[22px] rounded-md dark:invert transition-opacity duration-150 group-hover:opacity-0"
+                />
+                <PanelLeft
+                  className="absolute inset-0 m-auto w-5 h-5 text-sidebar-foreground/70 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                  aria-hidden="true"
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {t('sidebar.expand', 'Expand sidebar')}
+            </TooltipContent>
+          </Tooltip>
 
-        <button
-          type="button"
-          onClick={() => navigate('/mandalas/new')}
-          aria-label={t('sidebar.newMandalaCta', '새 만다라')}
-          title={t('sidebar.newMandalaCta', '새 만다라')}
-          className={iconBtn}
-        >
-          <CirclePlus className="w-5 h-5" />
-        </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => navigate('/mandalas/new')}
+                aria-label={t('sidebar.newMandalaCta', '새 만다라')}
+                className={iconBtn}
+              >
+                <CirclePlus className="w-5 h-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {t('sidebar.newMandalaCta', '새 만다라')}
+            </TooltipContent>
+          </Tooltip>
 
-        {searchBarElement && (
-          <>
-            <button
-              type="button"
-              onClick={() => setSearchDialogOpen(true)}
-              aria-label={t('sidebar.searchPlaceholder', '검색 (⌘K)')}
-              title={t('sidebar.searchPlaceholder', '검색 (⌘K)')}
-              className={iconBtn}
+          {searchBarElement && (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setSearchDialogOpen(true)}
+                    aria-label={t('sidebar.searchPlaceholder', '검색 (⌘K)')}
+                    className={iconBtn}
+                  >
+                    <Search className="w-5 h-5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  {t('sidebar.searchPlaceholder', '검색 (⌘K)')}
+                </TooltipContent>
+              </Tooltip>
+              <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>
+                <DialogContent className="max-w-xl p-4">{searchBarElement}</DialogContent>
+              </Dialog>
+            </>
+          )}
+
+          <Popover>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={t('sidebar.more', '더 보기')}
+                    className={iconBtn}
+                  >
+                    <ChevronDown className="w-5 h-5" />
+                  </button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                {t('sidebar.more', '더 보기')}
+              </TooltipContent>
+            </Tooltip>
+            <PopoverContent
+              side="right"
+              align="start"
+              sideOffset={8}
+              className="w-80 p-1.5 max-h-[80vh] overflow-y-auto"
             >
-              <Search className="w-5 h-5" />
-            </button>
-            <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>
-              <DialogContent className="max-w-xl p-4">{searchBarElement}</DialogContent>
-            </Dialog>
-          </>
-        )}
-
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              aria-label={t('sidebar.more', '더 보기')}
-              title={t('sidebar.more', '더 보기')}
-              className={iconBtn}
-            >
-              <ChevronDown className="w-5 h-5" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent
-            side="right"
-            align="start"
-            sideOffset={8}
-            className="w-80 p-1.5 max-h-[80vh] overflow-y-auto"
-          >
-            <SidebarSkillPanel mandalaId={selectedMandalaId ?? null} />
-          </PopoverContent>
-        </Popover>
-      </div>
+              <SidebarSkillPanel mandalaId={selectedMandalaId ?? null} />
+            </PopoverContent>
+          </Popover>
+        </div>
+      </TooltipProvider>
     );
   }
 
@@ -145,7 +168,7 @@ export function SidebarTopSection({
             title={t('sidebar.collapse', 'Collapse sidebar')}
             className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           >
-            <PanelLeftClose className="w-4 h-4" />
+            <PanelLeft className="w-5 h-5" />
           </button>
         )}
       </div>

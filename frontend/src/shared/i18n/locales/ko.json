@@ -1171,7 +1171,7 @@
     "collapse": "사이드바 접기",
     "expand": "사이드바 펼치기",
     "openMenu": "메뉴 열기",
-    "searchPlaceholder": "검색...",
+    "searchPlaceholder": "검색 (⌘K)",
     "searchMandalas": "만다라트 검색...",
     "sortRecent": "최근 추가순",
     "noResults": "결과 없음",
