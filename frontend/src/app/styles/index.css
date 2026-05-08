@@ -137,40 +137,43 @@
   }
 
   .dark {
-    /* Base background layers - Cool dark */
-    --bg-base: 220 15% 10%;
-    --bg-mid: 220 13% 13%;
-    --bg-light: 220 12% 17%;
-    --bg-sunken: 220 16% 7%;
+    /* Base background layers - ChatGPT-flat (CP445.x): main surface 통일.
+       interaction surfaces (--muted/--accent/--border/--input/--secondary)
+       만 명도 차이 보존. */
+    --bg-base: 0 0% 8%;
+    --bg-mid: 0 0% 8%;
+    --bg-light: 0 0% 8%;
+    --bg-sunken: 0 0% 8%;
 
     /* Core semantic tokens */
-    --background: 220 15% 10%;
-    --foreground: 220 10% 95%;
+    /* CP445.x — main surface 8% 단일 톤 (ChatGPT-flat). card/popover 도 통일. */
+    --background: 0 0% 8%;
+    --foreground: 0 0% 95%;
 
-    --card: 220 12% 17%;
-    --card-foreground: 220 10% 95%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 95%;
 
-    --popover: 220 13% 13%;
-    --popover-foreground: 220 10% 95%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 95%;
 
     /* Accent color - Muted light indigo for dark mode (AA ~5.5:1) */
     --primary: 234 60% 72%;
-    --primary-foreground: 220 15% 10%;
+    --primary-foreground: 0 0% 10%;
 
-    --secondary: 220 12% 40%;
-    --secondary-foreground: 220 10% 95%;
+    --secondary: 0 0% 40%;
+    --secondary-foreground: 0 0% 95%;
 
-    --muted: 220 12% 22%;
-    --muted-foreground: 220 10% 72%;
+    --muted: 0 0% 22%;
+    --muted-foreground: 0 0% 72%;
 
-    --accent: 220 12% 22%;
+    --accent: 0 0% 22%;
     --accent-foreground: 234 60% 75%;
 
     --destructive: 0 60% 58%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 12% 22%;
-    --input: 220 12% 20%;
+    --border: 0 0% 22%;
+    --input: 0 0% 20%;
     --ring: 234 60% 72%;
 
     /* Domain colors — Explore page category accents */
@@ -195,33 +198,34 @@
 
     /* Sidebar */
     --sidebar-width: 22rem;
-    /* CP441 — sidebar bg unified with content area (--background) */
-    --sidebar-background: 220 15% 10%;
-    --sidebar-foreground: 220 10% 95%;
+    /* CP441 — sidebar bg unified with content area (--background).
+       CP445.x — ChatGPT-style neutral very dark. */
+    --sidebar-background: 0 0% 8%;
+    --sidebar-foreground: 0 0% 95%;
     --sidebar-primary: 234 60% 72%;
-    --sidebar-primary-foreground: 220 15% 10%;
-    --sidebar-accent: 220 12% 22%;
+    --sidebar-primary-foreground: 0 0% 10%;
+    --sidebar-accent: 0 0% 22%;
     --sidebar-accent-foreground: 234 60% 75%;
-    --sidebar-border: 220 12% 22%;
+    --sidebar-border: 0 0% 22%;
     --sidebar-ring: 234 60% 72%;
-    --sidebar: 220 15% 10%;
+    --sidebar: 0 0% 10%;
 
     /* Chart colors */
     --chart-1: 234 60% 72%;
     --chart-2: 234 50% 75%;
     --chart-3: 250 45% 65%;
-    --chart-4: 220 45% 58%;
-    --chart-5: 220 12% 30%;
+    --chart-4: 0 0% 58%;
+    --chart-5: 0 0% 30%;
 
     /* Depth System - Dark mode shadows */
     --shadow-sm: 
       0 1px 2px hsl(0 0% 0% / 0.4),
-      0 -1px 0 hsl(220 30% 20% / 0.3) inset;
+      0 -1px 0 hsl(0 0% 20% / 0.3) inset;
     
     --shadow-md: 
       0 4px 12px hsl(0 0% 0% / 0.5),
       0 2px 4px hsl(0 0% 0% / 0.3),
-      0 -1px 0 hsl(220 30% 20% / 0.2) inset;
+      0 -1px 0 hsl(0 0% 20% / 0.2) inset;
     
     --shadow-lg: 
       0 12px 30px hsl(0 0% 0% / 0.6),
@@ -232,12 +236,12 @@
       0 10px 20px hsl(0 0% 0% / 0.5);
 
     --shadow-inset-raised: 
-      0 -1px 0 hsl(220 30% 25% / 0.4) inset,
+      0 -1px 0 hsl(0 0% 25% / 0.4) inset,
       0 2px 4px hsl(0 0% 0% / 0.5);
     
     --shadow-inset-sunken: 
       0 2px 6px hsl(0 0% 0% / 0.6) inset,
-      0 -1px 0 hsl(220 30% 20% / 0.2) inset;
+      0 -1px 0 hsl(0 0% 20% / 0.2) inset;
 
     /* Legacy shadow tokens */
     --shadow-2xs: 0 1px 2px hsl(0 0% 0% / 0.3);
@@ -247,14 +251,14 @@
 
     /* Dark Glass */
     --glass-bg: 225 30% 12% / 0.85;
-    --glass-border: 220 20% 25% / 0.5;
-    --glass-highlight: 220 30% 30% / 0.3;
+    --glass-border: 0 0% 25% / 0.5;
+    --glass-highlight: 0 0% 30% / 0.3;
     --glass-shadow: 0 0% 0% / 0.4;
     --glass-shadow-diffuse: 0 8px 32px hsl(0 0% 0% / 0.5), 0 2px 8px hsl(0 0% 0% / 0.3);
-    --glass-shadow-sharp: 0 1px 1px hsl(220 30% 25% / 0.2) inset, 0 -1px 1px hsl(0 0% 0% / 0.3) inset;
+    --glass-shadow-sharp: 0 1px 1px hsl(0 0% 25% / 0.2) inset, 0 -1px 1px hsl(0 0% 0% / 0.3) inset;
 
     /* Surface borders */
-    --border-subtle: 220 30% 100% / 0.06;
+    --border-subtle: 0 0% 100% / 0.06;
   }
 }
 
@@ -1006,13 +1010,15 @@
   animation: insighta-shimmer 2s ease-in-out infinite;
 }
 
-/* CopilotKit — theme variable mapping (Research Canvas pattern) */
+/* CopilotKit — theme variable mapping (Research Canvas pattern).
+   CP445.x — input/secondary surface 는 main bg (--card 통일된 8%) 와
+   분리해서 visible. semantic 일치하는 --input (input field bg) 사용. */
 .copilotkit-chat-wrapper {
   --copilot-kit-primary-color: hsl(var(--foreground)) !important;
   --copilot-kit-contrast-color: hsl(var(--background)) !important;
   --copilot-kit-background-color: hsl(var(--background)) !important;
-  --copilot-kit-input-background-color: hsl(var(--card)) !important;
-  --copilot-kit-secondary-color: hsl(var(--card)) !important;
+  --copilot-kit-input-background-color: hsl(var(--input)) !important;
+  --copilot-kit-secondary-color: hsl(var(--input)) !important;
   --copilot-kit-secondary-contrast-color: hsl(var(--card-foreground)) !important;
   --copilot-kit-separator-color: hsl(var(--border)) !important;
   --copilot-kit-muted-color: hsl(var(--muted-foreground)) !important;
@@ -1025,7 +1031,9 @@
 
 .copilotkit-chat-wrapper .copilotKitMessages {
   overflow-y: auto !important;
-  font-size: 13px;
+  /* CP445.x — 챗봇이 메모(14px)보다 폰트 weight 차이로 시각상 더 크게
+     보임. 본문 size 12px (이전 13px 에서 한 단계 작게) 로 시각 무게 균형. */
+  font-size: 12px;
   font-weight: 400;
   line-height: 1.6;
   color: hsl(var(--muted-foreground));
@@ -1055,10 +1063,12 @@
   outline: none !important;
   border: none !important;
   box-shadow: none !important;
+  /* CP445.x — 본문 메시지와 동일 12px. */
+  font-size: 12px;
 }
 
 .copilotkit-chat-wrapper .copilotKitInput > textarea::placeholder {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .copilotkit-chat-wrapper .copilotKitButton {
