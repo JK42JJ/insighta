@@ -175,16 +175,19 @@ export function InsightCardItemV2({
         <img
           src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
           alt={card.title}
-          className="w-full h-full object-cover transition-transform duration-[350ms] ease-out group-hover:scale-105"
+          className="w-full h-full object-cover"
           loading="lazy"
           onError={handleThumbnailError}
           onLoad={handleThumbnailLoad}
         />
 
+        {/* CP443 — Brightness overlay on hover (replaces zoom — calmer, no overflow risk) */}
+        <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+
         {/* CP443 — Play overlay (fades in on hover, pointer-events-none so it doesn't steal clicks) */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-          <div className="w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow-md">
-            <Play className="w-4 h-4 text-black fill-black translate-x-[1px]" aria-hidden="true" />
+          <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-md">
+            <Play className="w-6 h-6 text-black fill-black translate-x-[1px]" aria-hidden="true" />
           </div>
         </div>
 
@@ -257,7 +260,7 @@ export function InsightCardItemV2({
       </div>
 
       {/* ── Body: title + meta ── */}
-      <div className="px-[2px] pt-2 pb-1">
+      <div className="px-[2px] pt-2 pb-3">
         <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px]">
           {card.title}
         </h4>
