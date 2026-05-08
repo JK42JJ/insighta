@@ -3,7 +3,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
-import { GripVertical, NotepadText, Loader2, RotateCw } from 'lucide-react';
+import { GripVertical, NotepadText, Loader2, RotateCw, Play } from 'lucide-react';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import {
   upgradeYouTubeThumbnail,
@@ -150,6 +150,8 @@ export function InsightCardItemV2({
       className={cn(
         'group relative cursor-pointer transition-all duration-200',
         'border-0 shadow-none bg-transparent rounded-[10px]',
+        // CP443 — hover lift + subtle ring (border-0 preserved to keep shadcn Card chrome intact)
+        'hover:-translate-y-0.5 hover:ring-1 hover:ring-border/60',
         isSelected && canDrag && 'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-30',
         className
@@ -173,11 +175,18 @@ export function InsightCardItemV2({
         <img
           src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
           alt={card.title}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover transition-transform duration-[350ms] ease-out group-hover:scale-105"
           loading="lazy"
           onError={handleThumbnailError}
           onLoad={handleThumbnailLoad}
         />
+
+        {/* CP443 — Play overlay (fades in on hover, pointer-events-none so it doesn't steal clicks) */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+          <div className="w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow-md">
+            <Play className="w-4 h-4 text-black fill-black translate-x-[1px]" aria-hidden="true" />
+          </div>
+        </div>
 
         {/* Top-left: Quality badge */}
         {qualityBadge && (
