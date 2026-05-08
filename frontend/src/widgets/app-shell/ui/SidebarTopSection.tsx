@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
+import {
+  CirclePlus,
+  ChevronDown,
+  ChevronUp,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+} from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/shared/ui/popover';
 import { Dialog, DialogContent } from '@/shared/ui/dialog';
 import { SidebarSkillPanel } from '@/widgets/sidebar-skill-panel';
@@ -25,6 +32,9 @@ export function SidebarTopSection({
   const selectedMandalaId = useMandalaStore((s) => s.selectedMandalaId);
   // CP441 — collapsed search opens a centered modal (ChatGPT pattern).
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  // CP446 — expanded "more" Popover uses controlled open state so the chevron
+  // can toggle (ChevronDown ↔ ChevronUp).
+  const [moreOpen, setMoreOpen] = useState(false);
 
   // Collapsed state — ChatGPT-style icon stack:
   // toggle / logo / + new mandala / search (modal) / more (popover) / [profile renders in footer]
@@ -60,7 +70,7 @@ export function SidebarTopSection({
           title={t('sidebar.newMandalaCta', '새 만다라')}
           className={iconBtn}
         >
-          <Plus className="w-4 h-4" />
+          <CirclePlus className="w-5 h-5" />
         </button>
 
         {searchBarElement && (
@@ -68,11 +78,11 @@ export function SidebarTopSection({
             <button
               type="button"
               onClick={() => setSearchDialogOpen(true)}
-              aria-label={t('sidebar.searchPlaceholder', '검색...')}
-              title={t('sidebar.searchPlaceholder', '검색...')}
+              aria-label={t('sidebar.searchPlaceholder', '검색 (⌘K)')}
+              title={t('sidebar.searchPlaceholder', '검색 (⌘K)')}
               className={iconBtn}
             >
-              <Search className="w-4 h-4" />
+              <Search className="w-5 h-5" />
             </button>
             <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>
               <DialogContent className="max-w-xl p-4">{searchBarElement}</DialogContent>
@@ -88,7 +98,7 @@ export function SidebarTopSection({
               title={t('sidebar.more', '더 보기')}
               className={iconBtn}
             >
-              <MoreHorizontal className="w-4 h-4" />
+              <ChevronDown className="w-5 h-5" />
             </button>
           </PopoverTrigger>
           <PopoverContent
@@ -140,24 +150,29 @@ export function SidebarTopSection({
         )}
       </div>
 
+      {/* CP446 — Menu rows: 36px height, gap-2, 13px text, 20px icon, rounded-md. */}
       <button
         type="button"
         onClick={() => navigate('/mandalas/new')}
-        className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        className="mt-2 flex items-center gap-2 h-9 px-3 rounded-md text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
       >
-        <Plus className="w-4 h-4 shrink-0" aria-hidden="true" />
+        <CirclePlus className="w-5 h-5 shrink-0" aria-hidden="true" />
         <span>{t('sidebar.newMandalaCta', '새 만다라')}</span>
       </button>
 
       {searchBarElement && <div className="w-full">{searchBarElement}</div>}
 
-      <Popover>
+      <Popover open={moreOpen} onOpenChange={setMoreOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            className="flex items-center gap-2 h-9 px-3 rounded-md text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           >
-            <MoreHorizontal className="w-4 h-4 shrink-0" aria-hidden="true" />
+            {moreOpen ? (
+              <ChevronUp className="w-5 h-5 shrink-0" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="w-5 h-5 shrink-0" aria-hidden="true" />
+            )}
             <span>{t('sidebar.more', '더 보기')}</span>
           </button>
         </PopoverTrigger>
