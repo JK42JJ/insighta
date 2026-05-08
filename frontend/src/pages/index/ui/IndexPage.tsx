@@ -381,6 +381,24 @@ function AuthenticatedApp() {
   // CP442 — IdeaSpot popup open state (replaces dock-mode preference as the
   // visibility driver; `scratchpad_is_floating` preference preserved untouched).
   const [scratchPadOpen, setScratchPadOpen] = useState(false);
+  const scratchPadWrapperRef = useRef<HTMLDivElement | null>(null);
+
+  // CP442 — outside-click closes the IdeaSpot popup. The trigger button is
+  // tagged with data-idea-spot-trigger so its own click (which toggles the
+  // state via onClick) isn't treated as an outside event. Listener is only
+  // armed while the popup is open to avoid global mousedown overhead.
+  useEffect(() => {
+    if (!scratchPadOpen) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (target instanceof Element && target.closest('[data-idea-spot-trigger]')) return;
+      if (scratchPadWrapperRef.current?.contains(target)) return;
+      setScratchPadOpen(false);
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [scratchPadOpen]);
 
   // 드래그 시작 시점의 selectedCardIds 스냅샷 — 드래그 중 selection 변경에 영향받지 않도록
   const dragSelectedIdsRef = useRef<string[] | null>(null);
@@ -636,6 +654,7 @@ function AuthenticatedApp() {
   const ideaSpotTrigger = (
     <button
       type="button"
+      data-idea-spot-trigger
       onClick={() => setScratchPadOpen((v) => !v)}
       title={t('ideaSpot.tooltip', '아이디어스팟 {{count}}개', { count: ideaSpotCount })}
       aria-label={t('ideaSpot.tooltip', '아이디어스팟 {{count}}개', { count: ideaSpotCount })}
@@ -813,8 +832,8 @@ function AuthenticatedApp() {
         {/* CP442 — Floating ScratchPad: kept mounted, toggled via display so
             internal size/position state survives close/reopen. Wrapper div
             isolates the display switch (FloatingScratchPad has no style/className
-            props). */}
-        <div style={{ display: scratchPadOpen ? 'block' : 'none' }}>
+            props) and serves as outside-click boundary via ref. */}
+        <div ref={scratchPadWrapperRef} style={{ display: scratchPadOpen ? 'block' : 'none' }}>
           <FloatingScratchPad
             {...scratchPadProps(true)}
             initialPosition={
