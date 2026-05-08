@@ -152,6 +152,8 @@ export function InsightCardItemV2({
         'border-0 shadow-none bg-transparent rounded-[10px]',
         // CP443 — hover lift + subtle ring (border-0 preserved to keep shadcn Card chrome intact)
         'hover:-translate-y-0.5 hover:ring-1 hover:ring-border/60',
+        // CP443 — 10% size reduction within grid cell (parent uses justify-items-center)
+        'w-[90%]',
         isSelected && canDrag && 'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-30',
         className
