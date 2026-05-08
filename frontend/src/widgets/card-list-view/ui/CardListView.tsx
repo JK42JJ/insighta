@@ -415,63 +415,101 @@ export function CardListView({
     );
   }
 
-  // Grid mode
+  // Grid mode — CP446 2-layer hit-area split.
+  //
+  // ╔══════════════════════════════════════════════════════════════════════╗
+  // ║ DROP HIT AREA (outer) ─ 시각 효과 0, 화면 폭 전체 droppable           ║
+  // ║   ╔════════════════════════════════════════════════════════════════╗ ║
+  // ║   ║ VISUAL CHROME (inner) ─ 현재 시각 그대로, dashed border 등     ║ ║
+  // ║   ║   header / pills / CardList                                     ║ ║
+  // ║   ╚════════════════════════════════════════════════════════════════╝ ║
+  // ╚══════════════════════════════════════════════════════════════════════╝
+  //
+  // **Why two layers**: IndexPage main content has `lg:px-[70px]` padding —
+  // before this split the droppable id `drop-grid-area` lived inside that
+  // padding, leaving ~140px of dead zone on either side where users could
+  // not drop cards. The outer wrapper uses negative margin + restored
+  // padding to extend the hit area to the full main-content width while
+  // keeping the visual position pixel-identical to the pre-CP446 layout.
+  //
+  // **WHEN MODIFYING D&D**:
+  //   - `setGridAreaRef` (dnd-kit useDroppable) → MUST stay on outer.
+  //     Native HTML5 handlers (`onDragOver/Leave/Drop`) also stay on outer
+  //     so externally-dragged URLs/files anywhere in the main content
+  //     register. Moving these to inner shrinks the hit area back.
+  //   - `containerRef` (ResizeObserver / `useContainerColumns`) → MUST stay
+  //     on inner. It measures the visible grid width to pick a column count;
+  //     measuring the outer would let cards bleed into the padding region.
+  //   - The `-mx-* px-*` pair on outer is a single trick: cancel padding,
+  //     re-add it. Don't separate them.
+  //   - Active-drag visual (`border-2 border-dashed border-primary/40
+  //     bg-primary/5 rounded-md`) belongs on inner so the dashed outline
+  //     traces the card grid, not the screen edge.
+  //   - dnd-smoke.spec.ts, D&D Change Guard, and CLAUDE.md "D&D Protection"
+  //     still apply — touching anything D&D-related requires `/test-dnd`
+  //     before push.
   if (effectiveViewMode === 'grid') {
-    // Combine setGridAreaRef (DnD) and containerRef (ResizeObserver)
-    const setCombinedRef = (node: HTMLDivElement | null) => {
-      setGridAreaRef(node);
-      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-    };
     return (
       <div
-        ref={setCombinedRef}
+        ref={setGridAreaRef}
         onDragOver={handleExternalDragOver}
         onDragLeave={handleExternalDragLeave}
         onDrop={handleExternalDrop}
-        className={cn(
-          'animate-fade-in transition-all duration-200 relative',
-          (isExternalCardDragActive || isExternalDragOver || isInternalCardDragActive) &&
-            '-mx-4 px-4 border-2 border-dashed border-primary/40 bg-primary/5 rounded-md'
-        )}
+        // OUTER: drop hit area only — extend across the lg:px-[70px] padding
+        // applied by IndexPage's main content. Visual is intentionally none.
+        className="-mx-6 md:-mx-10 lg:-mx-[70px] px-6 md:px-10 lg:px-[70px]"
       >
-        {isExternalDragOver && (
-          <div className="absolute inset-0 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] pointer-events-none z-10">
-            <div className="flex flex-col items-center gap-2">
-              <div
-                className="rounded-md border border-dashed border-primary/40 bg-primary/10 flex items-center justify-center"
-                style={{
-                  width: '52px',
-                  aspectRatio: '16/9',
-                  animation: 'card-silhouette-pulse 1.5s ease-in-out infinite',
-                }}
-              >
-                <Plus className="w-4 h-4 text-primary/40" />
+        <div
+          ref={containerRef}
+          // INNER: visible chrome — measured for responsive columns and
+          // styled with the active-drag dashed outline. Pre-CP446 className
+          // preserved verbatim except for the now-unnecessary `-mx-4 px-4`
+          // (the outer wrapper handles padding).
+          className={cn(
+            'animate-fade-in transition-all duration-200 relative',
+            (isExternalCardDragActive || isExternalDragOver || isInternalCardDragActive) &&
+              'border-2 border-dashed border-primary/40 bg-primary/5 rounded-md'
+          )}
+        >
+          {isExternalDragOver && (
+            <div className="absolute inset-0 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] pointer-events-none z-10">
+              <div className="flex flex-col items-center gap-2">
+                <div
+                  className="rounded-md border border-dashed border-primary/40 bg-primary/10 flex items-center justify-center"
+                  style={{
+                    width: '52px',
+                    aspectRatio: '16/9',
+                    animation: 'card-silhouette-pulse 1.5s ease-in-out infinite',
+                  }}
+                >
+                  <Plus className="w-4 h-4 text-primary/40" />
+                </div>
+                <span className="text-primary font-medium text-xs">
+                  {t('index.dropToAdd', 'Drop to add card')}
+                </span>
               </div>
-              <span className="text-primary font-medium text-xs">
-                {t('index.dropToAdd', 'Drop to add card')}
-              </span>
             </div>
-          </div>
-        )}
-        {contextHeaderElement}
-        {sectorPillsElement}
-        <CardList
-          cards={sortedCards}
-          isLoading={isLoading}
-          title={title}
-          gridColumns={gridColumns}
-          compact={gridColumns >= COMPACT_THRESHOLD}
-          onCardClick={onCardClick ? (card) => onCardClick(card, sortedCards) : undefined}
-          onCardDragStart={onCardDragStart}
-          onMultiCardDragStart={onMultiCardDragStart}
-          onSaveNote={onSaveNote}
-          onCardsReorder={onCardsReorder}
-          onDeleteCards={onDeleteCards}
-          onSelectionChange={handleSelectionChange}
-          enrichingCardIds={enrichingCardIds}
-          failedEnrichCardIds={failedEnrichCardIds}
-          onRetryEnrich={onRetryEnrich}
-        />
+          )}
+          {contextHeaderElement}
+          {sectorPillsElement}
+          <CardList
+            cards={sortedCards}
+            isLoading={isLoading}
+            title={title}
+            gridColumns={gridColumns}
+            compact={gridColumns >= COMPACT_THRESHOLD}
+            onCardClick={onCardClick ? (card) => onCardClick(card, sortedCards) : undefined}
+            onCardDragStart={onCardDragStart}
+            onMultiCardDragStart={onMultiCardDragStart}
+            onSaveNote={onSaveNote}
+            onCardsReorder={onCardsReorder}
+            onDeleteCards={onDeleteCards}
+            onSelectionChange={handleSelectionChange}
+            enrichingCardIds={enrichingCardIds}
+            failedEnrichCardIds={failedEnrichCardIds}
+            onRetryEnrich={onRetryEnrich}
+          />
+        </div>
       </div>
     );
   }
