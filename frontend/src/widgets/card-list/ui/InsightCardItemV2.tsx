@@ -184,13 +184,13 @@ export function InsightCardItemV2({
           onLoad={handleThumbnailLoad}
         />
 
-        {/* CP443 — Brightness overlay on hover (replaces zoom — calmer, no overflow risk) */}
-        <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+        {/* CP443 — Hover dim overlay (replaces zoom — calmer, slightly darkens the thumbnail) */}
+        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
 
-        {/* CP443 — Play overlay (fades in on hover, pointer-events-none so it doesn't steal clicks) */}
+        {/* CP443 — Glass-morphism Play badge (fades in on hover, pointer-events-none so it doesn't steal clicks) */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-          <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-md">
-            <Play className="w-6 h-6 text-black fill-black translate-x-[1px]" aria-hidden="true" />
+          <div className="w-12 h-12 rounded-full bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center shadow-md">
+            <Play className="w-6 h-6 text-white fill-white translate-x-[1px]" aria-hidden="true" />
           </div>
         </div>
 
