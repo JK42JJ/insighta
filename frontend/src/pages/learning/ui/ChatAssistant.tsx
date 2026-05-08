@@ -12,13 +12,34 @@ import { apiClient } from '@/shared/lib/api-client';
 import type { CopilotChatLabels } from '@copilotkit/react-ui';
 
 export interface ChatContext {
-  layer: 'video' | 'cell' | 'mandala' | 'global';
+  layer: 'note' | 'video-time' | 'video' | 'cell' | 'mandala' | 'global';
   mandala_id: string;
   mandala_name: string;
   cell_name: string | null;
   cell_index: number | null;
   video_id: string;
   current_section: string | null;
+}
+
+const REGION_AWARENESS_ENABLED = import.meta.env.VITE_CHATBOT_REGION_AWARENESS === 'true';
+
+export function computeChatLayer(input: {
+  regionAware: boolean;
+  noteSelectionText: string | null;
+  playerState: string;
+  playerTimeSec: number;
+  currentSection: string | null;
+  selectedCellIndex: number | null;
+  videoId: string;
+  mandalaId: string;
+}): ChatContext['layer'] {
+  if (input.regionAware && input.noteSelectionText) return 'note';
+  if (input.regionAware && input.playerState === 'playing' && input.playerTimeSec > 0)
+    return 'video-time';
+  if (input.currentSection !== null || input.selectedCellIndex !== null) return 'cell';
+  if (input.videoId) return 'video';
+  if (input.mandalaId) return 'mandala';
+  return 'global';
 }
 
 interface ChatAssistantProps {
@@ -164,6 +185,13 @@ function ChatPanel({
   const { book: bookResponse } = useMandalaBook(mandalaId);
   const selectedCellIndex = useLearningStore((s) => s.selectedCellIndex);
   const activeSectionRef = useLearningStore((s) => s.activeSectionRef);
+  const activeRegion = useLearningStore((s) => s.activeRegion);
+  const lastInteractionTs = useLearningStore((s) => s.lastInteractionTs);
+  const playerTimeSec = useLearningStore((s) => s.playerTimeSec);
+  const playerState = useLearningStore((s) => s.playerState);
+  const playerDurationSec = useLearningStore((s) => s.playerDurationSec);
+  const noteDraftExcerpt = useLearningStore((s) => s.noteDraftExcerpt);
+  const noteSelectionText = useLearningStore((s) => s.noteSelectionText);
 
   const chatContext = useMemo<ChatContext>(() => {
     const mandalaName = mandalaLevels.root?.centerGoal ?? '';
@@ -180,8 +208,16 @@ function ChatPanel({
       if (chapter && section) currentSection = `${chapter.title} > ${section.title}`;
     }
 
-    const layer: ChatContext['layer'] =
-      currentSection !== null || selectedCellIndex !== null ? 'cell' : 'mandala';
+    const layer = computeChatLayer({
+      regionAware: REGION_AWARENESS_ENABLED,
+      noteSelectionText,
+      playerState,
+      playerTimeSec,
+      currentSection,
+      selectedCellIndex,
+      videoId,
+      mandalaId,
+    });
 
     return {
       layer,
@@ -192,7 +228,17 @@ function ChatPanel({
       video_id: videoId,
       current_section: currentSection,
     };
-  }, [mandalaId, videoId, mandalaLevels, bookResponse, selectedCellIndex, activeSectionRef]);
+  }, [
+    mandalaId,
+    videoId,
+    mandalaLevels,
+    bookResponse,
+    selectedCellIndex,
+    activeSectionRef,
+    playerState,
+    playerTimeSec,
+    noteSelectionText,
+  ]);
 
   const instructions = useMemo(
     () => buildInstructions(videoId, richSummary ?? null),
@@ -208,6 +254,34 @@ function ChatPanel({
   useCopilotReadable({
     description: 'Structured learning context (mandala / cell / section / video hierarchy)',
     value: chatContext,
+  });
+
+  // Region awareness — gated behind VITE_CHATBOT_REGION_AWARENESS flag.
+  // Default false. When off, the next 3 readables are skipped → prompt token
+  // and LLM behavior identical to pre-CP446+1.
+  useCopilotReadable({
+    description: 'Active region of the learning page where the user last interacted',
+    value: REGION_AWARENESS_ENABLED
+      ? { active_region: activeRegion, last_interaction_ts: lastInteractionTs }
+      : null,
+  });
+
+  useCopilotReadable({
+    description: 'Current YouTube player state (playback time, paused state, duration)',
+    value: REGION_AWARENESS_ENABLED
+      ? {
+          player_time_sec: playerTimeSec,
+          player_state: playerState,
+          duration_sec: playerDurationSec,
+        }
+      : null,
+  });
+
+  useCopilotReadable({
+    description: 'User notes draft (last 200 chars + selected text if any)',
+    value: REGION_AWARENESS_ENABLED
+      ? { draft_excerpt: noteDraftExcerpt, selection_text: noteSelectionText }
+      : null,
   });
 
   const chatLabels: CopilotChatLabels = {

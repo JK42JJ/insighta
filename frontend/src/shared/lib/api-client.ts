@@ -169,6 +169,16 @@ export interface VideoRichSummaryLora {
   qa_pairs?: VideoRichSummaryQAPair[];
 }
 
+/** CP445 — note mode per-mandala TipTap doc. */
+export interface NoteDocumentResponse {
+  id: string;
+  mandala_id: string;
+  content_json: unknown;
+  original_json: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface VideoRichSummaryResponse {
   videoId: string;
   oneLiner: string | null;
@@ -723,6 +733,46 @@ class ApiClient {
       `/mandalas/${mandalaId}/rich-summary-trigger`,
       { method: 'POST', body: JSON.stringify({}) }
     );
+  }
+
+  // ─── CP445 Note Documents (note mode TipTap doc per-mandala) ──────────────
+
+  /** Fetch the current user's note document for a mandala. 404 → null. */
+  async getNoteDocument(mandalaId: string): Promise<NoteDocumentResponse | null> {
+    try {
+      const res = await this.request<{
+        success: boolean;
+        data: { doc: NoteDocumentResponse | null };
+      }>(`/note-documents/${mandalaId}`);
+      return res.data.doc;
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.statusCode === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /** First-create a note document. Idempotent (server upserts on (user, mandala) unique). */
+  async createNoteDocument(input: {
+    mandalaId: string;
+    content_json: unknown;
+    original_json: unknown;
+  }): Promise<NoteDocumentResponse> {
+    const res = await this.request<{ success: boolean; data: { doc: NoteDocumentResponse } }>(
+      '/note-documents',
+      { method: 'POST', body: JSON.stringify(input) }
+    );
+    return res.data.doc;
+  }
+
+  /** Auto-save: update content_json only (original_json immutable). */
+  async updateNoteDocument(id: string, content_json: unknown): Promise<NoteDocumentResponse> {
+    const res = await this.request<{ success: boolean; data: { doc: NoteDocumentResponse } }>(
+      `/note-documents/${id}`,
+      { method: 'PUT', body: JSON.stringify({ content_json }) }
+    );
+    return res.data.doc;
   }
 
   async getPlaylistVideos(playlistId: string): Promise<Video[]> {

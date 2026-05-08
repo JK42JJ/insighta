@@ -393,6 +393,7 @@ model users {
   bot_approval_tokens           bot_approval_tokens[]
   newsletter_settings           newsletter_settings?
   newsletter_logs               newsletter_logs[]
+  note_documents                note_documents[]
   skill_runs                    skill_runs[]
   pipeline_runs                 mandala_pipeline_runs[]
   skill_outputs                 skill_outputs[]
@@ -441,6 +442,7 @@ model user_mandalas {
   pipeline_runs        mandala_pipeline_runs[]
   create_timings       mandala_create_timings[]
   book                 mandala_books?
+  note_documents       note_documents[]
 
   source_template_id String?  @db.Uuid
   focus_tags         String[] @default([])
@@ -482,21 +484,21 @@ model mandala_create_timings {
 /// time to populate recommendation_cache immediately → dashboard first card ≤1s.
 /// TTL 10min, pg_cron sweep every 5min (migration 001 handles scheduling).
 model mandala_wizard_precompute {
-  session_id          String   @id @db.Uuid
-  user_id             String   @db.Uuid
+  session_id          String    @id @db.Uuid
+  user_id             String    @db.Uuid
   goal                String
-  language            String   @db.VarChar(5)
-  focus_tags          String[] @default([])
-  target_level        String?  @db.VarChar(30)
+  language            String    @db.VarChar(5)
+  focus_tags          String[]  @default([])
+  target_level        String?   @db.VarChar(30)
   /// 'pending' | 'running' | 'done' | 'failed' | 'consumed'
-  status              String   @default("pending") @db.VarChar(20)
+  status              String    @default("pending") @db.VarChar(20)
   discover_result     Json?
   error_message       String?
-  consumed_mandala_id String?  @db.Uuid
-  created_at          DateTime @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  consumed_mandala_id String?   @db.Uuid
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
   consumed_at         DateTime? @db.Timestamptz(6)
-  expires_at          DateTime @default(dbgenerated("(now() + interval '10 minutes')")) @db.Timestamptz(6)
+  expires_at          DateTime  @default(dbgenerated("(now() + interval '10 minutes')")) @db.Timestamptz(6)
 
   @@index([user_id, created_at(sort: Desc)], map: "idx_precompute_user_created")
   @@index([expires_at], map: "idx_precompute_expires")
@@ -614,15 +616,38 @@ model mandala_activity_log {
 /// (book_chapters/book_sections/book_atoms split tables).
 /// Raw SQL DDL: prisma/migrations/book-poc/001_add_table.sql
 model mandala_books {
-  mandala_id   String        @id @db.Uuid
-  book_json    Json          @db.JsonB
-  version      Int           @default(1)
-  source_videos Int          @default(0)
-  source_atoms Int           @default(0)
-  generated_at DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
-  mandala      user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  mandala_id    String        @id @db.Uuid
+  book_json     Json          @db.JsonB
+  version       Int           @default(1)
+  source_videos Int           @default(0)
+  source_atoms  Int           @default(0)
+  generated_at  DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  mandala       user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@schema("public")
+}
+
+/// CP445 (2026-05-08) — Obsidian-style note mode persistence.
+/// One row per (user_id, mandala_id) — note doc is per-mandala, multi-video
+/// (mandala_books drives the chapters/sections/atoms structure).
+/// `original_json` is the immutable AI-generated baseline (set at first
+/// create). `content_json` is user-edited TipTap JSON, auto-saved every 2s.
+/// "원본 복원" replaces content_json with original_json.
+/// Raw SQL DDL: prisma/migrations/note_documents/001_create_table.sql
+model note_documents {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String        @db.Uuid
+  mandala_id    String        @db.Uuid
+  content_json  Json          @db.JsonB
+  original_json Json          @db.JsonB
+  created_at    DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  user          users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  mandala       user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, mandala_id], map: "uq_note_documents_user_mandala")
+  @@index([user_id, updated_at(sort: Desc)], map: "idx_note_documents_user_updated_at")
   @@schema("public")
 }
 
@@ -891,48 +916,48 @@ model youtube_sync_settings {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model youtube_videos {
-  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  youtube_video_id       String                   @unique
-  title                  String
-  description            String?
-  thumbnail_url          String?
-  channel_title          String?
-  duration_seconds       Int?
-  published_at           DateTime?                @db.Timestamptz(6)
-  view_count             BigInt?
-  like_count             BigInt?
+  id                      String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  youtube_video_id        String                   @unique
+  title                   String
+  description             String?
+  thumbnail_url           String?
+  channel_title           String?
+  duration_seconds        Int?
+  published_at            DateTime?                @db.Timestamptz(6)
+  view_count              BigInt?
+  like_count              BigInt?
   /// CP437 (2026-04-29) — full metadata expansion.
   /// Raw SQL DDL: prisma/migrations/youtube-metadata-v2/001_add_fields.sql
   /// Populated by youtube-metadata-cron + new save paths in collectors.
-  comment_count          BigInt?
-  tags                   String[]
-  topic_categories       String[]
-  has_caption            Boolean?
-  default_language       String?                  @db.VarChar(10)
-  metadata_fetched_at    DateTime?                @db.Timestamptz(6)
+  comment_count           BigInt?
+  tags                    String[]
+  topic_categories        String[]
+  has_caption             Boolean?
+  default_language        String?                  @db.VarChar(10)
+  metadata_fetched_at     DateTime?                @db.Timestamptz(6)
   /// CP437 transcript pipeline (Mac Mini yt-dlp). Stamped on summary
   /// success; transcript text itself is never persisted.
-  transcript_fetched_at  DateTime?                @db.Timestamptz(6)
+  transcript_fetched_at   DateTime?                @db.Timestamptz(6)
   /// CP438+1 (2026-05-03) — stamp on no_caption / claude_invalid_json so
   /// the candidates selector can skip recently-attempted videos and avoid
   /// the stale-no_caption resurfacing loop documented in
   /// docs/runbook/cp438-resume-handoff.md §4. 7-day cooldown allows
   /// catching late-added captions while preventing per-batch resurface.
   /// Raw SQL DDL: prisma/migrations/transcript-attempted/001_add_column.sql
-  transcript_attempted_at DateTime?               @db.Timestamptz(6)
+  transcript_attempted_at DateTime?                @db.Timestamptz(6)
   /// CP438 (2026-04-29) collector pipeline source.
   /// Values: 'category_mostpopular' | 'naver_keyword' | 'youtube_mostpopular' | 'domain_keyword'.
   /// Pre-CP438 legacy rows stay NULL (소급 불가).
   /// Raw SQL DDL: prisma/migrations/collector-source/001_add_source.sql
-  source                 String?                  @db.VarChar(30)
-  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
-  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
-  userState              UserVideoState[]
-  video_captions         video_captions[]
-  video_notes            video_notes[]
-  watch_sessions         watch_sessions[]
-  youtube_playlist_items youtube_playlist_items[]
-  youtube_watch_history  youtube_watch_history[]
+  source                  String?                  @db.VarChar(30)
+  created_at              DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime                 @default(now()) @db.Timestamptz(6)
+  userState               UserVideoState[]
+  video_captions          video_captions[]
+  video_notes             video_notes[]
+  watch_sessions          watch_sessions[]
+  youtube_playlist_items  youtube_playlist_items[]
+  youtube_watch_history   youtube_watch_history[]
 
   @@index([metadata_fetched_at], map: "idx_youtube_videos_metadata_fetched_at")
   @@index([transcript_fetched_at], map: "idx_youtube_videos_transcript_fetched_at")

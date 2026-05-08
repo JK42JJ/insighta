@@ -11,6 +11,8 @@ import { useEffect, useRef, useCallback } from 'react';
 import { getYouTubeVideoId, loadYouTubeAPI } from '@/widgets/video-player/model/youtube-api';
 import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
 
+export type PanelPlayerState = 'playing' | 'paused' | 'buffering' | 'ended' | 'unstarted' | 'cued';
+
 export interface PanelVideoPlayerProps {
   videoUrl: string;
   startTime?: number;
@@ -24,7 +26,18 @@ export interface PanelVideoPlayerProps {
   onUserPlayed?: () => void;
   /** Called on every play/pause state change. True = playing, false = paused. */
   onPlayStateChange?: (isPlaying: boolean) => void;
+  /** Called every ~1s with current player time/state/duration for chatbot context. */
+  onTimeUpdate?: (time: number, state: PanelPlayerState, duration: number) => void;
 }
+
+const YT_STATE_MAP: Record<number, PanelPlayerState> = {
+  [-1]: 'unstarted',
+  0: 'ended',
+  1: 'playing',
+  2: 'paused',
+  3: 'buffering',
+  5: 'cued',
+};
 
 export function PanelVideoPlayer({
   videoUrl,
@@ -34,6 +47,7 @@ export function PanelVideoPlayer({
   shouldAutoplay = false,
   onUserPlayed,
   onPlayStateChange,
+  onTimeUpdate,
 }: PanelVideoPlayerProps) {
   const youtubeId = getYouTubeVideoId(videoUrl);
   const internalPlayerRef = useRef<YTPlayer | null>(null);
@@ -86,6 +100,18 @@ export function PanelVideoPlayer({
             onPlayStateChange?.(true);
           } else if (event.data === 2) {
             onPlayStateChange?.(false);
+          }
+
+          if (onTimeUpdate && internalPlayerRef.current) {
+            const p = internalPlayerRef.current;
+            const mapped = YT_STATE_MAP[event.data] ?? 'unstarted';
+            try {
+              const t = p.getCurrentTime?.() ?? 0;
+              const d = (p as unknown as { getDuration?: () => number }).getDuration?.() ?? 0;
+              onTimeUpdate(t, mapped, d);
+            } catch {
+              // Player not ready
+            }
           }
         },
       },
@@ -142,6 +168,27 @@ export function PanelVideoPlayer({
     };
   }, [setPlayer]);
 
+  // Poll player time/state every 1s when playing — feeds chatbot region readable.
+  useEffect(() => {
+    if (!onTimeUpdate) return;
+    const id = window.setInterval(() => {
+      const p = internalPlayerRef.current;
+      if (!p || !playerReadyRef.current) return;
+      try {
+        const stateNum = (p as unknown as { getPlayerState?: () => number }).getPlayerState?.();
+        const mapped = stateNum != null ? (YT_STATE_MAP[stateNum] ?? 'unstarted') : 'unstarted';
+        // Only emit while playing — avoid noisy paused-state updates.
+        if (mapped !== 'playing') return;
+        const t = p.getCurrentTime?.() ?? 0;
+        const d = (p as unknown as { getDuration?: () => number }).getDuration?.() ?? 0;
+        onTimeUpdate(t, mapped, d);
+      } catch {
+        // Player transient state — ignore.
+      }
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [onTimeUpdate]);
+
   if (!youtubeId) {
     return (
       <div className="flex w-full items-center justify-center bg-black aspect-video shrink-0">
@@ -170,8 +217,15 @@ export function PanelVideoPlayer({
 
   return (
     <div
-      className="relative w-full shrink-0 overflow-hidden rounded-lg bg-black"
-      style={{ aspectRatio: '16/9' }}
+      className="relative mx-auto w-full shrink-0 overflow-hidden rounded-lg bg-black"
+      // CP445.x — max-height 49.5vh (55vh 에서 10% 축소, 사용자 spec). 하단
+      // 탭 콘텐츠 영역 추가 확보. aspect-ratio 16:9 유지 + max-width 도 비례
+      // cap (16/9 보존 + 가운데).
+      style={{
+        aspectRatio: '16/9',
+        maxHeight: '49.5vh',
+        maxWidth: 'calc(49.5vh * 16 / 9)',
+      }}
     >
       <iframe
         ref={iframeRef}

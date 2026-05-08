@@ -34,6 +34,9 @@ export interface PanelNoteEditorProps {
   playerRef?: React.MutableRefObject<YTPlayer | null>;
   /** Video URL for constructing timestamp links. */
   videoUrl?: string;
+  /** Debounced (500ms) editor context — last 200 plain-text chars + selection text.
+   *  Feeds chatbot region readable. */
+  onContextChange?: (draftExcerpt: string, selectionText: string | null) => void;
 }
 
 export function PanelNoteEditor({
@@ -42,6 +45,7 @@ export function PanelNoteEditor({
   onTimestampClick,
   playerRef,
   videoUrl,
+  onContextChange,
 }: PanelNoteEditorProps) {
   const { t } = useTranslation();
   const onChangeRef = useRef(onDocChange);
@@ -150,6 +154,30 @@ export function PanelNoteEditor({
     }
     return undefined;
   }, [editor]);
+
+  // Emit debounced context (last 200 plain-text chars + selection) for chatbot.
+  useEffect(() => {
+    if (!editor || !onContextChange) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const emit = () => {
+      const text = editor.getText();
+      const excerpt = text.slice(-200);
+      const { from, to } = editor.state.selection;
+      const selectionText = from !== to ? editor.state.doc.textBetween(from, to, ' ') : null;
+      onContextChange(excerpt, selectionText);
+    };
+    const debounced = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(emit, 500);
+    };
+    editor.on('update', debounced);
+    editor.on('selectionUpdate', debounced);
+    return () => {
+      if (timer) clearTimeout(timer);
+      editor.off('update', debounced);
+      editor.off('selectionUpdate', debounced);
+    };
+  }, [editor, onContextChange]);
 
   if (!editor) {
     return <div className="text-xs text-[#4e4f5c]">에디터를 불러오는 중...</div>;

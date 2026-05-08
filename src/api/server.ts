@@ -10,6 +10,7 @@ import { playlistRoutes } from './routes/playlists';
 import { videoRoutes } from './routes/videos';
 import { videoRichNotesRoutes } from './routes/video-rich-notes';
 import { noteRoutes } from './routes/notes';
+import { noteDocumentsRoutes } from './routes/note-documents';
 import { analyticsRoutes } from './routes/analytics';
 import { syncRoutes } from './routes/sync';
 import { quotaRoutes } from './routes/quota';
@@ -244,6 +245,9 @@ export async function buildServer() {
 
       // Register notes routes (notes are nested under videos for create/list, but top-level for get/update/delete)
       await instance.register(noteRoutes, { prefix: '/notes' });
+
+      // Register note-documents routes (CP445 — per-mandala TipTap doc for note mode)
+      await instance.register(noteDocumentsRoutes, { prefix: '/note-documents' });
 
       // Register analytics routes
       await instance.register(analyticsRoutes, { prefix: '/analytics' });
