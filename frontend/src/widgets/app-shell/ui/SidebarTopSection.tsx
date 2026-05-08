@@ -139,7 +139,10 @@ export function SidebarTopSection({
 
   return (
     <div className="shrink-0 flex flex-col gap-2 pt-4 pb-2 px-1">
-      <div className="flex items-center gap-2.5">
+      {/* Logo row — keeps its own px-1.5 so the brand mark sits at the same
+          10px optical inset as the menu rows below; the outer wrapper's
+          tighter px-1 must not pull the logo to the sidebar edge. */}
+      <div className="flex items-center gap-2.5 px-1.5">
         <Link
           to="/"
           onClick={onNavigateHome}
@@ -183,7 +186,7 @@ export function SidebarTopSection({
         <span>{t('sidebar.newMandalaCta', '새 만다라')}</span>
       </button>
 
-      {searchBarElement && <div className="w-full">{searchBarElement}</div>}
+      {searchBarElement && <div className="w-full px-1.5">{searchBarElement}</div>}
 
       <Popover open={moreOpen} onOpenChange={setMoreOpen}>
         <PopoverTrigger asChild>
