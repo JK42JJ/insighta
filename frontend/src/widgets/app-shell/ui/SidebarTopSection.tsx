@@ -186,7 +186,7 @@ export function SidebarTopSection({
         <span>{t('sidebar.newMandalaCta', '새 만다라')}</span>
       </button>
 
-      {searchBarElement && <div className="w-full px-1.5">{searchBarElement}</div>}
+      {searchBarElement && <div className="w-full">{searchBarElement}</div>}
 
       <Popover open={moreOpen} onOpenChange={setMoreOpen}>
         <PopoverTrigger asChild>
