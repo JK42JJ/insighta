@@ -11,6 +11,7 @@ import {
   handleThumbnailLoad,
 } from '@/shared/lib/image-utils';
 import { formatRelativeDate } from '@/shared/lib/format-date';
+import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 
 // ── Constants ──────────────────────────────────────────────
 
@@ -262,9 +263,9 @@ export function InsightCardItemV2({
       </div>
 
       {/* ── Body: title + meta ── */}
-      <div className="px-[2px] pt-2 pb-3">
+      <div className="px-[2px] pt-2 pb-4">
         <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px]">
-          {card.title}
+          {decodeHtmlEntities(card.title)}
         </h4>
         {(footerLeft || footerRight) && (
           <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
