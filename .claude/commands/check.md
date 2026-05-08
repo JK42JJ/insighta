@@ -168,6 +168,21 @@ Known repeat-offense patterns. Check changed files for these risks. If any match
 - Check: error-string grep precedes any success/failure stamping; OAuth/limit responses produce a distinct exit code (e.g., exit 4 oauth, exit 5 limit) and a sentinel file (`.oauth_limit_hit`) so cooldown locks are NOT applied to videos that were never actually attempted.
 - Reference: troubleshooting.md "CP439: claude -p OAuth/limit 응답이 mark_attempted 도장 → 7-day cooldown poison" (LEVEL-1, 81 social-domain candidates 7-day locked without ever being attempted; PR #606 fix `f61ad69`).
 
+**[6q] Native HTML5 image-drag suppression in dnd-kit zones**
+- Trigger: any new card/list component using `dnd-kit` with `<img>` or `data:`/`blob:` thumbnail.
+- Check: `<img draggable={false}>` set OR `onDragStart={(e) => e.preventDefault()}` applied; otherwise native HTML5 drag fires in parallel with dnd-kit, surfacing false invalid-URL toasts and breaking sort.
+- Reference: troubleshooting.md "CP443: native HTML5 image drag fires alongside dnd-kit" (LEVEL-1, false invalid-URL toast user-visible).
+
+**[6r] Outside-click handler `mousedown` race in dnd-kit context**
+- Trigger: any popover/menu/tooltip with outside-click close inside (or adjacent to) a dnd-kit container.
+- Check: outside-click uses `click` event (not `mousedown`); `mousedown` race fires close before dnd-kit can register drag start, breaking drag interaction or losing focus mid-drag.
+- Reference: troubleshooting.md "CP446: idea-spot mousedown→click race fix" (commit `8cc1db8`).
+
+**[6s] Layout root background-color explicit on chrome restructure**
+- Trigger: any sidebar/chrome layout restructure that unifies `--sidebar-background` with `--background`, or removes a previously-relied-on bg variable.
+- Check: component root explicitly sets `bg-*` class; `border-r` alone is insufficient when bg is unified — collapsed sidebar appears to vanish without explicit bg, masking actual presence.
+- Reference: troubleshooting.md "CP441: Layout 변경 시 background-color 명시 누락" (LEVEL-1, user image catch).
+
 Promotion policy: an item is added here when it appears in troubleshooting.md at LEVEL-2+, OR at LEVEL-1 with high prod impact (user frustration / outage / data corruption). Items retired when counter drops or pattern becomes impossible by design.
 
 ## Output Format

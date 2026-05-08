@@ -90,9 +90,10 @@ Find the last checkpoint's commit hash from checkpoint.md, and only target commi
 - Format: "{target file/tool}에 {specific action}" — MUST be actionable
 - If simple session with no target, use "—"
 
-**checkpoint.md rotation**:
-- When exceeding 20 entries, move the 10 oldest to `checkpoint-archive.md`
-- Always retain the Pending Work section
+**checkpoint.md rotation (Rule C — enforced, CP444 /retro 2026-05-08)**:
+- Enforced trigger: when entry count ≥ 21, MUST move the 10 oldest entries to `checkpoint-archive.md` BEFORE writing the new entry. No skip, no defer.
+- Always retain the Pending Work section.
+- Rationale: 7 epoch 누적 미해소 (CP437~CP443, cap 20 → 26 entries). 권고 → 강제 trigger.
 
 ### Step 2a: Append session-log.md row
 
@@ -176,6 +177,15 @@ Existing procedure (Read → check duplicates → add if new pattern) PLUS **Reg
 4. Enforce 200-line limit
 5. Advise whether `/tidy` run is recommended
 
+**Rule B — compression auto-trigger (CP444 /retro 2026-05-08)**:
+- `wc -l` on `work-efficiency.md` and `architecture.md`. If `work-efficiency.md > 1800` OR `architecture.md > 1900`, increment compression-warning counter in MEMORY.md footer (`_/save run … Rule B compression warning N세션 누적_`).
+- **3rd cumulative warning**: do NOT just emit a warning. Immediately spawn a 5-minute compression sub-task within this /save run:
+  1. Identify oldest 3-5 sections (CP-tagged) in the over-cap file.
+  2. Move full bodies to `<file>-archive.md`; replace with one-line summaries linking to archive.
+  3. Re-measure `wc -l`; if reduction < 100 lines, mark sub-task as needing manual deep-compression and escalate to next /retro.
+  4. Reset compression-warning counter to 0 in MEMORY.md footer.
+- Rationale (CP438→CP443 = 6 cumulative warnings unaddressed; work-efficiency.md grew 1525→1968 = +443 lines while compression remained "next session"): memory-only "권고" enforcement fire rate = 0% → forced sub-task spawn.
+
 ### Step 5: Update MEMORY.md
 
 - Replace "최근 작업" section with current date and work content
@@ -203,6 +213,11 @@ eval-scores.md path: `~/.claude/projects/-Users-jeonhokim-cursor-insighta/memory
 4. Append new row to eval-scores.md Epoch Log table
 5. Analyze change vs previous Epoch
 6. If 5+ epochs → update Trend Analysis
+7. **Rule K — D2 floor ≤ 0.50 BLOCKING marker (CP444 /retro 2026-05-08, threshold clarified)**:
+   - If this Epoch's `D2 ≤ 0.50` (inclusive), write a marker file `~/.claude/projects/-Users-jeonhokim-cursor-insighta/memory/.d2-blocking` containing JSON `{"epoch":"{N}","d2":"{score}","reason":"{1-line cause}"}`.
+   - Next `/init` Phase 5 reads this file; if present, surface 🚨 BLOCKING section above "Ready" line: `"D2 = {score} ≤ 0.50 floor reached at Epoch {N}. (a) 추측 패턴 visual-domain pre-flight 재확인 / (b) 어떤 LEVEL-2+ pattern 이 재발했는가? / (c) 사용자 frustration 누적 신호인가? — 1-line 답."`
+   - Marker file delete only after user-confirmed answer + retrospective.md Rule Evolution Log entry.
+   - Threshold note: spec uses `≤ 0.50` (inclusive). CP443 D2 = 0.50 case demonstrated `< 0.50` strict comparison missed the floor exactly at boundary.
 
 ### Step 7: Output Summary
 
