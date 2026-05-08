@@ -166,7 +166,7 @@ export function Sidebar({
         >
           {/* Minimap — fixed (outside scroll container, CP441 handoff §1) */}
           {!collapsed && minimapData && (
-            <div className="shrink-0 px-4 pt-2 pb-3">
+            <div className="shrink-0 px-2 pt-2 pb-3">
               <SidebarHeatMinimap
                 cardsByCell={minimapData.cardsByCell}
                 sectorSubjects={minimapData.sectorSubjects}
@@ -233,7 +233,7 @@ export function Sidebar({
               : 'translate-x-full opacity-0 pointer-events-none'
           )}
         >
-          <div className={cn('pt-4 pb-2', collapsed ? 'px-2' : 'px-4')}>
+          <div className={cn('pt-4 pb-2 px-2')}>
             {!collapsed && (
               <div className="flex items-center justify-between gap-2 mb-3">
                 <button
@@ -276,7 +276,7 @@ export function Sidebar({
               : 'translate-x-full opacity-0 pointer-events-none'
           )}
         >
-          <div className="px-4 pt-4 pb-2">
+          <div className="px-2 pt-4 pb-2">
             <button
               onClick={handleBackToApp}
               className="flex items-center gap-2 text-sm font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors mb-4"

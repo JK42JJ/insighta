@@ -138,7 +138,7 @@ export function SidebarTopSection({
   }
 
   return (
-    <div className="shrink-0 flex flex-col gap-2 pt-4 pb-2 px-4">
+    <div className="shrink-0 flex flex-col gap-2 pt-4 pb-2 px-2">
       <div className="flex items-center gap-2.5">
         <Link
           to="/"
