@@ -31,6 +31,11 @@ interface LearningState {
   /** CP445.x — note-mode inline iframe: ProseMirror pos of the currently
    *  expanded VideoBlock (null = none expanded). Single-active enforced. */
   activeNoteVideoKey: number | null;
+  /** CP446.x — auto-follow mode. true = scroll-driven activeKey switching
+   *  (visibility-based). false = explicit click required. Toggled true on
+   *  first VideoBlock click, false on note-mode exit / edit-mode enter /
+   *  mandala change. Spec: "명시적 재생 액티비티 only". */
+  noteAutoFollowEnabled: boolean;
 
   setCurrentVideo: (videoId: string) => void;
   setActiveTab: (tab: 'ai-summary' | 'notes') => void;
@@ -39,6 +44,7 @@ interface LearningState {
   setCenterViewMode: (mode: CenterViewMode) => void;
   setActiveSection: (ref: ActiveSectionRef | null) => void;
   setActiveNoteVideoKey: (key: number | null) => void;
+  setNoteAutoFollow: (enabled: boolean) => void;
 
   setActiveRegion: (region: ActiveRegion) => void;
   setPlayerState: (time: number, state: PlayerState, duration: number) => void;
@@ -61,6 +67,7 @@ export const useLearningStore = create<LearningState>((set) => ({
   noteDraftExcerpt: '',
   noteSelectionText: null,
   activeNoteVideoKey: null,
+  noteAutoFollowEnabled: false,
 
   setCurrentVideo: (videoId) => set({ currentVideoId: videoId }),
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -69,6 +76,7 @@ export const useLearningStore = create<LearningState>((set) => ({
   setCenterViewMode: (mode) => set({ centerViewMode: mode }),
   setActiveSection: (ref) => set({ activeSectionRef: ref }),
   setActiveNoteVideoKey: (key) => set({ activeNoteVideoKey: key }),
+  setNoteAutoFollow: (enabled) => set({ noteAutoFollowEnabled: enabled }),
 
   setActiveRegion: (region) => set({ activeRegion: region, lastInteractionTs: Date.now() }),
   setPlayerState: (time, state, duration) =>

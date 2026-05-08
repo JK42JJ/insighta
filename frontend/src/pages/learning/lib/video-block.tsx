@@ -19,11 +19,18 @@
  *   - Don't touch the YT iframe player owned by CenterPanel Row 1 (hidden in
  *     note mode by CP442 mount-preserve pattern)
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Play } from 'lucide-react';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
+import { loadYouTubeAPI, type YTPlayer } from '@/widgets/video-player/model/youtube-api';
+
+// CP446.x — YT.PlayerState constants. Avoid relying on window.YT.PlayerState
+// at module load (loaded async).
+const YT_STATE_PLAYING = 1;
+const YT_STATE_PAUSED = 2;
+const YT_STATE_ENDED = 0;
 
 export interface VideoBlockOptions {
   HTMLAttributes: Record<string, unknown>;
@@ -56,6 +63,7 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
   const ts = formatTs(attrs.fromSec);
   const activeKey = useLearningStore((s) => s.activeNoteVideoKey);
   const setActiveKey = useLearningStore((s) => s.setActiveNoteVideoKey);
+  const setAutoFollow = useLearningStore((s) => s.setNoteAutoFollow);
   // CP445.x — img onError 시 thumbnail 깨진 vid → block 숨김 (간단 path).
   // 더 strict 한 youtube_videos 테이블 query / fetch 검증은 별 PR.
   const [thumbBroken, setThumbBroken] = useState(false);
@@ -66,6 +74,57 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
   const isActive = activeKey !== null && activeKey === myKey;
   const isEditable = editor.isEditable;
 
+  // CP446.x — when active iframe is mounted, register YT.Player to track
+  // user-driven play/pause. On PAUSED → disable auto-follow (user explicitly
+  // stopped → scrolling shouldn't autoplay other blocks). On PLAYING →
+  // re-enable (user resumed). Stable iframe id per block via useRef.
+  const iframeIdRef = useRef(`vb-${Math.random().toString(36).slice(2, 10)}`);
+  const playerRef = useRef<YTPlayer | null>(null);
+  useEffect(() => {
+    if (!isActive || isEditable) return;
+    let cancelled = false;
+    let player: YTPlayer | null = null;
+
+    loadYouTubeAPI().then(() => {
+      if (cancelled) return;
+      const elementId = iframeIdRef.current;
+      // The iframe with this id must be in the DOM at this point (rendered
+      // by isActive branch below). Defensive: skip if missing.
+      if (!document.getElementById(elementId)) return;
+      try {
+        player = new window.YT.Player(elementId, {
+          events: {
+            onStateChange: (event) => {
+              if (event.data === YT_STATE_PLAYING) {
+                // User resumed (or autoplay started) — keep auto-follow on.
+                setAutoFollow(true);
+              } else if (event.data === YT_STATE_PAUSED || event.data === YT_STATE_ENDED) {
+                // Explicit pause/end = user no longer wants automatic playback.
+                setAutoFollow(false);
+              }
+            },
+          },
+        });
+        playerRef.current = player;
+      } catch {
+        // YT.Player init failed — let iframe play without state tracking.
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      const p = playerRef.current;
+      playerRef.current = null;
+      if (p) {
+        try {
+          p.destroy();
+        } catch {
+          // ignore destroy errors
+        }
+      }
+    };
+  }, [isActive, isEditable, setAutoFollow]);
+
   if (thumbBroken && !isActive) {
     // Hide entire block when thumbnail load failed (deleted / private / fake vid).
     return <NodeViewWrapper data-type="video-block" className="video-block-wrap hidden" />;
@@ -75,7 +134,10 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
     e.preventDefault();
     if (isEditable) return; // edit mode: thumbnail is static; ProseMirror owns the click
     if (!attrs.vid) return;
+    // CP446.x — explicit play activity = enable auto-follow mode. Subsequent
+    // scrolls drive activeKey via IntersectionObserver (useNoteAutoFollow).
     setActiveKey(myKey);
+    setAutoFollow(true);
   };
 
   return (
@@ -83,14 +145,19 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
       data-type="video-block"
       data-vid={attrs.vid}
       data-from-sec={String(attrs.fromSec)}
+      // CP446.x — expose ProseMirror pos so useNoteAutoFollow can resolve
+      // the IntersectionObserver-detected element back to the activeKey
+      // (which is the pos number stored in Zustand).
+      data-pm-pos={typeof pos === 'number' ? String(pos) : undefined}
       className="video-block-wrap"
     >
       {isActive && !isEditable ? (
         <div className="video-block-frame video-block-frame--active">
           <iframe
+            id={iframeIdRef.current}
             src={`https://www.youtube.com/embed/${attrs.vid}?autoplay=1&mute=0&start=${Math.floor(
               attrs.fromSec
-            )}&rel=0&modestbranding=1`}
+            )}&rel=0&modestbranding=1&enablejsapi=1`}
             title={attrs.sectionTitle ?? `Video ${attrs.vid}`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen

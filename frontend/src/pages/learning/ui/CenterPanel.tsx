@@ -19,6 +19,7 @@ import { PanelAISummary } from '@/features/video-side-panel/ui/PanelAISummary';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
 import { useNoteDocument } from '@/pages/learning/model/useNoteDocument';
+import { useNoteAutoFollow } from '@/pages/learning/model/useNoteAutoFollow';
 import { exportToMarkdown, exportToHtml } from '@/pages/learning/lib/note-export';
 import { cn } from '@/shared/lib/utils';
 import type { MandalaBookChapter, MandalaBookSection } from '@/shared/lib/api-client';
@@ -57,10 +58,21 @@ export function CenterPanel({
   const setPlayerState = useLearningStore((s) => s.setPlayerState);
   const { book } = useMandalaBook(mandalaId);
   const setActiveNoteVideoKey = useLearningStore((s) => s.setActiveNoteVideoKey);
+  const noteAutoFollowEnabled = useLearningStore((s) => s.noteAutoFollowEnabled);
+  const setNoteAutoFollow = useLearningStore((s) => s.setNoteAutoFollow);
 
   // CP445.x — VideoBlock owns its click → inline YouTube iframe (autoplay)
   // via Zustand `activeNoteVideoKey`. No external player.seekTo needed.
   const noteDoc = useNoteDocument({ mandalaId });
+
+  // CP446.x — visibility-driven auto-follow: scrolling drives activeKey
+  // once the user has explicitly clicked at least one VideoBlock. Disabled
+  // in edit mode and outside note mode (idempotent: hook early-returns).
+  useNoteAutoFollow({
+    editor: noteDoc.editor,
+    isEditable: noteDoc.isEditing,
+    enabled: noteAutoFollowEnabled && centerViewMode === 'note',
+  });
 
   // CP445 B3 — when entering note mode the player wrapper is hidden via CSS
   // (CP442 mount-preserve) but the YouTube iframe keeps playing audio in the
@@ -75,14 +87,26 @@ export function CenterPanel({
     }
   }, [centerViewMode, playerRef]);
 
-  // CP445.x — auto-collapse the inline-iframe VideoBlock when:
+  // CP445.x / CP446.x — auto-collapse the inline-iframe VideoBlock AND
+  // disable auto-follow when:
   //   (a) leaving note mode (player mode shouldn't keep a hidden iframe playing)
-  //   (b) entering edit mode (per spec: edit mode = static thumbnails only)
+  //   (b) entering edit mode (spec: edit mode = static thumbnails only)
+  // Auto-follow OFF here ensures next note-mode entry begins in "explicit
+  // play activity" state — user must click a VideoBlock to enable scrolling
+  // auto-switch (Q1 default).
   useEffect(() => {
     if (centerViewMode !== 'note' || noteDoc.isEditing) {
       setActiveNoteVideoKey(null);
+      setNoteAutoFollow(false);
     }
-  }, [centerViewMode, noteDoc.isEditing, setActiveNoteVideoKey]);
+  }, [centerViewMode, noteDoc.isEditing, setActiveNoteVideoKey, setNoteAutoFollow]);
+
+  // CP446.x — mandala 변경 시 auto-follow 초기화. 다른 mandala 의 노트 doc
+  // 으로 진입 시 explicit click 다시 필요하도록.
+  useEffect(() => {
+    setActiveNoteVideoKey(null);
+    setNoteAutoFollow(false);
+  }, [mandalaId, setActiveNoteVideoKey, setNoteAutoFollow]);
 
   // CP445 Q-D=B+C — Toast on save failure (silent on success — dot indicator
   // covers normal feedback). useRef-equivalent guard: only toast when status
