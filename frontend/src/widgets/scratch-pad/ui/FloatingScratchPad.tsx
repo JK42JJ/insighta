@@ -1003,7 +1003,7 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 </button>
                 <div
                   ref={scrollContainerRef}
-                  className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 scroll-smooth"
+                  className="flex-1 flex items-center gap-1.5 overflow-x-auto scratchpad-scroll py-0.5 scroll-smooth"
                   onClick={handleContainerClick}
                 >
                   <SortableContext items={sortableIds} strategy={rectSortingStrategy}>

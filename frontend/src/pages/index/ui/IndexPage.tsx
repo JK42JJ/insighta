@@ -7,6 +7,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
+import { Lightbulb } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { BootShell } from '@/shared/ui/BootShell';
 import { trackCardViewed } from '@/shared/lib/posthog';
@@ -377,6 +378,9 @@ function AuthenticatedApp() {
   const [activeDragData, setActiveDragData] = useState<DragData | null>(null);
   const [activeDragCellIndex, setActiveDragCellIndex] = useState<number | null>(null);
   const [activeDragOverCellIndex, setActiveDragOverCellIndex] = useState<number | null>(null);
+  // CP442 — IdeaSpot popup open state (replaces dock-mode preference as the
+  // visibility driver; `scratchpad_is_floating` preference preserved untouched).
+  const [scratchPadOpen, setScratchPadOpen] = useState(false);
 
   // 드래그 시작 시점의 selectedCardIds 스냅샷 — 드래그 중 selection 변경에 영향받지 않도록
   const dragSelectedIdsRef = useRef<string[] | null>(null);
@@ -625,7 +629,28 @@ function AuthenticatedApp() {
     dragDrop.setIsDraggingCell(false);
   }, [dragDrop]);
 
-  // Shared ScratchPad props factory
+  // CP442 — IdeaSpot trigger button (rendered left of ViewSwitcher in
+  // ContextHeader / graph mode / InsightsView toolbars). onClick wired in
+  // Phase 3 (open-state toggle).
+  const ideaSpotCount = cards.scratchPadCards.length;
+  const ideaSpotTrigger = (
+    <button
+      type="button"
+      onClick={() => setScratchPadOpen((v) => !v)}
+      title={t('ideaSpot.tooltip', '아이디어스팟 {{count}}개', { count: ideaSpotCount })}
+      aria-label={t('ideaSpot.tooltip', '아이디어스팟 {{count}}개', { count: ideaSpotCount })}
+      className="relative flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+    >
+      <Lightbulb className="w-4 h-4" />
+      {ideaSpotCount > 0 && (
+        <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold leading-none flex items-center justify-center">
+          {ideaSpotCount}
+        </span>
+      )}
+    </button>
+  );
+
+  // Shared ScratchPad props factory (CP442 — dock mode retired, floating only)
   const scratchPadProps = (isFloating: boolean) => ({
     cards: cards.scratchPadCards,
     isDropTarget: dragDrop.isScratchPadDropTarget,
@@ -638,9 +663,10 @@ function AuthenticatedApp() {
     onDeleteCards: cards.handleDeleteCards,
     onFileDrop: cards.handleScratchPadFileDrop,
     isFloating,
-    onToggleFloating: () => layout.handleSetScratchPadFloating(!layout.isScratchPadFloating),
-    dockPosition: layout.scratchPadDockPosition,
-    onDockPositionChange: layout.handleSetScratchPadDockPosition,
+    // CP442 — onToggleFloating now closes the popup (existing close button
+    // semantics). Preference (`scratchpad_is_floating`) intentionally NOT
+    // mutated to honor the "preserve preference" decision.
+    onToggleFloating: () => setScratchPadOpen(false),
   });
 
   // Shared MandalaGrid element
@@ -784,15 +810,11 @@ function AuthenticatedApp() {
           isInternalDrag
         />
 
-        {/* Top docked ScratchPad */}
-        {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'top' && (
-          <div className="flex-shrink-0 relative z-30">
-            <FloatingScratchPad {...scratchPadProps(false)} />
-          </div>
-        )}
-
-        {/* Floating ScratchPad */}
-        {layout.isScratchPadFloating && (
+        {/* CP442 — Floating ScratchPad: kept mounted, toggled via display so
+            internal size/position state survives close/reopen. Wrapper div
+            isolates the display switch (FloatingScratchPad has no style/className
+            props). */}
+        <div style={{ display: scratchPadOpen ? 'block' : 'none' }}>
           <FloatingScratchPad
             {...scratchPadProps(true)}
             initialPosition={
@@ -802,7 +824,7 @@ function AuthenticatedApp() {
             }
             onPositionChange={layout.setScratchPadPosition}
           />
-        )}
+        </div>
 
         {/* Main Content Area — ResizablePanelGroup for resizable side panel */}
         <ResizablePanelGroup
@@ -812,13 +834,6 @@ function AuthenticatedApp() {
         >
           <ResizablePanel defaultSize={isSidePanelOpen ? 65 : 100} minSize={30}>
             <div className="flex h-full overflow-hidden">
-              {/* Left docked ScratchPad */}
-              {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'left' && (
-                <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-r border-border/30 relative z-30 h-full">
-                  <FloatingScratchPad {...scratchPadProps(false)} />
-                </div>
-              )}
-
               <div
                 className={`flex-1 h-full px-6 md:px-10 lg:px-[70px] py-6 ${modal.isModalOpen ? 'overflow-hidden' : 'overflow-y-auto scrollbar-pro'} ${
                   isSidePanelOpen
@@ -862,6 +877,7 @@ function AuthenticatedApp() {
                     viewMode={layout.viewMode}
                     onViewModeChange={layout.handleSetViewMode}
                     mandalaId={effectiveMandalaId}
+                    trailingAction={ideaSpotTrigger}
                   />
                 ) : (
                   <>
@@ -933,17 +949,11 @@ function AuthenticatedApp() {
                       cardsByCell={cards.cardsByCell}
                       isExternalCardDragActive={activeDragData?.type === 'card'}
                       newlySyncedCards={cards.newlySyncedCards}
+                      trailingAction={ideaSpotTrigger}
                     />
                   </>
                 )}
               </div>
-
-              {/* Right docked ScratchPad */}
-              {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'right' && (
-                <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-l border-border/30 relative z-30 h-full">
-                  <FloatingScratchPad {...scratchPadProps(false)} />
-                </div>
-              )}
             </div>
           </ResizablePanel>
 
@@ -963,13 +973,6 @@ function AuthenticatedApp() {
             </>
           )}
         </ResizablePanelGroup>
-
-        {/* Bottom docked ScratchPad */}
-        {!layout.isScratchPadFloating && layout.scratchPadDockPosition === 'bottom' && (
-          <div className="flex-shrink-0 bg-surface-mid/90 backdrop-blur-sm border-t border-border/30 relative z-30">
-            <FloatingScratchPad {...scratchPadProps(false)} />
-          </div>
-        )}
 
         <VideoPlayerModal
           card={modal.currentModalCard}

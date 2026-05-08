@@ -665,6 +665,9 @@
     "emptyHintVertical": "Drop\nlink",
     "dropOnScratchPad": "Drop in Ideation"
   },
+  "ideaSpot": {
+    "tooltip": "Idea Spot — {{count}} item(s)"
+  },
   "index": {
     "addCard": "Add Card",
     "addCardPlaceholder": "Enter a YouTube URL or link",

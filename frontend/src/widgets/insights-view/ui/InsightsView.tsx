@@ -20,6 +20,8 @@ interface InsightsViewProps {
   onViewModeChange: (mode: ViewMode) => void;
   /** Optional — when provided, RecommendationFeed renders under the title row. */
   mandalaId?: string | null;
+  /** CP442 — slot rendered left of ViewSwitcher (e.g., IdeaSpot trigger). */
+  trailingAction?: React.ReactNode;
 }
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -57,6 +59,7 @@ export function InsightsView({
   viewMode,
   onViewModeChange,
   mandalaId,
+  trailingAction,
 }: InsightsViewProps) {
   const { t } = useTranslation();
 
@@ -188,7 +191,10 @@ export function InsightsView({
             {t('contextHeader.cardCount', '{{count}} cards', { count: stats.total })}
           </span>
         </div>
-        <ViewSwitcher value={viewMode} onChange={onViewModeChange} />
+        <div className="flex items-center gap-1.5">
+          {trailingAction}
+          <ViewSwitcher value={viewMode} onChange={onViewModeChange} />
+        </div>
       </div>
 
       {/* Layer 2: Personalized recommendation feed (CP356 — sits directly under

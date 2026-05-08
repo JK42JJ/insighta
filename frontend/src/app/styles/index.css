@@ -386,6 +386,34 @@
     background: transparent;
   }
 
+  /* CP442 — FloatingScratchPad inner scroll (4px overlay, transparent track) */
+  .scratchpad-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  }
+
+  .scratchpad-scroll::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .scratchpad-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scratchpad-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+  }
+
+  .scratchpad-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  .scratchpad-scroll::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   /* Gradient shift for explore hero text */
   @keyframes gradShift {
     0%, 100% { background-position: 0% 50%; }

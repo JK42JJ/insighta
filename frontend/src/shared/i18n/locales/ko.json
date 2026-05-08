@@ -666,6 +666,9 @@
     "emptyHintVertical": "링크\n드롭",
     "dropOnScratchPad": "아이디에이션에 드롭"
   },
+  "ideaSpot": {
+    "tooltip": "아이디어스팟 {{count}}개"
+  },
   "index": {
     "addCard": "카드 추가",
     "addCardPlaceholder": "YouTube URL 또는 링크를 입력하세요",

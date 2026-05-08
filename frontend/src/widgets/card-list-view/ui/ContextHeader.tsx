@@ -22,6 +22,8 @@ interface ContextHeaderProps {
   sortMode: SortMode;
   onSortModeChange: (mode: SortMode) => void;
   sliderElement?: React.ReactNode;
+  /** CP442 — slot left of ViewSwitcher (e.g., IdeaSpot trigger button). */
+  trailingAction?: React.ReactNode;
 }
 
 const SORT_OPTIONS: { value: SortMode; labelKey: string }[] = [
@@ -41,6 +43,7 @@ export function ContextHeader({
   sortMode,
   onSortModeChange,
   sliderElement,
+  trailingAction,
 }: ContextHeaderProps) {
   const { t } = useTranslation();
   const titleInitial = title.charAt(0).toUpperCase();
@@ -111,6 +114,7 @@ export function ContextHeader({
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {trailingAction}
         <ViewSwitcher value={viewMode} onChange={onViewModeChange} />
       </div>
     </div>

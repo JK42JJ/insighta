@@ -113,6 +113,8 @@ interface CardListViewProps {
    * "Newly Synced" pill is hidden when this list is empty.
    */
   newlySyncedCards?: InsightCard[];
+  /** CP442 — slot rendered left of ViewSwitcher (e.g., IdeaSpot trigger). */
+  trailingAction?: React.ReactNode;
 }
 
 export function CardListView({
@@ -148,6 +150,7 @@ export function CardListView({
   onGridColumnsChange,
   compactMode = false,
   newlySyncedCards,
+  trailingAction,
 }: CardListViewProps) {
   const { t } = useTranslation();
   // Auto-responsive columns by CONTAINER width (reacts to side panel open/close).
@@ -365,6 +368,7 @@ export function CardListView({
       sortMode={sortMode}
       onSortModeChange={setSortMode}
       sliderElement={gridSliderElement}
+      trailingAction={trailingAction}
     />
   );
 
@@ -391,7 +395,10 @@ export function CardListView({
           <h3 className="text-lg font-semibold">
             {title} {t('cards.insights')}
           </h3>
-          <ViewSwitcher value={viewMode} onChange={onViewModeChange} />
+          <div className="flex items-center gap-1.5">
+            {trailingAction}
+            <ViewSwitcher value={viewMode} onChange={onViewModeChange} />
+          </div>
         </div>
         <div className="flex-1 min-h-0 relative">
           <GraphView mandalaId={mandalaId} />
