@@ -111,9 +111,11 @@ export function InsightCardItemV2({
     disabled: !canDrag,
   });
 
-  // CP445 — Apple Finder mode: card body never carries listeners; drag intent
-  // lives on the handle only. The card body keeps onClick → learning page.
-  // Multi-select dragData (selectedCardIds) is preserved on the handle.
+  // CP446 — restore B-model: card body carries listeners only when the card
+  // is already selected (multi-drag). Non-selected card bodies stay free for
+  // drag-to-select (useDragSelect.isDndActivator returns false). Drag-to-move
+  // a single non-selected card uses the visible 24×24 grip handle.
+  const cardListeners = isSelected ? listeners : undefined;
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -146,7 +148,7 @@ export function InsightCardItemV2({
   return (
     <Card
       ref={setNodeRef}
-      {...(canDrag ? attributes : {})}
+      {...(canDrag ? { ...attributes, ...cardListeners } : {})}
       data-dnd-draggable={isSelected ? '' : undefined}
       data-card-content
       onClick={handleClick}
@@ -157,21 +159,20 @@ export function InsightCardItemV2({
         'hover:-translate-y-0.5 hover:ring-1 hover:ring-border/60',
         // CP443 — pull cards 5% inward (each side 2.5%) to tighten gaps without touching grid template
         'w-[95%]',
+        isSelected && canDrag && 'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-30',
         className
       )}
     >
-      {/* CP445 — Drag-handle hit zone covers the top 40px strip of the card,
-           but pointer-events flip on only when the card is hovered so a non-
-           hovered card body still routes onClick → learning page. The 24×24
-           grip icon is the only visible affordance. */}
-      {canDrag && (
+      {/* Drag handle — visible grip for non-selected cards (24×24 hit area).
+          Selected cards drag from the body itself (multi-card drag). */}
+      {canDrag && !isSelected && (
         <div
           {...listeners}
           data-dnd-handle
-          className="absolute top-0 left-0 right-0 h-10 z-10 cursor-grab active:cursor-grabbing pointer-events-none group-hover:pointer-events-auto"
+          className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
         >
-          <div className="absolute top-2 left-2 w-6 h-6 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="w-6 h-6 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded">
             <GripVertical className="w-5 h-5 text-white/70" aria-hidden="true" />
           </div>
         </div>
