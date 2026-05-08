@@ -157,15 +157,15 @@ export function InsightCardItemV2({
         className
       )}
     >
-      {/* Drag handle — grip icon for non-selected cards */}
+      {/* Drag handle — grip icon for non-selected cards (CP443 — 24×24 hit area) */}
       {canDrag && !isSelected && (
         <div
           {...listeners}
           data-dnd-handle
           className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
         >
-          <div className="bg-black/60 backdrop-blur-sm rounded p-0.5">
-            <GripVertical className="w-3 h-3 text-white/70" aria-hidden="true" />
+          <div className="w-6 h-6 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded">
+            <GripVertical className="w-5 h-5 text-white/70" aria-hidden="true" />
           </div>
         </div>
       )}
