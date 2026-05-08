@@ -152,6 +152,12 @@ export function InsightCardItemV2({
       data-dnd-draggable={isSelected ? '' : undefined}
       data-card-content
       onClick={handleClick}
+      // CP446 — block native HTML5 drag on the card. Without this, the
+      // browser's image-drag picks up the thumbnail URL in parallel with
+      // dnd-kit; if the user releases off any droppable, CardListView's
+      // onDrop fires with the thumbnail URL and the scratchpad-drop branch
+      // calls isValidUrl → "유효하지 않은 URL" toast (false positive).
+      onDragStart={(e) => e.preventDefault()}
       className={cn(
         'group relative cursor-pointer transition-all duration-200',
         'border-0 shadow-none bg-transparent rounded-[10px]',
@@ -185,6 +191,7 @@ export function InsightCardItemV2({
           alt={card.title}
           className="w-full h-full object-cover"
           loading="lazy"
+          draggable={false}
           onError={handleThumbnailError}
           onLoad={handleThumbnailLoad}
         />
