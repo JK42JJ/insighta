@@ -111,7 +111,9 @@ export function InsightCardItemV2({
     disabled: !canDrag,
   });
 
-  const cardListeners = isSelected ? listeners : undefined;
+  // CP445 — Apple Finder mode: card body never carries listeners; drag intent
+  // lives on the handle only. The card body keeps onClick → learning page.
+  // Multi-select dragData (selectedCardIds) is preserved on the handle.
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -144,7 +146,7 @@ export function InsightCardItemV2({
   return (
     <Card
       ref={setNodeRef}
-      {...(canDrag ? { ...attributes, ...cardListeners } : {})}
+      {...(canDrag ? attributes : {})}
       data-dnd-draggable={isSelected ? '' : undefined}
       data-card-content
       onClick={handleClick}
@@ -155,13 +157,12 @@ export function InsightCardItemV2({
         'hover:-translate-y-0.5 hover:ring-1 hover:ring-border/60',
         // CP443 — pull cards 5% inward (each side 2.5%) to tighten gaps without touching grid template
         'w-[95%]',
-        isSelected && canDrag && 'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-30',
         className
       )}
     >
-      {/* Drag handle — grip icon for non-selected cards (CP443 — 24×24 hit area) */}
-      {canDrag && !isSelected && (
+      {/* CP445 — Drag handle visible on hover; sole drag-trigger for the card. */}
+      {canDrag && (
         <div
           {...listeners}
           data-dnd-handle
