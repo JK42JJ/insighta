@@ -5,10 +5,24 @@ import { CopilotChat } from '@copilotkit/react-ui';
 import '@copilotkit/react-ui/styles.css';
 import { toast } from 'sonner';
 import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
+import { useMandalaQuery } from '@/features/mandala';
+import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
+import { useLearningStore } from '@/pages/learning/model/useLearningStore';
 import { apiClient } from '@/shared/lib/api-client';
 import type { CopilotChatLabels } from '@copilotkit/react-ui';
 
+export interface ChatContext {
+  layer: 'video' | 'cell' | 'mandala' | 'global';
+  mandala_id: string;
+  mandala_name: string;
+  cell_name: string | null;
+  cell_index: number | null;
+  video_id: string;
+  current_section: string | null;
+}
+
 interface ChatAssistantProps {
+  mandalaId: string;
   videoId: string;
   onSeek?: (seconds: number) => void;
 }
@@ -132,11 +146,53 @@ function buildSuggestions(
   return contextual.length > 0 ? contextual.slice(0, 3) : defaults;
 }
 
-function ChatPanel({ videoId, onSeek }: { videoId: string; onSeek?: (seconds: number) => void }) {
+function ChatPanel({
+  mandalaId,
+  videoId,
+  onSeek,
+}: {
+  mandalaId: string;
+  videoId: string;
+  onSeek?: (seconds: number) => void;
+}) {
   const { t } = useTranslation();
   const { richSummary } = useRichSummary(videoId);
   const suggestions = buildSuggestions(t, richSummary?.structured ?? null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const { mandalaLevels } = useMandalaQuery(mandalaId);
+  const { book: bookResponse } = useMandalaBook(mandalaId);
+  const selectedCellIndex = useLearningStore((s) => s.selectedCellIndex);
+  const activeSectionRef = useLearningStore((s) => s.activeSectionRef);
+
+  const chatContext = useMemo<ChatContext>(() => {
+    const mandalaName = mandalaLevels.root?.centerGoal ?? '';
+    const subjects = mandalaLevels.root?.subjects ?? [];
+    const cellName =
+      selectedCellIndex !== null && selectedCellIndex >= 1 && selectedCellIndex <= 8
+        ? (subjects[selectedCellIndex - 1] ?? null)
+        : null;
+
+    let currentSection: string | null = null;
+    if (activeSectionRef && bookResponse?.book?.chapters) {
+      const chapter = bookResponse.book.chapters.find((c) => c.ch === activeSectionRef.chapterIdx);
+      const section = chapter?.sections?.[activeSectionRef.sectionIdx];
+      if (chapter && section) currentSection = `${chapter.title} > ${section.title}`;
+    }
+
+    const layer: ChatContext['layer'] =
+      currentSection !== null || selectedCellIndex !== null ? 'cell' : 'mandala';
+
+    return {
+      layer,
+      mandala_id: mandalaId,
+      mandala_name: mandalaName,
+      cell_name: cellName,
+      cell_index: selectedCellIndex,
+      video_id: videoId,
+      current_section: currentSection,
+    };
+  }, [mandalaId, videoId, mandalaLevels, bookResponse, selectedCellIndex, activeSectionRef]);
 
   const instructions = useMemo(
     () => buildInstructions(videoId, richSummary ?? null),
@@ -147,6 +203,11 @@ function ChatPanel({ videoId, onSeek }: { videoId: string; onSeek?: (seconds: nu
     description: 'Current YouTube video context and assistant role instructions',
     value: instructions,
     convert: (v: string) => v,
+  });
+
+  useCopilotReadable({
+    description: 'Structured learning context (mandala / cell / section / video hierarchy)',
+    value: chatContext,
   });
 
   const chatLabels: CopilotChatLabels = {
@@ -203,7 +264,7 @@ function ChatPanel({ videoId, onSeek }: { videoId: string; onSeek?: (seconds: nu
   );
 }
 
-export function ChatAssistant({ videoId, onSeek }: ChatAssistantProps) {
+export function ChatAssistant({ mandalaId, videoId, onSeek }: ChatAssistantProps) {
   const token = apiClient.getAccessToken();
   const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -214,7 +275,7 @@ export function ChatAssistant({ videoId, onSeek }: ChatAssistantProps) {
       enableInspector={false}
       headers={headers}
     >
-      <ChatPanel videoId={videoId} onSeek={onSeek} />
+      <ChatPanel mandalaId={mandalaId} videoId={videoId} onSeek={onSeek} />
     </CopilotKit>
   );
 }

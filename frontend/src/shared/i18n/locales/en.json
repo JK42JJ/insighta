@@ -1176,7 +1176,10 @@
     "createWithWizard": "Create with wizard",
     "createBlank": "Quick create",
     "createMandala": "Create Mandala",
-    "myMandalas": "My Mandalas"
+    "myMandalas": "Mandala List",
+    "newMandalaCta": "New Mandala",
+    "more": "More",
+    "upgrade": "Upgrade"
   },
   "footer": {
     "brand": "Insighta",
@@ -1601,6 +1604,11 @@
     "tabNotes": "Notes",
     "tabChatbot": "AI Chatbot",
     "tabSummary": "AI Summary",
+    "tabSection": "Section",
+    "noActiveSection": "Select a section from the book index on the left.",
+    "chapterLabel": "Chapter {{n}}",
+    "atomsLabel": "Atoms",
+    "qaLabel": "Q&A",
     "goal": "Learning Goal",
     "videoCount": "{{count}} videos",
     "noVideos": "No videos yet",

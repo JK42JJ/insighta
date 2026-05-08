@@ -1,10 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams, useMatch } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams, useMatch } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  Home,
-  ChevronLeft,
-  ChevronRight,
   Settings,
   Palette,
   Bell,
@@ -14,11 +10,16 @@ import {
   Shield,
   ArrowLeft,
   User,
+  PanelLeftClose,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { Button } from '@/shared/ui/button';
 import { SidebarMandalaSection, type MinimapData } from './SidebarMandalaSection';
 import { SidebarLearningSection } from './SidebarLearningSection';
+import { SidebarTopSection } from './SidebarTopSection';
+import { SidebarProfileFooter } from './SidebarProfileFooter';
+import { SidebarHeatMinimap } from '@/widgets/sidebar-heat-minimap';
+import { useUpdateSectorNames } from '@/features/mandala';
+import { toast } from '@/shared/lib/use-toast';
 import { ErrorBoundary } from 'react-error-boundary';
 import { RefreshCw } from 'lucide-react';
 
@@ -90,23 +91,7 @@ const SETTINGS_NAV_GROUPS = [
   },
 ];
 
-const MIN_SIDEBAR_WIDTH = 240;
-const MAX_SIDEBAR_WIDTH = 480;
-const DEFAULT_SIDEBAR_WIDTH = 320;
-const SIDEBAR_WIDTH_KEY = 'insighta-sidebar-width';
-
-function getInitialWidth(): number {
-  try {
-    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
-    if (saved) {
-      const parsed = parseInt(saved, 10);
-      if (!isNaN(parsed)) return Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed));
-    }
-  } catch {
-    /* ignore */
-  }
-  return DEFAULT_SIDEBAR_WIDTH;
-}
+const SIDEBAR_WIDTH = 320;
 
 interface SidebarProps {
   collapsed: boolean;
@@ -116,16 +101,8 @@ interface SidebarProps {
   /** Issue #389: per-mandala "Newly Synced" card count for the sidebar dot+count indicator. */
   newlySyncedCountByMandala?: Record<string, number>;
   settingsMode?: boolean;
+  searchBarElement?: React.ReactNode;
 }
-
-interface NavItem {
-  to: string;
-  icon: typeof Home;
-  labelKey: string;
-  exact?: boolean;
-}
-
-const MAIN_NAV: NavItem[] = [{ to: '/', icon: Home, labelKey: 'sidebar.home', exact: true }];
 
 export function Sidebar({
   collapsed,
@@ -134,108 +111,17 @@ export function Sidebar({
   minimapData,
   newlySyncedCountByMandala,
   settingsMode = false,
+  searchBarElement,
 }: SidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [sidebarWidth, setSidebarWidth] = useState(getInitialWidth);
-  const widthRef = useRef(sidebarWidth);
-  widthRef.current = sidebarWidth;
 
   const learningMatch = useMatch('/learning/:mandalaId/:videoId');
   const isLearningRoute = Boolean(learningMatch);
 
-  const isActive = (path: string, exact?: boolean) => {
-    if (exact) return location.pathname === path;
-    return location.pathname.startsWith(path);
-  };
-
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const sidebar = e.currentTarget.parentElement as HTMLElement;
-    const startWidth = sidebar.getBoundingClientRect().width;
-
-    // Disable transition during drag for instant feedback
-    sidebar.style.transition = 'none';
-
-    const onMouseMove = (ev: MouseEvent) => {
-      // DOM direct manipulation — no React rerender, 60fps
-      const newWidth = Math.max(
-        MIN_SIDEBAR_WIDTH,
-        Math.min(MAX_SIDEBAR_WIDTH, startWidth + (ev.clientX - startX))
-      );
-      sidebar.style.width = `${newWidth}px`;
-    };
-
-    const onMouseUp = (ev: MouseEvent) => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      sidebar.style.transition = '';
-
-      // Sync React state + persist once on mouseup
-      const finalWidth = Math.max(
-        MIN_SIDEBAR_WIDTH,
-        Math.min(MAX_SIDEBAR_WIDTH, startWidth + (ev.clientX - startX))
-      );
-      setSidebarWidth(finalWidth);
-      widthRef.current = finalWidth;
-      try {
-        localStorage.setItem(SIDEBAR_WIDTH_KEY, String(finalWidth));
-      } catch {
-        /* ignore */
-      }
-    };
-
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }, []);
-
-  const handleResizeDoubleClick = useCallback(() => {
-    setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
-    widthRef.current = DEFAULT_SIDEBAR_WIDTH;
-    try {
-      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(DEFAULT_SIDEBAR_WIDTH));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const renderNavItem = (item: NavItem) => {
-    const active = isActive(item.to, item.exact);
-    const Icon = item.icon;
-
-    const handleClick = () => {
-      if (item.to === '/' && onNavigateHome) {
-        onNavigateHome();
-      }
-    };
-
-    return (
-      <li key={item.to}>
-        <Link
-          to={item.to}
-          onClick={handleClick}
-          className={cn(
-            'relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
-            'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
-            collapsed && 'justify-center px-2'
-          )}
-          aria-current={active ? 'page' : undefined}
-          title={collapsed ? t(item.labelKey) : undefined}
-        >
-          <Icon className={cn('shrink-0', collapsed ? 'w-5 h-5' : 'w-4 h-4')} aria-hidden="true" />
-          {!collapsed && <span>{t(item.labelKey)}</span>}
-        </Link>
-      </li>
-    );
-  };
+  const updateSectorNames = useUpdateSectorNames();
 
   const activeSettingsTab = (searchParams.get('tab') as SettingsCategory) || 'general';
 
@@ -247,188 +133,204 @@ export function Sidebar({
     navigate('/');
   };
 
-  const showResizeHandle = !collapsed;
-
   return (
     <aside
       className={cn(
-        'hidden md:flex flex-col h-full bg-sidebar border-r border-sidebar-border shrink-0 transition-[width] duration-300 ease-in-out overflow-hidden relative',
+        'hidden md:flex flex-col h-full shrink-0 transition-[width] duration-300 ease-in-out overflow-hidden relative',
+        'bg-sidebar border-r border-sidebar-border/40',
         !settingsMode && collapsed && 'w-16'
       )}
       style={{
-        width: collapsed && !settingsMode ? undefined : `${sidebarWidth}px`,
+        width: collapsed && !settingsMode ? undefined : `${SIDEBAR_WIDTH}px`,
       }}
       aria-label={t('sidebar.navigation')}
     >
-      {/* App Panel (dashboard) */}
-      <div
-        className={cn(
-          'absolute inset-0 flex flex-col transition-all duration-300 ease-in-out',
-          settingsMode || isLearningRoute
-            ? '-translate-x-full opacity-0 pointer-events-none'
-            : 'translate-x-0 opacity-100'
-        )}
-      >
-        <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto scrollbar-none">
-          {location.pathname === '/' && (
-            <>
-              <ul className="space-y-1" role="list">
-                {MAIN_NAV.map(renderNavItem)}
-              </ul>
-              <div className="my-3 mx-2">
-                <div className="h-px bg-sidebar-border" />
-              </div>
-            </>
-          )}
+      {((!isLearningRoute && !settingsMode) || collapsed) && (
+        <SidebarTopSection
+          collapsed={collapsed}
+          searchBarElement={searchBarElement}
+          onNavigateHome={onNavigateHome}
+          onToggleCollapse={onToggleCollapse}
+        />
+      )}
 
-          {/* Mandala section — error boundary prevents sidebar crash */}
-          <ErrorBoundary
-            fallbackRender={({ resetErrorBoundary }) => (
-              <div className="px-2 space-y-0.5">
-                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
-                  Mandalas
+      <div className="relative flex-1 min-h-0 overflow-hidden">
+        {/* App Panel (dashboard) */}
+        <div
+          className={cn(
+            'absolute inset-0 flex flex-col transition-all duration-300 ease-in-out',
+            settingsMode || isLearningRoute
+              ? '-translate-x-full opacity-0 pointer-events-none'
+              : 'translate-x-0 opacity-100'
+          )}
+        >
+          <nav className="flex-1 px-2 py-2 space-y-3 overflow-y-auto scrollbar-none">
+            {/* Minimap — always visible at top of app panel (CP441 handoff: §1) */}
+            {!collapsed && minimapData && (
+              <div className="px-2">
+                <SidebarHeatMinimap
+                  cardsByCell={minimapData.cardsByCell}
+                  sectorSubjects={minimapData.sectorSubjects}
+                  sectorLabels={minimapData.sectorLabels}
+                  centerGoal={minimapData.centerGoal}
+                  centerLabel={minimapData.centerLabel}
+                  selectedCellIndex={minimapData.selectedCellIndex}
+                  onCellClick={minimapData.onCellClick}
+                  onExternalUrlDrop={minimapData.onExternalUrlDrop}
+                  onSectorNamesChange={
+                    minimapData.mandalaId
+                      ? (newGoal, newSubjects) => {
+                          updateSectorNames.mutate(
+                            {
+                              mandalaId: minimapData.mandalaId!,
+                              centerGoal: newGoal,
+                              subjects: newSubjects,
+                            },
+                            {
+                              onSuccess: () => toast({ title: t('minimap.saved') }),
+                              onError: () =>
+                                toast({ title: t('common.error'), variant: 'destructive' }),
+                            }
+                          );
+                        }
+                      : undefined
+                  }
+                />
+              </div>
+            )}
+
+            {/* Mandala fold list — error boundary prevents sidebar crash */}
+            <ErrorBoundary
+              fallbackRender={({ resetErrorBoundary }) => (
+                <div className="px-2 space-y-0.5">
+                  <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+                    Mandalas
+                  </div>
+                  <button
+                    onClick={resetErrorBoundary}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Load failed. Tap to retry.
+                  </button>
                 </div>
+              )}
+            >
+              <SidebarMandalaSection
+                collapsed={collapsed}
+                newlySyncedCountByMandala={newlySyncedCountByMandala}
+              />
+            </ErrorBoundary>
+          </nav>
+        </div>
+
+        {/* Learning Panel */}
+        <div
+          className={cn(
+            'absolute inset-0 flex flex-col transition-all duration-300 ease-in-out',
+            isLearningRoute && !settingsMode
+              ? 'translate-x-0 opacity-100'
+              : 'translate-x-full opacity-0 pointer-events-none'
+          )}
+        >
+          <div className={cn('pt-4 pb-2', collapsed ? 'px-2' : 'px-4')}>
+            {!collapsed && (
+              <div className="flex items-center justify-between gap-2 mb-3">
                 <button
-                  onClick={resetErrorBoundary}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
+                  onClick={handleBackToApp}
+                  className="flex items-center gap-2 text-sm font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors duration-150"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Load failed. Tap to retry.
+                  <ArrowLeft className="w-4 h-4" />
+                  {t('settings.backToApp', 'Back to app')}
+                </button>
+                <button
+                  type="button"
+                  onClick={onToggleCollapse}
+                  aria-label={t('sidebar.collapse', 'Collapse sidebar')}
+                  title={t('sidebar.collapse', 'Collapse sidebar')}
+                  className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                >
+                  <PanelLeftClose className="w-4 h-4" />
                 </button>
               </div>
             )}
-          >
-            <SidebarMandalaSection
-              collapsed={collapsed}
-              minimapData={minimapData}
-              newlySyncedCountByMandala={newlySyncedCountByMandala}
-            />
-          </ErrorBoundary>
-        </nav>
-
-        {/* Bottom section — collapse toggle only */}
-        <div className="px-2 py-3 border-t border-sidebar-border">
-          <div
-            className={cn('flex items-center', collapsed ? 'justify-center' : 'justify-end gap-1')}
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onToggleCollapse}
-              className={cn(
-                'text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent',
-                collapsed ? 'justify-center px-2' : 'px-2'
-              )}
-              aria-label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
-            >
-              {collapsed ? (
-                <ChevronRight className="w-4 h-4" />
-              ) : (
-                <ChevronLeft className="w-4 h-4" />
-              )}
-            </Button>
           </div>
-        </div>
-      </div>
 
-      {/* Learning Panel */}
-      <div
-        className={cn(
-          'absolute inset-0 flex flex-col transition-all duration-300 ease-in-out',
-          isLearningRoute && !settingsMode
-            ? 'translate-x-0 opacity-100'
-            : 'translate-x-full opacity-0 pointer-events-none'
-        )}
-      >
-        <div className="px-4 pt-4 pb-2">
-          <button
-            onClick={handleBackToApp}
-            className="flex items-center gap-2 text-sm font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors mb-3"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            {t('settings.backToApp', 'Back to app')}
-          </button>
+          <nav className="flex-1 px-0 pb-4 overflow-y-auto scrollbar-none">
+            {learningMatch && (
+              <SidebarLearningSection
+                mandalaId={learningMatch.params.mandalaId!}
+                currentVideoId={learningMatch.params.videoId}
+                collapsed={collapsed}
+              />
+            )}
+          </nav>
         </div>
 
-        <nav className="flex-1 px-0 pb-4 overflow-y-auto scrollbar-none">
-          {learningMatch && (
-            <SidebarLearningSection
-              mandalaId={learningMatch.params.mandalaId!}
-              currentVideoId={learningMatch.params.videoId}
-              collapsed={collapsed}
-            />
-          )}
-        </nav>
-      </div>
-
-      {/* Settings Panel */}
-      <div
-        className={cn(
-          'absolute inset-0 flex flex-col transition-all duration-300 ease-in-out',
-          settingsMode
-            ? 'translate-x-0 opacity-100'
-            : 'translate-x-full opacity-0 pointer-events-none'
-        )}
-      >
-        <div className="px-4 pt-4 pb-2">
-          <button
-            onClick={handleBackToApp}
-            className="flex items-center gap-2 text-sm font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors mb-4"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            {t('settings.backToApp', 'Back to app')}
-          </button>
-          <h2 className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-sidebar-foreground to-sidebar-primary bg-clip-text text-transparent px-1 pb-3">
-            {t('settings.title', 'Settings')}
-          </h2>
-        </div>
-
-        <nav className="flex-1 px-3 pb-4 overflow-y-auto scrollbar-none">
-          {SETTINGS_NAV_GROUPS.map((group, gIdx) => (
-            <div key={gIdx} className="mb-2">
-              {group.labelKey && (
-                <div className="px-3 pt-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/35">
-                  {t(group.labelKey, group.labelKey.split('.').pop())}
-                </div>
-              )}
-              {!group.labelKey && gIdx > 0 && <div className="mx-2 my-2 h-px bg-sidebar-border" />}
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const active = activeSettingsTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleSettingsTabClick(item.id)}
-                    className={cn(
-                      'relative flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13.5px] font-medium transition-all duration-150 border border-transparent',
-                      active
-                        ? 'bg-sidebar-primary/10 text-sidebar-primary border-sidebar-primary/15 font-semibold'
-                        : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground'
-                    )}
-                  >
-                    {active && (
-                      <span className="absolute -left-1 top-1/2 -translate-y-1/2 w-[3px] h-[18px] bg-sidebar-primary rounded-r-sm" />
-                    )}
-                    <Icon
-                      className={cn('w-4 h-4 shrink-0', active ? 'opacity-100' : 'opacity-60')}
-                    />
-                    {t(item.labelKey)}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-      </div>
-
-      {/* Resize handle */}
-      {showResizeHandle && (
+        {/* Settings Panel */}
         <div
-          className="absolute top-0 right-0 w-1 h-full cursor-col-resize z-50"
-          onMouseDown={handleResizeStart}
-          onDoubleClick={handleResizeDoubleClick}
-        />
-      )}
+          className={cn(
+            'absolute inset-0 flex flex-col transition-all duration-300 ease-in-out',
+            settingsMode
+              ? 'translate-x-0 opacity-100'
+              : 'translate-x-full opacity-0 pointer-events-none'
+          )}
+        >
+          <div className="px-4 pt-4 pb-2">
+            <button
+              onClick={handleBackToApp}
+              className="flex items-center gap-2 text-sm font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors mb-4"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              {t('settings.backToApp', 'Back to app')}
+            </button>
+            <h2 className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-sidebar-foreground to-sidebar-primary bg-clip-text text-transparent px-1 pb-3">
+              {t('settings.title', 'Settings')}
+            </h2>
+          </div>
+
+          <nav className="flex-1 px-3 pb-4 overflow-y-auto scrollbar-none">
+            {SETTINGS_NAV_GROUPS.map((group, gIdx) => (
+              <div key={gIdx} className="mb-2">
+                {group.labelKey && (
+                  <div className="px-3 pt-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/35">
+                    {t(group.labelKey, group.labelKey.split('.').pop())}
+                  </div>
+                )}
+                {!group.labelKey && gIdx > 0 && (
+                  <div className="mx-2 my-2 h-px bg-sidebar-border" />
+                )}
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = activeSettingsTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleSettingsTabClick(item.id)}
+                      className={cn(
+                        'relative flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13.5px] font-medium transition-all duration-150 border border-transparent',
+                        active
+                          ? 'bg-sidebar-primary/10 text-sidebar-primary border-sidebar-primary/15 font-semibold'
+                          : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                      )}
+                    >
+                      {active && (
+                        <span className="absolute -left-1 top-1/2 -translate-y-1/2 w-[3px] h-[18px] bg-sidebar-primary rounded-r-sm" />
+                      )}
+                      <Icon
+                        className={cn('w-4 h-4 shrink-0', active ? 'opacity-100' : 'opacity-60')}
+                      />
+                      {t(item.labelKey)}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      <SidebarProfileFooter collapsed={collapsed} />
     </aside>
   );
 }

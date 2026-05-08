@@ -47,7 +47,8 @@
 
     /* Sidebar */
     --sidebar-width: 22rem;
-    --sidebar-background: 220 14% 96%;
+    /* CP441 — sidebar bg unified with content area (--background) */
+    --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 220 15% 10%;
     --sidebar-primary: 234 65% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
@@ -55,7 +56,7 @@
     --sidebar-accent-foreground: 234 65% 50%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 234 65% 50%;
-    --sidebar: 220 14% 96%;
+    --sidebar: 0 0% 100%;
 
     /* Chart colors */
     --chart-1: 234 65% 50%;
@@ -194,7 +195,8 @@
 
     /* Sidebar */
     --sidebar-width: 22rem;
-    --sidebar-background: 220 13% 13%;
+    /* CP441 — sidebar bg unified with content area (--background) */
+    --sidebar-background: 220 15% 10%;
     --sidebar-foreground: 220 10% 95%;
     --sidebar-primary: 234 60% 72%;
     --sidebar-primary-foreground: 220 15% 10%;
@@ -202,7 +204,7 @@
     --sidebar-accent-foreground: 234 60% 75%;
     --sidebar-border: 220 12% 22%;
     --sidebar-ring: 234 60% 72%;
-    --sidebar: 220 12% 17%;
+    --sidebar: 220 15% 10%;
 
     /* Chart colors */
     --chart-1: 234 60% 72%;
@@ -348,6 +350,39 @@
   }
   
   .scrollbar-pro::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* CP441 — sidebar mandala list scrollbar (thin, sidebar-border colored) */
+  .scrollbar-sidebar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--sidebar-border) / 0.4) transparent;
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar-thumb {
+    background: hsl(var(--sidebar-border) / 0.4);
+    border-radius: 3px;
+    transition: background 0.15s ease;
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--sidebar-border) / 0.65);
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar-thumb:active {
+    background: hsl(var(--sidebar-foreground) / 0.4);
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar-corner {
     background: transparent;
   }
 
@@ -962,6 +997,20 @@
 
 .copilotkit-chat-wrapper .copilotKitMessages {
   overflow-y: auto !important;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+
+.copilotkit-chat-wrapper .copilotKitMessages strong,
+.copilotkit-chat-wrapper .copilotKitMessages b {
+  font-weight: 500;
+}
+
+.copilotkit-chat-wrapper .copilotKitMessages ul,
+.copilotkit-chat-wrapper .copilotKitMessages ol {
+  padding-left: 12px;
 }
 
 .copilotkit-chat-wrapper .poweredBy {
@@ -980,6 +1029,10 @@
   box-shadow: none !important;
 }
 
+.copilotkit-chat-wrapper .copilotKitInput > textarea::placeholder {
+  font-size: 13px;
+}
+
 .copilotkit-chat-wrapper .copilotKitButton {
   border: none !important;
   box-shadow: none !important;
@@ -989,7 +1042,7 @@
   border-color: hsl(var(--border)) !important;
 }
 
-.chat-ts {
+.copilotkit-chat-wrapper .chat-ts {
   color: hsl(var(--primary));
   cursor: pointer;
   text-decoration: underline;
@@ -997,8 +1050,10 @@
   background: none;
   border: none;
   padding: 0;
-  font: inherit;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
 }
-.chat-ts:hover {
+.copilotkit-chat-wrapper .chat-ts:hover {
   opacity: 0.7;
 }

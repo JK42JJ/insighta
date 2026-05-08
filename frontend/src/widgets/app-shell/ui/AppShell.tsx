@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom';
 import { DndContext } from '@dnd-kit/core';
 import { useTranslation } from 'react-i18next';
 import { Sidebar } from './Sidebar';
-import { AppHeader } from './AppHeader';
 import { MobileDrawer } from './MobileDrawer';
 import { useShellStore, dndHandlersRef } from '@/stores/shellStore';
 import { useAuth } from '@/features/auth/model/useAuth';
@@ -109,24 +108,16 @@ export function AppShell({ children }: AppShellProps) {
       onDragCancel={() => dndHandlersRef.current?.onDragCancel()}
     >
       <div className="h-screen flex flex-col bg-surface-base overflow-hidden">
-        <AppHeader
-          onMobileMenuOpen={() => setMobileDrawerOpen(true)}
-          searchBarElement={searchBarElement}
-        />
-
         <div className="flex-1 flex overflow-hidden">
           {showSidebar && (
             <Sidebar
-              collapsed={
-                isSettingsRoute || location.pathname.startsWith('/learning')
-                  ? false
-                  : sidebarCollapsed
-              }
+              collapsed={isSettingsRoute ? false : sidebarCollapsed}
               onToggleCollapse={handleToggleCollapse}
               onNavigateHome={onNavigateHome ?? undefined}
               minimapData={minimapData ?? undefined}
               newlySyncedCountByMandala={newlySyncedCountByMandala}
               settingsMode={isSettingsRoute}
+              searchBarElement={searchBarElement}
             />
           )}
 

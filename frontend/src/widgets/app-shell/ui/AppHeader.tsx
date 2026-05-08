@@ -23,6 +23,18 @@ interface AppHeaderProps {
   searchBarElement?: React.ReactNode;
 }
 
+/**
+ * @deprecated 2026-05-07 — Header chrome was retired in favor of a sidebar-integrated layout.
+ * Logo + search slot moved to `SidebarTopSection`. Profile menu / language toggle / theme toggle /
+ * tier badge / logout moved to `SidebarProfileFooter`. Mobile hamburger trigger is intentionally
+ * dropped pending a separate mobile-layout PR.
+ *
+ * This file is preserved (per handoff §7 "AppHeader.tsx 파일 삭제 금지") for:
+ *   1. cleanup PR identification (search for `@deprecated` in this dir)
+ *   2. potential rollback if sidebar integration regresses
+ *
+ * Do not import — `AppShell` no longer renders this. New code must use the sidebar surfaces.
+ */
 export function AppHeader({ onMobileMenuOpen, searchBarElement }: AppHeaderProps) {
   const { t, i18n } = useTranslation();
   const { isLoggedIn, isLoading, userName, userEmail, userAvatar, signOut } = useAuth();

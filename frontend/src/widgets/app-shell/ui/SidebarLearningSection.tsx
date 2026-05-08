@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, BookOpen, Sparkles, PlayCircle } from 'lucide-react';
+import { ChevronRight, BookOpen, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useMandalaCards } from '@/pages/learning/model/useMandalaCards';
+import { useLearningStore } from '@/pages/learning/model/useLearningStore';
 import type { InsightCard } from '@/entities/card/model/types';
 import type { MandalaBookChapter } from '@/shared/lib/api-client';
 import { cn } from '@/shared/lib/utils';
@@ -22,6 +23,9 @@ export function SidebarLearningSection({
 }: SidebarLearningSectionProps) {
   const { t } = useTranslation();
   const [selectedCell, setSelectedCell] = useState<number | null>(null);
+  const activeSectionRef = useLearningStore((s) => s.activeSectionRef);
+  const setActiveSection = useLearningStore((s) => s.setActiveSection);
+  const setCenterTab = useLearningStore((s) => s.setCenterTab);
 
   const { mandalaLevels } = useMandalaQuery(mandalaId);
   const rootLevel = mandalaLevels.root;
@@ -56,8 +60,14 @@ export function SidebarLearningSection({
   })();
 
   useEffect(() => {
-    if (activeMatch) setSelectedCell(activeMatch.chapterIdx + 1);
-  }, [activeMatch?.chapterIdx]);
+    if (activeMatch) {
+      setSelectedCell(activeMatch.chapterIdx + 1);
+      setActiveSection({
+        chapterIdx: activeMatch.chapterIdx,
+        sectionIdx: activeMatch.sectionIdx,
+      });
+    }
+  }, [activeMatch?.chapterIdx, activeMatch?.sectionIdx, setActiveSection]);
 
   const cardsByCell = new Map<number, InsightCard[]>();
   for (const card of mandalaCards) {
@@ -101,26 +111,34 @@ export function SidebarLearningSection({
           // CP438+1 — book chapter `ch` is 0-based but cellIndex is 1-based.
           const bookChapter = bookChaptersByIdx.get(idx);
           const sectionCount = bookChapter?.sections?.length ?? 0;
-          const isActiveChapter = activeMatch?.chapterIdx === idx;
+          const isActiveChapter =
+            activeMatch?.chapterIdx === idx || activeSectionRef?.chapterIdx === idx || isExpanded;
 
           return (
             <div key={idx}>
               <button
-                onClick={() => setSelectedCell(isExpanded ? null : idx + 1)}
+                onClick={() => {
+                  if (isExpanded) {
+                    setSelectedCell(null);
+                  } else {
+                    setSelectedCell(idx + 1);
+                    if (bookChapter && bookChapter.sections.length > 0) {
+                      setActiveSection({ chapterIdx: idx, sectionIdx: 0 });
+                      setCenterTab('section');
+                    }
+                  }
+                }}
                 className={cn(
-                  'flex w-full items-center gap-2 px-3 py-2 text-left rounded-lg transition-colors',
-                  isActiveChapter && !isExpanded
-                    ? 'bg-[rgba(129,140,248,0.10)] text-sidebar-foreground'
-                    : isExpanded
-                      ? 'bg-sidebar-accent text-sidebar-foreground'
-                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50'
+                  'flex w-full items-center gap-2 px-3 py-2 text-left rounded-lg transition-colors border-l-[3px]',
+                  isActiveChapter
+                    ? 'border-[#818cf8] text-sidebar-foreground font-semibold'
+                    : 'border-transparent text-sidebar-foreground/70 font-normal hover:bg-sidebar-accent/50'
                 )}
               >
                 <ChevronRight
                   className={cn('h-3 w-3 shrink-0 transition-transform', isExpanded && 'rotate-90')}
                 />
-                <span className="flex-1 truncate text-[12px] font-medium">{goal}</span>
-                {isActiveChapter && <PlayCircle className="h-3 w-3 shrink-0 text-[#818cf8]" />}
+                <span className="flex-1 truncate text-[12px]">{goal}</span>
                 {sectionCount > 0 ? (
                   <span className="shrink-0 rounded-full bg-[rgba(45,212,191,0.15)] px-1.5 py-0.5 text-[10px] font-semibold text-[#2dd4bf]">
                     📖 {sectionCount}
@@ -141,7 +159,13 @@ export function SidebarLearningSection({
                       chapter={bookChapter}
                       mandalaId={mandalaId}
                       currentVideoId={currentVideoId}
-                      activeSectionIdx={isActiveChapter ? (activeMatch?.sectionIdx ?? null) : null}
+                      activeSectionIdx={
+                        activeSectionRef?.chapterIdx === bookChapter.ch
+                          ? activeSectionRef.sectionIdx
+                          : activeMatch?.chapterIdx === idx
+                            ? (activeMatch?.sectionIdx ?? null)
+                            : null
+                      }
                     />
                   ) : (
                     <div className="flex items-center gap-1.5 text-[11px] text-sidebar-foreground/40">
@@ -181,6 +205,8 @@ function BookChapterPreview({
   activeSectionIdx: number | null;
 }) {
   const sections = chapter.sections ?? [];
+  const setActiveSection = useLearningStore((s) => s.setActiveSection);
+  const setCenterTab = useLearningStore((s) => s.setCenterTab);
 
   return (
     <div className="space-y-2">
@@ -194,21 +220,22 @@ function BookChapterPreview({
           return (
             <li
               key={sIdx}
+              onClick={() => {
+                setActiveSection({ chapterIdx: chapter.ch, sectionIdx: sIdx });
+                setCenterTab('section');
+              }}
               className={cn(
-                'rounded-[6px] border px-2 py-2 transition-colors',
-                isActiveSection
-                  ? 'border-[#818cf8] bg-[rgba(129,140,248,0.08)] ring-1 ring-[rgba(129,140,248,0.3)]'
-                  : 'border-sidebar-border bg-sidebar-accent/30'
+                'cursor-pointer rounded-[6px] px-2 py-2 transition-colors border-l-[3px]',
+                isActiveSection ? 'border-[#818cf8]' : 'border-transparent'
               )}
             >
               <div className="flex items-start gap-1.5">
-                {isActiveSection && (
-                  <PlayCircle className="mt-[1px] h-3 w-3 shrink-0 text-[#818cf8]" />
-                )}
                 <p
                   className={cn(
-                    'text-[11px] font-semibold',
-                    isActiveSection ? 'text-[#818cf8]' : 'text-sidebar-foreground/80'
+                    'text-[11px]',
+                    isActiveSection
+                      ? 'text-[#818cf8] font-semibold'
+                      : 'text-sidebar-foreground/80 font-normal'
                   )}
                 >
                   {sec.title}

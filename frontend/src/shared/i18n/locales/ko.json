@@ -1177,7 +1177,10 @@
     "createWithWizard": "위저드로 만들기",
     "createBlank": "바로 만들기",
     "createMandala": "만다라트 생성",
-    "myMandalas": "내 만다라"
+    "myMandalas": "만다라 리스트",
+    "newMandalaCta": "새 만다라",
+    "more": "더 보기",
+    "upgrade": "Upgrade"
   },
   "footer": {
     "brand": "Insighta",
@@ -1602,6 +1605,11 @@
     "tabNotes": "노트",
     "tabChatbot": "AI 챗봇",
     "tabSummary": "AI 요약",
+    "tabSection": "섹션 내용",
+    "noActiveSection": "좌측 북인덱스에서 섹션을 선택하세요.",
+    "chapterLabel": "챕터 {{n}}",
+    "atomsLabel": "아톰",
+    "qaLabel": "Q&A",
     "goal": "학습 목표",
     "videoCount": "{{count}}개 영상",
     "noVideos": "아직 영상이 없습니다",

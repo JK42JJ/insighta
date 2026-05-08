@@ -41,7 +41,7 @@ export function VideoStrip({ mandalaId, currentVideoId }: VideoStripProps) {
   if (mandalaCards.length <= 1) return null;
 
   return (
-    <div className="relative shrink-0 border-b border-border bg-card/50">
+    <div className="relative shrink-0">
       <button
         onClick={() => scroll('left')}
         className="absolute left-0 top-0 bottom-0 z-10 flex w-8 items-center justify-center bg-gradient-to-r from-background/90 to-transparent text-muted-foreground hover:text-foreground transition-colors"
