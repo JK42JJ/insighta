@@ -153,8 +153,8 @@ export function InsightCardItemV2({
         'border-0 shadow-none bg-transparent rounded-[10px]',
         // CP443 — hover lift + subtle ring (border-0 preserved to keep shadcn Card chrome intact)
         'hover:-translate-y-0.5 hover:ring-1 hover:ring-border/60',
-        // CP443 — 10% size reduction within grid cell (parent uses justify-items-center)
-        'w-[90%]',
+        // CP443 — pull cards 5% inward (each side 2.5%) to tighten gaps without touching grid template
+        'w-[95%]',
         isSelected && canDrag && 'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-30',
         className
@@ -263,7 +263,7 @@ export function InsightCardItemV2({
       </div>
 
       {/* ── Body: title + meta ── */}
-      <div className="px-[2px] pt-2 pb-4">
+      <div className="px-3 pt-2 pb-4">
         <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px]">
           {decodeHtmlEntities(card.title)}
         </h4>
