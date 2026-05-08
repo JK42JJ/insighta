@@ -30,8 +30,10 @@ interface LabelFilterPillsV2Props {
 // CP444 — YouTube-style pill chrome. Active = filled, inactive = muted soft;
 // underline indicator retired. Edge-fade + chevron buttons surface horizontal
 // scroll affordance only when the row actually overflows.
+// CP444+1 — sized down half a step to align with the surrounding 13px text
+// scale (card title 13px, sidebar item 13px, footer 11px).
 const PILL_BASE =
-  'shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150';
+  'shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[13px] font-medium transition-colors duration-150';
 const PILL_ACTIVE = 'bg-foreground text-background';
 const PILL_INACTIVE = 'bg-muted/40 text-muted-foreground hover:bg-muted/60';
 const SCROLL_DELTA = 200;
@@ -81,14 +83,17 @@ export function LabelFilterPillsV2({
 
   return (
     <div data-card-chrome className="relative mb-1.5">
-      <div ref={scrollRef} className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
+      <div
+        ref={scrollRef}
+        className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1"
+      >
         {/* All pill */}
         <button
           onClick={onAllClick}
           className={cn(PILL_BASE, isAllSelected ? PILL_ACTIVE : PILL_INACTIVE)}
         >
           {t('contextHeader.all', 'All')}
-          <span className="text-[11px] font-medium opacity-70">{totalCount}</span>
+          <span className="text-[10px] font-medium opacity-70">{totalCount}</span>
         </button>
 
         {/* 8 sector pills */}
@@ -102,7 +107,7 @@ export function LabelFilterPillsV2({
               className={cn(PILL_BASE, isActive ? PILL_ACTIVE : PILL_INACTIVE)}
             >
               {sector}
-              <span className="text-[11px] font-medium opacity-70">{count}</span>
+              <span className="text-[10px] font-medium opacity-70">{count}</span>
             </button>
           );
         })}
@@ -122,7 +127,7 @@ export function LabelFilterPillsV2({
           >
             <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" aria-hidden="true" />
             {t('labelFilter.newlySynced', 'Newly Synced')}
-            <span className="text-[11px] font-medium opacity-70">{newlySyncedCount}</span>
+            <span className="text-[10px] font-medium opacity-70">{newlySyncedCount}</span>
           </button>
         )}
       </div>
@@ -134,9 +139,9 @@ export function LabelFilterPillsV2({
             type="button"
             onClick={() => handleScrollBy(-SCROLL_DELTA)}
             aria-label={t('labelFilter.scrollLeft', 'Scroll left')}
-            className="pointer-events-auto inline-flex items-center justify-center w-8 h-6 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors duration-150"
+            className="pointer-events-auto inline-flex items-center justify-center w-7 h-6 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors duration-150"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
@@ -148,9 +153,9 @@ export function LabelFilterPillsV2({
             type="button"
             onClick={() => handleScrollBy(SCROLL_DELTA)}
             aria-label={t('labelFilter.scrollRight', 'Scroll right')}
-            className="pointer-events-auto inline-flex items-center justify-center w-8 h-6 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors duration-150"
+            className="pointer-events-auto inline-flex items-center justify-center w-7 h-6 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors duration-150"
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
