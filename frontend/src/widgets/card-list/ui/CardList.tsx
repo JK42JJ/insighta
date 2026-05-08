@@ -35,17 +35,12 @@ interface CardListProps {
   compact?: boolean;
 }
 
-// Wrapper to make each card slot a droppable for reorder
-function CardSlot({
-  card,
-  isOver,
-  children,
-}: {
-  card: InsightCard;
-  isOver: boolean;
-  children: React.ReactNode;
-}) {
-  const { setNodeRef } = useDroppable({
+// Wrapper to make each card slot a droppable for reorder.
+// CP445 — `isOver` is now sourced from `useDroppable` directly (was previously
+// a prop hard-coded to `false` at the call site, so per-cell hover emphasis
+// never lit up). Active color tightened to handoff spec.
+function CardSlot({ card, children }: { card: InsightCard; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({
     id: cardSlotDropId(card.id),
     data: { type: 'card-slot' as const, cardId: card.id },
   });
@@ -57,7 +52,7 @@ function CardSlot({
       data-card-id={card.id}
       className={cn(
         'w-full transition-all duration-200 rounded-2xl relative',
-        isOver && 'border-2 border-dashed border-primary bg-primary/5 scale-[1.02]'
+        isOver && 'border-2 border-dashed border-primary/80 bg-primary/10 scale-[1.02]'
       )}
     >
       {children}
@@ -293,7 +288,7 @@ export function CardList({
         {visibleCards.map((card, idx) => {
           const isSelected = selectedCardIds.has(card.id);
           return (
-            <CardSlot key={card.id} card={card} isOver={false}>
+            <CardSlot key={card.id} card={card}>
               {isSelected && (
                 <div
                   className="absolute top-2 left-2 z-20 bg-primary rounded-full p-1 cursor-pointer hover:bg-primary/80 transition-colors"

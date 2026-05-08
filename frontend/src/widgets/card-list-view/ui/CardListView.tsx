@@ -103,6 +103,13 @@ interface CardListViewProps {
   cardsByCell?: Record<number, InsightCard[]>;
   /** True when an external card drag is active (from Ideation) */
   isExternalCardDragActive?: boolean;
+  /**
+   * CP445 — true while an *internal* card drag (handle-driven D&D within the
+   * grid) is active. Triggers the same dashed-border + soft-fill guideline
+   * overlay as the external case so users see where drops land before they
+   * release.
+   */
+  isInternalCardDragActive?: boolean;
   /** Grid column count (2-6) */
   gridColumns?: number;
   /** Grid column change handler */
@@ -146,6 +153,7 @@ export function CardListView({
   totalCardCount,
   cardsByCell,
   isExternalCardDragActive,
+  isInternalCardDragActive,
   gridColumns: gridColumnsProp,
   onGridColumnsChange,
   compactMode = false,
@@ -422,8 +430,8 @@ export function CardListView({
         onDrop={handleExternalDrop}
         className={cn(
           'animate-fade-in transition-all duration-200 relative',
-          (isExternalCardDragActive || isExternalDragOver) &&
-            '-mx-4 px-4 border-2 border-dashed border-primary bg-primary/5 rounded-md'
+          (isExternalCardDragActive || isExternalDragOver || isInternalCardDragActive) &&
+            '-mx-4 px-4 border-2 border-dashed border-primary/40 bg-primary/5 rounded-md'
         )}
       >
         {isExternalDragOver && (

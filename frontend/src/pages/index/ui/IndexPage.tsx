@@ -967,6 +967,9 @@ function AuthenticatedApp() {
                       totalCardCount={cards.totalCards}
                       cardsByCell={cards.cardsByCell}
                       isExternalCardDragActive={activeDragData?.type === 'card'}
+                      isInternalCardDragActive={
+                        activeDragData?.type === 'card' || activeDragData?.type === 'card-reorder'
+                      }
                       newlySyncedCards={cards.newlySyncedCards}
                       trailingAction={ideaSpotTrigger}
                     />
