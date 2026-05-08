@@ -1,4 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
 interface LabelFilterPillsV2Props {
@@ -25,6 +27,15 @@ interface LabelFilterPillsV2Props {
   onNewlySyncedClick?: () => void;
 }
 
+// CP444 — YouTube-style pill chrome. Active = filled, inactive = muted soft;
+// underline indicator retired. Edge-fade + chevron buttons surface horizontal
+// scroll affordance only when the row actually overflows.
+const PILL_BASE =
+  'shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150';
+const PILL_ACTIVE = 'bg-foreground text-background';
+const PILL_INACTIVE = 'bg-muted/40 text-muted-foreground hover:bg-muted/60';
+const SCROLL_DELTA = 200;
+
 export function LabelFilterPillsV2({
   sectors,
   selectedIndex,
@@ -40,82 +51,108 @@ export function LabelFilterPillsV2({
   const isAllSelected = selectedIndex === null && !isNewlySyncedSelected;
   const showNewlySynced = newlySyncedCount > 0 && typeof onNewlySyncedClick === 'function';
 
-  return (
-    <div
-      data-card-chrome
-      className="flex items-center gap-0 overflow-x-auto scrollbar-hide pb-1 mb-1.5"
-    >
-      {/* All tab */}
-      <button
-        onClick={onAllClick}
-        className={cn(
-          'relative shrink-0 mr-3 pb-1 text-[11px] font-medium transition-colors bg-transparent border-none cursor-pointer',
-          isAllSelected
-            ? 'text-[var(--t1,#ededf0)] font-bold'
-            : 'text-[var(--t3,#5a5b68)] hover:text-[var(--t2,#9394a0)]'
-        )}
-      >
-        {t('contextHeader.all', 'All')}
-        <span className="ml-[3px] text-[10px] font-medium text-[var(--t4,#3a3b46)]">
-          {totalCount}
-        </span>
-        {isAllSelected && (
-          <span className="absolute bottom-[-2px] left-0 right-0 h-[2px] bg-[var(--ind,#818cf8)] rounded-full" />
-        )}
-      </button>
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
-      {/* 8 sector tabs */}
-      {sectors.map((sector, idx) => {
-        const isActive = selectedIndex === idx && !isNewlySyncedSelected;
-        const count = sectorCounts[idx] ?? 0;
-        return (
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const update = () => {
+      setCanScrollLeft(el.scrollLeft > 0);
+      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    };
+
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+
+    return () => {
+      el.removeEventListener('scroll', update);
+      ro.disconnect();
+    };
+  }, [sectors.length, showNewlySynced]);
+
+  const handleScrollBy = (delta: number) => {
+    scrollRef.current?.scrollBy({ left: delta, behavior: 'smooth' });
+  };
+
+  return (
+    <div data-card-chrome className="relative mb-1.5">
+      <div ref={scrollRef} className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
+        {/* All pill */}
+        <button
+          onClick={onAllClick}
+          className={cn(PILL_BASE, isAllSelected ? PILL_ACTIVE : PILL_INACTIVE)}
+        >
+          {t('contextHeader.all', 'All')}
+          <span className="text-[11px] font-medium opacity-70">{totalCount}</span>
+        </button>
+
+        {/* 8 sector pills */}
+        {sectors.map((sector, idx) => {
+          const isActive = selectedIndex === idx && !isNewlySyncedSelected;
+          const count = sectorCounts[idx] ?? 0;
+          return (
+            <button
+              key={idx}
+              onClick={() => onSectorClick(idx, sector)}
+              className={cn(PILL_BASE, isActive ? PILL_ACTIVE : PILL_INACTIVE)}
+            >
+              {sector}
+              <span className="text-[11px] font-medium opacity-70">{count}</span>
+            </button>
+          );
+        })}
+
+        {/* Issue #389 — Newly Synced pill: primary accent + leading dot
+            preserved (data signal); only the underline indicator was removed
+            in line with the rest of the row. */}
+        {showNewlySynced && (
           <button
-            key={idx}
-            onClick={() => onSectorClick(idx, sector)}
+            onClick={onNewlySyncedClick}
             className={cn(
-              'relative shrink-0 mr-3 pb-1 text-[11px] font-medium transition-colors bg-transparent border-none cursor-pointer',
-              isActive
-                ? 'text-[var(--t1,#ededf0)] font-bold'
-                : 'text-[var(--t3,#5a5b68)] hover:text-[var(--t2,#9394a0)]'
+              PILL_BASE,
+              isNewlySyncedSelected
+                ? 'bg-[var(--ind,#818cf8)] text-background'
+                : 'bg-[var(--ind,#818cf8)]/15 text-[var(--ind,#818cf8)] hover:bg-[var(--ind,#818cf8)]/25'
             )}
           >
-            {sector}
-            <span className="ml-[3px] text-[10px] font-medium text-[var(--t4,#3a3b46)]">
-              {count}
-            </span>
-            {isActive && (
-              <span className="absolute bottom-[-2px] left-0 right-0 h-[2px] bg-[var(--ind,#818cf8)] rounded-full" />
-            )}
+            <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" aria-hidden="true" />
+            {t('labelFilter.newlySynced', 'Newly Synced')}
+            <span className="text-[11px] font-medium opacity-70">{newlySyncedCount}</span>
           </button>
-        );
-      })}
+        )}
+      </div>
 
-      {/* Issue #389: "Newly Synced" tab — appended at the end, hidden when 0.
-          Visually distinguished from the All/sector pills with the primary
-          accent (leading dot + tinted text) so it echoes the sidebar
-          dot+count indicator that surfaces the same per-mandala count. */}
-      {showNewlySynced && (
-        <button
-          onClick={onNewlySyncedClick}
-          className={cn(
-            'relative shrink-0 mr-3 pb-1 text-[11px] font-medium transition-colors bg-transparent border-none cursor-pointer inline-flex items-center gap-1',
-            isNewlySyncedSelected
-              ? 'text-[var(--ind,#818cf8)] font-bold'
-              : 'text-[var(--ind,#818cf8)]/80 hover:text-[var(--ind,#818cf8)]'
-          )}
-        >
-          <span
-            className="w-1.5 h-1.5 rounded-full bg-[var(--ind,#818cf8)] shrink-0"
-            aria-hidden="true"
-          />
-          {t('labelFilter.newlySynced', 'Newly Synced')}
-          <span className="ml-[2px] text-[10px] font-medium text-[var(--ind,#818cf8)]/70">
-            {newlySyncedCount}
-          </span>
-          {isNewlySyncedSelected && (
-            <span className="absolute bottom-[-2px] left-0 right-0 h-[2px] bg-[var(--ind,#818cf8)] rounded-full" />
-          )}
-        </button>
+      {/* Left edge fade + chevron — only when overflow exists on the left */}
+      {canScrollLeft && (
+        <div className="absolute left-0 inset-y-0 z-10 flex items-center pr-3 pl-1 bg-gradient-to-r from-background via-background/95 to-transparent pointer-events-none">
+          <button
+            type="button"
+            onClick={() => handleScrollBy(-SCROLL_DELTA)}
+            aria-label={t('labelFilter.scrollLeft', 'Scroll left')}
+            className="pointer-events-auto inline-flex items-center justify-center w-8 h-6 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors duration-150"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Right edge fade + chevron — only when overflow exists on the right */}
+      {canScrollRight && (
+        <div className="absolute right-0 inset-y-0 z-10 flex items-center pl-3 pr-1 bg-gradient-to-l from-background via-background/95 to-transparent pointer-events-none">
+          <button
+            type="button"
+            onClick={() => handleScrollBy(SCROLL_DELTA)}
+            aria-label={t('labelFilter.scrollRight', 'Scroll right')}
+            className="pointer-events-auto inline-flex items-center justify-center w-8 h-6 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors duration-150"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
       )}
     </div>
   );
