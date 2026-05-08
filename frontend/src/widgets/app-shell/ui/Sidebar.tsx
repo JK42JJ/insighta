@@ -164,42 +164,42 @@ export function Sidebar({
               : 'translate-x-0 opacity-100'
           )}
         >
-          <nav className="flex-1 px-2 py-2 space-y-3 overflow-y-auto scrollbar-none">
-            {/* Minimap — always visible at top of app panel (CP441 handoff: §1) */}
-            {!collapsed && minimapData && (
-              <div className="px-2">
-                <SidebarHeatMinimap
-                  cardsByCell={minimapData.cardsByCell}
-                  sectorSubjects={minimapData.sectorSubjects}
-                  sectorLabels={minimapData.sectorLabels}
-                  centerGoal={minimapData.centerGoal}
-                  centerLabel={minimapData.centerLabel}
-                  selectedCellIndex={minimapData.selectedCellIndex}
-                  onCellClick={minimapData.onCellClick}
-                  onExternalUrlDrop={minimapData.onExternalUrlDrop}
-                  onSectorNamesChange={
-                    minimapData.mandalaId
-                      ? (newGoal, newSubjects) => {
-                          updateSectorNames.mutate(
-                            {
-                              mandalaId: minimapData.mandalaId!,
-                              centerGoal: newGoal,
-                              subjects: newSubjects,
-                            },
-                            {
-                              onSuccess: () => toast({ title: t('minimap.saved') }),
-                              onError: () =>
-                                toast({ title: t('common.error'), variant: 'destructive' }),
-                            }
-                          );
-                        }
-                      : undefined
-                  }
-                />
-              </div>
-            )}
+          {/* Minimap — fixed (outside scroll container, CP441 handoff §1) */}
+          {!collapsed && minimapData && (
+            <div className="shrink-0 px-4 pt-2 pb-3">
+              <SidebarHeatMinimap
+                cardsByCell={minimapData.cardsByCell}
+                sectorSubjects={minimapData.sectorSubjects}
+                sectorLabels={minimapData.sectorLabels}
+                centerGoal={minimapData.centerGoal}
+                centerLabel={minimapData.centerLabel}
+                selectedCellIndex={minimapData.selectedCellIndex}
+                onCellClick={minimapData.onCellClick}
+                onExternalUrlDrop={minimapData.onExternalUrlDrop}
+                onSectorNamesChange={
+                  minimapData.mandalaId
+                    ? (newGoal, newSubjects) => {
+                        updateSectorNames.mutate(
+                          {
+                            mandalaId: minimapData.mandalaId!,
+                            centerGoal: newGoal,
+                            subjects: newSubjects,
+                          },
+                          {
+                            onSuccess: () => toast({ title: t('minimap.saved') }),
+                            onError: () =>
+                              toast({ title: t('common.error'), variant: 'destructive' }),
+                          }
+                        );
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          )}
 
-            {/* Mandala fold list — error boundary prevents sidebar crash */}
+          {/* Mandala fold list — scrollable */}
+          <nav className="flex-1 min-h-0 overflow-y-auto scrollbar-none px-2 pb-2">
             <ErrorBoundary
               fallbackRender={({ resetErrorBoundary }) => (
                 <div className="px-2 space-y-0.5">
