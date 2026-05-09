@@ -129,6 +129,27 @@ if [ "$CACHE_HIT" = "0" ]; then
   chmod 600 "$CACHE_FILE" 2>/dev/null || true
 fi
 
+# 2.5. Algorithmic transcript chunking (CP446+, 2026-05-09).
+#   Pre-split transcript by [mm:ss] markers (gap >= 15s OR 5-min cap).
+#   The LLM receives a tagged transcript with [SECTION N: from~to]
+#   block headers; segments.sections.from_sec/to_sec are forced to the
+#   chunk boundaries via enforce-sections.py after the LLM response.
+#   Earlier measurement: LLM hallucinates section ts at ~55% rate; this
+#   removes hallucination from the LLM's hands.
+TAGGED_FILE="$TMP/tagged.txt"
+CHUNKS_META_FILE="$TMP/chunks.json"
+TRANSCRIPT_FILE="$TMP/transcript.txt"
+printf '%s' "$TRANSCRIPT" > "$TRANSCRIPT_FILE"
+if ! python3 "$DIR/chunk-transcript.py" \
+     "$TRANSCRIPT_FILE" "$TAGGED_FILE" "$CHUNKS_META_FILE" \
+     2>"$LOG_DIR/$VID.chunks.log"; then
+  echo "[$VID] chunking_failed (using raw transcript)" >> "$LOG_DIR/$VID.log"
+  cp "$TRANSCRIPT_FILE" "$TAGGED_FILE"
+  printf '[]' > "$CHUNKS_META_FILE"
+fi
+TAGGED=$(cat "$TAGGED_FILE")
+N_CHUNKS=$(jq -r 'length' "$CHUNKS_META_FILE" 2>/dev/null || echo 0)
+
 # 3. Build prompt + invoke claude -p
 # Schema synced to src/modules/skills/rich-summary-v2-prompt.ts SSOT (CP438):
 #   content_type:  tutorial | lecture | vlog | interview | documentary | review (NOT explainer/case_study/discussion/news)
@@ -156,7 +177,7 @@ Schema (no extra keys, no markdown fences, JSON only):
     "prerequisites": string
   },
   "segments": {
-    "sections": [{"idx": int, "title": string, "from_sec": int, "to_sec": int, "summary": string}, ... 4+ entries],
+    "sections": [{"idx": int, "title": string, "from_sec": int, "to_sec": int, "summary": string}, ... one per [SECTION N] block in transcript],
     "atoms": [{"idx": int, "type": "fact"|"tip"|"argument", "text": string, "timestamp_sec": int}, ... 4+ entries]
   },
   "lora": {
@@ -171,14 +192,19 @@ Rules:
 - analysis.actionables: each a single imperative sentence the viewer can do today.
 - lora.qa_pairs: 5-7 entries, all level=1, all context="video".
 - timestamp_sec / from_sec / to_sec are integers in seconds (NOT mm:ss).
-- TIMESTAMP RULE (critical, CP438+1): The transcript below is annotated with
-  [mm:ss] markers at the start of every cue. Atom timestamp_sec MUST be
-  derived from the [mm:ss] marker that contains the source phrase — convert
-  to seconds (mm*60 + ss). Section from_sec/to_sec must come from the
-  earliest/latest [mm:ss] marker spanned. NEVER invent round numbers
-  (1:00, 5:00, 7:00, etc.) without a matching marker. Atom timestamp_sec
-  MUST be ≤ video duration ('"${DURATION_SEC}"' s); if a candidate exceeds
-  it, drop the atom rather than emit it.
+- SECTION RULE (critical, CP446+): The transcript below is pre-split into
+  [SECTION N: <from_sec>s ~ <to_sec>s] blocks. These boundaries are FINAL —
+  do not invent your own. segments.sections MUST contain exactly '"${N_CHUNKS}"' entries,
+  one per [SECTION N] block, with from_sec/to_sec copied verbatim from the
+  block header (idx 0..'"${N_CHUNKS}"'-1). The "title" and "summary" you write per
+  section.
+- ATOM RULE (critical, CP446+): Each atom belongs to exactly one [SECTION N]
+  block (the one whose [<from_sec>s ~ <to_sec>s] range contains the source
+  phrase). atom.timestamp_sec MUST satisfy from_sec ≤ timestamp_sec < to_sec
+  for that section. Convert from the [mm:ss] cue marker that introduces the
+  phrase: mm*60 + ss. NEVER invent round numbers (60, 120, 300) without a
+  matching cue marker.
+- atom.timestamp_sec MUST be ≤ video duration ('"${DURATION_SEC}"' s).
 - Use the source language consistently across every string field.
 - Output JSON only — no preamble, no markdown fences, no commentary.
 '
@@ -191,7 +217,7 @@ CLAUDE_BIN="${CLAUDE_BIN:-$(which claude 2>/dev/null || echo "$HOME/.npm-global/
 # Mac Mini has no active billing → "Invalid API key · Fix external API
 # key" returned and every call silently fails. Strip the env so OAuth
 # wins (CP438 — 2026-04-30 batch incident: 1,527/1,540 invalid_json).
-V2_JSON=$(printf '%s\n\nVideo: %s\nLanguage: %s\nTranscript:\n%s\n' "$PROMPT_HEADER" "$VID" "$LANG" "$TRANSCRIPT" \
+V2_JSON=$(printf '%s\n\nVideo: %s\nLanguage: %s\nTranscript (pre-chunked):\n%s\n' "$PROMPT_HEADER" "$VID" "$LANG" "$TAGGED" \
   | env -u ANTHROPIC_API_KEY "$CLAUDE_BIN" -p 2>"$LOG_DIR/$VID.claude.err")
 
 # Strip optional markdown fences if claude added them despite instructions.
@@ -226,10 +252,46 @@ if ! printf '%s' "$V2_JSON" | jq -e . >/dev/null 2>&1; then
   exit 2
 fi
 
+# 3.5a. Force-overwrite segments.sections from chunks_meta (CP446+).
+#   The LLM's section.from_sec/to_sec hallucinates ~55% per prod sample;
+#   chunks_meta carries marker-anchored boundaries. Title/summary from the
+#   LLM are preserved when section count matches.
+V2_JSON_FILE="$TMP/v2.json"
+printf '%s' "$V2_JSON" > "$V2_JSON_FILE"
+V2_SECTIONS_ENFORCED=$(python3 "$DIR/enforce-sections.py" "$CHUNKS_META_FILE" "$V2_JSON_FILE" \
+  2>"$LOG_DIR/$VID.sections.log")
+ENFORCE_RC=$?
+if [ $ENFORCE_RC -eq 0 ] && [ -n "$V2_SECTIONS_ENFORCED" ]; then
+  V2_JSON="$V2_SECTIONS_ENFORCED"
+  printf '%s' "$V2_JSON" > "$V2_JSON_FILE"
+else
+  echo "[$VID] enforce_sections_failed rc=$ENFORCE_RC (sections may carry LLM ts)" >> "$LOG_DIR/$VID.log"
+fi
+
+# 3.5b. Atom timestamp_sec post-validation (Stage 1 only — marker snap +
+#   over-duration drop + duplicate_ts drop). Stage 2 (text-marker matching)
+#   removed 2026-05-09 due to false-positive rate on abstract atom.text.
+V2_VALIDATED=$(python3 "$DIR/validate-atoms.py" "$TRANSCRIPT_FILE" "$V2_JSON_FILE" "$DURATION_SEC" \
+  2>"$LOG_DIR/$VID.atoms.drops")
+VALIDATE_RC=$?
+if [ $VALIDATE_RC -ne 0 ] || [ -z "$V2_VALIDATED" ]; then
+  echo "[$VID] atom_validation_failed rc=$VALIDATE_RC (using sections-enforced raw)" >> "$LOG_DIR/$VID.log"
+else
+  V2_JSON="$V2_VALIDATED"
+fi
+
+# DRY_RUN=1 — print final v2 JSON + skip upsert. Used for end-to-end
+# verification on Mac Mini without touching prod DB.
+if [ "${DRY_RUN:-0}" = "1" ]; then
+  echo "[$VID] DRY_RUN=1 — skipping upsert"
+  printf '%s\n' "$V2_JSON"
+  exit 0
+fi
+
 # 4. POST upsert-direct
 PAYLOAD=$(printf '%s' "$V2_JSON" | jq -c \
   --arg vid "$VID" --arg lang "$LANG" \
-  '{videoId: $vid, sourceLanguage: $lang, stampTranscriptFetchedAt: true, core, analysis, lora, segments}')
+  '{videoId: $vid, sourceLanguage: $lang, stampTranscriptFetchedAt: true, core, analysis, lora, segments, validationMeta: .validation_meta}')
 
 RESP=$(printf '%s' "$PAYLOAD" | curl -sS \
   -X POST "${INSIGHTA_API_URL%/}/api/v1/internal/v2-summary/upsert-direct" \

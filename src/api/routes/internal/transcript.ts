@@ -332,6 +332,14 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
       segments?: unknown;
       sourceLanguage?: string;
       stampTranscriptFetchedAt?: boolean;
+      /**
+       * CP446+ — atom validation telemetry from process-one.sh's
+       * validate-atoms.py. Optional; when present the route stamps a
+       * `pipeline_events.stage='atom_validation'` row for downstream
+       * monitoring. Schema: { atom_dropped_count, drop_reasons: { ... },
+       * atoms_in, atoms_out, snapped_count, marker_count }.
+       */
+      validationMeta?: Record<string, unknown>;
     };
   }>('/v2-summary/upsert-direct', async (request, reply) => {
     const expected = getInternalBatchToken();
@@ -484,6 +492,18 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         completeness: score.score,
         domain: summary.core.domain,
       });
+
+      // CP446+ — atom validation telemetry. process-one.sh's validate-atoms.py
+      // ships drop counts + reasons in body.validationMeta; persist them in
+      // pipeline_events for monitoring (drop-rate trend, marker-drift drift).
+      // Non-fatal; recordPipelineEvent already swallows errors.
+      if (body.validationMeta && typeof body.validationMeta === 'object') {
+        await recordPipelineEvent({
+          stage: 'atom_validation',
+          videoId,
+          payload: body.validationMeta,
+        });
+      }
 
       // CP437 — auto-bridge to ontology (no LLM, no embedding).
       // Fire-and-forget; failure is non-fatal so the upsert response stays
