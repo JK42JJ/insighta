@@ -1,31 +1,30 @@
 #!/bin/bash
-# batch-backfill.sh — re-process v2 videos through the CP446+ pipeline.
+# batch-backfill.sh — sequential CP446+ atom regeneration with IP-block
+# backoff (single-worker, 2026-05-09 mode).
 #
-# Sequentially invokes process-one.sh for each video_id in the input
-# list. Honors:
-#   - DRY_RUN=1 : skip upsert (sample / gate-check mode)
-#   - .oauth_limit_hit sentinel from process-one.sh (CC subscription
-#     5h cap) : abort the remaining queue cleanly so the operator can
-#     re-run after re-login without losing position.
+# Why sequential: an earlier 5-worker parallel run on the 1,296-row v2
+# queue tripped YouTube's transcript-download IP rate-limit (1,253 / 1,296
+# = 96.7% IpBlocked). list() still works during the block, but fetch()
+# is throttled. Single-worker + per-video sleep keeps the request rate
+# below the threshold; consecutive-IpBlocked detector triggers a longer
+# backoff if the block recurs.
 #
 # Args:
-#   $1  vid_list_file  — one youtube_video_id per line
+#   $1  vid_list_file  — one youtube_video_id per line (e.g. failed-vids.txt)
 #   $2  dur_meta_file  — TSV: <vid>\t<duration_sec>\t<source_language>
-#                         (run prepare-backfill-list.js to generate)
 #
 # Env:
 #   V2_LOG_DIR        — log dir (default /tmp/insighta-backfill)
 #   DRY_RUN=1         — pass-through to process-one.sh
-#   INSIGHTA_API_URL  — required for non-dry-run prod writes
-#   INTERNAL_BATCH_TOKEN — required for non-dry-run
+#   SLEEP_BETWEEN_SEC — per-video sleep (default 15s)
+#   IPBLOCK_THRESHOLD — consecutive IpBlocked count → backoff (default 10)
+#   IPBLOCK_BACKOFF_SEC — backoff duration (default 3600s = 1h)
+#   IPBLOCK_BACKOFF_MAX — max consecutive backoffs before abort (default 3)
 #
 # Exit:
-#   0 — full queue processed (zero or more failures)
-#   2 — OAuth cap hit; remaining queue NOT processed (resumable)
-#
-# stdout: per-video result lines (forwarded from process-one.sh) +
-#         summary line at the end:
-#   [batch-backfill] DONE total=N processed=M pass=P fail=F skipped=S
+#   0 — full queue processed
+#   2 — OAuth cap hit (resumable via remaining-vids.txt)
+#   3 — IpBlocked persistent past IPBLOCK_BACKOFF_MAX backoffs
 
 set -uo pipefail
 
@@ -35,90 +34,104 @@ LOG_DIR="${V2_LOG_DIR:-/tmp/insighta-backfill}"
 mkdir -p "$LOG_DIR"
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Source env (INSIGHTA_API_URL / INTERNAL_BATCH_TOKEN / WEBSHARE_*) — same
-# pattern as batch.sh + daily-targeted.sh. _bootstrap.sh reads from
-# /Users/jamesjk/code/video-dictionary/.env on Mac Mini per CP438. Skip
-# silently in DRY_RUN mode (no upsert call), or when the bootstrap is
-# absent (running on a non-Mac-Mini machine).
 if [ -f "$DIR/../openclaw-handlers/_bootstrap.sh" ]; then
   # shellcheck source=../openclaw-handlers/_bootstrap.sh disable=SC1091
   source "$DIR/../openclaw-handlers/_bootstrap.sh"
 fi
 
-# Bash 3.2 (macOS default) lacks `declare -A`; use awk-based lookup
-# against the TSV. Each lookup is O(N) but N=1296 is tiny vs the LLM
-# call cost, so amortized overhead is negligible.
+# Bash 3.2 (macOS default) lacks `declare -A`; awk lookup.
 lookup_meta() {
   awk -F'\t' -v vid="$1" '$1 == vid { print $2 ":" $3; exit }' "$DUR_META"
 }
 
+# IpBlocked detector: process-one.sh's fetch.err captures fetch-transcript.py
+# stderr. New fetch-transcript.py writes 'IpBlocked' substring on the
+# attempt-failed line.
+saw_ipblocked() {
+  local vid="$1"
+  grep -q "IpBlocked\|RequestBlocked" "$LOG_DIR/$vid.fetch.err" 2>/dev/null
+}
+
+SLEEP_BETWEEN_SEC="${SLEEP_BETWEEN_SEC:-15}"
+IPBLOCK_THRESHOLD="${IPBLOCK_THRESHOLD:-10}"
+IPBLOCK_BACKOFF_SEC="${IPBLOCK_BACKOFF_SEC:-3600}"
+IPBLOCK_BACKOFF_MAX="${IPBLOCK_BACKOFF_MAX:-3}"
+
 TOTAL=$(wc -l < "$VID_LIST" | tr -d ' ')
-CONC="${V2_CONCURRENCY:-5}"
+COUNTER=0
+PASS=0
+FAIL=0
+SKIPPED=0
+CONSEC_IPBLOCK=0
+BACKOFF_COUNT=0
+
 START_TS=$(date +%s)
 
-echo "[batch-backfill] target=$TOTAL concurrency=$CONC log_dir=$LOG_DIR dry_run=${DRY_RUN:-0}"
+echo "[batch-backfill] target=$TOTAL mode=sequential sleep=${SLEEP_BETWEEN_SEC}s ipblock_threshold=${IPBLOCK_THRESHOLD} backoff=${IPBLOCK_BACKOFF_SEC}s log_dir=$LOG_DIR dry_run=${DRY_RUN:-0}"
 
-# Build (vid lang dur) triples — one per xargs invocation. Each line is
-# fed as 3 args to process-one.sh via `xargs -n 3 -I {} bash -c '...'`.
-# Same pattern as batch.sh:53-54 (CP437+).
-PAIRS_FILE="$LOG_DIR/pairs.txt"
-> "$PAIRS_FILE"
-while read -r VID; do
+while IFS= read -r VID; do
   [ -z "$VID" ] && continue
+  COUNTER=$((COUNTER + 1))
+
+  if [ -f "$LOG_DIR/.oauth_limit_hit" ]; then
+    echo "[batch-backfill] OAuth cap sentinel detected at #$COUNTER ($VID). Stopping queue."
+    SKIPPED=$((TOTAL - COUNTER + 1))
+    tail -n +"$COUNTER" "$VID_LIST" > "$LOG_DIR/remaining-vids.txt"
+    echo "[batch-backfill] Remaining queue saved: $LOG_DIR/remaining-vids.txt ($SKIPPED items)"
+    exit 2
+  fi
+
   META=$(lookup_meta "$VID")
   [ -z "$META" ] && META="0:ko"
   DUR="${META%%:*}"
   LANG="${META##*:}"
   [ -z "$DUR" ] && DUR=0
   [ -z "$LANG" ] && LANG=ko
-  echo "$VID $LANG $DUR" >> "$PAIRS_FILE"
+
+  echo "[batch-backfill] [$COUNTER/$TOTAL] $VID lang=$LANG dur=$DUR"
+  V2_LOG_DIR="$LOG_DIR" \
+    bash "$DIR/process-one.sh" "$VID" "$LANG" "$DUR" \
+    >> "$LOG_DIR/batch.stdout.log" 2>> "$LOG_DIR/batch.stderr.log"
+  RC=$?
+
+  case $RC in
+    0)
+      PASS=$((PASS + 1))
+      CONSEC_IPBLOCK=0
+      ;;
+    4)
+      echo "[batch-backfill] OAuth cap on $VID (rc=4). Stopping queue."
+      SKIPPED=$((TOTAL - COUNTER))
+      tail -n +$((COUNTER + 1)) "$VID_LIST" > "$LOG_DIR/remaining-vids.txt"
+      echo "[batch-backfill] Remaining queue saved: $LOG_DIR/remaining-vids.txt ($SKIPPED items)"
+      exit 2
+      ;;
+    *)
+      FAIL=$((FAIL + 1))
+      if saw_ipblocked "$VID"; then
+        CONSEC_IPBLOCK=$((CONSEC_IPBLOCK + 1))
+        echo "[batch-backfill] $VID IpBlocked (consecutive=$CONSEC_IPBLOCK / threshold=$IPBLOCK_THRESHOLD)"
+      else
+        CONSEC_IPBLOCK=0
+      fi
+      ;;
+  esac
+
+  if [ "$CONSEC_IPBLOCK" -ge "$IPBLOCK_THRESHOLD" ]; then
+    BACKOFF_COUNT=$((BACKOFF_COUNT + 1))
+    if [ "$BACKOFF_COUNT" -gt "$IPBLOCK_BACKOFF_MAX" ]; then
+      echo "[batch-backfill] IpBlocked persists past $IPBLOCK_BACKOFF_MAX backoffs. Stopping queue."
+      tail -n +$((COUNTER + 1)) "$VID_LIST" > "$LOG_DIR/remaining-vids.txt"
+      exit 3
+    fi
+    echo "[batch-backfill] $CONSEC_IPBLOCK consecutive IpBlocked. Backoff #$BACKOFF_COUNT — sleep ${IPBLOCK_BACKOFF_SEC}s..."
+    sleep "$IPBLOCK_BACKOFF_SEC"
+    CONSEC_IPBLOCK=0
+    echo "[batch-backfill] backoff over, resuming"
+  fi
+
+  sleep "$SLEEP_BETWEEN_SEC"
 done < "$VID_LIST"
 
-PAIRS_TOTAL=$(wc -l < "$PAIRS_FILE" | tr -d ' ')
-echo "[batch-backfill] pairs prepared: $PAIRS_TOTAL"
-
-# Worker wrapper — exits early when sentinel exists so newly-spawned
-# workers stop dispatching after an OAuth cap, while in-flight workers
-# drain their current video. Wraps process-one.sh and forwards exit code.
-WORKER="$LOG_DIR/worker.sh"
-cat > "$WORKER" <<EOFW
-#!/bin/bash
-set -uo pipefail
-VID="\$1"; LANG="\$2"; DUR="\$3"
-LOG_DIR="$LOG_DIR"
-DIR="$DIR"
-if [ -f "\$LOG_DIR/.oauth_limit_hit" ]; then
-  echo "[skip] \$VID — oauth_limit_hit"
-  exit 0
-fi
-V2_LOG_DIR="\$LOG_DIR" bash "\$DIR/process-one.sh" "\$VID" "\$LANG" "\$DUR" \\
-  >> "\$LOG_DIR/batch.stdout.log" 2>> "\$LOG_DIR/batch.stderr.log"
-RC=\$?
-echo "[done] \$VID rc=\$RC"
-exit \$RC
-EOFW
-chmod +x "$WORKER"
-
-# Dispatch via xargs -P (batch.sh:54 pattern). `|| true` so that an
-# individual exit-4 (OAuth cap) doesn't kill the whole xargs batch —
-# the WORKER's own sentinel check drains gracefully.
-cat "$PAIRS_FILE" | xargs -n 3 -P "$CONC" -I {} bash -c 'eval set -- {}; "$0" "$1" "$2" "$3"' "$WORKER" || true
-
-# Tally results from main.stdout (each WORKER appends one [done] line).
-DONE_COUNT=$(grep -c '^\[done\]' "$LOG_DIR/main.stdout" 2>/dev/null || echo 0)
-PASS=$(grep -c '^\[done\] .* rc=0$' "$LOG_DIR/main.stdout" 2>/dev/null || echo 0)
-SKIP=$(grep -c '^\[skip\]' "$LOG_DIR/main.stdout" 2>/dev/null || echo 0)
-FAIL=$((DONE_COUNT - PASS))
-
-# OAuth cap → save remaining list (videos in PAIRS_FILE not in [done]
-# lines). Workers that ran but skipped (sentinel) are also remaining.
-if [ -f "$LOG_DIR/.oauth_limit_hit" ]; then
-  awk '/^\[done\] / {print $2}' "$LOG_DIR/main.stdout" > "$LOG_DIR/_done_vids.txt"
-  awk '/^\[skip\] / {print $2}' "$LOG_DIR/main.stdout" >> "$LOG_DIR/_done_vids.txt" 2>/dev/null
-  grep -vF -f "$LOG_DIR/_done_vids.txt" "$VID_LIST" > "$LOG_DIR/remaining-vids.txt" || true
-  REMAIN=$(wc -l < "$LOG_DIR/remaining-vids.txt" | tr -d ' ')
-  echo "[batch-backfill] OAuth cap detected. Remaining=$REMAIN saved: $LOG_DIR/remaining-vids.txt"
-fi
-
 ELAPSED=$(( $(date +%s) - START_TS ))
-echo "[batch-backfill] DONE total=$TOTAL pass=$PASS fail=$FAIL skip=$SKIP elapsed=${ELAPSED}s"
+echo "[batch-backfill] DONE total=$TOTAL processed=$COUNTER pass=$PASS fail=$FAIL skipped=$SKIPPED backoffs=$BACKOFF_COUNT elapsed=${ELAPSED}s"
