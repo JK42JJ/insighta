@@ -58,7 +58,14 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
 
   server.removeAllListeners('request');
   server.on('request', (req, res) => {
-    if (req.url?.startsWith('/api/v1/chat') && !req.url?.startsWith('/api/v1/chat/config')) {
+    // CP447 — exempt /api/v1/chat/qwen so the qwen-lora route in
+    // chat-qwen.ts (Fastify) handles it instead of being swallowed by
+    // the CopilotKit GraphQL endpoint.
+    if (
+      req.url?.startsWith('/api/v1/chat') &&
+      !req.url?.startsWith('/api/v1/chat/config') &&
+      !req.url?.startsWith('/api/v1/chat/qwen')
+    ) {
       void yoga(req, res);
       return;
     }

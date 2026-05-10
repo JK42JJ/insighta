@@ -1,4 +1,9 @@
-import { useMemo, useEffect, useRef, useCallback } from 'react';
+// CP447 — file-level disable: this module also exports ChatContext type
+// and computeChatLayer function for direct use by tests + the qwen-lora
+// path. Splitting them into a separate file is a bigger refactor; the
+// fast-refresh impact is limited to rebuild scope on saves.
+/* eslint-disable react-refresh/only-export-components */
+import { useMemo, useEffect, useRef, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopilotKit, useCopilotReadable } from '@copilotkit/react-core';
 import { CopilotChat } from '@copilotkit/react-ui';
@@ -339,6 +344,14 @@ function ChatPanel({
 }
 
 export function ChatAssistant({ mandalaId, videoId, onSeek }: ChatAssistantProps) {
+  // CP447 — qwen-lora mode: bypass CopilotKit, call /api/v1/chat/qwen directly.
+  // Read env inline (build-time constant; avoids react-refresh module-export
+  // rule that flags top-level non-component consts in component files).
+  const provider = (import.meta.env.VITE_CHATBOT_PROVIDER as string | undefined) ?? '';
+  if (provider === 'qwen-lora') {
+    return <QwenChatAssistant mandalaId={mandalaId} videoId={videoId} onSeek={onSeek} />;
+  }
+
   const token = apiClient.getAccessToken();
   const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -351,5 +364,261 @@ export function ChatAssistant({ mandalaId, videoId, onSeek }: ChatAssistantProps
     >
       <ChatPanel mandalaId={mandalaId} videoId={videoId} onSeek={onSeek} />
     </CopilotKit>
+  );
+}
+
+// ============================================================================
+// CP447 — qwen-lora direct path (CopilotKit-free)
+// ============================================================================
+
+interface QwenMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+function QwenChatAssistant({ mandalaId, videoId, onSeek }: ChatAssistantProps) {
+  const { t } = useTranslation();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const [messages, setMessages] = useState<QwenMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [streaming, setStreaming] = useState(false);
+
+  // Reuse the same store fields as the CopilotKit path so the BE prompt
+  // builder receives identical context regardless of provider. (BE
+  // resolves cell_name from user_mandala_levels.root.subjects, so we
+  // don't need useMandalaQuery here — only the IDs + region state.)
+  const selectedCellIndex = useLearningStore((s) => s.selectedCellIndex);
+  const activeRegion = useLearningStore((s) => s.activeRegion);
+  const playerTimeSec = useLearningStore((s) => s.playerTimeSec);
+  const playerState = useLearningStore((s) => s.playerState);
+  const noteSelectionText = useLearningStore((s) => s.noteSelectionText);
+  const activeSectionRef = useLearningStore((s) => s.activeSectionRef);
+  const { book: bookResponse } = useMandalaBook(mandalaId);
+
+  const layer = useMemo<ChatContext['layer']>(() => {
+    let currentSection: string | null = null;
+    if (activeSectionRef && bookResponse?.book?.chapters) {
+      const ch = bookResponse.book.chapters.find((c) => c.ch === activeSectionRef.chapterIdx);
+      const sec = ch?.sections?.[activeSectionRef.sectionIdx];
+      if (ch && sec) currentSection = `${ch.title} > ${sec.title}`;
+    }
+    return computeChatLayer({
+      regionAware: true,
+      noteSelectionText,
+      playerState,
+      playerTimeSec,
+      currentSection,
+      selectedCellIndex,
+      videoId,
+      mandalaId,
+    });
+  }, [
+    activeSectionRef,
+    bookResponse,
+    noteSelectionText,
+    playerState,
+    playerTimeSec,
+    selectedCellIndex,
+    videoId,
+    mandalaId,
+  ]);
+
+  // Auto-scroll on new chunks.
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, streaming]);
+
+  // Linkify timestamps in rendered messages (reuses page-level handler).
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || !onSeek) return;
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations)
+        for (const node of m.addedNodes) if (node instanceof HTMLElement) linkifyTimestamps(node);
+    });
+    observer.observe(wrapper, { childList: true, subtree: true });
+    linkifyTimestamps(wrapper);
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('chat-ts') && target.dataset['seconds']) {
+        e.preventDefault();
+        onSeek(Number(target.dataset['seconds']));
+      }
+    };
+    wrapper.addEventListener('click', handleClick);
+    return () => {
+      observer.disconnect();
+      wrapper.removeEventListener('click', handleClick);
+    };
+  }, [onSeek]);
+
+  // Cleanup in-flight request when the component unmounts.
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
+
+  const send = useCallback(async () => {
+    const trimmed = input.trim();
+    if (!trimmed || streaming) return;
+    setInput('');
+    setStreaming(true);
+    const userMsg: QwenMessage = { role: 'user', content: trimmed };
+    setMessages((prev) => [...prev, userMsg, { role: 'assistant', content: '' }]);
+
+    const token = apiClient.getAccessToken();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    let accumulated = '';
+    try {
+      const resp = await fetch('/api/v1/chat/qwen', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          message: trimmed,
+          videoId,
+          mandalaId,
+          cellIndex: selectedCellIndex,
+          layer,
+          regionContext: {
+            activeRegion: activeRegion ?? 'chat',
+            layer,
+            playerTimeSec,
+            playerState,
+            currentSection:
+              activeSectionRef && bookResponse?.book?.chapters
+                ? (() => {
+                    const ch = bookResponse.book.chapters.find(
+                      (c) => c.ch === activeSectionRef.chapterIdx
+                    );
+                    const sec = ch?.sections?.[activeSectionRef.sectionIdx];
+                    return ch && sec ? `${ch.title} > ${sec.title}` : null;
+                  })()
+                : null,
+            noteSelectionText,
+          },
+        }),
+        signal: controller.signal,
+      });
+
+      if (!resp.ok || !resp.body) {
+        const errBody = await resp.text().catch(() => '');
+        toast.error(`chat error: ${resp.status}${errBody ? ' — ' + errBody.slice(0, 80) : ''}`);
+        setStreaming(false);
+        return;
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        // SSE frames are separated by \n\n
+        const frames = buf.split('\n\n');
+        buf = frames.pop() ?? '';
+        for (const frame of frames) {
+          const dataLine = frame.split('\n').find((l) => l.startsWith('data: '));
+          if (!dataLine) continue;
+          const payload = dataLine.slice(6).trim();
+          if (payload === '[DONE]') {
+            // server has flushed final marker — keep reading until reader.done
+            continue;
+          }
+          try {
+            const obj = JSON.parse(payload) as { content?: string; error?: string };
+            if (obj.error) {
+              toast.error(`chat upstream error: ${obj.error}`);
+              continue;
+            }
+            if (obj.content) {
+              accumulated += obj.content;
+              setMessages((prev) => {
+                const next = prev.slice();
+                next[next.length - 1] = { role: 'assistant', content: accumulated };
+                return next;
+              });
+            }
+          } catch {
+            // malformed frame — skip
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+      toast.error(`chat failed: ${(err as Error).message}`);
+    } finally {
+      setStreaming(false);
+      abortRef.current = null;
+    }
+  }, [
+    input,
+    streaming,
+    videoId,
+    mandalaId,
+    selectedCellIndex,
+    layer,
+    activeRegion,
+    playerTimeSec,
+    playerState,
+    activeSectionRef,
+    bookResponse,
+    noteSelectionText,
+  ]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    },
+    [send]
+  );
+
+  return (
+    <div ref={wrapperRef} className="qwen-chat-wrapper flex h-full flex-col text-[14px]">
+      <div className="flex-1 overflow-y-auto p-3">
+        {messages.length === 0 && (
+          <div className="text-[12px] text-muted-foreground">
+            {t(
+              'learning.chatInitial',
+              'Insighta 학습 도우미입니다. 영상에 대해 무엇이든 물어보세요.'
+            )}
+          </div>
+        )}
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            className={
+              m.role === 'user'
+                ? 'mb-2 ml-auto max-w-[85%] rounded-md bg-secondary/60 px-2 py-1.5'
+                : 'mb-2 max-w-[95%] whitespace-pre-wrap leading-[1.6]'
+            }
+          >
+            {m.content || (streaming && i === messages.length - 1 ? '…' : '')}
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+      <div className="border-t border-border p-2">
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={t('learning.chatPlaceholder', '질문을 입력하세요')}
+          disabled={streaming}
+          rows={2}
+          className="w-full resize-none rounded border border-border bg-input px-2 py-1.5 text-[14px] outline-none focus:ring-1 focus:ring-ring"
+        />
+      </div>
+    </div>
   );
 }

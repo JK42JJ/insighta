@@ -11,6 +11,7 @@ import { videoRoutes } from './routes/videos';
 import { videoRichNotesRoutes } from './routes/video-rich-notes';
 import { noteRoutes } from './routes/notes';
 import { noteDocumentsRoutes } from './routes/note-documents';
+import { chatQwenRoutes } from './routes/chat-qwen';
 import { analyticsRoutes } from './routes/analytics';
 import { syncRoutes } from './routes/sync';
 import { quotaRoutes } from './routes/quota';
@@ -248,6 +249,10 @@ export async function buildServer() {
 
       // Register note-documents routes (CP445 — per-mandala TipTap doc for note mode)
       await instance.register(noteDocumentsRoutes, { prefix: '/note-documents' });
+
+      // Register qwen-lora chat route (CP447 — CopilotKit-bypass serving path).
+      // Mounts POST /api/v1/chat/qwen with SSE streaming from QWEN_LORA_API_URL.
+      await instance.register(chatQwenRoutes);
 
       // Register analytics routes
       await instance.register(analyticsRoutes, { prefix: '/analytics' });
