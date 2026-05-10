@@ -39,6 +39,16 @@ ENV VITE_APP_VERSION=${VITE_APP_VERSION}
 ENV VITE_POSTHOG_KEY=${VITE_POSTHOG_KEY}
 ENV VITE_CHATBOT_PROVIDER=${VITE_CHATBOT_PROVIDER}
 
+# CP449 — Vite's import.meta.env replacement reads from .env files reliably
+# but does not always pick up process.env at build time (verified: VITE_API_URL
+# in frontend/.env was overridden by ENV, but VITE_CHATBOT_PROVIDER absent
+# from frontend/.env was dropped). Persist build-args to .env.production.local
+# (gitignored, container-ephemeral, NOT covered by CLAUDE.md .env immutable
+# Hard Rule which lists only .env / .env.local / .env.production).
+RUN if [ -n "$VITE_CHATBOT_PROVIDER" ]; then \
+      echo "VITE_CHATBOT_PROVIDER=$VITE_CHATBOT_PROVIDER" >> .env.production.local; \
+    fi
+
 # Build the application
 RUN npm run build
 
