@@ -109,6 +109,7 @@ const envSchema = z.object({
   // Qwen-LoRA serving (chat-qwen.ts route)
   QWEN_LORA_API_URL: z.string().optional(),
   QWEN_LORA_MODEL: z.string().default('qwen3:30b-a3b'),
+  RUNPOD_API_KEY: z.string().optional(),
 
   // CORS — comma-separated origin allowlist (consumed by @fastify/cors AND by
   // routes that bypass the plugin via reply.hijack() such as /wizard-stream).
@@ -273,6 +274,11 @@ export const config = {
   qwenLora: {
     apiUrl: env.QWEN_LORA_API_URL,
     model: env.QWEN_LORA_MODEL,
+  },
+
+  // RunPod Serverless — used when QWEN_LORA_API_URL contains 'runpod.ai'
+  runpod: {
+    apiKey: env.RUNPOD_API_KEY,
   },
 
   // CORS — pre-parsed allowlist (split from CORS_ORIGIN env). Consumed by

@@ -197,6 +197,100 @@ export const chatQwenRoutes: FastifyPluginAsync = async (fastify) => {
         reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
       };
 
+      // RunPod Serverless branch — non-streaming POST {input:{...}} → JSON output.
+      // Triggered when QWEN_LORA_API_URL points at runpod.ai (e.g. /runsync).
+      // System prompt gets `/no_think` appended; <think>...</think> blocks are
+      // stripped before forwarding to client. Auth via RUNPOD_API_KEY.
+      const isRunPod = ollamaUrl.includes('runpod.ai');
+      if (isRunPod) {
+        const apiKey = config.runpod.apiKey;
+        if (!apiKey) {
+          log.warn('RUNPOD_API_KEY not configured');
+          writeSse({ error: 'runpod_api_key_missing' }, 'error');
+          reply.raw.end();
+          return;
+        }
+        const systemPromptForRunPod = `${systemPrompt}\n/no_think`;
+        let runpodResp: Response;
+        try {
+          runpodResp = await fetch(ollamaUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              input: {
+                messages: [
+                  { role: 'system', content: systemPromptForRunPod },
+                  { role: 'user', content: message },
+                ],
+                max_tokens: 500,
+                model: 'insighta-chatbot',
+              },
+            }),
+          });
+        } catch (err) {
+          log.error('runpod fetch failed', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+          writeSse({ error: 'upstream_unreachable' }, 'error');
+          reply.raw.end();
+          return;
+        }
+        if (!runpodResp.ok) {
+          const errText = await runpodResp.text().catch(() => '');
+          log.error('runpod call failed', {
+            status: runpodResp.status,
+            errText: errText.slice(0, 200),
+          });
+          writeSse({ error: 'upstream_failed', status: runpodResp.status }, 'error');
+          reply.raw.end();
+          return;
+        }
+        const json = (await runpodResp.json().catch(() => null)) as {
+          output?: unknown;
+          error?: string;
+        } | null;
+        if (!json) {
+          log.error('runpod invalid json');
+          writeSse({ error: 'upstream_invalid' }, 'error');
+          reply.raw.end();
+          return;
+        }
+        if (json.error) {
+          log.error('runpod inline error', { detail: String(json.error).slice(0, 200) });
+          writeSse({ error: 'upstream_inline', detail: json.error }, 'error');
+          reply.raw.end();
+          return;
+        }
+        // Output shape varies by serverless handler. Try common variants.
+        const out = json.output as
+          | string
+          | { content?: string; choices?: Array<{ message?: { content?: string } }> }
+          | Array<{ content?: string; generated_text?: string }>
+          | null
+          | undefined;
+        let content = '';
+        if (typeof out === 'string') {
+          content = out;
+        } else if (Array.isArray(out)) {
+          content = out[0]?.content ?? out[0]?.generated_text ?? '';
+        } else if (out && typeof out === 'object') {
+          content =
+            (out as { content?: string }).content ??
+            (out as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message
+              ?.content ??
+            '';
+        }
+        // Strip <think>...</think> reasoning blocks (qwen-style). Multiline-safe.
+        const stripped = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        if (stripped) writeSse({ content: stripped });
+        reply.raw.write('data: [DONE]\n\n');
+        reply.raw.end();
+        return;
+      }
+
       let upstreamResp: Response;
       try {
         upstreamResp = await fetch(`${ollamaUrl.replace(/\/$/, '')}/api/chat`, {
