@@ -223,10 +223,6 @@ export function SidebarLearningSection({
                   />
                 </div>
               )}
-              {/*
-                CP449+: 정적 "보고서 준비중 / 콘텐츠 수집 중" placeholder 제거 (사용자 요청).
-                실 generation trigger 시점에 별도 progress animation 컴포넌트 마운트 예정 — 그 전엔 nothing 렌더링.
-              */}
             </div>
           );
         })}

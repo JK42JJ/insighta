@@ -321,9 +321,11 @@ function SectionContentView({
 export function ViewModeToggle({
   mode,
   onChange,
+  noteDisabled = false,
 }: {
   mode: 'player' | 'note';
   onChange: (mode: 'player' | 'note') => void;
+  noteDisabled?: boolean;
 }) {
   const { t } = useTranslation();
   const items: Array<{
@@ -337,22 +339,27 @@ export function ViewModeToggle({
   ];
   return (
     <div className="flex items-center gap-0.5 self-center rounded-md border border-border bg-secondary/30 p-0.5">
-      {items.map(({ id, labelKey, fallback, Icon }) => (
-        <button
-          key={id}
-          onClick={() => onChange(id)}
-          className={cn(
-            'flex items-center gap-1 rounded px-2 py-1 text-[12px] transition-colors',
-            mode === id
-              ? 'bg-background text-foreground font-semibold shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
-          aria-pressed={mode === id}
-        >
-          <Icon className="h-3 w-3" />
-          {t(labelKey, fallback)}
-        </button>
-      ))}
+      {items.map(({ id, labelKey, fallback, Icon }) => {
+        const dimmed = id === 'note' && noteDisabled;
+        return (
+          <button
+            key={id}
+            onClick={() => onChange(id)}
+            className={cn(
+              'flex items-center gap-1 rounded px-2 py-1 text-[12px] transition-colors',
+              mode === id
+                ? 'bg-background text-foreground font-semibold shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+              dimmed && 'opacity-50'
+            )}
+            aria-pressed={mode === id}
+            aria-disabled={dimmed}
+          >
+            <Icon className="h-3 w-3" />
+            {t(labelKey, fallback)}
+          </button>
+        );
+      })}
     </div>
   );
 }

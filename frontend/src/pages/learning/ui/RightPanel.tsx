@@ -1,10 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NotebookPen, Bot, MoreHorizontal } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { PanelNoteEditor } from '@/features/video-side-panel/ui/PanelNoteEditor';
 import { ChatAssistant } from './ChatAssistant';
 import { ViewModeToggle } from './CenterPanel';
+import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useMandalaCards } from '../model/useMandalaCards';
 import { useLearningStore } from '../model/useLearningStore';
 import { apiClient } from '@/shared/lib/api-client';
@@ -27,6 +29,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
   const centerViewMode = useLearningStore((s) => s.centerViewMode);
   const setCenterViewMode = useLearningStore((s) => s.setCenterViewMode);
   const { cards } = useMandalaCards(mandalaId);
+  const { book, isLoading: bookLoading } = useMandalaBook(mandalaId);
 
   const currentCard = cards.find((c) => {
     const match = c.videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
@@ -80,13 +83,23 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
 
   return (
     <div
-      className="flex w-[400px] shrink-0 flex-col pl-3"
+      className="flex w-[400px] shrink-0 flex-col"
       onMouseEnter={() => setActiveRegion(activeTab === 'notes' ? 'notes' : 'chat')}
     >
       {/* CP445 (사용자 directive) — ViewModeToggle + [⋯] 우측 사이드바 상단
           고정. 영상/노트 모드 전환 시 위치 변동 없음 (toggle 의 단일 home). */}
       <div className="flex shrink-0 items-center justify-between py-2 pr-3">
-        <ViewModeToggle mode={centerViewMode} onChange={setCenterViewMode} />
+        <ViewModeToggle
+          mode={centerViewMode}
+          noteDisabled={!bookLoading && !book}
+          onChange={(mode) => {
+            if (mode === 'note' && !bookLoading && !book) {
+              toast(t('learning.noteNotReady', '노트가 아직 생성되지 않았어요'));
+              return;
+            }
+            setCenterViewMode(mode);
+          }}
+        />
         <button
           type="button"
           aria-label="More"
@@ -121,7 +134,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
 
       <div
         className={cn(
-          'flex flex-1 flex-col overflow-y-auto scrollbar-pro px-4 py-3.5',
+          'flex flex-1 flex-col overflow-y-auto scrollbar-pro pl-0 pr-4 py-3.5',
           activeTab !== 'notes' && 'hidden'
         )}
       >

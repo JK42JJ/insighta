@@ -378,21 +378,10 @@ function AuthenticatedApp() {
   const [activeDragData, setActiveDragData] = useState<DragData | null>(null);
   const [activeDragCellIndex, setActiveDragCellIndex] = useState<number | null>(null);
   const [activeDragOverCellIndex, setActiveDragOverCellIndex] = useState<number | null>(null);
-  // IdeaSpot popup open state.
-  //
-  // CP449+ structural fix (2026-05-10) — outside-click close handler removed
-  // entirely. Insighta's core formfactor is D&D between mandala-cell ↔
-  // idea-spot ↔ mandala-cell. Any incidental click (drag pickup, resize
-  // mouseup synthetic click, scroll, accidental click) closing the popup
-  // breaks the primary workflow. Prior patches (CP442 outside-click,
-  // CP446 mousedown→click, CP449+ D&D grace ref) were treating symptoms
-  // — the design itself was wrong for this app. Only EXPLICIT close
-  // gestures close the popup now: trigger button toggle, header
-  // close (Move icon + new X icon), and ESC key.
   const [scratchPadOpen, setScratchPadOpen] = useState(false);
   const scratchPadWrapperRef = useRef<HTMLDivElement | null>(null);
 
-  // ESC key closes the IdeaSpot popup. Listener is only armed while open.
+  // ESC closes IdeaSpot. No outside-click close — would conflict with D&D.
   useEffect(() => {
     if (!scratchPadOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
