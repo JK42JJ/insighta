@@ -7,8 +7,22 @@ import path from "path";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
+  // CP449 — explicit static replacement for VITE_CHATBOT_PROVIDER. Vite's
+  // automatic process.env pickup proved unreliable in our Docker prod build
+  // (verified: even after writing .env.production.local, the bundle still
+  // dead-code-eliminated the qwen-lora branch). This explicit `define` is
+  // the canonical Vite pattern for build-arg → import.meta.env injection
+  // when the key isn't present in committed .env files.
+  const explicitDefines: Record<string, string> = {};
+  const VITE_INJECT_KEYS = ['VITE_CHATBOT_PROVIDER'] as const;
+  for (const key of VITE_INJECT_KEYS) {
+    const value = process.env[key] || env[key] || '';
+    explicitDefines[`import.meta.env.${key}`] = JSON.stringify(value);
+  }
+
   return {
     base: '/',
+    define: explicitDefines,
     server: {
       host: "::",
       port: 8081,
