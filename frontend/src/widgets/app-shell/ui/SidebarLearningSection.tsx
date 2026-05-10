@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Sparkles, ChevronRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
+import { BookOpen, ChevronRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
@@ -205,35 +205,28 @@ export function SidebarLearningSection({
                 )}
               </button>
 
-              {isExpanded && (
+              {isExpanded && bookChapter && (
                 <div className="pl-6 pt-1">
-                  {bookChapter ? (
-                    <BookChapterPreview
-                      chapter={bookChapter}
-                      mandalaId={mandalaId}
-                      currentVideoId={currentVideoId}
-                      // CP445.x — single source of truth = activeSectionRef
-                      // (사용자 click). activeMatch fallback 제거 — multi-vid
-                      // section 시 다른 chapter 까지 동시 highlight 되는 bug
-                      // 회피.
-                      activeSectionIdx={
-                        activeSectionRef?.chapterIdx === bookChapter.ch
-                          ? activeSectionRef.sectionIdx
-                          : null
-                      }
-                    />
-                  ) : (
-                    <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] text-sidebar-foreground/40">
-                      <Sparkles className="w-3 h-3 shrink-0" />
-                      <span>
-                        {cellCards.length > 0
-                          ? t('learning.reportPreparing', '보고서 작성 준비중 ...')
-                          : t('learning.contentCollecting', '콘텐츠 수집 중...')}
-                      </span>
-                    </div>
-                  )}
+                  <BookChapterPreview
+                    chapter={bookChapter}
+                    mandalaId={mandalaId}
+                    currentVideoId={currentVideoId}
+                    // CP445.x — single source of truth = activeSectionRef
+                    // (사용자 click). activeMatch fallback 제거 — multi-vid
+                    // section 시 다른 chapter 까지 동시 highlight 되는 bug
+                    // 회피.
+                    activeSectionIdx={
+                      activeSectionRef?.chapterIdx === bookChapter.ch
+                        ? activeSectionRef.sectionIdx
+                        : null
+                    }
+                  />
                 </div>
               )}
+              {/*
+                CP449+: 정적 "보고서 준비중 / 콘텐츠 수집 중" placeholder 제거 (사용자 요청).
+                실 generation trigger 시점에 별도 progress animation 컴포넌트 마운트 예정 — 그 전엔 nothing 렌더링.
+              */}
             </div>
           );
         })}

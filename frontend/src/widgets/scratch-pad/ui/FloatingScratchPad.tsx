@@ -1324,7 +1324,8 @@ export const FloatingScratchPad = forwardRef<HTMLDivElement, FloatingScratchPadP
                 size="icon"
                 className="h-6 w-6 text-muted-foreground hover:text-foreground"
                 onClick={onToggleFloating}
-                title={t('mandala.switchToDock')}
+                title={t('common.close', 'Close')}
+                aria-label={t('common.close', 'Close')}
               >
                 <X className="w-3.5 h-3.5" />
               </Button>

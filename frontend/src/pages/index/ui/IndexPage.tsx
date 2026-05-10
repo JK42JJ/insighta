@@ -378,29 +378,28 @@ function AuthenticatedApp() {
   const [activeDragData, setActiveDragData] = useState<DragData | null>(null);
   const [activeDragCellIndex, setActiveDragCellIndex] = useState<number | null>(null);
   const [activeDragOverCellIndex, setActiveDragOverCellIndex] = useState<number | null>(null);
-  // CP442 — IdeaSpot popup open state (replaces dock-mode preference as the
-  // visibility driver; `scratchpad_is_floating` preference preserved untouched).
+  // IdeaSpot popup open state.
+  //
+  // CP449+ structural fix (2026-05-10) — outside-click close handler removed
+  // entirely. Insighta's core formfactor is D&D between mandala-cell ↔
+  // idea-spot ↔ mandala-cell. Any incidental click (drag pickup, resize
+  // mouseup synthetic click, scroll, accidental click) closing the popup
+  // breaks the primary workflow. Prior patches (CP442 outside-click,
+  // CP446 mousedown→click, CP449+ D&D grace ref) were treating symptoms
+  // — the design itself was wrong for this app. Only EXPLICIT close
+  // gestures close the popup now: trigger button toggle, header
+  // close (Move icon + new X icon), and ESC key.
   const [scratchPadOpen, setScratchPadOpen] = useState(false);
   const scratchPadWrapperRef = useRef<HTMLDivElement | null>(null);
 
-  // CP442 — outside-click closes the IdeaSpot popup. The trigger button is
-  // tagged with data-idea-spot-trigger so its own click (which toggles the
-  // state via onClick) isn't treated as an outside event. Listener is only
-  // armed while the popup is open to avoid global click overhead.
-  // CP446 — uses `click` (not `mousedown`) so a card-drag's mousedown can't
-  // false-trigger the close: `click` only fires when mousedown + mouseup
-  // happen on the same element, which never holds during D&D.
+  // ESC key closes the IdeaSpot popup. Listener is only armed while open.
   useEffect(() => {
     if (!scratchPadOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as Node | null;
-      if (!target) return;
-      if (target instanceof Element && target.closest('[data-idea-spot-trigger]')) return;
-      if (scratchPadWrapperRef.current?.contains(target)) return;
-      setScratchPadOpen(false);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setScratchPadOpen(false);
     };
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [scratchPadOpen]);
 
   // 드래그 시작 시점의 selectedCardIds 스냅샷 — 드래그 중 selection 변경에 영향받지 않도록
