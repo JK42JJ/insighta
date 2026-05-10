@@ -45,6 +45,7 @@ import {
   type Lang,
 } from '@/modules/chatbot-rag/prompt-builder';
 import { logger } from '@/utils/logger';
+import { config } from '@/config/index';
 
 const log = logger.child({ module: 'api/chat-qwen' });
 
@@ -107,12 +108,12 @@ export const chatQwenRoutes: FastifyPluginAsync = async (fastify) => {
       const language: Lang = body.language === 'en' ? 'en' : 'ko';
       const layer = deriveLayer(body);
 
-      const ollamaUrl = process.env['QWEN_LORA_API_URL'];
+      const ollamaUrl = config.qwenLora.apiUrl;
       if (!ollamaUrl) {
         log.warn('QWEN_LORA_API_URL not configured');
         return reply.code(503).send({ error: 'qwen_lora_not_configured' });
       }
-      const model = process.env['QWEN_LORA_MODEL'] ?? 'qwen3:30b-a3b';
+      const model = config.qwenLora.model;
 
       const prisma = getPrismaClient();
 

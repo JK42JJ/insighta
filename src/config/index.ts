@@ -106,6 +106,18 @@ const envSchema = z.object({
   CHATBOT_MODEL: z.string().default('google/gemini-2.5-flash'),
   CHATBOT_LOCAL_URL: z.string().default('http://localhost:11434/v1'),
 
+  // Qwen-LoRA serving (chat-qwen.ts route)
+  QWEN_LORA_API_URL: z.string().optional(),
+  QWEN_LORA_MODEL: z.string().default('qwen3:30b-a3b'),
+
+  // CORS — comma-separated origin allowlist (consumed by @fastify/cors AND by
+  // routes that bypass the plugin via reply.hijack() such as /wizard-stream).
+  CORS_ORIGIN: z
+    .string()
+    .default(
+      'http://localhost:3000,http://localhost:5173,http://localhost:8081,http://localhost:8082'
+    ),
+
   // KG Bridge
   KG_BRIDGE_SIMILAR_TO_THRESHOLD: z.coerce.number().default(0.7),
 
@@ -255,6 +267,21 @@ export const config = {
     provider: env.CHATBOT_PROVIDER as 'gemini' | 'openrouter' | 'local',
     model: env.CHATBOT_MODEL,
     localUrl: env.CHATBOT_LOCAL_URL,
+  },
+
+  // Qwen-LoRA serving (chat-qwen.ts route)
+  qwenLora: {
+    apiUrl: env.QWEN_LORA_API_URL,
+    model: env.QWEN_LORA_MODEL,
+  },
+
+  // CORS — pre-parsed allowlist (split from CORS_ORIGIN env). Consumed by
+  // both @fastify/cors plugin (server.ts) and routes that bypass the
+  // plugin via reply.hijack() (e.g., /wizard-stream SSE).
+  cors: {
+    allowedOrigins: env.CORS_ORIGIN.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
   },
 
   // KG Bridge

@@ -24,6 +24,7 @@ import {
   RECOMMENDATION_DEFAULT_STATUS,
   RECOMMENDATION_DEFAULT_MODE,
 } from '../../config/recommendations';
+import { config } from '../../config';
 import { MemoryCache } from '../../utils/memory-cache';
 import { cardPublisher, type CardPayload } from '../../modules/recommendations/publisher';
 import { generateMandalaActions } from '../../modules/mandala/generator';
@@ -682,12 +683,10 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       // CORS headers — manual because reply.hijack() bypasses @fastify/cors plugin.
       // Without these, browsers block the SSE response with "No 'Access-Control-Allow-Origin'
       // header" even though the underlying handler emits all events successfully.
-      const allowedOrigins = (process.env['CORS_ORIGIN'] ?? '')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      // Allowlist comes from src/config/index.ts (cors.allowedOrigins) — same
+      // CORS_ORIGIN env split shared with the @fastify/cors plugin in server.ts.
       const reqOrigin = request.headers.origin;
-      if (reqOrigin && allowedOrigins.includes(reqOrigin)) {
+      if (reqOrigin && config.cors.allowedOrigins.includes(reqOrigin)) {
         raw.setHeader('Access-Control-Allow-Origin', reqOrigin);
         raw.setHeader('Access-Control-Allow-Credentials', 'true');
         raw.setHeader('Vary', 'Origin');
