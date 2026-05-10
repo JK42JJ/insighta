@@ -176,6 +176,7 @@
 
 ### 하드코딩 + 단편 조치 금지 (절대 규칙, LEVEL-3)
 - 업무 로직에 `process.env[...]` 직접 읽기, 파일별 `MS_PER_DAY` 재선언, 인라인 env 파서 금지 → `src/config/**` · `<plugin>/config.ts` (zod) · `src/utils/time-constants.ts` 사용.
+- **CSS 색상 literal 금지 (CP446 sub-pattern, CP447+1 /retro #5)**: CSS variable mapping (`:root` / `.dark` 블록 또는 컴포넌트별 CSS-in-JS) 에 `hsl(...)` / `rgb(...)` / `#xxxxxx` literal 직접 입력 금지. 항상 semantic named token (`hsl(var(--input))`, `hsl(var(--card))`) 참조. 적절 token 부재 시 `:root` / `.dark` 에 새 token 정의 후 참조. literal 우회 = 위반.
 - 수정 전 `Grep` 으로 동일 패턴 전수 검색 → 발견한 중복은 **같은 PR 에서 일괄 정리**. 단일 파일 부분 조치 금지.
 - 신규 env default = "기존 동작" (unset = no-op). code revert 없이 flag off 로 롤백 가능해야.
 - 측정: `scripts/audit/hardcode-audit.ts` (5 룰). CI job `hardcode-audit` 가 PR 마다 baseline 초과 시 FAIL. baseline 은 **감소 방향으로만** 수정.
@@ -198,9 +199,10 @@
   - 설정 값 / 환경변수 이름 → `.env` · `deploy.yml` · `config.py` 를 `awk -F= '/^PREFIX/ {print $1}'` 등으로 **키만** 나열해서 실제 이름 확인. 값 노출 없는 discovery 먼저.
   - Enum / 토픽 slug / 디스패처 키 → 해당 모듈의 `SET_T` · `REGISTRY` · 등 dict 를 직접 `grep` 로 확인. 기억에 의존해서 타이핑하지 말 것.
   - 호스트 · IP → `tailscale status | grep <keyword>` · `gh secret list` · `ssh <alias> echo ok` 로 사전 검증. hostname 추측 금지.
-- 위반 시 패턴: 잘못된 버전 핀 / 잘못된 토픽 slug / 잘못된 hostname / 값 leak 을 유발하는 `sed` 마스킹 regex / 존재하지 않는 함수 이름으로 만든 grep.
+  - **Visual/UI mismatch 보고 (CP443/CP446 sub-rule, CP447+1 /retro #4)**: 사용자가 "X 가 Y 처럼 보임" / "어긋남" / "사라짐" / "얼룩덜룩" 류 시각 보고 시 0순위 액션 = 관련 className/file `Read` 또는 `grep` (예: `grep -n "className=" frontend/src/.../Foo.tsx`). hypothesis-first 응답 ("캐시 문제일까?" / "환경 차이?" / "리로드 해보세요") **금지** — 사용자 환경 추측은 trust burn. 1순위 = fact 1줄 보고 (예: "Foo.tsx:42 className=`bg-card`, parent button opacity-50 inherit"). 2순위 = fix proposal.
+- 위반 시 패턴: 잘못된 버전 핀 / 잘못된 토픽 slug / 잘못된 hostname / 값 leak 을 유발하는 `sed` 마스킹 regex / 존재하지 않는 함수 이름으로 만든 grep / visual mismatch 에 대한 hypothesis-first 응답.
 - **발생 시 즉시 재작업**: 추측으로 만들어진 코드/명령은 삭제하고 소스 read → 재구성. 부분 수정으로 봉합 금지.
-- 근거: CP391 (`transformers<4.30` 추측 pin), CP396 (`cut -d= -f2` base64 drop), CP412 (`sed mask regex` 반대 방향 → 4 redis 비번 leak), CP413 (`kpop-choreo` / `recipe` fabricated slug → pilot seed 실패). 4회 재발 → memory-only feedback file 3회 enforcement 실패 증명 → LEVEL-3 승격.
+- 근거: CP391 (`transformers<4.30` 추측 pin), CP396 (`cut -d= -f2` base64 drop), CP412 (`sed mask regex` 반대 방향 → 4 redis 비번 leak), CP413 (`kpop-choreo` / `recipe` fabricated slug → pilot seed 실패), CP443 (4 visual user-corrections), CP446 (5+ visual user-corrections + 5+ meta-frustrations + D2=0.45 Rule K marker fire). 5회+ 재발 → memory-only feedback file enforcement 실패 증명 → LEVEL-3 승격 + visual-domain sub-rule.
 
 ### 계획 → 승인 → 실행 (절대 규칙, LEVEL-2, CP388→CP391→CP392)
 - 모든 side-effect 작업 (Write, Edit, git, gh, ssh, install, docker) **전에** plan 제시: 파일 경로 + diff 요지 + 롤백 방법.

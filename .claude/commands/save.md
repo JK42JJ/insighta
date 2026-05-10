@@ -177,14 +177,14 @@ Existing procedure (Read → check duplicates → add if new pattern) PLUS **Reg
 4. Enforce 200-line limit
 5. Advise whether `/tidy` run is recommended
 
-**Rule B — compression auto-trigger (CP444 /retro 2026-05-08)**:
-- `wc -l` on `work-efficiency.md` and `architecture.md`. If `work-efficiency.md > 1800` OR `architecture.md > 1900`, increment compression-warning counter in MEMORY.md footer (`_/save run … Rule B compression warning N세션 누적_`).
-- **3rd cumulative warning**: do NOT just emit a warning. Immediately spawn a 5-minute compression sub-task within this /save run:
+**Rule B — compression auto-trigger (CP444 /retro 2026-05-08, strengthened CP447+1 /retro 2026-05-09 #6)**:
+- `wc -l` on `work-efficiency.md` and `architecture.md`.
+- **Single-session over-cap → immediate sub-task** (no warning counter): if `work-efficiency.md > 1800` OR `architecture.md > 1900`, spawn a 5-minute compression sub-task within this /save run:
   1. Identify oldest 3-5 sections (CP-tagged) in the over-cap file.
   2. Move full bodies to `<file>-archive.md`; replace with one-line summaries linking to archive.
-  3. Re-measure `wc -l`; if reduction < 100 lines, mark sub-task as needing manual deep-compression and escalate to next /retro.
-  4. Reset compression-warning counter to 0 in MEMORY.md footer.
-- Rationale (CP438→CP443 = 6 cumulative warnings unaddressed; work-efficiency.md grew 1525→1968 = +443 lines while compression remained "next session"): memory-only "권고" enforcement fire rate = 0% → forced sub-task spawn.
+  3. Re-measure `wc -l`; if reduction < 100 lines OR file still over cap, mark sub-task as needing manual deep-compression and escalate to next /retro.
+  4. Record sub-task SUCCESS/PARTIAL in MEMORY.md footer.
+- Rationale (CP438→CP443 = 6 cumulative warnings + CP444 1968→1703 SUCCESS but CP446 regression 1799→1847 over cap again): "3-cumulative" threshold lets the file regress between successes. Single over-cap = trigger removes the regression window. memory-only "권고" enforcement fire rate = 0% → forced sub-task spawn each session.
 
 ### Step 5: Update MEMORY.md
 
@@ -213,11 +213,12 @@ eval-scores.md path: `~/.claude/projects/-Users-jeonhokim-cursor-insighta/memory
 4. Append new row to eval-scores.md Epoch Log table
 5. Analyze change vs previous Epoch
 6. If 5+ epochs → update Trend Analysis
-7. **Rule K — D2 floor ≤ 0.50 BLOCKING marker (CP444 /retro 2026-05-08, threshold clarified)**:
-   - If this Epoch's `D2 ≤ 0.50` (inclusive), write a marker file `~/.claude/projects/-Users-jeonhokim-cursor-insighta/memory/.d2-blocking` containing JSON `{"epoch":"{N}","d2":"{score}","reason":"{1-line cause}"}`.
-   - Next `/init` Phase 5 reads this file; if present, surface 🚨 BLOCKING section above "Ready" line: `"D2 = {score} ≤ 0.50 floor reached at Epoch {N}. (a) 추측 패턴 visual-domain pre-flight 재확인 / (b) 어떤 LEVEL-2+ pattern 이 재발했는가? / (c) 사용자 frustration 누적 신호인가? — 1-line 답."`
-   - Marker file delete only after user-confirmed answer + retrospective.md Rule Evolution Log entry.
-   - Threshold note: spec uses `≤ 0.50` (inclusive). CP443 D2 = 0.50 case demonstrated `< 0.50` strict comparison missed the floor exactly at boundary.
+7. **Rule K — D2 floor BLOCKING marker (CP444 /retro 2026-05-08; threshold raised CP447+1 /retro 2026-05-09 #4)**:
+   - If this Epoch's `D2 ≤ 0.55` (raised from 0.50, inclusive), write marker `~/.claude/projects/-Users-jeonhokim-cursor-insighta/memory/.d2-blocking` containing JSON `{"epoch":"{N}","d2":"{score}","reason":"{1-line cause}"}`.
+   - Soft early-warning band `0.55 < D2 ≤ 0.60`: do NOT write marker, but emit **Footer note** in /save Step 7 output: `"D2 = {score} early-warning (next floor at 0.55). Watch for {weakest sub-pattern}."` Tracks pre-floor erosion before BLOCKING fires.
+   - Next `/init` Phase 5 reads marker; if present, surface 🚨 BLOCKING section above "Ready": `"D2 = {score} ≤ 0.55 floor reached at Epoch {N}. (a) 추측 패턴 visual-domain pre-flight 재확인 / (b) 어떤 LEVEL-2+ pattern 이 재발했는가? / (c) 사용자 frustration 누적 신호인가? — 1-line 답."`
+   - **Marker auto-clear (CP447+1 /retro #3)**: after user 1-line answer received → Claude MUST `rm` the marker file AND append a row to `retrospective.md` Rule Evolution Log (date + epoch + answer text). NOT optional. Preserved-but-unanswered marker = process bug (CP446→CP447 마커 보존된 채 새 작업 진입).
+   - Threshold rationale: CP447+1 — 0.50 floor preserved CP446 (D2=0.45) but the 0.50→0.95 swing in 1 session shows volatile regime. 0.55 catches mid-band drops (e.g., CP443 0.50, CP437 0.45, CP438 0.50) earlier; 0.60 early-warning gives 1-session buffer.
 
 ### Step 7: Output Summary
 

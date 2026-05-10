@@ -183,6 +183,21 @@ Known repeat-offense patterns. Check changed files for these risks. If any match
 - Check: component root explicitly sets `bg-*` class; `border-r` alone is insufficient when bg is unified — collapsed sidebar appears to vanish without explicit bg, masking actual presence.
 - Reference: troubleshooting.md "CP441: Layout 변경 시 background-color 명시 누락" (LEVEL-1, user image catch).
 
+**[6t] CSS template literal multi-byte chars + multi-line comments (SWC parser)**
+- Trigger: any TS/TSX file embedding CSS via template literal (`` const FOO_STYLE = `...` ``) AND containing multi-byte chars (e.g., Korean comments) inside the literal or near a backtick boundary.
+- Check: comments inside the template literal are ASCII-only single-line `/* ... */`; no multi-byte char immediately before/after a backtick or newline; `npm run dev` SWC parse passes (tsc PASS alone is insufficient).
+- Reference: troubleshooting.md "CP446: CSS template literal 안 multi-byte chars + multi-line CSS 주석 SWC parser confusion" (LEVEL-1, NoteEditorView mount runtime parse error).
+
+**[6u] flex item conditional `hidden` (display:none) layout shift**
+- Trigger: any `flex` parent whose direct child receives a conditional `hidden` (Tailwind = `display:none`) class.
+- Check: outer wrapper preserved + inner element toggled, OR `invisible` (visibility:hidden) used to keep slot, OR wrapper has `min-w-[Npx]` reservation; sibling layout 시각 검증 의무.
+- Reference: troubleshooting.md "CP446: flex item hidden=display:none 시 layout shift" (LEVEL-1, B8 wave toggle 위치 어긋남).
+
+**[6v] 3-column page-header (toprow) RightPanel 침범**
+- Trigger: any 3-column page (e.g., LearningPage with Center+Right panels) introducing a page-header / nav-row.
+- Check: toprow lives inside the center column (subordinate to `flex-col [toprow + Center]`), NOT as outermost row above the column split; OR explicit `LearningLayout` wrapper documents the full-width toprow decision.
+- Reference: troubleshooting.md "CP446: 3-column layout page header (toprow) RightPanel 위 침범" (LEVEL-1, B9 wave 1 명시 revert).
+
 Promotion policy: an item is added here when it appears in troubleshooting.md at LEVEL-2+, OR at LEVEL-1 with high prod impact (user frustration / outage / data corruption). Items retired when counter drops or pattern becomes impossible by design.
 
 ## Output Format
