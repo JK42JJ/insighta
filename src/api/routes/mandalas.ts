@@ -679,6 +679,19 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       void reply.hijack();
       const raw = reply.raw;
+      // CORS headers — manual because reply.hijack() bypasses @fastify/cors plugin.
+      // Without these, browsers block the SSE response with "No 'Access-Control-Allow-Origin'
+      // header" even though the underlying handler emits all events successfully.
+      const allowedOrigins = (process.env['CORS_ORIGIN'] ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const reqOrigin = request.headers.origin;
+      if (reqOrigin && allowedOrigins.includes(reqOrigin)) {
+        raw.setHeader('Access-Control-Allow-Origin', reqOrigin);
+        raw.setHeader('Access-Control-Allow-Credentials', 'true');
+        raw.setHeader('Vary', 'Origin');
+      }
       raw.setHeader('Content-Type', 'text/event-stream');
       raw.setHeader('Cache-Control', 'no-cache');
       raw.setHeader('Connection', 'keep-alive');
