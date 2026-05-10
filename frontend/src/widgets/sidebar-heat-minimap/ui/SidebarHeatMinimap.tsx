@@ -6,6 +6,7 @@ import { cn } from '@/shared/lib/utils';
 import { type DropData } from '@/shared/lib/dnd';
 import type { InsightCard } from '@/entities/card/model/types';
 import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
+import { DOMAIN_STYLES, type MandalaDomain } from '@/shared/config/domain-colors';
 
 interface SidebarHeatMinimapProps {
   cardsByCell: Record<number, InsightCard[]>;
@@ -15,6 +16,8 @@ interface SidebarHeatMinimapProps {
   centerGoal: string;
   centerLabel?: string | null;
   selectedCellIndex: number | null;
+  /** Mandala domain — center cell color matches DOMAIN_STYLES (wizard/explore look&feel parity). */
+  domain?: MandalaDomain | null;
   onCellClick: (cellIndex: number, subject: string) => void;
   onSectorNamesChange?: (centerGoal: string, subjects: string[]) => void;
   onExternalUrlDrop?: (cellIndex: number, url: string) => void;
@@ -54,6 +57,7 @@ export function SidebarHeatMinimap({
   centerGoal,
   centerLabel,
   selectedCellIndex,
+  domain,
   onCellClick,
   onSectorNamesChange,
   onExternalUrlDrop,
@@ -216,6 +220,7 @@ export function SidebarHeatMinimap({
               isCenter={isCenter}
               isSelected={isSelected}
               showNumbers={showNumbers}
+              domain={domain}
               onClick={() => {
                 if (isCenter) {
                   onCellClick(-1, label);
@@ -329,6 +334,7 @@ interface HeatCellProps {
   isCenter: boolean;
   isSelected: boolean;
   showNumbers: boolean;
+  domain?: MandalaDomain | null;
   onClick: () => void;
   onExternalUrlDrop?: (cellIndex: number, url: string) => void;
 }
@@ -339,10 +345,11 @@ function HeatCell({
   label,
   isPlaceholder,
   count,
-  opacity,
+  opacity: _opacity,
   isCenter,
   isSelected,
-  showNumbers,
+  showNumbers: _showNumbers,
+  domain,
   onClick,
   onExternalUrlDrop,
 }: HeatCellProps) {
@@ -401,9 +408,13 @@ function HeatCell({
       onDragLeave={handleExternalDragLeave}
       onDrop={handleExternalDrop}
       className={cn(
-        'aspect-square rounded-[5px] flex flex-col items-center justify-center gap-0.5 transition-all duration-150',
+        'relative aspect-square rounded-[5px] flex flex-col items-center justify-center gap-0.5 transition-all duration-150',
         'border border-transparent',
-        isCenter && 'border-sidebar-border',
+        // Center cell: glassmorphism via gradient overlay + strong border + inset highlight + drop shadow.
+        // Note: backdrop-blur alone has no visible effect because sidebar bg is solid — gradient overlay simulates frosted glass.
+        isCenter &&
+          'backdrop-blur-md border-white/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),inset_0_-1px_0_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.10)]',
+        isCenter && !domain && 'border-sidebar-border',
         isSelected && 'border-primary',
         !isCenter &&
           !isSelected &&
@@ -418,25 +429,24 @@ function HeatCell({
       )}
       style={{
         background: isCenter
-          ? 'hsl(var(--sidebar-accent))'
+          ? domain && DOMAIN_STYLES[domain]
+            ? // Glass effect (transparent feel): only thin shine band + domain tint at HALF alpha (~0.05 vs default 0.10).
+              // Diffuse white gradient removed (was reducing transparency feel by adding milky overlay).
+              `linear-gradient(115deg, transparent 0%, transparent 40%, rgba(255,255,255,0.10) 47%, rgba(255,255,255,0.02) 52%, transparent 58%, transparent 100%), ${DOMAIN_STYLES[domain].dim.replace(/[\d.]+\)$/, '0.05)')}`
+            : `linear-gradient(115deg, transparent 0%, transparent 40%, rgba(255,255,255,0.10) 47%, rgba(255,255,255,0.02) 52%, transparent 58%, transparent 100%), hsl(var(--sidebar-accent) / 0.5)`
           : isOver
             ? 'hsl(var(--primary) / 0.30)'
-            : count === 0
-              ? 'hsl(var(--muted))'
-              : `hsl(var(--primary) / ${opacity})`,
+            : 'hsl(var(--muted) / 0.15)',
+        color:
+          isCenter && domain && DOMAIN_STYLES[domain] ? DOMAIN_STYLES[domain].color : undefined,
       }}
     >
-      {showNumbers && !isCenter && count > 0 && (
-        <span className="text-[12px] font-medium text-sidebar-foreground leading-none">
-          {count}
-        </span>
-      )}
       <span
         className={cn(
           'text-[9px] leading-tight text-center line-clamp-2 break-words px-0.5',
           isPlaceholder && 'italic',
           isCenter
-            ? 'text-sidebar-foreground font-medium text-[10px]'
+            ? 'font-medium text-[10px]'
             : isPlaceholder
               ? 'text-sidebar-foreground/60'
               : isSelected
@@ -446,6 +456,15 @@ function HeatCell({
       >
         {label}
       </span>
+      {/* 동영상 개수 badge — 우측하단 원형 (count > 0 일 때만, 외곽 셀 한정) */}
+      {!isCenter && count > 0 && (
+        <span
+          className="absolute bottom-0.5 right-0.5 min-w-[14px] h-[14px] px-[3px] rounded-full bg-primary/80 text-primary-foreground text-[9px] font-semibold leading-none flex items-center justify-center pointer-events-none"
+          aria-label={`${count} videos`}
+        >
+          {count}
+        </span>
+      )}
     </button>
   );
 }

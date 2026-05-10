@@ -14,6 +14,8 @@ export interface MinimapData {
   centerGoal: string;
   centerLabel?: string | null;
   selectedCellIndex: number | null;
+  /** Mandala domain — sidebar minimap center cell color matches DOMAIN_STYLES (wizard/explore look&feel parity). */
+  domain?: import('@/shared/config/domain-colors').MandalaDomain | null;
   onCellClick: (cellIndex: number, subject: string) => void;
   mandalaId: string | null;
   onExternalUrlDrop?: (cellIndex: number, url: string) => void;

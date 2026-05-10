@@ -225,20 +225,64 @@ export default function MandalaCard({
         {gridCells.map((cell, idx) => {
           const baseClass =
             'flex aspect-square items-center justify-center overflow-hidden rounded p-1 text-center text-[10px] leading-[1.2]';
-          const fillClass = cell.isCenter
-            ? isAi
-              ? 'bg-primary/30 font-semibold text-primary'
-              : 'bg-primary/20 font-semibold text-primary'
-            : isAiLoading
-              ? `bg-primary/[0.10] ai-cell-pulse-${(idx * 137) % 9}`
-              : isTemplateLoading
-                ? 'bg-foreground/[0.04] animate-pulse'
-                : 'bg-background/60 text-muted-foreground';
+          // Loading / AI variants keep existing class-based fills (animations / shimmer).
+          if (isAiLoading) {
+            return (
+              <div
+                key={idx}
+                className={`${baseClass} ${
+                  cell.isCenter
+                    ? 'bg-primary/30 font-semibold text-primary'
+                    : `bg-primary/[0.10] ai-cell-pulse-${(idx * 137) % 9}`
+                }`}
+              >
+                <span className="line-clamp-3 break-keep">{renderCellText(cell.text)}</span>
+              </div>
+            );
+          }
+          if (isTemplateLoading) {
+            return (
+              <div
+                key={idx}
+                className={`${baseClass} ${
+                  cell.isCenter
+                    ? 'bg-primary/20 font-semibold text-primary'
+                    : 'bg-foreground/[0.04] animate-pulse'
+                }`}
+              >
+                <span className="line-clamp-3 break-keep">{''}</span>
+              </div>
+            );
+          }
+          // Template / ai-complete static state — match insighta.one prod explore card colors.
+          // Center: domain dim+color (when domain known) or primary fallback.
+          // Other: hsl(var(--muted)/0.15) bg + hsl(var(--muted-foreground)/0.4) text.
+          if (cell.isCenter) {
+            const domainKey = (domain ?? null) as MandalaDomain | null;
+            const ds = domainKey ? DOMAIN_STYLES[domainKey] : null;
+            const centerStyle: CSSProperties | undefined = ds
+              ? { backgroundColor: ds.dim, color: ds.color }
+              : undefined;
+            return (
+              <div
+                key={idx}
+                className={`${baseClass} font-semibold ${ds ? '' : isAi ? 'bg-primary/30 text-primary' : 'bg-primary/20 text-primary'}`}
+                style={centerStyle}
+              >
+                <span className="line-clamp-3 break-keep">{renderCellText(cell.text)}</span>
+              </div>
+            );
+          }
           return (
-            <div key={idx} className={`${baseClass} ${fillClass}`}>
-              <span className="line-clamp-3 break-keep">
-                {isLoading ? '' : renderCellText(cell.text)}
-              </span>
+            <div
+              key={idx}
+              className={baseClass}
+              style={{
+                background: 'hsl(var(--muted) / 0.15)',
+                color: 'hsl(var(--muted-foreground) / 0.4)',
+              }}
+            >
+              <span className="line-clamp-3 break-keep">{renderCellText(cell.text)}</span>
             </div>
           );
         })}

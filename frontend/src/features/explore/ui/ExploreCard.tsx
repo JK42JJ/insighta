@@ -74,20 +74,14 @@ export function ExploreCard({
         </span>
       )}
 
-      {/* Title + Badge */}
-      <div className="flex justify-between items-start mb-4 gap-3">
-        <span
-          className="text-[15px] font-semibold leading-snug flex-1 tracking-tight"
-          style={{ color: 'hsl(var(--foreground))' }}
-        >
-          {title}
-        </span>
-        {ds && (
+      {/* Top row: Domain badge only (Title moved to bottom — 배지 때문에 3줄 차지하던 문제 해소) */}
+      {ds && (
+        <div className="mb-3 flex justify-end">
           <span className="explore-domain-badge text-[10px] font-semibold px-2.5 py-0.5 rounded whitespace-nowrap shrink-0 tracking-wide">
             {getDomainLabel(domain!, i18n.language)}
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Author */}
       <div
@@ -126,7 +120,7 @@ export function ExploreCard({
         ) : null}
       </div>
 
-      {/* Mini 3×3 mandala */}
+      {/* Mini 3×3 mandala — 색상 ORIGINAL prod 그대로 (insighta.one 동일) */}
       <div className="grid grid-cols-3 gap-0.5 mb-4 rounded-lg overflow-hidden">
         {[
           ...(subjectLabels ?? subjects).slice(0, 4),
@@ -153,6 +147,15 @@ export function ExploreCard({
           </div>
         ))}
       </div>
+
+      {/* Title (BOTTOM, line-clamp-2 강제 — `<h4>` 사용 (이전 `<span block>` 은 line-clamp 의 display:-webkit-box 를 덮어써서 영문 5줄 풀어짐)). title attribute = native browser tooltip showing full text on hover. */}
+      <h4
+        className="line-clamp-2 text-[14px] font-semibold leading-snug tracking-tight mb-3 break-keep"
+        style={{ color: 'hsl(var(--foreground))' }}
+        title={title}
+      >
+        {title}
+      </h4>
 
       {/* Meta */}
       <div

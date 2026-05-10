@@ -753,6 +753,11 @@ function AuthenticatedApp() {
 
   // minimapData — sync to shell store for sidebar minimap
   useEffect(() => {
+    const currentMandala = mandalaListData?.mandalas?.find((m) => m.id === selectedMandalaId);
+    const currentDomain =
+      (currentMandala?.domain as
+        | import('@/shared/config/domain-colors').MandalaDomain
+        | undefined) ?? null;
     setMinimapData({
       cardsByCell: cards.cardsByCell,
       sectorSubjects: navigation.currentLevel.subjects,
@@ -760,6 +765,7 @@ function AuthenticatedApp() {
       centerGoal: navigation.currentLevel.centerGoal,
       centerLabel: navigation.currentLevel.centerLabel,
       selectedCellIndex: navigation.selectedCellIndex,
+      domain: currentDomain,
       onCellClick: navigation.handleCellClick,
       mandalaId: selectedMandalaId,
       onExternalUrlDrop: (cellIndex: number, url: string) => {
@@ -773,6 +779,7 @@ function AuthenticatedApp() {
     navigation.currentLevel.subjectLabels,
     navigation.selectedCellIndex,
     selectedMandalaId,
+    mandalaListData,
     setMinimapData,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 

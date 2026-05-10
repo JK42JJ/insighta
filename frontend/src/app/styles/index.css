@@ -491,6 +491,47 @@
     }
   }
 
+  /* Glass shine — single-direction sweep (L→R), then invisible snap-back during long pause. */
+  @keyframes glass-shine-sweep {
+    0% {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+    2% {
+      opacity: 1;
+    }
+    10% {
+      transform: translateX(100%);
+      opacity: 1;
+    }
+    11%,
+    100% {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+  }
+  .glass-shine-overlay {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+  }
+  .glass-shine-overlay::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      115deg,
+      transparent 40%,
+      rgba(255, 255, 255, 0.28) 50%,
+      transparent 60%
+    );
+    transform: translateX(-100%);
+    opacity: 0;
+    animation: glass-shine-sweep 7s ease-in-out infinite;
+  }
+
   /* Card tile pop-in animation */
   @keyframes card-pop-in {
     0% {
