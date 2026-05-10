@@ -210,11 +210,13 @@ jobs:
           REDIS_INSIGHTA_PW: ${{ secrets.REDIS_INSIGHTA_PASSWORD }}
           REDIS_INSIGHTA_UPSERT_PW: ${{ secrets.REDIS_INSIGHTA_UPSERT_PASSWORD }}
           TAILSCALE_IP: ${{ vars.INSIGHTA_TAILSCALE_IP }}
+          QWEN_LORA_API_URL: ${{ secrets.QWEN_LORA_API_URL }}
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP
+          envs: OR_KEY,OR_MODEL,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY
           script: |
             set -e
             cd /opt/tubearchive
@@ -278,6 +280,16 @@ jobs:
             fi
             if [ -n "${TAILSCALE_IP}" ]; then
               grep -q '^INSIGHTA_TAILSCALE_IP=' .env 2>/dev/null && sed -i "s|^INSIGHTA_TAILSCALE_IP=.*|INSIGHTA_TAILSCALE_IP=${TAILSCALE_IP}|" .env || echo "INSIGHTA_TAILSCALE_IP=${TAILSCALE_IP}" >> .env
+            fi
+            # CP449 — qwen-lora chatbot serving (chat-qwen.ts route).
+            # QWEN_LORA_API_URL points at Ollama OR RunPod runsync;
+            # chat-qwen.ts auto-detects via 'runpod.ai' substring.
+            # RUNPOD_API_KEY only used when URL is RunPod.
+            if [ -n "${QWEN_LORA_API_URL}" ]; then
+              grep -q '^QWEN_LORA_API_URL=' .env 2>/dev/null && sed -i "s|^QWEN_LORA_API_URL=.*|QWEN_LORA_API_URL=${QWEN_LORA_API_URL}|" .env || echo "QWEN_LORA_API_URL=${QWEN_LORA_API_URL}" >> .env
+            fi
+            if [ -n "${RUNPOD_API_KEY}" ]; then
+              grep -q '^RUNPOD_API_KEY=' .env 2>/dev/null && sed -i "s|^RUNPOD_API_KEY=.*|RUNPOD_API_KEY=${RUNPOD_API_KEY}|" .env || echo "RUNPOD_API_KEY=${RUNPOD_API_KEY}" >> .env
             fi
             chmod 600 .env
 
