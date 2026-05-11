@@ -55,15 +55,15 @@ export function ExploreSearchBar({ value, onChange }: ExploreSearchBarProps) {
         className="w-full py-[18px] pl-14 pr-[60px] rounded-[28px] text-[15px] outline-none transition-all"
         style={{
           background: 'hsl(var(--card))',
-          border: '1px solid hsl(var(--border) / 0.4)',
+          border: '1px solid hsl(var(--border) / 0.15)',
           color: 'hsl(var(--foreground))',
         }}
         onFocus={(e) => {
-          e.currentTarget.style.borderColor = 'hsl(var(--border))';
+          e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.5)';
           e.currentTarget.style.boxShadow = '0 0 0 4px hsl(var(--primary) / 0.08)';
         }}
         onBlur={(e) => {
-          e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.4)';
+          e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.15)';
           e.currentTarget.style.boxShadow = 'none';
         }}
       />
