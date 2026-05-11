@@ -119,7 +119,8 @@
     "source": {
       "all": "전체",
       "template": "템플릿",
-      "community": "커뮤니티"
+      "community": "커뮤니티",
+      "mine": "내 만다라"
     },
     "sort": {
       "popular": "인기",
@@ -134,7 +135,14 @@
       "clones": "복제",
       "templateLabel": "템플릿",
       "starts": "{{count}}명 시작",
-      "ctaPreview": "미리보기 →"
+      "ctaPreview": "미리보기 →",
+      "ctaOpenDashboard": "대시보드 열기 →",
+      "myBadge": "MY",
+      "actions": {
+        "edit": "편집",
+        "delete": "삭제"
+      },
+      "deletePending": "삭제 기능은 곧 추가됩니다 (Sub-PR 2C)"
     },
     "time": {
       "today": "오늘",

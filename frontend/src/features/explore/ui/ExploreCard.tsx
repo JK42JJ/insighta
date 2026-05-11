@@ -1,4 +1,4 @@
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { MandalaDomain } from '@/shared/config/domain-colors';
 import { DOMAIN_STYLES, domainCssVars, getDomainLabel } from '@/shared/config/domain-colors';
@@ -15,7 +15,11 @@ interface Props {
   author: { displayName: string; avatarInitial: string } | null;
   cloneCount: number;
   isNew?: boolean;
+  /** Owner-vs-other branching: MY badge + hover inline actions + footer cta + click behavior. */
+  isMine?: boolean;
   onClick: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 export function ExploreCard({
@@ -29,7 +33,10 @@ export function ExploreCard({
   author,
   cloneCount,
   isNew,
+  isMine,
   onClick,
+  onEdit,
+  onDelete,
 }: Props) {
   const { t, i18n } = useTranslation();
   const ds = domain ? DOMAIN_STYLES[domain] : null;
@@ -60,14 +67,80 @@ export function ExploreCard({
       {/* Accent line */}
       <div className="explore-accent-line explore-domain-accent" />
 
-      {/* NEW tag */}
+      {/* NEW tag (left corner — right corner reserved for owner inline actions) */}
       {isNew && (
         <span
-          className="absolute top-3.5 right-3.5 text-[9px] font-bold px-[7px] py-0.5 rounded tracking-wide uppercase"
+          className="absolute top-3.5 left-3.5 text-[9px] font-bold px-[7px] py-0.5 rounded tracking-wide uppercase"
           style={{ background: 'rgba(52,211,153,0.10)', color: '#34d399' }}
         >
           New
         </span>
+      )}
+
+      {/* Inline actions (mine 카드만, hover 시 우상단 노출). event.stopPropagation
+          으로 카드 클릭과 분리. mockup v6 spec. */}
+      {isMine && (
+        <div
+          className="absolute top-2.5 right-2.5 z-[5] flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity duration-150 pointer-events-none group-hover/card:pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {onEdit && (
+            <button
+              type="button"
+              aria-label={t('explore.card.actions.edit')}
+              title={t('explore.card.actions.edit')}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="w-7 h-7 rounded-md flex items-center justify-center transition-colors"
+              style={{
+                background: 'hsl(var(--card) / 0.92)',
+                border: '1px solid hsl(var(--border) / 0.4)',
+                color: 'hsl(var(--muted-foreground))',
+                backdropFilter: 'blur(8px)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#fbbf24';
+                e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.7)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'hsl(var(--muted-foreground))';
+                e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.4)';
+              }}
+            >
+              <Pencil size={13} />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              aria-label={t('explore.card.actions.delete')}
+              title={t('explore.card.actions.delete')}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="w-7 h-7 rounded-md flex items-center justify-center transition-colors"
+              style={{
+                background: 'hsl(var(--card) / 0.92)',
+                border: '1px solid hsl(var(--border) / 0.4)',
+                color: 'hsl(var(--muted-foreground))',
+                backdropFilter: 'blur(8px)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#fb7185';
+                e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.7)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'hsl(var(--muted-foreground))';
+                e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.4)';
+              }}
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
       )}
 
       {/* Top row: Domain badge only (Title moved to bottom — 배지 때문에 3줄 차지하던 문제 해소) */}
@@ -114,6 +187,14 @@ export function ExploreCard({
             {author.displayName}
           </>
         ) : null}
+        {isMine && (
+          <span
+            className="ml-1 text-[9px] font-bold px-[6px] py-px rounded tracking-wide"
+            style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399' }}
+          >
+            {t('explore.card.myBadge')}
+          </span>
+        )}
       </div>
 
       {/* Mini 3×3 mandala — 색상 ORIGINAL prod 그대로 (insighta.one 동일) */}
@@ -163,7 +244,7 @@ export function ExploreCard({
           {t('explore.card.starts', { count: cloneCount })}
         </span>
         <span className="font-semibold" style={{ color: 'var(--d-color, hsl(var(--primary)))' }}>
-          {t('explore.card.ctaPreview')}
+          {isMine ? t('explore.card.ctaOpenDashboard') : t('explore.card.ctaPreview')}
         </span>
       </div>
     </div>

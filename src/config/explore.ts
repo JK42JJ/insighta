@@ -7,7 +7,7 @@
 
 import { MS_PER_HOUR } from '@/utils/time-constants';
 
-export const EXPLORE_SOURCES = ['all', 'template', 'community'] as const;
+export const EXPLORE_SOURCES = ['all', 'template', 'community', 'mine'] as const;
 export type ExploreSource = (typeof EXPLORE_SOURCES)[number];
 
 export const EXPLORE_SORTS = ['popular', 'recent', 'cloned'] as const;

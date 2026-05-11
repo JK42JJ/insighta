@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
 
-type Source = 'all' | 'template' | 'community';
+type Source = 'all' | 'template' | 'community' | 'mine';
 type Sort = 'popular' | 'recent' | 'cloned';
 
 interface ExploreToolbarProps {
@@ -12,7 +12,7 @@ interface ExploreToolbarProps {
   onSortChange: (sort: Sort) => void;
 }
 
-const SOURCES: Source[] = ['all', 'template', 'community'];
+const SOURCES: Source[] = ['all', 'template', 'community', 'mine'];
 const SORTS: Sort[] = ['popular', 'recent', 'cloned'];
 
 export function ExploreToolbar({

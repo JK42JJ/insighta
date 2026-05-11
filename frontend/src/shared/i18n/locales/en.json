@@ -119,7 +119,8 @@
     "source": {
       "all": "All",
       "template": "Templates",
-      "community": "Community"
+      "community": "Community",
+      "mine": "My Mandalas"
     },
     "sort": {
       "popular": "Popular",
@@ -134,7 +135,14 @@
       "clones": "clones",
       "templateLabel": "Template",
       "starts": "{{count}} started",
-      "ctaPreview": "Preview →"
+      "ctaPreview": "Preview →",
+      "ctaOpenDashboard": "Open dashboard →",
+      "myBadge": "MY",
+      "actions": {
+        "edit": "Edit",
+        "delete": "Delete"
+      },
+      "deletePending": "Delete coming soon (Sub-PR 2C)"
     },
     "time": {
       "today": "today",

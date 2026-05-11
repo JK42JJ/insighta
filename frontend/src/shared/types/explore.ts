@@ -3,6 +3,8 @@ import type { MandalaDomain } from '@/shared/config/domain-colors';
 /** Summary shape returned by GET /mandalas/explore */
 export interface ExploreMandala {
   id: string;
+  /** Owner user_id — FE owner-vs-other branching (MY badge / inline actions / cta label / click). */
+  userId: string;
   title: string;
   shareSlug: string | null;
   domain: MandalaDomain | null;
@@ -42,7 +44,7 @@ export interface ExploreFilters {
   q: string;
   domain: MandalaDomain | 'all';
   language: ExploreLanguage;
-  source: 'all' | 'template' | 'community';
+  source: 'all' | 'template' | 'community' | 'mine';
   sort: 'popular' | 'recent' | 'cloned';
   page: number;
 }

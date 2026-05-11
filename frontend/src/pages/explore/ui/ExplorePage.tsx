@@ -37,7 +37,8 @@ export default function ExplorePage() {
   const { slug } = useParams<{ slug: string }>();
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user } = useAuth();
+  const currentUserId = user?.id ?? null;
   const { filters, updateFilters } = useExploreFilters();
   const { data, isLoading } = useExploreMandalas(filters);
   const createFromTemplateMutation = useExploreCreateFromTemplate();
@@ -50,40 +51,52 @@ export default function ExplorePage() {
   // Ref check is synchronous and beats the render race. Reset in onSettled.
   const isStartingRef = useRef(false);
 
-  const handleCardClick = useCallback(async (mandala: ExploreMandala) => {
-    setModal({
-      isOpen: true,
-      mandala,
-      rootLevel: mandala.rootLevel ?? { centerGoal: mandala.title, subjects: [] },
-      subLevels: [],
-      centerLabel: mandala.rootLevel?.centerLabel ?? undefined,
-      subLabels: mandala.rootLevel?.subjectLabels,
-    });
-
-    if (mandala.shareSlug) {
-      try {
-        const result = await apiClient.getPublicMandala(mandala.shareSlug);
-        const levels = result.mandala.levels ?? [];
-        const root = levels.find((l) => l.depth === 0);
-        const subs = levels
-          .filter((l) => l.depth === 1)
-          .sort((a, b) => a.position - b.position)
-          .map((l) => ({ centerGoal: l.centerGoal, subjects: l.subjects }));
-
-        setModal((prev) => ({
-          ...prev,
-          rootLevel: root
-            ? { centerGoal: root.centerGoal, subjects: root.subjects }
-            : prev.rootLevel,
-          subLevels: subs,
-          centerLabel: root?.centerLabel ?? prev.centerLabel,
-          subLabels: (root?.subjectLabels?.length ?? 0) > 0 ? root!.subjectLabels : prev.subLabels,
-        }));
-      } catch {
-        // keep modal open with summary data
+  const handleCardClick = useCallback(
+    async (mandala: ExploreMandala) => {
+      // Owner branching: 내 만다라 = 모달 skip → selectMandala + dashboard 진입.
+      // 타인 카드 = 기존 modal 미리보기 (CTA 안에서 create-from-template).
+      const isMine = !!currentUserId && mandala.userId === currentUserId;
+      if (isMine) {
+        selectMandala(mandala.id);
+        navigate('/');
+        return;
       }
-    }
-  }, []);
+      setModal({
+        isOpen: true,
+        mandala,
+        rootLevel: mandala.rootLevel ?? { centerGoal: mandala.title, subjects: [] },
+        subLevels: [],
+        centerLabel: mandala.rootLevel?.centerLabel ?? undefined,
+        subLabels: mandala.rootLevel?.subjectLabels,
+      });
+
+      if (mandala.shareSlug) {
+        try {
+          const result = await apiClient.getPublicMandala(mandala.shareSlug);
+          const levels = result.mandala.levels ?? [];
+          const root = levels.find((l) => l.depth === 0);
+          const subs = levels
+            .filter((l) => l.depth === 1)
+            .sort((a, b) => a.position - b.position)
+            .map((l) => ({ centerGoal: l.centerGoal, subjects: l.subjects }));
+
+          setModal((prev) => ({
+            ...prev,
+            rootLevel: root
+              ? { centerGoal: root.centerGoal, subjects: root.subjects }
+              : prev.rootLevel,
+            subLevels: subs,
+            centerLabel: root?.centerLabel ?? prev.centerLabel,
+            subLabels:
+              (root?.subjectLabels?.length ?? 0) > 0 ? root!.subjectLabels : prev.subLabels,
+          }));
+        } catch {
+          // keep modal open with summary data
+        }
+      }
+    },
+    [currentUserId, selectMandala, navigate]
+  );
 
   const handleCloseModal = useCallback(() => setModal(EMPTY_MODAL), []);
 
@@ -115,6 +128,20 @@ export default function ExplorePage() {
   const handleBack = useCallback(() => {
     navigate('/');
   }, [navigate]);
+
+  // 인라인 [편집] = MandalaEditorPage 라우트 (router/index.tsx:71, 살아있음, 핸드오프 §4 옵션 B).
+  const handleEdit = useCallback(
+    (mandalaId: string) => {
+      navigate(`/mandalas/${mandalaId}/edit`);
+    },
+    [navigate]
+  );
+
+  // 인라인 [삭제] = Sub-PR 2C 에서 mutation + cascade 처리. 본 PR 은 placeholder
+  // (사용자에게 곧 wire 됨 안내). confirm/optimistic/toast 모두 2C 범위.
+  const handleDelete = useCallback(() => {
+    window.alert(t('explore.card.deletePending'));
+  }, [t]);
 
   if (slug) return <PublicMandalaView slug={slug} />;
 
@@ -201,22 +228,28 @@ export default function ExplorePage() {
           <>
             {/* Explicit 3-col responsive grid (mockup v6: 3 / 2 / 1 at 900 / 600 breakpoints) */}
             <div className="grid grid-cols-3 max-[900px]:grid-cols-2 max-[600px]:grid-cols-1 gap-4">
-              {mandalas.map((m) => (
-                <ExploreCard
-                  key={m.id}
-                  id={m.id}
-                  title={m.title}
-                  centerGoal={m.rootLevel?.centerGoal ?? m.title}
-                  centerLabel={m.rootLevel?.centerLabel ?? undefined}
-                  subjects={m.rootLevel?.subjects ?? []}
-                  subjectLabels={m.rootLevel?.subjectLabels}
-                  domain={m.domain as MandalaDomain | null}
-                  isTemplate={m.isTemplate}
-                  author={m.author}
-                  cloneCount={m.cloneCount}
-                  onClick={() => handleCardClick(m)}
-                />
-              ))}
+              {mandalas.map((m) => {
+                const isMine = !!currentUserId && m.userId === currentUserId;
+                return (
+                  <ExploreCard
+                    key={m.id}
+                    id={m.id}
+                    title={m.title}
+                    centerGoal={m.rootLevel?.centerGoal ?? m.title}
+                    centerLabel={m.rootLevel?.centerLabel ?? undefined}
+                    subjects={m.rootLevel?.subjects ?? []}
+                    subjectLabels={m.rootLevel?.subjectLabels}
+                    domain={m.domain as MandalaDomain | null}
+                    isTemplate={m.isTemplate}
+                    author={m.author}
+                    cloneCount={m.cloneCount}
+                    isMine={isMine}
+                    onClick={() => handleCardClick(m)}
+                    onEdit={isMine ? () => handleEdit(m.id) : undefined}
+                    onDelete={isMine ? handleDelete : undefined}
+                  />
+                );
+              })}
             </div>
 
             {totalPages > 1 && (

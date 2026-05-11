@@ -231,7 +231,8 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   });
 
   /**
-   * GET /api/v1/mandalas/explore - List public mandalas for explore page (no auth)
+   * GET /api/v1/mandalas/explore - List mandalas for explore page (auth required —
+   * dashboard menu, all callers logged-in). source='mine' filters by owner_id.
    */
   fastify.get<{
     Querystring: {
@@ -243,7 +244,10 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       page?: string;
       limit?: string;
     };
-  }>('/explore', async (request, reply) => {
+  }>('/explore', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
     const { q, domain, language, source, sort } = request.query;
     const page = request.query.page ? parseInt(request.query.page, 10) : undefined;
     const limit = request.query.limit ? parseInt(request.query.limit, 10) : undefined;
@@ -269,19 +273,21 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         : undefined,
       page,
       limit,
+      userId,
     };
 
-    // Skip cache for search queries (results vary per request)
-    const cacheKey = parsedFilters.q
-      ? null
-      : MemoryCache.buildKey({
-          domain: parsedFilters.domain,
-          source: parsedFilters.source,
-          sort: parsedFilters.sort,
-          language: parsedFilters.language,
-          page: parsedFilters.page,
-          limit: parsedFilters.limit,
-        });
+    // Skip cache for search queries AND mine source (per-user results vary)
+    const cacheKey =
+      parsedFilters.q || parsedFilters.source === 'mine'
+        ? null
+        : MemoryCache.buildKey({
+            domain: parsedFilters.domain,
+            source: parsedFilters.source,
+            sort: parsedFilters.sort,
+            language: parsedFilters.language,
+            page: parsedFilters.page,
+            limit: parsedFilters.limit,
+          });
 
     if (cacheKey) {
       const cached = exploreCache.get(cacheKey);

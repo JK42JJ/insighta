@@ -70,6 +70,8 @@ export interface MandalaWithLevels {
 
 export interface ExploreMandala {
   id: string;
+  /** Owner user_id — needed for owner-vs-other branching on FE (MY badge, edit/delete). */
+  userId: string;
   title: string;
   shareSlug: string | null;
   domain: string | null;
@@ -95,6 +97,8 @@ export interface ExploreFilters {
   sort?: ExploreSort;
   page?: number;
   limit?: number;
+  /** Required when source==='mine'. Filters mandalas to owner. */
+  userId?: string;
 }
 
 interface ListMandalasResult {
@@ -958,6 +962,12 @@ export class MandalaManager {
       conditions.push({ is_template: true });
     } else if (filters.source === 'community') {
       conditions.push({ is_public: true, is_template: false });
+    } else if (filters.source === 'mine') {
+      // 'mine' requires userId from authenticated request — empty result if missing.
+      if (!filters.userId) {
+        return { mandalas: [], total: 0, page, limit };
+      }
+      conditions.push({ user_id: filters.userId });
     } else {
       conditions.push({ OR: [{ is_public: true }, { is_template: true }] });
     }
@@ -1054,6 +1064,7 @@ export class MandalaManager {
 
     return {
       id: mandala.id,
+      userId: mandala.user_id,
       title: mandala.title,
       shareSlug: mandala.share_slug,
       domain: mandala.domain,

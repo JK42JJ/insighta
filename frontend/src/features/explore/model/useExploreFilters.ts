@@ -5,7 +5,7 @@ import type { ExploreFilters, ExploreLanguage } from '@/shared/types/explore';
 import { DEFAULT_EXPLORE_FILTERS } from '@/shared/types/explore';
 import { MANDALA_DOMAINS, type MandalaDomain } from '@/shared/config/domain-colors';
 
-const VALID_SOURCES = ['all', 'template', 'community'] as const;
+const VALID_SOURCES = ['all', 'template', 'community', 'mine'] as const;
 const VALID_SORTS = ['popular', 'recent', 'cloned'] as const;
 
 type Source = (typeof VALID_SOURCES)[number];
