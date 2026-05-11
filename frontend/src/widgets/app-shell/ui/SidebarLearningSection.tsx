@@ -166,11 +166,6 @@ export function SidebarLearningSection({
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-none pb-3">
-        {/* CP453+2 — Obsidian help-docs left-nav tone. Chapter row: subtle
-            caret + plain inline section count (no pill) + hover/expanded
-            subtle bg + expanded left accent bar. Section row: vertical guide
-            border-l + bg + left accent for active. 보라색 #818cf8 active
-            텍스트 유지 (사용자 spec, Obsidian 좌측 nav 와 동일 톤). */}
         {subGoals.map((goal, idx) => {
           const bookChapter = bookChaptersByIdx.get(idx);
           const isExpanded = isChapterExpanded(idx);
@@ -240,7 +235,7 @@ function BookChapterPreview({
   if (sections.length === 0) return null;
 
   return (
-    <ul className="space-y-[1px]">
+    <ul>
       {sections.map((sec, sIdx) => {
         const isActiveSection = sIdx === activeSectionIdx;
         const firstAtom = sec.atoms?.[0];
@@ -261,10 +256,6 @@ function BookChapterPreview({
             }}
             className={cn(
               'cursor-pointer pl-2 py-1.5 leading-[1.5] border-l-2 transition-colors',
-              // 사용자 명시 사실 (스샷 #18/#19 + 직전 메시지):
-              // - L2 에 쉐이드(bg) 없음, 글씨로만 하일라이트
-              // - Active = 좌측 라인도 보라 + 글씨 보라
-              // - Hover = 라인 진한 회색 + 글씨 진해짐
               isActiveSection
                 ? 'border-[#818cf8] text-[14px] font-medium text-[#818cf8]'
                 : 'border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/80 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
