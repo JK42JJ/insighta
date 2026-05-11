@@ -1072,12 +1072,10 @@
 
 .copilotkit-chat-wrapper .copilotKitMessages {
   overflow-y: auto !important;
-  /* CP445.x — 챗봇이 메모(14px)보다 폰트 weight 차이로 시각상 더 크게
-     보임. 본문 size 12px (이전 13px 에서 한 단계 작게) 로 시각 무게 균형. */
   font-size: 12px;
   font-weight: 400;
   line-height: 1.6;
-  color: hsl(var(--muted-foreground));
+  color: hsl(var(--muted-foreground) / 0.55);
 }
 
 .copilotkit-chat-wrapper .copilotKitMessages strong,

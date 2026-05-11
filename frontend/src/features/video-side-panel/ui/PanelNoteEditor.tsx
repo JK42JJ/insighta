@@ -221,7 +221,7 @@ export function PanelNoteEditor({
           // Timestamp pills (decoration from TimestampPlugin)
           '[&_.ProseMirror_.timestamp-pill]:no-underline [&_.ProseMirror_.timestamp-pill]:bg-[rgba(129,140,248,0.1)] [&_.ProseMirror_.timestamp-pill]:text-[#818cf8] [&_.ProseMirror_.timestamp-pill]:rounded-full [&_.ProseMirror_.timestamp-pill]:px-2 [&_.ProseMirror_.timestamp-pill]:py-0.5 [&_.ProseMirror_.timestamp-pill]:text-[11px] [&_.ProseMirror_.timestamp-pill]:font-medium [&_.ProseMirror_.timestamp-pill]:cursor-pointer [&_.ProseMirror_.timestamp-pill]:decoration-0 [&_.ProseMirror_.timestamp-pill:hover]:bg-[rgba(129,140,248,0.2)]',
           // Placeholder
-          '[&_.ProseMirror_.is-editor-empty:first-child::before]:text-[#353642] [&_.ProseMirror_.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_.is-editor-empty:first-child::before]:pointer-events-none',
+          '[&_.ProseMirror_.is-editor-empty:first-child::before]:text-muted-foreground/45 [&_.ProseMirror_.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_.is-editor-empty:first-child::before]:pointer-events-none',
         ].join(' ')}
       />
 
