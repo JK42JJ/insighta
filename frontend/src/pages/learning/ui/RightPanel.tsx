@@ -134,11 +134,11 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
 
       <div
         className={cn(
-          'flex flex-1 flex-col overflow-y-auto scrollbar-pro pl-0 pr-4 py-3.5',
+          'group flex flex-1 flex-col overflow-y-auto scrollbar-pro pl-0 pr-4 py-3.5',
           activeTab !== 'notes' && 'hidden'
         )}
       >
-        <p className="mb-3 text-[12px] leading-relaxed text-muted-foreground/60">
+        <p className="mb-3 text-[12px] leading-relaxed text-muted-foreground/60 group-focus-within:hidden">
           {t('learning.noteHint')}
         </p>
         {(noteLoaded || !currentCard?.id) && (
