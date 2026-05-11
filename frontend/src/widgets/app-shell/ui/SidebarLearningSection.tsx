@@ -6,7 +6,6 @@ import { useMandalaQuery } from '@/features/mandala';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useMandalaCards } from '@/pages/learning/model/useMandalaCards';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
-import type { InsightCard } from '@/entities/card/model/types';
 import type { MandalaBookChapter } from '@/shared/lib/api-client';
 import { cn } from '@/shared/lib/utils';
 
@@ -111,13 +110,6 @@ export function SidebarLearningSection({
     }
   };
 
-  const cardsByCell = new Map<number, InsightCard[]>();
-  for (const card of mandalaCards) {
-    const list = cardsByCell.get(card.cellIndex) ?? [];
-    list.push(card);
-    cardsByCell.set(card.cellIndex, list);
-  }
-
   if (collapsed) {
     return (
       <div className="px-2 py-1" onMouseEnter={() => setActiveRegion('sidebar')}>
@@ -180,9 +172,7 @@ export function SidebarLearningSection({
             border-l + bg + left accent for active. 보라색 #818cf8 active
             텍스트 유지 (사용자 spec, Obsidian 좌측 nav 와 동일 톤). */}
         {subGoals.map((goal, idx) => {
-          const cellCards = cardsByCell.get(idx + 1) ?? [];
           const bookChapter = bookChaptersByIdx.get(idx);
-          const sectionCount = bookChapter?.sections?.length ?? 0;
           const isExpanded = isChapterExpanded(idx);
 
           return (
@@ -190,11 +180,7 @@ export function SidebarLearningSection({
               <button
                 type="button"
                 onClick={() => toggleChapter(idx)}
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors',
-                  'hover:bg-sidebar-accent/15',
-                  isExpanded && 'bg-sidebar-accent/25 border-l-2 border-[#818cf8]/40 rounded-l-none'
-                )}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-sidebar-accent/15"
               >
                 <ChevronRight
                   className={cn(
@@ -205,15 +191,10 @@ export function SidebarLearningSection({
                 <span className="flex-1 truncate text-[13px] font-medium tracking-[-0.01em] text-sidebar-foreground/85">
                   {goal}
                 </span>
-                {(sectionCount > 0 || cellCards.length > 0) && (
-                  <span className="shrink-0 text-[11px] tabular-nums text-sidebar-foreground/35">
-                    {sectionCount > 0 ? sectionCount : cellCards.length}
-                  </span>
-                )}
               </button>
 
               {isExpanded && bookChapter && (
-                <div className="ml-4 pl-3 pt-0.5 border-l border-sidebar-foreground/10">
+                <div className="ml-4 pt-0.5">
                   <BookChapterPreview
                     chapter={bookChapter}
                     mandalaId={mandalaId}
@@ -280,11 +261,10 @@ function BookChapterPreview({
             }}
             className={cn(
               'cursor-pointer rounded-[4px] px-2 py-1.5 leading-[1.5] transition-colors',
-              // CP453+2 — Obsidian active row pattern: bg + left accent bar
-              // + 보라 텍스트 (사용자 spec 보존). 비활성 = subtle foreground;
-              // numbering prefix 도 더 옅게.
+              // Obsidian #17 패턴: 비활성 = plain text / hover = subtle bg /
+              // active = bg + 보라 텍스트 (border-l 등 추가 layer 없음).
               isActiveSection
-                ? 'bg-sidebar-accent/50 border-l-2 border-[#818cf8] rounded-l-none text-[14px] font-medium text-[#818cf8]'
+                ? 'bg-sidebar-accent/50 text-[14px] font-medium text-[#818cf8]'
                 : 'text-[13px] text-sidebar-foreground/65 hover:bg-sidebar-accent/15 hover:text-sidebar-foreground'
             )}
           >
