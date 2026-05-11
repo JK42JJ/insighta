@@ -83,7 +83,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
 
   return (
     <div
-      className="flex w-[400px] shrink-0 flex-col"
+      className="flex w-[400px] shrink-0 flex-col pr-5"
       onMouseEnter={() => setActiveRegion(activeTab === 'notes' ? 'notes' : 'chat')}
     >
       {/* CP445 (사용자 directive) — ViewModeToggle + [⋯] 우측 사이드바 상단
