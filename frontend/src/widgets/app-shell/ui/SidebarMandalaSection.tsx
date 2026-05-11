@@ -279,11 +279,10 @@ export function SidebarMandalaSection({
                   }
                 }}
                 className={cn(
-                  'group flex items-center gap-1 rounded-md pl-1.5 pr-1 py-1.5 text-[13px] cursor-pointer transition-colors duration-150',
-                  'hover:bg-sidebar-accent',
+                  'group flex items-center gap-1 pl-1.5 pr-1 py-1.5 text-[13px] cursor-pointer transition-colors duration-150',
                   isSelected
                     ? 'font-semibold text-sidebar-primary'
-                    : 'font-normal text-sidebar-foreground/75'
+                    : 'font-normal text-sidebar-foreground/75 hover:text-sidebar-foreground'
                 )}
               >
                 <span className="flex flex-1 min-w-0 items-center gap-2 text-left">
