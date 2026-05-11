@@ -1075,7 +1075,11 @@
   font-size: 12px;
   font-weight: 400;
   line-height: 1.6;
-  color: hsl(var(--muted-foreground) / 0.55);
+  color: hsl(var(--muted-foreground) / 0.55) !important;
+}
+
+.copilotkit-chat-wrapper .copilotKitMessages *:not(textarea):not(input):not(button) {
+  color: inherit !important;
 }
 
 .copilotkit-chat-wrapper .copilotKitMessages strong,
