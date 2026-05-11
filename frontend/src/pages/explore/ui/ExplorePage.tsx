@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -44,6 +44,11 @@ export default function ExplorePage() {
   const selectMandala = useMandalaStore((s) => s.selectMandala);
 
   const [modal, setModal] = useState<ModalState>(EMPTY_MODAL);
+  // Sync rapid-click guard. React's mutation.isPending is async — first onClick
+  // fires the mutation but disabled={isPending} only propagates on next render,
+  // so a 50–100ms double/triple-click can fire create-from-template 2-4 times.
+  // Ref check is synchronous and beats the render race. Reset in onSettled.
+  const isStartingRef = useRef(false);
 
   const handleCardClick = useCallback(async (mandala: ExploreMandala) => {
     setModal({
@@ -88,10 +93,15 @@ export default function ExplorePage() {
       navigate('/login?returnTo=/explore');
       return;
     }
+    if (isStartingRef.current) return;
+    isStartingRef.current = true;
     createFromTemplateMutation.mutate(modal.mandala.id, {
       onSuccess: (res) => {
         selectMandala(res.mandalaId);
         navigate('/');
+      },
+      onSettled: () => {
+        isStartingRef.current = false;
       },
     });
   }, [modal.mandala, isLoggedIn, navigate, createFromTemplateMutation, selectMandala]);
