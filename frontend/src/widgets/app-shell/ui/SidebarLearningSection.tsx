@@ -255,7 +255,7 @@ function BookChapterPreview({
               }
             }}
             className={cn(
-              'cursor-pointer pl-2 py-1.5 leading-[1.5] border-l-2 transition-colors',
+              'cursor-pointer pl-3 py-1.5 leading-[1.5] border-l-2 transition-colors',
               isActiveSection
                 ? 'border-[#818cf8] text-[14px] font-medium text-[#818cf8]'
                 : 'border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/80 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
