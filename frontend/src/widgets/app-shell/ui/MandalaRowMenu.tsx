@@ -60,10 +60,27 @@ export function MandalaRowMenu({ mandalaId, isLastMandala, onAfterDelete }: Mand
     onAfterDelete?.(mandalaId);
     deleteMutation.mutate(mandalaId, {
       onSuccess: () => {
-        // Force a list refetch on top of the hook-level invalidate (defensive
-        // against placeholderData / keepPreviousData masking the optimistic
-        // filter when invalidate runs).
+        // Belt-and-suspenders: the hook-level onMutate filters the list cache
+        // optimistically, but users reported the row still rendered after the
+        // confirm. Re-apply the filter directly here, then force a refetch on
+        // top of the hook-level invalidate so the list query state is rebuilt
+        // from the server even if placeholderData/keepPreviousData masks the
+        // intermediate cache mutation.
+        queryClient.setQueryData<{
+          mandalas: Array<{ id: string }>;
+          total: number;
+          page: number;
+          limit: number;
+        }>(queryKeys.mandala.list(), (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            mandalas: old.mandalas.filter((m) => m.id !== mandalaId),
+            total: Math.max(0, old.total - 1),
+          };
+        });
         queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
+        queryClient.refetchQueries({ queryKey: queryKeys.mandala.list() });
         toast.success(t('sidebar.mandalaActions.deleteSuccess', '만다라가 삭제됐어요'));
       },
       onError: () => {
