@@ -763,7 +763,7 @@
     "orderChanged": "Order changed",
     "orderChangedDesc": "Card order has been updated.",
     "deleted": "Deleted",
-    "deletedVideoDesc": "{{count}} videos removed from Idea Spot.",
+    "deletedVideoDesc": "{{count}} videos removed.",
     "deleteFailedVideoDesc": "Failed to delete some videos.",
     "deletedLocalDesc": "{{count}} local cards deleted.",
     "deleteFailedLocalDesc": "Failed to delete some cards.",
