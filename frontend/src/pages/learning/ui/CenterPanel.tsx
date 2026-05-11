@@ -476,7 +476,6 @@ const NOTE_PROSE_STYLE = `
   border: none;
   padding: 0;
   background: #111;
-  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
 }
