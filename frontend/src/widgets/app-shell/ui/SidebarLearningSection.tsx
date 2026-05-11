@@ -174,8 +174,11 @@ export function SidebarLearningSection({
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-none pb-3">
-        {/* CP445.x — single-chapter accordion. 클릭 시 해당 chapter 만 펼치고
-            나머지 자동 collapse. 보라색 active highlight 없음 (사용자 spec). */}
+        {/* CP453+2 — Obsidian help-docs left-nav tone. Chapter row: subtle
+            caret + plain inline section count (no pill) + hover/expanded
+            subtle bg + expanded left accent bar. Section row: vertical guide
+            border-l + bg + left accent for active. 보라색 #818cf8 active
+            텍스트 유지 (사용자 spec, Obsidian 좌측 nav 와 동일 톤). */}
         {subGoals.map((goal, idx) => {
           const cellCards = cardsByCell.get(idx + 1) ?? [];
           const bookChapter = bookChaptersByIdx.get(idx);
@@ -183,38 +186,38 @@ export function SidebarLearningSection({
           const isExpanded = isChapterExpanded(idx);
 
           return (
-            <div key={idx} className="mb-1">
+            <div key={idx} className="mb-0.5">
               <button
                 type="button"
                 onClick={() => toggleChapter(idx)}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent/40"
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors',
+                  'hover:bg-sidebar-accent/15',
+                  isExpanded && 'bg-sidebar-accent/25 border-l-2 border-[#818cf8]/40 rounded-l-none'
+                )}
               >
                 <ChevronRight
                   className={cn(
-                    'h-3 w-3 shrink-0 text-sidebar-foreground/50 transition-transform',
+                    'h-3.5 w-3.5 shrink-0 text-sidebar-foreground/35 transition-transform',
                     isExpanded && 'rotate-90'
                   )}
                 />
-                <span className="flex-1 truncate text-[13px] font-medium text-sidebar-foreground/85">
+                <span className="flex-1 truncate text-[13px] font-medium tracking-[-0.01em] text-sidebar-foreground/85">
                   {idx + 1}. {goal}
                 </span>
                 {(sectionCount > 0 || cellCards.length > 0) && (
-                  <span className="shrink-0 rounded-full bg-sidebar-accent/40 px-1.5 py-0.5 text-[10px] tabular-nums text-sidebar-foreground/60">
+                  <span className="shrink-0 text-[11px] tabular-nums text-sidebar-foreground/35">
                     {sectionCount > 0 ? sectionCount : cellCards.length}
                   </span>
                 )}
               </button>
 
               {isExpanded && bookChapter && (
-                <div className="pl-6 pt-1">
+                <div className="ml-4 pl-3 pt-0.5 border-l border-sidebar-foreground/10">
                   <BookChapterPreview
                     chapter={bookChapter}
                     mandalaId={mandalaId}
                     currentVideoId={currentVideoId}
-                    // CP445.x — single source of truth = activeSectionRef
-                    // (사용자 click). activeMatch fallback 제거 — multi-vid
-                    // section 시 다른 chapter 까지 동시 highlight 되는 bug
-                    // 회피.
                     activeSectionIdx={
                       activeSectionRef?.chapterIdx === bookChapter.ch
                         ? activeSectionRef.sectionIdx
@@ -256,7 +259,7 @@ function BookChapterPreview({
   if (sections.length === 0) return null;
 
   return (
-    <ul className="space-y-0.5">
+    <ul className="space-y-[1px]">
       {sections.map((sec, sIdx) => {
         const isActiveSection = sIdx === activeSectionIdx;
         const firstAtom = sec.atoms?.[0];
@@ -266,8 +269,6 @@ function BookChapterPreview({
             onClick={() => {
               setActiveSection({ chapterIdx: chapter.ch, sectionIdx: sIdx });
               setCenterTab('section');
-              // CP445.x — section 클릭 시 첫 atom 의 vid 로 player 교체. 같은
-              // 영상이면 ?t= query 만 갱신해 같은 vid 안 timestamp seek.
               if (firstAtom?.vid && Number.isFinite(firstAtom.ts)) {
                 const ts = Math.floor(firstAtom.ts ?? 0);
                 if (firstAtom.vid !== currentVideoId) {
@@ -278,15 +279,24 @@ function BookChapterPreview({
               }
             }}
             className={cn(
-              'cursor-pointer rounded-[4px] px-2 py-1 leading-[1.5] transition-colors',
-              // 비활성 단일 색상, 활성 = 보라색 highlight + 폰트 한 단계 크게
-              // (13px → 14px) + medium weight. (CP453+1 — 가독성 위해 11/12 → 13/14 상향)
+              'cursor-pointer rounded-[4px] px-2 py-1.5 leading-[1.5] transition-colors',
+              // CP453+2 — Obsidian active row pattern: bg + left accent bar
+              // + 보라 텍스트 (사용자 spec 보존). 비활성 = subtle foreground;
+              // numbering prefix 도 더 옅게.
               isActiveSection
-                ? 'text-[14px] font-medium text-[#818cf8]'
-                : 'text-[13px] text-sidebar-foreground/80 hover:text-sidebar-foreground'
+                ? 'bg-sidebar-accent/50 border-l-2 border-[#818cf8] rounded-l-none text-[14px] font-medium text-[#818cf8]'
+                : 'text-[13px] text-sidebar-foreground/65 hover:bg-sidebar-accent/15 hover:text-sidebar-foreground'
             )}
           >
-            {chapter.ch + 1}.{sIdx + 1} {sec.title}
+            <span
+              className={cn(
+                'mr-1.5 tabular-nums',
+                isActiveSection ? 'text-[#818cf8]/70' : 'text-sidebar-foreground/35'
+              )}
+            >
+              {chapter.ch + 1}.{sIdx + 1}
+            </span>
+            {sec.title}
           </li>
         );
       })}
