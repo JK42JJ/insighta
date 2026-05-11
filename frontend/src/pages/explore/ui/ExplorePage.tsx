@@ -8,12 +8,9 @@ import { useAuth } from '@/features/auth/model/useAuth';
 import { LandingHeader } from '@/pages/landing/ui/components/LandingHeader';
 import { GradientBackground } from '@/pages/landing/ui/components/GradientBackground';
 import { FooterSection } from '@/pages/landing/ui/components/FooterSection';
-import {
-  useExploreMandalas,
-  useExploreClone,
-  useExploreCreateFromTemplate,
-} from '@/features/explore';
+import { useExploreMandalas, useExploreCreateFromTemplate } from '@/features/explore';
 import { useExploreFilters } from '@/features/explore';
+import { useMandalaStore } from '@/stores/mandalaStore';
 import { ExploreHero } from '@/features/explore/ui/ExploreHero';
 import { ExploreSearchBar } from '@/features/explore/ui/ExploreSearchBar';
 import { DomainChips } from '@/features/explore/ui/DomainChips';
@@ -47,72 +44,68 @@ export default function ExplorePage() {
   const { isLoggedIn } = useAuth();
   const { filters, updateFilters } = useExploreFilters();
   const { data, isLoading } = useExploreMandalas(filters);
-  const cloneMutation = useExploreClone();
   const createFromTemplateMutation = useExploreCreateFromTemplate();
+  const selectMandala = useMandalaStore((s) => s.selectMandala);
 
   const [modal, setModal] = useState<ModalState>(EMPTY_MODAL);
 
-  const handleCardClick = useCallback(
-    async (mandala: ExploreMandala) => {
-      // Logged-in: direct create-from-template (skill auto-run) + dashboard. Skip preview modal.
-      if (isLoggedIn) {
-        createFromTemplateMutation.mutate(mandala.id, {
-          onSuccess: (res) => navigate(`/mandalas/${res.mandalaId}`),
-        });
-        return;
+  const handleCardClick = useCallback(async (mandala: ExploreMandala) => {
+    // All users open the preview modal first per spec §1; CTA inside the modal
+    // triggers create-from-template. Owner-vs-other branching (owner==me skips
+    // the modal and goes straight to the dashboard) is a Step 2 follow-up.
+    setModal({
+      isOpen: true,
+      mandala,
+      rootLevel: mandala.rootLevel ?? { centerGoal: mandala.title, subjects: [] },
+      subLevels: [],
+      centerLabel: mandala.rootLevel?.centerLabel ?? undefined,
+      subLabels: mandala.rootLevel?.subjectLabels,
+    });
+
+    // Fetch full level data for 9×9 grid
+    if (mandala.shareSlug) {
+      try {
+        const result = await apiClient.getPublicMandala(mandala.shareSlug);
+        const levels = result.mandala.levels ?? [];
+        const root = levels.find((l) => l.depth === 0);
+        const subs = levels
+          .filter((l) => l.depth === 1)
+          .sort((a, b) => a.position - b.position)
+          .map((l) => ({ centerGoal: l.centerGoal, subjects: l.subjects }));
+
+        setModal((prev) => ({
+          ...prev,
+          rootLevel: root
+            ? { centerGoal: root.centerGoal, subjects: root.subjects }
+            : prev.rootLevel,
+          subLevels: subs,
+          centerLabel: root?.centerLabel ?? prev.centerLabel,
+          subLabels: (root?.subjectLabels?.length ?? 0) > 0 ? root!.subjectLabels : prev.subLabels,
+        }));
+      } catch {
+        // keep modal open with summary data
       }
-
-      // Visitor: open preview modal with summary data first.
-      setModal({
-        isOpen: true,
-        mandala,
-        rootLevel: mandala.rootLevel ?? { centerGoal: mandala.title, subjects: [] },
-        subLevels: [],
-        centerLabel: mandala.rootLevel?.centerLabel ?? undefined,
-        subLabels: mandala.rootLevel?.subjectLabels,
-      });
-
-      // Fetch full level data for 9×9 grid
-      if (mandala.shareSlug) {
-        try {
-          const result = await apiClient.getPublicMandala(mandala.shareSlug);
-          const levels = result.mandala.levels ?? [];
-          const root = levels.find((l) => l.depth === 0);
-          const subs = levels
-            .filter((l) => l.depth === 1)
-            .sort((a, b) => a.position - b.position)
-            .map((l) => ({ centerGoal: l.centerGoal, subjects: l.subjects }));
-
-          setModal((prev) => ({
-            ...prev,
-            rootLevel: root
-              ? { centerGoal: root.centerGoal, subjects: root.subjects }
-              : prev.rootLevel,
-            subLevels: subs,
-            centerLabel: root?.centerLabel ?? prev.centerLabel,
-            subLabels:
-              (root?.subjectLabels?.length ?? 0) > 0 ? root!.subjectLabels : prev.subLabels,
-          }));
-        } catch {
-          // keep modal open with summary data
-        }
-      }
-    },
-    [isLoggedIn, createFromTemplateMutation, navigate]
-  );
+    }
+  }, []);
 
   const handleCloseModal = useCallback(() => setModal(EMPTY_MODAL), []);
 
-  const handleClone = useCallback(() => {
+  // Modal CTA "이 템플릿으로 시작 →" — create-from-template (video-discover skill
+  // auto-attaches recommendations), then route to the unified dashboard (/) with
+  // the new mandala selected. Mirrors useWizard.goToUnifiedDashboard pattern.
+  const handleStart = useCallback(() => {
     if (!modal.mandala) return;
     if (!isLoggedIn) {
       navigate('/login?returnTo=/explore');
       return;
     }
-    cloneMutation.mutate(modal.mandala.id, {
-      onSuccess: (res) => navigate(`/mandalas/${res.data.mandalaId}/edit`),
+    createFromTemplateMutation.mutate(modal.mandala.id, {
+      onSuccess: (res) => {
+        selectMandala(res.mandalaId);
+        navigate('/');
+      },
     });
-  }, [modal.mandala, isLoggedIn, navigate, cloneMutation]);
+  }, [modal.mandala, isLoggedIn, navigate, createFromTemplateMutation, selectMandala]);
 
   const handleCopyLink = useCallback(async () => {
     if (!modal.mandala) return;
@@ -218,10 +211,10 @@ export default function ExplorePage() {
           subLevels={modal.subLevels}
           centerLabel={modal.centerLabel}
           subLabels={modal.subLabels}
-          likeCount={modal.mandala.likeCount}
           cloneCount={modal.mandala.cloneCount}
           updatedAt={new Date(modal.mandala.updatedAt).toLocaleDateString()}
-          onClone={handleClone}
+          onStart={handleStart}
+          isStarting={createFromTemplateMutation.isPending}
           onCopyLink={handleCopyLink}
         />
       )}

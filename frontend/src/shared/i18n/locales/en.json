@@ -78,6 +78,19 @@
     "unsubscribe": "Unsubscribe",
     "recentActivity": "Recent Activity",
     "noActivity": "No activity yet",
+    "modal": {
+      "aiTemplate": "Insighta AI Template",
+      "copyLink": "Copy link",
+      "start": "Start with this template",
+      "starting": "Starting…",
+      "whatNextLabel": "When you start with this template",
+      "whatNext1": "9×9 structure cloned automatically",
+      "whatNext2": "AI places 3 videos per cell",
+      "whatNext3": "Land on the dashboard, ready to watch",
+      "startedCount": "{{count}} started",
+      "cloneCount": "{{count}} clones",
+      "updatedAt": "Updated {{date}}"
+    },
     "hero": {
       "badge": "Explore Mandalas",
       "titleBefore": "Discover goals and ",
