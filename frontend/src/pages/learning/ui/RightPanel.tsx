@@ -138,6 +138,9 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
           activeTab !== 'notes' && 'hidden'
         )}
       >
+        <p className="mb-3 text-[12px] leading-relaxed text-muted-foreground/60">
+          {t('learning.noteHint')}
+        </p>
         {(noteLoaded || !currentCard?.id) && (
           <PanelNoteEditor
             initialContent={noteContent}
