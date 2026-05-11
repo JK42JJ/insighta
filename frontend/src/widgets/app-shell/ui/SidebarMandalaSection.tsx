@@ -47,6 +47,14 @@ export function SidebarMandalaSection({
   const { t } = useTranslation();
   const { data: listData, isLoading, isError, error, refetch } = useMandalaList();
 
+  // Local optimistic mask. Rows added here are hidden from render regardless
+  // of cache state. This is a belt-and-suspenders fallback because the
+  // hook-level setQueryData + inline invalidate/refetch did not visibly clear
+  // the deleted row for the user — the row stays until manual refresh, so
+  // the Tanstack cache update must be getting masked by something we can't
+  // pin down from static inspection. A local Set bypasses cache entirely.
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+
   const switchMandala = useSwitchMandala();
 
   const switchTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -108,20 +116,26 @@ export function SidebarMandalaSection({
     }
   }, [mandalas, lastOptimisticTitle, setLastOptimisticTitle]);
 
-  // After optimistic delete: if the deleted mandala was the currently selected
-  // one, pick the next entry in the createdAt-desc sorted list (fall back to
-  // previous when at the tail). Defined BEFORE the early returns below so the
-  // hook order stays stable across loading / error / collapsed / loaded
-  // states — React Hooks Rules prohibit conditional hook invocation.
+  // After optimistic delete: hide the row immediately via local state + (if
+  // the deleted mandala is the selected one) pick the next entry in the
+  // createdAt-desc sorted list as the new selection. Defined BEFORE the early
+  // returns below so hook order is stable.
   const handleAfterDelete = useCallback(
     (deletedId: string) => {
-      if (selectedMandalaId !== deletedId) return;
-      const sorted = [...mandalas].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      const idx = sorted.findIndex((m) => m.id === deletedId);
-      const next = sorted[idx + 1] ?? sorted[idx - 1] ?? null;
-      if (next) selectMandala(next.id);
+      // 1) Optimistic local hide — independent of cache.
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.add(deletedId);
+        return next;
+      });
+      // 2) Auto-select next if the deleted row was the selected one.
+      if (selectedMandalaId === deletedId) {
+        const sorted = [...mandalas]
+          .filter((m) => m.id !== deletedId)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const next = sorted[0] ?? null;
+        if (next) selectMandala(next.id);
+      }
     },
     [selectedMandalaId, mandalas, selectMandala]
   );
@@ -171,9 +185,9 @@ export function SidebarMandalaSection({
     );
   }
 
-  const sortedMandalas = [...mandalas].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  const sortedMandalas = [...mandalas]
+    .filter((m) => !deletingIds.has(m.id))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const getCenterLabel = (m: (typeof mandalas)[0]) => {
     const rootLevel = m.levels?.find((l: { depth: number }) => l.depth === 0);
