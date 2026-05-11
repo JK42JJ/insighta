@@ -9,6 +9,7 @@ import { CopilotChat } from '@copilotkit/react-ui';
 import '@copilotkit/react-ui/styles.css';
 import { toast } from 'sonner';
 import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
+import { useMandalaQuery } from '@/features/mandala';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
 import { apiClient } from '@/shared/lib/api-client';
