@@ -101,14 +101,21 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-1.5-flash'),
 
-  // Chatbot
-  CHATBOT_PROVIDER: z.enum(['gemini', 'openrouter', 'local']).default('openrouter'),
+  // Chatbot — CopilotKit runtime provider.
+  // 'qwen-runpod' routes through CopilotKit OpenAIAdapter against the
+  // OpenAI-compatible endpoint exposed by RunPod's worker-vllm
+  // (`<base>/openai/v1/chat/completions`). The model id sent in requests
+  // is `insighta-chatbot` (vLLM `--served-model-name`).
+  CHATBOT_PROVIDER: z.enum(['gemini', 'openrouter', 'local', 'qwen-runpod']).default('openrouter'),
   CHATBOT_MODEL: z.string().default('google/gemini-2.5-flash'),
   CHATBOT_LOCAL_URL: z.string().default('http://localhost:11434/v1'),
 
-  // Qwen-LoRA serving (chat-qwen.ts route)
+  // Qwen-LoRA serving — RunPod Serverless endpoint base URL.
+  // Accepts either the legacy runsync form (`.../<id>/runsync`) or the
+  // OpenAI-compatible form (`.../<id>/openai/v1`); the adapter normalises
+  // both to the OpenAI form at request time.
   QWEN_LORA_API_URL: z.string().optional(),
-  QWEN_LORA_MODEL: z.string().default('qwen3:30b-a3b'),
+  QWEN_LORA_MODEL: z.string().default('insighta-chatbot'),
   RUNPOD_API_KEY: z.string().optional(),
 
   // CORS — comma-separated origin allowlist (consumed by @fastify/cors AND by
@@ -265,18 +272,19 @@ export const config = {
 
   // Chatbot (CopilotKit runtime)
   chatbot: {
-    provider: env.CHATBOT_PROVIDER as 'gemini' | 'openrouter' | 'local',
+    provider: env.CHATBOT_PROVIDER,
     model: env.CHATBOT_MODEL,
     localUrl: env.CHATBOT_LOCAL_URL,
   },
 
-  // Qwen-LoRA serving (chat-qwen.ts route)
+  // Qwen-LoRA serving — consumed by CopilotKit OpenAIAdapter when provider
+  // is 'qwen-runpod'.
   qwenLora: {
     apiUrl: env.QWEN_LORA_API_URL,
     model: env.QWEN_LORA_MODEL,
   },
 
-  // RunPod Serverless — used when QWEN_LORA_API_URL contains 'runpod.ai'
+  // RunPod Serverless — Bearer token used when provider is 'qwen-runpod'.
   runpod: {
     apiKey: env.RUNPOD_API_KEY,
   },

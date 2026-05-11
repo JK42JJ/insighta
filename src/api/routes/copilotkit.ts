@@ -4,7 +4,18 @@ import { CopilotRuntime, OpenAIAdapter, copilotRuntimeNodeHttpEndpoint } from '@
 import OpenAI from 'openai';
 import { config } from '@/config/index';
 
-type ChatbotProvider = 'gemini' | 'openrouter' | 'local';
+type ChatbotProvider = 'gemini' | 'openrouter' | 'local' | 'qwen-runpod';
+
+// Normalise a RunPod endpoint URL to its OpenAI-compatible base.
+// Accepts:
+//   https://api.runpod.ai/v2/<id>/runsync     → .../v2/<id>/openai/v1
+//   https://api.runpod.ai/v2/<id>/openai/v1   → unchanged
+//   https://api.runpod.ai/v2/<id>             → .../v2/<id>/openai/v1
+function toRunpodOpenAiBase(raw: string): string {
+  const trimmed = raw.replace(/\/+$/, '');
+  if (trimmed.endsWith('/openai/v1')) return trimmed;
+  return trimmed.replace(/\/(?:runsync|run)$/, '') + '/openai/v1';
+}
 
 function createServiceAdapter(provider: ChatbotProvider, model?: string): OpenAIAdapter {
   switch (provider) {
@@ -26,6 +37,17 @@ function createServiceAdapter(provider: ChatbotProvider, model?: string): OpenAI
         }),
         model: model || config.ollama.generateModel,
       });
+
+    case 'qwen-runpod':
+      if (!config.qwenLora.apiUrl) throw new Error('QWEN_LORA_API_URL not set');
+      if (!config.runpod.apiKey) throw new Error('RUNPOD_API_KEY not set');
+      return new OpenAIAdapter({
+        openai: new OpenAI({
+          apiKey: config.runpod.apiKey,
+          baseURL: toRunpodOpenAiBase(config.qwenLora.apiUrl),
+        }),
+        model: model || config.qwenLora.model,
+      });
   }
 }
 
@@ -36,6 +58,8 @@ function getDefaultModel(provider: ChatbotProvider): string {
       return 'google/gemini-2.5-flash';
     case 'local':
       return config.ollama.generateModel;
+    case 'qwen-runpod':
+      return config.qwenLora.model;
   }
 }
 
@@ -58,14 +82,7 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
 
   server.removeAllListeners('request');
   server.on('request', (req, res) => {
-    // CP447 — exempt /api/v1/chat/qwen so the qwen-lora route in
-    // chat-qwen.ts (Fastify) handles it instead of being swallowed by
-    // the CopilotKit GraphQL endpoint.
-    if (
-      req.url?.startsWith('/api/v1/chat') &&
-      !req.url?.startsWith('/api/v1/chat/config') &&
-      !req.url?.startsWith('/api/v1/chat/qwen')
-    ) {
+    if (req.url?.startsWith('/api/v1/chat') && !req.url?.startsWith('/api/v1/chat/config')) {
       void yoga(req, res);
       return;
     }
