@@ -1667,7 +1667,7 @@
     "feedbackSaved": "피드백 저장됨",
     "noteNotReady": "노트가 아직 생성되지 않았어요",
     "chatDisclaimer": "챗봇은 실수할 수 있습니다. 답변을 다시 확인하세요.",
-    "noteHint": "영상에 대한 메모를 작성할 수 있습니다.\n'/' 메뉴를 통해 추가 기능을 사용할 수 있습니다.",
+    "noteHint": "영상에 대한 메모를 작성하거나 '/' 를 입력해 명령어를 사용할 수 있습니다.",
     "suggestSummarize": "영상 요약",
     "suggestSummarizeMsg": "이 영상의 핵심 내용을 타임스탬프와 함께 요약해줘.",
     "suggestRelated": "관련 콘텐츠 추천",

@@ -138,7 +138,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
           activeTab !== 'notes' && 'hidden'
         )}
       >
-        <p className="mb-3 whitespace-pre-line text-[14px] leading-relaxed text-muted-foreground/60 group-focus-within:hidden">
+        <p className="mb-3 whitespace-pre-line text-[14px] leading-relaxed text-muted-foreground/60 group-focus-within:hidden group-has-[.ProseMirror>p:first-child:not(.is-editor-empty)]:hidden">
           {t('learning.noteHint')}
         </p>
         {(noteLoaded || !currentCard?.id) && (

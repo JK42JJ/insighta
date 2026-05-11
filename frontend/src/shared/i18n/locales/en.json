@@ -1666,7 +1666,7 @@
     "feedbackSaved": "Feedback saved",
     "noteNotReady": "Note hasn't been generated yet",
     "chatDisclaimer": "Chatbot can make mistakes. Please double-check responses.",
-    "noteHint": "Take notes about this video.\nType '/' to access additional commands.",
+    "noteHint": "Take notes about this video, or type '/' for additional commands.",
     "suggestSummarize": "Summarize the video",
     "suggestSummarizeMsg": "Summarize this video with key points and timestamps.",
     "suggestRelated": "Recommend related content",
