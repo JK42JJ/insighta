@@ -195,7 +195,7 @@ export function PanelNoteEditor({
           // Root: no outline, no border, caret indigo
           '[&_.ProseMirror]:min-h-[200px] [&_.ProseMirror]:outline-none [&_.ProseMirror]:ring-0 [&_.ProseMirror]:ring-offset-0 [&_.ProseMirror]:caret-[#818cf8]',
           // Body text: 14px, line-height 1.72, slight transparency
-          '[&_.ProseMirror]:text-[14px] [&_.ProseMirror]:leading-[1.72] [&_.ProseMirror]:text-[rgba(237,237,240,0.88)]',
+          '[&_.ProseMirror]:text-[14px] [&_.ProseMirror]:leading-[1.72] [&_.ProseMirror]:text-foreground',
           // Headings
           '[&_.ProseMirror_h2]:text-[16px] [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:tracking-[-0.2px] [&_.ProseMirror_h2]:mt-[22px] [&_.ProseMirror_h2]:mb-1 [&_.ProseMirror_h2]:text-[#ededf0]',
           '[&_.ProseMirror_h2:first-child]:mt-0',
