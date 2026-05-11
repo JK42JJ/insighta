@@ -41,6 +41,11 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
   const [richNote, setRichNote] = useState<TiptapDoc | null>(null);
   const [noteLoaded, setNoteLoaded] = useState(false);
   const prevCardIdRef = useRef<string | null>(null);
+  const noteWrapperRef = useRef<HTMLDivElement>(null);
+
+  const focusNoteEditor = useCallback(() => {
+    noteWrapperRef.current?.querySelector<HTMLElement>('.ProseMirror')?.focus();
+  }, []);
 
   useEffect(() => {
     if (!currentCard?.id || prevCardIdRef.current === currentCard.id) return;
@@ -133,12 +138,16 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
       </div>
 
       <div
+        ref={noteWrapperRef}
         className={cn(
           'group flex flex-1 flex-col overflow-y-auto scrollbar-pro pl-0 pr-4 py-3.5',
           activeTab !== 'notes' && 'hidden'
         )}
       >
-        <p className="mb-3 whitespace-pre-line text-[14px] leading-relaxed text-muted-foreground/60 group-focus-within:hidden group-has-[.ProseMirror>p:first-child:not(.is-editor-empty)]:hidden">
+        <p
+          onClick={focusNoteEditor}
+          className="mb-3 cursor-text whitespace-pre-line text-[14px] leading-relaxed text-muted-foreground/60 group-focus-within:hidden group-has-[.ProseMirror>p:first-child:not(.is-editor-empty)]:hidden"
+        >
           {t('learning.noteHint')}
         </p>
         {(noteLoaded || !currentCard?.id) && (
