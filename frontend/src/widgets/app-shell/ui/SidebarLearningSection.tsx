@@ -194,7 +194,7 @@ export function SidebarLearningSection({
               </button>
 
               {isExpanded && bookChapter && (
-                <div className="ml-4 pl-3 pt-0.5 border-l border-sidebar-foreground/10">
+                <div className="ml-9 pt-0.5">
                   <BookChapterPreview
                     chapter={bookChapter}
                     mandalaId={mandalaId}
@@ -260,13 +260,14 @@ function BookChapterPreview({
               }
             }}
             className={cn(
-              'cursor-pointer rounded-[4px] px-2 py-1.5 leading-[1.5] transition-colors',
-              // Obsidian #17 fact (사용자 명시): active = 글씨 톤 변화만
-              // (보라 #818cf8), bg 변화 없음. font-size 등은 사용자 명시 없음 →
-              // 직전 commit (09522e3) 상태 유지.
+              'cursor-pointer pl-2 py-1.5 leading-[1.5] border-l-2 transition-colors',
+              // 사용자 명시 사실 (스샷 #18/#19 + 직전 메시지):
+              // - L2 에 쉐이드(bg) 없음, 글씨로만 하일라이트
+              // - Active = 좌측 라인도 보라 + 글씨 보라
+              // - Hover = 라인 진한 회색 + 글씨 진해짐
               isActiveSection
-                ? 'text-[14px] font-medium text-[#818cf8]'
-                : 'text-[13px] text-sidebar-foreground/80 hover:text-sidebar-foreground'
+                ? 'border-[#818cf8] text-[14px] font-medium text-[#818cf8]'
+                : 'border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/80 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
             )}
           >
             {sec.title}
