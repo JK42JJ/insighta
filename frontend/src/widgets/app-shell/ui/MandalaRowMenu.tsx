@@ -11,9 +11,12 @@
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { MoreHorizontal, Share2, Archive, Trash2, Loader2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDeleteMandala } from '@/features/mandala';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/shared/config/query-client';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,15 +46,32 @@ interface MandalaRowMenuProps {
 
 export function MandalaRowMenu({ mandalaId, isLastMandala, onAfterDelete }: MandalaRowMenuProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const deleteMutation = useDeleteMandala();
 
   const handleConfirmDelete = () => {
-    // optimistic — UI removes the row in onMutate before the request resolves
-    deleteMutation.mutate(mandalaId);
+    // Close the confirm dialog immediately for snappy UX. Run the next-mandala
+    // auto-select BEFORE the mutate call so subsequent re-renders see the new
+    // selectedMandalaId (the deleted row would otherwise stay highlighted while
+    // the optimistic cache update is in flight).
     setDeleteOpen(false);
     onAfterDelete?.(mandalaId);
+    deleteMutation.mutate(mandalaId, {
+      onSuccess: () => {
+        // Force a list refetch on top of the hook-level invalidate (defensive
+        // against placeholderData / keepPreviousData masking the optimistic
+        // filter when invalidate runs).
+        queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
+        toast.success(t('sidebar.mandalaActions.deleteSuccess', '만다라가 삭제됐어요'));
+      },
+      onError: () => {
+        toast.error(
+          t('sidebar.mandalaActions.deleteError', '삭제에 실패했어요. 다시 시도해주세요.')
+        );
+      },
+    });
   };
 
   return (

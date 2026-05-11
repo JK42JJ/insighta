@@ -1190,6 +1190,8 @@
       "delete": "Delete",
       "comingSoon": "Coming soon",
       "lastMandalaTooltip": "Cannot delete the last mandala",
+      "deleteSuccess": "Mandala deleted",
+      "deleteError": "Couldn't delete the mandala. Please try again.",
       "deleteConfirm": {
         "title": "Delete this mandala?",
         "description": "This mandala and all of its cards will be deleted. This action cannot be undone.",
