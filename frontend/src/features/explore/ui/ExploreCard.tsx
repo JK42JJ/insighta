@@ -31,7 +31,7 @@ export function ExploreCard({
   isNew,
   onClick,
 }: Props) {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const ds = domain ? DOMAIN_STYLES[domain] : null;
 
   return (
