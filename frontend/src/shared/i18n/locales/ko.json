@@ -1192,7 +1192,7 @@
       "comingSoon": "준비중",
       "lastMandalaTooltip": "마지막 만다라는 삭제할 수 없습니다",
       "deleteSuccess": "만다라가 삭제됐어요",
-      "deleteError": "삭제에 실패했어요. 다시 시도해주세요.",
+      "deleteError": "삭제가 완료되지 않았어요. 잠시 후 다시 시도해주세요.",
       "deleteConfirm": {
         "title": "만다라를 삭제하시겠습니까?",
         "description": "이 만다라와 안에 담긴 카드가 모두 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",

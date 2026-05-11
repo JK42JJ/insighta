@@ -156,7 +156,10 @@ export function SidebarMandalaSection({
             return next;
           });
           toast.error(
-            t('sidebar.mandalaActions.deleteError', '삭제에 실패했어요. 다시 시도해주세요.')
+            t(
+              'sidebar.mandalaActions.deleteError',
+              '삭제가 완료되지 않았어요. 잠시 후 다시 시도해주세요.'
+            )
           );
         },
       });
