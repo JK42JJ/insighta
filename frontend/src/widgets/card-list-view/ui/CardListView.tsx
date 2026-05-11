@@ -70,6 +70,8 @@ interface CardListViewProps {
   cards: InsightCard[];
   isLoading?: boolean;
   title: string;
+  /** Render title as a shimmer placeholder while mandala detail query is loading. */
+  titleLoading?: boolean;
   viewMode: ViewMode;
   listPanelRatio: number;
   mandalaId?: string | null;
@@ -128,6 +130,7 @@ export function CardListView({
   cards,
   isLoading,
   title,
+  titleLoading,
   viewMode,
   listPanelRatio,
   mandalaId,
@@ -368,6 +371,7 @@ export function CardListView({
   const contextHeaderElement = (
     <ContextHeader
       title={title}
+      titleLoading={titleLoading}
       totalCardCount={effectiveCards.length}
       viewMode={effectiveViewMode}
       onViewModeChange={onViewModeChange}

@@ -175,6 +175,7 @@ export function Sidebar({
                 centerLabel={minimapData.centerLabel}
                 selectedCellIndex={minimapData.selectedCellIndex}
                 domain={minimapData.domain ?? null}
+                isLoading={minimapData.isLoading}
                 onCellClick={minimapData.onCellClick}
                 onExternalUrlDrop={minimapData.onExternalUrlDrop}
                 onSectorNamesChange={

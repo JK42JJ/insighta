@@ -5,6 +5,7 @@ import { cn } from '@/shared/lib/utils';
 import { useMandalaList, useSwitchMandala } from '@/features/mandala';
 import { useMandalaStore } from '@/stores/mandalaStore';
 import type { InsightCard } from '@/entities/card/model/types';
+import { MandalaRowMenu } from './MandalaRowMenu';
 
 export interface MinimapData {
   cardsByCell: Record<number, InsightCard[]>;
@@ -18,6 +19,9 @@ export interface MinimapData {
   domain?: import('@/shared/config/domain-colors').MandalaDomain | null;
   onCellClick: (cellIndex: number, subject: string) => void;
   mandalaId: string | null;
+  /** True while mandala detail query is loading and labels are empty —
+   * SidebarHeatMinimap renders shimmer placeholders instead of "Sector N". */
+  isLoading?: boolean;
   onExternalUrlDrop?: (cellIndex: number, url: string) => void;
 }
 
@@ -104,6 +108,24 @@ export function SidebarMandalaSection({
     }
   }, [mandalas, lastOptimisticTitle, setLastOptimisticTitle]);
 
+  // After optimistic delete: if the deleted mandala was the currently selected
+  // one, pick the next entry in the createdAt-desc sorted list (fall back to
+  // previous when at the tail). Defined BEFORE the early returns below so the
+  // hook order stays stable across loading / error / collapsed / loaded
+  // states — React Hooks Rules prohibit conditional hook invocation.
+  const handleAfterDelete = useCallback(
+    (deletedId: string) => {
+      if (selectedMandalaId !== deletedId) return;
+      const sorted = [...mandalas].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const idx = sorted.findIndex((m) => m.id === deletedId);
+      const next = sorted[idx + 1] ?? sorted[idx - 1] ?? null;
+      if (next) selectMandala(next.id);
+    },
+    [selectedMandalaId, mandalas, selectMandala]
+  );
+
   if (collapsed) {
     return null;
   }
@@ -183,30 +205,45 @@ export function SidebarMandalaSection({
             const isSelected = mandala.id === selectedMandalaId;
             const newlySyncedCount = newlySyncedCountByMandala?.[mandala.id] ?? 0;
             return (
-              <button
+              <div
                 key={mandala.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => handleMandalaSelect(mandala.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleMandalaSelect(mandala.id);
+                  }
+                }}
                 className={cn(
-                  'w-full flex items-center gap-2 px-1.5 py-1.5 rounded-md text-[13px] text-left transition-colors duration-150',
+                  'group flex items-center gap-1 rounded-md pl-1.5 pr-1 py-1.5 text-[13px] cursor-pointer transition-colors duration-150',
                   'hover:bg-sidebar-accent',
                   isSelected
                     ? 'font-semibold text-sidebar-primary'
                     : 'font-normal text-sidebar-foreground/75'
                 )}
               >
-                <span className="truncate flex-1">{getCenterLabel(mandala)}</span>
-                {newlySyncedCount > 0 && (
-                  <span
-                    className="shrink-0 flex items-center gap-1 text-[11px] text-primary font-medium"
-                    aria-label={t('sidebar.newlySyncedAria', '{{count}} newly synced', {
-                      count: newlySyncedCount,
-                    })}
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" aria-hidden="true" />
-                    {newlySyncedCount}
-                  </span>
-                )}
-              </button>
+                <span className="flex flex-1 min-w-0 items-center gap-2 text-left">
+                  <span className="truncate flex-1">{getCenterLabel(mandala)}</span>
+                  {newlySyncedCount > 0 && (
+                    <span
+                      className="shrink-0 flex items-center gap-1 text-[11px] text-primary font-medium"
+                      aria-label={t('sidebar.newlySyncedAria', '{{count}} newly synced', {
+                        count: newlySyncedCount,
+                      })}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary" aria-hidden="true" />
+                      {newlySyncedCount}
+                    </span>
+                  )}
+                </span>
+                <MandalaRowMenu
+                  mandalaId={mandala.id}
+                  isLastMandala={sortedMandalas.length <= 1}
+                  onAfterDelete={handleAfterDelete}
+                />
+              </div>
             );
           })}
         </div>

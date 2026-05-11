@@ -1182,7 +1182,21 @@
     "myMandalas": "Mandala List",
     "newMandalaCta": "New Mandala",
     "more": "More",
-    "upgrade": "Upgrade"
+    "upgrade": "Upgrade",
+    "mandalaActions": {
+      "openMenu": "Open menu",
+      "share": "Share",
+      "archive": "Archive",
+      "delete": "Delete",
+      "comingSoon": "Coming soon",
+      "lastMandalaTooltip": "Cannot delete the last mandala",
+      "deleteConfirm": {
+        "title": "Delete this mandala?",
+        "description": "This mandala and all of its cards will be deleted. This action cannot be undone.",
+        "confirm": "Delete",
+        "cancel": "Cancel"
+      }
+    }
   },
   "footer": {
     "brand": "Insighta",

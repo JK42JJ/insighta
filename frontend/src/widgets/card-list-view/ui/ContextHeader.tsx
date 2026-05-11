@@ -14,6 +14,8 @@ export type SortMode = 'latest' | 'oldest' | 'title-asc' | 'title-desc';
 
 interface ContextHeaderProps {
   title: string;
+  /** Render title + initial badge as shimmer while mandala detail query is loading. */
+  titleLoading?: boolean;
   totalCardCount: number;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
@@ -35,6 +37,7 @@ const SORT_OPTIONS: { value: SortMode; labelKey: string }[] = [
 
 export function ContextHeader({
   title,
+  titleLoading,
   totalCardCount,
   viewMode,
   onViewModeChange,
@@ -53,11 +56,22 @@ export function ContextHeader({
     <div data-card-chrome className="flex items-center justify-between mb-1">
       {/* Left: sector badge + title + count + selection */}
       <div className="flex items-center gap-2 min-w-0">
-        <div className="flex items-center justify-center w-6 h-6 rounded bg-primary/10 text-primary text-[11px] font-semibold shrink-0">
-          {titleInitial}
-        </div>
+        {titleLoading ? (
+          <div
+            className="w-6 h-6 rounded bg-foreground/[0.06] animate-pulse shrink-0"
+            aria-hidden="true"
+          />
+        ) : (
+          <div className="flex items-center justify-center w-6 h-6 rounded bg-primary/10 text-primary text-[11px] font-semibold shrink-0">
+            {titleInitial}
+          </div>
+        )}
 
-        <h3 className="text-lg font-semibold leading-tight truncate">{title}</h3>
+        {titleLoading ? (
+          <div className="h-5 w-32 rounded bg-foreground/[0.06] animate-pulse" aria-hidden="true" />
+        ) : (
+          <h3 className="text-lg font-semibold leading-tight truncate">{title}</h3>
+        )}
 
         <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
           {t('contextHeader.cardCount', '{{count}} cards', { count: totalCardCount })}

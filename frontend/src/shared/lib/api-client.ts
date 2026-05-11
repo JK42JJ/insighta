@@ -435,7 +435,10 @@ class ApiClient {
   // HTTP Request Wrapper
   // ========================================
 
-  private isRefreshing = false;
+  // Shared promise so concurrent 401s coalesce into a single refreshSession()
+  // call. Cleared via queueMicrotask after resolution so the next round of
+  // 401s can start a fresh refresh.
+  private refreshPromise: Promise<string | null> | null = null;
 
   private async request<T>(
     endpoint: string,
@@ -496,21 +499,30 @@ class ApiClient {
       console.log(`[apiClient] Response: ${response.status} ${endpoint}`);
     }
 
-    // On 401, try refreshing session once (skip if already refreshing)
-    if (response.status === 401 && !this.isRefreshing) {
-      this.isRefreshing = true;
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.refreshSession();
-        if (session?.access_token) {
-          this.accessToken = session.access_token;
-          (headers as Record<string, string>)['Authorization'] = `Bearer ${session.access_token}`;
-          const retryResponse = await fetch(url, { ...options, headers });
-          return this.handleResponse<T>(retryResponse);
-        }
-      } finally {
-        this.isRefreshing = false;
+    // On 401, refresh session and retry once. Concurrent 401s share the same
+    // refresh promise so we only call refreshSession() once even when many
+    // queries fire in parallel (e.g., mandala list + detail + cards on mount).
+    if (response.status === 401) {
+      if (!this.refreshPromise) {
+        this.refreshPromise = supabase.auth
+          .refreshSession()
+          .then(({ data: { session } }) => {
+            const token = session?.access_token ?? null;
+            if (token) this.accessToken = token;
+            return token;
+          })
+          .catch(() => null)
+          .finally(() => {
+            queueMicrotask(() => {
+              this.refreshPromise = null;
+            });
+          });
+      }
+      const newToken = await this.refreshPromise;
+      if (newToken) {
+        (headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
+        const retryResponse = await fetch(url, { ...options, headers });
+        return this.handleResponse<T>(retryResponse);
       }
     }
 

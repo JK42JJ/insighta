@@ -18,6 +18,9 @@ interface SidebarHeatMinimapProps {
   selectedCellIndex: number | null;
   /** Mandala domain — center cell color matches DOMAIN_STYLES (wizard/explore look&feel parity). */
   domain?: MandalaDomain | null;
+  /** True while mandala detail query is loading and labels are empty —
+   * each cell renders an inline animate-pulse bar instead of "Sector N". */
+  isLoading?: boolean;
   onCellClick: (cellIndex: number, subject: string) => void;
   onSectorNamesChange?: (centerGoal: string, subjects: string[]) => void;
   onExternalUrlDrop?: (cellIndex: number, url: string) => void;
@@ -58,6 +61,7 @@ export function SidebarHeatMinimap({
   centerLabel,
   selectedCellIndex,
   domain,
+  isLoading = false,
   onCellClick,
   onSectorNamesChange,
   onExternalUrlDrop,
@@ -116,50 +120,6 @@ export function SidebarHeatMinimap({
 
   return (
     <div className="flex-shrink-0">
-      {/* Header with edit toggle + # toggle */}
-      <div className="flex items-center justify-end px-3 pb-1">
-        <div className="flex items-center gap-1">
-          {/* Edit toggle */}
-          {onSectorNamesChange && (
-            <button
-              onClick={isEditing ? saveAndExit : enterEditMode}
-              className={cn(
-                'p-0.5 rounded transition-colors',
-                isEditing
-                  ? 'text-primary hover:text-primary/80'
-                  : 'text-sidebar-foreground/60 hover:text-sidebar-foreground/70'
-              )}
-              aria-label={t('minimap.editSectors')}
-              title={t('minimap.editSectors')}
-            >
-              {isEditing ? <Check className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
-            </button>
-          )}
-          {/* # toggle */}
-          {!isEditing && (
-            <button
-              onClick={handleToggle}
-              className={cn(
-                'relative w-7 h-[15px] rounded-full transition-colors',
-                showNumbers ? 'bg-primary' : 'bg-muted'
-              )}
-              aria-label={t('minimap.showNumbers')}
-              title={t('minimap.showNumbers')}
-            >
-              <span className="absolute text-[8px] font-bold text-sidebar-foreground/50 -left-3 top-0.5">
-                #
-              </span>
-              <div
-                className={cn(
-                  'absolute top-[2px] w-[11px] h-[11px] rounded-full bg-sidebar-background transition-[left]',
-                  showNumbers ? 'left-[14px]' : 'left-[2px]'
-                )}
-              />
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* 3x3 Heat Grid */}
       <div className="grid grid-cols-3 gap-1 px-3 pb-2">
         {Array.from({ length: 9 }).map((_, gridIndex) => {
@@ -215,6 +175,7 @@ export function SidebarHeatMinimap({
               subjectIndex={subjectIndex}
               label={label || placeholder}
               isPlaceholder={!label}
+              isLoading={isLoading && !label}
               count={count}
               opacity={opacity}
               isCenter={isCenter}
@@ -329,6 +290,8 @@ interface HeatCellProps {
   subjectIndex: number;
   label: string;
   isPlaceholder: boolean;
+  /** Render an inline animate-pulse bar in place of the label text. */
+  isLoading: boolean;
   count: number;
   opacity: number;
   isCenter: boolean;
@@ -344,6 +307,7 @@ function HeatCell({
   subjectIndex,
   label,
   isPlaceholder,
+  isLoading,
   count,
   opacity: _opacity,
   isCenter,
@@ -441,21 +405,31 @@ function HeatCell({
           isCenter && domain && DOMAIN_STYLES[domain] ? DOMAIN_STYLES[domain].color : undefined,
       }}
     >
-      <span
-        className={cn(
-          'text-[9px] leading-tight text-center line-clamp-2 break-words px-0.5',
-          isPlaceholder && 'italic',
-          isCenter
-            ? 'font-medium text-[10px]'
-            : isPlaceholder
-              ? 'text-sidebar-foreground/60'
-              : isSelected
-                ? 'text-primary font-medium'
-                : 'text-sidebar-foreground/70'
-        )}
-      >
-        {label}
-      </span>
+      {isLoading ? (
+        <div
+          className={cn(
+            'animate-pulse rounded bg-sidebar-foreground/15',
+            isCenter ? 'h-2.5 w-10' : 'h-2 w-8'
+          )}
+          aria-hidden="true"
+        />
+      ) : (
+        <span
+          className={cn(
+            'text-[9px] leading-tight text-center line-clamp-2 break-words px-0.5',
+            isPlaceholder && 'italic',
+            isCenter
+              ? 'font-medium text-[10px]'
+              : isPlaceholder
+                ? 'text-sidebar-foreground/60'
+                : isSelected
+                  ? 'text-primary font-medium'
+                  : 'text-sidebar-foreground/70'
+          )}
+        >
+          {label}
+        </span>
+      )}
       {/* 동영상 개수 badge — 우측하단 원형 (count > 0 일 때만, 외곽 셀 한정) */}
       {!isCenter && count > 0 && (
         <span

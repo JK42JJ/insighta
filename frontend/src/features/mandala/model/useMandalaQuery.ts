@@ -52,6 +52,7 @@ export function useMandalaQuery(mandalaId?: string | null) {
     enabled: isLoggedIn && isTokenReady,
     staleTime: 5 * 60_000,
     gcTime: 10 * 60_000,
+    placeholderData: keepPreviousData,
   });
 
   const activeQueryKey = mandalaId ? queryKeys.mandala.detail(mandalaId) : queryKeys.mandala.all;

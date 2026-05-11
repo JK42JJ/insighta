@@ -11,6 +11,11 @@ import apiClient from '@/shared/lib/api-client';
 
 export type SummaryRating = 1 | -1 | null;
 
+// Mirror of api-client.ts normalization: prod sets VITE_API_URL="/api",
+// so naively concatenating "/api/v1/..." doubles the prefix.
+const VITE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE_URL = VITE_API_URL.endsWith('/api') ? VITE_API_URL.slice(0, -4) : VITE_API_URL;
+
 // Query key
 export const summaryRatingsKey = ['summary-ratings'] as const;
 
@@ -29,15 +34,12 @@ export function useSummaryRatings() {
     queryKey: summaryRatingsKey,
     queryFn: async (): Promise<Record<string, number>> => {
       await apiClient.tokenReady;
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/v1/ontology/summary-ratings`,
-        {
-          headers: {
-            Authorization: `Bearer ${apiClient.getAccessToken()}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const res = await fetch(`${API_BASE_URL}/api/v1/ontology/summary-ratings`, {
+        headers: {
+          Authorization: `Bearer ${apiClient.getAccessToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
       if (!res.ok) throw new Error('Failed to fetch summary ratings');
       const json: RatingsResponse = await res.json();
       return json.data.ratings;
@@ -56,17 +58,14 @@ export function useRateSummary() {
   return useMutation({
     mutationFn: async ({ cardId, rating }: { cardId: string; rating: SummaryRating }) => {
       await apiClient.tokenReady;
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/v1/ontology/rate-summary`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiClient.getAccessToken()}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ card_id: cardId, rating }),
-        }
-      );
+      const res = await fetch(`${API_BASE_URL}/api/v1/ontology/rate-summary`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiClient.getAccessToken()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ card_id: cardId, rating }),
+      });
       if (!res.ok) throw new Error('Failed to rate summary');
       return res.json();
     },

@@ -153,9 +153,16 @@ function AuthenticatedApp() {
   const isViewingPending = !!pendingMandala && effectiveMandalaId === pendingMandala.tempId;
 
   // 3. Mandala data from DB (by selected mandala ID)
-  const { mandalaLevels: queryMandalaLevels } = useMandalaQuery(
+  const { mandalaLevels: queryMandalaLevels, isLoading: mandalaQueryLoading } = useMandalaQuery(
     isViewingPending ? null : effectiveMandalaId
   );
+
+  // Suppress "Sector 1..8" + empty-title placeholders while the detail query
+  // is still inflight AND we have no useful subjects yet. Treated as
+  // structure-loading; sidebar minimap + ContextHeader render shimmer instead.
+  const mandalaStructureLoading =
+    mandalaQueryLoading &&
+    (!queryMandalaLevels?.root?.subjects?.length || !queryMandalaLevels?.root?.centerGoal);
 
   const mandalaLevels = useMemo(() => {
     if (!isViewingPending || !pendingMandala) return queryMandalaLevels;
@@ -756,6 +763,7 @@ function AuthenticatedApp() {
       domain: currentDomain,
       onCellClick: navigation.handleCellClick,
       mandalaId: selectedMandalaId,
+      isLoading: mandalaStructureLoading,
       onExternalUrlDrop: (cellIndex: number, url: string) => {
         cards.handleCardDrop(cellIndex, url);
       },
@@ -768,6 +776,7 @@ function AuthenticatedApp() {
     navigation.selectedCellIndex,
     selectedMandalaId,
     mandalaListData,
+    mandalaStructureLoading,
     setMinimapData,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -924,6 +933,7 @@ function AuthenticatedApp() {
                           ? t('search.results', 'Search Results')
                           : cards.displayTitle
                       }
+                      titleLoading={!search.isSearchActive && mandalaStructureLoading}
                       viewMode={layout.viewMode}
                       listPanelRatio={layout.listPanelRatio}
                       mandalaId={effectiveMandalaId}
