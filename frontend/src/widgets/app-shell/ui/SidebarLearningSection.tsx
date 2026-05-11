@@ -203,7 +203,7 @@ export function SidebarLearningSection({
                   )}
                 />
                 <span className="flex-1 truncate text-[13px] font-medium tracking-[-0.01em] text-sidebar-foreground/85">
-                  {idx + 1}. {goal}
+                  {goal}
                 </span>
                 {(sectionCount > 0 || cellCards.length > 0) && (
                   <span className="shrink-0 text-[11px] tabular-nums text-sidebar-foreground/35">
@@ -288,14 +288,6 @@ function BookChapterPreview({
                 : 'text-[13px] text-sidebar-foreground/65 hover:bg-sidebar-accent/15 hover:text-sidebar-foreground'
             )}
           >
-            <span
-              className={cn(
-                'mr-1.5 tabular-nums',
-                isActiveSection ? 'text-[#818cf8]/70' : 'text-sidebar-foreground/35'
-              )}
-            >
-              {chapter.ch + 1}.{sIdx + 1}
-            </span>
             {sec.title}
           </li>
         );
