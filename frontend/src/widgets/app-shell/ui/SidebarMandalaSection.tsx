@@ -121,6 +121,24 @@ export function SidebarMandalaSection({
     }
   }, [mandalas, lastOptimisticTitle, setLastOptimisticTitle]);
 
+  // Safety net: if the currently selected mandala is in the deletingIds mask
+  // (i.e. user just deleted it), force-select the next visible mandala. This
+  // guards against any path where the immediate selectMandala call inside
+  // handleConfirmDelete didn't land (closure race / store-sync timing) — the
+  // main view + minimap would otherwise stay stuck on the deleted detail.
+  useEffect(() => {
+    if (!selectedMandalaId || !deletingIds.has(selectedMandalaId)) return;
+    const sorted = [...mandalas].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    const deletedIdx = sorted.findIndex((m) => m.id === selectedMandalaId);
+    const next = sorted
+      .slice(deletedIdx + 1)
+      .concat([...sorted.slice(0, deletedIdx)].reverse())
+      .find((m) => !deletingIds.has(m.id));
+    if (next) selectMandala(next.id);
+  }, [selectedMandalaId, deletingIds, mandalas, selectMandala]);
+
   // Confirm-delete handler hosted in the parent so the useDeleteMandala
   // observer + its inline { onSuccess/onError } callbacks survive the row
   // unmount. Defined BEFORE the early returns below so hook order is stable.
@@ -132,17 +150,20 @@ export function SidebarMandalaSection({
         next.add(deletedId);
         return next;
       });
-      // 2) Auto-select next if the deleted row was the selected one.
-      if (selectedMandalaId === deletedId) {
-        const sorted = [...mandalas]
-          .filter((m) => m.id !== deletedId)
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        const next = sorted[0] ?? null;
+      // 2) Auto-select the row immediately following the deleted one in the
+      //    visible (createdAt-desc) order. Falls back to the previous row when
+      //    the deleted item was at the tail. Reads the store directly so the
+      //    comparison can't go stale through any closure/render race.
+      const currentSelected = useMandalaStore.getState().selectedMandalaId;
+      if (currentSelected === deletedId) {
+        const sorted = [...mandalas].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        const deletedIdx = sorted.findIndex((m) => m.id === deletedId);
+        const next = sorted[deletedIdx + 1] ?? sorted[deletedIdx - 1] ?? null;
         if (next) selectMandala(next.id);
       }
-      // 3) Fire the BE delete + feedback from a stable host (this component
-      //    is not in the mapping closure, so its mutation observer stays
-      //    alive through the row unmount).
+      // 3) Fire the BE delete + feedback from a stable host.
       deleteMandala.mutate(deletedId, {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
@@ -164,7 +185,7 @@ export function SidebarMandalaSection({
         },
       });
     },
-    [selectedMandalaId, mandalas, selectMandala, deleteMandala, queryClient, t]
+    [mandalas, selectMandala, deleteMandala, queryClient, t]
   );
 
   if (collapsed) {
