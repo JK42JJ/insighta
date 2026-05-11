@@ -2,12 +2,16 @@ import { useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { Button } from '@/shared/ui/button';
 import { apiClient } from '@/shared/lib/api-client';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { useExploreMandalas, useExploreCreateFromTemplate } from '@/features/explore';
 import { useExploreFilters } from '@/features/explore';
+import { useDeleteMandala } from '@/features/mandala';
 import { useMandalaStore } from '@/stores/mandalaStore';
+import { queryKeys } from '@/shared/config/query-client';
 import { ExploreSearchBar } from '@/features/explore/ui/ExploreSearchBar';
 import { DomainChips } from '@/features/explore/ui/DomainChips';
 import { ExploreToolbar } from '@/features/explore/ui/ExploreToolbar';
@@ -50,6 +54,12 @@ export default function ExplorePage() {
   // so a 50–100ms double/triple-click can fire create-from-template 2-4 times.
   // Ref check is synchronous and beats the render race. Reset in onSettled.
   const isStartingRef = useRef(false);
+  // Optimistic local mask for delete (CP451 사이드바 패턴 — cache propagation
+  // race 회피, parent-host mutation, fail rollback). Hidden 즉시, BE 성공 시
+  // 유지 + cache invalidate, 실패 시 mask 해제.
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
+  const deleteMandala = useDeleteMandala();
 
   const handleCardClick = useCallback(
     async (mandala: ExploreMandala) => {
@@ -137,11 +147,36 @@ export default function ExplorePage() {
     [navigate]
   );
 
-  // 인라인 [삭제] = Sub-PR 2C 에서 mutation + cascade 처리. 본 PR 은 placeholder
-  // (사용자에게 곧 wire 됨 안내). confirm/optimistic/toast 모두 2C 범위.
-  const handleDelete = useCallback(() => {
-    window.alert(t('explore.card.deletePending'));
-  }, [t]);
+  // 인라인 [삭제] — confirm → DELETE /api/v1/mandalas/:id → optimistic local
+  // mask + cache invalidate + toast. 실패 시 mask rollback + error toast.
+  // CP451 사이드바 패턴 (parent-host mutation host) 동일 적용.
+  const handleDelete = useCallback(
+    (mandalaId: string) => {
+      const ok = window.confirm(t('explore.card.deleteConfirm'));
+      if (!ok) return;
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.add(mandalaId);
+        return next;
+      });
+      deleteMandala.mutate(mandalaId, {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.explore.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.mandala.all });
+          toast.success(t('explore.card.deleteSuccess'));
+        },
+        onError: () => {
+          setDeletingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(mandalaId);
+            return next;
+          });
+          toast.error(t('explore.card.deleteError'));
+        },
+      });
+    },
+    [t, deleteMandala, queryClient]
+  );
 
   if (slug) return <PublicMandalaView slug={slug} />;
 
@@ -228,28 +263,30 @@ export default function ExplorePage() {
           <>
             {/* Explicit 3-col responsive grid (mockup v6: 3 / 2 / 1 at 900 / 600 breakpoints) */}
             <div className="grid grid-cols-3 max-[900px]:grid-cols-2 max-[600px]:grid-cols-1 gap-4">
-              {mandalas.map((m) => {
-                const isMine = !!currentUserId && m.userId === currentUserId;
-                return (
-                  <ExploreCard
-                    key={m.id}
-                    id={m.id}
-                    title={m.title}
-                    centerGoal={m.rootLevel?.centerGoal ?? m.title}
-                    centerLabel={m.rootLevel?.centerLabel ?? undefined}
-                    subjects={m.rootLevel?.subjects ?? []}
-                    subjectLabels={m.rootLevel?.subjectLabels}
-                    domain={m.domain as MandalaDomain | null}
-                    isTemplate={m.isTemplate}
-                    author={m.author}
-                    cloneCount={m.cloneCount}
-                    isMine={isMine}
-                    onClick={() => handleCardClick(m)}
-                    onEdit={isMine ? () => handleEdit(m.id) : undefined}
-                    onDelete={isMine ? handleDelete : undefined}
-                  />
-                );
-              })}
+              {mandalas
+                .filter((m) => !deletingIds.has(m.id))
+                .map((m) => {
+                  const isMine = !!currentUserId && m.userId === currentUserId;
+                  return (
+                    <ExploreCard
+                      key={m.id}
+                      id={m.id}
+                      title={m.title}
+                      centerGoal={m.rootLevel?.centerGoal ?? m.title}
+                      centerLabel={m.rootLevel?.centerLabel ?? undefined}
+                      subjects={m.rootLevel?.subjects ?? []}
+                      subjectLabels={m.rootLevel?.subjectLabels}
+                      domain={m.domain as MandalaDomain | null}
+                      isTemplate={m.isTemplate}
+                      author={m.author}
+                      cloneCount={m.cloneCount}
+                      isMine={isMine}
+                      onClick={() => handleCardClick(m)}
+                      onEdit={isMine ? () => handleEdit(m.id) : undefined}
+                      onDelete={isMine ? () => handleDelete(m.id) : undefined}
+                    />
+                  );
+                })}
             </div>
 
             {totalPages > 1 && (

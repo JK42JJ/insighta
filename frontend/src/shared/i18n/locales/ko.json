@@ -142,7 +142,9 @@
         "edit": "편집",
         "delete": "삭제"
       },
-      "deletePending": "삭제 기능은 곧 추가됩니다 (Sub-PR 2C)"
+      "deleteConfirm": "만다라를 영구 삭제합니다. 계속하시겠습니까?",
+      "deleteSuccess": "만다라가 삭제됐어요",
+      "deleteError": "삭제가 완료되지 않았어요. 잠시 후 다시 시도해주세요."
     },
     "time": {
       "today": "오늘",

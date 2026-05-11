@@ -142,7 +142,9 @@
         "edit": "Edit",
         "delete": "Delete"
       },
-      "deletePending": "Delete coming soon (Sub-PR 2C)"
+      "deleteConfirm": "This will permanently delete the mandala. Continue?",
+      "deleteSuccess": "Mandala deleted",
+      "deleteError": "Delete didn't complete. Please try again shortly."
     },
     "time": {
       "today": "today",
