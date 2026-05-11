@@ -1519,6 +1519,18 @@ class ApiClient {
     return this.request(`/mandalas/${mandalaId}/clone`, { method: 'POST' });
   }
 
+  async createMandalaFromTemplate(params: {
+    templateId: string;
+    skills: Record<string, boolean>;
+    focusTags?: string[];
+    targetLevel?: string;
+  }): Promise<{ mandalaId: string; title?: string }> {
+    return this.request(`/mandalas/create-from-template`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
   async subscribeMandala(mandalaId: string): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>(`/mandalas/${mandalaId}/subscribe`, {
       method: 'POST',

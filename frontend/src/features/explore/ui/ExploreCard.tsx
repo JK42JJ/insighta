@@ -129,7 +129,7 @@ export function ExploreCard({
         ].map((text, i) => (
           <div
             key={i}
-            className={`aspect-square flex items-center justify-center p-1 text-center leading-tight overflow-hidden ${
+            className={`aspect-square flex items-center justify-center p-1 text-center leading-tight overflow-hidden break-keep ${
               i === 4
                 ? 'explore-domain-center text-[11px] font-semibold rounded-sm'
                 : 'text-[10px] font-medium'

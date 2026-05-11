@@ -8,7 +8,11 @@ import { useAuth } from '@/features/auth/model/useAuth';
 import { LandingHeader } from '@/pages/landing/ui/components/LandingHeader';
 import { GradientBackground } from '@/pages/landing/ui/components/GradientBackground';
 import { FooterSection } from '@/pages/landing/ui/components/FooterSection';
-import { useExploreMandalas, useExploreClone } from '@/features/explore';
+import {
+  useExploreMandalas,
+  useExploreClone,
+  useExploreCreateFromTemplate,
+} from '@/features/explore';
 import { useExploreFilters } from '@/features/explore';
 import { ExploreHero } from '@/features/explore/ui/ExploreHero';
 import { ExploreSearchBar } from '@/features/explore/ui/ExploreSearchBar';
@@ -44,45 +48,58 @@ export default function ExplorePage() {
   const { filters, updateFilters } = useExploreFilters();
   const { data, isLoading } = useExploreMandalas(filters);
   const cloneMutation = useExploreClone();
+  const createFromTemplateMutation = useExploreCreateFromTemplate();
 
   const [modal, setModal] = useState<ModalState>(EMPTY_MODAL);
 
-  const handleCardClick = useCallback(async (mandala: ExploreMandala) => {
-    // Open modal with summary data first
-    setModal({
-      isOpen: true,
-      mandala,
-      rootLevel: mandala.rootLevel ?? { centerGoal: mandala.title, subjects: [] },
-      subLevels: [],
-      centerLabel: mandala.rootLevel?.centerLabel ?? undefined,
-      subLabels: mandala.rootLevel?.subjectLabels,
-    });
-
-    // Fetch full level data for 9×9 grid
-    if (mandala.shareSlug) {
-      try {
-        const result = await apiClient.getPublicMandala(mandala.shareSlug);
-        const levels = result.mandala.levels ?? [];
-        const root = levels.find((l) => l.depth === 0);
-        const subs = levels
-          .filter((l) => l.depth === 1)
-          .sort((a, b) => a.position - b.position)
-          .map((l) => ({ centerGoal: l.centerGoal, subjects: l.subjects }));
-
-        setModal((prev) => ({
-          ...prev,
-          rootLevel: root
-            ? { centerGoal: root.centerGoal, subjects: root.subjects }
-            : prev.rootLevel,
-          subLevels: subs,
-          centerLabel: root?.centerLabel ?? prev.centerLabel,
-          subLabels: (root?.subjectLabels?.length ?? 0) > 0 ? root!.subjectLabels : prev.subLabels,
-        }));
-      } catch {
-        // keep modal open with summary data
+  const handleCardClick = useCallback(
+    async (mandala: ExploreMandala) => {
+      // Logged-in: direct create-from-template (skill auto-run) + dashboard. Skip preview modal.
+      if (isLoggedIn) {
+        createFromTemplateMutation.mutate(mandala.id, {
+          onSuccess: (res) => navigate(`/mandalas/${res.mandalaId}`),
+        });
+        return;
       }
-    }
-  }, []);
+
+      // Visitor: open preview modal with summary data first.
+      setModal({
+        isOpen: true,
+        mandala,
+        rootLevel: mandala.rootLevel ?? { centerGoal: mandala.title, subjects: [] },
+        subLevels: [],
+        centerLabel: mandala.rootLevel?.centerLabel ?? undefined,
+        subLabels: mandala.rootLevel?.subjectLabels,
+      });
+
+      // Fetch full level data for 9×9 grid
+      if (mandala.shareSlug) {
+        try {
+          const result = await apiClient.getPublicMandala(mandala.shareSlug);
+          const levels = result.mandala.levels ?? [];
+          const root = levels.find((l) => l.depth === 0);
+          const subs = levels
+            .filter((l) => l.depth === 1)
+            .sort((a, b) => a.position - b.position)
+            .map((l) => ({ centerGoal: l.centerGoal, subjects: l.subjects }));
+
+          setModal((prev) => ({
+            ...prev,
+            rootLevel: root
+              ? { centerGoal: root.centerGoal, subjects: root.subjects }
+              : prev.rootLevel,
+            subLevels: subs,
+            centerLabel: root?.centerLabel ?? prev.centerLabel,
+            subLabels:
+              (root?.subjectLabels?.length ?? 0) > 0 ? root!.subjectLabels : prev.subLabels,
+          }));
+        } catch {
+          // keep modal open with summary data
+        }
+      }
+    },
+    [isLoggedIn, createFromTemplateMutation, navigate]
+  );
 
   const handleCloseModal = useCallback(() => setModal(EMPTY_MODAL), []);
 

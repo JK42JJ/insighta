@@ -42,3 +42,21 @@ export function useExploreClone() {
     },
   });
 }
+
+// Direct create-from-template path used by ExplorePage card click for logged-in
+// users. Triggers video-discover skill so cells get recommended videos auto-attached.
+export function useExploreCreateFromTemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (templateId: string) =>
+      apiClient.createMandalaFromTemplate({
+        templateId,
+        skills: { 'video-discover': true },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.explore.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.all });
+    },
+  });
+}

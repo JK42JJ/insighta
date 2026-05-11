@@ -220,11 +220,13 @@ export default function MandalaCard({
         )}
       </div>
 
-      {/* Mini 9-cell grid */}
-      <div className="mb-3 grid grid-cols-3 gap-1">
+      {/* Mini 9-cell grid — matches ExploreCard mini (gap-0.5, outer rounded-lg
+          overflow-hidden, center cell text-[11px]). */}
+      <div className="mb-3 grid grid-cols-3 gap-0.5 rounded-lg overflow-hidden">
         {gridCells.map((cell, idx) => {
-          const baseClass =
-            'flex aspect-square items-center justify-center overflow-hidden rounded p-1 text-center text-[10px] leading-[1.2]';
+          const baseClass = `flex aspect-square items-center justify-center overflow-hidden p-1 text-center leading-tight ${
+            cell.isCenter ? 'text-[11px] rounded-sm' : 'text-[10px]'
+          }`;
           // Loading / AI variants keep existing class-based fills (animations / shimmer).
           if (isAiLoading) {
             return (

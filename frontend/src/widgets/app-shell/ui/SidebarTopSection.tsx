@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { CirclePlus, ChevronDown, ChevronUp, PanelLeft, Search } from 'lucide-react';
+import { CirclePlus, ChevronDown, ChevronUp, Compass, PanelLeft, Search } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/shared/ui/popover';
 import { Dialog, DialogContent } from '@/shared/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
@@ -80,6 +80,22 @@ export function SidebarTopSection({
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={8}>
               {t('sidebar.newMandalaCta', '새 만다라')}
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => navigate('/explore')}
+                aria-label={t('sidebar.findTemplatesCta', '템플릿 찾기')}
+                className={iconBtn}
+              >
+                <Compass className="w-5 h-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {t('sidebar.findTemplatesCta', '템플릿 찾기')}
             </TooltipContent>
           </Tooltip>
 
@@ -184,6 +200,15 @@ export function SidebarTopSection({
       >
         <CirclePlus className="w-5 h-5 shrink-0" aria-hidden="true" />
         <span>{t('sidebar.newMandalaCta', '새 만다라')}</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => navigate('/explore')}
+        className="flex items-center gap-2 h-9 px-1.5 rounded-md text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+      >
+        <Compass className="w-5 h-5 shrink-0" aria-hidden="true" />
+        <span>{t('sidebar.findTemplatesCta', '템플릿 찾기')}</span>
       </button>
 
       {searchBarElement && <div className="w-full">{searchBarElement}</div>}
