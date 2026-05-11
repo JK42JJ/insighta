@@ -88,7 +88,7 @@ export default function LearningPage() {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* CP445 (사용자 directive) — VideoStrip = player 폭 정렬. CenterPanel
             의 px-4 padding 과 동일 적용 (베젤 축소). 노트 모드 시 hidden. */}
-        <div className={cn('shrink-0 px-4 pt-[5px]', centerViewMode === 'note' && 'hidden')}>
+        <div className={cn('shrink-0 pl-4 pr-3 pt-[5px]', centerViewMode === 'note' && 'hidden')}>
           <VideoStrip mandalaId={mandalaId!} currentVideoId={videoId!} />
         </div>
         <CenterPanel

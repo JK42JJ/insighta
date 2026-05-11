@@ -164,7 +164,7 @@ export function CenterPanel({
   ];
 
   return (
-    <div className="flex flex-1 min-w-0 flex-col overflow-hidden px-4 pt-[5px]">
+    <div className="flex flex-1 min-w-0 flex-col overflow-hidden pl-4 pr-3 pt-[5px]">
       <div
         className={cn('shrink-0', centerViewMode === 'note' && 'hidden')}
         onMouseEnter={() => setActiveRegion('player')}
