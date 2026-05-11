@@ -195,7 +195,7 @@ export function SidebarLearningSection({
                     isExpanded && 'rotate-90'
                   )}
                 />
-                <span className="flex-1 truncate text-[12px] font-medium text-sidebar-foreground/85">
+                <span className="flex-1 truncate text-[13px] font-medium text-sidebar-foreground/85">
                   {idx + 1}. {goal}
                 </span>
                 {(sectionCount > 0 || cellCards.length > 0) && (
@@ -279,11 +279,11 @@ function BookChapterPreview({
             }}
             className={cn(
               'cursor-pointer rounded-[4px] px-2 py-1 leading-[1.5] transition-colors',
-              // CP445.x — 비활성 단일 색상, 활성 = 보라색 highlight + 폰트
-              // 한 단계 크게 (11px → 12px) + medium weight.
+              // 비활성 단일 색상, 활성 = 보라색 highlight + 폰트 한 단계 크게
+              // (13px → 14px) + medium weight. (CP453+1 — 가독성 위해 11/12 → 13/14 상향)
               isActiveSection
-                ? 'text-[12px] font-medium text-[#818cf8]'
-                : 'text-[11px] text-sidebar-foreground/80 hover:text-sidebar-foreground'
+                ? 'text-[14px] font-medium text-[#818cf8]'
+                : 'text-[13px] text-sidebar-foreground/80 hover:text-sidebar-foreground'
             )}
           >
             {chapter.ch + 1}.{sIdx + 1} {sec.title}
