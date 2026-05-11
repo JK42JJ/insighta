@@ -1285,7 +1285,12 @@ export function useCardOrchestrator(
             return updateVideoState.mutateAsync({
               videoStateId: id,
               updates: isInMandala
-                ? { cell_index: -1, level_id: '', mandala_id: null, is_in_ideation: false }
+                ? {
+                    cell_index: -1,
+                    level_id: 'scratchpad',
+                    mandala_id: null,
+                    is_in_ideation: false,
+                  }
                 : { is_in_ideation: false },
             });
           })
