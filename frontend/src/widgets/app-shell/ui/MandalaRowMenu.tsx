@@ -2,21 +2,20 @@
  * MandalaRowMenu — ChatGPT-style "..." menu on hover for sidebar mandala rows.
  *
  * Reuses dashboard icons (Share2/Archive/Trash2) and the AlertDialog confirm
- * pattern. Trigger uses MoreHorizontal (ChatGPT-style horizontal "...") rather
- * than the dashboard's MoreVertical to match the user-specified sidebar
- * affordance. Share/Archive are
- * placeholders pending BE work — shown disabled with a "준비중 / Coming soon"
- * label. Delete is the only fully wired action; deletion is optimistic via
- * useDeleteMandala (`features/mandala/model/useMandalaQuery.ts`).
+ * pattern. Trigger uses MoreHorizontal (horizontal "...") rather than the
+ * dashboard's MoreVertical to match the user-specified sidebar affordance.
+ * Share/Archive are placeholders pending BE work — shown disabled with a
+ * "준비중 / Coming soon" label.
+ *
+ * Delete itself is owned by the PARENT (SidebarMandalaSection) — see
+ * onConfirmDelete. Hosting the mutation in the parent keeps its useMutation
+ * observer alive when the row unmounts via the local deletingIds mask, so
+ * the success/error toast still fires.
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
-import { MoreHorizontal, Share2, Archive, Trash2, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Share2, Archive, Trash2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { useDeleteMandala } from '@/features/mandala';
-import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '@/shared/config/query-client';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,57 +38,15 @@ interface MandalaRowMenuProps {
   mandalaId: string;
   /** True when this is the only remaining mandala — delete is blocked. */
   isLastMandala: boolean;
-  /** Called after the delete mutation is fired (synchronously). Parent uses
-   * this to auto-select the next mandala in the sorted list. */
-  onAfterDelete?: (deletedId: string) => void;
+  /** Parent-hosted delete handler. Called on AlertDialog confirm with the
+   * mandala id. The parent runs the mutation + toast + optimistic mask. */
+  onConfirmDelete: (mandalaId: string) => void;
 }
 
-export function MandalaRowMenu({ mandalaId, isLastMandala, onAfterDelete }: MandalaRowMenuProps) {
+export function MandalaRowMenu({ mandalaId, isLastMandala, onConfirmDelete }: MandalaRowMenuProps) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const deleteMutation = useDeleteMandala();
-
-  const handleConfirmDelete = () => {
-    // Close the confirm dialog immediately for snappy UX. Run the next-mandala
-    // auto-select BEFORE the mutate call so subsequent re-renders see the new
-    // selectedMandalaId (the deleted row would otherwise stay highlighted while
-    // the optimistic cache update is in flight).
-    setDeleteOpen(false);
-    onAfterDelete?.(mandalaId);
-    deleteMutation.mutate(mandalaId, {
-      onSuccess: () => {
-        // Belt-and-suspenders: the hook-level onMutate filters the list cache
-        // optimistically, but users reported the row still rendered after the
-        // confirm. Re-apply the filter directly here, then force a refetch on
-        // top of the hook-level invalidate so the list query state is rebuilt
-        // from the server even if placeholderData/keepPreviousData masks the
-        // intermediate cache mutation.
-        queryClient.setQueryData<{
-          mandalas: Array<{ id: string }>;
-          total: number;
-          page: number;
-          limit: number;
-        }>(queryKeys.mandala.list(), (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            mandalas: old.mandalas.filter((m) => m.id !== mandalaId),
-            total: Math.max(0, old.total - 1),
-          };
-        });
-        queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
-        queryClient.refetchQueries({ queryKey: queryKeys.mandala.list() });
-        toast.success(t('sidebar.mandalaActions.deleteSuccess', '만다라가 삭제됐어요'));
-      },
-      onError: () => {
-        toast.error(
-          t('sidebar.mandalaActions.deleteError', '삭제에 실패했어요. 다시 시도해주세요.')
-        );
-      },
-    });
-  };
 
   return (
     <>
@@ -101,9 +58,6 @@ export function MandalaRowMenu({ mandalaId, isLastMandala, onAfterDelete }: Mand
             onClick={(e) => e.stopPropagation()}
             className={cn(
               'shrink-0 rounded p-1 text-sidebar-foreground/60 transition-opacity hover:bg-sidebar-accent hover:text-sidebar-foreground',
-              // Hidden until row hover OR menu open OR keyboard focus (focus-visible
-              // skips the mouse-click focus state Radix restores on close — that
-              // would otherwise keep the icon stuck on after dropdown dismiss).
               menuOpen
                 ? 'opacity-100'
                 : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
@@ -169,10 +123,12 @@ export function MandalaRowMenu({ mandalaId, isLastMandala, onAfterDelete }: Mand
               {t('sidebar.mandalaActions.deleteConfirm.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleConfirmDelete}
+              onClick={() => {
+                setDeleteOpen(false);
+                onConfirmDelete(mandalaId);
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t('sidebar.mandalaActions.deleteConfirm.confirm')}
             </AlertDialogAction>
           </AlertDialogFooter>

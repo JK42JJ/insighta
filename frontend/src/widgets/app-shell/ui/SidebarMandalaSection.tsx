@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, RefreshCw } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { useMandalaList, useSwitchMandala } from '@/features/mandala';
+import { useMandalaList, useSwitchMandala, useDeleteMandala } from '@/features/mandala';
 import { useMandalaStore } from '@/stores/mandalaStore';
+import { queryKeys } from '@/shared/config/query-client';
 import type { InsightCard } from '@/entities/card/model/types';
 import { MandalaRowMenu } from './MandalaRowMenu';
 
@@ -47,13 +50,15 @@ export function SidebarMandalaSection({
   const { t } = useTranslation();
   const { data: listData, isLoading, isError, error, refetch } = useMandalaList();
 
-  // Local optimistic mask. Rows added here are hidden from render regardless
-  // of cache state. This is a belt-and-suspenders fallback because the
-  // hook-level setQueryData + inline invalidate/refetch did not visibly clear
-  // the deleted row for the user — the row stays until manual refresh, so
-  // the Tanstack cache update must be getting masked by something we can't
-  // pin down from static inspection. A local Set bypasses cache entirely.
+  // Local optimistic mask — rows added here are hidden regardless of cache.
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+
+  // Mutation lives in the parent (not in MandalaRowMenu) because the row
+  // unmounts the instant we add its id to deletingIds — if useDeleteMandala
+  // is hosted inside the row, its useMutation observer is torn down before
+  // the inline { onSuccess } callback can fire, swallowing the toast.
+  const queryClient = useQueryClient();
+  const deleteMandala = useDeleteMandala();
 
   const switchMandala = useSwitchMandala();
 
@@ -116,11 +121,10 @@ export function SidebarMandalaSection({
     }
   }, [mandalas, lastOptimisticTitle, setLastOptimisticTitle]);
 
-  // After optimistic delete: hide the row immediately via local state + (if
-  // the deleted mandala is the selected one) pick the next entry in the
-  // createdAt-desc sorted list as the new selection. Defined BEFORE the early
-  // returns below so hook order is stable.
-  const handleAfterDelete = useCallback(
+  // Confirm-delete handler hosted in the parent so the useDeleteMandala
+  // observer + its inline { onSuccess/onError } callbacks survive the row
+  // unmount. Defined BEFORE the early returns below so hook order is stable.
+  const handleConfirmDelete = useCallback(
     (deletedId: string) => {
       // 1) Optimistic local hide — independent of cache.
       setDeletingIds((prev) => {
@@ -136,8 +140,28 @@ export function SidebarMandalaSection({
         const next = sorted[0] ?? null;
         if (next) selectMandala(next.id);
       }
+      // 3) Fire the BE delete + feedback from a stable host (this component
+      //    is not in the mapping closure, so its mutation observer stays
+      //    alive through the row unmount).
+      deleteMandala.mutate(deletedId, {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.mandala.list() });
+          toast.success(t('sidebar.mandalaActions.deleteSuccess', '만다라가 삭제됐어요'));
+        },
+        onError: () => {
+          // Roll the optimistic mask back so the user can retry.
+          setDeletingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(deletedId);
+            return next;
+          });
+          toast.error(
+            t('sidebar.mandalaActions.deleteError', '삭제에 실패했어요. 다시 시도해주세요.')
+          );
+        },
+      });
     },
-    [selectedMandalaId, mandalas, selectMandala]
+    [selectedMandalaId, mandalas, selectMandala, deleteMandala, queryClient, t]
   );
 
   if (collapsed) {
@@ -255,7 +279,7 @@ export function SidebarMandalaSection({
                 <MandalaRowMenu
                   mandalaId={mandala.id}
                   isLastMandala={sortedMandalas.length <= 1}
-                  onAfterDelete={handleAfterDelete}
+                  onConfirmDelete={handleConfirmDelete}
                 />
               </div>
             );
