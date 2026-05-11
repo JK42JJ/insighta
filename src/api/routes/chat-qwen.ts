@@ -299,7 +299,7 @@ export const chatQwenRoutes: FastifyPluginAsync = async (fastify) => {
           body: JSON.stringify({
             model,
             messages: [
-              { role: 'system', content: systemPrompt },
+              { role: 'system', content: `${systemPrompt}\n/no_think` },
               { role: 'user', content: message },
             ],
             stream: true,
@@ -324,6 +324,47 @@ export const chatQwenRoutes: FastifyPluginAsync = async (fastify) => {
         reply.raw.end();
         return;
       }
+
+      // Streaming filter: drop <think>...</think> spans across chunk boundaries.
+      // Holds a tail buffer that may contain a partial open tag.
+      const stripThink = (() => {
+        let inThink = false;
+        let buf = '';
+        return (chunk: string): string => {
+          buf += chunk;
+          let out = '';
+          while (buf.length > 0) {
+            if (inThink) {
+              const closeIdx = buf.indexOf('</think>');
+              if (closeIdx === -1) {
+                // close tag not yet visible — drop everything we've buffered
+                buf = '';
+                break;
+              }
+              buf = buf.slice(closeIdx + '</think>'.length);
+              inThink = false;
+            } else {
+              const openIdx = buf.indexOf('<think>');
+              if (openIdx === -1) {
+                // hold any tail that could still grow into '<think>'
+                const lastLt = buf.lastIndexOf('<');
+                if (lastLt !== -1 && '<think>'.startsWith(buf.slice(lastLt))) {
+                  out += buf.slice(0, lastLt);
+                  buf = buf.slice(lastLt);
+                } else {
+                  out += buf;
+                  buf = '';
+                }
+                break;
+              }
+              out += buf.slice(0, openIdx);
+              buf = buf.slice(openIdx + '<think>'.length);
+              inThink = true;
+            }
+          }
+          return out;
+        };
+      })();
 
       // Ollama /api/chat streams NDJSON: one JSON object per line, last with done:true.
       const reader = upstreamResp.body.getReader();
@@ -350,7 +391,9 @@ export const chatQwenRoutes: FastifyPluginAsync = async (fastify) => {
                 continue;
               }
               const content = obj.message?.content ?? '';
-              if (content) writeSse({ content });
+              if (!content) continue;
+              const filtered = stripThink(content);
+              if (filtered) writeSse({ content: filtered });
             } catch {
               // skip malformed line; Ollama occasionally emits keepalive whitespace
             }
@@ -360,7 +403,10 @@ export const chatQwenRoutes: FastifyPluginAsync = async (fastify) => {
           try {
             const obj = JSON.parse(buffer) as { message?: { content?: string } };
             const content = obj.message?.content ?? '';
-            if (content) writeSse({ content });
+            if (content) {
+              const filtered = stripThink(content);
+              if (filtered) writeSse({ content: filtered });
+            }
           } catch {
             // ignore tail noise
           }
