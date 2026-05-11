@@ -175,15 +175,15 @@ export function SidebarLearningSection({
               <button
                 type="button"
                 onClick={() => toggleChapter(idx)}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-sidebar-accent/15"
+                className="group flex w-full items-center gap-2 px-2 py-1 text-left transition-colors"
               >
                 <ChevronRight
                   className={cn(
-                    'h-3.5 w-3.5 shrink-0 text-sidebar-foreground/35 transition-transform',
+                    'h-3.5 w-3.5 shrink-0 text-sidebar-foreground/35 transition-colors group-hover:text-sidebar-foreground',
                     isExpanded && 'rotate-90'
                   )}
                 />
-                <span className="flex-1 truncate text-[13px] font-medium tracking-[-0.01em] text-sidebar-foreground/85">
+                <span className="flex-1 truncate text-[13px] font-medium tracking-[-0.01em] text-sidebar-foreground/80 transition-colors group-hover:text-sidebar-foreground">
                   {goal}
                 </span>
               </button>
