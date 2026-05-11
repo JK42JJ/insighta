@@ -13,7 +13,7 @@ export function DomainChips({ selected, onSelect }: DomainChipsProps) {
   const { t } = useTranslation();
 
   return (
-    <div className="flex gap-1.5 justify-center flex-wrap mb-7">
+    <div className="flex gap-1.5 justify-center flex-wrap mb-[84px]">
       {ALL_OPTIONS.map((domain) => (
         <button
           key={domain}
