@@ -1,17 +1,13 @@
 import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, Globe } from 'lucide-react';
+import { Loader2, ArrowLeft, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { apiClient } from '@/shared/lib/api-client';
 import { useAuth } from '@/features/auth/model/useAuth';
-import { LandingHeader } from '@/pages/landing/ui/components/LandingHeader';
-import { GradientBackground } from '@/pages/landing/ui/components/GradientBackground';
-import { FooterSection } from '@/pages/landing/ui/components/FooterSection';
 import { useExploreMandalas, useExploreCreateFromTemplate } from '@/features/explore';
 import { useExploreFilters } from '@/features/explore';
 import { useMandalaStore } from '@/stores/mandalaStore';
-import { ExploreHero } from '@/features/explore/ui/ExploreHero';
 import { ExploreSearchBar } from '@/features/explore/ui/ExploreSearchBar';
 import { DomainChips } from '@/features/explore/ui/DomainChips';
 import { ExploreToolbar } from '@/features/explore/ui/ExploreToolbar';
@@ -50,9 +46,6 @@ export default function ExplorePage() {
   const [modal, setModal] = useState<ModalState>(EMPTY_MODAL);
 
   const handleCardClick = useCallback(async (mandala: ExploreMandala) => {
-    // All users open the preview modal first per spec §1; CTA inside the modal
-    // triggers create-from-template. Owner-vs-other branching (owner==me skips
-    // the modal and goes straight to the dashboard) is a Step 2 follow-up.
     setModal({
       isOpen: true,
       mandala,
@@ -62,7 +55,6 @@ export default function ExplorePage() {
       subLabels: mandala.rootLevel?.subjectLabels,
     });
 
-    // Fetch full level data for 9×9 grid
     if (mandala.shareSlug) {
       try {
         const result = await apiClient.getPublicMandala(mandala.shareSlug);
@@ -90,9 +82,6 @@ export default function ExplorePage() {
 
   const handleCloseModal = useCallback(() => setModal(EMPTY_MODAL), []);
 
-  // Modal CTA "이 템플릿으로 시작 →" — create-from-template (video-discover skill
-  // auto-attaches recommendations), then route to the unified dashboard (/) with
-  // the new mandala selected. Mirrors useWizard.goToUnifiedDashboard pattern.
   const handleStart = useCallback(() => {
     if (!modal.mandala) return;
     if (!isLoggedIn) {
@@ -113,7 +102,10 @@ export default function ExplorePage() {
     await navigator.clipboard.writeText(url);
   }, [modal.mandala]);
 
-  // Slug-based detail view
+  const handleBack = useCallback(() => {
+    navigate('/');
+  }, [navigate]);
+
   if (slug) return <PublicMandalaView slug={slug} />;
 
   const mandalas = data?.mandalas ?? [];
@@ -121,83 +113,128 @@ export default function ExplorePage() {
   const totalPages = Math.ceil(total / (data?.limit ?? 24));
 
   return (
-    <div className="relative min-h-screen bg-background">
-      <GradientBackground variant="F" />
-      <div className="relative z-10">
-        {!isLoggedIn && <LandingHeader />}
+    <div
+      className="relative min-h-screen overflow-x-hidden"
+      style={{ background: 'hsl(var(--background))' }}
+    >
+      {/* Subtle radial gradient (top center, wizard-style ambience) */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 60% 50% at 50% 0%, hsl(var(--primary) / 0.05), transparent 60%)',
+        }}
+      />
 
-        <main className="max-w-[1120px] mx-auto px-7 pt-12 pb-24">
-          <ExploreHero />
-          <ExploreSearchBar value={filters.q} onChange={(q) => updateFilters({ q })} />
-          <DomainChips selected={filters.domain} onSelect={(domain) => updateFilters({ domain })} />
-          <ExploreToolbar
-            total={total}
-            source={filters.source}
-            sort={filters.sort}
-            onSourceChange={(source) => updateFilters({ source })}
-            onSortChange={(sort) => updateFilters({ sort })}
-          />
-
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : mandalas.length === 0 ? (
-            <div className="text-center py-20">
-              <Globe className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
-              <h2 className="text-lg font-semibold text-foreground mb-2">{t('explore.empty')}</h2>
-              <p className="text-sm text-muted-foreground">{t('explore.emptyDesc')}</p>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(330px,1fr))] gap-3.5">
-                {mandalas.map((m) => (
-                  <ExploreCard
-                    key={m.id}
-                    id={m.id}
-                    title={m.title}
-                    centerGoal={m.rootLevel?.centerGoal ?? m.title}
-                    centerLabel={m.rootLevel?.centerLabel ?? undefined}
-                    subjects={m.rootLevel?.subjects ?? []}
-                    subjectLabels={m.rootLevel?.subjectLabels}
-                    domain={m.domain as MandalaDomain | null}
-                    isTemplate={m.isTemplate}
-                    author={m.author}
-                    likeCount={m.likeCount}
-                    cloneCount={m.cloneCount}
-                    updatedAt={new Date(m.updatedAt).toLocaleDateString()}
-                    onClick={() => handleCardClick(m)}
-                  />
-                ))}
-              </div>
-
-              {totalPages > 1 && (
-                <div className="flex justify-center gap-2 mt-8">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => updateFilters({ page: Math.max(1, filters.page - 1) })}
-                    disabled={filters.page === 1}
-                  >
-                    {t('common.previous')}
-                  </Button>
-                  <span className="flex items-center px-3 text-sm text-muted-foreground">
-                    {filters.page} / {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => updateFilters({ page: Math.min(totalPages, filters.page + 1) })}
-                    disabled={filters.page === totalPages}
-                  >
-                    {t('common.next')}
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-        </main>
+      {/* Wizard-style top toolbar (single back button only) */}
+      <div className="relative z-10 px-6 py-4">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12.5px] font-medium transition"
+          style={{
+            background: 'transparent',
+            border: '1px solid hsl(var(--border) / 0.5)',
+            color: 'hsl(var(--muted-foreground))',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = 'hsl(var(--foreground))';
+            e.currentTarget.style.borderColor = 'hsl(var(--border))';
+            e.currentTarget.style.background = 'hsl(var(--accent) / 0.3)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = 'hsl(var(--muted-foreground))';
+            e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.5)';
+            e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          {t('explore.backButton')}
+        </button>
       </div>
+
+      <main className="relative z-10 max-w-[1120px] mx-auto px-8 pb-20">
+        {/* Headline (mockup v6: 36px / weight 700 / letter-spacing -0.03em / center) */}
+        <div className="text-center pt-12 pb-9">
+          <h1
+            className="text-[36px] font-bold leading-[1.2]"
+            style={{
+              color: 'hsl(var(--foreground))',
+              letterSpacing: '-0.03em',
+            }}
+          >
+            {t('explore.headline')}
+          </h1>
+        </div>
+
+        <ExploreSearchBar value={filters.q} onChange={(q) => updateFilters({ q })} />
+        <DomainChips selected={filters.domain} onSelect={(domain) => updateFilters({ domain })} />
+        <ExploreToolbar
+          total={total}
+          source={filters.source}
+          sort={filters.sort}
+          onSourceChange={(source) => updateFilters({ source })}
+          onSortChange={(sort) => updateFilters({ sort })}
+        />
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : mandalas.length === 0 ? (
+          <div className="text-center py-20">
+            <Globe className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
+            <h2 className="text-lg font-semibold text-foreground mb-2">{t('explore.empty')}</h2>
+            <p className="text-sm text-muted-foreground">{t('explore.emptyDesc')}</p>
+          </div>
+        ) : (
+          <>
+            {/* Explicit 3-col responsive grid (mockup v6: 3 / 2 / 1 at 900 / 600 breakpoints) */}
+            <div className="grid grid-cols-3 max-[900px]:grid-cols-2 max-[600px]:grid-cols-1 gap-4">
+              {mandalas.map((m) => (
+                <ExploreCard
+                  key={m.id}
+                  id={m.id}
+                  title={m.title}
+                  centerGoal={m.rootLevel?.centerGoal ?? m.title}
+                  centerLabel={m.rootLevel?.centerLabel ?? undefined}
+                  subjects={m.rootLevel?.subjects ?? []}
+                  subjectLabels={m.rootLevel?.subjectLabels}
+                  domain={m.domain as MandalaDomain | null}
+                  isTemplate={m.isTemplate}
+                  author={m.author}
+                  cloneCount={m.cloneCount}
+                  onClick={() => handleCardClick(m)}
+                />
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex justify-center gap-2 mt-8">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateFilters({ page: Math.max(1, filters.page - 1) })}
+                  disabled={filters.page === 1}
+                >
+                  {t('common.previous')}
+                </Button>
+                <span className="flex items-center px-3 text-sm text-muted-foreground">
+                  {filters.page} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateFilters({ page: Math.min(totalPages, filters.page + 1) })}
+                  disabled={filters.page === totalPages}
+                >
+                  {t('common.next')}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </main>
 
       {modal.mandala && (
         <ExploreExpandModal
@@ -218,7 +255,6 @@ export default function ExplorePage() {
           onCopyLink={handleCopyLink}
         />
       )}
-      <FooterSection />
     </div>
   );
 }

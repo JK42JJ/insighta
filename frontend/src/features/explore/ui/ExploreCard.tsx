@@ -1,4 +1,4 @@
-import { Heart, Copy } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { MandalaDomain } from '@/shared/config/domain-colors';
 import { DOMAIN_STYLES, domainCssVars, getDomainLabel } from '@/shared/config/domain-colors';
@@ -13,9 +13,7 @@ interface Props {
   domain: MandalaDomain | null;
   isTemplate: boolean;
   author: { displayName: string; avatarInitial: string } | null;
-  likeCount: number;
   cloneCount: number;
-  updatedAt: string;
   isNew?: boolean;
   onClick: () => void;
 }
@@ -29,9 +27,7 @@ export function ExploreCard({
   domain,
   isTemplate,
   author,
-  likeCount,
   cloneCount,
-  updatedAt,
   isNew,
   onClick,
 }: Props) {
@@ -157,21 +153,18 @@ export function ExploreCard({
         {title}
       </h4>
 
-      {/* Meta */}
-      <div
-        className="flex items-center gap-3.5 text-xs"
-        style={{ color: 'hsl(var(--muted-foreground) / 0.35)' }}
-      >
-        <span className="inline-flex items-center gap-1">
-          <Heart size={14} />
-          {likeCount}
+      {/* Footer (mockup v6 — Heart/Copy meta retired; left = N people started, right = preview CTA). Owner-aware label branching is Step 2B. */}
+      <div className="flex items-center justify-between text-[11.5px]">
+        <span
+          className="inline-flex items-center gap-1.5"
+          style={{ color: 'hsl(var(--muted-foreground) / 0.55)' }}
+        >
+          <MessageSquare size={11} />
+          {t('explore.card.starts', { count: cloneCount })}
         </span>
-        <span className="inline-flex items-center gap-1">
-          <Copy size={13} />
-          {cloneCount}
+        <span className="font-semibold" style={{ color: 'var(--d-color, hsl(var(--primary)))' }}>
+          {t('explore.card.ctaPreview')}
         </span>
-        <span className="flex-1" />
-        <span>{updatedAt}</span>
       </div>
     </div>
   );

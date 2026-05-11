@@ -69,6 +69,8 @@
   },
   "explore": {
     "title": "Explore Mandalas",
+    "headline": "What goal do you want to start with?",
+    "backButton": "Back to app",
     "empty": "English templates coming soon",
     "emptyDesc": "We're preparing English mandala templates. Switch to Korean to browse available templates now.",
     "notFound": "Mandala not found",
@@ -99,7 +101,8 @@
       "subtitle": "Browse structured goal plans from our community. Find one you love and clone it to get started right away."
     },
     "search": {
-      "placeholder": "Search by goal, keyword..."
+      "placeholder": "What mandala are you looking for?",
+      "submit": "Search"
     },
     "domain": {
       "all": "All",
@@ -129,7 +132,9 @@
     "card": {
       "likes": "likes",
       "clones": "clones",
-      "templateLabel": "Template"
+      "templateLabel": "Template",
+      "starts": "{{count}} started",
+      "ctaPreview": "Preview →"
     },
     "time": {
       "today": "today",
