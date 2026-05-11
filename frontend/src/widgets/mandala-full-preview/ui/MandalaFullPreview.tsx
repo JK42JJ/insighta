@@ -78,6 +78,8 @@ const CENTER_SUB_TO_BLOCK: Record<number, number> = {
 
 interface CellData {
   text: string;
+  /** Full goal text (label 이 아닌 원본). hover tooltip 용. text 와 다를 수 있음 (label 사용 시). */
+  goal: string;
   ring: number;
   isCenter: boolean;
   isSubCenter: boolean;
@@ -110,10 +112,17 @@ function buildCells(
             displayCenter,
             ...displaySubjects.slice(4),
           ];
+          // Full goal text (label 무관 원본) — hover tooltip 용
+          const fullCells = [
+            ...rootLevel.subjects.slice(0, 4),
+            rootLevel.centerGoal,
+            ...rootLevel.subjects.slice(4),
+          ];
           for (let ccol = 0; ccol < 3; ccol++) {
             const idx = crow * 3 + ccol;
             cells.push({
               text: centerCells[idx] || '',
+              goal: fullCells[idx] || '',
               ring: 0,
               isCenter: idx === 4,
               isSubCenter: idx !== 4,
@@ -129,11 +138,15 @@ function buildCells(
           // Short label for sub-center cell
           const subLabelName = subLabels?.[blockIdx] ?? subGoalName;
           let blockCells: string[];
+          let fullBlockCells: string[];
 
           if (sub) {
             blockCells = [...sub.subjects.slice(0, 4), subLabelName, ...sub.subjects.slice(4)];
+            // sub-center 자리 = subGoalName (full), ring 1+ = sub.subjects (이미 full)
+            fullBlockCells = [...sub.subjects.slice(0, 4), subGoalName, ...sub.subjects.slice(4)];
           } else {
             blockCells = ['', '', '', '', subLabelName, '', '', '', ''];
+            fullBlockCells = ['', '', '', '', subGoalName, '', '', '', ''];
           }
 
           for (let ccol = 0; ccol < 3; ccol++) {
@@ -152,9 +165,12 @@ function buildCells(
 
             let text = blockCells[idx] || '';
             text = text.replace(/\[HIGH\]\s*/g, '');
+            let goal = fullBlockCells[idx] || '';
+            goal = goal.replace(/\[HIGH\]\s*/g, '');
 
             cells.push({
               text,
+              goal,
               ring,
               isCenter: false,
               isSubCenter,
@@ -416,7 +432,7 @@ export function MandalaFullPreview({
                 ...flyStyle,
                 ...hoverLinkStyle,
               }}
-              title={cell.text}
+              title={cell.goal}
               onClick={() => handleCellClick(cell)}
               onMouseEnter={() =>
                 cell.blockIdx !== -1 ? setHoveredBlock(cell.blockIdx) : undefined
