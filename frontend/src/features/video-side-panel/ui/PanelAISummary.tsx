@@ -40,6 +40,7 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   // CP438+1: prefer new layered v2 jsonb when present.
   const hasNewV2 = Boolean(richSummary?.core);
   const hasLegacyRich = !hasNewV2 && Boolean(richSummary?.structured);
+  const hasRich = hasNewV2 || hasLegacyRich;
   const hasShort = Boolean(short) || tags.length > 0;
 
   if (!hasNewV2 && !hasLegacyRich && !hasShort && !isRichLoading) {
