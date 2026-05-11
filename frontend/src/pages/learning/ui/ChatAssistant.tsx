@@ -2,7 +2,7 @@
 // direct use by tests; React-refresh's only-export-components rule flags
 // non-component exports in a component file, so we disable it here.
 /* eslint-disable react-refresh/only-export-components */
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopilotKit, useCopilotReadable } from '@copilotkit/react-core';
 import { CopilotChat } from '@copilotkit/react-ui';
