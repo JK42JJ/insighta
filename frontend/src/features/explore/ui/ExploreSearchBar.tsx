@@ -54,7 +54,7 @@ export function ExploreSearchBar({ value, onChange }: ExploreSearchBarProps) {
         placeholder={t('explore.search.placeholder')}
         className="w-full py-[18px] pl-14 pr-[60px] rounded-[28px] focus-visible:rounded-[28px] text-[15px] outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
         style={{
-          background: 'hsl(var(--card))',
+          background: 'hsl(var(--input))',
           border: '1px solid hsl(var(--border) / 0.15)',
           color: 'hsl(var(--foreground))',
         }}
