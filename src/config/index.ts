@@ -161,15 +161,6 @@ const envSchema = z.object({
   V3_ENABLE_HYBRID_RERANK: z
     .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
     .default(false),
-
-  // LangGraph chatbot route (hybrid-retrieval spec 2026-05-12, PR2).
-  // When true, /api/v1/ontology/chat dispatches to `chat-graph.ts` (3-way
-  // route: cheap LLM classifier → static_reply / direct_reply / tool_call_agent).
-  // When false, the legacy `ontology/chat.ts` (single-pass graph+LLM) runs
-  // — pre-PR2 behaviour bit-identical. Default OFF for safe rollout.
-  CHAT_USE_LANGGRAPH: z
-    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
-    .default(false),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -320,11 +311,6 @@ export const config = {
     provider: env.CHATBOT_PROVIDER,
     model: env.CHATBOT_MODEL,
     localUrl: env.CHATBOT_LOCAL_URL,
-  },
-
-  // LangGraph chatbot route (hybrid-retrieval spec PR2)
-  chatLangGraph: {
-    enabled: env.CHAT_USE_LANGGRAPH,
   },
 
   // Qwen-LoRA serving — consumed by CopilotKit OpenAIAdapter when provider

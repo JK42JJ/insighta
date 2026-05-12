@@ -27,8 +27,6 @@ import {
   enrichBySourceRef,
 } from '../../modules/ontology/enrichment';
 import { chat } from '../../modules/ontology/chat';
-import { chatWithGraph } from '../../modules/ontology/chat-graph';
-import { config } from '../../config';
 import { generateKnowledgeSummary } from '../../modules/ontology/report';
 import { routeRequest } from '../../modules/ontology/router';
 import { ChatBodySchema, SummaryQuerySchema, RouteBodySchema } from '../schemas/ontology.schema';
@@ -459,14 +457,7 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     }
 
     try {
-      // PR2 — LangGraph 3-way route (CHAT_USE_LANGGRAPH flag).
-      // When ON: route_message classifies → static_reply / direct_reply
-      // (cheap LLM, no graph) / tool_call_agent (full pipeline). Saves
-      // cost+latency on trivial queries.
-      // When OFF: legacy chat() (single-pass graph+LLM) — bit-identical.
-      const result = config.chatLangGraph.enabled
-        ? await chatWithGraph(userId, parsed.data)
-        : await chat(userId, parsed.data);
+      const result = await chat(userId, parsed.data);
       return reply.send({ status: 'ok', data: result });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
