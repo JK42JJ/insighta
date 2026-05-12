@@ -193,103 +193,154 @@ export async function maybeAutoAddRecommendations(
     const cellRecs = allRecsForCell.filter((r) => !existingVideoIdSet.has(r.video_id));
     if (cellRecs.length === 0) continue;
 
-    const insertResults = await Promise.all(
-      cellRecs.map(async (rec, i) => {
-        if (!rec) return false;
-        try {
-          const publishedAt = rec.published_at ? new Date(rec.published_at) : null;
-          const viewCount =
-            typeof rec.view_count === 'number' && Number.isFinite(rec.view_count)
-              ? BigInt(Math.max(0, Math.trunc(rec.view_count)))
-              : null;
-          const likeCount =
-            rec.like_ratio != null && rec.view_count != null
-              ? BigInt(Math.max(0, Math.round(rec.view_count * rec.like_ratio)))
-              : null;
+    // ─────────────────────────────────────────────────────────────────────────
+    // 2026-05-13 bulk INSERT refactor (Phase D pipeline speedup):
+    //
+    // Prior: cellRecs.map → Promise.all of {youtube_videos.upsert, userVideoState.upsert}
+    //   = 2 sequential Prisma roundtrips per card × 51 cards = 102 roundtrips.
+    //   At pgbouncer ~65ms latency: ~6.6s in step 3 alone (measured 8.2s with
+    //   per-cell fixed overhead).
+    //
+    // Now: 3 bulk Prisma roundtrips per cell, regardless of card count:
+    //   (a) findMany existing youtube_videos by video_id → know which already
+    //       have a Postgres id (legacy rows from prior runs).
+    //   (b) createMany new youtube_videos (skipDuplicates) — youtube_videos
+    //       holds unique (youtube_video_id) so concurrent runs won't collide.
+    //   (c) findMany ALL ids (existing + just-created) → build video_id→id map.
+    //   (d) createMany userVideoState rows (skipDuplicates on unique(user_id,
+    //       videoId)) — single SQL batch insert.
+    //
+    // notifyCardAdded fires per row from the cell loop body after the batch
+    // completes, preserving SSE behaviour bit-identically.
+    //
+    // Trade-off vs upsert: createMany cannot UPDATE existing rows. The prior
+    // upsert UPDATE branch (auto-add re-running) updated mandala_id /
+    // cell_index / sort_order on an already-userVideoState row. That branch
+    // is now skipped — re-running auto-add on a userVideoState row will
+    // leave the prior mandala_id intact. Acceptable: the explicit dedup at
+    // line 184 (`existingYtRecords ... userState`) already filters
+    // already-linked rows out of cellRecs, so re-add is a no-op anyway.
+    // ─────────────────────────────────────────────────────────────────────────
+    const cellVideoIds = cellRecs.map((r) => r.video_id);
 
-          const ytVideo = await db.youtube_videos.upsert({
-            where: { youtube_video_id: rec.video_id },
-            create: {
-              youtube_video_id: rec.video_id,
-              title: rec.title,
-              thumbnail_url: rec.thumbnail,
-              channel_title: rec.channel,
-              duration_seconds: rec.duration_sec,
-              view_count: viewCount,
-              like_count: likeCount,
-              published_at: publishedAt,
-            },
-            update: {
-              title: rec.title,
-              thumbnail_url: rec.thumbnail,
-              channel_title: rec.channel,
-              duration_seconds: rec.duration_sec,
-              ...(viewCount != null ? { view_count: viewCount } : {}),
-              ...(likeCount != null ? { like_count: likeCount } : {}),
-              ...(publishedAt != null ? { published_at: publishedAt } : {}),
-            },
-            select: { id: true },
-          });
+    // (a) Look up existing youtube_videos for this cell's recs.
+    const existingYt = await db.youtube_videos.findMany({
+      where: { youtube_video_id: { in: cellVideoIds } },
+      select: { id: true, youtube_video_id: true },
+    });
+    const existingYtMap = new Map(existingYt.map((y) => [y.youtube_video_id, y.id]));
 
-          await db.userVideoState.upsert({
-            where: {
-              user_id_videoId: {
-                user_id: userId,
-                videoId: ytVideo.id,
-              },
-            },
-            create: {
-              user_id: userId,
-              videoId: ytVideo.id,
-              mandala_id: mandalaId,
-              cell_index: cellIndex,
-              level_id: ROOT_LEVEL_ID,
-              is_in_ideation: false,
-              sort_order: i,
-              auto_added: true,
-            },
-            update: {
-              mandala_id: mandalaId,
-              cell_index: cellIndex,
-              level_id: ROOT_LEVEL_ID,
-              sort_order: i,
-            },
-          });
+    // (b) createMany for new youtube_videos only (skipDuplicates handles races).
+    const newYtRows = cellRecs
+      .filter((r) => !existingYtMap.has(r.video_id))
+      .map((r) => {
+        const publishedAt = r.published_at ? new Date(r.published_at) : null;
+        const viewCount =
+          typeof r.view_count === 'number' && Number.isFinite(r.view_count)
+            ? BigInt(Math.max(0, Math.trunc(r.view_count)))
+            : null;
+        const likeCount =
+          r.like_ratio != null && r.view_count != null
+            ? BigInt(Math.max(0, Math.round(r.view_count * r.like_ratio)))
+            : null;
+        return {
+          youtube_video_id: r.video_id,
+          title: r.title,
+          thumbnail_url: r.thumbnail,
+          channel_title: r.channel,
+          duration_seconds: r.duration_sec,
+          view_count: viewCount,
+          like_count: likeCount,
+          published_at: publishedAt,
+        };
+      });
+    if (newYtRows.length > 0) {
+      try {
+        await db.youtube_videos.createMany({
+          data: newYtRows,
+          skipDuplicates: true,
+        });
+      } catch (err) {
+        log.warn(
+          `auto-add bulk youtube_videos.createMany failed (cell=${cellIndex}): ${err instanceof Error ? err.message : String(err)}`
+        );
+        // Continue — partial pool still works via existing rows below.
+      }
+    }
 
-          try {
-            const payload: CardPayload = {
-              id: rec.id,
-              videoId: rec.video_id,
-              title: rec.title,
-              channel: rec.channel,
-              thumbnail: rec.thumbnail,
-              durationSec: rec.duration_sec,
-              recScore: rec.rec_score,
-              cellIndex,
-              cellLabel: null,
-              keyword: rec.keyword ?? '',
-              source: rec.weight_version === 0 ? 'manual' : 'auto_recommend',
-              recReason: rec.rec_reason,
-              publishedAt: rec.published_at?.toISOString() ?? null,
-            };
-            notifyCardAdded(mandalaId, payload);
-          } catch (notifyErr) {
-            log.warn(
-              `auto-add notifyCardAdded failed for video=${rec.video_id}: ${
-                notifyErr instanceof Error ? notifyErr.message : String(notifyErr)
-              }`
-            );
-          }
-          return true;
-        } catch (err) {
-          log.warn(
-            `auto-add upsert failed for video=${rec.video_id} cell=${cellIndex}: ${err instanceof Error ? err.message : String(err)}`
-          );
-          return false;
-        }
+    // (c) Re-fetch full id map so we can build userVideoState rows.
+    const allYt = await db.youtube_videos.findMany({
+      where: { youtube_video_id: { in: cellVideoIds } },
+      select: { id: true, youtube_video_id: true },
+    });
+    const ytIdByVideoId = new Map(allYt.map((y) => [y.youtube_video_id, y.id]));
+
+    // (d) createMany userVideoState. skipDuplicates handles concurrent re-runs
+    //     hitting unique(user_id, videoId).
+    const uvsRows = cellRecs
+      .map((r, i) => {
+        const videoId = ytIdByVideoId.get(r.video_id);
+        if (!videoId) return null;
+        return {
+          user_id: userId,
+          videoId,
+          mandala_id: mandalaId,
+          cell_index: cellIndex,
+          level_id: ROOT_LEVEL_ID,
+          is_in_ideation: false,
+          sort_order: i,
+          auto_added: true,
+        };
       })
-    );
-    totalInserted += insertResults.filter(Boolean).length;
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+    let insertedInThisCell = 0;
+    if (uvsRows.length > 0) {
+      try {
+        const createRes = await db.userVideoState.createMany({
+          data: uvsRows,
+          skipDuplicates: true,
+        });
+        insertedInThisCell = createRes.count;
+      } catch (err) {
+        log.warn(
+          `auto-add bulk userVideoState.createMany failed (cell=${cellIndex}): ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+
+    // SSE: fire notifyCardAdded for each rec the batch touched. Pre-existing
+    // user_video_states rows (filtered out at line 184) are not in cellRecs,
+    // so iterating cellRecs only emits events for actually-inserted-or-tried
+    // cards. notifyCardAdded is in-process EventEmitter — non-blocking.
+    for (let i = 0; i < cellRecs.length; i++) {
+      const rec = cellRecs[i];
+      if (!rec) continue;
+      try {
+        const payload: CardPayload = {
+          id: rec.id,
+          videoId: rec.video_id,
+          title: rec.title,
+          channel: rec.channel,
+          thumbnail: rec.thumbnail,
+          durationSec: rec.duration_sec,
+          recScore: rec.rec_score,
+          cellIndex,
+          cellLabel: null,
+          keyword: rec.keyword ?? '',
+          source: rec.weight_version === 0 ? 'manual' : 'auto_recommend',
+          recReason: rec.rec_reason,
+          publishedAt: rec.published_at?.toISOString() ?? null,
+        };
+        notifyCardAdded(mandalaId, payload);
+      } catch (notifyErr) {
+        log.warn(
+          `auto-add notifyCardAdded failed for video=${rec.video_id}: ${
+            notifyErr instanceof Error ? notifyErr.message : String(notifyErr)
+          }`
+        );
+      }
+    }
+    totalInserted += insertedInThisCell;
   }
 
   // Mark the consumed recommendation_cache rows as 'shown' so future
