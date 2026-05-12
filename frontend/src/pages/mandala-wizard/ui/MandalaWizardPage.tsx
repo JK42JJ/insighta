@@ -11,6 +11,7 @@ import {
 import { MandalaWizardStreamView } from './MandalaWizardStreamView';
 import { useMandalaQuota } from '@/features/mandala';
 import type { PendingMandalaInputs } from '@/stores/mandalaStore';
+import { cn } from '@/shared/lib/utils';
 
 /**
  * Feature flag: legacy `useWizard` flow (template + AI pick, 3-step UX)
@@ -111,11 +112,9 @@ export default function MandalaWizardPage() {
     [wizard]
   );
 
-  // Step 3 (results) uses wider layout for the 4-column card grid
   const isResultsStep = wizard.currentStep === 3;
-  const containerClass = isResultsStep
-    ? 'mx-auto max-w-[1080px] px-6 py-10'
-    : 'mx-auto max-w-[720px] px-6 py-10';
+  // Main inner width: step 3 needs 1080 for 4-card grid, step 1/2 = 720.
+  const mainMaxClass = isResultsStep ? 'max-w-[1080px]' : 'max-w-[720px]';
 
   if (dailyReached) {
     return (
@@ -184,91 +183,101 @@ export default function MandalaWizardPage() {
   }
 
   return (
-    <div className={containerClass}>
-      <Link
-        to="/"
-        className="mb-6 inline-flex items-center gap-1.5 rounded-md border border-border/50 px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:border-border hover:bg-accent/30 hover:text-foreground"
+    <div className="relative flex min-h-screen flex-col">
+      <div className="px-6 py-4">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border/50 px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:border-border hover:bg-accent/30 hover:text-foreground"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          {t('settings.backToApp', 'Back to app')}
+        </Link>
+      </div>
+
+      <main
+        className={cn(
+          'mx-auto flex w-full flex-1 flex-col px-6 pb-10',
+          mainMaxClass,
+          !isResultsStep && 'justify-center'
+        )}
       >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        {t('settings.backToApp', 'Back to app')}
-      </Link>
+        <WizardStepper currentStep={wizard.currentStep} />
 
-      <WizardStepper currentStep={wizard.currentStep} />
+        {/* Step 1: Goal input only — no search/generate yet */}
+        {wizard.currentStep === 1 && (
+          <WizardStepGoal
+            goalInput={wizard.goalInput}
+            searchResults={[]}
+            isSearching={false}
+            searchSucceeded={false}
+            isSearchSoftSlow={false}
+            isSearchFailed={false}
+            onRetrySearch={() => {}}
+            aiGenerated={null}
+            aiSource={null}
+            isGenerating={false}
+            isGenerateSoftSlow={false}
+            isGenerateFailed={false}
+            onRetryGenerate={() => {}}
+            generateError={null}
+            onSetGoalInput={wizard.setGoalInput}
+            onSubmitGoal={handleGoalGo}
+            onCancelGoal={wizard.cancelGoal}
+            onClearGoal={wizard.clearGoal}
+            onSelectSearchResult={() => {}}
+            onSelectGeneratedMandala={() => {}}
+            onCreateBlank={wizard.createBlank}
+            isCreatingBlank={wizard.isCreatingBlank}
+          />
+        )}
 
-      {/* Step 1: Goal input only — no search/generate yet */}
-      {wizard.currentStep === 1 && (
-        <WizardStepGoal
-          goalInput={wizard.goalInput}
-          searchResults={[]}
-          isSearching={false}
-          searchSucceeded={false}
-          isSearchSoftSlow={false}
-          isSearchFailed={false}
-          onRetrySearch={() => {}}
-          aiGenerated={null}
-          aiSource={null}
-          isGenerating={false}
-          isGenerateSoftSlow={false}
-          isGenerateFailed={false}
-          onRetryGenerate={() => {}}
-          generateError={null}
-          onSetGoalInput={wizard.setGoalInput}
-          onSubmitGoal={handleGoalGo}
-          onCancelGoal={wizard.cancelGoal}
-          onClearGoal={wizard.clearGoal}
-          onSelectSearchResult={() => {}}
-          onSelectGeneratedMandala={() => {}}
-          onCreateBlank={wizard.createBlank}
-          isCreatingBlank={wizard.isCreatingBlank}
-        />
-      )}
+        {/* Step 2: Context (focus tags + target level) */}
+        {wizard.currentStep === 2 && (
+          <WizardStepContext
+            focusTags={wizard.focusTags}
+            targetLevel={wizard.targetLevel}
+            onSetFocusTags={wizard.setFocusTags}
+            onSetTargetLevel={wizard.setTargetLevel}
+            onComplete={handleContextContinue}
+            onBack={() => wizard.goToStep(1)}
+            isCreating={false}
+          />
+        )}
 
-      {/* Step 2: Context (focus tags + target level) */}
-      {wizard.currentStep === 2 && (
-        <WizardStepContext
-          focusTags={wizard.focusTags}
-          targetLevel={wizard.targetLevel}
-          onSetFocusTags={wizard.setFocusTags}
-          onSetTargetLevel={wizard.setTargetLevel}
-          onComplete={handleContextContinue}
-          onBack={() => wizard.goToStep(1)}
-          isCreating={false}
-        />
-      )}
+        {/* Step 3: Results — search + generate fired, show results */}
+        {wizard.currentStep === 3 && (
+          <WizardStepGoal
+            goalInput={wizard.goalInput}
+            searchResults={wizard.searchResults}
+            isSearching={wizard.isSearching}
+            searchSucceeded={wizard.searchSucceeded}
+            isSearchSoftSlow={wizard.isSearchSoftSlow}
+            isSearchFailed={wizard.isSearchFailed}
+            onRetrySearch={wizard.retrySearch}
+            aiGenerated={wizard.aiGenerated}
+            aiSource={wizard.aiSource}
+            isGenerating={wizard.isGenerating}
+            isGenerateSoftSlow={wizard.isGenerateSoftSlow}
+            isGenerateFailed={wizard.isGenerateFailed}
+            onRetryGenerate={wizard.retryGenerate}
+            generateError={wizard.generateError as Error | null}
+            onSetGoalInput={wizard.setGoalInput}
+            onSubmitGoal={wizard.submitGoal}
+            onCancelGoal={wizard.cancelGoal}
+            onClearGoal={wizard.clearGoal}
+            onSelectSearchResult={handleSelectAndComplete}
+            onSelectGeneratedMandala={handleSelectGeneratedAndComplete}
+            onCreateBlank={wizard.createBlank}
+            isCreatingBlank={wizard.isCreatingBlank}
+          />
+        )}
 
-      {/* Step 3: Results — search + generate fired, show results */}
-      {wizard.currentStep === 3 && (
-        <WizardStepGoal
-          goalInput={wizard.goalInput}
-          searchResults={wizard.searchResults}
-          isSearching={wizard.isSearching}
-          searchSucceeded={wizard.searchSucceeded}
-          isSearchSoftSlow={wizard.isSearchSoftSlow}
-          isSearchFailed={wizard.isSearchFailed}
-          onRetrySearch={wizard.retrySearch}
-          aiGenerated={wizard.aiGenerated}
-          aiSource={wizard.aiSource}
-          isGenerating={wizard.isGenerating}
-          isGenerateSoftSlow={wizard.isGenerateSoftSlow}
-          isGenerateFailed={wizard.isGenerateFailed}
-          onRetryGenerate={wizard.retryGenerate}
-          generateError={wizard.generateError as Error | null}
-          onSetGoalInput={wizard.setGoalInput}
-          onSubmitGoal={wizard.submitGoal}
-          onCancelGoal={wizard.cancelGoal}
-          onClearGoal={wizard.clearGoal}
-          onSelectSearchResult={handleSelectAndComplete}
-          onSelectGeneratedMandala={handleSelectGeneratedAndComplete}
-          onCreateBlank={wizard.createBlank}
-          isCreatingBlank={wizard.isCreatingBlank}
-        />
-      )}
-
-      {wizard.createError && (
-        <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-center text-sm text-destructive">
-          {wizard.createError.message}
-        </div>
-      )}
+        {wizard.createError && (
+          <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-center text-sm text-destructive">
+            {wizard.createError.message}
+          </div>
+        )}
+      </main>
     </div>
   );
 }
