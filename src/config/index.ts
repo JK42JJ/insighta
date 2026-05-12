@@ -143,6 +143,24 @@ const envSchema = z.object({
   //   'openrouter' → skip Mac Mini, OpenRouter only.
   // See docs/design/mac-mini-deprecation-2026-05-13.md.
   TREND_EXTRACT_PROVIDER: z.enum(['ollama', 'openrouter']).default('ollama'),
+
+  // Cohere Rerank API (hybrid-retrieval spec 2026-05-12, Issue #610 fix).
+  // Cross-encoder reranking via `rerank-multilingual-v3.0` (multilingual incl.
+  // Korean). Chosen over Mac Mini self-host (temporary scaffold) and OpenRouter
+  // (no reranker hosted, verified 2026-05-12). API key required — see
+  // memory/credentials.md COHERE_API_KEY entry.
+  COHERE_API_KEY: z.string().optional(),
+  COHERE_RERANK_MODEL: z.string().default('rerank-multilingual-v3.0'),
+  COHERE_RERANK_TIMEOUT_MS: z.coerce.number().default(5000),
+
+  // V3 hybrid retrieval — pipeline flag (default OFF for safe rollout).
+  // When true, v3 executor wraps candidate list through hybrid-rerank.ts
+  // (tsvector keyword + Cohere rerank + 0-100 normalize + group by video).
+  // Replaces V3_USE_YOUTUBE_RANKING_ONLY behavior (PR #555). Flip ON only
+  // after manual smoke verifies the Issue #610 regression (mandala 7b99f68c).
+  V3_ENABLE_HYBRID_RERANK: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -268,6 +286,18 @@ export const config = {
   openrouter: {
     apiKey: env.OPENROUTER_API_KEY,
     model: env.OPENROUTER_MODEL,
+  },
+
+  // Cohere Rerank (cross-encoder reranking, hybrid-retrieval spec 2026-05-12)
+  cohere: {
+    apiKey: env.COHERE_API_KEY,
+    rerankModel: env.COHERE_RERANK_MODEL,
+    rerankTimeoutMs: env.COHERE_RERANK_TIMEOUT_MS,
+  },
+
+  // V3 feature flags (hybrid-retrieval spec 2026-05-12)
+  v3HybridRerank: {
+    enabled: env.V3_ENABLE_HYBRID_RERANK,
   },
 
   // Gemini

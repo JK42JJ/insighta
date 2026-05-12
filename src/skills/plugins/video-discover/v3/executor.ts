@@ -45,6 +45,7 @@ import {
 } from './mandala-filter';
 import { v3Config } from './config';
 import { filterByQualityGate } from './quality-gate';
+import { applyHybridRerank } from './hybrid-rerank';
 import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
 
 import {
@@ -341,8 +342,82 @@ export const executor: SkillExecutor = {
     const rerankedSlots = await maybeApplySemanticRerank(slots, mandalaId);
     const semanticTrace: SemanticRerankTrace | null = rerankedSlots.trace;
 
+    // ── Hybrid rerank — Cohere cross-encoder (Issue #610 spec PR1) ─────
+    // Off by default (V3_ENABLE_HYBRID_RERANK=false). When ON, replaces the
+    // medical-English oversaturation (PR #555 mandala-filter bypass) by
+    // scoring candidates against centerGoal via Cohere rerank-multilingual-v3.0.
+    // Field mapping: AssembledSlot.score ↔ RerankSlot.rec_score (in-memory only,
+    // upsertSlots writes to recommendation_cache.rec_score either way).
+    const hybridResult = await applyHybridRerank({
+      slots: rerankedSlots.slots.map((s) => ({
+        videoId: s.videoId,
+        title: s.title,
+        cellIndex: s.cellIndex,
+        rec_score: s.score,
+        _original: s,
+      })),
+      centerGoal: state.centerGoal,
+      // YT-Navigator hybrid pattern (PR #612 amendment, 2026-05-13):
+      // pass sub_goals so keyword-expanded candidates from video_pool can
+      // be cell-assigned via argmax token-overlap. Enable expansion by
+      // default — the function itself is fault-tolerant (empty on DB
+      // error / no matches).
+      subGoals: state.subGoals,
+      enableKeywordExpansion: true,
+      requestId: mandalaId,
+    });
+    const hybridSlots: AssembledSlot[] = hybridResult.slots
+      .map((r) => {
+        // Semantic-side slots carry `_original` (full AssembledSlot from
+        // mandala-filter). Keyword-expansion slots carry `_keywordFullData`
+        // (hydrated from video_pool query). Convert either to AssembledSlot.
+        const ext = r as unknown as {
+          _original?: AssembledSlot;
+          _keywordFullData?: {
+            videoId: string;
+            title: string;
+            description: string | null;
+            channelName: string | null;
+            channelId: string | null;
+            thumbnail: string | null;
+            viewCount: number | null;
+            likeCount: number | null;
+            durationSec: number | null;
+            publishedAt: Date | null;
+            cellIndex: number;
+          };
+        };
+        if (ext._original) {
+          return { ...ext._original, score: r.rec_score };
+        }
+        if (ext._keywordFullData) {
+          const k = ext._keywordFullData;
+          // Construct AssembledSlot from video_pool hydration. `tier: 'cache'`
+          // because the row came from video_pool (the same caching tier the
+          // Tier 1 cache-matcher would have used had it scored this video).
+          return {
+            videoId: k.videoId,
+            title: k.title,
+            description: k.description,
+            channelName: k.channelName,
+            channelId: k.channelId,
+            thumbnail: k.thumbnail,
+            viewCount: k.viewCount,
+            likeCount: k.likeCount,
+            durationSec: k.durationSec,
+            publishedAt: k.publishedAt,
+            cellIndex: k.cellIndex,
+            score: r.rec_score,
+            tier: 'cache' as const,
+          };
+        }
+        return null;
+      })
+      .filter((s): s is AssembledSlot => s !== null);
+    const hybridStats = hybridResult.stats;
+
     // ── Dual whitelist gate (dual-whitelist.md §3.2 — off by default) ──
-    const gatedSlots = await maybeApplyWhitelistGate(rerankedSlots.slots);
+    const gatedSlots = await maybeApplyWhitelistGate(hybridSlots);
     const whitelistTrace: WhitelistGateTrace | null = gatedSlots.trace;
 
     // ── Upsert recommendation_cache ────────────────────────────────────
@@ -365,6 +440,7 @@ export const executor: SkillExecutor = {
         ...(tier2Debug ? { debug: tier2Debug } : {}),
         ...(semanticTrace ? { semantic_rerank: semanticTrace } : {}),
         ...(whitelistTrace ? { whitelist_gate: whitelistTrace } : {}),
+        hybrid_rerank: hybridStats,
       },
       metrics: {
         duration_ms: wallMs,
