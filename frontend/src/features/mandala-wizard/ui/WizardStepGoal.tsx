@@ -1,13 +1,20 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Code, TrendingUp, Languages, Brain, Activity } from 'lucide-react';
 
 import { apiClient } from '@/shared/lib/api-client';
 import type { MandalaSearchResult, GeneratedMandala } from '@/shared/types/mandala-ux';
+import { cn } from '@/shared/lib/utils';
 import MandalaCard from './MandalaCard';
 import { WizardSearchBar } from './WizardSearchBar';
 
-const SUGGESTION_KEYS = ['s1', 's2', 's3', 's4', 's5'] as const;
+const SUGGESTIONS = [
+  { key: 's1', Icon: Code },
+  { key: 's2', Icon: TrendingUp },
+  { key: 's3', Icon: Languages },
+  { key: 's4', Icon: Brain },
+  { key: 's5', Icon: Activity },
+] as const;
 
 // ─── Trending example placeholders (MVP — static fallback before YouTube API integration) ───
 const TRENDING_EXAMPLES: Record<string, string[]> = {
@@ -87,6 +94,16 @@ interface WizardStepGoalProps {
   onSelectGeneratedMandala: (generated: GeneratedMandala) => void;
   onCreateBlank: () => void;
   isCreatingBlank?: boolean;
+  /** True only on step 3 (results). When false (step 1 idle), suppresses
+   *  results-view UI (titleResults swap + similar templates section + AI grid)
+   *  even if goalInput has a leftover value from a prior submit. */
+  isResultsView?: boolean;
+  /** Step-2 focus tags carried into step 3, shown read-only as chips inside
+   *  the locked search bar so the user retains context while picking. */
+  focusTags?: string[];
+  /** Step 3 only — back to step 2 (context). Renders a small inline back link
+   *  above the hero so the user is not stuck on the results page. */
+  onBackToContext?: () => void;
 }
 
 export default function WizardStepGoal({
@@ -110,6 +127,9 @@ export default function WizardStepGoal({
   onSelectGeneratedMandala,
   onCreateBlank,
   isCreatingBlank = false,
+  isResultsView = false,
+  focusTags,
+  onBackToContext,
 }: WizardStepGoalProps) {
   const { t, i18n } = useTranslation();
   const [localGoal, setLocalGoal] = useState(goalInput);
@@ -170,10 +190,28 @@ export default function WizardStepGoal({
   const handleSuggestionClick = (text: string) => {
     setLocalGoal(text);
     onSetGoalInput(text);
-    onSubmitGoal(text);
+    // Do NOT auto-submit; user reviews/edits the text in the search bar
+    // and presses the submit button (or enter) to advance to step 2.
   };
 
-  const hasSubmitted = goalInput.length > 0;
+  // Step 3 — selected template (template id) or 'ai' (generated mandala).
+  // Card click only marks selection; the explicit "검색하기" button on the
+  // search bar fires the actual create+search call.
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+
+  const handleResultsSubmit = () => {
+    if (!isResultsView || !selectedItem) return;
+    if (selectedItem === 'ai' && aiGenerated) {
+      onSelectGeneratedMandala(aiGenerated);
+      return;
+    }
+    const target = searchResults.find((r) => r.mandala_id === selectedItem);
+    if (target) onSelectSearchResult(target);
+  };
+
+  // Results view = explicit prop only. Step 1 with leftover goalInput must
+  // NOT render results UI (titleResults swap / similar templates section).
+  const hasSubmitted = isResultsView && goalInput.length > 0;
   // Empty state fires only when the search has actually resolved successfully
   // with zero hits. CP358: gating on `searchSucceeded` (mutation.isSuccess)
   // instead of `!isSearching` removes the 1-frame race between reset() and
@@ -241,21 +279,33 @@ export default function WizardStepGoal({
         <WizardSearchBar
           value={localGoal}
           onChange={setLocalGoal}
-          onSubmit={handleWizardSubmit}
+          onSubmit={isResultsView ? handleResultsSubmit : handleWizardSubmit}
           onCancel={onCancelGoal}
           onClear={handleClear}
           placeholder={placeholder}
           isBusy={isBusy}
+          readOnly={isResultsView}
+          // Step-1-only feature: typeahead dropdown of matching template
+          // titles. Disabled on step 3 (read-only locked bar). Step 2 uses a
+          // different component entirely (focus tags input), so unaffected.
+          enableTypeahead={!isResultsView}
+          submitLabel={isResultsView ? t('wizard.goal.searchSelected', '검색하기') : undefined}
+          submitDisabled={isResultsView && !selectedItem}
+          focusTagsContext={isResultsView ? focusTags : undefined}
           ariaLabel={t('wizard.goal.inputAria', 'Goal input')}
           ariaSubmitLabel={
-            isBusy ? t('wizard.goal.cancel', 'Cancel') : t('wizard.goal.submit', 'Go')
+            isBusy
+              ? t('wizard.goal.cancel', 'Cancel')
+              : isResultsView
+                ? t('wizard.goal.searchSelected', '검색하기')
+                : t('wizard.goal.submit', 'Go')
           }
         />
       </div>
 
       {!hasSubmitted && (
         <div className="mx-auto mt-6 flex max-w-[720px] flex-wrap justify-center gap-2">
-          {SUGGESTION_KEYS.map((key) => {
+          {SUGGESTIONS.map(({ key, Icon }) => {
             const text = t(`wizard.goal.suggestions.${key}`, '');
             if (!text) return null;
             return (
@@ -263,7 +313,7 @@ export default function WizardStepGoal({
                 key={key}
                 type="button"
                 onClick={() => handleSuggestionClick(text)}
-                className="rounded-full px-4 py-2 text-[12.5px] font-medium transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12.5px] font-medium transition-colors"
                 style={{
                   background: 'transparent',
                   border: '1px solid hsl(var(--border) / 0.4)',
@@ -280,6 +330,7 @@ export default function WizardStepGoal({
                   e.currentTarget.style.background = 'transparent';
                 }}
               >
+                <Icon className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
                 {text}
               </button>
             );
@@ -304,17 +355,16 @@ export default function WizardStepGoal({
             </div>
           ) : (
             // Fixed 4-slot grid: 3 template slots + 1 AI slot.
-            // Order is stable from the moment user submits — slots fill in as data arrives.
+            // Sorted ascending by similarity so the highest-match card sits
+            // closest to the AI slot — left→right reads as "least → best fit".
             <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-              {/* Slots 1-3: template results.
-                  CP361 Issue #375 — 3-way state branching:
-                    1. Real error  (isSearchFailed)   → amber DelayedCard + Retry
-                    2. Soft-slow   (isSearchSoftSlow) → skeleton + inline hint
-                    3. Loading     (isSearching)      → plain skeleton
-                  Failed takes priority over soft-slow. */}
               {[0, 1, 2].map((slotIdx) => {
-                const result = searchResults[slotIdx];
+                const sortedResults = [...searchResults].sort(
+                  (a, b) => a.similarity - b.similarity
+                );
+                const result = sortedResults[slotIdx];
                 if (result) {
+                  const isSelected = isResultsView && selectedItem === result.mandala_id;
                   return (
                     <MandalaCard
                       key={result.mandala_id}
@@ -325,7 +375,12 @@ export default function WizardStepGoal({
                       subjects={result.sub_goals}
                       title={result.center_goal}
                       matchPct={Math.round(result.similarity * 100)}
-                      onClick={() => onSelectSearchResult(result)}
+                      isSelected={isSelected}
+                      onClick={() =>
+                        isResultsView
+                          ? setSelectedItem(result.mandala_id)
+                          : onSelectSearchResult(result)
+                      }
                     />
                   );
                 }
@@ -366,7 +421,10 @@ export default function WizardStepGoal({
                   subjects={aiGenerated.sub_goals}
                   title={aiGenerated.center_goal}
                   matchPct={100}
-                  onClick={() => onSelectGeneratedMandala(aiGenerated)}
+                  isSelected={isResultsView && selectedItem === 'ai'}
+                  onClick={() =>
+                    isResultsView ? setSelectedItem('ai') : onSelectGeneratedMandala(aiGenerated)
+                  }
                 />
               ) : isGenerateFailed ? (
                 <MandalaCard variant="ai-delayed" onRetry={onRetryGenerate} />
@@ -384,18 +442,32 @@ export default function WizardStepGoal({
         </div>
       )}
 
-      {/* Blank create — text link only (per user spec, no button styling) */}
-      <div className="mt-8 text-center">
-        <button
-          type="button"
-          onClick={onCreateBlank}
-          disabled={isCreatingBlank}
-          className="text-[13px] font-medium text-muted-foreground/70 underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isCreatingBlank
-            ? t('wizard.domain.creating', 'Creating...')
-            : t('wizard.domain.createBlank', 'Start from scratch →')}
-        </button>
+      {/* Footer row — back (left) + createBlank (center), same visual weight */}
+      <div className="mt-8 grid grid-cols-3 items-center">
+        <div className="justify-self-start">
+          {isResultsView && onBackToContext && (
+            <button
+              type="button"
+              onClick={onBackToContext}
+              className="inline-flex h-10 items-center rounded-full px-4 text-[13px] font-medium text-muted-foreground transition hover:bg-foreground/[0.04] hover:text-foreground"
+            >
+              {t('common.back', 'Back')}
+            </button>
+          )}
+        </div>
+        <div className="text-center">
+          <button
+            type="button"
+            onClick={onCreateBlank}
+            disabled={isCreatingBlank}
+            className="text-[13px] font-medium text-muted-foreground/70 underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isCreatingBlank
+              ? t('wizard.domain.creating', 'Creating...')
+              : t('wizard.domain.createBlank', 'Start from scratch →')}
+          </button>
+        </div>
+        <div />
       </div>
     </div>
   );

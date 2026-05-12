@@ -1447,6 +1447,7 @@
     "goal": {
       "title": "What goal do you want to start with?",
       "titleResults": "Pick a mandala — AI will find videos for you",
+      "searchSelected": "Search",
       "subtitle": "Enter your goal — we'll find similar templates and generate a custom mandala.",
       "placeholder": "Enter a goal — we'll use a mandala to find the best videos for you",
       "placeholderPrefix": "e.g.,",

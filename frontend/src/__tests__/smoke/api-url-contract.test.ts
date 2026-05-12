@@ -59,4 +59,9 @@ describe('API Client URL Contract', () => {
       expect(line).not.toContain('/api/v1/skills');
     }
   });
+
+  it('searchTemplatesTypeahead uses /mandalas/templates/typeahead (no double prefix)', () => {
+    expect(content).toContain('/mandalas/templates/typeahead');
+    expect(content).not.toMatch(/\/api\/v1\/mandalas\/templates\/typeahead/);
+  });
 });

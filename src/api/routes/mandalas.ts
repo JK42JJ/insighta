@@ -366,6 +366,38 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   // ─── Multi-Mandala CRUD endpoints (Story #60) ───
 
   /**
+   * GET /api/v1/mandalas/templates/typeahead - Substring search over template center_goal titles.
+   * Returns up to 5 matches ordered by title length (shortest first).
+   */
+  fastify.get<{ Querystring: { q?: string } }>(
+    '/templates/typeahead',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const q = (request.query.q ?? '').trim();
+      if (q.length < 2) {
+        return reply.send({ results: [] });
+      }
+
+      type TypeaheadRow = { mandala_id: string; center_goal: string; domain: string | null };
+
+      const rows = await getPrismaClient().$queryRaw<TypeaheadRow[]>`
+        SELECT
+          mandala_id::text AS mandala_id,
+          center_goal,
+          domain
+        FROM mandala_embeddings
+        WHERE level = 1
+          AND sub_goal_index IS NULL
+          AND center_goal ILIKE ${'%' + q + '%'}
+        ORDER BY LENGTH(center_goal) ASC
+        LIMIT 5
+      `;
+
+      return reply.send({ results: rows });
+    }
+  );
+
+  /**
    * GET /api/v1/mandalas/quota - Get user's mandala quota info
    */
   fastify.get('/quota', { onRequest: [fastify.authenticate] }, async (request, reply) => {

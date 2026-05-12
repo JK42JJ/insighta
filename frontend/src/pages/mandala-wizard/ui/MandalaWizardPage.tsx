@@ -113,8 +113,9 @@ export default function MandalaWizardPage() {
   );
 
   const isResultsStep = wizard.currentStep === 3;
-  // Main inner width: step 3 needs 1080 for 4-card grid, step 1/2 = 720.
-  const mainMaxClass = isResultsStep ? 'max-w-[1080px]' : 'max-w-[720px]';
+  // Main inner width: step 3 = 1188 (4-card grid, 10% larger than 1080),
+  // step 1/2 = 720.
+  const mainMaxClass = isResultsStep ? 'max-w-[1188px]' : 'max-w-[720px]';
 
   if (dailyReached) {
     return (
@@ -194,89 +195,88 @@ export default function MandalaWizardPage() {
         </Link>
       </div>
 
-      <main
-        className={cn(
-          'mx-auto flex w-full flex-1 flex-col px-6 pb-10',
-          mainMaxClass,
-          !isResultsStep && 'justify-center'
-        )}
-      >
+      <main className={cn('mx-auto flex w-full flex-1 flex-col px-6 pb-10', mainMaxClass)}>
         <WizardStepper currentStep={wizard.currentStep} />
+        <div className={cn('flex-1', !isResultsStep && 'flex flex-col justify-center pb-[20vh]')}>
+          {/* Step 1: Goal input only — no search/generate yet */}
+          {wizard.currentStep === 1 && (
+            <WizardStepGoal
+              goalInput={wizard.goalInput}
+              searchResults={[]}
+              isSearching={false}
+              searchSucceeded={false}
+              isSearchSoftSlow={false}
+              isSearchFailed={false}
+              onRetrySearch={() => {}}
+              aiGenerated={null}
+              aiSource={null}
+              isGenerating={false}
+              isGenerateSoftSlow={false}
+              isGenerateFailed={false}
+              onRetryGenerate={() => {}}
+              generateError={null}
+              onSetGoalInput={wizard.setGoalInput}
+              onSubmitGoal={handleGoalGo}
+              onCancelGoal={wizard.cancelGoal}
+              onClearGoal={wizard.clearGoal}
+              onSelectSearchResult={() => {}}
+              onSelectGeneratedMandala={() => {}}
+              onCreateBlank={wizard.createBlank}
+              isCreatingBlank={wizard.isCreatingBlank}
+            />
+          )}
 
-        {/* Step 1: Goal input only — no search/generate yet */}
-        {wizard.currentStep === 1 && (
-          <WizardStepGoal
-            goalInput={wizard.goalInput}
-            searchResults={[]}
-            isSearching={false}
-            searchSucceeded={false}
-            isSearchSoftSlow={false}
-            isSearchFailed={false}
-            onRetrySearch={() => {}}
-            aiGenerated={null}
-            aiSource={null}
-            isGenerating={false}
-            isGenerateSoftSlow={false}
-            isGenerateFailed={false}
-            onRetryGenerate={() => {}}
-            generateError={null}
-            onSetGoalInput={wizard.setGoalInput}
-            onSubmitGoal={handleGoalGo}
-            onCancelGoal={wizard.cancelGoal}
-            onClearGoal={wizard.clearGoal}
-            onSelectSearchResult={() => {}}
-            onSelectGeneratedMandala={() => {}}
-            onCreateBlank={wizard.createBlank}
-            isCreatingBlank={wizard.isCreatingBlank}
-          />
-        )}
+          {/* Step 2: Context (focus tags + target level) */}
+          {wizard.currentStep === 2 && (
+            <WizardStepContext
+              goal={wizard.goalInput}
+              focusTags={wizard.focusTags}
+              targetLevel={wizard.targetLevel}
+              onSetFocusTags={wizard.setFocusTags}
+              onSetTargetLevel={wizard.setTargetLevel}
+              onComplete={handleContextContinue}
+              onBack={() => wizard.goToStep(1)}
+              isCreating={false}
+            />
+          )}
 
-        {/* Step 2: Context (focus tags + target level) */}
-        {wizard.currentStep === 2 && (
-          <WizardStepContext
-            focusTags={wizard.focusTags}
-            targetLevel={wizard.targetLevel}
-            onSetFocusTags={wizard.setFocusTags}
-            onSetTargetLevel={wizard.setTargetLevel}
-            onComplete={handleContextContinue}
-            onBack={() => wizard.goToStep(1)}
-            isCreating={false}
-          />
-        )}
+          {/* Step 3: Results — search + generate fired, show results */}
+          {wizard.currentStep === 3 && (
+            <WizardStepGoal
+              goalInput={wizard.goalInput}
+              searchResults={wizard.searchResults}
+              isSearching={wizard.isSearching}
+              searchSucceeded={wizard.searchSucceeded}
+              isSearchSoftSlow={wizard.isSearchSoftSlow}
+              isSearchFailed={wizard.isSearchFailed}
+              onRetrySearch={wizard.retrySearch}
+              aiGenerated={wizard.aiGenerated}
+              aiSource={wizard.aiSource}
+              isGenerating={wizard.isGenerating}
+              isGenerateSoftSlow={wizard.isGenerateSoftSlow}
+              isGenerateFailed={wizard.isGenerateFailed}
+              onRetryGenerate={wizard.retryGenerate}
+              generateError={wizard.generateError as Error | null}
+              onSetGoalInput={wizard.setGoalInput}
+              onSubmitGoal={wizard.submitGoal}
+              onCancelGoal={wizard.cancelGoal}
+              onClearGoal={wizard.clearGoal}
+              onSelectSearchResult={handleSelectAndComplete}
+              onSelectGeneratedMandala={handleSelectGeneratedAndComplete}
+              onCreateBlank={wizard.createBlank}
+              isCreatingBlank={wizard.isCreatingBlank}
+              isResultsView
+              focusTags={wizard.focusTags}
+              onBackToContext={() => wizard.goToStep(2)}
+            />
+          )}
 
-        {/* Step 3: Results — search + generate fired, show results */}
-        {wizard.currentStep === 3 && (
-          <WizardStepGoal
-            goalInput={wizard.goalInput}
-            searchResults={wizard.searchResults}
-            isSearching={wizard.isSearching}
-            searchSucceeded={wizard.searchSucceeded}
-            isSearchSoftSlow={wizard.isSearchSoftSlow}
-            isSearchFailed={wizard.isSearchFailed}
-            onRetrySearch={wizard.retrySearch}
-            aiGenerated={wizard.aiGenerated}
-            aiSource={wizard.aiSource}
-            isGenerating={wizard.isGenerating}
-            isGenerateSoftSlow={wizard.isGenerateSoftSlow}
-            isGenerateFailed={wizard.isGenerateFailed}
-            onRetryGenerate={wizard.retryGenerate}
-            generateError={wizard.generateError as Error | null}
-            onSetGoalInput={wizard.setGoalInput}
-            onSubmitGoal={wizard.submitGoal}
-            onCancelGoal={wizard.cancelGoal}
-            onClearGoal={wizard.clearGoal}
-            onSelectSearchResult={handleSelectAndComplete}
-            onSelectGeneratedMandala={handleSelectGeneratedAndComplete}
-            onCreateBlank={wizard.createBlank}
-            isCreatingBlank={wizard.isCreatingBlank}
-          />
-        )}
-
-        {wizard.createError && (
-          <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-center text-sm text-destructive">
-            {wizard.createError.message}
-          </div>
-        )}
+          {wizard.createError && (
+            <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-center text-sm text-destructive">
+              {wizard.createError.message}
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );

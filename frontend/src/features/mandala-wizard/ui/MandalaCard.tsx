@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, Search, Sparkles } from 'lucide-react';
+import { Search, Sparkles } from 'lucide-react';
 
 import { apiClient } from '@/shared/lib/api-client';
 import { DOMAIN_STYLES, type MandalaDomain, getDomainLabel } from '@/shared/config/domain-colors';
@@ -55,6 +55,12 @@ export interface MandalaCardProps {
    * color — NEVER amber. Undefined / empty string = no hint shown.
    */
   hint?: string;
+  /**
+   * Highlight the card's own outline as selected (used by step-3 results
+   * grid). Applied directly to the card element so the ring follows the
+   * hover transform — no wrapper-vs-card geometry mismatch.
+   */
+  isSelected?: boolean;
 }
 
 export default function MandalaCard({
@@ -68,6 +74,7 @@ export default function MandalaCard({
   onClick,
   onRetry,
   hint,
+  isSelected,
 }: MandalaCardProps) {
   const { t, i18n } = useTranslation();
 
@@ -86,6 +93,14 @@ export default function MandalaCard({
   const isAiComplete = variant === 'ai-complete';
   const isAi = isAiLoading || isAiComplete;
   const isDelayed = variant === 'template-delayed' || variant === 'ai-delayed';
+
+  // Confidence-tier color (semantic tokens, inline style to avoid JIT issues):
+  //   >=70%  -> --success (green)
+  //   50-69% -> --warning (amber)
+  //   <50%   -> --muted-foreground (gray)
+  const matchTierPct = isAiComplete ? 100 : (matchPct ?? 0);
+  const matchTierToken: 'success' | 'warning' | 'muted-foreground' =
+    matchTierPct >= 70 ? 'success' : matchTierPct >= 50 ? 'warning' : 'muted-foreground';
 
   // Resolve domain → localized label + inline color style via SSOT
   // (domain-colors.ts). DB stores the English enum ('finance', 'tech', …);
@@ -161,15 +176,16 @@ export default function MandalaCard({
   }
 
   const cardClass = [
-    'group relative overflow-hidden rounded-xl px-5 pb-5 pt-[20px] text-left transition-all duration-200',
+    'group relative w-full overflow-hidden rounded-xl px-5 pb-5 pt-[20px] text-left transition-all duration-200',
     isAiLoading
       ? 'border border-dashed border-primary/40 bg-primary/[0.05] cursor-default ai-loading-shimmer'
       : isTemplateLoading
         ? 'border border-border-subtle bg-card/60 cursor-default'
-        : isAiComplete
-          ? 'border-[1.5px] border-primary bg-card shadow-[0_0_0_3px_hsl(var(--primary)/0.15)] cursor-pointer hover:-translate-y-[2px]'
-          : 'border border-border-subtle bg-card cursor-pointer hover:-translate-y-[2px] hover:bg-card/80 hover:border-border hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)]',
-  ].join(' ');
+        : 'border border-border-subtle bg-card cursor-pointer hover:-translate-y-[2px] hover:bg-card/80 hover:border-border hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)]',
+    isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <button
@@ -210,13 +226,6 @@ export default function MandalaCard({
               domainLabel
             )}
           </div>
-        )}
-        {!isLoading && (
-          <ArrowRight
-            className="h-4 w-4 flex-shrink-0 text-muted-foreground opacity-0 transition-all duration-200 group-hover:translate-x-[2px] group-hover:opacity-100"
-            strokeWidth={2}
-            aria-hidden="true"
-          />
         )}
       </div>
 
@@ -305,26 +314,31 @@ export default function MandalaCard({
           />
         </>
       ) : (
-        <h4 className="mb-2.5 line-clamp-2 text-[13px] font-semibold leading-snug text-foreground break-keep">
+        <h4
+          className="mb-2.5 line-clamp-2 min-h-[36px] text-[13px] font-semibold leading-snug text-foreground break-keep"
+          title={title}
+        >
           {title}
         </h4>
       )}
 
-      {/* Match bar */}
+      {/* Match bar — confidence-tier color: >=70 success, 50-69 warning, <50 muted */}
       {!isLoading ? (
         <div className="flex items-center gap-2">
           <div className="h-[3px] flex-1 overflow-hidden rounded-full bg-background/60">
             <div
-              className="h-full rounded-full bg-primary transition-all duration-500"
-              style={{ width: isAiComplete ? '100%' : `${matchPct ?? 0}%` }}
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${matchTierPct}%`,
+                background: `hsl(var(--${matchTierToken}))`,
+              }}
             />
           </div>
           <div
-            className={`min-w-[32px] text-right text-[11px] font-semibold ${
-              isAiComplete ? 'text-primary' : 'text-muted-foreground'
-            }`}
+            className="min-w-[32px] text-right text-[11px] font-semibold"
+            style={{ color: `hsl(var(--${matchTierToken}))` }}
           >
-            {isAiComplete ? t('wizard.goal.card.matchLabel', 'Best') : `${matchPct ?? 0}%`}
+            {isAiComplete ? t('wizard.goal.card.matchLabel', 'Best') : `${matchTierPct}%`}
           </div>
         </div>
       ) : (

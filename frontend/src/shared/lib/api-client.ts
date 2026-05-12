@@ -322,6 +322,16 @@ export interface SkillOutputResponse {
   created_at: string;
 }
 
+/**
+ * Result row returned by the wizard step-1 typeahead endpoint.
+ * Backend contract: `{ results: TemplateTypeaheadResult[] }`.
+ */
+export interface TemplateTypeaheadResult {
+  mandala_id: string;
+  center_goal: string;
+  domain: string | null;
+}
+
 interface MandalaResponse {
   id: string;
   userId: string;
@@ -1354,6 +1364,31 @@ class ApiClient {
         structure_duration_ms: structureDurationMs,
       };
     }
+  }
+
+  /**
+   * Lightweight typeahead for the wizard step-1 search bar.
+   *
+   * Backend contract (BE agent owned). Endpoint resolves to:
+   *   GET <baseUrl>/api/v1 + the relative path passed to request() below.
+   *   q.length < 2 → returns { results: [] } (no DB query)
+   *   limit 5
+   *
+   * Returns an empty array on short query (< 2 chars) without hitting the
+   * network — saves a roundtrip per keystroke during initial typing.
+   */
+  async searchTemplatesTypeahead(
+    q: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<TemplateTypeaheadResult[]> {
+    const trimmed = q.trim();
+    if (trimmed.length < 2) return [];
+    const qs = `?q=${encodeURIComponent(trimmed)}`;
+    const res = await this.request<{ results: TemplateTypeaheadResult[] }>(
+      `/mandalas/templates/typeahead${qs}`,
+      { externalSignal: options?.signal }
+    );
+    return res.results ?? [];
   }
 
   async searchMandalasByGoal(

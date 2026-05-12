@@ -39,6 +39,19 @@
     --destructive: 0 65% 55%;
     --destructive-foreground: 0 0% 100%;
 
+    /* Trust accent — used for AI-generated content (e.g. AI custom mandala
+       match bar). Cyan-blue conveys reliability without competing with the
+       indigo --primary hue. */
+    --info: 200 80% 45%;
+    --info-foreground: 0 0% 100%;
+
+    /* Confidence-tier accents — used for score/match-percent indicators.
+       success: high (>=70%), warning: medium (50-69%), low uses --muted. */
+    --success: 142 65% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 10%;
+
     --border: 220 13% 91%;
     --input: 220 13% 91%;
     --ring: 234 65% 50%;
@@ -171,6 +184,14 @@
 
     --destructive: 0 60% 58%;
     --destructive-foreground: 0 0% 100%;
+
+    --info: 200 75% 62%;
+    --info-foreground: 0 0% 10%;
+
+    --success: 142 55% 58%;
+    --success-foreground: 0 0% 10%;
+    --warning: 38 85% 60%;
+    --warning-foreground: 0 0% 10%;
 
     --border: 0 0% 22%;
     --input: 0 0% 20%;
