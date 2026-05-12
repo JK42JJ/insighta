@@ -357,12 +357,63 @@ export const executor: SkillExecutor = {
         _original: s,
       })),
       centerGoal: state.centerGoal,
+      // YT-Navigator hybrid pattern (PR #612 amendment, 2026-05-13):
+      // pass sub_goals so keyword-expanded candidates from video_pool can
+      // be cell-assigned via argmax token-overlap. Enable expansion by
+      // default — the function itself is fault-tolerant (empty on DB
+      // error / no matches).
+      subGoals: state.subGoals,
+      enableKeywordExpansion: true,
       requestId: mandalaId,
     });
-    const hybridSlots: AssembledSlot[] = hybridResult.slots.map((r) => ({
-      ...r._original,
-      score: r.rec_score,
-    }));
+    const hybridSlots: AssembledSlot[] = hybridResult.slots
+      .map((r) => {
+        // Semantic-side slots carry `_original` (full AssembledSlot from
+        // mandala-filter). Keyword-expansion slots carry `_keywordFullData`
+        // (hydrated from video_pool query). Convert either to AssembledSlot.
+        const ext = r as unknown as {
+          _original?: AssembledSlot;
+          _keywordFullData?: {
+            videoId: string;
+            title: string;
+            description: string | null;
+            channelName: string | null;
+            channelId: string | null;
+            thumbnail: string | null;
+            viewCount: number | null;
+            likeCount: number | null;
+            durationSec: number | null;
+            publishedAt: Date | null;
+            cellIndex: number;
+          };
+        };
+        if (ext._original) {
+          return { ...ext._original, score: r.rec_score };
+        }
+        if (ext._keywordFullData) {
+          const k = ext._keywordFullData;
+          // Construct AssembledSlot from video_pool hydration. `tier: 'cache'`
+          // because the row came from video_pool (the same caching tier the
+          // Tier 1 cache-matcher would have used had it scored this video).
+          return {
+            videoId: k.videoId,
+            title: k.title,
+            description: k.description,
+            channelName: k.channelName,
+            channelId: k.channelId,
+            thumbnail: k.thumbnail,
+            viewCount: k.viewCount,
+            likeCount: k.likeCount,
+            durationSec: k.durationSec,
+            publishedAt: k.publishedAt,
+            cellIndex: k.cellIndex,
+            score: r.rec_score,
+            tier: 'cache' as const,
+          };
+        }
+        return null;
+      })
+      .filter((s): s is AssembledSlot => s !== null);
     const hybridStats = hybridResult.stats;
 
     // ── Dual whitelist gate (dual-whitelist.md §3.2 — off by default) ──
