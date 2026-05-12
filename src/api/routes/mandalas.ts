@@ -304,6 +304,72 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   });
 
   /**
+   * GET /api/v1/mandalas/templates-public - Public template list for marketing landing page.
+   * No auth required — anonymous access allowed.
+   * source is always forced to 'all'; mine source is not supported.
+   */
+  fastify.get<{
+    Querystring: {
+      q?: string;
+      domain?: string;
+      language?: string;
+      sort?: string;
+      page?: string;
+      limit?: string;
+    };
+  }>('/templates-public', async (request, reply) => {
+    const { q, domain, language, sort } = request.query;
+    const page = request.query.page ? parseInt(request.query.page, 10) : undefined;
+    const limit = request.query.limit ? parseInt(request.query.limit, 10) : undefined;
+
+    if (
+      (page !== undefined && (isNaN(page) || page < 1)) ||
+      (limit !== undefined && (isNaN(limit) || limit < 1 || limit > MAX_PAGINATION_LIMIT))
+    ) {
+      return reply.code(400).send({ error: 'Invalid pagination parameters' });
+    }
+
+    const parsedFilters = {
+      q: q || undefined,
+      domain: domain || undefined,
+      language: EXPLORE_LANGUAGES.includes(language as (typeof EXPLORE_LANGUAGES)[number])
+        ? language
+        : undefined,
+      source: 'all' as (typeof EXPLORE_SOURCES)[number],
+      sort: EXPLORE_SORTS.includes(sort as (typeof EXPLORE_SORTS)[number])
+        ? (sort as (typeof EXPLORE_SORTS)[number])
+        : undefined,
+      page,
+      limit,
+      userId: undefined,
+    };
+
+    const cacheKey = parsedFilters.q
+      ? null
+      : MemoryCache.buildKey({
+          prefix: 'tpl-public',
+          domain: parsedFilters.domain,
+          sort: parsedFilters.sort,
+          language: parsedFilters.language,
+          page: parsedFilters.page,
+          limit: parsedFilters.limit,
+        });
+
+    if (cacheKey) {
+      const cached = exploreCache.get(cacheKey);
+      if (cached) return reply.send(cached);
+    }
+
+    const result = await getMandalaManager().listExploreMandalas(parsedFilters);
+
+    if (cacheKey) {
+      exploreCache.set(cacheKey, result);
+    }
+
+    return reply.send(result);
+  });
+
+  /**
    * POST /api/v1/mandalas/:id/like - Toggle like on a public mandala (auth required)
    */
   fastify.post<{ Params: { id: string } }>(

@@ -1546,6 +1546,30 @@ class ApiClient {
     return this.request<ExploreListResponse>(`/mandalas/explore${query}`);
   }
 
+  /**
+   * List public templates for the marketing /templates landing page.
+   * No auth token is sent — anonymous access.
+   * source is always 'all' (BE ignores any source param).
+   */
+  async listPublicTemplates(filters: {
+    q?: string;
+    domain?: string;
+    language?: string;
+    sort?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<ExploreListResponse> {
+    const params = new URLSearchParams();
+    if (filters.q) params.set('q', filters.q);
+    if (filters.domain && filters.domain !== 'all') params.set('domain', filters.domain);
+    if (filters.language && filters.language !== 'all') params.set('language', filters.language);
+    if (filters.sort) params.set('sort', filters.sort);
+    if (filters.page) params.set('page', String(filters.page));
+    if (filters.limit) params.set('limit', String(filters.limit));
+    const query = params.toString() ? `?${params}` : '';
+    return this.request<ExploreListResponse>(`/mandalas/templates-public${query}`);
+  }
+
   async toggleMandalaLike(
     mandalaId: string
   ): Promise<{ success: boolean; data: { liked: boolean; likeCount: number } }> {

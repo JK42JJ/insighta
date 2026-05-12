@@ -26,7 +26,10 @@ const PrivacyPage = lazy(() => import('@/pages/privacy'));
 const TermsPage = lazy(() => import('@/pages/terms'));
 const ExplorePage = lazy(() => import('@/pages/explore'));
 const PricingPage = lazy(() => import('@/pages/pricing'));
-// TemplatesPage removed — /templates redirects to /explore (Phase 5)
+// Marketing /templates page (CP454): forked from pre-CP453 ExplorePage so the
+// public template catalog keeps its scroll-the-grid UX after /explore was
+// pivoted to a wizard-style dashboard.
+const TemplatesPage = lazy(() => import('@/pages/templates'));
 const LearningPage = lazy(() => import('@/pages/learning'));
 const HelpPage = lazy(() => import('@/pages/help'));
 const NotFoundPage = lazy(() => import('@/pages/not-found'));
@@ -49,8 +52,8 @@ export function AppRouter() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/landing" element={<LandingPage />} />
         <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/templates" element={<Navigate to="/explore" replace />} />
-        <Route path="/templates/:templateId" element={<Navigate to="/explore" replace />} />
+        <Route path="/templates" element={<TemplatesPage />} />
+        <Route path="/templates/:slug" element={<TemplatesPage />} />
         <Route
           path="/mandalas"
           element={

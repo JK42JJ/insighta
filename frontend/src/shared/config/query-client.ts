@@ -82,6 +82,10 @@ export const queryKeys = {
     all: ['explore'] as const,
     list: (filters: Record<string, unknown>) => ['explore', 'list', filters] as const,
   },
+  templatesPublic: {
+    all: ['templates-public'] as const,
+    list: (filters: Record<string, unknown>) => ['templates-public', 'list', filters] as const,
+  },
   uiPreferences: {
     all: ['ui-preferences'] as const,
   },

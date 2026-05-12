@@ -64,4 +64,9 @@ describe('API Client URL Contract', () => {
     expect(content).toContain('/mandalas/templates/typeahead');
     expect(content).not.toMatch(/\/api\/v1\/mandalas\/templates\/typeahead/);
   });
+
+  it('listPublicTemplates uses /mandalas/templates-public (no double prefix)', () => {
+    expect(content).toContain('/mandalas/templates-public');
+    expect(content).not.toMatch(/\/api\/v1\/mandalas\/templates-public/);
+  });
 });

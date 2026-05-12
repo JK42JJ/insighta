@@ -411,9 +411,11 @@ export function CardListView({
   const currentSortLabel = SORT_OPTIONS.find((o) => o.value === sortMode);
   const CurrentSortIcon = SORT_ICON_BY_VALUE[sortMode];
   const dragSortInline = (
-    <div className="flex items-center gap-3 shrink-0">
+    // pb-1 mirrors the LabelFilterPillsV2 inner wrapper's pb-1 so this
+    // toolbar sits on the same vertical center as the chips on the left.
+    <div className="flex items-center gap-3 shrink-0 pb-1">
       {effectiveViewMode === 'grid' && (
-        <div className="hidden lg:flex items-center gap-1 text-[11px] text-muted-foreground/70">
+        <div className="hidden lg:flex h-7 items-center gap-1 text-[11px] text-muted-foreground/70">
           <GripVertical className="h-3 w-3" />
           <span>{t('cards.dragToMove')}</span>
         </div>
@@ -422,7 +424,7 @@ export function CardListView({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="inline-flex items-center gap-1 px-1 py-0.5 text-[11px] text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none"
+            className="inline-flex h-7 items-center gap-1 px-1 text-[11px] text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none"
           >
             <CurrentSortIcon className="h-3 w-3" />
             <span className="hidden sm:inline">
