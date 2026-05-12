@@ -352,6 +352,8 @@ export async function consumePrecompute(
             typeof slot.publishedAt === 'string'
               ? slot.publishedAt
               : (slot.publishedAt?.toISOString() ?? null),
+          // PR3 — anchor lookup deferred to SSE backlog path on subscriber connect.
+          startSec: null,
         };
         notifyCardAdded(input.mandalaId, payload);
         return true;

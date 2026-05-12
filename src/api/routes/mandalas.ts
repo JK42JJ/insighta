@@ -27,6 +27,7 @@ import {
 import { config } from '../../config';
 import { MemoryCache } from '../../utils/memory-cache';
 import { cardPublisher, type CardPayload } from '../../modules/recommendations/publisher';
+import { lookupChunkAnchors } from '../../modules/recommendations/chunk-anchor';
 import { generateMandalaActions } from '../../modules/mandala/generator';
 
 // Explore results cache — templates are near-immutable, 10-min TTL
@@ -1755,6 +1756,12 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       take: RECOMMENDATION_FETCH_LIMIT,
     });
 
+    // PR3 (hybrid-retrieval spec 2026-05-12) — per-video chunk anchor lookup.
+    // Adds a `startSec` field so the FE can build a deep-link to the relevant
+    // moment in the YouTube video. Falls back to null when no chunk exists
+    // for the video (caller renders plain URL without `&t=`).
+    const anchors = await lookupChunkAnchors(rows.map((r) => r.video_id));
+
     const items = rows.map((row) => ({
       id: row.id,
       videoId: row.video_id,
@@ -1769,6 +1776,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       source: row.weight_version === 0 ? ('manual' as const) : ('auto_recommend' as const),
       recReason: row.rec_reason,
       publishedAt: row.published_at?.toISOString() ?? null,
+      startSec: anchors.get(row.video_id) ?? null,
     }));
 
     const firstRow = rows[0];
@@ -2428,6 +2436,9 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         take: RECOMMENDATION_FETCH_LIMIT,
       });
 
+      // PR3 — chunk anchors for SSE backlog (same lookup as REST path).
+      const backlogAnchors = await lookupChunkAnchors(backlogRows.map((r) => r.video_id));
+
       for (const row of backlogRows) {
         const payload: CardPayload = {
           id: row.id,
@@ -2444,6 +2455,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           source: row.weight_version === 0 ? 'manual' : 'auto_recommend',
           recReason: row.rec_reason,
           publishedAt: row.published_at?.toISOString() ?? null,
+          startSec: backlogAnchors.get(row.video_id) ?? null,
         };
         write('card_added', payload);
       }

@@ -1220,6 +1220,11 @@ async function upsertSlots(
             source: row.weight_version === 0 ? 'manual' : 'auto_recommend',
             recReason: row.rec_reason,
             publishedAt: row.published_at?.toISOString() ?? null,
+            // PR3 — chunk anchor for live SSE. We could batch-lookup per slot
+            // but that adds DB round trips during the upsert hot path; the
+            // backlog emit path already supplies anchors to subscribers when
+            // they connect. Set null here; FE falls back to plain URL.
+            startSec: null,
           };
           notifyCardAdded(mandalaId, payload);
         } catch (notifyErr) {
@@ -1272,6 +1277,9 @@ async function upsertSlots(
         source: row.weight_version === 0 ? 'manual' : 'auto_recommend',
         recReason: row.rec_reason,
         publishedAt: row.published_at?.toISOString() ?? null,
+        // PR3 — chunk anchor not looked up in hot upsert path; SSE backlog
+        // path supplies anchors on subscriber connect (see mandalas.ts).
+        startSec: null,
       };
       notifyCardAdded(mandalaId, payload);
     } catch (notifyErr) {
