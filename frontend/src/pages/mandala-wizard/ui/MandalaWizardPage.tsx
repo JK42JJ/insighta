@@ -187,9 +187,9 @@ export default function MandalaWizardPage() {
     <div className={containerClass}>
       <Link
         to="/"
-        className="mb-6 inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+        className="mb-6 inline-flex items-center gap-1.5 rounded-md border border-border/50 px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:border-border hover:bg-accent/30 hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" />
+        <ArrowLeft className="h-3.5 w-3.5" />
         {t('settings.backToApp', 'Back to app')}
       </Link>
 

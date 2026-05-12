@@ -38,7 +38,7 @@ export default function WizardStepContext({
 
   const removeTag = useCallback(
     (tag: string) => {
-      onSetFocusTags(focusTags.filter((t) => t !== tag));
+      onSetFocusTags(focusTags.filter((tg) => tg !== tag));
     },
     [focusTags, onSetFocusTags]
   );
@@ -54,26 +54,51 @@ export default function WizardStepContext({
   );
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
+    <div className="space-y-9 wizard-step-enter">
       <div className="text-center">
-        <h2 className="text-xl font-bold tracking-tight">
+        <h1
+          className="text-[36px] font-bold leading-[1.2]"
+          style={{ color: 'hsl(var(--foreground))', letterSpacing: '-0.03em' }}
+        >
           {t('wizard.context.title', "Anything else you'd like to focus on?")}
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
+        </h1>
+        <p className="mt-3 text-[14px] leading-relaxed text-muted-foreground/80">
           {t(
             'wizard.context.subtitle',
-            'Add focus areas and select your target level. You can skip this step.'
+            'Add focus areas to find more relevant videos. You can skip.'
           )}
         </p>
       </div>
 
-      {/* Focus Tags */}
-      <div className="space-y-3">
-        <label className="text-sm font-semibold text-foreground/80">
-          {t('wizard.context.focusLabel', 'Focus areas')}
-        </label>
-        <div className="flex gap-2">
+      <div className="mx-auto w-full max-w-[720px] space-y-4">
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-2xl px-3 py-2 transition-colors focus-within:border-primary/50"
+          style={{
+            background: 'hsl(var(--input))',
+            border: '1px solid hsl(var(--border) / 0.2)',
+            minHeight: '52px',
+          }}
+        >
+          {focusTags.map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-semibold"
+              style={{
+                background: 'hsl(var(--primary) / 0.12)',
+                color: 'hsl(var(--primary))',
+              }}
+            >
+              {tag}
+              <button
+                type="button"
+                onClick={() => removeTag(tag)}
+                className="grid h-3.5 w-3.5 place-items-center rounded-sm transition-colors hover:bg-primary/20"
+                aria-label={`Remove ${tag}`}
+              >
+                <X className="h-3 w-3" strokeWidth={2.5} />
+              </button>
+            </span>
+          ))}
           <input
             type="text"
             value={tagInput}
@@ -85,82 +110,46 @@ export default function WizardStepContext({
             onCompositionEnd={() => {
               isComposingRef.current = false;
             }}
-            placeholder={t('wizard.context.focusPlaceholder', 'e.g. ETF, budgeting, real estate')}
-            className="flex-1 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+            placeholder={t(
+              'wizard.context.focusPlaceholder',
+              'Add a focus area — e.g. hybrid search, BGE-M3, reranker'
+            )}
+            className="min-w-[140px] flex-1 border-none bg-transparent px-1 py-1.5 text-[14px] outline-none placeholder:text-muted-foreground/45 focus-visible:ring-0 focus-visible:ring-offset-0"
             maxLength={30}
           />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={addTag}
-            disabled={!tagInput.trim()}
-            className="shrink-0"
+        </div>
+
+        <div className="flex justify-center">
+          <div
+            className="inline-flex gap-0.5 rounded-lg p-[3px]"
+            style={{
+              background: 'hsl(var(--input))',
+              border: '1px solid hsl(var(--border) / 0.2)',
+            }}
           >
-            {t('wizard.context.addTag', 'Add')}
-          </Button>
-        </div>
-        {focusTags.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {focusTags.map((tag) => (
-              <span
-                key={tag}
-                className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
-              >
-                #{tag}
+            {TARGET_LEVELS.map((level) => {
+              const isSelected = targetLevel === level;
+              return (
                 <button
-                  onClick={() => removeTag(tag)}
-                  className="rounded-full p-0.5 hover:bg-primary/20 transition-colors"
-                  aria-label={`Remove ${tag}`}
+                  key={level}
+                  type="button"
+                  onClick={() => onSetTargetLevel(level)}
+                  className={cn(
+                    'rounded-md px-4 py-1.5 text-[13px] font-medium transition-all',
+                    isSelected
+                      ? 'bg-background text-foreground shadow-sm font-semibold'
+                      : 'text-muted-foreground/70 hover:text-foreground'
+                  )}
                 >
-                  <X className="h-3 w-3" />
+                  {t(`wizard.context.level.${level}`, level)}
                 </button>
-              </span>
-            ))}
+              );
+            })}
           </div>
-        )}
-      </div>
-
-      {/* Target Level — compact, bottom, optional */}
-      <div className="space-y-1.5 pt-2">
-        <label className="text-xs text-muted-foreground">
-          {t('wizard.context.levelLabel', 'Target level')}
-          <span className="ml-1 text-muted-foreground/50">
-            ({t('wizard.context.optional', 'optional')})
-          </span>
-        </label>
-        <div className="flex gap-1.5">
-          {TARGET_LEVELS.map((level) => {
-            const isSelected = targetLevel === level;
-            const desc = t(`wizard.context.levelDesc.${level}`, '');
-            return (
-              <button
-                key={level}
-                onClick={() => onSetTargetLevel(level)}
-                className={cn(
-                  'rounded-md border px-2.5 py-1 text-xs transition-all',
-                  isSelected
-                    ? 'border-primary/40 bg-primary/10 text-primary'
-                    : 'border-border/50 text-muted-foreground/70 hover:border-primary/30 hover:text-foreground'
-                )}
-                title={desc}
-              >
-                {t(`wizard.context.level.${level}`, level.charAt(0).toUpperCase() + level.slice(1))}
-              </button>
-            );
-          })}
-          <span className="self-center ml-1 text-[12px] text-muted-foreground/60">
-            {targetLevel === 'foundation' &&
-              t('wizard.context.levelDesc.foundation', 'Step-by-step basics for beginners')}
-            {targetLevel === 'standard' &&
-              t('wizard.context.levelDesc.standard', 'Practical skills for everyday use')}
-            {targetLevel === 'advanced' &&
-              t('wizard.context.levelDesc.advanced', 'Deep mastery and expert techniques')}
-          </span>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center justify-between pt-4">
+      <div className="mx-auto flex w-full max-w-[720px] items-center justify-between pt-2">
         <Button variant="ghost" onClick={onBack} className="text-muted-foreground">
           {t('common.back', 'Back')}
         </Button>

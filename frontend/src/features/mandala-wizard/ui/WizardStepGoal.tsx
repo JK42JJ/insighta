@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Search, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 import { apiClient } from '@/shared/lib/api-client';
 import type { MandalaSearchResult, GeneratedMandala } from '@/shared/types/mandala-ux';
 import MandalaCard from './MandalaCard';
+import { WizardSearchBar } from './WizardSearchBar';
+
+const SUGGESTION_KEYS = ['s1', 's2', 's3', 's4', 's5'] as const;
 
 // ─── Trending example placeholders (MVP — static fallback before YouTube API integration) ───
 const TRENDING_EXAMPLES: Record<string, string[]> = {
@@ -143,27 +146,31 @@ export default function WizardStepGoal({
     return () => window.clearInterval(id);
   }, [localGoal.length, examples.length]);
 
-  const placeholder = `${t('wizard.goal.placeholderPrefix', 'e.g.')} ${examples[exampleIdx]}`;
+  // CP453+ — placeholder reverted to single hero message; rotating examples
+  // surface as suggestion chips below the input instead of as inline rotation.
+  void exampleIdx;
+  void examples;
+  const placeholder = t('wizard.goal.placeholder', '');
 
   // BUSY = any in-flight request (search or generate)
   const isBusy = isSearching || isGenerating;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isBusy) {
-      onCancelGoal();
-      return;
-    }
+  const handleWizardSubmit = () => {
     const trimmed = localGoal.trim();
-    if (trimmed) {
-      onSetGoalInput(trimmed);
-      onSubmitGoal(trimmed);
-    }
+    if (!trimmed) return;
+    onSetGoalInput(trimmed);
+    onSubmitGoal(trimmed);
   };
 
   const handleClear = () => {
     setLocalGoal('');
     onClearGoal();
+  };
+
+  const handleSuggestionClick = (text: string) => {
+    setLocalGoal(text);
+    onSetGoalInput(text);
+    onSubmitGoal(text);
   };
 
   const hasSubmitted = goalInput.length > 0;
@@ -219,58 +226,66 @@ export default function WizardStepGoal({
 
   return (
     <div className="wizard-step-enter">
-      <h1 className="text-[28px] font-black leading-tight tracking-tight">
-        {t('wizard.goal.title', 'What is your goal?')}
-      </h1>
-      <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted-foreground">
-        {t(
-          'wizard.goal.subtitle',
-          'Enter your goal — we’ll find similar templates and generate a custom mandala.'
-        )}
-      </p>
+      <div className="text-center">
+        <h1
+          className="text-[36px] font-bold leading-[1.2]"
+          style={{ color: 'hsl(var(--foreground))', letterSpacing: '-0.03em' }}
+        >
+          {hasSubmitted
+            ? t('wizard.goal.titleResults', 'Pick a mandala — AI will find videos for you')
+            : t('wizard.goal.title', 'What goal do you want to start with?')}
+        </h1>
+      </div>
 
-      {/* Goal input */}
-      <form onSubmit={handleSubmit} className="mt-8">
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
-            strokeWidth={1.8}
-            aria-hidden="true"
-          />
-          <input
-            type="text"
-            value={localGoal}
-            onChange={(e) => setLocalGoal(e.target.value)}
-            placeholder={placeholder}
-            className="w-full rounded-2xl border border-border bg-card py-[18px] pl-12 pr-36 text-[15px] outline-none transition-colors focus:border-primary/40 focus:bg-primary/[0.02]"
-            aria-label={t('wizard.goal.inputAria', 'Goal input')}
-          />
-          {/* Clear button (X) — only visible in idle state with text */}
-          {!isBusy && localGoal.length > 0 && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="absolute right-[76px] top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
-              aria-label={t('wizard.goal.clear', 'Clear input')}
-            >
-              <X className="h-4 w-4" strokeWidth={2} />
-            </button>
-          )}
-          {/* Go / Cancel toggle button (single source of action) */}
-          <button
-            type="submit"
-            disabled={!isBusy && !localGoal.trim()}
-            className={`absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
-              isBusy
-                ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
-                : 'bg-primary text-primary-foreground'
-            }`}
-          >
-            {isBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {isBusy ? t('wizard.goal.cancel', 'Cancel') : t('wizard.goal.submit', 'Go')}
-          </button>
+      <div className="mt-9">
+        <WizardSearchBar
+          value={localGoal}
+          onChange={setLocalGoal}
+          onSubmit={handleWizardSubmit}
+          onCancel={onCancelGoal}
+          onClear={handleClear}
+          placeholder={placeholder}
+          isBusy={isBusy}
+          ariaLabel={t('wizard.goal.inputAria', 'Goal input')}
+          ariaSubmitLabel={
+            isBusy ? t('wizard.goal.cancel', 'Cancel') : t('wizard.goal.submit', 'Go')
+          }
+        />
+      </div>
+
+      {!hasSubmitted && (
+        <div className="mx-auto mt-6 flex max-w-[720px] flex-wrap justify-center gap-2">
+          {SUGGESTION_KEYS.map((key) => {
+            const text = t(`wizard.goal.suggestions.${key}`, '');
+            if (!text) return null;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => handleSuggestionClick(text)}
+                className="rounded-full px-4 py-2 text-[12.5px] font-medium transition-colors"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid hsl(var(--border) / 0.4)',
+                  color: 'hsl(var(--muted-foreground))',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = 'hsl(var(--foreground))';
+                  e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                  e.currentTarget.style.background = 'hsl(var(--accent) / 0.3)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = 'hsl(var(--muted-foreground))';
+                  e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.4)';
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                {text}
+              </button>
+            );
+          })}
         </div>
-      </form>
+      )}
 
       {/* Unified card grid: similar templates + AI card (last slot) */}
       {hasSubmitted && (
@@ -369,16 +384,13 @@ export default function WizardStepGoal({
         </div>
       )}
 
-      {/* Separator + blank create */}
-      <div className="my-8 text-center text-[11px] font-semibold text-foreground/[0.06]">
-        {t('wizard.domain.separator', '— or —')}
-      </div>
-      <div className="text-center">
+      {/* Blank create — text link only (per user spec, no button styling) */}
+      <div className="mt-8 text-center">
         <button
           type="button"
           onClick={onCreateBlank}
           disabled={isCreatingBlank}
-          className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-transparent px-5 py-2.5 text-[13px] font-semibold text-muted-foreground transition-all duration-[180ms] hover:border-foreground/10 hover:bg-foreground/[0.02] hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+          className="text-[13px] font-medium text-muted-foreground/70 underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isCreatingBlank
             ? t('wizard.domain.creating', 'Creating...')

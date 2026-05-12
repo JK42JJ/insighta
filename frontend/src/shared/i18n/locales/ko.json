@@ -1401,9 +1401,9 @@
     },
     "context": {
       "title": "더 집중하고 싶은 것이 있나요?",
-      "subtitle": "집중 영역을 추가하고 목표 수준을 선택하세요. 건너뛸 수 있습니다.",
+      "subtitle": "집중 영역을 추가하면 더 적합한 영상을 찾을 수 있어요. 건너뛰어도 괜찮아요.",
       "focusLabel": "집중 영역",
-      "focusPlaceholder": "예: ETF, 배당, 부동산, 절세",
+      "focusPlaceholder": "집중 영역 추가 — 예: 하이브리드 검색, BGE-M3, reranker",
       "addTag": "추가",
       "optional": "선택",
       "levelLabel": "목표 수준",
@@ -1446,10 +1446,18 @@
       }
     },
     "goal": {
-      "title": "어떤 목표를 이루고 싶으세요?",
+      "title": "어떤 목표로 시작해볼까요?",
+      "titleResults": "만다라트를 선택하면 AI가 영상을 찾아드립니다",
       "subtitle": "목표를 입력하면 비슷한 템플릿을 찾고 맞춤 만다라트를 만들어드려요",
-      "placeholder": "예: 6개월 내 TOEFL 100점 달성",
+      "placeholder": "목표를 입력하면 만다라트를 이용해, 최적의 영상을 찾아드립니다",
       "placeholderPrefix": "예:",
+      "suggestions": {
+        "s1": "개발자로 커리어 전환하기",
+        "s2": "ETF 투자로 노후 자산 만들기",
+        "s3": "6개월 내 영어 프리토킹 달성",
+        "s4": "AI·머신러닝 프로젝트 포트폴리오 완성",
+        "s5": "하프 마라톤 완주하기"
+      },
       "inputAria": "목표 입력란",
       "submit": "시작",
       "cancel": "취소",

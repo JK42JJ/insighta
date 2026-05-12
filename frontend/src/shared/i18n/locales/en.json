@@ -1400,9 +1400,9 @@
     },
     "context": {
       "title": "Anything else you'd like to focus on?",
-      "subtitle": "Add focus areas and select your target level. You can skip this step.",
+      "subtitle": "Add focus areas to find more relevant videos. You can skip.",
       "focusLabel": "Focus areas",
-      "focusPlaceholder": "e.g. ETF, budgeting, real estate",
+      "focusPlaceholder": "Add a focus area — e.g. hybrid search, BGE-M3, reranker",
       "addTag": "Add",
       "optional": "optional",
       "levelLabel": "Target level",
@@ -1445,10 +1445,18 @@
       }
     },
     "goal": {
-      "title": "What is your goal?",
+      "title": "What goal do you want to start with?",
+      "titleResults": "Pick a mandala — AI will find videos for you",
       "subtitle": "Enter your goal — we'll find similar templates and generate a custom mandala.",
-      "placeholder": "e.g., Achieve TOEFL 100 in 6 months",
+      "placeholder": "Enter a goal — we'll use a mandala to find the best videos for you",
       "placeholderPrefix": "e.g.,",
+      "suggestions": {
+        "s1": "Switch career to software development",
+        "s2": "Build retirement assets via ETF investing",
+        "s3": "Achieve conversational English in 6 months",
+        "s4": "Complete an AI/ML project portfolio",
+        "s5": "Finish a half marathon"
+      },
       "inputAria": "Goal input",
       "submit": "Go",
       "cancel": "Cancel",
