@@ -28,6 +28,29 @@ const DEFAULT_OLLAMA_URL = 'http://100.91.173.17:11434';
 // keyword extraction.
 const DEFAULT_MODEL = 'llama3.1:latest';
 const REQUEST_TIMEOUT_MS = 60000; // per-chunk timeout
+
+// OpenRouter fallback path (Mac Mini deprecation Phase D1-b, 2026-05-13).
+// Mirrors the llm-query-generator OpenRouter constants. Used when
+// TREND_EXTRACT_PROVIDER=openrouter, or as fallback when Ollama call fails
+// while provider='ollama'.
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_REQUEST_TIMEOUT_MS = 30_000;
+const OPENROUTER_DEFAULT_MODEL = 'qwen/qwen3-30b-a3b';
+
+/**
+ * Selects which LLM provider to hit per chunk.
+ *
+ *   'ollama'     → Mac-mini Ollama first, OpenRouter fallback on transport/HTTP failure
+ *                  (default — pre-D1-b behaviour with added safety net)
+ *   'openrouter' → skip Mac Mini entirely, OpenRouter only
+ *
+ * Switch via env `TREND_EXTRACT_PROVIDER` at runtime (no code change).
+ */
+export type TrendExtractProvider = 'ollama' | 'openrouter';
+
+function resolveProvider(envVal: string | undefined): TrendExtractProvider {
+  return envVal === 'openrouter' ? 'openrouter' : 'ollama';
+}
 /**
  * Chunk size for batched extraction. llama3.1 8B handles 5 titles in ~30s
  * comfortably; 40 titles in one shot exceeds 120s on Mac Mini M4.
@@ -58,12 +81,23 @@ export interface ExtractKeywordsOptions {
   titles: string[];
   /** Override Ollama base URL. Defaults to Mac Mini. */
   baseUrl?: string;
-  /** Override model. Defaults to llama3.1:latest. */
+  /** Override Ollama model. Defaults to llama3.1:latest. */
   model?: string;
   /** Override chunk size. Defaults to 5 (proven safe on llama3.1 8B). */
   chunkSize?: number;
   /** Injectable fetch for testability. */
   fetchImpl?: typeof fetch;
+
+  // D1-b: OpenRouter fallback path overrides + provider switch.
+  /**
+   * Which provider to call per chunk. When omitted, read from
+   * `process.env.TREND_EXTRACT_PROVIDER` (defaults to 'ollama').
+   */
+  provider?: TrendExtractProvider;
+  /** OpenRouter API key. Falls back to `process.env.OPENROUTER_API_KEY`. */
+  openRouterApiKey?: string;
+  /** OpenRouter model id. Defaults to {@link OPENROUTER_DEFAULT_MODEL}. */
+  openRouterModel?: string;
 }
 
 const SYSTEM_PROMPT = `너는 학습 콘텐츠 발굴 엔진을 위한 키워드 추출 시스템이다.
@@ -164,10 +198,42 @@ export async function extractKeywordsBatch(
 }
 
 /**
- * Single Ollama call for one chunk. Throws LlmExtractError on any failure;
+ * Single chunk extraction — dispatches to Ollama or OpenRouter based on
+ * `opts.provider` (or `process.env.TREND_EXTRACT_PROVIDER`).
+ *
+ * Provider='ollama' (default): try Ollama → on LlmExtractError fall back
+ * to OpenRouter when API key is configured. Provider='openrouter': skip
+ * Ollama entirely.
+ *
+ * Throws LlmExtractError on any unrecoverable failure;
  * extractKeywordsBatch catches and pads.
  */
 async function extractOneChunk(
+  titles: string[],
+  opts: ExtractKeywordsOptions
+): Promise<ExtractedKeyword[]> {
+  const provider = opts.provider ?? resolveProvider(process.env['TREND_EXTRACT_PROVIDER']);
+  const openRouterApiKey = opts.openRouterApiKey ?? process.env['OPENROUTER_API_KEY'] ?? '';
+
+  if (provider === 'openrouter') {
+    return extractOneChunkViaOpenRouter(titles, opts, openRouterApiKey);
+  }
+
+  // provider='ollama' — try Mac Mini first, OpenRouter fallback on error.
+  try {
+    return await extractOneChunkViaOllama(titles, opts);
+  } catch (ollamaErr) {
+    if (!openRouterApiKey) {
+      // No fallback available — rethrow original error.
+      throw ollamaErr;
+    }
+    // Mac Mini unreachable / failing — try OpenRouter once.
+    return extractOneChunkViaOpenRouter(titles, opts, openRouterApiKey);
+  }
+}
+
+/** Ollama (Mac Mini) call path. Original D1-b extraction pre-refactor. */
+async function extractOneChunkViaOllama(
   titles: string[],
   opts: ExtractKeywordsOptions
 ): Promise<ExtractedKeyword[]> {
@@ -221,6 +287,81 @@ async function extractOneChunk(
   const content = data.message?.content;
   if (!content) {
     throw new LlmExtractError('Ollama chat returned empty content');
+  }
+
+  return parseExtractionResponse(content, titles);
+}
+
+/**
+ * OpenRouter call path. Mirrors `llm-query-generator.generateSearchQueriesViaOpenRouter`
+ * convention (Qwen3 reasoning disabled to prevent empty content, JSON-only
+ * prompt enforcement since OpenRouter Qwen3 doesn't support `format: json`).
+ */
+async function extractOneChunkViaOpenRouter(
+  titles: string[],
+  opts: ExtractKeywordsOptions,
+  apiKey: string
+): Promise<ExtractedKeyword[]> {
+  if (!apiKey) {
+    throw new LlmExtractError('OpenRouter API key not configured');
+  }
+  const fetchFn = opts.fetchImpl ?? fetch;
+  const model = opts.openRouterModel ?? OPENROUTER_DEFAULT_MODEL;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OPENROUTER_REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    const body: Record<string, unknown> = {
+      model,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: buildUserPrompt(titles) },
+      ],
+      temperature: 0.2,
+      max_tokens: 1024,
+    };
+    // OpenRouter Qwen3 default to reasoning mode which drains the content
+    // token budget. Disable for the qwen-family models (same convention
+    // as OpenRouterGenerationProvider + llm-query-generator).
+    if (model.toLowerCase().includes('qwen')) {
+      body['reasoning'] = { enabled: false };
+    }
+
+    res = await fetchFn(OPENROUTER_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    throw new LlmExtractError(
+      `OpenRouter chat failed: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+  clearTimeout(timer);
+
+  if (!res.ok) {
+    let body = '';
+    try {
+      body = (await res.text()).slice(0, 200);
+    } catch {
+      // ignore
+    }
+    throw new LlmExtractError(`OpenRouter chat HTTP ${res.status}: ${body}`, res.status);
+  }
+
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new LlmExtractError('OpenRouter chat returned empty content');
   }
 
   return parseExtractionResponse(content, titles);
