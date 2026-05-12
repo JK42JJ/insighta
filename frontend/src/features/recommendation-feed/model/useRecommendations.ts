@@ -17,6 +17,16 @@ export interface RecommendationItem {
   keyword: string;
   source: RecommendationSource;
   recReason: string | null;
+  /**
+   * Best-matching transcript chunk start time, in seconds.
+   * When non-null, the card click builds a YouTube URL with `&t=<startSec>s`
+   * so the user lands on the relevant moment. Null when no chunk data exists
+   * for the video (most videos as of 2026-05-12 — only 64/1493 covered).
+   *
+   * Sourced from `video_chunk_embeddings.start_time` via BE chunk anchor
+   * lookup (hybrid-retrieval spec PR3).
+   */
+  startSec?: number | null;
 }
 
 export interface RecommendationsResponse {

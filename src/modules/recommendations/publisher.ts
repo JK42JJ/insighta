@@ -46,6 +46,17 @@ export interface CardPayload {
   source: 'auto_recommend' | 'manual';
   recReason: string | null;
   publishedAt: string | null;
+  /**
+   * Best-matching transcript chunk start time, in seconds.
+   * When non-null, the FE may build a YouTube URL like
+   * `?v=<id>&t=<startSec>s` so the user lands on the relevant moment
+   * instead of the video start.
+   *
+   * Sourced from `video_chunk_embeddings.start_time` (populated by an
+   * external Mac Mini batch). Optional: null when no chunk data exists
+   * for the video.
+   */
+  startSec: number | null;
 }
 
 /** Unsubscribe callback returned by `subscribe`. Idempotent. */

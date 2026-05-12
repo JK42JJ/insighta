@@ -330,6 +330,9 @@ export async function maybeAutoAddRecommendations(
           source: rec.weight_version === 0 ? 'manual' : 'auto_recommend',
           recReason: rec.rec_reason,
           publishedAt: rec.published_at?.toISOString() ?? null,
+          // PR3 (#614) — anchor lookup deferred to SSE backlog path
+          // (see GET /api/v1/mandalas/:id and SSE handler in mandalas.ts).
+          startSec: null,
         };
         notifyCardAdded(mandalaId, payload);
       } catch (notifyErr) {
