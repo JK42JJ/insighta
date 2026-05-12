@@ -175,7 +175,7 @@ agent  ← loop
 
 | 항목 | 결정 | 근거 |
 |------|-----|-----|
-| Reranker 모델 | **Mac Mini self-host: `BAAI/bge-reranker-v2-m3` via TEI server** | OpenRouter 에 reranker 없음 (확인 완료, 0 hits). Cohere/Voyage 는 신규 API key + 비용. Mac Mini 는 기존 Tailscale 인프라 재사용, CLAUDE.md LLM-API 금지 규칙과 무관 |
+| Reranker 모델 | **Cohere Rerank API (`rerank-multilingual-v3.0`)** | (1) Mac Mini 는 production-critical inference 의 *임시 scaffold* 이지 영구 위치 아님 — 단일 머신 / SLA 불가 / Seoul↔us-west-2 latency. 더 키우지 않음. (2) OpenRouter 에 reranker 없음 (확인). (3) Cohere = zero ops, 100-200ms latency, multilingual (Korean), traffic 에서 cost < $10/mo. (4) 신규 API key + credentials.md 업데이트는 일회성 비용. **별 track 으로 Mac Mini 의 기존 LoRA 는 RunPod Serverless 로 마이그레이션 (CP449 챗봇 패턴 복제) 예정.** |
 | LangGraph | **`@langchain/langgraph@1.3.0` TS 도입** | 공식 TS 포팅 안정. 자체 구현 (~200 lines) 대비 ecosystem (HITL, checkpointing, streaming) 가치 큼 |
 | Keyword search | **Postgres `to_tsvector` + `ts_rank`** | 외부 lib 0. BM25 와 정확히 같지 않지만 keyword recall 효과 충분. 추가 인덱스 1개 |
 | Rerank 호출 빈도 | **매 wizard 시 1회, 결과는 `recommendation_cache.rec_score` 저장 (재호출 X)** | 추가 LLM 호출 없음. recompute 만이 갱신 |
@@ -193,54 +193,60 @@ agent  ← loop
 
 ---
 
-## 8. 실행 시퀀스 (lock-in)
+## 8. 실행 시퀀스 (lock-in, 2026-05-12 amendment)
 
-각 Phase 가 독립 PR. PR 머지 후 다음 Phase 진입. 4 PR / ~1-2 주 estimate.
+**Amendment 근거**:
+- 사용자 directive: "Mac Mini 는 임시 패턴, 향후 BE 통합되어야" → reranker 를 Mac Mini TEI 에 올리지 않고 처음부터 BE-native (Cohere) 로
+- 데이터 점검: `video_chunk_embeddings` schema 에 `text/start_time/end_time/chunk_idx` **이미 존재** + 2,641 rows 적재 (Mac Mini A1→A4 batch 가 채움). 우리 BE 에서 INSERT 코드 0건
+- → 원래 PR1 (DDL + transcript segment loop) 의 가정이 부분 무효. 시퀀스 축소.
 
-### PR1 — Pattern B (timestamp anchor + segment loop) — Foundation
-- **이유**: Pattern A 가 segment-level chunks 를 의미있게 활용하려면 chunk 가 시간 anchor 있어야. 다른 PR 의 prerequisite.
+### 새 시퀀스 (3 PR)
+
+#### PR1 — Pattern A + D (Hybrid retrieval + Cohere rerank + score normalize) — Issue #610 fix
+- **이유**: 가장 큰 user-facing 효과, prerequisite 없음 (chunk data + schema 이미 있음, reranker = Cohere API)
 - **범위**:
-  - DDL: `prisma/migrations/hybrid-retrieval/001_video_chunk_time.sql` — `ALTER TABLE video_chunk_embeddings ADD COLUMN start_sec INT, end_sec INT, text TEXT`
-  - Code: `internal/transcript.ts` 의 segment loop 추가
-  - FE: 카드 click 시 `&t=<start_sec>s` deep-link
-  - 기존 2,641 rows = `start_sec NULL` 그대로
-- **검증**: 신규 transcript 처리 1건 → chunk 10+ row, 모두 시간 채워짐
-
-### PR2 — Mac Mini TEI server (BGE-reranker) — Infrastructure
-- **이유**: Pattern A 의 rerank step 의 prerequisite
-- **범위**:
-  - Mac Mini 에 `text-embeddings-inference` server 띄움 (HF TEI, Docker)
-  - 모델: `BAAI/bge-reranker-v2-m3` (multilingual, 4-lang Korean OK)
-  - Tailscale 포트 노출, 신규 env `MANDALA_RERANK_URL=http://100.91.173.17:<port>`
-  - Insighta TS client: `src/modules/rerank/client.ts` (POST /rerank, body {query, texts[]})
-- **검증**: localhost 에서 sample (query, 10 texts) → score 배열 반환
-
-### PR3 — Pattern A (Hybrid retrieval + rerank) — Main quality fix
-- **이유**: Issue #610 의 spec 옵션 (c) 의 본체. 가장 큰 user-facing 효과.
-- **범위**:
-  - `src/skills/plugins/video-discover/v3/hybrid-rerank.ts` (모듈)
-  - 단계: candidate list → BM25 search → concat → dedupe → rerank → top-N → score 표준화 → group by video → return
-  - 통합 위치: `v3/executor.ts` 의 기존 mandala-filter 결과를 입력으로 받음
-  - flag: `V3_ENABLE_HYBRID_RERANK=true` (PR 머지 시 default ON)
+  - `src/modules/rerank/cohere-client.ts` — `POST https://api.cohere.com/v2/rerank` wrapper (axios, retry, timeout)
+  - `credentials.md` — `COHERE_API_KEY` 등록 + `.env` 에 추가 절차 명시 (실제 키는 .env 만, repo X)
+  - `src/skills/plugins/video-discover/v3/hybrid-rerank.ts` — pipeline:
+    - 입력: mandala-filter 결과 candidate list
+    - 단계: tsvector keyword search → concat → dedupe → cohere rerank → top-N → score 0-100 normalize → group by video (avg) → sort
+  - `v3/executor.ts` 통합 — `V3_ENABLE_HYBRID_RERANK=true` env (default ON after merge)
   - PR #555 `V3_USE_YOUTUBE_RANKING_ONLY=true` 의 cell-quality 문제를 hybrid+rerank 가 대체
-- **검증**: 동일 mandala (7b99f68c, 영어 학습) 에서 의료영어 oversaturation 사라지는지 (top 5 카드 manual 검증). Issue #610 close.
+- **검증**:
+  - 단위 테스트: cohere-client mock + hybrid-rerank.ts (5+ test)
+  - 회귀 mandala (7b99f68c, 영어 학습): 의료영어 oversaturation 사라지는지 manual 확인 → Issue #610 close
+  - cost telemetry: 일 1주일 cohere 호출 수 + cost 로그
+- **롤백**: `V3_ENABLE_HYBRID_RERANK=false`
 
-### PR4 — Pattern D (Score 표준화 + group by video) — Polish
-- **이유**: rec_score 분포 평탄성 개선 + UX 정렬 합리화
-- **범위**:
-  - rec_score 0-100 normalize (PR3 안에 통합 가능하면 흡수)
-  - cell-별 정렬에 video group-avg 보조 score 추가
-- **검증**: 동일 video 다중 chunk 가 분산되지 않고 1 video 가 1 슬롯에 응집
-
-### PR5 — Pattern C (LangGraph ReAct + 3-way route) — Chatbot
-- **이유**: 챗봇 cost / latency / 응답 품질. PR3 와 독립적.
+#### PR2 — Pattern C (LangGraph ReAct + 3-way route 챗봇)
+- **이유**: 챗봇 cost / latency / 응답 품질. PR1 와 독립적 (vectorSearchTool 은 PR1 의 hybrid-rerank.ts wrapping 으로 재사용 가능, 그러나 PR1 머지 전에도 기존 v3 path wrap 가능)
 - **범위**:
   - `npm i @langchain/langgraph @langchain/core`
   - `src/modules/ontology/chat-graph.ts` 신규
-  - 3 노드: `route_message` (cheap LLM cheap, e.g. Qwen 7B local) / `static_reply` / `tool_call_agent` (powerful, Haiku/Gemini)
-  - 도구 2개: `vectorSearchTool` (PR3 의 hybrid-rerank.ts wrapping) + `sqlTool` (user_video_states / mandala_levels select)
-  - 기존 `ontology/chat.ts` flag-off, 신규 path flag-on (`CHAT_USE_LANGGRAPH=true`)
-- **검증**: trivial query ("안녕") → route 가 cheap LLM 만 호출 (LLM cost 측정). 복잡 query → tool_call agent 가 적절히 도구 호출.
+  - 3 노드:
+    - `route_message` — cheap LLM (Haiku 또는 Qwen 7B RunPod) 으로 분류: (a) direct (b) static_not_relevant (c) tool_call
+    - `static_reply` — 정해진 응답
+    - `tool_call_agent` — powerful LLM (Haiku 4.5 또는 Gemini 2.5) + tools (vectorSearch + sql)
+  - 도구 2개: `vectorSearchTool` (hybrid-rerank wrapping), `sqlTool` (user_video_states / mandala_levels select-only)
+  - 기존 `ontology/chat.ts` flag-off, 신규 path `CHAT_USE_LANGGRAPH=true`
+- **검증**:
+  - trivial query ("안녕") → cheap LLM 만 호출, cost 측정
+  - 복잡 query → tool_call agent 가 도구 호출
+  - 응답 latency p50/p95 vs 기존 chat.ts
+
+#### PR3 — FE timestamp deep-link (Pattern B 부분 — 카드 click)
+- **이유**: video_chunk_embeddings 의 start_time data 가 이미 있으나 사용자에게 노출 X. PR1 의 rerank 결과에 chunk start_time 도 전파되도록 보강 후 FE 단순 추가.
+- **범위**:
+  - PR1 의 hybrid-rerank 결과 schema 에 `start_sec` 포함
+  - FE 카드 click 시 `youtube.com/watch?v=<id>&t=<start_sec>s` deep-link (한 줄)
+  - chunk → card 매핑: 한 video 의 top-scored chunk 의 start_time 을 카드의 anchor 로
+- **검증**: 카드 click 시 시간 anchor 적용 youtube 페이지 열림
+
+### 보류
+
+- **Pattern B 의 transcript.ts segment loop 부분**: write path 가 Mac Mini batch (외부) — 별도 spec
+- **Pattern E (channel scan)**: mandala-centric 모델 충돌 — backlog
+- **Mac Mini deprecation 전체 roadmap**: 별 spec doc 으로 분리 (LoRA action-fill → RunPod 이동, etc.)
 
 ---
 
