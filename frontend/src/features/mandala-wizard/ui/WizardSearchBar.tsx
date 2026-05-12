@@ -106,8 +106,13 @@ export function WizardSearchBar({
     const timer = window.setTimeout(async () => {
       setIsTypeaheadLoading(true);
       try {
+        // Language filter — pick a short code from i18n.language (e.g.
+        // 'ko-KR' → 'ko'). BE only honors 'ko' / 'en'; anything else is
+        // forwarded as-is and ignored server-side.
+        const lang = (i18n.language ?? '').slice(0, 2).toLowerCase();
         const rows = await apiClient.searchTemplatesTypeahead(trimmed, {
           signal: controller.signal,
+          lang,
         });
         if (controller.signal.aborted) return;
         const limited = rows.slice(0, TYPEAHEAD_MAX_VISIBLE_ROWS);

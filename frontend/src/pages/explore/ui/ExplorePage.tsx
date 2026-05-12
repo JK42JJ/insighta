@@ -47,6 +47,9 @@ export default function ExplorePage() {
   const { data, isLoading } = useExploreMandalas(filters);
   const createFromTemplateMutation = useExploreCreateFromTemplate();
   const selectMandala = useMandalaStore((s) => s.selectMandala);
+  const setPendingMandala = useMandalaStore((s) => s.setPendingMandala);
+  const clearPendingMandala = useMandalaStore((s) => s.clearPendingMandala);
+  const setJustCreated = useMandalaStore((s) => s.setJustCreated);
 
   const [modal, setModal] = useState<ModalState>(EMPTY_MODAL);
   // Sync rapid-click guard. React's mutation.isPending is async — first onClick
@@ -117,17 +120,84 @@ export default function ExplorePage() {
       return;
     }
     if (isStartingRef.current) return;
+    if (useMandalaStore.getState().pendingMandala != null) return;
     isStartingRef.current = true;
+
+    const tempId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    // Optimistic: set pending state + select tempId + instant nav so dashboard
+    // renders the skeleton/progress bar while the server creates the mandala.
+    // Mirrors useWizard.fireCreateMandala / fireCreateMandalaFromTemplate.
+    setPendingMandala({
+      tempId,
+      startedAt: Date.now(),
+      originalInputs: {
+        title: modal.mandala.title,
+        centerGoal: modal.mandala.centerGoal ?? modal.mandala.title,
+        subjects: modal.mandala.subjects ?? [],
+      },
+    });
+    selectMandala(tempId);
+    // CardDiscoveryProgress (= "Reading your goals" skeleton) 트리거.
+    // IndexPage:243 isNewMandalaActive = justCreatedMandalaId === effectiveMandalaId.
+    setJustCreated(tempId);
+    navigate('/');
+
     createFromTemplateMutation.mutate(modal.mandala.id, {
       onSuccess: (res) => {
-        selectMandala(res.mandalaId);
-        navigate('/');
+        // Cache swap: tempId → real id in the mandala list.
+        queryClient.setQueryData(
+          queryKeys.mandala.list(),
+          (
+            old:
+              | { mandalas: Array<{ id: string } & Record<string, unknown>>; total: number }
+              | undefined
+          ) => {
+            if (!old) return old;
+            return {
+              ...old,
+              mandalas: old.mandalas.map((m) =>
+                m.id === tempId ? { ...m, id: res.mandalaId } : m
+              ),
+            };
+          }
+        );
+        // Reconcile selected pointer + justCreated marker so isNewMandalaActive
+        // remains true on the real id (skeleton stays until cards arrive).
+        const storeState = useMandalaStore.getState();
+        if (storeState.selectedMandalaId === tempId) {
+          storeState.selectMandala(res.mandalaId);
+        }
+        if (storeState.justCreatedMandalaId === tempId) {
+          setJustCreated(res.mandalaId);
+        }
+        clearPendingMandala();
+      },
+      onError: () => {
+        // Rollback optimistic state; toast surfaces the error to the user.
+        clearPendingMandala();
+        setJustCreated(null);
+        toast.error(t('explore.modal.startError', '템플릿 시작에 실패했습니다.'));
       },
       onSettled: () => {
         isStartingRef.current = false;
       },
     });
-  }, [modal.mandala, isLoggedIn, navigate, createFromTemplateMutation, selectMandala]);
+  }, [
+    modal.mandala,
+    isLoggedIn,
+    navigate,
+    createFromTemplateMutation,
+    selectMandala,
+    setPendingMandala,
+    clearPendingMandala,
+    setJustCreated,
+    queryClient,
+    t,
+  ]);
 
   const handleCopyLink = useCallback(async () => {
     if (!modal.mandala) return;

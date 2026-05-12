@@ -11,10 +11,33 @@ import { ListView } from '@/widgets/list-view';
 import { DetailPanel } from '@/widgets/detail-panel';
 import { GraphView } from '@/components/graph/GraphView';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
-import { LayoutGrid, Grid3X3, Plus } from 'lucide-react';
+import {
+  LayoutGrid,
+  Grid3X3,
+  Plus,
+  GripVertical,
+  ArrowDownWideNarrow,
+  ArrowUpWideNarrow,
+  ArrowDownAZ,
+  ArrowDownZA,
+} from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from '@/shared/ui/dropdown-menu';
 import { Slider } from '@/shared/ui/slider';
-import { ContextHeader, type SortMode } from './ContextHeader';
+import { ContextHeader, SORT_OPTIONS, type SortMode } from './ContextHeader';
 import { LabelFilterPillsV2 } from './LabelFilterPillsV2';
+
+const SORT_ICON_BY_VALUE: Record<SortMode, typeof ArrowDownWideNarrow> = {
+  latest: ArrowDownWideNarrow,
+  oldest: ArrowUpWideNarrow,
+  'title-asc': ArrowDownAZ,
+  'title-desc': ArrowDownZA,
+};
 
 const MIN_GRID_COLUMNS = 2;
 const MAX_GRID_COLUMNS = 6;
@@ -377,15 +400,63 @@ export function CardListView({
       onViewModeChange={onViewModeChange}
       selectedCardIds={selectedCardIds}
       onDeleteSelected={handleDeleteSelected}
-      sortMode={sortMode}
-      onSortModeChange={setSortMode}
       sliderElement={gridSliderElement}
       trailingAction={trailingAction}
     />
   );
 
-  // Sector pills
-  const sectorPillsElement = sectorSubjects && sectorSubjects.length > 0 && (
+  // Drag-to-move hint + sort dropdown — sits inline with the sector pills row
+  // (one level below the ContextHeader title row so the toolbar capsules don't
+  // compete with the hint text).
+  const currentSortLabel = SORT_OPTIONS.find((o) => o.value === sortMode);
+  const CurrentSortIcon = SORT_ICON_BY_VALUE[sortMode];
+  const dragSortInline = (
+    <div className="flex items-center gap-3 shrink-0">
+      {effectiveViewMode === 'grid' && (
+        <div className="hidden lg:flex items-center gap-1 text-[11px] text-muted-foreground/70">
+          <GripVertical className="h-3 w-3" />
+          <span>{t('cards.dragToMove')}</span>
+        </div>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 px-1 py-0.5 text-[11px] text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none"
+          >
+            <CurrentSortIcon className="h-3 w-3" />
+            <span className="hidden sm:inline">
+              {currentSortLabel ? t(currentSortLabel.labelKey) : t('cards.sort', 'Sort')}
+            </span>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuRadioGroup
+            value={sortMode}
+            onValueChange={(v) => setSortMode(v as SortMode)}
+          >
+            {SORT_OPTIONS.map((opt) => {
+              const OptIcon = SORT_ICON_BY_VALUE[opt.value];
+              return (
+                <DropdownMenuRadioItem
+                  key={opt.value}
+                  value={opt.value}
+                  className="text-xs focus:text-foreground"
+                >
+                  <OptIcon className="mr-2 h-3.5 w-3.5" />
+                  {t(opt.labelKey)}
+                </DropdownMenuRadioItem>
+              );
+            })}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+
+  // Sector pills — row wrapped with drag/sort inline on the right so chips and
+  // toolbar hint sit on the same visual level.
+  const sectorPillsContent = sectorSubjects && sectorSubjects.length > 0 && (
     <LabelFilterPillsV2
       sectors={sectorSubjects}
       selectedIndex={selectedCellIndex ?? null}
@@ -397,6 +468,16 @@ export function CardListView({
       isNewlySyncedSelected={isNewlySyncedActive}
       onNewlySyncedClick={handleNewlySyncedClick}
     />
+  );
+
+  // Row wrapper: pills on the left (flex-grow) + drag-hint + sort on the right.
+  // pr-2 mirrors the ContextHeader inset so the right-edge visual weight
+  // (sort text + capsule buttons above) aligns with the chips on the left.
+  const sectorPillsElement = (
+    <div className="flex items-center justify-between gap-3 pr-2">
+      <div className="flex-1 min-w-0">{sectorPillsContent || null}</div>
+      {dragSortInline}
+    </div>
   );
 
   // Graph mode

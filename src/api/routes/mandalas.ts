@@ -368,8 +368,10 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   /**
    * GET /api/v1/mandalas/templates/typeahead - Substring search over template center_goal titles.
    * Returns up to 5 matches ordered by title length (shortest first).
+   * Optional `lang` query param filters by `mandala_embeddings.language`
+   * (e.g. 'ko' or 'en') so Korean users don't see English titles and vice-versa.
    */
-  fastify.get<{ Querystring: { q?: string } }>(
+  fastify.get<{ Querystring: { q?: string; lang?: string } }>(
     '/templates/typeahead',
     { onRequest: [fastify.authenticate] },
     async (request, reply) => {
@@ -377,21 +379,39 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       if (q.length < 2) {
         return reply.send({ results: [] });
       }
+      const lang = (request.query.lang ?? '').trim().toLowerCase();
+      // Only honor a known short language code; anything else = no filter.
+      const langFilter = lang === 'ko' || lang === 'en' ? lang : null;
 
       type TypeaheadRow = { mandala_id: string; center_goal: string; domain: string | null };
 
-      const rows = await getPrismaClient().$queryRaw<TypeaheadRow[]>`
-        SELECT
-          mandala_id::text AS mandala_id,
-          center_goal,
-          domain
-        FROM mandala_embeddings
-        WHERE level = 1
-          AND sub_goal_index IS NULL
-          AND center_goal ILIKE ${'%' + q + '%'}
-        ORDER BY LENGTH(center_goal) ASC
-        LIMIT 5
-      `;
+      const pattern = '%' + q + '%';
+      const rows = langFilter
+        ? await getPrismaClient().$queryRaw<TypeaheadRow[]>`
+            SELECT
+              mandala_id::text AS mandala_id,
+              center_goal,
+              domain
+            FROM mandala_embeddings
+            WHERE level = 1
+              AND sub_goal_index IS NULL
+              AND language = ${langFilter}
+              AND center_goal ILIKE ${pattern}
+            ORDER BY LENGTH(center_goal) ASC
+            LIMIT 5
+          `
+        : await getPrismaClient().$queryRaw<TypeaheadRow[]>`
+            SELECT
+              mandala_id::text AS mandala_id,
+              center_goal,
+              domain
+            FROM mandala_embeddings
+            WHERE level = 1
+              AND sub_goal_index IS NULL
+              AND center_goal ILIKE ${pattern}
+            ORDER BY LENGTH(center_goal) ASC
+            LIMIT 5
+          `;
 
       return reply.send({ results: rows });
     }

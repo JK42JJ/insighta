@@ -694,7 +694,8 @@
     "dropOnScratchPad": "Drop in Idea Spot"
   },
   "ideaSpot": {
-    "tooltip": "Idea Spot — {{count}} item(s)"
+    "tooltip": "Idea Spot — {{count}} item(s)",
+    "label": "Idea Spot"
   },
   "index": {
     "addCard": "Add Card",
@@ -939,6 +940,7 @@
     "listDetail": "List + Detail",
     "graph": "Knowledge Graph",
     "insights": "Insights",
+    "beta": "BETA",
     "switchView": "Switch view",
     "noCardSelected": "No card selected",
     "selectCardHint": "Select a card from the list to view details",

@@ -695,7 +695,8 @@
     "dropOnScratchPad": "아이디어 스팟에 드롭"
   },
   "ideaSpot": {
-    "tooltip": "아이디어스팟 {{count}}개"
+    "tooltip": "아이디어스팟 {{count}}개",
+    "label": "아이디어스팟"
   },
   "index": {
     "addCard": "카드 추가",
@@ -940,6 +941,7 @@
     "listDetail": "리스트 + 상세",
     "graph": "지식 그래프",
     "insights": "인사이트",
+    "beta": "BETA",
     "switchView": "뷰 전환",
     "noCardSelected": "카드가 선택되지 않았습니다",
     "selectCardHint": "리스트에서 카드를 선택하면 상세 정보를 볼 수 있습니다",

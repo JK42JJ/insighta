@@ -1,16 +1,16 @@
 import { useTranslation } from 'react-i18next';
-import { ArrowDownUp, Move, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import type { ViewMode } from '@/entities/user/model/types';
 import { ViewSwitcher } from '@/features/view-mode';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-} from '@/shared/ui/dropdown-menu';
 
 export type SortMode = 'latest' | 'oldest' | 'title-asc' | 'title-desc';
+
+export const SORT_OPTIONS: { value: SortMode; labelKey: string }[] = [
+  { value: 'latest', labelKey: 'contextHeader.sortLatest' },
+  { value: 'oldest', labelKey: 'contextHeader.sortOldest' },
+  { value: 'title-asc', labelKey: 'contextHeader.sortTitleAZ' },
+  { value: 'title-desc', labelKey: 'contextHeader.sortTitleZA' },
+];
 
 interface ContextHeaderProps {
   title: string;
@@ -21,19 +21,10 @@ interface ContextHeaderProps {
   onViewModeChange: (mode: ViewMode) => void;
   selectedCardIds: string[];
   onDeleteSelected?: () => void;
-  sortMode: SortMode;
-  onSortModeChange: (mode: SortMode) => void;
   sliderElement?: React.ReactNode;
   /** CP442 — slot left of ViewSwitcher (e.g., IdeaSpot trigger button). */
   trailingAction?: React.ReactNode;
 }
-
-const SORT_OPTIONS: { value: SortMode; labelKey: string }[] = [
-  { value: 'latest', labelKey: 'contextHeader.sortLatest' },
-  { value: 'oldest', labelKey: 'contextHeader.sortOldest' },
-  { value: 'title-asc', labelKey: 'contextHeader.sortTitleAZ' },
-  { value: 'title-desc', labelKey: 'contextHeader.sortTitleZA' },
-];
 
 export function ContextHeader({
   title,
@@ -43,17 +34,14 @@ export function ContextHeader({
   onViewModeChange,
   selectedCardIds,
   onDeleteSelected,
-  sortMode,
-  onSortModeChange,
   sliderElement,
   trailingAction,
 }: ContextHeaderProps) {
   const { t } = useTranslation();
   const titleInitial = title.charAt(0).toUpperCase();
-  const currentSortLabel = SORT_OPTIONS.find((o) => o.value === sortMode);
 
   return (
-    <div data-card-chrome className="flex items-center justify-between mb-1">
+    <div data-card-chrome className="flex items-center justify-between mb-1 pr-2">
       {/* Left: sector badge + title + count + selection */}
       <div className="flex items-center gap-2 min-w-0">
         {titleLoading ? (
@@ -96,38 +84,6 @@ export function ContextHeader({
       {/* Right: slider + drag hint + sort + view */}
       <div className="flex items-center gap-1.5 shrink-0">
         {sliderElement}
-
-        {viewMode === 'grid' && (
-          <div className="hidden lg:flex items-center gap-0.5 text-[10px] text-muted-foreground">
-            <Move className="w-2.5 h-2.5" />
-            <span>{t('cards.dragToMove')}</span>
-          </div>
-        )}
-
-        {/* Sort dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
-              <ArrowDownUp className="w-2.5 h-2.5" />
-              <span className="hidden sm:inline">
-                {currentSortLabel ? t(currentSortLabel.labelKey) : 'Sort'}
-              </span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-36">
-            <DropdownMenuRadioGroup
-              value={sortMode}
-              onValueChange={(v) => onSortModeChange(v as SortMode)}
-            >
-              {SORT_OPTIONS.map((opt) => (
-                <DropdownMenuRadioItem key={opt.value} value={opt.value} className="text-xs">
-                  {t(opt.labelKey)}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         {trailingAction}
         <ViewSwitcher value={viewMode} onChange={onViewModeChange} />
       </div>

@@ -471,27 +471,9 @@ export function useWizard() {
     [navigate, selectMandalaInStore, setJustCreated, queryClient, state.selectedTemplate, user]
   );
 
-  // Create from template mutation (for DB templates)
-  const createMutation = useMutation({
-    mutationFn: (params: {
-      templateId: string;
-      skills: Record<string, boolean>;
-      focusTags?: string[];
-      targetLevel?: string;
-    }) =>
-      fetchWithAuth<CreateFromTemplateResponse>('/mandalas/create-from-template', {
-        method: 'POST',
-        body: JSON.stringify(params),
-      }),
-    onSuccess: (data) => {
-      trackMandalaCreated({
-        mandala_id: data.mandalaId,
-        template_id: state.selectedTemplate?.id,
-        language: detectGoalLanguage(state.goalInput),
-      });
-      goToUnifiedDashboard(data.mandalaId);
-    },
-  });
+  // CP454: removed legacy `createMutation` for DB templates — replaced by
+  // `fireCreateMandalaFromTemplate` below (instant nav + optimistic flow,
+  // mirrors fireCreateMandala).
 
   // Create blank mandala mutation (for "처음부터 직접 만들기" / "Create from scratch")
   // Blank mandalas need an editor first — keep them on the editor route.
@@ -698,11 +680,172 @@ export function useWizard() {
     ]
   );
 
-  // Stable ref for createMutation.mutate (avoid infinite loops)
-  const createMutateRef = useRef(createMutation.mutate);
-  useEffect(() => {
-    createMutateRef.current = createMutation.mutate;
-  }, [createMutation.mutate]);
+  // Optimistic-first variant for DB template clone path. Mirrors
+  // `fireCreateMandala` (instant nav + setPendingMandala + background POST +
+  // cache swap) so the dashboard skeleton appears immediately on Step 3
+  // "create" instead of waiting 2-5s for `/mandalas/create-from-template` to
+  // respond before navigating. Pre-CP454 this path went through the legacy
+  // `createMutation` which awaited the server before `goToUnifiedDashboard`,
+  // leaving the wizard "stuck" and skipping the pending-skeleton state — a
+  // visible inconsistency vs the AI-custom path.
+  const fireCreateMandalaFromTemplate = useCallback(
+    async (
+      templateId: string,
+      params: {
+        title: string;
+        centerGoal: string;
+        subjects: string[];
+        skills: Record<string, boolean>;
+        focusTags?: string[];
+        targetLevel?: string;
+      }
+    ) => {
+      // Duplicate-click guard (mirrors fireCreateMandala).
+      if (useMandalaStore.getState().pendingMandala != null) return;
+
+      const tempId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      // 1. Optimistic: cache inject + store select + navigate ("instant nav")
+      const pendingInputs: PendingMandalaInputs = {
+        title: params.title,
+        centerGoal: params.centerGoal,
+        subjects: params.subjects,
+        skills: params.skills,
+        focusTags: params.focusTags,
+        targetLevel: params.targetLevel,
+      };
+      setPendingMandala({
+        tempId,
+        startedAt: Date.now(),
+        originalInputs: pendingInputs,
+      });
+      const tSubmit = performance.now();
+      void goToUnifiedDashboard(tempId, params.title);
+
+      // 2. Background server call — bare promise, NOT useMutation, so the
+      //    continuation survives wizard-component unmount (CP386 lesson).
+      try {
+        const data = await fetchWithAuth<CreateFromTemplateResponse>(
+          '/mandalas/create-from-template',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              templateId,
+              skills: params.skills,
+              focusTags: params.focusTags,
+              targetLevel: params.targetLevel,
+            }),
+          }
+        );
+        const tResponse = performance.now();
+        console.info('[wizard-timing]', {
+          event: 'createFromTemplate',
+          submit_to_response_ms: Math.round(tResponse - tSubmit),
+          tempId,
+          mandalaId: data.mandalaId,
+          title: params.title,
+        });
+
+        // 3a. Swap tempId → real id in the mandala list cache.
+        queryClient.setQueryData(
+          queryKeys.mandala.list(),
+          (
+            old:
+              | { mandalas: Array<{ id: string } & Record<string, unknown>>; total: number }
+              | undefined
+          ) => {
+            if (!old) return old;
+            return {
+              ...old,
+              mandalas: old.mandalas.map((m) =>
+                m.id === tempId ? { ...m, id: data.mandalaId } : m
+              ),
+            };
+          }
+        );
+
+        // 3b. Reconcile store. Silent swap if user is still focused on tempId,
+        //     toast otherwise (mirrors fireCreateMandala UX).
+        const storeState = useMandalaStore.getState();
+        const currentSelected = storeState.selectedMandalaId;
+        const silentSwap = currentSelected === tempId;
+        const prevOptimistic = storeState.lastOptimisticTitle;
+        useMandalaStore.setState({
+          selectedMandalaId: silentSwap ? data.mandalaId : currentSelected,
+          justCreatedMandalaId: data.mandalaId,
+          pendingMandala: null,
+          lastOptimisticTitle:
+            prevOptimistic && prevOptimistic.id === tempId
+              ? { id: data.mandalaId, title: prevOptimistic.title }
+              : prevOptimistic,
+        });
+
+        if (!silentSwap) {
+          toast.success(`'${params.title}' 만다라가 완성되었습니다`, {
+            duration: 7_000,
+            action: {
+              label: '보기',
+              onClick: () => {
+                useMandalaStore.getState().selectMandala(data.mandalaId);
+              },
+            },
+          });
+        }
+
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.mandala.list(),
+          refetchType: 'all',
+        });
+        queryClient.invalidateQueries({ queryKey: queryKeys.mandala.quota() });
+        trackMandalaCreated({
+          mandala_id: data.mandalaId,
+          template_id: templateId,
+          language: detectGoalLanguage(state.goalInput),
+        });
+      } catch (err) {
+        // 4. Rollback: remove optimistic entry, clear store selection if it
+        //    pointed at tempId, restore wizard inputs via navigation state.
+        queryClient.setQueryData(
+          queryKeys.mandala.list(),
+          (old: { mandalas: Array<{ id: string }>; total: number } | undefined) => {
+            if (!old) return old;
+            const filtered = old.mandalas.filter((m) => m.id !== tempId);
+            return {
+              ...old,
+              total: Math.max(0, old.total - (old.mandalas.length - filtered.length)),
+              mandalas: filtered,
+            };
+          }
+        );
+        const s = useMandalaStore.getState();
+        useMandalaStore.setState({
+          selectedMandalaId: s.selectedMandalaId === tempId ? null : s.selectedMandalaId,
+          justCreatedMandalaId: s.justCreatedMandalaId === tempId ? null : s.justCreatedMandalaId,
+          pendingMandala: null,
+        });
+
+        const message = err instanceof Error && err.message ? err.message : '만다라 생성 실패';
+        toast.error(`${message} — 입력값은 유지됩니다`);
+        navigate('/mandalas/new', {
+          replace: true,
+          state: { restoreInputs: pendingInputs, errorMessage: message },
+        });
+      } finally {
+        clearPendingMandala();
+      }
+    },
+    [
+      navigate,
+      queryClient,
+      goToUnifiedDashboard,
+      setPendingMandala,
+      clearPendingMandala,
+      state.goalInput,
+    ]
+  );
 
   // ─── Actions ───
 
@@ -922,16 +1065,28 @@ export function useWizard() {
           targetLevel: state.targetLevel !== 'standard' ? state.targetLevel : undefined,
         });
       } else {
-        // DB template clone (keeps source_template_id linkage)
-        createMutateRef.current({
-          templateId: template.id,
+        // DB template clone (keeps source_template_id linkage). CP454: now
+        // uses the same optimistic-first flow as fireCreateMandala so the
+        // dashboard skeleton appears instantly instead of waiting on the
+        // create-from-template POST.
+        void fireCreateMandalaFromTemplate(template.id, {
+          title: template.title,
+          centerGoal: template.centerGoal,
+          subjects: template.subjects,
           skills: state.skills,
           focusTags: state.focusTags.length > 0 ? state.focusTags : undefined,
           targetLevel: state.targetLevel !== 'standard' ? state.targetLevel : undefined,
         });
       }
     },
-    [state.selectedTemplate, state.skills, state.focusTags, state.targetLevel, fireCreateMandala]
+    [
+      state.selectedTemplate,
+      state.skills,
+      state.focusTags,
+      state.targetLevel,
+      fireCreateMandala,
+      fireCreateMandalaFromTemplate,
+    ]
   );
 
   /**
@@ -985,8 +1140,8 @@ export function useWizard() {
     templates: templates ?? [],
     isLoadingTemplates,
     isLoadingDetail,
-    isCreating: createMutation.isPending || pendingMandala != null,
-    createError: createMutation.error ?? null,
+    isCreating: pendingMandala != null,
+    createError: null,
     selectDomain,
     selectTemplate,
     setSkill,

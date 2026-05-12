@@ -1379,13 +1379,17 @@ class ApiClient {
    */
   async searchTemplatesTypeahead(
     q: string,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; lang?: string }
   ): Promise<TemplateTypeaheadResult[]> {
     const trimmed = q.trim();
     if (trimmed.length < 2) return [];
-    const qs = `?q=${encodeURIComponent(trimmed)}`;
+    const params = new URLSearchParams({ q: trimmed });
+    // Language filter: only forward 'ko' / 'en' (BE ignores anything else).
+    if (options?.lang === 'ko' || options?.lang === 'en') {
+      params.set('lang', options.lang);
+    }
     const res = await this.request<{ results: TemplateTypeaheadResult[] }>(
-      `/mandalas/templates/typeahead${qs}`,
+      `/mandalas/templates/typeahead?${params}`,
       { externalSignal: options?.signal }
     );
     return res.results ?? [];

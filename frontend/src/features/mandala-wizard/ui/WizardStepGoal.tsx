@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Code, TrendingUp, Languages, Brain, Activity } from 'lucide-react';
 
@@ -15,32 +15,6 @@ const SUGGESTIONS = [
   { key: 's4', Icon: Brain },
   { key: 's5', Icon: Activity },
 ] as const;
-
-// ─── Trending example placeholders (MVP — static fallback before YouTube API integration) ───
-const TRENDING_EXAMPLES: Record<string, string[]> = {
-  ko: [
-    'AI 활용해 부업 월 100만원',
-    '퇴근 후 1시간으로 토익 900점',
-    '3개월 안에 5kg 감량',
-    'React 풀스택 포트폴리오 완성',
-    '주식 투자 첫 1000만원 굴리기',
-    '유튜브 채널 구독자 1000명',
-    '매일 운동하는 습관 만들기',
-    '디지털 노마드 1년 안에 떠나기',
-  ],
-  en: [
-    'Earn $1K/month with AI side project',
-    'Score TOEIC 900 in 6 months',
-    'Lose 5kg in 3 months',
-    'Build a full-stack React portfolio',
-    'Invest first $10K in stocks',
-    'Grow YouTube channel to 1K subs',
-    'Build a daily workout habit',
-    'Become a digital nomad in 1 year',
-  ],
-};
-
-const PLACEHOLDER_ROTATE_MS = 3500;
 
 // ─── CP361 Issue #375 — phased AI loading label thresholds ───
 //
@@ -131,7 +105,7 @@ export default function WizardStepGoal({
   focusTags,
   onBackToContext,
 }: WizardStepGoalProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [localGoal, setLocalGoal] = useState(goalInput);
 
   // Sync local input with external state changes
@@ -149,27 +123,9 @@ export default function WizardStepGoal({
     void apiClient.prewarmMandalaModel();
   }, []);
 
-  // ─── Rotating placeholder (trending examples) ───
-  const examples = useMemo(() => {
-    const lang = i18n.language?.startsWith('ko') ? 'ko' : 'en';
-    return TRENDING_EXAMPLES[lang] ?? TRENDING_EXAMPLES.en;
-  }, [i18n.language]);
-
-  const [exampleIdx, setExampleIdx] = useState(() => Math.floor(Math.random() * examples.length));
-
-  // Rotate placeholder while input is empty + idle
-  useEffect(() => {
-    if (localGoal.length > 0) return;
-    const id = window.setInterval(() => {
-      setExampleIdx((prev) => (prev + 1) % examples.length);
-    }, PLACEHOLDER_ROTATE_MS);
-    return () => window.clearInterval(id);
-  }, [localGoal.length, examples.length]);
-
-  // CP453+ — placeholder reverted to single hero message; rotating examples
-  // surface as suggestion chips below the input instead of as inline rotation.
-  void exampleIdx;
-  void examples;
+  // CP453+ — placeholder is a single hero message; trending examples surface
+  // as suggestion chips below the input instead of inline rotation, so the
+  // old TRENDING_EXAMPLES table + rotation interval were dropped (CP454).
   const placeholder = t('wizard.goal.placeholder', '');
 
   // BUSY = any in-flight request (search or generate)

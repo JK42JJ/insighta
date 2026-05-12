@@ -7,7 +7,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { Lightbulb } from 'lucide-react';
+import { Inbox } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { BootShell } from '@/shared/ui/BootShell';
 import { trackCardViewed } from '@/shared/lib/posthog';
@@ -656,11 +656,22 @@ function AuthenticatedApp() {
       onClick={() => setScratchPadOpen((v) => !v)}
       title={t('ideaSpot.tooltip', '아이디어스팟 {{count}}개', { count: ideaSpotCount })}
       aria-label={t('ideaSpot.tooltip', '아이디어스팟 {{count}}개', { count: ideaSpotCount })}
-      className="relative flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+      className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+      style={{
+        borderColor: 'hsl(var(--border) / 0.4)',
+        color: 'hsl(var(--foreground))',
+      }}
     >
-      <Lightbulb className="w-4 h-4" />
+      <Inbox className="h-3.5 w-3.5" />
+      <span>{t('ideaSpot.label', '아이디어스팟')}</span>
       {ideaSpotCount > 0 && (
-        <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold leading-none flex items-center justify-center">
+        <span
+          className="ml-0.5 inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-tight"
+          style={{
+            background: 'hsl(var(--primary))',
+            color: 'hsl(var(--primary-foreground))',
+          }}
+        >
           {ideaSpotCount}
         </span>
       )}
