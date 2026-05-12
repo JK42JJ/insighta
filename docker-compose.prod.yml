@@ -217,6 +217,21 @@ services:
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).
       # - OPENROUTER_EMBED_MODEL=qwen/qwen3-embedding-8b
+      # CP451 (2026-05-12) — raise Prisma pool 5 → 15 to fix wizard
+      # tx_total bimodal gap (p50 3.9s, max 8.3s) caused by Supabase
+      # transaction pooler slot exhaustion. Background hot path
+      # (`UPDATE youtube_videos SET transcript_fetched_at`) takes 3-5s
+      # per call × 10+ concurrent, saturating the default 5-slot pool;
+      # wizard `$transaction` then waits for a free slot.
+      # Evidence: same user 60s gap delta = 12×, `pool_limit=5` in
+      # `[prisma-init]` log, `[prisma-slow-query]` shows 10× UPDATE 3-5s.
+      # Code default is `DEFAULT_POOL_LIMIT=5` (src/modules/database/
+      # connection-url.ts:21) — this env override raises ceiling to 15.
+      # Safety: `MAX_POOL_LIMIT=50` enforced at connection-url.ts:23,
+      # Supabase transaction pool quota ≫ 15. Tuning knob, not a secret
+      # (CP392 2-question test: pool size is stdout-safe / OSS-safe).
+      # Revert: delete this line → code default 5 takes over on redeploy.
+      - PRISMA_POOL_LIMIT=15
     volumes:
       - cache_data:/app/cache
       - logs_data:/app/logs
