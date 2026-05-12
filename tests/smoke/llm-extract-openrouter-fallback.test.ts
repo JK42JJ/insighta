@@ -8,7 +8,12 @@
  *   no OpenRouter API key       → no fallback, rethrow Ollama error
  *
  * The actual HTTP layer is mocked via fetchImpl injection.
+ *
+ * ENCRYPTION_SECRET is set below so config validation passes in CI — the
+ * SUT imports `@/config/index` (hardcode-audit fix, 2026-05-13).
  */
+process.env['ENCRYPTION_SECRET'] ??=
+  'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 import {
   extractKeywordsBatch,
