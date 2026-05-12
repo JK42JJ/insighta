@@ -45,6 +45,7 @@ import {
 } from './mandala-filter';
 import { v3Config } from './config';
 import { filterByQualityGate } from './quality-gate';
+import { applyHybridRerank } from './hybrid-rerank';
 import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
 
 import {
@@ -341,8 +342,31 @@ export const executor: SkillExecutor = {
     const rerankedSlots = await maybeApplySemanticRerank(slots, mandalaId);
     const semanticTrace: SemanticRerankTrace | null = rerankedSlots.trace;
 
+    // ── Hybrid rerank — Cohere cross-encoder (Issue #610 spec PR1) ─────
+    // Off by default (V3_ENABLE_HYBRID_RERANK=false). When ON, replaces the
+    // medical-English oversaturation (PR #555 mandala-filter bypass) by
+    // scoring candidates against centerGoal via Cohere rerank-multilingual-v3.0.
+    // Field mapping: AssembledSlot.score ↔ RerankSlot.rec_score (in-memory only,
+    // upsertSlots writes to recommendation_cache.rec_score either way).
+    const hybridResult = await applyHybridRerank({
+      slots: rerankedSlots.slots.map((s) => ({
+        videoId: s.videoId,
+        title: s.title,
+        cellIndex: s.cellIndex,
+        rec_score: s.score,
+        _original: s,
+      })),
+      centerGoal: state.centerGoal,
+      requestId: mandalaId,
+    });
+    const hybridSlots: AssembledSlot[] = hybridResult.slots.map((r) => ({
+      ...r._original,
+      score: r.rec_score,
+    }));
+    const hybridStats = hybridResult.stats;
+
     // ── Dual whitelist gate (dual-whitelist.md §3.2 — off by default) ──
-    const gatedSlots = await maybeApplyWhitelistGate(rerankedSlots.slots);
+    const gatedSlots = await maybeApplyWhitelistGate(hybridSlots);
     const whitelistTrace: WhitelistGateTrace | null = gatedSlots.trace;
 
     // ── Upsert recommendation_cache ────────────────────────────────────
@@ -365,6 +389,7 @@ export const executor: SkillExecutor = {
         ...(tier2Debug ? { debug: tier2Debug } : {}),
         ...(semanticTrace ? { semantic_rerank: semanticTrace } : {}),
         ...(whitelistTrace ? { whitelist_gate: whitelistTrace } : {}),
+        hybrid_rerank: hybridStats,
       },
       metrics: {
         duration_ms: wallMs,
