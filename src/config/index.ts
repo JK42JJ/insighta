@@ -137,6 +137,12 @@ const envSchema = z.object({
   // Pipeline events — round id stamped on each measurement event (paper §6.2).
   // Increment when starting a new measurement batch.
   PIPELINE_EVENTS_ROUND: z.coerce.number().int().min(1).default(1),
+
+  // Trend collector keyword extraction (D1-b, 2026-05-13).
+  //   'ollama'     → Mac-mini Ollama first, OpenRouter race fallback.
+  //   'openrouter' → skip Mac Mini, OpenRouter only.
+  // See docs/design/mac-mini-deprecation-2026-05-13.md.
+  TREND_EXTRACT_PROVIDER: z.enum(['ollama', 'openrouter']).default('ollama'),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -313,6 +319,11 @@ export const config = {
   // Pipeline events (paper §6.2 measurement)
   pipelineEvents: {
     round: env.PIPELINE_EVENTS_ROUND,
+  },
+
+  // Trend collector keyword extraction (D1-b)
+  trendExtract: {
+    provider: env.TREND_EXTRACT_PROVIDER,
   },
 
   // YouTube API costs (in quota units)
