@@ -21,6 +21,8 @@
  * pipeline runs against all 40+ titles.
  */
 
+import { config } from '@/config/index';
+
 const DEFAULT_OLLAMA_URL = 'http://100.91.173.17:11434';
 // Mac Mini installed models (verified 2026-04-07): llama3.1:latest (8B),
 // qwen3-embedding:8b (embed-only, can't chat), mandala-gen (mandala-tuned).
@@ -48,9 +50,6 @@ const OPENROUTER_DEFAULT_MODEL = 'qwen/qwen3-30b-a3b';
  */
 export type TrendExtractProvider = 'ollama' | 'openrouter';
 
-function resolveProvider(envVal: string | undefined): TrendExtractProvider {
-  return envVal === 'openrouter' ? 'openrouter' : 'ollama';
-}
 /**
  * Chunk size for batched extraction. llama3.1 8B handles 5 titles in ~30s
  * comfortably; 40 titles in one shot exceeds 120s on Mac Mini M4.
@@ -91,10 +90,11 @@ export interface ExtractKeywordsOptions {
   // D1-b: OpenRouter fallback path overrides + provider switch.
   /**
    * Which provider to call per chunk. When omitted, read from
-   * `process.env.TREND_EXTRACT_PROVIDER` (defaults to 'ollama').
+   * `config.trendExtract.provider` (sourced from `TREND_EXTRACT_PROVIDER`
+   * env, defaults to 'ollama').
    */
   provider?: TrendExtractProvider;
-  /** OpenRouter API key. Falls back to `process.env.OPENROUTER_API_KEY`. */
+  /** OpenRouter API key. Falls back to `config.openrouter.apiKey`. */
   openRouterApiKey?: string;
   /** OpenRouter model id. Defaults to {@link OPENROUTER_DEFAULT_MODEL}. */
   openRouterModel?: string;
@@ -199,7 +199,7 @@ export async function extractKeywordsBatch(
 
 /**
  * Single chunk extraction — dispatches to Ollama or OpenRouter based on
- * `opts.provider` (or `process.env.TREND_EXTRACT_PROVIDER`).
+ * `opts.provider` (or `config.trendExtract.provider`).
  *
  * Provider='ollama' (default): try Ollama → on LlmExtractError fall back
  * to OpenRouter when API key is configured. Provider='openrouter': skip
@@ -212,8 +212,8 @@ async function extractOneChunk(
   titles: string[],
   opts: ExtractKeywordsOptions
 ): Promise<ExtractedKeyword[]> {
-  const provider = opts.provider ?? resolveProvider(process.env['TREND_EXTRACT_PROVIDER']);
-  const openRouterApiKey = opts.openRouterApiKey ?? process.env['OPENROUTER_API_KEY'] ?? '';
+  const provider = opts.provider ?? config.trendExtract.provider;
+  const openRouterApiKey = opts.openRouterApiKey ?? config.openrouter.apiKey ?? '';
 
   if (provider === 'openrouter') {
     return extractOneChunkViaOpenRouter(titles, opts, openRouterApiKey);
