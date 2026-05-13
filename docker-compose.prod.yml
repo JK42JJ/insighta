@@ -246,6 +246,16 @@ services:
       # minViewsPerDay=33 → 30-day cutoff ≈ 1K views (user hypothesis).
       - V3_ENABLE_QUALITY_GATE=true
       - V3_MIN_VIEWS_PER_DAY=33
+      # CP457 (2026-05-13) — domain idempotency fix per ssh-connect prod
+      # measurement: travel mandala 94d713f0 v2_promoted only = 13 rows
+      # across 8 cells; +batch_trend = 372 rows; cosine ≥ 0.5 admits 43.
+      # batch_trend ko gold+silver = 7,465 vs v2_promoted ko = 1,156
+      # (6.5x volume). Quality bar raise to 0.5 filters cross-domain
+      # near-matches (CP455 cell 6 = 28 토익스피킹 at cosine 0.55+).
+      # Rollback: remove both lines or comment out — backward compat
+      # defaults (['v2_promoted'], 0.35) restore CP456 behavior.
+      - V3_TIER1_SOURCES=v2_promoted,batch_trend
+      - V3_SEMANTIC_MIN_COSINE=0.5
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).
