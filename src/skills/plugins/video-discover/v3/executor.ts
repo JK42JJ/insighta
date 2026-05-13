@@ -357,59 +357,13 @@ export const executor: SkillExecutor = {
         _original: s,
       })),
       centerGoal: state.centerGoal,
-      // YT-Navigator hybrid pattern (PR #612 amendment, 2026-05-13):
-      // pass sub_goals so keyword-expanded candidates from video_pool can
-      // be cell-assigned via argmax token-overlap. Enable expansion by
-      // default — the function itself is fault-tolerant (empty on DB
-      // error / no matches).
-      subGoals: state.subGoals,
-      enableKeywordExpansion: true,
       requestId: mandalaId,
     });
     const hybridSlots: AssembledSlot[] = hybridResult.slots
       .map((r) => {
-        // Semantic-side slots carry `_original` (full AssembledSlot from
-        // mandala-filter). Keyword-expansion slots carry `_keywordFullData`
-        // (hydrated from video_pool query). Convert either to AssembledSlot.
-        const ext = r as unknown as {
-          _original?: AssembledSlot;
-          _keywordFullData?: {
-            videoId: string;
-            title: string;
-            description: string | null;
-            channelName: string | null;
-            channelId: string | null;
-            thumbnail: string | null;
-            viewCount: number | null;
-            likeCount: number | null;
-            durationSec: number | null;
-            publishedAt: Date | null;
-            cellIndex: number;
-          };
-        };
+        const ext = r as unknown as { _original?: AssembledSlot };
         if (ext._original) {
           return { ...ext._original, score: r.rec_score };
-        }
-        if (ext._keywordFullData) {
-          const k = ext._keywordFullData;
-          // Construct AssembledSlot from video_pool hydration. `tier: 'cache'`
-          // because the row came from video_pool (the same caching tier the
-          // Tier 1 cache-matcher would have used had it scored this video).
-          return {
-            videoId: k.videoId,
-            title: k.title,
-            description: k.description,
-            channelName: k.channelName,
-            channelId: k.channelId,
-            thumbnail: k.thumbnail,
-            viewCount: k.viewCount,
-            likeCount: k.likeCount,
-            durationSec: k.durationSec,
-            publishedAt: k.publishedAt,
-            cellIndex: k.cellIndex,
-            score: r.rec_score,
-            tier: 'cache' as const,
-          };
         }
         return null;
       })
@@ -1527,21 +1481,75 @@ export async function runDiscoverEphemeral(
 
   const allSlots = [...redisSlots, ...tier2Slots];
 
-  // CP455 — apply hybrid rerank (Cohere) to ephemeral discover path so
-  // wizard-precompute results get the same quality filter as the main
-  // runV3VideoDiscover path. Without this, the wizard saves Tier 1/2
-  // results directly into recommendation_cache — including off-topic
-  // candidates that Cohere would have dropped (measured CP455 02:47 KST:
-  // 코딩테스트 mandala surfaced 수영 / 발로란트 / 이더리움 / JLPT cards).
-  //
-  // Flag-gated by V3_ENABLE_HYBRID_RERANK env (default false). When OFF
-  // the function returns input slots unchanged so this insertion is a
-  // no-op — same path as the main executor (hybrid-rerank.ts:309).
-  let rerankedSlots = allSlots;
-  if (allSlots.length > 0) {
+  let filteredSlots = allSlots;
+  if (allSlots.length > 0 && v3Config.centerGateMode === 'semantic') {
+    try {
+      const cap = v3Config.semanticMaxCandidates;
+      const cappedSlots = allSlots.slice(0, cap);
+      const texts = [input.centerGoal, ...cappedSlots.map((s) => s.title)];
+      const embedT0 = Date.now();
+      const vectors = await embedBatch(texts);
+      const embedMs = Date.now() - embedT0;
+      if (vectors.length === texts.length) {
+        const centerEmbedding = vectors[0];
+        const candidateEmbeddings = new Map<string, number[]>();
+        for (let i = 0; i < cappedSlots.length; i++) {
+          const vec = vectors[i + 1];
+          const id = cappedSlots[i]?.videoId;
+          if (vec && id) candidateEmbeddings.set(id, vec);
+        }
+        const filterInputs = allSlots.map((s) => ({
+          videoId: s.videoId,
+          title: s.title,
+          description: s.description,
+          publishedAt: s.publishedAt,
+        }));
+        const { byCell, stats: mfStats } = applyMandalaFilterWithStats(filterInputs, {
+          centerGoal: input.centerGoal,
+          subGoals: input.subGoals,
+          language: input.language,
+          focusTags: input.focusTags,
+          recencyWeight: v3Config.recencyWeight,
+          recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
+          centerGateMode: v3Config.centerGateMode,
+          centerEmbedding,
+          candidateEmbeddings,
+        });
+        const slotById = new Map(allSlots.map((s) => [s.videoId, s]));
+        const flattened: AssembledSlot[] = [];
+        for (const [cellIndex, assignments] of byCell.entries()) {
+          for (const a of assignments) {
+            const original = slotById.get(a.candidate.videoId);
+            if (original) {
+              flattened.push({ ...original, cellIndex, score: a.score });
+            }
+          }
+        }
+        filteredSlots = flattened;
+        log.info(
+          `[ephemeral] mandala-filter input=${mfStats.input} output=${mfStats.output} ` +
+            `droppedCenterGate=${mfStats.droppedByCenterGate} droppedJaccard=${mfStats.droppedByJaccardBelowThreshold} ` +
+            `mode=${mfStats.centerGateMode ?? '-'} embedMs=${embedMs}`
+        );
+      } else {
+        log.warn(
+          `[ephemeral] mandala-filter embed vector mismatch: got ${vectors.length}/${texts.length} — skipping filter`
+        );
+      }
+    } catch (err) {
+      log.warn(
+        `[ephemeral] mandala-filter threw — falling back to unfiltered slots: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  }
+
+  let rerankedSlots = filteredSlots;
+  if (filteredSlots.length > 0) {
     try {
       const hybridResult = await applyHybridRerank({
-        slots: allSlots.map((s) => ({
+        slots: filteredSlots.map((s) => ({
           videoId: s.videoId,
           title: s.title,
           cellIndex: s.cellIndex,
@@ -1549,56 +1557,20 @@ export async function runDiscoverEphemeral(
           _original: s,
         })),
         centerGoal: input.centerGoal,
-        subGoals: input.subGoals,
-        enableKeywordExpansion: true,
         requestId: 'ephemeral-precompute',
       });
       rerankedSlots = hybridResult.slots
         .map((r) => {
-          const ext = r as unknown as {
-            _original?: AssembledSlot;
-            _keywordFullData?: {
-              videoId: string;
-              title: string;
-              description: string | null;
-              channelName: string | null;
-              channelId: string | null;
-              thumbnail: string | null;
-              viewCount: number | null;
-              likeCount: number | null;
-              durationSec: number | null;
-              publishedAt: Date | null;
-              cellIndex: number;
-            };
-          };
+          const ext = r as unknown as { _original?: AssembledSlot };
           if (ext._original) {
             return { ...ext._original, score: r.rec_score };
-          }
-          if (ext._keywordFullData) {
-            const k = ext._keywordFullData;
-            return {
-              videoId: k.videoId,
-              title: k.title,
-              description: k.description,
-              channelName: k.channelName,
-              channelId: k.channelId,
-              thumbnail: k.thumbnail,
-              viewCount: k.viewCount,
-              likeCount: k.likeCount,
-              durationSec: k.durationSec,
-              publishedAt: k.publishedAt,
-              cellIndex: k.cellIndex,
-              score: r.rec_score,
-              tier: 'cache' as const,
-            };
           }
           return null;
         })
         .filter((s): s is AssembledSlot => s !== null);
       log.info(
-        `[ephemeral] hybrid-rerank ${allSlots.length} → ${rerankedSlots.length} slots ` +
+        `[ephemeral] hybrid-rerank ${filteredSlots.length} → ${rerankedSlots.length} slots ` +
           `(applied=${hybridResult.stats.applied} reason=${hybridResult.stats.reason} ` +
-          `keywordAdded=${hybridResult.stats.keywordAdded} afterDedupe=${hybridResult.stats.afterDedupe} ` +
           `reranked=${hybridResult.stats.reranked} latencyMs=${hybridResult.stats.cohereLatencyMs ?? '-'})`
       );
     } catch (err) {

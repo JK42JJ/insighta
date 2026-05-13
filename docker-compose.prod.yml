@@ -174,7 +174,10 @@ services:
       # by v2/keyword-builder. centerGateMode and semantic cap above stay
       # configured but become no-ops for the Tier 2 path while this is true.
       # Revert: delete this line → re-enable applyMandalaFilter.
-      - V3_USE_YOUTUBE_RANKING_ONLY=true
+      # CP455 2026-05-13 — re-enabled (deleted) per unified semantic-gate design.
+      # mandala-filter 의 token-jaccard noise (PR #555 도입 이유) 는 V3_CENTER_GATE_MODE=semantic
+      # 활성으로 해결 (cosine center gate ≥ 0.35 + sub gate jaccard for cell-assign).
+      # OR-tsquery keyword expansion (commit 2ad5da3d) 노이즈도 본 PR 에서 함께 비활성.
       # PR #612 (CP455, 2026-05-13) — YT-Navigator hybrid retrieval activation.
       # Cohere rerank-multilingual-v3.0 cross-encoder + tsvector keyword
       # expansion. Stacks on top of v3 executor (post mandala-filter / pre

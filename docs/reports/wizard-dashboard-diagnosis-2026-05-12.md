@@ -595,3 +595,110 @@ PR #620 deploy 완료 후 **브라우저 DevTools** 로:
 - 콘솔 → `[DEBUG-WIZARD] setJustCreated called with:` 출력 시각
 
 이 데이터 없이는 "70s → ?s" 의 결과를 단정 불가.
+
+---
+
+## 15. SSE 안정성 8 risk 전수 점검 (2026-05-13 KST ~10:15)
+
+사용자 directive: "sse 를 우회해서 fallback 하는것도 중요한데. sse 가 반드시 잘 동작하도록 설계를 해야지" — primary path 안정성 점검 8 risk 매트릭스 측정.
+
+### 15.1 측정 결과
+
+| # | Risk | 측정 결과 (사실) | 영향 |
+|---|------|-----------------|------|
+| 1 | 인증 (`?access_token=` query) | ✅ PR #620 fix 적용 (last 15min 401 = 0건) | OK |
+| 2 | nginx `proxy_buffering` | ❌ `proxy_buffering on` (`/etc/nginx/sites-enabled/insighta` 측정). BE handler 가 `X-Accel-Buffering: no` 헤더 설정 (mandalas.ts:2387) — nginx honor 여부 미측정 | SSE chunks 가 nginx buffer 에 accumulated → real-time push 차단 가능 |
+| 3 | BE heartbeat 간격 | ✅ `setInterval(20s)` 명시 (mandalas.ts:2468) | nginx 180s timeout 보다 짧음 = OK |
+| 4 | FE reconnect / Last-Event-ID / backlog catchup | ❌ `EventSource` 자동 재연결만 (브라우저 native). `Last-Event-ID` 사용 0건, 재연결 후 backlog GET 0건 | 재연결 사이 카드 누락 가능 |
+| 5 | Server restart graceful shutdown | ❌ `src/index.ts` 의 SIGTERM/SIGINT handler **0건**. deploy 시 컨테이너 SIGKILL → SSE 연결 폭력적 종료 | deploy 직후 사용자 카드 누락 |
+| 6 | CORS (reply.hijack() bypass @fastify/cors) | ✅ CP449 manual Access-Control-* header set | OK |
+| 7 | BE 관찰성 (open/emit/close 로그) | ❌ SSE handler (mandalas.ts:2360-2490) `log.info/logger.info` **0건**. `reply.hijack()` 으로 standard res log 도 미기록 | **SSE 실제 동작 여부 측정 불가 = root cause** |
+| 8 | Publisher connection leak / limit | ⚠️ `MemoryCardPublisher.subscribe` 의 `unsubscribe` 가 idempotent (off flag), `cleanup` 이 `request.raw.on('close')` + `'error'` 둘 다 listen — 단 mid-stream network timeout 시 `'close'` 미 fire 가능, 그 경우 listener 누수 | 낮음 |
+
+### 15.2 Critical 3종
+
+1. **nginx `proxy_buffering on`** = SSE event chunks 가 nginx 에 buffer 되어 FE 가 real-time push 안 받을 가능성. `X-Accel-Buffering: no` 헤더가 작동하는지 별도 측정 (`curl -N` direct vs nginx 경유 응답 비교) 필요.
+2. **BE 관찰성 0건** = SSE 가 정말 동작하는지 측정 자체 불가. 모든 후속 측정 (heartbeat 도달 / event emit 빈도 / disconnect 원인) 의 prerequisite.
+3. **Graceful shutdown 0건** = deploy 시 SSE 끊김이 사용자 경험에 영향. FE 자동 재연결로 부분 회복 가능하나 backlog catchup 부재로 카드 누락.
+
+### 15.3 권장 작업 (영향도 × 즉시성)
+
+| 순위 | 작업 | 파일 변경 |
+|------|------|----------|
+| 1 | **BE 관찰성 로그** 추가 (open/emit/close + duration) — 다른 모든 risk 측정 prerequisite | `mandalas.ts` +5 lines |
+| 2 | **nginx proxy_buffering off** (SSE location 명시) + redeploy nginx config | `/etc/nginx/sites-enabled/insighta` 1 line (+) |
+| 3 | **graceful shutdown** SIGTERM handler — fastify.close() + 30s drain | `src/index.ts` +20 lines |
+| 4 | **FE heartbeat 감시** — 30s 동안 heartbeat/event 0건 시 강제 reconnect | `useVideoStream.ts` +20 lines |
+| 5 | **Last-Event-ID + backlog catchup** on reconnect | `useVideoStream.ts` + `mandalas.ts` +15 lines |
+| 6 | **Publisher leak hook** — mid-stream timeout 시 explicit cleanup | `publisher.ts` +5 lines |
+
+### 15.4 측정 코드 ref
+
+- nginx config: `/etc/nginx/sites-enabled/insighta`
+- BE SSE handler: `src/api/routes/mandalas.ts:2360-2492`
+- BE publisher: `src/modules/recommendations/publisher.ts:107-118`
+- FE EventSource: `frontend/src/features/recommendation-feed/model/useVideoStream.ts:62-172`
+- server entry: `src/index.ts`
+
+---
+
+## 16. D-2 unified semantic-gate design (2026-05-13 ~12:30 KST)
+
+### 사용자 directive
+
+> "부분적 수정만 하면 상호 베타적 문제가 끊임없이 발생해. 전체 목표 차원에서 본질을 반드시 생각해. 전체 차원에서 작업을 조율"
+
+본 세션 누적 partial fix (Cohere flag-flip / GIN index / OR-tsquery / ephemeral hybrid-rerank push) 의 한계 확인 — 양쪽 path (main + wizard-precompute) 에 의미 기반 필터 layer 부재가 unified root cause.
+
+### 측정된 root cause (사실)
+
+- 사용자 mandala `05d7ff7e` "일주일 코딩테스트 준비하기" 47장 중 10장 noise (수영/이더리움/JLPT/발로란트/바이브코딩/배당주/MLOps)
+- `recommendation_cache` rec_reason 분포: realtime 27 (0 noise) / cache 20 (10 noise = 50%)
+- → 100% noise 는 commit `2ad5da3d` 의 OR-tsquery keyword expansion 출처 (cache rec_reason)
+- 의미 layer 매트릭스 (M4 측정):
+  - main path (runV3VideoDiscover, executor.ts:805): mandala-filter 호출 있으나 `V3_USE_YOUTUBE_RANKING_ONLY=true` 로 bypass (PR #555)
+  - wizard-precompute path (runDiscoverEphemeral): mandala-filter 호출 자체 없음
+  - → 양쪽 모두 의미 기반 center gate 비활성 = rule-based token match (jaccard, tsvector OR) 가 noise 생성
+
+### 본질 (한 줄)
+
+양쪽 path 에 mandala-filter (이미 코드 존재, `V3_CENTER_GATE_MODE=semantic` 활성) 를 일관 적용. 노이즈 감소 효과는 deploy + 측정 후 결정.
+
+### 변경 사항 (단일 commit)
+
+1. `docker-compose.prod.yml`: `V3_USE_YOUTUBE_RANKING_ONLY=true` 라인 삭제 → mandala-filter 활성 (main path 의 의미 layer 복원)
+2. `src/skills/plugins/video-discover/v3/executor.ts:runDiscoverEphemeral`: embedBatch + applyMandalaFilterWithStats 호출 추가 (wizard-precompute path 에 의미 layer 추가)
+3. `applyHybridRerank` 호출 site 양쪽 (main + ephemeral): `enableKeywordExpansion` 제거 (default false, 의미 처리 부재 OR-tsquery 노이즈 source)
+4. dead code 정리 (사용자 directive): `tsvectorKeywordCandidates` 함수 + `KeywordCandidate` interface + `tokenizeLower` / `countTokenOverlap` 헬퍼 + `subGoals` / `enableKeywordExpansion` / `keywordExpansionLimit` 파라미터 + `_keywordFullData` dead branch + `keywordAdded` stat 모두 삭제 (`hybrid-rerank.ts` + `executor.ts`)
+
+### 사실 vs 가설 (사용자 directive "추측 금지")
+
+**사실 (코드 변경 후 보장)**:
+- mandala-filter (`applyMandalaFilterWithStats`) 양쪽 path 호출
+- semantic center gate (cosine ≥ 0.35) 활성
+- tsvector OR-tsquery keyword expansion 코드 제거됨
+
+**가설 (deploy 후 측정 필요)**:
+- noise 감소 효과 (얼마나?)
+- cards/mandala 변화 (감소 가능)
+- semantic gate threshold 0.35 의 적절성
+
+### 검증 측정 (deploy 후)
+
+- `docker logs | grep '\[ephemeral\] mandala-filter'` → 의미 layer 동작 확인
+- 사용자 새 wizard test → mandala_pipeline_runs.step2_result.hybrid_rerank stats 비교
+- noise rate 측정 (이전 50% → ?)
+- 사용자 시각 평가
+
+### 리스크 / 롤백
+
+- semantic gate strict 시 cards 수 급감 가능 — threshold 0.35 → 0.25 조정 가능
+- embedBatch 추가 호출 latency 증가 (~수백 ms)
+- 롤백: 단일 commit revert 또는 env flag 복원 (`V3_USE_YOUTUBE_RANKING_ONLY=true` 재추가)
+
+### PR #555 context (origin)
+
+PR #555 (2026-04-28, commit body) 가 mandala-filter bypass 도입한 이유 = **token-jaccard heuristic noise** (substring center gate mode 시절). 본 D-2 의 차이 = `V3_CENTER_GATE_MODE=semantic` 활성 → cosine embedding 기반 center gate 로 token-jaccard 약점 해결 가능 (가설, 측정 후 확정).
+
+PR #555 의 out-of-scope 명시: "Re-enabling mandala-filter as a post-rank refiner under flag once YouTube ranking-only baseline is measured" — 본 D-2 가 그 후속.
+
