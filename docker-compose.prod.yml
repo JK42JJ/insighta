@@ -175,6 +175,18 @@ services:
       # configured but become no-ops for the Tier 2 path while this is true.
       # Revert: delete this line → re-enable applyMandalaFilter.
       - V3_USE_YOUTUBE_RANKING_ONLY=true
+      # PR #612 (CP455, 2026-05-13) — YT-Navigator hybrid retrieval activation.
+      # Cohere rerank-multilingual-v3.0 cross-encoder + tsvector keyword
+      # expansion. Stacks on top of v3 executor (post mandala-filter / pre
+      # upsertSlots). Designed to address Issue #610 (medical-English
+      # oversaturation / Chinese cards / off-domain channels). Cohere key
+      # comes via deploy.yml secret sync (COHERE_API_KEY → .env).
+      - V3_ENABLE_HYBRID_RERANK=true
+      # PR #617 (CP455, 2026-05-13) — Mac Mini deprecation Phase D1-b.
+      # Trend-collector keyword extraction routes through OpenRouter race
+      # path instead of Mac Mini Ollama first (background cron only — not
+      # on the wizard critical path).
+      - TREND_EXTRACT_PROVIDER=openrouter
       # QW-2/QW-4 (CP426): recency 편향 감소 + search timeout 확장
       - V3_RECENCY_WEIGHT=0.05
       - V3_YOUTUBE_SEARCH_TIMEOUT_MS=3000
