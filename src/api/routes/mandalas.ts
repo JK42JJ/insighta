@@ -2501,12 +2501,47 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           status: RECOMMENDATION_DEFAULT_STATUS,
           expires_at: { gt: new Date() },
         },
-        orderBy: [{ rec_score: 'desc' }, { cell_index: 'asc' }],
+        // CP457+ deterministic tie-break to match the REST endpoint.
+        // Cohere normalize collapses top to rec_score=1.0 — without id
+        // tie-break, backlog emit order shuffles on each reconnect and
+        // tied cards appear to move around the grid.
+        orderBy: [{ rec_score: 'desc' }, { cell_index: 'asc' }, { id: 'asc' }],
         take: RECOMMENDATION_FETCH_LIMIT,
       });
 
       // PR3 — chunk anchors for SSE backlog (same lookup as REST path).
       const backlogAnchors = await lookupChunkAnchors(backlogRows.map((r) => r.video_id));
+
+      // CP457+ pin surfacing for SSE backlog. Same two-step bridge as
+      // the REST `/recommendations` route — rec_cache.video_id (string)
+      // → youtube_videos.id (uuid) → user_video_states.pinned_at. Two
+      // batch findManys, no N+1.
+      const backlogVideoIdStrings = Array.from(new Set(backlogRows.map((r) => r.video_id)));
+      const backlogPinnedAtByVideoId = new Map<string, Date>();
+      if (backlogVideoIdStrings.length > 0) {
+        const ytRows = await getPrismaClient().youtube_videos.findMany({
+          where: { youtube_video_id: { in: backlogVideoIdStrings } },
+          select: { id: true, youtube_video_id: true },
+        });
+        const ytUuidToVideoId = new Map(ytRows.map((y) => [y.id, y.youtube_video_id]));
+        const ytUuids = ytRows.map((y) => y.id);
+        if (ytUuids.length > 0) {
+          const pinRows = await getPrismaClient().userVideoState.findMany({
+            where: {
+              user_id: userId,
+              videoId: { in: ytUuids },
+              pinned_at: { not: null },
+            },
+            select: { videoId: true, pinned_at: true },
+          });
+          for (const p of pinRows) {
+            const videoIdString = ytUuidToVideoId.get(p.videoId);
+            if (videoIdString && p.pinned_at) {
+              backlogPinnedAtByVideoId.set(videoIdString, p.pinned_at);
+            }
+          }
+        }
+      }
 
       // CP455 SSE PR A — reconnect catchup: skip rows already seen by client.
       // recommendation_cache.id is UUID, lexicographically comparable but
@@ -2533,6 +2568,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           recReason: row.rec_reason,
           publishedAt: row.published_at?.toISOString() ?? null,
           startSec: backlogAnchors.get(row.video_id) ?? null,
+          pinnedAt: backlogPinnedAtByVideoId.get(row.video_id)?.toISOString() ?? null,
         };
         write('card_added', payload, row.id);
         emitCount += 1;
