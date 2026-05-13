@@ -209,6 +209,12 @@ export async function tsvectorKeywordCandidates(
       FROM public.video_pool vp
       WHERE vp.is_active = true
         AND vp.source = ANY(${sources}::text[])
+        -- CP457+ P1a: gate out bronze. Tier 1 cache_matcher already filters
+        -- to gold+silver; the tsvector keyword-expansion path was admitting
+        -- bronze rows (measured: 50대 창업/기후테크/쿠팡/연 20% 배당 ETF
+        -- in cell 0 of the cook mandala) because this WHERE clause forgot
+        -- the quality_tier filter. Mirror the cache_matcher contract.
+        AND vp.quality_tier IN ('gold', 'silver')
         AND vp.video_id <> ALL(${exclude}::text[])
         AND to_tsvector('simple', coalesce(vp.title,'') || ' ' || coalesce(vp.description,''))
             @@ to_tsquery('simple', ${tsqueryString})
@@ -220,8 +226,16 @@ export async function tsvectorKeywordCandidates(
     const out: KeywordCandidate[] = [];
     for (const r of rows) {
       const titleTokens = tokenizeLower(r.title);
-      let bestCell = 0;
-      let bestOverlap = -1;
+      // CP457+ P5: cell assignment requires a real subGoal overlap. The
+      // previous default (`bestCell = 0`, `bestOverlap = -1`) caused
+      // every no-overlap candidate to land in cell 0 — the unrelated
+      // "ITZY 힙팝 챌린지" / "아이온큐 실적" / "뽀로로" cluster the user
+      // observed dumping into the first cell of the cook mandala. Now
+      // bestCell starts at -1; we only commit when a sub_goal actually
+      // shares at least one token with the title, otherwise the
+      // candidate is dropped (no on-topic cell for it).
+      let bestCell = -1;
+      let bestOverlap = 0;
       for (let i = 0; i < subTokens.length; i++) {
         const overlap = countTokenOverlap(titleTokens, subTokens[i] ?? []);
         if (overlap > bestOverlap) {
@@ -229,6 +243,7 @@ export async function tsvectorKeywordCandidates(
           bestCell = i;
         }
       }
+      if (bestCell < 0) continue;
       out.push({
         videoId: r.video_id,
         title: r.title,
@@ -367,7 +382,15 @@ export async function applyHybridRerank<S extends RerankSlot>(
     return { slots: cellVideoDeduped, stats };
   }
 
-  // Normalize Cohere relevance_scores to 0–100 within this batch.
+  // Normalize Cohere relevance_scores to 0–100 within this batch, then
+  // CP457+ P4b: divide back into the 0-1 contract that every
+  // downstream consumer assumes. `upsertSlots` clamps with
+  // `Math.min(1, slot.score)` (executor.ts:1215) so any 0-100 value
+  // collapses to 1.0 — destroying the rec_score distribution and
+  // producing the "every card rec_score=1.0" tie that the FE then
+  // can't break in ORDER BY. Keep `normalizeScores0to100` unchanged
+  // (its 0-100 contract is asserted by unit tests + intuitive for
+  // operators reading logs); divide at the use site so DB sees 0-1.
   const rawScores = cohereRes.results.map((r) => r.relevanceScore);
   const normalized = normalizeScores0to100(rawScores);
 
@@ -378,7 +401,7 @@ export async function applyHybridRerank<S extends RerankSlot>(
     if (!r) continue;
     const slot = cellVideoDeduped[r.index];
     if (!slot) continue;
-    const normScore = normalized[i] ?? slot.rec_score;
+    const normScore = normalized[i] != null ? normalized[i]! / 100 : slot.rec_score;
     reorderedSlots.push({
       ...slot,
       rec_score: normScore,
