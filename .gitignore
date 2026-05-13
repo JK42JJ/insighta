@@ -40,6 +40,7 @@ prisma/migrations/*
 !prisma/migrations/transcript-attempted/
 !prisma/migrations/book-poc/
 !prisma/migrations/note_documents/
+!prisma/migrations/video_pool/
 
 # Logs
 logs/
