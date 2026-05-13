@@ -253,9 +253,17 @@ export function InsightCardItemV2({
           aria-pressed={isPinned}
           className={cn(
             'absolute top-1.5 right-1.5 z-10 w-7 h-7 rounded-md backdrop-blur flex items-center justify-center transition-all',
+            // CP457+ UX:
+            //   pinned   → always-visible, brand `--primary` fill so the
+            //             persisted state is discoverable at a glance.
+            //   unpinned → hover-only, neutral white. Keeps the thumbnail
+            //             visually clean when the user isn't interacting.
+            // Color uses semantic `text-primary` token (per CLAUDE.md
+            // "하드코딩 색상 금지" Hard Rule); avoids brand-mismatching
+            // yellow and adapts automatically on theme change.
             isPinned
-              ? 'bg-black/65 text-yellow-400'
-              : 'bg-black/55 text-white hover:bg-black/80 hover:scale-105'
+              ? 'bg-black/50 text-primary opacity-100'
+              : 'bg-black/55 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80 hover:scale-105'
           )}
         >
           <Bookmark
