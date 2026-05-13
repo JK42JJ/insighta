@@ -252,16 +252,16 @@ export function InsightCardItemV2({
           aria-label={isPinned ? 'Unpin card' : 'Pin card'}
           aria-pressed={isPinned}
           className={cn(
-            'absolute top-1.5 right-1.5 z-10 w-6 h-6 rounded-md backdrop-blur flex items-center justify-center transition-colors',
+            'absolute top-1.5 right-1.5 z-10 w-7 h-7 rounded-md backdrop-blur flex items-center justify-center transition-all',
             isPinned
-              ? 'bg-black/60 text-yellow-400 opacity-100'
-              : 'bg-black/40 text-white/60 opacity-0 group-hover:opacity-100 hover:text-white'
+              ? 'bg-black/65 text-yellow-400'
+              : 'bg-black/55 text-white hover:bg-black/80 hover:scale-105'
           )}
         >
           <Bookmark
-            className="w-3.5 h-3.5"
+            className="w-[18px] h-[18px]"
             fill={isPinned ? 'currentColor' : 'none'}
-            strokeWidth={2}
+            strokeWidth={2.2}
             aria-hidden="true"
           />
         </button>
