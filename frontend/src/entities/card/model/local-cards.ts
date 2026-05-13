@@ -46,6 +46,8 @@ export interface LocalCard {
   /** YouTube upload date, joined from youtube_videos by video_id. Null for non-YouTube cards or YouTube cards not yet enriched. */
   published_at?: string | null;
   duration_seconds?: number | null;
+  /** CP457+ pin / bookmark timestamp. Null = unpinned. */
+  pinned_at?: string | null;
 }
 
 /**
@@ -138,6 +140,7 @@ export function localCardToInsightCard(card: LocalCard): InsightCard {
         : undefined,
     videoSummary: card.video_summary,
     sourceTable: 'user_local_cards',
+    pinnedAt: card.pinned_at ?? null,
   };
 }
 

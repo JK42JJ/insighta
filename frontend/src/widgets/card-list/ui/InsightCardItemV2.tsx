@@ -266,15 +266,8 @@ export function InsightCardItemV2({
           />
         </button>
 
-        {/* Top-right inboard: Source badge (shifted left of Pin) */}
-        {isYouTube && (
-          <span className="absolute top-2 right-9 text-[9px] font-semibold px-1.5 py-[2px] rounded-[3px] bg-black/60 backdrop-blur text-white/60 flex items-center gap-[3px]">
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <polygon points="5,3 19,12 5,21" />
-            </svg>
-            YouTube
-          </span>
-        )}
+        {/* YouTube source badge removed (CP457+ spec) — footer relativeDate +
+            viewCount + thumbnail itself convey YouTube context. Pin owns TR. */}
 
         {/* Bottom-left: Memo indicator (only if note exists) */}
         {hasNote && (
