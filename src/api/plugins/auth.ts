@@ -155,6 +155,15 @@ export async function registerAuth(fastify: FastifyInstance) {
         }
       }
 
+      // SSE/EventSource browser API cannot send custom headers, so the
+      // frontend passes the JWT via `?access_token=<jwt>` query for the
+      // /videos/stream endpoint. Fall back to that when no Authorization
+      // header is present — Authorization-header path stays bit-identical.
+      const queryToken = (request.query as Record<string, string> | undefined)?.['access_token'];
+      if (!request.headers.authorization && queryToken) {
+        request.headers.authorization = `Bearer ${queryToken}`;
+      }
+
       const decoded = await request.jwtVerify<SupabaseJWTClaims>();
 
       const userMeta: Record<string, unknown> = decoded.user_metadata || {};
