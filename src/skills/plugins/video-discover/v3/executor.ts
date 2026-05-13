@@ -1527,8 +1527,91 @@ export async function runDiscoverEphemeral(
 
   const allSlots = [...redisSlots, ...tier2Slots];
 
+  // CP455 — apply hybrid rerank (Cohere) to ephemeral discover path so
+  // wizard-precompute results get the same quality filter as the main
+  // runV3VideoDiscover path. Without this, the wizard saves Tier 1/2
+  // results directly into recommendation_cache — including off-topic
+  // candidates that Cohere would have dropped (measured CP455 02:47 KST:
+  // 코딩테스트 mandala surfaced 수영 / 발로란트 / 이더리움 / JLPT cards).
+  //
+  // Flag-gated by V3_ENABLE_HYBRID_RERANK env (default false). When OFF
+  // the function returns input slots unchanged so this insertion is a
+  // no-op — same path as the main executor (hybrid-rerank.ts:309).
+  let rerankedSlots = allSlots;
+  if (allSlots.length > 0) {
+    try {
+      const hybridResult = await applyHybridRerank({
+        slots: allSlots.map((s) => ({
+          videoId: s.videoId,
+          title: s.title,
+          cellIndex: s.cellIndex,
+          rec_score: s.score,
+          _original: s,
+        })),
+        centerGoal: input.centerGoal,
+        subGoals: input.subGoals,
+        enableKeywordExpansion: true,
+        requestId: 'ephemeral-precompute',
+      });
+      rerankedSlots = hybridResult.slots
+        .map((r) => {
+          const ext = r as unknown as {
+            _original?: AssembledSlot;
+            _keywordFullData?: {
+              videoId: string;
+              title: string;
+              description: string | null;
+              channelName: string | null;
+              channelId: string | null;
+              thumbnail: string | null;
+              viewCount: number | null;
+              likeCount: number | null;
+              durationSec: number | null;
+              publishedAt: Date | null;
+              cellIndex: number;
+            };
+          };
+          if (ext._original) {
+            return { ...ext._original, score: r.rec_score };
+          }
+          if (ext._keywordFullData) {
+            const k = ext._keywordFullData;
+            return {
+              videoId: k.videoId,
+              title: k.title,
+              description: k.description,
+              channelName: k.channelName,
+              channelId: k.channelId,
+              thumbnail: k.thumbnail,
+              viewCount: k.viewCount,
+              likeCount: k.likeCount,
+              durationSec: k.durationSec,
+              publishedAt: k.publishedAt,
+              cellIndex: k.cellIndex,
+              score: r.rec_score,
+              tier: 'cache' as const,
+            };
+          }
+          return null;
+        })
+        .filter((s): s is AssembledSlot => s !== null);
+      log.info(
+        `[ephemeral] hybrid-rerank ${allSlots.length} → ${rerankedSlots.length} slots ` +
+          `(applied=${hybridResult.stats.applied} reason=${hybridResult.stats.reason} ` +
+          `keywordAdded=${hybridResult.stats.keywordAdded} afterDedupe=${hybridResult.stats.afterDedupe} ` +
+          `reranked=${hybridResult.stats.reranked} latencyMs=${hybridResult.stats.cohereLatencyMs ?? '-'})`
+      );
+    } catch (err) {
+      log.warn(
+        `[ephemeral] hybrid-rerank threw — falling back to unranked slots: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  }
+
   return {
-    slots: allSlots,
+    slots: rerankedSlots,
     queriesUsed,
     tier0_matches: redisSlots.length,
     tier2_matches: tier2Slots.length,
