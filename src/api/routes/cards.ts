@@ -74,19 +74,24 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const prisma = getPrismaClient();
 
     try {
+      // Raw UPDATE to bypass Prisma's @updatedAt auto-touch on user_video_states.
+      // Pinning a row should NOT change `updated_at` — that would reorder the
+      // grid view (cards typically sorted by updated_at desc) and surface the
+      // pinned card to the top, which is unrelated side-effect.
+      // We set ONLY pinned_at and leave updated_at untouched.
       let updatedCount = 0;
       if (source === 'user_local_cards') {
-        const result = await prisma.user_local_cards.updateMany({
-          where: { id, user_id: userId },
-          data: { pinned_at: pinnedAt },
-        });
-        updatedCount = result.count;
+        updatedCount = await prisma.$executeRaw`
+          UPDATE public.user_local_cards
+             SET pinned_at = ${pinnedAt}
+           WHERE id = ${id}::uuid AND user_id = ${userId}::uuid
+        `;
       } else {
-        const result = await prisma.userVideoState.updateMany({
-          where: { id, user_id: userId },
-          data: { pinned_at: pinnedAt },
-        });
-        updatedCount = result.count;
+        updatedCount = await prisma.$executeRaw`
+          UPDATE public.user_video_states
+             SET pinned_at = ${pinnedAt}
+           WHERE id = ${id}::uuid AND user_id = ${userId}::uuid
+        `;
       }
 
       if (updatedCount === 0) {
