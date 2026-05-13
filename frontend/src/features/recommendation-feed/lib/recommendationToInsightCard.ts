@@ -40,5 +40,6 @@ export function recommendationToInsightCard(
     mandalaId,
     linkType: 'youtube',
     sourceTable: 'user_video_states',
+    pinnedAt: rec.pinnedAt ?? null,
   };
 }

@@ -1772,6 +1772,38 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     // for the video (caller renders plain URL without `&t=`).
     const anchors = await lookupChunkAnchors(rows.map((r) => r.video_id));
 
+    // CP457+ pin/bookmark surfacing. Pin state lives on user_video_states
+    // (user_id, video_id) — the table that survives rec_cache's 7d TTL.
+    // rec_cache.video_id is the YouTube string id while user_video_states
+    // uses the youtube_videos.id uuid, so we bridge through youtube_videos.
+    // Two batch queries (no N+1) + a Map merge.
+    const videoIdStrings = Array.from(new Set(rows.map((r) => r.video_id)));
+    const pinnedAtByVideoId = new Map<string, Date>();
+    if (videoIdStrings.length > 0) {
+      const ytRows = await prisma.youtube_videos.findMany({
+        where: { youtube_video_id: { in: videoIdStrings } },
+        select: { id: true, youtube_video_id: true },
+      });
+      const ytUuidToVideoId = new Map(ytRows.map((y) => [y.id, y.youtube_video_id]));
+      const ytUuids = ytRows.map((y) => y.id);
+      if (ytUuids.length > 0) {
+        const pinRows = await prisma.userVideoState.findMany({
+          where: {
+            user_id: userId,
+            videoId: { in: ytUuids },
+            pinned_at: { not: null },
+          },
+          select: { videoId: true, pinned_at: true },
+        });
+        for (const p of pinRows) {
+          const videoIdString = ytUuidToVideoId.get(p.videoId);
+          if (videoIdString && p.pinned_at) {
+            pinnedAtByVideoId.set(videoIdString, p.pinned_at);
+          }
+        }
+      }
+    }
+
     const items = rows.map((row) => ({
       id: row.id,
       videoId: row.video_id,
@@ -1787,6 +1819,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       recReason: row.rec_reason,
       publishedAt: row.published_at?.toISOString() ?? null,
       startSec: anchors.get(row.video_id) ?? null,
+      pinnedAt: pinnedAtByVideoId.get(row.video_id)?.toISOString() ?? null,
     }));
 
     const firstRow = rows[0];

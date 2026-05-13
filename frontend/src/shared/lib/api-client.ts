@@ -1708,6 +1708,7 @@ class ApiClient {
       keyword: string;
       source: 'auto_recommend' | 'manual';
       recReason: string | null;
+      pinnedAt?: string | null;
     }>;
     lastRefreshed: string | null;
   }> {
