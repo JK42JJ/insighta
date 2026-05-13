@@ -32,6 +32,9 @@ model UserVideoState {
   /// User trace on an auto-added row promotes it to permanent (preserved across refreshes).
   auto_added             Boolean        @default(false)
   added_to_ideation_at   DateTime       @default(now()) @db.Timestamptz(6)
+  /// CP457+ pin/bookmark: NULL = unpinned, timestamp = pinned moment.
+  /// Used by `idx_user_video_states_pinned_at` partial index for filter view.
+  pinned_at              DateTime?      @db.Timestamptz(6)
   createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   users                  users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -43,6 +46,7 @@ model UserVideoState {
   @@index([videoId], map: "idx_user_video_states_video_id")
   @@index([mandala_id], map: "idx_user_video_states_mandala_id")
   @@index([mandala_id, cell_index, auto_added], map: "idx_user_video_states_auto_add_lookup")
+  @@index([user_id, pinned_at(sort: Desc)], map: "idx_user_video_states_pinned_at")
   @@map("user_video_states")
   @@schema("public")
 }
@@ -378,6 +382,7 @@ model users {
   mandala_subscriptions         mandala_subscriptions[]
   content_entities              content_entities[]
   user_subscriptions            user_subscriptions[]
+  billing_subscriptions         billing_subscriptions[]
   user_ui_preferences           user_ui_preferences[]
   user_llm_keys                 user_llm_keys[]
   UserVideoState                UserVideoState[]
@@ -670,6 +675,9 @@ model user_local_cards {
   video_id             String?        @db.VarChar(11)
   created_at           DateTime?      @default(now()) @db.Timestamptz(6)
   updated_at           DateTime?      @default(now()) @db.Timestamptz(6)
+  /// CP457+ pin/bookmark: NULL = unpinned, timestamp = pinned moment.
+  /// Used by `idx_user_local_cards_pinned_at` partial index for filter view.
+  pinned_at            DateTime?      @db.Timestamptz(6)
   users                users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   mandala              user_mandalas? @relation(fields: [mandala_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
@@ -680,6 +688,7 @@ model user_local_cards {
   @@index([mandala_id], map: "idx_user_local_cards_mandala_id")
   @@index([user_id, mandala_id], map: "idx_user_local_cards_user_mandala")
   @@index([video_id], map: "idx_user_local_cards_video_id")
+  @@index([user_id, pinned_at(sort: Desc)], map: "idx_user_local_cards_pinned_at")
   @@schema("public")
 }
 
@@ -1440,6 +1449,54 @@ model payment_transactions {
   description       String?
   created_at        DateTime? @default(now()) @db.Timestamptz(6)
 
+  @@schema("public")
+}
+
+/// Provider-agnostic subscription mirror. Active provider = Lemon Squeezy (MoR).
+/// See docs/design/billing-lemonsqueezy-2026-05-13.md §3 L0.
+/// Raw DDL: prisma/migrations/billing/001_billing_subscriptions.sql.
+model billing_subscriptions {
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                  String    @db.Uuid
+  provider                 String    @default("lemonsqueezy") @db.VarChar(30)
+  provider_subscription_id String    @db.VarChar(255)
+  provider_customer_id     String?   @db.VarChar(255)
+  variant_id               String    @db.VarChar(255)
+  plan_code                String    @db.VarChar(50)
+  /// One of: PENDING | ACTIVE | PAST_DUE | CANCELLED | EXPIRED | PAUSED (CHECK constraint at DB).
+  status                   String    @default("PENDING") @db.VarChar(20)
+  current_period_start     DateTime? @db.Timestamptz(6)
+  current_period_end       DateTime? @db.Timestamptz(6)
+  cancel_at_period_end     Boolean   @default(false)
+  cancelled_at             DateTime? @db.Timestamptz(6)
+  amount_cents             Int
+  currency                 String    @db.Char(3)
+  created_at               DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime  @default(now()) @db.Timestamptz(6)
+  users                    users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([provider, provider_subscription_id], map: "billing_subscriptions_provider_sub_unique")
+  @@index([user_id], map: "idx_billing_subscriptions_user")
+  @@schema("public")
+}
+
+/// Webhook event ledger for idempotency + audit. Every LS webhook lands here
+/// (signature_ok=true/false) before billing_subscriptions transitions.
+/// Raw DDL: prisma/migrations/billing/002_billing_events.sql.
+model billing_events {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider          String    @default("lemonsqueezy") @db.VarChar(30)
+  provider_event_id String    @db.VarChar(255)
+  event_name        String    @db.VarChar(100)
+  payload           Json      @db.JsonB
+  signature_ok      Boolean
+  processed_at      DateTime? @db.Timestamptz(6)
+  error_message     String?
+  received_at       DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@unique([provider, provider_event_id], map: "billing_events_provider_event_unique")
+  @@index([received_at(sort: Desc)], map: "idx_billing_events_received")
+  @@index([event_name], map: "idx_billing_events_event_name")
   @@schema("public")
 }
 

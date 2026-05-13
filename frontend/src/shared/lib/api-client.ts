@@ -1069,6 +1069,29 @@ class ApiClient {
     });
   }
 
+  /**
+   * Toggle pin/bookmark state on a grid view card (CP457+).
+   *
+   * `source` must match `InsightCard.sourceTable` — the FE-only discriminator
+   * that tells us which DB table holds the row (user_local_cards or
+   * user_video_states). BE updates `pinned_at` (NULL = unpinned, NOW = pinned).
+   *
+   * Returns the new state; caller invalidates the cards query for optimistic UI.
+   */
+  async setCardPin(
+    id: string,
+    pinned: boolean,
+    source: 'user_local_cards' | 'user_video_states'
+  ): Promise<{
+    status: string;
+    data: { id: string; pinned: boolean; pinnedAt: string | null; source: string };
+  }> {
+    return this.request(`/cards/${id}/pin`, {
+      method: 'PATCH',
+      body: JSON.stringify({ pinned, source }),
+    });
+  }
+
   async getMandalaQuota(): Promise<{
     used: number;
     limit: number | null;
