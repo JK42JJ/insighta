@@ -242,6 +242,19 @@ function AuthenticatedApp() {
   const clearJustCreated = useMandalaStore((s) => s.setJustCreated);
   const isNewMandalaActive = justCreatedMandalaId === effectiveMandalaId && !!effectiveMandalaId;
 
+  // 5c'. Mandala-switch grace period: prevents the "0 cards" empty-state flash
+  // that surfaced on every mandala switch because keepPreviousData + client-side
+  // mandala_id filter yields cards.length=0 for a brief moment before the next
+  // useAllVideoStates fetch lands. During the grace window we force isLoading
+  // downstream (skeleton instead of empty-state).
+  const [mandalaSwitchGrace, setMandalaSwitchGrace] = useState(false);
+  useEffect(() => {
+    if (!effectiveMandalaId) return;
+    setMandalaSwitchGrace(true);
+    const timer = setTimeout(() => setMandalaSwitchGrace(false), 3000);
+    return () => clearTimeout(timer);
+  }, [effectiveMandalaId]);
+
   useEffect(() => {
     if (!isNewMandalaActive) return;
 
@@ -937,7 +950,9 @@ function AuthenticatedApp() {
                       isLoading={
                         search.isSearchActive
                           ? search.isLoading
-                          : cards.isLoading || (isNewMandalaActive && cards.totalCards === 0)
+                          : cards.isLoading ||
+                            (isNewMandalaActive && cards.totalCards === 0) ||
+                            (mandalaSwitchGrace && cards.totalCards === 0)
                       }
                       title={
                         search.isSearchActive

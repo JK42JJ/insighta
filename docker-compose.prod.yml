@@ -240,6 +240,12 @@ services:
       # video_pool now 11,242 rows (batch_trend 10,044 + v2_promoted 1,198);
       # mandala-filter + Cohere rerank backstop low-quality cache hits.
       - V3_ENABLE_TIER1_CACHE=true
+      # CP455+ (2026-05-13) — Tier 2 search.list quality gate ON.
+      # Statistical threshold: age > 30d + < 1K views ≈ bottom 70-80%
+      # (YouTube long-tail) — typical AI-generated / advertorial pattern.
+      # minViewsPerDay=33 → 30-day cutoff ≈ 1K views (user hypothesis).
+      - V3_ENABLE_QUALITY_GATE=true
+      - V3_MIN_VIEWS_PER_DAY=33
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).

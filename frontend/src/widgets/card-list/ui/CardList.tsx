@@ -322,14 +322,11 @@ export function CardList({
         })}
       </div>
 
-      {/* Infinite scroll sentinel */}
       {hasMore && (
-        <div ref={sentinelRef} className="flex justify-center py-6">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-            {t('cards.loadingMore', { loaded: visibleCount, total: sortedCards.length })}
-          </div>
-        </div>
+        <>
+          <CardSkeleton count={Math.min(sortedCards.length - visibleCount, 6)} />
+          <div ref={sentinelRef} aria-hidden className="h-1" />
+        </>
       )}
     </div>
   );
