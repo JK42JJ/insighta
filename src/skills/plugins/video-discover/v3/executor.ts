@@ -37,7 +37,7 @@ import {
 import { notifyCardAdded, type CardPayload } from '@/modules/recommendations/publisher';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { manifest, V3_TARGET_PER_CELL, V3_NUM_CELLS, V3_TARGET_TOTAL } from './manifest';
-import { matchFromVideoPool } from './cache-matcher';
+import { matchFromVideoPool, matchFromVideoPoolByCenterGoal } from './cache-matcher';
 import {
   applyMandalaFilterWithStats,
   MIN_SUB_RELEVANCE,
@@ -266,6 +266,7 @@ export const executor: SkillExecutor = {
           mandalaId,
           language: state.language,
           perCell: V3_TARGET_PER_CELL,
+          sources: v3Config.tier1Sources,
         })
       : [];
 
@@ -306,6 +307,7 @@ export const executor: SkillExecutor = {
               centerGateMode: v3Config.centerGateMode,
               centerEmbedding,
               candidateEmbeddings,
+              semanticMinCosine: v3Config.semanticMinCosine,
             });
             const keptIds = new Set<string>();
             for (const assignments of byCell.values()) {
@@ -418,6 +420,7 @@ export const executor: SkillExecutor = {
       enableKeywordExpansion: true,
       topN: V3_TARGET_TOTAL,
       requestId: mandalaId,
+      sources: v3Config.tier1Sources,
     });
     const hybridSlots: AssembledSlot[] = hybridResult.slots
       .map((r) => {
@@ -970,6 +973,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
       centerGateMode: v3Config.centerGateMode,
       centerEmbedding,
       candidateEmbeddings,
+      semanticMinCosine: v3Config.semanticMinCosine,
     });
     debug.timing.mandalaFilterMs = Date.now() - tMandalaFilterStart;
 
@@ -1448,6 +1452,8 @@ export interface EphemeralDiscoverResult {
   slots: AssembledSlot[];
   queriesUsed: number;
   tier0_matches: number;
+  /** CP457 — video_pool Tier 1 matches via centerGoal embedding. */
+  tier1_matches: number;
   tier2_matches: number;
   duration_ms: number;
   debug?: Tier2Debug;
@@ -1531,16 +1537,72 @@ export async function runDiscoverEphemeral(
     log.info(`[redis][ephemeral] disabled by V3_ENABLE_REDIS_PROVIDER=false (Y0g)`);
   }
 
-  // ── Compute per-cell deficit after Redis ─
-  const redisByCell = new Map<number, number>();
-  for (const s of redisSlots) {
-    redisByCell.set(s.cellIndex, (redisByCell.get(s.cellIndex) ?? 0) + 1);
-  }
+  // ── Tier 1: video_pool cache by center-goal embedding (CP457) ─
+  // Ephemeral path has no mandala_id → cannot use mandala_embeddings table.
+  // Instead we embed centerGoal once and query video_pool_embeddings cosine
+  // directly. Cell index is assigned via subGoal token-overlap argmax inside
+  // matchFromVideoPoolByCenterGoal (same pattern as tsvectorKeywordCandidates).
+  // Gated by V3_ENABLE_TIER1_CACHE (same flag as mandala-id Tier 1).
+  const tier1Slots: AssembledSlot[] = [];
   const existingVideoIds = new Set(redisSlots.map((s) => s.videoId));
+  if (v3Config.enableTier1Cache) {
+    try {
+      const [centerVec] = await embedBatch([input.centerGoal]);
+      if (centerVec && centerVec.length > 0) {
+        const tier1Matches = await matchFromVideoPoolByCenterGoal({
+          centerEmbedding: centerVec,
+          subGoals: input.subGoals,
+          language: input.language,
+          limit: V3_TARGET_TOTAL,
+          threshold: v3Config.semanticMinCosine,
+          sources: v3Config.tier1Sources,
+        });
+        for (const m of tier1Matches) {
+          if (existingVideoIds.has(m.videoId)) continue;
+          tier1Slots.push({
+            videoId: m.videoId,
+            title: m.title,
+            description: m.description,
+            channelName: m.channelName,
+            channelId: m.channelId,
+            thumbnail: m.thumbnail,
+            viewCount: m.viewCount,
+            likeCount: m.likeCount,
+            durationSec: m.durationSec,
+            publishedAt: m.publishedAt,
+            cellIndex: m.cellIndex,
+            score: m.score,
+            tier: 'cache',
+          });
+          existingVideoIds.add(m.videoId);
+        }
+        log.info(
+          `[tier1][ephemeral] matches=${tier1Matches.length} admitted=${tier1Slots.length} ` +
+            `sources=[${v3Config.tier1Sources.join(',')}] threshold=${v3Config.semanticMinCosine}`
+        );
+      } else {
+        log.warn(`[tier1][ephemeral] centerGoal embed returned empty — skipping Tier 1`);
+      }
+    } catch (err) {
+      log.warn(
+        `[tier1][ephemeral] threw — skipping Tier 1: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  } else {
+    log.info(`[tier1][ephemeral] disabled by V3_ENABLE_TIER1_CACHE=false`);
+  }
+
+  // ── Compute per-cell deficit after Redis + Tier 1 ─
+  const cacheByCell = new Map<number, number>();
+  for (const s of [...redisSlots, ...tier1Slots]) {
+    cacheByCell.set(s.cellIndex, (cacheByCell.get(s.cellIndex) ?? 0) + 1);
+  }
 
   const deficitCells: { cellIndex: number; need: number }[] = [];
   for (let i = 0; i < V3_NUM_CELLS; i++) {
-    const have = redisByCell.get(i) ?? 0;
+    const have = cacheByCell.get(i) ?? 0;
     const need = V3_TARGET_PER_CELL - have;
     if (need > 0) {
       deficitCells.push({ cellIndex: i, need });
@@ -1572,7 +1634,7 @@ export async function runDiscoverEphemeral(
     tier2Debug = tier2.debug;
   }
 
-  const allSlots = [...redisSlots, ...tier2Slots];
+  const allSlots = [...redisSlots, ...tier1Slots, ...tier2Slots];
 
   let filteredSlots = allSlots;
   if (allSlots.length > 0 && v3Config.centerGateMode === 'semantic') {
@@ -1607,6 +1669,7 @@ export async function runDiscoverEphemeral(
           centerGateMode: v3Config.centerGateMode,
           centerEmbedding,
           candidateEmbeddings,
+          semanticMinCosine: v3Config.semanticMinCosine,
         });
         const slotById = new Map(allSlots.map((s) => [s.videoId, s]));
         const flattened: AssembledSlot[] = [];
@@ -1653,6 +1716,7 @@ export async function runDiscoverEphemeral(
       enableKeywordExpansion: true,
       topN: V3_TARGET_TOTAL,
       requestId: 'ephemeral-precompute',
+      sources: v3Config.tier1Sources,
     });
     rerankedSlots = hybridResult.slots
       .map((r) => {
@@ -1714,6 +1778,7 @@ export async function runDiscoverEphemeral(
     slots: rerankedSlots,
     queriesUsed,
     tier0_matches: redisSlots.length,
+    tier1_matches: tier1Slots.length,
     tier2_matches: tier2Slots.length,
     duration_ms: Date.now() - t0,
     debug: tier2Debug,

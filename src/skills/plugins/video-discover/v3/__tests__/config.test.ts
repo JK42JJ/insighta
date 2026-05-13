@@ -6,10 +6,15 @@ import {
   DEFAULT_MIN_VIEW_COUNT,
   DEFAULT_MIN_VIEWS_PER_DAY,
   DEFAULT_PUBLISHED_AFTER_DAYS,
+  DEFAULT_TIER1_SOURCES,
   DEFAULT_YOUTUBE_SEARCH_TIMEOUT_MS,
   loadV3Config,
 } from '../config';
-import { DEFAULT_RECENCY_HALF_LIFE_MONTHS, DEFAULT_RECENCY_WEIGHT } from '../mandala-filter';
+import {
+  DEFAULT_RECENCY_HALF_LIFE_MONTHS,
+  DEFAULT_RECENCY_WEIGHT,
+  SEMANTIC_MIN_COSINE,
+} from '../mandala-filter';
 
 describe('loadV3Config', () => {
   test('empty env → activated defaults (Tier 1 off, recency on, 3yr cutoff, semantic off, yt timeout 1s, center-gate substring, quality gate off)', () => {
@@ -31,6 +36,8 @@ describe('loadV3Config', () => {
       semanticMaxCandidates: 30, // PR-Y0b2 default
       useYoutubeRankingOnly: false, // PR-Y0d default
       enableRedisProvider: false, // PR-Y0g default (kill switch)
+      tier1Sources: [...DEFAULT_TIER1_SOURCES], // CP457 default ['v2_promoted']
+      semanticMinCosine: SEMANTIC_MIN_COSINE, // CP457 default 0.35 (mandala-filter.ts const)
     });
   });
 
@@ -102,6 +109,8 @@ describe('loadV3Config', () => {
       semanticMaxCandidates: 30, // PR-Y0b2 default
       useYoutubeRankingOnly: false, // PR-Y0d default
       enableRedisProvider: false, // PR-Y0g default (kill switch)
+      tier1Sources: [...DEFAULT_TIER1_SOURCES], // CP457 default ['v2_promoted']
+      semanticMinCosine: SEMANTIC_MIN_COSINE, // CP457 default 0.35 (mandala-filter.ts const)
     });
   });
 
@@ -190,6 +199,46 @@ describe('loadV3Config', () => {
     expect(loadV3Config({ V3_MAX_QUERIES: '-3' }).maxQueries).toBe(DEFAULT_MAX_QUERIES);
     expect(loadV3Config({ V3_MAX_QUERIES: 'garbage' }).maxQueries).toBe(DEFAULT_MAX_QUERIES);
     expect(loadV3Config({ V3_MAX_QUERIES: '' }).maxQueries).toBe(DEFAULT_MAX_QUERIES);
+  });
+
+  test('V3_TIER1_SOURCES parses comma-separated list (CP457)', () => {
+    // Default unset → ['v2_promoted']
+    expect(loadV3Config({}).tier1Sources).toEqual(['v2_promoted']);
+    // Single value
+    expect(loadV3Config({ V3_TIER1_SOURCES: 'v2_promoted' }).tier1Sources).toEqual(['v2_promoted']);
+    // Two values (prod CP457 setting)
+    expect(loadV3Config({ V3_TIER1_SOURCES: 'v2_promoted,batch_trend' }).tier1Sources).toEqual([
+      'v2_promoted',
+      'batch_trend',
+    ]);
+    // Whitespace trimming + empty filter
+    expect(
+      loadV3Config({ V3_TIER1_SOURCES: '  v2_promoted , batch_trend , ' }).tier1Sources
+    ).toEqual(['v2_promoted', 'batch_trend']);
+    // Empty string → default fallback (parses as empty array, schema rejects via .min(1) → fallback)
+    expect(loadV3Config({ V3_TIER1_SOURCES: '' }).tier1Sources).toEqual([...DEFAULT_TIER1_SOURCES]);
+  });
+
+  test('V3_SEMANTIC_MIN_COSINE parses valid [0,1] values (CP457)', () => {
+    // Default unset → 0.35 (mandala-filter.ts SEMANTIC_MIN_COSINE)
+    expect(loadV3Config({}).semanticMinCosine).toBe(SEMANTIC_MIN_COSINE);
+    // Prod CP457 setting
+    expect(loadV3Config({ V3_SEMANTIC_MIN_COSINE: '0.5' }).semanticMinCosine).toBe(0.5);
+    expect(loadV3Config({ V3_SEMANTIC_MIN_COSINE: '0.55' }).semanticMinCosine).toBeCloseTo(0.55, 6);
+    // Bounds
+    expect(loadV3Config({ V3_SEMANTIC_MIN_COSINE: '0' }).semanticMinCosine).toBe(0);
+    expect(loadV3Config({ V3_SEMANTIC_MIN_COSINE: '1' }).semanticMinCosine).toBe(1);
+    // Empty / invalid → default
+    expect(loadV3Config({ V3_SEMANTIC_MIN_COSINE: '' }).semanticMinCosine).toBe(
+      SEMANTIC_MIN_COSINE
+    );
+    // Out of range → entire schema falls back to baseline
+    expect(loadV3Config({ V3_SEMANTIC_MIN_COSINE: '1.5' }).semanticMinCosine).toBe(
+      SEMANTIC_MIN_COSINE
+    );
+    expect(loadV3Config({ V3_SEMANTIC_MIN_COSINE: '-0.1' }).semanticMinCosine).toBe(
+      SEMANTIC_MIN_COSINE
+    );
   });
 
   test('V3_ENABLE_REDIS_PROVIDER kill switch (PR-Y0g, default false)', () => {
