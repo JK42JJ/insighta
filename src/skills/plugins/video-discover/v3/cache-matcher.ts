@@ -150,6 +150,154 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
 }
 
 /**
+ * Options for `matchFromVideoPoolByCenterGoal` (CP457).
+ *
+ * Used by the ephemeral / wizard-precompute path where no `mandala_id`
+ * exists yet — so `mandala_embeddings` table is unavailable. Instead the
+ * caller embeds `centerGoal` once and we run pgvector cosine against
+ * `video_pool_embeddings` with that single vector.
+ *
+ * Cell assignment falls back to argmax token-overlap over `subGoals`,
+ * the same pattern used by `tsvectorKeywordCandidates` in
+ * `hybrid-rerank.ts:212-224`. When centerGateMode='semantic' in the
+ * downstream executor the post-Tier-1 mandala-filter may reassign cells;
+ * we still need a meaningful initial value because non-semantic modes
+ * (substring/subword/off) skip that reassignment.
+ */
+export interface MatchByCenterGoalOpts {
+  /** 4096-d qwen3-embedding:8b vector of the wizard `centerGoal`. */
+  centerEmbedding: ReadonlyArray<number>;
+  /** Eight sub_goal strings; argmax token overlap drives cellIndex. */
+  subGoals: ReadonlyArray<string>;
+  language: 'ko' | 'en';
+  limit?: number;
+  /** Minimum cosine to admit. Caller passes `v3Config.semanticMinCosine`. */
+  threshold?: number;
+  /** Same default + override semantics as `matchFromVideoPool`. */
+  sources?: ReadonlyArray<string>;
+}
+
+interface CenterMatchRow {
+  video_id: string;
+  title: string;
+  description: string | null;
+  channel_name: string | null;
+  channel_id: string | null;
+  thumbnail_url: string | null;
+  view_count: bigint | null;
+  like_count: bigint | null;
+  duration_seconds: number | null;
+  published_at: Date | null;
+  score: number;
+}
+
+/**
+ * Tier 1 cache match against a single center-goal embedding (no mandala_id).
+ *
+ * Returns up to `limit` rows from `video_pool`, sorted by cosine desc
+ * against `centerEmbedding`, restricted to gold+silver, language match,
+ * is_active=true, and `sources` whitelist (default `['v2_promoted']`).
+ *
+ * Cell index is assigned per-row via argmax token-overlap with `subGoals`
+ * (lower-case tokenisation on title). Mirrors the tsvector-keyword-path
+ * cell-assignment so ephemeral Tier 1 + Tier 2 hybrid candidates share
+ * an identical distribution rule.
+ *
+ * Returns `[]` when the pool has zero gold+silver rows for the language
+ * or `centerEmbedding.length === 0` (defensive — caller should never).
+ */
+export async function matchFromVideoPoolByCenterGoal(
+  opts: MatchByCenterGoalOpts
+): Promise<CachedMatch[]> {
+  if (opts.centerEmbedding.length === 0) return [];
+  const limit = opts.limit ?? 64;
+  const threshold = opts.threshold ?? DEFAULT_RELEVANCE_THRESHOLD;
+  const sources = opts.sources ?? ['v2_promoted'];
+  const db = getPrismaClient();
+
+  // pgvector requires the literal vector cast — `${array}::vector` doesn't
+  // resolve a JS array through Prisma's template parameter binding, so we
+  // serialise to the `[v1,v2,...]` text form and let Postgres cast.
+  const vectorLiteral = `[${opts.centerEmbedding.join(',')}]`;
+
+  const rows = await db.$queryRaw<CenterMatchRow[]>(Prisma.sql`
+    SELECT
+      vp.video_id,
+      vp.title,
+      vp.description,
+      vp.channel_name,
+      vp.channel_id,
+      vp.thumbnail_url,
+      vp.view_count,
+      vp.like_count,
+      vp.duration_seconds,
+      vp.published_at,
+      1 - (vpe.embedding <=> ${vectorLiteral}::vector) AS score
+    FROM public.video_pool vp
+    JOIN public.video_pool_embeddings vpe
+      ON vp.video_id = vpe.video_id
+    WHERE vp.is_active = true
+      AND vp.language = ${opts.language}
+      AND vp.quality_tier IN ('gold', 'silver')
+      AND vp.source = ANY(${sources}::text[])
+      AND 1 - (vpe.embedding <=> ${vectorLiteral}::vector) >= ${threshold}
+    ORDER BY vpe.embedding <=> ${vectorLiteral}::vector ASC
+    LIMIT ${limit}
+  `);
+
+  const subTokens = opts.subGoals.map((sg) => tokenizeLower(sg ?? ''));
+  const matches: CachedMatch[] = rows.map((r) => {
+    const titleTokens = tokenizeLower(r.title);
+    let bestCell = 0;
+    let bestOverlap = -1;
+    for (let i = 0; i < subTokens.length; i++) {
+      const overlap = countTokenOverlap(titleTokens, subTokens[i] ?? []);
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap;
+        bestCell = i;
+      }
+    }
+    return {
+      videoId: r.video_id,
+      title: r.title,
+      description: r.description,
+      channelName: r.channel_name,
+      channelId: r.channel_id,
+      thumbnail: r.thumbnail_url,
+      viewCount: r.view_count == null ? null : Number(r.view_count),
+      likeCount: r.like_count == null ? null : Number(r.like_count),
+      durationSec: r.duration_seconds,
+      publishedAt: r.published_at,
+      cellIndex: bestCell,
+      score: r.score,
+    };
+  });
+
+  log.info(
+    `cache match (by center-goal): lang=${opts.language} sources=[${sources.join(',')}] threshold=${threshold} matches=${matches.length}`
+  );
+
+  return matches;
+}
+
+function tokenizeLower(s: string): string[] {
+  return s
+    .toLowerCase()
+    .split(/[\s.,;:!?()[\]{}'"`#~^$%&*+=\-_/\\|<>]+/u)
+    .filter((t) => t.length > 0);
+}
+
+function countTokenOverlap(a: ReadonlyArray<string>, b: ReadonlyArray<string>): number {
+  if (a.length === 0 || b.length === 0) return 0;
+  const bSet = new Set(b);
+  let n = 0;
+  for (const t of a) {
+    if (bSet.has(t)) n++;
+  }
+  return n;
+}
+
+/**
  * Distribute cached matches into 8 cell buckets (cellIndex 0..7). Already
  * sorted per cell by score desc. Caller is responsible for merging with
  * Tier 2 fallback and upserting to recommendation_cache.

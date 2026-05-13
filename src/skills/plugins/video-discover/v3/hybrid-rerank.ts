@@ -69,6 +69,13 @@ export interface HybridRerankInput<S extends RerankSlot> {
   keywordExpansionLimit?: number;
   topN?: number;
   requestId?: string;
+  /**
+   * `video_pool.source` whitelist for the tsvector keyword-expansion path
+   * (CP457). Default `['v2_promoted']` preserves CP456 behavior — gates out
+   * batch_trend cross-domain noise. Caller passes `v3Config.tier1Sources`
+   * to share the same filter as Tier 1 cache matching.
+   */
+  sources?: ReadonlyArray<string>;
 }
 
 export interface HybridRerankStats {
@@ -296,7 +303,13 @@ export async function applyHybridRerank<S extends RerankSlot>(
   if (input.enableKeywordExpansion === true && input.subGoals && input.subGoals.length > 0) {
     const excludeIds = semanticPool.map((s) => s.videoId);
     const limit = input.keywordExpansionLimit ?? 20;
-    const kw = await tsvectorKeywordCandidates(input.centerGoal, input.subGoals, excludeIds, limit);
+    const kw = await tsvectorKeywordCandidates(
+      input.centerGoal,
+      input.subGoals,
+      excludeIds,
+      limit,
+      input.sources
+    );
     const kwSlots = kw.map((k) => ({
       videoId: k.videoId,
       title: k.title,

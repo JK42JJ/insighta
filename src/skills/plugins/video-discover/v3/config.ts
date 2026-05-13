@@ -2,7 +2,11 @@ import { z } from 'zod';
 
 import { DEFAULT_SEMANTIC_ALPHA, DEFAULT_SEMANTIC_BETA } from '@/modules/video-dictionary';
 
-import { DEFAULT_RECENCY_HALF_LIFE_MONTHS, DEFAULT_RECENCY_WEIGHT } from './mandala-filter';
+import {
+  DEFAULT_RECENCY_HALF_LIFE_MONTHS,
+  DEFAULT_RECENCY_WEIGHT,
+  SEMANTIC_MIN_COSINE,
+} from './mandala-filter';
 
 export const DEFAULT_PUBLISHED_AFTER_DAYS = 0;
 
@@ -206,6 +210,60 @@ export const DEFAULT_USE_YOUTUBE_RANKING_ONLY = false;
  */
 export const DEFAULT_ENABLE_REDIS_PROVIDER = false;
 
+/**
+ * Tier 1 video_pool source filter (CP457 domain idempotency fix).
+ *
+ * Comma-separated list of `video_pool.source` values that Tier 1 + hybrid-
+ * rerank keyword-expansion are allowed to draw from. Default
+ * `['v2_promoted']` preserves CP456 behavior (CC-authored v2 summaries
+ * with completeness ≥ 0.7, structurally on-topic).
+ *
+ * Set `V3_TIER1_SOURCES=v2_promoted,batch_trend` in prod to expand
+ * coverage to travel / hobby / language / cooking domains where
+ * v2_promoted alone is sparse (CP457 prod measurement: travel mandala
+ * v2_promoted=13 rows vs +batch_trend=372 rows top-50 per cell, cosine
+ * ≥ 0.5 batch=38 + v2=5 = 43 rows pass).
+ *
+ * Trade-off: batch_trend rows are untriaged trend-cron output and admit
+ * cross-domain near-matches (CP455 cell 6 = 28 토익스피킹 at cosine 0.55+).
+ * Companion env `V3_SEMANTIC_MIN_COSINE` (default 0.35, raise to 0.5 in
+ * prod) gates noise via the post-Tier-1 mandala-filter semantic gate.
+ *
+ * Rollback: unset the env var or set back to `v2_promoted` only —
+ * no code change required.
+ */
+export const DEFAULT_TIER1_SOURCES: ReadonlyArray<string> = ['v2_promoted'];
+
+const tier1Sources = z
+  .preprocess((v) => {
+    if (typeof v !== 'string') return undefined;
+    const parts = v
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return parts.length > 0 ? parts : undefined;
+  }, z.array(z.string()).min(1).optional())
+  .transform((v) => v ?? [...DEFAULT_TIER1_SOURCES]);
+
+/**
+ * Semantic-mode center-gate cosine threshold (CP457 domain idempotency).
+ *
+ * Default 0.35 matches `mandala-filter.ts::SEMANTIC_MIN_COSINE` (CP416
+ * permissive floor) for backward compat. Set `V3_SEMANTIC_MIN_COSINE=0.5`
+ * in prod when V3_TIER1_SOURCES admits batch_trend — raises quality bar
+ * so cross-domain near-matches (CP455 cell 6 토익스피킹 cosine 0.55+) are
+ * filtered while in-domain matches (0.5-0.8 range per CP416 measurement)
+ * survive.
+ *
+ * Rollback: unset env to revert to 0.35 floor — no code change.
+ */
+const semanticMinCosine = z
+  .preprocess(
+    (v) => (v == null || v === '' ? undefined : Number(v)),
+    z.number().finite().min(0).max(1).optional()
+  )
+  .transform((v) => v ?? SEMANTIC_MIN_COSINE);
+
 const minViewCount = z
   .preprocess(
     (v) => (v == null || v === '' ? undefined : Number(v)),
@@ -245,6 +303,8 @@ export const v3EnvSchema = z.object({
   V3_SEMANTIC_MAX_CANDIDATES: semanticMaxCandidates,
   V3_USE_YOUTUBE_RANKING_ONLY: booleanFlag.optional().default(false as unknown as string),
   V3_ENABLE_REDIS_PROVIDER: booleanFlag.optional().default(false as unknown as string),
+  V3_TIER1_SOURCES: tier1Sources,
+  V3_SEMANTIC_MIN_COSINE: semanticMinCosine,
 });
 
 export interface V3Config {
@@ -265,6 +325,8 @@ export interface V3Config {
   semanticMaxCandidates: number;
   useYoutubeRankingOnly: boolean;
   enableRedisProvider: boolean;
+  tier1Sources: ReadonlyArray<string>;
+  semanticMinCosine: number;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -286,6 +348,8 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_SEMANTIC_MAX_CANDIDATES: env['V3_SEMANTIC_MAX_CANDIDATES'],
     V3_USE_YOUTUBE_RANKING_ONLY: env['V3_USE_YOUTUBE_RANKING_ONLY'],
     V3_ENABLE_REDIS_PROVIDER: env['V3_ENABLE_REDIS_PROVIDER'],
+    V3_TIER1_SOURCES: env['V3_TIER1_SOURCES'],
+    V3_SEMANTIC_MIN_COSINE: env['V3_SEMANTIC_MIN_COSINE'],
   });
   if (!parsed.success) {
     return {
@@ -306,6 +370,8 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       semanticMaxCandidates: DEFAULT_SEMANTIC_MAX_CANDIDATES,
       useYoutubeRankingOnly: DEFAULT_USE_YOUTUBE_RANKING_ONLY,
       enableRedisProvider: DEFAULT_ENABLE_REDIS_PROVIDER,
+      tier1Sources: [...DEFAULT_TIER1_SOURCES],
+      semanticMinCosine: SEMANTIC_MIN_COSINE,
     };
   }
   return {
@@ -326,6 +392,8 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     semanticMaxCandidates: parsed.data.V3_SEMANTIC_MAX_CANDIDATES,
     useYoutubeRankingOnly: parsed.data.V3_USE_YOUTUBE_RANKING_ONLY,
     enableRedisProvider: parsed.data.V3_ENABLE_REDIS_PROVIDER,
+    tier1Sources: parsed.data.V3_TIER1_SOURCES,
+    semanticMinCosine: parsed.data.V3_SEMANTIC_MIN_COSINE,
   };
 }
 
