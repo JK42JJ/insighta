@@ -36,8 +36,21 @@ export interface RecommendationsResponse {
   lastRefreshed: string | null;
 }
 
-/** 5 minutes — recommendation_cache is refreshed by an offline pipeline. */
-const REC_FEED_STALE_TIME_MS = 5 * 60 * 1000;
+/**
+ * Stale time = how long cached data is considered fresh before refetch is
+ * allowed. 30s lets SSE push be the fast path while REST polling stays the
+ * idempotency baseline (CP455 멱등성 원칙).
+ */
+const REC_FEED_STALE_TIME_MS = 30 * 1000;
+
+/**
+ * Background refetch interval (CP455 SSE PR — loosely coupled fallback).
+ * Polls `/recommendations` regardless of SSE state so the dashboard stays
+ * correct even if SSE is dead (proxy / CDN timeout / browser quirk).
+ * 8s = balance between freshness (user sees cards within ~8s if SSE down)
+ * and quota (8 requests / minute / mandala — light).
+ */
+const REC_FEED_REFETCH_INTERVAL_MS = 8 * 1000;
 
 export function useRecommendations(mandalaId: string | null | undefined) {
   const { data, isLoading, isError, refetch } = useQuery<RecommendationsResponse>({
@@ -45,6 +58,8 @@ export function useRecommendations(mandalaId: string | null | undefined) {
     queryFn: () => apiClient.getMandalaRecommendations(mandalaId as string),
     enabled: !!mandalaId,
     staleTime: REC_FEED_STALE_TIME_MS,
+    refetchInterval: REC_FEED_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
     retry: (failureCount, err: unknown) => {
       const status = (err as { statusCode?: number })?.statusCode;
       if (status === 404 || status === 403) return false;

@@ -29,6 +29,9 @@ import { MemoryCache } from '../../utils/memory-cache';
 import { cardPublisher, type CardPayload } from '../../modules/recommendations/publisher';
 import { lookupChunkAnchors } from '../../modules/recommendations/chunk-anchor';
 import { generateMandalaActions } from '../../modules/mandala/generator';
+import { logger } from '../../utils/logger';
+
+const sseLog = logger.child({ module: 'sse-videos-stream' });
 
 // Explore results cache — templates are near-immutable, 10-min TTL
 const exploreCache = new MemoryCache({ defaultTTLMs: EXPLORE_CACHE_TTL_MS, maxEntries: 100 });
@@ -2371,6 +2374,21 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         return reply.code(404).send({ error: 'Mandala not found' });
       }
 
+      // CP455 SSE PR A — reconnect catchup. Client supplies the id of the
+      // last `card_added` event it received (via `Last-Event-ID` header
+      // OR `?lastEventId=` query — EventSource sets header automatically
+      // on auto-reconnect; we also accept query for explicit catch-up).
+      // Backlog rows with id <= lastEventId are skipped to avoid duplicate
+      // emission. When absent, full backlog is emitted (initial connect).
+      const lastEventIdHeader = request.headers['last-event-id'];
+      const lastEventIdQuery = (request.query as Record<string, string> | undefined)?.[
+        'lastEventId'
+      ];
+      const lastEventId =
+        (typeof lastEventIdHeader === 'string' && lastEventIdHeader) ||
+        (typeof lastEventIdQuery === 'string' && lastEventIdQuery) ||
+        null;
+
       // Tell Fastify we're taking over the socket for a long-lived
       // SSE stream. Without hijack(), Fastify would try to send a
       // JSON body on handler return and double-close the response.
@@ -2392,8 +2410,19 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       raw.write('retry: 5000\n\n');
       raw.write(`: connected mandala=${mandalaId}\n\n`);
 
-      const write = (event: string, data: unknown): void => {
+      // CP455 SSE observability — open log captured to winston combined.log
+      // (PV-persisted via logs_data:/app/logs volume). Stats counters scope
+      // is per-request — closed at cleanup with duration.
+      const sseT0 = Date.now();
+      let emitCount = 0;
+      let heartbeatCount = 0;
+      sseLog.info('sse:open', { mandalaId, userId, lastEventId });
+
+      const write = (event: string, data: unknown, eventId?: string): void => {
         if (raw.destroyed) return;
+        if (eventId) {
+          raw.write(`id: ${eventId}\n`);
+        }
         raw.write(`event: ${event}\n`);
         raw.write(`data: ${JSON.stringify(data)}\n\n`);
       };
@@ -2439,7 +2468,15 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       // PR3 — chunk anchors for SSE backlog (same lookup as REST path).
       const backlogAnchors = await lookupChunkAnchors(backlogRows.map((r) => r.video_id));
 
-      for (const row of backlogRows) {
+      // CP455 SSE PR A — reconnect catchup: skip rows already seen by client.
+      // recommendation_cache.id is UUID, lexicographically comparable but
+      // not strictly monotonic — so we filter by simple inequality.
+      const backlogToEmit = lastEventId
+        ? backlogRows.filter((row) => row.id !== lastEventId)
+        : backlogRows;
+
+      let lastEmittedId: string | null = lastEventId;
+      for (const row of backlogToEmit) {
         const payload: CardPayload = {
           id: row.id,
           videoId: row.video_id,
@@ -2457,26 +2494,46 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           publishedAt: row.published_at?.toISOString() ?? null,
           startSec: backlogAnchors.get(row.video_id) ?? null,
         };
-        write('card_added', payload);
+        write('card_added', payload, row.id);
+        emitCount += 1;
+        lastEmittedId = row.id;
       }
-      write('backlog_done', { count: backlogRows.length });
+      write('backlog_done', { count: backlogToEmit.length, skippedAfterLastEventId: lastEventId });
+      sseLog.info('sse:backlog-done', {
+        mandalaId,
+        userId,
+        backlog: backlogToEmit.length,
+        lastEventId,
+      });
 
       const unsubscribe = cardPublisher.subscribe(mandalaId, (payload: CardPayload) => {
-        write('card_added', payload);
+        write('card_added', payload, payload.id);
+        emitCount += 1;
+        lastEmittedId = payload.id;
       });
 
       const heartbeatInterval = setInterval(() => {
         if (raw.destroyed) return;
         raw.write(`event: heartbeat\ndata: {"ts":${Date.now()}}\n\n`);
+        heartbeatCount += 1;
       }, 20_000);
 
-      const cleanup = (): void => {
+      const cleanup = (reason: string): void => {
         unsubscribe();
         clearInterval(heartbeatInterval);
+        sseLog.info('sse:close', {
+          mandalaId,
+          userId,
+          reason,
+          durationMs: Date.now() - sseT0,
+          emitCount,
+          heartbeatCount,
+          lastEmittedId,
+        });
       };
 
-      request.raw.on('close', cleanup);
-      request.raw.on('error', cleanup);
+      request.raw.on('close', () => cleanup('client-close'));
+      request.raw.on('error', () => cleanup('error'));
 
       // Keep the handler promise pending until the client
       // disconnects, otherwise Fastify resolves the route and some

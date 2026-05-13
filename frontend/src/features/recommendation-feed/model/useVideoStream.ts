@@ -59,10 +59,17 @@ export function useVideoStream(mandalaId: string | null | undefined): UseVideoSt
   // effect. Using a ref avoids a state update per card event.
   const seenRef = useRef<Set<string>>(new Set());
 
+  // CP455 SSE PR B — last-seen event id (BE recommendation_cache.id) for
+  // reconnect catchup. Survives EventSource auto-reconnect via the
+  // Last-Event-ID header set by the browser, AND explicit reconnect via
+  // ?lastEventId= query param (heartbeat-watchdog forced reconnect path).
+  const lastEventIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!mandalaId) {
       setCards([]);
       seenRef.current = new Set();
+      lastEventIdRef.current = null;
       setStatus('idle');
       setError(null);
       return;
@@ -74,6 +81,27 @@ export function useVideoStream(mandalaId: string | null | undefined): UseVideoSt
 
     let cancelled = false;
     let es: EventSource | null = null;
+    let watchdog: ReturnType<typeof setTimeout> | null = null;
+
+    // CP455 SSE PR B — heartbeat watchdog. EventSource auto-reconnects on
+    // transient errors but if the underlying TCP socket silently dies
+    // (proxy/CDN idle close, mid-stream timeout) the browser may not
+    // detect it for tens of seconds. BE emits `heartbeat` every 20s — we
+    // expect any event (heartbeat / card_added / backlog_done) within
+    // 35s. After 35s of silence, force-close + reopen with lastEventId.
+    const WATCHDOG_MS = 35_000;
+    const armWatchdog = (): void => {
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = setTimeout(() => {
+        if (cancelled) return;
+        // Force reconnect — passes lastEventIdRef.current via query param
+        // so BE skips rows already seen. Browser-native Last-Event-ID
+        // header path also works for transient auto-reconnects, but
+        // forcing close+reopen is more reliable for stuck-socket case.
+        es?.close();
+        void connect();
+      }, WATCHDOG_MS);
+    };
 
     const connect = async (): Promise<void> => {
       setStatus('connecting');
@@ -98,11 +126,17 @@ export function useVideoStream(mandalaId: string | null | undefined): UseVideoSt
       }
 
       // EventSource can't set Authorization headers — pass the
-      // token via query string. The backend route uses the same
-      // `fastify.authenticate` plugin as /recommendations, which
-      // reads the token from either header or access_token query
-      // param (supabase jwt plugin convention).
-      const url = `${API_BASE_URL}/api/v1/mandalas/${mandalaId}/videos/stream?access_token=${encodeURIComponent(accessToken)}`;
+      // token via query string. BE auth.ts (PR #620) synthesizes
+      // Authorization header from `?access_token=` query param so
+      // the existing jwtVerify path runs unchanged. CP455 PR B
+      // also passes `?lastEventId=` for explicit reconnect catchup
+      // (browser-native Last-Event-ID header path also works on
+      // automatic EventSource reconnect — we set both).
+      const params = new URLSearchParams({ access_token: accessToken });
+      if (lastEventIdRef.current) {
+        params.set('lastEventId', lastEventIdRef.current);
+      }
+      const url = `${API_BASE_URL}/api/v1/mandalas/${mandalaId}/videos/stream?${params.toString()}`;
 
       try {
         es = new EventSource(url);
@@ -112,16 +146,24 @@ export function useVideoStream(mandalaId: string | null | undefined): UseVideoSt
         return;
       }
 
+      armWatchdog();
+
       es.addEventListener('open', () => {
         if (cancelled) return;
         setStatus('streaming');
+        armWatchdog();
       });
 
       es.addEventListener('card_added', (ev) => {
         if (cancelled) return;
+        armWatchdog();
         try {
           const payload = JSON.parse((ev as MessageEvent).data) as RecommendationItem;
           if (!payload?.id) return;
+          // Track last event id across reconnects (use MessageEvent.lastEventId
+          // when present — BE sets `id:` per CP455 PR A — fall back to payload.id).
+          const eventId = (ev as MessageEvent).lastEventId || payload.id;
+          lastEventIdRef.current = eventId;
           if (seenRef.current.has(payload.id)) return;
           seenRef.current.add(payload.id);
           // CP416 Phase A (2026-04-22): sort by relevance (recScore desc)
@@ -139,9 +181,20 @@ export function useVideoStream(mandalaId: string | null | undefined): UseVideoSt
         }
       });
 
+      es.addEventListener('heartbeat', () => {
+        if (cancelled) return;
+        armWatchdog();
+      });
+
+      es.addEventListener('backlog_done', () => {
+        if (cancelled) return;
+        armWatchdog();
+      });
+
       es.addEventListener('complete', () => {
         if (cancelled) return;
         setStatus('complete');
+        if (watchdog) clearTimeout(watchdog);
         es?.close();
       });
 
@@ -155,6 +208,7 @@ export function useVideoStream(mandalaId: string | null | undefined): UseVideoSt
         if (es?.readyState === EventSource.CLOSED) {
           setStatus('error');
           setError('connection_closed');
+          if (watchdog) clearTimeout(watchdog);
         }
       });
     };
@@ -163,6 +217,7 @@ export function useVideoStream(mandalaId: string | null | undefined): UseVideoSt
 
     return () => {
       cancelled = true;
+      if (watchdog) clearTimeout(watchdog);
       es?.close();
       es = null;
     };
