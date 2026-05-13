@@ -57,6 +57,17 @@ export interface CardPayload {
    * for the video.
    */
   startSec: number | null;
+  /**
+   * CP457+ pin / bookmark timestamp from `user_video_states.pinned_at`
+   * (joined by youtube_videos.id → user_video_states.video_id). ISO
+   * string when the user has bookmarked this video, null when not.
+   *
+   * Backlog emit sets this from a batch lookup; live `notifyCardAdded`
+   * leaves it null (a brand-new rec can't have been pinned yet — pin
+   * mutations invalidate the cards query so the next backlog re-emits
+   * the up-to-date state).
+   */
+  pinnedAt?: string | null;
 }
 
 /** Unsubscribe callback returned by `subscribe`. Idempotent. */

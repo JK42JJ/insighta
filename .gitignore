@@ -41,6 +41,7 @@ prisma/migrations/*
 !prisma/migrations/book-poc/
 !prisma/migrations/note_documents/
 !prisma/migrations/video_pool/
+!prisma/migrations/pin/
 
 # Logs
 logs/

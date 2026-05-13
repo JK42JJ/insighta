@@ -47,6 +47,12 @@ export interface InsightCard {
   isInIdeation?: boolean; // Whether the card is in ideation (scratchpad) or mandala grid
   videoSummary?: VideoSummary; // Central video summary from video_summaries table
   sourceTable?: 'user_local_cards' | 'user_video_states'; // Origin table for enrichment routing
+  /**
+   * CP457+ pin/bookmark state. ISO string when pinned, null/undefined when not.
+   * Surfaced from `pinned_at` column on the source table. Toggled via
+   * `usePinCard` mutation hitting `PATCH /api/v1/cards/:id/pin`.
+   */
+  pinnedAt?: string | null;
 }
 
 export interface MandalaLevel {

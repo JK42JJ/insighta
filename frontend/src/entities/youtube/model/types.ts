@@ -75,6 +75,8 @@ export interface UserVideoState {
   added_to_ideation_at: string;
   created_at: string;
   updated_at: string;
+  /** CP457+ pin / bookmark timestamp. Null = unpinned. */
+  pinned_at?: string | null;
 }
 
 export interface YouTubeSyncHistory {

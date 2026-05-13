@@ -1,9 +1,10 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
-import { GripVertical, NotepadText, Loader2, RotateCw, Play } from 'lucide-react';
+import { GripVertical, NotepadText, Loader2, RotateCw, Play, Bookmark } from 'lucide-react';
+import { usePinCard } from '@/features/card-management/model/usePinCard';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import {
   upgradeYouTubeThumbnail,
@@ -110,6 +111,30 @@ export function InsightCardItemV2({
     data: dragData,
     disabled: !canDrag,
   });
+
+  // CP457+ — Pin / bookmark toggle. Optimistic local boolean to avoid the
+  // visible round-trip; the mutation invalidates the cards query so server
+  // state replaces local on next refetch.
+  const pinMutation = usePinCard();
+  const [isPinnedLocal, setIsPinnedLocal] = useState<boolean | null>(null);
+  const isPinned = isPinnedLocal ?? Boolean(card.pinnedAt);
+  const handlePinClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const next = !isPinned;
+      setIsPinnedLocal(next);
+      pinMutation.mutate(
+        { card, pinned: next },
+        {
+          onError: () => {
+            setIsPinnedLocal(!next); // rollback
+          },
+        }
+      );
+    },
+    [card, isPinned, pinMutation]
+  );
 
   // CP446 — restore B-model: card body carries listeners only when the card
   // is already selected (multi-drag). Non-selected card bodies stay free for
@@ -218,15 +243,39 @@ export function InsightCardItemV2({
           </span>
         )}
 
-        {/* Top-right: Source badge */}
-        {isYouTube && (
-          <span className="absolute top-2 right-2 text-[9px] font-semibold px-1.5 py-[2px] rounded-[3px] bg-black/60 backdrop-blur text-white/60 flex items-center gap-[3px]">
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <polygon points="5,3 19,12 5,21" />
-            </svg>
-            YouTube
-          </span>
-        )}
+        {/* Top-right: Pin / bookmark (CP457+) — primary TR anchor.
+            Inactive = subtle (white/40), hover lifts to white/80. Active
+            (pinned) = always-visible yellow fill for persistent confirmation. */}
+        <button
+          type="button"
+          onClick={handlePinClick}
+          aria-label={isPinned ? 'Unpin card' : 'Pin card'}
+          aria-pressed={isPinned}
+          className={cn(
+            'absolute top-1.5 right-1.5 z-10 w-7 h-7 rounded-md backdrop-blur flex items-center justify-center transition-all',
+            // CP457+ UX:
+            //   pinned   → always-visible, brand `--primary` fill so the
+            //             persisted state is discoverable at a glance.
+            //   unpinned → hover-only, neutral white. Keeps the thumbnail
+            //             visually clean when the user isn't interacting.
+            // Color uses semantic `text-primary` token (per CLAUDE.md
+            // "하드코딩 색상 금지" Hard Rule); avoids brand-mismatching
+            // yellow and adapts automatically on theme change.
+            isPinned
+              ? 'bg-black/50 text-primary opacity-100'
+              : 'bg-black/55 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80 hover:scale-105'
+          )}
+        >
+          <Bookmark
+            className="w-[18px] h-[18px]"
+            fill={isPinned ? 'currentColor' : 'none'}
+            strokeWidth={2.2}
+            aria-hidden="true"
+          />
+        </button>
+
+        {/* YouTube source badge removed (CP457+ spec) — footer relativeDate +
+            viewCount + thumbnail itself convey YouTube context. Pin owns TR. */}
 
         {/* Bottom-left: Memo indicator (only if note exists) */}
         {hasNote && (

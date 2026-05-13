@@ -38,6 +38,7 @@ export function convertToInsightCard(data: UserVideoStateWithVideo): InsightCard
     isInIdeation: data.is_in_ideation,
     videoSummary: data.video_summary,
     sourceTable: 'user_video_states',
+    pinnedAt: data.pinned_at ?? null,
   };
 }
 

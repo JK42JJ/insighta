@@ -1747,6 +1747,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     // The `idx_recommendation_cache_rec_score_desc` index on rec_score
     // already exists (see `schema.prisma`), so the re-ordered query hits
     // the index for the primary sort.
+    //
+    // CP457+ deterministic tie-break: `id asc` final key. Without it,
+    // tied (rec_score, cell_index) rows came back in PostgreSQL's
+    // non-deterministic order — every refetch (8s poll OR pin-click
+    // invalidate) could shuffle visually identical cards. uuid asc is
+    // arbitrary but stable across refetches, so the grid no longer
+    // re-arranges on background polling.
     const rows = await prisma.recommendation_cache.findMany({
       where: {
         user_id: userId,
@@ -1755,7 +1762,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         expires_at: { gt: new Date() },
         ...(cellIndexFilter !== undefined ? { cell_index: cellIndexFilter } : {}),
       },
-      orderBy: [{ rec_score: 'desc' }, { cell_index: 'asc' }],
+      orderBy: [{ rec_score: 'desc' }, { cell_index: 'asc' }, { id: 'asc' }],
       take: RECOMMENDATION_FETCH_LIMIT,
     });
 
@@ -1764,6 +1771,38 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     // moment in the YouTube video. Falls back to null when no chunk exists
     // for the video (caller renders plain URL without `&t=`).
     const anchors = await lookupChunkAnchors(rows.map((r) => r.video_id));
+
+    // CP457+ pin/bookmark surfacing. Pin state lives on user_video_states
+    // (user_id, video_id) — the table that survives rec_cache's 7d TTL.
+    // rec_cache.video_id is the YouTube string id while user_video_states
+    // uses the youtube_videos.id uuid, so we bridge through youtube_videos.
+    // Two batch queries (no N+1) + a Map merge.
+    const videoIdStrings = Array.from(new Set(rows.map((r) => r.video_id)));
+    const pinnedAtByVideoId = new Map<string, Date>();
+    if (videoIdStrings.length > 0) {
+      const ytRows = await prisma.youtube_videos.findMany({
+        where: { youtube_video_id: { in: videoIdStrings } },
+        select: { id: true, youtube_video_id: true },
+      });
+      const ytUuidToVideoId = new Map(ytRows.map((y) => [y.id, y.youtube_video_id]));
+      const ytUuids = ytRows.map((y) => y.id);
+      if (ytUuids.length > 0) {
+        const pinRows = await prisma.userVideoState.findMany({
+          where: {
+            user_id: userId,
+            videoId: { in: ytUuids },
+            pinned_at: { not: null },
+          },
+          select: { videoId: true, pinned_at: true },
+        });
+        for (const p of pinRows) {
+          const videoIdString = ytUuidToVideoId.get(p.videoId);
+          if (videoIdString && p.pinned_at) {
+            pinnedAtByVideoId.set(videoIdString, p.pinned_at);
+          }
+        }
+      }
+    }
 
     const items = rows.map((row) => ({
       id: row.id,
@@ -1780,6 +1819,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       recReason: row.rec_reason,
       publishedAt: row.published_at?.toISOString() ?? null,
       startSec: anchors.get(row.video_id) ?? null,
+      pinnedAt: pinnedAtByVideoId.get(row.video_id)?.toISOString() ?? null,
     }));
 
     const firstRow = rows[0];
@@ -2461,12 +2501,47 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           status: RECOMMENDATION_DEFAULT_STATUS,
           expires_at: { gt: new Date() },
         },
-        orderBy: [{ rec_score: 'desc' }, { cell_index: 'asc' }],
+        // CP457+ deterministic tie-break to match the REST endpoint.
+        // Cohere normalize collapses top to rec_score=1.0 — without id
+        // tie-break, backlog emit order shuffles on each reconnect and
+        // tied cards appear to move around the grid.
+        orderBy: [{ rec_score: 'desc' }, { cell_index: 'asc' }, { id: 'asc' }],
         take: RECOMMENDATION_FETCH_LIMIT,
       });
 
       // PR3 — chunk anchors for SSE backlog (same lookup as REST path).
       const backlogAnchors = await lookupChunkAnchors(backlogRows.map((r) => r.video_id));
+
+      // CP457+ pin surfacing for SSE backlog. Same two-step bridge as
+      // the REST `/recommendations` route — rec_cache.video_id (string)
+      // → youtube_videos.id (uuid) → user_video_states.pinned_at. Two
+      // batch findManys, no N+1.
+      const backlogVideoIdStrings = Array.from(new Set(backlogRows.map((r) => r.video_id)));
+      const backlogPinnedAtByVideoId = new Map<string, Date>();
+      if (backlogVideoIdStrings.length > 0) {
+        const ytRows = await getPrismaClient().youtube_videos.findMany({
+          where: { youtube_video_id: { in: backlogVideoIdStrings } },
+          select: { id: true, youtube_video_id: true },
+        });
+        const ytUuidToVideoId = new Map(ytRows.map((y) => [y.id, y.youtube_video_id]));
+        const ytUuids = ytRows.map((y) => y.id);
+        if (ytUuids.length > 0) {
+          const pinRows = await getPrismaClient().userVideoState.findMany({
+            where: {
+              user_id: userId,
+              videoId: { in: ytUuids },
+              pinned_at: { not: null },
+            },
+            select: { videoId: true, pinned_at: true },
+          });
+          for (const p of pinRows) {
+            const videoIdString = ytUuidToVideoId.get(p.videoId);
+            if (videoIdString && p.pinned_at) {
+              backlogPinnedAtByVideoId.set(videoIdString, p.pinned_at);
+            }
+          }
+        }
+      }
 
       // CP455 SSE PR A — reconnect catchup: skip rows already seen by client.
       // recommendation_cache.id is UUID, lexicographically comparable but
@@ -2493,6 +2568,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           recReason: row.rec_reason,
           publishedAt: row.published_at?.toISOString() ?? null,
           startSec: backlogAnchors.get(row.video_id) ?? null,
+          pinnedAt: backlogPinnedAtByVideoId.get(row.video_id)?.toISOString() ?? null,
         };
         write('card_added', payload, row.id);
         emitCount += 1;

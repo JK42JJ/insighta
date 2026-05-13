@@ -27,6 +27,13 @@ export interface RecommendationItem {
    * lookup (hybrid-retrieval spec PR3).
    */
   startSec?: number | null;
+  /**
+   * CP457+ pin/bookmark timestamp from user_video_states (joined by
+   * video_id). ISO string when pinned, null when not. Surfaced so the
+   * grid bookmark icon renders in its persisted active state without a
+   * second round-trip.
+   */
+  pinnedAt?: string | null;
 }
 
 export interface RecommendationsResponse {
