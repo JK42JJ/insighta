@@ -37,7 +37,7 @@ import {
 import { notifyCardAdded, type CardPayload } from '@/modules/recommendations/publisher';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { manifest, V3_TARGET_PER_CELL, V3_NUM_CELLS, V3_TARGET_TOTAL } from './manifest';
-import { matchFromVideoPool, groupByCell } from './cache-matcher';
+import { matchFromVideoPool } from './cache-matcher';
 import {
   applyMandalaFilterWithStats,
   MIN_SUB_RELEVANCE,
@@ -268,11 +268,68 @@ export const executor: SkillExecutor = {
           perCell: V3_TARGET_PER_CELL,
         })
       : [];
-    const tier1ByCell = groupByCell(tier1Matches, V3_NUM_CELLS);
+
     let tier1Total = 0;
-    for (const [cellIndex, cached] of tier1ByCell) {
-      for (const m of cached) {
-        if (existingVideoIds.has(m.videoId)) continue;
+    if (tier1Matches.length > 0) {
+      const fresh = tier1Matches.filter((m) => !existingVideoIds.has(m.videoId));
+      // CP455+ — semantic center gate on Tier 1 output before admission.
+      // Without this, cross-domain noise (e.g. cell 6 "모의고사" sub_goal
+      // matching 28 토익스피킹 videos at cosine 0.55+) surfaces unfiltered.
+      let filteredTier1: typeof fresh = fresh;
+      if (fresh.length > 0 && v3Config.centerGateMode === 'semantic') {
+        try {
+          const cap = v3Config.semanticMaxCandidates;
+          const capped = fresh.slice(0, cap);
+          const texts = [state.centerGoal, ...capped.map((m) => m.title)];
+          const vectors = await embedBatch(texts);
+          if (vectors.length === texts.length) {
+            const centerEmbedding = vectors[0];
+            const candidateEmbeddings = new Map<string, number[]>();
+            for (let i = 0; i < capped.length; i++) {
+              const vec = vectors[i + 1];
+              const id = capped[i]?.videoId;
+              if (vec && id) candidateEmbeddings.set(id, vec);
+            }
+            const filterInputs: FilterCandidate[] = capped.map((m) => ({
+              videoId: m.videoId,
+              title: m.title,
+              description: m.description,
+              publishedAt: m.publishedAt,
+            }));
+            const { byCell, stats: mfStats } = applyMandalaFilterWithStats(filterInputs, {
+              centerGoal: state.centerGoal,
+              subGoals: state.subGoals,
+              language: state.language,
+              focusTags: state.focusTags,
+              recencyWeight: v3Config.recencyWeight,
+              recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
+              centerGateMode: v3Config.centerGateMode,
+              centerEmbedding,
+              candidateEmbeddings,
+            });
+            const keptIds = new Set<string>();
+            for (const assignments of byCell.values()) {
+              for (const a of assignments) keptIds.add(a.candidate.videoId);
+            }
+            filteredTier1 = capped.filter((m) => keptIds.has(m.videoId));
+            log.info(
+              `[tier1] mandala-filter input=${mfStats.input} output=${mfStats.output} ` +
+                `droppedCenterGate=${mfStats.droppedByCenterGate} droppedJaccard=${mfStats.droppedByJaccardBelowThreshold}`
+            );
+          } else {
+            log.warn(
+              `[tier1] mandala-filter embed mismatch: got ${vectors.length}/${texts.length} — admitting unfiltered`
+            );
+          }
+        } catch (err) {
+          log.warn(
+            `[tier1] mandala-filter threw — admitting unfiltered: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          );
+        }
+      }
+      for (const m of filteredTier1) {
         slots.push({
           videoId: m.videoId,
           title: m.title,
@@ -284,7 +341,7 @@ export const executor: SkillExecutor = {
           likeCount: m.likeCount,
           durationSec: m.durationSec,
           publishedAt: m.publishedAt,
-          cellIndex,
+          cellIndex: m.cellIndex,
           score: m.score,
           tier: 'cache',
         });
@@ -357,13 +414,49 @@ export const executor: SkillExecutor = {
         _original: s,
       })),
       centerGoal: state.centerGoal,
+      subGoals: state.subGoals,
+      enableKeywordExpansion: true,
+      topN: V3_TARGET_TOTAL,
       requestId: mandalaId,
     });
     const hybridSlots: AssembledSlot[] = hybridResult.slots
       .map((r) => {
-        const ext = r as unknown as { _original?: AssembledSlot };
+        const ext = r as unknown as {
+          _original?: AssembledSlot;
+          _keywordFullData?: {
+            videoId: string;
+            title: string;
+            description: string | null;
+            channelName: string | null;
+            channelId: string | null;
+            thumbnail: string | null;
+            viewCount: number | null;
+            likeCount: number | null;
+            durationSec: number | null;
+            publishedAt: Date | null;
+            cellIndex: number;
+          };
+        };
         if (ext._original) {
           return { ...ext._original, score: r.rec_score };
+        }
+        if (ext._keywordFullData) {
+          const k = ext._keywordFullData;
+          return {
+            videoId: k.videoId,
+            title: k.title,
+            description: k.description,
+            channelName: k.channelName,
+            channelId: k.channelId,
+            thumbnail: k.thumbnail,
+            viewCount: k.viewCount,
+            likeCount: k.likeCount,
+            durationSec: k.durationSec,
+            publishedAt: k.publishedAt,
+            cellIndex: k.cellIndex,
+            score: r.rec_score,
+            tier: 'cache' as const,
+          };
         }
         return null;
       })
@@ -1546,40 +1639,75 @@ export async function runDiscoverEphemeral(
   }
 
   let rerankedSlots = filteredSlots;
-  if (filteredSlots.length > 0) {
-    try {
-      const hybridResult = await applyHybridRerank({
-        slots: filteredSlots.map((s) => ({
-          videoId: s.videoId,
-          title: s.title,
-          cellIndex: s.cellIndex,
-          rec_score: s.score,
-          _original: s,
-        })),
-        centerGoal: input.centerGoal,
-        requestId: 'ephemeral-precompute',
-      });
-      rerankedSlots = hybridResult.slots
-        .map((r) => {
-          const ext = r as unknown as { _original?: AssembledSlot };
-          if (ext._original) {
-            return { ...ext._original, score: r.rec_score };
-          }
-          return null;
-        })
-        .filter((s): s is AssembledSlot => s !== null);
-      log.info(
-        `[ephemeral] hybrid-rerank ${filteredSlots.length} → ${rerankedSlots.length} slots ` +
-          `(applied=${hybridResult.stats.applied} reason=${hybridResult.stats.reason} ` +
-          `reranked=${hybridResult.stats.reranked} latencyMs=${hybridResult.stats.cohereLatencyMs ?? '-'})`
-      );
-    } catch (err) {
-      log.warn(
-        `[ephemeral] hybrid-rerank threw — falling back to unranked slots: ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      );
-    }
+  try {
+    const hybridResult = await applyHybridRerank({
+      slots: filteredSlots.map((s) => ({
+        videoId: s.videoId,
+        title: s.title,
+        cellIndex: s.cellIndex,
+        rec_score: s.score,
+        _original: s,
+      })),
+      centerGoal: input.centerGoal,
+      subGoals: input.subGoals,
+      enableKeywordExpansion: true,
+      topN: V3_TARGET_TOTAL,
+      requestId: 'ephemeral-precompute',
+    });
+    rerankedSlots = hybridResult.slots
+      .map((r) => {
+        const ext = r as unknown as {
+          _original?: AssembledSlot;
+          _keywordFullData?: {
+            videoId: string;
+            title: string;
+            description: string | null;
+            channelName: string | null;
+            channelId: string | null;
+            thumbnail: string | null;
+            viewCount: number | null;
+            likeCount: number | null;
+            durationSec: number | null;
+            publishedAt: Date | null;
+            cellIndex: number;
+          };
+        };
+        if (ext._original) {
+          return { ...ext._original, score: r.rec_score };
+        }
+        if (ext._keywordFullData) {
+          const k = ext._keywordFullData;
+          return {
+            videoId: k.videoId,
+            title: k.title,
+            description: k.description,
+            channelName: k.channelName,
+            channelId: k.channelId,
+            thumbnail: k.thumbnail,
+            viewCount: k.viewCount,
+            likeCount: k.likeCount,
+            durationSec: k.durationSec,
+            publishedAt: k.publishedAt,
+            cellIndex: k.cellIndex,
+            score: r.rec_score,
+            tier: 'cache' as const,
+          };
+        }
+        return null;
+      })
+      .filter((s): s is AssembledSlot => s !== null);
+    log.info(
+      `[ephemeral] hybrid-rerank ${filteredSlots.length} → ${rerankedSlots.length} slots ` +
+        `(applied=${hybridResult.stats.applied} reason=${hybridResult.stats.reason} ` +
+        `keywordAdded=${hybridResult.stats.keywordAdded} reranked=${hybridResult.stats.reranked} ` +
+        `latencyMs=${hybridResult.stats.cohereLatencyMs ?? '-'})`
+    );
+  } catch (err) {
+    log.warn(
+      `[ephemeral] hybrid-rerank threw — falling back to unranked slots: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
   }
 
   return {

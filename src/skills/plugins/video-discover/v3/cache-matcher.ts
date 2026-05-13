@@ -18,8 +18,7 @@ import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'video-discover/v3/cache-matcher' });
 
-/** Minimum cosine similarity to admit a cached video to a cell. */
-export const DEFAULT_RELEVANCE_THRESHOLD = 0.3;
+export const DEFAULT_RELEVANCE_THRESHOLD = 0.5;
 /** Tiers eligible for Tier 1 matching. bronze is kept in the pool for
  *  diagnostics but never surfaced here. */
 export const MATCHED_QUALITY_TIERS: ReadonlyArray<'gold' | 'silver'> = ['gold', 'silver'];
@@ -44,6 +43,14 @@ export interface MatchFromVideoPoolOpts {
   language: 'ko' | 'en';
   perCell?: number;
   threshold?: number;
+  /**
+   * Restrict to video_pool rows by source tag. Default `['v2_promoted']`
+   * gates out batch_trend (untriaged trend-cron rows) which carry
+   * cross-domain noise — measured CP455 (mandala c1ba1e9f cell 6 = 28
+   * 토익스피킹 with cosine 0.55+). v2_promoted are CC-authored v2
+   * summaries with completeness ≥ 0.7, structurally on-topic.
+   */
+  sources?: ReadonlyArray<string>;
 }
 
 interface MatchRow {
@@ -74,6 +81,7 @@ interface MatchRow {
 export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<CachedMatch[]> {
   const perCell = opts.perCell ?? 5;
   const threshold = opts.threshold ?? DEFAULT_RELEVANCE_THRESHOLD;
+  const sources = opts.sources ?? ['v2_promoted'];
   const db = getPrismaClient();
 
   const rows = await db.$queryRaw<MatchRow[]>(Prisma.sql`
@@ -105,6 +113,7 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
       WHERE vp.is_active = true
         AND vp.language = ${opts.language}
         AND vp.quality_tier IN ('gold', 'silver')
+        AND vp.source = ANY(${sources}::text[])
     ),
     ranked AS (
       SELECT

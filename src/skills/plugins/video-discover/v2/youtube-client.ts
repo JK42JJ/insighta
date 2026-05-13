@@ -142,11 +142,9 @@ export function resolveSearchApiKeys(env: Readonly<Record<string, string | undef
   return keys;
 }
 
-/** Heuristic: is this error a YouTube quota/quotaExceeded signal worth rotating on? */
 function isQuotaError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  if (!msg.includes('search.list HTTP 403')) return false;
-  return msg.includes('quota') || msg.includes('exceeded') || msg.includes('quotaExceeded');
+  return msg.includes('search.list HTTP 403') || msg.includes('search.list HTTP 429');
 }
 
 async function searchVideosOne(
@@ -239,8 +237,7 @@ export interface VideosBatchOpts {
 
 function isVideosBatchQuotaError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  if (!msg.includes('videos.list HTTP 403')) return false;
-  return msg.includes('quota') || msg.includes('exceeded') || msg.includes('quotaExceeded');
+  return msg.includes('videos.list HTTP 403') || msg.includes('videos.list HTTP 429');
 }
 
 export async function videosBatch(opts: VideosBatchOpts): Promise<YouTubeVideoStatsItem[]> {

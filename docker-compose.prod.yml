@@ -236,7 +236,10 @@ services:
       # YouTubeProvider becomes the sole source, restoring CP385-era
       # quality (user feedback: "초기 youtube-only 가 가장 좋음").
       # Re-enable path: video_pool ≥ 30K rows + threshold raised to 0.5+.
-      # - V3_ENABLE_TIER1_CACHE=true
+      # CP455+ (2026-05-13) — re-enabled per unified semantic-gate design.
+      # video_pool now 11,242 rows (batch_trend 10,044 + v2_promoted 1,198);
+      # mandala-filter + Cohere rerank backstop low-quality cache hits.
+      - V3_ENABLE_TIER1_CACHE=true
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).
