@@ -1747,6 +1747,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     // The `idx_recommendation_cache_rec_score_desc` index on rec_score
     // already exists (see `schema.prisma`), so the re-ordered query hits
     // the index for the primary sort.
+    //
+    // CP457+ deterministic tie-break: `id asc` final key. Without it,
+    // tied (rec_score, cell_index) rows came back in PostgreSQL's
+    // non-deterministic order — every refetch (8s poll OR pin-click
+    // invalidate) could shuffle visually identical cards. uuid asc is
+    // arbitrary but stable across refetches, so the grid no longer
+    // re-arranges on background polling.
     const rows = await prisma.recommendation_cache.findMany({
       where: {
         user_id: userId,
@@ -1755,7 +1762,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         expires_at: { gt: new Date() },
         ...(cellIndexFilter !== undefined ? { cell_index: cellIndexFilter } : {}),
       },
-      orderBy: [{ rec_score: 'desc' }, { cell_index: 'asc' }],
+      orderBy: [{ rec_score: 'desc' }, { cell_index: 'asc' }, { id: 'asc' }],
       take: RECOMMENDATION_FETCH_LIMIT,
     });
 
