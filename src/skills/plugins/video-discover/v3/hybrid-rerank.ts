@@ -184,7 +184,22 @@ export async function tsvectorKeywordCandidates(
 
   try {
     const prisma = getPrismaClient();
-    // Query video_pool by centerGoal tsvector. Pull more than we'll keep
+
+    // Build an OR-tsquery from centerGoal + non-empty subGoals tokens so the
+    // GIN-indexed tsvector matches any single keyword, not just full phrase.
+    // Korean 'simple' tokenization splits on whitespace + punctuation; we
+    // sanitize each token (strip tsquery operators) and join with ` | `.
+    // Empty after sanitize → fall back to plainto_tsquery for safety.
+    const allTerms = [centerGoal, ...subGoals.filter((s) => s.trim().length > 0)];
+    const tokens = allTerms
+      .flatMap((t) => t.split(/[\s,/.;()[\]{}!?"'`~&|<>:*+\-=]+/))
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0)
+      .map((t) => t.replace(/[':!&|()<>*]/g, ''))
+      .filter((t, i, arr) => arr.indexOf(t) === i);
+    const tsqueryString = tokens.length > 0 ? tokens.join(' | ') : centerGoal;
+
+    // Query video_pool by tsvector OR-match. Pull more than we'll keep
     // (limit*2) so the cell-assignment + dedup against semantic pool can
     // still hit the requested `limit` after dedup.
     const fetchLimit = limit * 2;
@@ -216,14 +231,14 @@ export async function tsvectorKeywordCandidates(
         vp.duration_seconds,
         vp.published_at,
         ts_rank(
-          to_tsvector('simple', coalesce(vp.title,'')),
-          plainto_tsquery('simple', ${centerGoal})
+          to_tsvector('simple', coalesce(vp.title,'') || ' ' || coalesce(vp.description,'')),
+          to_tsquery('simple', ${tsqueryString})
         ) AS rank
       FROM public.video_pool vp
       WHERE vp.is_active = true
         AND vp.video_id <> ALL(${exclude}::text[])
-        AND to_tsvector('simple', coalesce(vp.title,''))
-            @@ plainto_tsquery('simple', ${centerGoal})
+        AND to_tsvector('simple', coalesce(vp.title,'') || ' ' || coalesce(vp.description,''))
+            @@ to_tsquery('simple', ${tsqueryString})
       ORDER BY rank DESC
       LIMIT ${fetchLimit}
     `);
