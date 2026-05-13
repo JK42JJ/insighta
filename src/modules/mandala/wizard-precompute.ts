@@ -245,7 +245,7 @@ export async function consumePrecompute(
   //
   // Tracking: log.info on poll-wait end captures `final_status` +
   // `waited_ms` so we can quantify miss reasons in prod log post-deploy.
-  const POLL_BUDGET_MS = 1_000;
+  const POLL_BUDGET_MS = 6_000;
   const POLL_INTERVAL_MS = 250;
   if (row.status === 'pending' || row.status === 'running') {
     const pollStart = Date.now();
