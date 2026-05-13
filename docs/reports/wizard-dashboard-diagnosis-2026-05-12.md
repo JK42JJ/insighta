@@ -405,3 +405,193 @@ CP418  semantic gate 켰다가 → subword 롤백 → 다시 semantic ON ...
 2. **모든 fix 는 측정 가능해야** — M3 telemetry 부재가 carryover 의 영속 원인
 3. **Ledger 와 ssh source 의 일치 의무** — `docs/reports/wizard-dashboard-perf-log.md` 갱신 책임을 commit 단위 또는 CP 단위로 강제
 4. **단편 fix 누적 시 stop + spec 재설계** — 본 세션의 모든 미해결 항목이 이 원칙 적용 대상
+
+---
+
+## 13. PR 시퀀스 merge cycle (2026-05-13 새벽, 누적)
+
+> "github에 pr 이 많이 쌓여 있는데... 우선순위와 영향도, 리그레션 등 고려해서 순차 진행해" — 사용자 directive
+
+### 13.1 Merge order + prod 검증 결과
+
+| Order | PR | 효과 | Prod 검증 | sha |
+|-------|----|------|-----------|-----|
+| 1 | #611 | docs (hybrid retrieval spec) | n/a | `21703493` |
+| 2 | #615 | docs (Mac Mini deprecation roadmap) | n/a | `040808f0` |
+| 3 | #618 | mig 017 sync_mandala seq-scan 879× | ✅ tx 5616→238ms (이전 단계) | (이전) |
+| 4 | #616 | IKS_EMBED_PROVIDER=openrouter (step 1: 20.4s→0.89s, 75×) | ✅ (이전) | (이전) |
+| 5 | #619 | auto-add bulk INSERT (step 3: 8.2s→~3.2s 기대) | ✅ uptime 117s reset | `96b099a7` |
+| 6 | #614 | YouTube timestamp deep-link (startSec via chunk anchor) | ✅ uptime 45s reset | `4743a06c` |
+| 7 | #617 | trend-collector OpenRouter fallback (Phase D1-b) | ✅ uptime 217s reset | `12b26af0` |
+| 8 | #612 | Cohere hybrid rerank + keyword expansion (flag-off) | ✅ uptime 39s reset | `0a2ce3b2` |
+| 9 | #613 | LangGraph 3-way chatbot route (flag-off) | ❌ **revert** (502) | `152a8490` → `b2206513` revert |
+
+### 13.2 누적 wizard 파이프라인 예상 단축 효과
+
+- step 1 (embed): **20.4s → 0.89s** (−19.5s, OpenRouter cloud GPU vs Mac Mini M4)
+- step 3 (auto-add): **8.2s → ~3.2s** (−5s, 102 roundtrips → 24)
+- mig 017 sync_mandala trigger: **5.4s → 0.24s** (−5.1s, seq scan 879× fix)
+- **합산 ~30s 단축 → 12s 목표 안쪽 진입** (사용자 manual 검증 필요)
+
+### 13.3 PR #613 prod 회귀 (2026-05-13 ~08:32 KST)
+
+**증상**: insighta.one 전체 502 Bad Gateway
+
+**Root cause (SSH `docker logs insighta-api`)**:
+```
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath './language_models/stream'
+is not defined by "exports" in /app/node_modules/@langchain/core/package.json
+    at Object.<anonymous> (/app/node_modules/@langchain/langgraph/dist/stream/transformers/messages.cjs:3:46)
+```
+
+**원인 분해**:
+1. `@langchain/langgraph` 의 `dist/stream/transformers/messages.cjs` 는 `@langchain/core/language_models/stream` subpath 를 `require()`
+2. 설치된 `@langchain/core@0.3.80` 의 `package.json.exports` 에 해당 subpath 정의 없음 → peer-dependency version mismatch
+3. **flag-off 가정 깨짐**: `CHAT_USE_LANGGRAPH=false` 라도 `chat-graph.ts` 가 ts 모듈에서 정적 import 되어 require 단계에 진입 → 컨테이너 startup 시점에 crash
+4. `node:20-alpine` prod 환경 ↔ local Node 24 dev 환경 차이로 local tsc/jest 통과 → false negative
+
+**복구 액션**:
+- `git revert --no-edit 152a8490` → commit `b2206513`
+- `git push origin main` → revert deploy run 25767331760 → uptime 94s reset → HTTP 200 회복
+
+**총 prod down time**: ~30분 (18:32 UTC 발생 → ~19:15 UTC 복구)
+
+### 13.4 사용자 후속 액션 (활성화 필수)
+
+#### #612 (Cohere hybrid rerank) — flag 미활성 시 prod 무영향
+1. **GitHub Secret 추가**: `COHERE_API_KEY` (Cohere 콘솔에서 발급, `rerank-multilingual-v3.0`)
+2. **Flag flip PR**: `docker-compose.prod.yml` 에 `V3_ENABLE_HYBRID_RERANK=true`
+3. 활성 후 검증: mandala 7b99f68c (Issue #610 regression) → 황창연/광고 채널 제거 여부
+
+#### #617 (trend-collector OpenRouter) — PR 내 `TREND_EXTRACT_PROVIDER=openrouter` 포함, 자동 적용
+- 별도 액션 불필요. cron trend-collector 실행 시 적용 확인.
+
+#### #614 (timestamp deep-link) — Cohere/LangGraph flag 없이 즉시 사용
+- 검증: 카드 클릭 → YouTube URL `&t=<sec>s` 적용 여부
+
+#### #613 (LangGraph) — re-attempt 전 필수 조건
+1. `@langchain/langgraph` 와 호환되는 `@langchain/core` 버전 핀 결정 (또는 langgraph downgrade)
+2. **node:20-alpine prod 이미지에서 직접 require 테스트**: `docker run insighta-api:test node -e "require('@langchain/langgraph')"`
+3. `chat-graph.ts` 를 **lazy dynamic import** 로 전환 (flag-off 시 require 단계 진입 차단)
+4. CI 에 prod-image startup smoke 추가 (`docker run … node -e "require('./dist/server')"`)
+
+### 13.5 회귀 lesson (troubleshooting.md 후보)
+
+**Pattern**: `flag-off default 라도 정적 import 는 require 단계 진입` → CJS/peer-dep 충돌 패키지는 dynamic import 필수.
+
+**Pattern**: `local node !== prod node:20-alpine` → tsc/jest PASS 가 startup OK 를 보장하지 않음. peer-dep-sensitive 패키지 도입 시 prod Docker 빌드 + `node -e "require(...)"` smoke 의무.
+
+**Pattern**: `package-lock.json` 의 peer-dep resolution 이 prod 와 다를 수 있음. 의존성 추가 PR 은 Docker 이미지 build → startup smoke job 추가 필요.
+
+### 13.6 main 최종 상태 (2026-05-13 ~08:15 KST)
+
+```
+b2206513 Revert "feat(chatbot): LangGraph ReAct + 3-way route (PR2 spec, flag-off) (#613)"
+0a2ce3b2 feat(v3): hybrid retrieval + Cohere rerank (Issue #610 spec, flag-off) (#612)
+12b26af0 feat(trend-collector): OpenRouter fallback for llm-extract (Phase D1-b) (#617)
+4743a06c feat(recommendations): YouTube timestamp deep-link from chunk anchor (PR3) (#614)
+96b099a7 perf(auto-add): bulk INSERT — 102 roundtrips → 24 (#619)
+040808f0 docs(spec): Mac Mini deprecation roadmap (#615)
+21703493 docs(spec): hybrid retrieval design + session diagnosis (#611)
+```
+
+Prod HTTP 200 ✅. Wizard 파이프라인 단축 효과는 다음 사용자 manual 위저드 생성으로 측정 예정.
+
+---
+
+## 14. SSE 401 + Polling fallback 점검 (2026-05-13 ~08:50 KST)
+
+### 14.1 사용자 보고
+
+> "리그래션 40초 넘어감." → "기존데로 60초 넘어가는듯." → "70초? 납득불가능해 > 10초로 개선해"
+> "fallback 이면, 보험성격인데 70초 대기가 뭐야? 설계 오류 아니야?"
+
+### 14.2 측정된 사실 (mandala `d155a979` 2026-05-13 KST 08:40)
+
+**BE 타임라인** (UTC ms, T=0 = wizard-stream 시작):
+
+| 시점 | T+ms | 이벤트 (출처) |
+|------|------|--------------|
+| 1778629204833 | 0 | POST /wizard-stream 시작 |
+| 1778629210636 | **+5803ms** | /wizard-stream 응답 200 (req-27) |
+| 1778629213495 | +8662 | POST /create-with-data 시작 |
+| 1778629215170 | +10337 | /create-with-data 응답 200 |
+| 1778629219843 | **+15010** | recommendation_cache 12 rows populated (DB) |
+| 1778629220145 | +15312 | user_video_states 12 rows populated (DB) |
+| 1778629305410 | **+100577** | /pipeline-status GET (api 컨테이너의 FE 첫 후속 흔적) |
+
+**BE end-to-end = 15.3s** (wizard-start → 모든 cards DB 확정).
+**+85s 갭** = cards 준비 → FE 가 다음 api 호출까지의 무활동 구간.
+
+### 14.3 SSE 401 측정
+
+`docker logs insighta-api --since 24h | grep '/videos/stream'`:
+- 24h 동안 5건의 SSE 시도 → **5/5 401 반환** (각 응답시간 < 1.1ms = preHandler 에서 거부)
+- 401 응답시간 < 1.1ms = `request.jwtVerify()` 의 "No Authorization header" 즉시 거부
+
+### 14.4 근본 원인 (코드 사실)
+
+**`src/api/plugins/auth.ts:137-189`**:
+- `fastify.decorate('authenticate', ...)` → `request.jwtVerify()` 호출 → `@fastify/jwt` 기본 동작 = `Authorization: Bearer <token>` 헤더만 읽음.
+
+**`frontend/src/features/recommendation-feed/model/useVideoStream.ts:100-105`** (잘못된 주석):
+```ts
+// "The backend route uses the same `fastify.authenticate` plugin... reads the
+//  token from either header or access_token query param (supabase jwt plugin convention)."
+const url = `${API_BASE_URL}/api/v1/mandalas/${mandalaId}/videos/stream?access_token=${encodeURIComponent(accessToken)}`;
+```
+
+**불일치 = 본 버그의 본질**. FE 는 `?access_token=` 으로 보냈지만 BE 는 헤더만 읽음. SSE 도입(CP416 Phase B) 시점부터 broken.
+
+### 14.5 Fallback 설계 오류 (사용자 지적 사실 확인)
+
+**`frontend/src/features/recommendation-feed/model/useRecommendations.ts:40-47`**:
+```ts
+const REC_FEED_STALE_TIME_MS = 5 * 60 * 1000;  // 5 분
+// refetchInterval 없음
+```
+→ SSE 가 죽어도 5분간 자동 재요청 없음. 진짜 fallback 아님.
+
+**`frontend/src/pages/index/ui/IndexPage.tsx:245-271`** — 별도의 post-creation 폴링:
+- `isNewMandalaActive` = `justCreatedMandalaId === effectiveMandalaId && !!effectiveMandalaId` 일 때만 시작
+- 2s interval, 90s timeout
+- `cards.totalCards > 0` 시 즉시 중단
+- 폴링 대상: `youtubeSyncKeys.allVideoStates` (Supabase Edge Function — EC2 api 로그에 잡히지 않음)
+
+**측정 불가**: justCreatedMandalaId 가 실제 set 됐는지 + Edge Function 폴링 cadence + Edge Function 응답시간 → 브라우저 DevTools Network + Supabase Functions 로그가 필요.
+
+### 14.6 즉시 적용된 fix (PR #620)
+
+**`src/api/plugins/auth.ts`** — `jwtVerify` 호출 전 query token 을 header 로 합성:
+```ts
+const queryToken = (request.query as Record<string, string> | undefined)?.['access_token'];
+if (!request.headers.authorization && queryToken) {
+  request.headers.authorization = `Bearer ${queryToken}`;
+}
+const decoded = await request.jwtVerify<SupabaseJWTClaims>();
+```
+
+- Header 가 있으면 기존 동작 그대로 (early return path 동일)
+- Header 부재 + query token 있음 → SSE 인증 성공 → `card_added` SSE 이벤트 즉시 수신 가능
+
+**검증된 항목**: tsc clean / hardcode-audit baseline 33 / auth-guard.test.ts pass / CI 6/6 PASS / merged main `5d3c56e6`.
+
+### 14.7 PR #620 만으로 부족한 부분 (사용자 지적 사실)
+
+PR #620 = **SSE 자체** 가 동작하도록 만들 뿐. fallback 설계 결함은 별도 작업 필요:
+
+**필요 후속 (영향도순)**:
+1. **`useRecommendations`** 에 `refetchInterval: 5000ms` (5초 폴링) — 새 mandala 가 아닌 일반 dashboard 에서도 SSE 죽었을 때 진짜 백업 동작
+2. **`useVideoStream` 의 error 상태를 `useRecommendations` 에 신호** → SSE error 시 `useRecommendations` 의 interval 단축 (5s → 2s)
+3. **wizard-stream 5.8s 단축** — LLM gen 단계가 BE 의 가장 큰 비중. 별도 PR.
+4. **`get-all-video-states` Edge Function 응답시간 측정** — 측정 후 필요시 캐싱/인덱스 최적화.
+
+### 14.8 검증 측정 필요 (사용자 다음 테스트 시)
+
+PR #620 deploy 완료 후 **브라우저 DevTools** 로:
+- Network 탭 → `/api/v1/mandalas/<id>/videos/stream` 응답 코드 (200 = SSE 정상 연결 / 401 = 여전히 broken)
+- Network 탭 → `card_added` SSE 이벤트 도착 시각 (mandala create 후 ~6s 내 첫 이벤트 = 정상)
+- Network 탭 → `/functions/v1/get-all-video-states` 호출 간격 (2s 주기 = 폴링 정상)
+- 콘솔 → `[DEBUG-WIZARD] setJustCreated called with:` 출력 시각
+
+이 데이터 없이는 "70s → ?s" 의 결과를 단정 불가.
