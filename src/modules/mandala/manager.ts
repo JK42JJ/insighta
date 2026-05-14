@@ -4,6 +4,7 @@ import { logger } from '../../utils/logger';
 import { user_mandalas, Prisma } from '@prisma/client';
 import { nanoid } from 'nanoid';
 import { DEFAULT_TIER, getMandalaLimit, type Tier } from '@/config/quota';
+import { detectLanguage } from '@/utils/detect-language';
 import {
   EXPLORE_PAGE_LIMIT,
   EXPLORE_DEFAULT_PAGE_SIZE,
@@ -479,6 +480,9 @@ export class MandalaManager {
             data: {
               user_id: userId,
               title,
+              // CP458: persist the input language so video-discover searches
+              // in the right language/region instead of defaulting to 'ko'.
+              language: detectLanguage(title),
               is_default: isDefault,
               position,
             },
@@ -838,6 +842,7 @@ export class MandalaManager {
             data: {
               user_id: userId,
               title,
+              language: detectLanguage(title),
               is_default: true,
               position: 0,
             },
@@ -1172,6 +1177,7 @@ export class MandalaManager {
       data: {
         user_id: targetUserId,
         title: clonedTitle,
+        language: detectLanguage(clonedTitle),
         is_default: existingCount === 0,
         is_public: false,
         source_template_id: options?.sourceTemplateId ?? null,
