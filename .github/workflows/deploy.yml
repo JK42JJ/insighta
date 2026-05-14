@@ -216,11 +216,17 @@ jobs:
           TAILSCALE_IP: ${{ vars.INSIGHTA_TAILSCALE_IP }}
           QWEN_LORA_API_URL: ${{ secrets.QWEN_LORA_API_URL }}
           RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          LS_API_KEY: ${{ secrets.LEMONSQUEEZY_API_KEY }}
+          LS_WEBHOOK_SECRET: ${{ secrets.LEMONSQUEEZY_WEBHOOK_SECRET }}
+          LS_STORE_ID: ${{ vars.LEMONSQUEEZY_STORE_ID }}
+          LS_VARIANT_MONTHLY: ${{ vars.LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY }}
+          LS_VARIANT_YEARLY: ${{ vars.LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY }}
+          LS_VARIANT_LIFETIME: ${{ vars.LEMONSQUEEZY_VARIANT_ID_PRO_LIFETIME }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY
+          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME
           script: |
             set -e
             cd /opt/tubearchive
@@ -307,6 +313,30 @@ jobs:
             fi
             if [ -n "${RUNPOD_API_KEY}" ]; then
               grep -q '^RUNPOD_API_KEY=' .env 2>/dev/null && sed -i "s|^RUNPOD_API_KEY=.*|RUNPOD_API_KEY=${RUNPOD_API_KEY}|" .env || echo "RUNPOD_API_KEY=${RUNPOD_API_KEY}" >> .env
+            fi
+            # CP456 — Lemon Squeezy billing. billingConfig.enabled requires
+            # API_KEY + WEBHOOK_SECRET + STORE_ID + VARIANT_MONTHLY +
+            # VARIANT_YEARLY all set (src/modules/billing/config.ts). Unset
+            # before this step => /api/v1/billing/* returns 503. API_KEY +
+            # WEBHOOK_SECRET are GH Secrets; STORE_ID + VARIANT_* are GH
+            # Variables (CP392 — visible in LS dashboard URL, non-secret).
+            if [ -n "${LS_API_KEY}" ]; then
+              grep -q '^LEMONSQUEEZY_API_KEY=' .env 2>/dev/null && sed -i "s|^LEMONSQUEEZY_API_KEY=.*|LEMONSQUEEZY_API_KEY=${LS_API_KEY}|" .env || echo "LEMONSQUEEZY_API_KEY=${LS_API_KEY}" >> .env
+            fi
+            if [ -n "${LS_WEBHOOK_SECRET}" ]; then
+              grep -q '^LEMONSQUEEZY_WEBHOOK_SECRET=' .env 2>/dev/null && sed -i "s|^LEMONSQUEEZY_WEBHOOK_SECRET=.*|LEMONSQUEEZY_WEBHOOK_SECRET=${LS_WEBHOOK_SECRET}|" .env || echo "LEMONSQUEEZY_WEBHOOK_SECRET=${LS_WEBHOOK_SECRET}" >> .env
+            fi
+            if [ -n "${LS_STORE_ID}" ]; then
+              grep -q '^LEMONSQUEEZY_STORE_ID=' .env 2>/dev/null && sed -i "s|^LEMONSQUEEZY_STORE_ID=.*|LEMONSQUEEZY_STORE_ID=${LS_STORE_ID}|" .env || echo "LEMONSQUEEZY_STORE_ID=${LS_STORE_ID}" >> .env
+            fi
+            if [ -n "${LS_VARIANT_MONTHLY}" ]; then
+              grep -q '^LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY=' .env 2>/dev/null && sed -i "s|^LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY=.*|LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY=${LS_VARIANT_MONTHLY}|" .env || echo "LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY=${LS_VARIANT_MONTHLY}" >> .env
+            fi
+            if [ -n "${LS_VARIANT_YEARLY}" ]; then
+              grep -q '^LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY=' .env 2>/dev/null && sed -i "s|^LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY=.*|LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY=${LS_VARIANT_YEARLY}|" .env || echo "LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY=${LS_VARIANT_YEARLY}" >> .env
+            fi
+            if [ -n "${LS_VARIANT_LIFETIME}" ]; then
+              grep -q '^LEMONSQUEEZY_VARIANT_ID_PRO_LIFETIME=' .env 2>/dev/null && sed -i "s|^LEMONSQUEEZY_VARIANT_ID_PRO_LIFETIME=.*|LEMONSQUEEZY_VARIANT_ID_PRO_LIFETIME=${LS_VARIANT_LIFETIME}|" .env || echo "LEMONSQUEEZY_VARIANT_ID_PRO_LIFETIME=${LS_VARIANT_LIFETIME}" >> .env
             fi
             chmod 600 .env
 
