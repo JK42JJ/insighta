@@ -24,13 +24,15 @@
  *   may be deleted to make room for fresh recommendations:
  *
  *     auto_added       = true
+ *     pinned_at        IS NULL                            -- not bookmarked
  *     user_note        IS NULL                            -- no memo
  *     is_watched       IS NULL OR false                   -- never watched
  *     watch_position_seconds IS NULL OR = 0               -- no playback
  *     is_in_ideation   = false                            -- not pinned to scratchpad
  *
- *   Any user trace (memo, watch progress, watched flag, manual scratchpad
- *   move) promotes that row to permanent — it survives every refresh.
+ *   Any user trace (bookmark, memo, watch progress, watched flag, manual
+ *   scratchpad move) promotes that row to permanent — it survives every
+ *   refresh.
  *   Manual rows (auto_added=false) are NEVER touched by this module.
  *
  * Insert per cell (post-2026-04-18):
@@ -151,6 +153,7 @@ export async function maybeAutoAddRecommendations(
         cell_index: cellIndex,
         auto_added: true,
         OR: [
+          { pinned_at: { not: null } },
           { user_note: { not: null } },
           { is_watched: true },
           { watch_position_seconds: { gt: 0 } },
@@ -165,6 +168,7 @@ export async function maybeAutoAddRecommendations(
         mandala_id: mandalaId,
         cell_index: cellIndex,
         auto_added: true,
+        pinned_at: null,
         user_note: null,
         is_watched: false,
         watch_position_seconds: 0,
