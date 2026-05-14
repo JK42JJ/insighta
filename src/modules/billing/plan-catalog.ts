@@ -2,7 +2,7 @@
  * Plan catalog — maps LS variant_id ↔ internal plan_code ↔ tier.
  * MVP scope (ADR-10): pro_monthly only @ $9.99 USD/month.
  *
- * variant_id source: process.env.LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY (per-env).
+ * variant_id source: the LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY env var (per-env).
  * Adding a new plan = (1) add env var, (2) extend catalog array, (3) update plan_code/tier union in types.ts.
  */
 
