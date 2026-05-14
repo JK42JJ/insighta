@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Youtube, X as XIcon, ChevronRight } from 'lucide-react';
+import { Loader2, Youtube, X as XIcon, ChevronRight, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useToast } from '@/shared/lib/use-toast';
 import { apiClient } from '@/shared/lib/api-client';
 import { cn } from '@/shared/lib/utils';
@@ -217,6 +217,11 @@ export function AddSourceModalV2({
 
   const isLoading = activeTab === 'pl' ? pls.isLoading : subs.isLoading;
   const activeQuery = activeTab === 'pl' ? pls : subs;
+  // A fetch failure that is NOT "not connected" — quota/5xx/network/etc.
+  // Without this the modal silently falls through to the empty-list view,
+  // hiding the failure (and blocking source registration, which the card
+  // push cron depends on).
+  const isError = activeQuery.isError && !isNotConnected;
 
   const FILTER_OPTIONS = [
     { id: 'all', label: t('common.all', 'All') },
@@ -398,6 +403,27 @@ export function AddSourceModalV2({
           ) : isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : isError && items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <AlertTriangle className="w-10 h-10 text-muted-foreground/30 mb-3" />
+              <p className="text-sm text-muted-foreground mb-1">{t('youtube.loadFailed')}</p>
+              <p className="text-xs text-muted-foreground/60 mb-3">
+                {(activeQuery.error as { code?: string } | null)?.code ??
+                  t('youtube.loadFailedHint')}
+              </p>
+              <button
+                onClick={() => activeQuery.refetch()}
+                disabled={activeQuery.isFetching}
+                className="bg-foreground/10 hover:bg-foreground/15 text-foreground px-4 py-2 rounded-[7px] text-sm font-semibold flex items-center gap-1.5 transition-colors"
+              >
+                {activeQuery.isFetching ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-3.5 h-3.5" />
+                )}
+                {t('common.retry')}
+              </button>
             </div>
           ) : items.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-16">

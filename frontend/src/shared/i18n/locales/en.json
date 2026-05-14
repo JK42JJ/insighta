@@ -517,6 +517,8 @@
     "channelHashtagSoon": "Channel & hashtag sources — coming soon",
     "noPlaylists": "No registered playlists.",
     "noPlaylistsHint": "Add a YouTube playlist URL above to get started.",
+    "loadFailed": "Couldn't load the list",
+    "loadFailedHint": "Something went wrong fetching from YouTube. Try again.",
     "syncSettings": "Sync Settings",
     "autoSyncInterval": "Auto Sync Interval",
     "autoSyncIntervalDesc": "Choose how often to sync playlists automatically",
