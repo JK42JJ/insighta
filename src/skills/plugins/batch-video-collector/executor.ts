@@ -257,7 +257,7 @@ export const executor: SkillExecutor = {
 
       // 7. Embeddings (Qwen3 via Mac Mini Ollama) — optional
       const embedReachable = await isOllamaReachable({ baseUrl: state.ollamaUrl });
-      let embeddings: number[][] = [];
+      let embeddings: (number[] | null)[] = [];
       if (embedReachable && enriched.length > 0) {
         try {
           const inputs = enriched.map((v) => buildEmbedText(v));
@@ -427,7 +427,9 @@ async function searchAllKeywords(
 
 async function upsertAll(
   enriched: EnrichedVideo[],
-  embeddings: number[][]
+  // One slot per `enriched` video; `null` where that video's embed chunk
+  // failed (embedBatch per-chunk isolation, CP458). Body skips null entries.
+  embeddings: (number[] | null)[]
 ): Promise<{ videosNew: number; videosUpdated: number; domainTagsWritten: number }> {
   const db = getPrismaClient();
   let videosNew = 0;

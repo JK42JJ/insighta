@@ -190,7 +190,7 @@ export async function promotePlaylistsToVideoPool(
 
   // 7. Generate embeddings (fail-open if Ollama unreachable).
   const reachable = await isOllamaReachable({ baseUrl: ollamaUrl });
-  let embeddings: number[][] = [];
+  let embeddings: (number[] | null)[] = [];
   if (reachable) {
     try {
       const inputs = validMeta.map(buildEmbedText);

@@ -56,6 +56,11 @@ jest.mock('@/modules/database', () => ({
   getPrismaClient: () => ({}),
 }));
 
+// embedding.ts imports recordTrace from discover-tracing, whose module-load
+// reads config.discoverTracing.enabled — the config mock above doesn't
+// provide it, so stub the tracer directly.
+jest.mock('@/modules/discover-tracing', () => ({ recordTrace: jest.fn() }));
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function makeOllamaResponse(count: number, vector: number[] = FAKE_OLLAMA_VECTOR): Response {
@@ -83,7 +88,7 @@ function makeErrorResponse(status: number, body = 'server error'): Response {
 
 // ─── Import after mocks ─────────────────────────────────────────────────────
 
-import { embedBatch, EmbeddingError } from '../embedding';
+import { embedBatch } from '../embedding';
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -140,14 +145,16 @@ describe('embedBatch — IKS_EMBED_PROVIDER fallback (Issue #543)', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it('provider=ollama: ollama fail + OpenRouter fail → throw EmbeddingError', async () => {
+  it('provider=ollama: ollama fail + OpenRouter fail → null slot, no throw (CP458 per-chunk isolation)', async () => {
     const fetchImpl = jest
       .fn()
       .mockRejectedValueOnce(new TypeError('fetch failed'))
       .mockResolvedValueOnce(makeErrorResponse(429, 'rate limited'));
 
-    await expect(embedBatch(['t1'], { fetchImpl })).rejects.toBeInstanceOf(EmbeddingError);
-    // logLLMCall fired with status=error for the failed OpenRouter attempt
+    // embedBatch isolates chunk failure — the chunk yields `null`, not a throw.
+    const out = await embedBatch(['t1'], { fetchImpl });
+    expect(out).toEqual([null]);
+    // logLLMCall still fired with status=error for the failed OpenRouter attempt
     expect(logLLMCallMock).toHaveBeenCalledTimes(1);
     const callArg = logLLMCallMock.mock.calls[0]?.[0] as { status: string };
     expect(callArg.status).toBe('error');
@@ -166,13 +173,16 @@ describe('embedBatch — IKS_EMBED_PROVIDER fallback (Issue #543)', () => {
     expect(url0).toContain('openrouter.ai');
   });
 
-  it('OpenRouter dimension mismatch → throws (no silent acceptance)', async () => {
+  it('OpenRouter dimension mismatch → null slot (no silent bad-dim acceptance, no throw)', async () => {
     const wrongDim = new Array(2048).fill(0.5);
     const fetchImpl = jest
       .fn()
       .mockRejectedValueOnce(new TypeError('fetch failed'))
       .mockResolvedValueOnce(makeOpenRouterResponse(1, wrongDim));
 
-    await expect(embedBatch(['t1'], { fetchImpl })).rejects.toBeInstanceOf(EmbeddingError);
+    // Dimension mismatch is non-retryable; embedOneChunk throws, embedBatch
+    // isolates it to a null slot rather than accepting the wrong-dim vector.
+    const out = await embedBatch(['t1'], { fetchImpl });
+    expect(out).toEqual([null]);
   });
 });

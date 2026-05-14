@@ -169,7 +169,7 @@ export async function promoteV2ToVideoPool(opts: PromoteOptions = {}): Promise<P
 
   // 4. Generate embeddings up-front via Mac Mini Ollama (parallel batch).
   const reachable = await isOllamaReachable({ baseUrl: ollamaUrl });
-  let embeddings: number[][] = [];
+  let embeddings: (number[] | null)[] = [];
   if (reachable) {
     try {
       const inputs = candidates.map(buildEmbedText);

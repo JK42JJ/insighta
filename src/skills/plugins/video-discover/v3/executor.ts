@@ -321,7 +321,7 @@ async function executeImpl(ctx: ExecuteContext): Promise<ExecuteResult> {
         const texts = [state.centerGoal, ...capped.map((m) => m.title)];
         const vectors = await embedBatch(texts);
         if (vectors.length === texts.length) {
-          const centerEmbedding = vectors[0];
+          const centerEmbedding = vectors[0] ?? undefined;
           const candidateEmbeddings = new Map<string, number[]>();
           for (let i = 0; i < capped.length; i++) {
             const vec = vectors[i + 1];
@@ -962,7 +962,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     try {
       const vectors = await embedBatch(texts);
       if (vectors.length === texts.length) {
-        centerEmbedding = vectors[0];
+        centerEmbedding = vectors[0] ?? undefined;
         candidateEmbeddings = new Map<string, number[]>();
         for (let i = 0; i < cappedFilterInputs.length; i++) {
           const vec = vectors[i + 1];
@@ -1748,7 +1748,7 @@ async function runDiscoverEphemeralImpl(
       const vectors = await embedBatch(texts);
       const embedMs = Date.now() - embedT0;
       if (vectors.length === texts.length) {
-        const centerEmbedding = vectors[0];
+        const centerEmbedding = vectors[0] ?? undefined;
         const candidateEmbeddings = new Map<string, number[]>();
         for (let i = 0; i < cappedSlots.length; i++) {
           const vec = vectors[i + 1];
