@@ -69,6 +69,8 @@ APPLY_FILES=(
   "prisma/migrations/billing/001_billing_subscriptions.sql"
   "prisma/migrations/billing/002_billing_events.sql"
   "prisma/migrations/system-settings/001_system_settings.sql"
+  "prisma/migrations/video_pool/002_add_ivfflat_index.sql"
+  "prisma/migrations/mandala_embeddings/001_add_ivfflat_index.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
