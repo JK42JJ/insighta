@@ -161,10 +161,16 @@ services:
       #
       # Revert: set to 'off' (or delete this line — code default 'substring').
       - V3_CENTER_GATE_MODE=semantic
-      # CP436 PR-Y0b2 — semantic gate candidate cap. ≤ 30 ensures the
-      # embedBatch call ([centerGoal, ...top30titles]) stays in a single
-      # OpenRouter/Ollama request. Cap > 50 would cross the chunk boundary.
-      - V3_SEMANTIC_MAX_CANDIDATES=30
+      # CP436 PR-Y0b2 — semantic gate candidate cap.
+      # 2026-05-14: raised 30 → 100 per direct user directive after "8구단
+      # 드래프트" mandala trace analysis revealed 750 raw → 30 cap → 18
+      # mandala_filter input → 6 final cards. Cap was the dominant
+      # bottleneck (1500 quota units yielded only 6 cards). Trade-off: the
+      # embedBatch single-chunk safety (DEFAULT_EMBED_CHUNK_SIZE=50) is now
+      # exceeded — embedding.ts will chunk into 2-3 batches, adding ~1-2s
+      # latency. Acceptable for the candidate-pool expansion gain.
+      # Rollback: set back to 30.
+      - V3_SEMANTIC_MAX_CANDIDATES=100
       # CP436 PR-Y0d (Issue #543) — bypass mandala-filter and trust YouTube's
       # search.list ranking. User feedback (2026-04-28): the 9-axis filter
       # actively degraded card quality vs the original YouTube-only path
