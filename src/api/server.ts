@@ -34,6 +34,8 @@ import { internalTrendCollectorRoutes } from './routes/internal/trend-collector'
 import { internalTranscriptRoutes } from './routes/internal/transcript';
 import { internalVideosBulkUpsertRoutes } from './routes/internal/videos-bulk-upsert';
 import { internalVideoPoolPromoteRoutes } from './routes/internal/video-pool-promote';
+import { internalGoogleCseRoutes } from './routes/internal/google-cse';
+import { internalPlaylistImportRoutes } from './routes/internal/playlist-import';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
@@ -326,6 +328,16 @@ export async function buildServer() {
       // embedding via Mac Mini Ollama, INSERT only).
       await instance.register(internalVideoPoolPromoteRoutes, {
         prefix: '/internal',
+      });
+      // CP458 T4-1 — Google CSE web-search PoC for sparse-domain fallback.
+      // Enabled only when GOOGLE_CSE_API_KEY + GOOGLE_CSE_CX are set.
+      await instance.register(internalGoogleCseRoutes, {
+        prefix: '/internal/google-cse',
+      });
+      // CP458 — Import user's curated YouTube playlists into video_pool
+      // (source='user_playlist', quality_tier='gold', INSERT only).
+      await instance.register(internalPlaylistImportRoutes, {
+        prefix: '/internal/playlist-import',
       });
     },
     { prefix: '/api/v1' }
