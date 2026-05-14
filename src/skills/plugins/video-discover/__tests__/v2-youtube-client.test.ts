@@ -102,14 +102,19 @@ describe('parseIsoDuration', () => {
 });
 
 describe('filters', () => {
-  test('isShortsByDuration — duration-based (180s threshold per 2024 YouTube policy)', () => {
+  test('isShortsByDuration — duration-based (60s threshold, CP358 original)', () => {
     expect(isShortsByDuration(30)).toBe(true);
     expect(isShortsByDuration(60)).toBe(true);
-    // Prod bug 2026-04-17: 110s video "한의대수석으로 만들어준 공부법
-    // #공부" slipped past the old 60s gate because YouTube widened Shorts
-    // from 60s to 180s in October 2024. Now caught.
-    expect(isShortsByDuration(110)).toBe(true);
-    expect(isShortsByDuration(180)).toBe(true);
+    // 2026-05-14 revert from 180s back to 60s: trace analysis of the
+    // "8구단 드래프트 1순위" mandala showed 24% of YouTube candidates
+    // (50/206) were KBO/MLB draft NEWS CLIPS from SBS/KBS/YTN/MBN
+    // (281k, 136k, 111k views) — exactly the mandala-relevant content
+    // — that fell in the 61-180s bucket and got incorrectly killed by
+    // the 180s gate. `titleIndicatesShorts` still catches explicit
+    // `#shorts` hashtag cases in this range.
+    expect(isShortsByDuration(61)).toBe(false);
+    expect(isShortsByDuration(110)).toBe(false);
+    expect(isShortsByDuration(180)).toBe(false);
     expect(isShortsByDuration(181)).toBe(false);
     expect(isShortsByDuration(600)).toBe(false);
   });
