@@ -252,16 +252,33 @@ function AuthenticatedApp() {
 
   // 5c'. Mandala-switch grace period: prevents the "0 cards" empty-state flash
   // that surfaced on every mandala switch because keepPreviousData + client-side
-  // mandala_id filter yields cards.length=0 for a brief moment before the next
-  // useAllVideoStates fetch lands. During the grace window we force isLoading
-  // downstream (skeleton instead of empty-state).
+  // mandala_id filter yields cards.length=0 for a brief moment while a card
+  // query is in flight. During the grace window we force isLoading downstream
+  // (skeleton instead of empty-state).
   const [mandalaSwitchGrace, setMandalaSwitchGrace] = useState(false);
+  // Render-assigned ref so the switch effect can read the current fetching
+  // state without re-running on every isFetching toggle.
+  const cardsFetchingRef = useRef(cards.isFetching);
+  cardsFetchingRef.current = cards.isFetching;
   useEffect(() => {
     if (!effectiveMandalaId) return;
+    // Only enter the grace if a card fetch is actually in flight at switch
+    // time. For a cached / genuinely-empty mandala the client-side filter
+    // resolves synchronously, so entering the grace would just flash the
+    // skeleton for one render (visible blink) with nothing to wait for.
+    if (!cardsFetchingRef.current) return;
     setMandalaSwitchGrace(true);
+    // 3s is a hard cap for a hung fetch; the effect below clears it earlier.
     const timer = setTimeout(() => setMandalaSwitchGrace(false), 3000);
     return () => clearTimeout(timer);
   }, [effectiveMandalaId]);
+  // Clear the grace as soon as the in-flight card fetch settles, so the
+  // skeleton never lingers past the actual load.
+  useEffect(() => {
+    if (mandalaSwitchGrace && !cards.isFetching) {
+      setMandalaSwitchGrace(false);
+    }
+  }, [mandalaSwitchGrace, cards.isFetching]);
 
   useEffect(() => {
     if (!isNewMandalaActive) return;
