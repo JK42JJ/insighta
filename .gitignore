@@ -45,6 +45,7 @@ prisma/migrations/*
 !prisma/migrations/discover-traces/
 !prisma/migrations/billing/
 !prisma/migrations/system-settings/
+!prisma/migrations/mandala_embeddings/
 
 # Logs
 logs/

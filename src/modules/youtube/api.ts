@@ -199,3 +199,159 @@ export async function getUserPlaylists(
   setCache(cacheKey, result);
   return result;
 }
+
+// ============================================================================
+// Playlist items + video metadata (for playlist import pipeline)
+// ============================================================================
+
+interface PlaylistItemEntry {
+  videoId: string;
+  position: number;
+}
+
+/**
+ * Fetch video IDs from a single playlist.
+ * YouTube API: playlistItems.list (part=contentDetails) — 1 quota unit/call.
+ * Cache TTL: 6h (same as playlists / subscriptions).
+ */
+export async function getPlaylistItems(
+  userId: string,
+  playlistId: string,
+  pageToken?: string
+): Promise<{ items: PlaylistItemEntry[]; nextPageToken?: string; totalResults: number }> {
+  type PlItemResult = {
+    items: PlaylistItemEntry[];
+    nextPageToken?: string;
+    totalResults: number;
+  };
+
+  const cacheKey = `${userId}:playlistItems:${playlistId}:${pageToken ?? ''}`;
+  const cached = getCached<PlItemResult>(cacheKey);
+  if (cached) return cached;
+
+  const accessToken = await getAccessToken(userId);
+  if (!accessToken) {
+    throw new Error('YOUTUBE_NOT_CONNECTED');
+  }
+
+  const params = new URLSearchParams({
+    part: 'snippet,contentDetails',
+    playlistId,
+    maxResults: String(MAX_RESULTS),
+  });
+  if (pageToken) params.set('pageToken', pageToken);
+
+  const response = await fetch(`${YOUTUBE_API_BASE}/playlistItems?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(`YOUTUBE_API_ERROR: ${response.status} ${JSON.stringify(error)}`);
+  }
+
+  const data = await response.json();
+
+  const items: PlaylistItemEntry[] = (data.items || []).map((item: any, idx: number) => ({
+    videoId: item.contentDetails?.videoId || '',
+    position: item.snippet?.position ?? idx,
+  }));
+
+  const result: PlItemResult = {
+    items,
+    nextPageToken: data.nextPageToken,
+    totalResults: data.pageInfo?.totalResults || 0,
+  };
+
+  setCache(cacheKey, result);
+  return result;
+}
+
+export interface VideoMetadata {
+  videoId: string;
+  title: string;
+  description: string;
+  channelTitle: string;
+  channelId: string;
+  durationSeconds: number;
+  viewCount: number;
+  likeCount: number;
+  publishedAt: string;
+  thumbnailUrl: string;
+  defaultLanguage: string | null;
+}
+
+/** Max IDs per videos.list call (YouTube hard limit). */
+const MAX_VIDEO_IDS_PER_CALL = 50;
+
+/**
+ * Parse ISO 8601 duration (e.g. PT1H23M45S, PT5M, PT30S) to integer seconds.
+ */
+function parseIsoDurationSeconds(iso: string): number {
+  if (!iso) return 0;
+  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+  const hours = parseInt(match[1] ?? '0', 10);
+  const minutes = parseInt(match[2] ?? '0', 10);
+  const seconds = parseInt(match[3] ?? '0', 10);
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+/**
+ * Fetch full metadata for up to `videoIds.length` videos.
+ * Internally chunks to MAX_VIDEO_IDS_PER_CALL (50) per call.
+ * YouTube API: videos.list (part=snippet,contentDetails,statistics).
+ * No cache — callers should deduplicate before calling.
+ */
+export async function getVideosMetadata(
+  userId: string,
+  videoIds: string[]
+): Promise<VideoMetadata[]> {
+  if (videoIds.length === 0) return [];
+
+  const accessToken = await getAccessToken(userId);
+  if (!accessToken) {
+    throw new Error('YOUTUBE_NOT_CONNECTED');
+  }
+
+  const results: VideoMetadata[] = [];
+
+  for (let i = 0; i < videoIds.length; i += MAX_VIDEO_IDS_PER_CALL) {
+    const chunk = videoIds.slice(i, i + MAX_VIDEO_IDS_PER_CALL);
+
+    const params = new URLSearchParams({
+      part: 'snippet,contentDetails,statistics',
+      id: chunk.join(','),
+      maxResults: String(chunk.length),
+    });
+
+    const response = await fetch(`${YOUTUBE_API_BASE}/videos?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(`YOUTUBE_API_ERROR: ${response.status} ${JSON.stringify(error)}`);
+    }
+
+    const data = await response.json();
+
+    for (const item of data.items || []) {
+      results.push({
+        videoId: item.id || '',
+        title: item.snippet?.title || '',
+        description: item.snippet?.description || '',
+        channelTitle: item.snippet?.channelTitle || '',
+        channelId: item.snippet?.channelId || '',
+        durationSeconds: parseIsoDurationSeconds(item.contentDetails?.duration || ''),
+        viewCount: parseInt(item.statistics?.viewCount ?? '0', 10) || 0,
+        likeCount: parseInt(item.statistics?.likeCount ?? '0', 10) || 0,
+        publishedAt: item.snippet?.publishedAt || '',
+        thumbnailUrl: item.snippet?.thumbnails?.default?.url || '',
+        defaultLanguage: item.snippet?.defaultLanguage ?? null,
+      });
+    }
+  }
+
+  return results;
+}
