@@ -81,9 +81,9 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
     [playerRef]
   );
 
-  const tabs: { id: RightTab; labelKey: string; fallback: string; icon: typeof NotebookPen }[] = [
-    { id: 'notes', labelKey: 'learning.tabNotes', fallback: '노트', icon: NotebookPen },
-    { id: 'chatbot', labelKey: 'learning.tabChatbot', fallback: 'AI 챗봇', icon: Bot },
+  const tabs: { id: RightTab; labelKey: string; icon: typeof NotebookPen }[] = [
+    { id: 'notes', labelKey: 'learning.tabNotes', icon: NotebookPen },
+    { id: 'chatbot', labelKey: 'learning.tabChatbot', icon: Bot },
   ];
 
   return (
@@ -117,7 +117,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
         </button>
       </div>
       <div className="flex shrink-0">
-        {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
+        {tabs.map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
             onClick={() => {
@@ -132,7 +132,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
             )}
           >
             <Icon className="h-3.5 w-3.5" />
-            {t(labelKey, fallback)}
+            {t(labelKey)}
           </button>
         ))}
       </div>
