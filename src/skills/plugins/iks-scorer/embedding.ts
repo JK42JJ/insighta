@@ -24,6 +24,7 @@ import { getPrismaClient } from '@/modules/database';
 import { Prisma } from '@prisma/client';
 import { config } from '@/config/index';
 import { logLLMCall } from '@/modules/llm/call-logger';
+import { recordTrace } from '@/modules/discover-tracing';
 
 const log = logger.child({ module: 'iks-scorer/embedding' });
 
@@ -108,13 +109,37 @@ export async function embedBatch(
   const chunkSize = opts.chunkSize ?? DEFAULT_EMBED_CHUNK_SIZE;
   const out: number[][] = [];
 
-  for (let i = 0; i < texts.length; i += chunkSize) {
-    const chunk = texts.slice(i, i + chunkSize);
-    const vectors = await embedOneChunk(chunk, opts);
-    out.push(...vectors);
+  const t0 = Date.now();
+  try {
+    for (let i = 0; i < texts.length; i += chunkSize) {
+      const chunk = texts.slice(i, i + chunkSize);
+      const vectors = await embedOneChunk(chunk, opts);
+      out.push(...vectors);
+    }
+    // CP457+ trace — text inputs + vector counts (skip the 4096d vectors
+    // themselves to keep payload sane; record first-3-dim sample per vec).
+    recordTrace({
+      step: 'embed.batch',
+      status: 'ok',
+      request: { text_count: texts.length, chunk_size: chunkSize, texts: texts.slice(0, 50) },
+      response: {
+        vector_count: out.length,
+        dim: out[0]?.length ?? 0,
+        samples: out.slice(0, 3).map((v) => v.slice(0, 3)),
+      },
+      latencyMs: Date.now() - t0,
+    });
+    return out;
+  } catch (err) {
+    recordTrace({
+      step: 'embed.batch',
+      status: 'error',
+      request: { text_count: texts.length, chunk_size: chunkSize, texts: texts.slice(0, 50) },
+      errorMessage: err instanceof Error ? err.message : String(err),
+      latencyMs: Date.now() - t0,
+    });
+    throw err;
   }
-
-  return out;
 }
 
 /**

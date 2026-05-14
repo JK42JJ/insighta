@@ -18,6 +18,7 @@
 
 import { config } from '@/config/index';
 import { logger } from '@/utils/logger';
+import { recordTrace } from '@/modules/discover-tracing';
 
 const COHERE_RERANK_URL = 'https://api.cohere.com/v2/rerank';
 
@@ -153,6 +154,21 @@ export async function rerank(input: RerankInput): Promise<RerankResponse> {
     returned: results.length,
     latencyMs,
     billedSearchUnits: json.meta?.billed_units?.search_units,
+  });
+
+  // CP457+ trace — capture rerank input + scored output. fire-and-forget.
+  recordTrace({
+    step: 'hybrid_rerank.cohere',
+    status: 'ok',
+    request: {
+      model,
+      query: input.query,
+      document_count: input.documents.length,
+      top_n: input.topN,
+      documents: input.documents.slice(),
+    },
+    response: { results, billedUnits: json.meta?.billed_units },
+    latencyMs,
   });
 
   return {
