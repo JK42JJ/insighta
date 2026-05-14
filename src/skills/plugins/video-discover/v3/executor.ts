@@ -416,12 +416,19 @@ async function executeImpl(ctx: ExecuteContext): Promise<ExecuteResult> {
     }
   }
 
-  // ── Tier 2: realtime fallback for deficit cells ────────────────────
+  // ── Tier 2: realtime YouTube search ────────────────────────────────
+  // V3_TIER2_OVERFETCH (default true): Tier 2 ALWAYS runs and fetches a
+  // full per-cell budget of *fresh* YouTube candidates regardless of how
+  // many the pool (Tier 1) supplied — the pool is a minimal device, live
+  // search is the main source. Pre-overfetch Tier 2 was budgeted as
+  // `need = V3_TARGET_PER_CELL - have`, so a pool-filled mandala fetched
+  // ~zero fresh videos ("돌려막기" — recycling pool cards). Set
+  // V3_TIER2_OVERFETCH=false to restore the deficit-fill behaviour.
   let tier2Count = 0;
   let tier2QueriesUsed = 0;
   let tier2Debug: Tier2Debug | null = null;
   const totalHave = slots.length;
-  if (totalHave < V3_TARGET_TOTAL) {
+  if (v3Config.tier2Overfetch || totalHave < V3_TARGET_TOTAL) {
     const slotsByCell = new Map<number, number>();
     for (const s of slots) {
       slotsByCell.set(s.cellIndex, (slotsByCell.get(s.cellIndex) ?? 0) + 1);
@@ -429,7 +436,11 @@ async function executeImpl(ctx: ExecuteContext): Promise<ExecuteResult> {
     const deficitCells: Array<{ cellIndex: number; need: number }> = [];
     for (let i = 0; i < V3_NUM_CELLS; i++) {
       const have = slotsByCell.get(i) ?? 0;
-      const need = Math.max(0, V3_TARGET_PER_CELL - have);
+      // Overfetch: target a full per-cell budget of fresh candidates,
+      // ignoring `have`. Deficit-fill: only top up to the per-cell target.
+      const need = v3Config.tier2Overfetch
+        ? V3_TARGET_PER_CELL
+        : Math.max(0, V3_TARGET_PER_CELL - have);
       if (need > 0) deficitCells.push({ cellIndex: i, need });
     }
 

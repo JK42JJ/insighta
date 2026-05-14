@@ -305,6 +305,7 @@ export const v3EnvSchema = z.object({
   V3_ENABLE_REDIS_PROVIDER: booleanFlag.optional().default(false as unknown as string),
   V3_TIER1_SOURCES: tier1Sources,
   V3_SEMANTIC_MIN_COSINE: semanticMinCosine,
+  V3_TIER2_OVERFETCH: booleanFlag.optional().default(true as unknown as string),
 });
 
 export interface V3Config {
@@ -327,6 +328,13 @@ export interface V3Config {
   enableRedisProvider: boolean;
   tier1Sources: ReadonlyArray<string>;
   semanticMinCosine: number;
+  /**
+   * When true (default), Tier 2 always runs and fetches a full per-cell
+   * budget of fresh YouTube candidates regardless of Tier 1 fill — live
+   * search is the main source, the pool is a minimal device. When false,
+   * Tier 2 reverts to deficit-fill (`need = V3_TARGET_PER_CELL - have`).
+   */
+  tier2Overfetch: boolean;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -350,6 +358,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_ENABLE_REDIS_PROVIDER: env['V3_ENABLE_REDIS_PROVIDER'],
     V3_TIER1_SOURCES: env['V3_TIER1_SOURCES'],
     V3_SEMANTIC_MIN_COSINE: env['V3_SEMANTIC_MIN_COSINE'],
+    V3_TIER2_OVERFETCH: env['V3_TIER2_OVERFETCH'],
   });
   if (!parsed.success) {
     return {
@@ -372,6 +381,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       enableRedisProvider: DEFAULT_ENABLE_REDIS_PROVIDER,
       tier1Sources: [...DEFAULT_TIER1_SOURCES],
       semanticMinCosine: SEMANTIC_MIN_COSINE,
+      tier2Overfetch: true,
     };
   }
   return {
@@ -394,6 +404,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     enableRedisProvider: parsed.data.V3_ENABLE_REDIS_PROVIDER,
     tier1Sources: parsed.data.V3_TIER1_SOURCES,
     semanticMinCosine: parsed.data.V3_SEMANTIC_MIN_COSINE,
+    tier2Overfetch: parsed.data.V3_TIER2_OVERFETCH,
   };
 }
 
