@@ -21,7 +21,6 @@ import {
 } from '../../config/explore';
 import {
   RECOMMENDATION_FETCH_LIMIT,
-  RECOMMENDATION_DEFAULT_STATUS,
   RECOMMENDATION_DEFAULT_MODE,
 } from '../../config/recommendations';
 import { config } from '../../config';
@@ -1754,11 +1753,16 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     // invalidate) could shuffle visually identical cards. uuid asc is
     // arbitrary but stable across refetches, so the grid no longer
     // re-arranges on background polling.
+    // No `status` filter: `status` is auto_add's bookkeeping (pending = not
+    // yet promoted to user_video_states, shown = promoted) — NOT a display
+    // gate. Filtering on status='pending' here made the feed empty itself
+    // the instant auto_add flipped its rows to 'shown', so cards "appeared
+    // then disappeared". The feed shows the mandala's non-expired
+    // recommendations regardless of promotion state.
     const rows = await prisma.recommendation_cache.findMany({
       where: {
         user_id: userId,
         mandala_id: mandalaId,
-        status: RECOMMENDATION_DEFAULT_STATUS,
         expires_at: { gt: new Date() },
         ...(cellIndexFilter !== undefined ? { cell_index: cellIndexFilter } : {}),
       },
@@ -2494,11 +2498,14 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         }
       }
 
+      // No `status` filter — see the /recommendations REST handler above:
+      // `status` is auto_add bookkeeping, not a display gate. Filtering it
+      // here made the SSE reconnect backlog come back empty once auto_add
+      // ran, wiping the feed.
       const backlogRows = await getPrismaClient().recommendation_cache.findMany({
         where: {
           user_id: userId,
           mandala_id: mandalaId,
-          status: RECOMMENDATION_DEFAULT_STATUS,
           expires_at: { gt: new Date() },
         },
         // CP457+ deterministic tie-break to match the REST endpoint.
