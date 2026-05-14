@@ -259,7 +259,10 @@ describeIfSigning('GET /api/v1/mandalas/:id/recommendations — authenticated', 
     expect(call?.where?.cell_index).toBe(2);
     expect(call?.where?.user_id).toBe(TEST_USER_ID);
     expect(call?.where?.mandala_id).toBe(TEST_MANDALA_ID);
-    expect(call?.where?.status).toBe('pending');
+    // No `status` filter: it is auto_add bookkeeping, not a display gate —
+    // filtering it made the feed empty when auto_add flipped rows to 'shown'.
+    expect(call?.where?.status).toBeUndefined();
+    expect(call?.where?.expires_at).toBeDefined();
     expect(call?.take).toBe(80);
   });
 });
