@@ -49,6 +49,7 @@ import {
 } from '@/prompts/search-query-generator';
 import { rerankBatch, type RerankCandidate } from './sources/llm-reranker';
 import { MS_PER_DAY } from '@/utils/time-constants';
+import { SHORTS_MAX_DURATION_SEC } from './v2/youtube-client';
 
 const log = logger.child({ module: 'video-discover' });
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
@@ -362,8 +363,6 @@ const TITLE_BLOCKLIST: readonly string[] = [
   '#광고',
 ];
 
-/** Minimum duration in seconds (Fix 3, CP358) — anything shorter is a Short. */
-const MIN_DURATION_SEC = 60;
 /**
  * Channel diversity cap (Fix 3, CP358). If a single channel contributes
  * `>= GLOBAL_CHANNEL_CAP_THRESHOLD` videos to the final 24, collapse it to
@@ -977,7 +976,7 @@ export const executor: SkillExecutor = {
     let droppedLangMismatch = 0;
     const hasKorean = (text: string) => /[가-힣]/.test(text);
     const survivedFix3 = allCandidates.filter((c) => {
-      if (c.durationSec !== null && c.durationSec < MIN_DURATION_SEC) {
+      if (c.durationSec !== null && c.durationSec <= SHORTS_MAX_DURATION_SEC) {
         droppedShorts += 1;
         return false;
       }

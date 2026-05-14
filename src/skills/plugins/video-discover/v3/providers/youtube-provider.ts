@@ -255,6 +255,7 @@ export class YouTubeProvider implements VideoProvider {
     const validCellIndices = new Set(request.cells.map((c) => c.cellIndex));
 
     const candidates: VideoCandidate[] = [];
+    let droppedLangMismatch = 0;
     for (const p of rawPool) {
       // Skip already-excluded videos before doing any heavier work.
       if (request.excludeVideoIds.has(p.videoId)) continue;
@@ -265,6 +266,18 @@ export class YouTubeProvider implements VideoProvider {
       if (isShortsByDuration(durationSec)) continue;
       if (titleIndicatesShorts(p.title)) continue;
       if (titleHitsBlocklist(p.title)) continue;
+      // Title-based language post-filter. YouTube's relevanceLanguage is a
+      // ranking hint, not a hard filter — Korean videos can leak into English
+      // mandalas and vice versa. This mirrors the legacy executor.ts post-filter.
+      const titleHasKorean = /[가-힣]/.test(p.title);
+      if (request.language === 'en' && titleHasKorean) {
+        droppedLangMismatch++;
+        continue;
+      }
+      if (request.language === 'ko' && !titleHasKorean) {
+        droppedLangMismatch++;
+        continue;
+      }
 
       const viewCount =
         s?.statistics?.viewCount != null ? parseInt(s.statistics.viewCount, 10) : null;
@@ -302,7 +315,7 @@ export class YouTubeProvider implements VideoProvider {
     const latencyMs = Date.now() - t0;
 
     log.info(
-      `[YouTubeProvider] mandala=${request.mandalaId} queries=${queries.length} rawPool=${rawPool.length} candidates=${candidates.length} quota=${totalQuota} latencyMs=${latencyMs}`
+      `[YouTubeProvider] mandala=${request.mandalaId} queries=${queries.length} rawPool=${rawPool.length} droppedLangMismatch=${droppedLangMismatch} candidates=${candidates.length} quota=${totalQuota} latencyMs=${latencyMs}`
     );
 
     return {

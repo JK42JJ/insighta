@@ -72,6 +72,14 @@ import type { CellDefinition } from './providers/types';
 
 const log = logger.child({ module: 'video-discover/v3/executor' });
 
+/**
+ * Returns true if the text contains at least one Hangul syllable block.
+ * Used by the Tier-2 language post-filter: YouTube's `relevanceLanguage`
+ * is a ranking hint, not a hard filter, so Korean videos can leak into
+ * English mandalas and Latin-only titles can leak into Korean mandalas.
+ */
+const hasKoreanTitle = (text: string): boolean => /[가-힣]/.test(text);
+
 const TTL_DAYS = 7;
 const RECOMMENDATION_STATUS_PENDING = 'pending';
 const WEIGHT_VERSION = 3;
@@ -683,6 +691,7 @@ interface Tier2Debug {
   droppedShortsDuration: number;
   droppedShortsTitle: number;
   droppedBlocklist: number;
+  droppedLangMismatch: number;
   droppedQuality: number;
   afterFilter: number;
   existingExcluded: number;
@@ -733,6 +742,7 @@ function makeEmptyDebug(input: Tier2Input): Tier2Debug {
     droppedShortsDuration: 0,
     droppedShortsTitle: 0,
     droppedBlocklist: 0,
+    droppedLangMismatch: 0,
     droppedQuality: 0,
     afterFilter: 0,
     existingExcluded: 0,
@@ -882,6 +892,15 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     }
     if (titleHitsBlocklist(p.title)) {
       debug.droppedBlocklist++;
+      continue;
+    }
+    // Title-based language post-filter (ported from legacy executor.ts §978-996).
+    // YouTube's relevanceLanguage is a ranking hint, not a hard filter — Korean
+    // videos leak into English mandalas (and vice versa). Only applied to Tier-2
+    // live YouTube candidates; Tier-1 video_pool is already language-filtered at
+    // the DB level.
+    if (hasKoreanTitle(p.title) !== (input.state.language === 'ko')) {
+      debug.droppedLangMismatch++;
       continue;
     }
     enriched.push({
