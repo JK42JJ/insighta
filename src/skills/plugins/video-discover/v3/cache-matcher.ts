@@ -86,8 +86,24 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
   const db = getPrismaClient();
   const t0 = Date.now();
 
+  // CP458: materialise the eligible video_pool subset (index scan, fast)
+  // BEFORE joining video_pool_embeddings, so pgvector cosine runs only over
+  // the eligible rows — not the whole embeddings table. EXPLAIN ANALYZE on
+  // prod: pre-CP458 the planner hash-joined (mandala × Seq Scan ALL 11,123
+  // embeddings) → 89k cosine ops → 65-100s. With the eligible CTE first +
+  // sources=['v2_promoted'] (1,156 ko rows): ~9k cosine → ~2.9s.
   const rows = await db.$queryRaw<MatchRow[]>(Prisma.sql`
-    WITH mandala_embs AS (
+    WITH eligible AS (
+      SELECT
+        video_id, title, description, channel_name, channel_id,
+        thumbnail_url, view_count, like_count, duration_seconds, published_at
+      FROM public.video_pool
+      WHERE is_active = true
+        AND language = ${opts.language}
+        AND quality_tier IN ('gold', 'silver')
+        AND source = ANY(${sources}::text[])
+    ),
+    mandala_embs AS (
       SELECT sub_goal_index AS cell_index, embedding
         FROM public.mandala_embeddings
        WHERE mandala_id = ${opts.mandalaId}
@@ -96,26 +112,22 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
     ),
     scored AS (
       SELECT
-        vp.video_id,
-        vp.title,
-        vp.description,
-        vp.channel_name,
-        vp.channel_id,
-        vp.thumbnail_url,
-        vp.view_count,
-        vp.like_count,
-        vp.duration_seconds,
-        vp.published_at,
+        e.video_id,
+        e.title,
+        e.description,
+        e.channel_name,
+        e.channel_id,
+        e.thumbnail_url,
+        e.view_count,
+        e.like_count,
+        e.duration_seconds,
+        e.published_at,
         me.cell_index,
         1 - (vpe.embedding <=> me.embedding) AS score
-      FROM public.video_pool vp
+      FROM eligible e
       JOIN public.video_pool_embeddings vpe
-        ON vp.video_id = vpe.video_id
+        ON vpe.video_id = e.video_id
       CROSS JOIN mandala_embs me
-      WHERE vp.is_active = true
-        AND vp.language = ${opts.language}
-        AND vp.quality_tier IN ('gold', 'silver')
-        AND vp.source = ANY(${sources}::text[])
     ),
     ranked AS (
       SELECT
@@ -246,27 +258,35 @@ export async function matchFromVideoPoolByCenterGoal(
   // serialise to the `[v1,v2,...]` text form and let Postgres cast.
   const vectorLiteral = `[${opts.centerEmbedding.join(',')}]`;
 
+  // CP458: same eligible-CTE-first restructure as matchFromVideoPool — cosine
+  // runs over the eligible video_pool subset, not the whole embeddings table.
   const rows = await db.$queryRaw<CenterMatchRow[]>(Prisma.sql`
+    WITH eligible AS (
+      SELECT
+        video_id, title, description, channel_name, channel_id,
+        thumbnail_url, view_count, like_count, duration_seconds, published_at
+      FROM public.video_pool
+      WHERE is_active = true
+        AND language = ${opts.language}
+        AND quality_tier IN ('gold', 'silver')
+        AND source = ANY(${sources}::text[])
+    )
     SELECT
-      vp.video_id,
-      vp.title,
-      vp.description,
-      vp.channel_name,
-      vp.channel_id,
-      vp.thumbnail_url,
-      vp.view_count,
-      vp.like_count,
-      vp.duration_seconds,
-      vp.published_at,
+      e.video_id,
+      e.title,
+      e.description,
+      e.channel_name,
+      e.channel_id,
+      e.thumbnail_url,
+      e.view_count,
+      e.like_count,
+      e.duration_seconds,
+      e.published_at,
       1 - (vpe.embedding <=> ${vectorLiteral}::vector) AS score
-    FROM public.video_pool vp
+    FROM eligible e
     JOIN public.video_pool_embeddings vpe
-      ON vp.video_id = vpe.video_id
-    WHERE vp.is_active = true
-      AND vp.language = ${opts.language}
-      AND vp.quality_tier IN ('gold', 'silver')
-      AND vp.source = ANY(${sources}::text[])
-      AND 1 - (vpe.embedding <=> ${vectorLiteral}::vector) >= ${threshold}
+      ON vpe.video_id = e.video_id
+    WHERE 1 - (vpe.embedding <=> ${vectorLiteral}::vector) >= ${threshold}
     ORDER BY vpe.embedding <=> ${vectorLiteral}::vector ASC
     LIMIT ${limit}
   `);
