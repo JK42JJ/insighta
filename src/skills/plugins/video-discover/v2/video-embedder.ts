@@ -68,7 +68,7 @@ export async function embedVideos(
   }
 
   const texts = videos.map(buildEmbeddingText);
-  let vectors: number[][];
+  let vectors: (number[] | null)[];
   try {
     vectors = await embedBatch(texts, opts);
   } catch (err) {

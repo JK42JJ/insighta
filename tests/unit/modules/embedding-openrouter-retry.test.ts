@@ -30,7 +30,7 @@ jest.mock('@/modules/llm/call-logger', () => ({ logLLMCall: jest.fn() }));
 jest.mock('@/modules/discover-tracing', () => ({ recordTrace: jest.fn() }));
 jest.mock('@/modules/database', () => ({ getPrismaClient: jest.fn() }));
 
-import { embedBatch, EmbeddingError } from '@/skills/plugins/iks-scorer/embedding';
+import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
 
 const DIM = 4096;
 const vec = (): number[] => new Array(DIM).fill(0.01);
@@ -113,12 +113,15 @@ describe('embedBatch — OpenRouter transient-404 retry + Ollama fallback', () =
     expect(ollamaCalls).toHaveLength(1); // fallback after exhaustion
   });
 
-  it('throws when OpenRouter retries exhaust AND the Ollama fallback also fails', async () => {
+  it('returns null slots when OpenRouter retries exhaust AND the Ollama fallback also fails', async () => {
     const fetchImpl = jest.fn(async (url: string) =>
       url.includes('/embeddings') ? httpErr(404) : httpErr(500)
     ) as unknown as typeof fetch;
 
-    await expect(embedBatch(['a', 'b'], { fetchImpl })).rejects.toThrow(EmbeddingError);
+    // per-chunk isolation (CP458): both providers fail → the chunk's inputs
+    // become null and embedBatch returns rather than throwing.
+    const out = await embedBatch(['a', 'b'], { fetchImpl });
+    expect(out).toEqual([null, null]);
   });
 
   it('ollama-provider branch: Ollama down → OpenRouter fallback also retries transient 404', async () => {

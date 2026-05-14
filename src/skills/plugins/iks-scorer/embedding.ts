@@ -111,49 +111,60 @@ export async function isOllamaReachable(opts: EmbeddingClientOptions = {}): Prom
  * into chunks of DEFAULT_EMBED_CHUNK_SIZE so no single call exceeds the
  * timeout.
  *
- * Returns vectors in the same order as inputs. Throws EmbeddingError if
- * ANY chunk fails — callers MUST decide whether to fall back to placeholder
- * mode (recommended) or fail the whole execute() call.
+ * Returns one slot per input, in order. Per-chunk isolation (CP458): a
+ * chunk whose embed call fails yields `null` for each of its inputs rather
+ * than failing the whole batch — a single bad chunk used to throw away
+ * every embedding (promote-from-playlists imported 197 rows with 0
+ * embeddings because one of its 4 chunks failed). The returned array length
+ * always equals `texts.length`; callers MUST null-check each entry.
+ * Does not throw for chunk-level failures.
  */
 export async function embedBatch(
   texts: string[],
   opts: EmbeddingClientOptions = {}
-): Promise<number[][]> {
+): Promise<(number[] | null)[]> {
   if (texts.length === 0) return [];
   const chunkSize = opts.chunkSize ?? DEFAULT_EMBED_CHUNK_SIZE;
-  const out: number[][] = [];
-
+  const out: (number[] | null)[] = [];
   const t0 = Date.now();
-  try {
-    for (let i = 0; i < texts.length; i += chunkSize) {
-      const chunk = texts.slice(i, i + chunkSize);
+  let failedChunks = 0;
+
+  for (let i = 0; i < texts.length; i += chunkSize) {
+    const chunk = texts.slice(i, i + chunkSize);
+    try {
       const vectors = await embedOneChunk(chunk, opts);
       out.push(...vectors);
+    } catch (err) {
+      failedChunks += 1;
+      log.warn(
+        `embedBatch chunk [${i}, ${i + chunk.length}) failed — continuing without it: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+      for (let j = 0; j < chunk.length; j += 1) out.push(null);
     }
-    // CP457+ trace — text inputs + vector counts (skip the 4096d vectors
-    // themselves to keep payload sane; record first-3-dim sample per vec).
-    recordTrace({
-      step: 'embed.batch',
-      status: 'ok',
-      request: { text_count: texts.length, chunk_size: chunkSize, texts: texts.slice(0, 50) },
-      response: {
-        vector_count: out.length,
-        dim: out[0]?.length ?? 0,
-        samples: out.slice(0, 3).map((v) => v.slice(0, 3)),
-      },
-      latencyMs: Date.now() - t0,
-    });
-    return out;
-  } catch (err) {
-    recordTrace({
-      step: 'embed.batch',
-      status: 'error',
-      request: { text_count: texts.length, chunk_size: chunkSize, texts: texts.slice(0, 50) },
-      errorMessage: err instanceof Error ? err.message : String(err),
-      latencyMs: Date.now() - t0,
-    });
-    throw err;
   }
+
+  const okCount = out.reduce((n, v) => (v ? n + 1 : n), 0);
+  const firstVec = out.find((v): v is number[] => v != null);
+  // CP457+ trace — text inputs + vector counts (skip the 4096d vectors
+  // themselves to keep payload sane; record first-3-dim sample per vec).
+  recordTrace({
+    step: 'embed.batch',
+    status: okCount > 0 ? 'ok' : 'error',
+    request: { text_count: texts.length, chunk_size: chunkSize, texts: texts.slice(0, 50) },
+    response: {
+      vector_count: okCount,
+      failed_chunks: failedChunks,
+      dim: firstVec?.length ?? 0,
+      samples: out
+        .filter((v): v is number[] => v != null)
+        .slice(0, 3)
+        .map((v) => v.slice(0, 3)),
+    },
+    latencyMs: Date.now() - t0,
+  });
+  return out;
 }
 
 /**
@@ -277,8 +288,14 @@ async function embedOneChunkViaOpenRouter(
     throw new EmbeddingError('OPENROUTER_API_KEY not configured (cannot fall back from Ollama)');
   }
 
-  const baseUrl = opts.baseUrl ?? config.mandalaEmbed.openRouterBaseUrl;
-  const model = opts.model ?? config.mandalaEmbed.openRouterModel;
+  // NOTE: `opts.baseUrl` / `opts.model` are the *Ollama* overrides (see
+  // EmbeddingClientOptions JSDoc — they default to MAC_MINI_OLLAMA_DEFAULT_URL
+  // / QWEN3_EMBED_MODEL). They MUST NOT leak into the OpenRouter call. CP458:
+  // promote-from-* passed `{ baseUrl: ollamaUrl }`, which made this function
+  // POST to `http://<mac-mini>:11434/embeddings` — a route Ollama doesn't have
+  // — yielding a deterministic "HTTP 404 page not found" on every call.
+  const baseUrl = config.mandalaEmbed.openRouterBaseUrl;
+  const model = config.mandalaEmbed.openRouterModel;
   const expectedDim = config.mandalaEmbed.openRouterDimension;
   const fetchFn = opts.fetchImpl ?? fetch;
 

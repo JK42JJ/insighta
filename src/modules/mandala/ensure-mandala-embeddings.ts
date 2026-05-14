@@ -165,7 +165,7 @@ export async function ensureMandalaEmbeddings(mandalaId: string): Promise<Ensure
   // ── Step 4: generate via Mac Mini Ollama (only missing/stale) ─────
   const subjectsToEmbed = indexesToGenerate.map((i) => currentSubjects[i]!);
   const t0 = Date.now();
-  let vectors: number[][];
+  let vectors: (number[] | null)[];
   try {
     vectors = await embedBatch(subjectsToEmbed);
   } catch (err) {
