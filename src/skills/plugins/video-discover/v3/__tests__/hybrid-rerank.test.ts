@@ -34,7 +34,7 @@ jest.mock('@/modules/database/client', () => ({
 
 import {
   applyHybridRerank,
-  groupByCellVideo,
+  groupByVideo,
   normalizeScores0to100,
   type RerankSlot,
 } from '../hybrid-rerank';
@@ -69,17 +69,20 @@ describe('normalizeScores0to100', () => {
   });
 });
 
-describe('groupByCellVideo', () => {
-  it('keeps highest score per (cell, video) pair', () => {
+describe('groupByVideo', () => {
+  it('collapses a video to one slot across cells, keeping its highest score', () => {
+    // Same videoId in cells 0, 0, 1 — recommendation_cache's
+    // @@unique([user, mandala, video]) would collapse these anyway, so
+    // the rerank dedupes by videoId (not cell:video) to avoid spending
+    // the top-N budget on duplicates.
     const slots: RerankSlot[] = [
       baseSlot({ videoId: 'a', cellIndex: 0, rec_score: 0.4 }),
       baseSlot({ videoId: 'a', cellIndex: 0, rec_score: 0.9 }),
       baseSlot({ videoId: 'a', cellIndex: 1, rec_score: 0.3 }),
     ];
-    const out = groupByCellVideo(slots);
-    expect(out.length).toBe(2);
+    const out = groupByVideo(slots);
+    expect(out.length).toBe(1);
     expect(out[0]!.rec_score).toBe(0.9);
-    expect(out[1]!.rec_score).toBe(0.3);
   });
 
   it('returns slots sorted by rec_score desc', () => {
@@ -88,7 +91,7 @@ describe('groupByCellVideo', () => {
       baseSlot({ videoId: 'b', cellIndex: 0, rec_score: 0.9 }),
       baseSlot({ videoId: 'c', cellIndex: 0, rec_score: 0.5 }),
     ];
-    const out = groupByCellVideo(slots);
+    const out = groupByVideo(slots);
     expect(out.map((s) => s.videoId)).toEqual(['b', 'c', 'a']);
   });
 });
