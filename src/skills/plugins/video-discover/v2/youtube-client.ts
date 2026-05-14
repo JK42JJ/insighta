@@ -489,19 +489,26 @@ export const V2_TITLE_BLOCKLIST: ReadonlyArray<string> = [
  * Shorts are excluded from AI recommendations — users can add them
  * manually, but the discovery pipeline recommends long-form only.
  *
- * Threshold is 180 seconds (YouTube extended Shorts from 60s to 180s
- * in October 2024). Prod 2026-04-17: a 110-second shorts titled
- * "한의대수석으로 만들어준 공부법 #공부 #공부잘하는방법" surfaced in
- * a "효율적인 학습법 탐색" mandala — duration passed the old 60s gate
- * even though the video is clearly a short. The hashtag pattern also
- * missed it because the title tagged `#공부` rather than `#shorts`.
+ * Threshold history:
+ *   - Original: 60s (CP358 Fix 3) — YouTube's pre-2024 Shorts cutoff.
+ *   - 2026-04-17: raised to 180s after a 110s `#공부` short surfaced
+ *     in a learning mandala. The intent was to align with YouTube's
+ *     2024-10 Shorts format extension (60s → 180s).
+ *   - 2026-05-14: REVERTED to 60s. Trace analysis of the "8구단
+ *     드래프트 1순위" mandala showed 24% of the YouTube candidates
+ *     (50/206) fell into the 61-180s bucket — and inspection revealed
+ *     those were KBO/MLB draft news clips from SBS/KBS/YTN/MBN/MBC
+ *     official news channels (281k, 136k, 111k views), exactly the
+ *     mandala-relevant content. The 180s gate was killing the news
+ *     and highlights domain. `titleIndicatesShorts` still catches
+ *     explicit `#shorts` hashtag cases in the 60-180s range.
  *
  * Null duration is treated as shorts (defensive drop). Videos.list
  * occasionally omits `contentDetails.duration` for shorts specifically,
  * so null → drop prevents that hole.
  */
 export function isShortsByDuration(durationSec: number | null): boolean {
-  return durationSec === null || durationSec <= 180;
+  return durationSec === null || durationSec <= 60;
 }
 
 /**
