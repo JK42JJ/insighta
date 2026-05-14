@@ -112,24 +112,25 @@ export function normalizeScores0to100(raw: ReadonlyArray<number>): number[] {
 }
 
 /**
- * Group slots by videoId, keep the highest-scored slot per video.
- * Returns slots sorted by rec_score desc. Pattern borrowed from
- * YT-Navigator's `Counter(...).most_common(5)` + group_by_video.
+ * Group slots by videoId, keeping the highest-scored slot per video (its
+ * best-fit cell). Returns slots sorted by rec_score desc.
  *
- * Note: in the Insighta model each card is a (mandala, cell, video) tuple,
- * so dedupe by videoId might collapse cards across cells. To preserve cell
- * diversity, we group by (cellIndex, videoId) — keeping per-cell top scored.
+ * The dedupe key is videoId, NOT (cellIndex, videoId): recommendation_cache
+ * has @@unique([user_id, mandala_id, video_id]) — cell_index is not in the
+ * key — so upsertSlots' `ON CONFLICT` collapses a video to one row per
+ * mandala regardless of cell anyway. Keeping per-cell copies here only
+ * inflated the Cohere document list and let cross-cell duplicates eat the
+ * top-N budget (measured: a 124-doc rerank → top-N 96 → 50 distinct rows).
  */
-export function groupByCellVideo<S extends RerankSlot>(slots: ReadonlyArray<S>): S[] {
-  const byKey = new Map<string, S>();
+export function groupByVideo<S extends RerankSlot>(slots: ReadonlyArray<S>): S[] {
+  const byVideo = new Map<string, S>();
   for (const s of slots) {
-    const key = `${s.cellIndex}:${s.videoId}`;
-    const existing = byKey.get(key);
+    const existing = byVideo.get(s.videoId);
     if (!existing || s.rec_score > existing.rec_score) {
-      byKey.set(key, s);
+      byVideo.set(s.videoId, s);
     }
   }
-  return Array.from(byKey.values()).sort((a, b) => b.rec_score - a.rec_score);
+  return Array.from(byVideo.values()).sort((a, b) => b.rec_score - a.rec_score);
 }
 
 export interface KeywordCandidate {
@@ -380,12 +381,12 @@ export async function applyHybridRerank<S extends RerankSlot>(
     return { slots: [], stats };
   }
 
-  const cellVideoDeduped = groupByCellVideo(semanticPool);
+  const videoDeduped = groupByVideo(semanticPool);
 
   // Build the document list for Cohere — title is the dominant signal (matches
   // YT-Navigator's `doc.page_content`); cell-context is added so the cross-encoder
   // distinguishes the same title across cells.
-  const documents = cellVideoDeduped.map((s) => s.title);
+  const documents = videoDeduped.map((s) => s.title);
   stats.afterDedupe = documents.length;
 
   let cohereRes: Awaited<ReturnType<typeof rerank>>;
@@ -410,14 +411,14 @@ export async function applyHybridRerank<S extends RerankSlot>(
       reason: stats.reason,
       err: stats.cohereError,
     });
-    return { slots: cellVideoDeduped, stats };
+    return { slots: videoDeduped, stats };
   }
 
   stats.cohereLatencyMs = cohereRes.latencyMs;
 
   if (cohereRes.results.length === 0) {
     stats.reason = 'no-candidates';
-    return { slots: cellVideoDeduped, stats };
+    return { slots: videoDeduped, stats };
   }
 
   // Normalize Cohere relevance_scores to 0–100 within this batch, then
@@ -437,7 +438,7 @@ export async function applyHybridRerank<S extends RerankSlot>(
   for (let i = 0; i < cohereRes.results.length; i++) {
     const r = cohereRes.results[i];
     if (!r) continue;
-    const slot = cellVideoDeduped[r.index];
+    const slot = videoDeduped[r.index];
     if (!slot) continue;
     const normScore = normalized[i] != null ? normalized[i]! / 100 : slot.rec_score;
     reorderedSlots.push({
