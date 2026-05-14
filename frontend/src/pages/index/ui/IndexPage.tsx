@@ -207,6 +207,14 @@ function AuthenticatedApp() {
     useMandalaStore.getState().setSelectedCell(navigation.selectedCellIndex);
   }, [navigation.selectedCellIndex]);
 
+  // Render-assigned ref mirroring navigation.selectedCellIndex. Native HTML5
+  // drop handlers fire outside React's render cycle — reading the value via a
+  // render closure can be stale on the first drop after a cell selection
+  // (symptom: first external-URL drop lands in Idea Spot instead of the cell).
+  // Same precedent as dndHandlersRef: assigned during render, never via useEffect.
+  const selectedCellIndexRef = useRef(navigation.selectedCellIndex);
+  selectedCellIndexRef.current = navigation.selectedCellIndex;
+
   // 5a. SSE card stream — subscribe to `recommendation_cache` +
   // `user_video_states` notifications. Stream cards are fed directly
   // into the card orchestrator so the grid renders recommendation_cache
@@ -931,17 +939,6 @@ function AuthenticatedApp() {
                   />
                 ) : (
                   <>
-                    {(() => {
-                      console.log('[DEBUG-SKELETON]', {
-                        isNewMandalaActive,
-                        totalCards: cards.totalCards,
-                        cardsIsLoading: cards.isLoading,
-                        displayCardsLen: cards.displayCards.length,
-                        justCreatedMandalaId,
-                        effectiveMandalaId,
-                      });
-                      return null;
-                    })()}
                     {isNewMandalaActive && cards.totalCards === 0 && effectiveMandalaId && (
                       <CardDiscoveryProgress mandalaId={effectiveMandalaId} isComplete={false} />
                     )}
@@ -976,8 +973,12 @@ function AuthenticatedApp() {
                       onDeleteCards={cards.handleDeleteCards}
                       onAddCard={navigation.selectedCellIndex != null ? handleAddCard : undefined}
                       onExternalUrlDrop={(url) => {
-                        if (navigation.selectedCellIndex != null) {
-                          cards.handleCardDrop(navigation.selectedCellIndex, url);
+                        // Read via render-assigned ref, not the closure — the
+                        // closure can be stale on the first drop after a cell
+                        // selection, silently routing to Idea Spot.
+                        const cellIndex = selectedCellIndexRef.current;
+                        if (cellIndex != null) {
+                          cards.handleCardDrop(cellIndex, url);
                         } else {
                           cards.handleScratchPadDrop(url);
                         }
