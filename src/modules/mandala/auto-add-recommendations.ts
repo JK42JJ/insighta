@@ -53,6 +53,7 @@ import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { VIDEO_DISCOVER_SKILL_TYPE } from '@/config/recommendations';
 import { notifyCardAdded, type CardPayload } from '@/modules/recommendations/publisher';
+import { recordTrace } from '@/modules/discover-tracing';
 
 const log = logger.child({ module: 'auto-add-recommendations' });
 
@@ -83,6 +84,7 @@ export async function maybeAutoAddRecommendations(
   mandalaId: string
 ): Promise<AutoAddResult> {
   const db = getPrismaClient();
+  const t0 = Date.now();
 
   // Opt-in gate: read auto_add from user_skill_config.config JSONB.
   // Default ON when row exists with enabled=true (the wizard fallback
@@ -364,6 +366,20 @@ export async function maybeAutoAddRecommendations(
   log.info(
     `auto-add complete user=${userId} mandala=${mandalaId} cells=${CELLS_PER_MANDALA} preserved=${totalPreserved} deleted=${totalDeleted} inserted=${totalInserted}`
   );
+
+  // CP457+ trace — auto-add → user_video_states summary. Caller's trace
+  // context (mandalaId/userId/runId) propagates here via AsyncLocalStorage.
+  recordTrace({
+    step: 'auto_add.user_video_states',
+    status: 'ok',
+    request: { mandalaId, userId, cellsExamined: CELLS_PER_MANDALA },
+    response: {
+      rowsPreserved: totalPreserved,
+      rowsDeleted: totalDeleted,
+      rowsInserted: totalInserted,
+    },
+    latencyMs: Date.now() - t0,
+  });
 
   return {
     ok: true,

@@ -102,6 +102,12 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
       - run: npx jest --testPathPattern=tests/smoke
+        env:
+          # billing smoke tests import webhook-handler / system-settings,
+          # which pull in config/index.ts zod validation (ENCRYPTION_SECRET
+          # is the only no-default required var). Other smoke tests don't
+          # hit this chain, so the var wasn't needed here before.
+          ENCRYPTION_SECRET: ${{ secrets.ENCRYPTION_SECRET }}
       - run: npm run build
 
   # Combined: build-frontend + a11y (saves 1 npm install + 1 vite build)

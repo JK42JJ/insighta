@@ -411,7 +411,12 @@ export async function consumePrecompute(
   // step3 will retry the same logic ~30s later as a safety net.
   try {
     const { maybeAutoAddRecommendations } = await import('./auto-add-recommendations');
-    const autoAddResult = await maybeAutoAddRecommendations(input.userId, input.mandalaId);
+    const { withTraceContext } = await import('@/modules/discover-tracing');
+    // CP457+ bind trace context for auto_add.user_video_states row.
+    const autoAddResult = await withTraceContext(
+      { mandalaId: input.mandalaId, userId: input.userId },
+      () => maybeAutoAddRecommendations(input.userId, input.mandalaId)
+    );
     log.info(
       `precompute consume → auto-add inline: ok=${autoAddResult.ok}` +
         (autoAddResult.ok

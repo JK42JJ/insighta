@@ -15,6 +15,7 @@
 import { getPrismaClient } from '@/modules/database';
 import { Prisma } from '@prisma/client';
 import { logger } from '@/utils/logger';
+import { recordTrace } from '@/modules/discover-tracing';
 
 const log = logger.child({ module: 'video-discover/v3/cache-matcher' });
 
@@ -83,6 +84,7 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
   const threshold = opts.threshold ?? DEFAULT_RELEVANCE_THRESHOLD;
   const sources = opts.sources ?? ['v2_promoted'];
   const db = getPrismaClient();
+  const t0 = Date.now();
 
   const rows = await db.$queryRaw<MatchRow[]>(Prisma.sql`
     WITH mandala_embs AS (
@@ -132,6 +134,29 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
   log.info(
     `cache match: mandala=${opts.mandalaId} lang=${opts.language} matches=${rows.length} threshold=${threshold}`
   );
+
+  // CP457+ trace — capture SQL inputs + per-cell row sample.
+  recordTrace({
+    step: 'tier1.match_from_video_pool',
+    status: 'ok',
+    request: {
+      mandalaId: opts.mandalaId,
+      language: opts.language,
+      sources,
+      threshold,
+      perCell,
+    },
+    response: {
+      row_count: rows.length,
+      rows: rows.slice(0, 60).map((r) => ({
+        videoId: r.video_id,
+        title: r.title,
+        cell_index: r.cell_index,
+        score: r.score,
+      })),
+    },
+    latencyMs: Date.now() - t0,
+  });
 
   return rows.map((r) => ({
     videoId: r.video_id,
@@ -214,6 +239,7 @@ export async function matchFromVideoPoolByCenterGoal(
   const threshold = opts.threshold ?? DEFAULT_RELEVANCE_THRESHOLD;
   const sources = opts.sources ?? ['v2_promoted'];
   const db = getPrismaClient();
+  const t0 = Date.now();
 
   // pgvector requires the literal vector cast — `${array}::vector` doesn't
   // resolve a JS array through Prisma's template parameter binding, so we
@@ -276,6 +302,30 @@ export async function matchFromVideoPoolByCenterGoal(
   log.info(
     `cache match (by center-goal): lang=${opts.language} sources=[${sources.join(',')}] threshold=${threshold} matches=${matches.length}`
   );
+
+  // CP457+ trace — ephemeral path Tier 1 SQL inputs + outcome.
+  recordTrace({
+    step: 'tier1.match_by_center_goal',
+    status: 'ok',
+    request: {
+      language: opts.language,
+      sources,
+      threshold,
+      limit,
+      centerEmbedding_dim: opts.centerEmbedding.length,
+      subGoals_count: opts.subGoals.length,
+    },
+    response: {
+      row_count: matches.length,
+      rows: matches.slice(0, 60).map((m) => ({
+        videoId: m.videoId,
+        title: m.title,
+        cell_index: m.cellIndex,
+        score: m.score,
+      })),
+    },
+    latencyMs: Date.now() - t0,
+  });
 
   return matches;
 }
