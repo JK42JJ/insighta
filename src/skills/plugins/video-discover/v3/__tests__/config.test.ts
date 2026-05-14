@@ -38,6 +38,7 @@ describe('loadV3Config', () => {
       enableRedisProvider: false, // PR-Y0g default (kill switch)
       tier1Sources: [...DEFAULT_TIER1_SOURCES], // CP457 default ['v2_promoted']
       semanticMinCosine: SEMANTIC_MIN_COSINE, // CP457 default 0.35 (mandala-filter.ts const)
+      tier2Overfetch: true, // overfetch default — Tier 2 always runs a full per-cell budget
     });
   });
 
@@ -111,6 +112,7 @@ describe('loadV3Config', () => {
       enableRedisProvider: false, // PR-Y0g default (kill switch)
       tier1Sources: [...DEFAULT_TIER1_SOURCES], // CP457 default ['v2_promoted']
       semanticMinCosine: SEMANTIC_MIN_COSINE, // CP457 default 0.35 (mandala-filter.ts const)
+      tier2Overfetch: true, // overfetch default — Tier 2 always runs a full per-cell budget
     });
   });
 
@@ -250,5 +252,17 @@ describe('loadV3Config', () => {
     // Explicit off / empty / unset all collapse to default false
     expect(loadV3Config({ V3_ENABLE_REDIS_PROVIDER: 'false' }).enableRedisProvider).toBe(false);
     expect(loadV3Config({ V3_ENABLE_REDIS_PROVIDER: '' }).enableRedisProvider).toBe(false);
+  });
+
+  test('V3_TIER2_OVERFETCH defaults true; explicit false reverts to deficit-fill', () => {
+    // Default unset → overfetch ON (Tier 2 always runs a full per-cell budget)
+    expect(loadV3Config({}).tier2Overfetch).toBe(true);
+    // Explicit re-affirm
+    expect(loadV3Config({ V3_TIER2_OVERFETCH: 'true' }).tier2Overfetch).toBe(true);
+    expect(loadV3Config({ V3_TIER2_OVERFETCH: '  TRUE  ' }).tier2Overfetch).toBe(true);
+    // Explicit false → rollback to deficit-fill behaviour
+    expect(loadV3Config({ V3_TIER2_OVERFETCH: 'false' }).tier2Overfetch).toBe(false);
+    // Empty string → booleanFlag treats as false (matches other flags' contract)
+    expect(loadV3Config({ V3_TIER2_OVERFETCH: '' }).tier2Overfetch).toBe(false);
   });
 });
