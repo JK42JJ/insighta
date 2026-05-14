@@ -5,7 +5,10 @@
  * user's subscriptions and playlists.
  */
 
+import { google } from 'googleapis';
 import { getPrismaClient } from '../database';
+import { config } from '@/config/index';
+import { logger } from '@/utils/logger';
 import { MS_PER_HOUR } from '@/utils/time-constants';
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
@@ -64,28 +67,66 @@ interface YouTubePlaylist {
 
 /**
  * Get user's YouTube access token from DB.
- * Returns null if not connected or token expired.
+ * If the stored access token is expired and a refresh token is present,
+ * performs an OAuth2 refresh, persists the new token, and returns it.
+ * Returns null if not connected or if the refresh fails.
  */
-async function getAccessToken(userId: string): Promise<string | null> {
+export async function getAccessToken(userId: string): Promise<string | null> {
   const prisma = getPrismaClient();
   const settings = await prisma.youtube_sync_settings.findUnique({
     where: { user_id: userId },
     select: {
       youtube_access_token: true,
       youtube_token_expires_at: true,
+      youtube_refresh_token: true,
     },
   });
 
   if (!settings?.youtube_access_token) return null;
 
-  if (
-    settings.youtube_token_expires_at &&
-    new Date(settings.youtube_token_expires_at) < new Date()
-  ) {
-    return null; // Token expired — frontend should trigger refresh via youtube-auth Edge Function
+  const isExpired =
+    settings.youtube_token_expires_at != null &&
+    new Date(settings.youtube_token_expires_at) < new Date();
+
+  if (!isExpired) {
+    return settings.youtube_access_token;
   }
 
-  return settings.youtube_access_token;
+  // Token is expired — attempt silent refresh if a refresh token is available.
+  if (!settings.youtube_refresh_token) {
+    return null; // Genuinely disconnected; no refresh possible.
+  }
+
+  try {
+    const oauth2Client = new google.auth.OAuth2(
+      config.youtube.clientId,
+      config.youtube.clientSecret,
+      config.youtube.redirectUri
+    );
+    oauth2Client.setCredentials({ refresh_token: settings.youtube_refresh_token });
+
+    const { credentials } = await oauth2Client.refreshAccessToken();
+    const newAccessToken = credentials.access_token ?? null;
+    const newExpiryDate = credentials.expiry_date ? new Date(credentials.expiry_date) : null;
+
+    if (!newAccessToken) {
+      logger.warn('YouTube token refresh returned no access_token', { userId });
+      return null;
+    }
+
+    await prisma.youtube_sync_settings.update({
+      where: { user_id: userId },
+      data: {
+        youtube_access_token: newAccessToken,
+        youtube_token_expires_at: newExpiryDate,
+      },
+    });
+
+    return newAccessToken;
+  } catch (err) {
+    logger.warn('YouTube OAuth token refresh failed', { userId, error: err });
+    return null;
+  }
 }
 
 /**
