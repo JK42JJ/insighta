@@ -37,6 +37,14 @@ const EMBED_TIMEOUT_MS = 60000;
 /** OpenRouter cost-logger module label (Issue #543 fallback path). */
 const OPENROUTER_FALLBACK_MODULE = 'iks-embed-fallback';
 /**
+ * OpenRouter embed transient-error retry policy (CP458).
+ * OpenRouter's /embeddings endpoint returns an intermittent HTTP 404
+ * — measured ~11% (8 err / 71 calls in 12h). The 404 is transient (the
+ * other 89% succeed), so 404 / 5xx / network errors are retried.
+ */
+const OPENROUTER_EMBED_MAX_RETRIES = 2;
+const OPENROUTER_EMBED_RETRY_BASE_MS = 500;
+/**
  * Embed chunk size — Mac Mini M4 handles ~50 texts in ~10s comfortably.
  * 456 texts in one call exceeds 60s timeout. Chunking gives predictable
  * per-call latency.
@@ -46,7 +54,13 @@ const DEFAULT_EMBED_CHUNK_SIZE = 50;
 export class EmbeddingError extends Error {
   constructor(
     message: string,
-    public readonly httpStatus?: number
+    public readonly httpStatus?: number,
+    /**
+     * True when the error is transient and a retry may succeed (network
+     * failure, HTTP 404 — see OPENROUTER_EMBED_* note — or 5xx). False for
+     * deterministic failures (auth, count/dimension mismatch).
+     */
+    public readonly retryable: boolean = false
   ) {
     super(message);
     this.name = 'EmbeddingError';
@@ -158,9 +172,21 @@ export async function embedBatch(
 async function embedOneChunk(texts: string[], opts: EmbeddingClientOptions): Promise<number[][]> {
   const provider = config.iksEmbed.provider;
   if (provider === 'openrouter') {
-    return embedOneChunkViaOpenRouter(texts, opts);
+    // OpenRouter primary (retry on transient errors) → Ollama fallback once
+    // retries are exhausted. Both produce 4096-d qwen3-embedding-8b vectors
+    // so a fallback chunk stays co-comparable with the rest of the batch.
+    try {
+      return await embedOneChunkViaOpenRouterRetrying(texts, opts);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      log.warn(
+        `OpenRouter embed failed after retries (chunk size=${texts.length}), falling back to Ollama: ${reason}`
+      );
+      return embedOneChunkViaOllama(texts, opts);
+    }
   }
-  // 'ollama' (default): Mac-mini first, OpenRouter fallback on transport/HTTP error.
+  // 'ollama' (default): Mac-mini first, OpenRouter (retrying) fallback on
+  // transport/HTTP error.
   try {
     return await embedOneChunkViaOllama(texts, opts);
   } catch (err) {
@@ -168,7 +194,7 @@ async function embedOneChunk(texts: string[], opts: EmbeddingClientOptions): Pro
     log.warn(
       `Ollama embed failed (chunk size=${texts.length}), falling back to OpenRouter: ${reason}`
     );
-    return embedOneChunkViaOpenRouter(texts, opts);
+    return embedOneChunkViaOpenRouterRetrying(texts, opts);
   }
 }
 
@@ -281,7 +307,8 @@ async function embedOneChunkViaOpenRouter(
       status: 'error',
       errorMessage: reason,
     });
-    throw new EmbeddingError(`OpenRouter embed call failed: ${reason}`);
+    // Network / timeout / abort — transient, safe to retry.
+    throw new EmbeddingError(`OpenRouter embed call failed: ${reason}`, undefined, true);
   }
   clearTimeout(timer);
 
@@ -300,7 +327,11 @@ async function embedOneChunkViaOpenRouter(
       status: 'error',
       errorMessage: errMsg,
     });
-    throw new EmbeddingError(errMsg, res.status);
+    // 404 is intermittent on OpenRouter /embeddings (~11%, CP458); 5xx is
+    // standard-transient. Both are retryable. 4xx-other (auth/bad request)
+    // is deterministic — not retryable.
+    const retryable = res.status === 404 || res.status >= 500;
+    throw new EmbeddingError(errMsg, res.status, retryable);
   }
 
   const data = (await res.json()) as {
@@ -339,6 +370,52 @@ async function embedOneChunkViaOpenRouter(
   });
 
   return vectors;
+}
+
+/** Promise-based sleep for retry backoff. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * `embedOneChunkViaOpenRouter` with bounded retry on transient errors.
+ *
+ * OpenRouter's /embeddings endpoint returns an intermittent HTTP 404
+ * ("404 page not found") — measured ~11% (8 err / 71 calls, 12h, CP458).
+ * It is transient, not endpoint-absent (the other 89% succeed), so
+ * `EmbeddingError.retryable` is set for 404 / 5xx / network errors and we
+ * retry up to OPENROUTER_EMBED_MAX_RETRIES with exponential backoff.
+ * Non-retryable errors (auth, count / dimension mismatch) throw at once.
+ *
+ * Rationale: a single un-retried 404 on any chunk used to fail the entire
+ * `embedBatch` — promote-from-playlists imported 197 rows with 0 embeddings
+ * because one of its 4 chunks hit the 404.
+ */
+async function embedOneChunkViaOpenRouterRetrying(
+  texts: string[],
+  opts: EmbeddingClientOptions
+): Promise<number[][]> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= OPENROUTER_EMBED_MAX_RETRIES; attempt++) {
+    try {
+      return await embedOneChunkViaOpenRouter(texts, opts);
+    } catch (err) {
+      lastErr = err;
+      const retryable = err instanceof EmbeddingError && err.retryable;
+      if (!retryable || attempt === OPENROUTER_EMBED_MAX_RETRIES) {
+        throw err;
+      }
+      const backoffMs = OPENROUTER_EMBED_RETRY_BASE_MS * 2 ** attempt;
+      log.warn(
+        `OpenRouter embed transient error (attempt ${attempt + 1}/${
+          OPENROUTER_EMBED_MAX_RETRIES + 1
+        }), retrying in ${backoffMs}ms: ${err instanceof Error ? err.message : String(err)}`
+      );
+      await sleep(backoffMs);
+    }
+  }
+  // Unreachable: the loop above either returns or throws. Satisfies TS.
+  throw lastErr;
 }
 
 // ============================================================================
