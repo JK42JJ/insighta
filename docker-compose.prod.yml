@@ -253,14 +253,18 @@ services:
       - V3_ENABLE_QUALITY_GATE=true
       - V3_MIN_VIEWS_PER_DAY=33
       # CP457 (2026-05-13) — domain idempotency fix per ssh-connect prod
-      # measurement: travel mandala 94d713f0 v2_promoted only = 13 rows
-      # across 8 cells; +batch_trend = 372 rows; cosine ≥ 0.5 admits 43.
-      # batch_trend ko gold+silver = 7,465 vs v2_promoted ko = 1,156
-      # (6.5x volume). Quality bar raise to 0.5 filters cross-domain
-      # near-matches (CP455 cell 6 = 28 토익스피킹 at cosine 0.55+).
-      # Rollback: remove both lines or comment out — backward compat
-      # defaults (['v2_promoted'], 0.35) restore CP456 behavior.
-      - V3_TIER1_SOURCES=v2_promoted,batch_trend
+      # CP458: batch_trend REMOVED from Tier 1 sources. EXPLAIN ANALYZE +
+      # per-mandala measurement on prod: with batch_trend the matchFromVideoPool
+      # cosine scans ~8.5k ko embeddings × 8 cells → 45-100s per run (the
+      # dominant wizard→dashboard latency). v2_promoted alone (1,156 ko rows)
+      # → ~0.3-2.7s for the SAME effective coverage: ko mandala 079148c3
+      # measured 37 rows/8 cells (v2_promoted) vs 40 rows/8 cells (+batch_trend)
+      # — +batch_trend bought 3 extra rows at a 16x latency cost. v2_promoted
+      # is also the cache-matcher.ts code default (batch_trend = untriaged
+      # cross-domain noise). Restructured query (eligible CTE first) makes the
+      # source filter actually shrink the cosine scan.
+      # Rollback: append ,batch_trend — but expect 45-100s Tier 1.
+      - V3_TIER1_SOURCES=v2_promoted
       - V3_SEMANTIC_MIN_COSINE=0.5
       # CP457+ — per-step request/response capture for video-discovery
       # (LLM prompts, YouTube search, Cohere rerank, embeddings, results).
