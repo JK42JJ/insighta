@@ -48,6 +48,7 @@ import { filterByQualityGate } from './quality-gate';
 import { applyHybridRerank } from './hybrid-rerank';
 import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
 import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
+import { resolveLanguage } from '@/utils/detect-language';
 
 import {
   buildRuleBasedQueriesSync,
@@ -187,7 +188,12 @@ export const executor: SkillExecutor = {
       if (r.center_goal && !centerGoal) centerGoal = r.center_goal;
     }
 
-    const language: KeywordLanguage = mandala.language === 'en' ? 'en' : 'ko';
+    // CP458: a stored 'ko'/'en' wins; otherwise detect from the goal text
+    // rather than blind-defaulting NULL → 'ko'. This is the chokepoint that
+    // feeds runSearchTraced's regionCode/relevanceLanguage AND the
+    // keyword-builder extraction path — getting it right here makes the
+    // YouTube search match the input language end-to-end.
+    const language: KeywordLanguage = resolveLanguage(mandala.language, centerGoal);
     const hydrated: HydratedState = {
       centerGoal,
       subGoals,
