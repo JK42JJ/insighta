@@ -52,4 +52,11 @@ export function invalidateCache(key?: string): void {
 // Well-known keys — centralize to avoid string typos at call sites.
 export const SETTING_KEYS = {
   BILLING_ENABLED: 'billing_enabled',
+  /**
+   * trend-collector LLM extraction model id (OpenRouter path).
+   * Stored value example: "anthropic/claude-haiku-4.5".
+   * Read by `src/skills/plugins/trend-collector/sources/llm-extract.ts`.
+   * Admin can override via PUT /api/v1/admin/settings/trend_extract_model.
+   */
+  TREND_EXTRACT_MODEL: 'trend_extract_model',
 } as const;

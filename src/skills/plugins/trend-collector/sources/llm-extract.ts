@@ -22,6 +22,7 @@
  */
 
 import { config } from '@/config/index';
+import { getSetting, SETTING_KEYS } from '@/modules/system-settings';
 
 const DEFAULT_OLLAMA_URL = 'http://100.91.173.17:11434';
 // Mac Mini installed models (verified 2026-04-07): llama3.1:latest (8B),
@@ -37,7 +38,33 @@ const REQUEST_TIMEOUT_MS = 60000; // per-chunk timeout
 // while provider='ollama'.
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_REQUEST_TIMEOUT_MS = 30_000;
-const OPENROUTER_DEFAULT_MODEL = 'qwen/qwen3-30b-a3b';
+// Hardcoded fallback default — applied only when neither opts.openRouterModel
+// nor system_settings 'trend_extract_model' resolves. Swapped from
+// qwen3-30b-a3b → claude-haiku-4.5 (2026-05-14): MoE Qwen produced about
+// 약어 잘림 (e.g. "마케"→"마케팅" 규칙 위반) and inconsistent JSON
+// fencing; Haiku 4.5 handles the Korean noun normalization + JSON
+// strict-mode prompt more reliably. Admin can override via
+// PUT /api/v1/admin/settings/trend_extract_model.
+const OPENROUTER_DEFAULT_MODEL = 'anthropic/claude-haiku-4.5';
+
+/**
+ * Resolve the OpenRouter model id at call time. Order:
+ *   1. system_settings 'trend_extract_model' (admin-editable)
+ *   2. OPENROUTER_DEFAULT_MODEL (hardcoded fallback)
+ *
+ * The system_settings read is wrapped in try/catch so a missing table
+ * (pre-DDL-apply) or any DB transient never breaks trend-collection — the
+ * hardcoded default still produces the same behaviour as before this
+ * resolver existed.
+ */
+async function resolveOpenRouterModel(): Promise<string> {
+  try {
+    const v = await getSetting<string>(SETTING_KEYS.TREND_EXTRACT_MODEL, OPENROUTER_DEFAULT_MODEL);
+    return typeof v === 'string' && v.length > 0 ? v : OPENROUTER_DEFAULT_MODEL;
+  } catch {
+    return OPENROUTER_DEFAULT_MODEL;
+  }
+}
 
 /**
  * Selects which LLM provider to hit per chunk.
@@ -306,7 +333,7 @@ async function extractOneChunkViaOpenRouter(
     throw new LlmExtractError('OpenRouter API key not configured');
   }
   const fetchFn = opts.fetchImpl ?? fetch;
-  const model = opts.openRouterModel ?? OPENROUTER_DEFAULT_MODEL;
+  const model = opts.openRouterModel ?? (await resolveOpenRouterModel());
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), OPENROUTER_REQUEST_TIMEOUT_MS);
