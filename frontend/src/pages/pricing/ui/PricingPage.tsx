@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { Check, ChevronDown, ChevronUp, Shield, Lock, RefreshCw, X, Sparkles } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
@@ -6,6 +7,10 @@ import { useRef, useState } from 'react';
 import { GradientBackground } from '@/pages/landing/ui/components/GradientBackground';
 import { LandingHeader } from '@/pages/landing/ui/components/LandingHeader';
 import { FooterSection } from '@/pages/landing/ui/components/FooterSection';
+import { useAuth } from '@/features/auth/model/useAuth';
+import { useBillingEnabled } from '@/features/billing/model/useBillingEnabled';
+import { toast } from '@/shared/lib/use-toast';
+import type { BillingPlanCode } from '@/shared/lib/api-client';
 
 const TOTAL_SPOTS = 100;
 const SPOTS_REMAINING = 47;
@@ -13,6 +18,33 @@ const SPOTS_TAKEN_PERCENT = ((TOTAL_SPOTS - SPOTS_REMAINING) / TOTAL_SPOTS) * 10
 
 export default function PricingPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { isLoggedIn } = useAuth();
+  // CP456 Phase 5 (strict gate): flag=false → CTA disabled regardless of role.
+  // Admins flip the flag from /admin/billing first.
+  const { data: flagData } = useBillingEnabled();
+  const billingFlagOn = flagData?.enabled === true;
+  const billingLocked = !billingFlagOn;
+
+  // CTA → /subscription with auto-checkout for the selected plan. Logged-out
+  // users go through /login first; the existing returnTo handler in LoginPage
+  // forwards them after auth so the SubscriptionPage useEffect can trigger the
+  // LS checkout overlay (CP456 Phase 4 auto-checkout flow).
+  const handlePlanCta = (planCode: BillingPlanCode) => {
+    if (billingLocked) {
+      toast({
+        title: t('billing.disabled.title'),
+        description: t('billing.disabled.desc'),
+      });
+      return;
+    }
+    const target = `/subscription?plan=${planCode}&autoCheckout=1`;
+    if (isLoggedIn) {
+      navigate(target);
+    } else {
+      navigate(`/login?returnTo=${encodeURIComponent(target)}`);
+    }
+  };
 
   return (
     <div className="relative min-h-screen bg-background">
@@ -87,9 +119,11 @@ export default function PricingPage() {
                   variant="outline"
                   size="lg"
                   className="w-full rounded-full py-6 text-base"
-                  disabled
+                  onClick={() => handlePlanCta('pro_monthly')}
+                  disabled={billingLocked}
+                  title={billingLocked ? t('billing.disabled.desc') : undefined}
                 >
-                  {t('pricing.monthlyCtaDisabled')}
+                  {billingLocked ? t('billing.disabled.cta') : t('pricing.monthlyCta')}
                 </Button>
               </div>
             </div>
@@ -139,8 +173,11 @@ export default function PricingPage() {
                 <Button
                   size="lg"
                   className="w-full rounded-full py-6 text-base bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-lg shadow-primary/20"
+                  onClick={() => handlePlanCta('pro_lifetime')}
+                  disabled={billingLocked}
+                  title={billingLocked ? t('billing.disabled.desc') : undefined}
                 >
-                  {t('pricing.ctaButton')}
+                  {billingLocked ? t('billing.disabled.cta') : t('pricing.ctaButton')}
                 </Button>
               </div>
             </div>

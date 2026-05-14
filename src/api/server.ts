@@ -28,6 +28,7 @@ import { sharingRoutes } from './routes/sharing';
 import { cardsRoutes } from './routes/cards';
 import { skillRoutes } from './routes/skills';
 import { copilotKitRoutes } from './routes/copilotkit';
+import { billingRoutes } from './routes/billing';
 import { internalBatchVideoCollectorRoutes } from './routes/internal/batch-video-collector';
 import { internalTrendCollectorRoutes } from './routes/internal/trend-collector';
 import { internalTranscriptRoutes } from './routes/internal/transcript';
@@ -297,6 +298,9 @@ export async function buildServer() {
 
       // Register CopilotKit runtime routes (AI chatbot)
       await instance.register(copilotKitRoutes, { prefix: '/chat' });
+
+      // Register billing routes (Lemon Squeezy — MoR subscription, CP456)
+      await instance.register(billingRoutes, { prefix: '/billing' });
 
       // Register admin routes (requires is_super_admin)
       await instance.register(adminRoutes, { prefix: '/admin' });

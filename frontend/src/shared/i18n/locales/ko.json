@@ -376,6 +376,10 @@
     "currentPlan": "현재 플랜",
     "upgrade": "업그레이드",
     "contactSales": "문의하기",
+    "currentUser": "{{name}} 님으로 로그인됨",
+    "recommended": "추천",
+    "urgency": "파이오니어 가격은 곧 월간 구독제로 전환됩니다.",
+    "checkoutInProgress": "결제 페이지로 이동 중…",
     "free": {
       "name": "무료",
       "description": "기본 기능을 무료로 사용하세요",
@@ -386,10 +390,24 @@
         "커뮤니티 지원"
       ]
     },
+    "ltd": {
+      "name": "파이오니어 평생 이용권",
+      "description": "1회 결제로 평생 사용",
+      "oneTime": "1회 결제",
+      "buy": "평생 이용권 구매",
+      "features": [
+        "만다라트 무제한 생성",
+        "AI 요약 (월 500회)",
+        "플레이리스트 동기화",
+        "평생 업데이트",
+        "우선 지원"
+      ]
+    },
     "pro": {
       "name": "프로",
       "description": "더 많은 기능으로 생산성을 높이세요",
       "popular": "인기",
+      "buy": "프로 구독",
       "features": [
         "만다라트 무제한 생성",
         "카드 무제한 저장",
@@ -408,6 +426,82 @@
         "API 접근",
         "전담 지원"
       ]
+    },
+    "toast": {
+      "alreadyProTitle": "이미 Pro 사용 중",
+      "alreadyProDesc": "플랜 변경 / 해지는 결제 관리에서 진행해 주세요.",
+      "lifetimeActiveTitle": "Lifetime 이용 중",
+      "lifetimeActiveDesc": "이미 평생 권한이 활성화되어 있습니다.",
+      "checkoutFailedTitle": "결제 시작 실패",
+      "checkoutFailedDesc": "결제 페이지를 여는 중 오류가 발생했습니다.",
+      "checkoutSuccessTitle": "Pro 구독 활성화 완료",
+      "checkoutSuccessDesc": "결제가 완료되었습니다.",
+      "alreadySubscribedTitle": "이미 구독 중",
+      "alreadySubscribedDesc": "활성 구독이 이미 존재합니다. 결제 관리 페이지로 이동합니다.",
+      "activationDelayedTitle": "결제 완료, 권한 적용 중",
+      "activationDelayedDesc": "결제는 정상 처리되었습니다. 권한 적용까지 잠시 시간이 걸릴 수 있습니다."
+    },
+    "footer": "결제는 Lemon Squeezy (Merchant of Record) 가 처리합니다. 한국 부가세 · 환율은 자동 정산됩니다. 구독은 결제 관리에서 언제든 해지할 수 있으며 다음 결제 주기까지 Pro 권한이 유지됩니다."
+  },
+  "billing": {
+    "status": {
+      "ACTIVE": "활성",
+      "PAST_DUE": "결제 실패 (재시도 중)",
+      "CANCELLED": "해지 예약",
+      "PAUSED": "일시 정지",
+      "EXPIRED": "만료",
+      "PENDING": "결제 처리 중"
+    },
+    "card": {
+      "currentSubscription": "현재 구독 중",
+      "planMonthly": "Pro Monthly",
+      "planYearly": "Pro Yearly",
+      "planLifetime": "Pioneer Lifetime",
+      "amount": "결제 금액",
+      "nextBillingDate": "다음 결제일",
+      "endingOn": "종료 예정",
+      "portalCta": "결제 관리",
+      "portalOpening": "결제 관리 열기…",
+      "portalFooter": "결제 수단 변경 · 해지는 Lemon Squeezy 결제 관리에서 진행됩니다.",
+      "portalErrorTitle": "결제 관리 열기 실패",
+      "portalErrorDesc": "결제 관리 페이지를 여는 중 오류가 발생했습니다."
+    },
+    "success": {
+      "heading": "플랜 준비하는 중",
+      "subline0": "결제 정보 확인 중",
+      "subline1": "구독 활성화 중",
+      "subline2": "Pro 권한 적용 중",
+      "subline3": "거의 다 됐어요",
+      "activeHeading": "Pro 구독 활성화 완료",
+      "activeReturn": "메인 페이지로 이동합니다…",
+      "timedOutTitle": "결제 처리 지연",
+      "timedOutDesc": "결제는 정상 처리되었지만 권한 적용까지 시간이 걸리고 있습니다. 잠시 후 새로고침 또는 플랜 페이지에서 확인해 주세요.",
+      "refresh": "새로고침",
+      "viewPlans": "플랜 보기"
+    },
+    "disabled": {
+      "title": "곧 출시 예정",
+      "desc": "결제 기능은 아직 일반 공개 전입니다. 조금만 기다려주세요!",
+      "cta": "곧 출시 예정"
+    },
+    "adminTestBadge": "관리자 테스트 모드"
+  },
+  "admin": {
+    "billing": {
+      "title": "결제 활성화 플래그",
+      "subtitle": "일반 사용자의 결제 가능 여부를 제어합니다. 관리자는 플래그 상태와 관계없이 항상 결제할 수 있습니다.",
+      "toggleLabel": "일반 사용자 결제 허용",
+      "toggleDesc": "OFF 인 동안에는 일반 사용자에게 '곧 출시 예정' 으로 표시되고, 관리자는 테스트 결제가 가능합니다.",
+      "statusOn": "활성화 (ON)",
+      "statusOff": "비활성화 (OFF)",
+      "behaviorOn": "ON: 모든 로그인 사용자가 /subscription · /pricing 에서 결제 가능.",
+      "behaviorOff": "OFF: 관리자만 결제 가능. 일반 사용자 CTA 는 비활성화 + '곧 출시 예정'.",
+      "savedToast": "저장 완료",
+      "enabledDesc": "결제가 모든 사용자에게 활성화되었습니다.",
+      "disabledDesc": "결제가 일반 사용자에게는 비활성화되었습니다 (관리자만 가능).",
+      "errorToast": "저장 실패",
+      "kycNoteTitle": "KYC 승인 후에만 실제 결제 가능",
+      "kycNoteDesc": "Lemon Squeezy Identity Verification 완료 + Live 모드 전환이 선행되어야 합니다. KYC In Review 상태에서는 테스트 모드 결제만 동작합니다."
     }
   },
   "youtube": {
@@ -1112,9 +1206,9 @@
     "ltdDesc": "한 번 결제, 영원히 사용",
     "monthlyName": "월 구독",
     "monthlyDesc": "일반 구독 플랜",
-    "monthlyPrice": "$19.90",
+    "monthlyPrice": "$9",
     "monthlyPeriod": "월",
-    "monthlyAnnual": "연 $238.80",
+    "monthlyAnnual": "연 $108",
     "monthlyFeatures": [
       "만다라트 3개",
       "AI 요약 (월 100회)",
@@ -1123,6 +1217,7 @@
     ],
     "monthlyTrial": "14일 무료 체험",
     "monthlyCtaDisabled": "곧 출시 예정",
+    "monthlyCta": "월 구독 시작",
     "compareTitle": "플랜 비교",
     "compareFeature": "기능",
     "compareRows": [
@@ -1152,9 +1247,14 @@
         "ltd": "true"
       },
       {
-        "feature": "1년 총 비용",
-        "monthly": "$238.80",
+        "feature": "1년차 비용",
+        "monthly": "$108",
         "ltd": "$99"
+      },
+      {
+        "feature": "이후 매년",
+        "monthly": "$108",
+        "ltd": "무료"
       }
     ],
     "faqTitle": "자주 묻는 질문",
@@ -1168,7 +1268,7 @@
     "faq4a": "Pioneer 평생 이용권 구매자는 원래 가격으로 평생 이용이 유지됩니다. 월 구독은 $19.90/월부터 시작됩니다. 모든 신규 가입자에게 14일간 Pro 기능 무료 체험이 제공됩니다.",
     "socialProof": "이미 {{count}}명의 Pioneer가 함께합니다",
     "saveLabel": "58% 절약",
-    "monthlyComparison": "월구독 대비 연 $238 절약",
+    "monthlyComparison": "한 번 결제로 매년 $108 절약 · 평생",
     "trustGuarantee": "30일 환불",
     "trustSecure": "안전한 결제",
     "trustUpdates": "평생 업데이트"

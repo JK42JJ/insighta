@@ -1480,6 +1480,18 @@ model billing_subscriptions {
   @@schema("public")
 }
 
+/// Generic key-value runtime config for admin-toggleable flags.
+/// First use: `billing_enabled` (CP456 Phase 5 — admin-gated billing launch).
+/// Raw DDL: prisma/migrations/system-settings/001_system_settings.sql.
+model system_settings {
+  key        String   @id @db.Text
+  value      Json     @db.JsonB
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_by String?  @db.Uuid
+
+  @@schema("public")
+}
+
 /// Webhook event ledger for idempotency + audit. Every LS webhook lands here
 /// (signature_ok=true/false) before billing_subscriptions transitions.
 /// Raw DDL: prisma/migrations/billing/002_billing_events.sql.

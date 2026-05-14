@@ -93,4 +93,10 @@ export const queryKeys = {
     all: ['video'] as const,
     richSummary: (videoId: string) => [...queryKeys.video.all, 'rich-summary', videoId] as const,
   },
+  billing: {
+    all: ['billing'] as const,
+    me: () => [...queryKeys.billing.all, 'me'] as const,
+    portal: () => [...queryKeys.billing.all, 'portal'] as const,
+    featureFlag: () => [...queryKeys.billing.all, 'feature-flag'] as const,
+  },
 } as const;

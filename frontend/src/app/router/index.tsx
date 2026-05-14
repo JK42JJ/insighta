@@ -12,6 +12,7 @@ import { AdminAnalytics } from '@/pages/admin/ui/AdminAnalytics';
 import { AdminPayments } from '@/pages/admin/ui/AdminPayments';
 import { AdminModeration } from '@/pages/admin/ui/AdminModeration';
 import { AdminHealth } from '@/pages/admin/ui/AdminHealth';
+import { AdminBilling } from '@/pages/admin/ui/AdminBilling';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -21,6 +22,7 @@ const MandalaDashboardPage = lazy(() => import('@/pages/mandala-dashboard'));
 const MandalaEditorPage = lazy(() => import('@/pages/mandala-editor'));
 const MandalasPage = lazy(() => import('@/pages/mandalas'));
 const SubscriptionPage = lazy(() => import('@/pages/subscription'));
+const BillingSuccessPage = lazy(() => import('@/pages/billing-success'));
 const SettingsPage = lazy(() => import('@/pages/settings'));
 const PrivacyPage = lazy(() => import('@/pages/privacy'));
 const TermsPage = lazy(() => import('@/pages/terms'));
@@ -112,6 +114,14 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/billing/success"
+          element={
+            <ProtectedRoute>
+              <BillingSuccessPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
@@ -132,6 +142,7 @@ export function AppRouter() {
           <Route path="moderation" element={<AdminModeration />} />
           <Route path="promotions" element={<AdminPromotions />} />
           <Route path="payments" element={<AdminPayments />} />
+          <Route path="billing" element={<AdminBilling />} />
           <Route path="health" element={<AdminHealth />} />
           <Route path="audit-log" element={<AdminAuditLog />} />
         </Route>

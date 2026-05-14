@@ -1,5 +1,16 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Users, ArrowLeft, Gift, ScrollText, BarChart3, CreditCard, Shield, HeartPulse } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Users,
+  ArrowLeft,
+  Gift,
+  ScrollText,
+  BarChart3,
+  CreditCard,
+  Shield,
+  HeartPulse,
+  ToggleRight,
+} from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
 const NAV_ITEMS = [
@@ -9,6 +20,7 @@ const NAV_ITEMS = [
   { to: '/admin/moderation', icon: Shield, label: 'Moderation' },
   { to: '/admin/promotions', icon: Gift, label: 'Promotions' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
+  { to: '/admin/billing', icon: ToggleRight, label: 'Billing Flag' },
   { to: '/admin/health', icon: HeartPulse, label: 'Health' },
   { to: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },
 ] as const;

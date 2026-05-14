@@ -20,6 +20,7 @@ interface ApiError {
   statusCode: number;
   code?: string;
   error?: string;
+  details?: Record<string, unknown>;
 }
 
 interface User {
@@ -66,6 +67,34 @@ interface Note {
   timestamp?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── CP456 Billing (Lemon Squeezy) types ───────────────────────────────────
+
+export type BillingPlanCode = 'pro_monthly' | 'pro_yearly' | 'pro_lifetime';
+export type BillingTier = 'free' | 'pro' | 'lifetime' | 'admin';
+export type BillingSubscriptionStatus =
+  | 'PENDING'
+  | 'ACTIVE'
+  | 'PAST_DUE'
+  | 'CANCELLED'
+  | 'EXPIRED'
+  | 'PAUSED';
+
+export interface BillingSubscriptionSummary {
+  id: string;
+  planCode: string;
+  status: BillingSubscriptionStatus;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  amountCents: number;
+  currency: string;
+}
+
+export interface BillingSubscriptionMeResponse {
+  tier: BillingTier;
+  subscription: BillingSubscriptionSummary | null;
 }
 
 export interface VideoRichSummaryChapter {
@@ -368,13 +397,20 @@ interface MandalaLevelBody {
 export class ApiHttpError extends Error {
   public readonly statusCode: number;
   public readonly code: string | undefined;
+  public readonly details: Record<string, unknown> | undefined;
   public readonly isTransient: boolean;
 
-  constructor(message: string, statusCode: number, code?: string) {
+  constructor(
+    message: string,
+    statusCode: number,
+    code?: string,
+    details?: Record<string, unknown>
+  ) {
     super(message);
     this.name = 'ApiHttpError';
     this.statusCode = statusCode;
     this.code = code;
+    this.details = details;
     this.isTransient = statusCode === 429 || statusCode >= 500;
   }
 }
@@ -541,19 +577,32 @@ class ApiClient {
 
   private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
-      let error: ApiError;
+      let raw: unknown;
       try {
-        error = await response.json();
+        raw = await response.json();
       } catch {
-        error = {
+        raw = {
           message: 'An unexpected error occurred',
           statusCode: response.status,
-        };
+        } as ApiError;
       }
+      // BE returns standardized errors as `{ error: { code, message, details, ... } }`
+      // (see common.schema.ts createErrorResponse). Unwrap when present so the
+      // client surfaces the BE-provided message/code/details rather than the
+      // outer envelope's undefined fields.
+      const flat: ApiError =
+        raw &&
+        typeof raw === 'object' &&
+        'error' in raw &&
+        typeof (raw as { error: unknown }).error === 'object' &&
+        (raw as { error: unknown }).error !== null
+          ? ((raw as { error: ApiError }).error as ApiError)
+          : (raw as ApiError);
       throw new ApiHttpError(
-        error.message || `HTTP Error: ${response.status}`,
-        error.statusCode || response.status,
-        error.code
+        flat.message || `HTTP Error: ${response.status}`,
+        flat.statusCode || response.status,
+        flat.code,
+        flat.details
       );
     }
 
@@ -755,6 +804,87 @@ class ApiClient {
       `/mandalas/${mandalaId}/rich-summary-trigger`,
       { method: 'POST', body: JSON.stringify({}) }
     );
+  }
+
+  // ─── CP456 Billing (Lemon Squeezy, MoR subscription) ──────────────────────
+
+  /**
+   * Create a Lemon Squeezy hosted checkout URL for the current user.
+   * BE: POST /api/v1/billing/checkout.
+   * 503 when billing not configured (LEMONSQUEEZY_* env unset).
+   */
+  async createBillingCheckout(input: {
+    planCode: BillingPlanCode;
+    successUrl?: string;
+    /** When true, LS overlay renders in dark theme (matches user's site theme). */
+    dark?: boolean;
+    /** ISO locale ('ko' / 'en') for LS hosted checkout — matches i18n.language. */
+    locale?: string;
+  }): Promise<{ checkoutUrl: string; expiresAt: string | null; planCode: string }> {
+    const res = await this.request<{
+      success: boolean;
+      data: { checkoutUrl: string; expiresAt: string | null; planCode: string };
+    }>('/billing/checkout', { method: 'POST', body: JSON.stringify(input) });
+    return res.data;
+  }
+
+  /**
+   * Current user's billing subscription state.
+   * BE: GET /api/v1/billing/subscriptions/me.
+   * Returns `subscription: null` when no active row — distinguishes "no plan yet" from error.
+   */
+  async getMyBillingSubscription(): Promise<BillingSubscriptionMeResponse> {
+    const res = await this.request<{ success: boolean; data: BillingSubscriptionMeResponse }>(
+      '/billing/subscriptions/me'
+    );
+    return res.data;
+  }
+
+  /**
+   * LS customer portal URL (signed, ~24h validity). 404 when no active subscription.
+   * BE: GET /api/v1/billing/portal.
+   */
+  async getBillingPortalUrl(): Promise<{ portalUrl: string }> {
+    const res = await this.request<{ success: boolean; data: { portalUrl: string } }>(
+      '/billing/portal'
+    );
+    return res.data;
+  }
+
+  /**
+   * Public billing feature flag (CP456 Phase 5).
+   * BE: GET /api/v1/billing/feature-flag (no auth).
+   * `enabled=false` → general users see "coming soon" CTA; admins bypass at FE/BE.
+   */
+  async getBillingFeatureFlag(): Promise<{ enabled: boolean }> {
+    const res = await this.request<{ success: boolean; data: { enabled: boolean } }>(
+      '/billing/feature-flag'
+    );
+    return res.data;
+  }
+
+  /**
+   * Update a system_settings key (admin only). CP456 Phase 5.
+   * BE: PUT /api/v1/admin/settings/:key.
+   */
+  async setSystemSetting(key: string, value: unknown): Promise<{ key: string; value: unknown }> {
+    const res = await this.request<{
+      success: boolean;
+      data: { key: string; value: unknown };
+    }>(`/admin/settings/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value }),
+    });
+    return res.data;
+  }
+
+  /** Read a system_settings key (admin only). */
+  async getSystemSetting(key: string): Promise<{ key: string; value: unknown }> {
+    const res = await this.request<{
+      success: boolean;
+      data: { key: string; value: unknown };
+    }>(`/admin/settings/${encodeURIComponent(key)}`);
+    return res.data;
   }
 
   // ─── CP445 Note Documents (note mode TipTap doc per-mandala) ──────────────

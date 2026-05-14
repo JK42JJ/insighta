@@ -1099,7 +1099,10 @@
   color: hsl(var(--muted-foreground) / 0.55) !important;
 }
 
-.copilotkit-chat-wrapper .copilotKitMessages *:not(textarea):not(input):not(button) {
+/* Inherit applies to assistant messages only — user bubbles must keep
+   their CopilotKit `--copilot-kit-contrast-color` so text stays visible
+   on the bright primary background. */
+.copilotkit-chat-wrapper .copilotKitMessages .copilotKitAssistantMessage *:not(textarea):not(input):not(button) {
   color: inherit !important;
 }
 
@@ -1158,4 +1161,12 @@
 }
 .copilotkit-chat-wrapper .chat-ts:hover {
   opacity: 0.7;
+}
+
+/* CP456: LS overlay backdrop dark mode override.
+   Lemon.js sets inline style `background: rgba(255,255,255,0.9)` on
+   `.lemonsqueezy-loader` div. We force dark when Insighta is in dark mode.
+   The hosted checkout iframe itself remains LS-styled (LS domain, no CSS access). */
+html.dark .lemonsqueezy-loader {
+  background: rgba(0, 0, 0, 0.9) !important;
 }

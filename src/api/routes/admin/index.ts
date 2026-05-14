@@ -6,7 +6,9 @@ import { adminStatsRoutes } from './stats';
 import { adminPromotionRoutes } from './promotions';
 import { adminAuditRoutes } from './audit';
 import { adminRedemptionRoutes, adminBulkRoutes } from './redemption';
-import { adminPaymentRoutes, stripeWebhookRoutes } from './payments';
+// Stripe scaffold moved to payments.legacy.ts on 2026-05-13 (superseded by
+// Lemon Squeezy under /api/v1/billing/*). See payments.legacy.ts header.
+// import { adminPaymentRoutes, stripeWebhookRoutes } from './payments';
 import { adminAnalyticsRoutes } from './analytics';
 import { adminContentRoutes } from './content';
 import { adminReportRoutes } from './reports';
@@ -17,6 +19,7 @@ import { adminClawbotRoutes } from './clawbot';
 import { adminEnrichmentSchedulerRoutes } from './enrichment-scheduler';
 import { adminChatbotRoutes } from './chatbot';
 import { adminQualityMetricsRoutes } from './quality-metrics';
+import { adminSystemSettingsRoutes } from './system-settings';
 import { adminDiscoverTracesRoutes } from './discover-traces';
 
 /**
@@ -38,7 +41,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminAnalyticsRoutes, { prefix: '/analytics' });
   await fastify.register(adminContentRoutes, { prefix: '/content' });
   await fastify.register(adminReportRoutes, { prefix: '/reports' });
-  await fastify.register(adminPaymentRoutes, { prefix: '/payments' });
+  // Stripe scaffold de-registered 2026-05-13 (see payments.legacy.ts).
+  // await fastify.register(adminPaymentRoutes, { prefix: '/payments' });
   await fastify.register(adminHealthRoutes, { prefix: '/health' });
   await fastify.register(adminLlmRoutes, { prefix: '/llm' });
   await fastify.register(adminEnrichmentRoutes, { prefix: '/enrichment' });
@@ -46,6 +50,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminEnrichmentSchedulerRoutes, { prefix: '/enrichment-scheduler' });
   await fastify.register(adminChatbotRoutes, { prefix: '/chatbot' });
   await fastify.register(adminQualityMetricsRoutes, { prefix: '/quality-metrics' });
+  await fastify.register(adminSystemSettingsRoutes, { prefix: '/settings' });
   await fastify.register(adminDiscoverTracesRoutes, { prefix: '/discover-traces' });
-  await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
+  // await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }

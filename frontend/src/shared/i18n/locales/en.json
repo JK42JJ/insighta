@@ -375,6 +375,10 @@
     "currentPlan": "Current Plan",
     "upgrade": "Upgrade",
     "contactSales": "Contact Sales",
+    "currentUser": "Logged in as {{name}}",
+    "recommended": "Recommended",
+    "urgency": "Pioneer pricing will transition to monthly subscription soon.",
+    "checkoutInProgress": "Opening checkout…",
     "free": {
       "name": "Free",
       "description": "Get started with basic features",
@@ -385,10 +389,17 @@
         "Community support"
       ]
     },
+    "ltd": {
+      "name": "Pioneer Lifetime",
+      "description": "One-time payment, lifetime access",
+      "oneTime": "One-time payment",
+      "buy": "Get Lifetime Access"
+    },
     "pro": {
       "name": "Pro",
       "description": "Boost productivity with more features",
       "popular": "Popular",
+      "buy": "Subscribe to Pro",
       "features": [
         "Unlimited mandalas",
         "Unlimited cards",
@@ -407,6 +418,82 @@
         "API access",
         "Dedicated support"
       ]
+    },
+    "toast": {
+      "alreadyProTitle": "Already on Pro",
+      "alreadyProDesc": "Use the billing portal to change or cancel your plan.",
+      "lifetimeActiveTitle": "Lifetime plan active",
+      "lifetimeActiveDesc": "You already have lifetime access.",
+      "checkoutFailedTitle": "Checkout failed to open",
+      "checkoutFailedDesc": "An error occurred while opening the checkout page.",
+      "checkoutSuccessTitle": "Pro subscription activated",
+      "checkoutSuccessDesc": "Your payment was successful.",
+      "alreadySubscribedTitle": "Already subscribed",
+      "alreadySubscribedDesc": "An active subscription already exists. Opening the billing portal.",
+      "activationDelayedTitle": "Payment complete, activating",
+      "activationDelayedDesc": "Your payment was processed. It may take a moment for access to apply."
+    },
+    "footer": "Billing is processed by Lemon Squeezy (Merchant of Record). VAT and currency conversion are handled automatically. You can cancel anytime in the billing portal; Pro access continues until the end of your billing period."
+  },
+  "billing": {
+    "status": {
+      "ACTIVE": "Active",
+      "PAST_DUE": "Past due (retrying)",
+      "CANCELLED": "Scheduled to cancel",
+      "PAUSED": "Paused",
+      "EXPIRED": "Expired",
+      "PENDING": "Processing"
+    },
+    "card": {
+      "currentSubscription": "Currently subscribed",
+      "planMonthly": "Pro Monthly",
+      "planYearly": "Pro Yearly",
+      "planLifetime": "Pioneer Lifetime",
+      "amount": "Amount",
+      "nextBillingDate": "Next billing date",
+      "endingOn": "Ends on",
+      "portalCta": "Manage billing",
+      "portalOpening": "Opening billing portal…",
+      "portalFooter": "Update payment method or cancel from the Lemon Squeezy billing portal.",
+      "portalErrorTitle": "Failed to open billing portal",
+      "portalErrorDesc": "An error occurred while opening the billing portal."
+    },
+    "success": {
+      "heading": "Preparing your plan",
+      "subline0": "Verifying payment",
+      "subline1": "Activating subscription",
+      "subline2": "Applying Pro access",
+      "subline3": "Almost there",
+      "activeHeading": "Pro subscription activated",
+      "activeReturn": "Returning to your workspace…",
+      "timedOutTitle": "Activation delayed",
+      "timedOutDesc": "Your payment was processed but access is taking a bit longer to apply. Please refresh or check the Plans page in a moment.",
+      "refresh": "Refresh",
+      "viewPlans": "View plans"
+    },
+    "disabled": {
+      "title": "Coming soon",
+      "desc": "Billing is not yet available for general users. Stay tuned!",
+      "cta": "Coming soon"
+    },
+    "adminTestBadge": "Admin test mode"
+  },
+  "admin": {
+    "billing": {
+      "title": "Billing launch flag",
+      "subtitle": "Controls whether general users can purchase. Admins can always check out regardless of this flag.",
+      "toggleLabel": "Allow general user checkout",
+      "toggleDesc": "While OFF, general users see 'Coming soon' on plan CTAs; admins can still complete test purchases.",
+      "statusOn": "Enabled (ON)",
+      "statusOff": "Disabled (OFF)",
+      "behaviorOn": "ON: every logged-in user can check out from /subscription and /pricing.",
+      "behaviorOff": "OFF: only admins can check out. General-user CTAs are disabled with 'Coming soon'.",
+      "savedToast": "Saved",
+      "enabledDesc": "Billing enabled for all users.",
+      "disabledDesc": "Billing disabled for general users (admin-only).",
+      "errorToast": "Save failed",
+      "kycNoteTitle": "Real charges require KYC approval",
+      "kycNoteDesc": "Lemon Squeezy Identity Verification must be approved and the store flipped to Live mode. While KYC is In Review only test-mode checkouts succeed."
     }
   },
   "youtube": {
@@ -1111,9 +1198,9 @@
     "ltdDesc": "Pay once, use forever",
     "monthlyName": "Monthly",
     "monthlyDesc": "Standard subscription plan",
-    "monthlyPrice": "$19.90",
+    "monthlyPrice": "$9",
     "monthlyPeriod": "mo",
-    "monthlyAnnual": "$238.80/year",
+    "monthlyAnnual": "$108/year",
     "monthlyFeatures": [
       "Up to 3 mandalas",
       "AI summaries (100/month)",
@@ -1122,6 +1209,7 @@
     ],
     "monthlyTrial": "14-day free trial",
     "monthlyCtaDisabled": "Available soon",
+    "monthlyCta": "Start monthly plan",
     "compareTitle": "Compare Plans",
     "compareFeature": "Feature",
     "compareRows": [
@@ -1151,9 +1239,14 @@
         "ltd": "true"
       },
       {
-        "feature": "Total Cost (1yr)",
-        "monthly": "$238.80",
+        "feature": "First year",
+        "monthly": "$108",
         "ltd": "$99"
+      },
+      {
+        "feature": "Every year after",
+        "monthly": "$108",
+        "ltd": "Free"
       }
     ],
     "faqTitle": "Frequently Asked Questions",
@@ -1167,7 +1260,7 @@
     "faq4a": "Pioneer LTD holders keep their lifetime access at the original price. Monthly plans will start at $19.90/mo. All new users get a 14-day free trial with full Pro features.",
     "socialProof": "{{count}} pioneers have already joined",
     "saveLabel": "Save 58%",
-    "monthlyComparison": "vs $238/yr on monthly",
+    "monthlyComparison": "Pay once, save $108/year · Lifetime",
     "trustGuarantee": "30-day refund",
     "trustSecure": "Secure checkout",
     "trustUpdates": "Lifetime updates"
