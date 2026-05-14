@@ -28,7 +28,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
-import { config } from '@/config';
+import { config } from '@/config/index';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 
