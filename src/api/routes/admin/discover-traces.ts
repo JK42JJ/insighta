@@ -6,13 +6,15 @@
  * pipeline behaviour: LLM prompts, YouTube search queries, Cohere rerank
  * input/output, embedding batches, etc.
  *
- * Requires is_super_admin (parent plugin enforces).
+ * All routes guarded by fastify.authenticate + fastify.authenticateAdmin.
  */
 
 import { FastifyPluginCallback } from 'fastify';
 import { getPrismaClient } from '@/modules/database';
 
 export const adminDiscoverTracesRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
+  const adminAuth = { onRequest: [fastify.authenticate, fastify.authenticateAdmin] };
+
   /**
    * GET /api/v1/admin/discover-traces/by-mandala/:mandalaId
    *
@@ -20,6 +22,7 @@ export const adminDiscoverTracesRoutes: FastifyPluginCallback = (fastify, _opts,
    */
   fastify.get<{ Params: { mandalaId: string } }>(
     '/by-mandala/:mandalaId',
+    adminAuth,
     async (request, reply) => {
       const prisma = getPrismaClient();
       const rows = await prisma.video_discover_traces.findMany({
@@ -49,15 +52,19 @@ export const adminDiscoverTracesRoutes: FastifyPluginCallback = (fastify, _opts,
   /**
    * GET /api/v1/admin/discover-traces/by-run/:runId — fetch one execution.
    */
-  fastify.get<{ Params: { runId: string } }>('/by-run/:runId', async (request, reply) => {
-    const prisma = getPrismaClient();
-    const rows = await prisma.video_discover_traces.findMany({
-      where: { run_id: request.params.runId },
-      orderBy: { created_at: 'asc' },
-      take: 5000,
-    });
-    return reply.send({ runId: request.params.runId, count: rows.length, traces: rows });
-  });
+  fastify.get<{ Params: { runId: string } }>(
+    '/by-run/:runId',
+    adminAuth,
+    async (request, reply) => {
+      const prisma = getPrismaClient();
+      const rows = await prisma.video_discover_traces.findMany({
+        where: { run_id: request.params.runId },
+        orderBy: { created_at: 'asc' },
+        take: 5000,
+      });
+      return reply.send({ runId: request.params.runId, count: rows.length, traces: rows });
+    }
+  );
 
   /**
    * GET /api/v1/admin/discover-traces/recent?user_id=...&limit=N
@@ -65,6 +72,7 @@ export const adminDiscoverTracesRoutes: FastifyPluginCallback = (fastify, _opts,
    */
   fastify.get<{ Querystring: { user_id?: string; limit?: string } }>(
     '/recent',
+    adminAuth,
     async (request, reply) => {
       const userId = request.query.user_id;
       const limit = Math.min(Number(request.query.limit ?? '500') || 500, 5000);
