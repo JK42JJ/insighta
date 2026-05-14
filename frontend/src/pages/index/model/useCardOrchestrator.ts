@@ -317,8 +317,16 @@ export function useCardOrchestrator(
   // Merged scratchpad (deduplicate by normalized URL)
   const scratchPadCards = useMemo(() => {
     const persistedUrls = new Set(persistedLocalCards.map((c) => normalizeUrl(c.videoUrl)));
+    // Only pending cards that are actually scratchpad-bound. A cell-targeted
+    // pending card (cellIndex >= 0 + real levelId) is mid-persist into a cell —
+    // including it here would flash it in Idea Spot until the write settles.
     const filteredPending = pendingLocalCards.filter(
-      (c) => !persistedUrls.has(normalizeUrl(c.videoUrl))
+      (c) =>
+        !persistedUrls.has(normalizeUrl(c.videoUrl)) &&
+        (typeof c.cellIndex !== 'number' ||
+          c.cellIndex < 0 ||
+          !c.levelId ||
+          c.levelId === 'scratchpad')
     );
     const merged = [...ideationVideoCards, ...scratchpadLocalCards, ...filteredPending];
     const seen = new Set<string>();
@@ -931,16 +939,80 @@ export function useCardOrchestrator(
             return;
           }
 
-          // Duplicate check: normalized URL already exists in persisted or pending cards
+          // Duplicate handling: if the URL already exists in the collection,
+          // don't blindly block. An Idea Spot / unplaced copy should MOVE into
+          // the target cell (the user dragged it here on purpose); only a card
+          // already placed in a real cell is a true "already added" no-op.
           const normalized = normalizeUrl(url);
-          const isDuplicate =
-            persistedLocalCards.some((c) => normalizeUrl(c.videoUrl) === normalized) ||
-            pendingLocalCards.some((c) => normalizeUrl(c.videoUrl) === normalized);
-          if (isDuplicate) {
-            toast({
-              title: t('index.duplicateCard'),
-              description: t('index.duplicateCardDesc'),
-            });
+          const existing =
+            syncedCards.find((c) => normalizeUrl(c.videoUrl) === normalized) ??
+            persistedLocalCards.find((c) => normalizeUrl(c.videoUrl) === normalized) ??
+            pendingLocalCards.find((c) => normalizeUrl(c.videoUrl) === normalized);
+          if (existing) {
+            const isPlaced =
+              typeof existing.cellIndex === 'number' &&
+              existing.cellIndex >= 0 &&
+              !!existing.levelId &&
+              existing.levelId !== 'scratchpad';
+            if (isPlaced) {
+              toast({
+                title: t('index.duplicateCard'),
+                description: t('index.duplicateCardDesc'),
+              });
+              return;
+            }
+            // Unplaced / Idea Spot card — relocate it into the target cell.
+            const source = detectCardSource(
+              existing.id,
+              syncedCards,
+              persistedLocalCards,
+              existing
+            );
+            const onMoveSuccess = () => {
+              toast({
+                title: t('index.cardMoved'),
+                description: t('index.movedToCell', {
+                  subject: currentLevel.subjects[cellIndex],
+                }),
+              });
+            };
+            const onMoveError = (error: unknown) => {
+              toast({
+                title: t('index.moveFailed'),
+                description: error instanceof Error ? error.message : t('index.moveFailedDesc'),
+                variant: 'destructive',
+              });
+            };
+            if (source === 'synced') {
+              updateVideoState.mutate(
+                {
+                  videoStateId: existing.id,
+                  updates: {
+                    is_in_ideation: false,
+                    cell_index: cellIndex,
+                    level_id: currentLevelId,
+                    mandala_id: mandalaId,
+                  },
+                },
+                { onSuccess: onMoveSuccess, onError: onMoveError }
+              );
+            } else if (source === 'local') {
+              updateLocalCard({
+                id: existing.id,
+                cell_index: cellIndex,
+                level_id: currentLevelId,
+                mandala_id: mandalaId,
+              })
+                .then(onMoveSuccess)
+                .catch(onMoveError);
+            } else {
+              // 'pending' — not persisted yet; it will land via its own
+              // in-flight write. Surface the duplicate notice, no-op here.
+              toast({
+                title: t('index.duplicateCard'),
+                description: t('index.duplicateCardDesc'),
+              });
+            }
             return;
           }
 

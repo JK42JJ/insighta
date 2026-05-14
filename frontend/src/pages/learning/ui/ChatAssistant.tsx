@@ -101,35 +101,57 @@ function buildInstructions(
   richSummary: {
     title?: string;
     structured?: { key_points?: string[]; core_argument?: string; actionables?: string[] };
-  } | null
+  } | null,
+  language: string
 ): string {
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const hasContent =
+    richSummary != null &&
+    (richSummary.title ||
+      richSummary.structured?.core_argument ||
+      richSummary.structured?.key_points?.length ||
+      richSummary.structured?.actionables?.length);
 
-  let context = `\n\n## 현재 영상\n- URL: ${videoUrl}`;
-  if (richSummary?.title) context += `\n- 제목: ${richSummary.title}`;
-  if (richSummary?.structured?.core_argument)
-    context += `\n- 핵심 주장: ${richSummary.structured.core_argument}`;
-  if (richSummary?.structured?.key_points?.length)
-    context += `\n- 핵심 포인트:\n${richSummary.structured.key_points.map((p) => `  - ${p}`).join('\n')}`;
-  if (richSummary?.structured?.actionables?.length)
-    context += `\n- 실천 항목:\n${richSummary.structured.actionables.map((a) => `  - ${a}`).join('\n')}`;
+  let videoSection: string;
+  if (hasContent) {
+    videoSection = `\n\n## Current Video\n- URL: ${videoUrl}`;
+    if (richSummary!.title) videoSection += `\n- Title: ${richSummary!.title}`;
+    if (richSummary!.structured?.core_argument)
+      videoSection += `\n- Core argument: ${richSummary!.structured.core_argument}`;
+    if (richSummary!.structured?.key_points?.length)
+      videoSection += `\n- Key points:\n${richSummary!.structured.key_points.map((p) => `  - ${p}`).join('\n')}`;
+    if (richSummary!.structured?.actionables?.length)
+      videoSection += `\n- Actionable takeaways:\n${richSummary!.structured.actionables.map((a) => `  - ${a}`).join('\n')}`;
+  } else {
+    videoSection = `\n\n## Current Video\n- URL: ${videoUrl}\n- Content status: AI analysis for this video is currently being prepared and will be available shortly.`;
+  }
 
-  return `당신은 Insighta의 학습 어시스턴트입니다. 사용자가 시청 중인 YouTube 영상의 내용을 기반으로 학습을 돕습니다.
+  const noContentRule = hasContent
+    ? ''
+    : `\n- IMPORTANT: The AI analysis for this video is still being prepared — no summary, transcript, or structured content is available yet. Do NOT fabricate a summary. Do NOT invent timestamps. Do NOT guess or infer the video's topic or content from any other context (including the user's learning goal or mandala). When the user asks about the video, tell them warmly that the analysis is in progress and will be ready soon, and offer to help in the meantime with general questions about their learning goal.`;
 
-## 역할
-- 영상 내용에 대한 질문에 정확하게 답변
-- 핵심 개념을 쉽게 설명
-- 실생활 적용 방안 제시
-- 추가 학습 방향 추천
+  const timestampRule = hasContent
+    ? '\n- When summarizing or referencing the video, include timestamps (e.g. 0:47) tied to actual sections in the content above to help the user navigate.'
+    : '';
 
-## 규칙
-- 영상 내용 범위 내에서 답변. 확실하지 않으면 솔직하게 "영상에서 다루지 않은 내용입니다"라고 답변
-- 한국어로 대화하되, 사용자가 영어로 질문하면 영어로 답변
-- 답변은 간결하고 구조적으로 (bullet points, 번호 목록 활용)
-- 전문 용어는 쉬운 설명을 함께 제공
-- 학습자의 이해도를 높이는 데 집중
-- 요약 시 timestamp를 포함하여 구간별로 정리
-- "이 영상은 ~에 대한 내용을 다루고 있습니다" 같은 도입부/마무리 보일러플레이트 문장 사용 금지. 바로 핵심 내용으로 시작${context}`;
+  return `You are Insighta's learning assistant. You help users learn from the YouTube video they are currently watching.
+
+## Language rule (highest priority)
+- Always respond in the same language as the user's most recent message.
+- The user's current UI language is: ${language}. Default to that language when the user's intent is ambiguous.
+- Never override this rule based on the language of any other context (video content, system prompt, learning goal).
+
+## Role
+- Answer questions accurately based on available video content.
+- Explain key concepts in plain, accessible language.
+- Suggest practical applications and next learning steps.
+
+## Rules
+- Confine answers to what is actually available in the video content below. If something is not covered, say so plainly (e.g. "The video doesn't cover that").${noContentRule}
+- Keep answers concise and structured — use bullet points or numbered lists.
+- Explain technical jargon with simple definitions.
+- IMPORTANT: The "mandala" / learning-goal context provided elsewhere describes the USER'S BROADER LEARNING OBJECTIVE — it is NOT the current video's content. Never confuse the user's goal title or cell names with the video's topic.
+- Do not open or close with boilerplate phrases like "This video is about…" or "I hope this helps!". Start directly with the substance.${timestampRule}${videoSection}`;
 }
 
 function buildSuggestions(
@@ -180,7 +202,7 @@ function ChatPanel({
   videoId: string;
   onSeek?: (seconds: number) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { richSummary } = useRichSummary(videoId);
   const suggestions = buildSuggestions(t, richSummary?.structured ?? null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -245,8 +267,8 @@ function ChatPanel({
   ]);
 
   const instructions = useMemo(
-    () => buildInstructions(videoId, richSummary ?? null),
-    [videoId, richSummary]
+    () => buildInstructions(videoId, richSummary ?? null, i18n.language),
+    [videoId, richSummary, i18n.language]
   );
 
   useCopilotReadable({
@@ -266,7 +288,8 @@ function ChatPanel({
   });
 
   useCopilotReadable({
-    description: 'Structured learning context (mandala / cell / section / video hierarchy)',
+    description:
+      "User's learning-goal hierarchy (mandala = the user's top-level learning objective; cell = a sub-topic the user is studying; section = a chapter/section within the learning book). These fields describe the USER'S GOAL and study structure — they are NOT the current video's title, topic, or content.",
     value: chatContext,
   });
 

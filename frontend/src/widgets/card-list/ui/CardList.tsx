@@ -8,9 +8,6 @@ import { cn } from '@/shared/lib/utils';
 import { useDragSelect } from '@/features/drag-select/model/useDragSelect';
 import { cardSlotDropId } from '@/shared/lib/dnd';
 import { CardSkeleton } from './CardSkeleton';
-import { useQueryClient } from '@tanstack/react-query';
-import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
-import type { LocalCardsResponse } from '@/entities/card/model/local-cards';
 import {
   useSummaryRatings,
   useRateSummary,
@@ -76,7 +73,6 @@ export function CardList({
   compact = false,
 }: CardListProps) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
 
   const { data: summaryRatings } = useSummaryRatings();
   const rateSummary = useRateSummary();
@@ -87,8 +83,6 @@ export function CardList({
     },
     [rateSummary]
   );
-  const cachedCardCount = queryClient.getQueryData<LocalCardsResponse>(localCardsKeys.list())?.cards
-    .length;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -250,7 +244,6 @@ export function CardList({
     [lastSelectedIndex, sortedCards, onCardClick]
   );
 
-  console.log('[DEBUG-CARDLIST]', { isLoading, cardsLen: cards.length, cachedCardCount });
   if (isLoading && cards.length === 0) {
     return <CardSkeleton count={6} />;
   }

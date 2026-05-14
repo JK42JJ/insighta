@@ -13,6 +13,7 @@
  * Design tokens: insighta-side-editor-mockup-v3.html
  */
 import { useParams, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import type { VideoSummary } from '@/entities/card/model/types';
 import { getYouTubeVideoId } from '@/widgets/video-player/model/youtube-api';
 import type {
@@ -30,6 +31,7 @@ export interface PanelAISummaryProps {
 }
 
 export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) {
+  const { t } = useTranslation();
   const { mandalaId } = useParams<{ mandalaId: string }>();
   const youtubeId = videoUrl ? getYouTubeVideoId(videoUrl) : null;
   const { richSummary, isLoading: isRichLoading } = useRichSummary(youtubeId);
@@ -46,7 +48,7 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   if (!hasNewV2 && !hasLegacyRich && !hasShort && !isRichLoading) {
     return (
       <p className="py-8 text-center text-[13px] text-[#4e4f5c]">
-        아직 AI 요약이 생성되지 않았어요
+        {t('learning.aiSummaryNotReady')}
       </p>
     );
   }
@@ -71,14 +73,14 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
         <section className="space-y-4">
           {hasRich && (
             <h2 className="text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-              메타 요약
+              {t('learning.metaSummary')}
             </h2>
           )}
           {short && (
             <section>
               {!hasRich && (
                 <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-                  요약
+                  {t('learning.summaryLabel')}
                 </h3>
               )}
               <p className="text-[13px] leading-[1.6] text-[rgba(237,237,240,0.78)]">{short}</p>
@@ -87,7 +89,7 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
           {tags.length > 0 && (
             <section>
               <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-                키워드
+                {t('learning.keywordsLabel')}
               </h3>
               <div className="flex flex-wrap gap-x-1 gap-y-[3px]">
                 {tags.map((tag) => (
@@ -121,6 +123,7 @@ function RichSummaryBlock({ structured }: RichSummaryBlockProps) {
 }
 
 function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
+  const { t } = useTranslation();
   const tlDr = structured.tl_dr_ko || structured.tl_dr_en || null;
   const keyPoints = structured.key_points ?? [];
   const actionables = structured.actionables ?? [];
@@ -131,7 +134,7 @@ function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
       {tlDr && (
         <section>
           <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#818cf8]">
-            한 줄 요약
+            {t('learning.oneLiner')}
           </h3>
           <p className="text-[13px] leading-[1.6] text-[#ededf0]">{tlDr}</p>
         </section>
@@ -140,7 +143,7 @@ function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
       {keyPoints.length > 0 && (
         <section>
           <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#818cf8]">
-            핵심 포인트
+            {t('learning.keyPoints')}
           </h3>
           <ul className="space-y-1.5 text-[13px] leading-[1.55] text-[rgba(237,237,240,0.84)]">
             {keyPoints.map((pt, idx) => (
@@ -156,7 +159,7 @@ function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
       {actionables.length > 0 && (
         <section>
           <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#818cf8]">
-            실행 아이템
+            {t('learning.actionables')}
           </h3>
           <ul className="space-y-1.5 text-[13px] leading-[1.55] text-[rgba(237,237,240,0.84)]">
             {actionables.map((item, idx) => (
@@ -177,7 +180,7 @@ function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
       {chapters.length > 0 && (
         <section>
           <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#818cf8]">
-            챕터
+            {t('learning.chapters')}
           </h3>
           <ul className="divide-y divide-[rgba(255,255,255,0.04)] rounded-[6px] bg-[rgba(255,255,255,0.02)]">
             {chapters.map((ch, idx) => (
@@ -199,6 +202,7 @@ function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
 }
 
 function RichSummaryV2Block({ structured }: RichSummaryBlockProps) {
+  const { t } = useTranslation();
   const tlDr = structured.tl_dr_ko || structured.tl_dr_en || null;
   const sections = structured.sections ?? [];
   const entities = structured.entities ?? [];
@@ -208,7 +212,7 @@ function RichSummaryV2Block({ structured }: RichSummaryBlockProps) {
       {tlDr && (
         <section>
           <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            핵심 요약
+            {t('learning.coreSummary')}
           </h3>
           <p className="rounded-r-[6px] border-l-2 border-[#818cf8] bg-[rgba(99,102,241,0.06)] px-[14px] py-[10px] text-[13px] leading-[1.65] text-[#ededf0]">
             {tlDr}
@@ -219,7 +223,7 @@ function RichSummaryV2Block({ structured }: RichSummaryBlockProps) {
       {sections.length > 0 && (
         <section>
           <h3 className="mb-[8px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            구간별 분석
+            {t('learning.sectionAnalysis')}
           </h3>
           <div className="space-y-1">
             {sections.map((sec, idx) => (
@@ -232,7 +236,7 @@ function RichSummaryV2Block({ structured }: RichSummaryBlockProps) {
       {entities.length > 0 && (
         <section>
           <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            주요 개념
+            {t('learning.keyConcepts')}
           </h3>
           <div className="flex flex-wrap gap-x-1 gap-y-[3px]">
             {entities.map((ent) => (
@@ -260,6 +264,7 @@ interface SectionData {
 }
 
 function SectionRow({ section }: { section: SectionData }) {
+  const { t } = useTranslation();
   const relevanceColor =
     section.relevance_pct >= 75
       ? 'text-[#2dd4bf]'
@@ -287,7 +292,9 @@ function SectionRow({ section }: { section: SectionData }) {
           <span className={`font-mono text-[12px] font-bold ${relevanceColor}`}>
             {section.relevance_pct}%
           </span>
-          <span className="text-[7px] uppercase tracking-[0.05em] text-[#4e4f5c]">관련도</span>
+          <span className="text-[7px] uppercase tracking-[0.05em] text-[#4e4f5c]">
+            {t('learning.relevanceLabel')}
+          </span>
         </div>
       </div>
       {section.key_points && section.key_points.length > 0 && (
@@ -337,6 +344,7 @@ function RichSummaryV2NewBlock({
   youtubeId,
   mandalaId,
 }: RichSummaryV2NewBlockProps) {
+  const { t } = useTranslation();
   const oneLiner = core?.one_liner ?? null;
   const coreArg = analysis?.core_argument ?? null;
   const actionables = analysis?.actionables ?? [];
@@ -360,7 +368,7 @@ function RichSummaryV2NewBlock({
       {oneLiner && (
         <section>
           <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            한 줄 요약
+            {t('learning.oneLiner')}
           </h3>
           <p className="rounded-r-[6px] border-l-2 border-[#818cf8] bg-[rgba(99,102,241,0.06)] px-[14px] py-[10px] text-[13px] leading-[1.65] text-[#ededf0]">
             {oneLiner}
@@ -371,7 +379,7 @@ function RichSummaryV2NewBlock({
       {coreArg && (
         <section>
           <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            핵심 주장
+            {t('learning.coreArgument')}
           </h3>
           <p className="text-[13px] leading-[1.6] text-[rgba(237,237,240,0.84)]">{coreArg}</p>
         </section>
@@ -381,12 +389,12 @@ function RichSummaryV2NewBlock({
         <div className="flex flex-wrap gap-1.5">
           {hasAd && (
             <span className="rounded-[4px] bg-[rgba(248,113,113,0.12)] px-[7px] py-[2px] text-[10px] font-semibold text-[#f87171]">
-              광고 포함
+              {t('learning.containsAds')}
             </span>
           )}
           {subjectivity === 'high' && (
             <span className="rounded-[4px] bg-[rgba(245,158,11,0.12)] px-[7px] py-[2px] text-[10px] font-semibold text-[#f59e0b]">
-              주관성 높음
+              {t('learning.highSubjectivity')}
             </span>
           )}
         </div>
@@ -395,7 +403,7 @@ function RichSummaryV2NewBlock({
       {actionables.length > 0 && (
         <section>
           <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#818cf8]">
-            실행 아이템
+            {t('learning.actionables')}
           </h3>
           <ul className="space-y-1.5 text-[13px] leading-[1.55] text-[rgba(237,237,240,0.84)]">
             {actionables.map((item, idx) => (
@@ -416,7 +424,7 @@ function RichSummaryV2NewBlock({
       {keyConcepts.length > 0 && (
         <section>
           <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            주요 개념
+            {t('learning.keyConcepts')}
           </h3>
           <ul className="space-y-2 text-[13px] leading-[1.5]">
             {keyConcepts.map((kc, idx) => (
@@ -434,7 +442,7 @@ function RichSummaryV2NewBlock({
       {sections.length > 0 && (
         <section>
           <h3 className="mb-[8px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            구간별 분석
+            {t('learning.sectionAnalysis')}
           </h3>
           <div className="space-y-1">
             {sections.map((sec, idx) => (

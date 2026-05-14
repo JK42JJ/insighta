@@ -113,9 +113,9 @@ export function CenterPanel({
   // transitions INTO 'error' (not on every render).
   useEffect(() => {
     if (noteDoc.saveStatus === 'error') {
-      toast.error('노트 저장 실패. 잠시 후 자동 재시도됩니다.');
+      toast.error(t('learning.noteSaveError'));
     }
-  }, [noteDoc.saveStatus]);
+  }, [noteDoc.saveStatus, t]);
 
   // CP445 — when book index sets activeSection while in note view, scroll
   // to the matching <h3> inside the TipTap editor. Note doc is per-mandala
@@ -331,15 +331,14 @@ export function ViewModeToggle({
   const items: Array<{
     id: 'player' | 'note';
     labelKey: string;
-    fallback: string;
     Icon: typeof Play;
   }> = [
-    { id: 'player', labelKey: 'learning.viewModePlayer', fallback: '영상', Icon: Play },
-    { id: 'note', labelKey: 'learning.viewModeNote', fallback: '노트', Icon: BookOpen },
+    { id: 'player', labelKey: 'learning.viewModePlayer', Icon: Play },
+    { id: 'note', labelKey: 'learning.viewModeNote', Icon: BookOpen },
   ];
   return (
     <div className="flex items-center gap-0.5 self-center rounded-md border border-border bg-secondary/30 p-0.5">
-      {items.map(({ id, labelKey, fallback, Icon }) => {
+      {items.map(({ id, labelKey, Icon }) => {
         const dimmed = id === 'note' && noteDisabled;
         return (
           <button
@@ -356,7 +355,7 @@ export function ViewModeToggle({
             aria-disabled={dimmed}
           >
             <Icon className="h-3 w-3" />
-            {t(labelKey, fallback)}
+            {t(labelKey)}
           </button>
         );
       })}
@@ -571,31 +570,32 @@ function NoteEditorView({
   restoreOriginal: () => Promise<void>;
   hasBook: boolean;
 }) {
+  const { t } = useTranslation();
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-[12px] text-muted-foreground">
-        노트 불러오는 중…
+        {t('learning.noteLoading')}
       </div>
     );
   }
   if (error) {
     return (
       <div className="flex h-full items-center justify-center text-[12px] text-muted-foreground">
-        노트를 불러오지 못했습니다. 새로고침 해주세요.
+        {t('learning.noteLoadError')}
       </div>
     );
   }
   if (!hasBook) {
     return (
       <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-muted-foreground">
-        아직 만다라의 북 인덱스가 생성되지 않았습니다.
+        {t('learning.bookNotReady')}
       </div>
     );
   }
   if (!editor) {
     return (
       <div className="flex h-full items-center justify-center text-[12px] text-muted-foreground">
-        에디터 준비 중…
+        {t('learning.editorPreparing')}
       </div>
     );
   }
@@ -630,6 +630,7 @@ function NoteToolbar({
   restoreOriginal: () => Promise<void>;
   editor: Editor;
 }) {
+  const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -654,14 +655,14 @@ function NoteToolbar({
   }, [menuOpen]);
 
   const handleRestore = async () => {
-    if (!window.confirm('원본으로 되돌리면 현재 편집 내용은 모두 사라집니다. 진행하시겠습니까?')) {
+    if (!window.confirm(t('learning.restoreConfirm'))) {
       return;
     }
     try {
       await restoreOriginal();
-      toast.success('원본으로 되돌렸습니다.');
+      toast.success(t('learning.restoreSuccess'));
     } catch {
-      toast.error('원본 복원에 실패했습니다.');
+      toast.error(t('learning.restoreError'));
     }
   };
 
@@ -679,7 +680,7 @@ function NoteToolbar({
     try {
       downloadBlob(exportToMarkdown(editor.getJSON() as TiptapDoc), 'text/markdown', 'md');
     } catch {
-      toast.error('Markdown 내보내기 실패');
+      toast.error(t('learning.markdownExportError'));
     }
   };
 
@@ -687,7 +688,7 @@ function NoteToolbar({
     try {
       downloadBlob(exportToHtml(editor), 'text/html', 'html');
     } catch {
-      toast.error('HTML 내보내기 실패');
+      toast.error(t('learning.htmlExportError'));
     }
   };
 
@@ -703,7 +704,7 @@ function NoteToolbar({
           className="flex items-center gap-1 rounded px-2.5 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-secondary"
         >
           <Pencil className="h-3.5 w-3.5" />
-          {isEditing ? '완료' : '편집'}
+          {isEditing ? t('learning.editorDone') : t('learning.editorEdit')}
         </button>
         <span className="mx-0.5 h-4 w-[0.5px] bg-border" aria-hidden />
         <button
@@ -730,7 +731,7 @@ function NoteToolbar({
               className="flex w-full items-center gap-1.5 rounded px-2.5 py-1.5 text-left text-[12px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
               <Download className="h-3.5 w-3.5" />
-              Markdown 다운로드
+              {t('learning.downloadMarkdown')}
             </button>
             <button
               type="button"
@@ -742,7 +743,7 @@ function NoteToolbar({
               className="flex w-full items-center gap-1.5 rounded px-2.5 py-1.5 text-left text-[12px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
               <FileText className="h-3.5 w-3.5" />
-              HTML 다운로드
+              {t('learning.downloadHtml')}
             </button>
             <div className="my-1 h-[0.5px] bg-border" aria-hidden />
             <button
@@ -755,7 +756,7 @@ function NoteToolbar({
               className="flex w-full items-center gap-1.5 rounded px-2.5 py-1.5 text-left text-[12px] text-destructive transition-colors hover:bg-destructive/10"
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              원본 복원
+              {t('learning.restoreOriginal')}
             </button>
           </div>
         )}
