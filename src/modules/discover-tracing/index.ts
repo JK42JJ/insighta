@@ -28,12 +28,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
+import { config } from '@/config';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'discover-tracing' });
 
-const TRACE_ENABLED = (process.env['V3_TRACE_ENABLED'] ?? 'false').trim().toLowerCase() === 'true';
+const TRACE_ENABLED = config.discoverTracing.enabled;
 
 const PAYLOAD_BYTE_CAP = 64 * 1024;
 
