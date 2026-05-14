@@ -102,20 +102,16 @@ describe('parseIsoDuration', () => {
 });
 
 describe('filters', () => {
-  test('isShortsByDuration — duration-based (60s threshold, CP358 original)', () => {
+  test('isShortsByDuration — duration-based (75s threshold, 2026-05-15)', () => {
     expect(isShortsByDuration(30)).toBe(true);
     expect(isShortsByDuration(60)).toBe(true);
-    // 2026-05-14 revert from 180s back to 60s: trace analysis of the
-    // "8구단 드래프트 1순위" mandala showed 24% of YouTube candidates
-    // (50/206) were KBO/MLB draft NEWS CLIPS from SBS/KBS/YTN/MBN
-    // (281k, 136k, 111k views) — exactly the mandala-relevant content
-    // — that fell in the 61-180s bucket and got incorrectly killed by
-    // the 180s gate. `titleIndicatesShorts` still catches explicit
-    // `#shorts` hashtag cases in this range.
-    expect(isShortsByDuration(61)).toBe(false);
+    // 2026-05-15: raised from 60s to 75s — outputs still surfaced cards
+    // slightly over the 60s line; 75s clears that band.
+    expect(isShortsByDuration(61)).toBe(true);
+    expect(isShortsByDuration(75)).toBe(true);
+    expect(isShortsByDuration(76)).toBe(false);
     expect(isShortsByDuration(110)).toBe(false);
     expect(isShortsByDuration(180)).toBe(false);
-    expect(isShortsByDuration(181)).toBe(false);
     expect(isShortsByDuration(600)).toBe(false);
   });
 

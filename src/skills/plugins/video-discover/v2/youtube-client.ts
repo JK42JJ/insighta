@@ -502,13 +502,17 @@ export const V2_TITLE_BLOCKLIST: ReadonlyArray<string> = [
  *     mandala-relevant content. The 180s gate was killing the news
  *     and highlights domain. `titleIndicatesShorts` still catches
  *     explicit `#shorts` hashtag cases in the 60-180s range.
+ *   - 2026-05-15: raised 60s → 75s. Outputs still surfaced cards
+ *     slightly over the 60s line; 75s clears that band.
  *
  * Null duration is treated as shorts (defensive drop). Videos.list
  * occasionally omits `contentDetails.duration` for shorts specifically,
  * so null → drop prevents that hole.
  */
+export const SHORTS_MAX_DURATION_SEC = 75;
+
 export function isShortsByDuration(durationSec: number | null): boolean {
-  return durationSec === null || durationSec <= 60;
+  return durationSec === null || durationSec <= SHORTS_MAX_DURATION_SEC;
 }
 
 /**
