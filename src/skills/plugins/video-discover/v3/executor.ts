@@ -304,6 +304,27 @@ async function executeImpl(ctx: ExecuteContext): Promise<ExecuteResult> {
   }
   const existingVideoIds = new Set(slots.map((s) => s.videoId));
 
+  // Exclude videos the user already owns in ANY mandala. user_video_states
+  // has @@unique([user_id, videoId]) — a video lives in one mandala per
+  // user — so a video owned elsewhere can never be inserted here anyway.
+  // Filtering it at the source (before Tier 1 + Tier 2) stops the pipeline
+  // from computing + SSE-streaming candidates that auto-add would silently
+  // drop, which is what made the dashboard count shrink on refresh.
+  try {
+    const owned = await getPrismaClient().youtube_videos.findMany({
+      where: { userState: { some: { user_id: ctx.userId } } },
+      select: { youtube_video_id: true },
+    });
+    for (const v of owned) existingVideoIds.add(v.youtube_video_id);
+    log.info(`[exclude] user owns ${owned.length} videos across mandalas — excluded from this run`);
+  } catch (err) {
+    log.warn(
+      `[exclude] failed to load user-owned video ids (continuing unfiltered): ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
+
   const tier1Matches = v3Config.enableTier1Cache
     ? await matchFromVideoPool({
         mandalaId,
