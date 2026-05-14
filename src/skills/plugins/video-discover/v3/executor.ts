@@ -322,6 +322,7 @@ async function executeImpl(ctx: ExecuteContext): Promise<ExecuteResult> {
             description: m.description,
             publishedAt: m.publishedAt,
           }));
+          const mfT0 = Date.now();
           const { byCell, stats: mfStats } = applyMandalaFilterWithStats(filterInputs, {
             centerGoal: state.centerGoal,
             subGoals: state.subGoals,
@@ -343,6 +344,25 @@ async function executeImpl(ctx: ExecuteContext): Promise<ExecuteResult> {
             `[tier1] mandala-filter input=${mfStats.input} output=${mfStats.output} ` +
               `droppedCenterGate=${mfStats.droppedByCenterGate} droppedJaccard=${mfStats.droppedByJaccardBelowThreshold}`
           );
+          // CP457+ trace — Tier 1 mandala-filter gate.
+          recordTrace({
+            step: 'mandala_filter.semantic_gate.tier1',
+            status: 'ok',
+            request: {
+              input_count: filterInputs.length,
+              mode: v3Config.centerGateMode,
+              language: state.language,
+              subGoals_count: state.subGoals.length,
+              focusTags: state.focusTags,
+              semanticMinCosine: v3Config.semanticMinCosine,
+              centerEmbedding_dim: centerEmbedding?.length ?? 0,
+            },
+            response: {
+              stats: mfStats,
+              byCell_counts: Array.from({ length: 8 }, (_, i) => byCell.get(i)?.length ?? 0),
+            },
+            latencyMs: Date.now() - mfT0,
+          });
         } else {
           log.warn(
             `[tier1] mandala-filter embed mismatch: got ${vectors.length}/${texts.length} — admitting unfiltered`
@@ -1006,6 +1026,26 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     debug.mandalaFilterDroppedJaccard = mfStats.droppedByJaccardBelowThreshold;
     debug.mandalaFilterCenterTokens = mfStats.centerTokens;
     debug.mandalaFilterSubGoalTokenCounts = mfStats.subGoalTokenCounts;
+
+    // CP457+ trace — Tier 2 mandala-filter gate (post-YouTube candidates).
+    recordTrace({
+      step: 'mandala_filter.semantic_gate.tier2',
+      status: 'ok',
+      request: {
+        input_count: filterInputs.length,
+        mode: v3Config.centerGateMode,
+        language: input.state.language,
+        subGoals_count: input.state.subGoals.length,
+        focusTags: input.state.focusTags,
+        semanticMinCosine: v3Config.semanticMinCosine,
+        centerEmbedding_dim: centerEmbedding?.length ?? 0,
+      },
+      response: {
+        stats: mfStats,
+        byCell_counts: Array.from({ length: 8 }, (_, i) => byCell.get(i)?.length ?? 0),
+      },
+      latencyMs: Date.now() - tMandalaFilterStart,
+    });
 
     for (const [cellIndex, list] of byCell) {
       if (!deficitCellSet.has(cellIndex)) continue;
@@ -1704,6 +1744,7 @@ async function runDiscoverEphemeralImpl(
           description: s.description,
           publishedAt: s.publishedAt,
         }));
+        const mfT0 = Date.now();
         const { byCell, stats: mfStats } = applyMandalaFilterWithStats(filterInputs, {
           centerGoal: input.centerGoal,
           subGoals: input.subGoals,
@@ -1732,6 +1773,27 @@ async function runDiscoverEphemeralImpl(
             `droppedCenterGate=${mfStats.droppedByCenterGate} droppedJaccard=${mfStats.droppedByJaccardBelowThreshold} ` +
             `mode=${mfStats.centerGateMode ?? '-'} embedMs=${embedMs}`
         );
+        // CP457+ trace — ephemeral mandala-filter gate (Redis + Tier 1 + Tier 2 unified).
+        recordTrace({
+          step: 'mandala_filter.semantic_gate.ephemeral',
+          status: 'ok',
+          request: {
+            input_count: filterInputs.length,
+            mode: v3Config.centerGateMode,
+            language: input.language,
+            subGoals_count: input.subGoals.length,
+            focusTags: input.focusTags,
+            semanticMinCosine: v3Config.semanticMinCosine,
+            centerEmbedding_dim: centerEmbedding?.length ?? 0,
+            embedMs,
+          },
+          response: {
+            stats: mfStats,
+            byCell_counts: Array.from({ length: 8 }, (_, i) => byCell.get(i)?.length ?? 0),
+            flattened_count: flattened.length,
+          },
+          latencyMs: Date.now() - mfT0,
+        });
       } else {
         log.warn(
           `[ephemeral] mandala-filter embed vector mismatch: got ${vectors.length}/${texts.length} — skipping filter`

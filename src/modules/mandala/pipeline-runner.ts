@@ -20,6 +20,7 @@ import type { Tier } from '@/config/quota';
 import { logger } from '@/utils/logger';
 import { ensureMandalaEmbeddings } from './ensure-mandala-embeddings';
 import { maybeAutoAddRecommendations } from './auto-add-recommendations';
+import { withTraceContext } from '@/modules/discover-tracing';
 
 const log = logger.child({ module: 'pipeline-runner' });
 
@@ -239,7 +240,11 @@ export async function executePipelineRun(runId: string): Promise<void> {
     } else {
       await updateStep(runId, 3, 'running');
       try {
-        const result = await maybeAutoAddRecommendations(userId, mandalaId);
+        // CP457+ bind trace context so auto_add.user_video_states row
+        // carries the mandalaId/userId for the by-mandala chronological view.
+        const result = await withTraceContext({ mandalaId, userId }, () =>
+          maybeAutoAddRecommendations(userId, mandalaId)
+        );
         if (result.ok) {
           await updateStep(runId, 3, 'completed', result);
           log.info(

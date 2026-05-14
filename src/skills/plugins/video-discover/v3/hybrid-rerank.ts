@@ -40,6 +40,7 @@ import { Prisma } from '@prisma/client';
 import { config } from '@/config/index';
 import { getPrismaClient } from '@/modules/database/client';
 import { logger } from '@/utils/logger';
+import { recordTrace } from '@/modules/discover-tracing';
 import {
   rerank,
   CohereRerankConfigError,
@@ -162,6 +163,7 @@ export async function tsvectorKeywordCandidates(
   sources: ReadonlyArray<string> = ['v2_promoted']
 ): Promise<KeywordCandidate[]> {
   if (!centerGoal.trim()) return [];
+  const t0 = Date.now();
 
   try {
     const prisma = getPrismaClient();
@@ -260,10 +262,46 @@ export async function tsvectorKeywordCandidates(
       });
       if (out.length >= limit) break;
     }
+    // CP457+ trace — capture tsquery + raw row sample + cell-assigned output.
+    recordTrace({
+      step: 'hybrid_rerank.tsvector_keyword',
+      status: 'ok',
+      request: {
+        tsqueryString,
+        sources: [...sources],
+        limit,
+        fetchLimit,
+        exclude_count: excludeVideoIds.length,
+        centerGoal,
+        subGoals_count: subGoals.length,
+      },
+      response: {
+        sql_row_count: rows.length,
+        assigned_count: out.length,
+        rows: rows.slice(0, 60).map((r) => ({
+          videoId: r.video_id,
+          title: r.title,
+          rank: r.rank,
+        })),
+        assigned_by_cell: out.slice(0, 60).map((o) => ({
+          videoId: o.videoId,
+          cell_index: o.cellIndex,
+          rec_score: o.rec_score,
+        })),
+      },
+      latencyMs: Date.now() - t0,
+    });
     return out;
   } catch (err) {
     log.warn('tsvector keyword search failed (non-fatal)', {
       error: err instanceof Error ? err.message : String(err),
+    });
+    recordTrace({
+      step: 'hybrid_rerank.tsvector_keyword',
+      status: 'error',
+      request: { centerGoal, sources: [...sources], limit, exclude_count: excludeVideoIds.length },
+      errorMessage: err instanceof Error ? err.message : String(err),
+      latencyMs: Date.now() - t0,
     });
     return [];
   }
