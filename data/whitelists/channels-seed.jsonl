@@ -1,0 +1,57 @@
+{"channel_id":"UC__REVIEW_nomadcoders__","channel_name":"노마드 코더 Nomad Coders","domain":"tech","language":"ko","reason":"한국어 풀스택 웹/모바일 개발 강의 — 입문자 진입 채널로 검증됨","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_dream-coding__","channel_name":"드림코딩 by 엘리","domain":"tech","language":"ko","reason":"JS/CS 기초 강의 — 한국어 프론트엔드 학습 표준","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_codingapple__","channel_name":"코딩애플","domain":"tech","language":"ko","reason":"실무형 웹 개발 튜토리얼, 한국어 explainer","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_fireship__","channel_name":"Fireship","domain":"tech","language":"en","reason":"100-second 기술 explainer, 신기술 트렌드 학습 가치 높음","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_theo-t3__","channel_name":"Theo - t3.gg","domain":"tech","language":"en","reason":"풀스택 / TypeScript 실시간 개발 디스커션","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_traversymedia__","channel_name":"Traversy Media","domain":"tech","language":"en","reason":"웹 개발 long-form 강의 채널, 검증된 입문 자원","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_thecodingTrain__","channel_name":"The Coding Train","domain":"tech","language":"en","reason":"creative coding + 알고리즘 시각화, 학습 가치 high","verify_confidence":"placeholder"}
+{"channel_id":"UCEBb1b_L6zDS3xTUrIALZOw","channel_name":"MIT OpenCourseWare","domain":"learning","language":"en","reason":"MIT 정식 강의 — university-grade learning resource","verify_confidence":"high"}
+{"channel_id":"UCsXVk37bltHxD1rDPwtNM8Q","channel_name":"Kurzgesagt – In a Nutshell","domain":"learning","language":"en","reason":"과학/사회 explainer 표준, 시각 학습 가치 매우 높음","verify_confidence":"high"}
+{"channel_id":"UC__REVIEW_veritasium__","channel_name":"Veritasium","domain":"learning","language":"en","reason":"과학 deep-dive explainer (Derek Muller)","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_3blue1brown__","channel_name":"3Blue1Brown","domain":"learning","language":"en","reason":"수학 시각화 (Grant Sanderson) — 선형대수/미적분 학습 표준","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_crashcourse__","channel_name":"CrashCourse","domain":"learning","language":"en","reason":"역사/과학/문학 short-form 강의 시리즈","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_ted__","channel_name":"TED","domain":"learning","language":"en","reason":"전 분야 lecture 표준 채널","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_eo-jaeong__","channel_name":"EO","domain":"learning","language":"ko","reason":"한국 스타트업/창업 다큐 — long-form 인터뷰 학습 자원","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_sebasi__","channel_name":"세바시 강연 Sebasi Talk","domain":"learning","language":"ko","reason":"한국어 15분 강연 — 인문/사회/심리 분야 학습","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_shooka__","channel_name":"슈카월드","domain":"finance","language":"ko","reason":"한국어 금융/경제 explainer, 검증된 메인스트림 채널","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_parkgomhee__","channel_name":"박곰희TV","domain":"finance","language":"ko","reason":"한국어 ETF / 배당 / 자산배분 학습","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_3prochannel__","channel_name":"삼프로TV","domain":"finance","language":"ko","reason":"한국어 시황/매크로/기업 분석 podcast 형식","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_ben-felix__","channel_name":"Ben Felix","domain":"finance","language":"en","reason":"근거 기반 개인 투자 explainer, 학술적 출처","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_plain-bagel__","channel_name":"The Plain Bagel","domain":"finance","language":"en","reason":"금융 기초 explainer (Richard Coffin)","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_patrickboyle__","channel_name":"Patrick Boyle","domain":"finance","language":"en","reason":"퀀트/매크로 deep-dive, 학습 가치 high","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_t-investor__","channel_name":"티슈인베스터","domain":"finance","language":"ko","reason":"한국어 가치투자 / 기업분석 long-form","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_yspeak__","channel_name":"신사임당","domain":"business","language":"ko","reason":"한국어 1인 사업/수익화 인터뷰 채널 (변경된 채널명 가능, 재확인 필요)","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_changsa__","channel_name":"창업다마고치","domain":"business","language":"ko","reason":"한국어 스타트업 운영 explainer","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_yc__","channel_name":"Y Combinator","domain":"business","language":"en","reason":"스타트업 strategy / Startup School 강의","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_a16z__","channel_name":"a16z","domain":"business","language":"en","reason":"VC 산업 분석 / founder 인터뷰","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_hbr__","channel_name":"Harvard Business Review","domain":"business","language":"en","reason":"경영/리더십 explainer, 학술적 검증","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_lennys__","channel_name":"Lenny's Podcast","domain":"business","language":"en","reason":"프로덕트 매니지먼트 long-form 인터뷰","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_kim-juhwan__","channel_name":"김주환의 그릿","domain":"mind","language":"ko","reason":"한국어 회복탄력성/메타인지 강의 (연세대 김주환 교수)","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_chunghaesung__","channel_name":"정신과의사 정우열","domain":"mind","language":"ko","reason":"한국어 정신건강 explainer, 전문가 운영","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_andrewhuberman__","channel_name":"Andrew Huberman","domain":"mind","language":"en","reason":"신경과학 기반 행동/수면/포커스 explainer (Stanford)","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_drk__","channel_name":"HealthyGamerGG","domain":"mind","language":"en","reason":"정신건강 explainer (Dr. K, Harvard psychiatry)","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_school-of-life__","channel_name":"The School of Life","domain":"mind","language":"en","reason":"철학/감정 explainer, 학습 가치 검증","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_dr-jung__","channel_name":"닥터프렌즈","domain":"health","language":"ko","reason":"한국어 의사 3인 health explainer, 메인스트림 채널","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_pildock__","channel_name":"필라테스소년","domain":"health","language":"ko","reason":"한국어 운동 / 자세교정 explainer","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_attia__","channel_name":"Peter Attia MD","domain":"health","language":"en","reason":"longevity / 대사 건강 deep-dive 인터뷰","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_drmike__","channel_name":"Renaissance Periodization","domain":"health","language":"en","reason":"근거 기반 운동 과학 (Dr. Mike Israetel)","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_nutritionmadesimple__","channel_name":"Nutrition Made Simple!","domain":"health","language":"en","reason":"영양학 evidence-based explainer (Dr. Gil Carvalho)","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_drhyman__","channel_name":"Dr. Mark Hyman","domain":"health","language":"en","reason":"functional medicine / 영양 long-form 인터뷰","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_yangjini__","channel_name":"양조장","domain":"lifestyle","language":"ko","reason":"한국어 자취/요리/생활 essentials explainer","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_seungseung__","channel_name":"승우아빠","domain":"lifestyle","language":"ko","reason":"한국어 요리 explainer, 학습 가치 (technique 중심)","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_matty-matheson__","channel_name":"Matty Matheson","domain":"lifestyle","language":"en","reason":"요리 craft + culture explainer","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_kingofrandom__","channel_name":"How To Cook That","domain":"lifestyle","language":"en","reason":"베이킹 과학 explainer (Ann Reardon, food forensics)","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_mark-manson__","channel_name":"Mark Manson","domain":"social","language":"en","reason":"관계/커뮤니케이션 essay-form explainer","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_charisma-on-cmd__","channel_name":"Charisma on Command","domain":"social","language":"en","reason":"대화/카리스마 social-skill explainer","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_jordanharbinger__","channel_name":"The Jordan Harbinger Show","domain":"social","language":"en","reason":"인간관계 / 네트워킹 long-form 인터뷰","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_attachment-project__","channel_name":"The Attachment Project","domain":"social","language":"en","reason":"애착이론 기반 관계 심리 explainer","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_jaesa__","channel_name":"체인지그라운드","domain":"social","language":"ko","reason":"한국어 자기계발 / 인간관계 explainer","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_kim-mi-kyung__","channel_name":"김미경TV","domain":"social","language":"ko","reason":"한국어 커뮤니케이션 / 자기계발 강연","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_proko__","channel_name":"Proko","domain":"creative","language":"en","reason":"드로잉 / 해부학 학습 표준 채널","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_marcobruneart__","channel_name":"Marco Bucci Art","domain":"creative","language":"en","reason":"디지털 페인팅 explainer, 학습 자원","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_adam-neely__","channel_name":"Adam Neely","domain":"creative","language":"en","reason":"음악이론 / 베이스 explainer, 학습 가치 high","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_andrew-huang__","channel_name":"Andrew Huang","domain":"creative","language":"en","reason":"음악 제작 / sound design explainer","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_brandon-sanderson__","channel_name":"Brandon Sanderson","domain":"creative","language":"en","reason":"creative writing 강의 (BYU lecture 시리즈)","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_drawfee__","channel_name":"Drawfee Show","domain":"creative","language":"en","reason":"드로잉 craft + creative process","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_kim-jung-gi__","channel_name":"김정기 SPACE","domain":"creative","language":"ko","reason":"한국 작가 김정기 드로잉 archive (사후 운영 가능, 확인 필요)","verify_confidence":"placeholder"}
+{"channel_id":"UC__REVIEW_thinkingmusic__","channel_name":"생각많은 둘째언니","domain":"creative","language":"ko","reason":"한국어 글쓰기 / 사고력 explainer","verify_confidence":"placeholder"}
