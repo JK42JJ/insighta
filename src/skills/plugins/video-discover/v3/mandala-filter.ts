@@ -42,6 +42,20 @@ import type { CenterGateMode } from './config';
 export const MIN_SUB_RELEVANCE = 0.05;
 
 /**
+ * Cosine-similarity floor for semantic cell assignment.
+ * When `subGoalEmbeddings` are provided, each candidate is assigned to the
+ * sub_goal cell whose embedding has the highest cosine with the candidate's
+ * own embedding. If the best cosine is below this threshold the candidate
+ * is dropped — mirror of MIN_SUB_RELEVANCE for the lexical path.
+ *
+ * 0.25 is a permissive floor: in-domain qwen3-embedding pairs typically
+ * run 0.3-0.8 (see SEMANTIC_MIN_COSINE comment above), so 0.25 admits
+ * nearly all genuine sub-domain matches while filtering clear off-domain
+ * noise. Can be tightened once telemetry lands.
+ */
+export const SEMANTIC_MIN_CELL_COSINE = 0.25;
+
+/**
  * Cosine-similarity threshold for the `'semantic'` center-gate mode.
  * A candidate passes when cosine(centerEmbedding, titleEmbedding) ≥ this.
  *
@@ -120,6 +134,18 @@ export interface MandalaFilterInput {
    * threshold without code changes. Clamped to [0, 1].
    */
   semanticMinCosine?: number;
+  /**
+   * Per-sub_goal embeddings (same 4096d qwen3-embedding:8b space as
+   * `centerEmbedding` / `candidateEmbeddings`). Length must equal
+   * `subGoals.length` (8). Entries may be undefined/empty for sub_goals
+   * that lack an embedding.
+   *
+   * When present AND a candidate has an entry in `candidateEmbeddings`,
+   * cell assignment uses `argmax_i cosineSimilarity(candidateEmb, subGoalEmb[i])`
+   * instead of the lexical jaccard+bigram path. Callers that omit this field
+   * get bit-identical lexical behavior (backward compatible).
+   */
+  subGoalEmbeddings?: ReadonlyArray<ReadonlyArray<number>>;
 }
 
 export interface ScoreWeights {
@@ -162,6 +188,13 @@ export interface MandalaFilterStats {
   output: number;
   droppedByCenterGate: number;
   droppedByJaccardBelowThreshold: number;
+  /**
+   * Candidates dropped because their best semantic cell cosine was below
+   * `SEMANTIC_MIN_CELL_COSINE`. Only populated when `subGoalEmbeddings` are
+   * provided; otherwise 0. Backward compatible — callers that read only the
+   * old fields are unaffected.
+   */
+  droppedByCellScoreBelowThreshold: number;
   centerTokens: string[];
   subGoalTokenCounts: number[];
   /** How many candidates passed the gate via focusTag match (2026-04-18). */
@@ -240,6 +273,7 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     output: 0,
     droppedByCenterGate: 0,
     droppedByJaccardBelowThreshold: 0,
+    droppedByCellScoreBelowThreshold: 0,
     centerTokens: [...centerTokens],
     subGoalTokenCounts: subGoalTokens.map((s) => s.size),
     passedByFocusTag: 0,
@@ -302,26 +336,54 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     }
 
     const bodyTokens = tokenize(`${c.title} ${c.description ?? ''}`, input.language);
-    const bodyGrams = new Set<string>();
-    for (const t of bodyTokens) for (const g of charBigrams(t)) bodyGrams.add(g);
+
+    // Cell assignment: semantic path when subGoalEmbeddings + candidate
+    // embedding are both present; lexical jaccard+bigram path otherwise.
+    const candidateVec = input.candidateEmbeddings?.get(c.videoId);
+    const useSemanticCell =
+      input.subGoalEmbeddings != null &&
+      input.subGoalEmbeddings.length > 0 &&
+      candidateVec != null &&
+      candidateVec.length > 0;
 
     let bestCell = -1;
     let bestScore = 0;
-    for (let i = 0; i < subGoalTokens.length; i++) {
-      const sg = subGoalTokens[i];
-      if (!sg) continue;
-      const exact = jaccard(bodyTokens, sg);
-      const sgGrams = subGoalGrams[i];
-      const bigram = sgGrams && sgGrams.size > 0 ? bigramOverlap(bodyGrams, sgGrams) : 0;
-      const s = Math.max(exact, bigram);
-      if (s > bestScore) {
-        bestScore = s;
-        bestCell = i;
+
+    if (useSemanticCell) {
+      // Semantic cell assignment: argmax cosine(candidateVec, subGoalEmb[i]).
+      for (let i = 0; i < input.subGoalEmbeddings!.length; i++) {
+        const sgEmb = input.subGoalEmbeddings![i];
+        if (!sgEmb || sgEmb.length === 0) continue;
+        const s = cosineSimilarity(candidateVec, sgEmb);
+        if (s > bestScore) {
+          bestScore = s;
+          bestCell = i;
+        }
       }
-    }
-    if (bestCell === -1 || bestScore < MIN_SUB_RELEVANCE) {
-      stats.droppedByJaccardBelowThreshold++;
-      continue;
+      if (bestCell === -1 || bestScore < SEMANTIC_MIN_CELL_COSINE) {
+        stats.droppedByCellScoreBelowThreshold++;
+        continue;
+      }
+    } else {
+      // Lexical cell assignment: max(jaccard, bigramOverlap).
+      const bodyGrams = new Set<string>();
+      for (const t of bodyTokens) for (const g of charBigrams(t)) bodyGrams.add(g);
+      for (let i = 0; i < subGoalTokens.length; i++) {
+        const sg = subGoalTokens[i];
+        if (!sg) continue;
+        const exact = jaccard(bodyTokens, sg);
+        const sgGrams = subGoalGrams[i];
+        const bigram = sgGrams && sgGrams.size > 0 ? bigramOverlap(bodyGrams, sgGrams) : 0;
+        const s = Math.max(exact, bigram);
+        if (s > bestScore) {
+          bestScore = s;
+          bestCell = i;
+        }
+      }
+      if (bestCell === -1 || bestScore < MIN_SUB_RELEVANCE) {
+        stats.droppedByJaccardBelowThreshold++;
+        continue;
+      }
     }
 
     const recencyScore =

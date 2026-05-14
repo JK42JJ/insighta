@@ -89,6 +89,8 @@ const MAX_PER_CHANNEL_PER_CELL = 2;
 export interface HydratedState {
   centerGoal: string;
   subGoals: string[]; // length 8
+  /** Sub_goal embedding vectors (same 4096d space as candidate embeddings). */
+  subGoalEmbeddings: number[][]; // length 8, indexed by sub_goal_index
   language: KeywordLanguage;
   focusTags: string[];
   targetLevel: string;
@@ -158,21 +160,30 @@ export const executor: SkillExecutor = {
       };
     }
 
-    // Also load sub_goal text so Tier 2 can build per-cell queries. The
-    // embedding comparison itself runs in SQL so we don't load vectors here.
+    // Load sub_goal text AND embeddings. Embeddings are used for semantic
+    // cell assignment in applyMandalaFilterWithStats (replaces lexical
+    // jaccard+bigram path — see mandala-filter.ts SEMANTIC_MIN_CELL_COSINE).
     const subGoalRows = await db.$queryRaw<
-      { sub_goal_index: number; sub_goal: string | null; center_goal: string | null }[]
+      {
+        sub_goal_index: number;
+        sub_goal: string | null;
+        center_goal: string | null;
+        embedding: string | null;
+      }[]
     >(
-      Prisma.sql`SELECT sub_goal_index, sub_goal, center_goal FROM public.mandala_embeddings
+      Prisma.sql`SELECT sub_goal_index, sub_goal, center_goal, embedding::text AS embedding
+                 FROM public.mandala_embeddings
                  WHERE mandala_id = ${ctx.mandalaId} AND level = 1
                  ORDER BY sub_goal_index ASC`
     );
     const subGoals: string[] = new Array(V3_NUM_CELLS).fill('');
+    const subGoalEmbeddings: number[][] = new Array(V3_NUM_CELLS).fill([]);
     let centerGoal = mandala.title ?? '';
     for (const r of subGoalRows) {
       const idx = r.sub_goal_index;
       if (idx < 0 || idx >= V3_NUM_CELLS) continue;
       subGoals[idx] = r.sub_goal ?? '';
+      if (r.embedding) subGoalEmbeddings[idx] = parseVectorLiteral(r.embedding);
       if (r.center_goal && !centerGoal) centerGoal = r.center_goal;
     }
 
@@ -180,6 +191,7 @@ export const executor: SkillExecutor = {
     const hydrated: HydratedState = {
       centerGoal,
       subGoals,
+      subGoalEmbeddings,
       language,
       focusTags: mandala.focus_tags ?? [],
       targetLevel: mandala.target_level ?? 'standard',
@@ -334,6 +346,7 @@ async function executeImpl(ctx: ExecuteContext): Promise<ExecuteResult> {
             centerEmbedding,
             candidateEmbeddings,
             semanticMinCosine: v3Config.semanticMinCosine,
+            subGoalEmbeddings: state.subGoalEmbeddings,
           });
           const keptIds = new Set<string>();
           for (const assignments of byCell.values()) {
@@ -1018,6 +1031,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
       centerEmbedding,
       candidateEmbeddings,
       semanticMinCosine: v3Config.semanticMinCosine,
+      subGoalEmbeddings: input.state.subGoalEmbeddings,
     });
     debug.timing.mandalaFilterMs = Date.now() - tMandalaFilterStart;
 
@@ -1705,6 +1719,9 @@ async function runDiscoverEphemeralImpl(
       state: {
         centerGoal: input.centerGoal,
         subGoals: input.subGoals,
+        // Ephemeral path has no mandala in DB → no sub_goal embeddings.
+        // Semantic cell assignment falls back to lexical jaccard+bigram.
+        subGoalEmbeddings: [],
         language: input.language,
         focusTags: input.focusTags,
         targetLevel: input.targetLevel,
@@ -1890,4 +1907,20 @@ async function runDiscoverEphemeralImpl(
     duration_ms: Date.now() - t0,
     debug: tier2Debug,
   };
+}
+
+/**
+ * Parse a pgvector literal (`[f1,f2,...]`) into a `number[]`.
+ * Mirrors the identical helper in v2/executor.ts — kept local so v3 has
+ * no runtime dependency on v2's private scope.
+ */
+function parseVectorLiteral(literal: string): number[] {
+  if (!literal || literal.length < 2) return [];
+  const inner = literal.startsWith('[') && literal.endsWith(']') ? literal.slice(1, -1) : literal;
+  const parts = inner.split(',');
+  const out = new Array<number>(parts.length);
+  for (let i = 0; i < parts.length; i++) {
+    out[i] = parseFloat(parts[i] ?? '0');
+  }
+  return out;
 }

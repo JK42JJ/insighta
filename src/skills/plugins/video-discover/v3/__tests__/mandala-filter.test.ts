@@ -13,6 +13,7 @@ import {
   DEFAULT_RECENCY_HALF_LIFE_MONTHS,
   MIN_SUB_RELEVANCE,
   SEMANTIC_MIN_COSINE,
+  SEMANTIC_MIN_CELL_COSINE,
   type FilterCandidate,
 } from '../mandala-filter';
 
@@ -631,6 +632,10 @@ describe('applyMandalaFilter — centerGateMode: "semantic"', () => {
     expect(stats.droppedByCenterGate).toBeGreaterThanOrEqual(1);
   });
 
+  test('SEMANTIC_MIN_CELL_COSINE is exported and equals 0.25', () => {
+    expect(SEMANTIC_MIN_CELL_COSINE).toBeCloseTo(0.25, 5);
+  });
+
   test('EN fixture: paraphrase admitted, off-domain dropped', () => {
     const enInput = {
       centerGoal: 'Master React hooks in 30 days',
@@ -664,5 +669,114 @@ describe('applyMandalaFilter — centerGateMode: "semantic"', () => {
     );
     expect(stats.centerGateMode).toBe('semantic');
     expect(stats.droppedByCenterGate).toBe(1); // noise only; paraphrase passes
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Semantic cell assignment (Part A — subGoalEmbeddings)
+// ---------------------------------------------------------------------------
+
+describe('applyMandalaFilter — semantic cell assignment via subGoalEmbeddings', () => {
+  // Mandala: AI 마케팅 (mirrors the production trace 8a272317).
+  // Sub-goal embeddings are synthetic 4-dim vectors, each aligned with a
+  // different axis so the argmax is unambiguous in tests.
+  const centerGoal = 'AI 마케팅 전략';
+  const subGoals = [
+    'AI 마케팅 도구 및 플랫폼 학습', // cell 0 — axis [1, 0, 0, 0]
+    '데이터 분석 및 인사이트 도출', // cell 1 — axis [0, 1, 0, 0]
+    '콘텐츠 생성 및 최적화', // cell 2 — axis [0, 0, 1, 0]
+    '고객 타겟팅 전략', // cell 3 — axis [0, 0, 0, 1]
+    'ROI 측정 및 성과 관리', // cell 4 — axis [0.7, 0.7, 0, 0]
+    '소셜 미디어 채널 운영', // cell 5 — axis [0, 0, 0.7, 0.7]
+    '검색 엔진 최적화', // cell 6 — axis [0.5, 0, 0.5, 0]
+    '이메일 마케팅 자동화', // cell 7 — axis [0, 0.5, 0, 0.5]
+  ];
+  // Sub-goal embedding vectors — each axis-aligned per above.
+  const subGoalEmbeddings: number[][] = [
+    [1, 0, 0, 0],
+    [0, 1, 0, 0],
+    [0, 0, 1, 0],
+    [0, 0, 0, 1],
+    [0.7, 0.7, 0, 0],
+    [0, 0, 0.7, 0.7],
+    [0.5, 0, 0.5, 0],
+    [0, 0.5, 0, 0.5],
+  ];
+  const centerVec = [0.8, 0.6, 0, 0]; // near cells 0 + 1 axis
+
+  // Input template — semantic center gate so all center-matched candidates pass gate 1.
+  const baseInput = {
+    centerGoal,
+    subGoals,
+    language: 'ko' as const,
+    centerGateMode: 'semantic' as const,
+    centerEmbedding: centerVec,
+    subGoalEmbeddings,
+  };
+
+  test('(1) semantic cell assignment: candidate assigned to cell with highest cosine, even without title token overlap', () => {
+    // Cell 2 (콘텐츠 생성) embedding: [0, 0, 1, 0].
+    // Candidate title shares NO tokens with "콘텐츠 생성 및 최적화" — pure semantic.
+    const candidateVec: number[] = [0, 0, 0.95, 0.1]; // closest to cell 2 axis
+    const candidate = cand('sem1', '영상 제작 워크플로우 자동화', '');
+    // We need the candidate to pass the center gate too — give it a non-zero cosine vs centerVec.
+    // Override: use centerGateMode='off' so center gate is bypassed; we're testing cell routing only.
+    const { byCell } = applyMandalaFilterWithStats([candidate], {
+      ...baseInput,
+      centerGateMode: 'off',
+      candidateEmbeddings: new Map([['sem1', candidateVec]]),
+    });
+    // Must land in cell 2 (highest cosine with [0,0,1,0]).
+    const cell2 = byCell.get(2) ?? [];
+    expect(cell2).toHaveLength(1);
+    expect(cell2[0]!.candidate.videoId).toBe('sem1');
+    // All other cells must be empty.
+    for (const [idx, list] of byCell) {
+      if (idx !== 2) expect(list).toHaveLength(0);
+    }
+  });
+
+  test('(2) lexical fallback when subGoalEmbeddings absent — existing Jaccard path unchanged', () => {
+    // Without subGoalEmbeddings, the lexical path must behave identically to
+    // the pre-fix implementation. "Reading 만점" has clear token overlap with
+    // subGoal[0] of this separate TOEFL mandala.
+    const toeflInput = {
+      centerGoal: '토플 100점 달성',
+      subGoals: [
+        'Reading 25점 이상',
+        'Listening 25점 이상',
+        'Speaking 23점 이상',
+        'Writing 25점 이상',
+        'Grammar 복습',
+        '학습 루틴 관리',
+        '오답노트 작성',
+        '시험일 컨디션 관리',
+      ],
+      language: 'ko' as const,
+      // subGoalEmbeddings intentionally omitted → lexical path
+    };
+    const candidate = cand('lex1', '토플 Reading 만점 전략', '토플 Reading 25점');
+    const { byCell, stats } = applyMandalaFilterWithStats([candidate], toeflInput);
+    // droppedByCellScoreBelowThreshold must be 0 (semantic path not taken).
+    expect(stats.droppedByCellScoreBelowThreshold).toBe(0);
+    // Candidate routed to Reading cell (0) via Jaccard.
+    const cell0 = byCell.get(0) ?? [];
+    expect(cell0).toHaveLength(1);
+  });
+
+  test('(3) candidate below SEMANTIC_MIN_CELL_COSINE on all cells is dropped', () => {
+    // Use a zero-magnitude vector — cosineSimilarity returns 0 (zero-magnitude guard).
+    // 0 < SEMANTIC_MIN_CELL_COSINE (0.25) so the candidate must be dropped.
+    const zeroCandVec: number[] = [0, 0, 0, 0];
+    const candidate = cand('drop1', '완전히 다른 주제의 영상', '전혀 관련 없는 설명');
+    const { byCell, stats } = applyMandalaFilterWithStats([candidate], {
+      ...baseInput,
+      centerGateMode: 'off', // bypass center gate — test only cell assignment drop
+      candidateEmbeddings: new Map([['drop1', zeroCandVec]]),
+    });
+    expect(stats.droppedByCellScoreBelowThreshold).toBeGreaterThanOrEqual(1);
+    for (const list of byCell.values()) {
+      expect(list).toHaveLength(0);
+    }
   });
 });
