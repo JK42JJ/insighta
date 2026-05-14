@@ -65,6 +65,7 @@ APPLY_FILES=(
   "prisma/migrations/pipeline-events/001_create_pipeline_events.sql"
   "prisma/migrations/note_documents/001_create_table.sql"
   "prisma/migrations/video_pool/001_add_tsvector_gin_index.sql"
+  "prisma/migrations/discover-traces/001_create_video_discover_traces.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "

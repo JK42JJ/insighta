@@ -28,6 +28,7 @@ import {
   SEARCH_QUERY_MAX_TOKENS,
 } from '@/prompts/search-query-generator';
 import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
+import { recordTrace } from '@/modules/discover-tracing';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'video-discover/v2/keyword-builder' });
@@ -166,6 +167,7 @@ export async function runLLMQueries(
     focusTags: input.focusTags,
     targetLevel: input.targetLevel,
   });
+  const t0 = Date.now();
   try {
     // Test injection takes precedence so unit tests don't reach OpenRouter.
     // In real code, OpenRouterGenerationProvider reads OPENROUTER_API_KEY
@@ -183,11 +185,47 @@ export async function runLLMQueries(
     });
     const queries = parseQueriesResponse(raw) ?? [];
     const cap = resolveMaxQueries(opts.maxQueries);
-    return queries.slice(0, cap).map((q) => ({ query: clip(q), source: 'llm' as const }));
+    const result = queries.slice(0, cap).map((q) => ({ query: clip(q), source: 'llm' as const }));
+    // CP457+ trace — capture prompt + raw LLM response + parsed queries.
+    recordTrace({
+      step: 'tier2.keyword_builder.llm',
+      status: 'ok',
+      request: {
+        model: SEARCH_QUERY_MODEL,
+        temperature: SEARCH_QUERY_TEMPERATURE,
+        maxTokens: SEARCH_QUERY_MAX_TOKENS,
+        prompt,
+        centerGoal: center,
+        language: input.language,
+        focusTags: input.focusTags,
+        subGoals: input.subGoals,
+      },
+      response: {
+        raw_response: raw,
+        parsed_query_count: queries.length,
+        queries_after_cap: result.map((q) => q.query),
+      },
+      latencyMs: Date.now() - t0,
+    });
+    return result;
   } catch (err) {
     log.warn(
       `C+ LLM query failed: ${err instanceof Error ? err.message : String(err)} — falling back to rule-based`
     );
+    recordTrace({
+      step: 'tier2.keyword_builder.llm',
+      status: 'error',
+      request: {
+        model: SEARCH_QUERY_MODEL,
+        prompt,
+        centerGoal: center,
+        language: input.language,
+        focusTags: input.focusTags,
+        subGoals: input.subGoals,
+      },
+      errorMessage: err instanceof Error ? err.message : String(err),
+      latencyMs: Date.now() - t0,
+    });
     return [];
   }
 }

@@ -9,6 +9,8 @@
  * isolated. v1 stays untouched (rollback path).
  */
 
+import { recordTrace } from '@/modules/discover-tracing';
+
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
 export const VIDEOS_LIST_MAX_IDS_PER_CALL = 50;
@@ -213,18 +215,60 @@ export async function searchVideos(opts: SearchOpts): Promise<YouTubeSearchItem[
     throw new Error('searchVideos: server API key is required (v2 does not accept OAuth)');
   }
   let lastErr: unknown = null;
+  // CP457+ trace — capture the search query that BE sent + the items
+  // returned. apiKey deliberately NOT logged. Fire-and-forget.
+  const traceReq = {
+    query: opts.query,
+    maxResults: opts.maxResults ?? SEARCH_MAX_RESULTS,
+    regionCode: opts.regionCode,
+    relevanceLanguage: opts.relevanceLanguage,
+    order: opts.order,
+    publishedAfter: opts.publishedAfter,
+  };
+  const t0 = Date.now();
   for (const key of keys) {
     if (!key) continue;
     try {
-      return await searchVideosOne(key, opts);
+      const items = await searchVideosOne(key, opts);
+      recordTrace({
+        step: 'tier2.search.list',
+        status: 'ok',
+        request: traceReq,
+        response: {
+          item_count: items.length,
+          items: items.map((it) => ({
+            videoId: it.id?.videoId,
+            title: it.snippet?.title,
+            channelTitle: it.snippet?.channelTitle,
+            publishedAt: it.snippet?.publishedAt,
+          })),
+        },
+        latencyMs: Date.now() - t0,
+      });
+      return items;
     } catch (err) {
       lastErr = err;
       if (!isQuotaError(err)) {
+        recordTrace({
+          step: 'tier2.search.list',
+          status: 'error',
+          request: traceReq,
+          errorMessage: err instanceof Error ? err.message : String(err),
+          latencyMs: Date.now() - t0,
+        });
         throw err; // non-quota errors are terminal
       }
       // quota: try next key
     }
   }
+  recordTrace({
+    step: 'tier2.search.list',
+    status: 'error',
+    request: traceReq,
+    errorMessage:
+      'all_keys_quota_exhausted: ' + (lastErr instanceof Error ? lastErr.message : String(lastErr)),
+    latencyMs: Date.now() - t0,
+  });
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
@@ -250,22 +294,49 @@ export async function videosBatch(opts: VideosBatchOpts): Promise<YouTubeVideoSt
   for (let i = 0; i < opts.videoIds.length; i += VIDEOS_LIST_MAX_IDS_PER_CALL) {
     chunks.push(opts.videoIds.slice(i, i + VIDEOS_LIST_MAX_IDS_PER_CALL));
   }
-  const results = await Promise.all(
-    chunks.map(async (chunk) => {
-      let lastErr: unknown = null;
-      for (const key of keys) {
-        if (!key) continue;
-        try {
-          return await videosBatchSingle(chunk, key, opts.fetchFn);
-        } catch (err) {
-          lastErr = err;
-          if (!isVideosBatchQuotaError(err)) throw err;
+  const t0 = Date.now();
+  try {
+    const results = await Promise.all(
+      chunks.map(async (chunk) => {
+        let lastErr: unknown = null;
+        for (const key of keys) {
+          if (!key) continue;
+          try {
+            return await videosBatchSingle(chunk, key, opts.fetchFn);
+          } catch (err) {
+            lastErr = err;
+            if (!isVideosBatchQuotaError(err)) throw err;
+          }
         }
-      }
-      throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
-    })
-  );
-  return results.flat();
+        throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+      })
+    );
+    const flat = results.flat();
+    recordTrace({
+      step: 'tier2.videos.batch',
+      status: 'ok',
+      request: { video_id_count: opts.videoIds.length, chunks: chunks.length },
+      response: {
+        item_count: flat.length,
+        items: flat.map((it) => ({
+          id: it.id,
+          duration: it.contentDetails?.duration,
+          viewCount: it.statistics?.viewCount,
+        })),
+      },
+      latencyMs: Date.now() - t0,
+    });
+    return flat;
+  } catch (err) {
+    recordTrace({
+      step: 'tier2.videos.batch',
+      status: 'error',
+      request: { video_id_count: opts.videoIds.length, chunks: chunks.length },
+      errorMessage: err instanceof Error ? err.message : String(err),
+      latencyMs: Date.now() - t0,
+    });
+    throw err;
+  }
 }
 
 async function videosBatchSingle(

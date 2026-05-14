@@ -47,6 +47,7 @@ import { v3Config } from './config';
 import { filterByQualityGate } from './quality-gate';
 import { applyHybridRerank } from './hybrid-rerank';
 import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
+import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
 
 import {
   buildRuleBasedQueriesSync,
@@ -187,318 +188,341 @@ export const executor: SkillExecutor = {
   },
 
   async execute(ctx: ExecuteContext): Promise<ExecuteResult> {
-    const t0 = Date.now();
-    const apiKeys = resolveSearchApiKeys(ctx.env ?? {});
-    const openRouterApiKey = ctx.env?.['OPENROUTER_API_KEY'];
-    const openRouterModel = ctx.env?.['OPENROUTER_MODEL'] ?? 'qwen/qwen3-30b-a3b';
-    const state = ctx.state as unknown as HydratedState;
-    const mandalaId = ctx.mandalaId!;
-
-    // ── Tier 0: Redis video-dictionary (gated by v3Config.enableRedisProvider; default off)
-    // CP436 PR-Y0g (Issue #543): Tier 0 was always-on with no quality gate. Prod
-    // incident on mandala 1ee990a9 ("감정 컨트롤 하기") admitted 96 cards in cell 2,
-    // 100% from RedisProvider, with cross-domain noise (속기/마케팅/자각몽/한복) and
-    // hardcoded score 0.5. Re-enable only after a quality gate (semantic cosine
-    // threshold or strict minOverlap raise) is in place — see config.ts comment.
-    const slots: AssembledSlot[] = [];
-    let redisMatchCount = 0;
-    if (v3Config.enableRedisProvider) {
-      const redisProvider = new RedisProvider();
-      const redisHealth = await redisProvider.health();
-      if (redisHealth.available) {
-        const cells: CellDefinition[] = state.subGoals.map((sg, i) => ({
-          cellIndex: i,
-          subGoal: sg,
-          keywords: [],
-        }));
-        try {
-          const redisResult = await redisProvider.match({
-            mandalaId,
-            userId: ctx.userId,
-            cells,
-            budget: V3_TARGET_TOTAL,
-            excludeVideoIds: new Set<string>(),
-            language: state.language,
-            centerGoal: state.centerGoal,
-            focusTags: state.focusTags,
-          });
-          for (const c of redisResult.candidates) {
-            slots.push({
-              videoId: c.videoId,
-              title: c.title,
-              description: c.description,
-              channelName: c.channelTitle,
-              channelId: c.channelId,
-              thumbnail: c.thumbnailUrl,
-              viewCount: c.viewCount,
-              likeCount: c.likeCount,
-              durationSec: c.durationSec,
-              publishedAt: c.publishedAt,
-              cellIndex: c.cellIndex,
-              score: c.relevanceScore,
-              tier: 'cache',
-            });
-          }
-          redisMatchCount = redisResult.candidates.length;
-          log.info(
-            `[redis] mandala=${mandalaId} candidates=${redisMatchCount} latencyMs=${redisResult.meta.latencyMs}`
-          );
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          log.warn(`[redis] match failed (non-fatal): ${msg}`);
-        }
-      } else {
-        log.info(`[redis] unavailable: ${redisHealth.lastError}`);
-      }
-    } else {
-      log.info(`[redis] disabled by V3_ENABLE_REDIS_PROVIDER=false (Y0g)`);
-    }
-
-    // ── Tier 1: video_pool cache (disabled by default — see v3Config.enableTier1Cache)
-    const redisByCell = new Map<number, number>();
-    for (const s of slots) {
-      redisByCell.set(s.cellIndex, (redisByCell.get(s.cellIndex) ?? 0) + 1);
-    }
-    const existingVideoIds = new Set(slots.map((s) => s.videoId));
-
-    const tier1Matches = v3Config.enableTier1Cache
-      ? await matchFromVideoPool({
-          mandalaId,
-          language: state.language,
-          perCell: V3_TARGET_PER_CELL,
-          sources: v3Config.tier1Sources,
-        })
-      : [];
-
-    let tier1Total = 0;
-    if (tier1Matches.length > 0) {
-      const fresh = tier1Matches.filter((m) => !existingVideoIds.has(m.videoId));
-      // CP455+ — semantic center gate on Tier 1 output before admission.
-      // Without this, cross-domain noise (e.g. cell 6 "모의고사" sub_goal
-      // matching 28 토익스피킹 videos at cosine 0.55+) surfaces unfiltered.
-      let filteredTier1: typeof fresh = fresh;
-      if (fresh.length > 0 && v3Config.centerGateMode === 'semantic') {
-        try {
-          const cap = v3Config.semanticMaxCandidates;
-          const capped = fresh.slice(0, cap);
-          const texts = [state.centerGoal, ...capped.map((m) => m.title)];
-          const vectors = await embedBatch(texts);
-          if (vectors.length === texts.length) {
-            const centerEmbedding = vectors[0];
-            const candidateEmbeddings = new Map<string, number[]>();
-            for (let i = 0; i < capped.length; i++) {
-              const vec = vectors[i + 1];
-              const id = capped[i]?.videoId;
-              if (vec && id) candidateEmbeddings.set(id, vec);
-            }
-            const filterInputs: FilterCandidate[] = capped.map((m) => ({
-              videoId: m.videoId,
-              title: m.title,
-              description: m.description,
-              publishedAt: m.publishedAt,
-            }));
-            const { byCell, stats: mfStats } = applyMandalaFilterWithStats(filterInputs, {
-              centerGoal: state.centerGoal,
-              subGoals: state.subGoals,
-              language: state.language,
-              focusTags: state.focusTags,
-              recencyWeight: v3Config.recencyWeight,
-              recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
-              centerGateMode: v3Config.centerGateMode,
-              centerEmbedding,
-              candidateEmbeddings,
-              semanticMinCosine: v3Config.semanticMinCosine,
-            });
-            const keptIds = new Set<string>();
-            for (const assignments of byCell.values()) {
-              for (const a of assignments) keptIds.add(a.candidate.videoId);
-            }
-            filteredTier1 = capped.filter((m) => keptIds.has(m.videoId));
-            log.info(
-              `[tier1] mandala-filter input=${mfStats.input} output=${mfStats.output} ` +
-                `droppedCenterGate=${mfStats.droppedByCenterGate} droppedJaccard=${mfStats.droppedByJaccardBelowThreshold}`
-            );
-          } else {
-            log.warn(
-              `[tier1] mandala-filter embed mismatch: got ${vectors.length}/${texts.length} — admitting unfiltered`
-            );
-          }
-        } catch (err) {
-          log.warn(
-            `[tier1] mandala-filter threw — admitting unfiltered: ${
-              err instanceof Error ? err.message : String(err)
-            }`
-          );
-        }
-      }
-      for (const m of filteredTier1) {
-        slots.push({
-          videoId: m.videoId,
-          title: m.title,
-          description: m.description,
-          channelName: m.channelName,
-          channelId: m.channelId,
-          thumbnail: m.thumbnail,
-          viewCount: m.viewCount,
-          likeCount: m.likeCount,
-          durationSec: m.durationSec,
-          publishedAt: m.publishedAt,
-          cellIndex: m.cellIndex,
-          score: m.score,
-          tier: 'cache',
-        });
-        existingVideoIds.add(m.videoId);
-        tier1Total++;
-      }
-    }
-
-    // ── Tier 2: realtime fallback for deficit cells ────────────────────
-    let tier2Count = 0;
-    let tier2QueriesUsed = 0;
-    let tier2Debug: Tier2Debug | null = null;
-    const totalHave = slots.length;
-    if (totalHave < V3_TARGET_TOTAL) {
-      const slotsByCell = new Map<number, number>();
-      for (const s of slots) {
-        slotsByCell.set(s.cellIndex, (slotsByCell.get(s.cellIndex) ?? 0) + 1);
-      }
-      const deficitCells: Array<{ cellIndex: number; need: number }> = [];
-      for (let i = 0; i < V3_NUM_CELLS; i++) {
-        const have = slotsByCell.get(i) ?? 0;
-        const need = Math.max(0, V3_TARGET_PER_CELL - have);
-        if (need > 0) deficitCells.push({ cellIndex: i, need });
-      }
-
-      const tier2Fill = await runTier2({
-        deficitCells,
-        state,
-        apiKeys,
-        openRouterApiKey: openRouterApiKey || undefined,
-        openRouterModel,
-        existingVideoIds,
-      });
-      slots.push(...tier2Fill.slots);
-      tier2Count = tier2Fill.slots.length;
-      tier2QueriesUsed = tier2Fill.queriesUsed;
-      tier2Debug = tier2Fill.debug;
-    }
-
-    if (slots.length === 0) {
-      return {
-        status: 'failed',
-        data: {
-          redis_matches: redisMatchCount,
-          tier1_matches: 0,
-          tier2_matches: 0,
-          ...(tier2Debug ? { debug: tier2Debug } : {}),
-        },
-        error: 'No recommendations from Redis, cache, or realtime fallback',
-        metrics: { duration_ms: Date.now() - t0 },
-      };
-    }
-
-    // ── Semantic rerank (D36, synthesis spec §4.2 — off by default) ────
-    const rerankedSlots = await maybeApplySemanticRerank(slots, mandalaId);
-    const semanticTrace: SemanticRerankTrace | null = rerankedSlots.trace;
-
-    // ── Hybrid rerank — Cohere cross-encoder (Issue #610 spec PR1) ─────
-    // Off by default (V3_ENABLE_HYBRID_RERANK=false). When ON, replaces the
-    // medical-English oversaturation (PR #555 mandala-filter bypass) by
-    // scoring candidates against centerGoal via Cohere rerank-multilingual-v3.0.
-    // Field mapping: AssembledSlot.score ↔ RerankSlot.rec_score (in-memory only,
-    // upsertSlots writes to recommendation_cache.rec_score either way).
-    const hybridResult = await applyHybridRerank({
-      slots: rerankedSlots.slots.map((s) => ({
-        videoId: s.videoId,
-        title: s.title,
-        cellIndex: s.cellIndex,
-        rec_score: s.score,
-        _original: s,
-      })),
-      centerGoal: state.centerGoal,
-      subGoals: state.subGoals,
-      enableKeywordExpansion: true,
-      topN: V3_TARGET_TOTAL,
-      requestId: mandalaId,
-      sources: v3Config.tier1Sources,
-    });
-    const hybridSlots: AssembledSlot[] = hybridResult.slots
-      .map((r) => {
-        const ext = r as unknown as {
-          _original?: AssembledSlot;
-          _keywordFullData?: {
-            videoId: string;
-            title: string;
-            description: string | null;
-            channelName: string | null;
-            channelId: string | null;
-            thumbnail: string | null;
-            viewCount: number | null;
-            likeCount: number | null;
-            durationSec: number | null;
-            publishedAt: Date | null;
-            cellIndex: number;
-          };
-        };
-        if (ext._original) {
-          return { ...ext._original, score: r.rec_score };
-        }
-        if (ext._keywordFullData) {
-          const k = ext._keywordFullData;
-          return {
-            videoId: k.videoId,
-            title: k.title,
-            description: k.description,
-            channelName: k.channelName,
-            channelId: k.channelId,
-            thumbnail: k.thumbnail,
-            viewCount: k.viewCount,
-            likeCount: k.likeCount,
-            durationSec: k.durationSec,
-            publishedAt: k.publishedAt,
-            cellIndex: k.cellIndex,
-            score: r.rec_score,
-            tier: 'cache' as const,
-          };
-        }
-        return null;
-      })
-      .filter((s): s is AssembledSlot => s !== null);
-    const hybridStats = hybridResult.stats;
-
-    // ── Dual whitelist gate (dual-whitelist.md §3.2 — off by default) ──
-    const gatedSlots = await maybeApplyWhitelistGate(hybridSlots);
-    const whitelistTrace: WhitelistGateTrace | null = gatedSlots.trace;
-
-    // ── Upsert recommendation_cache ────────────────────────────────────
-    const upserts = await upsertSlots(ctx.userId, mandalaId, gatedSlots.slots, state.subGoals);
-
-    const finalTotal = gatedSlots.slots.length;
-    const wallMs = Date.now() - t0;
-
-    return {
-      status: 'success',
-      data: {
-        redis_matches: redisMatchCount,
-        tier1_matches: tier1Total,
-        tier2_matches: tier2Count,
-        tier2_queries: tier2QueriesUsed,
-        total_recommendations: finalTotal,
-        cells_filled: new Set(gatedSlots.slots.map((s) => s.cellIndex)).size,
-        rows_upserted: upserts,
-        target_met: finalTotal >= V3_TARGET_TOTAL,
-        ...(tier2Debug ? { debug: tier2Debug } : {}),
-        ...(semanticTrace ? { semantic_rerank: semanticTrace } : {}),
-        ...(whitelistTrace ? { whitelist_gate: whitelistTrace } : {}),
-        hybrid_rerank: hybridStats,
-      },
-      metrics: {
-        duration_ms: wallMs,
-        rows_written: { recommendation_cache: upserts },
-      },
-    };
+    // CP457+ — bind trace context so all nested LLM/YouTube/Cohere/embed
+    // calls land in video_discover_traces with the same run_id. Flag-gated
+    // by V3_TRACE_ENABLED inside the tracer; no overhead when off.
+    return withTraceContext({ mandalaId: ctx.mandalaId ?? null, userId: ctx.userId ?? null }, () =>
+      executeImpl(ctx)
+    );
   },
 };
+
+async function executeImpl(ctx: ExecuteContext): Promise<ExecuteResult> {
+  const t0 = Date.now();
+  const apiKeys = resolveSearchApiKeys(ctx.env ?? {});
+  const openRouterApiKey = ctx.env?.['OPENROUTER_API_KEY'];
+  const openRouterModel = ctx.env?.['OPENROUTER_MODEL'] ?? 'qwen/qwen3-30b-a3b';
+  const state = ctx.state as unknown as HydratedState;
+  const mandalaId = ctx.mandalaId!;
+  recordTrace({
+    step: 'pipeline.execute.start',
+    status: 'ok',
+    request: {
+      mandalaId,
+      userId: ctx.userId,
+      centerGoal: state.centerGoal,
+      subGoals: state.subGoals,
+      language: state.language,
+      focusTags: state.focusTags,
+      targetLevel: state.targetLevel,
+    },
+    response: null,
+  });
+
+  // ── Tier 0: Redis video-dictionary (gated by v3Config.enableRedisProvider; default off)
+  // CP436 PR-Y0g (Issue #543): Tier 0 was always-on with no quality gate. Prod
+  // incident on mandala 1ee990a9 ("감정 컨트롤 하기") admitted 96 cards in cell 2,
+  // 100% from RedisProvider, with cross-domain noise (속기/마케팅/자각몽/한복) and
+  // hardcoded score 0.5. Re-enable only after a quality gate (semantic cosine
+  // threshold or strict minOverlap raise) is in place — see config.ts comment.
+  const slots: AssembledSlot[] = [];
+  let redisMatchCount = 0;
+  if (v3Config.enableRedisProvider) {
+    const redisProvider = new RedisProvider();
+    const redisHealth = await redisProvider.health();
+    if (redisHealth.available) {
+      const cells: CellDefinition[] = state.subGoals.map((sg, i) => ({
+        cellIndex: i,
+        subGoal: sg,
+        keywords: [],
+      }));
+      try {
+        const redisResult = await redisProvider.match({
+          mandalaId,
+          userId: ctx.userId,
+          cells,
+          budget: V3_TARGET_TOTAL,
+          excludeVideoIds: new Set<string>(),
+          language: state.language,
+          centerGoal: state.centerGoal,
+          focusTags: state.focusTags,
+        });
+        for (const c of redisResult.candidates) {
+          slots.push({
+            videoId: c.videoId,
+            title: c.title,
+            description: c.description,
+            channelName: c.channelTitle,
+            channelId: c.channelId,
+            thumbnail: c.thumbnailUrl,
+            viewCount: c.viewCount,
+            likeCount: c.likeCount,
+            durationSec: c.durationSec,
+            publishedAt: c.publishedAt,
+            cellIndex: c.cellIndex,
+            score: c.relevanceScore,
+            tier: 'cache',
+          });
+        }
+        redisMatchCount = redisResult.candidates.length;
+        log.info(
+          `[redis] mandala=${mandalaId} candidates=${redisMatchCount} latencyMs=${redisResult.meta.latencyMs}`
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn(`[redis] match failed (non-fatal): ${msg}`);
+      }
+    } else {
+      log.info(`[redis] unavailable: ${redisHealth.lastError}`);
+    }
+  } else {
+    log.info(`[redis] disabled by V3_ENABLE_REDIS_PROVIDER=false (Y0g)`);
+  }
+
+  // ── Tier 1: video_pool cache (disabled by default — see v3Config.enableTier1Cache)
+  const redisByCell = new Map<number, number>();
+  for (const s of slots) {
+    redisByCell.set(s.cellIndex, (redisByCell.get(s.cellIndex) ?? 0) + 1);
+  }
+  const existingVideoIds = new Set(slots.map((s) => s.videoId));
+
+  const tier1Matches = v3Config.enableTier1Cache
+    ? await matchFromVideoPool({
+        mandalaId,
+        language: state.language,
+        perCell: V3_TARGET_PER_CELL,
+        sources: v3Config.tier1Sources,
+      })
+    : [];
+
+  let tier1Total = 0;
+  if (tier1Matches.length > 0) {
+    const fresh = tier1Matches.filter((m) => !existingVideoIds.has(m.videoId));
+    // CP455+ — semantic center gate on Tier 1 output before admission.
+    // Without this, cross-domain noise (e.g. cell 6 "모의고사" sub_goal
+    // matching 28 토익스피킹 videos at cosine 0.55+) surfaces unfiltered.
+    let filteredTier1: typeof fresh = fresh;
+    if (fresh.length > 0 && v3Config.centerGateMode === 'semantic') {
+      try {
+        const cap = v3Config.semanticMaxCandidates;
+        const capped = fresh.slice(0, cap);
+        const texts = [state.centerGoal, ...capped.map((m) => m.title)];
+        const vectors = await embedBatch(texts);
+        if (vectors.length === texts.length) {
+          const centerEmbedding = vectors[0];
+          const candidateEmbeddings = new Map<string, number[]>();
+          for (let i = 0; i < capped.length; i++) {
+            const vec = vectors[i + 1];
+            const id = capped[i]?.videoId;
+            if (vec && id) candidateEmbeddings.set(id, vec);
+          }
+          const filterInputs: FilterCandidate[] = capped.map((m) => ({
+            videoId: m.videoId,
+            title: m.title,
+            description: m.description,
+            publishedAt: m.publishedAt,
+          }));
+          const { byCell, stats: mfStats } = applyMandalaFilterWithStats(filterInputs, {
+            centerGoal: state.centerGoal,
+            subGoals: state.subGoals,
+            language: state.language,
+            focusTags: state.focusTags,
+            recencyWeight: v3Config.recencyWeight,
+            recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
+            centerGateMode: v3Config.centerGateMode,
+            centerEmbedding,
+            candidateEmbeddings,
+            semanticMinCosine: v3Config.semanticMinCosine,
+          });
+          const keptIds = new Set<string>();
+          for (const assignments of byCell.values()) {
+            for (const a of assignments) keptIds.add(a.candidate.videoId);
+          }
+          filteredTier1 = capped.filter((m) => keptIds.has(m.videoId));
+          log.info(
+            `[tier1] mandala-filter input=${mfStats.input} output=${mfStats.output} ` +
+              `droppedCenterGate=${mfStats.droppedByCenterGate} droppedJaccard=${mfStats.droppedByJaccardBelowThreshold}`
+          );
+        } else {
+          log.warn(
+            `[tier1] mandala-filter embed mismatch: got ${vectors.length}/${texts.length} — admitting unfiltered`
+          );
+        }
+      } catch (err) {
+        log.warn(
+          `[tier1] mandala-filter threw — admitting unfiltered: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+      }
+    }
+    for (const m of filteredTier1) {
+      slots.push({
+        videoId: m.videoId,
+        title: m.title,
+        description: m.description,
+        channelName: m.channelName,
+        channelId: m.channelId,
+        thumbnail: m.thumbnail,
+        viewCount: m.viewCount,
+        likeCount: m.likeCount,
+        durationSec: m.durationSec,
+        publishedAt: m.publishedAt,
+        cellIndex: m.cellIndex,
+        score: m.score,
+        tier: 'cache',
+      });
+      existingVideoIds.add(m.videoId);
+      tier1Total++;
+    }
+  }
+
+  // ── Tier 2: realtime fallback for deficit cells ────────────────────
+  let tier2Count = 0;
+  let tier2QueriesUsed = 0;
+  let tier2Debug: Tier2Debug | null = null;
+  const totalHave = slots.length;
+  if (totalHave < V3_TARGET_TOTAL) {
+    const slotsByCell = new Map<number, number>();
+    for (const s of slots) {
+      slotsByCell.set(s.cellIndex, (slotsByCell.get(s.cellIndex) ?? 0) + 1);
+    }
+    const deficitCells: Array<{ cellIndex: number; need: number }> = [];
+    for (let i = 0; i < V3_NUM_CELLS; i++) {
+      const have = slotsByCell.get(i) ?? 0;
+      const need = Math.max(0, V3_TARGET_PER_CELL - have);
+      if (need > 0) deficitCells.push({ cellIndex: i, need });
+    }
+
+    const tier2Fill = await runTier2({
+      deficitCells,
+      state,
+      apiKeys,
+      openRouterApiKey: openRouterApiKey || undefined,
+      openRouterModel,
+      existingVideoIds,
+    });
+    slots.push(...tier2Fill.slots);
+    tier2Count = tier2Fill.slots.length;
+    tier2QueriesUsed = tier2Fill.queriesUsed;
+    tier2Debug = tier2Fill.debug;
+  }
+
+  if (slots.length === 0) {
+    return {
+      status: 'failed',
+      data: {
+        redis_matches: redisMatchCount,
+        tier1_matches: 0,
+        tier2_matches: 0,
+        ...(tier2Debug ? { debug: tier2Debug } : {}),
+      },
+      error: 'No recommendations from Redis, cache, or realtime fallback',
+      metrics: { duration_ms: Date.now() - t0 },
+    };
+  }
+
+  // ── Semantic rerank (D36, synthesis spec §4.2 — off by default) ────
+  const rerankedSlots = await maybeApplySemanticRerank(slots, mandalaId);
+  const semanticTrace: SemanticRerankTrace | null = rerankedSlots.trace;
+
+  // ── Hybrid rerank — Cohere cross-encoder (Issue #610 spec PR1) ─────
+  // Off by default (V3_ENABLE_HYBRID_RERANK=false). When ON, replaces the
+  // medical-English oversaturation (PR #555 mandala-filter bypass) by
+  // scoring candidates against centerGoal via Cohere rerank-multilingual-v3.0.
+  // Field mapping: AssembledSlot.score ↔ RerankSlot.rec_score (in-memory only,
+  // upsertSlots writes to recommendation_cache.rec_score either way).
+  const hybridResult = await applyHybridRerank({
+    slots: rerankedSlots.slots.map((s) => ({
+      videoId: s.videoId,
+      title: s.title,
+      cellIndex: s.cellIndex,
+      rec_score: s.score,
+      _original: s,
+    })),
+    centerGoal: state.centerGoal,
+    subGoals: state.subGoals,
+    enableKeywordExpansion: true,
+    topN: V3_TARGET_TOTAL,
+    requestId: mandalaId,
+    sources: v3Config.tier1Sources,
+  });
+  const hybridSlots: AssembledSlot[] = hybridResult.slots
+    .map((r) => {
+      const ext = r as unknown as {
+        _original?: AssembledSlot;
+        _keywordFullData?: {
+          videoId: string;
+          title: string;
+          description: string | null;
+          channelName: string | null;
+          channelId: string | null;
+          thumbnail: string | null;
+          viewCount: number | null;
+          likeCount: number | null;
+          durationSec: number | null;
+          publishedAt: Date | null;
+          cellIndex: number;
+        };
+      };
+      if (ext._original) {
+        return { ...ext._original, score: r.rec_score };
+      }
+      if (ext._keywordFullData) {
+        const k = ext._keywordFullData;
+        return {
+          videoId: k.videoId,
+          title: k.title,
+          description: k.description,
+          channelName: k.channelName,
+          channelId: k.channelId,
+          thumbnail: k.thumbnail,
+          viewCount: k.viewCount,
+          likeCount: k.likeCount,
+          durationSec: k.durationSec,
+          publishedAt: k.publishedAt,
+          cellIndex: k.cellIndex,
+          score: r.rec_score,
+          tier: 'cache' as const,
+        };
+      }
+      return null;
+    })
+    .filter((s): s is AssembledSlot => s !== null);
+  const hybridStats = hybridResult.stats;
+
+  // ── Dual whitelist gate (dual-whitelist.md §3.2 — off by default) ──
+  const gatedSlots = await maybeApplyWhitelistGate(hybridSlots);
+  const whitelistTrace: WhitelistGateTrace | null = gatedSlots.trace;
+
+  // ── Upsert recommendation_cache ────────────────────────────────────
+  const upserts = await upsertSlots(ctx.userId, mandalaId, gatedSlots.slots, state.subGoals);
+
+  const finalTotal = gatedSlots.slots.length;
+  const wallMs = Date.now() - t0;
+
+  return {
+    status: 'success',
+    data: {
+      redis_matches: redisMatchCount,
+      tier1_matches: tier1Total,
+      tier2_matches: tier2Count,
+      tier2_queries: tier2QueriesUsed,
+      total_recommendations: finalTotal,
+      cells_filled: new Set(gatedSlots.slots.map((s) => s.cellIndex)).size,
+      rows_upserted: upserts,
+      target_met: finalTotal >= V3_TARGET_TOTAL,
+      ...(tier2Debug ? { debug: tier2Debug } : {}),
+      ...(semanticTrace ? { semantic_rerank: semanticTrace } : {}),
+      ...(whitelistTrace ? { whitelist_gate: whitelistTrace } : {}),
+      hybrid_rerank: hybridStats,
+    },
+    metrics: {
+      duration_ms: wallMs,
+      rows_written: { recommendation_cache: upserts },
+    },
+  };
+}
 
 // ============================================================================
 // Semantic rerank — D36 per synthesis spec §4.2 (off unless V3_ENABLE_SEMANTIC_RERANK=true)
@@ -1476,6 +1500,15 @@ export interface EphemeralDiscoverResult {
 export async function runDiscoverEphemeral(
   input: EphemeralDiscoverInput
 ): Promise<EphemeralDiscoverResult> {
+  // CP457+ — bind trace context for ephemeral wizard path. mandalaId is
+  // not yet known (wizard precompute), so use null and let downstream
+  // consume-time copy the run_id forward.
+  return withTraceContext({ mandalaId: null, userId: null }, () => runDiscoverEphemeralImpl(input));
+}
+
+async function runDiscoverEphemeralImpl(
+  input: EphemeralDiscoverInput
+): Promise<EphemeralDiscoverResult> {
   const t0 = Date.now();
   const apiKeys = resolveSearchApiKeys(input.env);
   if (apiKeys.length === 0) {
@@ -1483,6 +1516,18 @@ export async function runDiscoverEphemeral(
   }
   const openRouterApiKey = input.env['OPENROUTER_API_KEY'];
   const openRouterModel = input.env['OPENROUTER_MODEL'] ?? 'qwen/qwen3-30b-a3b';
+  recordTrace({
+    step: 'pipeline.ephemeral.start',
+    status: 'ok',
+    request: {
+      centerGoal: input.centerGoal,
+      subGoals: input.subGoals,
+      language: input.language,
+      focusTags: input.focusTags,
+      targetLevel: input.targetLevel,
+    },
+    response: null,
+  });
 
   // ── Tier 0: Redis video-dictionary (gated by v3Config.enableRedisProvider; default off, Y0g) ─
   const redisSlots: AssembledSlot[] = [];

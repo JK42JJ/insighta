@@ -161,6 +161,13 @@ const envSchema = z.object({
   V3_ENABLE_HYBRID_RERANK: z
     .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
     .default(false),
+
+  // Per-step request/response trace capture for video-discovery (CP457+).
+  // Off → near-zero overhead. On → fire-and-forget INSERT into
+  // public.video_discover_traces for every LLM/YouTube/Cohere/embed call.
+  V3_TRACE_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -298,6 +305,11 @@ export const config = {
   // V3 feature flags (hybrid-retrieval spec 2026-05-12)
   v3HybridRerank: {
     enabled: env.V3_ENABLE_HYBRID_RERANK,
+  },
+
+  // Discover-pipeline tracing (CP457+).
+  discoverTracing: {
+    enabled: env.V3_TRACE_ENABLED,
   },
 
   // Gemini

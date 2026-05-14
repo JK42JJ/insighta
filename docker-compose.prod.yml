@@ -256,6 +256,12 @@ services:
       # defaults (['v2_promoted'], 0.35) restore CP456 behavior.
       - V3_TIER1_SOURCES=v2_promoted,batch_trend
       - V3_SEMANTIC_MIN_COSINE=0.5
+      # CP457+ — per-step request/response capture for video-discovery
+      # (LLM prompts, YouTube search, Cohere rerank, embeddings, results).
+      # Writes to public.video_discover_traces (TTL 7d). Fire-and-forget;
+      # DB outage never blocks user pipeline. Off → near-zero overhead.
+      # Disable: set false (or remove line) → code default off.
+      - V3_TRACE_ENABLED=true
       # OPENROUTER_EMBED_MODEL defaults to `qwen/qwen3-embedding-8b` in
       # code. Uncomment + override here ONLY if the exact OpenRouter
       # model id string differs (verify at https://openrouter.ai/models).

@@ -42,6 +42,7 @@ prisma/migrations/*
 !prisma/migrations/note_documents/
 !prisma/migrations/video_pool/
 !prisma/migrations/pin/
+!prisma/migrations/discover-traces/
 
 # Logs
 logs/
