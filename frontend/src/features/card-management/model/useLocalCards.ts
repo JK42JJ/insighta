@@ -271,7 +271,6 @@ export function useLocalCards() {
 
     // Loading states
     isLoading: listQuery.isLoading,
-    isFetching: listQuery.isFetching,
     isAdding: addCard.isPending,
     isUpdating: updateCard.isPending,
     isDeleting: deleteCard.isPending,
