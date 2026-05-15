@@ -92,6 +92,8 @@ export const queryKeys = {
   video: {
     all: ['video'] as const,
     richSummary: (videoId: string) => [...queryKeys.video.all, 'rich-summary', videoId] as const,
+    captions: (videoId: string, language: string) =>
+      [...queryKeys.video.all, 'captions', videoId, language] as const,
   },
   billing: {
     all: ['billing'] as const,
