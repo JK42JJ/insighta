@@ -66,10 +66,17 @@ export function useVideoStream(mandalaId: string | null | undefined): UseVideoSt
   const lastEventIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // mandalaId changed (or first mount) → this is a fresh stream. Drop any
+    // cards / seen-ids / lastEventId accumulated for the PREVIOUS mandala.
+    // Without this, switching A→B appends B's stream onto A's leftover cards,
+    // and useCardOrchestrator.streamMandalaCards force-relabels them with the
+    // current mandalaId — so the previous mandala's cards leak into the new
+    // one (count inflates until a hard refresh remounts this hook).
+    setCards([]);
+    seenRef.current = new Set();
+    lastEventIdRef.current = null;
+
     if (!mandalaId) {
-      setCards([]);
-      seenRef.current = new Set();
-      lastEventIdRef.current = null;
       setStatus('idle');
       setError(null);
       return;
