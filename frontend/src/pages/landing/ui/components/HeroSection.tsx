@@ -4,7 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { CheckCircle2, Play } from 'lucide-react';
 
-const DEMO_VIDEO_SRC = '/insighta-demo.mp4';
+// Demo video sources per UI language. Each file lives in `frontend/public/`
+// and is excluded from the PWA precache glob (`vite.config.ts:75` covers only
+// js/css/html/svg/png/woff2), so the SW install size is unaffected.
+const DEMO_VIDEO_SRC_KO = '/insighta-demo-ko.mp4';
+const DEMO_VIDEO_SRC_EN = '/insighta-demo-en.mp4';
 
 export function HeroSection() {
   const { t, i18n } = useTranslation();
@@ -16,6 +20,7 @@ export function HeroSection() {
     if (videoRef.current) videoRef.current.pause();
   }, []);
   const isKo = i18n.language === 'ko';
+  const demoVideoSrc = isKo ? DEMO_VIDEO_SRC_KO : DEMO_VIDEO_SRC_EN;
 
   return (
     <section className="relative pt-20 pb-16 md:pt-28 md:pb-24 overflow-hidden">
@@ -108,7 +113,7 @@ export function HeroSection() {
             </button>
             <video
               ref={videoRef}
-              src={DEMO_VIDEO_SRC}
+              src={demoVideoSrc}
               controls
               autoPlay
               className="w-full rounded-lg shadow-2xl"
