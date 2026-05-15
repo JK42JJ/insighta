@@ -10,6 +10,7 @@ import '@copilotkit/react-ui/styles.css';
 import { toast } from 'sonner';
 import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
 import { useCaptions } from '@/features/video-side-panel/model/useCaptions';
+import type { VideoRichSummaryResponse } from '@/shared/lib/api-client';
 import { useMandalaQuery } from '@/features/mandala';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
@@ -102,36 +103,68 @@ function linkifyTimestamps(root: Node) {
   }
 }
 
+/**
+ * Returns true when `richSummary` carries any usable content for the prompt
+ * — across v2 layered fields (`core`/`analysis`, CP437) AND v1 (`structured`,
+ * pre-CP437). PanelAISummary uses the same split (`hasNewV2`/`hasLegacyRich`).
+ */
+export function summaryHasUsableContent(rs: VideoRichSummaryResponse | null): boolean {
+  if (!rs) return false;
+  if (rs.core?.one_liner) return true;
+  if (rs.analysis?.core_argument) return true;
+  if (rs.analysis?.key_concepts && rs.analysis.key_concepts.length > 0) return true;
+  if (rs.analysis?.actionables && rs.analysis.actionables.length > 0) return true;
+  if (rs.oneLiner) return true;
+  if (rs.structured?.core_argument) return true;
+  if (rs.structured?.key_points && rs.structured.key_points.length > 0) return true;
+  if (rs.structured?.actionables && rs.structured.actionables.length > 0) return true;
+  return false;
+}
+
 export function buildInstructions(
   videoId: string,
-  richSummary: {
-    title?: string;
-    structured?: { key_points?: string[]; core_argument?: string; actionables?: string[] };
-  } | null,
+  richSummary: VideoRichSummaryResponse | null,
   transcript: string | null,
   language: string
 ): string {
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const hasContent =
-    richSummary != null &&
-    (richSummary.title ||
-      richSummary.structured?.core_argument ||
-      richSummary.structured?.key_points?.length ||
-      richSummary.structured?.actionables?.length);
+  const hasContent = summaryHasUsableContent(richSummary);
 
   let videoSection: string;
   let noContentRule: string;
   let timestampRule: string;
 
-  if (hasContent) {
+  if (hasContent && richSummary) {
+    // Prefer v2 layered fields, fall back to v1 `structured` field-by-field.
+    const oneLiner = richSummary.core?.one_liner ?? richSummary.oneLiner ?? null;
+    const coreArg =
+      richSummary.analysis?.core_argument ?? richSummary.structured?.core_argument ?? null;
+    const keyConcepts = richSummary.analysis?.key_concepts ?? [];
+    const keyPoints = richSummary.structured?.key_points ?? [];
+    const actionables =
+      richSummary.analysis?.actionables ?? richSummary.structured?.actionables ?? [];
+    const sections = richSummary.segments?.sections ?? richSummary.structured?.chapters ?? null;
+
     videoSection = `\n\n## Current Video\n- URL: ${videoUrl}`;
-    if (richSummary!.title) videoSection += `\n- Title: ${richSummary!.title}`;
-    if (richSummary!.structured?.core_argument)
-      videoSection += `\n- Core argument: ${richSummary!.structured.core_argument}`;
-    if (richSummary!.structured?.key_points?.length)
-      videoSection += `\n- Key points:\n${richSummary!.structured.key_points.map((p) => `  - ${p}`).join('\n')}`;
-    if (richSummary!.structured?.actionables?.length)
-      videoSection += `\n- Actionable takeaways:\n${richSummary!.structured.actionables.map((a) => `  - ${a}`).join('\n')}`;
+    if (oneLiner) videoSection += `\n- One-liner: ${oneLiner}`;
+    if (coreArg) videoSection += `\n- Core argument: ${coreArg}`;
+    if (keyPoints.length)
+      videoSection += `\n- Key points:\n${keyPoints.map((p) => `  - ${p}`).join('\n')}`;
+    if (keyConcepts.length)
+      videoSection += `\n- Key concepts:\n${keyConcepts.map((c) => `  - ${c.term}: ${c.definition}`).join('\n')}`;
+    if (actionables.length)
+      videoSection += `\n- Actionable takeaways:\n${actionables.map((a) => `  - ${a}`).join('\n')}`;
+    if (Array.isArray(sections) && sections.length)
+      videoSection += `\n- Sections (with timestamps):\n${sections
+        .map((s) => {
+          const t =
+            'from_sec' in s && typeof s.from_sec === 'number'
+              ? ` (${Math.floor(s.from_sec / 60)}:${String(s.from_sec % 60).padStart(2, '0')})`
+              : '';
+          const title = 'title' in s ? s.title : '';
+          return `  - ${title}${t}`;
+        })
+        .join('\n')}`;
     noContentRule = '';
     timestampRule =
       '\n- When summarizing or referencing the video, include timestamps (e.g. 0:47) tied to actual sections in the content above to help the user navigate.';
@@ -224,10 +257,14 @@ function ChatPanel({
 }) {
   const { t, i18n } = useTranslation();
   const { richSummary, isLoading: richSummaryLoading } = useRichSummary(videoId);
-  // Transcript fallback: only fetched once rich-summary resolves to "absent",
-  // so videos that already have a structured summary never hit the captions
-  // endpoint.
-  const { captions } = useCaptions(videoId, !richSummaryLoading && !richSummary);
+  // Transcript fallback: only fetched once rich-summary resolves AND has no
+  // usable content (covers (a) row missing entirely and (b) row present but
+  // empty across both v2 and v1 fields — e.g. quality_flag=low). Videos with
+  // any usable rich-summary content never hit the captions endpoint.
+  const { captions } = useCaptions(
+    videoId,
+    !richSummaryLoading && !summaryHasUsableContent(richSummary ?? null)
+  );
   const suggestions = buildSuggestions(t, richSummary?.structured ?? null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
