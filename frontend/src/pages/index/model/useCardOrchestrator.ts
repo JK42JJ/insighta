@@ -64,9 +64,6 @@ export interface UseCardOrchestratorReturn {
   pendingLocalCards: InsightCard[];
   // Loading state
   isLoading: boolean;
-  // True while either underlying card query is fetching (incl. background
-  // refetch with keepPreviousData) — distinct from isLoading (first load only).
-  isFetching: boolean;
   // Card actions
   handleCardClick: (card: InsightCard) => void;
   handleCardDrop: (
@@ -117,11 +114,7 @@ export function useCardOrchestrator(
   const queryClient = useQueryClient();
 
   // YouTube sync
-  const {
-    data: allVideoStates,
-    isLoading: isVideoStatesLoading,
-    isFetching: isVideoStatesFetching,
-  } = useAllVideoStates();
+  const { data: allVideoStates, isLoading: isVideoStatesLoading } = useAllVideoStates();
   const updateVideoState = useUpdateVideoState();
   const { autoSummaryEnabled } = useYouTubeAuth();
 
@@ -130,7 +123,6 @@ export function useCardOrchestrator(
     cards: persistedLocalCards,
     subscription,
     isLoading: isLocalCardsLoading,
-    isFetching: isLocalCardsFetching,
     addCard: addLocalCard,
     updateCard: updateLocalCard,
     deleteCard: deleteLocalCard,
@@ -1472,7 +1464,6 @@ export function useCardOrchestrator(
     displayCards,
     displayTitle,
     isLoading: isLocalCardsLoading || isVideoStatesLoading,
-    isFetching: isLocalCardsFetching || isVideoStatesFetching,
     syncedCards,
     newlySyncedCards,
     newlySyncedCountByMandala,
