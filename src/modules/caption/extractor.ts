@@ -9,9 +9,13 @@
  * may be returned to the client for local caching only.
  */
 
-// Dynamic import: youtube-transcript is ESM-only, CJS require() fails in production
+// Dynamic import of the ESM build subpath.
+// The package `main` (youtube-transcript.common.js) is CJS-bodied yet the
+// package.json declares `"type": "module"`, so importing the bare package
+// name throws "exports is not defined in ES module scope". Importing the
+// `.esm.js` build directly sidesteps the broken main entry.
 async function loadFetchTranscript() {
-  const mod = await import('youtube-transcript');
+  const mod = await import('youtube-transcript/dist/youtube-transcript.esm.js');
   return mod.fetchTranscript;
 }
 import { logger } from '../../utils/logger';

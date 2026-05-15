@@ -9,6 +9,7 @@ import { CopilotChat } from '@copilotkit/react-ui';
 import '@copilotkit/react-ui/styles.css';
 import { toast } from 'sonner';
 import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
+import { useCaptions } from '@/features/video-side-panel/model/useCaptions';
 import { useMandalaQuery } from '@/features/mandala';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
@@ -26,6 +27,11 @@ export interface ChatContext {
 }
 
 const REGION_AWARENESS_ENABLED = import.meta.env.VITE_CHATBOT_REGION_AWARENESS === 'true';
+
+// Upper bound on raw transcript text injected into the chatbot prompt when
+// no structured rich summary exists. Long enough to cover most videos
+// substantially; bounded to keep prompt tokens and latency in check.
+const TRANSCRIPT_PROMPT_MAX_CHARS = 20000;
 
 export function computeChatLayer(input: {
   regionAware: boolean;
@@ -96,12 +102,13 @@ function linkifyTimestamps(root: Node) {
   }
 }
 
-function buildInstructions(
+export function buildInstructions(
   videoId: string,
   richSummary: {
     title?: string;
     structured?: { key_points?: string[]; core_argument?: string; actionables?: string[] };
   } | null,
+  transcript: string | null,
   language: string
 ): string {
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -113,6 +120,9 @@ function buildInstructions(
       richSummary.structured?.actionables?.length);
 
   let videoSection: string;
+  let noContentRule: string;
+  let timestampRule: string;
+
   if (hasContent) {
     videoSection = `\n\n## Current Video\n- URL: ${videoUrl}`;
     if (richSummary!.title) videoSection += `\n- Title: ${richSummary!.title}`;
@@ -122,17 +132,27 @@ function buildInstructions(
       videoSection += `\n- Key points:\n${richSummary!.structured.key_points.map((p) => `  - ${p}`).join('\n')}`;
     if (richSummary!.structured?.actionables?.length)
       videoSection += `\n- Actionable takeaways:\n${richSummary!.structured.actionables.map((a) => `  - ${a}`).join('\n')}`;
+    noContentRule = '';
+    timestampRule =
+      '\n- When summarizing or referencing the video, include timestamps (e.g. 0:47) tied to actual sections in the content above to help the user navigate.';
+  } else if (transcript) {
+    // Fallback: no structured rich summary yet, but the raw transcript is
+    // available. Feed it so the model can still produce a real summary
+    // instead of refusing — grounded strictly in the transcript text.
+    const clipped = transcript.slice(0, TRANSCRIPT_PROMPT_MAX_CHARS);
+    const truncatedNote =
+      transcript.length > TRANSCRIPT_PROMPT_MAX_CHARS
+        ? '\n\n[Transcript truncated for length — summarize what is available above.]'
+        : '';
+    videoSection = `\n\n## Current Video\n- URL: ${videoUrl}\n- Source: raw transcript (a structured AI analysis has not been generated yet)\n\n### Transcript\n${clipped}${truncatedNote}`;
+    noContentRule =
+      '\n- A structured AI summary is not available yet, but the raw video transcript is provided below. Base every answer strictly on that transcript. You MAY and SHOULD summarize the video from it when asked. Do NOT invent content, claims, or timestamps that are not present in the transcript.';
+    timestampRule = '';
   } else {
-    videoSection = `\n\n## Current Video\n- URL: ${videoUrl}\n- Content status: AI analysis for this video is currently being prepared and will be available shortly.`;
+    videoSection = `\n\n## Current Video\n- URL: ${videoUrl}\n- Content status: No transcript or AI analysis is available for this video yet.`;
+    noContentRule = `\n- IMPORTANT: Neither an AI analysis nor a transcript is available for this video. Do NOT fabricate a summary. Do NOT invent timestamps. Do NOT guess or infer the video's topic or content from any other context (including the user's learning goal or mandala). When the user asks about the video, tell them warmly that the content could not be loaded yet, and offer to help in the meantime with general questions about their learning goal.`;
+    timestampRule = '';
   }
-
-  const noContentRule = hasContent
-    ? ''
-    : `\n- IMPORTANT: The AI analysis for this video is still being prepared — no summary, transcript, or structured content is available yet. Do NOT fabricate a summary. Do NOT invent timestamps. Do NOT guess or infer the video's topic or content from any other context (including the user's learning goal or mandala). When the user asks about the video, tell them warmly that the analysis is in progress and will be ready soon, and offer to help in the meantime with general questions about their learning goal.`;
-
-  const timestampRule = hasContent
-    ? '\n- When summarizing or referencing the video, include timestamps (e.g. 0:47) tied to actual sections in the content above to help the user navigate.'
-    : '';
 
   return `You are Insighta's learning assistant. You help users learn from the YouTube video they are currently watching.
 
@@ -203,7 +223,11 @@ function ChatPanel({
   onSeek?: (seconds: number) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const { richSummary } = useRichSummary(videoId);
+  const { richSummary, isLoading: richSummaryLoading } = useRichSummary(videoId);
+  // Transcript fallback: only fetched once rich-summary resolves to "absent",
+  // so videos that already have a structured summary never hit the captions
+  // endpoint.
+  const { captions } = useCaptions(videoId, !richSummaryLoading && !richSummary);
   const suggestions = buildSuggestions(t, richSummary?.structured ?? null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -267,8 +291,9 @@ function ChatPanel({
   ]);
 
   const instructions = useMemo(
-    () => buildInstructions(videoId, richSummary ?? null, i18n.language),
-    [videoId, richSummary, i18n.language]
+    () =>
+      buildInstructions(videoId, richSummary ?? null, captions?.fullText ?? null, i18n.language),
+    [videoId, richSummary, captions, i18n.language]
   );
 
   useCopilotReadable({

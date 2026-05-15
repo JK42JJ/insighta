@@ -226,6 +226,18 @@ export interface VideoRichSummaryResponse {
 }
 
 /**
+ * YouTube captions (transcript) response shape.
+ * Transcript text is fetched on demand and never persisted server-side;
+ * only `fullText` is consumed by the chatbot's summary fallback.
+ */
+export interface VideoCaptionResponse {
+  videoId: string;
+  language: string;
+  fullText: string;
+  segments: { text: string; start: number; duration: number }[];
+}
+
+/**
  * CP438+1 PoC — Mandala book index response shape.
  * Server stores the entire generated book as a single jsonb blob keyed
  * by mandala_id. PoC schema; will split into normalized tables in P5.
@@ -763,6 +775,28 @@ class ApiClient {
         `/videos/${videoId}/rich-summary`
       );
       return res.data;
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.statusCode === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Fetch publicly available YouTube captions (transcript) for a video.
+   *
+   * Used as the chatbot's video-summary fallback when no rich summary
+   * exists yet. Returns null on 404 (no public captions / extraction
+   * failed) so callers can degrade gracefully. Other errors propagate.
+   */
+  async getVideoCaptions(videoId: string, language?: string): Promise<VideoCaptionResponse | null> {
+    const query = language ? `?language=${encodeURIComponent(language)}` : '';
+    try {
+      const res = await this.request<{ caption: VideoCaptionResponse }>(
+        `/videos/${videoId}/captions${query}`
+      );
+      return res.caption;
     } catch (err) {
       if (err instanceof ApiHttpError && err.statusCode === 404) {
         return null;

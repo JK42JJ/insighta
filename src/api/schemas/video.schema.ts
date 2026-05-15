@@ -13,6 +13,15 @@ import { errorResponseSchema } from './common.schema';
 // ============================================================================
 
 /**
+ * Video id route param accepts EITHER form, because the video manager
+ * (`getVideo().getVideo(id)`) resolves both: an internal UUID (36 chars)
+ * or a YouTube video id (11 chars of [A-Za-z0-9_-]). A `format: 'uuid'`
+ * constraint here wrongly 400s the YouTube-id callers (e.g. the learning
+ * page chatbot fetching captions by YouTube id).
+ */
+export const VIDEO_ID_PATTERN = '^[A-Za-z0-9_-]{11,64}$';
+
+/**
  * List videos query parameters
  */
 export const ListVideosQuerySchema = z.object({
@@ -32,7 +41,7 @@ export type ListVideosQuery = z.infer<typeof ListVideosQuerySchema>;
  * Get video params
  */
 export const GetVideoParamsSchema = z.object({
-  id: z.string().uuid('Invalid video ID format'),
+  id: z.string().regex(new RegExp(VIDEO_ID_PATTERN), 'Invalid video ID format'),
 });
 
 export type GetVideoParams = z.infer<typeof GetVideoParamsSchema>;
@@ -40,8 +49,11 @@ export type GetVideoParams = z.infer<typeof GetVideoParamsSchema>;
 /**
  * Get captions query parameters
  */
+// No default language: when omitted, the extractor falls back through its
+// own en→ko priority list (extractor.ts). Forcing 'en' here would make
+// Korean-only videos fail caption extraction.
 export const GetCaptionsQuerySchema = z.object({
-  language: z.string().optional().default('en'),
+  language: z.string().optional(),
 });
 
 export type GetCaptionsQuery = z.infer<typeof GetCaptionsQuerySchema>;
@@ -305,7 +317,11 @@ export const getVideoSchema: FastifySchema = {
     type: 'object',
     required: ['id'],
     properties: {
-      id: { type: 'string', format: 'uuid', description: 'Video ID' },
+      id: {
+        type: 'string',
+        pattern: VIDEO_ID_PATTERN,
+        description: 'Video ID (internal UUID or YouTube id)',
+      },
     },
   },
   response: {
@@ -334,7 +350,11 @@ export const getCaptionsSchema: FastifySchema = {
     type: 'object',
     required: ['id'],
     properties: {
-      id: { type: 'string', format: 'uuid', description: 'Video ID' },
+      id: {
+        type: 'string',
+        pattern: VIDEO_ID_PATTERN,
+        description: 'Video ID (internal UUID or YouTube id)',
+      },
     },
   },
   querystring: {
@@ -342,8 +362,8 @@ export const getCaptionsSchema: FastifySchema = {
     properties: {
       language: {
         type: 'string',
-        default: 'en',
-        description: 'Caption language code (e.g., en, ko, ja)',
+        description:
+          'Caption language code (e.g., en, ko, ja). Omit to let the extractor try en then ko.',
       },
     },
   },
@@ -373,7 +393,11 @@ export const getCaptionLanguagesSchema: FastifySchema = {
     type: 'object',
     required: ['id'],
     properties: {
-      id: { type: 'string', format: 'uuid', description: 'Video ID' },
+      id: {
+        type: 'string',
+        pattern: VIDEO_ID_PATTERN,
+        description: 'Video ID (internal UUID or YouTube id)',
+      },
     },
   },
   response: {
@@ -403,7 +427,11 @@ export const getSummarySchema: FastifySchema = {
     type: 'object',
     required: ['id'],
     properties: {
-      id: { type: 'string', format: 'uuid', description: 'Video ID' },
+      id: {
+        type: 'string',
+        pattern: VIDEO_ID_PATTERN,
+        description: 'Video ID (internal UUID or YouTube id)',
+      },
     },
   },
   response: {
@@ -442,7 +470,11 @@ export const generateSummarySchema: FastifySchema = {
     type: 'object',
     required: ['id'],
     properties: {
-      id: { type: 'string', format: 'uuid', description: 'Video ID' },
+      id: {
+        type: 'string',
+        pattern: VIDEO_ID_PATTERN,
+        description: 'Video ID (internal UUID or YouTube id)',
+      },
     },
   },
   body: {

@@ -17,6 +17,10 @@ import { logger } from '../../utils/logger';
 import { RecordNotFoundError } from '../../utils/errors';
 import { youtube_v3 } from 'googleapis';
 
+/** Standard UUID v1-v5 shape — used to decide whether an id can be matched
+ *  against the `youtube_videos.id` uuid column without a DB type error. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Video Manager
  *
@@ -109,13 +113,17 @@ export class VideoManager {
   }
 
   /**
-   * Get video by ID or YouTube ID
+   * Get video by internal UUID or YouTube video id.
+   *
+   * `id` (the internal PK) is a Postgres `uuid` column — comparing it
+   * against a non-UUID string (e.g. an 11-char YouTube id) raises a DB
+   * "invalid input syntax for type uuid" error. So only include the
+   * `{ id }` clause when the input actually looks like a UUID.
    */
   public async getVideo(id: string): Promise<youtube_videos> {
+    const isUuid = UUID_RE.test(id);
     const video = await db.youtube_videos.findFirst({
-      where: {
-        OR: [{ id }, { youtube_video_id: id }],
-      },
+      where: isUuid ? { OR: [{ id }, { youtube_video_id: id }] } : { youtube_video_id: id },
     });
 
     if (!video) {
