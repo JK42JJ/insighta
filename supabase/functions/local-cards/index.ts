@@ -75,7 +75,11 @@ async function checkCardLimit(supabase: ReturnType<typeof createClient>, userId:
   return {
     limit: subscription.local_cards_limit,
     used: count || 0,
-    canAdd: (count || 0) < subscription.local_cards_limit,
+    // `null = unlimited` per docs/policies/quota-policy.md + skill-quota-policy.md:96.
+    // Lifetime/admin tiers store null in local_cards_limit. Without this guard,
+    // `(count || 0) < null` coerces to `< 0` and blocks every add.
+    canAdd: subscription.local_cards_limit === null
+      || (count || 0) < subscription.local_cards_limit,
     tier: subscription.tier
   };
 }
@@ -87,7 +91,8 @@ async function verifyCardLimitAfterInsert(
   insertedCardIds: string[]
 ): Promise<{ exceeded: boolean; limitInfo?: { tier: string; limit: number; used: number } }> {
   const limitInfo = await checkCardLimit(supabase, userId);
-  if (limitInfo.used <= limitInfo.limit) {
+  // `null = unlimited` — never trigger rollback for unlimited tiers.
+  if (limitInfo.limit === null || limitInfo.used <= limitInfo.limit) {
     return { exceeded: false };
   }
 
@@ -598,9 +603,9 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Check limit for inserts
+          // Check limit for inserts — `null = unlimited` per policy.
           const limitInfo = await checkCardLimit(supabase, user.id);
-          if (limitInfo.used + inserts.length > limitInfo.limit) {
+          if (limitInfo.limit !== null && limitInfo.used + inserts.length > limitInfo.limit) {
             return new Response(
               JSON.stringify({
                 error: 'LIMIT_EXCEEDED',
@@ -735,9 +740,9 @@ Deno.serve(async (req) => {
         const playlistThumbnail = plMeta.snippet.thumbnails?.medium?.url || plMeta.snippet.thumbnails?.default?.url || '';
         const playlistItemCount = plMeta.contentDetails?.itemCount || 0;
 
-        // 2. Card limit pre-check
+        // 2. Card limit pre-check — `null = unlimited` per policy.
         const limitInfo = await checkCardLimit(supabase, user.id);
-        if (limitInfo.used + playlistItemCount > limitInfo.limit) {
+        if (limitInfo.limit !== null && limitInfo.used + playlistItemCount > limitInfo.limit) {
           const available = Math.max(0, limitInfo.limit - limitInfo.used);
           return new Response(
             JSON.stringify({
