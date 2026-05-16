@@ -278,9 +278,17 @@ export function useLocalCards() {
     // Error states
     error: listQuery.error || addCard.error || updateCard.error || deleteCard.error,
 
-    // Limit check
-    canAddCard: listQuery.subscription.used < listQuery.subscription.limit,
-    remainingSlots: listQuery.subscription.limit - listQuery.subscription.used,
+    // Limit check — per docs/policies/quota-policy.md + skill-quota-policy.md:96
+    // "If limit is null: unlimited, always allowed." Lifetime/admin tiers store
+    // null in user_subscriptions.local_cards_limit (TIER_LIMITS.lifetime.cards = null).
+    // Without the null guard, `used < null` coerces to `used < 0` and blocks every add.
+    canAddCard:
+      listQuery.subscription.limit === null ||
+      listQuery.subscription.used < listQuery.subscription.limit,
+    remainingSlots:
+      listQuery.subscription.limit === null
+        ? Number.POSITIVE_INFINITY
+        : listQuery.subscription.limit - listQuery.subscription.used,
 
     // Actions
     addCard: addCard.mutateAsync,

@@ -17,8 +17,10 @@ export type SubscriptionTier = 'free' | 'premium' | 'admin';
  */
 export interface UserSubscription {
   tier: SubscriptionTier;
-  limit: number;
-  mandalaLimit: number;
+  /** Card limit. `null` = unlimited (lifetime/admin tiers — see quota-policy.md). */
+  limit: number | null;
+  /** Mandala limit. `null` = unlimited (lifetime/admin tiers). */
+  mandalaLimit: number | null;
   used: number;
 }
 
