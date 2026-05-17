@@ -498,33 +498,38 @@ export function InsightCardItemV2({
         )}
       </div>
 
-      {/* ── Body: title + meta + (optional) one_liner + sector/relevance row ── */}
+      {/* ── Body: title → blockquote → unified meta row ──
+          CP463 unified design (2026-05-17 review):
+          - Single secondary cluster (date · views · sector) on the
+            left of the meta row, relevance % anchored to the right.
+          - One-liner blockquote is subtle (border-muted/25, pl-2.5,
+            10.5px, leading-relaxed) so it integrates instead of
+            looking like a foreign component.
+          - Consistent mt-2 between blocks for visual rhythm. */}
       <div className="px-3 pt-2 pb-4">
         <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px]">
           {decodeHtmlEntities(card.title)}
         </h4>
-        {(footerLeft || footerRight) && (
-          <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
-            <span className="truncate">{footerLeft ?? ''}</span>
-            <span className="shrink-0 ml-2">{footerRight ?? ''}</span>
-          </div>
+
+        {trimmedOneLiner && (
+          <blockquote className="mt-2 border-l-2 border-muted-foreground/25 pl-2.5 text-[10.5px] italic text-muted-foreground/75 leading-relaxed whitespace-pre-wrap break-words">
+            {decodeHtmlEntities(trimmedOneLiner)}
+          </blockquote>
         )}
-        {/* CP463 — sector (left) + relevance % (right) row. Sits above
-            the one_liner per follow-up directive 2026-05-17
-            "요약정보는 카드의 마지막 라인으로 이동시켜줄래". */}
-        {(sectorLabel || relevanceBadge) && (
-          <div className="mt-1.5 flex items-center justify-between gap-2 min-h-[18px]">
-            {sectorLabel ? (
-              <span className="text-[10px] font-medium text-muted-foreground/80 truncate max-w-[60%]">
-                {sectorLabel}
-              </span>
-            ) : (
-              <span />
-            )}
+
+        {(footerLeft || footerRight || sectorLabel || relevanceBadge) && (
+          <div className="mt-2 flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground/70">
+            <span className="truncate flex items-center gap-1.5 min-w-0">
+              {footerLeft && <span className="truncate">{footerLeft}</span>}
+              {footerLeft && footerRight && <span aria-hidden="true">·</span>}
+              {footerRight && <span className="shrink-0 tabular-nums">{footerRight}</span>}
+              {(footerLeft || footerRight) && sectorLabel && <span aria-hidden="true">·</span>}
+              {sectorLabel && <span className="truncate">{sectorLabel}</span>}
+            </span>
             {relevanceBadge && (
               <span
                 className={cn(
-                  'text-[10px] font-semibold shrink-0 tabular-nums',
+                  'text-[10.5px] font-semibold shrink-0 tabular-nums',
                   relevanceBadge.className
                 )}
               >
@@ -532,15 +537,6 @@ export function InsightCardItemV2({
               </span>
             )}
           </div>
-        )}
-        {/* CP463 — one_liner as Obsidian-style blockquote per user
-            directive 2026-05-17 (screenshot reference): left accent
-            bar + indented italic text + full wrap. Last line in the
-            card body. */}
-        {trimmedOneLiner && (
-          <blockquote className="mt-2 border-l-2 border-primary/40 pl-3 text-[11px] italic text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
-            {decodeHtmlEntities(trimmedOneLiner)}
-          </blockquote>
         )}
       </div>
     </Card>
