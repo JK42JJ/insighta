@@ -533,12 +533,14 @@ export function InsightCardItemV2({
             )}
           </div>
         )}
-        {/* CP463 — one_liner is the last line in the card body. Full
-            wrap, no line-clamp / no '…' (user directive same date). */}
+        {/* CP463 — one_liner as Obsidian-style blockquote per user
+            directive 2026-05-17 (screenshot reference): left accent
+            bar + indented italic text + full wrap. Last line in the
+            card body. */}
         {trimmedOneLiner && (
-          <p className="mt-1.5 text-[11px] italic text-muted-foreground leading-snug whitespace-pre-wrap break-words">
+          <blockquote className="mt-2 border-l-2 border-primary/40 pl-3 text-[11px] italic text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
             {decodeHtmlEntities(trimmedOneLiner)}
-          </p>
+          </blockquote>
         )}
       </div>
     </Card>
