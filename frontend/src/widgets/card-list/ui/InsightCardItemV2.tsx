@@ -438,7 +438,7 @@ export function InsightCardItemV2({
               className={cn(
                 'w-[22px] h-[22px]',
                 liked
-                  ? 'text-red-500 drop-shadow-[0_1px_3px_rgba(0,0,0,0.55)]'
+                  ? 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]'
                   : 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]'
               )}
               fill={liked ? 'currentColor' : 'none'}
