@@ -42,6 +42,9 @@ interface CardListProps {
   onRetryEnrich?: (cardId: string, videoUrl?: string) => void;
   gridColumns?: number;
   compact?: boolean;
+  /** CP463 — 8 sector names from currentLevel.subjects, used to render
+   *  the per-card sector label in the new footer row. */
+  sectorSubjects?: string[];
 }
 
 // Wrapper to make each card slot a droppable for reorder.
@@ -83,6 +86,7 @@ export function CardList({
   onRetryEnrich,
   gridColumns = 4,
   compact = false,
+  sectorSubjects,
 }: CardListProps) {
   const { t } = useTranslation();
 
@@ -389,6 +393,11 @@ export function CardList({
                   const vid = safeVideoId(card.videoUrl);
                   return vid ? (v2SummariesMap.get(vid)?.oneLiner ?? null) : null;
                 })()}
+                sectorLabel={
+                  sectorSubjects && card.cellIndex >= 0 && card.cellIndex < sectorSubjects.length
+                    ? sectorSubjects[card.cellIndex]
+                    : null
+                }
                 onArchived={handleArchived}
               />
             </CardSlot>

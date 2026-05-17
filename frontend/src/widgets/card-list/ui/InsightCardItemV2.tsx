@@ -142,6 +142,12 @@ interface InsightCardItemV2Props {
    * still records the signal but the toast is suppressed.
    */
   onArchived?: (videoId: string) => void;
+  /**
+   * CP463 — mandala sector label (currentLevel.subjects[cellIndex]).
+   * Renders on the left side of the new footer row paired with the
+   * relevance % badge on the right.
+   */
+  sectorLabel?: string | null;
 }
 
 // ── Component ──────────────────────────────────────────────
@@ -159,6 +165,7 @@ export function InsightCardItemV2({
   mandalaRelevancePct,
   oneLiner,
   onArchived,
+  sectorLabel,
 }: InsightCardItemV2Props) {
   const isSelected = selectedCardIds?.has(card.id) ?? false;
   const isMultiSelect = isSelected && selectedCardIds && selectedCardIds.size > 1;
@@ -348,17 +355,8 @@ export function InsightCardItemV2({
           </div>
         </div>
 
-        {/* Top-left: Mandala-relevance badge (Heart'd cards only, ≥ 70) */}
-        {relevanceBadge && (
-          <span
-            className={cn(
-              'absolute top-2 left-2 text-[10px] font-bold px-[7px] py-[2px] rounded',
-              relevanceBadge.className
-            )}
-          >
-            {relevanceBadge.label}
-          </span>
-        )}
+        {/* CP463 — TL relevance badge moved to the new footer row
+            (sector ◀ ▶ relevance %). The thumbnail TL slot is now free. */}
 
         {/* Top-right: Duration (moved from BR — Pin slot retired) */}
         {duration && (
@@ -492,7 +490,7 @@ export function InsightCardItemV2({
         )}
       </div>
 
-      {/* ── Body: title + (optional) one_liner + meta ── */}
+      {/* ── Body: title + (optional) one_liner + meta + sector/relevance row ── */}
       <div className="px-3 pt-2 pb-4">
         <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px]">
           {decodeHtmlEntities(card.title)}
@@ -506,6 +504,30 @@ export function InsightCardItemV2({
           <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
             <span className="truncate">{footerLeft ?? ''}</span>
             <span className="shrink-0 ml-2">{footerRight ?? ''}</span>
+          </div>
+        )}
+        {/* CP463 — new footer row: sector (left) + relevance % (right).
+            Only renders when either side has content so unrelated cards
+            don't get an empty row. */}
+        {(sectorLabel || relevanceBadge) && (
+          <div className="mt-1.5 flex items-center justify-between gap-2 min-h-[18px]">
+            {sectorLabel ? (
+              <span className="text-[10px] font-medium text-muted-foreground/80 truncate max-w-[60%]">
+                {sectorLabel}
+              </span>
+            ) : (
+              <span />
+            )}
+            {relevanceBadge && (
+              <span
+                className={cn(
+                  'text-[10px] font-bold px-[7px] py-[2px] rounded shrink-0',
+                  relevanceBadge.className
+                )}
+              >
+                {relevanceBadge.label}
+              </span>
+            )}
           </div>
         )}
       </div>
