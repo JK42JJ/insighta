@@ -70,14 +70,22 @@ CREATE INDEX IF NOT EXISTS idx_card_interactions_mandala
 -- (mandala_subscriptions). Users can only read/write their own rows.
 ALTER TABLE public.card_interactions ENABLE ROW LEVEL SECURITY;
 
+-- CP463+ — DROP-then-CREATE pattern so the file is idempotent across
+-- every `psql -f` reapply. PostgreSQL 15 has no `CREATE POLICY IF NOT
+-- EXISTS`, so on the second run a bare CREATE raises "policy ... already
+-- exists" and the whole Database Schema Sync deploy step fails with
+-- exit code 3 (see 2026-05-17 Deploy run 25989424141 against `65c3adef`).
+DROP POLICY IF EXISTS "Users can view their own card interactions" ON public.card_interactions;
 CREATE POLICY "Users can view their own card interactions"
   ON public.card_interactions FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can insert their own card interactions" ON public.card_interactions;
 CREATE POLICY "Users can insert their own card interactions"
   ON public.card_interactions FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can delete their own card interactions" ON public.card_interactions;
 CREATE POLICY "Users can delete their own card interactions"
   ON public.card_interactions FOR DELETE
   USING (user_id = auth.uid());
