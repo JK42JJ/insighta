@@ -72,6 +72,29 @@
 - tsc PASS ✔, smoke (POST /like + /archive without auth → 401) ✔.
 - URL contract test entries deferred to step 9 (Tests).
 
+### Phase 2 step 5 (current commit — delete signal hook)
+
+- `supabase/functions/local-cards/index.ts` (delete case) — chained
+  `.select('video_id')` onto the existing `.delete()` so we receive the
+  deleted row's YouTube id, then UPSERT a `card_interactions` row with
+  `signal='delete'` and `mandala_id=null` (user-global "do not
+  recommend" per decision #7). Signal write is non-fatal — failures log
+  a warning but the original delete success stays intact.
+- `/Users/jeonhokim/cursor/superbase/volumes/functions/main/index.ts`
+  (local-cards delete case) — mirrored the same change per the CLAUDE.md
+  "로컬 Supabase Edge Function 이중 구현" Hard Rule. Lives in the
+  separate `superbase` repo so it is NOT in this commit.
+- Auto-eviction in `auto-add-recommendations.ts` deletes `user_video_states`
+  rows directly via Prisma — it bypasses this handler entirely, so cron
+  cleanups will never produce stray `signal='delete'` rows.
+- `docker restart supabase-functions-dev` ✔, smoke
+  (POST /functions/v1/local-cards with auth missing → 401) ✔.
+- One caveat: the FE single-card delete uses `getEdgeFunctionUrl(...)`
+  with `action: 'delete'`. Multi-select delete in `CardListView` calls
+  `onDeleteCards?.(selectedCardIds)` which the host component decomposes
+  into per-id calls of the same Edge route, so the same hook covers both
+  flows automatically.
+
 ---
 
 ## Decisions captured in CP462 (all binding for steps 3–9)
@@ -96,11 +119,10 @@
 
 ---
 
-## Pending — Phase 2 steps 5–9 (next session)
+## Pending — Phase 2 steps 6–9 (next session)
 
 | Step | Work |
 |---|---|
-| 5 | Hook into existing delete path — find BE handler behind `useDeleteLocalCard` (`getEdgeFunctionUrl('local-cards','delete')` — verify whether to relocate to Fastify or keep on Edge Function + cross-call). INSERT `card_interactions` `signal='delete'` on every successful delete. |
 | 6 | SSE endpoint — `GET /api/v1/cards/:videoId/enrich-stream` (text/event-stream). Subscribe to pg-boss job state transitions via `boss.onComplete`/polling, emit 3 phases (Fetching / Analyzing / Scored). |
 | 7 | Card list endpoint — extend to LEFT JOIN `video_rich_summaries` and return `one_liner` + `mandala_relevance_pct` (NULL for non-Heart'd cards). Find list endpoint (`videos.ts`? mandala-scoped list in `mandalas.ts`?). |
 | 8 | `RICH_SUMMARY_ENABLED=true` — register as GitHub Variable, add to `deploy.yml`, draft quota distribution review (Free/Pro/Lifetime expected Heart-click frequency vs `assertRichSummaryQuota`). |
