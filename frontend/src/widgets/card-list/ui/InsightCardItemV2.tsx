@@ -460,16 +460,19 @@ export function InsightCardItemV2({
           <div className="absolute bottom-1.5 left-1.5 z-[5] pointer-events-none">
             <div
               className={cn(
-                'w-7 h-7 rounded-full flex items-center justify-center',
+                'w-5 h-5 rounded-full flex items-center justify-center shadow-[0_1px_2px_rgba(0,0,0,0.4)]',
+                // CP463 — 노랑 (준비/fetching) → 파랑 (진행/analyzing) →
+                // 초록 (완료/scored). Smaller chip (w-5 h-5) per user
+                // 2026-05-17 "원 크기도 전체 디자인을 고려해서 줄여줄래?".
                 streamPhase === 'scored'
                   ? 'bg-emerald-500/95'
                   : streamPhase === 'analyzing'
-                    ? 'bg-amber-500/95'
-                    : 'bg-blue-500/95'
+                    ? 'bg-blue-500/95'
+                    : 'bg-amber-500/95'
               )}
             >
               <Loader2
-                className={cn('w-4 h-4 text-white', streamPhase !== 'scored' && 'animate-spin')}
+                className={cn('w-3 h-3 text-white', streamPhase !== 'scored' && 'animate-spin')}
                 aria-hidden="true"
               />
             </div>
