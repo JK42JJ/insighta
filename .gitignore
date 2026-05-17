@@ -133,6 +133,8 @@ scripts/*
 !scripts/data/
 !scripts/dataset-v4/
 !scripts/apply-custom-sql.sh
+!scripts/hooks/
+!scripts/hooks/**
 prompt/
 
 # Dev tool configs
