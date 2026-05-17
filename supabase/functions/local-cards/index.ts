@@ -281,6 +281,7 @@ Deno.serve(async (req) => {
           duration_seconds: number | null;
           channel_title: string | null;
           view_count: number | null;
+          description: string | null;
         }>();
         if (youtubeUrls.length > 0 || youtubeVideoIds.length > 0) {
           const [summariesRes, videosRes] = await Promise.all([
@@ -293,7 +294,7 @@ Deno.serve(async (req) => {
             youtubeVideoIds.length > 0
               ? supabase
                   .from('youtube_videos')
-                  .select('youtube_video_id, published_at, duration_seconds, channel_title, view_count')
+                  .select('youtube_video_id, published_at, duration_seconds, channel_title, view_count, description')
                   .in('youtube_video_id', youtubeVideoIds)
               : Promise.resolve({ data: [] as Record<string, unknown>[] }),
           ]);
@@ -308,6 +309,7 @@ Deno.serve(async (req) => {
               duration_seconds: (v.duration_seconds as number | null) ?? null,
               channel_title: (v.channel_title as string | null) ?? null,
               view_count: (v.view_count as number | null) ?? null,
+              description: (v.description as string | null) ?? null,
             });
           }
         }
@@ -315,6 +317,15 @@ Deno.serve(async (req) => {
         const enrichedCards = cards.map((card: Record<string, unknown>) => {
           const summary = summaryMap.get(card.url as string);
           const videoMeta = card.video_id ? videoMetaMap.get(card.video_id as string) : undefined;
+          // CP464+ — fallback chain for the Obsidian-style blockquote on the
+          // card: prefer user_local_cards.metadata_description (whatever the
+          // FE captured on drop / fetch-url-metadata) and fall back to the
+          // joined youtube_videos.description (D&D videos without OG-tag
+          // metadata otherwise show no description at all — e.g. user drops
+          // `youtu.be/eUGlonGv2EY` with metadata_description NULL but the
+          // cached video row has 469 chars of description).
+          const desc =
+            (card.metadata_description as string | null) || videoMeta?.description || null;
           return {
             ...card,
             ...(summary ? { video_summary: summary } : {}),
@@ -326,6 +337,7 @@ Deno.serve(async (req) => {
                   view_count: videoMeta.view_count,
                 }
               : {}),
+            metadata_description: desc,
           };
         });
 
