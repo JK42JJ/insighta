@@ -108,18 +108,35 @@ export function CardList({
   }, [cards]);
   const { summariesByVideoId: v2SummariesMap } = useV2Summaries(videoIdsForV2);
 
-  // CP462+ Issue #649 Phase 3 — archive undo affordance. The card
-  // surfaces an `onArchived(videoId)` callback after the BE mutation
-  // succeeds; the list renders a 5-second toast with an undo action
-  // that fires unarchive.
+  // CP462+ Issue #649 Phase 3 — archive: client-side hide + 5-second
+  // undo. The BE archive endpoint only records the signal (it does NOT
+  // mutate the card row), so the FE owns the hide. We track hidden
+  // videoIds in a Set and `cards.filter()` against it; unarchive fires
+  // the BE delete + removes the videoId from the Set so the card
+  // re-appears.
+  // CP463 — was toast-only, which left the card visible (user-reported
+  // "토스트만 뜨고 카드는 그대로"). Adding the filter completes the spec.
   const { unarchive } = useArchiveCard();
+  const [hiddenVideoIds, setHiddenVideoIds] = useState<Set<string>>(new Set());
   const handleArchived = useCallback(
     (videoId: string) => {
+      setHiddenVideoIds((prev) => {
+        const next = new Set(prev);
+        next.add(videoId);
+        return next;
+      });
       toast.success(t('cards.archive.toastSuccess', '보관됨'), {
         duration: 5000,
         action: {
           label: t('cards.archive.undoLabel', '되돌리기'),
-          onClick: () => unarchive.mutate(videoId),
+          onClick: () => {
+            unarchive.mutate(videoId);
+            setHiddenVideoIds((prev) => {
+              const next = new Set(prev);
+              next.delete(videoId);
+              return next;
+            });
+          },
         },
       });
     },
@@ -135,7 +152,20 @@ export function CardList({
   // Cards arrive already sorted by the host (CardListView applies the user's
   // sortMode chip). Re-sorting here would override publishedAt ranking with
   // sortOrder / createdAt and was the cause of "5d ago in the middle".
-  const sortedCards = cards;
+  // CP463 — apply the archive hide before downstream slicing / sorting.
+  // hiddenVideoIds reflects user "보관" clicks within this session; on
+  // unarchive (undo toast or future restore action) the id is removed
+  // and the card re-appears on the next render.
+  const sortedCards = useMemo(
+    () =>
+      hiddenVideoIds.size === 0
+        ? cards
+        : cards.filter((c) => {
+            const vid = safeVideoId(c.videoUrl);
+            return !vid || !hiddenVideoIds.has(vid);
+          }),
+    [cards, hiddenVideoIds]
+  );
 
   // Reset visible count when card list changes (e.g., cell switch)
   const cardListKey = useMemo(() => cards.map((c) => c.id).join(','), [cards]);

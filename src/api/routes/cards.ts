@@ -793,7 +793,11 @@ function isUuid(s: string): boolean {
   return UUID_RE.test(s);
 }
 
-const ENRICH_STREAM_POLL_MS = 1000;
+// CP463 flicker-fix — was 1s. 2s halves the FE re-render rate during
+// `analyzing` phase without delaying the user-visible 'scored' chip
+// noticeably (LLM call takes 5-15s anyway, so 2s polling still emits
+// the transition within one cycle of the actual state change).
+const ENRICH_STREAM_POLL_MS = 2000;
 const ENRICH_STREAM_MAX_MS = 5 * 60 * 1000;
 /**
  * v2-summaries batch cap — bounds response time + pg query cost. A typical

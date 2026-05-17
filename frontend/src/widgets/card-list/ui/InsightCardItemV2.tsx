@@ -32,6 +32,11 @@ import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 const QUALITY_BADGE_THRESHOLD_HIGH = 90;
 const QUALITY_BADGE_THRESHOLD_MID = 80;
 const QUALITY_BADGE_THRESHOLD_LOW = 70;
+// CP463 — Heart'd cards always show the % badge regardless of score
+// (user directive 2026-05-17: "하트 선택된 내용은 관련도가 백분율로
+// 표기되어야해"). Color stays score-tiered (high/mid/low) but the
+// previous "hide below 70" cut-off is dropped — a 50 or 60 score still
+// renders, just in the lower-tier color.
 
 const VIEW_COUNT_BILLION = 1_000_000_000;
 const VIEW_COUNT_MILLION = 1_000_000;
@@ -69,12 +74,15 @@ function getMandalaRelevanceBadge(
 ): { label: string; className: string } | null {
   if (pct == null) return null;
   const value = Math.max(0, Math.min(100, Math.round(pct)));
-  if (value < QUALITY_BADGE_THRESHOLD_LOW) return null;
-  if (value >= QUALITY_BADGE_THRESHOLD_HIGH)
-    return { label: String(value), className: 'bg-[#818cf8] text-white' };
+  const label = `${value}%`;
+  if (value >= QUALITY_BADGE_THRESHOLD_HIGH) return { label, className: 'bg-[#818cf8] text-white' };
   if (value >= QUALITY_BADGE_THRESHOLD_MID)
-    return { label: String(value), className: 'bg-[#34d399] text-[#0a1a14]' };
-  return { label: String(value), className: 'bg-[#fbbf24] text-[#1a1400]' };
+    return { label, className: 'bg-[#34d399] text-[#0a1a14]' };
+  if (value >= QUALITY_BADGE_THRESHOLD_LOW)
+    return { label, className: 'bg-[#fbbf24] text-[#1a1400]' };
+  // CP463 — render below 70 too, neutral tier so the user sees the
+  // score on every Heart'd card.
+  return { label, className: 'bg-[#94a3b8] text-[#0f172a]' };
 }
 
 /** Extract YouTube metadata from InsightCard.metadata (runtime fields beyond UrlMetadata type) */

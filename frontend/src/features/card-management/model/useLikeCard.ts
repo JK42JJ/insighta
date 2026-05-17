@@ -34,18 +34,15 @@ export function useLikeCard() {
       const { videoId, mandalaId, title, description } = args;
       return apiClient.likeCard(videoId, { mandalaId, title, description });
     },
-    onSuccess: (_data, vars) => {
-      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
-      queryClient.invalidateQueries({ queryKey: ['mandala', 'recommendations'] });
-      if (vars.mandalaId) {
-        queryClient.invalidateQueries({
-          queryKey: ['mandala', 'recommendations', vars.mandalaId],
-        });
-      }
-      // CP462+ Issue #649 Phase 3 bug-fix — the TL relevance badge +
-      // footer one_liner come from the v2-summaries cache; without
-      // this invalidate the staleTime=60s window holds the pre-like
-      // empty payload and the badge never appears.
+    onSuccess: () => {
+      // CP463 flicker-fix — DO NOT invalidate the card-list queries
+      // (`localCards.list()` / `['mandala','recommendations']`). like only
+      // changes `pinned_at`, which the in-card `likedLocal` optimistic
+      // state already reflects; invalidating the list forces a full grid
+      // refetch + 60+ card reconcile per click, and triggers a visible
+      // flicker storm when multiple cards are enriched concurrently.
+      // Only v2-summaries needs an invalidate so the TL badge + footer
+      // one_liner appear when the score lands.
       queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
     },
   });
@@ -55,8 +52,9 @@ export function useLikeCard() {
       await apiClient.unlikeCard(videoId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
-      queryClient.invalidateQueries({ queryKey: ['mandala', 'recommendations'] });
+      // Same flicker-fix as `like` — the optimistic flip already covers
+      // the UI; the next natural refetch (`useRecommendations`
+      // refetchInterval 8s) propagates the server pinned_at=NULL.
       queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
     },
   });

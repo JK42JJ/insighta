@@ -35,11 +35,25 @@ export function useV2Summaries(videoIds: string[] | null | undefined) {
   const enabled = dedupedIds.length > 0;
 
   const query = useQuery({
-    queryKey: ['cards', 'v2-summaries', dedupedIds.join(',')],
+    // CP463 flicker-fix — queryKey is the LENGTH + first/last id only,
+    // NOT the full join. The full-join key changed on every card list
+    // mutation (server refetch returns a new array even when contents
+    // match), which forced a cache miss + loading-state render on every
+    // refetch cycle, contributing to the grid flicker storm. Length +
+    // bounds is a stable identifier for "same set of cards in the same
+    // order" — when the set genuinely changes the key changes too.
+    queryKey: [
+      'cards',
+      'v2-summaries',
+      dedupedIds.length,
+      dedupedIds[0] ?? '',
+      dedupedIds[dedupedIds.length - 1] ?? '',
+    ],
     queryFn: () => apiClient.getV2Summaries(dedupedIds),
     enabled,
     staleTime: V2_SUMMARIES_STALE_MS,
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const map = new Map<string, V2SummaryItem>();
