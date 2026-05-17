@@ -322,16 +322,29 @@ export function InsightCardItemV2({
         className
       )}
     >
-      {/* Drag handle — visible grip for non-selected cards (24×24 hit area). */}
+      {/* Drag handle — icon-only chrome-less (CP463 — matches the
+          Heart / Archive language: drop-shadow for legibility,
+          hover-only fade, hover:scale-125 + active:scale-95 for the
+          same tactile response as the other corner affordances.
+          No rotate on hover since a grip-handle tilting reads weird
+          for a drag affordance; scale alone is enough. */}
       {canDrag && !isSelected && (
         <div
           {...listeners}
           data-dnd-handle
-          className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+          className={cn(
+            'absolute top-1.5 left-1.5 z-10 w-7 h-7 flex items-center justify-center',
+            'opacity-0 group-hover:opacity-100',
+            'transition-all duration-200 ease-out',
+            'hover:scale-125 active:scale-95',
+            'cursor-grab active:cursor-grabbing'
+          )}
         >
-          <div className="w-6 h-6 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded">
-            <GripVertical className="w-5 h-5 text-white/70" aria-hidden="true" />
-          </div>
+          <GripVertical
+            className="w-[20px] h-[20px] text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+            strokeWidth={2.2}
+            aria-hidden="true"
+          />
         </div>
       )}
 

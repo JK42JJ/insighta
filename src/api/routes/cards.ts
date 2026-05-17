@@ -53,6 +53,7 @@ import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { enqueueEnrichRichSummary } from '@/modules/queue';
+import { config } from '../../config';
 
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const VIDEO_ID_LOG_TRIM = 60;
@@ -695,8 +696,10 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       void reply.hijack();
       const raw = reply.raw;
       const reqOrigin = request.headers.origin;
-      // Reuse the same allowlist server.ts gives the cors plugin.
-      const allowed = (process.env['CORS_ORIGIN'] ?? '*').split(',').map((s) => s.trim());
+      // Reuse the central CORS allowlist via the config module (CP463
+      // — fixed to satisfy CLAUDE.md "Hard Rule sub-bullet on env access
+      // through config zod schema" + hardcode-audit baseline).
+      const allowed = config.cors.allowedOrigins;
       if (reqOrigin && (allowed.includes('*') || allowed.includes(reqOrigin))) {
         raw.setHeader('Access-Control-Allow-Origin', reqOrigin);
         raw.setHeader('Access-Control-Allow-Credentials', 'true');
