@@ -22,9 +22,30 @@
 ### Phase 2 step 2 (current commit)
 
 - `src/modules/queue/types.ts` — `JOB_NAMES.ENRICH_RICH_SUMMARY` + `EnrichRichSummaryPayload` + `RICH_SUMMARY_RETRY_OPTIONS` (no retry, 5-min expiry — user is actively waiting) + `QUEUE_CONFIG.RICH_SUMMARY_CONCURRENCY = 5`
-- `src/modules/queue/handlers/enrich-rich-summary.ts` (NEW) — worker that calls `enrichRichSummary()` DIRECTLY (bypasses `enrichVideo` cache-hit-skip per handoff §4)
+- `src/modules/queue/handlers/enrich-rich-summary.ts` (NEW) — worker that ensures v1 row + then upgrades to v2 (corrected in step 3 — original draft called only the v1 path; see step 3 below)
 - `src/modules/queue/index.ts` — registers worker on `initJobQueue()`, exports `enqueueEnrichRichSummary`
 - tsc PASS ✔
+
+### Phase 2 step 3 (current commit — v2 prompt + path correction)
+
+- `src/modules/skills/rich-summary-v2-prompt.ts` (5 edits)
+  - `MandalaFit` interface gains required `mandala_relevance_pct: number`
+  - `PromptInput` gains optional `mandalaCenterGoal?: string`
+  - prompt template adds `{mandala_center_goal}` line + `mandala_relevance_pct` field in JSON + field rules
+  - `buildV2Prompt` substitutes the new placeholder (capped at `MANDALA_CENTER_GOAL_MAX_CHARS=200`)
+  - `validateV2Layered` enforces integer 0–100; `scoreCompleteness` includes the field in the `mandala_fit` weight
+- `src/modules/skills/rich-summary-v2-generator.ts` (3 edits)
+  - `V2GenerationInput` gains optional `mandalaCenterGoal?: string`
+  - `buildV2Prompt` call passes it through
+  - skip condition tightened: `template_version === 'v2' && mandala_relevance_pct != null` — legacy v2 rows with NULL score are regenerated on the next Heart click (Lazy backfill, decision #11)
+  - UPDATE writes the new column
+- `src/modules/skills/rich-summary-reader.ts` (1 edit) — v1 row reader defaults `mandala_relevance_pct=0` so the FE quality badge stays hidden for non-Heart'd cards (correct visual fallback)
+- `src/modules/queue/handlers/enrich-rich-summary.ts` (path correction) — now runs the 2-step flow:
+  1. `enrichRichSummary` (v1) — bootstraps the row when missing (short-circuits on cache hit)
+  2. `getMandalaManager().getMandalaById(userId, mandalaId)` → `levels[0].centerGoal`
+  3. `generateRichSummaryV2({ videoId, userId, mandalaCenterGoal })` — v2 upgrade + score
+- `tests/unit/api/transcript-direct-upsert.test.ts` + `tests/unit/skills/rich-summary-v2.test.ts` — `mandala_relevance_pct: 75` added to valid payloads
+- jest 26 + 31 tests PASS ✔, tsc PASS ✔, v1-only tests (rich-summary-prompt, summary-gate) unaffected
 
 ---
 
@@ -50,11 +71,10 @@
 
 ---
 
-## Pending — Phase 2 steps 3–9 (next session)
+## Pending — Phase 2 steps 4–9 (next session)
 
 | Step | Work |
 |---|---|
-| 3 | v2 prompt mod — add top-level `mandala_relevance_pct` (0–100) output. Update `rich-summary-v2-prompt.ts` schema + parser + completeness scorer. Within-video `segments[].relevance_pct` stays untouched (chapter-jump UX). |
 | 4 | Fastify endpoints — `POST /api/v1/cards/:videoId/{like,unlike,archive,unarchive}` in `src/api/routes/cards.ts`. like calls `enqueueEnrichRichSummary` + sets `pinned_at=now()`. archive INSERTs signal + soft-hides row. |
 | 5 | Hook into existing delete path — find BE handler behind `useDeleteLocalCard` (`getEdgeFunctionUrl('local-cards','delete')` — verify whether to relocate to Fastify or keep on Edge Function + cross-call). INSERT `card_interactions` `signal='delete'` on every successful delete. |
 | 6 | SSE endpoint — `GET /api/v1/cards/:videoId/enrich-stream` (text/event-stream). Subscribe to pg-boss job state transitions via `boss.onComplete`/polling, emit 3 phases (Fetching / Analyzing / Scored). |

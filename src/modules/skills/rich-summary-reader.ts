@@ -164,6 +164,14 @@ export function adaptV1ToLayered(
       : ({} as Record<string, unknown>);
   const suggested = arrayOfStrings(fit['suggested_topics'] ?? fit['suggested_goals']) ?? [];
   const rationale = pickString(fit['relevance_rationale']) ?? '';
+  // CP462+ Issue #649 — v1 rows never had mandala_relevance_pct. Surface as 0
+  // so the FE quality badge stays hidden (which is the correct visual fallback:
+  // a v1-only row is "not Heart-scored" from the user's perspective).
+  const mandalaRelevancePctRaw = fit['mandala_relevance_pct'];
+  const mandalaRelevancePct =
+    typeof mandalaRelevancePctRaw === 'number' && Number.isFinite(mandalaRelevancePctRaw)
+      ? Math.max(0, Math.min(100, Math.round(mandalaRelevancePctRaw)))
+      : 0;
 
   const actionables = arrayOfStrings(v1['actionables']) ?? [];
   const biasArr = arrayOfStrings(v1['bias_signals']);
@@ -175,6 +183,7 @@ export function adaptV1ToLayered(
     mandala_fit: {
       suggested_goals: suggested,
       relevance_rationale: rationale,
+      mandala_relevance_pct: mandalaRelevancePct,
     },
     bias_signals: {
       has_ad: biasArr ? biasArr.some((s) => /\bad\b|광고|sponsor|협찬/i.test(s)) : false,

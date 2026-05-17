@@ -1,33 +1,42 @@
 /**
  * Enrich Rich Summary Job Handler — CP462+ Issue #649 Phase 2
  *
- * Heart-click on-demand rich summary generation. Calls enrichRichSummary()
- * DIRECTLY (NOT via enrichVideo wrapper) per handoff §4 to bypass the
- * cache-hit-skip behaviour in enrichVideo's gate.
+ * Heart-click on-demand rich summary generation. 2-step path per CP462
+ * Phase 2 step 3 fact-finding:
+ *
+ *   1. enrichRichSummary (v1) — short-circuits when a row already exists
+ *      with quality_flag='pass'. Otherwise INSERTs the v1 row that v2's
+ *      UPDATE-only generator requires.
+ *   2. generateRichSummaryV2 — upgrades the v1 row to v2 (writes
+ *      core/analysis/lora + mandala_relevance_pct against the user's
+ *      mandala center_goal). Skips when the row is already v2 AND the
+ *      score is populated. Legacy v2 rows (NULL score) are regenerated
+ *      on the first Heart click per the Lazy backfill decision.
  *
  * Job flow:
  *   POST /api/v1/cards/:videoId/like
  *     → INSERT card_interactions signal='like'
  *     → enqueueEnrichRichSummary({videoId, userId, mandalaId, title})
  *     → this handler picks up the job
- *     → enrichRichSummary() generates v2 row (cache hits short-circuit)
- *     → mandala_relevance_pct is populated by the v2 prompt update
- *       (Phase 2 step 3 — until then, the column stays NULL and the FE
- *       falls back to "Scored" phase with no score badge)
+ *     → step 1 + step 2 above
  *
- * The interactive Heart path uses RICH_SUMMARY_RETRY_OPTIONS (no retry,
- * 5-min expiry) — the user is actively waiting via SSE, so failures must
- * surface immediately rather than silent backoff.
+ * Interactive path: RICH_SUMMARY_RETRY_OPTIONS (no retry, 5-min expiry) —
+ * the user is actively waiting via SSE, so failures must surface
+ * immediately rather than silent backoff.
  *
  * See:
  *   docs/runbook/card-preference-signal-handoff-2026-05-15.md
+ *   docs/runbook/cp462-card-interactions-phase2-handoff.md
  *   src/modules/queue/types.ts (EnrichRichSummaryPayload, RICH_SUMMARY_RETRY_OPTIONS)
- *   src/modules/skills/rich-summary.ts (enrichRichSummary direct caller)
+ *   src/modules/skills/rich-summary.ts (enrichRichSummary — v1 generator)
+ *   src/modules/skills/rich-summary-v2-generator.ts (generateRichSummaryV2 — v2 upgrade)
  */
 
 import type PgBoss from 'pg-boss';
 
 import { enrichRichSummary } from '../../skills/rich-summary';
+import { generateRichSummaryV2 } from '../../skills/rich-summary-v2-generator';
+import { getMandalaManager } from '../../mandala/manager';
 import { logger } from '../../../utils/logger';
 import { getJobQueue } from '../manager';
 import {
@@ -72,24 +81,53 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     mandalaId,
   });
 
-  // Direct call — bypasses enrichVideo's cache-hit-skip path. enrichRichSummary
-  // itself short-circuits when an existing v2 row has quality_flag='pass',
-  // so this is still cheap on cache hits.
-  // transcript / segments intentionally omitted at this step — the FE Heart
-  // click does not yet provide them. Phase 2 step 6+ may add a transcript
-  // fetch step inside the worker if the v2 quality on description-only is
-  // insufficient.
-  const result = await enrichRichSummary(videoId, {
+  // Step 1 — ensure a video_rich_summaries row exists (v1). Short-circuits
+  // on cache hit (quality_flag='pass'); on cold path it generates the v1
+  // structured row that step 2's UPDATE-only v2 generator requires.
+  // transcript / segments intentionally omitted — the FE Heart click does
+  // not provide them. v1 falls back to title+description, which is fine
+  // for bootstrapping the row.
+  const v1Result = await enrichRichSummary(videoId, {
     userId,
     title,
     description,
   });
 
+  // Step 2 — resolve the mandala center goal (root level, depth=0). When
+  // the mandala is missing or unreadable we still attempt v2 with an empty
+  // center goal so the LLM scores mandala_relevance_pct=0; the v2 row is
+  // still useful for `one_liner` / chapter relevance display.
+  let centerGoal = '';
+  try {
+    const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
+    centerGoal = mandala?.levels[0]?.centerGoal ?? '';
+  } catch (err) {
+    logger.warn('enrich-rich-summary: mandala lookup failed (continuing with empty center goal)', {
+      jobId: job.id,
+      videoId,
+      mandalaId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Step 3 — v2 upgrade + mandala_relevance_pct. Returns 'skip' when the
+  // row is already v2 AND the score is populated; otherwise generates.
+  const v2Outcome = await generateRichSummaryV2({
+    videoId,
+    userId,
+    mandalaCenterGoal: centerGoal,
+  });
+
   logger.info('enrich-rich-summary: completed', {
     jobId: job.id,
     videoId,
-    qualityFlag: result.qualityFlag,
-    qualityScore: result.qualityScore,
+    v1QualityFlag: v1Result.qualityFlag,
+    v1QualityScore: v1Result.qualityScore,
+    v2OutcomeKind: v2Outcome.kind,
+    v2Detail:
+      v2Outcome.kind === 'pass'
+        ? { completeness: v2Outcome.completeness }
+        : { reason: v2Outcome.reason },
   });
 }
 

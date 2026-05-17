@@ -46,6 +46,15 @@ export interface BiasSignals {
 export interface MandalaFit {
   suggested_goals: string[];
   relevance_rationale: string;
+  /**
+   * CP462+ Issue #649 — 0-100 integer score (single value) capturing how
+   * well this video fits the user's mandala center_goal that triggered the
+   * generation. NULL when generation predates the column (legacy rows
+   * lazy-regenerate on Heart click).
+   *
+   * Distinct from `segments[].relevance_pct` (intra-video chapter metric).
+   */
+  mandala_relevance_pct: number;
 }
 
 export interface RichSummaryAnalysis {
@@ -116,6 +125,7 @@ Video title: {title}
 Video description: {description}
 Channel: {channel}
 Transcript (when available; empty otherwise): {transcript_block}
+User mandala center goal (the learning objective the viewer is pursuing; empty when not provided): {mandala_center_goal}
 
 Respond with this exact JSON structure (no extra keys, no comments):
 {{
@@ -134,7 +144,8 @@ Respond with this exact JSON structure (no extra keys, no comments):
     "actionables": ["concrete action item the viewer can do today"],
     "mandala_fit": {{
       "suggested_goals": ["goal phrase 1", "goal phrase 2"],
-      "relevance_rationale": "1 sentence explaining why this video fits those goals"
+      "relevance_rationale": "1 sentence explaining why this video fits those goals",
+      "mandala_relevance_pct": 0
     }},
     "bias_signals": {{
       "has_ad": false,
@@ -157,6 +168,7 @@ Field rules:
 - analysis.key_concepts: 3-5 entries.
 - analysis.actionables: 3-5 entries, each a single imperative sentence.
 - analysis.mandala_fit.suggested_goals: 2-4 short phrases that align with the 9-domain SSOT taxonomy.
+- analysis.mandala_fit.mandala_relevance_pct: integer 0-100 reflecting how well this video fits the user's mandala center goal above. Score 0 when the center goal is empty or genuinely unrelated; higher values mean stronger alignment. Be conservative — 90+ only when the video clearly addresses the exact goal.
 - analysis.bias_signals.has_ad / is_sponsored: boolean. Only true when explicitly visible in the title/description.
 - lora.qa_pairs: 5-7 entries, all level=1, all context="video". Each Q is something a learner would ask AFTER watching this video; A is grounded in the video content.
 - prerequisites: empty string when none.
@@ -182,6 +194,13 @@ export interface PromptInput {
    * provider token limits.
    */
   transcript?: string;
+  /**
+   * CP462+ Issue #649 — optional mandala center goal text. When provided,
+   * the LLM uses it as the reference point for
+   * `analysis.mandala_fit.mandala_relevance_pct` scoring. When empty, the
+   * model is instructed to return 0 for that field.
+   */
+  mandalaCenterGoal?: string;
 }
 
 /**
@@ -197,13 +216,21 @@ export function buildV2Prompt(input: PromptInput): string {
     input.transcript && input.transcript.length > 0
       ? input.transcript.slice(0, TRANSCRIPT_MAX_CHARS)
       : '(no transcript)';
+  const centerGoalBlock =
+    input.mandalaCenterGoal && input.mandalaCenterGoal.trim().length > 0
+      ? input.mandalaCenterGoal.trim().slice(0, MANDALA_CENTER_GOAL_MAX_CHARS)
+      : '(empty)';
   return RICH_SUMMARY_V2_LAYERED_PROMPT.replace(/\{title\}/g, input.title.slice(0, 200))
     .replace(/\{description\}/g, input.description.slice(0, 800))
     .replace(/\{channel\}/g, input.channel.slice(0, 80))
     .replace(/\{transcript_block\}/g, transcriptBlock)
+    .replace(/\{mandala_center_goal\}/g, centerGoalBlock)
     .replace(/\{language\}/g, input.language)
     .replace(/\{language_label\}/g, languageLabel);
 }
+
+/** Hard cap on mandala center goal string to keep prompt token use bounded. */
+export const MANDALA_CENTER_GOAL_MAX_CHARS = 200;
 
 // ============================================================================
 // Validator (after JSON.parse) — narrow to RichSummaryV2Layered or throw
@@ -299,12 +326,30 @@ export function validateV2Layered(parsed: unknown): RichSummaryV2Layered {
     f['suggested_goals'],
     'analysis.mandala_fit.suggested_goals'
   ).map((s, i) => requireString(s, `analysis.mandala_fit.suggested_goals[${i}]`));
+  const mandalaRelevancePctRaw = f['mandala_relevance_pct'];
+  let mandalaRelevancePct: number;
+  if (typeof mandalaRelevancePctRaw === 'number' && Number.isFinite(mandalaRelevancePctRaw)) {
+    mandalaRelevancePct = Math.round(mandalaRelevancePctRaw);
+  } else {
+    throw new V2ValidationError(
+      'expected integer 0-100',
+      'analysis.mandala_fit.mandala_relevance_pct'
+    );
+  }
+  if (mandalaRelevancePct < 0 || mandalaRelevancePct > 100) {
+    throw new V2ValidationError(
+      `out of range ${mandalaRelevancePct} (expected 0-100)`,
+      'analysis.mandala_fit.mandala_relevance_pct'
+    );
+  }
+
   const mandalaFit: MandalaFit = {
     suggested_goals: suggestedGoals,
     relevance_rationale: requireString(
       f['relevance_rationale'],
       'analysis.mandala_fit.relevance_rationale'
     ),
+    mandala_relevance_pct: mandalaRelevancePct,
   };
 
   const biasRaw = a['bias_signals'];
@@ -515,7 +560,10 @@ export function scoreCompleteness(s: RichSummaryV2Layered): CompletenessResult {
     );
   if (
     s.analysis.mandala_fit.suggested_goals.length >= 2 &&
-    s.analysis.mandala_fit.relevance_rationale.length > 0
+    s.analysis.mandala_fit.relevance_rationale.length > 0 &&
+    Number.isInteger(s.analysis.mandala_fit.mandala_relevance_pct) &&
+    s.analysis.mandala_fit.mandala_relevance_pct >= 0 &&
+    s.analysis.mandala_fit.mandala_relevance_pct <= 100
   ) {
     score += 0.1;
   } else {
