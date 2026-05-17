@@ -490,21 +490,27 @@ export function InsightCardItemV2({
         )}
       </div>
 
-      {/* ── Body: title + (optional) one_liner + meta + sector/relevance row ── */}
+      {/* ── Body: title + meta + (optional) one_liner + sector/relevance row ── */}
       <div className="px-3 pt-2 pb-4">
         <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px]">
           {decodeHtmlEntities(card.title)}
         </h4>
-        {trimmedOneLiner && (
-          <p className="mt-1 text-[11px] italic text-muted-foreground line-clamp-1">
-            {decodeHtmlEntities(trimmedOneLiner)}
-          </p>
-        )}
         {(footerLeft || footerRight) && (
           <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
             <span className="truncate">{footerLeft ?? ''}</span>
             <span className="shrink-0 ml-2">{footerRight ?? ''}</span>
           </div>
+        )}
+        {/* CP463 — one_liner moved below date/views per user directive
+            "요약정보는 카드의 기간/조회수 아래에 배치해줘" (2026-05-17),
+            and rendered in full (no line-clamp / no '…' truncation —
+            wrap as needed) per follow-up directive same date:
+            "요약정보에 ... 표기하지말고 전체 내용모두 표기 (줄바꿈
+            되어도 관찮아)". */}
+        {trimmedOneLiner && (
+          <p className="mt-1 text-[11px] italic text-muted-foreground leading-snug whitespace-pre-wrap break-words">
+            {decodeHtmlEntities(trimmedOneLiner)}
+          </p>
         )}
         {/* CP463 — new footer row: sector (left) + relevance % (right).
             Only renders when either side has content so unrelated cards
