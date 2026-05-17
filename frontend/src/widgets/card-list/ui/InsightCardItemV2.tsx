@@ -457,25 +457,29 @@ export function InsightCardItemV2({
               scored    → emerald-500 (완료, transient ~2.5s)
             Legacy isEnriching prop falls into the blue fetching tier. */}
         {(streamActive || isEnriching) && (
-          <div className="absolute bottom-1.5 left-1.5 z-[5] pointer-events-none">
+          <div className="absolute bottom-2 left-2 z-[5] pointer-events-none">
             <div
               className={cn(
-                'w-5 h-5 rounded-full flex items-center justify-center shadow-[0_1px_2px_rgba(0,0,0,0.4)]',
-                // CP463 — 노랑 (준비/fetching) → 파랑 (진행/analyzing) →
-                // 초록 (완료/scored). Smaller chip (w-5 h-5) per user
-                // 2026-05-17 "원 크기도 전체 디자인을 고려해서 줄여줄래?".
+                // CP463 — minimal dot per user directive 2026-05-17
+                // "보다 작게해서 점 형태로 하고 디밍으로 진행을 알리는
+                // 건 어떨까?". 8×8 colored dot, dim (animate-pulse =
+                // opacity 1 → 0.5 cycle) while in progress, stays
+                // solid on scored.
+                'w-2 h-2 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.5)]',
                 streamPhase === 'scored'
-                  ? 'bg-emerald-500/95'
+                  ? 'bg-emerald-500'
                   : streamPhase === 'analyzing'
-                    ? 'bg-blue-500/95'
-                    : 'bg-amber-500/95'
+                    ? 'bg-blue-500 animate-pulse'
+                    : 'bg-amber-500 animate-pulse'
               )}
-            >
-              <Loader2
-                className={cn('w-3 h-3 text-white', streamPhase !== 'scored' && 'animate-spin')}
-                aria-hidden="true"
-              />
-            </div>
+              aria-label={
+                streamPhase === 'scored'
+                  ? '평가 완료'
+                  : streamPhase === 'analyzing'
+                    ? '분석 중'
+                    : '준비 중'
+              }
+            />
           </div>
         )}
 
