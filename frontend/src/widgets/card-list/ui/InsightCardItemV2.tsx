@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { InsightCard } from '@/entities/card/model/types';
@@ -476,26 +476,10 @@ export function InsightCardItemV2({
           </div>
         )}
 
-        {/* CP463 — failed / timeout: same BL slot, destructive color,
-            retry on click. Handles both the legacy isEnrichFailed prop
-            and the Heart SSE failed/timeout phase. */}
-        {!streamActive && !isEnriching && (isEnrichFailed || showFailedGlow) && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (showFailedGlow && videoId) {
-                void enrichStream.open(videoId);
-              } else {
-                onRetryEnrich?.(card.id, card.videoUrl);
-              }
-            }}
-            className="absolute bottom-1.5 left-1.5 z-[5] w-7 h-7 rounded-full bg-destructive/90 hover:bg-destructive flex items-center justify-center transition-colors cursor-pointer"
-            aria-label="Retry enrichment"
-          >
-            <RotateCw className="w-4 h-4 text-white" aria-hidden="true" />
-          </button>
-        )}
+        {/* CP463 — failure Retry button moved to the footer meta row
+            (right slot, where the % normally sits) per user directive
+            2026-05-17. The BL thumbnail slot is reserved for the
+            in-progress chip and the Archive icon. */}
       </div>
 
       {/* ── Body: title → blockquote → unified meta row ──
@@ -517,16 +501,76 @@ export function InsightCardItemV2({
           </blockquote>
         )}
 
-        {(footerLeft || footerRight || sectorLabel || relevanceBadge) && (
+        {(ytMeta.channelTitle ||
+          footerLeft ||
+          footerRight ||
+          sectorLabel ||
+          relevanceBadge ||
+          isEnrichFailed ||
+          showFailedGlow) && (
           <div className="mt-2 flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground/70">
             <span className="truncate flex items-center gap-1.5 min-w-0">
-              {footerLeft && <span className="truncate">{footerLeft}</span>}
-              {footerLeft && footerRight && <span aria-hidden="true">·</span>}
-              {footerRight && <span className="shrink-0 tabular-nums">{footerRight}</span>}
-              {(footerLeft || footerRight) && sectorLabel && <span aria-hidden="true">·</span>}
-              {sectorLabel && <span className="truncate">{sectorLabel}</span>}
+              {(() => {
+                // CP463 — inline meta: channel · date · views · sector.
+                // Channel first (most identifying), foreground/80 so it
+                // reads slightly stronger than the rest of the row.
+                const parts: { key: string; node: React.ReactNode }[] = [];
+                if (ytMeta.channelTitle)
+                  parts.push({
+                    key: 'ch',
+                    node: (
+                      <span className="truncate text-foreground/80">{ytMeta.channelTitle}</span>
+                    ),
+                  });
+                if (footerLeft)
+                  parts.push({
+                    key: 'date',
+                    node: <span className="truncate">{footerLeft}</span>,
+                  });
+                if (footerRight)
+                  parts.push({
+                    key: 'views',
+                    node: <span className="shrink-0 tabular-nums">{footerRight}</span>,
+                  });
+                if (sectorLabel)
+                  parts.push({
+                    key: 'sector',
+                    node: <span className="truncate">{sectorLabel}</span>,
+                  });
+                return parts.flatMap((p, i) =>
+                  i === 0
+                    ? [<React.Fragment key={p.key}>{p.node}</React.Fragment>]
+                    : [
+                        <span key={`${p.key}-sep`} aria-hidden="true">
+                          ·
+                        </span>,
+                        <React.Fragment key={p.key}>{p.node}</React.Fragment>,
+                      ]
+                );
+              })()}
             </span>
-            {relevanceBadge && (
+            {/* CP463 — right slot priority:
+                  failure  → Retry icon (user directive 2026-05-17:
+                            "재시도 아이콘이 현재 관련도 비율 위치에")
+                  scored   → relevance % (color-tiered)
+                  else     → empty */}
+            {!streamActive && !isEnriching && (isEnrichFailed || showFailedGlow) ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (showFailedGlow && videoId) {
+                    void enrichStream.open(videoId);
+                  } else {
+                    onRetryEnrich?.(card.id, card.videoUrl);
+                  }
+                }}
+                className="shrink-0 text-destructive hover:text-destructive/80 transition-colors cursor-pointer"
+                aria-label="Retry enrichment"
+              >
+                <RotateCw className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            ) : relevanceBadge ? (
               <span
                 className={cn(
                   'text-[10.5px] font-semibold shrink-0 tabular-nums',
@@ -535,7 +579,7 @@ export function InsightCardItemV2({
               >
                 {relevanceBadge.label}
               </span>
-            )}
+            ) : null}
           </div>
         )}
       </div>
