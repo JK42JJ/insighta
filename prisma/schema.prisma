@@ -407,6 +407,7 @@ model users {
   recommendation_cache          recommendation_cache[]
   recommendation_feedback       recommendation_feedback[]
   generation_log                generation_log[]
+  card_interactions             card_interactions[]
 
   @@index([instance_id])
   @@index([is_anonymous])
@@ -448,6 +449,7 @@ model user_mandalas {
   create_timings       mandala_create_timings[]
   book                 mandala_books?
   note_documents       note_documents[]
+  card_interactions    card_interactions[]
 
   source_template_id String?  @db.Uuid
   focus_tags         String[] @default([])
@@ -705,6 +707,47 @@ model video_summaries {
   updated_at          DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@index([url], map: "idx_video_summaries_url")
+  @@schema("public")
+}
+
+/// CP462+ Issue #649 — Card preference signal table.
+/// Records explicit user interactions (like / archive / delete / watch_complete / skip)
+/// on video cards. Source-agnostic across user_local_cards and user_video_states
+/// (keyed by video_id, not card row id). UNIQUE (user_id, video_id, signal) — latest
+/// wins per signal type. See docs/runbook/card-preference-signal-handoff-2026-05-15.md.
+/// Raw SQL DDL: prisma/migrations/card-interactions/001_create_table.sql
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model card_interactions {
+  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String         @db.Uuid
+  video_id   String         @db.VarChar(11)
+  signal     CardSignal
+  mandala_id String?        @db.Uuid
+  created_at DateTime       @default(now()) @db.Timestamptz(6)
+  users      users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  mandala    user_mandalas? @relation(fields: [mandala_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@unique([user_id, video_id, signal], map: "card_interactions_user_video_signal_uniq")
+  @@index([user_id, signal, created_at(sort: Desc)], map: "idx_card_interactions_user_signal_created")
+  @@index([video_id], map: "idx_card_interactions_video")
+  @@index([mandala_id], map: "idx_card_interactions_mandala")
+  @@schema("public")
+}
+
+/// CP462+ Issue #649 — card_interactions.signal enum.
+/// like           — heart click; triggers v2 enrichment + reranker boost.
+/// archive        — soft hide within mandala (5s undo window).
+/// delete         — explicit "do not recommend"; reranker hard exclusion.
+/// watch_complete — reserved (Phase 4+).
+/// skip           — reserved (Phase 4+).
+enum CardSignal {
+  like
+  archive
+  delete
+  watch_complete
+  skip
+
+  @@map("card_signal")
   @@schema("public")
 }
 
@@ -1542,6 +1585,11 @@ model video_rich_summaries {
   translations            Json?
   lora                    Json?
   completeness            Float?
+  /// CP462+ Issue #649: 0-100 single fit score vs triggering user mandala center_goal.
+  /// NULL for pre-#649 rows (lazy-regenerate on Heart click). Distinct from
+  /// segments[].relevance_pct which is intra-video chapter metric.
+  /// Raw SQL DDL: prisma/migrations/rich-summary-v2/005_mandala_relevance_pct.sql
+  mandala_relevance_pct   Int?
   created_at              DateTime @default(now()) @db.Timestamptz(6)
   updated_at              DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
