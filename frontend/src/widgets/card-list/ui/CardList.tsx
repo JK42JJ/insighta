@@ -118,15 +118,67 @@ export function CardList({
   // videoIds in a Set and `cards.filter()` against it; unarchive fires
   // the BE delete + removes the videoId from the Set so the card
   // re-appears.
-  // CP463 — was toast-only, which left the card visible (user-reported
-  // "토스트만 뜨고 카드는 그대로"). Adding the filter completes the spec.
+  // CP463 — persisted to localStorage scoped by mandalaId so refresh /
+  // navigation away-and-back keeps the archive applied. Cross-device
+  // sync is the BE list-endpoint LEFT JOIN, deferred to a follow-up PR.
   const { unarchive } = useArchiveCard();
-  const [hiddenVideoIds, setHiddenVideoIds] = useState<Set<string>>(new Set());
+  const archiveStorageKey = useMemo(() => {
+    const mandalaId = cards.find((c) => c.mandalaId)?.mandalaId;
+    return mandalaId ? `archived_videos:${mandalaId}` : null;
+  }, [cards]);
+  const [hiddenVideoIds, setHiddenVideoIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined' || !archiveStorageKey) return new Set();
+    try {
+      const raw = window.localStorage.getItem(archiveStorageKey);
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw) as unknown;
+      return Array.isArray(arr)
+        ? new Set(arr.filter((s): s is string => typeof s === 'string'))
+        : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  // Re-load when the active mandala (storage key) changes — e.g. user
+  // switches mandalas without remounting CardList.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !archiveStorageKey) {
+      setHiddenVideoIds(new Set());
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(archiveStorageKey);
+      if (!raw) {
+        setHiddenVideoIds(new Set());
+        return;
+      }
+      const arr = JSON.parse(raw) as unknown;
+      setHiddenVideoIds(
+        Array.isArray(arr)
+          ? new Set(arr.filter((s): s is string => typeof s === 'string'))
+          : new Set()
+      );
+    } catch {
+      setHiddenVideoIds(new Set());
+    }
+  }, [archiveStorageKey]);
+  const persistHidden = useCallback(
+    (next: Set<string>) => {
+      if (typeof window === 'undefined' || !archiveStorageKey) return;
+      try {
+        window.localStorage.setItem(archiveStorageKey, JSON.stringify(Array.from(next)));
+      } catch {
+        // quota exceeded or storage disabled — non-fatal, in-memory state still works
+      }
+    },
+    [archiveStorageKey]
+  );
   const handleArchived = useCallback(
     (videoId: string) => {
       setHiddenVideoIds((prev) => {
         const next = new Set(prev);
         next.add(videoId);
+        persistHidden(next);
         return next;
       });
       toast.success(t('cards.archive.toastSuccess', '보관됨'), {
@@ -138,13 +190,14 @@ export function CardList({
             setHiddenVideoIds((prev) => {
               const next = new Set(prev);
               next.delete(videoId);
+              persistHidden(next);
               return next;
             });
           },
         },
       });
     },
-    [t, unarchive]
+    [persistHidden, t, unarchive]
   );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
