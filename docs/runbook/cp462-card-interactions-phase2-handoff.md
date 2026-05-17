@@ -47,6 +47,31 @@
 - `tests/unit/api/transcript-direct-upsert.test.ts` + `tests/unit/skills/rich-summary-v2.test.ts` — `mandala_relevance_pct: 75` added to valid payloads
 - jest 26 + 31 tests PASS ✔, tsc PASS ✔, v1-only tests (rich-summary-prompt, summary-gate) unaffected
 
+### Phase 2 step 4 (current commit — 4 Fastify endpoints)
+
+- `src/api/routes/cards.ts` (+~230 lines) — 4 new endpoints mirroring the
+  Pin PATCH pattern (auth + body validation + raw SQL + structured error
+  codes):
+  - `POST /:videoId/like` body `{mandalaId?, title?, description?}` —
+    card_interactions UPSERT signal='like' + pinned_at=now() on every
+    matching user_local_cards / user_video_states row (auto-eviction
+    guard) + enqueueEnrichRichSummary pg-boss job when mandalaId is
+    supplied. Returns 202 with `{signalRecorded, jobId, pinnedRows}`.
+  - `POST /:videoId/unlike` — DELETE signal + pinned_at=NULL on both
+    source tables. Returns 204.
+  - `POST /:videoId/archive` body `{mandalaId}` — UPSERT signal='archive'
+    with mandala_id. Mandala-agnostic UNIQUE (user_id+video_id+signal)
+    means archiving the same video in a different mandala overwrites the
+    mandala_id; per-mandala archive scoping deferred. Returns 204.
+  - `POST /:videoId/unarchive` — DELETE signal='archive' regardless of
+    which mandala originally archived. Returns 204.
+- videoId validated against `/^[A-Za-z0-9_-]{11}$/` (YouTube id pattern).
+  card_interactions.video_id is VARCHAR(11) so this is a 1:1 match.
+- pinned_at write uses raw SQL for both tables to avoid Prisma
+  `@updatedAt` auto-touch (same rationale as Pin PATCH).
+- tsc PASS ✔, smoke (POST /like + /archive without auth → 401) ✔.
+- URL contract test entries deferred to step 9 (Tests).
+
 ---
 
 ## Decisions captured in CP462 (all binding for steps 3–9)
@@ -71,11 +96,10 @@
 
 ---
 
-## Pending — Phase 2 steps 4–9 (next session)
+## Pending — Phase 2 steps 5–9 (next session)
 
 | Step | Work |
 |---|---|
-| 4 | Fastify endpoints — `POST /api/v1/cards/:videoId/{like,unlike,archive,unarchive}` in `src/api/routes/cards.ts`. like calls `enqueueEnrichRichSummary` + sets `pinned_at=now()`. archive INSERTs signal + soft-hides row. |
 | 5 | Hook into existing delete path — find BE handler behind `useDeleteLocalCard` (`getEdgeFunctionUrl('local-cards','delete')` — verify whether to relocate to Fastify or keep on Edge Function + cross-call). INSERT `card_interactions` `signal='delete'` on every successful delete. |
 | 6 | SSE endpoint — `GET /api/v1/cards/:videoId/enrich-stream` (text/event-stream). Subscribe to pg-boss job state transitions via `boss.onComplete`/polling, emit 3 phases (Fetching / Analyzing / Scored). |
 | 7 | Card list endpoint — extend to LEFT JOIN `video_rich_summaries` and return `one_liner` + `mandala_relevance_pct` (NULL for non-Heart'd cards). Find list endpoint (`videos.ts`? mandala-scoped list in `mandalas.ts`?). |

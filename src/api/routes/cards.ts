@@ -1,7 +1,33 @@
 /**
- * Card Pin / Bookmark Routes (CP457+)
+ * Card Pin / Bookmark + Interactions Routes
  *
- * REST API endpoints for toggling pin state on grid view cards.
+ * REST API endpoints for the grid view cards. Two separate concerns share
+ * this file because both ultimately write to the same source tables
+ * (user_local_cards / user_video_states):
+ *
+ *   1. Pin / bookmark (CP457+) — PATCH /:id/pin
+ *      Pin = UX bookmark (save for later) + behavioural signal for ranking.
+ *      NULL = unpinned, TIMESTAMPTZ = pinned moment.
+ *      See: prisma/migrations/pin/001_add_pinned_at.sql (DDL)
+ *
+ *   2. Preference interactions (CP462+, Issue #649) — POST /:videoId/{like,unlike,archive,unarchive}
+ *      Records explicit user signals (like / archive) on a video.
+ *      The "delete" signal is captured by hooking into the existing card
+ *      delete handler (step 5, separate edit) and never has a public
+ *      endpoint here.
+ *
+ *      like  → card_interactions UPSERT signal='like'
+ *            + auto-eviction protection on the source rows (sets
+ *              pinned_at=now() on both user_video_states and
+ *              user_local_cards that match user_id+video_id)
+ *            + enqueueEnrichRichSummary pg-boss job (Heart on-demand v2
+ *              with mandala_relevance_pct).
+ *      archive → card_interactions UPSERT signal='archive'+mandala_id.
+ *              The DB UNIQUE constraint is mandala-agnostic
+ *              (user_id+video_id+signal), so the row stores the most
+ *              recent archive mandala. Multi-mandala archive scoping is
+ *              deferred to a future schema iteration.
+ *      unlike / unarchive → card_interactions DELETE the matching signal.
  *
  * Cards in Insighta come from three FE-visible sources:
  *   - `user_local_cards`  — user-added / scratchpad / promoted cards.
@@ -16,16 +42,20 @@
  * pinned_at — promoting the recommendation to a persistent saved video so
  * the pin outlives the rec_cache's 7-day TTL.
  *
- * Pin = UX bookmark (save for later) + behavioural signal for ranking.
- * NULL = unpinned, TIMESTAMPTZ = pinned moment. See:
- *   prisma/migrations/pin/001_add_pinned_at.sql (DDL)
+ * See:
  *   prisma/schema.prisma (model fields + partial indexes)
+ *   prisma/migrations/card-interactions/001_create_table.sql
+ *   docs/runbook/cp462-card-interactions-phase2-handoff.md
  */
 
 import { FastifyPluginCallback } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
+import { enqueueEnrichRichSummary } from '@/modules/queue';
+
+const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+const VIDEO_ID_LOG_TRIM = 60;
 
 const log = logger.child({ module: 'cards-routes' });
 
@@ -221,6 +251,302 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       });
     }
   });
+
+  // ─────────────────────────────────────────────────────────────────
+  // CP462+ Issue #649 — Card preference signal endpoints
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * POST /api/v1/cards/:videoId/like — record a heart click.
+   *
+   * Body: { mandalaId?: string }  (mandala context for the signal row)
+   *
+   * Side effects:
+   *   - card_interactions UPSERT signal='like' (UNIQUE on user+video+signal
+   *     → repeated clicks bump created_at but do not duplicate rows)
+   *   - pinned_at=now() on every matching user_video_states /
+   *     user_local_cards row (user_id+video_id) — auto-eviction guard
+   *     so the recommendation refresh does not evict a liked card
+   *   - enqueueEnrichRichSummary pg-boss job (v1 bootstrap → v2 upgrade
+   *     with mandala_relevance_pct). Skipped when mandalaId is missing
+   *     because the v2 generator needs a mandala center goal to score.
+   *
+   * Returns 202 { signalRecorded, jobId, pinnedRows }
+   */
+  fastify.post<{
+    Params: { videoId: string };
+    Body: { mandalaId?: string; title?: string; description?: string };
+  }>('/:videoId/like', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    if (!request.user || !('userId' in request.user)) {
+      return reply
+        .code(401)
+        .send({ status: 'error', code: 'UNAUTHORIZED', message: 'Unauthorized' });
+    }
+    const userId = request.user.userId;
+    const { videoId } = request.params;
+    const body = request.body ?? {};
+
+    if (!YOUTUBE_VIDEO_ID_RE.test(videoId)) {
+      return reply.code(400).send({
+        status: 'error',
+        code: 'INVALID_VIDEO_ID',
+        message: `videoId must be a YouTube 11-char id; got ${videoId.slice(0, VIDEO_ID_LOG_TRIM)}`,
+      });
+    }
+
+    const prisma = getPrismaClient();
+    try {
+      // 1. Signal UPSERT
+      await prisma.card_interactions.upsert({
+        where: {
+          user_id_video_id_signal: { user_id: userId, video_id: videoId, signal: 'like' },
+        },
+        update: { created_at: new Date(), mandala_id: body.mandalaId ?? null },
+        create: {
+          user_id: userId,
+          video_id: videoId,
+          signal: 'like',
+          mandala_id: body.mandalaId ?? null,
+        },
+      });
+
+      // 2. Auto-eviction guard: set pinned_at=now() on every matching
+      //    source row. Both tables hold pinned_at; user_video_states is
+      //    keyed by uuid video_id (FK to youtube_videos.id); user_local_cards
+      //    stores the youtube string id directly in `video_id VARCHAR(11)`.
+      const pinnedAt = new Date();
+      const localCardsUpdated = await prisma.$executeRaw`
+        UPDATE public.user_local_cards
+           SET pinned_at = ${pinnedAt}
+         WHERE user_id = ${userId}::uuid AND video_id = ${videoId}
+      `;
+      const videoStatesUpdated = await prisma.$executeRaw`
+        UPDATE public.user_video_states uvs
+           SET pinned_at = ${pinnedAt}
+          FROM public.youtube_videos yv
+         WHERE uvs.user_id = ${userId}::uuid
+           AND uvs.video_id = yv.id
+           AND yv.youtube_video_id = ${videoId}
+      `;
+
+      // 3. Enrichment job — only when the caller supplied a mandalaId so
+      //    the v2 generator can resolve a center_goal. Title/description
+      //    are best-effort hints; rich-summary falls back to youtube_videos
+      //    metadata when omitted (downstream lookup in enrichRichSummary).
+      let jobId: string | null = null;
+      if (body.mandalaId) {
+        jobId = await enqueueEnrichRichSummary({
+          videoId,
+          userId,
+          mandalaId: body.mandalaId,
+          title: body.title ?? '',
+          description: body.description ?? undefined,
+        });
+      }
+
+      return reply.code(202).send({
+        status: 'ok',
+        data: {
+          signalRecorded: true,
+          jobId,
+          pinnedRows: {
+            user_local_cards: localCardsUpdated,
+            user_video_states: videoStatesUpdated,
+          },
+        },
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn(`like failed: videoId=${videoId} userId=${userId} err=${msg}`);
+      return reply.code(500).send({
+        status: 'error',
+        code: 'LIKE_FAILED',
+        message: msg.slice(0, 200),
+      });
+    }
+  });
+
+  /**
+   * POST /api/v1/cards/:videoId/unlike — remove the like signal.
+   *
+   * Side effects:
+   *   - card_interactions DELETE signal='like'
+   *   - pinned_at=null on every matching source row (revert auto-eviction
+   *     guard so the recommendation refresh may evict the card again)
+   *
+   * Returns 204.
+   */
+  fastify.post<{ Params: { videoId: string } }>(
+    '/:videoId/unlike',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        return reply
+          .code(401)
+          .send({ status: 'error', code: 'UNAUTHORIZED', message: 'Unauthorized' });
+      }
+      const userId = request.user.userId;
+      const { videoId } = request.params;
+
+      if (!YOUTUBE_VIDEO_ID_RE.test(videoId)) {
+        return reply.code(400).send({
+          status: 'error',
+          code: 'INVALID_VIDEO_ID',
+          message: `videoId must be a YouTube 11-char id; got ${videoId.slice(0, VIDEO_ID_LOG_TRIM)}`,
+        });
+      }
+
+      const prisma = getPrismaClient();
+      try {
+        await prisma.card_interactions.deleteMany({
+          where: { user_id: userId, video_id: videoId, signal: 'like' },
+        });
+        await prisma.$executeRaw`
+          UPDATE public.user_local_cards
+             SET pinned_at = NULL
+           WHERE user_id = ${userId}::uuid AND video_id = ${videoId}
+        `;
+        await prisma.$executeRaw`
+          UPDATE public.user_video_states uvs
+             SET pinned_at = NULL
+            FROM public.youtube_videos yv
+           WHERE uvs.user_id = ${userId}::uuid
+             AND uvs.video_id = yv.id
+             AND yv.youtube_video_id = ${videoId}
+        `;
+        return reply.code(204).send();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn(`unlike failed: videoId=${videoId} userId=${userId} err=${msg}`);
+        return reply.code(500).send({
+          status: 'error',
+          code: 'UNLIKE_FAILED',
+          message: msg.slice(0, 200),
+        });
+      }
+    }
+  );
+
+  /**
+   * POST /api/v1/cards/:videoId/archive — soft-hide the video within a
+   * mandala (Phase 3 FE provides the visible undo affordance).
+   *
+   * Body: { mandalaId: string }  (required — archive is mandala-scoped)
+   *
+   * Side effects:
+   *   - card_interactions UPSERT signal='archive', mandala_id stored
+   *
+   * Schema note: UNIQUE is (user_id, video_id, signal) — mandala-agnostic,
+   * so re-archiving the same video in a different mandala overwrites the
+   * mandala_id rather than producing a per-mandala row. Multi-mandala
+   * archive scoping is deferred to a future schema iteration (would
+   * require a partial unique index restricted to signal IN ('like',
+   * 'delete')).
+   *
+   * Returns 204.
+   */
+  fastify.post<{
+    Params: { videoId: string };
+    Body: { mandalaId: string };
+  }>('/:videoId/archive', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    if (!request.user || !('userId' in request.user)) {
+      return reply
+        .code(401)
+        .send({ status: 'error', code: 'UNAUTHORIZED', message: 'Unauthorized' });
+    }
+    const userId = request.user.userId;
+    const { videoId } = request.params;
+    const body = request.body ?? ({} as { mandalaId?: string });
+
+    if (!YOUTUBE_VIDEO_ID_RE.test(videoId)) {
+      return reply.code(400).send({
+        status: 'error',
+        code: 'INVALID_VIDEO_ID',
+        message: `videoId must be a YouTube 11-char id; got ${videoId.slice(0, VIDEO_ID_LOG_TRIM)}`,
+      });
+    }
+    if (!body.mandalaId || !isUuid(body.mandalaId)) {
+      return reply.code(400).send({
+        status: 'error',
+        code: 'INVALID_MANDALA_ID',
+        message: 'body.mandalaId must be a uuid',
+      });
+    }
+
+    const prisma = getPrismaClient();
+    try {
+      await prisma.card_interactions.upsert({
+        where: {
+          user_id_video_id_signal: { user_id: userId, video_id: videoId, signal: 'archive' },
+        },
+        update: { created_at: new Date(), mandala_id: body.mandalaId },
+        create: {
+          user_id: userId,
+          video_id: videoId,
+          signal: 'archive',
+          mandala_id: body.mandalaId,
+        },
+      });
+      return reply.code(204).send();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn(
+        `archive failed: videoId=${videoId} userId=${userId} mandalaId=${body.mandalaId} err=${msg}`
+      );
+      return reply.code(500).send({
+        status: 'error',
+        code: 'ARCHIVE_FAILED',
+        message: msg.slice(0, 200),
+      });
+    }
+  });
+
+  /**
+   * POST /api/v1/cards/:videoId/unarchive — remove the archive signal.
+   *
+   * Per the mandala-agnostic UNIQUE constraint there is at most one
+   * archive row per (user, video); this endpoint deletes it regardless of
+   * which mandala originally archived.
+   *
+   * Returns 204.
+   */
+  fastify.post<{ Params: { videoId: string } }>(
+    '/:videoId/unarchive',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        return reply
+          .code(401)
+          .send({ status: 'error', code: 'UNAUTHORIZED', message: 'Unauthorized' });
+      }
+      const userId = request.user.userId;
+      const { videoId } = request.params;
+
+      if (!YOUTUBE_VIDEO_ID_RE.test(videoId)) {
+        return reply.code(400).send({
+          status: 'error',
+          code: 'INVALID_VIDEO_ID',
+          message: `videoId must be a YouTube 11-char id; got ${videoId.slice(0, VIDEO_ID_LOG_TRIM)}`,
+        });
+      }
+
+      const prisma = getPrismaClient();
+      try {
+        await prisma.card_interactions.deleteMany({
+          where: { user_id: userId, video_id: videoId, signal: 'archive' },
+        });
+        return reply.code(204).send();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn(`unarchive failed: videoId=${videoId} userId=${userId} err=${msg}`);
+        return reply.code(500).send({
+          status: 'error',
+          code: 'UNARCHIVE_FAILED',
+          message: msg.slice(0, 200),
+        });
+      }
+    }
+  );
 
   done();
 };
