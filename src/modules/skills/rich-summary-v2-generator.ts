@@ -61,6 +61,14 @@ export interface V2GenerationInput {
    * to NOW() after a successful pass. Set by the Mac Mini route only.
    */
   stampTranscriptFetchedAt?: boolean;
+  /**
+   * CP462+ Issue #649 — mandala center_goal text. Passed straight into the
+   * prompt so the LLM can compute `analysis.mandala_fit.mandala_relevance_pct`.
+   * Omitted (or empty) ⇒ the model is instructed to return 0 for that field
+   * and the score on the row stays low — that is the correct behaviour for
+   * cron-driven backfill which does not know which user triggered the video.
+   */
+  mandalaCenterGoal?: string;
 }
 
 export async function generateRichSummaryV2(
@@ -76,12 +84,15 @@ export async function generateRichSummaryV2(
       template_version: true,
       source_language: true,
       quality_flag: true,
+      // CP462+ Issue #649 — legacy v2 rows have NULL here; Lazy backfill
+      // regenerates them on the first Heart click so the score is populated.
+      mandala_relevance_pct: true,
     },
   });
   if (!row) {
     return { kind: 'skip', videoId: input.videoId, reason: 'no_rich_summary_row' };
   }
-  if (row.template_version === 'v2') {
+  if (row.template_version === 'v2' && row.mandala_relevance_pct != null) {
     return { kind: 'skip', videoId: input.videoId, reason: 'already_v2' };
   }
 
@@ -100,6 +111,7 @@ export async function generateRichSummaryV2(
     channel: ytRow.channel_title ?? '',
     language,
     transcript: input.transcript,
+    mandalaCenterGoal: input.mandalaCenterGoal,
   });
 
   const provider = await createGenerationProvider();
@@ -162,6 +174,7 @@ export async function generateRichSummaryV2(
           completeness: score.score,
           quality_flag: 'pass',
           model: provider.model,
+          mandala_relevance_pct: summary.analysis.mandala_fit.mandala_relevance_pct,
           ...(input.userId ? { user_id: input.userId } : {}),
           updated_at: new Date(),
         },

@@ -39,6 +39,7 @@ function validSummary(overrides: Partial<RichSummaryV2Layered> = {}): RichSummar
       mandala_fit: {
         suggested_goals: ['생산성 향상', '루틴 만들기'],
         relevance_rationale: '직접 적용 가능한 시간관리 기법.',
+        mandala_relevance_pct: 75,
       },
       bias_signals: {
         has_ad: false,

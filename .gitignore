@@ -46,6 +46,8 @@ prisma/migrations/*
 !prisma/migrations/billing/
 !prisma/migrations/system-settings/
 !prisma/migrations/mandala_embeddings/
+!prisma/migrations/rich-summary-v2/
+!prisma/migrations/card-interactions/
 
 # Logs
 logs/

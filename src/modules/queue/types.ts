@@ -11,6 +11,8 @@
 export const JOB_NAMES = {
   ENRICH_VIDEO: 'enrich-video',
   BATCH_SCAN: 'batch-scan',
+  /** CP462+ Issue #649 — Heart-click on-demand rich summary (direct enrichRichSummary). */
+  ENRICH_RICH_SUMMARY: 'enrich-rich-summary',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -39,6 +41,25 @@ export interface BatchScanPayload {
   limit: number;
 }
 
+/**
+ * CP462+ Issue #649 — payload for ENRICH_RICH_SUMMARY job.
+ *
+ * Triggered by the Heart click endpoint (POST /api/v1/cards/:videoId/like).
+ * Calls enrichRichSummary() directly (NOT via enrichVideo wrapper) to bypass
+ * the cache-hit-skip path documented in handoff §4.
+ *
+ * mandalaId is REQUIRED so the worker can compute mandala_relevance_pct
+ * against the mandala's center_goal (v2 prompt update in Phase 2 step 3
+ * will populate that column server-side).
+ */
+export interface EnrichRichSummaryPayload {
+  videoId: string;
+  userId: string;
+  mandalaId: string;
+  title: string;
+  description?: string;
+}
+
 // ============================================================================
 // Job Options
 // ============================================================================
@@ -58,6 +79,16 @@ export const ENRICH_RETRY_OPTIONS = {
   expireInMinutes: 10,
 } as const;
 
+/**
+ * Heart-triggered rich summary — user is actively waiting (SSE-subscribed),
+ * so fail fast: no retry, short expiry. The FE will show a Retry button on
+ * failure rather than silent backoff. CP462+ Issue #649.
+ */
+export const RICH_SUMMARY_RETRY_OPTIONS = {
+  retryLimit: 0,
+  expireInMinutes: 5,
+} as const;
+
 /** Batch scan: no retries (runs on schedule) */
 export const BATCH_SCAN_OPTIONS = {
   retryLimit: 0,
@@ -73,6 +104,13 @@ export const QUEUE_CONFIG = {
   BATCH_SCAN_CRON: '*/30 * * * *',
   /** Max concurrent enrichment workers */
   ENRICH_CONCURRENCY: 1,
+  /**
+   * Max concurrent Heart-triggered rich-summary workers. CP462+ Issue #649.
+   * Independent pool from ENRICH_CONCURRENCY so batch backfill cannot starve
+   * interactive Heart clicks. Override via BULLMQ_ENRICH_CONCURRENCY env
+   * (legacy name retained for compatibility even though pg-boss replaced BullMQ).
+   */
+  RICH_SUMMARY_CONCURRENCY: 5,
   /** Delay between polling for new jobs (seconds) */
   POLL_INTERVAL_SECONDS: 10,
   /** How long to keep completed jobs (days) */

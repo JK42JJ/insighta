@@ -525,13 +525,42 @@ Deno.serve(async (req) => {
           );
         }
 
-        const { error: deleteError } = await supabase
+        // CP462+ Issue #649 — user-explicit delete carries the "do not
+        // recommend" intent. RETURNING video_id (.select) so we can record
+        // a card_interactions signal='delete' row with mandala_id=NULL
+        // (user-global reranker exclusion). Auto-eviction in
+        // auto-add-recommendations.ts does NOT pass through this handler,
+        // so cron cleanups never produce stray delete signals.
+        const { data: deletedRows, error: deleteError } = await supabase
           .from('user_local_cards')
           .delete()
           .eq('id', id)
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .select('video_id');
 
         if (deleteError) throw deleteError;
+
+        // Non-fatal — signal write failure must not block the delete.
+        for (const row of deletedRows ?? []) {
+          if (!row?.video_id) continue;
+          const { error: signalError } = await supabase
+            .from('card_interactions')
+            .upsert(
+              {
+                user_id: user.id,
+                video_id: row.video_id,
+                signal: 'delete',
+                mandala_id: null,
+              },
+              { onConflict: 'user_id,video_id,signal' }
+            );
+          if (signalError) {
+            console.warn('[local-cards] delete-signal write failed (non-fatal)', {
+              videoId: row.video_id,
+              error: signalError.message,
+            });
+          }
+        }
 
         return new Response(
           JSON.stringify({ success: true }),

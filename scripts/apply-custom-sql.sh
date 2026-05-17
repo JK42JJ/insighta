@@ -71,6 +71,12 @@ APPLY_FILES=(
   "prisma/migrations/system-settings/001_system_settings.sql"
   "prisma/migrations/video_pool/002_add_ivfflat_index.sql"
   "prisma/migrations/mandala_embeddings/001_add_ivfflat_index.sql"
+  # CP462+ Issue #649 — Card preference signal (heart/archive/delete) +
+  # mandala_relevance_pct 0-100 single fit score. Both files use
+  # IF NOT EXISTS / DO $$ EXCEPTION duplicate_object NULL — idempotent
+  # re-application is safe.
+  "prisma/migrations/card-interactions/001_create_table.sql"
+  "prisma/migrations/rich-summary-v2/005_mandala_relevance_pct.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "

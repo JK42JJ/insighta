@@ -4,19 +4,23 @@
  * so that the same content always produces the same canonical URL.
  */
 
-const YOUTUBE_HOSTS = new Set([
-  'youtube.com',
-  'www.youtube.com',
-  'm.youtube.com',
-  'youtu.be',
-]);
+const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be']);
 
 const GENERIC_TRACKING_PARAMS = new Set([
-  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
-  'fbclid', 'gclid', 'ref', 'source', 'mc_cid', 'mc_eid',
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_term',
+  'utm_content',
+  'fbclid',
+  'gclid',
+  'ref',
+  'source',
+  'mc_cid',
+  'mc_eid',
 ]);
 
-function extractYouTubeVideoId(url: URL): string | null {
+export function extractYouTubeVideoId(url: URL): string | null {
   const host = url.hostname.replace(/^www\./, '');
 
   if (host === 'youtu.be') {
@@ -59,7 +63,8 @@ export function normalizeUrl(url: string): string {
   }
 
   const host = parsed.hostname.replace(/^www\./, '');
-  const isYouTube = YOUTUBE_HOSTS.has(parsed.hostname) || YOUTUBE_HOSTS.has(host) || host === 'youtu.be';
+  const isYouTube =
+    YOUTUBE_HOSTS.has(parsed.hostname) || YOUTUBE_HOSTS.has(host) || host === 'youtu.be';
 
   if (isYouTube) {
     const videoId = extractYouTubeVideoId(parsed);

@@ -585,6 +585,7 @@ export function CardListView({
             title={title}
             gridColumns={gridColumns}
             compact={gridColumns >= COMPACT_THRESHOLD}
+            sectorSubjects={sectorSubjects}
             onCardClick={onCardClick ? (card) => onCardClick(card, sortedCards) : undefined}
             onCardDragStart={onCardDragStart}
             onMultiCardDragStart={onMultiCardDragStart}

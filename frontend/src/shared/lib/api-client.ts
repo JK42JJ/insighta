@@ -1256,6 +1256,83 @@ class ApiClient {
     });
   }
 
+  // ========================================
+  // Card Interactions (Heart / Archive)
+  // CP462+ Issue #649 Phase 3
+  // ========================================
+
+  /**
+   * Heart-click a video. BE records signal='like' in card_interactions,
+   * sets pinned_at=now() on every matching source row (auto-eviction
+   * guard), and — when mandalaId is supplied — enqueues a pg-boss
+   * enrich-rich-summary job whose progress can be streamed via
+   * GET /cards/:videoId/enrich-stream.
+   */
+  async likeCard(
+    videoId: string,
+    body: { mandalaId?: string; title?: string; description?: string }
+  ): Promise<{
+    status: string;
+    data: {
+      signalRecorded: boolean;
+      jobId: string | null;
+      pinnedRows: { user_local_cards: number; user_video_states: number };
+    };
+  }> {
+    return this.request(`/cards/${videoId}/like`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async unlikeCard(videoId: string): Promise<void> {
+    // Empty `{}` body to satisfy the default `Content-Type: application/json`
+    // header (request() always sets it). Fastify's JSON parser returns
+    // 400 FST_ERR_CTP_EMPTY_JSON_BODY when Content-Type is application/json
+    // but the body is empty — observed in dev with Bug 1 of #649 Phase 3.
+    return this.request(`/cards/${videoId}/unlike`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async archiveCard(videoId: string, mandalaId: string): Promise<void> {
+    return this.request(`/cards/${videoId}/archive`, {
+      method: 'POST',
+      body: JSON.stringify({ mandalaId }),
+    });
+  }
+
+  async unarchiveCard(videoId: string): Promise<void> {
+    // Same empty-body workaround as unlikeCard (see comment above).
+    return this.request(`/cards/${videoId}/unarchive`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  /**
+   * Batch lookup of v2 rich-summary fields for the card grid. Returns
+   * only rows that have a video_rich_summaries row; videoIds without a
+   * row simply do not appear in `items` (FE renders no badge / no
+   * one_liner for them). Cap is 128 ids per request.
+   */
+  async getV2Summaries(videoIds: string[]): Promise<{
+    status: string;
+    data: {
+      items: Array<{
+        videoId: string;
+        oneLiner: string | null;
+        mandalaRelevancePct: number | null;
+        qualityFlag: string | null;
+        templateVersion: string;
+      }>;
+    };
+  }> {
+    const ids = videoIds.filter((id) => id && id.length > 0).join(',');
+    return this.request(`/cards/v2-summaries?videoIds=${encodeURIComponent(ids)}`);
+  }
+
   async getMandalaQuota(): Promise<{
     used: number;
     limit: number | null;

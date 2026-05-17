@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDroppable } from '@dnd-kit/core';
+import { toast } from 'sonner';
 import { InsightCard } from '@/entities/card/model/types';
 import { InsightCardItemV2 } from './InsightCardItemV2';
 import { FileVideo, Check } from 'lucide-react';
@@ -13,6 +14,17 @@ import {
   useRateSummary,
 } from '@/features/card-management/model/useSummaryRating';
 import type { SummaryRating } from '@/features/card-management/model/useSummaryRating';
+import { useV2Summaries } from '@/features/card-management/model/useV2Summaries';
+import { useArchiveCard } from '@/features/card-management/model/useArchiveCard';
+import { extractYouTubeVideoId } from '@/shared/lib/url-normalize';
+
+function safeVideoId(videoUrl: string): string | null {
+  try {
+    return extractYouTubeVideoId(new URL(videoUrl));
+  } catch {
+    return null;
+  }
+}
 
 interface CardListProps {
   cards: InsightCard[];
@@ -30,6 +42,9 @@ interface CardListProps {
   onRetryEnrich?: (cardId: string, videoUrl?: string) => void;
   gridColumns?: number;
   compact?: boolean;
+  /** CP463 — 8 sector names from currentLevel.subjects, used to render
+   *  the per-card sector label in the new footer row. */
+  sectorSubjects?: string[];
 }
 
 // Wrapper to make each card slot a droppable for reorder.
@@ -71,6 +86,7 @@ export function CardList({
   onRetryEnrich,
   gridColumns = 4,
   compact = false,
+  sectorSubjects,
 }: CardListProps) {
   const { t } = useTranslation();
 
@@ -83,6 +99,106 @@ export function CardList({
     },
     [rateSummary]
   );
+
+  // CP462+ Issue #649 Phase 3 — batch v2 lookup for Heart-only TL badge
+  // + footer one_liner. Falls back to empty map when no cards.
+  const videoIdsForV2 = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of cards) {
+      const vid = safeVideoId(c.videoUrl);
+      if (vid) ids.add(vid);
+    }
+    return Array.from(ids);
+  }, [cards]);
+  const { summariesByVideoId: v2SummariesMap } = useV2Summaries(videoIdsForV2);
+
+  // CP462+ Issue #649 Phase 3 — archive: client-side hide + 5-second
+  // undo. The BE archive endpoint only records the signal (it does NOT
+  // mutate the card row), so the FE owns the hide. We track hidden
+  // videoIds in a Set and `cards.filter()` against it; unarchive fires
+  // the BE delete + removes the videoId from the Set so the card
+  // re-appears.
+  // CP463 — persisted to localStorage scoped by mandalaId so refresh /
+  // navigation away-and-back keeps the archive applied. Cross-device
+  // sync is the BE list-endpoint LEFT JOIN, deferred to a follow-up PR.
+  const { unarchive } = useArchiveCard();
+  const archiveStorageKey = useMemo(() => {
+    const mandalaId = cards.find((c) => c.mandalaId)?.mandalaId;
+    return mandalaId ? `archived_videos:${mandalaId}` : null;
+  }, [cards]);
+  const [hiddenVideoIds, setHiddenVideoIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined' || !archiveStorageKey) return new Set();
+    try {
+      const raw = window.localStorage.getItem(archiveStorageKey);
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw) as unknown;
+      return Array.isArray(arr)
+        ? new Set(arr.filter((s): s is string => typeof s === 'string'))
+        : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  // Re-load when the active mandala (storage key) changes — e.g. user
+  // switches mandalas without remounting CardList.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !archiveStorageKey) {
+      setHiddenVideoIds(new Set());
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(archiveStorageKey);
+      if (!raw) {
+        setHiddenVideoIds(new Set());
+        return;
+      }
+      const arr = JSON.parse(raw) as unknown;
+      setHiddenVideoIds(
+        Array.isArray(arr)
+          ? new Set(arr.filter((s): s is string => typeof s === 'string'))
+          : new Set()
+      );
+    } catch {
+      setHiddenVideoIds(new Set());
+    }
+  }, [archiveStorageKey]);
+  const persistHidden = useCallback(
+    (next: Set<string>) => {
+      if (typeof window === 'undefined' || !archiveStorageKey) return;
+      try {
+        window.localStorage.setItem(archiveStorageKey, JSON.stringify(Array.from(next)));
+      } catch {
+        // quota exceeded or storage disabled — non-fatal, in-memory state still works
+      }
+    },
+    [archiveStorageKey]
+  );
+  const handleArchived = useCallback(
+    (videoId: string) => {
+      setHiddenVideoIds((prev) => {
+        const next = new Set(prev);
+        next.add(videoId);
+        persistHidden(next);
+        return next;
+      });
+      toast.success(t('cards.archive.toastSuccess', '보관됨'), {
+        duration: 5000,
+        action: {
+          label: t('cards.archive.undoLabel', '되돌리기'),
+          onClick: () => {
+            unarchive.mutate(videoId);
+            setHiddenVideoIds((prev) => {
+              const next = new Set(prev);
+              next.delete(videoId);
+              persistHidden(next);
+              return next;
+            });
+          },
+        },
+      });
+    },
+    [persistHidden, t, unarchive]
+  );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -93,7 +209,20 @@ export function CardList({
   // Cards arrive already sorted by the host (CardListView applies the user's
   // sortMode chip). Re-sorting here would override publishedAt ranking with
   // sortOrder / createdAt and was the cause of "5d ago in the middle".
-  const sortedCards = cards;
+  // CP463 — apply the archive hide before downstream slicing / sorting.
+  // hiddenVideoIds reflects user "보관" clicks within this session; on
+  // unarchive (undo toast or future restore action) the id is removed
+  // and the card re-appears on the next render.
+  const sortedCards = useMemo(
+    () =>
+      hiddenVideoIds.size === 0
+        ? cards
+        : cards.filter((c) => {
+            const vid = safeVideoId(c.videoUrl);
+            return !vid || !hiddenVideoIds.has(vid);
+          }),
+    [cards, hiddenVideoIds]
+  );
 
   // Reset visible count when card list changes (e.g., cell switch)
   const cardListKey = useMemo(() => cards.map((c) => c.id).join(','), [cards]);
@@ -309,6 +438,20 @@ export function CardList({
                 isEnriching={enrichingCardIds?.has(card.id)}
                 isEnrichFailed={failedEnrichCardIds?.has(card.id)}
                 onRetryEnrich={onRetryEnrich}
+                mandalaRelevancePct={(() => {
+                  const vid = safeVideoId(card.videoUrl);
+                  return vid ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null) : null;
+                })()}
+                oneLiner={(() => {
+                  const vid = safeVideoId(card.videoUrl);
+                  return vid ? (v2SummariesMap.get(vid)?.oneLiner ?? null) : null;
+                })()}
+                sectorLabel={
+                  sectorSubjects && card.cellIndex >= 0 && card.cellIndex < sectorSubjects.length
+                    ? sectorSubjects[card.cellIndex]
+                    : null
+                }
+                onArchived={handleArchived}
               />
             </CardSlot>
           );

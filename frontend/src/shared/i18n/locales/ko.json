@@ -633,7 +633,11 @@
     "dragToMove": "드래그하여 이동",
     "addCard": "카드 추가",
     "addCardPlaceholder": "URL을 붙여넣으세요...",
-    "loadingMore": "로딩 중... {{loaded}} / {{total}}"
+    "loadingMore": "로딩 중... {{loaded}} / {{total}}",
+    "archive": {
+      "toastSuccess": "보관됨",
+      "undoLabel": "되돌리기"
+    }
   },
   "contextHeader": {
     "home": "홈",
