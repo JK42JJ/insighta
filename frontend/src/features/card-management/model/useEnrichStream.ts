@@ -97,7 +97,15 @@ export function useEnrichStream(): UseEnrichStreamResult {
           if (data.phase === 'scored' || data.phase === 'failed' || data.phase === 'timeout') {
             es.close();
             esRef.current = null;
-            setIsActive(false);
+            // CP463 — keep chip visible for ~2.5s after the terminal
+            // phase so the user sees the completion color before it
+            // fades. Setting isActive=false immediately hides the chip
+            // and the user just sees the result row pop in with no
+            // closure cue.
+            setTimeout(() => {
+              setIsActive(false);
+              setPhase('idle');
+            }, 2500);
           }
         }
       } catch {

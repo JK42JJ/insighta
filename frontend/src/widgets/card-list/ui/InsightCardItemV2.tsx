@@ -373,12 +373,11 @@ export function InsightCardItemV2({
             flow). See the BL chip below the Archive / memo indicator
             block. */}
 
-        {/* Bottom-left: Archive (hover-only icon, no chrome) — soft hide within mandala.
-            CP463 user directive 2026-05-17: "아카이브/하트는 배경은 제거하고
-            아이콘만 표기하되 호버시 사용자가 인지 가능한 수준의 애니메이션
-            을 제공할것." Icon-only with drop-shadow for legibility over
-            the thumbnail, scale-125 + rotate on hover. */}
-        {videoId && card.mandalaId && (
+        {/* Bottom-left: Archive (hover-only icon, no chrome). CP463 —
+            hidden while a Heart-click enrichment is active so the
+            progress chip can occupy the same BL corner without
+            overlap. */}
+        {videoId && card.mandalaId && !streamActive && (
           <button
             type="button"
             onClick={handleArchiveClick}
@@ -449,40 +448,53 @@ export function InsightCardItemV2({
           </button>
         )}
 
-        {/* CP463 — Heart SSE in-progress chip uses the SAME legacy blue
-            AI chip pattern as the YouTube D&D enrichment flow (user
-            directive: "이 모듈은 기존에 존재하는것"). Bottom-left at
-            44px offset, sits next to the Archive icon (BL @ 1.5px). */}
+        {/* CP463 — Heart SSE / legacy enrichment progress chip. Sits in
+            the BL corner (Archive is hidden while streamActive). Icon-
+            only (no "AI" label per user directive 2026-05-17). Phase
+            color encodes state:
+              fetching  → blue-500  (준비)
+              analyzing → amber-500 (진행중)
+              scored    → emerald-500 (완료, transient ~2.5s)
+            Legacy isEnriching prop falls into the blue fetching tier. */}
         {(streamActive || isEnriching) && (
-          <div className="absolute bottom-1.5 left-[44px] z-[5] pointer-events-none">
-            <div className="flex items-center gap-1 bg-blue-500/90 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              <span>AI</span>
+          <div className="absolute bottom-1.5 left-1.5 z-[5] pointer-events-none">
+            <div
+              className={cn(
+                'w-7 h-7 rounded-full flex items-center justify-center',
+                streamPhase === 'scored'
+                  ? 'bg-emerald-500/95'
+                  : streamPhase === 'analyzing'
+                    ? 'bg-amber-500/95'
+                    : 'bg-blue-500/95'
+              )}
+            >
+              <Loader2
+                className={cn('w-4 h-4 text-white', streamPhase !== 'scored' && 'animate-spin')}
+                aria-hidden="true"
+              />
             </div>
           </div>
         )}
 
-        {/* CP463 — failed / timeout: same BL[44px] slot, destructive
-            color, retry on click. Handles both the legacy isEnrichFailed
-            prop and the Heart SSE failed/timeout phase. */}
+        {/* CP463 — failed / timeout: same BL slot, destructive color,
+            retry on click. Handles both the legacy isEnrichFailed prop
+            and the Heart SSE failed/timeout phase. */}
         {!streamActive && !isEnriching && (isEnrichFailed || showFailedGlow) && (
-          <div className="absolute bottom-1.5 left-[44px] z-[5]">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (showFailedGlow && videoId) {
-                  void enrichStream.open(videoId);
-                } else {
-                  onRetryEnrich?.(card.id, card.videoUrl);
-                }
-              }}
-              className="flex items-center gap-1 bg-destructive/90 hover:bg-destructive text-white text-[10px] px-1.5 py-0.5 rounded-full transition-colors cursor-pointer"
-            >
-              <RotateCw className="w-3 h-3" />
-              <span>Retry</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (showFailedGlow && videoId) {
+                void enrichStream.open(videoId);
+              } else {
+                onRetryEnrich?.(card.id, card.videoUrl);
+              }
+            }}
+            className="absolute bottom-1.5 left-1.5 z-[5] w-7 h-7 rounded-full bg-destructive/90 hover:bg-destructive flex items-center justify-center transition-colors cursor-pointer"
+            aria-label="Retry enrichment"
+          >
+            <RotateCw className="w-4 h-4 text-white" aria-hidden="true" />
+          </button>
         )}
       </div>
 
