@@ -35,6 +35,7 @@ export function useArchiveCard() {
         queryKey: ['mandala', 'recommendations', vars.mandalaId],
       });
       queryClient.invalidateQueries({ queryKey: ['mandala', 'recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
     },
   });
 
@@ -45,6 +46,7 @@ export function useArchiveCard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
       queryClient.invalidateQueries({ queryKey: ['mandala', 'recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
     },
   });
 

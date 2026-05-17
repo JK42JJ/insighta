@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
@@ -172,8 +172,18 @@ export function InsightCardItemV2({
   // but TanStack invalidation has a refetch latency. Without an optimistic
   // flip the user can re-click before pinned_at has propagated and the
   // hook still sees `liked=true`, looking like the toggle was ignored.
+  // The effect below clears the local override only when the server has
+  // CAUGHT UP (server-state === local), so an immediate clear in
+  // onSuccess does not let the stale `card.pinnedAt` snap the heart
+  // straight back to its previous state.
   const [likedLocal, setLikedLocal] = useState<boolean | null>(null);
-  const liked = likedLocal ?? Boolean(card.pinnedAt);
+  const serverLiked = Boolean(card.pinnedAt);
+  const liked = likedLocal ?? serverLiked;
+  useEffect(() => {
+    if (likedLocal !== null && serverLiked === likedLocal) {
+      setLikedLocal(null);
+    }
+  }, [likedLocal, serverLiked]);
   const { like, unlike } = useLikeCard();
   const { archive } = useArchiveCard();
   const enrichStream = useEnrichStream();
@@ -186,8 +196,9 @@ export function InsightCardItemV2({
       if (liked) {
         setLikedLocal(false);
         unlike.mutate(videoId, {
-          onSuccess: () => setLikedLocal(null), // server state replaces local
-          onError: () => setLikedLocal(true), // rollback
+          // No onSuccess clear — the effect above clears likedLocal
+          // once the refetched card.pinnedAt catches up to `false`.
+          onError: () => setLikedLocal(true), // rollback to previous true
         });
         return;
       }
@@ -200,7 +211,6 @@ export function InsightCardItemV2({
         },
         {
           onSuccess: () => {
-            setLikedLocal(null);
             // Open the SSE only when the BE actually enqueued a job
             // (which requires mandalaId; like without mandalaId still
             // records the signal but skips v2 enrichment).
@@ -208,7 +218,7 @@ export function InsightCardItemV2({
               void enrichStream.open(videoId);
             }
           },
-          onError: () => setLikedLocal(false), // rollback
+          onError: () => setLikedLocal(false), // rollback to previous false
         }
       );
     },

@@ -42,6 +42,11 @@ export function useLikeCard() {
           queryKey: ['mandala', 'recommendations', vars.mandalaId],
         });
       }
+      // CP462+ Issue #649 Phase 3 bug-fix — the TL relevance badge +
+      // footer one_liner come from the v2-summaries cache; without
+      // this invalidate the staleTime=60s window holds the pre-like
+      // empty payload and the badge never appears.
+      queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
     },
   });
 
@@ -52,6 +57,7 @@ export function useLikeCard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
       queryClient.invalidateQueries({ queryKey: ['mandala', 'recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
     },
   });
 
