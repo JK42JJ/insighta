@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
@@ -168,7 +168,12 @@ export function InsightCardItemV2({
   // still set server-side as the auto-eviction guard, but the UI no
   // longer exposes a separate Pin button per handoff decision #3).
   const videoId = useMemo(() => safeExtractVideoId(card.videoUrl), [card.videoUrl]);
-  const liked = Boolean(card.pinnedAt);
+  // Optimistic local override — server pinned_at is the truth of record,
+  // but TanStack invalidation has a refetch latency. Without an optimistic
+  // flip the user can re-click before pinned_at has propagated and the
+  // hook still sees `liked=true`, looking like the toggle was ignored.
+  const [likedLocal, setLikedLocal] = useState<boolean | null>(null);
+  const liked = likedLocal ?? Boolean(card.pinnedAt);
   const { like, unlike } = useLikeCard();
   const { archive } = useArchiveCard();
   const enrichStream = useEnrichStream();
@@ -179,9 +184,14 @@ export function InsightCardItemV2({
       e.preventDefault();
       if (!videoId) return;
       if (liked) {
-        unlike.mutate(videoId);
+        setLikedLocal(false);
+        unlike.mutate(videoId, {
+          onSuccess: () => setLikedLocal(null), // server state replaces local
+          onError: () => setLikedLocal(true), // rollback
+        });
         return;
       }
+      setLikedLocal(true);
       like.mutate(
         {
           videoId,
@@ -190,6 +200,7 @@ export function InsightCardItemV2({
         },
         {
           onSuccess: () => {
+            setLikedLocal(null);
             // Open the SSE only when the BE actually enqueued a job
             // (which requires mandalaId; like without mandalaId still
             // records the signal but skips v2 enrichment).
@@ -197,6 +208,7 @@ export function InsightCardItemV2({
               void enrichStream.open(videoId);
             }
           },
+          onError: () => setLikedLocal(false), // rollback
         }
       );
     },

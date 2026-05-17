@@ -685,15 +685,30 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         });
       }
 
-      // SSE handshake — disable any intermediate buffering (Nginx adds
-      // `X-Accel-Buffering: no` to ensure each write reaches the browser
-      // immediately).
-      reply.raw.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no',
-      });
+      // SSE handshake — mirror the proven pattern in mandalas.ts:808.
+      // `reply.hijack()` MUST come first so Fastify stops trying to
+      // finalize the response on its own; without it the connection
+      // closes immediately after our write and the FE EventSource sees
+      // an `error` event ⇒ phase flips to 'failed' as soon as the
+      // Heart click lands. Manual CORS headers because hijack() bypasses
+      // the @fastify/cors plugin.
+      void reply.hijack();
+      const raw = reply.raw;
+      const reqOrigin = request.headers.origin;
+      // Reuse the same allowlist server.ts gives the cors plugin.
+      const allowed = (process.env['CORS_ORIGIN'] ?? '*').split(',').map((s) => s.trim());
+      if (reqOrigin && (allowed.includes('*') || allowed.includes(reqOrigin))) {
+        raw.setHeader('Access-Control-Allow-Origin', reqOrigin);
+        raw.setHeader('Access-Control-Allow-Credentials', 'true');
+        raw.setHeader('Vary', 'Origin');
+      }
+      raw.setHeader('Content-Type', 'text/event-stream');
+      raw.setHeader('Cache-Control', 'no-cache');
+      raw.setHeader('Connection', 'keep-alive');
+      raw.setHeader('X-Accel-Buffering', 'no');
+      raw.statusCode = 200;
+      raw.write('retry: 5000\n\n');
+      raw.write(`: connected videoId=${videoId}\n\n`);
 
       const prisma = getPrismaClient();
       let lastPhase: string | null = null;
@@ -701,9 +716,9 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       let closed = false;
 
       const sendPhase = (phase: string, extra?: Record<string, unknown>): void => {
-        if (closed) return;
+        if (closed || raw.destroyed) return;
         const payload = JSON.stringify({ phase, videoId, ...extra });
-        reply.raw.write(`event: phase\ndata: ${payload}\n\n`);
+        raw.write(`event: phase\ndata: ${payload}\n\n`);
       };
 
       const closeStream = (): void => {
@@ -711,7 +726,7 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         closed = true;
         clearInterval(interval);
         try {
-          reply.raw.end();
+          raw.end();
         } catch {
           /* swallow — connection may already be closed */
         }
