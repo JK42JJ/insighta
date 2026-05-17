@@ -349,7 +349,7 @@ export function InsightCardItemV2({
       )}
 
       {/* ── Thumbnail ── */}
-      <div className="relative aspect-video overflow-hidden rounded-[10px] bg-gradient-to-br from-[#1a1c28] to-[#13141c] group-hover:brightness-105 transition-[filter] duration-200">
+      <div className="relative aspect-video overflow-hidden rounded-[10px] bg-gradient-to-br from-[#1a1c28] to-[#13141c] transition-[filter] duration-300 group-hover:brightness-[0.96] group-hover:contrast-[1.04]">
         <img
           src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
           alt={card.title}
@@ -360,8 +360,12 @@ export function InsightCardItemV2({
           onLoad={handleThumbnailLoad}
         />
 
-        {/* Hover dim overlay */}
-        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+        {/* CP463+ — vignette-only hover: darken top + bottom edges so
+            the white drop-shadowed icons (grip TL / Heart TR / Archive BL /
+            progress dot BL) read clearly. via-transparent keeps the
+            middle of the thumbnail untouched so the original artwork
+            stays alive (user feedback: "전체가 시커멓게 되면 원본이 죽는 느낌"). */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
         {/* Glass-morphism Play badge */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">

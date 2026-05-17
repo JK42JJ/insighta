@@ -629,6 +629,10 @@
     "archive": {
       "toastSuccess": "Archived",
       "undoLabel": "Undo"
+    },
+    "dropError": {
+      "notVideoUrlTitle": "Video URL required",
+      "notVideoUrlDescription": "Channel and playlist URLs cannot be added. Please drag the URL of the video page itself."
     }
   },
   "contextHeader": {
