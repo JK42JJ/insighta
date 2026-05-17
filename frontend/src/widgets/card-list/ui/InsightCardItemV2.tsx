@@ -519,20 +519,9 @@ export function InsightCardItemV2({
             <span className="shrink-0 ml-2">{footerRight ?? ''}</span>
           </div>
         )}
-        {/* CP463 — one_liner moved below date/views per user directive
-            "요약정보는 카드의 기간/조회수 아래에 배치해줘" (2026-05-17),
-            and rendered in full (no line-clamp / no '…' truncation —
-            wrap as needed) per follow-up directive same date:
-            "요약정보에 ... 표기하지말고 전체 내용모두 표기 (줄바꿈
-            되어도 관찮아)". */}
-        {trimmedOneLiner && (
-          <p className="mt-1 text-[11px] italic text-muted-foreground leading-snug whitespace-pre-wrap break-words">
-            {decodeHtmlEntities(trimmedOneLiner)}
-          </p>
-        )}
-        {/* CP463 — new footer row: sector (left) + relevance % (right).
-            Only renders when either side has content so unrelated cards
-            don't get an empty row. */}
+        {/* CP463 — sector (left) + relevance % (right) row. Sits above
+            the one_liner per follow-up directive 2026-05-17
+            "요약정보는 카드의 마지막 라인으로 이동시켜줄래". */}
         {(sectorLabel || relevanceBadge) && (
           <div className="mt-1.5 flex items-center justify-between gap-2 min-h-[18px]">
             {sectorLabel ? (
@@ -553,6 +542,13 @@ export function InsightCardItemV2({
               </span>
             )}
           </div>
+        )}
+        {/* CP463 — one_liner is the last line in the card body. Full
+            wrap, no line-clamp / no '…' (user directive same date). */}
+        {trimmedOneLiner && (
+          <p className="mt-1.5 text-[11px] italic text-muted-foreground leading-snug whitespace-pre-wrap break-words">
+            {decodeHtmlEntities(trimmedOneLiner)}
+          </p>
         )}
       </div>
     </Card>
