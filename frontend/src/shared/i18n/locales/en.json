@@ -625,7 +625,11 @@
     "dragToMove": "Drag to move",
     "addCard": "Add Card",
     "addCardPlaceholder": "Paste a URL...",
-    "loadingMore": "Loading... {{loaded}} of {{total}}"
+    "loadingMore": "Loading... {{loaded}} of {{total}}",
+    "archive": {
+      "toastSuccess": "Archived",
+      "undoLabel": "Undo"
+    }
   },
   "contextHeader": {
     "home": "Home",

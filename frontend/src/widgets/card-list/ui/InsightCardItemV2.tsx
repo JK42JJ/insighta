@@ -1,10 +1,23 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
-import { GripVertical, NotepadText, Loader2, RotateCw, Play, Bookmark } from 'lucide-react';
-import { usePinCard } from '@/features/card-management/model/usePinCard';
+import {
+  GripVertical,
+  NotepadText,
+  Loader2,
+  RotateCw,
+  Play,
+  Heart,
+  Archive,
+  Check,
+  AlertTriangle,
+} from 'lucide-react';
+import { useLikeCard } from '@/features/card-management/model/useLikeCard';
+import { useArchiveCard } from '@/features/card-management/model/useArchiveCard';
+import { useEnrichStream } from '@/features/card-management/model/useEnrichStream';
+import { extractYouTubeVideoId } from '@/shared/lib/url-normalize';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import {
   upgradeYouTubeThumbnail,
@@ -19,7 +32,6 @@ import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 const QUALITY_BADGE_THRESHOLD_HIGH = 90;
 const QUALITY_BADGE_THRESHOLD_MID = 80;
 const QUALITY_BADGE_THRESHOLD_LOW = 70;
-const SCORE_SCALE = 100;
 
 const VIEW_COUNT_BILLION = 1_000_000_000;
 const VIEW_COUNT_MILLION = 1_000_000;
@@ -27,6 +39,7 @@ const VIEW_COUNT_THOUSAND = 1_000;
 
 const RELATIVE_MINUTE_SEC = 60;
 const RELATIVE_HOUR_SEC = 3600;
+
 // ── Helpers ────────────────────────────────────────────────
 
 function formatDuration(sec: number | null | undefined): string | null {
@@ -46,17 +59,22 @@ function formatViewCount(count: number | null | undefined): string | null {
   return String(count);
 }
 
-function getQualityBadge(
-  score: number | null | undefined
+/**
+ * Quality badge built from the CP462+ `mandala_relevance_pct` (0-100,
+ * Heart'd cards only). The generic rec_score badge was retired per
+ * handoff decision #8: only Heart'd cards earn a TL badge.
+ */
+function getMandalaRelevanceBadge(
+  pct: number | null | undefined
 ): { label: string; className: string } | null {
-  if (score == null || score <= 0) return null;
-  const displayScore = Math.round(score * SCORE_SCALE);
-  if (displayScore < QUALITY_BADGE_THRESHOLD_LOW) return null;
-  if (displayScore >= QUALITY_BADGE_THRESHOLD_HIGH)
-    return { label: String(displayScore), className: 'bg-[#818cf8] text-white' };
-  if (displayScore >= QUALITY_BADGE_THRESHOLD_MID)
-    return { label: String(displayScore), className: 'bg-[#34d399] text-[#0a1a14]' };
-  return { label: String(displayScore), className: 'bg-[#fbbf24] text-[#1a1400]' };
+  if (pct == null) return null;
+  const value = Math.max(0, Math.min(100, Math.round(pct)));
+  if (value < QUALITY_BADGE_THRESHOLD_LOW) return null;
+  if (value >= QUALITY_BADGE_THRESHOLD_HIGH)
+    return { label: String(value), className: 'bg-[#818cf8] text-white' };
+  if (value >= QUALITY_BADGE_THRESHOLD_MID)
+    return { label: String(value), className: 'bg-[#34d399] text-[#0a1a14]' };
+  return { label: String(value), className: 'bg-[#fbbf24] text-[#1a1400]' };
 }
 
 /** Extract YouTube metadata from InsightCard.metadata (runtime fields beyond UrlMetadata type) */
@@ -70,6 +88,14 @@ function extractYouTubeMeta(card: InsightCard) {
   };
 }
 
+function safeExtractVideoId(videoUrl: string): string | null {
+  try {
+    return extractYouTubeVideoId(new URL(videoUrl));
+  } catch {
+    return null;
+  }
+}
+
 // ── Types ──────────────────────────────────────────────────
 
 interface InsightCardItemV2Props {
@@ -79,11 +105,35 @@ interface InsightCardItemV2Props {
   isDraggable?: boolean;
   selectedCardIds?: Set<string>;
   className?: string;
+  /**
+   * Legacy enrichment indicator (separate from the Heart-click v2
+   * stream). Preserved for older callers that drive the blue "AI"
+   * pulse via prop. The Heart flow uses its own `useEnrichStream`
+   * subscription inside the card.
+   */
   isEnriching?: boolean;
   isEnrichFailed?: boolean;
   onRetryEnrich?: (cardId: string, videoUrl?: string) => void;
-  /** Optional quality score 0-1 (from rec_score). Overrides metadata extraction. */
-  recScore?: number | null;
+  /**
+   * CP462+ Issue #649 — mandala-relevance fit score (0-100). Sourced
+   * from `video_rich_summaries.mandala_relevance_pct` via the batch
+   * /v2-summaries endpoint. Renders the TL badge only when non-null
+   * (i.e. the user has Heart'd this video and v2 has scored it).
+   */
+  mandalaRelevancePct?: number | null;
+  /**
+   * CP462+ Issue #649 — v2 `core.one_liner` (≤ 20 chars). Renders as
+   * italic line-clamp-1 below the title only when non-empty (Heart'd
+   * cards with a passed v2 row).
+   */
+  oneLiner?: string | null;
+  /**
+   * Optional archive callback. The card calls this AFTER the archive
+   * mutation succeeds so the parent can present a 5-second undo
+   * toast (handoff decision #6 — soft hide). When omitted, the card
+   * still records the signal but the toast is suppressed.
+   */
+  onArchived?: (videoId: string) => void;
 }
 
 // ── Component ──────────────────────────────────────────────
@@ -98,7 +148,9 @@ export function InsightCardItemV2({
   isEnriching = false,
   isEnrichFailed = false,
   onRetryEnrich,
-  recScore,
+  mandalaRelevancePct,
+  oneLiner,
+  onArchived,
 }: InsightCardItemV2Props) {
   const isSelected = selectedCardIds?.has(card.id) ?? false;
   const isMultiSelect = isSelected && selectedCardIds && selectedCardIds.size > 1;
@@ -112,28 +164,60 @@ export function InsightCardItemV2({
     disabled: !canDrag,
   });
 
-  // CP457+ — Pin / bookmark toggle. Optimistic local boolean to avoid the
-  // visible round-trip; the mutation invalidates the cards query so server
-  // state replaces local on next refetch.
-  const pinMutation = usePinCard();
-  const [isPinnedLocal, setIsPinnedLocal] = useState<boolean | null>(null);
-  const isPinned = isPinnedLocal ?? Boolean(card.pinnedAt);
-  const handlePinClick = useCallback(
+  // CP462+ Issue #649 — Heart subsumes the old Pin role (pinned_at is
+  // still set server-side as the auto-eviction guard, but the UI no
+  // longer exposes a separate Pin button per handoff decision #3).
+  const videoId = useMemo(() => safeExtractVideoId(card.videoUrl), [card.videoUrl]);
+  const liked = Boolean(card.pinnedAt);
+  const { like, unlike } = useLikeCard();
+  const { archive } = useArchiveCard();
+  const enrichStream = useEnrichStream();
+
+  const handleHeartClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
-      const next = !isPinned;
-      setIsPinnedLocal(next);
-      pinMutation.mutate(
-        { card, pinned: next },
+      if (!videoId) return;
+      if (liked) {
+        unlike.mutate(videoId);
+        return;
+      }
+      like.mutate(
         {
-          onError: () => {
-            setIsPinnedLocal(!next); // rollback
+          videoId,
+          mandalaId: card.mandalaId ?? undefined,
+          title: card.title,
+        },
+        {
+          onSuccess: () => {
+            // Open the SSE only when the BE actually enqueued a job
+            // (which requires mandalaId; like without mandalaId still
+            // records the signal but skips v2 enrichment).
+            if (card.mandalaId) {
+              void enrichStream.open(videoId);
+            }
           },
         }
       );
     },
-    [card, isPinned, pinMutation]
+    [card.mandalaId, card.title, enrichStream, like, liked, unlike, videoId]
+  );
+
+  const handleArchiveClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!videoId || !card.mandalaId) return;
+      archive.mutate(
+        { videoId, mandalaId: card.mandalaId },
+        {
+          onSuccess: () => {
+            onArchived?.(videoId);
+          },
+        }
+      );
+    },
+    [archive, card.mandalaId, onArchived, videoId]
   );
 
   // CP446 — restore B-model: card body carries listeners only when the card
@@ -155,20 +239,25 @@ export function InsightCardItemV2({
 
   // ── Data extraction ──
   const ytMeta = extractYouTubeMeta(card);
-  const effectiveScore = recScore ?? null;
-  const qualityBadge = getQualityBadge(effectiveScore);
+  const relevanceBadge = getMandalaRelevanceBadge(mandalaRelevancePct);
   const duration = formatDuration(ytMeta.durationSec);
   const views = formatViewCount(ytMeta.viewCount);
   const relDate = formatRelativeDate(ytMeta.publishedAt ?? card.createdAt?.toISOString());
   const hasNote = !!card.userNote?.trim();
-  const isYouTube = card.linkType === 'youtube' || card.linkType === 'youtube-shorts';
+  const trimmedOneLiner = oneLiner?.trim();
 
-  // ── Footer meta: left = YouTube upload date, right = view count.
-  //    Channel name is intentionally dropped from the card footer per UX
-  //    direction — it was duplicating the thumbnail's YouTube badge and
-  //    pushing the more useful signals (recency + popularity) off-screen.
   const footerLeft = relDate || null;
   const footerRight = views || null;
+
+  // 3-phase animation phase from the Heart-click SSE stream (idle for
+  // non-active cards). The legacy `isEnriching` / `isEnrichFailed`
+  // props still drive their own indicators; the new stream wins when
+  // both are active (Heart click is more user-visible).
+  const streamPhase = enrichStream.phase;
+  const streamActive = enrichStream.isActive;
+  const showAnalyzingGlow = streamActive && streamPhase === 'analyzing';
+  const showScoredFlash = streamPhase === 'scored';
+  const showFailedGlow = streamPhase === 'failed' || streamPhase === 'timeout';
 
   return (
     <Card
@@ -177,26 +266,24 @@ export function InsightCardItemV2({
       data-dnd-draggable={isSelected ? '' : undefined}
       data-card-content
       onClick={handleClick}
-      // CP446 — block native HTML5 drag on the card. Without this, the
-      // browser's image-drag picks up the thumbnail URL in parallel with
-      // dnd-kit; if the user releases off any droppable, CardListView's
-      // onDrop fires with the thumbnail URL and the scratchpad-drop branch
-      // calls isValidUrl → "유효하지 않은 URL" toast (false positive).
       onDragStart={(e) => e.preventDefault()}
       className={cn(
         'group relative cursor-pointer transition-all duration-200',
         'border-0 shadow-none bg-transparent rounded-[10px]',
-        // CP443 — hover lift + subtle ring (border-0 preserved to keep shadcn Card chrome intact)
         'hover:-translate-y-0.5 hover:ring-1 hover:ring-border/60',
-        // CP443 — pull cards 5% inward (each side 2.5%) to tighten gaps without touching grid template
         'w-[95%]',
+        // CP462+ Issue #649 — 3-phase glow overlay. Wraps the whole
+        // card (not just the thumbnail) so the visual feedback is
+        // unmistakable even on smaller tiles.
+        showAnalyzingGlow && 'ring-2 ring-emerald-500/60 animate-pulse',
+        showScoredFlash && 'ring-2 ring-emerald-500/80',
+        showFailedGlow && 'ring-2 ring-destructive/60',
         isSelected && canDrag && 'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-30',
         className
       )}
     >
-      {/* Drag handle — visible grip for non-selected cards (24×24 hit area).
-          Selected cards drag from the body itself (multi-card drag). */}
+      {/* Drag handle — visible grip for non-selected cards (24×24 hit area). */}
       {canDrag && !isSelected && (
         <div
           {...listeners}
@@ -221,65 +308,99 @@ export function InsightCardItemV2({
           onLoad={handleThumbnailLoad}
         />
 
-        {/* CP443 — Hover dim overlay (replaces zoom — calmer, slightly darkens the thumbnail) */}
+        {/* Hover dim overlay */}
         <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
 
-        {/* CP443 — Glass-morphism Play badge (fades in on hover, pointer-events-none so it doesn't steal clicks) */}
+        {/* Glass-morphism Play badge */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
           <div className="w-12 h-12 rounded-full bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center shadow-md">
             <Play className="w-6 h-6 text-white fill-white translate-x-[1px]" aria-hidden="true" />
           </div>
         </div>
 
-        {/* Top-left: Quality badge */}
-        {qualityBadge && (
+        {/* Top-left: Mandala-relevance badge (Heart'd cards only, ≥ 70) */}
+        {relevanceBadge && (
           <span
             className={cn(
               'absolute top-2 left-2 text-[10px] font-bold px-[7px] py-[2px] rounded',
-              qualityBadge.className
+              relevanceBadge.className
             )}
           >
-            {qualityBadge.label}
+            {relevanceBadge.label}
           </span>
         )}
 
-        {/* Top-right: Pin / bookmark (CP457+) — primary TR anchor.
-            Inactive = subtle (white/40), hover lifts to white/80. Active
-            (pinned) = always-visible yellow fill for persistent confirmation. */}
-        <button
-          type="button"
-          onClick={handlePinClick}
-          aria-label={isPinned ? 'Unpin card' : 'Pin card'}
-          aria-pressed={isPinned}
-          className={cn(
-            'absolute top-1.5 right-1.5 z-10 w-7 h-7 rounded-md backdrop-blur flex items-center justify-center transition-all',
-            // CP457+ UX:
-            //   pinned   → always-visible, brand `--primary` fill so the
-            //             persisted state is discoverable at a glance.
-            //   unpinned → hover-only, neutral white. Keeps the thumbnail
-            //             visually clean when the user isn't interacting.
-            // Color uses semantic `text-primary` token (per CLAUDE.md
-            // "하드코딩 색상 금지" Hard Rule); avoids brand-mismatching
-            // yellow and adapts automatically on theme change.
-            isPinned
-              ? 'bg-black/50 text-primary opacity-100'
-              : 'bg-black/55 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80 hover:scale-105'
-          )}
-        >
-          <Bookmark
-            className="w-[18px] h-[18px]"
-            fill={isPinned ? 'currentColor' : 'none'}
-            strokeWidth={2.2}
-            aria-hidden="true"
-          />
-        </button>
+        {/* Top-right: Duration (moved from BR — Pin slot retired) */}
+        {duration && (
+          <span className="absolute top-1.5 right-1.5 text-[10px] font-mono font-medium px-[5px] py-[2px] rounded bg-black/75 text-white/85">
+            {duration}
+          </span>
+        )}
 
-        {/* YouTube source badge removed (CP457+ spec) — footer relativeDate +
-            viewCount + thumbnail itself convey YouTube context. Pin owns TR. */}
+        {/* Center-top chip — Heart-click 3-phase animation (live SSE) */}
+        {streamActive && (
+          <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-[6] pointer-events-none">
+            <div className="flex items-center gap-1 bg-emerald-500/95 text-white text-[10px] px-2 py-0.5 rounded-full shadow-sm">
+              <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+              <span>
+                {streamPhase === 'fetching'
+                  ? '수집 중'
+                  : streamPhase === 'analyzing'
+                    ? '분석 중'
+                    : '준비 중'}
+              </span>
+            </div>
+          </div>
+        )}
+        {showScoredFlash && (
+          <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-[6] pointer-events-none">
+            <div className="flex items-center gap-1 bg-emerald-500/95 text-white text-[10px] px-2 py-0.5 rounded-full shadow-sm">
+              <Check className="w-3 h-3" aria-hidden="true" />
+              <span>평가 완료</span>
+            </div>
+          </div>
+        )}
+        {showFailedGlow && (
+          <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-[6]">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (videoId) void enrichStream.open(videoId);
+              }}
+              className="flex items-center gap-1 bg-destructive/90 hover:bg-destructive text-white text-[10px] px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+            >
+              <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+              <span>다시 시도</span>
+            </button>
+          </div>
+        )}
 
-        {/* Bottom-left: Memo indicator (only if note exists) */}
+        {/* Bottom-left: Archive (hover-only) — soft hide within mandala */}
+        {videoId && card.mandalaId && (
+          <button
+            type="button"
+            onClick={handleArchiveClick}
+            aria-label="Archive card"
+            disabled={archive.isPending}
+            className={cn(
+              'absolute bottom-1.5 left-1.5 z-10 w-7 h-7 rounded-md backdrop-blur flex items-center justify-center transition-all',
+              'bg-black/55 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80 hover:scale-105',
+              'disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
+          >
+            <Archive className="w-[16px] h-[16px]" strokeWidth={2.2} aria-hidden="true" />
+          </button>
+        )}
+
+        {/* Bottom-left (alt): Memo indicator — shifts up when Archive is visible */}
         {hasNote && (
-          <div className="absolute bottom-1.5 left-1.5 w-6 h-5 rounded bg-black/60 backdrop-blur flex items-center justify-center">
+          <div
+            className={cn(
+              'absolute w-6 h-5 rounded bg-black/60 backdrop-blur flex items-center justify-center pointer-events-none',
+              videoId && card.mandalaId ? 'bottom-[44px] left-1.5' : 'bottom-1.5 left-1.5'
+            )}
+          >
             <NotepadText
               className="w-[13px] h-[13px] text-white/70"
               strokeWidth={1.8}
@@ -288,16 +409,34 @@ export function InsightCardItemV2({
           </div>
         )}
 
-        {/* Bottom-right: Duration */}
-        {duration && (
-          <span className="absolute bottom-1.5 right-1.5 text-[10px] font-mono font-medium px-[5px] py-[2px] rounded bg-black/75 text-white/85">
-            {duration}
-          </span>
+        {/* Bottom-right: Heart (Pin replacement — active=red fill) */}
+        {videoId && (
+          <button
+            type="button"
+            onClick={handleHeartClick}
+            aria-label={liked ? 'Unlike card' : 'Like card'}
+            aria-pressed={liked}
+            disabled={like.isPending || unlike.isPending}
+            className={cn(
+              'absolute bottom-1.5 right-1.5 z-10 w-7 h-7 rounded-md backdrop-blur flex items-center justify-center transition-all',
+              liked
+                ? 'bg-black/55 text-red-500 opacity-100'
+                : 'bg-black/55 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80 hover:scale-105',
+              'disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
+          >
+            <Heart
+              className="w-[18px] h-[18px]"
+              fill={liked ? 'currentColor' : 'none'}
+              strokeWidth={2.2}
+              aria-hidden="true"
+            />
+          </button>
         )}
 
-        {/* Enriching spinner */}
-        {isEnriching && (
-          <div className="absolute bottom-1.5 left-1.5 z-[5] pointer-events-none">
+        {/* Legacy enriching spinner (separate from Heart SSE) */}
+        {isEnriching && !streamActive && (
+          <div className="absolute bottom-1.5 left-[44px] z-[5] pointer-events-none">
             <div className="flex items-center gap-1 bg-blue-500/90 text-white text-[10px] px-1.5 py-0.5 rounded-full">
               <Loader2 className="w-3 h-3 animate-spin" />
               <span>AI</span>
@@ -305,9 +444,9 @@ export function InsightCardItemV2({
           </div>
         )}
 
-        {/* Enrich failed */}
-        {isEnrichFailed && !isEnriching && (
-          <div className="absolute bottom-1.5 left-1.5 z-[5]">
+        {/* Legacy enrich failed — Retry button */}
+        {isEnrichFailed && !isEnriching && !streamActive && (
+          <div className="absolute bottom-1.5 left-[44px] z-[5]">
             <button
               type="button"
               onClick={(e) => {
@@ -323,11 +462,16 @@ export function InsightCardItemV2({
         )}
       </div>
 
-      {/* ── Body: title + meta ── */}
+      {/* ── Body: title + (optional) one_liner + meta ── */}
       <div className="px-3 pt-2 pb-4">
         <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px]">
           {decodeHtmlEntities(card.title)}
         </h4>
+        {trimmedOneLiner && (
+          <p className="mt-1 text-[11px] italic text-muted-foreground line-clamp-1">
+            {decodeHtmlEntities(trimmedOneLiner)}
+          </p>
+        )}
         {(footerLeft || footerRight) && (
           <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
             <span className="truncate">{footerLeft ?? ''}</span>

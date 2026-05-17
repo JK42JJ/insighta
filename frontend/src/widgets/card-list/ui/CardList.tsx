@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDroppable } from '@dnd-kit/core';
+import { toast } from 'sonner';
 import { InsightCard } from '@/entities/card/model/types';
 import { InsightCardItemV2 } from './InsightCardItemV2';
 import { FileVideo, Check } from 'lucide-react';
@@ -13,6 +14,17 @@ import {
   useRateSummary,
 } from '@/features/card-management/model/useSummaryRating';
 import type { SummaryRating } from '@/features/card-management/model/useSummaryRating';
+import { useV2Summaries } from '@/features/card-management/model/useV2Summaries';
+import { useArchiveCard } from '@/features/card-management/model/useArchiveCard';
+import { extractYouTubeVideoId } from '@/shared/lib/url-normalize';
+
+function safeVideoId(videoUrl: string): string | null {
+  try {
+    return extractYouTubeVideoId(new URL(videoUrl));
+  } catch {
+    return null;
+  }
+}
 
 interface CardListProps {
   cards: InsightCard[];
@@ -82,6 +94,36 @@ export function CardList({
       rateSummary.mutate({ cardId, rating });
     },
     [rateSummary]
+  );
+
+  // CP462+ Issue #649 Phase 3 — batch v2 lookup for Heart-only TL badge
+  // + footer one_liner. Falls back to empty map when no cards.
+  const videoIdsForV2 = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of cards) {
+      const vid = safeVideoId(c.videoUrl);
+      if (vid) ids.add(vid);
+    }
+    return Array.from(ids);
+  }, [cards]);
+  const { summariesByVideoId: v2SummariesMap } = useV2Summaries(videoIdsForV2);
+
+  // CP462+ Issue #649 Phase 3 — archive undo affordance. The card
+  // surfaces an `onArchived(videoId)` callback after the BE mutation
+  // succeeds; the list renders a 5-second toast with an undo action
+  // that fires unarchive.
+  const { unarchive } = useArchiveCard();
+  const handleArchived = useCallback(
+    (videoId: string) => {
+      toast.success(t('cards.archive.toastSuccess', '보관됨'), {
+        duration: 5000,
+        action: {
+          label: t('cards.archive.undoLabel', '되돌리기'),
+          onClick: () => unarchive.mutate(videoId),
+        },
+      });
+    },
+    [t, unarchive]
   );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -309,6 +351,15 @@ export function CardList({
                 isEnriching={enrichingCardIds?.has(card.id)}
                 isEnrichFailed={failedEnrichCardIds?.has(card.id)}
                 onRetryEnrich={onRetryEnrich}
+                mandalaRelevancePct={(() => {
+                  const vid = safeVideoId(card.videoUrl);
+                  return vid ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null) : null;
+                })()}
+                oneLiner={(() => {
+                  const vid = safeVideoId(card.videoUrl);
+                  return vid ? (v2SummariesMap.get(vid)?.oneLiner ?? null) : null;
+                })()}
+                onArchived={handleArchived}
               />
             </CardSlot>
           );

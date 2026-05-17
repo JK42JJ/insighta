@@ -226,6 +226,96 @@ remaining manual gate before the FE work can demonstrate the full
 Heart-click flow end-to-end is the `gh variable set
 RICH_SUMMARY_ENABLED --body true` + redeploy described above.
 
+## Phase 3 — complete (FE card UI shipped)
+
+End-to-end Heart / Archive / v2 progress animation wired up against
+the Phase 2 BE.
+
+### File touch summary
+
+- `frontend/src/shared/lib/url-normalize.ts` — exported the existing
+  `extractYouTubeVideoId` helper (was private).
+- `frontend/src/shared/lib/api-client.ts` (+~75 lines, 5 methods)
+  - `likeCard(videoId, {mandalaId?, title?, description?})` → 202 with
+    `{signalRecorded, jobId, pinnedRows}`
+  - `unlikeCard(videoId)` → 204
+  - `archiveCard(videoId, mandalaId)` → 204
+  - `unarchiveCard(videoId)` → 204
+  - `getV2Summaries(videoIds[])` → `{items[]}` batch lookup
+- `frontend/src/features/card-management/model/useLikeCard.ts` (NEW)
+  — `like.mutate({videoId, mandalaId, title, description})` /
+  `unlike.mutate(videoId)`. Invalidates `localCardsKeys.list()` +
+  `['mandala','recommendations',...]` on success (mirrors
+  `usePinCard`'s pattern).
+- `frontend/src/features/card-management/model/useArchiveCard.ts` (NEW)
+  — `archive.mutate({videoId, mandalaId})` /
+  `unarchive.mutate(videoId)`. Same invalidation strategy.
+- `frontend/src/features/card-management/model/useV2Summaries.ts` (NEW)
+  — TanStack `useQuery` keyed by sorted dedup'd videoIds (so two
+  callers with the same set share the cache). `staleTime` 60s.
+  Returns `summariesByVideoId` Map for O(1) lookup in the grid render.
+- `frontend/src/features/card-management/model/useEnrichStream.ts` (NEW)
+  — opens an `EventSource` against `/api/v1/cards/:videoId/enrich-stream`
+  using the Supabase session token via `?access_token=` query param
+  (same pattern as `useVideoStream`). Surfaces a state machine
+  `idle → fetching → analyzing → scored | failed | timeout` and
+  auto-closes on terminal phases.
+- `frontend/src/widgets/card-list/ui/InsightCardItemV2.tsx`
+  (rewritten, ~400 lines)
+  - Pin button retired; the `pinned_at` column is still set
+    server-side by `POST /like` (auto-eviction guard, handoff
+    decision #3), but the UI exposes Heart instead.
+  - **Top-left**: mandala-relevance badge (≥ 70). Sourced from
+    the Heart-only `mandalaRelevancePct` prop; non-Heart'd cards
+    get no badge (decision #8).
+  - **Top-right**: duration (moved from BR, freed by Pin removal).
+  - **Bottom-right**: Heart toggle (hover-only when inactive,
+    persistent red fill when liked).
+  - **Bottom-left**: Archive toggle (hover-only).
+  - **Center-top chip**: 3-phase live animation (`수집 중 / 분석 중 /
+    평가 완료`) driven by `useEnrichStream`. Failed state surfaces
+    a "다시 시도" button (re-opens the SSE).
+  - **Card-wide glow ring**: emerald pulse during `analyzing`,
+    emerald flash on `scored`, destructive on `failed`.
+  - **Footer**: title + (optional) italic `oneLiner` line-clamp-1
+    when v2 has scored the card + date / views row.
+- `frontend/src/widgets/card-list/ui/CardList.tsx`
+  - Dedup'd `videoIds` from the card list → `useV2Summaries(...)` →
+    pass-through `mandalaRelevancePct` + `oneLiner` per card.
+  - `handleArchived(videoId)` → `sonner` toast with 5-second undo
+    affordance (`useArchiveCard().unarchive`).
+- `frontend/src/shared/i18n/locales/{ko,en}.json` — 2 new keys
+  (`cards.archive.toastSuccess`, `cards.archive.undoLabel`).
+- The 3-phase chip strings (`수집 중 / 분석 중 / 평가 완료`) remain
+  hardcoded Korean in the card; a follow-up PR can move them to i18n
+  if the UI ships to additional locales.
+
+### Verification
+
+- `tsc --noEmit` (FE) ✔
+- `vitest run` → **316/316 tests pass** (0 regressions)
+- All existing card flows (drag, Pin via BE endpoint, multi-select,
+  delete signal hook) remain unaffected — Heart is additive.
+
+### Phase 3 caveats / known limitations
+
+- `mandalaRelevancePct` reflects the FIRST user / mandala that
+  triggered v2 generation; subsequent users heart-clicking the same
+  video reuse that score. Per-user scoring needs a
+  `user_video_relevance` table (out of scope for #649).
+- Archive scope is mandala-agnostic at the DB level
+  (`UNIQUE(user_id, video_id, signal)`), so re-archiving the same
+  video in a second mandala overwrites the mandala_id. Multi-mandala
+  archive scoping requires a partial unique index restricted to
+  `signal IN ('like', 'delete')` — also out of scope for #649.
+- The chip text remains Korean even when the UI language is `en`.
+- Heart UI is fully gated by `RICH_SUMMARY_ENABLED`: when the
+  GitHub Variable is unset/empty, `POST /like` still records the
+  signal but the pg-boss job's `enrichRichSummary` returns early
+  (config default `false`), so the FE will see `fetching →
+  scored` very quickly with `mandalaRelevancePct = null` and no
+  badge / one_liner appears.
+
 ## Remaining for Issue #649
 
 | Phase | Work |
