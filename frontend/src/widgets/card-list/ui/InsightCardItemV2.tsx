@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
+import { useQueryClient } from '@tanstack/react-query';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
@@ -202,6 +203,19 @@ export function InsightCardItemV2({
   const { like, unlike } = useLikeCard();
   const { archive } = useArchiveCard();
   const enrichStream = useEnrichStream();
+  // CP463 — when the SSE reports 'scored', the BE has just written the
+  // new v2 row (mandala_relevance_pct + one_liner). useLikeCard.onSuccess
+  // invalidated v2-summaries at enqueue time (too early — row didn't
+  // exist yet), and useV2Summaries' 60s staleTime would otherwise hold
+  // the empty payload until the next natural refetch. Force a refetch
+  // here so the badge + footer one_liner appear the moment 'scored'
+  // arrives.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (enrichStream.phase === 'scored') {
+      void queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
+    }
+  }, [enrichStream.phase, queryClient]);
 
   const handleHeartClick = useCallback(
     (e: React.MouseEvent) => {
