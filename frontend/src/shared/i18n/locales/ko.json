@@ -637,6 +637,10 @@
     "archive": {
       "toastSuccess": "보관됨",
       "undoLabel": "되돌리기"
+    },
+    "dropError": {
+      "notVideoUrlTitle": "영상 URL 이 필요합니다",
+      "notVideoUrlDescription": "채널/플레이리스트 URL 은 추가할 수 없습니다. 영상 페이지의 URL 을 드래그해주세요."
     }
   },
   "contextHeader": {

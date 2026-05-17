@@ -973,6 +973,29 @@ function AuthenticatedApp() {
                       onDeleteCards={cards.handleDeleteCards}
                       onAddCard={navigation.selectedCellIndex != null ? handleAddCard : undefined}
                       onExternalUrlDrop={(url) => {
+                        // CP463+ Issue #649 follow-up — reject YouTube
+                        // channel/playlist URLs that have no video id. The
+                        // add path silently stores a placeholder row when
+                        // video_id can't be extracted (user reported case:
+                        // dropping the channel home `youtube.com/@xxx` →
+                        // "YouTube Video" placeholder + /placeholder.svg).
+                        const isYouTubeHost = /(?:^|\.)(?:youtube\.com|youtu\.be)$/i.test(
+                          (() => {
+                            try {
+                              return new URL(url).hostname;
+                            } catch {
+                              return '';
+                            }
+                          })()
+                        );
+                        if (isYouTubeHost && !getYouTubeVideoId(url)) {
+                          toast({
+                            title: t('cards.dropError.notVideoUrlTitle'),
+                            description: t('cards.dropError.notVideoUrlDescription'),
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
                         // Read via render-assigned ref, not the closure — the
                         // closure can be stale on the first drop after a cell
                         // selection, silently routing to Idea Spot.
