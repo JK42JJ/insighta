@@ -75,14 +75,14 @@ function getMandalaRelevanceBadge(
   if (pct == null) return null;
   const value = Math.max(0, Math.min(100, Math.round(pct)));
   const label = `${value}%`;
-  if (value >= QUALITY_BADGE_THRESHOLD_HIGH) return { label, className: 'bg-[#818cf8] text-white' };
-  if (value >= QUALITY_BADGE_THRESHOLD_MID)
-    return { label, className: 'bg-[#34d399] text-[#0a1a14]' };
-  if (value >= QUALITY_BADGE_THRESHOLD_LOW)
-    return { label, className: 'bg-[#fbbf24] text-[#1a1400]' };
-  // CP463 — render below 70 too, neutral tier so the user sees the
-  // score on every Heart'd card.
-  return { label, className: 'bg-[#94a3b8] text-[#0f172a]' };
+  // CP463 — user directive 2026-05-17: "관련도 는 배지가 아닌 텍스트
+  // (비율별 칼라 다르게 적용)". Drop the background/padding/rounded
+  // chrome; keep only the per-tier text color so the relevance reads
+  // as plain coloured text in the footer row.
+  if (value >= QUALITY_BADGE_THRESHOLD_HIGH) return { label, className: 'text-[#818cf8]' };
+  if (value >= QUALITY_BADGE_THRESHOLD_MID) return { label, className: 'text-[#34d399]' };
+  if (value >= QUALITY_BADGE_THRESHOLD_LOW) return { label, className: 'text-[#fbbf24]' };
+  return { label, className: 'text-[#94a3b8]' };
 }
 
 /** Extract YouTube metadata from InsightCard.metadata (runtime fields beyond UrlMetadata type) */
@@ -521,7 +521,7 @@ export function InsightCardItemV2({
             {relevanceBadge && (
               <span
                 className={cn(
-                  'text-[10px] font-bold px-[7px] py-[2px] rounded shrink-0',
+                  'text-[10px] font-semibold shrink-0 tabular-nums',
                   relevanceBadge.className
                 )}
               >
