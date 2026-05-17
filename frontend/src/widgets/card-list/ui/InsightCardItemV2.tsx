@@ -4,17 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
-import {
-  GripVertical,
-  NotepadText,
-  Loader2,
-  RotateCw,
-  Play,
-  Heart,
-  Archive,
-  Check,
-  AlertTriangle,
-} from 'lucide-react';
+import { GripVertical, NotepadText, Loader2, RotateCw, Play, Heart, Archive } from 'lucide-react';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { useArchiveCard } from '@/features/card-management/model/useArchiveCard';
 import { useEnrichStream } from '@/features/card-management/model/useEnrichStream';
@@ -306,8 +296,6 @@ export function InsightCardItemV2({
   // both are active (Heart click is more user-visible).
   const streamPhase = enrichStream.phase;
   const streamActive = enrichStream.isActive;
-  const showAnalyzingGlow = streamActive && streamPhase === 'analyzing';
-  const showScoredFlash = streamPhase === 'scored';
   const showFailedGlow = streamPhase === 'failed' || streamPhase === 'timeout';
 
   return (
@@ -323,12 +311,12 @@ export function InsightCardItemV2({
         'border-0 shadow-none bg-transparent rounded-[10px]',
         'hover:-translate-y-0.5 hover:ring-1 hover:ring-border/60',
         'w-[95%]',
-        // CP462+ Issue #649 — 3-phase glow overlay. Wraps the whole
-        // card (not just the thumbnail) so the visual feedback is
-        // unmistakable even on smaller tiles.
-        showAnalyzingGlow && 'ring-2 ring-emerald-500/60 animate-pulse',
-        showScoredFlash && 'ring-2 ring-emerald-500/80',
-        showFailedGlow && 'ring-2 ring-destructive/60',
+        // CP463 — outer glow / pulse removed per user directive
+        // 2026-05-17: "수집중/분석중일때 카드가 심각하게 깜빡임. 매우
+        // 어지러움 ... 카드 외곽하일라이트 > 하단 프로그래스로 수정".
+        // Progress is now indicated by the legacy blue AI chip at
+        // bottom-left[44px] (same module used for the YouTube D&D
+        // enrichment flow); no more ring/animate-pulse on the card.
         isSelected && canDrag && 'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-30',
         className
@@ -379,44 +367,11 @@ export function InsightCardItemV2({
           </span>
         )}
 
-        {/* Center-top chip — Heart-click 3-phase animation (live SSE) */}
-        {streamActive && (
-          <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-[6] pointer-events-none">
-            <div className="flex items-center gap-1 bg-emerald-500/95 text-white text-[10px] px-2 py-0.5 rounded-full shadow-sm">
-              <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
-              <span>
-                {streamPhase === 'fetching'
-                  ? '수집 중'
-                  : streamPhase === 'analyzing'
-                    ? '분석 중'
-                    : '준비 중'}
-              </span>
-            </div>
-          </div>
-        )}
-        {showScoredFlash && (
-          <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-[6] pointer-events-none">
-            <div className="flex items-center gap-1 bg-emerald-500/95 text-white text-[10px] px-2 py-0.5 rounded-full shadow-sm">
-              <Check className="w-3 h-3" aria-hidden="true" />
-              <span>평가 완료</span>
-            </div>
-          </div>
-        )}
-        {showFailedGlow && (
-          <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-[6]">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (videoId) void enrichStream.open(videoId);
-              }}
-              className="flex items-center gap-1 bg-destructive/90 hover:bg-destructive text-white text-[10px] px-2 py-0.5 rounded-full transition-colors cursor-pointer"
-            >
-              <AlertTriangle className="w-3 h-3" aria-hidden="true" />
-              <span>다시 시도</span>
-            </button>
-          </div>
-        )}
+        {/* CP463 — top-center 3-phase chip removed per user directive
+            (깜빡 어지러움). Replaced by the legacy bottom-left blue AI
+            chip (same component used for the YouTube D&D enrichment
+            flow). See the BL chip below the Archive / memo indicator
+            block. */}
 
         {/* Bottom-left: Archive (hover-only icon, no chrome) — soft hide within mandala.
             CP463 user directive 2026-05-17: "아카이브/하트는 배경은 제거하고
@@ -494,8 +449,11 @@ export function InsightCardItemV2({
           </button>
         )}
 
-        {/* Legacy enriching spinner (separate from Heart SSE) */}
-        {isEnriching && !streamActive && (
+        {/* CP463 — Heart SSE in-progress chip uses the SAME legacy blue
+            AI chip pattern as the YouTube D&D enrichment flow (user
+            directive: "이 모듈은 기존에 존재하는것"). Bottom-left at
+            44px offset, sits next to the Archive icon (BL @ 1.5px). */}
+        {(streamActive || isEnriching) && (
           <div className="absolute bottom-1.5 left-[44px] z-[5] pointer-events-none">
             <div className="flex items-center gap-1 bg-blue-500/90 text-white text-[10px] px-1.5 py-0.5 rounded-full">
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -504,14 +462,20 @@ export function InsightCardItemV2({
           </div>
         )}
 
-        {/* Legacy enrich failed — Retry button */}
-        {isEnrichFailed && !isEnriching && !streamActive && (
+        {/* CP463 — failed / timeout: same BL[44px] slot, destructive
+            color, retry on click. Handles both the legacy isEnrichFailed
+            prop and the Heart SSE failed/timeout phase. */}
+        {!streamActive && !isEnriching && (isEnrichFailed || showFailedGlow) && (
           <div className="absolute bottom-1.5 left-[44px] z-[5]">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                onRetryEnrich?.(card.id, card.videoUrl);
+                if (showFailedGlow && videoId) {
+                  void enrichStream.open(videoId);
+                } else {
+                  onRetryEnrich?.(card.id, card.videoUrl);
+                }
               }}
               className="flex items-center gap-1 bg-destructive/90 hover:bg-destructive text-white text-[10px] px-1.5 py-0.5 rounded-full transition-colors cursor-pointer"
             >
