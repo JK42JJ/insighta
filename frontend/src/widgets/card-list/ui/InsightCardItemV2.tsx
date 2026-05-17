@@ -404,7 +404,11 @@ export function InsightCardItemV2({
           </div>
         )}
 
-        {/* Bottom-left: Archive (hover-only) — soft hide within mandala */}
+        {/* Bottom-left: Archive (hover-only icon, no chrome) — soft hide within mandala.
+            CP463 user directive 2026-05-17: "아카이브/하트는 배경은 제거하고
+            아이콘만 표기하되 호버시 사용자가 인지 가능한 수준의 애니메이션
+            을 제공할것." Icon-only with drop-shadow for legibility over
+            the thumbnail, scale-125 + rotate on hover. */}
         {videoId && card.mandalaId && (
           <button
             type="button"
@@ -412,12 +416,18 @@ export function InsightCardItemV2({
             aria-label="Archive card"
             disabled={archive.isPending}
             className={cn(
-              'absolute bottom-1.5 left-1.5 z-10 w-7 h-7 rounded-md backdrop-blur flex items-center justify-center transition-all',
-              'bg-black/55 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80 hover:scale-105',
+              'absolute bottom-1.5 left-1.5 z-10 w-7 h-7 flex items-center justify-center',
+              'opacity-0 group-hover:opacity-100',
+              'transition-all duration-200 ease-out',
+              'hover:scale-125 hover:-rotate-6 active:scale-95',
               'disabled:opacity-50 disabled:cursor-not-allowed'
             )}
           >
-            <Archive className="w-[16px] h-[16px]" strokeWidth={2.2} aria-hidden="true" />
+            <Archive
+              className="w-[20px] h-[20px] text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+              strokeWidth={2.2}
+              aria-hidden="true"
+            />
           </button>
         )}
 
@@ -437,7 +447,10 @@ export function InsightCardItemV2({
           </div>
         )}
 
-        {/* Bottom-right: Heart (Pin replacement — active=red fill) */}
+        {/* Bottom-right: Heart (Pin replacement). Icon-only (no chrome)
+            per CP463 user directive 2026-05-17. Liked = always-visible
+            red fill; unliked = hover-only white. Hover animates scale-125
+            + slight rotate so the affordance is unmistakable. */}
         {videoId && (
           <button
             type="button"
@@ -446,15 +459,20 @@ export function InsightCardItemV2({
             aria-pressed={liked}
             disabled={like.isPending || unlike.isPending}
             className={cn(
-              'absolute bottom-1.5 right-1.5 z-10 w-7 h-7 rounded-md backdrop-blur flex items-center justify-center transition-all',
-              liked
-                ? 'bg-black/55 text-red-500 opacity-100'
-                : 'bg-black/55 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80 hover:scale-105',
+              'absolute bottom-1.5 right-1.5 z-10 w-7 h-7 flex items-center justify-center',
+              liked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+              'transition-all duration-200 ease-out',
+              'hover:scale-125 hover:rotate-6 active:scale-95',
               'disabled:opacity-50 disabled:cursor-not-allowed'
             )}
           >
             <Heart
-              className="w-[18px] h-[18px]"
+              className={cn(
+                'w-[22px] h-[22px]',
+                liked
+                  ? 'text-red-500 drop-shadow-[0_1px_3px_rgba(0,0,0,0.55)]'
+                  : 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]'
+              )}
               fill={liked ? 'currentColor' : 'none'}
               strokeWidth={2.2}
               aria-hidden="true"
