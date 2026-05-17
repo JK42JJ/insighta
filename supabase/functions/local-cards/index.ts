@@ -276,7 +276,12 @@ Deno.serve(async (req) => {
           .filter((id): id is string => !!id);
 
         let summaryMap = new Map<string, Record<string, unknown>>();
-        let videoMetaMap = new Map<string, { published_at: string | null; duration_seconds: number | null }>();
+        let videoMetaMap = new Map<string, {
+          published_at: string | null;
+          duration_seconds: number | null;
+          channel_title: string | null;
+          view_count: number | null;
+        }>();
         if (youtubeUrls.length > 0 || youtubeVideoIds.length > 0) {
           const [summariesRes, videosRes] = await Promise.all([
             youtubeUrls.length > 0
@@ -288,7 +293,7 @@ Deno.serve(async (req) => {
             youtubeVideoIds.length > 0
               ? supabase
                   .from('youtube_videos')
-                  .select('youtube_video_id, published_at, duration_seconds')
+                  .select('youtube_video_id, published_at, duration_seconds, channel_title, view_count')
                   .in('youtube_video_id', youtubeVideoIds)
               : Promise.resolve({ data: [] as Record<string, unknown>[] }),
           ]);
@@ -301,6 +306,8 @@ Deno.serve(async (req) => {
             videoMetaMap.set(v.youtube_video_id as string, {
               published_at: (v.published_at as string | null) ?? null,
               duration_seconds: (v.duration_seconds as number | null) ?? null,
+              channel_title: (v.channel_title as string | null) ?? null,
+              view_count: (v.view_count as number | null) ?? null,
             });
           }
         }
@@ -315,6 +322,8 @@ Deno.serve(async (req) => {
               ? {
                   published_at: videoMeta.published_at,
                   duration_seconds: videoMeta.duration_seconds,
+                  channel_title: videoMeta.channel_title,
+                  view_count: videoMeta.view_count,
                 }
               : {}),
           };
@@ -443,6 +452,56 @@ Deno.serve(async (req) => {
               }),
               { status: 403, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
             );
+          }
+        }
+
+        // CP463+ Issue #649 — populate youtube_videos cache for this video
+        // so subsequent /local-cards/list (and Heart→v2 enrichment) returns
+        // channel_title / view_count / duration_seconds / published_at
+        // instead of falling back to the user-supplied placeholder. Synchronous
+        // so the first list refetch after add already has full metadata. Silent
+        // skip on cache hit, missing API key, or YouTube API failure (the card
+        // still saves successfully — D&D add path remains unblocked).
+        if (
+          card?.id &&
+          (body.link_type === 'youtube' || body.link_type === 'youtube-shorts') &&
+          body.video_id
+        ) {
+          try {
+            const { data: cached } = await supabase
+              .from('youtube_videos')
+              .select('youtube_video_id')
+              .eq('youtube_video_id', body.video_id)
+              .maybeSingle();
+            if (!cached) {
+              const apiKey = Deno.env.get('YOUTUBE_API_KEY');
+              if (apiKey) {
+                const vUrl = `${YOUTUBE_API_BASE}/videos?part=snippet,contentDetails,statistics&id=${body.video_id}`;
+                const vResp = await youtubeRequest(vUrl, null, apiKey);
+                if (vResp.ok) {
+                  const vData = await vResp.json();
+                  const video = vData.items?.[0];
+                  if (video) {
+                    await supabase.from('youtube_videos').upsert({
+                      youtube_video_id: body.video_id,
+                      title: video.snippet?.title || '',
+                      description: video.snippet?.description || '',
+                      thumbnail_url: video.snippet?.thumbnails?.medium?.url
+                        || video.snippet?.thumbnails?.default?.url
+                        || '',
+                      channel_title: video.snippet?.channelTitle || '',
+                      published_at: video.snippet?.publishedAt || null,
+                      duration_seconds: parseDuration(video.contentDetails?.duration || 'PT0S'),
+                      view_count: Number(video.statistics?.viewCount) || 0,
+                      like_count: Number(video.statistics?.likeCount) || 0,
+                      source: 'user-d-and-d',
+                    }, { onConflict: 'youtube_video_id' });
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.error('[local-cards] youtube_videos cache populate failed:', e);
           }
         }
 

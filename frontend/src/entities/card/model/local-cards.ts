@@ -48,6 +48,9 @@ export interface LocalCard {
   /** YouTube upload date, joined from youtube_videos by video_id. Null for non-YouTube cards or YouTube cards not yet enriched. */
   published_at?: string | null;
   duration_seconds?: number | null;
+  /** Joined from youtube_videos by video_id (CP463+ /local-cards/list LEFT JOIN extension). */
+  channel_title?: string | null;
+  view_count?: number | null;
   /** CP457+ pin / bookmark timestamp. Null = unpinned. */
   pinned_at?: string | null;
 }
@@ -109,10 +112,16 @@ export interface LimitExceededError {
 export function localCardToInsightCard(card: LocalCard): InsightCard {
   const publishedAt = card.published_at ? new Date(card.published_at) : null;
   const hasMetadataTitle = !!card.metadata_title;
-  const hasVideoExtras = card.published_at != null || card.duration_seconds != null;
+  const hasVideoExtras =
+    card.published_at != null ||
+    card.duration_seconds != null ||
+    card.channel_title != null ||
+    card.view_count != null;
   const metadataExtras: Record<string, unknown> = {};
   if (card.published_at) metadataExtras['published_at'] = card.published_at;
   if (card.duration_seconds != null) metadataExtras['duration_seconds'] = card.duration_seconds;
+  if (card.channel_title) metadataExtras['channel_title'] = card.channel_title;
+  if (card.view_count != null) metadataExtras['view_count'] = Number(card.view_count);
 
   return {
     id: card.id,
