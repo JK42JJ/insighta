@@ -95,6 +95,29 @@
   into per-id calls of the same Edge route, so the same hook covers both
   flows automatically.
 
+### Phase 2 step 6 (current commit — SSE enrich-stream)
+
+- `src/api/routes/cards.ts` (+~120 lines)
+  - `GET /:videoId/enrich-stream` — Server-Sent Events stream of the
+    Heart-click v2 enrichment progress. Polls `pgboss.job` every 1s for
+    the most recent `enrich-rich-summary` job matching (user, video) and
+    emits a `phase` event when the pg-boss state transitions:
+    - `created` / `retry` → `'fetching'` (수집 중)
+    - `active` → `'analyzing'` (분석 중)
+    - `completed` → `'scored'` (평가 완료, stream closes)
+    - `failed` / `cancelled` / `expired` → `'failed'` (stream closes)
+  - SSE headers: `text/event-stream`, `Cache-Control: no-cache`,
+    `Connection: keep-alive`, `X-Accel-Buffering: no` (disables Nginx
+    buffering in prod).
+  - Hard caps: 5-min max duration (matches `RICH_SUMMARY_RETRY_OPTIONS.
+    expireInMinutes`); cleanup on `request.raw.on('close', …)`.
+  - Initial `fetching` event fired before the first poll so the FE has
+    something to render immediately.
+- `mapJobStateToPhase()` helper exported as private; centralised so the
+  FE vocabulary stays consistent across this endpoint and any future
+  polling caller.
+- Smoke: GET without auth → 401 ✔ (route registered).
+
 ---
 
 ## Decisions captured in CP462 (all binding for steps 3–9)
@@ -119,7 +142,7 @@
 
 ---
 
-## Pending — Phase 2 steps 6–9 (next session)
+## Pending — Phase 2 steps 7–9 (next session)
 
 | Step | Work |
 |---|---|

@@ -548,6 +548,131 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     }
   );
 
+  /**
+   * GET /api/v1/cards/:videoId/enrich-stream — Server-Sent Events stream
+   * of the Heart-click v2 enrichment progress for the calling user.
+   *
+   * The FE Heart UI subscribes after firing POST /:videoId/like and shows
+   * the 3-phase animation (수집 중 → 분석 중 → 평가 완료) per CP462
+   * Phase 2 step 3 spec. The stream polls `pgboss.job` for the most
+   * recent enrich-rich-summary job matching (user, video) and emits a
+   * phase event when the pg-boss state transitions.
+   *
+   * Phase mapping:
+   *   created / retry    → 'fetching'   (수집 중)
+   *   active             → 'analyzing'  (분석 중)
+   *   completed          → 'scored'     (평가 완료, stream closes)
+   *   failed / cancelled / expired → 'failed' (stream closes)
+   *
+   * Hard caps so the stream cannot leak server resources:
+   *   - 5-minute max duration (matches RICH_SUMMARY_RETRY_OPTIONS expireInMinutes)
+   *   - polling interval 1 second
+   *   - close on client disconnect
+   */
+  fastify.get<{ Params: { videoId: string } }>(
+    '/:videoId/enrich-stream',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        return reply
+          .code(401)
+          .send({ status: 'error', code: 'UNAUTHORIZED', message: 'Unauthorized' });
+      }
+      const userId = request.user.userId;
+      const { videoId } = request.params;
+
+      if (!YOUTUBE_VIDEO_ID_RE.test(videoId)) {
+        return reply.code(400).send({
+          status: 'error',
+          code: 'INVALID_VIDEO_ID',
+          message: `videoId must be a YouTube 11-char id; got ${videoId.slice(0, VIDEO_ID_LOG_TRIM)}`,
+        });
+      }
+
+      // SSE handshake — disable any intermediate buffering (Nginx adds
+      // `X-Accel-Buffering: no` to ensure each write reaches the browser
+      // immediately).
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+
+      const prisma = getPrismaClient();
+      let lastPhase: string | null = null;
+      const startedAt = Date.now();
+      let closed = false;
+
+      const sendPhase = (phase: string, extra?: Record<string, unknown>): void => {
+        if (closed) return;
+        const payload = JSON.stringify({ phase, videoId, ...extra });
+        reply.raw.write(`event: phase\ndata: ${payload}\n\n`);
+      };
+
+      const closeStream = (): void => {
+        if (closed) return;
+        closed = true;
+        clearInterval(interval);
+        try {
+          reply.raw.end();
+        } catch {
+          /* swallow — connection may already be closed */
+        }
+      };
+
+      const pollOnce = async (): Promise<void> => {
+        if (Date.now() - startedAt > ENRICH_STREAM_MAX_MS) {
+          sendPhase('timeout');
+          closeStream();
+          return;
+        }
+        const rows = await prisma.$queryRaw<Array<{ state: string }>>`
+          SELECT state
+            FROM pgboss.job
+           WHERE name = 'enrich-rich-summary'
+             AND data->>'videoId' = ${videoId}
+             AND data->>'userId' = ${userId}
+           ORDER BY createdon DESC
+           LIMIT 1
+        `;
+        const job = rows[0];
+        if (!job) {
+          // No job row yet — SSE auto-reconnect handles transient
+          // network loss, so heartbeats are unnecessary; just wait for
+          // the next poll cycle.
+          return;
+        }
+        const phase = mapJobStateToPhase(job.state);
+        if (phase !== lastPhase) {
+          sendPhase(phase, { jobState: job.state });
+          lastPhase = phase;
+          if (phase === 'scored' || phase === 'failed') {
+            closeStream();
+          }
+        }
+      };
+
+      // Emit `fetching` immediately so the FE has something to render
+      // before the first poll cycle resolves.
+      sendPhase('fetching');
+      lastPhase = 'fetching';
+
+      const interval = setInterval(() => {
+        // setInterval expects a void-returning callback; wrap the async
+        // pollOnce so the floating promise is caught here.
+        pollOnce().catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          log.warn(`enrich-stream poll failed: videoId=${videoId} err=${msg}`);
+          // Single poll failure is not fatal — keep trying until the cap.
+        });
+      }, ENRICH_STREAM_POLL_MS);
+
+      // Cleanup if the client navigates away or aborts the request.
+      request.raw.on('close', closeStream);
+    }
+  );
+
   done();
 };
 
@@ -555,4 +680,30 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 function isUuid(s: string): boolean {
   return UUID_RE.test(s);
+}
+
+const ENRICH_STREAM_POLL_MS = 1000;
+const ENRICH_STREAM_MAX_MS = 5 * 60 * 1000;
+
+/**
+ * Translate pg-boss job state into the 3-phase FE vocabulary
+ * (수집 중 / 분석 중 / 평가 완료 + failed). Unknown states fall back
+ * to 'fetching' so the FE never sees an empty event.
+ */
+function mapJobStateToPhase(state: string): 'fetching' | 'analyzing' | 'scored' | 'failed' {
+  switch (state) {
+    case 'created':
+    case 'retry':
+      return 'fetching';
+    case 'active':
+      return 'analyzing';
+    case 'completed':
+      return 'scored';
+    case 'failed':
+    case 'cancelled':
+    case 'expired':
+      return 'failed';
+    default:
+      return 'fetching';
+  }
 }
