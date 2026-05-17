@@ -1286,7 +1286,14 @@ class ApiClient {
   }
 
   async unlikeCard(videoId: string): Promise<void> {
-    return this.request(`/cards/${videoId}/unlike`, { method: 'POST' });
+    // Empty `{}` body to satisfy the default `Content-Type: application/json`
+    // header (request() always sets it). Fastify's JSON parser returns
+    // 400 FST_ERR_CTP_EMPTY_JSON_BODY when Content-Type is application/json
+    // but the body is empty — observed in dev with Bug 1 of #649 Phase 3.
+    return this.request(`/cards/${videoId}/unlike`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
   }
 
   async archiveCard(videoId: string, mandalaId: string): Promise<void> {
@@ -1297,7 +1304,11 @@ class ApiClient {
   }
 
   async unarchiveCard(videoId: string): Promise<void> {
-    return this.request(`/cards/${videoId}/unarchive`, { method: 'POST' });
+    // Same empty-body workaround as unlikeCard (see comment above).
+    return this.request(`/cards/${videoId}/unarchive`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
   }
 
   /**
