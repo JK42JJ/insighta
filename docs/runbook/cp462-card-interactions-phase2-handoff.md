@@ -139,6 +139,62 @@
   require a `user_video_relevance` table; out of scope for #649 Phase 2.
 - Smoke: GET without auth → 401 ✔ (route registered).
 
+### Phase 2 step 8 (current commit — RICH_SUMMARY_ENABLED deploy wiring)
+
+- `.github/workflows/deploy.yml`
+  - `env:` block — references `${{ vars.RICH_SUMMARY_ENABLED }}` (a
+    GitHub Variable, not Secret, per CP392 — it is a boolean toggle,
+    not a credential).
+  - `envs:` list — appended `RICH_SUMMARY_ENABLED` so the env reaches
+    the SSH deploy step.
+  - Deploy script — `if [ -n "${RICH_SUMMARY_ENABLED}" ]` guarded
+    `grep / sed / echo` writes the row idempotently. When the Variable
+    is unset/empty the branch falls through, so prod stays on the
+    `config/rich-summary.ts:39` default `false` (no v2 generation).
+- `credentials.md` L6 table — new entry documenting the Variable name,
+  consumer, quota math (free 30 / pro 200 / lifetime+admin unlimited),
+  and the activation command.
+
+**Manual step required (cannot be automated from this branch)**:
+
+```bash
+# 1. Register the GitHub Variable at the repo level
+gh variable set RICH_SUMMARY_ENABLED --body true
+
+# 2. Verify it shows up in vars
+gh variable list | grep RICH_SUMMARY_ENABLED
+
+# 3. Redeploy to pick up the new value on prod
+gh workflow run deploy.yml  # or merge any PR onto main
+
+# 4. Confirm prod EC2 .env has the row
+bash scripts/ssh-connect.sh "grep RICH_SUMMARY_ENABLED /opt/tubearchive/.env"
+# expected: RICH_SUMMARY_ENABLED=true
+```
+
+Quota expectations: free tier = 30 v2 generations / month, pro = 200,
+lifetime / admin = unlimited. enrichRichSummary cache-hits (existing
+`quality_flag='pass'` row) do NOT consume quota, so the realistic
+Heart-click cost is well below cap when cron pre-fills most cards.
+
+### Phase 2 step 9 (current commit — smoke test)
+
+- `tests/smoke/card-interactions.test.ts` (NEW, 7 tests)
+  - `POST /:videoId/{like,unlike,archive,unarchive}` → 401 without token
+  - `GET /v2-summaries?videoIds=…` → 401 without token
+  - `GET /:videoId/enrich-stream` → 401 without token
+  - `POST /like` without auth must NOT return 200/202 (no false-pass
+    on body validation order)
+  - Mirrors `cards-pin-routes.test.ts` pattern (describeIfServer so
+    local jest skips when SUPABASE_JWT_SECRET / JWT_SECRET / SUPABASE_URL
+    are unset; CI sets them and the 7 tests execute).
+- Run locally: skipped (no env). On CI: executes against a freshly
+  built Fastify instance.
+- FE URL contract test entries (`frontend/src/__tests__/smoke/
+  api-url-contract.test.ts`) are deferred to Phase 3 — those checks
+  require the new api-client methods (`likeCard`, `archiveCard`, etc.)
+  which are introduced when the FE consumes these endpoints.
+
 ---
 
 ## Decisions captured in CP462 (all binding for steps 3–9)
@@ -163,10 +219,20 @@
 
 ---
 
-## Pending — Phase 2 steps 8–9 (next session)
+## Phase 2 — complete (steps 1-9 shipped)
 
-| Step | Work |
+All BE infrastructure for Issue #649 Phase 2 is in place. The only
+remaining manual gate before the FE work can demonstrate the full
+Heart-click flow end-to-end is the `gh variable set
+RICH_SUMMARY_ENABLED --body true` + redeploy described above.
+
+## Remaining for Issue #649
+
+| Phase | Work |
 |---|---|
+| 3 | FE card UI — Heart BR / Archive BL / Delete via existing header buttons / 3-phase animation via EventSource on /enrich-stream / TL badge from /v2-summaries / footer one_liner. New api-client methods + URL contract test entries. |
+| 4 | Reranker integration — `hybrid-rerank.ts` adds `userLikedVideoIds` + `userArchivedVideoIds` + `userDeletedVideoIds` features. Reads from `card_interactions`. Hard exclude on `signal='delete'`. |
+| 5 | Re-search side panel (Notion peek pattern) — independent backlog per the original handoff `docs/runbook/card-preference-signal-handoff-2026-05-15.md` §8. |
 | 6 | SSE endpoint — `GET /api/v1/cards/:videoId/enrich-stream` (text/event-stream). Subscribe to pg-boss job state transitions via `boss.onComplete`/polling, emit 3 phases (Fetching / Analyzing / Scored). |
 | 7 | Card list endpoint — extend to LEFT JOIN `video_rich_summaries` and return `one_liner` + `mandala_relevance_pct` (NULL for non-Heart'd cards). Find list endpoint (`videos.ts`? mandala-scoped list in `mandalas.ts`?). |
 | 8 | `RICH_SUMMARY_ENABLED=true` — register as GitHub Variable, add to `deploy.yml`, draft quota distribution review (Free/Pro/Lifetime expected Heart-click frequency vs `assertRichSummaryQuota`). |

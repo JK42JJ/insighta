@@ -222,11 +222,17 @@ jobs:
           LS_VARIANT_MONTHLY: ${{ vars.LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY }}
           LS_VARIANT_YEARLY: ${{ vars.LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY }}
           LS_VARIANT_LIFETIME: ${{ vars.LEMONSQUEEZY_VARIANT_ID_PRO_LIFETIME }}
+          # CP462+ Issue #649 — Heart-click on-demand v2 trigger.
+          # Non-secret per CP392: toggle, not a credential. Default empty
+          # ⇒ enrichRichSummary stays in its existing `enabled=false`
+          # state (config/rich-summary.ts:39). Set GitHub Variable
+          # RICH_SUMMARY_ENABLED to "true" to activate.
+          RICH_SUMMARY_ENABLED: ${{ vars.RICH_SUMMARY_ENABLED }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME
+          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED
           script: |
             set -e
             cd /opt/tubearchive
@@ -246,6 +252,15 @@ jobs:
             # CP392: stdout-safe + open-source-safe → hardcoded here, not
             # GH Secret. Rollback: change value to "substring" or delete row.
             grep -q '^V3_CENTER_GATE_MODE=' .env 2>/dev/null && sed -i "s|^V3_CENTER_GATE_MODE=.*|V3_CENTER_GATE_MODE=semantic|" .env || echo "V3_CENTER_GATE_MODE=semantic" >> .env
+            # CP462+ Issue #649 — Heart-click v2 generation trigger.
+            # When RICH_SUMMARY_ENABLED GitHub Variable is unset/empty the
+            # sed branch falls through to NOT writing the row, leaving the
+            # config/rich-summary.ts default (false) in effect. Activate
+            # by `gh variable set RICH_SUMMARY_ENABLED --body true` then
+            # redeploy. Non-secret per CP392 (boolean tuning knob).
+            if [ -n "${RICH_SUMMARY_ENABLED}" ]; then
+              grep -q '^RICH_SUMMARY_ENABLED=' .env 2>/dev/null && sed -i "s|^RICH_SUMMARY_ENABLED=.*|RICH_SUMMARY_ENABLED=${RICH_SUMMARY_ENABLED}|" .env || echo "RICH_SUMMARY_ENABLED=${RICH_SUMMARY_ENABLED}" >> .env
+            fi
             # 2026-04-18 — sync DB URLs from GitHub Secrets so password
             # rotations propagate to prod .env without manual SSH. Was
             # blocking deploy after Supabase password rotation (container
