@@ -549,6 +549,102 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   );
 
   /**
+   * GET /api/v1/cards/v2-summaries?videoIds=a,b,c — batch lookup of the
+   * v2 rich-summary "card-display" fields for a set of YouTube videos.
+   *
+   * Used by the FE card grid to render the Heart-only quality badge
+   * (`mandala_relevance_pct`) and the footer one-liner. Both surface
+   * only for videos the user has heart-clicked; for non-Heart'd cards
+   * `mandala_relevance_pct` is NULL and the FE hides the badge per
+   * decision #8.
+   *
+   * Schema-level caveat (documented for future PR): the v2 row is keyed
+   * by video_id alone, so `mandala_relevance_pct` reflects the FIRST
+   * user / mandala that triggered v2 generation. A second user heart-
+   * clicking the same video reuses that score. Per-user scoring would
+   * require a `user_video_relevance` table — out of scope for #649 Phase 2.
+   *
+   * Auth: required (user scope is implicit; the response itself contains
+   *       no user-identifying data beyond what the card list already shows).
+   *
+   * Query string:
+   *   videoIds — comma-separated list of YouTube 11-char ids
+   *              (max 100; over-length lists are 400 to keep response time bounded)
+   *
+   * Returns 200 { items: [{videoId, oneLiner, mandalaRelevancePct, qualityFlag, templateVersion}] }
+   */
+  fastify.get<{ Querystring: { videoIds?: string } }>(
+    '/v2-summaries',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        return reply
+          .code(401)
+          .send({ status: 'error', code: 'UNAUTHORIZED', message: 'Unauthorized' });
+      }
+      const raw = request.query.videoIds ?? '';
+      const ids = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+
+      if (ids.length === 0) {
+        return reply.code(200).send({ status: 'ok', data: { items: [] } });
+      }
+      if (ids.length > V2_SUMMARIES_MAX_IDS) {
+        return reply.code(400).send({
+          status: 'error',
+          code: 'TOO_MANY_IDS',
+          message: `videoIds count ${ids.length} exceeds max ${V2_SUMMARIES_MAX_IDS}`,
+        });
+      }
+      for (const id of ids) {
+        if (!YOUTUBE_VIDEO_ID_RE.test(id)) {
+          return reply.code(400).send({
+            status: 'error',
+            code: 'INVALID_VIDEO_ID',
+            message: `videoIds contains non-YouTube id: ${id.slice(0, VIDEO_ID_LOG_TRIM)}`,
+          });
+        }
+      }
+
+      const prisma = getPrismaClient();
+      try {
+        const rows = await prisma.video_rich_summaries.findMany({
+          where: { video_id: { in: ids } },
+          select: {
+            video_id: true,
+            one_liner: true,
+            mandala_relevance_pct: true,
+            quality_flag: true,
+            template_version: true,
+          },
+        });
+        return reply.code(200).send({
+          status: 'ok',
+          data: {
+            items: rows.map((r) => ({
+              videoId: r.video_id,
+              oneLiner: r.one_liner,
+              mandalaRelevancePct: r.mandala_relevance_pct,
+              qualityFlag: r.quality_flag,
+              templateVersion: r.template_version,
+            })),
+          },
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn(`v2-summaries lookup failed: count=${ids.length} err=${msg}`);
+        return reply.code(500).send({
+          status: 'error',
+          code: 'V2_SUMMARIES_FAILED',
+          message: msg.slice(0, 200),
+        });
+      }
+    }
+  );
+
+  /**
    * GET /api/v1/cards/:videoId/enrich-stream — Server-Sent Events stream
    * of the Heart-click v2 enrichment progress for the calling user.
    *
@@ -684,6 +780,12 @@ function isUuid(s: string): boolean {
 
 const ENRICH_STREAM_POLL_MS = 1000;
 const ENRICH_STREAM_MAX_MS = 5 * 60 * 1000;
+/**
+ * v2-summaries batch cap — bounds response time + pg query cost. A typical
+ * mandala renders 64 cards (V3_TARGET_TOTAL); doubling that absorbs heavy
+ * pages without inviting massive single-query fetches.
+ */
+const V2_SUMMARIES_MAX_IDS = 128;
 
 /**
  * Translate pg-boss job state into the 3-phase FE vocabulary

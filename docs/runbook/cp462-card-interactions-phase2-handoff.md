@@ -118,6 +118,27 @@
   polling caller.
 - Smoke: GET without auth → 401 ✔ (route registered).
 
+### Phase 2 step 7 (current commit — v2-summaries batch endpoint)
+
+- `src/api/routes/cards.ts` (+~85 lines)
+  - `GET /v2-summaries?videoIds=a,b,c` — batch lookup of v2 fields
+    (`oneLiner`, `mandalaRelevancePct`, `qualityFlag`, `templateVersion`)
+    used by the FE card grid to render the Heart-only quality badge
+    (TL) and the footer one-liner.
+  - videoIds validated against the YouTube 11-char regex; max 128 ids
+    per request (≈ 2× V3_TARGET_TOTAL of 64) to bound response time.
+  - Prisma `findMany` with `video_id IN (…)` — single query, no N+1.
+- Decision (A) `Edge function + mandalas.ts LEFT JOIN` was rejected:
+  too large a change for one PR, would touch the CLAUDE.md "이중 구현"
+  Hard Rule pair. Single batch endpoint is the lighter contract that
+  the FE can consume from any source — local cards, mandala recs, or
+  a future re-search side panel.
+- Schema-level caveat documented inline: `video_rich_summaries` is
+  keyed by video_id alone, so `mandala_relevance_pct` reflects the
+  FIRST user / mandala that triggered v2. Per-user scoring would
+  require a `user_video_relevance` table; out of scope for #649 Phase 2.
+- Smoke: GET without auth → 401 ✔ (route registered).
+
 ---
 
 ## Decisions captured in CP462 (all binding for steps 3–9)
@@ -142,7 +163,7 @@
 
 ---
 
-## Pending — Phase 2 steps 7–9 (next session)
+## Pending — Phase 2 steps 8–9 (next session)
 
 | Step | Work |
 |---|---|
