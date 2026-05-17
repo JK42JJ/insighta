@@ -9,12 +9,14 @@
 
 export { getJobQueue, JobQueueManager } from './manager';
 export { JOB_NAMES, QUEUE_CONFIG } from './types';
-export type { EnrichVideoPayload, BatchScanPayload } from './types';
+export type { EnrichVideoPayload, BatchScanPayload, EnrichRichSummaryPayload } from './types';
 export { enqueueEnrichVideo } from './handlers/enrich-video';
+export { enqueueEnrichRichSummary } from './handlers/enrich-rich-summary';
 
 import { getJobQueue } from './manager';
 import { registerEnrichVideoWorker } from './handlers/enrich-video';
 import { registerBatchScanWorker } from './handlers/batch-scan';
+import { registerEnrichRichSummaryWorker } from './handlers/enrich-rich-summary';
 import { logger } from '../../utils/logger';
 
 /**
@@ -31,6 +33,7 @@ export async function initJobQueue(): Promise<void> {
   // Register workers
   await registerEnrichVideoWorker();
   await registerBatchScanWorker();
+  await registerEnrichRichSummaryWorker();
 
-  logger.info('Job queue fully initialized (pg-boss + 2 workers)');
+  logger.info('Job queue fully initialized (pg-boss + 3 workers)');
 }
