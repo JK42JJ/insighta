@@ -285,7 +285,17 @@ export function InsightCardItemV2({
   const views = formatViewCount(ytMeta.viewCount);
   const relDate = formatRelativeDate(ytMeta.publishedAt ?? card.createdAt?.toISOString());
   const hasNote = !!card.userNote?.trim();
-  const trimmedOneLiner = oneLiner?.trim();
+  // CP464+ — blockquote source priority:
+  //   1. v2 `core.one_liner` (Heart-triggered v2 enrichment, ≤ 20 chars
+  //      mandala-fit one-liner — most precise).
+  //   2. v1 `video_summaries.summary_ko` (Clawbot cron auto-summary —
+  //      already populated for every D&D card with a transcript,
+  //      regardless of Heart click).
+  // PR #653 originally bound this slot to oneLiner only, which silently
+  // dropped the v1 summary that the legacy auto-pipeline still produces.
+  // Falling back to summary_ko restores the "drop a card → auto summary
+  // appears" behaviour while preserving the v2 precision on Heart'd cards.
+  const trimmedOneLiner = (oneLiner ?? card.videoSummary?.summary_ko)?.trim();
 
   const footerLeft = relDate || null;
   const footerRight = views || null;
