@@ -21,6 +21,11 @@ interface AddCardsPanelState {
   filters: AddCardsFilters;
   targetLevel: string;
   mandalaMetaSeeded: boolean;
+  /** CP466 amendment 11 — last visible result count per mandala.
+   *  Read by `AddCardsTriggerChip` so the chip surfaces the same
+   *  count badge the panel header shows, even when the panel is
+   *  closed. */
+  visibleCountByMandala: Record<string, number>;
 
   openPanel: (mandalaId: string) => void;
   closePanel: () => void;
@@ -30,6 +35,7 @@ interface AddCardsPanelState {
   setTargetLevel: (level: string) => void;
   seedFromWizardMeta: (focusTags: string[], targetLevel: string) => void;
   setExtraKeywords: (keywords: string[]) => void;
+  setVisibleCount: (mandalaId: string, count: number) => void;
 }
 
 export const useAddCardsPanelStore = create<AddCardsPanelState>((set) => ({
@@ -39,6 +45,7 @@ export const useAddCardsPanelStore = create<AddCardsPanelState>((set) => ({
   filters: {},
   targetLevel: 'standard',
   mandalaMetaSeeded: false,
+  visibleCountByMandala: {},
 
   openPanel: (mandalaId) =>
     set((s) => ({
@@ -61,11 +68,22 @@ export const useAddCardsPanelStore = create<AddCardsPanelState>((set) => ({
     }),
 
   removeKeyword: (kw) =>
-    set((s) => ({ ...s, extraKeywords: s.extraKeywords.filter((k) => k !== kw) })),
+    // CP466 amendment 11 — user explicitly removing a chip is a
+    // veto of wizard-meta seed: lock further seeding so a subsequent
+    // search.onSuccess does not re-add the chip the user just deleted.
+    set((s) => ({
+      ...s,
+      extraKeywords: s.extraKeywords.filter((k) => k !== kw),
+      mandalaMetaSeeded: true,
+    })),
 
   setFilters: (next) => set({ filters: next }),
   setTargetLevel: (level) => set({ targetLevel: level }),
-  setExtraKeywords: (keywords) => set({ extraKeywords: keywords }),
+  setExtraKeywords: (keywords) => set({ extraKeywords: keywords, mandalaMetaSeeded: true }),
+  setVisibleCount: (mandalaId, count) =>
+    set((s) => ({
+      visibleCountByMandala: { ...s.visibleCountByMandala, [mandalaId]: count },
+    })),
   seedFromWizardMeta: (focusTags, targetLevel) =>
     set((s) => {
       if (s.mandalaMetaSeeded) return s;

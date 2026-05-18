@@ -52,6 +52,7 @@ export function AddCardsPanel() {
   const filters = useAddCardsPanelStore((s) => s.filters);
   const targetLevel = useAddCardsPanelStore((s) => s.targetLevel);
   const seedFromWizardMeta = useAddCardsPanelStore((s) => s.seedFromWizardMeta);
+  const setVisibleCount = useAddCardsPanelStore((s) => s.setVisibleCount);
   const closePanel = useAddCardsPanelStore((s) => s.closePanel);
 
   const { mandalaLevels } = useMandalaQuery(open ? mandalaId : null);
@@ -157,6 +158,16 @@ export function AddCardsPanel() {
     if (!meta) return;
     seedFromWizardMeta(meta.focusTags, meta.targetLevel);
   }, [mutation.data, seedFromWizardMeta]);
+
+  // CP466 amendment 11 — keep store.visibleCountByMandala in sync
+  // with the panel's effective card count so the AddCardsTriggerChip
+  // (rendered outside the panel) can show the same badge as the
+  // header. Updates on every cards.length / mandalaId change; persists
+  // across panel close so the chip badge stays accurate when closed.
+  useEffect(() => {
+    if (!mandalaId) return;
+    setVisibleCount(mandalaId, cards.length);
+  }, [mandalaId, cards.length, setVisibleCount]);
 
   // CP466 amendment 8 — input zone collapses automatically on first
   // success result; user can toggle back via the chevron in the header.

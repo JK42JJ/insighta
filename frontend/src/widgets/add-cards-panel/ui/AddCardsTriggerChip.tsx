@@ -1,11 +1,16 @@
 /**
  * Add Cards trigger chip (CP466).
  *
- * Renders the "+ Add Cards" chip rendered by IndexPage in the grid
- * view header trailing slot. Click opens the slide-in panel scoped to
- * the current mandalaId.
+ * Rendered in the grid view trailing action slot. Click opens the
+ * slide-in panel scoped to the current mandalaId.
  *
- * Spec: docs/design/add-cards-2026-05-18.md §2 (trigger).
+ * CP466 amendment 11 — count badge mirrors the panel header badge
+ * (IdeaSpot pattern, IndexPage.tsx:688). Reads
+ * `useAddCardsPanelStore.visibleCountByMandala[mandalaId]` which the
+ * panel keeps in sync with its visible card count even after close,
+ * so the chip surfaces "N cards waiting" to the user.
+ *
+ * Spec: docs/design/add-cards-2026-05-18.md §2.
  */
 
 import { useTranslation } from 'react-i18next';
@@ -19,6 +24,9 @@ interface AddCardsTriggerChipProps {
 export function AddCardsTriggerChip({ mandalaId }: AddCardsTriggerChipProps) {
   const { t } = useTranslation();
   const openPanel = useAddCardsPanelStore((s) => s.openPanel);
+  const count = useAddCardsPanelStore((s) =>
+    mandalaId ? (s.visibleCountByMandala[mandalaId] ?? 0) : 0
+  );
 
   if (!mandalaId) return null;
 
@@ -35,6 +43,17 @@ export function AddCardsTriggerChip({ mandalaId }: AddCardsTriggerChipProps) {
     >
       <Bookmark className="h-3.5 w-3.5" strokeWidth={2.2} />
       <span>{t('addCards.triggerChip', '+ Add Cards')}</span>
+      {count > 0 && (
+        <span
+          className="ml-0.5 inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-tight"
+          style={{
+            background: 'hsl(var(--primary))',
+            color: 'hsl(var(--primary-foreground))',
+          }}
+        >
+          {count}
+        </span>
+      )}
     </button>
   );
 }
