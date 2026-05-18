@@ -963,15 +963,19 @@ function AuthenticatedApp() {
                             (mandalaSwitchGrace && cards.totalCards === 0)
                       }
                       skeletonCount={(() => {
-                        // skeletonCount only makes sense in the main grid
-                        // (all root cells visible). Any sub-view — cell
-                        // selection / Newly Synced / search — renders an
-                        // explicit subset so the server total no longer
-                        // maps onto cell-by-cell layout.
+                        // YouTube pattern (CP468 → CP469 sweep): padding
+                        // only when the grid is genuinely empty (loading).
+                        // Once a single real card lands the grid renders
+                        // organically — never inject placeholders between
+                        // or after real cards. Sub-views render explicit
+                        // subsets, so the server total no longer maps onto
+                        // cell-by-cell layout there either.
                         if (search.isSearchActive) return 0;
                         if (navigation.selectedCellIndex !== null) return 0;
                         if (isNewlySyncedActive) return 0;
-                        return Math.max(0, serverCardCount - cards.displayCards.length);
+                        if (cards.displayCards.length > 0) return 0;
+                        const SKELETON_HINT_CAP = 12;
+                        return Math.min(serverCardCount, SKELETON_HINT_CAP);
                       })()}
                       isNewlySyncedActive={isNewlySyncedActive}
                       onNewlySyncedActiveChange={setIsNewlySyncedActive}
