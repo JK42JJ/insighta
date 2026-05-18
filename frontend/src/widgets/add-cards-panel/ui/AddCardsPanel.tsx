@@ -100,6 +100,13 @@ export function AddCardsPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mutation.isSuccess, mutation.data, mandalaId]);
 
+  // CP466 amendment 10 — pick state declared BEFORE the cards filter
+  // that reads it. (Linter reformat had moved the useState below the
+  // filter, causing a TDZ reference error at runtime.)
+  const [pickedSet, setPickedSet] = useState<Set<string>>(() => new Set());
+  const { like } = useLikeCard();
+  const queryClient = useQueryClient();
+
   // Display source: live mutation data wins; otherwise the restored
   // snapshot from localStorage. Picked cards are filtered out so the
   // panel + header count update immediately on pick (CP466 amendment
@@ -107,17 +114,6 @@ export function AddCardsPanel() {
   const allCards: AddCardCandidate[] = mutation.data?.cards ?? restoredCards ?? [];
   const cards: AddCardCandidate[] = allCards.filter((c) => !pickedSet.has(c.videoId));
   const hasSearched = mutation.isSuccess || mutation.isError || restoredCards !== null;
-
-  // CP466 amendment 10 — pick = optimistic remove from panel +
-  // INSERT to mandala grid. pickedSet tracks the optimistic state
-  // so the panel can filter the card out IMMEDIATELY (user directive
-  // 2026-05-18 "북마크하면 즉시 만다라로 이동 + 상단 메뉴 카드 개수
-  // 그만큼 줄어들어야"). On success → invalidate mandala grid queries
-  // so the user sees the card land in its assigned cell. On error →
-  // rollback the pickedSet so the card returns to the panel.
-  const [pickedSet, setPickedSet] = useState<Set<string>>(() => new Set());
-  const { like } = useLikeCard();
-  const queryClient = useQueryClient();
 
   const handlePick = useCallback(
     (videoId: string, title: string) => {
