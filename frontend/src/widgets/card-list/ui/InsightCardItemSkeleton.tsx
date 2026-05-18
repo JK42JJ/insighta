@@ -4,17 +4,14 @@
 export function InsightCardItemSkeleton() {
   return (
     <div className="w-full overflow-hidden rounded-2xl relative">
-      {/* Thumbnail placeholder — matches InsightCardItemV2's aspect-video
-          dark-gradient container so reveal swaps in-place without size
-          jitter. */}
-      <div className="relative aspect-video overflow-hidden rounded-[10px] bg-gradient-to-br from-[#1a1c28] to-[#13141c]" />
+      {/* Unified placeholder tone — `bg-foreground/5` (~5% white tint on
+          the dark card body) reads as a standard "loading" skeleton in
+          all three slots: thumbnail, title bar, meta bar. */}
+      <div className="relative aspect-video overflow-hidden rounded-[10px] bg-foreground/5" />
 
-      {/* Body placeholder — px-3 pt-2 pb-4 matches the real card. Two
-          bars approximate the title (line-clamp-2 → ~34px) and the
-          meta row. */}
       <div className="px-3 pt-2 pb-4 space-y-2">
-        <div className="h-[34px] bg-muted/40 rounded" />
-        <div className="h-[14px] bg-muted/30 rounded w-2/3" />
+        <div className="h-[34px] bg-foreground/5 rounded" />
+        <div className="h-[14px] bg-foreground/5 rounded w-2/3" />
       </div>
 
       {/* Subtle shimmer sweep — opaque enough to read as "loading", but
