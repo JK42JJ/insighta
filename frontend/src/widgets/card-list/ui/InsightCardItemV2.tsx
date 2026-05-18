@@ -120,11 +120,6 @@ interface InsightCardItemV2Props {
    * v1 (long) → v2 (short) text-shrink flicker on grid mutation refetch.
    */
   isV2Loading?: boolean;
-  /** Fires when this card's thumbnail reaches a terminal load state
-   *  (decoded, fallback exhausted, or placeholder). CardList uses it
-   *  to gate the per-mandala batch reveal so all cards swap from
-   *  skeleton to real content together. */
-  onThumbnailReady?: (cardId: string) => void;
   /**
    * Optional archive callback. The card calls this AFTER the archive
    * mutation succeeds so the parent can present a 5-second undo
@@ -155,7 +150,6 @@ export function InsightCardItemV2({
   mandalaRelevancePct,
   oneLiner,
   isV2Loading = false,
-  onThumbnailReady,
   onArchived,
   sectorLabel,
 }: InsightCardItemV2Props) {
@@ -370,21 +364,8 @@ export function InsightCardItemV2({
           loading="lazy"
           decoding="async"
           draggable={false}
-          onError={(e) => {
-            handleThumbnailError(e);
-            if (e.currentTarget.src.endsWith('/placeholder.svg')) {
-              onThumbnailReady?.(card.id);
-            }
-          }}
-          onLoad={(e) => {
-            handleThumbnailLoad(e);
-            const finalSrc = e.currentTarget.src;
-            const isYtPlaceholder =
-              e.currentTarget.naturalWidth === 120 && e.currentTarget.naturalHeight === 90;
-            if (finalSrc.endsWith('/placeholder.svg') || !isYtPlaceholder) {
-              onThumbnailReady?.(card.id);
-            }
-          }}
+          onError={handleThumbnailError}
+          onLoad={handleThumbnailLoad}
         />
 
         {/* CP463+ — vignette-only hover: darken top + bottom edges so

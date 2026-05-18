@@ -211,20 +211,6 @@ export function CardList({
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  // First-batch reveal: the initial 6 cards (typical above-the-fold)
-  // hold their skeletons until ALL six thumbnails settle, then reveal
-  // together. Cards from index 6 onward (scrolled into view later)
-  // reveal individually as their own thumbnail settles.
-  const [loadedThumbnailIds, setLoadedThumbnailIds] = useState<Set<string>>(new Set());
-  const handleThumbnailReady = useCallback((cardId: string) => {
-    setLoadedThumbnailIds((prev) => {
-      if (prev.has(cardId)) return prev;
-      const next = new Set(prev);
-      next.add(cardId);
-      return next;
-    });
-  }, []);
-
   // Cards arrive already sorted by the host (CardListView applies the user's
   // sortMode chip). Re-sorting here would override publishedAt ranking with
   // sortOrder / createdAt and was the cause of "5d ago in the middle".
@@ -243,17 +229,12 @@ export function CardList({
     [cards, hiddenVideoIds]
   );
 
-  // Reset visible count + first-batch timeout when card list changes
-  // (mandala / cell switch). 10s hard cap prevents one slow thumbnail
-  // from holding the first 6 cards hostage forever.
+  // Reset infinite-scroll page count when the card list changes
+  // (mandala / cell switch). The thumbnail fade-in is handled per-image
+  // by image-utils' opacity-0 → 1 onLoad chain — no batch gating here.
   const cardListKey = useMemo(() => cards.map((c) => c.id).join(','), [cards]);
-  const [firstBatchTimedOut, setFirstBatchTimedOut] = useState(false);
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-    setLoadedThumbnailIds(new Set());
-    setFirstBatchTimedOut(false);
-    const t = setTimeout(() => setFirstBatchTimedOut(true), 10_000);
-    return () => clearTimeout(t);
   }, [cardListKey]);
 
   // Infinite scroll: observe sentinel at bottom of grid
@@ -278,19 +259,6 @@ export function CardList({
     [sortedCards, visibleCount]
   );
   const hasMore = visibleCount < sortedCards.length;
-
-  // Batch size caps at 6 but shrinks for mandalas with fewer cards —
-  // a 3-card mandala batches all 3, not "wait for 6 imaginary cards".
-  const FIRST_BATCH_SIZE = Math.min(6, sortedCards.length);
-  const firstBatchCardIds = useMemo(
-    () => sortedCards.slice(0, FIRST_BATCH_SIZE).map((c) => c.id),
-    [sortedCards, FIRST_BATCH_SIZE]
-  );
-  const firstBatchReady = useMemo(() => {
-    if (firstBatchCardIds.length === 0) return true;
-    if (firstBatchTimedOut) return true;
-    return firstBatchCardIds.every((id) => loadedThumbnailIds.has(id));
-  }, [firstBatchCardIds, loadedThumbnailIds, firstBatchTimedOut]);
 
   // Filter out selection IDs that no longer exist in cards (e.g., after moving cards)
   useEffect(() => {
@@ -433,11 +401,14 @@ export function CardList({
     );
   }
 
-  // Loading / pre-arrival padding count when no cards are present yet.
-  // Honour the server-truth skeletonCount EXACTLY — no fallback. A mandala
-  // with 3 cards shows 3 skeletons, not 6. Pre-mandala-fetch (cardCount
-  // unknown) renders no padding rather than a misleading 6-slot grid.
-  const loadingPaddingCount = cards.length === 0 && skeletonCount > 0 ? skeletonCount : 0;
+  // Padding only when the grid is genuinely empty (loading state). Once
+  // a single real card lands the grid renders organically — never inject
+  // placeholders between/after real cards. Capped at 12 so big mandalas
+  // (server cardCount can be 200+) don't paint a full-screen skeleton
+  // wall before the first real card arrives.
+  const SKELETON_CAP = 12;
+  const loadingPaddingCount =
+    cards.length === 0 && skeletonCount > 0 ? Math.min(skeletonCount, SKELETON_CAP) : 0;
 
   return (
     <div className="animate-fade-in -mx-4 px-4 relative select-none" ref={containerRef}>
@@ -474,94 +445,54 @@ export function CardList({
                   <Check className="w-3 h-3 text-primary-foreground" />
                 </div>
               )}
-              {/* Stacked layout — real card stays mounted so its thumbnail
-                  onLoad/onError fires; we hide it until reveal.
-                  - First 6 cards reveal TOGETHER once every thumbnail
-                    settles OR the 10s hard cap fires.
-                  - Cards from index 6+ stay hidden until the first
-                    batch revealed (order preservation — no back card
-                    appearing before front cards), then each reveals
-                    on their own thumbnail-ready signal. */}
-              {(() => {
-                const inFirstBatch = idx < FIRST_BATCH_SIZE;
-                const cardRevealed = inFirstBatch
-                  ? firstBatchReady
-                  : firstBatchReady && loadedThumbnailIds.has(card.id);
-                return (
-                  <>
-                    <div
-                      style={{ visibility: cardRevealed ? 'visible' : 'hidden' }}
-                      className={cn(
-                        'transition-opacity duration-300',
-                        cardRevealed ? 'opacity-100' : 'opacity-0'
-                      )}
-                    >
-                      <InsightCardItemV2
-                        card={card}
-                        onCardClick={() => onCardClick?.(card)}
-                        onCtrlClick={(e) => handleCardClick(e, card, idx)}
-                        isDraggable={true}
-                        selectedCardIds={selectedCardIds.size > 0 ? selectedCardIds : undefined}
-                        isEnriching={enrichingCardIds?.has(card.id)}
-                        isEnrichFailed={failedEnrichCardIds?.has(card.id)}
-                        onRetryEnrich={onRetryEnrich}
-                        mandalaRelevancePct={(() => {
-                          const vid = safeVideoId(card.videoUrl);
-                          return vid
-                            ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null)
-                            : null;
-                        })()}
-                        oneLiner={(() => {
-                          const vid = safeVideoId(card.videoUrl);
-                          return vid ? (v2SummariesMap.get(vid)?.oneLiner ?? null) : null;
-                        })()}
-                        isV2Loading={v2IsFetching}
-                        sectorLabel={
-                          sectorSubjects &&
-                          card.cellIndex >= 0 &&
-                          card.cellIndex < sectorSubjects.length
-                            ? sectorSubjects[card.cellIndex]
-                            : null
-                        }
-                        onArchived={handleArchived}
-                        onThumbnailReady={handleThumbnailReady}
-                      />
-                    </div>
-                    {!cardRevealed && (
-                      <div className="absolute inset-0 pointer-events-none">
-                        <InsightCardItemSkeleton />
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
+              {/* YouTube pattern: the card renders immediately. The
+                  thumbnail fades in via image-utils' opacity-0 → 1
+                  onLoad chain inside InsightCardItemV2's <img>. No
+                  outer visibility/opacity wrap and no per-card skeleton
+                  overlay — those gated already-decoded thumbs behind a
+                  Set lookup and made the grid feel broken on mandala
+                  switch (CP468 → CP469 sweep). */}
+              <InsightCardItemV2
+                card={card}
+                onCardClick={() => onCardClick?.(card)}
+                onCtrlClick={(e) => handleCardClick(e, card, idx)}
+                isDraggable={true}
+                selectedCardIds={selectedCardIds.size > 0 ? selectedCardIds : undefined}
+                isEnriching={enrichingCardIds?.has(card.id)}
+                isEnrichFailed={failedEnrichCardIds?.has(card.id)}
+                onRetryEnrich={onRetryEnrich}
+                mandalaRelevancePct={(() => {
+                  const vid = safeVideoId(card.videoUrl);
+                  return vid ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null) : null;
+                })()}
+                oneLiner={(() => {
+                  const vid = safeVideoId(card.videoUrl);
+                  return vid ? (v2SummariesMap.get(vid)?.oneLiner ?? null) : null;
+                })()}
+                isV2Loading={v2IsFetching}
+                sectorLabel={
+                  sectorSubjects && card.cellIndex >= 0 && card.cellIndex < sectorSubjects.length
+                    ? sectorSubjects[card.cellIndex]
+                    : null
+                }
+                onArchived={handleArchived}
+              />
             </CardSlot>
           );
         })}
 
-        {/* Inline padding skeletons — same grid, same column, same tile
-            layout as real cards. Sources of padding (mutually exclusive
-            so we never double-render):
-              - loading / mandala-switch pre-arrival (cards=0)
-              - server-truth slot count not yet filled (cards>0)
-              - infinite-scroll trailing batch (hasMore)
-            All routed through InsightCardItemSkeleton so the user only
-            ever sees ONE skeleton style across the whole timeline. */}
-        {(() => {
-          let pad = 0;
-          if (cards.length === 0) {
-            pad = loadingPaddingCount;
-          } else if (hasMore) {
-            pad = Math.min(sortedCards.length - visibleCount, 6);
-          } else if (skeletonCount > 0) {
-            pad = skeletonCount;
-          }
-          return Array.from({ length: pad }).map((_, i) => (
+        {/* Padding skeletons — ONLY when the grid is genuinely empty
+            (initial loading / mandala switch with no data yet). Once
+            real cards land we never inject placeholders between or
+            after them; the infinite-scroll sentinel below handles
+            paging without padding. */}
+        {cards.length === 0 &&
+          loadingPaddingCount > 0 &&
+          Array.from({ length: loadingPaddingCount }).map((_, i) => (
             <div key={`sk-${i}`} className="w-full">
               <InsightCardItemSkeleton />
             </div>
-          ));
-        })()}
+          ))}
       </div>
 
       {hasMore && <div ref={sentinelRef} aria-hidden className="h-1" />}
