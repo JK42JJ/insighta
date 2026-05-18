@@ -243,13 +243,17 @@ export function CardList({
     [cards, hiddenVideoIds]
   );
 
-  // Reset visible count when card list changes (e.g., cell switch).
-  // Also clear loadedThumbnailIds so the new mandala's cards mount
-  // through their own skeleton → thumbnail-load reveal cycle.
+  // Reset visible count + first-batch timeout when card list changes
+  // (mandala / cell switch). 10s hard cap prevents one slow thumbnail
+  // from holding the first 6 cards hostage forever.
   const cardListKey = useMemo(() => cards.map((c) => c.id).join(','), [cards]);
+  const [firstBatchTimedOut, setFirstBatchTimedOut] = useState(false);
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
     setLoadedThumbnailIds(new Set());
+    setFirstBatchTimedOut(false);
+    const t = setTimeout(() => setFirstBatchTimedOut(true), 10_000);
+    return () => clearTimeout(t);
   }, [cardListKey]);
 
   // Infinite scroll: observe sentinel at bottom of grid
@@ -282,8 +286,9 @@ export function CardList({
   );
   const firstBatchReady = useMemo(() => {
     if (firstBatchCardIds.length === 0) return true;
+    if (firstBatchTimedOut) return true;
     return firstBatchCardIds.every((id) => loadedThumbnailIds.has(id));
-  }, [firstBatchCardIds, loadedThumbnailIds]);
+  }, [firstBatchCardIds, loadedThumbnailIds, firstBatchTimedOut]);
 
   // Filter out selection IDs that no longer exist in cards (e.g., after moving cards)
   useEffect(() => {
@@ -474,15 +479,17 @@ export function CardList({
               )}
               {/* Stacked layout — real card stays mounted so its thumbnail
                   onLoad/onError fires; we hide it until reveal.
-                  - First 6 cards (above-the-fold) reveal TOGETHER once
-                    every one of their thumbnails has settled.
-                  - Cards from index 6+ (scrolled into view) reveal each
+                  - First 6 cards reveal TOGETHER once every thumbnail
+                    settles OR the 10s hard cap fires.
+                  - Cards from index 6+ stay hidden until the first
+                    batch revealed (order preservation — no back card
+                    appearing before front cards), then each reveals
                     on their own thumbnail-ready signal. */}
               {(() => {
                 const inFirstBatch = idx < FIRST_BATCH_SIZE;
                 const cardRevealed = inFirstBatch
                   ? firstBatchReady
-                  : loadedThumbnailIds.has(card.id);
+                  : firstBatchReady && loadedThumbnailIds.has(card.id);
                 return (
                   <>
                     <div
