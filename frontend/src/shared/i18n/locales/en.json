@@ -1830,6 +1830,7 @@
       "keywordPlaceholder": "Add keyword…",
       "removeKeyword": "Remove keyword {{keyword}}",
       "searchButton": "Search",
+      "resetButton": "Reset",
       "resultCount": "{{count}} matches",
       "expandOptions": "Expand options",
       "collapseOptions": "Collapse options",
@@ -1872,11 +1873,6 @@
     "actions": {
       "addOne": "Add to mandala",
       "picked": "Picked"
-    },
-    "confirm": {
-      "title": "Replace current results?",
-      "description": "Your current search results will be cleared and replaced with the new search. Continue?",
-      "proceed": "Search"
     }
   }
 }

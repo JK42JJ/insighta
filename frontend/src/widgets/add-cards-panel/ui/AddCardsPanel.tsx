@@ -1,35 +1,11 @@
-/**
- * Add Cards slide-in panel (CP466).
- *
- * Notion-style right-side slide-in (45% desktop width). Open via
- * `useAddCardsPanelStore.openPanel(mandalaId)`. The panel mounts in
- * IndexPage so the surrounding grid stays visible on the left
- * ("발견한 영상이 내 큐레이션으로 흡수" mental model).
- *
- * CP466 amendment 8 — multi-select retired (Bookmark = pick). Input
- * zone auto-collapses on first search success (user directive
- * 2026-05-18 "검색 결과 출력되면서 검색 옵션 창은 폴딩되어 줄어들어야
- * 함") and can be re-expanded with the chevron toggle in the header.
- *
- * Spec: docs/design/add-cards-2026-05-18.md §2 + §6.
- */
+/** Slide-in panel for picking video candidates into a mandala. */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
-import { ChevronDown, ChevronUp, Loader2, Lock, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, Lock, RotateCcw, Search, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/shared/lib/utils';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/shared/ui/alert-dialog';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import { youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
@@ -60,12 +36,7 @@ export function AddCardsPanel() {
 
   const mutation = useAddCards();
 
-  // CP466 amendment 9 — persisted result + cumulative surfaced set.
-  // On panel-open we hydrate from localStorage so a reload / browser-
-  // quit / dashboard navigation does NOT lose the user's discovery
-  // context. `restoredCards` is the last batch shown; `surfacedVideoIds`
-  // is the cumulative shown-history (sent as excludeVideoIds on every
-  // Search click so the user never sees the same card twice).
+  // Hydrate from localStorage on panel open so reload/quit doesn't drop discovery context.
   const [restoredCards, setRestoredCards] = useState<AddCardCandidate[] | null>(null);
   const [surfacedVideoIds, setSurfacedVideoIds] = useState<string[]>([]);
 
@@ -79,16 +50,11 @@ export function AddCardsPanel() {
       setRestoredCards(null);
       setSurfacedVideoIds([]);
     }
-    // Also clear any prior mutation data so the freshly-restored
-    // batch wins until the user clicks Search.
     mutation.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mandalaId]);
 
-  // Save freshly-fetched results + grow the surfaced set whenever a
-  // new mutation success lands. Surfaced grows monotonically per
-  // mandala until the user manually clears (no UI for that yet —
-  // future v2+).
+  // Persist + grow surfaced set on each successful search.
   useEffect(() => {
     if (!mutation.isSuccess || !mandalaId) return;
     const freshCards = mutation.data?.cards ?? [];
@@ -96,22 +62,15 @@ export function AddCardsPanel() {
     const nextSurfaced = mergeSurfacedVideoIds(surfacedVideoIds, freshIds);
     setSurfacedVideoIds(nextSurfaced);
     saveAddCardsState(mandalaId, freshCards, nextSurfaced);
-    // Fresh batch takes over → drop the restored snapshot.
     setRestoredCards(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mutation.isSuccess, mutation.data, mandalaId]);
 
-  // CP466 amendment 10 — pick state declared BEFORE the cards filter
-  // that reads it. (Linter reformat had moved the useState below the
-  // filter, causing a TDZ reference error at runtime.)
+  // Picked set must precede the cards filter that reads it (TDZ).
   const [pickedSet, setPickedSet] = useState<Set<string>>(() => new Set());
   const { like } = useLikeCard();
   const queryClient = useQueryClient();
 
-  // Display source: live mutation data wins; otherwise the restored
-  // snapshot from localStorage. Picked cards are filtered out so the
-  // panel + header count update immediately on pick (CP466 amendment
-  // 10 user directive).
   const allCards: AddCardCandidate[] = mutation.data?.cards ?? restoredCards ?? [];
   const cards: AddCardCandidate[] = allCards.filter((c) => !pickedSet.has(c.videoId));
   const hasSearched = mutation.isSuccess || mutation.isError || restoredCards !== null;
@@ -133,8 +92,6 @@ export function AddCardsPanel() {
         { videoId, mandalaId, title, cellIndex },
         {
           onSuccess: () => {
-            // Mandala grid + local-cards refresh so the new card
-            // appears in its assigned sector without a manual reload.
             queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
             queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
             queryClient.invalidateQueries({ queryKey: ['mandala', 'recommendations', mandalaId] });
@@ -152,39 +109,31 @@ export function AddCardsPanel() {
     [mandalaId, pickedSet, like, mutation.data, restoredCards, queryClient]
   );
 
-  // CP466 amendment 2 — seed wizard meta on first response.
+  // Seed wizard meta (focus_tags + target_level) on first response.
   useEffect(() => {
     const meta = mutation.data?.mandalaMeta;
     if (!meta) return;
     seedFromWizardMeta(meta.focusTags, meta.targetLevel);
   }, [mutation.data, seedFromWizardMeta]);
 
-  // CP466 amendment 11 — keep store.visibleCountByMandala in sync
-  // with the panel's effective card count so the AddCardsTriggerChip
-  // (rendered outside the panel) can show the same badge as the
-  // header. Updates on every cards.length / mandalaId change; persists
-  // across panel close so the chip badge stays accurate when closed.
+  // Keep store count in sync so the external trigger chip badge follows panel state.
   useEffect(() => {
     if (!mandalaId) return;
     setVisibleCount(mandalaId, cards.length);
   }, [mandalaId, cards.length, setVisibleCount]);
 
-  // CP466 amendment 8 — input zone collapses automatically on first
-  // success result; user can toggle back via the chevron in the header.
+  // Auto-collapse the input zone once per mandala on first successful search.
   const [inputCollapsed, setInputCollapsed] = useState(false);
   const autoCollapsedFor = useRef<string | null>(null);
   useEffect(() => {
     if (mutation.isSuccess && cards.length > 0 && mandalaId) {
-      // Only auto-collapse once per (mandala open + first successful
-      // search). Subsequent searches don't re-collapse if user has
-      // expanded manually.
       if (autoCollapsedFor.current !== mandalaId) {
         autoCollapsedFor.current = mandalaId;
         setInputCollapsed(true);
       }
     }
   }, [mutation.isSuccess, cards.length, mandalaId]);
-  // Reset auto-collapse memory when panel closes.
+
   useEffect(() => {
     if (!open) {
       autoCollapsedFor.current = null;
@@ -193,9 +142,6 @@ export function AddCardsPanel() {
     }
   }, [open]);
 
-  // CP466 amendment 3 + 9 — explicit search. excludeVideoIds carries
-  // the cumulative surfaced-history so the user never sees the same
-  // card twice in this mandala's panel (persistence across reload).
   const runSearch = useCallback(() => {
     if (!mandalaId) return;
     const keywords =
@@ -208,24 +154,22 @@ export function AddCardsPanel() {
     });
   }, [mandalaId, extraKeywords, filters, mutation, targetLevel, surfacedVideoIds]);
 
-  // CP466 amendment 10 — confirm dialog when the user re-runs Search
-  // with existing results visible (user directive 2026-05-18 "기존
-  // 검색 내용은 초기화 됩니다. 검색을 진행하시겠습니까?"). First-time
-  // search (no current results) skips the prompt and fires directly.
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  // Toggle: results visible → click clears them; empty → click searches.
+  // Surfaced history is preserved across the toggle.
+  const resetResults = useCallback(() => {
+    mutation.reset();
+    setRestoredCards(null);
+    setPickedSet(new Set());
+  }, [mutation]);
   const triggerSearch = useCallback(() => {
     if (cards.length > 0) {
-      setConfirmOpen(true);
+      resetResults();
       return;
     }
     runSearch();
-  }, [cards.length, runSearch]);
-  const handleConfirmReplace = useCallback(() => {
-    setConfirmOpen(false);
-    runSearch();
-  }, [runSearch]);
+  }, [cards.length, resetResults, runSearch]);
 
-  // CP466 amendment 4 — race-free close animation.
+  // Race-free close: keep mount during the 200ms slide-out so the grid never flashes.
   const [isClosingLocal, setIsClosingLocal] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -284,17 +228,11 @@ export function AddCardsPanel() {
             : 'animate-in slide-in-from-right duration-200 ease-out'
         )}
       >
-        {/* Header — title + count badge (IdeaSpot pattern, user
-            directive 2026-05-18 "상단 아이디어스팟 매뉴와 동일한
-            방식으로 우측에 수량 표기") + collapse toggle (when results
-            visible) + close. */}
         <header className="flex items-center justify-between px-4 py-3 border-b border-border/40">
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="text-[14px] font-semibold truncate">
               {t('addCards.panel.title', 'Find more videos')}
             </h2>
-            {/* Result count badge — same shape as
-                IndexPage.tsx ideaSpotTrigger count (line ~688). */}
             {cards.length > 0 && (
               <span
                 className="inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-tight"
@@ -309,7 +247,6 @@ export function AddCardsPanel() {
                 {cards.length}
               </span>
             )}
-            {/* Collapse toggle — visible only after first successful search. */}
             {mutation.isSuccess && cards.length > 0 && (
               <button
                 type="button"
@@ -340,8 +277,6 @@ export function AddCardsPanel() {
           </button>
         </header>
 
-        {/* Input zone — collapses on first successful search. The
-            transition is height/opacity-based for smooth folding. */}
         <div
           className={cn(
             'border-b border-border/40 overflow-hidden transition-all duration-200 ease-in-out',
@@ -370,19 +305,32 @@ export function AddCardsPanel() {
               type="button"
               onClick={triggerSearch}
               disabled={mutation.isPending}
-              className="inline-flex items-center gap-1.5 h-8 rounded-full bg-primary text-primary-foreground text-[12px] font-medium px-3.5 hover:bg-primary/90 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className={cn(
+                'inline-flex items-center gap-1.5 h-8 rounded-full text-[12px] font-medium px-3.5 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2',
+                cards.length > 0
+                  ? // Reset state — secondary tone so it reads as
+                    // "clear/return", visually distinct from "search".
+                    'bg-secondary text-secondary-foreground hover:bg-secondary/80 focus-visible:ring-foreground/20'
+                  : // Search state — primary CTA.
+                    'bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-primary/30'
+              )}
             >
               {mutation.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : cards.length > 0 ? (
+                <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.2} />
               ) : (
                 <Search className="h-3.5 w-3.5" strokeWidth={2.2} />
               )}
-              <span>{t('addCards.panel.searchButton', 'Search')}</span>
+              <span>
+                {cards.length > 0
+                  ? t('addCards.panel.resetButton', 'Reset')
+                  : t('addCards.panel.searchButton', 'Search')}
+              </span>
             </button>
           </div>
         </div>
 
-        {/* Collapsed-state compact bar: show locked base + Search shortcut. */}
         {inputCollapsed && (
           <div className="flex items-center gap-2 px-4 py-2 border-b border-border/40 text-[11.5px] text-muted-foreground">
             <Lock className="h-3 w-3 shrink-0" />
@@ -391,26 +339,35 @@ export function AddCardsPanel() {
               type="button"
               onClick={triggerSearch}
               disabled={mutation.isPending}
-              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] text-foreground hover:bg-foreground/[0.06] transition-colors"
+              className={cn(
+                'inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] transition-colors',
+                cards.length > 0
+                  ? 'text-foreground/80 hover:bg-foreground/[0.06]'
+                  : 'text-foreground hover:bg-foreground/[0.06]'
+              )}
             >
               {mutation.isPending ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
+              ) : cards.length > 0 ? (
+                <RotateCcw className="h-3 w-3" strokeWidth={2.2} />
               ) : (
                 <Search className="h-3 w-3" strokeWidth={2.2} />
               )}
-              <span>{t('addCards.panel.searchButton', 'Search')}</span>
+              <span>
+                {cards.length > 0
+                  ? t('addCards.panel.resetButton', 'Reset')
+                  : t('addCards.panel.searchButton', 'Search')}
+              </span>
             </button>
           </div>
         )}
 
-        {/* Result count row */}
         {mutation.isSuccess && cards.length > 0 && (
           <div className="px-4 py-1.5 text-[11px] text-muted-foreground">
             {t('addCards.panel.resultCount', '{{count}} matches', { count: cards.length })}
           </div>
         )}
 
-        {/* Result list */}
         <div className="flex-1 flex flex-col min-h-0">
           <div className="flex-1 overflow-y-auto scrollbar-pro min-h-0">
             <AddCardsList
@@ -427,30 +384,6 @@ export function AddCardsPanel() {
           </div>
         </div>
       </aside>
-
-      {/* CP466 amendment 10 — confirm before clearing visible results
-          and running a new search (user directive 2026-05-18). */}
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('addCards.confirm.title', 'Replace current results?')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t(
-                'addCards.confirm.description',
-                'Your current search results will be cleared and replaced with the new search. Continue?'
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmReplace}>
-              {t('addCards.confirm.proceed', 'Search')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

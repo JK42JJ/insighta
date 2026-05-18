@@ -1838,6 +1838,7 @@
       "keywordPlaceholder": "키워드 추가…",
       "removeKeyword": "키워드 {{keyword}} 제거",
       "searchButton": "검색",
+      "resetButton": "초기화",
       "resultCount": "{{count}}개 결과",
       "expandOptions": "검색 옵션 펼치기",
       "collapseOptions": "검색 옵션 접기",
@@ -1880,11 +1881,6 @@
     "actions": {
       "addOne": "만다라에 추가",
       "picked": "추가됨"
-    },
-    "confirm": {
-      "title": "기존 검색 결과를 교체할까요?",
-      "description": "현재 검색 결과는 초기화되고 새로운 검색 결과로 대체됩니다. 검색을 진행하시겠습니까?",
-      "proceed": "검색"
     }
   }
 }
