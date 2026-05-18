@@ -317,6 +317,11 @@ export function InsightCardItemV2({
         'group relative cursor-pointer transition-all duration-200',
         'border-0 shadow-none bg-transparent rounded-[10px]',
         'hover:-translate-y-0.5 hover:ring-1 hover:ring-border/60',
+        // CP473 — card sizes itself to its own content so the hover
+        // ring only outlines the visible body. The grid cell
+        // (CardSlot) still stretches to the row's max height via the
+        // CSS-grid default, so empty space below a short card sits
+        // outside the card (in the cell) and not inside the ring.
         'w-[95%]',
         // CP463 — outer glow / pulse removed per user directive
         // 2026-05-17: "수집중/분석중일때 카드가 심각하게 깜빡임. 매우
@@ -529,13 +534,12 @@ export function InsightCardItemV2({
             so longer summaries truncate with "…" instead of stretching
             the card. min-h reserves the 3-line slot so cards stay the
             same height regardless of summary length. */}
-      <div className="px-3 pt-2 pb-4 flex flex-col">
-        <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px] min-h-[2.8em]">
+      <div className="px-3 pt-2 pb-4">
+        <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px]">
           {decodeHtmlEntities(card.title)}
         </h4>
 
-        {(ytMeta.channelTitle ||
-          footerLeft ||
+        {(footerLeft ||
           footerRight ||
           sectorLabel ||
           relevanceBadge ||
@@ -544,31 +548,26 @@ export function InsightCardItemV2({
           <div className="mt-2 flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground/70">
             <span className="truncate flex items-center gap-1.5 min-w-0">
               {(() => {
-                // CP463 — inline meta: channel · date · views · sector.
-                // Channel first (most identifying), foreground/80 so it
-                // reads slightly stronger than the rest of the row.
+                // CP473 user directive 2026-05-19:
+                //   "장애 제거 70.2K 7 months ago   85%"
+                //   "채널명은 표기하지 않는거야."
+                // Order: sector → views → date | relevance %.
+                // Channel intentionally omitted from the row.
                 const parts: { key: string; node: React.ReactNode }[] = [];
-                if (ytMeta.channelTitle)
+                if (sectorLabel)
                   parts.push({
-                    key: 'ch',
-                    node: (
-                      <span className="truncate text-foreground/80">{ytMeta.channelTitle}</span>
-                    ),
-                  });
-                if (footerLeft)
-                  parts.push({
-                    key: 'date',
-                    node: <span className="truncate">{footerLeft}</span>,
+                    key: 'sector',
+                    node: <span className="truncate text-foreground/80">{sectorLabel}</span>,
                   });
                 if (footerRight)
                   parts.push({
                     key: 'views',
                     node: <span className="shrink-0 tabular-nums">{footerRight}</span>,
                   });
-                if (sectorLabel)
+                if (footerLeft)
                   parts.push({
-                    key: 'sector',
-                    node: <span className="truncate">{sectorLabel}</span>,
+                    key: 'date',
+                    node: <span className="truncate">{footerLeft}</span>,
                   });
                 return parts.flatMap((p, i) =>
                   i === 0
@@ -616,13 +615,17 @@ export function InsightCardItemV2({
           </div>
         )}
 
-        {/* CP473 — summary moved to the bottom + line-clamp-3 with "…"
-            so the card height stays uniform whether the one-liner is
-            absent, short, or long. min-h reserves three lines so empty
-            cards align with full ones in the grid. */}
-        <blockquote className="mt-2 border-l-2 border-muted-foreground/25 pl-2.5 text-[10.5px] italic text-muted-foreground/75 leading-relaxed line-clamp-3 min-h-[3em] break-words">
-          {trimmedOneLiner ? decodeHtmlEntities(trimmedOneLiner) : ''}
-        </blockquote>
+        {/* CP473 — summary at the bottom + line-clamp-3 with "…" for
+            long content. When the one-liner is missing, the block is
+            NOT rendered — the parent `flex-grow` body absorbs the
+            leftover space and the empty area sits flush at the card's
+            bottom (YouTube-style: no empty line between meta and the
+            absent summary). */}
+        {trimmedOneLiner && (
+          <blockquote className="mt-2 text-[10.5px] italic text-muted-foreground/75 leading-relaxed line-clamp-3 break-words">
+            {decodeHtmlEntities(trimmedOneLiner)}
+          </blockquote>
+        )}
       </div>
     </Card>
   );
