@@ -1227,6 +1227,16 @@ class ApiClient {
     });
   }
 
+  // Replace the mandala's focus_tags array. Called when the user X-removes
+  // a chip in the Add Cards panel so the change persists across reload
+  // (FE-only veto was getting clobbered by the wizard-meta seed).
+  async updateMandalaFocusTags(id: string, focusTags: string[]): Promise<{ focusTags: string[] }> {
+    return this.request(`/mandalas/${id}/focus-tags`, {
+      method: 'PATCH',
+      body: JSON.stringify({ focusTags }),
+    });
+  }
+
   async deleteMandala(id: string): Promise<void> {
     return this.request<void>(`/mandalas/${id}`, {
       method: 'DELETE',
@@ -1363,6 +1373,14 @@ class ApiClient {
     return this.request(`/mandalas/${mandalaId}/add-cards`, {
       method: 'POST',
       body: JSON.stringify(body),
+      // BE runs Tier 1 (video_pool KNN) + Tier 2 (runDiscoverEphemeral
+      // → YouTube API, 9 cells × 60 buffer with 6-key rotation) in
+      // parallel. Default 15s client timeout aborts before BE can
+      // assemble + filter the cohort on mandalas with a cold video_pool
+      // (prod incident 2026-05-18 — "Request timeout (15s)"). Match the
+      // wizard 60s budget; BE remains the source of truth for actual
+      // upper bound.
+      timeoutMs: 60_000,
     });
   }
 

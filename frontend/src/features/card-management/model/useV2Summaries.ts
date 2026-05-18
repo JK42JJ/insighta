@@ -64,6 +64,9 @@ export function useV2Summaries(videoIds: string[] | null | undefined) {
   return {
     summariesByVideoId: map,
     isLoading: query.isLoading,
+    // Covers initial load + background refetch. Consumers suppress v1
+    // fallback while this is true to avoid the v1->v2 swap flicker.
+    isFetching: query.isFetching,
     isError: query.isError,
   };
 }
