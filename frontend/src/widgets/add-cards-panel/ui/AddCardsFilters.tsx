@@ -121,7 +121,7 @@ export function AddCardsFilters() {
   const publishedPresetsTr = PUBLISHED_PRESETS.map((p) => ({ ...p, defaultLabel: tr(p) }));
 
   return (
-    <div className="py-1 border-b border-border/40 space-y-0.5">
+    <div className="py-1 space-y-0.5">
       <ChipRow
         label={t('addCards.filters.viewCount.label', 'Views')}
         presets={viewPresetsTr}
