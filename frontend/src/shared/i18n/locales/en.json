@@ -1825,7 +1825,7 @@
   "addCards": {
     "triggerChip": "+ Add Cards",
     "panel": {
-      "title": "Find more videos",
+      "title": "Find more cards",
       "lockedBaseLabel": "Searching within",
       "keywordPlaceholder": "Add keyword…",
       "removeKeyword": "Remove keyword {{keyword}}",

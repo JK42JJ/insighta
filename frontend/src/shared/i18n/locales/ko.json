@@ -1833,7 +1833,7 @@
   "addCards": {
     "triggerChip": "+ 카드 추가",
     "panel": {
-      "title": "동영상 더 찾기",
+      "title": "카드 더 찾기",
       "lockedBaseLabel": "검색 범위",
       "keywordPlaceholder": "키워드 추가…",
       "removeKeyword": "키워드 {{keyword}} 제거",

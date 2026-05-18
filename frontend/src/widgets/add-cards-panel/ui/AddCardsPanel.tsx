@@ -274,7 +274,7 @@ export function AddCardsPanel() {
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label={t('addCards.panel.title', 'Find more videos')}
+        aria-label={t('addCards.panel.title', 'Find more cards')}
         className={cn(
           'fixed top-0 right-0 bottom-0 z-40 flex flex-col bg-background border-l border-border/60 shadow-2xl',
           PANEL_WIDTH_CLASS,
@@ -286,7 +286,7 @@ export function AddCardsPanel() {
         <header className="flex items-center justify-between px-5 py-3 border-b border-border/40 sm:px-6">
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="text-[14px] font-semibold truncate">
-              {t('addCards.panel.title', 'Find more videos')}
+              {t('addCards.panel.title', 'Find more cards')}
             </h2>
             {visibleCount > 0 && (
               <span
