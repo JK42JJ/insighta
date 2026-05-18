@@ -212,10 +212,22 @@ export function AddCardsPanel() {
           </div>
         </div>
 
-        {/* Result list — flex-1 fills remaining vertical space; bulk bar
-            sticks to bottom inside the same flex container. */}
+        {/* Result count row — visible only after a search has produced
+            cards. Shows N matches so the user knows how many candidates
+            remain after caps + filters (CP466 user directive 2026-05-18). */}
+        {mutation.isSuccess && cards.length > 0 && (
+          <div className="px-4 py-1.5 text-[11px] text-muted-foreground">
+            {t('addCards.panel.resultCount', '{{count}} matches', { count: cards.length })}
+          </div>
+        )}
+
+        {/* Result list — flex-1 fills remaining vertical space; scroll
+            container lives on the wrapper so the inner ul stays a flat
+            grid (was previously broken — overflow-y-auto on the ul
+            itself never engaged because the ul height auto-grew). Bulk
+            bar sticks to bottom inside the same flex container. */}
         <div className="flex-1 flex flex-col min-h-0">
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto scrollbar-pro min-h-0">
             <AddCardsList
               cards={cards}
               mandalaId={mandalaId}

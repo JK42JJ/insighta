@@ -1839,6 +1839,7 @@
       "removeKeyword": "키워드 {{keyword}} 제거",
       "selectCard": "카드 선택",
       "searchButton": "검색",
+      "resultCount": "{{count}}개 결과",
       "idle": "키워드와 필터를 설정한 뒤 검색을 눌러주세요.",
       "empty": "결과를 찾지 못했어요. 잠시 후 다시 시도해주세요.",
       "searchFailed": "검색이 완료되지 않았어요. 잠시 후 다시 시도해주세요."
