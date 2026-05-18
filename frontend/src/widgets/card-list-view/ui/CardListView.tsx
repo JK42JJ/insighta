@@ -31,6 +31,7 @@ import {
 import { Slider } from '@/shared/ui/slider';
 import { ContextHeader, SORT_OPTIONS, type SortMode } from './ContextHeader';
 import { LabelFilterPillsV2 } from './LabelFilterPillsV2';
+import { useStableSortedCards } from '../lib/useStableSortedCards';
 
 const SORT_ICON_BY_VALUE: Record<SortMode, typeof ArrowDownWideNarrow> = {
   latest: ArrowDownWideNarrow,
@@ -355,6 +356,16 @@ export function CardListView({
     }
   }, [effectiveCards, sortMode]);
 
+  // CP471 — mandala-scoped settle window. Hides the grid behind the
+  // existing skeleton padding for ~1.2s after a mandala switch so the
+  // four async card sources (local refetch, video-states refetch, SSE
+  // stream, pending) can all land before the grid commits to a sort
+  // order. Reveals once. Cards arriving after settle append to the
+  // end so previously-shown positions never reflow. Sector pill /
+  // search swap the upstream `cards` prop and bypass this hook, so
+  // they stay instant.
+  const { cards: stableCards, hasSettled } = useStableSortedCards(sortedCards, mandalaId ?? null);
+
   // Sector card counts (0-7)
   const sectorCounts = useMemo(() => {
     if (!sectorSubjects || !cardsByCell) return [];
@@ -602,13 +613,17 @@ export function CardListView({
           {contextHeaderElement}
           {sectorPillsElement}
           <CardList
-            cards={sortedCards}
-            isLoading={isLoading}
+            cards={hasSettled ? stableCards : []}
+            isLoading={isLoading || !hasSettled}
             title={title}
             gridColumns={gridColumns}
             compact={gridColumns >= COMPACT_THRESHOLD}
             sectorSubjects={sectorSubjects}
-            onCardClick={onCardClick ? (card) => onCardClick(card, sortedCards) : undefined}
+            onCardClick={
+              onCardClick
+                ? (card) => onCardClick(card, hasSettled ? stableCards : sortedCards)
+                : undefined
+            }
             onCardDragStart={onCardDragStart}
             onMultiCardDragStart={onMultiCardDragStart}
             onSaveNote={onSaveNote}
@@ -618,7 +633,9 @@ export function CardListView({
             enrichingCardIds={enrichingCardIds}
             failedEnrichCardIds={failedEnrichCardIds}
             onRetryEnrich={onRetryEnrich}
-            skeletonCount={skeletonCount}
+            skeletonCount={
+              hasSettled ? skeletonCount : Math.max(skeletonCount, Math.min(sortedCards.length, 12))
+            }
           />
         </div>
       </div>
