@@ -424,14 +424,21 @@ function AuthenticatedApp() {
   // 드래그 시작 시점의 selectedCardIds 스냅샷 — 드래그 중 selection 변경에 영향받지 않도록
   const dragSelectedIdsRef = useRef<string[] | null>(null);
 
-  // Build a card lookup for DragOverlay
+  // Build a card lookup for DragOverlay. Must include `newlySyncedCards`
+  // — multi-drag from the "Newly Synced" tab otherwise misses the lookup
+  // and DragOverlayContent renders empty placeholder tiles (CP473 user
+  // report image #50).
   const allCardsMap = useMemo(() => {
     const map = new Map<string, { thumbnail: string; title: string }>();
-    for (const card of [...cards.allMandalaCards, ...cards.scratchPadCards]) {
+    for (const card of [
+      ...cards.allMandalaCards,
+      ...cards.scratchPadCards,
+      ...cards.newlySyncedCards,
+    ]) {
       map.set(card.id, { thumbnail: card.thumbnail, title: card.title });
     }
     return map;
-  }, [cards.allMandalaCards, cards.scratchPadCards]);
+  }, [cards.allMandalaCards, cards.scratchPadCards, cards.newlySyncedCards]);
 
   // Build cell label lookup for DragOverlay
   const cellLabels = useMemo(() => {
