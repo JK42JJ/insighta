@@ -121,6 +121,14 @@ interface InsightCardItemV2Props {
    */
   isV2Loading?: boolean;
   /**
+   * Above-the-fold hint (CP469 follow-up). When true the thumbnail
+   * <img> opts out of lazy loading and asks the browser to fetch with
+   * high priority, so the first row of cards arrives near-simultaneously
+   * and the user reads a "top → bottom" reveal cadence instead of a
+   * random mosaic. Caller decides — CardList sets it for idx < 6.
+   */
+  priority?: boolean;
+  /**
    * Optional archive callback. The card calls this AFTER the archive
    * mutation succeeds so the parent can present a 5-second undo
    * toast (handoff decision #6 — soft hide). When omitted, the card
@@ -150,6 +158,7 @@ export function InsightCardItemV2({
   mandalaRelevancePct,
   oneLiner,
   isV2Loading = false,
+  priority = false,
   onArchived,
   sectorLabel,
 }: InsightCardItemV2Props) {
@@ -355,13 +364,30 @@ export function InsightCardItemV2({
         </div>
       )}
 
-      {/* ── Thumbnail ── */}
-      <div className="relative aspect-video overflow-hidden rounded-[10px] bg-gradient-to-br from-[#1a1c28] to-[#13141c] transition-[filter] duration-300 group-hover:brightness-[0.96] group-hover:contrast-[1.04]">
+      {/* ── Thumbnail ──
+          Container = YouTube-style muted-gray placeholder + shimmer
+          (CLAUDE.md no-hardcoded-color: bg-muted is the dark-mode
+          semantic token at HSL 0 0% 22%, matching InsightCardItemSkeleton
+          so the loading state reads identical across the timeline).
+          <img> sits ABOVE the shimmer in DOM order; once it fades from
+          opacity-0 → 1 via image-utils' onLoad chain, it occludes the
+          shimmer naturally — no extra state needed. */}
+      <div className="relative aspect-video overflow-hidden rounded-[10px] bg-muted transition-[filter] duration-300 group-hover:brightness-[0.96] group-hover:contrast-[1.04]">
+        <div
+          className="absolute inset-0 -translate-x-full pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.04), transparent)',
+            animation: 'shimmer 1.5s ease-in-out infinite',
+          }}
+          aria-hidden="true"
+        />
         <img
           src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
           alt={card.title}
-          className="w-full h-full object-cover opacity-0 transition-opacity duration-200"
-          loading="lazy"
+          className="relative w-full h-full object-cover opacity-0 transition-opacity duration-200"
+          loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : 'auto'}
           decoding="async"
           draggable={false}
           onError={handleThumbnailError}

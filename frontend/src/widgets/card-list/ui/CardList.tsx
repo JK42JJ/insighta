@@ -461,6 +461,7 @@ export function CardList({
                 isEnriching={enrichingCardIds?.has(card.id)}
                 isEnrichFailed={failedEnrichCardIds?.has(card.id)}
                 onRetryEnrich={onRetryEnrich}
+                priority={idx < 6}
                 mandalaRelevancePct={(() => {
                   const vid = safeVideoId(card.videoUrl);
                   return vid ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null) : null;
