@@ -8,7 +8,7 @@ import { FileVideo, Check } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDragSelect } from '@/features/drag-select/model/useDragSelect';
 import { cardSlotDropId } from '@/shared/lib/dnd';
-import { InsightCardItemSkeleton } from './InsightCardItemSkeleton';
+import { CardSkeleton } from './CardSkeleton';
 import {
   useSummaryRatings,
   useRateSummary,
@@ -29,9 +29,6 @@ function safeVideoId(videoUrl: string): string | null {
 interface CardListProps {
   cards: InsightCard[];
   isLoading?: boolean;
-  /** Server-truth slot count not yet filled — rendered as skeleton tiles
-   *  at the end of the grid so the total cell count stays fixed. */
-  skeletonCount?: number;
   title: string;
   onCardClick?: (card: InsightCard) => void;
   onCardDragStart?: (card: InsightCard) => void;
@@ -81,7 +78,6 @@ const PAGE_SIZE = 24;
 export function CardList({
   cards,
   isLoading,
-  skeletonCount = 0,
   onCardClick,
   onSaveNote,
   onSelectionChange,
@@ -229,33 +225,11 @@ export function CardList({
     [cards, hiddenVideoIds]
   );
 
-  // Reset infinite-scroll page count when the card list changes
-  // (mandala / cell switch). The thumbnail fade-in is handled per-image
-  // by image-utils' opacity-0 → 1 onLoad chain — no batch gating here.
+  // Reset visible count when card list changes (e.g., cell switch)
   const cardListKey = useMemo(() => cards.map((c) => c.id).join(','), [cards]);
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [cardListKey]);
-
-  // CP469.3 sequential reveal queue REMOVED (CP470 hotfix).
-  //
-  // The queue's `readyIds` Set was reset on every `cardListKey` change
-  // (= card ids list change). Background SSE / TanStack refetches add
-  // a card → ids list changes → reset → all revealed cards flip back
-  // to wrapper opacity-0 → user sees a "메롱" flash where thumbs that
-  // were already visible disappear behind shimmer and re-reveal.
-  //
-  // We rely instead on:
-  //   - image-utils' own opacity-0 → 1 fade-in (onLoad/onError chain).
-  //   - `loading="eager" + fetchPriority="high"` for idx < 6 so the
-  //     first row arrives near-simultaneously (mosaic minimized).
-  //   - `bg-muted` + shimmer overlay so the placeholder reads as a
-  //     YouTube-style gray loading state until each thumb settles.
-  //
-  // Sequential order across the entire grid is best-effort, not
-  // strict. Re-introducing strict order requires a race-free design
-  // (mandala-scoped reset key + monotonic ready set + safe
-  // sort-change handling) and lands in a separate PR.
 
   // Infinite scroll: observe sentinel at bottom of grid
   useEffect(() => {
@@ -400,11 +374,11 @@ export function CardList({
     [lastSelectedIndex, sortedCards, onCardClick]
   );
 
-  // Empty state ONLY when there is genuinely nothing expected to load —
-  // not loading AND server says zero AND the local list is empty.
-  // Otherwise we mount the real grid (below) so its cells either hold a
-  // real card or an inline skeleton tile of the SAME size.
-  if (cards.length === 0 && skeletonCount === 0 && !isLoading) {
+  if (isLoading && cards.length === 0) {
+    return <CardSkeleton count={6} />;
+  }
+
+  if (cards.length === 0) {
     return (
       <div
         ref={gridRef}
@@ -420,15 +394,6 @@ export function CardList({
       </div>
     );
   }
-
-  // Padding only when the grid is genuinely empty (loading state). Once
-  // a single real card lands the grid renders organically — never inject
-  // placeholders between/after real cards. Capped at 12 so big mandalas
-  // (server cardCount can be 200+) don't paint a full-screen skeleton
-  // wall before the first real card arrives.
-  const SKELETON_CAP = 12;
-  const loadingPaddingCount =
-    cards.length === 0 && skeletonCount > 0 ? Math.min(skeletonCount, SKELETON_CAP) : 0;
 
   return (
     <div className="animate-fade-in -mx-4 px-4 relative select-none" ref={containerRef}>
@@ -465,13 +430,6 @@ export function CardList({
                   <Check className="w-3 h-3 text-primary-foreground" />
                 </div>
               )}
-              {/* YouTube pattern: the card renders immediately. The
-                  thumbnail fades in via image-utils' opacity-0 → 1
-                  onLoad chain inside InsightCardItemV2's <img>. No
-                  outer visibility/opacity wrap and no per-card skeleton
-                  overlay — those gated already-decoded thumbs behind a
-                  Set lookup and made the grid feel broken on mandala
-                  switch (CP468 → CP469 sweep). */}
               <InsightCardItemV2
                 card={card}
                 onCardClick={() => onCardClick?.(card)}
@@ -481,7 +439,6 @@ export function CardList({
                 isEnriching={enrichingCardIds?.has(card.id)}
                 isEnrichFailed={failedEnrichCardIds?.has(card.id)}
                 onRetryEnrich={onRetryEnrich}
-                priority={idx < 6}
                 mandalaRelevancePct={(() => {
                   const vid = safeVideoId(card.videoUrl);
                   return vid ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null) : null;
@@ -501,22 +458,14 @@ export function CardList({
             </CardSlot>
           );
         })}
-
-        {/* Padding skeletons — ONLY when the grid is genuinely empty
-            (initial loading / mandala switch with no data yet). Once
-            real cards land we never inject placeholders between or
-            after them; the infinite-scroll sentinel below handles
-            paging without padding. */}
-        {cards.length === 0 &&
-          loadingPaddingCount > 0 &&
-          Array.from({ length: loadingPaddingCount }).map((_, i) => (
-            <div key={`sk-${i}`} className="w-full">
-              <InsightCardItemSkeleton />
-            </div>
-          ))}
       </div>
 
-      {hasMore && <div ref={sentinelRef} aria-hidden className="h-1" />}
+      {hasMore && (
+        <>
+          <CardSkeleton count={Math.min(sortedCards.length - visibleCount, 6)} />
+          <div ref={sentinelRef} aria-hidden className="h-1" />
+        </>
+      )}
     </div>
   );
 }

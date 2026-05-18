@@ -121,14 +121,6 @@ interface InsightCardItemV2Props {
    */
   isV2Loading?: boolean;
   /**
-   * Above-the-fold hint. When true the thumbnail <img> opts out of
-   * lazy loading and asks the browser to fetch with high priority.
-   * NOTE: priority is advisory — bytes still arrive in whatever order
-   * HTTP/2 multiplex / image size / CDN cache state decides; the
-   * remaining mosaic is acceptable and intentional after CP470.
-   */
-  priority?: boolean;
-  /**
    * Optional archive callback. The card calls this AFTER the archive
    * mutation succeeds so the parent can present a 5-second undo
    * toast (handoff decision #6 — soft hide). When omitted, the card
@@ -158,7 +150,6 @@ export function InsightCardItemV2({
   mandalaRelevancePct,
   oneLiner,
   isV2Loading = false,
-  priority = false,
   onArchived,
   sectorLabel,
 }: InsightCardItemV2Props) {
@@ -364,38 +355,13 @@ export function InsightCardItemV2({
         </div>
       )}
 
-      {/* ── Thumbnail ──
-          Container = YouTube-style muted-gray placeholder + shimmer
-          (CLAUDE.md no-hardcoded-color: bg-muted is the dark-mode
-          semantic token at HSL 0 0% 22%, matching InsightCardItemSkeleton
-          so the loading state reads identical across the timeline).
-          <img> sits ABOVE the shimmer in DOM order; once it fades from
-          opacity-0 → 1 via image-utils' onLoad chain, it occludes the
-          shimmer naturally — no extra state needed. */}
-      <div className="relative aspect-video overflow-hidden rounded-[10px] bg-muted transition-[filter] duration-300 group-hover:brightness-[0.96] group-hover:contrast-[1.04]">
-        <div
-          className="absolute inset-0 -translate-x-full pointer-events-none"
-          style={{
-            background:
-              'linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.04), transparent)',
-            animation: 'shimmer 1.5s ease-in-out infinite',
-          }}
-          aria-hidden="true"
-        />
-        {/* CP470 — wrapper opacity gate removed. image-utils' own
-            opacity-0 → 1 onLoad chain (revealThumbnail sets
-            img.style.opacity = '1' on terminal load states) handles
-            the fade-in, so each thumb reveals the moment its own
-            bytes settle. No parent gate means background SSE /
-            refetches that change the cards list can no longer flash
-            already-revealed thumbs back behind the shimmer. */}
+      {/* ── Thumbnail ── */}
+      <div className="relative aspect-video overflow-hidden rounded-[10px] bg-gradient-to-br from-[#1a1c28] to-[#13141c] transition-[filter] duration-300 group-hover:brightness-[0.96] group-hover:contrast-[1.04]">
         <img
           src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
           alt={card.title}
-          className="relative w-full h-full object-cover opacity-0 transition-opacity duration-200"
-          loading={priority ? 'eager' : 'lazy'}
-          fetchPriority={priority ? 'high' : 'auto'}
-          decoding="async"
+          className="w-full h-full object-cover"
+          loading="lazy"
           draggable={false}
           onError={handleThumbnailError}
           onLoad={handleThumbnailLoad}
@@ -511,8 +477,45 @@ export function InsightCardItemV2({
           </button>
         )}
 
-        {/* Phase dot relocated to the footer meta row (same slot as the
-            % badge) — see the right-slot ternary in the body below. */}
+        {/* CP463 — Heart SSE / legacy enrichment progress chip. Sits in
+            the BL corner (Archive is hidden while streamActive). Icon-
+            only (no "AI" label per user directive 2026-05-17). Phase
+            color encodes state:
+              fetching  → blue-500  (준비)
+              analyzing → amber-500 (진행중)
+              scored    → emerald-500 (완료, transient ~2.5s)
+            Legacy isEnriching prop falls into the blue fetching tier. */}
+        {(streamActive || isEnriching) && (
+          <div className="absolute bottom-2 left-2 z-[5] pointer-events-none">
+            <div
+              className={cn(
+                // CP463 — minimal dot per user directive 2026-05-17
+                // "보다 작게해서 점 형태로 하고 디밍으로 진행을 알리는
+                // 건 어떨까?". 8×8 colored dot, dim (animate-pulse =
+                // opacity 1 → 0.5 cycle) while in progress, stays
+                // solid on scored.
+                'w-2 h-2 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.5)]',
+                streamPhase === 'scored'
+                  ? 'bg-emerald-500'
+                  : streamPhase === 'analyzing'
+                    ? 'bg-blue-500 animate-pulse'
+                    : 'bg-amber-500 animate-pulse'
+              )}
+              aria-label={
+                streamPhase === 'scored'
+                  ? '평가 완료'
+                  : streamPhase === 'analyzing'
+                    ? '분석 중'
+                    : '준비 중'
+              }
+            />
+          </div>
+        )}
+
+        {/* CP463 — failure Retry button moved to the footer meta row
+            (right slot, where the % normally sits) per user directive
+            2026-05-17. The BL thumbnail slot is reserved for the
+            in-progress chip and the Archive icon. */}
       </div>
 
       {/* ── Body: title → blockquote → unified meta row ──
@@ -582,8 +585,11 @@ export function InsightCardItemV2({
                 );
               })()}
             </span>
-            {/* Right slot: failure → Retry, in-progress → phase dot
-                (gray/amber), scored → relevance % (natural transition). */}
+            {/* CP463 — right slot priority:
+                  failure  → Retry icon (user directive 2026-05-17:
+                            "재시도 아이콘이 현재 관련도 비율 위치에")
+                  scored   → relevance % (color-tiered)
+                  else     → empty */}
             {!streamActive && !isEnriching && (isEnrichFailed || showFailedGlow) ? (
               <button
                 type="button"
@@ -600,24 +606,10 @@ export function InsightCardItemV2({
               >
                 <RotateCw className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
-            ) : (streamActive || isEnriching) && streamPhase !== 'scored' ? (
-              <span
-                className={cn(
-                  // Brand-monochromatic progression — slate (preparing)
-                  // morphs into indigo (analyzing) inside a single cool
-                  // axis, then the scored % badge picks the relevance
-                  // tier (also indigo at high). Smooth color transition
-                  // + 8s dot-breathe gives a calm, on-brand "thinking".
-                  'w-2 h-2 rounded-full shrink-0 transition-colors duration-700 animate-dot-breathe',
-                  streamPhase === 'analyzing' ? 'bg-indigo-400' : 'bg-slate-400/50'
-                )}
-                style={{ boxShadow: '0 0 6px currentColor' }}
-                aria-label={streamPhase === 'analyzing' ? '분석 중' : '준비 중'}
-              />
             ) : relevanceBadge ? (
               <span
                 className={cn(
-                  'text-[10.5px] font-semibold shrink-0 tabular-nums transition-opacity duration-300',
+                  'text-[10.5px] font-semibold shrink-0 tabular-nums',
                   relevanceBadge.className
                 )}
               >
