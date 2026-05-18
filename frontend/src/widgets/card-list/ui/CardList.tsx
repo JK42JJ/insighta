@@ -211,10 +211,10 @@ export function CardList({
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  // Per-card reveal — each card carries its own thumbnail-loaded flag.
-  // Mount → skeleton overlay. Thumbnail settled → fade the real card
-  // in, fade the overlay out. Cards that scroll into view later go
-  // through the same path independently; nothing is gated grid-wide.
+  // First-batch reveal: the initial 6 cards (typical above-the-fold)
+  // hold their skeletons until ALL six thumbnails settle, then reveal
+  // together. Cards from index 6 onward (scrolled into view later)
+  // reveal individually as their own thumbnail settles.
   const [loadedThumbnailIds, setLoadedThumbnailIds] = useState<Set<string>>(new Set());
   const handleThumbnailReady = useCallback((cardId: string) => {
     setLoadedThumbnailIds((prev) => {
@@ -274,6 +274,16 @@ export function CardList({
     [sortedCards, visibleCount]
   );
   const hasMore = visibleCount < sortedCards.length;
+
+  const FIRST_BATCH_SIZE = 6;
+  const firstBatchCardIds = useMemo(
+    () => sortedCards.slice(0, FIRST_BATCH_SIZE).map((c) => c.id),
+    [sortedCards]
+  );
+  const firstBatchReady = useMemo(() => {
+    if (firstBatchCardIds.length === 0) return true;
+    return firstBatchCardIds.every((id) => loadedThumbnailIds.has(id));
+  }, [firstBatchCardIds, loadedThumbnailIds]);
 
   // Filter out selection IDs that no longer exist in cards (e.g., after moving cards)
   useEffect(() => {
@@ -463,11 +473,16 @@ export function CardList({
                 </div>
               )}
               {/* Stacked layout — real card stays mounted so its thumbnail
-                  onLoad/onError fires; we hide it until its own thumbnail
-                  has settled (per-card reveal). Cards that scroll into
-                  view later go through the same path independently. */}
+                  onLoad/onError fires; we hide it until reveal.
+                  - First 6 cards (above-the-fold) reveal TOGETHER once
+                    every one of their thumbnails has settled.
+                  - Cards from index 6+ (scrolled into view) reveal each
+                    on their own thumbnail-ready signal. */}
               {(() => {
-                const cardRevealed = loadedThumbnailIds.has(card.id);
+                const inFirstBatch = idx < FIRST_BATCH_SIZE;
+                const cardRevealed = inFirstBatch
+                  ? firstBatchReady
+                  : loadedThumbnailIds.has(card.id);
                 return (
                   <>
                     <div
