@@ -210,7 +210,7 @@ function NodeDetailOverlay({
             <img
               src={thumbnail}
               alt=""
-              className="mt-2 rounded h-16 object-cover opacity-0 transition-opacity duration-200"
+              className="mt-2 rounded h-16 object-cover"
               loading="lazy"
               decoding="async"
               onError={handleThumbnailError}
