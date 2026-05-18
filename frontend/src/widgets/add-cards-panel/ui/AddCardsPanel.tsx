@@ -76,37 +76,53 @@ export function AddCardsPanel() {
     });
   }, [mandalaId, extraKeywords, filters, mutation, targetLevel]);
 
-  // Mount-aware close animation (CP466 amendment 3 — user directive
-  // 2026-05-18: 닫힐 때도 슬라이딩). When `open` flips to false we keep
-  // the panel mounted for `CLOSE_ANIMATION_MS` so the transform-to-
-  // off-screen transition can play, then unmount.
-  const [isAnimatingOut, setIsAnimatingOut] = useState(false);
-  const wasOpenRef = useRef(false);
-  useEffect(() => {
-    if (open) {
-      wasOpenRef.current = true;
-      setIsAnimatingOut(false);
-      return;
-    }
-    if (wasOpenRef.current) {
-      setIsAnimatingOut(true);
-      const timer = setTimeout(() => setIsAnimatingOut(false), CLOSE_ANIMATION_MS);
-      return () => clearTimeout(timer);
-    }
-  }, [open]);
+  // CP466 amendment 4 — race-free close animation (user-reported
+  // grid-card flash on close, 2026-05-18). The previous useEffect-
+  // gated approach unmounted for one frame between `open=false` render
+  // and the next-tick state catch-up — exposing the grid behind
+  // backdrop. Fix: close trigger sets a SYNCHRONOUS local flag in the
+  // same render cycle, the store action is deferred 200ms so mount
+  // never lapses.
+  const [isClosingLocal, setIsClosingLocal] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Esc closes the panel.
+  const handleClose = useCallback(() => {
+    if (isClosingLocal) return; // already animating
+    setIsClosingLocal(true);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      closePanel();
+      setIsClosingLocal(false);
+      closeTimerRef.current = null;
+    }, CLOSE_ANIMATION_MS);
+  }, [closePanel, isClosingLocal]);
+
+  // Cleanup pending close timer on unmount to avoid stale store
+  // mutations (e.g. user navigates away mid-animation).
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Esc closes the panel via the same animation path.
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closePanel();
+      if (e.key === 'Escape') handleClose();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, closePanel]);
+  }, [open, handleClose]);
 
-  const shouldRender = (open || isAnimatingOut) && mandalaId;
+  // Mount window = store-open OR mid-close animation. Both phases keep
+  // backdrop + panel rendered so the grid never peeks through.
+  const shouldRender = (open || isClosingLocal) && mandalaId;
   if (!shouldRender) return null;
+  const isClosing = isClosingLocal && !open ? true : isClosingLocal;
 
   return (
     <>
@@ -115,9 +131,9 @@ export function AddCardsPanel() {
       <div
         className={cn(
           'fixed inset-0 z-30 bg-black/20 transition-opacity duration-200 ease-in-out',
-          open ? 'opacity-100' : 'opacity-0'
+          isClosing ? 'opacity-0' : 'opacity-100'
         )}
-        onClick={closePanel}
+        onClick={handleClose}
         aria-hidden="true"
       />
       {/* Slide-in / slide-out panel. Open → animate-in + slide-in-from-
@@ -130,9 +146,9 @@ export function AddCardsPanel() {
         className={cn(
           'fixed top-0 right-0 bottom-0 z-40 flex flex-col bg-background border-l border-border/60 shadow-2xl',
           PANEL_WIDTH_CLASS,
-          open
-            ? 'animate-in slide-in-from-right duration-200 ease-out'
-            : 'animate-out slide-out-to-right duration-200 ease-in fill-mode-forwards'
+          isClosing
+            ? 'animate-out slide-out-to-right duration-200 ease-in fill-mode-forwards'
+            : 'animate-in slide-in-from-right duration-200 ease-out'
         )}
       >
         {/* Header — single divider above the entire "input zone".
@@ -143,7 +159,7 @@ export function AddCardsPanel() {
           </h2>
           <button
             type="button"
-            onClick={closePanel}
+            onClick={handleClose}
             aria-label={t('common.close', 'Close')}
             className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-foreground/[0.06] transition-colors"
           >
