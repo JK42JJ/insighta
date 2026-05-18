@@ -27,6 +27,7 @@ import { AlertCircle, Bookmark, Check, Loader2, RotateCw } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { formatRelativeDate } from '@/shared/lib/format-date';
 import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
+import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
 import type { AddCardCandidate } from '../model/useAddCards';
 
 interface AddCardsListProps {
@@ -142,12 +143,36 @@ export function AddCardsList({
                 <img
                   src={card.thumbnail}
                   alt=""
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover opacity-0 transition-opacity duration-200"
                   loading="lazy"
+                  decoding="async"
+                  onError={handleThumbnailError}
+                  onLoad={handleThumbnailLoad}
                 />
               )}
 
-              {/* Picked overlay — strong layered cue */}
+              {/* Hover preview (unpicked): uncolored mirror of the
+                  picked overlay so the click affordance is obvious. */}
+              {!isPicked && (
+                <div
+                  className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/35 backdrop-blur-[1px] gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none"
+                  aria-hidden="true"
+                >
+                  <span
+                    className={cn(
+                      'flex items-center justify-center w-9 h-9 rounded-full border-2 border-white/80 bg-black/20',
+                      'transition-transform duration-200 scale-90 group-hover:scale-100'
+                    )}
+                  >
+                    <Check className="w-5 h-5 text-white/80" strokeWidth={2.5} />
+                  </span>
+                  <span className="text-[10.5px] font-medium text-white/85 tracking-wide">
+                    {t('addCards.actions.addOne', 'Add to mandala')}
+                  </span>
+                </div>
+              )}
+
+              {/* Picked overlay — strong layered cue (post-click). */}
               {isPicked && (
                 <div
                   className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/55 backdrop-blur-[2px] gap-1"
@@ -162,22 +187,20 @@ export function AddCardsList({
                 </div>
               )}
 
-              {/* Bookmark indicator (decorative, no longer a button —
-                  the whole card is the button now). Hover-reveal on
-                  unpicked, persistent filled on picked. */}
-              <span
-                className={cn(
-                  'absolute bottom-1 right-1 z-10 w-6 h-6 flex items-center justify-center transition-opacity duration-200',
-                  isPicked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                )}
-                aria-hidden="true"
-              >
-                <Bookmark
-                  className="w-[18px] h-[18px] text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
-                  fill={isPicked ? 'currentColor' : 'none'}
-                  strokeWidth={2.2}
-                />
-              </span>
+              {/* Bookmark indicator — picked cards only. Unpicked
+                  cards rely on the hover preview overlay above. */}
+              {isPicked && (
+                <span
+                  className="absolute bottom-1 right-1 z-10 w-6 h-6 flex items-center justify-center opacity-100"
+                  aria-hidden="true"
+                >
+                  <Bookmark
+                    className="w-[18px] h-[18px] text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+                    fill="currentColor"
+                    strokeWidth={2.2}
+                  />
+                </span>
+              )}
             </div>
             <div className="px-1.5 py-1 space-y-0">
               <h4

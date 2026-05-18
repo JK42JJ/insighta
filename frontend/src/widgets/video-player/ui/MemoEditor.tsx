@@ -87,7 +87,16 @@ function CaptureGallery({
             className="relative flex-shrink-0 rounded overflow-hidden border border-border/20 hover:border-primary/40 transition-colors group"
             title={cap.alt}
           >
-            <img src={cap.url} alt={cap.alt} className="h-8 w-auto object-cover" loading="lazy" />
+            <img
+              src={cap.url}
+              alt={cap.alt}
+              className="h-8 w-auto object-cover opacity-0 transition-opacity duration-200"
+              loading="lazy"
+              decoding="async"
+              onLoad={(e) => {
+                (e.currentTarget as HTMLImageElement).style.opacity = '1';
+              }}
+            />
             {cap.seconds !== null && (
               <span className="absolute bottom-0 right-0 text-[8px] bg-black/70 text-white px-0.5 rounded-tl">
                 {formatTime(cap.seconds)}

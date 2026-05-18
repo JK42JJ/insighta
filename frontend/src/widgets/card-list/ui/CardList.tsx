@@ -8,7 +8,7 @@ import { FileVideo, Check } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDragSelect } from '@/features/drag-select/model/useDragSelect';
 import { cardSlotDropId } from '@/shared/lib/dnd';
-import { CardSkeleton } from './CardSkeleton';
+import { InsightCardItemSkeleton } from './InsightCardItemSkeleton';
 import {
   useSummaryRatings,
   useRateSummary,
@@ -29,6 +29,9 @@ function safeVideoId(videoUrl: string): string | null {
 interface CardListProps {
   cards: InsightCard[];
   isLoading?: boolean;
+  /** Server-truth slot count not yet filled — rendered as skeleton tiles
+   *  at the end of the grid so the total cell count stays fixed. */
+  skeletonCount?: number;
   title: string;
   onCardClick?: (card: InsightCard) => void;
   onCardDragStart?: (card: InsightCard) => void;
@@ -78,6 +81,7 @@ const PAGE_SIZE = 24;
 export function CardList({
   cards,
   isLoading,
+  skeletonCount = 0,
   onCardClick,
   onSaveNote,
   onSelectionChange,
@@ -207,6 +211,20 @@ export function CardList({
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
+  // First-batch reveal: the initial 6 cards (typical above-the-fold)
+  // hold their skeletons until ALL six thumbnails settle, then reveal
+  // together. Cards from index 6 onward (scrolled into view later)
+  // reveal individually as their own thumbnail settles.
+  const [loadedThumbnailIds, setLoadedThumbnailIds] = useState<Set<string>>(new Set());
+  const handleThumbnailReady = useCallback((cardId: string) => {
+    setLoadedThumbnailIds((prev) => {
+      if (prev.has(cardId)) return prev;
+      const next = new Set(prev);
+      next.add(cardId);
+      return next;
+    });
+  }, []);
+
   // Cards arrive already sorted by the host (CardListView applies the user's
   // sortMode chip). Re-sorting here would override publishedAt ranking with
   // sortOrder / createdAt and was the cause of "5d ago in the middle".
@@ -225,10 +243,17 @@ export function CardList({
     [cards, hiddenVideoIds]
   );
 
-  // Reset visible count when card list changes (e.g., cell switch)
+  // Reset visible count + first-batch timeout when card list changes
+  // (mandala / cell switch). 10s hard cap prevents one slow thumbnail
+  // from holding the first 6 cards hostage forever.
   const cardListKey = useMemo(() => cards.map((c) => c.id).join(','), [cards]);
+  const [firstBatchTimedOut, setFirstBatchTimedOut] = useState(false);
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
+    setLoadedThumbnailIds(new Set());
+    setFirstBatchTimedOut(false);
+    const t = setTimeout(() => setFirstBatchTimedOut(true), 10_000);
+    return () => clearTimeout(t);
   }, [cardListKey]);
 
   // Infinite scroll: observe sentinel at bottom of grid
@@ -253,6 +278,19 @@ export function CardList({
     [sortedCards, visibleCount]
   );
   const hasMore = visibleCount < sortedCards.length;
+
+  // Batch size caps at 6 but shrinks for mandalas with fewer cards —
+  // a 3-card mandala batches all 3, not "wait for 6 imaginary cards".
+  const FIRST_BATCH_SIZE = Math.min(6, sortedCards.length);
+  const firstBatchCardIds = useMemo(
+    () => sortedCards.slice(0, FIRST_BATCH_SIZE).map((c) => c.id),
+    [sortedCards, FIRST_BATCH_SIZE]
+  );
+  const firstBatchReady = useMemo(() => {
+    if (firstBatchCardIds.length === 0) return true;
+    if (firstBatchTimedOut) return true;
+    return firstBatchCardIds.every((id) => loadedThumbnailIds.has(id));
+  }, [firstBatchCardIds, loadedThumbnailIds, firstBatchTimedOut]);
 
   // Filter out selection IDs that no longer exist in cards (e.g., after moving cards)
   useEffect(() => {
@@ -374,11 +412,11 @@ export function CardList({
     [lastSelectedIndex, sortedCards, onCardClick]
   );
 
-  if (isLoading && cards.length === 0) {
-    return <CardSkeleton count={6} />;
-  }
-
-  if (cards.length === 0) {
+  // Empty state ONLY when there is genuinely nothing expected to load —
+  // not loading AND server says zero AND the local list is empty.
+  // Otherwise we mount the real grid (below) so its cells either hold a
+  // real card or an inline skeleton tile of the SAME size.
+  if (cards.length === 0 && skeletonCount === 0 && !isLoading) {
     return (
       <div
         ref={gridRef}
@@ -394,6 +432,12 @@ export function CardList({
       </div>
     );
   }
+
+  // Loading / pre-arrival padding count when no cards are present yet.
+  // Honour the server-truth skeletonCount EXACTLY — no fallback. A mandala
+  // with 3 cards shows 3 skeletons, not 6. Pre-mandala-fetch (cardCount
+  // unknown) renders no padding rather than a misleading 6-slot grid.
+  const loadingPaddingCount = cards.length === 0 && skeletonCount > 0 ? skeletonCount : 0;
 
   return (
     <div className="animate-fade-in -mx-4 px-4 relative select-none" ref={containerRef}>
@@ -430,42 +474,97 @@ export function CardList({
                   <Check className="w-3 h-3 text-primary-foreground" />
                 </div>
               )}
-              <InsightCardItemV2
-                card={card}
-                onCardClick={() => onCardClick?.(card)}
-                onCtrlClick={(e) => handleCardClick(e, card, idx)}
-                isDraggable={true}
-                selectedCardIds={selectedCardIds.size > 0 ? selectedCardIds : undefined}
-                isEnriching={enrichingCardIds?.has(card.id)}
-                isEnrichFailed={failedEnrichCardIds?.has(card.id)}
-                onRetryEnrich={onRetryEnrich}
-                mandalaRelevancePct={(() => {
-                  const vid = safeVideoId(card.videoUrl);
-                  return vid ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null) : null;
-                })()}
-                oneLiner={(() => {
-                  const vid = safeVideoId(card.videoUrl);
-                  return vid ? (v2SummariesMap.get(vid)?.oneLiner ?? null) : null;
-                })()}
-                isV2Loading={v2IsFetching}
-                sectorLabel={
-                  sectorSubjects && card.cellIndex >= 0 && card.cellIndex < sectorSubjects.length
-                    ? sectorSubjects[card.cellIndex]
-                    : null
-                }
-                onArchived={handleArchived}
-              />
+              {/* Stacked layout — real card stays mounted so its thumbnail
+                  onLoad/onError fires; we hide it until reveal.
+                  - First 6 cards reveal TOGETHER once every thumbnail
+                    settles OR the 10s hard cap fires.
+                  - Cards from index 6+ stay hidden until the first
+                    batch revealed (order preservation — no back card
+                    appearing before front cards), then each reveals
+                    on their own thumbnail-ready signal. */}
+              {(() => {
+                const inFirstBatch = idx < FIRST_BATCH_SIZE;
+                const cardRevealed = inFirstBatch
+                  ? firstBatchReady
+                  : firstBatchReady && loadedThumbnailIds.has(card.id);
+                return (
+                  <>
+                    <div
+                      style={{ visibility: cardRevealed ? 'visible' : 'hidden' }}
+                      className={cn(
+                        'transition-opacity duration-300',
+                        cardRevealed ? 'opacity-100' : 'opacity-0'
+                      )}
+                    >
+                      <InsightCardItemV2
+                        card={card}
+                        onCardClick={() => onCardClick?.(card)}
+                        onCtrlClick={(e) => handleCardClick(e, card, idx)}
+                        isDraggable={true}
+                        selectedCardIds={selectedCardIds.size > 0 ? selectedCardIds : undefined}
+                        isEnriching={enrichingCardIds?.has(card.id)}
+                        isEnrichFailed={failedEnrichCardIds?.has(card.id)}
+                        onRetryEnrich={onRetryEnrich}
+                        mandalaRelevancePct={(() => {
+                          const vid = safeVideoId(card.videoUrl);
+                          return vid
+                            ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null)
+                            : null;
+                        })()}
+                        oneLiner={(() => {
+                          const vid = safeVideoId(card.videoUrl);
+                          return vid ? (v2SummariesMap.get(vid)?.oneLiner ?? null) : null;
+                        })()}
+                        isV2Loading={v2IsFetching}
+                        sectorLabel={
+                          sectorSubjects &&
+                          card.cellIndex >= 0 &&
+                          card.cellIndex < sectorSubjects.length
+                            ? sectorSubjects[card.cellIndex]
+                            : null
+                        }
+                        onArchived={handleArchived}
+                        onThumbnailReady={handleThumbnailReady}
+                      />
+                    </div>
+                    {!cardRevealed && (
+                      <div className="absolute inset-0 pointer-events-none">
+                        <InsightCardItemSkeleton />
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </CardSlot>
           );
         })}
+
+        {/* Inline padding skeletons — same grid, same column, same tile
+            layout as real cards. Sources of padding (mutually exclusive
+            so we never double-render):
+              - loading / mandala-switch pre-arrival (cards=0)
+              - server-truth slot count not yet filled (cards>0)
+              - infinite-scroll trailing batch (hasMore)
+            All routed through InsightCardItemSkeleton so the user only
+            ever sees ONE skeleton style across the whole timeline. */}
+        {(() => {
+          let pad = 0;
+          if (cards.length === 0) {
+            pad = loadingPaddingCount;
+          } else if (hasMore) {
+            pad = Math.min(sortedCards.length - visibleCount, 6);
+          } else if (skeletonCount > 0) {
+            pad = skeletonCount;
+          }
+          return Array.from({ length: pad }).map((_, i) => (
+            <div key={`sk-${i}`} className="w-full">
+              <InsightCardItemSkeleton />
+            </div>
+          ));
+        })()}
       </div>
 
-      {hasMore && (
-        <>
-          <CardSkeleton count={Math.min(sortedCards.length - visibleCount, 6)} />
-          <div ref={sentinelRef} aria-hidden className="h-1" />
-        </>
-      )}
+      {hasMore && <div ref={sentinelRef} aria-hidden className="h-1" />}
     </div>
   );
 }

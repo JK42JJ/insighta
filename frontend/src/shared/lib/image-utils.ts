@@ -44,6 +44,15 @@ export function isYouTubePlaceholder(img: HTMLImageElement): boolean {
   return img.naturalWidth === YT_PLACEHOLDER_WIDTH && img.naturalHeight === YT_PLACEHOLDER_HEIGHT;
 }
 
+/** Reveal handler: parent renders the thumbnail with `opacity-0` so the
+ *  progressive-decode mid-frames stay invisible until the load chain
+ *  reaches a final state (real decoded image OR placeholder).
+ */
+function revealThumbnail(img: HTMLImageElement): void {
+  // jsdom test stubs may not provide `style`; ignore safely.
+  if (img.style) img.style.opacity = '1';
+}
+
 /**
  * onError handler: walks the full YouTube quality chain, then falls back to local placeholder.
  */
@@ -61,6 +70,7 @@ export function handleThumbnailError(e: { currentTarget: HTMLImageElement }): vo
 
   // All YouTube qualities exhausted or non-YouTube image — local placeholder
   img.src = '/placeholder.svg';
+  revealThumbnail(img);
 }
 
 /**
@@ -72,8 +82,14 @@ export function handleThumbnailError(e: { currentTarget: HTMLImageElement }): vo
  */
 export function handleThumbnailLoad(e: { currentTarget: HTMLImageElement }): void {
   const img = e.currentTarget;
-  if (img.src.endsWith('/placeholder.svg')) return;
-  if (!isYouTubePlaceholder(img)) return;
+  if (img.src.endsWith('/placeholder.svg')) {
+    revealThumbnail(img);
+    return;
+  }
+  if (!isYouTubePlaceholder(img)) {
+    revealThumbnail(img);
+    return;
+  }
 
   const src = img.src;
   const currentIdx = YT_FALLBACK_CHAIN.findIndex((q) => src.includes(q));
@@ -84,6 +100,7 @@ export function handleThumbnailLoad(e: { currentTarget: HTMLImageElement }): voi
   }
 
   img.src = '/placeholder.svg';
+  revealThumbnail(img);
 }
 
 /**

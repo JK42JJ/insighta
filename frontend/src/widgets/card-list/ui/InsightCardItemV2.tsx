@@ -120,6 +120,11 @@ interface InsightCardItemV2Props {
    * v1 (long) → v2 (short) text-shrink flicker on grid mutation refetch.
    */
   isV2Loading?: boolean;
+  /** Fires when this card's thumbnail reaches a terminal load state
+   *  (decoded, fallback exhausted, or placeholder). CardList uses it
+   *  to gate the per-mandala batch reveal so all cards swap from
+   *  skeleton to real content together. */
+  onThumbnailReady?: (cardId: string) => void;
   /**
    * Optional archive callback. The card calls this AFTER the archive
    * mutation succeeds so the parent can present a 5-second undo
@@ -150,6 +155,7 @@ export function InsightCardItemV2({
   mandalaRelevancePct,
   oneLiner,
   isV2Loading = false,
+  onThumbnailReady,
   onArchived,
   sectorLabel,
 }: InsightCardItemV2Props) {
@@ -360,11 +366,25 @@ export function InsightCardItemV2({
         <img
           src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
           alt={card.title}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover opacity-0 transition-opacity duration-200"
           loading="lazy"
+          decoding="async"
           draggable={false}
-          onError={handleThumbnailError}
-          onLoad={handleThumbnailLoad}
+          onError={(e) => {
+            handleThumbnailError(e);
+            if (e.currentTarget.src.endsWith('/placeholder.svg')) {
+              onThumbnailReady?.(card.id);
+            }
+          }}
+          onLoad={(e) => {
+            handleThumbnailLoad(e);
+            const finalSrc = e.currentTarget.src;
+            const isYtPlaceholder =
+              e.currentTarget.naturalWidth === 120 && e.currentTarget.naturalHeight === 90;
+            if (finalSrc.endsWith('/placeholder.svg') || !isYtPlaceholder) {
+              onThumbnailReady?.(card.id);
+            }
+          }}
         />
 
         {/* CP463+ — vignette-only hover: darken top + bottom edges so
@@ -477,45 +497,8 @@ export function InsightCardItemV2({
           </button>
         )}
 
-        {/* CP463 — Heart SSE / legacy enrichment progress chip. Sits in
-            the BL corner (Archive is hidden while streamActive). Icon-
-            only (no "AI" label per user directive 2026-05-17). Phase
-            color encodes state:
-              fetching  → blue-500  (준비)
-              analyzing → amber-500 (진행중)
-              scored    → emerald-500 (완료, transient ~2.5s)
-            Legacy isEnriching prop falls into the blue fetching tier. */}
-        {(streamActive || isEnriching) && (
-          <div className="absolute bottom-2 left-2 z-[5] pointer-events-none">
-            <div
-              className={cn(
-                // CP463 — minimal dot per user directive 2026-05-17
-                // "보다 작게해서 점 형태로 하고 디밍으로 진행을 알리는
-                // 건 어떨까?". 8×8 colored dot, dim (animate-pulse =
-                // opacity 1 → 0.5 cycle) while in progress, stays
-                // solid on scored.
-                'w-2 h-2 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.5)]',
-                streamPhase === 'scored'
-                  ? 'bg-emerald-500'
-                  : streamPhase === 'analyzing'
-                    ? 'bg-blue-500 animate-pulse'
-                    : 'bg-amber-500 animate-pulse'
-              )}
-              aria-label={
-                streamPhase === 'scored'
-                  ? '평가 완료'
-                  : streamPhase === 'analyzing'
-                    ? '분석 중'
-                    : '준비 중'
-              }
-            />
-          </div>
-        )}
-
-        {/* CP463 — failure Retry button moved to the footer meta row
-            (right slot, where the % normally sits) per user directive
-            2026-05-17. The BL thumbnail slot is reserved for the
-            in-progress chip and the Archive icon. */}
+        {/* Phase dot relocated to the footer meta row (same slot as the
+            % badge) — see the right-slot ternary in the body below. */}
       </div>
 
       {/* ── Body: title → blockquote → unified meta row ──
@@ -585,11 +568,8 @@ export function InsightCardItemV2({
                 );
               })()}
             </span>
-            {/* CP463 — right slot priority:
-                  failure  → Retry icon (user directive 2026-05-17:
-                            "재시도 아이콘이 현재 관련도 비율 위치에")
-                  scored   → relevance % (color-tiered)
-                  else     → empty */}
+            {/* Right slot: failure → Retry, in-progress → phase dot
+                (gray/amber), scored → relevance % (natural transition). */}
             {!streamActive && !isEnriching && (isEnrichFailed || showFailedGlow) ? (
               <button
                 type="button"
@@ -606,10 +586,24 @@ export function InsightCardItemV2({
               >
                 <RotateCw className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
+            ) : (streamActive || isEnriching) && streamPhase !== 'scored' ? (
+              <span
+                className={cn(
+                  // Brand-monochromatic progression — slate (preparing)
+                  // morphs into indigo (analyzing) inside a single cool
+                  // axis, then the scored % badge picks the relevance
+                  // tier (also indigo at high). Smooth color transition
+                  // + 8s dot-breathe gives a calm, on-brand "thinking".
+                  'w-2 h-2 rounded-full shrink-0 transition-colors duration-700 animate-dot-breathe',
+                  streamPhase === 'analyzing' ? 'bg-indigo-400' : 'bg-slate-400/50'
+                )}
+                style={{ boxShadow: '0 0 6px currentColor' }}
+                aria-label={streamPhase === 'analyzing' ? '분석 중' : '준비 중'}
+              />
             ) : relevanceBadge ? (
               <span
                 className={cn(
-                  'text-[10.5px] font-semibold shrink-0 tabular-nums',
+                  'text-[10.5px] font-semibold shrink-0 tabular-nums transition-opacity duration-300',
                   relevanceBadge.className
                 )}
               >

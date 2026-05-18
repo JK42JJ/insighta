@@ -11,7 +11,14 @@ import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import { useAllVideoStates, youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
 import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
 import { useAddCards, type AddCardCandidate } from '../model/useAddCards';
-import { loadAddCardsState, mergeSurfacedVideoIds, saveAddCardsState } from '../lib/persistence';
+import {
+  clearSessionPicks,
+  loadAddCardsState,
+  loadSessionPicks,
+  mergeSurfacedVideoIds,
+  saveAddCardsState,
+  saveSessionPicks,
+} from '../lib/persistence';
 import { KeywordChipInput } from './KeywordChipInput';
 import { AddCardsFilters } from './AddCardsFilters';
 import { TargetLevelChips } from './TargetLevelChips';
@@ -69,20 +76,23 @@ export function AddCardsPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mutation.isSuccess, mutation.data, mandalaId]);
 
-  // Locally-toggled picks (optimistic, before BE round trip completes).
-  // Server truth lives in `user_video_states`; we union the two so a
-  // reload still shows past picks as disabled overlays — the picked
-  // card MUST remain in the panel (user directive 2026-05-18 "비활성화
-  // 처리, 카드는 사라지지 않음"). Stripping the card from the list was
-  // the bug being fixed.
+  // This-session picks (drives the "added" overlay). Persisted per mandala
+  // in localStorage so panel close/reopen keeps the overlay until the user
+  // explicitly resets.
   const [localPicks, setLocalPicks] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (!open || !mandalaId) return;
+    setLocalPicks(new Set(loadSessionPicks(mandalaId)));
+  }, [open, mandalaId]);
+  useEffect(() => {
+    if (!mandalaId) return;
+    saveSessionPicks(mandalaId, Array.from(localPicks));
+  }, [mandalaId, localPicks]);
   const { like } = useLikeCard();
   const queryClient = useQueryClient();
 
-  // Pull every user_video_states row, filter to this mandala, project
-  // the underlying youtube_video_id into a Set so AddCardsList can mark
-  // already-added cards as picked (overlay + disabled) on panel re-open
-  // and after page reload.
+  // Server-truth set of mandala-pre-existing videoIds. Used as a list
+  // filter (not an overlay) to cover the localStorage-restored path.
   const { data: allVideoStates } = useAllVideoStates();
   const serverPickedSet = useMemo(() => {
     if (!mandalaId) return new Set<string>();
@@ -95,20 +105,14 @@ export function AddCardsPanel() {
     return set;
   }, [allVideoStates, mandalaId]);
 
-  const pickedSet = useMemo(() => {
-    const merged = new Set<string>(serverPickedSet);
-    for (const v of localPicks) merged.add(v);
-    return merged;
-  }, [serverPickedSet, localPicks]);
+  const pickedSet = localPicks;
 
-  // Cards stay in the panel even after pick — `isPicked` drives the
-  // overlay + disabled affordance. Filtering them out was the
-  // user-reported "completely disappears" bug. But every COUNT surface
-  // (header badge, trigger chip badge, resultCount text, auto-collapse
-  // gate) reflects ONLY the cards the user can still pick — picked
-  // cards are visually still present but counted as "done" so the
-  // user-perceived "remaining to pick" matches the badge number.
-  const cards: AddCardCandidate[] = mutation.data?.cards ?? restoredCards ?? [];
+  // Filter out mandala-pre-existing cards; keep this session's local
+  // picks so they show the green-check overlay until panel close.
+  const cards: AddCardCandidate[] = useMemo(() => {
+    const raw = mutation.data?.cards ?? restoredCards ?? [];
+    return raw.filter((c) => !serverPickedSet.has(c.videoId) || localPicks.has(c.videoId));
+  }, [mutation.data, restoredCards, serverPickedSet, localPicks]);
   const visibleCount = useMemo(
     () => cards.filter((c) => !pickedSet.has(c.videoId)).length,
     [cards, pickedSet]
@@ -206,7 +210,8 @@ export function AddCardsPanel() {
     if (!open) {
       autoCollapsedFor.current = null;
       setInputCollapsed(false);
-      setLocalPicks(new Set());
+      // localPicks intentionally NOT reset — picks survive panel close
+      // until "초기화" (resetResults) is clicked.
     }
   }, [open]);
 
@@ -228,7 +233,8 @@ export function AddCardsPanel() {
     mutation.reset();
     setRestoredCards(null);
     setLocalPicks(new Set());
-  }, [mutation]);
+    if (mandalaId) clearSessionPicks(mandalaId);
+  }, [mutation, mandalaId]);
   const triggerSearch = useCallback(() => {
     if (cards.length > 0) {
       resetResults();
@@ -287,7 +293,7 @@ export function AddCardsPanel() {
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label={t('addCards.panel.title', 'Find more videos')}
+        aria-label={t('addCards.panel.title', 'Find more cards')}
         className={cn(
           'fixed top-0 right-0 bottom-0 z-40 flex flex-col bg-background border-l border-border/60 shadow-2xl',
           PANEL_WIDTH_CLASS,
@@ -299,7 +305,7 @@ export function AddCardsPanel() {
         <header className="flex items-center justify-between px-5 py-3 border-b border-border/40 sm:px-6">
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="text-[14px] font-semibold truncate">
-              {t('addCards.panel.title', 'Find more videos')}
+              {t('addCards.panel.title', 'Find more cards')}
             </h2>
             {visibleCount > 0 && (
               <span

@@ -386,6 +386,8 @@ interface MandalaResponse {
   focusTags?: string[];
   targetLevel?: string;
   language?: string;
+  // CP467b — server-truth card count for grid layout commitment.
+  cardCount?: number;
   createdAt: string;
   updatedAt: string;
   levels: Array<{
