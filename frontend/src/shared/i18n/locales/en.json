@@ -1829,9 +1829,10 @@
       "lockedBaseLabel": "Searching within",
       "keywordPlaceholder": "Add keyword…",
       "removeKeyword": "Remove keyword {{keyword}}",
-      "selectCard": "Select card",
       "searchButton": "Search",
       "resultCount": "{{count}} matches",
+      "expandOptions": "Expand options",
+      "collapseOptions": "Collapse options",
       "idle": "Choose keywords and filters, then press Search.",
       "empty": "No matches yet. Please try again in a moment.",
       "searchFailed": "The search didn't complete. Please try again in a moment."
@@ -1870,13 +1871,7 @@
     },
     "actions": {
       "addOne": "Add to mandala",
-      "addMany": "Add {{count}} cards"
-    },
-    "toast": {
-      "addedOne": "Added to your mandala.",
-      "addedMany": "{{count}} cards added.",
-      "partialFailed": "{{count}} cards failed.",
-      "failed": "The add didn't complete. Please try again in a moment."
+      "picked": "Picked"
     }
   }
 }

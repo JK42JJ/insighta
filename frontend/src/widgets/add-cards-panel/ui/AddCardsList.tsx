@@ -1,9 +1,13 @@
 /**
- * Add Cards result list (CP466).
+ * Add Cards result list (CP466 amendment 8).
  *
- * Renders up to 40 candidate cards in a 2-col grid, with a checkbox
- * for multi-select bulk add and a Bookmark icon for single-Pick.
- * Single-Pick fires `useLikeCard` (existing endpoint, signal=like).
+ * Pure presentation component:
+ *   - 3-col grid of candidate cards
+ *   - Bookmark click → onPick callback (parent owns mutation state)
+ *   - Border on hover only (user directive 2026-05-18)
+ *   - Picked cards render disabled with filled Bookmark
+ *
+ * Branch ordering: isLoading → isError → !hasSearched → empty → grid.
  *
  * Spec: docs/design/add-cards-2026-05-18.md §6.
  */
@@ -11,35 +15,35 @@
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Bookmark, Loader2, RotateCw } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { useLikeCard } from '@/features/card-management/model/useLikeCard';
-import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
 import type { AddCardCandidate } from '../model/useAddCards';
 
 interface AddCardsListProps {
   cards: AddCardCandidate[];
-  mandalaId: string;
   isLoading: boolean;
   hasSearched: boolean;
-  /** CP466 amendment 5 — error surface so the user sees fetch failures
-   *  instead of an indistinguishable empty state. */
   isError?: boolean;
   errorMessage?: string;
   onRetry?: () => void;
+  pickedSet: ReadonlySet<string>;
+  /** Disables the Bookmark on every card while any pick mutation is in
+   *  flight. Owned by the parent so a single mutation instance can be
+   *  shared / inspected. */
+  isPickPending: boolean;
+  onPick: (videoId: string, title: string) => void;
 }
 
 export function AddCardsList({
   cards,
-  mandalaId,
   isLoading,
   hasSearched,
   isError = false,
   errorMessage,
   onRetry,
+  pickedSet,
+  isPickPending,
+  onPick,
 }: AddCardsListProps) {
   const { t } = useTranslation();
-  const selectedIds = useAddCardsPanelStore((s) => s.selectedIds);
-  const toggleSelected = useAddCardsPanelStore((s) => s.toggleSelected);
-  const { like } = useLikeCard();
 
   if (isLoading) {
     return (
@@ -49,8 +53,6 @@ export function AddCardsList({
     );
   }
 
-  // CP466 amendment 5 — error state distinct from empty/idle so the
-  // user can distinguish "search failed" from "no results".
   if (isError) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6 gap-3 text-center">
@@ -75,8 +77,6 @@ export function AddCardsList({
     );
   }
 
-  // CP466 amendment 3 — idle state shown before the user has clicked
-  // Search even once (auto-fetch removed).
   if (!hasSearched) {
     return (
       <div className="flex items-center justify-center py-16 text-[13px] text-muted-foreground text-center px-6">
@@ -87,35 +87,26 @@ export function AddCardsList({
 
   if (cards.length === 0) {
     return (
-      <div className="flex items-center justify-center py-16 text-[13px] text-muted-foreground">
-        {t('addCards.panel.empty', 'No cards found.')}
+      <div className="flex items-center justify-center py-16 text-[13px] text-muted-foreground text-center px-6">
+        {t('addCards.panel.empty', 'No matches yet. Please try again in a moment.')}
       </div>
     );
   }
 
-  const handlePickSingle = (videoId: string, title: string) => {
-    like.mutate({ videoId, mandalaId, title });
-  };
-
-  // CP466 amendment 7 — compact card grid + selection visual cleanup
-  // (user directive 2026-05-18 "카드 사이즈 더 작게 / 보라색
-  // 하일라이트 제거"). Switched grid-cols-2 → grid-cols-3, dropped
-  // ring-2/ring-primary in favor of a subtle foreground border so the
-  // selection state reads via the checkbox + thin border, not a
-  // saturated halo.
   return (
     <ul className="grid grid-cols-3 gap-2 px-3 py-2">
       {cards.map((card) => {
-        const isSelected = selectedIds.has(card.videoId);
+        const isPicked = pickedSet.has(card.videoId);
         return (
           <li
             key={card.videoId}
             className={cn(
               'group relative rounded-md overflow-hidden border bg-card transition-colors',
-              isSelected ? 'border-foreground/60' : 'border-border/40 hover:border-border'
+              'border-transparent hover:border-border',
+              isPicked && 'opacity-50 pointer-events-none hover:border-transparent'
             )}
+            aria-disabled={isPicked || undefined}
           >
-            {/* thumbnail */}
             <div className="relative aspect-video bg-muted">
               {card.thumbnail && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -126,33 +117,32 @@ export function AddCardsList({
                   loading="lazy"
                 />
               )}
-              {/* TL checkbox */}
-              <label className="absolute top-1 left-1 z-10 flex items-center justify-center w-4 h-4 rounded bg-black/55 backdrop-blur-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => toggleSelected(card.videoId)}
-                  className="h-3 w-3 accent-foreground cursor-pointer"
-                  aria-label={t('addCards.panel.selectCard', { defaultValue: 'Select card' })}
-                />
-              </label>
-              {/* BR Pick (single) */}
               <button
                 type="button"
-                onClick={() => handlePickSingle(card.videoId, card.title)}
-                disabled={like.isPending}
-                className="absolute bottom-1 right-1 z-10 w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out hover:scale-110 active:scale-95 disabled:opacity-50"
-                aria-label={t('addCards.actions.addOne', 'Add to mandala')}
+                onClick={() => !isPicked && onPick(card.videoId, card.title)}
+                disabled={isPickPending || isPicked}
+                aria-pressed={isPicked}
+                aria-label={
+                  isPicked
+                    ? t('addCards.actions.picked', 'Picked')
+                    : t('addCards.actions.addOne', 'Add to mandala')
+                }
+                className={cn(
+                  'absolute bottom-1 right-1 z-10 w-6 h-6 flex items-center justify-center transition-all duration-200 ease-out',
+                  isPicked
+                    ? 'opacity-100'
+                    : 'opacity-0 group-hover:opacity-100 hover:scale-110 active:scale-95',
+                  'disabled:cursor-not-allowed'
+                )}
               >
                 <Bookmark
                   className="w-[18px] h-[18px] text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
-                  fill="none"
+                  fill={isPicked ? 'currentColor' : 'none'}
                   strokeWidth={2.2}
                   aria-hidden="true"
                 />
               </button>
             </div>
-            {/* footer */}
             <div className="px-1.5 py-1 space-y-0">
               <h4 className="text-[11px] font-medium line-clamp-2 leading-snug">{card.title}</h4>
               {card.channel && (
