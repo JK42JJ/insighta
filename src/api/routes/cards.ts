@@ -311,10 +311,12 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         },
       });
 
-      // 2. Auto-eviction guard: set pinned_at=now() on every matching
+      // 2. Auto-eviction guard + Add Cards surfacing mark (CP466):
+      //    set pinned_at=now() AND surfaced_at=now() on every matching
       //    source row. Both tables hold pinned_at; user_video_states is
       //    keyed by uuid video_id (FK to youtube_videos.id); user_local_cards
       //    stores the youtube string id directly in `video_id VARCHAR(11)`.
+      //    surfaced_at lives only on user_video_states (CP466 Phase 1 schema).
       const pinnedAt = new Date();
       const localCardsUpdated = await prisma.$executeRaw`
         UPDATE public.user_local_cards
@@ -323,7 +325,8 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       `;
       const videoStatesUpdated = await prisma.$executeRaw`
         UPDATE public.user_video_states uvs
-           SET pinned_at = ${pinnedAt}
+           SET pinned_at = ${pinnedAt},
+               surfaced_at = ${pinnedAt}
           FROM public.youtube_videos yv
          WHERE uvs.user_id = ${userId}::uuid
            AND uvs.video_id = yv.id
