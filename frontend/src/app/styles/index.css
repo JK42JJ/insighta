@@ -589,7 +589,7 @@
     50% { opacity: 1; }
   }
   .animate-dot-breathe {
-    animation: dot-breathe 6s ease-in-out infinite;
+    animation: dot-breathe 8s ease-in-out infinite;
   }
 
 }

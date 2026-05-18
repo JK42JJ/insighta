@@ -589,11 +589,13 @@ export function InsightCardItemV2({
             ) : (streamActive || isEnriching) && streamPhase !== 'scored' ? (
               <span
                 className={cn(
-                  // Smooth color interpolation (preparing gray → analyzing amber)
-                  // + dot-breathe (0.45↔1, 2s) for a calm "thinking" feel.
-                  // Soft currentColor halo gives the dot a softer edge.
-                  'w-2 h-2 rounded-full shrink-0 transition-colors duration-500 animate-dot-breathe',
-                  streamPhase === 'analyzing' ? 'bg-amber-400' : 'bg-muted-foreground/45'
+                  // Brand-monochromatic progression — slate (preparing)
+                  // morphs into indigo (analyzing) inside a single cool
+                  // axis, then the scored % badge picks the relevance
+                  // tier (also indigo at high). Smooth color transition
+                  // + 8s dot-breathe gives a calm, on-brand "thinking".
+                  'w-2 h-2 rounded-full shrink-0 transition-colors duration-700 animate-dot-breathe',
+                  streamPhase === 'analyzing' ? 'bg-indigo-400' : 'bg-slate-400/50'
                 )}
                 style={{ boxShadow: '0 0 6px currentColor' }}
                 aria-label={streamPhase === 'analyzing' ? '분석 중' : '준비 중'}
