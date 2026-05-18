@@ -518,24 +518,21 @@ export function InsightCardItemV2({
             in-progress chip and the Archive icon. */}
       </div>
 
-      {/* ── Body: title → blockquote → unified meta row ──
-          CP463 unified design (2026-05-17 review):
-          - Single secondary cluster (date · views · sector) on the
-            left of the meta row, relevance % anchored to the right.
-          - One-liner blockquote is subtle (border-muted/25, pl-2.5,
-            10.5px, leading-relaxed) so it integrates instead of
-            looking like a foreign component.
-          - Consistent mt-2 between blocks for visual rhythm. */}
-      <div className="px-3 pt-2 pb-4">
-        <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px]">
+      {/* ── Body: title → meta row → summary ──
+          CP473 layout (2026-05-19 user directive: "요약을 카드 가장
+          아래로 이동, max 3줄로 고정"):
+          - Title at top (line-clamp-2 with min-h to keep 1-line and
+            2-line titles occupying the same vertical slot).
+          - Meta row directly below title (channel · date · views ·
+            sector | relevance %).
+          - One-liner blockquote anchored at the bottom, line-clamp-3
+            so longer summaries truncate with "…" instead of stretching
+            the card. min-h reserves the 3-line slot so cards stay the
+            same height regardless of summary length. */}
+      <div className="px-3 pt-2 pb-4 flex flex-col">
+        <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px] min-h-[2.8em]">
           {decodeHtmlEntities(card.title)}
         </h4>
-
-        {trimmedOneLiner && (
-          <blockquote className="mt-2 border-l-2 border-muted-foreground/25 pl-2.5 text-[10.5px] italic text-muted-foreground/75 leading-relaxed whitespace-pre-wrap break-words">
-            {decodeHtmlEntities(trimmedOneLiner)}
-          </blockquote>
-        )}
 
         {(ytMeta.channelTitle ||
           footerLeft ||
@@ -618,6 +615,14 @@ export function InsightCardItemV2({
             ) : null}
           </div>
         )}
+
+        {/* CP473 — summary moved to the bottom + line-clamp-3 with "…"
+            so the card height stays uniform whether the one-liner is
+            absent, short, or long. min-h reserves three lines so empty
+            cards align with full ones in the grid. */}
+        <blockquote className="mt-2 border-l-2 border-muted-foreground/25 pl-2.5 text-[10.5px] italic text-muted-foreground/75 leading-relaxed line-clamp-3 min-h-[3em] break-words">
+          {trimmedOneLiner ? decodeHtmlEntities(trimmedOneLiner) : ''}
+        </blockquote>
       </div>
     </Card>
   );
