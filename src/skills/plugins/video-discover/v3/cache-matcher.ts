@@ -258,8 +258,14 @@ export async function matchFromVideoPoolByCenterGoal(
   // serialise to the `[v1,v2,...]` text form and let Postgres cast.
   const vectorLiteral = `[${opts.centerEmbedding.join(',')}]`;
 
-  // CP458: same eligible-CTE-first restructure as matchFromVideoPool — cosine
-  // runs over the eligible video_pool subset, not the whole embeddings table.
+  // CP467: dropped the `WHERE 1 - (cosine) >= threshold` filter that was
+  // forcing the planner into a full Seq Scan + Sort path (ivfflat
+  // `idx_vpool_emb_cosine` unused — EXPLAIN measured ~10s vs ~1.4s
+  // without the filter). Threshold is applied post-fetch in JS instead;
+  // ORDER BY + LIMIT keeps ANN-style top-k behaviour and lets the
+  // planner choose the embedding index when beneficial. The eligible
+  // CTE is still materialised first so only the gold|silver|active
+  // subset enters the cosine path.
   const rows = await db.$queryRaw<CenterMatchRow[]>(Prisma.sql`
     WITH eligible AS (
       SELECT
@@ -286,13 +292,16 @@ export async function matchFromVideoPoolByCenterGoal(
     FROM eligible e
     JOIN public.video_pool_embeddings vpe
       ON vpe.video_id = e.video_id
-    WHERE 1 - (vpe.embedding <=> ${vectorLiteral}::vector) >= ${threshold}
     ORDER BY vpe.embedding <=> ${vectorLiteral}::vector ASC
     LIMIT ${limit}
   `);
 
+  // Post-fetch threshold gate — preserves semantic floor without
+  // poisoning the SQL planner.
+  const aboveThreshold = rows.filter((r) => r.score >= threshold);
+
   const subTokens = opts.subGoals.map((sg) => tokenizeLower(sg ?? ''));
-  const matches: CachedMatch[] = rows.map((r) => {
+  const matches: CachedMatch[] = aboveThreshold.map((r) => {
     const titleTokens = tokenizeLower(r.title);
     let bestCell = 0;
     let bestOverlap = -1;

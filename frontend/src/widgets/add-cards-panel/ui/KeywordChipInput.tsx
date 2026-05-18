@@ -61,7 +61,7 @@ export function KeywordChipInput() {
   }, [draft, addKeyword]);
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 px-4 py-3">
+    <div className="flex flex-wrap items-center gap-1.5 px-5 py-3 sm:px-6">
       {extraKeywords.map((kw) => (
         <span
           key={kw}

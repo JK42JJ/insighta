@@ -27,6 +27,18 @@ export interface LikeCardArgs {
   /** CP466 — Add Cards panel pass the candidate's auto-assigned cell
    *  so the BE UPSERT can place it in the right mandala sector. */
   cellIndex?: number;
+  /** CP467 — Tier 2 (fresh-from-YouTube) candidates have no
+   *  youtube_videos row yet. Sending the metadata lets BE INSERT
+   *  the row so the card actually reaches the mandala grid. */
+  videoCacheHint?: {
+    title?: string | null;
+    description?: string | null;
+    channelTitle?: string | null;
+    thumbnailUrl?: string | null;
+    durationSec?: number | null;
+    viewCount?: number | null;
+    publishedAt?: string | null;
+  };
 }
 
 export function useLikeCard() {
@@ -34,8 +46,14 @@ export function useLikeCard() {
 
   const like = useMutation({
     mutationFn: async (args: LikeCardArgs) => {
-      const { videoId, mandalaId, title, description, cellIndex } = args;
-      return apiClient.likeCard(videoId, { mandalaId, title, description, cellIndex });
+      const { videoId, mandalaId, title, description, cellIndex, videoCacheHint } = args;
+      return apiClient.likeCard(videoId, {
+        mandalaId,
+        title,
+        description,
+        cellIndex,
+        videoCacheHint,
+      });
     },
     onSuccess: () => {
       // CP463 flicker-fix — DO NOT invalidate the card-list queries

@@ -24,6 +24,7 @@ import {
   handleThumbnailLoad,
 } from '@/shared/lib/image-utils';
 import { formatRelativeDate } from '@/shared/lib/format-date';
+import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
 import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 
 // ── Constants ──────────────────────────────────────────────
@@ -37,31 +38,9 @@ const QUALITY_BADGE_THRESHOLD_LOW = 70;
 // previous "hide below 70" cut-off is dropped — a 50 or 60 score still
 // renders, just in the lower-tier color.
 
-const VIEW_COUNT_BILLION = 1_000_000_000;
-const VIEW_COUNT_MILLION = 1_000_000;
-const VIEW_COUNT_THOUSAND = 1_000;
-
-const RELATIVE_MINUTE_SEC = 60;
-const RELATIVE_HOUR_SEC = 3600;
-
 // ── Helpers ────────────────────────────────────────────────
-
-function formatDuration(sec: number | null | undefined): string | null {
-  if (sec == null || sec <= 0) return null;
-  const h = Math.floor(sec / RELATIVE_HOUR_SEC);
-  const m = Math.floor((sec % RELATIVE_HOUR_SEC) / RELATIVE_MINUTE_SEC);
-  const s = Math.floor(sec % RELATIVE_MINUTE_SEC);
-  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function formatViewCount(count: number | null | undefined): string | null {
-  if (count == null || count <= 0) return null;
-  if (count >= VIEW_COUNT_BILLION) return `${(count / VIEW_COUNT_BILLION).toFixed(1)}B`;
-  if (count >= VIEW_COUNT_MILLION) return `${(count / VIEW_COUNT_MILLION).toFixed(1)}M`;
-  if (count >= VIEW_COUNT_THOUSAND) return `${(count / VIEW_COUNT_THOUSAND).toFixed(1)}K`;
-  return String(count);
-}
+// formatDuration / formatViewCount live in shared/lib/format-number so
+// the Add Cards panel + future card surfaces share the same rules.
 
 /**
  * Quality badge built from the CP462+ `mandala_relevance_pct` (0-100,

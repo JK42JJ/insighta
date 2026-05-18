@@ -21,30 +21,53 @@ import {
   clearMandalaLocalStorage,
 } from './mandala-converters';
 
+export interface MandalaMeta {
+  focusTags: string[];
+  targetLevel: string;
+  language: string;
+  title: string;
+}
+
+interface MandalaQueryShape {
+  levels: Record<string, MandalaLevel>;
+  meta: MandalaMeta | null;
+}
+
+const EMPTY_META: MandalaMeta = {
+  focusTags: [],
+  targetLevel: 'standard',
+  language: 'ko',
+  title: '',
+};
+
 export function useMandalaQuery(mandalaId?: string | null) {
   const { isLoggedIn, isTokenReady } = useAuth();
   const queryClient = useQueryClient();
 
-  const {
-    data: mandalaLevels,
-    isLoading,
-    error,
-  } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: mandalaId ? queryKeys.mandala.detail(mandalaId) : queryKeys.mandala.all,
-    queryFn: async (): Promise<Record<string, MandalaLevel>> => {
+    queryFn: async (): Promise<MandalaQueryShape> => {
       try {
-        const data = mandalaId
+        const apiResponse = mandalaId
           ? await apiClient.getMandalaById(mandalaId)
           : await apiClient.getDefaultMandala();
         // If DB mandala exists but localStorage still has data, clean it up
         if (localStorage.getItem('mandala-root')) {
           clearMandalaLocalStorage();
         }
-        return apiLevelsToRecord(data.mandala);
+        return {
+          levels: apiLevelsToRecord(apiResponse.mandala),
+          meta: {
+            focusTags: apiResponse.mandala.focusTags ?? [],
+            targetLevel: apiResponse.mandala.targetLevel ?? 'standard',
+            language: apiResponse.mandala.language ?? 'ko',
+            title: apiResponse.mandala.title ?? '',
+          },
+        };
       } catch (err: unknown) {
         // 404 means no mandala in DB — MigrationPrompt will handle localStorage migration
         if (err instanceof ApiHttpError && err.statusCode === 404) {
-          return EMPTY_ROOT_LEVELS;
+          return { levels: EMPTY_ROOT_LEVELS, meta: null };
         }
         throw err;
       }
@@ -55,18 +78,32 @@ export function useMandalaQuery(mandalaId?: string | null) {
     placeholderData: keepPreviousData,
   });
 
+  const mandalaLevels = data?.levels;
+  const mandalaMeta = data?.meta ?? null;
+
   const activeQueryKey = mandalaId ? queryKeys.mandala.detail(mandalaId) : queryKeys.mandala.all;
 
   const saveMutation = useMutation({
-    mutationFn: async (levels: Record<string, MandalaLevel>) => {
+    mutationFn: async (levels: Record<string, MandalaLevel>): Promise<MandalaQueryShape> => {
       const payload = recordToApiLevels(levels);
-      const data = await apiClient.upsertMandala(payload.title, payload.levels);
-      return apiLevelsToRecord(data.mandala);
+      const apiResponse = await apiClient.upsertMandala(payload.title, payload.levels);
+      return {
+        levels: apiLevelsToRecord(apiResponse.mandala),
+        meta: {
+          focusTags: apiResponse.mandala.focusTags ?? [],
+          targetLevel: apiResponse.mandala.targetLevel ?? 'standard',
+          language: apiResponse.mandala.language ?? 'ko',
+          title: apiResponse.mandala.title ?? '',
+        },
+      };
     },
     onMutate: async (levels) => {
       await queryClient.cancelQueries({ queryKey: activeQueryKey });
-      const previous = queryClient.getQueryData<Record<string, MandalaLevel>>(activeQueryKey);
-      queryClient.setQueryData(activeQueryKey, levels);
+      const previous = queryClient.getQueryData<MandalaQueryShape>(activeQueryKey);
+      queryClient.setQueryData<MandalaQueryShape>(activeQueryKey, {
+        levels,
+        meta: previous?.meta ?? EMPTY_META,
+      });
       return { previous };
     },
     onError: (_err, _vars, context) => {
@@ -81,6 +118,7 @@ export function useMandalaQuery(mandalaId?: string | null) {
 
   return {
     mandalaLevels: mandalaLevels && 'root' in mandalaLevels ? mandalaLevels : EMPTY_ROOT_LEVELS,
+    mandalaMeta,
     isLoading,
     isSaving: saveMutation.isPending,
     error,

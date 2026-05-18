@@ -276,7 +276,25 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
    */
   fastify.post<{
     Params: { videoId: string };
-    Body: { mandalaId?: string; title?: string; description?: string; cellIndex?: number };
+    Body: {
+      mandalaId?: string;
+      title?: string;
+      description?: string;
+      cellIndex?: number;
+      // CP467 — Add Cards panel sends Tier 2 fresh-from-YouTube
+      // candidate metadata here. youtube_videos has no row for these
+      // yet, so without a hint the like path would skip user_video_states
+      // INSERT and the picked card would never reach the mandala grid.
+      videoCacheHint?: {
+        title?: string | null;
+        description?: string | null;
+        channelTitle?: string | null;
+        thumbnailUrl?: string | null;
+        durationSec?: number | null;
+        viewCount?: number | null;
+        publishedAt?: string | null;
+      };
+    };
   }>('/:videoId/like', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     if (!request.user || !('userId' in request.user)) {
       return reply
@@ -328,10 +346,44 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
          WHERE user_id = ${userId}::uuid AND video_id = ${videoId}
       `;
       let videoStatesUpdated = 0;
-      const yt = await prisma.youtube_videos.findFirst({
+      let yt = await prisma.youtube_videos.findFirst({
         where: { youtube_video_id: videoId },
         select: { id: true },
       });
+      // CP467 — yt row missing + caller supplied a cache hint (Add Cards
+      // Pick of a Tier 2 fresh-from-YouTube candidate). Best-effort
+      // INSERT so the downstream user_video_states INSERT path can run.
+      // skipDuplicates handles the race when two parallel picks arrive
+      // for the same video.
+      if (!yt && body.mandalaId && body.videoCacheHint) {
+        const hint = body.videoCacheHint;
+        try {
+          await prisma.youtube_videos.create({
+            data: {
+              youtube_video_id: videoId,
+              title: hint.title ?? body.title ?? 'Untitled',
+              description: hint.description ?? body.description ?? null,
+              channel_title: hint.channelTitle ?? '',
+              thumbnail_url: hint.thumbnailUrl ?? null,
+              duration_seconds: hint.durationSec ?? null,
+              view_count:
+                typeof hint.viewCount === 'number' && Number.isFinite(hint.viewCount)
+                  ? BigInt(Math.max(0, Math.trunc(hint.viewCount)))
+                  : null,
+              published_at: hint.publishedAt ? new Date(hint.publishedAt) : null,
+            },
+          });
+        } catch (err) {
+          // Concurrent insert race or other constraint — re-read.
+          log.warn(
+            `like: youtube_videos cache-hint INSERT failed (will re-read): ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+        yt = await prisma.youtube_videos.findFirst({
+          where: { youtube_video_id: videoId },
+          select: { id: true },
+        });
+      }
       if (yt && body.mandalaId) {
         const cellIndex =
           typeof body.cellIndex === 'number' && Number.isFinite(body.cellIndex)
