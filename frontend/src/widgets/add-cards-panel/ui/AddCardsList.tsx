@@ -143,7 +143,7 @@ export function AddCardsList({
                 <img
                   src={card.thumbnail}
                   alt=""
-                  className="h-full w-full object-cover opacity-0 transition-opacity duration-200"
+                  className="h-full w-full object-cover"
                   loading="lazy"
                   decoding="async"
                   onError={handleThumbnailError}
