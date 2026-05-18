@@ -16,6 +16,8 @@ import { useShellStore, dndHandlersRef } from '@/stores/shellStore';
 import { DropZoneOverlay } from '@/widgets/header/ui/DropZoneOverlay';
 import { CardListView } from '@/widgets/card-list-view';
 import { CardDiscoveryProgress } from '@/widgets/card-list/ui/CardDiscoveryProgress';
+import { CardSkeleton } from '@/widgets/card-list/ui/CardSkeleton';
+import { cn } from '@/shared/lib/utils';
 import { VideoPlayerModal } from '@/widgets/video-player/ui/VideoPlayerModal';
 import { getYouTubeVideoId } from '@/widgets/video-player/model/youtube-api';
 import { VideoSidePanel, useVideoPanelStore } from '@/features/video-side-panel';
@@ -261,11 +263,7 @@ function AuthenticatedApp() {
   const clearJustCreated = useMandalaStore((s) => s.setJustCreated);
   const isNewMandalaActive = justCreatedMandalaId === effectiveMandalaId && !!effectiveMandalaId;
 
-  // 5c'. Mandala-switch grace period: prevents the "0 cards" empty-state flash
-  // that surfaced on every mandala switch because keepPreviousData + client-side
-  // mandala_id filter yields cards.length=0 for a brief moment before the next
-  // useAllVideoStates fetch lands. During the grace window we force isLoading
-  // downstream (skeleton instead of empty-state).
+  // 5c'. Mandala-switch grace period — see batch-reveal gate below.
   const [mandalaSwitchGrace, setMandalaSwitchGrace] = useState(false);
   useEffect(() => {
     if (!effectiveMandalaId) return;
@@ -273,6 +271,25 @@ function AuthenticatedApp() {
     const timer = setTimeout(() => setMandalaSwitchGrace(false), 3000);
     return () => clearTimeout(timer);
   }, [effectiveMandalaId]);
+
+  // Batch reveal gate: skeleton stays until every visible card's thumbnail
+  // is settled. Hard cap 5s prevents one stuck image from blocking reveal.
+  const [loadedThumbnailIds, setLoadedThumbnailIds] = useState<Set<string>>(new Set());
+  const [maxRevealTimeoutElapsed, setMaxRevealTimeoutElapsed] = useState(false);
+  useEffect(() => {
+    setLoadedThumbnailIds(new Set());
+    setMaxRevealTimeoutElapsed(false);
+    const timer = setTimeout(() => setMaxRevealTimeoutElapsed(true), 5000);
+    return () => clearTimeout(timer);
+  }, [effectiveMandalaId]);
+  const handleThumbnailReady = useCallback((cardId: string) => {
+    setLoadedThumbnailIds((prev) => {
+      if (prev.has(cardId)) return prev;
+      const next = new Set(prev);
+      next.add(cardId);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (!isNewMandalaActive) return;
@@ -953,113 +970,150 @@ function AuthenticatedApp() {
                     {isNewMandalaActive && cards.totalCards === 0 && effectiveMandalaId && (
                       <CardDiscoveryProgress mandalaId={effectiveMandalaId} isComplete={false} />
                     )}
-                    <CardListView
-                      cards={search.isSearchActive ? search.results : cards.displayCards}
-                      isLoading={
-                        search.isSearchActive
-                          ? search.isLoading
-                          : cards.isLoading ||
-                            (isNewMandalaActive && cards.totalCards === 0) ||
-                            (mandalaSwitchGrace && cards.totalCards === 0)
-                      }
-                      skeletonCount={(() => {
-                        // skeletonCount only makes sense in the main grid
-                        // (all root cells visible). Any sub-view — cell
-                        // selection / Newly Synced / search — renders an
-                        // explicit subset so the server total no longer
-                        // maps onto cell-by-cell layout.
-                        if (search.isSearchActive) return 0;
-                        if (navigation.selectedCellIndex !== null) return 0;
-                        if (isNewlySyncedActive) return 0;
-                        return Math.max(0, serverCardCount - cards.displayCards.length);
-                      })()}
-                      isNewlySyncedActive={isNewlySyncedActive}
-                      onNewlySyncedActiveChange={setIsNewlySyncedActive}
-                      title={
-                        search.isSearchActive
-                          ? t('search.results', 'Search Results')
-                          : cards.displayTitle
-                      }
-                      titleLoading={!search.isSearchActive && mandalaStructureLoading}
-                      viewMode={layout.viewMode}
-                      listPanelRatio={layout.listPanelRatio}
-                      mandalaId={effectiveMandalaId}
-                      onViewModeChange={layout.handleSetViewMode}
-                      onListPanelRatioChange={layout.handleSetListPanelRatio}
-                      gridColumns={layout.gridColumns}
-                      onGridColumnsChange={layout.handleSetGridColumns}
-                      compactMode={isSidePanelOpen}
-                      onCardClick={handleCardClick}
-                      onCardDragStart={dragDrop.handleCardDragStart}
-                      onMultiCardDragStart={dragDrop.handleMultiCardDragStart}
-                      onSaveNote={cards.handleSaveNote}
-                      onCardsReorder={cards.handleCardsReorder}
-                      onDeleteCards={cards.handleDeleteCards}
-                      onAddCard={navigation.selectedCellIndex != null ? handleAddCard : undefined}
-                      onExternalUrlDrop={(url) => {
-                        // CP463+ Issue #649 follow-up — reject YouTube
-                        // channel/playlist URLs that have no video id. The
-                        // add path silently stores a placeholder row when
-                        // video_id can't be extracted (user reported case:
-                        // dropping the channel home `youtube.com/@xxx` →
-                        // "YouTube Video" placeholder + /placeholder.svg).
-                        const isYouTubeHost = /(?:^|\.)(?:youtube\.com|youtu\.be)$/i.test(
-                          (() => {
-                            try {
-                              return new URL(url).hostname;
-                            } catch {
-                              return '';
-                            }
-                          })()
-                        );
-                        if (isYouTubeHost && !getYouTubeVideoId(url)) {
-                          toast({
-                            title: t('cards.dropError.notVideoUrlTitle'),
-                            description: t('cards.dropError.notVideoUrlDescription'),
-                            variant: 'destructive',
-                          });
-                          return;
-                        }
-                        // Read via render-assigned ref, not the closure — the
-                        // closure can be stale on the first drop after a cell
-                        // selection, silently routing to Idea Spot.
-                        const cellIndex = selectedCellIndexRef.current;
-                        if (cellIndex != null) {
-                          cards.handleCardDrop(cellIndex, url);
-                        } else {
-                          cards.handleScratchPadDrop(url);
-                        }
-                      }}
-                      onExternalFileDrop={(files) => {
-                        cards.handleScratchPadFileDrop(files);
-                      }}
-                      onSaveWatchPosition={cards.handleSaveWatchPosition}
-                      watchPositionCache={modal.watchPositionCache}
-                      panelSizeCache={modal.panelSizeCache}
-                      enrichingCardIds={cards.enrichingCardIds}
-                      failedEnrichCardIds={cards.failedEnrichCardIds}
-                      onRetryEnrich={cards.retryEnrich}
-                      sectorSubjects={
-                        navigation.currentLevel.subjectLabels?.length
-                          ? navigation.currentLevel.subjectLabels
-                          : navigation.currentLevel.subjects
-                      }
-                      selectedCellIndex={navigation.selectedCellIndex}
-                      onCellClick={navigation.handleCellClick}
-                      totalCardCount={cards.totalCards}
-                      cardsByCell={cards.cardsByCell}
-                      isExternalCardDragActive={activeDragData?.type === 'card'}
-                      isInternalCardDragActive={
-                        activeDragData?.type === 'card' || activeDragData?.type === 'card-reorder'
-                      }
-                      newlySyncedCards={cards.newlySyncedCards}
-                      trailingAction={
-                        <>
-                          <AddCardsTriggerChip mandalaId={effectiveMandalaId} />
-                          {ideaSpotTrigger}
-                        </>
-                      }
-                    />
+                    {(() => {
+                      // Batch reveal gate — show skeleton until every visible
+                      // thumbnail settles (or 5s cap). Skips for search/sub-views.
+                      const expectedCount = search.isSearchActive
+                        ? search.results.length
+                        : navigation.selectedCellIndex !== null
+                          ? cards.displayCards.length
+                          : Math.max(serverCardCount, cards.displayCards.length);
+                      const isGridRevealed =
+                        search.isSearchActive ||
+                        navigation.selectedCellIndex !== null ||
+                        isNewlySyncedActive ||
+                        expectedCount === 0 ||
+                        loadedThumbnailIds.size >= cards.displayCards.length ||
+                        maxRevealTimeoutElapsed;
+                      return (
+                        <div className="relative flex-1 flex flex-col min-h-0">
+                          {!isGridRevealed && (
+                            <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden">
+                              <CardSkeleton count={Math.min(expectedCount, 12)} />
+                            </div>
+                          )}
+                          <div
+                            className={cn(
+                              'flex-1 flex flex-col min-h-0 transition-opacity duration-300',
+                              isGridRevealed ? 'opacity-100' : 'opacity-0'
+                            )}
+                            aria-hidden={!isGridRevealed}
+                          >
+                            <CardListView
+                              cards={search.isSearchActive ? search.results : cards.displayCards}
+                              isLoading={
+                                search.isSearchActive
+                                  ? search.isLoading
+                                  : cards.isLoading ||
+                                    (isNewMandalaActive && cards.totalCards === 0) ||
+                                    (mandalaSwitchGrace && cards.totalCards === 0)
+                              }
+                              skeletonCount={(() => {
+                                // skeletonCount only makes sense in the main grid
+                                // (all root cells visible). Any sub-view — cell
+                                // selection / Newly Synced / search — renders an
+                                // explicit subset so the server total no longer
+                                // maps onto cell-by-cell layout.
+                                if (search.isSearchActive) return 0;
+                                if (navigation.selectedCellIndex !== null) return 0;
+                                if (isNewlySyncedActive) return 0;
+                                return Math.max(0, serverCardCount - cards.displayCards.length);
+                              })()}
+                              isNewlySyncedActive={isNewlySyncedActive}
+                              onNewlySyncedActiveChange={setIsNewlySyncedActive}
+                              title={
+                                search.isSearchActive
+                                  ? t('search.results', 'Search Results')
+                                  : cards.displayTitle
+                              }
+                              titleLoading={!search.isSearchActive && mandalaStructureLoading}
+                              viewMode={layout.viewMode}
+                              listPanelRatio={layout.listPanelRatio}
+                              mandalaId={effectiveMandalaId}
+                              onViewModeChange={layout.handleSetViewMode}
+                              onListPanelRatioChange={layout.handleSetListPanelRatio}
+                              gridColumns={layout.gridColumns}
+                              onGridColumnsChange={layout.handleSetGridColumns}
+                              compactMode={isSidePanelOpen}
+                              onCardClick={handleCardClick}
+                              onCardDragStart={dragDrop.handleCardDragStart}
+                              onMultiCardDragStart={dragDrop.handleMultiCardDragStart}
+                              onSaveNote={cards.handleSaveNote}
+                              onCardsReorder={cards.handleCardsReorder}
+                              onDeleteCards={cards.handleDeleteCards}
+                              onAddCard={
+                                navigation.selectedCellIndex != null ? handleAddCard : undefined
+                              }
+                              onExternalUrlDrop={(url) => {
+                                // CP463+ Issue #649 follow-up — reject YouTube
+                                // channel/playlist URLs that have no video id. The
+                                // add path silently stores a placeholder row when
+                                // video_id can't be extracted (user reported case:
+                                // dropping the channel home `youtube.com/@xxx` →
+                                // "YouTube Video" placeholder + /placeholder.svg).
+                                const isYouTubeHost = /(?:^|\.)(?:youtube\.com|youtu\.be)$/i.test(
+                                  (() => {
+                                    try {
+                                      return new URL(url).hostname;
+                                    } catch {
+                                      return '';
+                                    }
+                                  })()
+                                );
+                                if (isYouTubeHost && !getYouTubeVideoId(url)) {
+                                  toast({
+                                    title: t('cards.dropError.notVideoUrlTitle'),
+                                    description: t('cards.dropError.notVideoUrlDescription'),
+                                    variant: 'destructive',
+                                  });
+                                  return;
+                                }
+                                // Read via render-assigned ref, not the closure — the
+                                // closure can be stale on the first drop after a cell
+                                // selection, silently routing to Idea Spot.
+                                const cellIndex = selectedCellIndexRef.current;
+                                if (cellIndex != null) {
+                                  cards.handleCardDrop(cellIndex, url);
+                                } else {
+                                  cards.handleScratchPadDrop(url);
+                                }
+                              }}
+                              onExternalFileDrop={(files) => {
+                                cards.handleScratchPadFileDrop(files);
+                              }}
+                              onSaveWatchPosition={cards.handleSaveWatchPosition}
+                              watchPositionCache={modal.watchPositionCache}
+                              panelSizeCache={modal.panelSizeCache}
+                              enrichingCardIds={cards.enrichingCardIds}
+                              failedEnrichCardIds={cards.failedEnrichCardIds}
+                              onRetryEnrich={cards.retryEnrich}
+                              sectorSubjects={
+                                navigation.currentLevel.subjectLabels?.length
+                                  ? navigation.currentLevel.subjectLabels
+                                  : navigation.currentLevel.subjects
+                              }
+                              selectedCellIndex={navigation.selectedCellIndex}
+                              onCellClick={navigation.handleCellClick}
+                              totalCardCount={cards.totalCards}
+                              cardsByCell={cards.cardsByCell}
+                              isExternalCardDragActive={activeDragData?.type === 'card'}
+                              isInternalCardDragActive={
+                                activeDragData?.type === 'card' ||
+                                activeDragData?.type === 'card-reorder'
+                              }
+                              newlySyncedCards={cards.newlySyncedCards}
+                              trailingAction={
+                                <>
+                                  <AddCardsTriggerChip mandalaId={effectiveMandalaId} />
+                                  {ideaSpotTrigger}
+                                </>
+                              }
+                              onThumbnailReady={handleThumbnailReady}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
               </div>

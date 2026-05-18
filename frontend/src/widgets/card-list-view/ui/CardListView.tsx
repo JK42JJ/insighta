@@ -156,6 +156,10 @@ interface CardListViewProps {
    *  so it can disable skeletonCount when the user is in the sub-view. */
   isNewlySyncedActive?: boolean;
   onNewlySyncedActiveChange?: (active: boolean) => void;
+  /** Card-level thumbnail readiness callback. Parent uses it to gate the
+   *  grid's batch reveal so a mandala switch first shows skeletons and
+   *  only fades in when every visible thumbnail has settled. */
+  onThumbnailReady?: (cardId: string) => void;
 }
 
 export function CardListView({
@@ -189,6 +193,7 @@ export function CardListView({
   skeletonCount = 0,
   isNewlySyncedActive: isNewlySyncedActiveProp,
   onNewlySyncedActiveChange,
+  onThumbnailReady,
   cardsByCell,
   isExternalCardDragActive,
   isInternalCardDragActive,
@@ -619,6 +624,7 @@ export function CardListView({
             failedEnrichCardIds={failedEnrichCardIds}
             onRetryEnrich={onRetryEnrich}
             skeletonCount={skeletonCount}
+            onThumbnailReady={onThumbnailReady}
           />
         </div>
       </div>
