@@ -1343,6 +1343,12 @@ class ApiClient {
         cellIndex: number;
         source: 'video_pool';
       }>;
+      mandalaMeta: {
+        title: string;
+        focusTags: string[];
+        targetLevel: string;
+        language: 'ko' | 'en';
+      };
       trace?: {
         layer1_count: number;
         after_exclude: number;

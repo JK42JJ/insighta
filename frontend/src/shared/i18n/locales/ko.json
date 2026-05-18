@@ -1867,6 +1867,12 @@
         "365d": "지난 1년"
       }
     },
+    "targetLevel": {
+      "label": "난이도",
+      "foundation": "기초",
+      "standard": "중급",
+      "advanced": "심화"
+    },
     "actions": {
       "addOne": "만다라에 추가",
       "addMany": "카드 {{count}}개 추가"

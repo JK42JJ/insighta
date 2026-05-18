@@ -1859,6 +1859,12 @@
         "365d": "Past year"
       }
     },
+    "targetLevel": {
+      "label": "Level",
+      "foundation": "Foundation",
+      "standard": "Standard",
+      "advanced": "Advanced"
+    },
     "actions": {
       "addOne": "Add to mandala",
       "addMany": "Add {{count}} cards"

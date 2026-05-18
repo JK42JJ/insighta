@@ -23,6 +23,10 @@ interface AddCardsPanelState {
   selectedIds: Set<string>;
   /** CP466 amendment — request filters (조회수/길이/기간). */
   filters: AddCardsFilters;
+  /** CP466 amendment 2 — editable target level (난이도) from wizard. */
+  targetLevel: string;
+  /** True once the wizard-meta seed has run for this mandala open. */
+  mandalaMetaSeeded: boolean;
 
   openPanel: (mandalaId: string) => void;
   closePanel: () => void;
@@ -31,6 +35,9 @@ interface AddCardsPanelState {
   toggleSelected: (videoId: string) => void;
   clearSelected: () => void;
   setFilters: (next: AddCardsFilters) => void;
+  setTargetLevel: (level: string) => void;
+  seedFromWizardMeta: (focusTags: string[], targetLevel: string) => void;
+  setExtraKeywords: (keywords: string[]) => void;
 }
 
 export const useAddCardsPanelStore = create<AddCardsPanelState>((set) => ({
@@ -39,19 +46,45 @@ export const useAddCardsPanelStore = create<AddCardsPanelState>((set) => ({
   extraKeywords: [],
   selectedIds: new Set<string>(),
   filters: {},
+  targetLevel: 'standard',
+  mandalaMetaSeeded: false,
 
   openPanel: (mandalaId) =>
     set((s) => ({
       open: true,
-      // Reset keywords + selection + filters if switching to a different
-      // mandala; preserve them if the same mandala is being reopened.
+      // Reset keywords + selection + filters + level if switching to a
+      // different mandala; preserve them if the same mandala is being
+      // reopened.
       mandalaId,
       extraKeywords: s.mandalaId === mandalaId ? s.extraKeywords : [],
       selectedIds: s.mandalaId === mandalaId ? s.selectedIds : new Set<string>(),
       filters: s.mandalaId === mandalaId ? s.filters : {},
+      targetLevel: s.mandalaId === mandalaId ? s.targetLevel : 'standard',
+      // Force re-seed when switching mandalas so the wizard meta loads fresh.
+      mandalaMetaSeeded: s.mandalaId === mandalaId ? s.mandalaMetaSeeded : false,
     })),
 
   setFilters: (next) => set({ filters: next }),
+  setTargetLevel: (level) => set({ targetLevel: level }),
+  setExtraKeywords: (keywords) => set({ extraKeywords: keywords }),
+  seedFromWizardMeta: (focusTags, targetLevel) =>
+    set((s) => {
+      if (s.mandalaMetaSeeded) return s;
+      // Merge focus tags into extraKeywords (dedup, no auto-overwrite of
+      // user-typed chips). Adopt the wizard target level only when the
+      // user has not yet changed it.
+      const merged = [...s.extraKeywords];
+      for (const t of focusTags) {
+        const trimmed = (t ?? '').trim();
+        if (trimmed && !merged.includes(trimmed)) merged.push(trimmed);
+      }
+      return {
+        ...s,
+        extraKeywords: merged,
+        targetLevel: s.targetLevel === 'standard' ? targetLevel : s.targetLevel,
+        mandalaMetaSeeded: true,
+      };
+    }),
 
   closePanel: () => set({ open: false }),
 

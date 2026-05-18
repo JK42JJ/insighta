@@ -24,6 +24,7 @@ import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
 import { useAddCards } from '../model/useAddCards';
 import { KeywordChipInput } from './KeywordChipInput';
 import { AddCardsFilters } from './AddCardsFilters';
+import { TargetLevelChips } from './TargetLevelChips';
 import { AddCardsList } from './AddCardsList';
 import { AddCardsBulkBar } from './AddCardsBulkBar';
 
@@ -35,6 +36,8 @@ export function AddCardsPanel() {
   const mandalaId = useAddCardsPanelStore((s) => s.mandalaId);
   const extraKeywords = useAddCardsPanelStore((s) => s.extraKeywords);
   const filters = useAddCardsPanelStore((s) => s.filters);
+  const targetLevel = useAddCardsPanelStore((s) => s.targetLevel);
+  const seedFromWizardMeta = useAddCardsPanelStore((s) => s.seedFromWizardMeta);
   const closePanel = useAddCardsPanelStore((s) => s.closePanel);
 
   // Resolve center_goal (locked base, readonly) — same hook the dashboard
@@ -45,18 +48,31 @@ export function AddCardsPanel() {
   const mutation = useAddCards();
   const cards = mutation.data?.cards ?? [];
 
+  // CP466 amendment 2 — first response carries `mandalaMeta` (wizard
+  // focus_tags + target_level). Seed the store once per panel-open so
+  // the chips prepopulate; subsequent fetches don't overwrite user edits.
+  useEffect(() => {
+    const meta = mutation.data?.mandalaMeta;
+    if (!meta) return;
+    seedFromWizardMeta(meta.focusTags, meta.targetLevel);
+  }, [mutation.data, seedFromWizardMeta]);
+
   // CP466 amendment — explicit search button. Initial open triggers 1
   // auto-fetch (backlog); subsequent keyword/filter changes do NOT
   // auto-refetch — user clicks the Search button explicitly.
+  // targetLevel (난이도) is appended to extraKeywords for the BE embed
+  // batch when it diverges from 'standard' (user-tunable wizard meta).
   const triggerSearch = useCallback(() => {
     if (!mandalaId) return;
+    const keywords =
+      targetLevel && targetLevel !== 'standard' ? [...extraKeywords, targetLevel] : extraKeywords;
     mutation.mutate({
       mandalaId,
-      extraKeywords,
+      extraKeywords: keywords,
       excludeVideoIds: [],
       filters,
     });
-  }, [mandalaId, extraKeywords, filters, mutation]);
+  }, [mandalaId, extraKeywords, filters, mutation, targetLevel]);
 
   // Initial-open one-shot fetch — refs guard against re-fire on
   // mandala-id same-value re-open.
@@ -100,7 +116,8 @@ export function AddCardsPanel() {
           'animate-in slide-in-from-right duration-200 ease-out'
         )}
       >
-        {/* Header */}
+        {/* Header — single divider above the entire "input zone".
+            CP466 user directive 2026-05-18: 구분선 최소만 사용. */}
         <header className="flex items-center justify-between px-4 py-3 border-b border-border/40">
           <h2 className="text-[14px] font-semibold">
             {t('addCards.panel.title', 'Find more videos')}
@@ -115,41 +132,49 @@ export function AddCardsPanel() {
           </button>
         </header>
 
-        {/* Locked base */}
-        <div className="px-4 py-3 border-b border-border/40">
-          <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-            <Lock className="h-3.5 w-3.5 shrink-0" />
-            <span className="line-clamp-1">
-              <span className="opacity-70">
-                {t('addCards.panel.lockedBaseLabel', 'Searching within')}:
-              </span>{' '}
-              <span className="text-foreground">{centerGoal || '…'}</span>
-            </span>
+        {/* Input zone — locked base + keyword chips + filter chips +
+            level chips + Search row, NO internal dividers. Single
+            border below the search button separates input zone from
+            result list. */}
+        <div className="border-b border-border/40">
+          {/* Locked base */}
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+              <Lock className="h-3.5 w-3.5 shrink-0" />
+              <span className="line-clamp-1">
+                <span className="opacity-70">
+                  {t('addCards.panel.lockedBaseLabel', 'Searching within')}:
+                </span>{' '}
+                <span className="text-foreground">{centerGoal || '…'}</span>
+              </span>
+            </div>
           </div>
-        </div>
 
-        {/* Keyword chips */}
-        <KeywordChipInput />
+          {/* Keyword chips (editable, seeded from wizard focus_tags) */}
+          <KeywordChipInput />
 
-        {/* CP466 amendment — 3 filter dropdowns (조회수/길이/기간) */}
-        <AddCardsFilters />
+          {/* CP466 amendment — 3 filter chip rows (조회수/길이/기간) */}
+          <AddCardsFilters />
 
-        {/* CP466 amendment — explicit Search button (auto-refetch removed,
-            initial open auto-fetches once). */}
-        <div className="px-4 py-2 border-b border-border/40">
-          <button
-            type="button"
-            onClick={triggerSearch}
-            disabled={mutation.isPending}
-            className="w-full inline-flex items-center justify-center gap-2 h-9 rounded-full bg-primary text-primary-foreground text-[12px] font-medium transition-colors hover:bg-primary/90 disabled:opacity-50"
-          >
-            {mutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="h-3.5 w-3.5" strokeWidth={2.2} />
-            )}
-            <span>{t('addCards.panel.searchButton', 'Search')}</span>
-          </button>
+          {/* CP466 amendment 2 — editable wizard target level (난이도) */}
+          <TargetLevelChips />
+
+          {/* Right-aligned compact Search button (CP466 UX directive). */}
+          <div className="flex items-center justify-end px-4 py-2.5">
+            <button
+              type="button"
+              onClick={triggerSearch}
+              disabled={mutation.isPending}
+              className="inline-flex items-center gap-1.5 h-8 rounded-full bg-primary text-primary-foreground text-[12px] font-medium px-3.5 hover:bg-primary/90 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              {mutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Search className="h-3.5 w-3.5" strokeWidth={2.2} />
+              )}
+              <span>{t('addCards.panel.searchButton', 'Search')}</span>
+            </button>
+          </div>
         </div>
 
         {/* Result list — flex-1 fills remaining vertical space; bulk bar

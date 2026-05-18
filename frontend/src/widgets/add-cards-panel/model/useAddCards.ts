@@ -41,8 +41,16 @@ interface AddCardsRequest {
   filters?: AddCardsFilters;
 }
 
+export interface AddCardsMandalaMeta {
+  title: string;
+  focusTags: string[];
+  targetLevel: string;
+  language: 'ko' | 'en';
+}
+
 interface AddCardsResponseData {
   cards: AddCardCandidate[];
+  mandalaMeta: AddCardsMandalaMeta;
   trace?: {
     layer1_count: number;
     after_exclude: number;

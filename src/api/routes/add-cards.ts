@@ -180,10 +180,21 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
       const centerGoal = root.centerGoal;
       const subGoals = root.subjects.slice(0, 8);
-      // language defaults to 'ko' (future PR: derive from mandala or request body).
-      const language: 'ko' | 'en' = 'ko';
+      // CP466 amendment 2 — pull wizard metadata (focus_tags +
+      // target_level + language + title) so the response exposes them
+      // to the FE. Per user directive 2026-05-18: title is the locked
+      // base (immutable, already rendered via center_goal); focus_tags
+      // + target_level are EDITABLE on the FE — sent up as chips in
+      // the request `extraKeywords` rather than auto-injected server-
+      // side. This endpoint just surfaces them in the response so the
+      // FE can prepopulate the panel state.
+      const mandalaMeta = await prisma.user_mandalas.findUnique({
+        where: { id: mandalaId },
+        select: { focus_tags: true, target_level: true, language: true, title: true },
+      });
+      const language: 'ko' | 'en' = mandalaMeta?.language === 'en' ? 'en' : 'ko';
 
-      // 2. embed center_goal + extraKeywords (1 batch, chunk-fail-safe)
+      // 2. embed center_goal + extraKeywords (1 batch, chunk-fail-safe).
       const embedTexts = [centerGoal, ...extraKeywords];
       const embeddings = await embedBatch(embedTexts);
       const centerEmbedding = embeddings[0];
@@ -280,10 +291,22 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           }
         : undefined;
 
-      return reply.code(200).send({
-        status: 'ok',
-        data: trace ? { cards, trace } : { cards },
-      });
+      // CP466 amendment 2 — surface wizard meta so the FE panel can
+      // prepopulate editable chips (focus_tags) + level selector
+      // (target_level) on first open. title is informational (locked
+      // base already shown via center_goal).
+      const mandalaMetaOut = {
+        title: mandalaMeta?.title ?? '',
+        focusTags: mandalaMeta?.focus_tags ?? [],
+        targetLevel: mandalaMeta?.target_level ?? 'standard',
+        language,
+      };
+
+      const payload = trace
+        ? { cards, mandalaMeta: mandalaMetaOut, trace }
+        : { cards, mandalaMeta: mandalaMetaOut };
+
+      return reply.code(200).send({ status: 'ok', data: payload });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn(`add-cards failed: mandalaId=${mandalaId} userId=${userId} err=${msg}`);
