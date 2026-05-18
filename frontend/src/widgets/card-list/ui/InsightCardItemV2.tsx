@@ -4,7 +4,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
-import { GripVertical, NotepadText, Loader2, RotateCw, Play, Heart, Archive } from 'lucide-react';
+import {
+  GripVertical,
+  NotepadText,
+  Loader2,
+  RotateCw,
+  Play,
+  Bookmark,
+  Archive,
+} from 'lucide-react';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { useArchiveCard } from '@/features/card-management/model/useArchiveCard';
 import { useEnrichStream } from '@/features/card-management/model/useEnrichStream';
@@ -442,15 +450,19 @@ export function InsightCardItemV2({
           </div>
         )}
 
-        {/* Bottom-right: Heart (Pin replacement). Icon-only (no chrome)
-            per CP463 user directive 2026-05-17. Liked = always-visible
-            red fill; unliked = hover-only white. Hover animates scale-125
-            + slight rotate so the affordance is unmistakable. */}
+        {/* Bottom-right: Pick — Bookmark icon (CP466 swap from Heart, doc
+            add-cards-2026-05-18.md). mental model = "pick-and-save into
+            my curation", not "like". BookmarkPlus = hover-in affordance
+            (add), BookmarkCheck = idle-saved state (added). idle saved
+            renders at scale-[0.5] so the thumbnail stays legible; on
+            card hover the icon restores to full size, on button hover
+            it scales to 125% (per CP466 user directive 2026-05-18).
+            unliked = hover-only opacity-100, unchanged. */}
         {videoId && (
           <button
             type="button"
             onClick={handleHeartClick}
-            aria-label={liked ? 'Unlike card' : 'Like card'}
+            aria-label={liked ? 'Remove from saved' : 'Save card'}
             aria-pressed={liked}
             disabled={like.isPending || unlike.isPending}
             className={cn(
@@ -461,9 +473,10 @@ export function InsightCardItemV2({
               'disabled:opacity-50 disabled:cursor-not-allowed'
             )}
           >
-            <Heart
+            <Bookmark
               className={cn(
-                'w-[22px] h-[22px]',
+                'w-[22px] h-[22px] transition-transform duration-200',
+                liked && 'scale-[0.65] group-hover:scale-100',
                 liked
                   ? 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]'
                   : 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]'
