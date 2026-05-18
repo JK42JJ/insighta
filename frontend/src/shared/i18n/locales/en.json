@@ -1821,5 +1821,58 @@
     "restoreOriginal": "Restore original",
     "viewModePlayer": "Video",
     "viewModeNote": "Note"
+  },
+  "addCards": {
+    "triggerChip": "+ Add Cards",
+    "panel": {
+      "title": "Find more videos",
+      "lockedBaseLabel": "Searching within",
+      "keywordPlaceholder": "Add keyword…",
+      "removeKeyword": "Remove keyword {{keyword}}",
+      "searchButton": "Search",
+      "resetButton": "Reset",
+      "resultCount": "{{count}} matches",
+      "expandOptions": "Expand options",
+      "collapseOptions": "Collapse options",
+      "idle": "Choose keywords and filters, then press Search.",
+      "empty": "No matches yet. Please try again in a moment.",
+      "searchFailed": "The search didn't complete. Please try again in a moment."
+    },
+    "filters": {
+      "viewCount": {
+        "label": "Views",
+        "all": "All views",
+        "1k": "≥ 1K views",
+        "10k": "≥ 10K views",
+        "100k": "≥ 100K views",
+        "1m": "≥ 1M views"
+      },
+      "duration": {
+        "label": "Length",
+        "all": "Any length",
+        "short": "< 10 min",
+        "medium": "10–30 min",
+        "long": "30–60 min",
+        "xlong": "≥ 60 min"
+      },
+      "published": {
+        "label": "Published",
+        "all": "Any time",
+        "7d": "Past week",
+        "30d": "Past month",
+        "180d": "Past 6 months",
+        "365d": "Past year"
+      }
+    },
+    "targetLevel": {
+      "label": "Level",
+      "foundation": "Foundation",
+      "standard": "Standard",
+      "advanced": "Advanced"
+    },
+    "actions": {
+      "addOne": "Add to mandala",
+      "picked": "Picked"
+    }
   }
 }

@@ -48,6 +48,8 @@ prisma/migrations/*
 !prisma/migrations/mandala_embeddings/
 !prisma/migrations/rich-summary-v2/
 !prisma/migrations/card-interactions/
+!prisma/migrations/add-cards/
+!prisma/migrations/add-cards/**
 
 # Logs
 logs/
