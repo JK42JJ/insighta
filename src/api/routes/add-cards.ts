@@ -43,6 +43,7 @@ import {
   type AssembledSlot,
 } from '@/skills/plugins/video-discover/v3/executor';
 import { getAddCardsConfig } from '@/config/add-cards';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -50,7 +51,6 @@ const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const MAX_EXTRA_KEYWORDS = 10;
 const MAX_EXCLUDE_IDS = 500;
 const MAX_KEYWORD_LEN = 200;
-const MS_PER_DAY = 86_400_000;
 
 const log = logger.child({ module: 'add-cards-routes' });
 
