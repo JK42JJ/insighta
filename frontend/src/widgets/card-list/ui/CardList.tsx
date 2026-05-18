@@ -237,44 +237,25 @@ export function CardList({
     setVisibleCount(PAGE_SIZE);
   }, [cardListKey]);
 
-  // CP469.3 — strict top-down sequential reveal queue.
+  // CP469.3 sequential reveal queue REMOVED (CP470 hotfix).
   //
-  // Browser fetchPriority + loading="eager" only order the *fetch
-  // start* — bytes arrive in whatever order HTTP/2 multiplex / image
-  // size / CDN cache state decides. To match the user mental model
-  // ("상단부터 차례로 로드"), CardList owns a `readyIds` Set and only
-  // reveals idx N once 0..N-1 have all reached a terminal load state
-  // (real decoded thumb, fallback exhausted, or placeholder) — OR the
-  // per-idx timeout fires so one slow network never holds the rest of
-  // the grid hostage. Per-idx timeout = REVEAL_TIMEOUT_BASE_MS +
-  // idx * REVEAL_TIMEOUT_STAGGER_MS so the stagger trickles the
-  // forced advances in order even on a totally cold connection.
-  const REVEAL_TIMEOUT_BASE_MS = 1500;
-  const REVEAL_TIMEOUT_STAGGER_MS = 100;
-  const [readyIds, setReadyIds] = useState<Set<string>>(new Set());
-  const markReady = useCallback((cardId: string) => {
-    setReadyIds((prev) => {
-      if (prev.has(cardId)) return prev;
-      const next = new Set(prev);
-      next.add(cardId);
-      return next;
-    });
-  }, []);
-  useEffect(() => {
-    setReadyIds(new Set());
-  }, [cardListKey]);
-  useEffect(() => {
-    if (sortedCards.length === 0) return;
-    const timers = sortedCards.map((card, idx) =>
-      setTimeout(() => markReady(card.id), REVEAL_TIMEOUT_BASE_MS + idx * REVEAL_TIMEOUT_STAGGER_MS)
-    );
-    return () => timers.forEach(clearTimeout);
-  }, [cardListKey, sortedCards, markReady]);
-  const revealedPrefix = useMemo(() => {
-    let i = 0;
-    while (i < sortedCards.length && readyIds.has(sortedCards[i].id)) i++;
-    return i;
-  }, [sortedCards, readyIds]);
+  // The queue's `readyIds` Set was reset on every `cardListKey` change
+  // (= card ids list change). Background SSE / TanStack refetches add
+  // a card → ids list changes → reset → all revealed cards flip back
+  // to wrapper opacity-0 → user sees a "메롱" flash where thumbs that
+  // were already visible disappear behind shimmer and re-reveal.
+  //
+  // We rely instead on:
+  //   - image-utils' own opacity-0 → 1 fade-in (onLoad/onError chain).
+  //   - `loading="eager" + fetchPriority="high"` for idx < 6 so the
+  //     first row arrives near-simultaneously (mosaic minimized).
+  //   - `bg-muted` + shimmer overlay so the placeholder reads as a
+  //     YouTube-style gray loading state until each thumb settles.
+  //
+  // Sequential order across the entire grid is best-effort, not
+  // strict. Re-introducing strict order requires a race-free design
+  // (mandala-scoped reset key + monotonic ready set + safe
+  // sort-change handling) and lands in a separate PR.
 
   // Infinite scroll: observe sentinel at bottom of grid
   useEffect(() => {
@@ -501,8 +482,6 @@ export function CardList({
                 isEnrichFailed={failedEnrichCardIds?.has(card.id)}
                 onRetryEnrich={onRetryEnrich}
                 priority={idx < 6}
-                isRevealed={idx < revealedPrefix}
-                onImageReady={() => markReady(card.id)}
                 mandalaRelevancePct={(() => {
                   const vid = safeVideoId(card.videoUrl);
                   return vid ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null) : null;
