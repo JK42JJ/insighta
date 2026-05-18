@@ -155,18 +155,9 @@ function AuthenticatedApp() {
   const isViewingPending = !!pendingMandala && effectiveMandalaId === pendingMandala.tempId;
 
   // 3. Mandala data from DB (by selected mandala ID)
-  const {
-    mandalaLevels: queryMandalaLevels,
-    mandalaMeta: queryMandalaMeta,
-    isLoading: mandalaQueryLoading,
-  } = useMandalaQuery(isViewingPending ? null : effectiveMandalaId);
-  // Server-truth card count used as the grid's layout commitment.
-  // Skeletons fill the gap until each cell's data lands.
-  const serverCardCount = queryMandalaMeta?.cardCount ?? 0;
-
-  // Lift CardListView's Newly Synced pill state up so skeletonCount can
-  // be disabled in any sub-view (cell-selected / Newly Synced / search).
-  const [isNewlySyncedActive, setIsNewlySyncedActive] = useState(false);
+  const { mandalaLevels: queryMandalaLevels, isLoading: mandalaQueryLoading } = useMandalaQuery(
+    isViewingPending ? null : effectiveMandalaId
+  );
 
   // Suppress "Sector 1..8" + empty-title placeholders while the detail query
   // is still inflight AND we have no useful subjects yet. Treated as
@@ -962,23 +953,6 @@ function AuthenticatedApp() {
                             (isNewMandalaActive && cards.totalCards === 0) ||
                             (mandalaSwitchGrace && cards.totalCards === 0)
                       }
-                      skeletonCount={(() => {
-                        // YouTube pattern (CP468 → CP469 sweep): padding
-                        // only when the grid is genuinely empty (loading).
-                        // Once a single real card lands the grid renders
-                        // organically — never inject placeholders between
-                        // or after real cards. Sub-views render explicit
-                        // subsets, so the server total no longer maps onto
-                        // cell-by-cell layout there either.
-                        if (search.isSearchActive) return 0;
-                        if (navigation.selectedCellIndex !== null) return 0;
-                        if (isNewlySyncedActive) return 0;
-                        if (cards.displayCards.length > 0) return 0;
-                        const SKELETON_HINT_CAP = 12;
-                        return Math.min(serverCardCount, SKELETON_HINT_CAP);
-                      })()}
-                      isNewlySyncedActive={isNewlySyncedActive}
-                      onNewlySyncedActiveChange={setIsNewlySyncedActive}
                       title={
                         search.isSearchActive
                           ? t('search.results', 'Search Results')

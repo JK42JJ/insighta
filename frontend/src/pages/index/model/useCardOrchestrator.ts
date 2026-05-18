@@ -260,13 +260,8 @@ export function useCardOrchestrator(
           c.cellIndex >= 0 &&
           c.levelId &&
           c.levelId !== 'scratchpad' &&
-          // Strict mandala scope (CP471 follow-up). The previous
-          // `!mandalaId || c.mandalaId === mandalaId` short-circuit
-          // let EVERY mandala's cards through during the brief window
-          // when `effectiveMandalaId` is null (sidebar click → store
-          // update → useMemo recompute race), which the user saw as
-          // "기존 만다라 카드가 새 만다라에 보임" until refresh.
-          c.mandalaId === mandalaId
+          // Only show cards belonging to the current mandala
+          (!mandalaId || c.mandalaId === mandalaId)
       ),
     [persistedLocalCards, mandalaId]
   );
@@ -292,8 +287,8 @@ export function useCardOrchestrator(
           c.cellIndex >= 0 &&
           c.levelId &&
           c.levelId !== 'scratchpad' &&
-          // Strict mandala scope — see mandalaLocalCards comment.
-          c.mandalaId === mandalaId
+          // Only show cards belonging to the current mandala
+          (!mandalaId || c.mandalaId === mandalaId)
       ),
     [syncedCards, mandalaId]
   );
@@ -351,13 +346,9 @@ export function useCardOrchestrator(
         c.cellIndex >= 0 &&
         c.levelId &&
         c.levelId !== 'scratchpad' &&
-        // Strict mandala scope (CP471 follow-up) — without this, a
-        // pending optimistic card created on mandala A stayed visible
-        // on mandala B until the persist completed.
-        c.mandalaId === mandalaId &&
         !persistedUrls.has(normalizeUrl(c.videoUrl))
     );
-  }, [pendingLocalCards, mandalaLocalCards, mandalaId]);
+  }, [pendingLocalCards, mandalaLocalCards]);
 
   // SSE stream cards converted to InsightCard format (recommendation_cache backlog)
   const streamMandalaCards = useMemo(() => {
