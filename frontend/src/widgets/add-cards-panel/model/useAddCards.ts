@@ -23,7 +23,7 @@ export interface AddCardCandidate {
   publishedAt: string | null;
   score: number;
   cellIndex: number;
-  source: 'video_pool';
+  source: 'video_pool' | 'realtime';
 }
 
 export type DurationBucket = 'short' | 'medium' | 'long' | 'xlong';
@@ -53,6 +53,7 @@ interface AddCardsResponseData {
   mandalaMeta: AddCardsMandalaMeta;
   trace?: {
     layer1_count: number;
+    tier2_count: number;
     after_exclude: number;
     layer4_boost_applied: number;
     caps_enforced: { channel: number; subgoal: number };

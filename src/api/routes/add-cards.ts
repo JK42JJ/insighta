@@ -38,6 +38,10 @@ import {
   matchFromVideoPoolByCenterGoal,
   type CachedMatch,
 } from '@/skills/plugins/video-discover/v3/cache-matcher';
+import {
+  runDiscoverEphemeral,
+  type AssembledSlot,
+} from '@/skills/plugins/video-discover/v3/executor';
 import { getAddCardsConfig } from '@/config/add-cards';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -82,11 +86,12 @@ interface AddCardCandidate {
   publishedAt: string | null;
   score: number;
   cellIndex: number;
-  source: 'video_pool';
+  source: 'video_pool' | 'realtime';
 }
 
 interface AddCardsTrace {
   layer1_count: number;
+  tier2_count: number;
   after_exclude: number;
   layer4_boost_applied: number;
   caps_enforced: { channel: number; subgoal: number };
@@ -206,14 +211,44 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         });
       }
 
-      // 3. Tier 1 candidates from video_pool by centerGoal cosine
-      const candidates = await matchFromVideoPoolByCenterGoal({
-        centerEmbedding,
-        language,
-        subGoals,
-        limit: cfg.tier1KnnLimit,
-        threshold: cfg.semanticThreshold,
-      });
+      // 3. Hybrid candidate fetch — reuse the SAME single-source-of-truth
+      //    helpers that wizard-precompute / video-discover v3 already use,
+      //    so any future tuning of either tier propagates here too:
+      //    - Tier 1 (video_pool cosine, mandala-scoped) via
+      //      `matchFromVideoPoolByCenterGoal` — same call wizard uses.
+      //    - Tier 2 (YouTube realtime fresh) via `runDiscoverEphemeral`
+      //      — same call wizard-precompute (Step 1) uses.
+      //    Both run in parallel; results merged by videoId, higher score
+      //    wins (Tier 1 cache typically scores 0..1 cosine; Tier 2
+      //    realtime scoring matches per v3 spec).
+      const [tier1Candidates, ephemeralResult] = await Promise.all([
+        matchFromVideoPoolByCenterGoal({
+          centerEmbedding,
+          language,
+          subGoals,
+          limit: cfg.tier1KnnLimit,
+          threshold: cfg.semanticThreshold,
+        }),
+        runDiscoverEphemeral({
+          centerGoal,
+          subGoals,
+          language,
+          focusTags: (mandalaMeta?.focus_tags ?? []).slice(0, 10),
+          targetLevel: mandalaMeta?.target_level ?? 'standard',
+          env: process.env,
+        }).catch((err) => {
+          // Tier 2 is best-effort — YouTube quota / Ollama outage must
+          // not 500 the panel. Log + fall through with empty slots so
+          // Tier 1 alone still answers.
+          const msg = err instanceof Error ? err.message : String(err);
+          log.warn(`add-cards Tier 2 ephemeral failed (Tier 1 only): ${msg}`);
+          return null;
+        }),
+      ]);
+      const tier2Slots: AssembledSlot[] = ephemeralResult?.slots ?? [];
+      const merged = mergeTierCandidates(tier1Candidates, tier2Slots);
+      const candidates: CachedMatch[] = merged.candidates;
+      const sourceMap = merged.sourceMap;
 
       // 4. resolve exclude set in parallel
       const excludeSet = await resolveExcludeSet({
@@ -277,12 +312,13 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         publishedAt: c.publishedAt?.toISOString() ?? null,
         score: c.score,
         cellIndex: c.cellIndex,
-        source: 'video_pool',
+        source: sourceMap.get(c.videoId) ?? 'video_pool',
       }));
 
       const trace: AddCardsTrace | undefined = wantTrace
         ? {
-            layer1_count: candidates.length,
+            layer1_count: tier1Candidates.length,
+            tier2_count: tier2Slots.length,
             after_exclude: filtered.length,
             layer4_boost_applied: feedback.boostedCount,
             caps_enforced: { channel: result.capsChannel, subgoal: result.capsSubgoal },
@@ -520,6 +556,50 @@ function parsePgvectorLiteral(
     vec[i] = n;
   }
   return vec;
+}
+
+/**
+ * Merge Tier 1 (video_pool, mandala-scoped cosine) + Tier 2 (YouTube
+ * realtime via runDiscoverEphemeral) candidate sets into a single
+ * deduped CachedMatch[] (panel-internal shape). Dedup key = videoId.
+ * Higher score wins. Returns a parallel `sourceMap` so the response
+ * can label `'video_pool' | 'realtime'` without bloating CachedMatch
+ * (shared with cache-matcher / other callers).
+ */
+function mergeTierCandidates(
+  tier1: CachedMatch[],
+  tier2: AssembledSlot[]
+): { candidates: CachedMatch[]; sourceMap: Map<string, 'video_pool' | 'realtime'> } {
+  const byVideoId = new Map<string, CachedMatch>();
+  const sourceMap = new Map<string, 'video_pool' | 'realtime'>();
+  for (const c of tier1) {
+    byVideoId.set(c.videoId, c);
+    sourceMap.set(c.videoId, 'video_pool');
+  }
+  for (const s of tier2) {
+    const existing = byVideoId.get(s.videoId);
+    const slotAsMatch: CachedMatch = {
+      videoId: s.videoId,
+      title: s.title,
+      description: s.description,
+      channelName: s.channelName,
+      channelId: s.channelId,
+      thumbnail: s.thumbnail,
+      viewCount: s.viewCount,
+      likeCount: s.likeCount,
+      durationSec: s.durationSec,
+      publishedAt: s.publishedAt,
+      cellIndex: s.cellIndex,
+      score: s.score,
+    };
+    if (!existing || s.score > existing.score) {
+      byVideoId.set(s.videoId, slotAsMatch);
+      if (!sourceMap.has(s.videoId)) {
+        sourceMap.set(s.videoId, s.tier === 'cache' ? 'video_pool' : 'realtime');
+      }
+    }
+  }
+  return { candidates: [...byVideoId.values()], sourceMap };
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
