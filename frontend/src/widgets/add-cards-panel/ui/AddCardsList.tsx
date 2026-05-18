@@ -19,9 +19,10 @@ interface AddCardsListProps {
   cards: AddCardCandidate[];
   mandalaId: string;
   isLoading: boolean;
+  hasSearched: boolean;
 }
 
-export function AddCardsList({ cards, mandalaId, isLoading }: AddCardsListProps) {
+export function AddCardsList({ cards, mandalaId, isLoading, hasSearched }: AddCardsListProps) {
   const { t } = useTranslation();
   const selectedIds = useAddCardsPanelStore((s) => s.selectedIds);
   const toggleSelected = useAddCardsPanelStore((s) => s.toggleSelected);
@@ -31,6 +32,16 @@ export function AddCardsList({ cards, mandalaId, isLoading }: AddCardsListProps)
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // CP466 amendment 3 — idle state shown before the user has clicked
+  // Search even once (auto-fetch removed).
+  if (!hasSearched) {
+    return (
+      <div className="flex items-center justify-center py-16 text-[13px] text-muted-foreground text-center px-6">
+        {t('addCards.panel.idle', 'Choose keywords and filters, then press Search.')}
       </div>
     );
   }

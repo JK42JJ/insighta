@@ -1831,6 +1831,7 @@
       "removeKeyword": "Remove keyword {{keyword}}",
       "selectCard": "Select card",
       "searchButton": "Search",
+      "idle": "Choose keywords and filters, then press Search.",
       "empty": "No cards found."
     },
     "filters": {

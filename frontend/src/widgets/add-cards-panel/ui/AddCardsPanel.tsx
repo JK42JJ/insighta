@@ -15,7 +15,7 @@
  * Spec: docs/design/add-cards-2026-05-18.md §2 + §6.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
 import { Loader2, Lock, Search, X } from 'lucide-react';
@@ -29,6 +29,7 @@ import { AddCardsList } from './AddCardsList';
 import { AddCardsBulkBar } from './AddCardsBulkBar';
 
 const PANEL_WIDTH_CLASS = 'w-full md:w-[45vw] md:max-w-[720px]';
+const CLOSE_ANIMATION_MS = 200;
 
 export function AddCardsPanel() {
   const { t } = useTranslation();
@@ -57,9 +58,10 @@ export function AddCardsPanel() {
     seedFromWizardMeta(meta.focusTags, meta.targetLevel);
   }, [mutation.data, seedFromWizardMeta]);
 
-  // CP466 amendment — explicit search button. Initial open triggers 1
-  // auto-fetch (backlog); subsequent keyword/filter changes do NOT
-  // auto-refetch — user clicks the Search button explicitly.
+  // CP466 amendment 3 — search is fully user-driven. Panel open does
+  // NOT auto-fetch (user directive 2026-05-18: "검색창 열리면 자동
+  // 검색 X — 검색 버튼 눌러야 시작"). Empty result state below shows
+  // the idle empty message until the user clicks Search.
   // targetLevel (난이도) is appended to extraKeywords for the BE embed
   // batch when it diverges from 'standard' (user-tunable wizard meta).
   const triggerSearch = useCallback(() => {
@@ -74,18 +76,23 @@ export function AddCardsPanel() {
     });
   }, [mandalaId, extraKeywords, filters, mutation, targetLevel]);
 
-  // Initial-open one-shot fetch — refs guard against re-fire on
-  // mandala-id same-value re-open.
-  const initialFetchedFor = useRef<string | null>(null);
+  // Mount-aware close animation (CP466 amendment 3 — user directive
+  // 2026-05-18: 닫힐 때도 슬라이딩). When `open` flips to false we keep
+  // the panel mounted for `CLOSE_ANIMATION_MS` so the transform-to-
+  // off-screen transition can play, then unmount.
+  const [isAnimatingOut, setIsAnimatingOut] = useState(false);
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (!open || !mandalaId) return;
-    if (initialFetchedFor.current === mandalaId) return;
-    initialFetchedFor.current = mandalaId;
-    triggerSearch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mandalaId]);
-  useEffect(() => {
-    if (!open) initialFetchedFor.current = null;
+    if (open) {
+      wasOpenRef.current = true;
+      setIsAnimatingOut(false);
+      return;
+    }
+    if (wasOpenRef.current) {
+      setIsAnimatingOut(true);
+      const timer = setTimeout(() => setIsAnimatingOut(false), CLOSE_ANIMATION_MS);
+      return () => clearTimeout(timer);
+    }
   }, [open]);
 
   // Esc closes the panel.
@@ -98,14 +105,24 @@ export function AddCardsPanel() {
     return () => window.removeEventListener('keydown', handler);
   }, [open, closePanel]);
 
-  if (!open || !mandalaId) return null;
+  const shouldRender = (open || isAnimatingOut) && mandalaId;
+  if (!shouldRender) return null;
 
   return (
     <>
-      {/* Backdrop — click closes. z-index below dialog/modal stack
-          so VideoPlayerModal can stack above when a panel card is clicked. */}
-      <div className="fixed inset-0 z-30 bg-black/20" onClick={closePanel} aria-hidden="true" />
-      {/* Slide-in panel */}
+      {/* Backdrop — click closes. Fades with the panel slide so the
+          dim layer doesn't snap-cut when closing. */}
+      <div
+        className={cn(
+          'fixed inset-0 z-30 bg-black/20 transition-opacity duration-200 ease-in-out',
+          open ? 'opacity-100' : 'opacity-0'
+        )}
+        onClick={closePanel}
+        aria-hidden="true"
+      />
+      {/* Slide-in / slide-out panel. Open → animate-in + slide-in-from-
+          right. Closing → animate-out + slide-out-to-right. Same 200ms
+          ease for both directions (CP466 user directive 2026-05-18). */}
       <aside
         role="dialog"
         aria-modal="true"
@@ -113,7 +130,9 @@ export function AddCardsPanel() {
         className={cn(
           'fixed top-0 right-0 bottom-0 z-40 flex flex-col bg-background border-l border-border/60 shadow-2xl',
           PANEL_WIDTH_CLASS,
-          'animate-in slide-in-from-right duration-200 ease-out'
+          open
+            ? 'animate-in slide-in-from-right duration-200 ease-out'
+            : 'animate-out slide-out-to-right duration-200 ease-in fill-mode-forwards'
         )}
       >
         {/* Header — single divider above the entire "input zone".
@@ -181,7 +200,12 @@ export function AddCardsPanel() {
             sticks to bottom inside the same flex container. */}
         <div className="flex-1 flex flex-col min-h-0">
           <div className="flex-1 overflow-hidden">
-            <AddCardsList cards={cards} mandalaId={mandalaId} isLoading={mutation.isPending} />
+            <AddCardsList
+              cards={cards}
+              mandalaId={mandalaId}
+              isLoading={mutation.isPending}
+              hasSearched={mutation.isSuccess || mutation.isError}
+            />
           </div>
           <AddCardsBulkBar cards={cards} mandalaId={mandalaId} />
         </div>
