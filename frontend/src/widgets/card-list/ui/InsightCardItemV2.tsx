@@ -463,7 +463,8 @@ export function InsightCardItemV2({
           >
             <Heart
               className={cn(
-                'w-[22px] h-[22px]',
+                'w-[22px] h-[22px] transition-transform duration-200',
+                liked && 'scale-[0.5] group-hover:scale-100',
                 liked
                   ? 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]'
                   : 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]'
