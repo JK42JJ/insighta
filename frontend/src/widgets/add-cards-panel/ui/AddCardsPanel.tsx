@@ -19,6 +19,7 @@ import { AddCardsList } from './AddCardsList';
 
 const PANEL_WIDTH_CLASS = 'w-full md:w-[45vw] md:max-w-[720px]';
 const CLOSE_ANIMATION_MS = 200;
+const SCROLL_COLLAPSE_THRESHOLD_PX = 32;
 
 export function AddCardsPanel() {
   const { t } = useTranslation();
@@ -102,8 +103,16 @@ export function AddCardsPanel() {
 
   // Cards stay in the panel even after pick — `isPicked` drives the
   // overlay + disabled affordance. Filtering them out was the
-  // user-reported "completely disappears" bug.
+  // user-reported "completely disappears" bug. But every COUNT surface
+  // (header badge, trigger chip badge, resultCount text, auto-collapse
+  // gate) reflects ONLY the cards the user can still pick — picked
+  // cards are visually still present but counted as "done" so the
+  // user-perceived "remaining to pick" matches the badge number.
   const cards: AddCardCandidate[] = mutation.data?.cards ?? restoredCards ?? [];
+  const visibleCount = useMemo(
+    () => cards.filter((c) => !pickedSet.has(c.videoId)).length,
+    [cards, pickedSet]
+  );
   const hasSearched = mutation.isSuccess || mutation.isError || restoredCards !== null;
 
   const handlePick = useCallback(
@@ -178,20 +187,20 @@ export function AddCardsPanel() {
   // Keep store count in sync so the external trigger chip badge follows panel state.
   useEffect(() => {
     if (!mandalaId) return;
-    setVisibleCount(mandalaId, cards.length);
-  }, [mandalaId, cards.length, setVisibleCount]);
+    setVisibleCount(mandalaId, visibleCount);
+  }, [mandalaId, visibleCount, setVisibleCount]);
 
   // Auto-collapse the input zone once per mandala on first successful search.
   const [inputCollapsed, setInputCollapsed] = useState(false);
   const autoCollapsedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (mutation.isSuccess && cards.length > 0 && mandalaId) {
+    if (mutation.isSuccess && visibleCount > 0 && mandalaId) {
       if (autoCollapsedFor.current !== mandalaId) {
         autoCollapsedFor.current = mandalaId;
         setInputCollapsed(true);
       }
     }
-  }, [mutation.isSuccess, cards.length, mandalaId]);
+  }, [mutation.isSuccess, visibleCount, mandalaId]);
 
   useEffect(() => {
     if (!open) {
@@ -287,12 +296,12 @@ export function AddCardsPanel() {
             : 'animate-in slide-in-from-right duration-200 ease-out'
         )}
       >
-        <header className="flex items-center justify-between px-4 py-3 border-b border-border/40">
+        <header className="flex items-center justify-between px-5 py-3 border-b border-border/40 sm:px-6">
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="text-[14px] font-semibold truncate">
               {t('addCards.panel.title', 'Find more videos')}
             </h2>
-            {cards.length > 0 && (
+            {visibleCount > 0 && (
               <span
                 className="inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-tight"
                 style={{
@@ -300,13 +309,13 @@ export function AddCardsPanel() {
                   color: 'hsl(var(--primary-foreground))',
                 }}
                 aria-label={t('addCards.panel.resultCount', '{{count}} matches', {
-                  count: cards.length,
+                  count: visibleCount,
                 })}
               >
-                {cards.length}
+                {visibleCount}
               </span>
             )}
-            {mutation.isSuccess && cards.length > 0 && (
+            {hasSearched && cards.length > 0 && (
               <button
                 type="button"
                 onClick={() => setInputCollapsed((v) => !v)}
@@ -343,7 +352,7 @@ export function AddCardsPanel() {
           )}
           aria-hidden={inputCollapsed}
         >
-          <div className="px-4 py-3">
+          <div className="px-5 py-3 sm:px-6">
             <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
               <Lock className="h-3.5 w-3.5 shrink-0" />
               <span className="line-clamp-1">
@@ -359,7 +368,7 @@ export function AddCardsPanel() {
           <AddCardsFilters />
           <TargetLevelChips />
 
-          <div className="flex items-center justify-end px-4 py-2.5">
+          <div className="flex items-center justify-end px-5 py-2.5 sm:px-6">
             <button
               type="button"
               onClick={triggerSearch}
@@ -391,7 +400,7 @@ export function AddCardsPanel() {
         </div>
 
         {inputCollapsed && (
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-border/40 text-[11.5px] text-muted-foreground">
+          <div className="flex items-center gap-2 px-5 py-2 border-b border-border/40 text-[11.5px] text-muted-foreground sm:px-6">
             <Lock className="h-3 w-3 shrink-0" />
             <span className="truncate flex-1 text-foreground/80">{centerGoal || '…'}</span>
             <button
@@ -421,14 +430,26 @@ export function AddCardsPanel() {
           </div>
         )}
 
-        {mutation.isSuccess && cards.length > 0 && (
-          <div className="px-4 py-1.5 text-[11px] text-muted-foreground">
-            {t('addCards.panel.resultCount', '{{count}} matches', { count: cards.length })}
+        {mutation.isSuccess && visibleCount > 0 && (
+          <div className="px-5 py-1.5 text-[11px] text-muted-foreground sm:px-6">
+            {t('addCards.panel.resultCount', '{{count}} matches', { count: visibleCount })}
           </div>
         )}
 
         <div className="flex-1 flex flex-col min-h-0">
-          <div className="flex-1 overflow-y-auto scrollbar-pro min-h-0">
+          <div
+            className="flex-1 overflow-y-auto scrollbar-pro min-h-0"
+            // Scroll-driven auto-collapse: once the user starts scanning
+            // results the input section folds away. Up-scroll does NOT
+            // re-expand — the ChevronUp/Down button is the only path
+            // back up, so a quick wheel-down doesn't flip the panel
+            // open and closed.
+            onScroll={(e) => {
+              if (!inputCollapsed && e.currentTarget.scrollTop > SCROLL_COLLAPSE_THRESHOLD_PX) {
+                setInputCollapsed(true);
+              }
+            }}
+          >
             <AddCardsList
               cards={cards}
               isLoading={mutation.isPending}

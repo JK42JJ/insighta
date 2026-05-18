@@ -41,7 +41,7 @@ export function TargetLevelChips() {
   const setTargetLevel = useAddCardsPanelStore((s) => s.setTargetLevel);
 
   return (
-    <div className="flex items-center gap-2 px-4 py-1.5">
+    <div className="flex items-center gap-2 px-5 py-1.5 sm:px-6">
       <span className="shrink-0 text-[10.5px] uppercase tracking-wider text-muted-foreground w-[68px]">
         {t('addCards.targetLevel.label', 'Level')}
       </span>

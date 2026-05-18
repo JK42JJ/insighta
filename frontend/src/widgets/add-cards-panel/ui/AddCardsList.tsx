@@ -103,7 +103,7 @@ export function AddCardsList({
   }
 
   return (
-    <ul className="grid grid-cols-3 gap-3 px-4 py-3">
+    <ul className="grid grid-cols-3 gap-3 px-5 py-3 sm:px-6">
       {cards.map((card) => {
         const isPicked = pickedSet.has(card.videoId);
         const disabled = isPicked || isPickPending;
