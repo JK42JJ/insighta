@@ -1,19 +1,29 @@
 /**
- * Add Cards result list (CP466 amendment 8).
+ * Add Cards result list (CP466 amendment 9).
  *
- * Pure presentation component:
- *   - 3-col grid of candidate cards
- *   - Bookmark click → onPick callback (parent owns mutation state)
- *   - Border on hover only (user directive 2026-05-18)
- *   - Picked cards render disabled with filled Bookmark
+ * Pure presentation component. Card-wide click target — user directive
+ * 2026-05-18 "북마크 아이콘 클릭해야 → 카드 전체가 클릭 대상". Each
+ * card `<li>` is the single accessible button (role=button + tabIndex
+ * + onClick + Enter/Space keydown, mirroring SidebarMandalaSection
+ * pattern). Bookmark icon downgrades to a decorative indicator (was a
+ * nested <button>; nested buttons are invalid HTML and double-fired
+ * on bubble).
  *
- * Branch ordering: isLoading → isError → !hasSearched → empty → grid.
+ * Picked visual strengthened — user directive 2026-05-18 "선택 시
+ * 구별이 잘 안됨". Layered cue:
+ *   - thumbnail dimmed via overlay (bg-black/55)
+ *   - centered Check badge (large, white on emerald-500 circle)
+ *   - filled Bookmark stays in the corner for state continuity
+ *   - card border + opacity dropped to make the overlay the focal point
+ *
+ * Bezel — user directive 2026-05-18 "카드가 꽉차서 답답함, 좌/우 베젤
+ * 확보". ul padding bumped (px-3 → px-4, py-2 → py-3) + gap-2 → gap-3.
  *
  * Spec: docs/design/add-cards-2026-05-18.md §6.
  */
 
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, Bookmark, Loader2, RotateCw } from 'lucide-react';
+import { AlertCircle, Bookmark, Check, Loader2, RotateCw } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import type { AddCardCandidate } from '../model/useAddCards';
 
@@ -25,9 +35,6 @@ interface AddCardsListProps {
   errorMessage?: string;
   onRetry?: () => void;
   pickedSet: ReadonlySet<string>;
-  /** Disables the Bookmark on every card while any pick mutation is in
-   *  flight. Owned by the parent so a single mutation instance can be
-   *  shared / inspected. */
   isPickPending: boolean;
   onPick: (videoId: string, title: string) => void;
 }
@@ -94,57 +101,91 @@ export function AddCardsList({
   }
 
   return (
-    <ul className="grid grid-cols-3 gap-2 px-3 py-2">
+    <ul className="grid grid-cols-3 gap-3 px-4 py-3">
       {cards.map((card) => {
         const isPicked = pickedSet.has(card.videoId);
+        const disabled = isPicked || isPickPending;
+        const labelKey = isPicked ? 'addCards.actions.picked' : 'addCards.actions.addOne';
+        const labelDefault = isPicked ? 'Picked' : 'Add to mandala';
         return (
           <li
             key={card.videoId}
+            role="button"
+            tabIndex={isPicked ? -1 : 0}
+            aria-pressed={isPicked}
+            aria-disabled={disabled || undefined}
+            aria-label={`${t(labelKey, labelDefault)}: ${card.title}`}
+            onClick={() => {
+              if (disabled) return;
+              onPick(card.videoId, card.title);
+            }}
+            onKeyDown={(e) => {
+              if (disabled) return;
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onPick(card.videoId, card.title);
+              }
+            }}
             className={cn(
               'group relative rounded-md overflow-hidden border bg-card transition-colors',
-              'border-transparent hover:border-border',
-              isPicked && 'opacity-50 pointer-events-none hover:border-transparent'
+              'border-transparent',
+              !isPicked && 'cursor-pointer hover:border-border focus-visible:border-border',
+              isPicked && 'cursor-default',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30'
             )}
-            aria-disabled={isPicked || undefined}
           >
             <div className="relative aspect-video bg-muted">
               {card.thumbnail && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={card.thumbnail}
-                  alt={card.title}
+                  alt=""
                   className="h-full w-full object-cover"
                   loading="lazy"
                 />
               )}
-              <button
-                type="button"
-                onClick={() => !isPicked && onPick(card.videoId, card.title)}
-                disabled={isPickPending || isPicked}
-                aria-pressed={isPicked}
-                aria-label={
-                  isPicked
-                    ? t('addCards.actions.picked', 'Picked')
-                    : t('addCards.actions.addOne', 'Add to mandala')
-                }
+
+              {/* Picked overlay — strong layered cue */}
+              {isPicked && (
+                <div
+                  className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/55 backdrop-blur-[2px] gap-1"
+                  aria-hidden="true"
+                >
+                  <span className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 shadow-lg">
+                    <Check className="w-5 h-5 text-white" strokeWidth={3} />
+                  </span>
+                  <span className="text-[10.5px] font-semibold text-white tracking-wide">
+                    {t('addCards.actions.picked', 'Picked')}
+                  </span>
+                </div>
+              )}
+
+              {/* Bookmark indicator (decorative, no longer a button —
+                  the whole card is the button now). Hover-reveal on
+                  unpicked, persistent filled on picked. */}
+              <span
                 className={cn(
-                  'absolute bottom-1 right-1 z-10 w-6 h-6 flex items-center justify-center transition-all duration-200 ease-out',
-                  isPicked
-                    ? 'opacity-100'
-                    : 'opacity-0 group-hover:opacity-100 hover:scale-110 active:scale-95',
-                  'disabled:cursor-not-allowed'
+                  'absolute bottom-1 right-1 z-10 w-6 h-6 flex items-center justify-center transition-opacity duration-200',
+                  isPicked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                 )}
+                aria-hidden="true"
               >
                 <Bookmark
                   className="w-[18px] h-[18px] text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
                   fill={isPicked ? 'currentColor' : 'none'}
                   strokeWidth={2.2}
-                  aria-hidden="true"
                 />
-              </button>
+              </span>
             </div>
             <div className="px-1.5 py-1 space-y-0">
-              <h4 className="text-[11px] font-medium line-clamp-2 leading-snug">{card.title}</h4>
+              <h4
+                className={cn(
+                  'text-[11px] font-medium line-clamp-2 leading-snug',
+                  isPicked && 'text-muted-foreground'
+                )}
+              >
+                {card.title}
+              </h4>
               {card.channel && (
                 <p className="text-[9.5px] text-muted-foreground line-clamp-1">{card.channel}</p>
               )}

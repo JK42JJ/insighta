@@ -1270,7 +1270,7 @@ class ApiClient {
    */
   async likeCard(
     videoId: string,
-    body: { mandalaId?: string; title?: string; description?: string }
+    body: { mandalaId?: string; title?: string; description?: string; cellIndex?: number }
   ): Promise<{
     status: string;
     data: {

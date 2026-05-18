@@ -24,6 +24,9 @@ export interface LikeCardArgs {
   mandalaId?: string;
   title?: string;
   description?: string;
+  /** CP466 — Add Cards panel pass the candidate's auto-assigned cell
+   *  so the BE UPSERT can place it in the right mandala sector. */
+  cellIndex?: number;
 }
 
 export function useLikeCard() {
@@ -31,8 +34,8 @@ export function useLikeCard() {
 
   const like = useMutation({
     mutationFn: async (args: LikeCardArgs) => {
-      const { videoId, mandalaId, title, description } = args;
-      return apiClient.likeCard(videoId, { mandalaId, title, description });
+      const { videoId, mandalaId, title, description, cellIndex } = args;
+      return apiClient.likeCard(videoId, { mandalaId, title, description, cellIndex });
     },
     onSuccess: () => {
       // CP463 flicker-fix — DO NOT invalidate the card-list queries

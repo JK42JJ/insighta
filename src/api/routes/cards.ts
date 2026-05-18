@@ -276,7 +276,7 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
    */
   fastify.post<{
     Params: { videoId: string };
-    Body: { mandalaId?: string; title?: string; description?: string };
+    Body: { mandalaId?: string; title?: string; description?: string; cellIndex?: number };
   }>('/:videoId/like', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     if (!request.user || !('userId' in request.user)) {
       return reply
@@ -311,27 +311,82 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         },
       });
 
-      // 2. Auto-eviction guard + Add Cards surfacing mark (CP466):
-      //    set pinned_at=now() AND surfaced_at=now() on every matching
-      //    source row. Both tables hold pinned_at; user_video_states is
-      //    keyed by uuid video_id (FK to youtube_videos.id); user_local_cards
-      //    stores the youtube string id directly in `video_id VARCHAR(11)`.
-      //    surfaced_at lives only on user_video_states (CP466 Phase 1 schema).
+      // 2. Auto-eviction guard + Add Cards surfacing mark + INSERT
+      //    path for fresh picks (CP466 amendment 10).
+      //
+      //    A) UPDATE user_local_cards.pinned_at (where exists).
+      //    B) UPSERT user_video_states — INSERT when the row is new
+      //       (panel pick of a candidate that wasn't in the mandala
+      //       yet) so the card auto-appears in the mandala grid +
+      //       its assigned cell. UPDATE pinned_at + surfaced_at when
+      //       the row exists. yt lookup mirrors the Pin stream-
+      //       branch pattern (cards.ts:161-171).
       const pinnedAt = new Date();
       const localCardsUpdated = await prisma.$executeRaw`
         UPDATE public.user_local_cards
            SET pinned_at = ${pinnedAt}
          WHERE user_id = ${userId}::uuid AND video_id = ${videoId}
       `;
-      const videoStatesUpdated = await prisma.$executeRaw`
-        UPDATE public.user_video_states uvs
-           SET pinned_at = ${pinnedAt},
-               surfaced_at = ${pinnedAt}
-          FROM public.youtube_videos yv
-         WHERE uvs.user_id = ${userId}::uuid
-           AND uvs.video_id = yv.id
-           AND yv.youtube_video_id = ${videoId}
-      `;
+      let videoStatesUpdated = 0;
+      const yt = await prisma.youtube_videos.findFirst({
+        where: { youtube_video_id: videoId },
+        select: { id: true },
+      });
+      if (yt && body.mandalaId) {
+        const cellIndex =
+          typeof body.cellIndex === 'number' && Number.isFinite(body.cellIndex)
+            ? body.cellIndex
+            : -1;
+        videoStatesUpdated = await prisma.$executeRaw(Prisma.sql`
+          INSERT INTO public.user_video_states (
+            user_id, video_id, is_in_ideation, watch_position_seconds,
+            is_watched, cell_index, level_id, mandala_id, sort_order,
+            auto_added, added_to_ideation_at, created_at, updated_at,
+            pinned_at, surfaced_at
+          )
+          VALUES (
+            ${userId}::uuid,
+            ${yt.id}::uuid,
+            false,
+            0,
+            false,
+            ${cellIndex},
+            'root',
+            ${body.mandalaId}::uuid,
+            NULL,
+            false,
+            now(),
+            now(),
+            now(),
+            ${pinnedAt},
+            ${pinnedAt}
+          )
+          ON CONFLICT (user_id, video_id) DO UPDATE
+            SET pinned_at = ${pinnedAt},
+                surfaced_at = ${pinnedAt},
+                mandala_id = EXCLUDED.mandala_id,
+                cell_index = EXCLUDED.cell_index
+        `);
+      } else {
+        // No yt row → fall back to UPDATE-only path. Card stays in
+        // panel-history sense (signal recorded) but won't appear in
+        // mandala grid until a yt row exists. Follow-up: cache
+        // populate via YouTube Data API at this point.
+        videoStatesUpdated = await prisma.$executeRaw`
+          UPDATE public.user_video_states uvs
+             SET pinned_at = ${pinnedAt},
+                 surfaced_at = ${pinnedAt}
+            FROM public.youtube_videos yv
+           WHERE uvs.user_id = ${userId}::uuid
+             AND uvs.video_id = yv.id
+             AND yv.youtube_video_id = ${videoId}
+        `;
+        if (!yt) {
+          log.warn(
+            `like: youtube_videos row missing for videoId=${videoId} userId=${userId} — INSERT path skipped`
+          );
+        }
+      }
 
       // 3. Enrichment job — only when the caller supplied a mandalaId so
       //    the v2 generator can resolve a center_goal. Title/description

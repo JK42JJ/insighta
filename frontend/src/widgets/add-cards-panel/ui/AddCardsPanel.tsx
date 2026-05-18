@@ -18,10 +18,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
 import { ChevronDown, ChevronUp, Loader2, Lock, Search, X } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/shared/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/shared/ui/alert-dialog';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
+import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
+import { youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
 import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
-import { useAddCards } from '../model/useAddCards';
+import { useAddCards, type AddCardCandidate } from '../model/useAddCards';
+import { loadAddCardsState, mergeSurfacedVideoIds, saveAddCardsState } from '../lib/persistence';
 import { KeywordChipInput } from './KeywordChipInput';
 import { AddCardsFilters } from './AddCardsFilters';
 import { TargetLevelChips } from './TargetLevelChips';
@@ -44,30 +58,90 @@ export function AddCardsPanel() {
   const centerGoal = mandalaLevels?.root?.centerGoal ?? '';
 
   const mutation = useAddCards();
-  const cards = mutation.data?.cards ?? [];
 
-  // CP466 amendment 8 — pick set tracked locally per panel session.
-  // BE excludes already-liked videos from subsequent searches, so this
-  // local set only needs to cover the current result batch; resets on
-  // panel close-then-reopen automatically via mount.
+  // CP466 amendment 9 — persisted result + cumulative surfaced set.
+  // On panel-open we hydrate from localStorage so a reload / browser-
+  // quit / dashboard navigation does NOT lose the user's discovery
+  // context. `restoredCards` is the last batch shown; `surfacedVideoIds`
+  // is the cumulative shown-history (sent as excludeVideoIds on every
+  // Search click so the user never sees the same card twice).
+  const [restoredCards, setRestoredCards] = useState<AddCardCandidate[] | null>(null);
+  const [surfacedVideoIds, setSurfacedVideoIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!open || !mandalaId) return;
+    const stored = loadAddCardsState(mandalaId);
+    if (stored) {
+      setRestoredCards(stored.cards);
+      setSurfacedVideoIds(stored.surfacedVideoIds);
+    } else {
+      setRestoredCards(null);
+      setSurfacedVideoIds([]);
+    }
+    // Also clear any prior mutation data so the freshly-restored
+    // batch wins until the user clicks Search.
+    mutation.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mandalaId]);
+
+  // Save freshly-fetched results + grow the surfaced set whenever a
+  // new mutation success lands. Surfaced grows monotonically per
+  // mandala until the user manually clears (no UI for that yet —
+  // future v2+).
+  useEffect(() => {
+    if (!mutation.isSuccess || !mandalaId) return;
+    const freshCards = mutation.data?.cards ?? [];
+    const freshIds = freshCards.map((c) => c.videoId);
+    const nextSurfaced = mergeSurfacedVideoIds(surfacedVideoIds, freshIds);
+    setSurfacedVideoIds(nextSurfaced);
+    saveAddCardsState(mandalaId, freshCards, nextSurfaced);
+    // Fresh batch takes over → drop the restored snapshot.
+    setRestoredCards(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mutation.isSuccess, mutation.data, mandalaId]);
+
+  // Display source: live mutation data wins; otherwise the restored
+  // snapshot from localStorage. Picked cards are filtered out so the
+  // panel + header count update immediately on pick (CP466 amendment
+  // 10 user directive).
+  const allCards: AddCardCandidate[] = mutation.data?.cards ?? restoredCards ?? [];
+  const cards: AddCardCandidate[] = allCards.filter((c) => !pickedSet.has(c.videoId));
+  const hasSearched = mutation.isSuccess || mutation.isError || restoredCards !== null;
+
+  // CP466 amendment 10 — pick = optimistic remove from panel +
+  // INSERT to mandala grid. pickedSet tracks the optimistic state
+  // so the panel can filter the card out IMMEDIATELY (user directive
+  // 2026-05-18 "북마크하면 즉시 만다라로 이동 + 상단 메뉴 카드 개수
+  // 그만큼 줄어들어야"). On success → invalidate mandala grid queries
+  // so the user sees the card land in its assigned cell. On error →
+  // rollback the pickedSet so the card returns to the panel.
   const [pickedSet, setPickedSet] = useState<Set<string>>(() => new Set());
   const { like } = useLikeCard();
+  const queryClient = useQueryClient();
 
   const handlePick = useCallback(
     (videoId: string, title: string) => {
       if (!mandalaId) return;
       if (pickedSet.has(videoId)) return;
-      // Optimistic local mark so the card disables immediately;
-      // BE persistence proceeds in the background. like.mutate
-      // rolls back on error via onError below.
+      const candidate = (mutation.data?.cards ?? restoredCards ?? []).find(
+        (c) => c.videoId === videoId
+      );
+      const cellIndex = candidate?.cellIndex;
       setPickedSet((prev) => {
         const next = new Set(prev);
         next.add(videoId);
         return next;
       });
       like.mutate(
-        { videoId, mandalaId, title },
+        { videoId, mandalaId, title, cellIndex },
         {
+          onSuccess: () => {
+            // Mandala grid + local-cards refresh so the new card
+            // appears in its assigned sector without a manual reload.
+            queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+            queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+            queryClient.invalidateQueries({ queryKey: ['mandala', 'recommendations', mandalaId] });
+          },
           onError: () => {
             setPickedSet((prev) => {
               const next = new Set(prev);
@@ -78,7 +152,7 @@ export function AddCardsPanel() {
         }
       );
     },
-    [mandalaId, pickedSet, like]
+    [mandalaId, pickedSet, like, mutation.data, restoredCards, queryClient]
   );
 
   // CP466 amendment 2 — seed wizard meta on first response.
@@ -112,18 +186,37 @@ export function AddCardsPanel() {
     }
   }, [open]);
 
-  // CP466 amendment 3 — explicit search button (no auto-fetch).
-  const triggerSearch = useCallback(() => {
+  // CP466 amendment 3 + 9 — explicit search. excludeVideoIds carries
+  // the cumulative surfaced-history so the user never sees the same
+  // card twice in this mandala's panel (persistence across reload).
+  const runSearch = useCallback(() => {
     if (!mandalaId) return;
     const keywords =
       targetLevel && targetLevel !== 'standard' ? [...extraKeywords, targetLevel] : extraKeywords;
     mutation.mutate({
       mandalaId,
       extraKeywords: keywords,
-      excludeVideoIds: [],
+      excludeVideoIds: surfacedVideoIds,
       filters,
     });
-  }, [mandalaId, extraKeywords, filters, mutation, targetLevel]);
+  }, [mandalaId, extraKeywords, filters, mutation, targetLevel, surfacedVideoIds]);
+
+  // CP466 amendment 10 — confirm dialog when the user re-runs Search
+  // with existing results visible (user directive 2026-05-18 "기존
+  // 검색 내용은 초기화 됩니다. 검색을 진행하시겠습니까?"). First-time
+  // search (no current results) skips the prompt and fires directly.
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const triggerSearch = useCallback(() => {
+    if (cards.length > 0) {
+      setConfirmOpen(true);
+      return;
+    }
+    runSearch();
+  }, [cards.length, runSearch]);
+  const handleConfirmReplace = useCallback(() => {
+    setConfirmOpen(false);
+    runSearch();
+  }, [runSearch]);
 
   // CP466 amendment 4 — race-free close animation.
   const [isClosingLocal, setIsClosingLocal] = useState(false);
@@ -184,12 +277,31 @@ export function AddCardsPanel() {
             : 'animate-in slide-in-from-right duration-200 ease-out'
         )}
       >
-        {/* Header — title + collapse toggle (when results visible) + close. */}
+        {/* Header — title + count badge (IdeaSpot pattern, user
+            directive 2026-05-18 "상단 아이디어스팟 매뉴와 동일한
+            방식으로 우측에 수량 표기") + collapse toggle (when results
+            visible) + close. */}
         <header className="flex items-center justify-between px-4 py-3 border-b border-border/40">
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="text-[14px] font-semibold truncate">
               {t('addCards.panel.title', 'Find more videos')}
             </h2>
+            {/* Result count badge — same shape as
+                IndexPage.tsx ideaSpotTrigger count (line ~688). */}
+            {cards.length > 0 && (
+              <span
+                className="inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-tight"
+                style={{
+                  background: 'hsl(var(--primary))',
+                  color: 'hsl(var(--primary-foreground))',
+                }}
+                aria-label={t('addCards.panel.resultCount', '{{count}} matches', {
+                  count: cards.length,
+                })}
+              >
+                {cards.length}
+              </span>
+            )}
             {/* Collapse toggle — visible only after first successful search. */}
             {mutation.isSuccess && cards.length > 0 && (
               <button
@@ -297,7 +409,7 @@ export function AddCardsPanel() {
             <AddCardsList
               cards={cards}
               isLoading={mutation.isPending}
-              hasSearched={mutation.isSuccess || mutation.isError}
+              hasSearched={hasSearched}
               isError={mutation.isError}
               errorMessage={mutation.error?.message}
               onRetry={triggerSearch}
@@ -308,6 +420,30 @@ export function AddCardsPanel() {
           </div>
         </div>
       </aside>
+
+      {/* CP466 amendment 10 — confirm before clearing visible results
+          and running a new search (user directive 2026-05-18). */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('addCards.confirm.title', 'Replace current results?')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                'addCards.confirm.description',
+                'Your current search results will be cleared and replaced with the new search. Continue?'
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmReplace}>
+              {t('addCards.confirm.proceed', 'Search')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
