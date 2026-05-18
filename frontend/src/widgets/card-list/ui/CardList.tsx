@@ -9,6 +9,7 @@ import { cn } from '@/shared/lib/utils';
 import { useDragSelect } from '@/features/drag-select/model/useDragSelect';
 import { cardSlotDropId } from '@/shared/lib/dnd';
 import { CardSkeleton } from './CardSkeleton';
+import { InsightCardItemSkeleton } from './InsightCardItemSkeleton';
 import {
   useSummaryRatings,
   useRateSummary,
@@ -211,6 +212,21 @@ export function CardList({
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
+  // Batch reveal gate — every visible card's thumbnail must settle (or
+  // the 5s cap fires) before any real card is revealed. Until then each
+  // grid slot shows an InsightCardItemSkeleton overlay so the grid
+  // layout is committed, not the staggered async fill.
+  const [loadedThumbnailIds, setLoadedThumbnailIds] = useState<Set<string>>(new Set());
+  const [maxRevealTimeoutElapsed, setMaxRevealTimeoutElapsed] = useState(false);
+  const handleThumbnailReady = useCallback((cardId: string) => {
+    setLoadedThumbnailIds((prev) => {
+      if (prev.has(cardId)) return prev;
+      const next = new Set(prev);
+      next.add(cardId);
+      return next;
+    });
+  }, []);
+
   // Cards arrive already sorted by the host (CardListView applies the user's
   // sortMode chip). Re-sorting here would override publishedAt ranking with
   // sortOrder / createdAt and was the cause of "5d ago in the middle".
@@ -233,6 +249,10 @@ export function CardList({
   const cardListKey = useMemo(() => cards.map((c) => c.id).join(','), [cards]);
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
+    setLoadedThumbnailIds(new Set());
+    setMaxRevealTimeoutElapsed(false);
+    const t = setTimeout(() => setMaxRevealTimeoutElapsed(true), 5000);
+    return () => clearTimeout(t);
   }, [cardListKey]);
 
   // Infinite scroll: observe sentinel at bottom of grid
@@ -257,6 +277,25 @@ export function CardList({
     [sortedCards, visibleCount]
   );
   const hasMore = visibleCount < sortedCards.length;
+
+  // First batch (mandala/cell switch) — gate cards until every visible
+  // thumbnail has settled. Once revealed, the gate stays open even for
+  // later batches loaded by infinite scroll (subsequent loads are
+  // expected progressive UX).
+  const [hasRevealed, setHasRevealed] = useState(false);
+  const isFirstBatchReady =
+    visibleCards.length === 0 ||
+    loadedThumbnailIds.size >= visibleCards.length ||
+    maxRevealTimeoutElapsed;
+  useEffect(() => {
+    if (isFirstBatchReady) setHasRevealed(true);
+  }, [isFirstBatchReady]);
+  useEffect(() => {
+    // Reset reveal latch when the card list itself changes (mandala /
+    // cell switch). Subsequent scroll-driven appends keep hasRevealed=true.
+    setHasRevealed(false);
+  }, [cardListKey]);
+  const isRevealed = hasRevealed || isFirstBatchReady;
 
   // Filter out selection IDs that no longer exist in cards (e.g., after moving cards)
   useEffect(() => {
@@ -434,31 +473,48 @@ export function CardList({
                   <Check className="w-3 h-3 text-primary-foreground" />
                 </div>
               )}
-              <InsightCardItemV2
-                card={card}
-                onCardClick={() => onCardClick?.(card)}
-                onCtrlClick={(e) => handleCardClick(e, card, idx)}
-                isDraggable={true}
-                selectedCardIds={selectedCardIds.size > 0 ? selectedCardIds : undefined}
-                isEnriching={enrichingCardIds?.has(card.id)}
-                isEnrichFailed={failedEnrichCardIds?.has(card.id)}
-                onRetryEnrich={onRetryEnrich}
-                mandalaRelevancePct={(() => {
-                  const vid = safeVideoId(card.videoUrl);
-                  return vid ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null) : null;
-                })()}
-                oneLiner={(() => {
-                  const vid = safeVideoId(card.videoUrl);
-                  return vid ? (v2SummariesMap.get(vid)?.oneLiner ?? null) : null;
-                })()}
-                isV2Loading={v2IsFetching}
-                sectorLabel={
-                  sectorSubjects && card.cellIndex >= 0 && card.cellIndex < sectorSubjects.length
-                    ? sectorSubjects[card.cellIndex]
-                    : null
-                }
-                onArchived={handleArchived}
-              />
+              {/* Stacked layout — real card stays mounted so its thumbnail
+                  load fires, but visibility-hidden + a same-slot skeleton
+                  overlay keeps the user from seeing the staggered fill. */}
+              <div
+                style={{ visibility: isRevealed ? 'visible' : 'hidden' }}
+                className={cn(
+                  'transition-opacity duration-300',
+                  isRevealed ? 'opacity-100' : 'opacity-0'
+                )}
+              >
+                <InsightCardItemV2
+                  card={card}
+                  onCardClick={() => onCardClick?.(card)}
+                  onCtrlClick={(e) => handleCardClick(e, card, idx)}
+                  isDraggable={true}
+                  selectedCardIds={selectedCardIds.size > 0 ? selectedCardIds : undefined}
+                  isEnriching={enrichingCardIds?.has(card.id)}
+                  isEnrichFailed={failedEnrichCardIds?.has(card.id)}
+                  onRetryEnrich={onRetryEnrich}
+                  mandalaRelevancePct={(() => {
+                    const vid = safeVideoId(card.videoUrl);
+                    return vid ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null) : null;
+                  })()}
+                  oneLiner={(() => {
+                    const vid = safeVideoId(card.videoUrl);
+                    return vid ? (v2SummariesMap.get(vid)?.oneLiner ?? null) : null;
+                  })()}
+                  isV2Loading={v2IsFetching}
+                  sectorLabel={
+                    sectorSubjects && card.cellIndex >= 0 && card.cellIndex < sectorSubjects.length
+                      ? sectorSubjects[card.cellIndex]
+                      : null
+                  }
+                  onArchived={handleArchived}
+                  onThumbnailReady={handleThumbnailReady}
+                />
+              </div>
+              {!isRevealed && (
+                <div className="absolute inset-0 pointer-events-none">
+                  <InsightCardItemSkeleton />
+                </div>
+              )}
             </CardSlot>
           );
         })}

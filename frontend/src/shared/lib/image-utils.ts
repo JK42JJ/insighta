@@ -49,7 +49,8 @@ export function isYouTubePlaceholder(img: HTMLImageElement): boolean {
  *  reaches a final state (real decoded image OR placeholder).
  */
 function revealThumbnail(img: HTMLImageElement): void {
-  img.style.opacity = '1';
+  // jsdom test stubs may not provide `style`; ignore safely.
+  if (img.style) img.style.opacity = '1';
 }
 
 /**
