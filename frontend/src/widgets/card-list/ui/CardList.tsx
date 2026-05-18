@@ -8,7 +8,6 @@ import { FileVideo, Check } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDragSelect } from '@/features/drag-select/model/useDragSelect';
 import { cardSlotDropId } from '@/shared/lib/dnd';
-import { CardSkeleton } from './CardSkeleton';
 import { InsightCardItemSkeleton } from './InsightCardItemSkeleton';
 import {
   useSummaryRatings,
@@ -417,11 +416,11 @@ export function CardList({
     [lastSelectedIndex, sortedCards, onCardClick]
   );
 
-  if (isLoading && cards.length === 0) {
-    return <CardSkeleton count={6} />;
-  }
-
-  if (cards.length === 0) {
+  // Empty state ONLY when there is genuinely nothing expected to load —
+  // not loading AND server says zero AND the local list is empty.
+  // Otherwise we mount the real grid (below) so its cells either hold a
+  // real card or an inline skeleton tile of the SAME size.
+  if (cards.length === 0 && skeletonCount === 0 && !isLoading) {
     return (
       <div
         ref={gridRef}
@@ -437,6 +436,17 @@ export function CardList({
       </div>
     );
   }
+
+  // Loading / pre-arrival padding count when no cards are present yet
+  // (mandala switch, refresh). When the server-truth skeletonCount is
+  // available we honour it exactly; otherwise fall back to a sane page
+  // size so the grid doesn't render as empty while data flies in.
+  const loadingPaddingCount =
+    cards.length === 0 && (isLoading || skeletonCount > 0)
+      ? skeletonCount > 0
+        ? skeletonCount
+        : 6
+      : 0;
 
   return (
     <div className="animate-fade-in -mx-4 px-4 relative select-none" ref={containerRef}>
@@ -518,19 +528,33 @@ export function CardList({
             </CardSlot>
           );
         })}
+
+        {/* Inline padding skeletons — same grid, same column, same tile
+            layout as real cards. Sources of padding (mutually exclusive
+            so we never double-render):
+              - loading / mandala-switch pre-arrival (cards=0)
+              - server-truth slot count not yet filled (cards>0)
+              - infinite-scroll trailing batch (hasMore)
+            All routed through InsightCardItemSkeleton so the user only
+            ever sees ONE skeleton style across the whole timeline. */}
+        {(() => {
+          let pad = 0;
+          if (cards.length === 0) {
+            pad = loadingPaddingCount;
+          } else if (hasMore) {
+            pad = Math.min(sortedCards.length - visibleCount, 6);
+          } else if (skeletonCount > 0) {
+            pad = skeletonCount;
+          }
+          return Array.from({ length: pad }).map((_, i) => (
+            <div key={`sk-${i}`} className="w-full">
+              <InsightCardItemSkeleton />
+            </div>
+          ));
+        })()}
       </div>
 
-      {hasMore && (
-        <>
-          <CardSkeleton count={Math.min(sortedCards.length - visibleCount, 6)} />
-          <div ref={sentinelRef} aria-hidden className="h-1" />
-        </>
-      )}
-
-      {/* Server-truth slot count not yet filled: render trailing skeletons
-          so the grid's total cell count stays fixed while async sources
-          (useV2Summaries / useAllVideoStates / SSE stream) catch up. */}
-      {skeletonCount > 0 && !hasMore && <CardSkeleton count={skeletonCount} />}
+      {hasMore && <div ref={sentinelRef} aria-hidden className="h-1" />}
     </div>
   );
 }
