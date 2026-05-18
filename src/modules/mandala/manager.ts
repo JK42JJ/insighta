@@ -59,6 +59,11 @@ export interface MandalaWithLevels {
   focusTags: string[];
   targetLevel: string;
   language: string;
+  // CP467b — server-truth card count (user_local_cards ∪ user_video_states
+  // dedup by yt id / url). FE uses this as the grid layout commitment so
+  // skeleton placeholders fill unloaded cells, eliminating the staggered
+  // arrival jitter.
+  cardCount: number;
   createdAt: Date;
   updatedAt: Date;
   levels: {
@@ -153,7 +158,8 @@ export class MandalaManager {
         color: string | null;
         parent_level_id: string | null;
       }[];
-    }
+    },
+    cardCount?: number
   ): MandalaWithLevels {
     return {
       id: mandala.id,
@@ -166,6 +172,7 @@ export class MandalaManager {
       focusTags: mandala.focus_tags ?? [],
       targetLevel: mandala.target_level ?? 'standard',
       language: mandala.language ?? 'ko',
+      cardCount: cardCount ?? 0,
       createdAt: mandala.created_at,
       updatedAt: mandala.updated_at,
       levels: mandala.levels.map((l) => ({
@@ -285,6 +292,29 @@ export class MandalaManager {
   }
 
   /**
+   * Mandala's authoritative card count = user_local_cards ∪ user_video_states
+   * dedup'd by (video_id || url). Used by the grid as a layout commitment so
+   * unloaded cells render skeletons instead of letting the count grow as
+   * each source's fetch lands.
+   */
+  private async computeCardCount(userId: string, mandalaId: string): Promise<number> {
+    const rows = await this.prisma.$queryRaw<Array<{ c: number }>>`
+      WITH all_cards AS (
+        SELECT COALESCE(video_id, url) AS dedup_key
+          FROM public.user_local_cards
+         WHERE user_id = ${userId}::uuid AND mandala_id = ${mandalaId}::uuid
+        UNION
+        SELECT yv.youtube_video_id AS dedup_key
+          FROM public.user_video_states uvs
+          JOIN public.youtube_videos yv ON yv.id = uvs.video_id
+         WHERE uvs.user_id = ${userId}::uuid AND uvs.mandala_id = ${mandalaId}::uuid
+      )
+      SELECT COUNT(DISTINCT dedup_key)::int AS c FROM all_cards
+    `;
+    return rows[0]?.c ?? 0;
+  }
+
+  /**
    * Gets the default mandala for a user. Backward-compatible.
    */
   async getMandala(userId: string): Promise<MandalaWithLevels | null> {
@@ -299,7 +329,8 @@ export class MandalaManager {
 
     if (!mandala) return null;
 
-    return this.mapMandala(mandala);
+    const cardCount = await this.computeCardCount(userId, mandala.id);
+    return this.mapMandala(mandala, cardCount);
   }
 
   /**
@@ -318,7 +349,8 @@ export class MandalaManager {
 
     if (!mandala) return null;
 
-    return this.mapMandala(mandala);
+    const cardCount = await this.computeCardCount(userId, mandalaId);
+    return this.mapMandala(mandala, cardCount);
   }
 
   /**

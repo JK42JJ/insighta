@@ -147,6 +147,11 @@ interface CardListViewProps {
   newlySyncedCards?: InsightCard[];
   /** CP442 — slot rendered left of ViewSwitcher (e.g., IdeaSpot trigger). */
   trailingAction?: React.ReactNode;
+  /** Server-truth count of cards in this mandala minus the cards currently
+   *  delivered to the grid. Renders that many skeleton placeholders at the
+   *  end of the grid so the total cell count stays fixed while async sources
+   *  fill in. */
+  skeletonCount?: number;
 }
 
 export function CardListView({
@@ -177,6 +182,7 @@ export function CardListView({
   selectedCellIndex,
   onCellClick,
   totalCardCount,
+  skeletonCount = 0,
   cardsByCell,
   isExternalCardDragActive,
   isInternalCardDragActive,
@@ -596,6 +602,7 @@ export function CardListView({
             enrichingCardIds={enrichingCardIds}
             failedEnrichCardIds={failedEnrichCardIds}
             onRetryEnrich={onRetryEnrich}
+            skeletonCount={skeletonCount}
           />
         </div>
       </div>

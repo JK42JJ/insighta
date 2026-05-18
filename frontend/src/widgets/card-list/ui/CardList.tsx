@@ -29,6 +29,9 @@ function safeVideoId(videoUrl: string): string | null {
 interface CardListProps {
   cards: InsightCard[];
   isLoading?: boolean;
+  /** Server-truth slot count not yet filled — rendered as skeleton tiles
+   *  at the end of the grid so the total cell count stays fixed. */
+  skeletonCount?: number;
   title: string;
   onCardClick?: (card: InsightCard) => void;
   onCardDragStart?: (card: InsightCard) => void;
@@ -78,6 +81,7 @@ const PAGE_SIZE = 24;
 export function CardList({
   cards,
   isLoading,
+  skeletonCount = 0,
   onCardClick,
   onSaveNote,
   onSelectionChange,
@@ -466,6 +470,11 @@ export function CardList({
           <div ref={sentinelRef} aria-hidden className="h-1" />
         </>
       )}
+
+      {/* Server-truth slot count not yet filled: render trailing skeletons
+          so the grid's total cell count stays fixed while async sources
+          (useV2Summaries / useAllVideoStates / SSE stream) catch up. */}
+      {skeletonCount > 0 && !hasMore && <CardSkeleton count={skeletonCount} />}
     </div>
   );
 }

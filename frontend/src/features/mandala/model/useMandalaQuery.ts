@@ -26,6 +26,9 @@ export interface MandalaMeta {
   targetLevel: string;
   language: string;
   title: string;
+  /** Server-truth card count (user_local_cards ∪ user_video_states dedup'd).
+   *  Used by the grid as a layout commitment so unloaded cells render skeletons. */
+  cardCount: number;
 }
 
 interface MandalaQueryShape {
@@ -38,6 +41,7 @@ const EMPTY_META: MandalaMeta = {
   targetLevel: 'standard',
   language: 'ko',
   title: '',
+  cardCount: 0,
 };
 
 export function useMandalaQuery(mandalaId?: string | null) {
@@ -62,6 +66,7 @@ export function useMandalaQuery(mandalaId?: string | null) {
             targetLevel: apiResponse.mandala.targetLevel ?? 'standard',
             language: apiResponse.mandala.language ?? 'ko',
             title: apiResponse.mandala.title ?? '',
+            cardCount: apiResponse.mandala.cardCount ?? 0,
           },
         };
       } catch (err: unknown) {

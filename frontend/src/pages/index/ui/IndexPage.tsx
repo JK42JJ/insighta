@@ -155,9 +155,14 @@ function AuthenticatedApp() {
   const isViewingPending = !!pendingMandala && effectiveMandalaId === pendingMandala.tempId;
 
   // 3. Mandala data from DB (by selected mandala ID)
-  const { mandalaLevels: queryMandalaLevels, isLoading: mandalaQueryLoading } = useMandalaQuery(
-    isViewingPending ? null : effectiveMandalaId
-  );
+  const {
+    mandalaLevels: queryMandalaLevels,
+    mandalaMeta: queryMandalaMeta,
+    isLoading: mandalaQueryLoading,
+  } = useMandalaQuery(isViewingPending ? null : effectiveMandalaId);
+  // Server-truth card count used as the grid's layout commitment.
+  // Skeletons fill the gap until each cell's data lands.
+  const serverCardCount = queryMandalaMeta?.cardCount ?? 0;
 
   // Suppress "Sector 1..8" + empty-title placeholders while the detail query
   // is still inflight AND we have no useful subjects yet. Treated as
@@ -952,6 +957,11 @@ function AuthenticatedApp() {
                           : cards.isLoading ||
                             (isNewMandalaActive && cards.totalCards === 0) ||
                             (mandalaSwitchGrace && cards.totalCards === 0)
+                      }
+                      skeletonCount={
+                        search.isSearchActive
+                          ? 0
+                          : Math.max(0, serverCardCount - cards.displayCards.length)
                       }
                       title={
                         search.isSearchActive
