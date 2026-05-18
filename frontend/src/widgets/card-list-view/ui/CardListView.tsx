@@ -152,6 +152,10 @@ interface CardListViewProps {
    *  end of the grid so the total cell count stays fixed while async sources
    *  fill in. */
   skeletonCount?: number;
+  /** Issue #389 controlled lift — IndexPage owns the Newly Synced pill state
+   *  so it can disable skeletonCount when the user is in the sub-view. */
+  isNewlySyncedActive?: boolean;
+  onNewlySyncedActiveChange?: (active: boolean) => void;
 }
 
 export function CardListView({
@@ -183,6 +187,8 @@ export function CardListView({
   onCellClick,
   totalCardCount,
   skeletonCount = 0,
+  isNewlySyncedActive: isNewlySyncedActiveProp,
+  onNewlySyncedActiveChange,
   cardsByCell,
   isExternalCardDragActive,
   isInternalCardDragActive,
@@ -214,7 +220,17 @@ export function CardListView({
   // Kept as local state (rather than lifting to parent) because the filter is
   // a pure view concern that doesn't persist across navigations — the pill
   // only appears when the current mandala has mapping-synced unplaced cards.
-  const [isNewlySyncedActive, setIsNewlySyncedActive] = useState(false);
+  // Controlled lift: prefer the parent-owned state when supplied; otherwise
+  // keep the legacy internal state for callers that haven't migrated yet.
+  const [internalIsNewlySyncedActive, setInternalIsNewlySyncedActive] = useState(false);
+  const isNewlySyncedActive = isNewlySyncedActiveProp ?? internalIsNewlySyncedActive;
+  const setIsNewlySyncedActive = useCallback(
+    (next: boolean) => {
+      if (onNewlySyncedActiveChange) onNewlySyncedActiveChange(next);
+      else setInternalIsNewlySyncedActive(next);
+    },
+    [onNewlySyncedActiveChange]
+  );
   const newlySyncedCount = newlySyncedCards?.length ?? 0;
 
   // Auto-exit the Newly Synced view when the source list drains to 0 (user
