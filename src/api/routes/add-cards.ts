@@ -50,10 +50,27 @@ const MS_PER_DAY = 86_400_000;
 
 const log = logger.child({ module: 'add-cards-routes' });
 
+type DurationBucket = 'short' | 'medium' | 'long' | 'xlong';
+
+interface AddCardsFilters {
+  minViewCount?: number;
+  durationBucket?: DurationBucket;
+  publishedAfter?: string; // ISO date
+}
+
 interface AddCardsBody {
   extraKeywords?: string[];
   excludeVideoIds?: string[];
+  filters?: AddCardsFilters;
 }
+
+// CP466 amendment — durationBucket bounds in seconds.
+const DURATION_BUCKETS: Record<DurationBucket, { min: number; max: number }> = {
+  short: { min: 0, max: 600 },
+  medium: { min: 600, max: 1800 },
+  long: { min: 1800, max: 3600 },
+  xlong: { min: 3600, max: Number.POSITIVE_INFINITY },
+};
 
 interface AddCardCandidate {
   videoId: string;
@@ -114,6 +131,31 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           .slice(0, MAX_EXCLUDE_IDS)
       : [];
 
+    // CP466 amendment — request filters (post-filter, in-memory).
+    const rawFilters = body.filters ?? {};
+    const filters: AddCardsFilters = {};
+    if (
+      typeof rawFilters.minViewCount === 'number' &&
+      Number.isFinite(rawFilters.minViewCount) &&
+      rawFilters.minViewCount > 0
+    ) {
+      filters.minViewCount = rawFilters.minViewCount;
+    }
+    if (
+      rawFilters.durationBucket === 'short' ||
+      rawFilters.durationBucket === 'medium' ||
+      rawFilters.durationBucket === 'long' ||
+      rawFilters.durationBucket === 'xlong'
+    ) {
+      filters.durationBucket = rawFilters.durationBucket;
+    }
+    if (typeof rawFilters.publishedAfter === 'string') {
+      const parsed = Date.parse(rawFilters.publishedAfter);
+      if (Number.isFinite(parsed)) {
+        filters.publishedAfter = new Date(parsed).toISOString();
+      }
+    }
+
     const cfg = getAddCardsConfig();
     const prisma = getPrismaClient();
     const t0 = Date.now();
@@ -170,8 +212,33 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         requestExcludeIds: excludeVideoIds,
       });
 
-      // 5. filter candidates by exclude set
-      const filtered = candidates.filter((c) => !excludeSet.has(c.videoId));
+      // 5. filter candidates by exclude set + request filters (CP466
+      //    amendment — post-filter in-memory: minViewCount + durationBucket
+      //    + publishedAfter). NULL fields fall through (kept).
+      const publishedAfterTs = filters.publishedAfter ? Date.parse(filters.publishedAfter) : null;
+      const durationRange = filters.durationBucket
+        ? DURATION_BUCKETS[filters.durationBucket]
+        : null;
+      const minViews = filters.minViewCount ?? null;
+      const filtered = candidates.filter((c) => {
+        if (excludeSet.has(c.videoId)) return false;
+        if (minViews != null && c.viewCount != null && c.viewCount < minViews) return false;
+        if (
+          durationRange &&
+          c.durationSec != null &&
+          (c.durationSec < durationRange.min || c.durationSec >= durationRange.max)
+        ) {
+          return false;
+        }
+        if (publishedAfterTs != null && c.publishedAt) {
+          const ts =
+            c.publishedAt instanceof Date
+              ? c.publishedAt.getTime()
+              : Date.parse(String(c.publishedAt));
+          if (Number.isFinite(ts) && ts < publishedAfterTs) return false;
+        }
+        return true;
+      });
 
       // 6. Layer 4 feedback bias (channel match + drift guard).
       //    candidate-level embedding cosine boost (alphaEmbed) deferred —

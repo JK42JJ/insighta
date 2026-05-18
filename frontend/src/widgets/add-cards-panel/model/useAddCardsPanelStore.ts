@@ -10,6 +10,7 @@
  */
 
 import { create } from 'zustand';
+import type { AddCardsFilters } from './useAddCards';
 
 interface AddCardsPanelState {
   /** Whether the slide-in panel is open. */
@@ -20,6 +21,8 @@ interface AddCardsPanelState {
   extraKeywords: string[];
   /** videoIds the user has multi-selected for bulk add. */
   selectedIds: Set<string>;
+  /** CP466 amendment — request filters (조회수/길이/기간). */
+  filters: AddCardsFilters;
 
   openPanel: (mandalaId: string) => void;
   closePanel: () => void;
@@ -27,6 +30,7 @@ interface AddCardsPanelState {
   removeKeyword: (kw: string) => void;
   toggleSelected: (videoId: string) => void;
   clearSelected: () => void;
+  setFilters: (next: AddCardsFilters) => void;
 }
 
 export const useAddCardsPanelStore = create<AddCardsPanelState>((set) => ({
@@ -34,16 +38,20 @@ export const useAddCardsPanelStore = create<AddCardsPanelState>((set) => ({
   mandalaId: null,
   extraKeywords: [],
   selectedIds: new Set<string>(),
+  filters: {},
 
   openPanel: (mandalaId) =>
     set((s) => ({
       open: true,
-      // Reset keywords + selection if switching to a different mandala;
-      // preserve them if the same mandala is being reopened.
+      // Reset keywords + selection + filters if switching to a different
+      // mandala; preserve them if the same mandala is being reopened.
       mandalaId,
       extraKeywords: s.mandalaId === mandalaId ? s.extraKeywords : [],
       selectedIds: s.mandalaId === mandalaId ? s.selectedIds : new Set<string>(),
+      filters: s.mandalaId === mandalaId ? s.filters : {},
     })),
+
+  setFilters: (next) => set({ filters: next }),
 
   closePanel: () => set({ open: false }),
 

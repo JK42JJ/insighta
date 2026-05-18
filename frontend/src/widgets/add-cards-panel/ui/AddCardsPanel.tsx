@@ -15,25 +15,26 @@
  * Spec: docs/design/add-cards-2026-05-18.md §2 + §6.
  */
 
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
-import { Lock, X } from 'lucide-react';
+import { Loader2, Lock, Search, X } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
 import { useAddCards } from '../model/useAddCards';
 import { KeywordChipInput } from './KeywordChipInput';
+import { AddCardsFilters } from './AddCardsFilters';
 import { AddCardsList } from './AddCardsList';
 import { AddCardsBulkBar } from './AddCardsBulkBar';
 
 const PANEL_WIDTH_CLASS = 'w-full md:w-[45vw] md:max-w-[720px]';
-const REFETCH_DEBOUNCE_MS = 300;
 
 export function AddCardsPanel() {
   const { t } = useTranslation();
   const open = useAddCardsPanelStore((s) => s.open);
   const mandalaId = useAddCardsPanelStore((s) => s.mandalaId);
   const extraKeywords = useAddCardsPanelStore((s) => s.extraKeywords);
+  const filters = useAddCardsPanelStore((s) => s.filters);
   const closePanel = useAddCardsPanelStore((s) => s.closePanel);
 
   // Resolve center_goal (locked base, readonly) — same hook the dashboard
@@ -44,19 +45,32 @@ export function AddCardsPanel() {
   const mutation = useAddCards();
   const cards = mutation.data?.cards ?? [];
 
-  // Refetch on keyword change (debounced) + on first open.
+  // CP466 amendment — explicit search button. Initial open triggers 1
+  // auto-fetch (backlog); subsequent keyword/filter changes do NOT
+  // auto-refetch — user clicks the Search button explicitly.
+  const triggerSearch = useCallback(() => {
+    if (!mandalaId) return;
+    mutation.mutate({
+      mandalaId,
+      extraKeywords,
+      excludeVideoIds: [],
+      filters,
+    });
+  }, [mandalaId, extraKeywords, filters, mutation]);
+
+  // Initial-open one-shot fetch — refs guard against re-fire on
+  // mandala-id same-value re-open.
+  const initialFetchedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!open || !mandalaId) return;
-    const t1 = setTimeout(() => {
-      mutation.mutate({
-        mandalaId,
-        extraKeywords,
-        excludeVideoIds: [],
-      });
-    }, REFETCH_DEBOUNCE_MS);
-    return () => clearTimeout(t1);
+    if (initialFetchedFor.current === mandalaId) return;
+    initialFetchedFor.current = mandalaId;
+    triggerSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mandalaId, extraKeywords.join(',')]);
+  }, [open, mandalaId]);
+  useEffect(() => {
+    if (!open) initialFetchedFor.current = null;
+  }, [open]);
 
   // Esc closes the panel.
   useEffect(() => {
@@ -116,6 +130,27 @@ export function AddCardsPanel() {
 
         {/* Keyword chips */}
         <KeywordChipInput />
+
+        {/* CP466 amendment — 3 filter dropdowns (조회수/길이/기간) */}
+        <AddCardsFilters />
+
+        {/* CP466 amendment — explicit Search button (auto-refetch removed,
+            initial open auto-fetches once). */}
+        <div className="px-4 py-2 border-b border-border/40">
+          <button
+            type="button"
+            onClick={triggerSearch}
+            disabled={mutation.isPending}
+            className="w-full inline-flex items-center justify-center gap-2 h-9 rounded-full bg-primary text-primary-foreground text-[12px] font-medium transition-colors hover:bg-primary/90 disabled:opacity-50"
+          >
+            {mutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Search className="h-3.5 w-3.5" strokeWidth={2.2} />
+            )}
+            <span>{t('addCards.panel.searchButton', 'Search')}</span>
+          </button>
+        </div>
 
         {/* Result list — flex-1 fills remaining vertical space; bulk bar
             sticks to bottom inside the same flex container. */}

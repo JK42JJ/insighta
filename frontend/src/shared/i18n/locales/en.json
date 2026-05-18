@@ -1830,7 +1830,34 @@
       "keywordPlaceholder": "Add keyword…",
       "removeKeyword": "Remove keyword {{keyword}}",
       "selectCard": "Select card",
+      "searchButton": "Search",
       "empty": "No cards found."
+    },
+    "filters": {
+      "viewCount": {
+        "label": "Views",
+        "all": "All views",
+        "1k": "≥ 1K views",
+        "10k": "≥ 10K views",
+        "100k": "≥ 100K views",
+        "1m": "≥ 1M views"
+      },
+      "duration": {
+        "label": "Length",
+        "all": "Any length",
+        "short": "< 10 min",
+        "medium": "10–30 min",
+        "long": "30–60 min",
+        "xlong": "≥ 60 min"
+      },
+      "published": {
+        "label": "Published",
+        "all": "Any time",
+        "7d": "Past week",
+        "30d": "Past month",
+        "180d": "Past 6 months",
+        "365d": "Past year"
+      }
     },
     "actions": {
       "addOne": "Add to mandala",

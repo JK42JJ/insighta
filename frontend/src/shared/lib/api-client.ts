@@ -1319,7 +1319,15 @@ class ApiClient {
    */
   async addCards(
     mandalaId: string,
-    body: { extraKeywords: string[]; excludeVideoIds: string[] }
+    body: {
+      extraKeywords: string[];
+      excludeVideoIds: string[];
+      filters?: {
+        minViewCount?: number;
+        durationBucket?: 'short' | 'medium' | 'long' | 'xlong';
+        publishedAfter?: string;
+      };
+    }
   ): Promise<{
     status: string;
     data: {

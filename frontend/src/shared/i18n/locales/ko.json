@@ -1838,7 +1838,34 @@
       "keywordPlaceholder": "키워드 추가…",
       "removeKeyword": "키워드 {{keyword}} 제거",
       "selectCard": "카드 선택",
+      "searchButton": "검색",
       "empty": "결과가 없습니다."
+    },
+    "filters": {
+      "viewCount": {
+        "label": "조회수",
+        "all": "조회수 전체",
+        "1k": "1천+ 조회수",
+        "10k": "1만+ 조회수",
+        "100k": "10만+ 조회수",
+        "1m": "100만+ 조회수"
+      },
+      "duration": {
+        "label": "영상 길이",
+        "all": "길이 전체",
+        "short": "10분 미만",
+        "medium": "10–30분",
+        "long": "30–60분",
+        "xlong": "60분 이상"
+      },
+      "published": {
+        "label": "게시 기간",
+        "all": "기간 전체",
+        "7d": "지난 1주",
+        "30d": "지난 1개월",
+        "180d": "지난 6개월",
+        "365d": "지난 1년"
+      }
     },
     "actions": {
       "addOne": "만다라에 추가",

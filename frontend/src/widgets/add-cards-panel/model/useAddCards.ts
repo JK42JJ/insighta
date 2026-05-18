@@ -26,10 +26,19 @@ export interface AddCardCandidate {
   source: 'video_pool';
 }
 
+export type DurationBucket = 'short' | 'medium' | 'long' | 'xlong';
+
+export interface AddCardsFilters {
+  minViewCount?: number;
+  durationBucket?: DurationBucket;
+  publishedAfter?: string;
+}
+
 interface AddCardsRequest {
   mandalaId: string;
   extraKeywords: string[];
   excludeVideoIds: string[];
+  filters?: AddCardsFilters;
 }
 
 interface AddCardsResponseData {
@@ -46,8 +55,12 @@ interface AddCardsResponseData {
 
 export function useAddCards() {
   return useMutation<AddCardsResponseData, Error, AddCardsRequest>({
-    mutationFn: async ({ mandalaId, extraKeywords, excludeVideoIds }) => {
-      const result = await apiClient.addCards(mandalaId, { extraKeywords, excludeVideoIds });
+    mutationFn: async ({ mandalaId, extraKeywords, excludeVideoIds, filters }) => {
+      const result = await apiClient.addCards(mandalaId, {
+        extraKeywords,
+        excludeVideoIds,
+        ...(filters && { filters }),
+      });
       return result.data;
     },
   });
