@@ -37,6 +37,7 @@ import type PgBoss from 'pg-boss';
 import { enrichRichSummary } from '../../skills/rich-summary';
 import { generateRichSummaryV2 } from '../../skills/rich-summary-v2-generator';
 import { getMandalaManager } from '../../mandala/manager';
+import { getCaptionExtractor } from '../../caption/extractor';
 import { logger } from '../../../utils/logger';
 import { getJobQueue } from '../manager';
 import {
@@ -81,16 +82,42 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     mandalaId,
   });
 
-  // Step 1 — ensure a video_rich_summaries row exists (v1). Short-circuits
-  // on cache hit (quality_flag='pass'); on cold path it generates the v1
-  // structured row that step 2's UPDATE-only v2 generator requires.
-  // transcript / segments intentionally omitted — the FE Heart click does
-  // not provide them. v1 falls back to title+description, which is fine
-  // for bootstrapping the row.
+  // Step 0 — fetch transcript (in-memory only, never persisted). Best
+  // effort: failure → undefined → generators fall back to description.
+  let transcript: string | undefined;
+  try {
+    const result = await getCaptionExtractor().extractCaptions(videoId);
+    if (result.success && result.caption?.fullText) {
+      transcript = result.caption.fullText;
+      logger.info('enrich-rich-summary: transcript fetched', {
+        jobId: job.id,
+        videoId,
+        chars: transcript.length,
+        language: result.language,
+      });
+    } else {
+      logger.info('enrich-rich-summary: transcript unavailable (description fallback)', {
+        jobId: job.id,
+        videoId,
+        reason: result.error ?? 'unknown',
+      });
+    }
+  } catch (err) {
+    logger.warn('enrich-rich-summary: transcript fetch threw (description fallback)', {
+      jobId: job.id,
+      videoId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Step 1 — v1 generate. forceRegen when transcript just arrived so a
+  // description-only cache row is overwritten by transcript-derived content.
   const v1Result = await enrichRichSummary(videoId, {
     userId,
     title,
     description,
+    transcript,
+    forceRegen: transcript !== undefined,
   });
 
   // Step 2 — resolve the mandala center goal (root level, depth=0). When
@@ -110,17 +137,18 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     });
   }
 
-  // Step 3 — v2 upgrade + mandala_relevance_pct. Returns 'skip' when the
-  // row is already v2 AND the score is populated; otherwise generates.
+  // Step 3 — v2 upgrade + mandala_relevance_pct, transcript-aware.
   const v2Outcome = await generateRichSummaryV2({
     videoId,
     userId,
     mandalaCenterGoal: centerGoal,
+    transcript,
   });
 
   logger.info('enrich-rich-summary: completed', {
     jobId: job.id,
     videoId,
+    hadTranscript: transcript !== undefined,
     v1QualityFlag: v1Result.qualityFlag,
     v1QualityScore: v1Result.qualityScore,
     v2OutcomeKind: v2Outcome.kind,

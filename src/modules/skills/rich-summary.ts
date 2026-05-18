@@ -130,6 +130,9 @@ export async function enrichRichSummary(
     description?: string;
     transcript?: string;
     segments?: RichSummarySegment[];
+    /** When true, regenerate even if a passing cache row exists.
+     *  Used by the worker after a transcript arrives. */
+    forceRegen?: boolean;
   }
 ): Promise<RichSummaryResult> {
   const prisma = getPrismaClient();
@@ -153,7 +156,7 @@ export async function enrichRichSummary(
   const existing = await prisma.video_rich_summaries.findUnique({
     where: { video_id: videoId },
   });
-  if (existing && existing.quality_flag === 'pass') {
+  if (existing && existing.quality_flag === 'pass' && !options.forceRegen) {
     log.info('Rich summary cache hit', { videoId });
     return {
       videoId,
@@ -163,6 +166,12 @@ export async function enrichRichSummary(
       qualityFlag: 'pass',
       model: existing.model,
     };
+  }
+  if (existing && existing.quality_flag === 'pass' && options.forceRegen) {
+    log.info('Rich summary forceRegen — overriding cache hit', {
+      videoId,
+      hasTranscript: options.transcript !== undefined,
+    });
   }
 
   // CP423: enforce per-user monthly quota before LLM call.

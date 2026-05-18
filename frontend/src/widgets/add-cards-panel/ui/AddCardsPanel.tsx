@@ -69,20 +69,13 @@ export function AddCardsPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mutation.isSuccess, mutation.data, mandalaId]);
 
-  // Locally-toggled picks (optimistic, before BE round trip completes).
-  // Server truth lives in `user_video_states`; we union the two so a
-  // reload still shows past picks as disabled overlays — the picked
-  // card MUST remain in the panel (user directive 2026-05-18 "비활성화
-  // 처리, 카드는 사라지지 않음"). Stripping the card from the list was
-  // the bug being fixed.
+  // This-session picks only (drives the "added" overlay).
   const [localPicks, setLocalPicks] = useState<Set<string>>(() => new Set());
   const { like } = useLikeCard();
   const queryClient = useQueryClient();
 
-  // Pull every user_video_states row, filter to this mandala, project
-  // the underlying youtube_video_id into a Set so AddCardsList can mark
-  // already-added cards as picked (overlay + disabled) on panel re-open
-  // and after page reload.
+  // Server-truth set of mandala-pre-existing videoIds. Used as a list
+  // filter (not an overlay) to cover the localStorage-restored path.
   const { data: allVideoStates } = useAllVideoStates();
   const serverPickedSet = useMemo(() => {
     if (!mandalaId) return new Set<string>();
@@ -95,20 +88,14 @@ export function AddCardsPanel() {
     return set;
   }, [allVideoStates, mandalaId]);
 
-  const pickedSet = useMemo(() => {
-    const merged = new Set<string>(serverPickedSet);
-    for (const v of localPicks) merged.add(v);
-    return merged;
-  }, [serverPickedSet, localPicks]);
+  const pickedSet = localPicks;
 
-  // Cards stay in the panel even after pick — `isPicked` drives the
-  // overlay + disabled affordance. Filtering them out was the
-  // user-reported "completely disappears" bug. But every COUNT surface
-  // (header badge, trigger chip badge, resultCount text, auto-collapse
-  // gate) reflects ONLY the cards the user can still pick — picked
-  // cards are visually still present but counted as "done" so the
-  // user-perceived "remaining to pick" matches the badge number.
-  const cards: AddCardCandidate[] = mutation.data?.cards ?? restoredCards ?? [];
+  // Filter out mandala-pre-existing cards; keep this session's local
+  // picks so they show the green-check overlay until panel close.
+  const cards: AddCardCandidate[] = useMemo(() => {
+    const raw = mutation.data?.cards ?? restoredCards ?? [];
+    return raw.filter((c) => !serverPickedSet.has(c.videoId) || localPicks.has(c.videoId));
+  }, [mutation.data, restoredCards, serverPickedSet, localPicks]);
   const visibleCount = useMemo(
     () => cards.filter((c) => !pickedSet.has(c.videoId)).length,
     [cards, pickedSet]
