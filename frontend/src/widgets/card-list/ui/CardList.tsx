@@ -279,10 +279,12 @@ export function CardList({
   );
   const hasMore = visibleCount < sortedCards.length;
 
-  const FIRST_BATCH_SIZE = 6;
+  // Batch size caps at 6 but shrinks for mandalas with fewer cards —
+  // a 3-card mandala batches all 3, not "wait for 6 imaginary cards".
+  const FIRST_BATCH_SIZE = Math.min(6, sortedCards.length);
   const firstBatchCardIds = useMemo(
     () => sortedCards.slice(0, FIRST_BATCH_SIZE).map((c) => c.id),
-    [sortedCards]
+    [sortedCards, FIRST_BATCH_SIZE]
   );
   const firstBatchReady = useMemo(() => {
     if (firstBatchCardIds.length === 0) return true;
@@ -431,16 +433,11 @@ export function CardList({
     );
   }
 
-  // Loading / pre-arrival padding count when no cards are present yet
-  // (mandala switch, refresh). When the server-truth skeletonCount is
-  // available we honour it exactly; otherwise fall back to a sane page
-  // size so the grid doesn't render as empty while data flies in.
-  const loadingPaddingCount =
-    cards.length === 0 && (isLoading || skeletonCount > 0)
-      ? skeletonCount > 0
-        ? skeletonCount
-        : 6
-      : 0;
+  // Loading / pre-arrival padding count when no cards are present yet.
+  // Honour the server-truth skeletonCount EXACTLY — no fallback. A mandala
+  // with 3 cards shows 3 skeletons, not 6. Pre-mandala-fetch (cardCount
+  // unknown) renders no padding rather than a misleading 6-slot grid.
+  const loadingPaddingCount = cards.length === 0 && skeletonCount > 0 ? skeletonCount : 0;
 
   return (
     <div className="animate-fade-in -mx-4 px-4 relative select-none" ref={containerRef}>
