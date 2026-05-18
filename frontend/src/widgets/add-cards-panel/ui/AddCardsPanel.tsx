@@ -221,6 +221,9 @@ export function AddCardsPanel() {
               mandalaId={mandalaId}
               isLoading={mutation.isPending}
               hasSearched={mutation.isSuccess || mutation.isError}
+              isError={mutation.isError}
+              errorMessage={mutation.error?.message}
+              onRetry={triggerSearch}
             />
           </div>
           <AddCardsBulkBar cards={cards} mandalaId={mandalaId} />

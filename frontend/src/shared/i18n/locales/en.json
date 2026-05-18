@@ -1832,7 +1832,8 @@
       "selectCard": "Select card",
       "searchButton": "Search",
       "idle": "Choose keywords and filters, then press Search.",
-      "empty": "No cards found."
+      "empty": "No cards found.",
+      "searchFailed": "The search didn't complete. Please try again in a moment."
     },
     "filters": {
       "viewCount": {

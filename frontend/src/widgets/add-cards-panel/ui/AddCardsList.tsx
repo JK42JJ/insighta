@@ -9,7 +9,7 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { Bookmark, Loader2 } from 'lucide-react';
+import { AlertCircle, Bookmark, Loader2, RotateCw } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
@@ -20,9 +20,22 @@ interface AddCardsListProps {
   mandalaId: string;
   isLoading: boolean;
   hasSearched: boolean;
+  /** CP466 amendment 5 — error surface so the user sees fetch failures
+   *  instead of an indistinguishable empty state. */
+  isError?: boolean;
+  errorMessage?: string;
+  onRetry?: () => void;
 }
 
-export function AddCardsList({ cards, mandalaId, isLoading, hasSearched }: AddCardsListProps) {
+export function AddCardsList({
+  cards,
+  mandalaId,
+  isLoading,
+  hasSearched,
+  isError = false,
+  errorMessage,
+  onRetry,
+}: AddCardsListProps) {
   const { t } = useTranslation();
   const selectedIds = useAddCardsPanelStore((s) => s.selectedIds);
   const toggleSelected = useAddCardsPanelStore((s) => s.toggleSelected);
@@ -32,6 +45,32 @@ export function AddCardsList({ cards, mandalaId, isLoading, hasSearched }: AddCa
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // CP466 amendment 5 — error state distinct from empty/idle so the
+  // user can distinguish "search failed" from "no results".
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-6 gap-3 text-center">
+        <AlertCircle className="h-5 w-5 text-destructive" aria-hidden="true" />
+        <p className="text-[13px] text-foreground">
+          {t('addCards.panel.searchFailed', 'Search failed. Please try again.')}
+        </p>
+        {errorMessage && (
+          <p className="text-[11px] text-muted-foreground line-clamp-2">{errorMessage}</p>
+        )}
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex items-center gap-1.5 h-8 rounded-full border border-border/60 px-3 text-[12px] font-medium hover:bg-foreground/[0.04] transition-colors"
+          >
+            <RotateCw className="h-3.5 w-3.5" strokeWidth={2.2} />
+            <span>{t('common.retry', 'Retry')}</span>
+          </button>
+        )}
       </div>
     );
   }
