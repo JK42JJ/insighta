@@ -25,6 +25,8 @@
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Bookmark, Check, Loader2, RotateCw } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { formatRelativeDate } from '@/shared/lib/format-date';
+import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
 import type { AddCardCandidate } from '../model/useAddCards';
 
 interface AddCardsListProps {
@@ -189,10 +191,38 @@ export function AddCardsList({
               {card.channel && (
                 <p className="text-[9.5px] text-muted-foreground line-clamp-1">{card.channel}</p>
               )}
+              <CardMeta
+                viewCount={card.viewCount}
+                durationSec={card.durationSec}
+                publishedAt={card.publishedAt}
+              />
             </div>
           </li>
         );
       })}
     </ul>
+  );
+}
+
+// Compact meta row under the channel — view count · duration · age.
+// Mirrors InsightCardItemV2's footer fields but tighter (3-col panel
+// grid is narrow). Skips parts that are null/missing so a card with
+// only one signal still reads cleanly.
+function CardMeta({
+  viewCount,
+  durationSec,
+  publishedAt,
+}: {
+  viewCount: number | null;
+  durationSec: number | null;
+  publishedAt: string | null;
+}) {
+  const views = formatViewCount(viewCount);
+  const duration = formatDuration(durationSec);
+  const age = formatRelativeDate(publishedAt);
+  const parts = [views, duration, age].filter((s): s is string => !!s);
+  if (parts.length === 0) return null;
+  return (
+    <p className="text-[9.5px] text-muted-foreground line-clamp-1 mt-0.5">{parts.join(' · ')}</p>
   );
 }

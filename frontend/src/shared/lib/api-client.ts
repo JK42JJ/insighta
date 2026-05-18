@@ -381,6 +381,11 @@ interface MandalaResponse {
   isPublic: boolean;
   shareSlug: string | null;
   position: number;
+  // CP467 — wizard meta exposed on every mandala fetch (Add Cards
+  // panel chip seed + future filter consumers).
+  focusTags?: string[];
+  targetLevel?: string;
+  language?: string;
   createdAt: string;
   updatedAt: string;
   levels: Array<{

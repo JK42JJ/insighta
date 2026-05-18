@@ -1,21 +1,19 @@
 /**
- * Add Cards trigger chip (CP466).
- *
- * Rendered in the grid view trailing action slot. Click opens the
- * slide-in panel scoped to the current mandalaId.
- *
- * CP466 amendment 11 — count badge mirrors the panel header badge
- * (IdeaSpot pattern, IndexPage.tsx:688). Reads
- * `useAddCardsPanelStore.visibleCountByMandala[mandalaId]` which the
- * panel keeps in sync with its visible card count even after close,
- * so the chip surfaces "N cards waiting" to the user.
+ * Add Cards trigger chip — opens the slide-in panel scoped to the
+ * current mandalaId. The count badge prefers the live Zustand value
+ * (panel keeps it fresh on pick / search) and falls back to the
+ * localStorage-persisted card list on reload so the badge survives a
+ * full page refresh (user-reported 2026-05-18 "새로고침하면 카드수
+ * 사라짐").
  *
  * Spec: docs/design/add-cards-2026-05-18.md §2.
  */
 
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bookmark } from 'lucide-react';
 import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
+import { loadAddCardsState } from '../lib/persistence';
 
 interface AddCardsTriggerChipProps {
   mandalaId: string | null;
@@ -24,9 +22,25 @@ interface AddCardsTriggerChipProps {
 export function AddCardsTriggerChip({ mandalaId }: AddCardsTriggerChipProps) {
   const { t } = useTranslation();
   const openPanel = useAddCardsPanelStore((s) => s.openPanel);
-  const count = useAddCardsPanelStore((s) =>
-    mandalaId ? (s.visibleCountByMandala[mandalaId] ?? 0) : 0
+  const storeCount = useAddCardsPanelStore((s) =>
+    mandalaId ? s.visibleCountByMandala[mandalaId] : undefined
   );
+
+  // Hydrate fallback from localStorage when the in-memory store has not
+  // been populated yet (page reload — Zustand state is session-scoped).
+  // Re-runs when mandalaId changes so switching mandalas refreshes the
+  // badge without waiting for the panel to open.
+  const [persistedCount, setPersistedCount] = useState<number>(0);
+  useEffect(() => {
+    if (!mandalaId) {
+      setPersistedCount(0);
+      return;
+    }
+    const stored = loadAddCardsState(mandalaId);
+    setPersistedCount(stored?.cards.length ?? 0);
+  }, [mandalaId]);
+
+  const count = storeCount ?? persistedCount;
 
   if (!mandalaId) return null;
 

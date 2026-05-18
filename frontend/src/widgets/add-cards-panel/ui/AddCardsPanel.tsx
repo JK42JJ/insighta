@@ -31,7 +31,9 @@ export function AddCardsPanel() {
   const setVisibleCount = useAddCardsPanelStore((s) => s.setVisibleCount);
   const closePanel = useAddCardsPanelStore((s) => s.closePanel);
 
-  const { mandalaLevels } = useMandalaQuery(open ? mandalaId : null);
+  const { mandalaLevels, mandalaMeta: mandalaMetaFromQuery } = useMandalaQuery(
+    open ? mandalaId : null
+  );
   const centerGoal = mandalaLevels?.root?.centerGoal ?? '';
 
   const mutation = useAddCards();
@@ -95,6 +97,15 @@ export function AddCardsPanel() {
             queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
             queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
             queryClient.invalidateQueries({ queryKey: ['mandala', 'recommendations', mandalaId] });
+            // CP467 — strip the picked card from the persisted panel
+            // state too, otherwise a reload restores the same card +
+            // inflates the trigger-chip count badge (pickedSet was
+            // panel-local memory only, while cards persist via
+            // saveAddCardsState).
+            const source = mutation.data?.cards ?? restoredCards ?? [];
+            const remaining = source.filter((c) => c.videoId !== videoId);
+            saveAddCardsState(mandalaId, remaining, surfacedVideoIds);
+            if (restoredCards) setRestoredCards(remaining);
           },
           onError: () => {
             setPickedSet((prev) => {
@@ -106,15 +117,20 @@ export function AddCardsPanel() {
         }
       );
     },
-    [mandalaId, pickedSet, like, mutation.data, restoredCards, queryClient]
+    [mandalaId, pickedSet, like, mutation.data, restoredCards, surfacedVideoIds, queryClient]
   );
 
-  // Seed wizard meta (focus_tags + target_level) on first response.
+  // Seed wizard meta (focus_tags + target_level) as soon as the mandala
+  // detail query returns — NOT after the search response. Previously the
+  // chip seed was bound to `mutation.data?.mandalaMeta`, so the chips
+  // popped in only AFTER the user pressed Search and the response came
+  // back (user-reported 2026-05-18 "검색 후 chip 갑자기 추가"). Now the
+  // GET /mandalas/:id response (which carries focusTags / targetLevel /
+  // language since CP467) is the source — chips appear before any search.
   useEffect(() => {
-    const meta = mutation.data?.mandalaMeta;
-    if (!meta) return;
-    seedFromWizardMeta(meta.focusTags, meta.targetLevel);
-  }, [mutation.data, seedFromWizardMeta]);
+    if (!mandalaMetaFromQuery) return;
+    seedFromWizardMeta(mandalaMetaFromQuery.focusTags, mandalaMetaFromQuery.targetLevel);
+  }, [mandalaMetaFromQuery, seedFromWizardMeta]);
 
   // Keep store count in sync so the external trigger chip badge follows panel state.
   useEffect(() => {

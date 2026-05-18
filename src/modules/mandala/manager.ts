@@ -53,6 +53,12 @@ export interface MandalaWithLevels {
   isPublic: boolean;
   shareSlug: string | null;
   position: number;
+  // CP467 — wizard meta surfaced on every mandala fetch so consumers
+  // (Add Cards panel chip seed, future filter UIs) don't need a second
+  // round trip.
+  focusTags: string[];
+  targetLevel: string;
+  language: string;
   createdAt: Date;
   updatedAt: Date;
   levels: {
@@ -157,6 +163,9 @@ export class MandalaManager {
       isPublic: mandala.is_public,
       shareSlug: mandala.share_slug,
       position: mandala.position,
+      focusTags: mandala.focus_tags ?? [],
+      targetLevel: mandala.target_level ?? 'standard',
+      language: mandala.language ?? 'ko',
       createdAt: mandala.created_at,
       updatedAt: mandala.updated_at,
       levels: mandala.levels.map((l) => ({
