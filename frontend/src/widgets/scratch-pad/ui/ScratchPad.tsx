@@ -274,7 +274,7 @@ export function ScratchPad({
                         <img
                           src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
                           alt={card.title}
-                          className="w-full h-full object-cover opacity-0 transition-opacity duration-200 group-hover:scale-110"
+                          className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-110"
                           loading="lazy"
                           decoding="async"
                           onError={handleThumbnailError}
