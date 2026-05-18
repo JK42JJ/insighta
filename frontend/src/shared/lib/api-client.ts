@@ -1312,6 +1312,46 @@ class ApiClient {
   }
 
   /**
+   * Add Cards panel candidate fetcher (CP466). Returns up to N (default
+   * 40) Pick-able candidates with Layer 1 (Coverage) + Layer 4 (Feedback
+   * bias multiplier) + caps applied per
+   * docs/design/add-cards-2026-05-18.md §5.
+   */
+  async addCards(
+    mandalaId: string,
+    body: { extraKeywords: string[]; excludeVideoIds: string[] }
+  ): Promise<{
+    status: string;
+    data: {
+      cards: Array<{
+        videoId: string;
+        title: string;
+        channel: string | null;
+        thumbnail: string | null;
+        durationSec: number | null;
+        viewCount: number | null;
+        publishedAt: string | null;
+        score: number;
+        cellIndex: number;
+        source: 'video_pool';
+      }>;
+      trace?: {
+        layer1_count: number;
+        after_exclude: number;
+        layer4_boost_applied: number;
+        caps_enforced: { channel: number; subgoal: number };
+        drift_guard_fired: boolean;
+        duration_ms: number;
+      };
+    };
+  }> {
+    return this.request(`/mandalas/${mandalaId}/add-cards`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
    * Batch lookup of v2 rich-summary fields for the card grid. Returns
    * only rows that have a video_rich_summaries row; videoIds without a
    * row simply do not appear in `items` (FE renders no badge / no

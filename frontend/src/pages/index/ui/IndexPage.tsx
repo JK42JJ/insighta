@@ -24,6 +24,8 @@ import { MandalaPanel } from '@/widgets/mandala-panel';
 import { MandalaGrid } from '@/widgets/mandala-grid/ui/MandalaGrid';
 import { MobileBottomNav } from '@/widgets/mobile-nav';
 import { InsightsView } from '@/widgets/insights-view';
+import { AddCardsTriggerChip } from '@/widgets/add-cards-panel/ui/AddCardsTriggerChip';
+import { AddCardsPanel } from '@/widgets/add-cards-panel/ui/AddCardsPanel';
 
 import { useMandalaQuery, useMandalaList } from '@/features/mandala';
 import { useMandalaStore } from '@/stores/mandalaStore';
@@ -1029,7 +1031,12 @@ function AuthenticatedApp() {
                         activeDragData?.type === 'card' || activeDragData?.type === 'card-reorder'
                       }
                       newlySyncedCards={cards.newlySyncedCards}
-                      trailingAction={ideaSpotTrigger}
+                      trailingAction={
+                        <>
+                          <AddCardsTriggerChip mandalaId={effectiveMandalaId} />
+                          {ideaSpotTrigger}
+                        </>
+                      }
                     />
                   </>
                 )}
@@ -1097,6 +1104,9 @@ function AuthenticatedApp() {
           cellLabels={cellLabels}
         />
       </DragOverlay>
+      {/* CP466 — Add Cards slide-in panel. Mounts here (above main grid)
+          so the grid stays visible on the left ("흡수" mental model). */}
+      <AddCardsPanel />
     </>
   );
 }

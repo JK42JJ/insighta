@@ -1829,5 +1829,26 @@
     "restoreOriginal": "원본 복원",
     "viewModePlayer": "영상",
     "viewModeNote": "노트"
+  },
+  "addCards": {
+    "triggerChip": "+ 카드 추가",
+    "panel": {
+      "title": "동영상 더 찾기",
+      "lockedBaseLabel": "검색 범위",
+      "keywordPlaceholder": "키워드 추가…",
+      "removeKeyword": "키워드 {{keyword}} 제거",
+      "selectCard": "카드 선택",
+      "empty": "결과가 없습니다."
+    },
+    "actions": {
+      "addOne": "만다라에 추가",
+      "addMany": "카드 {{count}}개 추가"
+    },
+    "toast": {
+      "addedOne": "만다라에 추가됨.",
+      "addedMany": "카드 {{count}}개 추가됨.",
+      "partialFailed": "카드 {{count}}개 추가 실패.",
+      "failed": "추가가 완료되지 않았어요. 잠시 후 다시 시도해주세요."
+    }
   }
 }

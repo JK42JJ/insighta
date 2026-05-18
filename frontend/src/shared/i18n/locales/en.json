@@ -1821,5 +1821,26 @@
     "restoreOriginal": "Restore original",
     "viewModePlayer": "Video",
     "viewModeNote": "Note"
+  },
+  "addCards": {
+    "triggerChip": "+ Add Cards",
+    "panel": {
+      "title": "Find more videos",
+      "lockedBaseLabel": "Searching within",
+      "keywordPlaceholder": "Add keyword…",
+      "removeKeyword": "Remove keyword {{keyword}}",
+      "selectCard": "Select card",
+      "empty": "No cards found."
+    },
+    "actions": {
+      "addOne": "Add to mandala",
+      "addMany": "Add {{count}} cards"
+    },
+    "toast": {
+      "addedOne": "Added to your mandala.",
+      "addedMany": "{{count}} cards added.",
+      "partialFailed": "{{count}} cards failed.",
+      "failed": "The add didn't complete. Please try again in a moment."
+    }
   }
 }
