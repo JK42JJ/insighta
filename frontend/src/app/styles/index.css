@@ -581,15 +581,15 @@
     animation: breathe 1.5s ease-in-out infinite;
   }
   /* Softer dot-breathe for the card phase indicator — narrow opacity
-     band (0.45 ↔ 1) + 2s ease so the dot reads as "thinking" rather
-     than blinking. Matches the dimming feel of Claude Code's
-     progress indicator. */
+     band (0.55 ↔ 1) + 3.5s ease for a slower, more meditative dim
+     than the previous 2s pulse. Matches the calm "thinking" feel of
+     Claude Code's progress indicator. */
   @keyframes dot-breathe {
-    0%, 100% { opacity: 0.45; }
+    0%, 100% { opacity: 0.55; }
     50% { opacity: 1; }
   }
   .animate-dot-breathe {
-    animation: dot-breathe 2s ease-in-out infinite;
+    animation: dot-breathe 3.5s ease-in-out infinite;
   }
 
 }
