@@ -24,6 +24,40 @@ import type { AddCardCandidate } from '../model/useAddCards';
 const STORAGE_PREFIX = 'addCards:state:';
 const STORAGE_VERSION = 1;
 const MAX_SURFACED_VIDEO_IDS = 5000; // hard cap to bound localStorage growth
+const SESSION_PICKS_PREFIX = 'addCards:sessionPicks:';
+
+/** Persisted "this session" picks per mandala. Survives panel close/reopen
+ *  so picked cards keep their "추가됨" overlay until the user explicitly
+ *  resets — user directive 2026-05-18 "초기화 클릭 전까지는 그대로". */
+export function loadSessionPicks(mandalaId: string): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(SESSION_PICKS_PREFIX + mandalaId);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as unknown;
+    return Array.isArray(arr) ? arr.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveSessionPicks(mandalaId: string, picks: ReadonlyArray<string>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SESSION_PICKS_PREFIX + mandalaId, JSON.stringify([...picks]));
+  } catch {
+    // quota exceeded — degrade silently to in-memory only
+  }
+}
+
+export function clearSessionPicks(mandalaId: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(SESSION_PICKS_PREFIX + mandalaId);
+  } catch {
+    // ignore
+  }
+}
 
 interface AddCardsPersistedState {
   version: number;

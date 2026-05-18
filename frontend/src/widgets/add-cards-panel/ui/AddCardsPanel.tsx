@@ -11,7 +11,14 @@ import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import { useAllVideoStates, youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
 import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
 import { useAddCards, type AddCardCandidate } from '../model/useAddCards';
-import { loadAddCardsState, mergeSurfacedVideoIds, saveAddCardsState } from '../lib/persistence';
+import {
+  clearSessionPicks,
+  loadAddCardsState,
+  loadSessionPicks,
+  mergeSurfacedVideoIds,
+  saveAddCardsState,
+  saveSessionPicks,
+} from '../lib/persistence';
 import { KeywordChipInput } from './KeywordChipInput';
 import { AddCardsFilters } from './AddCardsFilters';
 import { TargetLevelChips } from './TargetLevelChips';
@@ -69,8 +76,18 @@ export function AddCardsPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mutation.isSuccess, mutation.data, mandalaId]);
 
-  // This-session picks only (drives the "added" overlay).
+  // This-session picks (drives the "added" overlay). Persisted per mandala
+  // in localStorage so panel close/reopen keeps the overlay until the user
+  // explicitly resets.
   const [localPicks, setLocalPicks] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (!open || !mandalaId) return;
+    setLocalPicks(new Set(loadSessionPicks(mandalaId)));
+  }, [open, mandalaId]);
+  useEffect(() => {
+    if (!mandalaId) return;
+    saveSessionPicks(mandalaId, Array.from(localPicks));
+  }, [mandalaId, localPicks]);
   const { like } = useLikeCard();
   const queryClient = useQueryClient();
 
@@ -193,7 +210,8 @@ export function AddCardsPanel() {
     if (!open) {
       autoCollapsedFor.current = null;
       setInputCollapsed(false);
-      setLocalPicks(new Set());
+      // localPicks intentionally NOT reset — picks survive panel close
+      // until "초기화" (resetResults) is clicked.
     }
   }, [open]);
 
@@ -215,7 +233,8 @@ export function AddCardsPanel() {
     mutation.reset();
     setRestoredCards(null);
     setLocalPicks(new Set());
-  }, [mutation]);
+    if (mandalaId) clearSessionPicks(mandalaId);
+  }, [mutation, mandalaId]);
   const triggerSearch = useCallback(() => {
     if (cards.length > 0) {
       resetResults();
