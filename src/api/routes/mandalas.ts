@@ -2127,6 +2127,56 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   );
 
   /**
+   * PATCH /api/v1/mandalas/:id/focus-tags - Replace the mandala's focus_tags
+   * array. Used by the Add Cards panel chip-X button so removing a chip
+   * persists at the DB layer (FE-only state was lost on reload + re-seeded
+   * by subsequent search responses, causing the chip to "come back").
+   * Body: { focusTags: string[] }
+   */
+  fastify.patch<{ Params: { id: string }; Body: { focusTags: unknown } }>(
+    '/:id/focus-tags',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const { focusTags } = request.body ?? {};
+      if (!Array.isArray(focusTags) || focusTags.some((t) => typeof t !== 'string')) {
+        return reply.code(400).send({
+          status: 400,
+          code: 'INVALID_BODY',
+          message: 'focusTags must be a string array',
+        });
+      }
+      const sanitized = (focusTags as string[])
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0 && t.length <= 200);
+
+      try {
+        const updated = await getPrismaClient().user_mandalas.update({
+          where: { id: request.params.id, user_id: userId },
+          data: { focus_tags: sanitized, updated_at: new Date() },
+          select: { focus_tags: true },
+        });
+        return reply.send({ focusTags: updated.focus_tags ?? [] });
+      } catch (err: any) {
+        if (err?.code === 'P2025') {
+          return reply.code(404).send({ error: 'Mandala not found' });
+        }
+        request.log.error(
+          { err, userId, mandalaId: request.params.id },
+          'Failed to update focus_tags'
+        );
+        return reply.code(500).send({
+          status: 500,
+          code: 'UPDATE_FAILED',
+          message: 'Failed to update focus_tags',
+        });
+      }
+    }
+  );
+
+  /**
    * DELETE /api/v1/mandalas/:id - Delete a mandala (cascade deletes levels)
    */
   fastify.delete<{ Params: { id: string } }>(

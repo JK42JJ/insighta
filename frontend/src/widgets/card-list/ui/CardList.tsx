@@ -110,7 +110,8 @@ export function CardList({
     }
     return Array.from(ids);
   }, [cards]);
-  const { summariesByVideoId: v2SummariesMap } = useV2Summaries(videoIdsForV2);
+  const { summariesByVideoId: v2SummariesMap, isFetching: v2IsFetching } =
+    useV2Summaries(videoIdsForV2);
 
   // CP462+ Issue #649 Phase 3 — archive: client-side hide + 5-second
   // undo. The BE archive endpoint only records the signal (it does NOT
@@ -446,6 +447,7 @@ export function CardList({
                   const vid = safeVideoId(card.videoUrl);
                   return vid ? (v2SummariesMap.get(vid)?.oneLiner ?? null) : null;
                 })()}
+                isV2Loading={v2IsFetching}
                 sectorLabel={
                   sectorSubjects && card.cellIndex >= 0 && card.cellIndex < sectorSubjects.length
                     ? sectorSubjects[card.cellIndex]

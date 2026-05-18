@@ -22,6 +22,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
+import { apiClient } from '@/shared/lib/api-client';
 
 const MAX_CHIP_LEN = 200;
 
@@ -30,8 +31,27 @@ export function KeywordChipInput() {
   const extraKeywords = useAddCardsPanelStore((s) => s.extraKeywords);
   const addKeyword = useAddCardsPanelStore((s) => s.addKeyword);
   const removeKeyword = useAddCardsPanelStore((s) => s.removeKeyword);
+  const mandalaId = useAddCardsPanelStore((s) => s.mandalaId);
   const [draft, setDraft] = useState('');
   const isComposingRef = useRef(false);
+
+  // Persist chip removal at the DB layer. FE-only veto was lost on
+  // reload + clobbered by the wizard-meta seed in the next search
+  // response, causing removed chips (e.g. "박문호") to come back.
+  const persistRemoval = useCallback(
+    (kw: string) => {
+      removeKeyword(kw);
+      if (!mandalaId) return;
+      const next = extraKeywords.filter((k) => k !== kw);
+      void apiClient.updateMandalaFocusTags(mandalaId, next).catch(() => {
+        // Non-fatal — the local store already removed the chip. If the
+        // DB write fails the wizard-meta seed may re-add it on next
+        // panel open, but that is a recoverable annoyance, not data
+        // loss.
+      });
+    },
+    [extraKeywords, mandalaId, removeKeyword]
+  );
 
   const commitDraft = useCallback(() => {
     const trimmed = draft.trim().slice(0, MAX_CHIP_LEN);
@@ -50,7 +70,7 @@ export function KeywordChipInput() {
           {kw}
           <button
             type="button"
-            onClick={() => removeKeyword(kw)}
+            onClick={() => persistRemoval(kw)}
             className="hover:bg-primary/15 rounded-full transition-colors"
             aria-label={t('addCards.panel.removeKeyword', {
               keyword: kw,
@@ -82,7 +102,7 @@ export function KeywordChipInput() {
             commitDraft();
           } else if (e.key === 'Backspace' && draft === '' && extraKeywords.length > 0) {
             const last = extraKeywords[extraKeywords.length - 1];
-            if (last) removeKeyword(last);
+            if (last) persistRemoval(last);
           }
         }}
         onBlur={() => {

@@ -135,6 +135,13 @@ interface InsightCardItemV2Props {
    */
   oneLiner?: string | null;
   /**
+   * True while the batch v2-summaries query is fetching (initial load or
+   * background refetch). When true the card suppresses the v1 fallback so
+   * the blockquote stays empty until v2 arrives — prevents the
+   * v1 (long) → v2 (short) text-shrink flicker on grid mutation refetch.
+   */
+  isV2Loading?: boolean;
+  /**
    * Optional archive callback. The card calls this AFTER the archive
    * mutation succeeds so the parent can present a 5-second undo
    * toast (handoff decision #6 — soft hide). When omitted, the card
@@ -163,6 +170,7 @@ export function InsightCardItemV2({
   onRetryEnrich,
   mandalaRelevancePct,
   oneLiner,
+  isV2Loading = false,
   onArchived,
   sectorLabel,
 }: InsightCardItemV2Props) {
@@ -293,17 +301,19 @@ export function InsightCardItemV2({
   const views = formatViewCount(ytMeta.viewCount);
   const relDate = formatRelativeDate(ytMeta.publishedAt ?? card.createdAt?.toISOString());
   const hasNote = !!card.userNote?.trim();
-  // CP464+ — blockquote source priority:
-  //   1. v2 `core.one_liner` (Heart-triggered v2 enrichment, ≤ 20 chars
-  //      mandala-fit one-liner — most precise).
-  //   2. v1 `video_summaries.summary_ko` (Clawbot cron auto-summary —
-  //      already populated for every D&D card with a transcript,
-  //      regardless of Heart click).
-  // PR #653 originally bound this slot to oneLiner only, which silently
-  // dropped the v1 summary that the legacy auto-pipeline still produces.
-  // Falling back to summary_ko restores the "drop a card → auto summary
-  // appears" behaviour while preserving the v2 precision on Heart'd cards.
-  const trimmedOneLiner = (oneLiner ?? card.videoSummary?.summary_ko)?.trim();
+  // Blockquote source priority (v2 wins; v1 only when v2 is settled-absent):
+  //   1. v2 `core.one_liner` if the row exists.
+  //   2. v1 `video_summaries.summary_ko` only when the v2 query has
+  //      FINISHED and produced no row for this video. While v2 is in
+  //      flight the slot stays empty — this prevents the v1 (long
+  //      paragraph) -> v2 (short one-liner) shrink flicker the user
+  //      reported on grid mutation refetch.
+  const trimmedOneLiner = (() => {
+    const v2 = oneLiner?.trim();
+    if (v2) return v2;
+    if (isV2Loading) return undefined;
+    return card.videoSummary?.summary_ko?.trim();
+  })();
 
   const footerLeft = relDate || null;
   const footerRight = views || null;
