@@ -27,6 +27,7 @@ import { AlertCircle, Bookmark, Check, Loader2, RotateCw } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { formatRelativeDate } from '@/shared/lib/format-date';
 import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
+import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
 import type { AddCardCandidate } from '../model/useAddCards';
 
 interface AddCardsListProps {
@@ -142,8 +143,11 @@ export function AddCardsList({
                 <img
                   src={card.thumbnail}
                   alt=""
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover opacity-0 transition-opacity duration-200"
                   loading="lazy"
+                  decoding="async"
+                  onError={handleThumbnailError}
+                  onLoad={handleThumbnailLoad}
                 />
               )}
 

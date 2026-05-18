@@ -42,7 +42,9 @@ export function FeedCard({ item, onClick }: FeedCardProps) {
           <img
             src={item.thumbnail}
             alt=""
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover opacity-0 transition-opacity duration-200"
+            loading="lazy"
+            decoding="async"
             onError={handleThumbnailError}
             onLoad={handleThumbnailLoad}
           />

@@ -360,8 +360,9 @@ export function InsightCardItemV2({
         <img
           src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
           alt={card.title}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover opacity-0 transition-opacity duration-200"
           loading="lazy"
+          decoding="async"
           draggable={false}
           onError={handleThumbnailError}
           onLoad={handleThumbnailLoad}
