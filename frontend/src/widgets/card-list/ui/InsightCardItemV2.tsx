@@ -123,11 +123,27 @@ interface InsightCardItemV2Props {
   /**
    * Above-the-fold hint (CP469 follow-up). When true the thumbnail
    * <img> opts out of lazy loading and asks the browser to fetch with
-   * high priority, so the first row of cards arrives near-simultaneously
-   * and the user reads a "top → bottom" reveal cadence instead of a
-   * random mosaic. Caller decides — CardList sets it for idx < 6.
+   * high priority. NOTE: priority is advisory — the browser may still
+   * deliver images out of order, which is why the parent CardList also
+   * sequences reveals via `isRevealed` / `onImageReady`.
    */
   priority?: boolean;
+  /**
+   * Sequential reveal gate (CP469.3 — strict top-down). When false the
+   * thumbnail <img> stays hidden behind the muted shimmer placeholder;
+   * the <img> itself stays mounted so its onLoad / onError still fires
+   * to signal readiness upstream. CardList opens the gate idx-by-idx
+   * as each prior card lands or times out.
+   */
+  isRevealed?: boolean;
+  /**
+   * Fires after image-utils' onLoad / onError chain reaches a terminal
+   * state (real decoded thumb, fallback exhausted, or placeholder). The
+   * parent CardList uses this to advance the reveal prefix. Detected by
+   * `img.style.opacity === '1'` since that is exactly what image-utils'
+   * `revealThumbnail` sets on terminal states only.
+   */
+  onImageReady?: () => void;
   /**
    * Optional archive callback. The card calls this AFTER the archive
    * mutation succeeds so the parent can present a 5-second undo
@@ -159,6 +175,8 @@ export function InsightCardItemV2({
   oneLiner,
   isV2Loading = false,
   priority = false,
+  isRevealed = true,
+  onImageReady,
   onArchived,
   sectorLabel,
 }: InsightCardItemV2Props) {
@@ -382,17 +400,34 @@ export function InsightCardItemV2({
           }}
           aria-hidden="true"
         />
-        <img
-          src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
-          alt={card.title}
-          className="relative w-full h-full object-cover opacity-0 transition-opacity duration-200"
-          loading={priority ? 'eager' : 'lazy'}
-          fetchPriority={priority ? 'high' : 'auto'}
-          decoding="async"
-          draggable={false}
-          onError={handleThumbnailError}
-          onLoad={handleThumbnailLoad}
-        />
+        {/* Image wrapper opacity-gated by parent CardList's strict
+            top-down reveal queue (CP469.3). The inner <img> keeps its
+            own image-utils opacity-0 → 1 fade so progressive-decode
+            mid-frames stay hidden, and we forward the terminal-state
+            signal (img.style.opacity === '1') to CardList via
+            onImageReady so the next idx can reveal. */}
+        <div
+          className="absolute inset-0 transition-opacity duration-300"
+          style={{ opacity: isRevealed ? 1 : 0 }}
+        >
+          <img
+            src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
+            alt={card.title}
+            className="relative w-full h-full object-cover opacity-0 transition-opacity duration-200"
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
+            decoding="async"
+            draggable={false}
+            onError={(e) => {
+              handleThumbnailError(e);
+              if (e.currentTarget.style.opacity === '1') onImageReady?.();
+            }}
+            onLoad={(e) => {
+              handleThumbnailLoad(e);
+              if (e.currentTarget.style.opacity === '1') onImageReady?.();
+            }}
+          />
+        </div>
 
         {/* CP463+ — vignette-only hover: darken top + bottom edges so
             the white drop-shadowed icons (grip TL / Heart TR / Archive BL /
