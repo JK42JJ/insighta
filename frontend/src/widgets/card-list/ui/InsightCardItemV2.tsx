@@ -120,10 +120,6 @@ interface InsightCardItemV2Props {
    * v1 (long) → v2 (short) text-shrink flicker on grid mutation refetch.
    */
   isV2Loading?: boolean;
-  /** Fires when this card's thumbnail reaches a terminal load state
-   *  (decoded, fallback exhausted, or placeholder). Parent uses it to
-   *  gate the grid's batch reveal. */
-  onThumbnailReady?: (cardId: string) => void;
   /**
    * Optional archive callback. The card calls this AFTER the archive
    * mutation succeeds so the parent can present a 5-second undo
@@ -154,7 +150,6 @@ export function InsightCardItemV2({
   mandalaRelevancePct,
   oneLiner,
   isV2Loading = false,
-  onThumbnailReady,
   onArchived,
   sectorLabel,
 }: InsightCardItemV2Props) {
@@ -369,25 +364,8 @@ export function InsightCardItemV2({
           loading="lazy"
           decoding="async"
           draggable={false}
-          onError={(e) => {
-            handleThumbnailError(e);
-            // Terminal error path also counts as ready for the batch
-            // reveal gate (parent waits for every card to settle).
-            if (e.currentTarget.src.endsWith('/placeholder.svg')) {
-              onThumbnailReady?.(card.id);
-            }
-          }}
-          onLoad={(e) => {
-            handleThumbnailLoad(e);
-            // Once the load chain reaches a terminal state (real image
-            // decoded OR placeholder), notify the parent gate.
-            const finalSrc = e.currentTarget.src;
-            const isYtPlaceholder =
-              e.currentTarget.naturalWidth === 120 && e.currentTarget.naturalHeight === 90;
-            if (finalSrc.endsWith('/placeholder.svg') || !isYtPlaceholder) {
-              onThumbnailReady?.(card.id);
-            }
-          }}
+          onError={handleThumbnailError}
+          onLoad={handleThumbnailLoad}
         />
 
         {/* CP463+ — vignette-only hover: darken top + bottom edges so

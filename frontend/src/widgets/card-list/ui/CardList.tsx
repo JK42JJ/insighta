@@ -41,7 +41,6 @@ interface CardListProps {
   onDeleteCards?: (cardIds: string[]) => void;
   onSelectionChange?: (selectedIds: string[]) => void;
   enrichingCardIds?: Set<string>;
-  onThumbnailReady?: (cardId: string) => void;
   failedEnrichCardIds?: Set<string>;
   onRetryEnrich?: (cardId: string, videoUrl?: string) => void;
   gridColumns?: number;
@@ -87,7 +86,6 @@ export function CardList({
   onSaveNote,
   onSelectionChange,
   enrichingCardIds,
-  onThumbnailReady,
   failedEnrichCardIds,
   onRetryEnrich,
   gridColumns = 4,
@@ -445,7 +443,6 @@ export function CardList({
                 isEnriching={enrichingCardIds?.has(card.id)}
                 isEnrichFailed={failedEnrichCardIds?.has(card.id)}
                 onRetryEnrich={onRetryEnrich}
-                onThumbnailReady={onThumbnailReady}
                 mandalaRelevancePct={(() => {
                   const vid = safeVideoId(card.videoUrl);
                   return vid ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null) : null;
