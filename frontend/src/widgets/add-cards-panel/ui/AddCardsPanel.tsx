@@ -1,6 +1,6 @@
 /** Slide-in panel for picking video candidates into a mandala. */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
 import { ChevronDown, ChevronUp, Loader2, Lock, RotateCcw, Search, X } from 'lucide-react';
@@ -8,7 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/shared/lib/utils';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
-import { youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
+import { useAllVideoStates, youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
 import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
 import { useAddCards, type AddCardCandidate } from '../model/useAddCards';
 import { loadAddCardsState, mergeSurfacedVideoIds, saveAddCardsState } from '../lib/persistence';
@@ -68,13 +68,42 @@ export function AddCardsPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mutation.isSuccess, mutation.data, mandalaId]);
 
-  // Picked set must precede the cards filter that reads it (TDZ).
-  const [pickedSet, setPickedSet] = useState<Set<string>>(() => new Set());
+  // Locally-toggled picks (optimistic, before BE round trip completes).
+  // Server truth lives in `user_video_states`; we union the two so a
+  // reload still shows past picks as disabled overlays — the picked
+  // card MUST remain in the panel (user directive 2026-05-18 "비활성화
+  // 처리, 카드는 사라지지 않음"). Stripping the card from the list was
+  // the bug being fixed.
+  const [localPicks, setLocalPicks] = useState<Set<string>>(() => new Set());
   const { like } = useLikeCard();
   const queryClient = useQueryClient();
 
-  const allCards: AddCardCandidate[] = mutation.data?.cards ?? restoredCards ?? [];
-  const cards: AddCardCandidate[] = allCards.filter((c) => !pickedSet.has(c.videoId));
+  // Pull every user_video_states row, filter to this mandala, project
+  // the underlying youtube_video_id into a Set so AddCardsList can mark
+  // already-added cards as picked (overlay + disabled) on panel re-open
+  // and after page reload.
+  const { data: allVideoStates } = useAllVideoStates();
+  const serverPickedSet = useMemo(() => {
+    if (!mandalaId) return new Set<string>();
+    const set = new Set<string>();
+    for (const s of allVideoStates ?? []) {
+      if (s.mandala_id !== mandalaId) continue;
+      const yvid = s.video?.youtube_video_id;
+      if (yvid) set.add(yvid);
+    }
+    return set;
+  }, [allVideoStates, mandalaId]);
+
+  const pickedSet = useMemo(() => {
+    const merged = new Set<string>(serverPickedSet);
+    for (const v of localPicks) merged.add(v);
+    return merged;
+  }, [serverPickedSet, localPicks]);
+
+  // Cards stay in the panel even after pick — `isPicked` drives the
+  // overlay + disabled affordance. Filtering them out was the
+  // user-reported "completely disappears" bug.
+  const cards: AddCardCandidate[] = mutation.data?.cards ?? restoredCards ?? [];
   const hasSearched = mutation.isSuccess || mutation.isError || restoredCards !== null;
 
   const handlePick = useCallback(
@@ -85,30 +114,44 @@ export function AddCardsPanel() {
         (c) => c.videoId === videoId
       );
       const cellIndex = candidate?.cellIndex;
-      setPickedSet((prev) => {
+      setLocalPicks((prev) => {
         const next = new Set(prev);
         next.add(videoId);
         return next;
       });
       like.mutate(
-        { videoId, mandalaId, title, cellIndex },
+        {
+          videoId,
+          mandalaId,
+          title,
+          cellIndex,
+          // CP467 — Tier 2 (fresh-from-YouTube) candidates have no
+          // youtube_videos row yet. Send the metadata we already have
+          // so BE can INSERT it and the card actually lands in the
+          // mandala grid.
+          videoCacheHint: candidate
+            ? {
+                title: candidate.title,
+                channelTitle: candidate.channel,
+                thumbnailUrl: candidate.thumbnail,
+                durationSec: candidate.durationSec,
+                viewCount: candidate.viewCount,
+                publishedAt: candidate.publishedAt,
+              }
+            : undefined,
+        },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
             queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
             queryClient.invalidateQueries({ queryKey: ['mandala', 'recommendations', mandalaId] });
-            // CP467 — strip the picked card from the persisted panel
-            // state too, otherwise a reload restores the same card +
-            // inflates the trigger-chip count badge (pickedSet was
-            // panel-local memory only, while cards persist via
-            // saveAddCardsState).
-            const source = mutation.data?.cards ?? restoredCards ?? [];
-            const remaining = source.filter((c) => c.videoId !== videoId);
-            saveAddCardsState(mandalaId, remaining, surfacedVideoIds);
-            if (restoredCards) setRestoredCards(remaining);
+            // Card stays in the panel list — DO NOT strip from
+            // localStorage. `pickedSet` (server picks ∪ local picks)
+            // drives the disabled overlay so the user can see what was
+            // already added to the mandala.
           },
           onError: () => {
-            setPickedSet((prev) => {
+            setLocalPicks((prev) => {
               const next = new Set(prev);
               next.delete(videoId);
               return next;
@@ -117,7 +160,7 @@ export function AddCardsPanel() {
         }
       );
     },
-    [mandalaId, pickedSet, like, mutation.data, restoredCards, surfacedVideoIds, queryClient]
+    [mandalaId, pickedSet, like, mutation.data, restoredCards, queryClient]
   );
 
   // Seed wizard meta (focus_tags + target_level) as soon as the mandala
@@ -154,7 +197,7 @@ export function AddCardsPanel() {
     if (!open) {
       autoCollapsedFor.current = null;
       setInputCollapsed(false);
-      setPickedSet(new Set());
+      setLocalPicks(new Set());
     }
   }, [open]);
 
@@ -175,7 +218,7 @@ export function AddCardsPanel() {
   const resetResults = useCallback(() => {
     mutation.reset();
     setRestoredCards(null);
-    setPickedSet(new Set());
+    setLocalPicks(new Set());
   }, [mutation]);
   const triggerSearch = useCallback(() => {
     if (cards.length > 0) {

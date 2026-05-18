@@ -1285,7 +1285,25 @@ class ApiClient {
    */
   async likeCard(
     videoId: string,
-    body: { mandalaId?: string; title?: string; description?: string; cellIndex?: number }
+    body: {
+      mandalaId?: string;
+      title?: string;
+      description?: string;
+      cellIndex?: number;
+      // CP467 — Add Cards panel Pick of a Tier 2 (fresh-from-YouTube)
+      // candidate. youtube_videos has no row yet; sending the metadata
+      // we already have on the client lets BE INSERT the row and place
+      // the card in the mandala grid.
+      videoCacheHint?: {
+        title?: string | null;
+        description?: string | null;
+        channelTitle?: string | null;
+        thumbnailUrl?: string | null;
+        durationSec?: number | null;
+        viewCount?: number | null;
+        publishedAt?: string | null;
+      };
+    }
   ): Promise<{
     status: string;
     data: {
