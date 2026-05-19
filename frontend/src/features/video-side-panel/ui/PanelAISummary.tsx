@@ -573,7 +573,7 @@ function AtomRow({ atom, jumpUrl }: { atom: VideoRichSummaryAtom; jumpUrl: strin
   const tooltip = t(tooltipKey);
 
   return (
-    <li className="flex items-start gap-2 text-[12px] leading-[1.5] text-[rgba(237,237,240,0.84)]">
+    <li className="flex items-start gap-2 text-[12px] leading-[1.5] text-[rgba(237,237,240,0.65)]">
       <TypeIcon
         aria-label={tooltip}
         title={tooltip}
