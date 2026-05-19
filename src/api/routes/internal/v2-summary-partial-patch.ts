@@ -29,6 +29,7 @@ interface PartialPatchBody {
   videoId?: string;
   entities?: Array<{ name?: unknown; type?: unknown }>;
   sectionRelevances?: Record<string, unknown>;
+  keyConcepts?: Array<{ term?: unknown; definition?: unknown }>;
 }
 
 export const v2SummaryPartialPatchRoutes: FastifyPluginAsync = async (fastify) => {
@@ -52,9 +53,14 @@ export const v2SummaryPartialPatchRoutes: FastifyPluginAsync = async (fastify) =
       request.body?.sectionRelevances && typeof request.body.sectionRelevances === 'object'
         ? request.body.sectionRelevances
         : null;
+    const keyConceptsIn = Array.isArray(request.body?.keyConcepts)
+      ? request.body.keyConcepts
+      : null;
 
-    if (!entitiesIn && !sectionRelIn) {
-      return reply.code(400).send({ error: 'entities or sectionRelevances required' });
+    if (!entitiesIn && !sectionRelIn && !keyConceptsIn) {
+      return reply
+        .code(400)
+        .send({ error: 'entities, sectionRelevances, or keyConcepts required' });
     }
 
     // Validate + sanitise inputs.
@@ -80,6 +86,21 @@ export const v2SummaryPartialPatchRoutes: FastifyPluginAsync = async (fastify) =
         }, {})
       : null;
 
+    // 3-5 entries, each {term: string, definition: string}. Replaces the
+    // existing key_concepts array verbatim (no merge — caller passes the
+    // full set in the target language).
+    const cleanKeyConcepts = keyConceptsIn
+      ? keyConceptsIn
+          .map((kc) => {
+            const term = typeof kc?.term === 'string' ? kc.term.trim() : '';
+            const definition = typeof kc?.definition === 'string' ? kc.definition.trim() : '';
+            if (!term) return null;
+            return { term, definition };
+          })
+          .filter((kc): kc is { term: string; definition: string } => kc !== null)
+          .slice(0, 8)
+      : null;
+
     const prisma = getPrismaClient();
     const row = await prisma.video_rich_summaries.findUnique({
       where: { video_id: videoId },
@@ -91,11 +112,23 @@ export const v2SummaryPartialPatchRoutes: FastifyPluginAsync = async (fastify) =
 
     let appliedEntities = false;
     let appliedSections = false;
+    let appliedKeyConcepts = false;
 
-    // Patch analysis.entities (only if provided + non-empty).
-    if (cleanEntities && cleanEntities.length > 0) {
+    // Patch analysis.entities and/or analysis.key_concepts in a single
+    // analysis-column write (avoids two sequential updates that would race).
+    if (
+      (cleanEntities && cleanEntities.length > 0) ||
+      (cleanKeyConcepts && cleanKeyConcepts.length > 0)
+    ) {
       const analysis = (row.analysis ?? {}) as Record<string, unknown>;
-      analysis['entities'] = cleanEntities;
+      if (cleanEntities && cleanEntities.length > 0) {
+        analysis['entities'] = cleanEntities;
+        appliedEntities = true;
+      }
+      if (cleanKeyConcepts && cleanKeyConcepts.length > 0) {
+        analysis['key_concepts'] = cleanKeyConcepts;
+        appliedKeyConcepts = true;
+      }
       await prisma.video_rich_summaries.update({
         where: { video_id: videoId },
         data: {
@@ -103,7 +136,6 @@ export const v2SummaryPartialPatchRoutes: FastifyPluginAsync = async (fastify) =
           updated_at: new Date(),
         },
       });
-      appliedEntities = true;
     }
 
     // Patch segments.sections[idx].relevance_pct (only on indices present in map).
@@ -133,13 +165,21 @@ export const v2SummaryPartialPatchRoutes: FastifyPluginAsync = async (fastify) =
       videoId,
       appliedEntities,
       appliedSections,
+      appliedKeyConcepts,
       entityCount: cleanEntities?.length ?? 0,
       sectionCount: cleanSectionRel ? Object.keys(cleanSectionRel).length : 0,
+      keyConceptCount: cleanKeyConcepts?.length ?? 0,
     });
 
     return reply.code(200).send({
       status: 'ok',
-      data: { applied: { entities: appliedEntities, sections: appliedSections } },
+      data: {
+        applied: {
+          entities: appliedEntities,
+          sections: appliedSections,
+          keyConcepts: appliedKeyConcepts,
+        },
+      },
     });
   });
 };
