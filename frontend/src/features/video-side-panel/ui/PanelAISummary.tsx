@@ -548,15 +548,8 @@ function RichSummaryV2NewBlock({
 }
 
 function AtomRow({ atom, jumpUrl }: { atom: VideoRichSummaryAtom; jumpUrl: string | null }) {
-  const typeColor =
-    atom.type === 'fact'
-      ? 'text-[#2dd4bf]'
-      : atom.type === 'argument'
-        ? 'text-[#f59e0b]'
-        : atom.type === 'tip'
-          ? 'text-[#818cf8]'
-          : 'text-[#94a3b8]';
-  // Lucide icon per atom type — meaning conveyed visually:
+  const { t } = useTranslation();
+  // Lucide icon per atom type. Meaning conveyed via hover tooltip (i18n).
   //   fact     → Info       (i in circle — neutral information / verifiable)
   //   argument → Quote      (quotation marks — speaker's claim / opinion)
   //   tip      → Lightbulb  (universal idea / actionable suggestion)
@@ -569,18 +562,23 @@ function AtomRow({ atom, jumpUrl }: { atom: VideoRichSummaryAtom; jumpUrl: strin
         : atom.type === 'tip'
           ? Lightbulb
           : Dot;
-  const typeLabel =
+  const tooltipKey =
     atom.type === 'fact'
-      ? 'fact'
+      ? 'learning.atomFact'
       : atom.type === 'argument'
-        ? 'argument'
+        ? 'learning.atomArgument'
         : atom.type === 'tip'
-          ? 'tip'
-          : 'other';
+          ? 'learning.atomTip'
+          : 'learning.atomOther';
+  const tooltip = t(tooltipKey);
 
   return (
     <li className="flex items-start gap-2 text-[12px] leading-[1.5] text-[rgba(237,237,240,0.84)]">
-      <TypeIcon aria-label={typeLabel} className={`mt-[2px] h-3.5 w-3.5 shrink-0 ${typeColor}`} />
+      <TypeIcon
+        aria-label={tooltip}
+        title={tooltip}
+        className="mt-[2px] h-3.5 w-3.5 shrink-0 text-white"
+      />
       <span className="flex-1">
         {atom.text}
         {jumpUrl && Number.isFinite(atom.timestamp_sec) && (
