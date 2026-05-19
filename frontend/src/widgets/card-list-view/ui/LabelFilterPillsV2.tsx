@@ -112,20 +112,12 @@ export function LabelFilterPillsV2({
           );
         })}
 
-        {/* CP474 — inactive "Updated" reads as a chip (accent-tinted bg,
-            ~20% opacity) distinct from neutral sector chips; selecting it
-            fills the chip in solid accent. */}
+        {/* CP474 — "Updated" pill shares chrome with the 9 sector chips. */}
         {showNewlySynced && (
           <button
             onClick={onNewlySyncedClick}
-            className={cn(
-              PILL_BASE,
-              isNewlySyncedSelected
-                ? 'bg-[var(--ind,#818cf8)] text-background'
-                : 'bg-[var(--ind,#818cf8)]/20 text-[var(--ind,#818cf8)] hover:bg-[var(--ind,#818cf8)]/35'
-            )}
+            className={cn(PILL_BASE, isNewlySyncedSelected ? PILL_ACTIVE : PILL_INACTIVE)}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" aria-hidden="true" />
             {t('labelFilter.updated', 'Updated')}
             <span className="text-[10px] font-medium opacity-70">{newlySyncedCount}</span>
           </button>
