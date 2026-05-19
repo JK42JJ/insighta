@@ -140,37 +140,65 @@ export function isCardInMandala(card: InsightCard): boolean {
 }
 
 /**
- * Issue #389: a card is "newly synced" when a `source_mandala_mappings`
- * entry caused the sync engine to stamp `mandala_id` on it, but no cell
- * placement has happened yet. These cards live in the target mandala's
- * "Newly Synced" tab until the user drops them into a cell.
+ * Issue #389: a card is "new" (surfaced under the "New Cards" tab) when a
+ * `source_mandala_mappings` entry caused the sync engine to stamp
+ * `mandala_id` on it, but no cell placement has happened yet. These cards
+ * live in the target mandala's "New Cards" tab until the user drops them
+ * into a cell.
+ *
+ * CP474 fix — the original three-condition predicate produced false
+ * positives because the auto-add recommendation pipeline
+ * (`auto-add-recommendations.ts`) and the Heart-click INSERT path
+ * (`cards.ts` line ~178) both write the same `is_in_ideation=false +
+ * cell_index=-1 + mandala_id=set` triple as the sync engine. We now
+ * additionally exclude rows whose `auto_added=true` (recommendation
+ * origin) or `pinned_at` is set (user explicitly bookmarked, not an
+ * incoming sync). The sync engine alone leaves both signals at their
+ * zero values.
  *
  * Predicate:
  *   - `isInIdeation === false` (out of the global Ideation palette)
  *   - `cellIndex < 0` or missing (unplaced)
  *   - `mandalaId` is truthy (has a mapped home mandala)
+ *   - `autoAdded !== true` (not a recommendation auto-add)
+ *   - `pinnedAt` is null/undefined (not user-bookmarked)
  *   - if `mandalaId` is supplied, filters to that mandala only
  */
-export function isNewlySyncedCard(card: InsightCard, mandalaId?: string | null): boolean {
+export function isNewCardForMandala(card: InsightCard, mandalaId?: string | null): boolean {
   if (card.isInIdeation !== false) return false;
   if (typeof card.cellIndex === 'number' && card.cellIndex >= 0) return false;
   if (!card.mandalaId) return false;
   if (mandalaId && card.mandalaId !== mandalaId) return false;
+  if (card.autoAdded) return false;
+  if (card.pinnedAt) return false;
   return true;
 }
 
 /**
- * Count newly-synced cards per mandala. Cards without a `mandalaId` or
- * that fail {@link isNewlySyncedCard} are ignored. Mandalas with count 0
- * are omitted from the result — consumers can treat a missing key as 0.
+ * Back-compat alias — exported name preserved so existing imports
+ * (`isNewlySyncedCard`) keep compiling while call-sites migrate.
+ * @deprecated Use {@link isNewCardForMandala}.
  */
-export function countNewlySyncedByMandala(cards: InsightCard[]): Record<string, number> {
+export const isNewlySyncedCard = isNewCardForMandala;
+
+/**
+ * Count "new" cards per mandala. Cards without a `mandalaId` or that fail
+ * {@link isNewCardForMandala} are ignored. Mandalas with count 0 are
+ * omitted from the result — consumers can treat a missing key as 0.
+ */
+export function countNewCardsByMandala(cards: InsightCard[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const c of cards) {
-    if (!isNewlySyncedCard(c)) continue;
+    if (!isNewCardForMandala(c)) continue;
     const key = c.mandalaId;
     if (!key) continue;
     counts[key] = (counts[key] ?? 0) + 1;
   }
   return counts;
 }
+
+/**
+ * Back-compat alias.
+ * @deprecated Use {@link countNewCardsByMandala}.
+ */
+export const countNewlySyncedByMandala = countNewCardsByMandala;

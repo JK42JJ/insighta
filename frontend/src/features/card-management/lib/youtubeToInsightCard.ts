@@ -39,6 +39,9 @@ export function convertToInsightCard(data: UserVideoStateWithVideo): InsightCard
     videoSummary: data.video_summary,
     sourceTable: 'user_video_states',
     pinnedAt: data.pinned_at ?? null,
+    // CP474 — propagate auto-add origin so the "New Cards" predicate can
+    // distinguish sync-engine rows from recommendation rows.
+    autoAdded: data.auto_added ?? false,
   };
 }
 

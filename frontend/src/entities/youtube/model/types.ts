@@ -77,6 +77,14 @@ export interface UserVideoState {
   updated_at: string;
   /** CP457+ pin / bookmark timestamp. Null = unpinned. */
   pinned_at?: string | null;
+  /**
+   * CP474 — true when the row was inserted by the auto-add pipeline
+   * (recommendation_cache → user_video_states). Distinct from the
+   * sync-engine path which leaves this `false`. The "New Cards" tab
+   * predicate excludes `auto_added=true` rows so recommendations
+   * never appear as if they were YouTube-synced.
+   */
+  auto_added?: boolean;
 }
 
 export interface YouTubeSyncHistory {

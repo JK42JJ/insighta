@@ -53,6 +53,15 @@ export interface InsightCard {
    * `usePinCard` mutation hitting `PATCH /api/v1/cards/:id/pin`.
    */
   pinnedAt?: string | null;
+  /**
+   * CP474 — true when the underlying row was inserted by the auto-add
+   * recommendation pipeline (not the YouTube sync engine). Used by the
+   * "New Cards" tab predicate to suppress auto-added rows so the tab
+   * only surfaces genuinely-synced YouTube content. Surfaced from the
+   * `auto_added` column on `user_video_states` (always `false` for
+   * `user_local_cards` rows, which the predicate ignores anyway).
+   */
+  autoAdded?: boolean;
 }
 
 export interface MandalaLevel {
