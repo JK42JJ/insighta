@@ -50,6 +50,8 @@ prisma/migrations/*
 !prisma/migrations/card-interactions/
 !prisma/migrations/add-cards/
 !prisma/migrations/add-cards/**
+!prisma/migrations/user-video-states-cleanup/
+!prisma/migrations/user-video-states-cleanup/**
 
 # Logs
 logs/

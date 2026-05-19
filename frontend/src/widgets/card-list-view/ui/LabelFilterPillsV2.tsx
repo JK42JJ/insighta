@@ -112,7 +112,7 @@ export function LabelFilterPillsV2({
           );
         })}
 
-        {/* Issue #389 — "New Cards" pill (renamed from "Newly Synced" CP474):
+        {/* Issue #389 — "New" pill (renamed from "Newly Synced" CP474):
             primary accent + leading dot preserved (data signal); only the
             underline indicator was removed in line with the rest of the row. */}
         {showNewlySynced && (
@@ -126,7 +126,7 @@ export function LabelFilterPillsV2({
             )}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" aria-hidden="true" />
-            {t('labelFilter.newCards', 'New Cards')}
+            {t('labelFilter.new', 'New')}
             <span className="text-[10px] font-medium opacity-70">{newlySyncedCount}</span>
           </button>
         )}
