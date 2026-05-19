@@ -112,21 +112,20 @@ export function LabelFilterPillsV2({
           );
         })}
 
-        {/* Issue #389 — Newly Synced pill: primary accent + leading dot
-            preserved (data signal); only the underline indicator was removed
-            in line with the rest of the row. */}
+        {/* CP474 — same chip chrome as sector pills (PILL_INACTIVE bg,
+            PILL_ACTIVE fill); accent text + dot kept as data signal. */}
         {showNewlySynced && (
           <button
             onClick={onNewlySyncedClick}
             className={cn(
               PILL_BASE,
               isNewlySyncedSelected
-                ? 'bg-[var(--ind,#818cf8)] text-background'
-                : 'bg-[var(--ind,#818cf8)]/15 text-[var(--ind,#818cf8)] hover:bg-[var(--ind,#818cf8)]/25'
+                ? PILL_ACTIVE
+                : 'bg-muted/40 text-[var(--ind,#818cf8)] hover:bg-muted/60'
             )}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" aria-hidden="true" />
-            {t('labelFilter.newlySynced', 'Newly Synced')}
+            {t('labelFilter.updated', 'Updated')}
             <span className="text-[10px] font-medium opacity-70">{newlySyncedCount}</span>
           </button>
         )}

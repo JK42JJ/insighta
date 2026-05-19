@@ -81,6 +81,10 @@ APPLY_FILES=(
   # index on user_video_states for Layer 1 Coverage dedup. ADD COLUMN IF
   # NOT EXISTS / CREATE INDEX IF NOT EXISTS — idempotent.
   "prisma/migrations/add-cards/001_user_video_states_surfacing_cols.sql"
+  # CP474 — Promote auto-added + Heart-pinned rows to user-owned
+  # (auto_added=false). Cleans up 120 historical rows that misrepresent
+  # their origin; idempotent (subsequent runs match 0 rows).
+  "prisma/migrations/user-video-states-cleanup/001_promote_pinned_auto_added.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "

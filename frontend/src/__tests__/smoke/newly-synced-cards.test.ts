@@ -106,6 +106,52 @@ describe('isNewlySyncedCard', () => {
     (card as unknown as { cellIndex: unknown }).cellIndex = undefined;
     expect(isNewlySyncedCard(card)).toBe(true);
   });
+
+  // CP474 — regression: prod sighting where a user-Hearted auto-add row
+  // (`auto_added=true` + `pinned_at` set) surfaced under the "New Cards"
+  // pill. Recommendation rows and explicit user pins must NOT be treated
+  // as sync output.
+  it('returns false when the row was auto-added by the recommendation pipeline', () => {
+    const card = makeCard({
+      isInIdeation: false,
+      cellIndex: -1,
+      mandalaId: MANDALA_A,
+      autoAdded: true,
+    });
+    expect(isNewlySyncedCard(card)).toBe(false);
+  });
+
+  it('returns false when the user has explicitly pinned the card (Heart click)', () => {
+    const card = makeCard({
+      isInIdeation: false,
+      cellIndex: -1,
+      mandalaId: MANDALA_A,
+      pinnedAt: '2026-05-19T01:23:45.000Z',
+    });
+    expect(isNewlySyncedCard(card)).toBe(false);
+  });
+
+  it('returns false for an auto-added + Heart-clicked row (the prod sighting)', () => {
+    const card = makeCard({
+      isInIdeation: false,
+      cellIndex: -1,
+      mandalaId: MANDALA_A,
+      autoAdded: true,
+      pinnedAt: '2026-05-19T01:23:45.000Z',
+    });
+    expect(isNewlySyncedCard(card)).toBe(false);
+  });
+
+  it('keeps returning true when both new exclusion fields are at their zero values (sync engine path)', () => {
+    const card = makeCard({
+      isInIdeation: false,
+      cellIndex: -1,
+      mandalaId: MANDALA_A,
+      autoAdded: false,
+      pinnedAt: null,
+    });
+    expect(isNewlySyncedCard(card)).toBe(true);
+  });
 });
 
 describe('countNewlySyncedByMandala', () => {
