@@ -137,12 +137,14 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     });
   }
 
-  // Step 3 — v2 upgrade + mandala_relevance_pct, transcript-aware.
+  // Step 3 — v2 upgrade. forceRegen when a transcript arrived so a prior
+  // description-only v2 row is replaced with transcript-grounded content.
   const v2Outcome = await generateRichSummaryV2({
     videoId,
     userId,
     mandalaCenterGoal: centerGoal,
     transcript,
+    forceRegen: transcript !== undefined,
   });
 
   logger.info('enrich-rich-summary: completed', {

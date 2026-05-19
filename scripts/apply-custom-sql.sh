@@ -77,6 +77,9 @@ APPLY_FILES=(
   # re-application is safe.
   "prisma/migrations/card-interactions/001_create_table.sql"
   "prisma/migrations/rich-summary-v2/005_mandala_relevance_pct.sql"
+  # CP474 — v2 regen gate based on transcript_used (boolean). ADD COLUMN
+  # IF NOT EXISTS + idempotent backfill (WHERE transcript_used = false).
+  "prisma/migrations/rich-summary-v2/006_add_transcript_used.sql"
   # CP466 — Add Cards Phase 1 (surfacing). `surfaced_at` column + partial
   # index on user_video_states for Layer 1 Coverage dedup. ADD COLUMN IF
   # NOT EXISTS / CREATE INDEX IF NOT EXISTS — idempotent.

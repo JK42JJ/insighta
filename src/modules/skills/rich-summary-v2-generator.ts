@@ -69,6 +69,9 @@ export interface V2GenerationInput {
    * cron-driven backfill which does not know which user triggered the video.
    */
   mandalaCenterGoal?: string;
+  /** CP474 — bypass the "complete v2" skip gate so a description-only row
+   *  can be regenerated when a transcript becomes available. */
+  forceRegen?: boolean;
 }
 
 export async function generateRichSummaryV2(
@@ -84,16 +87,23 @@ export async function generateRichSummaryV2(
       template_version: true,
       source_language: true,
       quality_flag: true,
-      // CP462+ Issue #649 — legacy v2 rows have NULL here; Lazy backfill
-      // regenerates them on the first Heart click so the score is populated.
       mandala_relevance_pct: true,
+      // CP474 — only "transcript-grounded v2" is skip-worthy.
+      transcript_used: true,
     },
   });
   if (!row) {
     return { kind: 'skip', videoId: input.videoId, reason: 'no_rich_summary_row' };
   }
-  if (row.template_version === 'v2' && row.mandala_relevance_pct != null) {
-    return { kind: 'skip', videoId: input.videoId, reason: 'already_v2' };
+  // CP474 — description-only v2 rows fall through so a later Heart click
+  // with a successful captioner can regenerate them. forceRegen overrides.
+  if (
+    !input.forceRegen &&
+    row.template_version === 'v2' &&
+    row.mandala_relevance_pct != null &&
+    row.transcript_used
+  ) {
+    return { kind: 'skip', videoId: input.videoId, reason: 'already_v2_with_transcript' };
   }
 
   const ytRow = await prisma.youtube_videos.findUnique({
@@ -175,6 +185,8 @@ export async function generateRichSummaryV2(
           quality_flag: 'pass',
           model: provider.model,
           mandala_relevance_pct: summary.analysis.mandala_fit.mandala_relevance_pct,
+          // CP474 — true only when the LLM actually saw a transcript.
+          transcript_used: Boolean(input.transcript && input.transcript.length > 0),
           ...(input.userId ? { user_id: input.userId } : {}),
           updated_at: new Date(),
         },
