@@ -150,13 +150,23 @@ export interface VideoRichSummaryKeyConcept {
   definition: string;
 }
 
+/** CP474 — typed entity emitted by the v2 prompt (5-type vocabulary). */
+export interface VideoRichSummaryEntity {
+  name: string;
+  type: 'concept' | 'person' | 'tool' | 'framework' | 'organization' | string;
+}
+
 export interface VideoRichSummaryAnalysis {
   core_argument?: string;
   key_concepts?: VideoRichSummaryKeyConcept[];
+  /** CP474 — KG bridge nodes (concept/person/tool/framework/organization). */
+  entities?: VideoRichSummaryEntity[];
   actionables?: string[];
   mandala_fit?: {
     suggested_goals?: string[];
     relevance_rationale?: string;
+    /** CP462+ — 0-100 whole-video score against the user's mandala center. */
+    mandala_relevance_pct?: number;
   };
   bias_signals?: {
     has_ad?: boolean;
@@ -173,6 +183,11 @@ export interface VideoRichSummarySection {
   from_sec: number;
   to_sec: number;
   summary?: string;
+  /** CP474 — intra-video relevance for this section vs the user's mandala
+   *  center goal (0-100 integer). Distinct from
+   *  `analysis.mandala_fit.mandala_relevance_pct` (whole-video score). */
+  relevance_pct?: number;
+  key_points?: Array<{ text: string; timestamp_sec?: number }>;
 }
 
 export interface VideoRichSummaryAtom {
@@ -180,6 +195,8 @@ export interface VideoRichSummaryAtom {
   type?: 'fact' | 'tip' | 'argument' | string;
   text: string;
   timestamp_sec?: number;
+  /** CP474 — links back to analysis.entities[].name (KG bridge). */
+  entity_refs?: string[];
 }
 
 export interface VideoRichSummarySegments {
@@ -1423,6 +1440,10 @@ class ApiClient {
         oneLiner: string | null;
         /** CP474 — `analysis.core_argument`, the v2 essence (2-3 sentences). */
         coreArgument: string | null;
+        /** Top `analysis.key_concepts[].term` values (≤ 3). */
+        keyConcepts: string[];
+        /** Fallback keywords from `video_summaries.tags` (≤ 3) when v2 absent. */
+        fallbackTags: string[];
         mandalaRelevancePct: number | null;
         qualityFlag: string | null;
         templateVersion: string;

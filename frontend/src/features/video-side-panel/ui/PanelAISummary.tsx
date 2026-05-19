@@ -12,10 +12,13 @@
  *
  * Design tokens: insighta-side-editor-mockup-v3.html
  */
+import { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { VideoSummary } from '@/entities/card/model/types';
 import { getYouTubeVideoId } from '@/widgets/video-player/model/youtube-api';
+import { queryKeys } from '@/shared/config/query-client';
 import type {
   VideoRichSummaryAnalysis,
   VideoRichSummaryAtom,
@@ -33,7 +36,14 @@ export interface PanelAISummaryProps {
 export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) {
   const { t } = useTranslation();
   const { mandalaId } = useParams<{ mandalaId: string }>();
+  const queryClient = useQueryClient();
   const youtubeId = videoUrl ? getYouTubeVideoId(videoUrl) : null;
+  // Cache-bust on every mount + videoId change so freshly-backfilled v2
+  // rows surface immediately without a hard refresh.
+  useEffect(() => {
+    if (!youtubeId) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.video.richSummary(youtubeId) });
+  }, [youtubeId, queryClient]);
   const { richSummary, isLoading: isRichLoading } = useRichSummary(youtubeId);
 
   const short = videoSummary?.summary_ko || videoSummary?.summary_en || null;
@@ -349,6 +359,8 @@ function RichSummaryV2NewBlock({
   const coreArg = analysis?.core_argument ?? null;
   const actionables = analysis?.actionables ?? [];
   const keyConcepts = analysis?.key_concepts ?? [];
+  // entities feed the KG bridge; absent on rows authored before they shipped.
+  const entities = analysis?.entities ?? [];
   const sections = segments?.sections ?? [];
   const atoms = segments?.atoms ?? [];
   const qaPairs = lora?.qa_pairs ?? [];
@@ -365,23 +377,65 @@ function RichSummaryV2NewBlock({
 
   return (
     <div className="space-y-4">
-      {oneLiner && (
+      {/* coreArgument in the headline slot. */}
+      {coreArg && (
         <section>
-          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            {t('learning.oneLiner')}
-          </h3>
-          <p className="rounded-r-[6px] border-l-2 border-[#818cf8] bg-[rgba(99,102,241,0.06)] px-[14px] py-[10px] text-[13px] leading-[1.65] text-[#ededf0]">
-            {oneLiner}
+          <p className="rounded-[6px] bg-[rgba(99,102,241,0.06)] px-[14px] py-[10px] text-[13px] leading-[1.65] text-[#ededf0]">
+            {coreArg}
           </p>
         </section>
       )}
 
-      {coreArg && (
+      {sections.length > 0 && (
         <section>
-          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            {t('learning.coreArgument')}
-          </h3>
-          <p className="text-[13px] leading-[1.6] text-[rgba(237,237,240,0.84)]">{coreArg}</p>
+          <div className="space-y-1">
+            {sections.map((sec, idx) => {
+              const jump = tsUrl(sec.from_sec);
+              const inner = (
+                <>
+                  <div className="flex items-baseline gap-3">
+                    <span className="font-mono text-[10px] text-[#818cf8] shrink-0">
+                      {formatSeconds(sec.from_sec)} — {formatSeconds(sec.to_sec)}
+                    </span>
+                    <p className="flex-1 text-[12px] font-semibold leading-[1.35] text-[rgba(237,237,240,0.92)]">
+                      {sec.title}
+                    </p>
+                    {typeof sec.relevance_pct === 'number' && (
+                      <span
+                        className={[
+                          'shrink-0 font-mono text-[11px] font-bold tabular-nums',
+                          sec.relevance_pct >= 75
+                            ? 'text-[#2dd4bf]'
+                            : sec.relevance_pct >= 50
+                              ? 'text-[#f59e0b]'
+                              : 'text-[#94a3b8]',
+                        ].join(' ')}
+                        title={t('learning.relevanceLabel')}
+                      >
+                        {sec.relevance_pct}%
+                      </span>
+                    )}
+                  </div>
+                  {sec.summary && (
+                    <p className="mt-[3px] pl-[88px] text-[11px] text-[rgba(237,237,240,0.66)]">
+                      {sec.summary}
+                    </p>
+                  )}
+                </>
+              );
+              const baseCls =
+                'block rounded-[6px] px-3 py-[10px] transition-colors hover:bg-[rgba(129,140,248,0.06)]';
+              return jump ? (
+                <Link key={idx} to={jump} className={`${baseCls} cursor-pointer`}>
+                  {inner}
+                </Link>
+              ) : (
+                <div key={idx} className={baseCls}>
+                  {inner}
+                </div>
+              );
+            })}
+          </div>
         </section>
       )}
 
@@ -439,36 +493,6 @@ function RichSummaryV2NewBlock({
         </section>
       )}
 
-      {sections.length > 0 && (
-        <section>
-          <h3 className="mb-[8px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            {t('learning.sectionAnalysis')}
-          </h3>
-          <div className="space-y-1">
-            {sections.map((sec, idx) => (
-              <div
-                key={idx}
-                className="rounded-[6px] px-3 py-[10px] transition-colors hover:bg-[rgba(255,255,255,0.02)]"
-              >
-                <div className="flex items-baseline gap-3">
-                  <span className="font-mono text-[10px] text-[#818cf8] shrink-0">
-                    {formatSeconds(sec.from_sec)} — {formatSeconds(sec.to_sec)}
-                  </span>
-                  <p className="text-[12px] font-semibold leading-[1.35] text-[rgba(237,237,240,0.92)]">
-                    {sec.title}
-                  </p>
-                </div>
-                {sec.summary && (
-                  <p className="mt-[3px] pl-[88px] text-[11px] text-[rgba(237,237,240,0.66)]">
-                    {sec.summary}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       {atoms.length > 0 && (
         <section>
           <h3 className="mb-[8px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
@@ -479,6 +503,25 @@ function RichSummaryV2NewBlock({
               <AtomRow key={idx} atom={atom} jumpUrl={tsUrl(atom.timestamp_sec)} />
             ))}
           </ul>
+        </section>
+      )}
+
+      {entities.length > 0 && (
+        <section>
+          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
+            {t('learning.tags')}
+          </h3>
+          <div className="flex flex-wrap gap-x-1 gap-y-[3px]">
+            {entities.map((ent) => (
+              <span
+                key={`${ent.type}:${ent.name}`}
+                className="inline-block rounded-[4px] bg-[rgba(129,140,248,0.08)] px-[7px] py-[2px] text-[10px] font-semibold text-[#818cf8]"
+                title={ent.type}
+              >
+                {ent.name}
+              </span>
+            ))}
+          </div>
         </section>
       )}
 

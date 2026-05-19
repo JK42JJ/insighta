@@ -34,6 +34,7 @@ import { internalBatchVideoCollectorRoutes } from './routes/internal/batch-video
 import { internalTrendCollectorRoutes } from './routes/internal/trend-collector';
 import { internalTranscriptRoutes } from './routes/internal/transcript';
 import { internalVideosBulkUpsertRoutes } from './routes/internal/videos-bulk-upsert';
+import { v2SummaryPartialPatchRoutes } from './routes/internal/v2-summary-partial-patch';
 import { internalVideoPoolPromoteRoutes } from './routes/internal/video-pool-promote';
 import { internalGoogleCseRoutes } from './routes/internal/google-cse';
 import { internalPlaylistImportRoutes } from './routes/internal/playlist-import';
@@ -326,6 +327,10 @@ export async function buildServer() {
       });
       // CP438 — Mac Mini new-collector bulk video metadata upsert.
       await instance.register(internalVideosBulkUpsertRoutes, {
+        prefix: '/internal',
+      });
+      // Partial backfill — entities[] + sections[].relevance_pct.
+      await instance.register(v2SummaryPartialPatchRoutes, {
         prefix: '/internal',
       });
       // CP438 — promote v2 layered summaries into video_pool (batched,

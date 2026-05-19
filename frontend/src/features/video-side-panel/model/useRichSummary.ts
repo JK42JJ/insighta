@@ -29,6 +29,7 @@ export function useRichSummary(videoId: string | null | undefined): UseRichSumma
     queryFn: () => apiClient.getVideoRichSummary(videoId as string),
     enabled: Boolean(videoId),
     staleTime: RICH_SUMMARY_STALE_MS,
+    refetchOnMount: 'always',
     retry: false,
   });
 

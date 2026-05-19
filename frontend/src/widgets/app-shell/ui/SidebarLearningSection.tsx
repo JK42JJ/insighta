@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, ChevronRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,9 @@ import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useMandalaCards } from '@/pages/learning/model/useMandalaCards';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
 import type { MandalaBookChapter } from '@/shared/lib/api-client';
+import type { InsightCard } from '@/entities/card/model/types';
+import { extractYouTubeVideoId } from '@/shared/lib/url-normalize';
+import { useV2Summaries } from '@/features/card-management/model/useV2Summaries';
 import { cn } from '@/shared/lib/utils';
 
 interface SidebarLearningSectionProps {
@@ -21,6 +24,7 @@ export function SidebarLearningSection({
   collapsed,
 }: SidebarLearningSectionProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const setActiveSection = useLearningStore((s) => s.setActiveSection);
   const activeSectionRef = useLearningStore((s) => s.activeSectionRef);
   const setActiveRegion = useLearningStore((s) => s.setActiveRegion);
@@ -32,7 +36,10 @@ export function SidebarLearningSection({
   const { mandalaLevels } = useMandalaQuery(mandalaId);
   const rootLevel = mandalaLevels.root;
   const centerGoal = rootLevel?.centerGoal ?? '';
+  // Short cell labels in the tree; long goals move to the hover tooltip.
+  const centerLabel = rootLevel?.centerLabel ?? null;
   const subGoals = rootLevel?.subjects ?? [];
+  const subjectLabels = rootLevel?.subjectLabels ?? [];
 
   const { cards: mandalaCards } = useMandalaCards(mandalaId);
   // CP438+1 — book index PoC; non-null when a book has been generated.
@@ -43,6 +50,34 @@ export function SidebarLearningSection({
       bookChaptersByIdx.set(ch.ch, ch);
     }
   }
+
+  // Group liked cards by cellIndex so each sub-goal lists its own videos.
+  const cardsByCell = useMemo(() => {
+    const map = new Map<number, InsightCard[]>();
+    for (const card of mandalaCards) {
+      if (typeof card.cellIndex !== 'number' || card.cellIndex < 1) continue;
+      const list = map.get(card.cellIndex) ?? [];
+      list.push(card);
+      map.set(card.cellIndex, list);
+    }
+    return map;
+  }, [mandalaCards]);
+
+  // Pull v2 key-concept terms for every liked video so the sub-goal tree
+  // can render keyword-style book-index entries instead of raw titles.
+  const likedVideoIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const card of mandalaCards) {
+      try {
+        const vid = extractYouTubeVideoId(new URL(card.videoUrl));
+        if (vid) ids.push(vid);
+      } catch {
+        /* skip cards whose URL cannot be parsed */
+      }
+    }
+    return ids;
+  }, [mandalaCards]);
+  const { summariesByVideoId } = useV2Summaries(likedVideoIds);
 
   // CP438+1: find which chapter+section contains an atom whose vid matches
   // the currently-playing video. Used to highlight the active section in
@@ -115,7 +150,7 @@ export function SidebarLearningSection({
       <div className="px-2 py-1" onMouseEnter={() => setActiveRegion('sidebar')}>
         <button
           className="w-full flex items-center justify-center px-2 py-2.5 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-          title={centerGoal || t('sidebar.learning', 'Learning')}
+          title={centerGoal || centerLabel || t('sidebar.learning', 'Learning')}
         >
           <BookOpen className="w-5 h-5" />
         </button>
@@ -123,13 +158,20 @@ export function SidebarLearningSection({
     );
   }
 
+  // Header text prefers the short label; long goal moves to the tooltip.
+  const headerText = centerLabel?.trim() || centerGoal || t('sidebar.learning', 'Learning');
+  const headerTooltip = centerGoal && centerGoal !== headerText ? centerGoal : undefined;
+
   return (
     <div className="pl-5 pr-2 flex flex-col" onMouseEnter={() => setActiveRegion('sidebar')}>
       <div className="px-3 py-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="text-[13px] font-bold text-sidebar-foreground leading-snug truncate">
-              {centerGoal || t('sidebar.learning', 'Learning')}
+            <h3
+              className="text-[13px] font-bold text-sidebar-foreground leading-snug truncate"
+              title={headerTooltip}
+            >
+              {headerText}
             </h3>
             {/* CP445 D18=B — 영상 모드 = 만다라 mapped 전체 영상 / 노트 모드 =
                 mandala_books 가 인용한 distinct vid 수 (필수 영상). */}
@@ -169,12 +211,16 @@ export function SidebarLearningSection({
         {subGoals.map((goal, idx) => {
           const bookChapter = bookChaptersByIdx.get(idx);
           const isExpanded = isChapterExpanded(idx);
+          // Row text shows the short label; long goal text is the tooltip.
+          const rowLabel = subjectLabels[idx]?.trim() || goal;
+          const rowTooltip = goal && goal !== rowLabel ? goal : undefined;
 
           return (
             <div key={idx} className="mb-0.5">
               <button
                 type="button"
                 onClick={() => toggleChapter(idx)}
+                title={rowTooltip}
                 className="group flex w-full items-center gap-2 px-2 py-1 text-left transition-colors"
               >
                 <ChevronRight
@@ -184,7 +230,7 @@ export function SidebarLearningSection({
                   )}
                 />
                 <span className="flex-1 truncate text-[13px] font-medium tracking-[-0.01em] text-sidebar-foreground/80 transition-colors group-hover:text-sidebar-foreground">
-                  {goal}
+                  {rowLabel}
                 </span>
               </button>
 
@@ -202,6 +248,56 @@ export function SidebarLearningSection({
                   />
                 </div>
               )}
+              {/* Book-index entries: keyword tokens distilled from v2
+                  analysis.key_concepts. Cards without a v2 row are
+                  omitted; they reappear once enrich-rich-summary lands. */}
+              {isExpanded &&
+                (() => {
+                  const cellCards = cardsByCell.get(idx + 1) ?? [];
+                  const indexedEntries = cellCards
+                    .map((card) => {
+                      let vid: string | null = null;
+                      try {
+                        vid = extractYouTubeVideoId(new URL(card.videoUrl));
+                      } catch {
+                        vid = null;
+                      }
+                      if (!vid) return null;
+                      const v2 = summariesByVideoId.get(vid);
+                      const primary = v2?.keyConcepts ?? [];
+                      const fallback = v2?.fallbackTags ?? [];
+                      const keywords = primary.length > 0 ? primary : fallback;
+                      if (keywords.length === 0) return null;
+                      const indexName = keywords.slice(0, 2).join(' · ');
+                      return { cardId: card.id, vid, indexName };
+                    })
+                    .filter(
+                      (e): e is { cardId: string; vid: string; indexName: string } => e !== null
+                    );
+                  if (indexedEntries.length === 0) return null;
+                  return (
+                    <ul className="ml-9 pt-0.5">
+                      {indexedEntries.map((entry) => {
+                        const isActive = entry.vid === currentVideoId;
+                        return (
+                          <li
+                            key={entry.cardId}
+                            onClick={() => navigate(`/learning/${mandalaId}/${entry.vid}`)}
+                            title={entry.indexName}
+                            className={cn(
+                              'cursor-pointer pl-3 py-1.5 leading-[1.5] border-l-2 transition-colors',
+                              isActive
+                                ? 'border-[#818cf8] text-[14px] font-medium text-[#818cf8]'
+                                : 'border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/80 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
+                            )}
+                          >
+                            {entry.indexName}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  );
+                })()}
             </div>
           );
         })}

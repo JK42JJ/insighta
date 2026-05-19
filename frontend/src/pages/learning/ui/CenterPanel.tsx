@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
   Sparkles,
+  Zap,
   BookText,
   Play,
   BookOpen,
@@ -17,6 +18,8 @@ import { toast } from 'sonner';
 import { PanelVideoPlayer } from '@/features/video-side-panel/ui/PanelVideoPlayer';
 import { PanelAISummary } from '@/features/video-side-panel/ui/PanelAISummary';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
+import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
+import { useHighlightReel, HIGHLIGHT_RELEVANCE_THRESHOLD } from '../model/useHighlightReel';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
 import { useNoteDocument } from '@/pages/learning/model/useNoteDocument';
 import { useNoteAutoFollow } from '@/pages/learning/model/useNoteAutoFollow';
@@ -35,9 +38,18 @@ interface CenterPanelProps {
   onUserPlayed?: () => void;
   onPlayStateChange?: (isPlaying: boolean) => void;
   startTime?: number;
+  onPlayerHoverIn?: () => void;
+  onPlayerHoverOut?: () => void;
 }
 
 type CenterTabId = 'summary' | 'section';
+
+function formatMMSS(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const mm = Math.floor(total / 60);
+  const ss = total % 60;
+  return `${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')}`;
+}
 
 export function CenterPanel({
   mandalaId,
@@ -47,9 +59,20 @@ export function CenterPanel({
   onUserPlayed,
   onPlayStateChange,
   startTime,
+  onPlayerHoverIn,
+  onPlayerHoverOut,
 }: CenterPanelProps) {
   const { t } = useTranslation();
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  // Highlight reel — auto-skip to sections whose relevance_pct >= threshold.
+  // Dormant until pre-CP474 rows are backfilled with segments + relevance.
+  const { richSummary: highlightRich } = useRichSummary(videoId);
+  const highlightSections = highlightRich?.segments?.sections ?? undefined;
+  const highlightReel = useHighlightReel({
+    sections: highlightSections,
+    playerRef,
+  });
   const centerTab = useLearningStore((s) => s.centerTab);
   const setCenterTab = useLearningStore((s) => s.setCenterTab);
   const centerViewMode = useLearningStore((s) => s.centerViewMode);
@@ -167,7 +190,11 @@ export function CenterPanel({
     <div className="flex flex-1 min-w-0 flex-col overflow-hidden pl-4 pr-3 pt-[5px]">
       <div
         className={cn('shrink-0', centerViewMode === 'note' && 'hidden')}
-        onMouseEnter={() => setActiveRegion('player')}
+        onMouseEnter={() => {
+          setActiveRegion('player');
+          onPlayerHoverIn?.();
+        }}
+        onMouseLeave={() => onPlayerHoverOut?.()}
       >
         <PanelVideoPlayer
           videoUrl={videoUrl}
@@ -191,22 +218,65 @@ export function CenterPanel({
           style={{ maxWidth: 'calc(49.5vh * 16 / 9)' }}
           onMouseEnter={() => setActiveRegion('book-index')}
         >
-          <div className="flex">
-            {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
+          <div className="flex items-center justify-between">
+            <div className="flex">
+              {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setCenterTab(id)}
+                  className={cn(
+                    'flex items-center gap-1.5 py-2.5 px-3 text-[12px] transition-colors border-b-2',
+                    centerTab === id
+                      ? 'border-primary text-foreground font-semibold'
+                      : 'border-transparent text-muted-foreground font-normal hover:text-foreground'
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {t(labelKey, fallback)}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              {highlightReel.enabled && (
+                <span
+                  className={cn(
+                    'text-[11px] tabular-nums font-medium transition-colors',
+                    highlightReel.active ? 'text-[#818cf8]/80' : 'text-white/60'
+                  )}
+                  aria-live="polite"
+                >
+                  {formatMMSS(
+                    highlightReel.active ? highlightReel.remainingSec : highlightReel.totalSec
+                  )}
+                </span>
+              )}
               <button
-                key={id}
-                onClick={() => setCenterTab(id)}
+                type="button"
+                onClick={highlightReel.active ? highlightReel.stop : highlightReel.start}
+                disabled={!highlightReel.enabled}
+                title={
+                  !highlightReel.enabled
+                    ? t('learning.highlightReelDisabledTooltip', {
+                        threshold: HIGHLIGHT_RELEVANCE_THRESHOLD,
+                      })
+                    : highlightReel.active
+                      ? t('learning.highlightReelActiveTooltip')
+                      : t('learning.highlightReelReadyTooltip', {
+                          count: highlightReel.highlights.length,
+                        })
+                }
+                aria-label={t('learning.highlightReel')}
                 className={cn(
-                  'flex items-center gap-1.5 py-2.5 px-3 text-[12px] transition-colors border-b-2',
-                  centerTab === id
-                    ? 'border-primary text-foreground font-semibold'
-                    : 'border-transparent text-muted-foreground font-normal hover:text-foreground'
+                  'inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors',
+                  highlightReel.active
+                    ? 'text-[#818cf8]/80 hover:bg-[rgba(129,140,248,0.10)]'
+                    : 'text-white hover:bg-white/10',
+                  !highlightReel.enabled && 'opacity-40 cursor-not-allowed'
                 )}
               >
-                <Icon className="h-3.5 w-3.5" />
-                {t(labelKey, fallback)}
+                <Zap className="h-5 w-5" aria-hidden="true" />
               </button>
-            ))}
+            </div>
           </div>
         </div>
       )}

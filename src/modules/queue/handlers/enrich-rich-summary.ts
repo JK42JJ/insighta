@@ -38,6 +38,7 @@ import { enrichRichSummary } from '../../skills/rich-summary';
 import { generateRichSummaryV2 } from '../../skills/rich-summary-v2-generator';
 import { getMandalaManager } from '../../mandala/manager';
 import { getCaptionExtractor } from '../../caption/extractor';
+import { getPrismaClient } from '../../database/client';
 import { logger } from '../../../utils/logger';
 import { getJobQueue } from '../manager';
 import {
@@ -46,6 +47,10 @@ import {
   RICH_SUMMARY_RETRY_OPTIONS,
   type EnrichRichSummaryPayload,
 } from '../types';
+
+/** Thrown when captions are unavailable so the worker fails fast and the
+ *  grid surfaces a retry affordance instead of a description-only row. */
+export const NO_TRANSCRIPT_ERROR = 'NO_TRANSCRIPT';
 
 /**
  * Register the enrich-rich-summary worker with pg-boss. Must be called
@@ -82,11 +87,35 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     mandalaId,
   });
 
-  // Step 0 — fetch transcript (in-memory only, never persisted). Best
-  // effort: failure → undefined → generators fall back to description.
+  // Pick a language hint so caption-extractor probes the spoken language
+  // before falling through to its ko/en defaults.
+  let langHint: string | undefined;
+  try {
+    const prisma = getPrismaClient();
+    const [rsRow, ytRow] = await Promise.all([
+      prisma.video_rich_summaries.findUnique({
+        where: { video_id: videoId },
+        select: { source_language: true },
+      }),
+      prisma.youtube_videos.findUnique({
+        where: { youtube_video_id: videoId },
+        select: { default_language: true },
+      }),
+    ]);
+    langHint = rsRow?.source_language ?? ytRow?.default_language ?? undefined;
+  } catch (err) {
+    logger.warn('enrich-rich-summary: lang-hint lookup failed (continuing without)', {
+      jobId: job.id,
+      videoId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Hard rule: NO v2 row without a transcript. Captions absent ⇒ throw
+  // NO_TRANSCRIPT ⇒ SSE `failed` ⇒ grid renders the retry icon.
   let transcript: string | undefined;
   try {
-    const result = await getCaptionExtractor().extractCaptions(videoId);
+    const result = await getCaptionExtractor().extractCaptions(videoId, langHint);
     if (result.success && result.caption?.fullText) {
       transcript = result.caption.fullText;
       logger.info('enrich-rich-summary: transcript fetched', {
@@ -94,30 +123,45 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
         videoId,
         chars: transcript.length,
         language: result.language,
+        langHint: langHint ?? null,
       });
     } else {
-      logger.info('enrich-rich-summary: transcript unavailable (description fallback)', {
+      logger.info('enrich-rich-summary: transcript unavailable — surfacing retry', {
         jobId: job.id,
         videoId,
         reason: result.error ?? 'unknown',
+        langHint: langHint ?? null,
       });
     }
   } catch (err) {
-    logger.warn('enrich-rich-summary: transcript fetch threw (description fallback)', {
+    logger.warn('enrich-rich-summary: transcript fetch threw — surfacing retry', {
       jobId: job.id,
       videoId,
       error: err instanceof Error ? err.message : String(err),
     });
   }
 
-  // Step 1 — v1 generate. forceRegen when transcript just arrived so a
-  // description-only cache row is overwritten by transcript-derived content.
+  if (transcript === undefined) {
+    // Stamp the attempt timestamp so the scheduler 7-day cooldown holds.
+    try {
+      await getPrismaClient().youtube_videos.update({
+        where: { youtube_video_id: videoId },
+        data: { transcript_attempted_at: new Date() },
+      });
+    } catch {
+      /* non-fatal — stamping failure does not change retry semantics */
+    }
+    throw new Error(NO_TRANSCRIPT_ERROR);
+  }
+
+  // v1 generate — transcript guaranteed; forceRegen overrides any prior
+  // description-only cache row.
   const v1Result = await enrichRichSummary(videoId, {
     userId,
     title,
     description,
     transcript,
-    forceRegen: transcript !== undefined,
+    forceRegen: true,
   });
 
   // Step 2 — resolve the mandala center goal (root level, depth=0). When
@@ -137,20 +181,20 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     });
   }
 
-  // Step 3 — v2 upgrade. forceRegen when a transcript arrived so a prior
-  // description-only v2 row is replaced with transcript-grounded content.
+  // v2 upgrade — transcript guaranteed; forceRegen replaces any prior
+  // description-only v2 row with transcript-grounded content.
   const v2Outcome = await generateRichSummaryV2({
     videoId,
     userId,
     mandalaCenterGoal: centerGoal,
     transcript,
-    forceRegen: transcript !== undefined,
+    forceRegen: true,
   });
 
   logger.info('enrich-rich-summary: completed', {
     jobId: job.id,
     videoId,
-    hadTranscript: transcript !== undefined,
+    hadTranscript: true,
     v1QualityFlag: v1Result.qualityFlag,
     v1QualityScore: v1Result.qualityScore,
     v2OutcomeKind: v2Outcome.kind,

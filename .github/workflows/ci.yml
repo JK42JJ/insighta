@@ -64,7 +64,7 @@ jobs:
         with:
           node-version: 20
       - name: Clean install (resolves platform-specific native binaries)
-        run: cd frontend && npm install --no-package-lock --no-audit
+        run: cd frontend && rm -rf node_modules package-lock.json && npm install --no-audit --legacy-peer-deps
       - run: cd frontend && npx vitest run
 
   hardcode-audit:
@@ -120,7 +120,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: cd frontend && npm install --no-package-lock --no-audit
+      - run: cd frontend && rm -rf node_modules package-lock.json && npm install --no-audit --legacy-peer-deps
       - run: cd frontend && npx tsc --noEmit
       - run: cd frontend && npm run build
         env:

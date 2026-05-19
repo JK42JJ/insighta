@@ -7,12 +7,25 @@ import type { InsightCard } from '@/entities/card/model/types';
 
 interface LeftPanelProps {
   mandalaId: string;
+  /** Long-form mandala center goal — rendered as tooltip on the header. */
   centerGoal: string;
+  /** Short cell-name label; falls back to centerGoal when empty. */
+  centerLabel?: string;
+  /** Long-form sub-goals (8 cells). Used as tooltip on each row. */
   subGoals: string[];
+  /** Short sub-cell labels; each row prefers labels[idx] over subGoals[idx]. */
+  subjectLabels?: string[];
   currentVideoId?: string;
 }
 
-export function LeftPanel({ mandalaId, centerGoal, subGoals, currentVideoId }: LeftPanelProps) {
+export function LeftPanel({
+  mandalaId,
+  centerGoal,
+  centerLabel,
+  subGoals,
+  subjectLabels,
+  currentVideoId,
+}: LeftPanelProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const selectedCell = useLearningStore((s) => s.selectedCellIndex);
@@ -38,12 +51,19 @@ export function LeftPanel({ mandalaId, centerGoal, subGoals, currentVideoId }: L
     }
   };
 
+  // Header prefers the short label; long goal lives in the tooltip.
+  const headerLabel = centerLabel?.trim() || centerGoal || t('learning.goal');
+  const headerTooltip = centerGoal && centerGoal !== headerLabel ? centerGoal : undefined;
+
   return (
     <div className="flex flex-col border-r border-[hsl(var(--border))] bg-[hsl(var(--bg-base))]">
       {/* Header */}
       <div className="shrink-0 border-b border-[hsl(var(--border))] px-4 py-3">
-        <h2 className="text-[13px] font-bold text-[hsl(var(--foreground))] leading-snug">
-          {centerGoal || t('learning.goal')}
+        <h2
+          className="text-[13px] font-bold text-[hsl(var(--foreground))] leading-snug"
+          title={headerTooltip}
+        >
+          {headerLabel}
         </h2>
         <p className="mt-0.5 text-[11px] text-[hsl(var(--muted-foreground))]">
           {t('learning.videoCount', { count: mandalaCards.length })}
@@ -56,11 +76,15 @@ export function LeftPanel({ mandalaId, centerGoal, subGoals, currentVideoId }: L
           {subGoals.map((goal, idx) => {
             const cellCards = cardsByCell.get(idx + 1) ?? [];
             const isSelected = selectedCell === idx + 1;
+            // Row prefers the short label; long goal becomes the tooltip.
+            const rowLabel = subjectLabels?.[idx]?.trim() || goal;
+            const rowTooltip = goal && goal !== rowLabel ? goal : undefined;
 
             return (
               <div key={idx}>
                 <button
                   onClick={() => setSelectedCell(isSelected ? null : idx + 1)}
+                  title={rowTooltip}
                   className={[
                     'flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors',
                     isSelected ? 'bg-[rgba(129,140,248,0.08)]' : 'hover:bg-[hsl(var(--bg-mid))]',
@@ -73,7 +97,7 @@ export function LeftPanel({ mandalaId, centerGoal, subGoals, currentVideoId }: L
                     ].join(' ')}
                   />
                   <span className="flex-1 truncate text-[12px] font-medium text-[hsl(var(--foreground))]">
-                    {goal}
+                    {rowLabel}
                   </span>
                   {cellCards.length > 0 && (
                     <span className="shrink-0 rounded-full bg-[rgba(129,140,248,0.1)] px-1.5 py-0.5 text-[10px] font-semibold text-[#818cf8]">

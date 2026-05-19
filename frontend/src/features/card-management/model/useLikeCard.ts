@@ -56,15 +56,12 @@ export function useLikeCard() {
       });
     },
     onSuccess: () => {
-      // CP463 flicker-fix — DO NOT invalidate the card-list queries
-      // (`localCards.list()` / `['mandala','recommendations']`). like only
-      // changes `pinned_at`, which the in-card `likedLocal` optimistic
-      // state already reflects; invalidating the list forces a full grid
-      // refetch + 60+ card reconcile per click, and triggers a visible
-      // flicker storm when multiple cards are enriched concurrently.
-      // Only v2-summaries needs an invalidate so the TL badge + footer
-      // one_liner appear when the score lands.
+      // Skip the recommendation feed invalidate — the optimistic flip
+      // covers the grid and a full refetch causes flicker storms.
       queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
+      // localCards drives the sidebar book-index; refetch so the new
+      // pinned card surfaces under its sub-goal without a manual reload.
+      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
     },
   });
 
@@ -73,10 +70,8 @@ export function useLikeCard() {
       await apiClient.unlikeCard(videoId);
     },
     onSuccess: () => {
-      // Same flicker-fix as `like` — the optimistic flip already covers
-      // the UI; the next natural refetch (`useRecommendations`
-      // refetchInterval 8s) propagates the server pinned_at=NULL.
       queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
+      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
     },
   });
 

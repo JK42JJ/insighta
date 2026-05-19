@@ -145,6 +145,10 @@ export const PASS_THRESHOLD = 0.7;
 export const MIN_KEY_CONCEPTS = 3;
 export const MIN_ACTIONABLES = 3;
 export const MIN_QA_PAIRS_L1 = 5;
+// Segments hard gate — rejects description-only fallback (1 catch-all
+// section, to_sec=0, <5 atoms). Mirrors the prompt's own minimums.
+export const MIN_SECTIONS = 3;
+export const MIN_ATOMS = 5;
 
 const VALID_CONTENT_TYPES: ReadonlySet<ContentType> = new Set([
   'tutorial',
@@ -694,11 +698,28 @@ export function scoreCompleteness(s: RichSummaryV2Layered): CompletenessResult {
   if (l1Count >= MIN_QA_PAIRS_L1) score += 0.1;
   else reasons.push(`lora.qa_pairs L1 insufficient: ${l1Count} (expected ${MIN_QA_PAIRS_L1}+)`);
 
+  // Segments hard gate — description-only fallback fails outright even
+  // when the 10 core/analysis/lora weights satisfy the 0.7 threshold.
+  const sectionCount = s.segments?.sections?.length ?? 0;
+  const atomCount = s.segments?.atoms?.length ?? 0;
+  const sectionHasRealRange = (s.segments?.sections ?? []).some((sec) => sec.to_sec > 0);
+  const segmentsValid =
+    sectionCount >= MIN_SECTIONS && atomCount >= MIN_ATOMS && sectionHasRealRange;
+  if (sectionCount < MIN_SECTIONS) {
+    reasons.push(`segments.sections insufficient: ${sectionCount} (expected ${MIN_SECTIONS}+)`);
+  }
+  if (atomCount < MIN_ATOMS) {
+    reasons.push(`segments.atoms insufficient: ${atomCount} (expected ${MIN_ATOMS}+)`);
+  }
+  if (!sectionHasRealRange) {
+    reasons.push('segments.sections all have to_sec=0 (description-only fallback)');
+  }
+
   // round to 2 decimals
   score = Math.round(score * 100) / 100;
   return {
     score,
-    passed: score >= PASS_THRESHOLD,
+    passed: score >= PASS_THRESHOLD && segmentsValid,
     reasons,
   };
 }

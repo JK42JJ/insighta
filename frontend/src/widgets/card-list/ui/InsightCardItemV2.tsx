@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
@@ -162,6 +163,7 @@ export function InsightCardItemV2({
   onArchived,
   sectorLabel,
 }: InsightCardItemV2Props) {
+  const { t } = useTranslation();
   const isSelected = selectedCardIds?.has(card.id) ?? false;
   const isMultiSelect = isSelected && selectedCardIds && selectedCardIds.size > 1;
   const dragData: DragData = isMultiSelect
@@ -231,6 +233,7 @@ export function InsightCardItemV2({
           videoId,
           mandalaId: card.mandalaId ?? undefined,
           title: card.title,
+          cellIndex: typeof card.cellIndex === 'number' ? card.cellIndex : undefined,
         },
         {
           onSuccess: () => {
@@ -317,6 +320,11 @@ export function InsightCardItemV2({
   const streamPhase = enrichStream.phase;
   const streamActive = enrichStream.isActive;
   const showFailedGlow = streamPhase === 'failed' || streamPhase === 'timeout';
+  // Persisted retry state — survives page refresh. mandala_relevance_pct
+  // is only populated when v2 enrichment landed with quality_flag='pass';
+  // a liked card whose pct is null means transcript fetch failed or the
+  // row never reached v2. Show the retry icon until enrichment succeeds.
+  const v2EnrichmentPending = liked && mandalaRelevancePct == null;
 
   return (
     <Card
@@ -599,22 +607,48 @@ export function InsightCardItemV2({
                             "재시도 아이콘이 현재 관련도 비율 위치에")
                   scored   → relevance % (color-tiered)
                   else     → empty */}
-            {!streamActive && !isEnriching && (isEnrichFailed || showFailedGlow) ? (
+            {!streamActive &&
+            !isEnriching &&
+            (isEnrichFailed || showFailedGlow || v2EnrichmentPending) ? (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (showFailedGlow && videoId) {
-                    void enrichStream.open(videoId);
+                  e.preventDefault();
+                  if (showFailedGlow && videoId && card.mandalaId) {
+                    like.mutate(
+                      {
+                        videoId,
+                        mandalaId: card.mandalaId,
+                        title: card.title,
+                        cellIndex: typeof card.cellIndex === 'number' ? card.cellIndex : undefined,
+                      },
+                      {
+                        onSuccess: () => {
+                          void enrichStream.open(videoId);
+                        },
+                      }
+                    );
                   } else {
                     onRetryEnrich?.(card.id, card.videoUrl);
                   }
                 }}
-                className="shrink-0 text-destructive hover:text-destructive/80 transition-colors cursor-pointer"
-                aria-label="Retry enrichment"
+                className="shrink-0 text-white/50 hover:text-white transition-colors cursor-pointer"
+                aria-label="Retry enrichment (transcript missing)"
+                title={t('cards.retryEnrichmentTooltip')}
               >
                 <RotateCw className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
+            ) : !streamActive && !isEnriching && mandalaRelevancePct == null && !liked ? (
+              // Not-liked + no v2 → background cron will analyse; show a
+              // passive "queued" label so the user knows the card is in
+              // the pipeline (no click action required).
+              <span
+                className="shrink-0 text-[10.5px] text-muted-foreground/60 tabular-nums"
+                title={t('cards.statusQueuedTooltip')}
+              >
+                {t('cards.statusQueued')}
+              </span>
             ) : relevanceBadge ? (
               <span
                 className={cn(

@@ -633,7 +633,10 @@
     "dropError": {
       "notVideoUrlTitle": "Video URL required",
       "notVideoUrlDescription": "Channel and playlist URLs cannot be added. Please drag the URL of the video page itself."
-    }
+    },
+    "statusQueued": "Queued",
+    "statusQueuedTooltip": "Pending background analysis",
+    "retryEnrichmentTooltip": "Retry caption fetch"
   },
   "contextHeader": {
     "home": "Home",
@@ -1767,6 +1770,11 @@
     "tabChatbot": "AI Chatbot",
     "tabSummary": "AI Summary",
     "tabSection": "Section",
+    "highlightReel": "Key Moments",
+    "tags": "Tags",
+    "highlightReelDisabledTooltip": "Activates once segment relevance is analysed (segments ≥ {{threshold}}%)",
+    "highlightReelActiveTooltip": "Playing key moments — click to stop",
+    "highlightReelReadyTooltip": "Play {{count}} key moment(s)",
     "noActiveSection": "Select a section from the book index on the left.",
     "chapterLabel": "Chapter {{n}}",
     "atomsLabel": "Atoms",
