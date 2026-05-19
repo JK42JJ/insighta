@@ -239,11 +239,18 @@ jobs:
           # rows that were created with snippet-only data and never
           # received the full videos.list metadata enrichment.
           YOUTUBE_METADATA_BACKFILL_ENABLED: ${{ vars.YOUTUBE_METADATA_BACKFILL_ENABLED }}
+          # Mac Mini transcript proxy. EC2 outbound to YouTube is blocked
+          # for caption fetch; the Mac Mini (KR ISP IP, Tailscale 4242)
+          # successfully fetches and forwards via x-transcript-token auth.
+          # When unset, caption-extractor falls back to direct
+          # youtube-transcript on EC2 (known to fail) — set both to enable.
+          MAC_MINI_TRANSCRIPT_URL: ${{ secrets.MAC_MINI_TRANSCRIPT_URL }}
+          MAC_MINI_TRANSCRIPT_TOKEN: ${{ secrets.MAC_MINI_TRANSCRIPT_TOKEN }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED,YOUTUBE_METADATA_BACKFILL_ENABLED
+          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED,YOUTUBE_METADATA_BACKFILL_ENABLED,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN
           script: |
             set -e
             cd /opt/tubearchive
@@ -292,6 +299,16 @@ jobs:
             fi
             if [ -n "${DB_DIRECT}" ]; then
               grep -q '^DIRECT_URL=' .env 2>/dev/null && sed -i "s|^DIRECT_URL=.*|DIRECT_URL=${DB_DIRECT}|" .env || echo "DIRECT_URL=${DB_DIRECT}" >> .env
+            fi
+            # CP475+ — Mac Mini transcript proxy (Tailscale). When unset,
+            # caption-extractor falls back to direct youtube-transcript on
+            # EC2 (known to fail with false "disabled" errors due to
+            # YouTube IP blocking us-west-2 outbound). Idempotent set.
+            if [ -n "${MAC_MINI_TRANSCRIPT_URL}" ]; then
+              grep -q '^MAC_MINI_TRANSCRIPT_URL=' .env 2>/dev/null && sed -i "s|^MAC_MINI_TRANSCRIPT_URL=.*|MAC_MINI_TRANSCRIPT_URL=${MAC_MINI_TRANSCRIPT_URL}|" .env || echo "MAC_MINI_TRANSCRIPT_URL=${MAC_MINI_TRANSCRIPT_URL}" >> .env
+            fi
+            if [ -n "${MAC_MINI_TRANSCRIPT_TOKEN}" ]; then
+              grep -q '^MAC_MINI_TRANSCRIPT_TOKEN=' .env 2>/dev/null && sed -i "s|^MAC_MINI_TRANSCRIPT_TOKEN=.*|MAC_MINI_TRANSCRIPT_TOKEN=${MAC_MINI_TRANSCRIPT_TOKEN}|" .env || echo "MAC_MINI_TRANSCRIPT_TOKEN=${MAC_MINI_TRANSCRIPT_TOKEN}" >> .env
             fi
             # CP360 — primary YouTube API key for video-discover search.list.
             # Mirrors the OPENROUTER pattern: idempotent add-or-update.
