@@ -44,6 +44,13 @@ interface CenterPanelProps {
 
 type CenterTabId = 'summary' | 'section';
 
+function formatMMSS(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const mm = Math.floor(total / 60);
+  const ss = total % 60;
+  return `${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')}`;
+}
+
 export function CenterPanel({
   mandalaId,
   videoId,
@@ -229,32 +236,47 @@ export function CenterPanel({
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={highlightReel.active ? highlightReel.stop : highlightReel.start}
-              disabled={!highlightReel.enabled}
-              title={
-                !highlightReel.enabled
-                  ? t('learning.highlightReelDisabledTooltip', {
-                      threshold: HIGHLIGHT_RELEVANCE_THRESHOLD,
-                    })
-                  : highlightReel.active
-                    ? t('learning.highlightReelActiveTooltip')
-                    : t('learning.highlightReelReadyTooltip', {
-                        count: highlightReel.highlights.length,
-                      })
-              }
-              aria-label={t('learning.highlightReel')}
-              className={cn(
-                'inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors',
-                highlightReel.active
-                  ? 'text-[#818cf8]/80 hover:bg-[rgba(129,140,248,0.10)]'
-                  : 'text-white hover:bg-white/10',
-                !highlightReel.enabled && 'opacity-40 cursor-not-allowed'
+            <div className="flex items-center gap-2">
+              {highlightReel.enabled && (
+                <span
+                  className={cn(
+                    'text-[11px] tabular-nums font-medium transition-colors',
+                    highlightReel.active ? 'text-[#818cf8]/80' : 'text-white/60'
+                  )}
+                  aria-live="polite"
+                >
+                  {formatMMSS(
+                    highlightReel.active ? highlightReel.remainingSec : highlightReel.totalSec
+                  )}
+                </span>
               )}
-            >
-              <Zap className="h-5 w-5" aria-hidden="true" />
-            </button>
+              <button
+                type="button"
+                onClick={highlightReel.active ? highlightReel.stop : highlightReel.start}
+                disabled={!highlightReel.enabled}
+                title={
+                  !highlightReel.enabled
+                    ? t('learning.highlightReelDisabledTooltip', {
+                        threshold: HIGHLIGHT_RELEVANCE_THRESHOLD,
+                      })
+                    : highlightReel.active
+                      ? t('learning.highlightReelActiveTooltip')
+                      : t('learning.highlightReelReadyTooltip', {
+                          count: highlightReel.highlights.length,
+                        })
+                }
+                aria-label={t('learning.highlightReel')}
+                className={cn(
+                  'inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors',
+                  highlightReel.active
+                    ? 'text-[#818cf8]/80 hover:bg-[rgba(129,140,248,0.10)]'
+                    : 'text-white hover:bg-white/10',
+                  !highlightReel.enabled && 'opacity-40 cursor-not-allowed'
+                )}
+              >
+                <Zap className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -45,14 +45,24 @@ export function useHighlightReel({ sections, playerRef, threshold }: UseHighligh
     (sections ?? []).every((s) => typeof s.relevance_pct === 'number');
   const enabled = allHaveRelevance && highlights.length > 0;
 
+  const totalSec = highlights.reduce((s, h) => s + Math.max(0, h.to - h.from), 0);
+
   const [active, setActive] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [remainingSec, setRemainingSec] = useState(totalSec);
   const expectedTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Re-sync remainingSec to totalSec while idle (e.g., new video loaded,
+  // highlights array changed). Active mode controls remainingSec itself.
+  useEffect(() => {
+    if (!active) setRemainingSec(totalSec);
+  }, [totalSec, active]);
 
   const stop = useCallback(() => {
     setActive(false);
     setCurrentIdx(0);
+    setRemainingSec(totalSec);
     expectedTimeRef.current = null;
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -63,7 +73,7 @@ export function useHighlightReel({ sections, playerRef, threshold }: UseHighligh
     } catch {
       /* swallow */
     }
-  }, [playerRef]);
+  }, [playerRef, totalSec]);
 
   const start = useCallback(() => {
     if (!enabled || !playerRef.current) return;
@@ -76,8 +86,9 @@ export function useHighlightReel({ sections, playerRef, threshold }: UseHighligh
     }
     expectedTimeRef.current = first.from;
     setCurrentIdx(0);
+    setRemainingSec(totalSec);
     setActive(true);
-  }, [enabled, highlights, playerRef]);
+  }, [enabled, highlights, playerRef, totalSec]);
 
   useEffect(() => {
     if (!active) return;
@@ -122,6 +133,16 @@ export function useHighlightReel({ sections, playerRef, threshold }: UseHighligh
         }
         expectedTimeRef.current = next.from;
         setCurrentIdx(nextIdx);
+        const futureSum = highlights
+          .slice(nextIdx + 1)
+          .reduce((s, h) => s + Math.max(0, h.to - h.from), 0);
+        setRemainingSec(Math.max(0, next.to - next.from) + futureSum);
+      } else {
+        const remInCur = Math.max(0, cur.to - now);
+        const futureSum = highlights
+          .slice(currentIdx + 1)
+          .reduce((s, h) => s + Math.max(0, h.to - h.from), 0);
+        setRemainingSec(remInCur + futureSum);
       }
     }, POLL_INTERVAL_MS);
     return () => {
@@ -137,6 +158,8 @@ export function useHighlightReel({ sections, playerRef, threshold }: UseHighligh
     active,
     highlights,
     currentIdx,
+    totalSec,
+    remainingSec,
     start,
     stop,
   };
