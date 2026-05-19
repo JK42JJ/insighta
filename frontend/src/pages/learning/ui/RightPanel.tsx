@@ -161,14 +161,17 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
           />
         )}
       </div>
-      {activeTab === 'chatbot' && (
-        <div className="relative min-h-0 flex-1 overflow-hidden pb-[35px]">
-          <ChatAssistant mandalaId={mandalaId} videoId={videoId} onSeek={handleSeek} />
-          <p className="absolute bottom-2 left-0 w-full text-center text-[10px] text-muted-foreground/60">
-            {t('learning.chatDisclaimer')}
-          </p>
-        </div>
-      )}
+      <div
+        className={cn(
+          'relative min-h-0 flex-1 overflow-hidden pb-[35px]',
+          activeTab !== 'chatbot' && 'hidden'
+        )}
+      >
+        <ChatAssistant key={videoId} mandalaId={mandalaId} videoId={videoId} onSeek={handleSeek} />
+        <p className="absolute bottom-2 left-0 w-full text-center text-[10px] text-muted-foreground/60">
+          {t('learning.chatDisclaimer')}
+        </p>
+      </div>
     </div>
   );
 }
