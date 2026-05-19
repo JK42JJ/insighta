@@ -4,7 +4,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useMemo, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CopilotKit, useCopilotReadable } from '@copilotkit/react-core';
+import { CopilotKit, useCopilotReadable, useCopilotChat } from '@copilotkit/react-core';
 import { CopilotChat } from '@copilotkit/react-ui';
 import '@copilotkit/react-ui/styles.css';
 import { toast } from 'sonner';
@@ -207,9 +207,15 @@ export function buildInstructions(
 - Do not open or close with boilerplate phrases like "This video is about…" or "I hope this helps!". Start directly with the substance.${timestampRule}${videoSection}`;
 }
 
-function buildSuggestions(
+// Chip rotation (CP474): expand the candidate pool so used chips can be filtered
+// out as the conversation grows; pool combines all key_points + core_argument +
+// all actionables (contextual) followed by the 3 generic defaults as fallback.
+// `excludeMessages` carries the set of user messages already sent in this chat
+// (from useCopilotChat visibleMessages) — those chips never re-appear.
+export function buildSuggestions(
   t: (key: string) => string,
-  structured: { key_points?: string[]; core_argument?: string; actionables?: string[] } | null
+  structured: { key_points?: string[]; core_argument?: string; actionables?: string[] } | null,
+  excludeMessages: Set<string> = new Set()
 ) {
   const defaults: { title: string; message: string }[] = [
     { title: t('learning.suggestSummarize'), message: t('learning.suggestSummarizeMsg') },
@@ -217,16 +223,20 @@ function buildSuggestions(
     { title: t('learning.suggestQuiz'), message: t('learning.suggestQuizMsg') },
   ];
 
-  if (!structured) return defaults;
+  if (!structured) {
+    return defaults.filter((s) => !excludeMessages.has(s.message)).slice(0, 3);
+  }
 
   const contextual: { title: string; message: string }[] = [];
   const { key_points, core_argument, actionables } = structured;
 
-  if (key_points?.[0]) {
-    contextual.push({
-      title: key_points[0].slice(0, 40),
-      message: `${key_points[0]}을 실제로 적용하면 어떻게 해야 하나요?`,
-    });
+  if (key_points?.length) {
+    for (const p of key_points) {
+      contextual.push({
+        title: p.slice(0, 40),
+        message: `${p}을 실제로 적용하면 어떻게 해야 하나요?`,
+      });
+    }
   }
 
   if (core_argument) {
@@ -236,14 +246,19 @@ function buildSuggestions(
     });
   }
 
-  if (actionables?.[0]) {
-    contextual.push({
-      title: actionables[0].slice(0, 40),
-      message: `${actionables[0]}의 한계나 주의할 점은 무엇인가요?`,
-    });
+  if (actionables?.length) {
+    for (const a of actionables) {
+      contextual.push({
+        title: a.slice(0, 40),
+        message: `${a}의 한계나 주의할 점은 무엇인가요?`,
+      });
+    }
   }
 
-  return contextual.length > 0 ? contextual.slice(0, 3) : defaults;
+  // Contextual first, defaults as tail fallback. Filter against the
+  // already-sent set, then take 3.
+  const pool = contextual.length > 0 ? [...contextual, ...defaults] : defaults;
+  return pool.filter((s) => !excludeMessages.has(s.message)).slice(0, 3);
 }
 
 function ChatPanel({
@@ -265,7 +280,26 @@ function ChatPanel({
     videoId,
     !richSummaryLoading && !summaryHasUsableContent(richSummary ?? null)
   );
-  const suggestions = buildSuggestions(t, richSummary?.structured ?? null);
+  // Chip rotation (CP474): collect user messages already sent so buildSuggestions
+  // can filter used chips out. visibleMessages is reactive — every new message
+  // re-renders ChatPanel and refreshes the chip set.
+  const { visibleMessages } = useCopilotChat();
+  const sentUserMessages = useMemo(() => {
+    const set = new Set<string>();
+    // CopilotKit upgrade (≥ 1.57.x via PR #676 pin / general ecosystem
+    // drift) made `visibleMessages` non-iterable before the chat is
+    // initialised — it can be undefined / null / a non-array object on
+    // first render. Guard with Array.isArray so the page doesn't crash.
+    if (!Array.isArray(visibleMessages)) return set;
+    for (const m of visibleMessages) {
+      const msg = m as { type?: string; role?: string; content?: string };
+      if (msg.type === 'TextMessage' && msg.role === 'user' && typeof msg.content === 'string') {
+        set.add(msg.content);
+      }
+    }
+    return set;
+  }, [visibleMessages]);
+  const suggestions = buildSuggestions(t, richSummary?.structured ?? null, sentUserMessages);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const { mandalaLevels } = useMandalaQuery(mandalaId);
