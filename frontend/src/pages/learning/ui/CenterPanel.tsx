@@ -248,9 +248,9 @@ export function CenterPanel({
               className={cn(
                 'inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors',
                 highlightReel.active
-                  ? 'bg-[rgba(129,140,248,0.12)] text-[#818cf8] hover:bg-[rgba(129,140,248,0.22)]'
-                  : 'bg-[#818cf8] text-white shadow-sm hover:bg-[#6c78de]',
-                !highlightReel.enabled && 'opacity-40 cursor-not-allowed hover:bg-[#818cf8]'
+                  ? 'text-[#818cf8]/80 hover:bg-[rgba(129,140,248,0.10)]'
+                  : 'text-white hover:bg-white/10',
+                !highlightReel.enabled && 'opacity-40 cursor-not-allowed'
               )}
             >
               <Zap className="h-5 w-5" aria-hidden="true" />
