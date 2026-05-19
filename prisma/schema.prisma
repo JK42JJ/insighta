@@ -1596,6 +1596,13 @@ model video_rich_summaries {
   /// segments[].relevance_pct which is intra-video chapter metric.
   /// Raw SQL DDL: prisma/migrations/rich-summary-v2/005_mandala_relevance_pct.sql
   mandala_relevance_pct   Int?
+  /// CP474 — true when the v2 row was generated with a transcript in scope.
+  /// description-only generations leave this false, which makes them eligible
+  /// for re-generation on a subsequent Heart click whose captioner succeeds.
+  /// Backfilled to true on rows where segments IS NOT NULL (transcript-derived
+  /// timestamps are the only realistic source of segments).
+  /// Raw SQL DDL: prisma/migrations/rich-summary-v2/006_add_transcript_used.sql
+  transcript_used         Boolean  @default(false)
   created_at              DateTime @default(now()) @db.Timestamptz(6)
   updated_at              DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
