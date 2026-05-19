@@ -31,7 +31,22 @@ import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database/client';
 import { logger } from '@/utils/logger';
 import { getInternalUserId } from '@/config/internal-auth';
-import type { RichSummaryV2Layered, KeyConcept } from '@/modules/skills/rich-summary-v2-prompt';
+import type {
+  RichSummaryV2Layered,
+  KeyConcept,
+  RichSummaryEntity,
+  EntityType,
+} from '@/modules/skills/rich-summary-v2-prompt';
+
+// CP474 — entity.type → ontology.nodes.type. `concept` shares the type slot
+// with key_concepts so dedup happens naturally on (type='concept', title).
+const ENTITY_TYPE_TO_NODE_TYPE: Record<EntityType, string> = {
+  concept: 'concept',
+  person: 'person',
+  tool: 'tool',
+  framework: 'framework',
+  organization: 'organization',
+};
 
 const log = logger.child({ module: 'OntologyV2Bridge' });
 
@@ -69,6 +84,8 @@ export interface V2BridgeResult {
   sectionNodeIds: string[];
   atomNodeIds: string[];
   actionNodeIds: string[];
+  /** CP474 — entities[] (5-type) → nodes, grouped by ontology.nodes.type. */
+  entityNodeIds: Record<EntityType, string[]>;
   edgeCount: {
     covers: number;
     has_section: number;
@@ -99,6 +116,23 @@ export async function bridgeV2ToOntology(input: V2BridgeInput): Promise<V2Bridge
   const conceptNameToId = new Map<string, string>(
     layered.analysis.key_concepts.map((c, i) => [c.term, conceptIds[i]!])
   );
+
+  // 2.5. CP474 — entities[] (5-type) → typed nodes. atoms.entity_refs prefers
+  // entities[].name match over key_concepts.term match when both exist.
+  const entities: RichSummaryEntity[] = layered.analysis.entities ?? [];
+  const entityNodeIds: Record<EntityType, string[]> = {
+    concept: [],
+    person: [],
+    tool: [],
+    framework: [],
+    organization: [],
+  };
+  const entityNameToId = new Map<string, string>();
+  for (const ent of entities) {
+    const id = await upsertEntity(prisma, userId, ent);
+    entityNodeIds[ent.type].push(id);
+    entityNameToId.set(ent.name, id);
+  }
 
   // 3. section_node (when segments present)
   const sectionIds: string[] = [];
@@ -147,7 +181,8 @@ export async function bridgeV2ToOntology(input: V2BridgeInput): Promise<V2Bridge
   for (let i = 0; i < atomIds.length; i++) {
     const refs = atomToEntityRefs[i] ?? [];
     for (const ref of refs) {
-      const target = conceptNameToId.get(ref);
+      // CP474 — entities[].name wins; key_concepts.term is fallback.
+      const target = entityNameToId.get(ref) ?? conceptNameToId.get(ref);
       if (target && (await upsertEdge(prisma, userId, atomIds[i]!, target, 'MENTIONS'))) {
         mentionsCount++;
       }
@@ -174,6 +209,7 @@ export async function bridgeV2ToOntology(input: V2BridgeInput): Promise<V2Bridge
     sectionNodeIds: sectionIds,
     atomNodeIds: atomIds,
     actionNodeIds: actionIds,
+    entityNodeIds,
     edgeCount: {
       covers: coversCount,
       has_section: hasSectionCount,
@@ -269,6 +305,48 @@ async function upsertConcept(
       'concept',
       ${concept.term},
       ${props}::jsonb,
+      ${sourceRef}::jsonb,
+      'service'
+    )
+    RETURNING id
+  `);
+  return inserted[0]!.id;
+}
+
+// CP474 — entities[] (5-type) lookup by (type, title) so key_concepts dedup
+// works for `concept` entries. Other types fall on their own type slot.
+async function upsertEntity(
+  prisma: ReturnType<typeof getPrismaClient>,
+  userId: string,
+  entity: RichSummaryEntity
+): Promise<string> {
+  const nodeType = ENTITY_TYPE_TO_NODE_TYPE[entity.type];
+  const sourceRef = JSON.stringify({
+    table: 'video_rich_summaries.entities',
+    type: entity.type,
+    name: entity.name,
+  });
+  const existing = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+    SELECT id FROM ontology.nodes
+    WHERE type = ${nodeType} AND title = ${entity.name}
+    LIMIT 1
+  `);
+  if (existing.length > 0) {
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE ontology.nodes
+      SET source_ref = ${sourceRef}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${existing[0]!.id}::uuid
+    `);
+    return existing[0]!.id;
+  }
+  const inserted = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+    INSERT INTO ontology.nodes (user_id, type, title, properties, source_ref, domain)
+    VALUES (
+      ${userId}::uuid,
+      ${nodeType},
+      ${entity.name},
+      '{}'::jsonb,
       ${sourceRef}::jsonb,
       'service'
     )

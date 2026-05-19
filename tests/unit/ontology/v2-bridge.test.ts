@@ -42,13 +42,18 @@ describe('v2-bridge module purity (Hard Rule no-API)', () => {
     }
   });
 
-  test('inserts the 5 expected node types exactly', () => {
+  test('declares the 9 expected node types (CP474 entities[] 5-type added)', () => {
     for (const nodeType of [
       'video_resource',
       'concept',
       'section_node',
       'atom_node',
       'action_node',
+      // CP474 — entities[] 5-type. 'concept' is shared with key_concepts.
+      'person',
+      'tool',
+      'framework',
+      'organization',
     ]) {
       expect(SOURCE).toContain(`'${nodeType}'`);
     }
@@ -60,11 +65,21 @@ describe('v2-bridge module purity (Hard Rule no-API)', () => {
   });
 
   test('node upserts UPDATE properties on existing match (not just return)', () => {
-    // Sections / atoms / actions / video_resource / concept upserts must
-    // refresh properties + source_ref when an existing row is found, not
-    // simply return the id (otherwise re-POST cannot correct field values).
+    // CP474: 6 upserters (video_resource / concept / entity / section /
+    // atom / action). Each must refresh on existing match.
     const updateMatches = SOURCE.match(/UPDATE ontology\.nodes\s+SET\s+/g) ?? [];
-    expect(updateMatches.length).toBeGreaterThanOrEqual(5);
+    expect(updateMatches.length).toBeGreaterThanOrEqual(6);
+  });
+
+  test('CP474 — atoms.entity_refs prefer entities[].name over key_concepts.term', () => {
+    // bridgeV2ToOntology MENTIONS edge fallback chain.
+    expect(SOURCE).toMatch(/entityNameToId\.get\(ref\)\s*\?\?\s*conceptNameToId\.get\(ref\)/);
+  });
+
+  test('CP474 — ENTITY_TYPE_TO_NODE_TYPE maps all 5 entity types', () => {
+    for (const t of ['concept', 'person', 'tool', 'framework', 'organization']) {
+      expect(SOURCE).toMatch(new RegExp(`${t}:\\s*'${t}'`));
+    }
   });
 
   test('findGoalNodesByExactTitle uses exact title match (no fuzzy)', () => {
