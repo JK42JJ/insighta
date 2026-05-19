@@ -112,8 +112,9 @@ export function LabelFilterPillsV2({
           );
         })}
 
-        {/* CP474 — inactive "Updated" is plain text (no chip bg); selecting
-            it morphs into the standard accent chip. */}
+        {/* CP474 — inactive "Updated" reads as a chip (accent-tinted bg,
+            ~20% opacity) distinct from neutral sector chips; selecting it
+            fills the chip in solid accent. */}
         {showNewlySynced && (
           <button
             onClick={onNewlySyncedClick}
@@ -121,7 +122,7 @@ export function LabelFilterPillsV2({
               PILL_BASE,
               isNewlySyncedSelected
                 ? 'bg-[var(--ind,#818cf8)] text-background'
-                : 'bg-transparent text-[var(--ind,#818cf8)] hover:bg-[var(--ind,#818cf8)]/15'
+                : 'bg-[var(--ind,#818cf8)]/20 text-[var(--ind,#818cf8)] hover:bg-[var(--ind,#818cf8)]/35'
             )}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" aria-hidden="true" />
