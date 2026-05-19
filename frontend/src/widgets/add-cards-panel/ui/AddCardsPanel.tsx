@@ -284,7 +284,7 @@ export function AddCardsPanel() {
     <>
       <div
         className={cn(
-          'fixed inset-0 z-30 bg-black/20 transition-opacity duration-200 ease-in-out',
+          'fixed inset-0 z-30 bg-black/30 backdrop-blur-md transition-[opacity,backdrop-filter] duration-200 ease-in-out',
           isClosing ? 'opacity-0' : 'opacity-100'
         )}
         onClick={handleClose}
