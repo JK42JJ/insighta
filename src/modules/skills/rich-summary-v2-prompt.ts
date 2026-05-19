@@ -43,6 +43,19 @@ export interface BiasSignals {
   notes: string;
 }
 
+// CP474 — entities are now emitted by the same single-LLM-call (was
+// previously only present in the legacy structured-jsonb v1 path). These
+// feed the KG bridge: each entity becomes a topic/concept/person/tool/
+// framework/organization node, and `atoms[].entity_refs` link insights
+// back to these names. The 5-type vocabulary mirrors
+// rich-summary-types.ts:18 RichSummaryEntity.
+export type EntityType = 'concept' | 'person' | 'tool' | 'framework' | 'organization';
+
+export interface RichSummaryEntity {
+  name: string;
+  type: EntityType;
+}
+
 export interface MandalaFit {
   suggested_goals: string[];
   relevance_rationale: string;
@@ -60,6 +73,15 @@ export interface MandalaFit {
 export interface RichSummaryAnalysis {
   core_argument: string;
   key_concepts: KeyConcept[];
+  /**
+   * CP474 — typed entities (concept / person / tool / framework /
+   * organization). Source of truth for KG bridge nodes and the target
+   * of `segments.atoms[].entity_refs`. Distinct from key_concepts:
+   * key_concepts.term carries a definition; entities[].name is a bare
+   * label with a type. The two arrays often overlap on `term ↔ name`
+   * for 'concept' entries.
+   */
+  entities: RichSummaryEntity[];
   actionables: string[];
   mandala_fit: MandalaFit;
   bias_signals: BiasSignals;
@@ -77,10 +99,41 @@ export interface RichSummaryLora {
   qa_pairs: QAPair[];
 }
 
+// CP474 — segments now emitted by the same single-LLM-call (was previously
+// only populated via the Mac Mini v2-author cron + upsert-direct path).
+// The shape mirrors validateV2Segments's allowed-key whitelist.
+export interface RichSummarySectionKeyPoint {
+  text: string;
+  timestamp_sec?: number;
+}
+export interface RichSummarySection {
+  idx?: number;
+  from_sec: number;
+  to_sec: number;
+  title: string;
+  summary?: string;
+  relevance_pct: number;
+  key_points?: RichSummarySectionKeyPoint[];
+}
+export interface RichSummaryAtom {
+  idx?: number;
+  type: string;
+  text: string;
+  timestamp_sec?: number;
+  entity_refs?: string[];
+}
+export interface RichSummarySegments {
+  sections?: RichSummarySection[];
+  atoms?: RichSummaryAtom[];
+}
+
 export interface RichSummaryV2Layered {
   core: RichSummaryCore;
   analysis: RichSummaryAnalysis;
   lora: RichSummaryLora;
+  /** CP474 — optional. Empty/undefined when the transcript was absent or
+   *  the LLM declined to emit segments. */
+  segments?: RichSummarySegments;
 }
 
 // ============================================================================
@@ -108,6 +161,13 @@ const VALID_DEPTH_LEVELS: ReadonlySet<DepthLevel> = new Set([
 ]);
 const VALID_SUBJECTIVITY: ReadonlySet<SubjectivityLevel> = new Set(['low', 'medium', 'high']);
 const VALID_DOMAIN_SET: ReadonlySet<string> = new Set(DOMAIN_SLUGS);
+const VALID_ENTITY_TYPES: ReadonlySet<EntityType> = new Set([
+  'concept',
+  'person',
+  'tool',
+  'framework',
+  'organization',
+]);
 
 // ============================================================================
 // Prompt template
@@ -141,6 +201,9 @@ Respond with this exact JSON structure (no extra keys, no comments):
     "key_concepts": [
       {{"term": "concept name", "definition": "short definition"}}
     ],
+    "entities": [
+      {{"name": "Entity label as it appears in the video", "type": "concept"}}
+    ],
     "actionables": ["concrete action item the viewer can do today"],
     "mandala_fit": {{
       "suggested_goals": ["goal phrase 1", "goal phrase 2"],
@@ -159,6 +222,24 @@ Respond with this exact JSON structure (no extra keys, no comments):
     "qa_pairs": [
       {{"level": 1, "q": "video-only Q", "a": "answer derived from the video", "context": "video"}}
     ]
+  }},
+  "segments": {{
+    "sections": [
+      {{
+        "idx": 0,
+        "from_sec": 0,
+        "to_sec": 102,
+        "title": "Section title (≤ 30 chars, no quotes)",
+        "summary": "What this section covers in 1 sentence",
+        "relevance_pct": 65,
+        "key_points": [
+          {{"text": "Key point grounded in the section", "timestamp_sec": 45}}
+        ]
+      }}
+    ],
+    "atoms": [
+      {{"idx": 0, "type": "fact", "text": "Standalone insight or claim", "timestamp_sec": 120, "entity_refs": ["Concept name"]}}
+    ]
   }}
 }}
 
@@ -166,17 +247,21 @@ Field rules:
 - core.one_liner: ≤ 20 chars, no quotes, no trailing punctuation.
 - core.domain: MUST be one of the 9 slugs above. No other values, no labels in Korean/English.
 - analysis.key_concepts: 3-5 entries.
+- analysis.entities: 3-10 entries. Each has a 'name' (bare label, no quotes) and a 'type' that MUST be one of: concept | person | tool | framework | organization. Use 'concept' for ideas/methods, 'person' for named individuals, 'tool' for software/products, 'framework' for named methodologies/processes, 'organization' for companies/institutions. When unsure, default to 'concept'. Entries should be distinct (no duplicate names). These are the KG bridge nodes — segments.atoms[].entity_refs should reference these names verbatim.
 - analysis.actionables: 3-5 entries, each a single imperative sentence.
 - analysis.mandala_fit.suggested_goals: 2-4 short phrases that align with the 9-domain SSOT taxonomy.
 - analysis.mandala_fit.mandala_relevance_pct: integer 0-100 reflecting how well this video fits the user's mandala center goal above. Score 0 when the center goal is empty or genuinely unrelated; higher values mean stronger alignment. Be conservative — 90+ only when the video clearly addresses the exact goal.
 - analysis.bias_signals.has_ad / is_sponsored: boolean. Only true when explicitly visible in the title/description.
 - lora.qa_pairs: 5-7 entries, all level=1, all context="video". Each Q is something a learner would ask AFTER watching this video; A is grounded in the video content.
 - prerequisites: empty string when none.
+- segments.sections: 3-8 entries dividing the video timeline. from_sec/to_sec integers in seconds, monotonically increasing, derived from transcript timestamps. relevance_pct (integer 0-100) is the intra-video metric for THIS section vs the user's mandala center goal — distinct from analysis.mandala_fit.mandala_relevance_pct (which is the whole-video score). Each section has 1-3 key_points; timestamp_sec is optional and falls within the section's [from_sec, to_sec] window.
+- segments.atoms: 5-15 standalone insights. type MUST be one of: fact | argument | tip | other. timestamp_sec is optional (use when derivable from the transcript). entity_refs is optional and links to analysis.entities[].name values (fallback: analysis.key_concepts[].term).
 
 Output rules:
 - Return JSON only — no markdown fences, no commentary, no chain-of-thought.
 - Use {language} consistently across every string field (Korean if 'ko', English if 'en').
-- When the Transcript block is non-empty, prefer transcript content over description/title for evidence in qa_pairs.a and analysis.core_argument. When empty, fall back to title + description.`;
+- When the Transcript block is non-empty, prefer transcript content over description/title for evidence in qa_pairs.a and analysis.core_argument. When empty, fall back to title + description.
+- When the Transcript block is empty (= "(no transcript)"): segments.sections should be a single catch-all entry (from_sec: 0, to_sec: 0, relevance_pct: 50) and segments.atoms entries should omit timestamp_sec — the LLM cannot infer real timestamps without transcript evidence. Do NOT fabricate timestamps.`;
 
 // ============================================================================
 // Prompt fill helper
@@ -314,6 +399,29 @@ export function validateV2Layered(parsed: unknown): RichSummaryV2Layered {
       definition: requireString(kk['definition'], `analysis.key_concepts[${i}].definition`),
     };
   });
+  // CP474 — entities are optional on the wire so pre-CP474 prompt
+  // responses (or LLMs that omit the field on retry) still validate.
+  // When present, every entry is strictly type-checked.
+  let entities: RichSummaryEntity[] = [];
+  const entitiesRaw = a['entities'];
+  if (Array.isArray(entitiesRaw)) {
+    entities = entitiesRaw.map((e, i) => {
+      if (!e || typeof e !== 'object') {
+        throw new V2ValidationError('entity must be object', `analysis.entities[${i}]`);
+      }
+      const ee = e as Record<string, unknown>;
+      const name = requireString(ee['name'], `analysis.entities[${i}].name`);
+      const type = String(ee['type'] ?? '');
+      if (!VALID_ENTITY_TYPES.has(type as EntityType)) {
+        throw new V2ValidationError(
+          `unknown entity type '${type}' (expected one of: ${[...VALID_ENTITY_TYPES].join(' | ')})`,
+          `analysis.entities[${i}].type`
+        );
+      }
+      return { name, type: type as EntityType };
+    });
+  }
+
   const actionablesRaw = requireArray<unknown>(a['actionables'], 'analysis.actionables');
   const actionables = actionablesRaw.map((s, i) => requireString(s, `analysis.actionables[${i}]`));
 
@@ -372,6 +480,7 @@ export function validateV2Layered(parsed: unknown): RichSummaryV2Layered {
   const analysis: RichSummaryAnalysis = {
     core_argument: coreArgument,
     key_concepts: keyConcepts,
+    entities,
     actionables,
     mandala_fit: mandalaFit,
     bias_signals: biasSignals,
@@ -408,7 +517,17 @@ export function validateV2Layered(parsed: unknown): RichSummaryV2Layered {
     };
   });
 
-  return { core, analysis, lora: { qa_pairs: qa } };
+  // CP474 — segments are optional. When present, run the strict key
+  // whitelist (validateV2Segments) and pass the raw object through so
+  // the generator can persist it to video_rich_summaries.segments as-is.
+  let segments: RichSummarySegments | undefined;
+  const segmentsRaw = obj['segments'];
+  if (segmentsRaw !== undefined && segmentsRaw !== null) {
+    validateV2Segments(segmentsRaw);
+    segments = segmentsRaw as RichSummarySegments;
+  }
+
+  return { core, analysis, lora: { qa_pairs: qa }, segments };
 }
 
 // ============================================================================

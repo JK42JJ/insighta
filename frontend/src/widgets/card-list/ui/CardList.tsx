@@ -447,6 +447,10 @@ export function CardList({
                   const vid = safeVideoId(card.videoUrl);
                   return vid ? (v2SummariesMap.get(vid)?.oneLiner ?? null) : null;
                 })()}
+                coreArgument={(() => {
+                  const vid = safeVideoId(card.videoUrl);
+                  return vid ? (v2SummariesMap.get(vid)?.coreArgument ?? null) : null;
+                })()}
                 isV2Loading={v2IsFetching}
                 sectorLabel={
                   sectorSubjects && card.cellIndex >= 0 && card.cellIndex < sectorSubjects.length

@@ -23,6 +23,14 @@ import { apiClient } from '@/shared/lib/api-client';
 export interface V2SummaryItem {
   videoId: string;
   oneLiner: string | null;
+  /**
+   * CP474 — v2 `analysis.core_argument` (2-3 sentences capturing the
+   * central thesis). Grid card blockquote prefers this over `oneLiner`
+   * because oneLiner is capped at 20 chars and underfills the
+   * line-clamp-3 slot. NULL when the row is pre-v2 or `analysis` is
+   * absent.
+   */
+  coreArgument: string | null;
   mandalaRelevancePct: number | null;
   qualityFlag: string | null;
   templateVersion: string;

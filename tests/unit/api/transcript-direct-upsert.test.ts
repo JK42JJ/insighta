@@ -35,6 +35,11 @@ function validPayload(): RichSummaryV2Layered {
         { term: '타임블로킹', definition: '시간대별 업무 고정 배치' },
         { term: '회고', definition: '하루 끝 5분 정리' },
       ],
+      entities: [
+        { name: '포모도로', type: 'concept' },
+        { name: '타임블로킹', type: 'concept' },
+        { name: '회고 노트', type: 'tool' },
+      ],
       actionables: ['오늘 저녁 내일 할 일 3가지 적기', '포모도로 앱 설치', '회고 노트 시작하기'],
       mandala_fit: {
         suggested_goals: ['생산성 향상', '루틴 만들기'],
