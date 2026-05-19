@@ -114,6 +114,14 @@ interface InsightCardItemV2Props {
    */
   oneLiner?: string | null;
   /**
+   * CP474 — v2 `analysis.core_argument` (2-3 sentences capturing the
+   * central thesis). When present this is preferred over `oneLiner`
+   * for the grid-card blockquote because oneLiner's 20-char cap
+   * underfills the line-clamp-3 slot. Production p50=180 / p90=240
+   * chars — line-clamp-3 + "…" handles overflow.
+   */
+  coreArgument?: string | null;
+  /**
    * True while the batch v2-summaries query is fetching (initial load or
    * background refetch). When true the card suppresses the v1 fallback so
    * the blockquote stays empty until v2 arrives — prevents the
@@ -149,6 +157,7 @@ export function InsightCardItemV2({
   onRetryEnrich,
   mandalaRelevancePct,
   oneLiner,
+  coreArgument,
   isV2Loading = false,
   onArchived,
   sectorLabel,
@@ -280,16 +289,20 @@ export function InsightCardItemV2({
   const views = formatViewCount(ytMeta.viewCount);
   const relDate = formatRelativeDate(ytMeta.publishedAt ?? card.createdAt?.toISOString());
   const hasNote = !!card.userNote?.trim();
-  // Blockquote source priority (v2 wins; v1 only when v2 is settled-absent):
-  //   1. v2 `core.one_liner` if the row exists.
-  //   2. v1 `video_summaries.summary_ko` only when the v2 query has
+  // CP474 — blockquote source priority (v2 essence wins, then v2 head-
+  // line, then v1 fallback when v2 is settled-absent):
+  //   1. v2 `analysis.core_argument` (2-3 sentences, the actual thesis).
+  //   2. v2 `core.one_liner` (≤ 20 chars headline) — only when essence
+  //      is missing (legacy rows pre-CP474 or generation gaps).
+  //   3. v1 `video_summaries.summary_ko` — only when the v2 query has
   //      FINISHED and produced no row for this video. While v2 is in
-  //      flight the slot stays empty — this prevents the v1 (long
-  //      paragraph) -> v2 (short one-liner) shrink flicker the user
-  //      reported on grid mutation refetch.
-  const trimmedOneLiner = (() => {
-    const v2 = oneLiner?.trim();
-    if (v2) return v2;
+  //      flight the slot stays empty to prevent the v1 (long) -> v2
+  //      (short) shrink flicker on grid mutation refetch.
+  const cardSummary = (() => {
+    const essence = coreArgument?.trim();
+    if (essence) return essence;
+    const headline = oneLiner?.trim();
+    if (headline) return headline;
     if (isV2Loading) return undefined;
     return card.videoSummary?.summary_ko?.trim();
   })();
@@ -621,9 +634,9 @@ export function InsightCardItemV2({
             leftover space and the empty area sits flush at the card's
             bottom (YouTube-style: no empty line between meta and the
             absent summary). */}
-        {trimmedOneLiner && (
+        {cardSummary && (
           <blockquote className="mt-2 text-[10.5px] italic text-muted-foreground/75 leading-relaxed line-clamp-3 break-words">
-            {decodeHtmlEntities(trimmedOneLiner)}
+            {decodeHtmlEntities(cardSummary)}
           </blockquote>
         )}
       </div>

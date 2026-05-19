@@ -31,7 +31,11 @@ import {
 const log = logger.child({ module: 'RichSummaryV2Generator' });
 
 const MAX_RETRIES = 1; // 1 retry → spec §7-D
-const MAX_TOKENS = 4096;
+// CP474 — raised from 4096 to accommodate segments.sections (3-8 entries
+// with summary + key_points) and segments.atoms (5-15 entries). Empirical
+// upper bound for the full layered output is ~3000 tokens; 6144 leaves
+// safe buffer for verbose outputs without truncation.
+const MAX_TOKENS = 6144;
 const TEMPERATURE = 0.3;
 
 export type V2GenerationOutcome =
@@ -181,6 +185,13 @@ export async function generateRichSummaryV2(
           core: summary.core as unknown as Prisma.InputJsonValue,
           analysis: summary.analysis as unknown as Prisma.InputJsonValue,
           lora: summary.lora as unknown as Prisma.InputJsonValue,
+          // CP474 — persist segments emitted by the same LLM call.
+          // Optional: when the LLM omits segments (transcript absent or
+          // model declined), leave the column NULL via undefined so
+          // existing rows aren't accidentally cleared.
+          ...(summary.segments
+            ? { segments: summary.segments as unknown as Prisma.InputJsonValue }
+            : {}),
           completeness: score.score,
           quality_flag: 'pass',
           model: provider.model,

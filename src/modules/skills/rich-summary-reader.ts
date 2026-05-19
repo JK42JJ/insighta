@@ -179,6 +179,7 @@ export function adaptV1ToLayered(
   const analysis: RichSummaryAnalysis = {
     core_argument: pickString(v1['core_argument']) ?? oneLiner,
     key_concepts: [], // v1 had no key_concepts
+    entities: [], // CP474 — legacy v1 has no typed entities; empty by design
     actionables,
     mandala_fit: {
       suggested_goals: suggested,

@@ -726,6 +726,12 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           select: {
             video_id: true,
             one_liner: true,
+            // CP474 — `analysis.core_argument` (2-3 sentences) is the v2
+            // essence/thesis. FE renders it as the grid-card blockquote
+            // (priority over the 20-char one_liner). Selecting the full
+            // `analysis` jsonb keeps the response shape stable if more
+            // fields surface to the card later.
+            analysis: true,
             mandala_relevance_pct: true,
             quality_flag: true,
             template_version: true,
@@ -734,13 +740,21 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         return reply.code(200).send({
           status: 'ok',
           data: {
-            items: rows.map((r) => ({
-              videoId: r.video_id,
-              oneLiner: r.one_liner,
-              mandalaRelevancePct: r.mandala_relevance_pct,
-              qualityFlag: r.quality_flag,
-              templateVersion: r.template_version,
-            })),
+            items: rows.map((r) => {
+              const analysis = (r.analysis ?? null) as { core_argument?: unknown } | null;
+              const coreArgument =
+                analysis && typeof analysis.core_argument === 'string'
+                  ? analysis.core_argument
+                  : null;
+              return {
+                videoId: r.video_id,
+                oneLiner: r.one_liner,
+                coreArgument,
+                mandalaRelevancePct: r.mandala_relevance_pct,
+                qualityFlag: r.quality_flag,
+                templateVersion: r.template_version,
+              };
+            }),
           },
         });
       } catch (err) {

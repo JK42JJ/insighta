@@ -1421,6 +1421,8 @@ class ApiClient {
       items: Array<{
         videoId: string;
         oneLiner: string | null;
+        /** CP474 — `analysis.core_argument`, the v2 essence (2-3 sentences). */
+        coreArgument: string | null;
         mandalaRelevancePct: number | null;
         qualityFlag: string | null;
         templateVersion: string;
