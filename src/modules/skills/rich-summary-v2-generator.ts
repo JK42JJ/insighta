@@ -28,6 +28,22 @@ import {
   type RichSummaryV2Layered,
 } from './rich-summary-v2-prompt';
 
+const HANGUL_RANGE = /[가-힯]/g;
+const LATIN_RANGE = /[A-Za-z]/g;
+
+function detectLanguageFromTitle(title: string): 'ko' | 'en' | null {
+  if (!title) return null;
+  const stripped = title.replace(/\s+/g, '');
+  if (stripped.length === 0) return null;
+  const hangulCount = (stripped.match(HANGUL_RANGE) ?? []).length;
+  const latinCount = (stripped.match(LATIN_RANGE) ?? []).length;
+  const hangulRatio = hangulCount / stripped.length;
+  const latinRatio = latinCount / stripped.length;
+  if (hangulRatio >= 0.2) return 'ko';
+  if (latinRatio >= 0.5 && hangulRatio < 0.05) return 'en';
+  return null;
+}
+
 const log = logger.child({ module: 'RichSummaryV2Generator' });
 
 const MAX_RETRIES = 1; // 1 retry → spec §7-D
@@ -118,7 +134,13 @@ export async function generateRichSummaryV2(
     return { kind: 'skip', videoId: input.videoId, reason: 'no_youtube_metadata' };
   }
 
-  const language: 'ko' | 'en' = row.source_language === 'en' ? 'en' : 'ko';
+  // Title-based language override — `source_language` is stamped from the
+  // transcript track YouTube returned, which is sometimes the wrong track
+  // (e.g. auto-translated EN captions for a Korean video). Trust the title:
+  // if hangul ratio is high enough, force 'ko'; if it's clearly Latin-only,
+  // force 'en'. Only fall back to source_language for ambiguous cases.
+  const language: 'ko' | 'en' =
+    detectLanguageFromTitle(ytRow.title) ?? (row.source_language === 'en' ? 'en' : 'ko');
   const prompt = buildV2Prompt({
     title: ytRow.title,
     description: ytRow.description ?? '',
