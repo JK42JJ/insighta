@@ -64,18 +64,37 @@ export interface YouTubeVideoFullMetadata {
     channelTitle?: string;
     channelId?: string;
     publishedAt?: string;
+    // CP474 — full thumbnail set; metadata-collector serializes it to
+    // youtube_videos.thumbnails jsonb, keeps `high.url` as the default
+    // for back-compat with the existing thumbnail_url column.
     thumbnails?: {
+      default?: { url?: string };
+      medium?: { url?: string };
       high?: { url?: string };
       standard?: { url?: string };
-      default?: { url?: string };
+      maxres?: { url?: string };
     };
     tags?: string[];
     defaultLanguage?: string;
     defaultAudioLanguage?: string;
+    categoryId?: string;
+    liveBroadcastContent?: string;
+    localized?: {
+      title?: string;
+      description?: string;
+    };
   };
   contentDetails?: {
     duration?: string;
     caption?: string;
+    dimension?: string;
+    definition?: string;
+    licensedContent?: boolean;
+    projection?: string;
+    regionRestriction?: {
+      allowed?: string[];
+      blocked?: string[];
+    };
   };
   statistics?: {
     viewCount?: string;
@@ -84,6 +103,11 @@ export interface YouTubeVideoFullMetadata {
   };
   topicDetails?: {
     topicCategories?: string[];
+  };
+  // CP474 — videos.list 'status' part (no extra quota; same 1-unit call).
+  status?: {
+    uploadStatus?: string;
+    privacyStatus?: string;
   };
 }
 
@@ -415,7 +439,9 @@ async function videosBatchFullSingle(
   // 4 parts. videos.list quota = 1 unit per call regardless of part count.
   // We deliberately do NOT request `commentThreads` here — comment text
   // is out of scope per the 2026-04-29 user directive.
-  url.searchParams.set('part', 'snippet,contentDetails,statistics,topicDetails');
+  // CP474 — `status` added (uploadStatus / privacyStatus). videos.list
+  // quota is still 1 unit/call regardless of part count.
+  url.searchParams.set('part', 'snippet,contentDetails,statistics,topicDetails,status');
   url.searchParams.set('id', videoIds.join(','));
   url.searchParams.set('key', apiKey);
 

@@ -101,15 +101,48 @@ interface MetadataColumns {
   topic_categories: string[];
   has_caption: boolean | null;
   default_language: string | null;
+  // CP474 — 14 new fields from videos.list snippet / contentDetails / status.
+  category_id: string | null;
+  channel_id: string | null;
+  default_audio_language: string | null;
+  live_broadcast_content: string | null;
+  localized_title: string | null;
+  localized_description: string | null;
+  thumbnails: Prisma.InputJsonValue | null;
+  dimension: string | null;
+  definition: string | null;
+  licensed_content: boolean | null;
+  projection: string | null;
+  region_restriction: Prisma.InputJsonValue | null;
+  upload_status: string | null;
+  privacy_status: string | null;
   metadata_fetched_at: Date;
   updated_at: Date;
 }
 
-function mapToColumns(item: YouTubeVideoFullMetadata, now: Date): Prisma.youtube_videosUpdateInput {
+export function mapToColumns(
+  item: YouTubeVideoFullMetadata,
+  now: Date
+): Prisma.youtube_videosUpdateInput {
   const stats = item.statistics ?? {};
   const snippet = item.snippet ?? {};
   const cd = item.contentDetails ?? {};
   const td = item.topicDetails ?? {};
+  const status = item.status ?? {};
+
+  // CP474 — preserve the full thumbnails object so the FE can pick a
+  // higher-resolution variant on demand. thumbnail_url stays the high
+  // default for back-compat.
+  const thumbsFull = snippet.thumbnails ?? null;
+  const thumbsCol: Prisma.InputJsonValue | null = thumbsFull
+    ? (thumbsFull as unknown as Prisma.InputJsonValue)
+    : null;
+
+  const regionRaw = cd.regionRestriction;
+  const regionCol: Prisma.InputJsonValue | null =
+    regionRaw && (regionRaw.allowed?.length || regionRaw.blocked?.length)
+      ? (regionRaw as unknown as Prisma.InputJsonValue)
+      : null;
 
   const cols: MetadataColumns = {
     view_count: parseBigInt(stats.viewCount),
@@ -124,6 +157,28 @@ function mapToColumns(item: YouTubeVideoFullMetadata, now: Date): Prisma.youtube
         : typeof snippet.defaultAudioLanguage === 'string'
           ? snippet.defaultAudioLanguage.slice(0, 10)
           : null,
+    category_id: typeof snippet.categoryId === 'string' ? snippet.categoryId.slice(0, 5) : null,
+    channel_id: typeof snippet.channelId === 'string' ? snippet.channelId.slice(0, 30) : null,
+    default_audio_language:
+      typeof snippet.defaultAudioLanguage === 'string'
+        ? snippet.defaultAudioLanguage.slice(0, 10)
+        : null,
+    live_broadcast_content:
+      typeof snippet.liveBroadcastContent === 'string'
+        ? snippet.liveBroadcastContent.slice(0, 10)
+        : null,
+    localized_title: snippet.localized?.title ?? null,
+    localized_description: snippet.localized?.description ?? null,
+    thumbnails: thumbsCol,
+    dimension: typeof cd.dimension === 'string' ? cd.dimension.slice(0, 5) : null,
+    definition: typeof cd.definition === 'string' ? cd.definition.slice(0, 5) : null,
+    licensed_content: typeof cd.licensedContent === 'boolean' ? cd.licensedContent : null,
+    projection: typeof cd.projection === 'string' ? cd.projection.slice(0, 20) : null,
+    region_restriction: regionCol,
+    upload_status:
+      typeof status.uploadStatus === 'string' ? status.uploadStatus.slice(0, 20) : null,
+    privacy_status:
+      typeof status.privacyStatus === 'string' ? status.privacyStatus.slice(0, 20) : null,
     metadata_fetched_at: now,
     updated_at: now,
   };
