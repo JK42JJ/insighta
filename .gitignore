@@ -52,6 +52,8 @@ prisma/migrations/*
 !prisma/migrations/add-cards/**
 !prisma/migrations/user-video-states-cleanup/
 !prisma/migrations/user-video-states-cleanup/**
+!prisma/migrations/youtube-metadata-completeness/
+!prisma/migrations/youtube-metadata-completeness/**
 
 # Logs
 logs/

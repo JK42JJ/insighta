@@ -88,6 +88,9 @@ APPLY_FILES=(
   # (auto_added=false). Cleans up 120 historical rows that misrepresent
   # their origin; idempotent (subsequent runs match 0 rows).
   "prisma/migrations/user-video-states-cleanup/001_promote_pinned_auto_added.sql"
+  # CP474 — youtube_videos 14 missing fields from videos.list. ADD COLUMN
+  # IF NOT EXISTS — idempotent.
+  "prisma/migrations/youtube-metadata-completeness/001_add_columns.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
