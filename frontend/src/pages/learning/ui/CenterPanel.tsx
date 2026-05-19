@@ -38,6 +38,8 @@ interface CenterPanelProps {
   onUserPlayed?: () => void;
   onPlayStateChange?: (isPlaying: boolean) => void;
   startTime?: number;
+  onPlayerHoverIn?: () => void;
+  onPlayerHoverOut?: () => void;
 }
 
 type CenterTabId = 'summary' | 'section';
@@ -50,6 +52,8 @@ export function CenterPanel({
   onUserPlayed,
   onPlayStateChange,
   startTime,
+  onPlayerHoverIn,
+  onPlayerHoverOut,
 }: CenterPanelProps) {
   const { t } = useTranslation();
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -179,7 +183,11 @@ export function CenterPanel({
     <div className="flex flex-1 min-w-0 flex-col overflow-hidden pl-4 pr-3 pt-[5px]">
       <div
         className={cn('shrink-0', centerViewMode === 'note' && 'hidden')}
-        onMouseEnter={() => setActiveRegion('player')}
+        onMouseEnter={() => {
+          setActiveRegion('player');
+          onPlayerHoverIn?.();
+        }}
+        onMouseLeave={() => onPlayerHoverOut?.()}
       >
         <PanelVideoPlayer
           videoUrl={videoUrl}
