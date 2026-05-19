@@ -228,11 +228,22 @@ jobs:
           # state (config/rich-summary.ts:39). Set GitHub Variable
           # RICH_SUMMARY_ENABLED to "true" to activate.
           RICH_SUMMARY_ENABLED: ${{ vars.RICH_SUMMARY_ENABLED }}
+          # CP474 — YouTube metadata backfill cron activation.
+          # Non-secret per CP392: boolean toggle, not a credential. Default
+          # empty ⇒ startYouTubeMetadataCron() exits early per
+          # src/modules/scheduler/youtube-metadata-cron.ts:111 (cron never
+          # registered, no API calls). Set GitHub Variable
+          # YOUTUBE_METADATA_BACKFILL_ENABLED to "true" to activate the
+          # backfill of tags / topic_categories / has_caption /
+          # default_language / comment_count for the ~11K youtube_videos
+          # rows that were created with snippet-only data and never
+          # received the full videos.list metadata enrichment.
+          YOUTUBE_METADATA_BACKFILL_ENABLED: ${{ vars.YOUTUBE_METADATA_BACKFILL_ENABLED }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED
+          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED,YOUTUBE_METADATA_BACKFILL_ENABLED
           script: |
             set -e
             cd /opt/tubearchive
@@ -260,6 +271,17 @@ jobs:
             # redeploy. Non-secret per CP392 (boolean tuning knob).
             if [ -n "${RICH_SUMMARY_ENABLED}" ]; then
               grep -q '^RICH_SUMMARY_ENABLED=' .env 2>/dev/null && sed -i "s|^RICH_SUMMARY_ENABLED=.*|RICH_SUMMARY_ENABLED=${RICH_SUMMARY_ENABLED}|" .env || echo "RICH_SUMMARY_ENABLED=${RICH_SUMMARY_ENABLED}" >> .env
+            fi
+            # CP474 — YouTube metadata backfill cron activation. Same
+            # idempotent grep/sed/echo pattern as RICH_SUMMARY_ENABLED.
+            # When the Variable is unset/empty the conditional skips,
+            # leaving the youtube-metadata config default (false) in
+            # effect (src/config/youtube-metadata.ts:32) and the cron
+            # logs "metadata cron disabled (...)" at startup. Activate
+            # via `gh variable set YOUTUBE_METADATA_BACKFILL_ENABLED
+            # --body true` then redeploy.
+            if [ -n "${YOUTUBE_METADATA_BACKFILL_ENABLED}" ]; then
+              grep -q '^YOUTUBE_METADATA_BACKFILL_ENABLED=' .env 2>/dev/null && sed -i "s|^YOUTUBE_METADATA_BACKFILL_ENABLED=.*|YOUTUBE_METADATA_BACKFILL_ENABLED=${YOUTUBE_METADATA_BACKFILL_ENABLED}|" .env || echo "YOUTUBE_METADATA_BACKFILL_ENABLED=${YOUTUBE_METADATA_BACKFILL_ENABLED}" >> .env
             fi
             # 2026-04-18 — sync DB URLs from GitHub Secrets so password
             # rotations propagate to prod .env without manual SSH. Was
