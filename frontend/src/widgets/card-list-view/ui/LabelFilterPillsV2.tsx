@@ -112,17 +112,16 @@ export function LabelFilterPillsV2({
           );
         })}
 
-        {/* CP474 — accent chip. Bg opacity matches sector chip strength
-            (40% inactive / 55% hover) so it reads unambiguously as a chip;
-            dot + accent text + count layout unchanged. */}
+        {/* CP474 — same chip chrome as sector pills (PILL_INACTIVE bg,
+            PILL_ACTIVE fill); accent text + dot kept as data signal. */}
         {showNewlySynced && (
           <button
             onClick={onNewlySyncedClick}
             className={cn(
               PILL_BASE,
               isNewlySyncedSelected
-                ? 'bg-[var(--ind,#818cf8)] text-background'
-                : 'bg-[var(--ind,#818cf8)]/40 text-[var(--ind,#818cf8)] hover:bg-[var(--ind,#818cf8)]/55'
+                ? PILL_ACTIVE
+                : 'bg-muted/40 text-[var(--ind,#818cf8)] hover:bg-muted/60'
             )}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" aria-hidden="true" />
