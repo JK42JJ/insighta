@@ -112,9 +112,8 @@ export function LabelFilterPillsV2({
           );
         })}
 
-        {/* Issue #389 — "Updated" pill (renamed from "Newly Synced" CP474):
-            primary accent + leading dot preserved (data signal); only the
-            underline indicator was removed in line with the rest of the row. */}
+        {/* CP474 — inactive "Updated" is plain text (no chip bg); selecting
+            it morphs into the standard accent chip. */}
         {showNewlySynced && (
           <button
             onClick={onNewlySyncedClick}
@@ -122,7 +121,7 @@ export function LabelFilterPillsV2({
               PILL_BASE,
               isNewlySyncedSelected
                 ? 'bg-[var(--ind,#818cf8)] text-background'
-                : 'bg-[var(--ind,#818cf8)]/15 text-[var(--ind,#818cf8)] hover:bg-[var(--ind,#818cf8)]/25'
+                : 'bg-transparent text-[var(--ind,#818cf8)] hover:bg-[var(--ind,#818cf8)]/15'
             )}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" aria-hidden="true" />
