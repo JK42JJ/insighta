@@ -23,7 +23,7 @@ type RightTab = 'notes' | 'chatbot';
 
 export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<RightTab>('notes');
+  const [activeTab, setActiveTab] = useState<RightTab>('chatbot');
   const setActiveRegion = useLearningStore((s) => s.setActiveRegion);
   const setNoteContext = useLearningStore((s) => s.setNoteContext);
   const centerViewMode = useLearningStore((s) => s.centerViewMode);

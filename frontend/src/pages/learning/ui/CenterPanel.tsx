@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
   Sparkles,
+  Zap,
   BookText,
   Play,
   BookOpen,
@@ -17,6 +18,8 @@ import { toast } from 'sonner';
 import { PanelVideoPlayer } from '@/features/video-side-panel/ui/PanelVideoPlayer';
 import { PanelAISummary } from '@/features/video-side-panel/ui/PanelAISummary';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
+import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
+import { useHighlightReel, HIGHLIGHT_RELEVANCE_THRESHOLD } from '../model/useHighlightReel';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
 import { useNoteDocument } from '@/pages/learning/model/useNoteDocument';
 import { useNoteAutoFollow } from '@/pages/learning/model/useNoteAutoFollow';
@@ -50,6 +53,15 @@ export function CenterPanel({
 }: CenterPanelProps) {
   const { t } = useTranslation();
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  // Highlight reel — auto-skip to sections whose relevance_pct >= threshold.
+  // Dormant until pre-CP474 rows are backfilled with segments + relevance.
+  const { richSummary: highlightRich } = useRichSummary(videoId);
+  const highlightSections = highlightRich?.segments?.sections ?? undefined;
+  const highlightReel = useHighlightReel({
+    sections: highlightSections,
+    playerRef,
+  });
   const centerTab = useLearningStore((s) => s.centerTab);
   const setCenterTab = useLearningStore((s) => s.setCenterTab);
   const centerViewMode = useLearningStore((s) => s.centerViewMode);
@@ -191,22 +203,50 @@ export function CenterPanel({
           style={{ maxWidth: 'calc(49.5vh * 16 / 9)' }}
           onMouseEnter={() => setActiveRegion('book-index')}
         >
-          <div className="flex">
-            {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setCenterTab(id)}
-                className={cn(
-                  'flex items-center gap-1.5 py-2.5 px-3 text-[12px] transition-colors border-b-2',
-                  centerTab === id
-                    ? 'border-primary text-foreground font-semibold'
-                    : 'border-transparent text-muted-foreground font-normal hover:text-foreground'
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {t(labelKey, fallback)}
-              </button>
-            ))}
+          <div className="flex items-center justify-between">
+            <div className="flex">
+              {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setCenterTab(id)}
+                  className={cn(
+                    'flex items-center gap-1.5 py-2.5 px-3 text-[12px] transition-colors border-b-2',
+                    centerTab === id
+                      ? 'border-primary text-foreground font-semibold'
+                      : 'border-transparent text-muted-foreground font-normal hover:text-foreground'
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {t(labelKey, fallback)}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={highlightReel.active ? highlightReel.stop : highlightReel.start}
+              disabled={!highlightReel.enabled}
+              title={
+                !highlightReel.enabled
+                  ? t('learning.highlightReelDisabledTooltip', {
+                      threshold: HIGHLIGHT_RELEVANCE_THRESHOLD,
+                    })
+                  : highlightReel.active
+                    ? t('learning.highlightReelActiveTooltip')
+                    : t('learning.highlightReelReadyTooltip', {
+                        count: highlightReel.highlights.length,
+                      })
+              }
+              className={cn(
+                'flex items-center gap-1 px-2.5 py-[3px] text-[11.5px] font-medium rounded-full transition-colors',
+                highlightReel.active
+                  ? 'bg-[rgba(129,140,248,0.12)] text-[#818cf8] hover:bg-[rgba(129,140,248,0.22)]'
+                  : 'bg-[#818cf8] text-white shadow-sm hover:bg-[#6c78de]',
+                !highlightReel.enabled && 'opacity-40 cursor-not-allowed hover:bg-[#818cf8]'
+              )}
+            >
+              <Zap className="h-3 w-3" aria-hidden="true" />
+              {t('learning.highlightReel')}
+            </button>
           </div>
         </div>
       )}

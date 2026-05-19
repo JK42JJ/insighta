@@ -31,6 +31,12 @@ export interface V2SummaryItem {
    * absent.
    */
   coreArgument: string | null;
+  /** Top key-concept terms (≤ 3) used as book-index entries in the
+   *  sidebar. Empty when the row is pre-v2 or analysis is absent. */
+  keyConcepts: string[];
+  /** Fallback keyword source for videos without a v2 row yet — derived
+   *  from video_summaries.tags. Sidebar uses these when keyConcepts empty. */
+  fallbackTags: string[];
   mandalaRelevancePct: number | null;
   qualityFlag: string | null;
   templateVersion: string;

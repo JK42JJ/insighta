@@ -414,10 +414,15 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             ${pinnedAt}
           )
           ON CONFLICT (user_id, video_id) DO UPDATE
-            SET pinned_at = ${pinnedAt},
+            SET pinned_at  = ${pinnedAt},
                 surfaced_at = ${pinnedAt},
-                mandala_id = EXCLUDED.mandala_id,
-                cell_index = EXCLUDED.cell_index
+                auto_added = false,
+                -- A like is "pin this video". cell_index is intentionally
+                -- absent from the SET clause: moving cells is a different
+                -- intent that must go through /move-cell. mandala_id stays
+                -- so users can re-pin a video into a different mandala
+                -- (Q1 design — one video belongs to one mandala).
+                mandala_id = EXCLUDED.mandala_id
         `);
       } else {
         // No yt row → fall back to UPDATE-only path. Card stays in
@@ -427,7 +432,8 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         videoStatesUpdated = await prisma.$executeRaw`
           UPDATE public.user_video_states uvs
              SET pinned_at = ${pinnedAt},
-                 surfaced_at = ${pinnedAt}
+                 surfaced_at = ${pinnedAt},
+                 auto_added = false
             FROM public.youtube_videos yv
            WHERE uvs.user_id = ${userId}::uuid
              AND uvs.video_id = yv.id
@@ -519,7 +525,10 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         `;
         await prisma.$executeRaw`
           UPDATE public.user_video_states uvs
-             SET pinned_at = NULL
+             SET pinned_at = NULL,
+                 -- Preserve the user-owned mark so the auto-add eviction
+                 -- sweep never reclaims a previously-liked card.
+                 auto_added = false
             FROM public.youtube_videos yv
            WHERE uvs.user_id = ${userId}::uuid
              AND uvs.video_id = yv.id
@@ -721,38 +730,66 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
       const prisma = getPrismaClient();
       try {
-        const rows = await prisma.video_rich_summaries.findMany({
-          where: { video_id: { in: ids } },
-          select: {
-            video_id: true,
-            one_liner: true,
-            // CP474 — `analysis.core_argument` (2-3 sentences) is the v2
-            // essence/thesis. FE renders it as the grid-card blockquote
-            // (priority over the 20-char one_liner). Selecting the full
-            // `analysis` jsonb keeps the response shape stable if more
-            // fields surface to the card later.
-            analysis: true,
-            mandala_relevance_pct: true,
-            quality_flag: true,
-            template_version: true,
-          },
-        });
+        const [rows, summaryRows] = await Promise.all([
+          prisma.video_rich_summaries.findMany({
+            where: { video_id: { in: ids } },
+            select: {
+              video_id: true,
+              one_liner: true,
+              analysis: true,
+              mandala_relevance_pct: true,
+              quality_flag: true,
+              template_version: true,
+            },
+          }),
+          // Fallback keyword source for videos that have no v2 row yet —
+          // sidebar book-index can render video_summaries.tags so a card is
+          // not invisible while v2 is still being generated.
+          prisma.video_summaries.findMany({
+            where: { video_id: { in: ids } },
+            select: { video_id: true, tags: true },
+          }),
+        ]);
+        const tagsByVideo = new Map<string, string[]>();
+        for (const s of summaryRows) {
+          tagsByVideo.set(
+            s.video_id,
+            (s.tags ?? []).filter((t) => typeof t === 'string' && t.length > 0)
+          );
+        }
+        const v2RowByVid = new Map(rows.map((r) => [r.video_id, r] as const));
         return reply.code(200).send({
           status: 'ok',
           data: {
-            items: rows.map((r) => {
-              const analysis = (r.analysis ?? null) as { core_argument?: unknown } | null;
+            // Iterate over the full id list so videos without a v2 row still
+            // receive a fallbackTags payload — sidebar can render those.
+            items: ids.map((vid) => {
+              const r = v2RowByVid.get(vid);
+              const analysis = (r?.analysis ?? null) as {
+                core_argument?: unknown;
+                key_concepts?: unknown;
+              } | null;
               const coreArgument =
                 analysis && typeof analysis.core_argument === 'string'
                   ? analysis.core_argument
                   : null;
+              const keyConcepts: string[] =
+                analysis && Array.isArray(analysis.key_concepts)
+                  ? (analysis.key_concepts as Array<{ term?: unknown }>)
+                      .map((kc) => (kc && typeof kc.term === 'string' ? kc.term.trim() : ''))
+                      .filter((t): t is string => t.length > 0)
+                      .slice(0, 3)
+                  : [];
+              const fallbackTags = (tagsByVideo.get(vid) ?? []).slice(0, 3);
               return {
-                videoId: r.video_id,
-                oneLiner: r.one_liner,
+                videoId: vid,
+                oneLiner: r?.one_liner ?? null,
                 coreArgument,
-                mandalaRelevancePct: r.mandala_relevance_pct,
-                qualityFlag: r.quality_flag,
-                templateVersion: r.template_version,
+                keyConcepts,
+                fallbackTags,
+                mandalaRelevancePct: r?.mandala_relevance_pct ?? null,
+                qualityFlag: r?.quality_flag ?? null,
+                templateVersion: r?.template_version ?? '',
               };
             }),
           },

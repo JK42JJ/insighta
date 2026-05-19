@@ -99,8 +99,8 @@ export async function generateRichSummaryV2(
   if (!row) {
     return { kind: 'skip', videoId: input.videoId, reason: 'no_rich_summary_row' };
   }
-  // CP474 — description-only v2 rows fall through so a later Heart click
-  // with a successful captioner can regenerate them. forceRegen overrides.
+  // description-only rows fall through so the next Heart click with a
+  // working captioner can regenerate. forceRegen overrides.
   if (
     !input.forceRegen &&
     row.template_version === 'v2' &&

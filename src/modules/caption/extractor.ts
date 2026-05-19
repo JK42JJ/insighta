@@ -40,8 +40,12 @@ export class CaptionExtractor {
     youtubeId: string,
     language?: string
   ): Promise<CaptionExtractionResult> {
-    // Language priority: explicit → en → ko → any available
-    const LANG_PRIORITY = language ? [language] : ['en', 'ko'];
+    // Korean-first default — auto captions follow the video's spoken
+    // language, and the prod pool skews Korean.
+    const BASE_LANGS = ['ko', 'en'];
+    const LANG_PRIORITY = language
+      ? [language, ...BASE_LANGS.filter((l) => l !== language)]
+      : BASE_LANGS;
 
     try {
       let segments: CaptionSegment[] = [];
@@ -50,20 +54,33 @@ export class CaptionExtractor {
       for (const lang of LANG_PRIORITY) {
         logger.info('Extracting captions', { videoId: youtubeId, language: lang });
 
-        try {
-          const transcript = await (await loadFetchTranscript())(youtubeId, { lang });
-          if (transcript && transcript.length > 0) {
-            segments = transcript.map((item) => ({
-              text: item.text,
-              start: item.offset / 1000,
-              duration: item.duration / 1000,
-            }));
-            resolvedLang = lang;
-            break;
+        // Single retry absorbs Innertube's transient drops without
+        // hammering on "captions not available" terminal errors.
+        let lastErr: unknown = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const transcript = await (await loadFetchTranscript())(youtubeId, { lang });
+            if (transcript && transcript.length > 0) {
+              segments = transcript.map((item) => ({
+                text: item.text,
+                start: item.offset / 1000,
+                duration: item.duration / 1000,
+              }));
+              resolvedLang = lang;
+              lastErr = null;
+              break;
+            }
+          } catch (err) {
+            lastErr = err;
+            if (attempt === 0) {
+              await new Promise((r) => setTimeout(r, 300));
+            }
           }
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          logger.warn('youtube-transcript failed', { youtubeId, lang, error: errMsg });
+        }
+        if (segments.length > 0) break;
+        if (lastErr) {
+          const errMsg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+          logger.warn('youtube-transcript failed after retry', { youtubeId, lang, error: errMsg });
         }
       }
 

@@ -63,6 +63,42 @@ function validSummary(overrides: Partial<RichSummaryV2Layered> = {}): RichSummar
         { level: 1, q: 'Q5', a: 'A5', context: 'video' },
       ],
     },
+    // Segments are required for scoreCompleteness to pass.
+    segments: {
+      sections: [
+        {
+          idx: 0,
+          from_sec: 0,
+          to_sec: 60,
+          title: '도입',
+          summary: '시간관리 도입',
+          relevance_pct: 70,
+        },
+        {
+          idx: 1,
+          from_sec: 60,
+          to_sec: 180,
+          title: '계획',
+          summary: '계획 단계',
+          relevance_pct: 80,
+        },
+        {
+          idx: 2,
+          from_sec: 180,
+          to_sec: 300,
+          title: '실행',
+          summary: '실행 단계',
+          relevance_pct: 75,
+        },
+      ],
+      atoms: [
+        { idx: 0, type: 'fact', text: 'a0', timestamp_sec: 30 },
+        { idx: 1, type: 'tip', text: 'a1', timestamp_sec: 90 },
+        { idx: 2, type: 'fact', text: 'a2', timestamp_sec: 150 },
+        { idx: 3, type: 'argument', text: 'a3', timestamp_sec: 210 },
+        { idx: 4, type: 'tip', text: 'a4', timestamp_sec: 270 },
+      ],
+    },
     ...overrides,
   };
 }
@@ -167,6 +203,65 @@ describe('scoreCompleteness', () => {
     const r = scoreCompleteness(s);
     expect(r.score).toBeLessThan(1);
     expect(r.reasons.some((x) => x.includes('L1'))).toBe(true);
+  });
+
+  // Segments hard gate — description-only fallback must fail.
+  test('hard gate: rejects when sections.length < 3', () => {
+    const s = validSummary();
+    s.segments = {
+      sections: [{ idx: 0, from_sec: 0, to_sec: 60, title: 's', summary: 'x', relevance_pct: 50 }],
+      atoms: s.segments!.atoms,
+    };
+    const r = scoreCompleteness(s);
+    expect(r.passed).toBe(false);
+    expect(r.reasons.some((x) => x.includes('segments.sections insufficient'))).toBe(true);
+  });
+
+  test('hard gate: rejects when atoms.length < 5', () => {
+    const s = validSummary();
+    s.segments = {
+      sections: s.segments!.sections,
+      atoms: [{ idx: 0, type: 'fact', text: 'only one', timestamp_sec: 30 }],
+    };
+    const r = scoreCompleteness(s);
+    expect(r.passed).toBe(false);
+    expect(r.reasons.some((x) => x.includes('segments.atoms insufficient'))).toBe(true);
+  });
+
+  test('hard gate: rejects description-only catch-all (all to_sec=0)', () => {
+    const s = validSummary();
+    s.segments = {
+      sections: [
+        { idx: 0, from_sec: 0, to_sec: 0, title: 'catch-all', summary: 'whole', relevance_pct: 50 },
+        {
+          idx: 1,
+          from_sec: 0,
+          to_sec: 0,
+          title: 'catch-all-2',
+          summary: 'whole',
+          relevance_pct: 50,
+        },
+        {
+          idx: 2,
+          from_sec: 0,
+          to_sec: 0,
+          title: 'catch-all-3',
+          summary: 'whole',
+          relevance_pct: 50,
+        },
+      ],
+      atoms: s.segments!.atoms,
+    };
+    const r = scoreCompleteness(s);
+    expect(r.passed).toBe(false);
+    expect(r.reasons.some((x) => x.includes('to_sec=0'))).toBe(true);
+  });
+
+  test('hard gate: rejects entirely missing segments object', () => {
+    const s = validSummary();
+    delete (s as { segments?: unknown }).segments;
+    const r = scoreCompleteness(s);
+    expect(r.passed).toBe(false);
   });
 });
 
