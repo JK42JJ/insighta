@@ -26,6 +26,7 @@ import type {
   VideoRichSummaryLora,
   VideoRichSummarySegments,
 } from '@/shared/lib/api-client';
+import { Info, Quote, Lightbulb, Dot } from 'lucide-react';
 import { useRichSummary } from '../model/useRichSummary';
 
 export interface PanelAISummaryProps {
@@ -555,14 +556,31 @@ function AtomRow({ atom, jumpUrl }: { atom: VideoRichSummaryAtom; jumpUrl: strin
         : atom.type === 'tip'
           ? 'text-[#818cf8]'
           : 'text-[#94a3b8]';
-  const typeMark =
-    atom.type === 'fact' ? '✓' : atom.type === 'argument' ? '!' : atom.type === 'tip' ? '★' : '·';
+  // Lucide icon per atom type — meaning conveyed visually:
+  //   fact     → Info       (i in circle — neutral information / verifiable)
+  //   argument → Quote      (quotation marks — speaker's claim / opinion)
+  //   tip      → Lightbulb  (universal idea / actionable suggestion)
+  //   other    → Dot        (subtle bullet)
+  const TypeIcon =
+    atom.type === 'fact'
+      ? Info
+      : atom.type === 'argument'
+        ? Quote
+        : atom.type === 'tip'
+          ? Lightbulb
+          : Dot;
+  const typeLabel =
+    atom.type === 'fact'
+      ? 'fact'
+      : atom.type === 'argument'
+        ? 'argument'
+        : atom.type === 'tip'
+          ? 'tip'
+          : 'other';
 
   return (
     <li className="flex items-start gap-2 text-[12px] leading-[1.5] text-[rgba(237,237,240,0.84)]">
-      <span aria-hidden className={`mt-[2px] shrink-0 font-mono text-[11px] ${typeColor}`}>
-        {typeMark}
-      </span>
+      <TypeIcon aria-label={typeLabel} className={`mt-[2px] h-3.5 w-3.5 shrink-0 ${typeColor}`} />
       <span className="flex-1">
         {atom.text}
         {jumpUrl && Number.isFinite(atom.timestamp_sec) && (
