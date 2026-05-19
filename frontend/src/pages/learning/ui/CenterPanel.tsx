@@ -244,16 +244,16 @@ export function CenterPanel({
                         count: highlightReel.highlights.length,
                       })
               }
+              aria-label={t('learning.highlightReel')}
               className={cn(
-                'flex items-center gap-1 px-2.5 py-[3px] text-[11.5px] font-medium rounded-full transition-colors',
+                'inline-flex items-center justify-center p-2.5 rounded-full transition-colors',
                 highlightReel.active
                   ? 'bg-[rgba(129,140,248,0.12)] text-[#818cf8] hover:bg-[rgba(129,140,248,0.22)]'
                   : 'bg-[#818cf8] text-white shadow-sm hover:bg-[#6c78de]',
                 !highlightReel.enabled && 'opacity-40 cursor-not-allowed hover:bg-[#818cf8]'
               )}
             >
-              <Zap className="h-3 w-3" aria-hidden="true" />
-              {t('learning.highlightReel')}
+              <Zap className="h-6 w-6" aria-hidden="true" />
             </button>
           </div>
         </div>
