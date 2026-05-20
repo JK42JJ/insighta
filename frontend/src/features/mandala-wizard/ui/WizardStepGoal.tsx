@@ -275,10 +275,10 @@ export default function WizardStepGoal({
       </div>
 
       {!hasSubmitted && (
-        <div className="mx-auto mt-6 flex max-w-[960px] flex-col items-center gap-2">
+        <div className="mx-auto mt-6 flex flex-col items-center gap-2">
           {[SUGGESTIONS.slice(0, 4), SUGGESTIONS.slice(4, 7), SUGGESTIONS.slice(7, 9)].map(
             (row, ri) => (
-              <div key={ri} className="flex flex-wrap justify-center gap-2">
+              <div key={ri} className="flex flex-nowrap justify-center gap-2">
                 {row.map(({ key, Icon, hoverIcon }) => {
                   const text = t(`wizard.goal.suggestions.${key}`, '');
                   if (!text) return null;
@@ -287,7 +287,7 @@ export default function WizardStepGoal({
                       key={key}
                       type="button"
                       onClick={() => handleSuggestionClick(text)}
-                      className="group inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12.5px] font-medium transition-colors"
+                      className="group inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[12.5px] font-medium transition-colors"
                       style={{
                         background: 'transparent',
                         border: '1px solid hsl(var(--border) / 0.4)',
