@@ -160,6 +160,11 @@ export class QwenRunpodAdapter implements CopilotServiceAdapter {
       stream: true;
       messages: ReadonlyArray<{ role: 'system' | 'user' | 'assistant'; content: string }>;
       chat_template_kwargs: { enable_thinking: boolean };
+      // CP475+4 — explicitly disable tool calling. vLLM Pod is started
+      // without --enable-auto-tool-choice; any inbound tool_choice='auto'
+      // (Vercel SDK default) produces 400 "auto" tool choice requires ...".
+      // The chatbot doesn't use function calling, so 'none' is correct.
+      tool_choice: 'none';
       max_completion_tokens?: number;
       temperature?: number;
       stop?: string | string[];
@@ -169,6 +174,7 @@ export class QwenRunpodAdapter implements CopilotServiceAdapter {
       stream: true,
       messages: openaiMessages,
       chat_template_kwargs: CHAT_TEMPLATE_KWARGS,
+      tool_choice: 'none',
     };
     if (forwardedParameters?.maxTokens) body.max_completion_tokens = forwardedParameters.maxTokens;
     if (forwardedParameters?.temperature !== undefined)

@@ -252,6 +252,25 @@ describe('QwenRunpodAdapter — process()', () => {
     ]);
   });
 
+  it('CP475+4 — request body sets tool_choice=none + chat_template_kwargs', async () => {
+    // vLLM Pod was started without --enable-auto-tool-choice. The chatbot
+    // doesn't use function calling, so the adapter must explicitly tell
+    // vLLM not to expect tool-call output.
+    mockChatCompletionsCreate.mockResolvedValueOnce(iterChunks([]));
+    const a = new QwenRunpodAdapter({ baseURL: BASE, apiKey: KEY });
+    const es = makeEventSource();
+
+    await a.process({
+      messages: [makeTextMessage('user', 'hi') as never],
+      actions: [],
+      eventSource: es as never,
+    });
+
+    const callArg = mockChatCompletionsCreate.mock.calls[0]![0];
+    expect(callArg.tool_choice).toBe('none');
+    expect(callArg.chat_template_kwargs).toEqual({ enable_thinking: false });
+  });
+
   it('streams deltas as start → content → end → complete', async () => {
     mockChatCompletionsCreate.mockResolvedValueOnce(
       iterChunks([

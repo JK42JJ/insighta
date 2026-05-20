@@ -224,4 +224,32 @@ describe('createQwenPromptMiddleware', () => {
     // On error, original params returned unchanged (no rewrite).
     expect(out).toBe(inputParams);
   });
+
+  it('CP475+4 — transformParams forces toolChoice=none + empty tools', async () => {
+    // The vLLM Pod was launched without --enable-auto-tool-choice, so any
+    // inbound `tool_choice: 'auto'` returns 400. Middleware must always
+    // override regardless of caller intent.
+    const mw = createQwenPromptMiddleware();
+    const inputParams = {
+      prompt: [{ role: 'system' as const, content: 'arbitrary' }],
+      toolChoice: { type: 'auto' as const },
+      tools: [
+        {
+          type: 'function' as const,
+          name: 'someTool',
+          description: '',
+          inputSchema: {},
+        },
+      ],
+    };
+
+    const out = await mw.transformParams!({
+      type: 'stream',
+      params: inputParams as never,
+      model: {} as never,
+    });
+
+    expect(out.toolChoice).toEqual({ type: 'none' });
+    expect(out.tools).toEqual([]);
+  });
 });
