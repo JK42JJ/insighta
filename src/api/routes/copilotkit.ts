@@ -10,10 +10,23 @@ import OpenAI from 'openai';
 import { config } from '@/config/index';
 import { QwenRunpodAdapter } from '@/modules/chatbot-rag';
 import { toRunpodOpenAiBase } from './copilotkit-base-url';
+import {
+  resolveChatbotModel,
+  type ChatbotProvider,
+  type ProviderDefaults,
+} from './copilotkit-model-resolver';
 
-type ChatbotProvider = 'gemini' | 'openrouter' | 'local' | 'qwen-runpod';
+const OPENROUTER_DEFAULT_MODEL = 'google/gemini-2.5-flash';
 
-function createServiceAdapter(provider: ChatbotProvider, model?: string): CopilotServiceAdapter {
+function buildProviderDefaults(): ProviderDefaults {
+  return {
+    openrouter: OPENROUTER_DEFAULT_MODEL,
+    local: config.ollama.generateModel,
+    qwenRunpod: config.qwenLora.model,
+  };
+}
+
+function createServiceAdapter(provider: ChatbotProvider, model: string): CopilotServiceAdapter {
   switch (provider) {
     case 'gemini':
     case 'openrouter':
@@ -22,7 +35,7 @@ function createServiceAdapter(provider: ChatbotProvider, model?: string): Copilo
           apiKey: config.openrouter.apiKey,
           baseURL: 'https://openrouter.ai/api/v1',
         }),
-        model: model || 'google/gemini-2.5-flash',
+        model,
       });
 
     case 'local':
@@ -31,7 +44,7 @@ function createServiceAdapter(provider: ChatbotProvider, model?: string): Copilo
           apiKey: 'not-needed',
           baseURL: config.chatbot.localUrl,
         }),
-        model: model || config.ollama.generateModel,
+        model,
       });
 
     case 'qwen-runpod':
@@ -45,26 +58,17 @@ function createServiceAdapter(provider: ChatbotProvider, model?: string): Copilo
       return new QwenRunpodAdapter({
         baseURL: toRunpodOpenAiBase(config.qwenLora.apiUrl),
         apiKey: config.runpod.apiKey,
-        model: model || config.qwenLora.model,
+        model,
       });
-  }
-}
-
-function getDefaultModel(provider: ChatbotProvider): string {
-  switch (provider) {
-    case 'gemini':
-    case 'openrouter':
-      return 'google/gemini-2.5-flash';
-    case 'local':
-      return config.ollama.generateModel;
-    case 'qwen-runpod':
-      return config.qwenLora.model;
   }
 }
 
 export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   const provider = config.chatbot.provider;
-  const model = config.chatbot.model;
+  // CP475+2 — resolve via provider-aware fallback so `qwen-runpod` no
+  // longer inherits the openrouter gemini-flash default and sends a
+  // model name vLLM doesn't recognise. CHATBOT_MODEL env still wins.
+  const model = resolveChatbotModel(provider, config.chatbot.model, buildProviderDefaults());
   const serviceAdapter = createServiceAdapter(provider, model);
   const runtime = new CopilotRuntime();
 
@@ -95,7 +99,8 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
       status: 200,
       data: {
         provider,
-        model: model || getDefaultModel(provider),
+        // `model` is already provider-resolved above (CP475+2 fix); send as-is.
+        model,
       },
     });
   });
