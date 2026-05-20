@@ -43,6 +43,7 @@ import {
   rewriteSystemPrompt,
   createQwenPromptMiddleware,
   appendNoThinkDirective,
+  appendTimestampFormatRule,
   _resetMiddlewareCacheForTesting,
 } from '@/modules/chatbot-rag/qwen-prompt-middleware';
 import { PRODUCT_PERSONA_KO, PRODUCT_PERSONA_EN } from '@/modules/chatbot-rag/prompt-builder';
@@ -280,6 +281,57 @@ describe('rewriteSystemContent — CP475+5 /no_think suppression', () => {
 
   it('appends /no_think to the generated system prompt (English)', async () => {
     const out = await rewriteSystemContent("You are Insighta's learning assistant.");
+    expect(out.endsWith('/no_think')).toBe(true);
+  });
+});
+
+describe('appendTimestampFormatRule (CP477+2)', () => {
+  it('adds the Korean rule when language=ko + marker absent', () => {
+    const out = appendTimestampFormatRule('hello', 'ko');
+    expect(out).toContain('[타임스탬프 형식]');
+    expect(out).toContain('"M:SS"');
+    expect(out).toContain('"N초"');
+  });
+
+  it('adds the English rule when language=en + marker absent', () => {
+    const out = appendTimestampFormatRule('hello', 'en');
+    expect(out).toContain('[Timestamp format]');
+    expect(out).toContain('"M:SS"');
+    expect(out).toContain('380s');
+  });
+
+  it('is idempotent on Korean — second call returns input unchanged', () => {
+    const once = appendTimestampFormatRule('hello', 'ko');
+    const twice = appendTimestampFormatRule(once, 'ko');
+    expect(twice).toBe(once);
+  });
+
+  it('is idempotent on English', () => {
+    const once = appendTimestampFormatRule('hello', 'en');
+    const twice = appendTimestampFormatRule(once, 'en');
+    expect(twice).toBe(once);
+  });
+
+  it('does not double-add when KO marker exists and EN call follows', () => {
+    // Either marker variant should short-circuit, regardless of language arg.
+    const out = appendTimestampFormatRule('foo\n[타임스탬프 형식]\nbar', 'en');
+    expect(out).toBe('foo\n[타임스탬프 형식]\nbar');
+  });
+});
+
+describe('rewriteSystemContent — CP477+2 timestamp rule injection', () => {
+  it('Korean system prompt ends with /no_think after timestamp rule and persona', async () => {
+    const out = await rewriteSystemContent('한국어 인사이트 챗봇 사용');
+    expect(out).toContain('[타임스탬프 형식]');
+    expect(out.endsWith('/no_think')).toBe(true);
+    // Timestamp rule sits BEFORE /no_think (the /no_think directive must be
+    // the very last token so Qwen3's chat template picks it up cleanly).
+    expect(out.indexOf('[타임스탬프 형식]')).toBeLessThan(out.indexOf('/no_think'));
+  });
+
+  it('English system prompt also gets the rule', async () => {
+    const out = await rewriteSystemContent("You are Insighta's learning assistant.");
+    expect(out).toContain('[Timestamp format]');
     expect(out.endsWith('/no_think')).toBe(true);
   });
 });

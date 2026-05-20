@@ -142,6 +142,46 @@ export function appendNoThinkDirective(systemContent: string): string {
 }
 
 /**
+ * Force the chatbot's timestamp output into a single canonical format so the
+ * FE `linkifyTimestamps` can convert ALL timestamps into clickable buttons.
+ *
+ * CP477+2 — bug-report 2026-05-20: the model sometimes emits `(0:56-1:12)`
+ * (M:SS form, FE regex matches → clickable) and sometimes `380~682초:`
+ * (raw seconds, FE regex does NOT match → plain text). Users see
+ * inconsistent timestamp affordance across responses on the same video.
+ *
+ * The Insighta SFT-aligned `ROLE_AND_RULES_KO/EN` already gives one example
+ * (`(1:00-1:12)`) but doesn't forbid raw-seconds variants. Adding a
+ * stand-alone directive at runtime keeps the SFT byte-identical while
+ * tightening the output contract on every request.
+ *
+ * Idempotent — directive marker is detected by a unique substring.
+ */
+const TIMESTAMP_RULE_KO = `[타임스탬프 형식]
+- 타임스탬프는 반드시 "M:SS" 또는 "(M:SS-M:SS)" 형식.
+- "N초" (예: 380초) 또는 "N~M초" (예: 380~682초) 형식 금지.
+- 초 단위 값 언급 필요 시: 380초 → "(6:20)" 으로 변환해 출력.`;
+
+const TIMESTAMP_RULE_EN = `[Timestamp format]
+- All timestamps MUST be in "M:SS" or "(M:SS-M:SS)" form.
+- Forbidden: raw-seconds form ("380s") or seconds range ("380~682s").
+- Convert seconds to M:SS before emitting (e.g., 380s → "(6:20)").`;
+
+const TIMESTAMP_RULE_MARKER = '[타임스탬프 형식]';
+const TIMESTAMP_RULE_MARKER_EN = '[Timestamp format]';
+
+export function appendTimestampFormatRule(systemContent: string, language: Lang): string {
+  if (
+    systemContent.includes(TIMESTAMP_RULE_MARKER) ||
+    systemContent.includes(TIMESTAMP_RULE_MARKER_EN)
+  ) {
+    return systemContent;
+  }
+  const rule = language === 'en' ? TIMESTAMP_RULE_EN : TIMESTAMP_RULE_KO;
+  return `${systemContent}\n\n${rule}`;
+}
+
+/**
  * Plain-string variant for the legacy SSE streaming path (QwenRunpodAdapter.process).
  *
  * Same pipeline as rewriteSystemPrompt but consumes/returns a single
@@ -169,12 +209,16 @@ export async function rewriteSystemContent(originalSystemContent: string): Promi
     transcript: videoCtx.transcript,
     includePersona: true,
   });
+  // CP477+2 — tighten timestamp output to a single canonical form so the
+  // FE linkifier can convert every timestamp to a clickable seek button
+  // (chatbot output was mixing `(M:SS-M:SS)` with `N초` / `N~M초`).
+  const withTimestampRule = appendTimestampFormatRule(built, language);
   // CP475+5 — suppress Qwen3 reasoning chain. The `chat_template_kwargs`
   // path (`enable_thinking: false`) only works on the legacy process() body;
   // Vercel AI SDK V3 strips provider-specific kwargs, so the textual
   // `/no_think` directive is the reliable way to gate reasoning on every
   // request that hits vLLM.
-  return appendNoThinkDirective(built);
+  return appendNoThinkDirective(withTimestampRule);
 }
 
 // ---------------------------------------------------------------------------
