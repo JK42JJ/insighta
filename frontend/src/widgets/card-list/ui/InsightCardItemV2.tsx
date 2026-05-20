@@ -309,12 +309,18 @@ export function InsightCardItemV2({
   //   3. v2 quick essence — fallback when v1 is missing (e.g. fresh-
   //      from-YouTube cards with no v1 row yet).
   //   4. v2 `core.one_liner` — last-resort 20-char headline.
+  //
+  // The previous `if (isV2Loading) return undefined` guard was a legacy
+  // from the v2-quick-wins era (preventing a long-v1 → short-quick text
+  // shrink during refetch). With v1 now winning over quick, v1 is stable
+  // across refetch cycles — the guard caused the new bug (siblings'
+  // bookmarks made every card's footer go transiently blank → height
+  // shrink → grid jump). Removed.
   const cardSummary = (() => {
     if (v2FullLanded) {
       const essence = coreArgument?.trim();
       if (essence) return essence;
     }
-    if (isV2Loading) return undefined;
     const v1 = card.videoSummary?.summary_ko?.trim();
     if (v1) return v1;
     const quickEssence = coreArgument?.trim();

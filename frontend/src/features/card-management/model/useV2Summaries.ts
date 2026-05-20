@@ -17,7 +17,7 @@
  *     same set hit the same cache regardless of input order.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/lib/api-client';
 
 export interface V2SummaryItem {
@@ -75,6 +75,15 @@ export function useV2Summaries(videoIds: string[] | null | undefined) {
     staleTime: V2_SUMMARIES_STALE_MS,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
+    // CP475+ — bookmarking a new card invalidates this query, and the
+    // grid mutation simultaneously changes `dedupedIds.length` → a new
+    // cache entry with `data=undefined` would render every existing
+    // card's v2 summary as empty while the refetch runs (visible as a
+    // height-shrink jump across the grid). `keepPreviousData` makes
+    // the previous batch's data act as a placeholder until the next
+    // batch resolves, so no v2-derived field ever transiently goes to
+    // null on an unrelated card.
+    placeholderData: keepPreviousData,
   });
 
   const map = new Map<string, V2SummaryItem>();
