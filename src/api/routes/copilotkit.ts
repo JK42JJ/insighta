@@ -9,19 +9,9 @@ import {
 import OpenAI from 'openai';
 import { config } from '@/config/index';
 import { QwenRunpodAdapter } from '@/modules/chatbot-rag';
+import { toRunpodOpenAiBase } from './copilotkit-base-url';
 
 type ChatbotProvider = 'gemini' | 'openrouter' | 'local' | 'qwen-runpod';
-
-// Normalise a RunPod endpoint URL to its OpenAI-compatible base.
-// Accepts:
-//   https://api.runpod.ai/v2/<id>/runsync     → .../v2/<id>/openai/v1
-//   https://api.runpod.ai/v2/<id>/openai/v1   → unchanged
-//   https://api.runpod.ai/v2/<id>             → .../v2/<id>/openai/v1
-function toRunpodOpenAiBase(raw: string): string {
-  const trimmed = raw.replace(/\/+$/, '');
-  if (trimmed.endsWith('/openai/v1')) return trimmed;
-  return trimmed.replace(/\/(?:runsync|run)$/, '') + '/openai/v1';
-}
 
 function createServiceAdapter(provider: ChatbotProvider, model?: string): CopilotServiceAdapter {
   switch (provider) {
