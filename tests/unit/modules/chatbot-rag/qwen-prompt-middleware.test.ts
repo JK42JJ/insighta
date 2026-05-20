@@ -273,15 +273,19 @@ describe('appendNoThinkDirective (CP475+5)', () => {
   });
 });
 
-describe('rewriteSystemContent — CP475+5 /no_think suppression', () => {
-  it('appends /no_think to the generated system prompt (Korean)', async () => {
+describe('rewriteSystemContent — CP477+4 /no_think REMOVED from system prompt', () => {
+  // CP475+5 had appended `/no_think` to the system prompt; CP477+4 reverted
+  // that because the directive only works at user-message end (Qwen3 chat
+  // template requirement). The system-prompt placement caused token echo on
+  // the OpenRouter base model AND multi-turn history corruption.
+  it('does NOT contain /no_think anywhere (Korean)', async () => {
     const out = await rewriteSystemContent('한국어 인사이트 챗봇 사용');
-    expect(out.endsWith('/no_think')).toBe(true);
+    expect(out).not.toContain('/no_think');
   });
 
-  it('appends /no_think to the generated system prompt (English)', async () => {
+  it('does NOT contain /no_think anywhere (English)', async () => {
     const out = await rewriteSystemContent("You are Insighta's learning assistant.");
-    expect(out.endsWith('/no_think')).toBe(true);
+    expect(out).not.toContain('/no_think');
   });
 });
 
@@ -320,18 +324,15 @@ describe('appendTimestampFormatRule (CP477+2)', () => {
 });
 
 describe('rewriteSystemContent — CP477+2 timestamp rule injection', () => {
-  it('Korean system prompt ends with /no_think after timestamp rule and persona', async () => {
+  it('Korean system prompt contains the timestamp rule (CP477+4: no /no_think appended)', async () => {
     const out = await rewriteSystemContent('한국어 인사이트 챗봇 사용');
     expect(out).toContain('[타임스탬프 형식]');
-    expect(out.endsWith('/no_think')).toBe(true);
-    // Timestamp rule sits BEFORE /no_think (the /no_think directive must be
-    // the very last token so Qwen3's chat template picks it up cleanly).
-    expect(out.indexOf('[타임스탬프 형식]')).toBeLessThan(out.indexOf('/no_think'));
+    expect(out).not.toContain('/no_think');
   });
 
   it('English system prompt also gets the rule', async () => {
     const out = await rewriteSystemContent("You are Insighta's learning assistant.");
     expect(out).toContain('[Timestamp format]');
-    expect(out.endsWith('/no_think')).toBe(true);
+    expect(out).not.toContain('/no_think');
   });
 });
