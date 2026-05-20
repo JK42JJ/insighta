@@ -53,6 +53,26 @@ export interface LocalCard {
   view_count?: number | null;
   /** CP457+ pin / bookmark timestamp. Null = unpinned. */
   pinned_at?: string | null;
+  /**
+   * CP475+ — v2 rich-summary fields folded into the same /local-cards/list
+   * response so the grid renders once with all fields present (previously
+   * a separate /cards/v2-summaries call arrived ~1s after the initial
+   * paint, forcing a visible swap of badges + footer text).
+   */
+  v2_one_liner?: string | null;
+  v2_core_argument?: string | null;
+  v2_mandala_relevance_pct?: number | null;
+  v2_quality_flag?: string | null;
+  v2_template_version?: string | null;
+  v2_full_landed?: boolean;
+  /**
+   * CP475+ — true only when the BE has every foundational field the grid
+   * card needs (published_at, duration_seconds for YouTube). False means
+   * the youtube_videos pipeline is still catching up; the FE renders the
+   * row as a skeleton until a subsequent refetch flips this to true.
+   * Always true for non-YouTube cards (no metadata pipeline).
+   */
+  metadata_complete?: boolean;
 }
 
 /**
@@ -152,6 +172,17 @@ export function localCardToInsightCard(card: LocalCard): InsightCard {
     videoSummary: card.video_summary,
     sourceTable: 'user_local_cards',
     pinnedAt: card.pinned_at ?? null,
+    // CP475+ — v2 fields from the unified /local-cards/list payload. Older
+    // BE responses without these keys leave them undefined, which the
+    // grid card treats the same as "no v2 row yet".
+    v2OneLiner: card.v2_one_liner ?? null,
+    v2CoreArgument: card.v2_core_argument ?? null,
+    v2MandalaRelevancePct: card.v2_mandala_relevance_pct ?? null,
+    v2QualityFlag: card.v2_quality_flag ?? null,
+    v2FullLanded: card.v2_full_landed ?? false,
+    // metadata_complete defaults to TRUE when the BE doesn't send it —
+    // ensures older deployments / non-YouTube cards keep rendering.
+    metadataComplete: card.metadata_complete ?? true,
   };
 }
 

@@ -439,22 +439,32 @@ export function CardList({
                 isEnriching={enrichingCardIds?.has(card.id)}
                 isEnrichFailed={failedEnrichCardIds?.has(card.id)}
                 onRetryEnrich={onRetryEnrich}
+                // CP475+ — v2 fields now arrive on `card` itself (folded
+                // into /local-cards/list). The separate useV2Summaries
+                // path is kept ONLY for the legacy user_video_states
+                // sourceTable where v2 fields are not yet inlined; for
+                // user_local_cards rows we prefer the inlined values.
                 mandalaRelevancePct={(() => {
+                  if (card.v2MandalaRelevancePct != null) return card.v2MandalaRelevancePct;
                   const vid = safeVideoId(card.videoUrl);
                   return vid ? (v2SummariesMap.get(vid)?.mandalaRelevancePct ?? null) : null;
                 })()}
                 oneLiner={(() => {
+                  if (card.v2OneLiner != null) return card.v2OneLiner;
                   const vid = safeVideoId(card.videoUrl);
                   return vid ? (v2SummariesMap.get(vid)?.oneLiner ?? null) : null;
                 })()}
                 coreArgument={(() => {
+                  if (card.v2CoreArgument != null) return card.v2CoreArgument;
                   const vid = safeVideoId(card.videoUrl);
                   return vid ? (v2SummariesMap.get(vid)?.coreArgument ?? null) : null;
                 })()}
                 v2FullLanded={(() => {
+                  if (card.v2FullLanded != null) return card.v2FullLanded;
                   const vid = safeVideoId(card.videoUrl);
                   return vid ? (v2SummariesMap.get(vid)?.v2FullLanded ?? false) : false;
                 })()}
+                metadataComplete={card.metadataComplete ?? true}
                 isV2Loading={v2IsFetching}
                 sectorLabel={
                   sectorSubjects && card.cellIndex >= 0 && card.cellIndex < sectorSubjects.length

@@ -122,6 +122,15 @@ interface InsightCardItemV2Props {
    */
   v2FullLanded?: boolean;
   /**
+   * CP475+ — false while the BE youtube_videos pipeline is still
+   * catching up (published_at / duration_seconds null). The card
+   * renders as a placeholder skeleton in that state so the user never
+   * sees a "just now" / hidden-duration row swap into final values 1s
+   * later. Default true preserves the pre-CP475+ behaviour for callers
+   * that don't pass this prop yet (non-YouTube cards, older BE).
+   */
+  metadataComplete?: boolean;
+  /**
    * True while the batch v2-summaries query is fetching (initial load or
    * background refetch). When true the card suppresses the v1 fallback so
    * the blockquote stays empty until v2 arrives — prevents the
@@ -159,6 +168,7 @@ export function InsightCardItemV2({
   oneLiner,
   coreArgument,
   v2FullLanded = false,
+  metadataComplete = true,
   isV2Loading = false,
   onArchived,
   sectorLabel,
@@ -290,7 +300,15 @@ export function InsightCardItemV2({
   const relevanceBadge = getMandalaRelevanceBadge(mandalaRelevancePct);
   const duration = formatDuration(ytMeta.durationSec);
   const views = formatViewCount(ytMeta.viewCount);
-  const relDate = formatRelativeDate(ytMeta.publishedAt ?? card.createdAt?.toISOString());
+  // CP475+ — when the BE has not yet caught up on this row's
+  // youtube_videos metadata (`metadataComplete=false`), fall back to
+  // null instead of card.createdAt. Otherwise the user sees "just now"
+  // briefly and then a real date like "4 weeks ago" 1s later — a
+  // jarring swap that erodes trust in the data. With `null`, the slot
+  // simply stays empty until the next refetch lands the real value.
+  const relDate = metadataComplete
+    ? formatRelativeDate(ytMeta.publishedAt ?? card.createdAt?.toISOString())
+    : null;
   const hasNote = !!card.userNote?.trim();
   // CP475+ blockquote source priority (user-confirmed 2026-05-20):
   // The v2 quick path's `core_argument` is a heavily-simplified Korean
