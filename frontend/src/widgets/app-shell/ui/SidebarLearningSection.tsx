@@ -51,11 +51,15 @@ export function SidebarLearningSection({
     }
   }
 
-  // Group liked cards by cellIndex so each sub-goal lists its own videos.
+  // Group cards by cellIndex so each sub-goal lists its own videos.
+  // CP475+ — user directive 2026-05-20: "북인덱스의 항목은 - 북마크 후에만
+  // 생성되도록 해". Skip cards that the user hasn't bookmarked yet.
+  // `pinnedAt` is the server source-of-truth for "liked" / bookmarked.
   const cardsByCell = useMemo(() => {
     const map = new Map<number, InsightCard[]>();
     for (const card of mandalaCards) {
       if (typeof card.cellIndex !== 'number' || card.cellIndex < 1) continue;
+      if (!card.pinnedAt) continue; // bookmark gate
       const list = map.get(card.cellIndex) ?? [];
       list.push(card);
       map.set(card.cellIndex, list);
@@ -254,6 +258,11 @@ export function SidebarLearningSection({
               {isExpanded &&
                 (() => {
                   const cellCards = cardsByCell.get(idx + 1) ?? [];
+                  // CP475+ — user directive 2026-05-20: entry text = v2
+                  // core.one_liner only (없으면 entry 자체 미표시). 3-4초
+                  // 안에 fast-path 가 oneLiner 채우므로 잠시 entry 부재는
+                  // 자연스러움. Previous keyConcepts joined pattern
+                  // "체크 · 준비 기간" was rejected as low quality.
                   const indexedEntries = cellCards
                     .map((card) => {
                       let vid: string | null = null;
@@ -264,12 +273,9 @@ export function SidebarLearningSection({
                       }
                       if (!vid) return null;
                       const v2 = summariesByVideoId.get(vid);
-                      const primary = v2?.keyConcepts ?? [];
-                      const fallback = v2?.fallbackTags ?? [];
-                      const keywords = primary.length > 0 ? primary : fallback;
-                      if (keywords.length === 0) return null;
-                      const indexName = keywords.slice(0, 2).join(' · ');
-                      return { cardId: card.id, vid, indexName };
+                      const oneLiner = v2?.oneLiner?.trim();
+                      if (!oneLiner) return null;
+                      return { cardId: card.id, vid, indexName: oneLiner };
                     })
                     .filter(
                       (e): e is { cardId: string; vid: string; indexName: string } => e !== null
