@@ -62,6 +62,25 @@ export interface InsightCard {
    * `user_local_cards` rows, which the predicate ignores anyway).
    */
   autoAdded?: boolean;
+  /**
+   * CP475+ — v2 rich-summary fields folded into the same /local-cards/list
+   * response so the grid renders once with all fields present (eliminates
+   * the second-stage useV2Summaries arrival that previously caused a
+   * 1-second swap on the dashboard).
+   */
+  v2OneLiner?: string | null;
+  v2CoreArgument?: string | null;
+  v2MandalaRelevancePct?: number | null;
+  v2QualityFlag?: string | null;
+  v2FullLanded?: boolean;
+  /**
+   * CP475+ — true only when the BE has every foundational field the grid
+   * card needs (published_at, duration_seconds for YouTube). False = the
+   * youtube_videos pipeline is still catching up; the FE renders the row
+   * as a skeleton until a subsequent refetch flips this to true. Always
+   * true for non-YouTube cards (no metadata pipeline).
+   */
+  metadataComplete?: boolean;
 }
 
 export interface MandalaLevel {

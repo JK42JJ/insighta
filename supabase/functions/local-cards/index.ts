@@ -282,8 +282,20 @@ Deno.serve(async (req) => {
           channel_title: string | null;
           view_count: number | null;
         }>();
+        // CP475+ — fold the v2 rich-summary lookup into the same /list trip
+        // so the grid renders once with all fields present. Was previously
+        // a separate GET /cards/v2-summaries call from the FE, which arrived
+        // ~1s after the initial paint and forced a visible swap.
+        let v2Map = new Map<string, {
+          one_liner: string | null;
+          core_argument: string | null;
+          mandala_relevance_pct: number | null;
+          quality_flag: string | null;
+          template_version: string;
+          atom_count: number;
+        }>();
         if (youtubeUrls.length > 0 || youtubeVideoIds.length > 0) {
-          const [summariesRes, videosRes] = await Promise.all([
+          const [summariesRes, videosRes, v2Res] = await Promise.all([
             youtubeUrls.length > 0
               ? supabase
                   .from('video_summaries')
@@ -295,6 +307,14 @@ Deno.serve(async (req) => {
                   .from('youtube_videos')
                   .select('youtube_video_id, published_at, duration_seconds, channel_title, view_count')
                   .in('youtube_video_id', youtubeVideoIds)
+              : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+            youtubeVideoIds.length > 0
+              ? supabase
+                  .from('video_rich_summaries')
+                  .select(
+                    'video_id, one_liner, analysis, segments, mandala_relevance_pct, quality_flag, template_version'
+                  )
+                  .in('video_id', youtubeVideoIds)
               : Promise.resolve({ data: [] as Record<string, unknown>[] }),
           ]);
 
@@ -310,11 +330,46 @@ Deno.serve(async (req) => {
               view_count: (v.view_count as number | null) ?? null,
             });
           }
+
+          const v2Rows = (v2Res as { data?: Record<string, unknown>[] }).data ?? [];
+          for (const r of v2Rows) {
+            const analysis = (r.analysis ?? null) as { core_argument?: unknown } | null;
+            const coreArgument =
+              analysis && typeof analysis.core_argument === 'string'
+                ? analysis.core_argument
+                : null;
+            const segments = (r.segments ?? null) as { atoms?: unknown } | null;
+            const atomCount =
+              segments && Array.isArray(segments.atoms)
+                ? (segments.atoms as unknown[]).length
+                : 0;
+            v2Map.set(r.video_id as string, {
+              one_liner: (r.one_liner as string | null) ?? null,
+              core_argument: coreArgument,
+              mandala_relevance_pct: (r.mandala_relevance_pct as number | null) ?? null,
+              quality_flag: (r.quality_flag as string | null) ?? null,
+              template_version: (r.template_version as string | null) ?? '',
+              atom_count: atomCount,
+            });
+          }
         }
 
         const enrichedCards = cards.map((card: Record<string, unknown>) => {
           const summary = summaryMap.get(card.url as string);
           const videoMeta = card.video_id ? videoMetaMap.get(card.video_id as string) : undefined;
+          const v2 = card.video_id ? v2Map.get(card.video_id as string) : undefined;
+          // CP475+ metadata_complete — true only when the BE has all
+          // foundational fields the grid card renders without falling back
+          // to "just now" or a hidden duration. Non-YouTube cards
+          // (link_type != 'youtube*') are always complete since they have
+          // no metadata pipeline.
+          const isYoutube =
+            card.link_type === 'youtube' || card.link_type === 'youtube-shorts';
+          const metadataComplete =
+            !isYoutube ||
+            (videoMeta != null &&
+              videoMeta.published_at != null &&
+              videoMeta.duration_seconds != null);
           return {
             ...card,
             ...(summary ? { video_summary: summary } : {}),
@@ -326,6 +381,13 @@ Deno.serve(async (req) => {
                   view_count: videoMeta.view_count,
                 }
               : {}),
+            v2_one_liner: v2?.one_liner ?? null,
+            v2_core_argument: v2?.core_argument ?? null,
+            v2_mandala_relevance_pct: v2?.mandala_relevance_pct ?? null,
+            v2_quality_flag: v2?.quality_flag ?? null,
+            v2_template_version: v2?.template_version ?? '',
+            v2_full_landed: (v2?.atom_count ?? 0) > 0,
+            metadata_complete: metadataComplete,
           };
         });
 
