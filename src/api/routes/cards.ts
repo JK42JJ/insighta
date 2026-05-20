@@ -53,7 +53,6 @@ import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { enqueueEnrichRichSummary } from '@/modules/queue';
-import { trimOneLinerLabel } from '@/modules/skills/rich-summary-v2-quick-prompt';
 import { config } from '../../config';
 
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -899,29 +898,31 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
                 segments != null &&
                 Array.isArray(segments.atoms) &&
                 (segments.atoms as unknown[]).length > 0;
-              // CP476+ — oneLiner priority:
-              //   (1) jsonb `core.one_liner` (v2 path, trimOneLinerLabel-
-              //       validated) → use as-is
-              //   (2) column `one_liner` (legacy v1) → trim to 20 chars,
-              //       strip trailing punctuation
-              //   (3) both null → null
-              // Background: prod sidebar showed a 44-char sentence sourced
-              // from the legacy column, while the jsonb path held a
-              // compliant 12-char label ("2026년 네이버 변화"). Same row,
-              // two source of truth. This response-layer normalisation
-              // bypasses the dual-column ambiguity without touching the
-              // DB or the legacy write path.
+              // CP476+ revised — oneLiner = jsonb `core.one_liner` ONLY.
+              //
+              // The PR #715 fallback path (column `one_liner` ran through
+              // `trimOneLinerLabel`) produced mid-word slice-20 cuts on
+              // legacy v1 rows where the column is a full sentence — the
+              // sidebar rendered fragments like "왕초보도 쿠팡 위탁을 통해 쉽게 온라"
+              // ("온라" mid-word) or "직장인도 부업으로 온라인 쇼핑몰을 0".
+              //
+              // CP473 directive (recorded 2026-04-29): sidebar entry text =
+              // v2 `core.one_liner` only, no fallback. Cards without a
+              // populated v2 row are intentionally hidden in the sidebar;
+              // the next v2 quick / cron tick fills them in within seconds
+              // (heart click) or 12 hours (legacy backfill). Honouring the
+              // directive removes the mid-word artefact entirely.
+              //
+              // v1-only rows therefore render `oneLiner: null` here. The
+              // sidebar code (`SidebarLearningSection.indexedEntries`)
+              // already filters those out. A separate operator action
+              // re-enqueues these rows for v2 backfill (see runbook
+              // docs/runbook/v2-summary-user-audit-cleansing.md §7).
               const core = (r?.core ?? null) as { one_liner?: unknown } | null;
-              const jsonbOneLiner =
+              const oneLinerOut =
                 core && typeof core.one_liner === 'string' && core.one_liner.length > 0
                   ? core.one_liner
                   : null;
-              const oneLinerOut =
-                jsonbOneLiner !== null
-                  ? jsonbOneLiner
-                  : r?.one_liner
-                    ? trimOneLinerLabel(r.one_liner)
-                    : null;
               return {
                 videoId: vid,
                 oneLiner: oneLinerOut,
