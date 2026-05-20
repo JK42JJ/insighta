@@ -19,6 +19,7 @@ async function loadFetchTranscript() {
   return mod.fetchTranscript;
 }
 import { logger } from '../../utils/logger';
+import { loadTranscriptConfig } from '@/config/transcript';
 
 // Mac Mini transcript proxy. EC2 us-west-2 outbound to YouTube is rate-
 // limited / returns false "Transcript is disabled" — verified by apples-
@@ -27,8 +28,9 @@ import { logger } from '../../utils/logger';
 // MAC_MINI_TRANSCRIPT_URL is set, we forward the fetch to Mac Mini over
 // Tailscale; the EC2 caption-extractor falls back to direct youtube-
 // transcript only if the proxy is unreachable (defence in depth).
-const MAC_MINI_URL = process.env['MAC_MINI_TRANSCRIPT_URL'] ?? '';
-const MAC_MINI_TOKEN = process.env['MAC_MINI_TRANSCRIPT_TOKEN'] ?? '';
+const TRANSCRIPT_CONFIG = loadTranscriptConfig();
+const MAC_MINI_URL = TRANSCRIPT_CONFIG.macMiniUrl;
+const MAC_MINI_TOKEN = TRANSCRIPT_CONFIG.macMiniToken;
 const MAC_MINI_TIMEOUT_MS = 30_000;
 
 interface MacMiniSegment {

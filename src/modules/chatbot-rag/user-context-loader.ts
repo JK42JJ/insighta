@@ -23,6 +23,7 @@
 
 import { getPrismaClient } from '@/modules/database/client';
 import type { Tier } from '@/config/quota';
+import { MS_PER_DAY } from '@/utils/time-constants';
 import { type UserContext, MAX_MANDALA_TITLES, RECENT_DAYS_WINDOW } from './types';
 import type { Lang } from './prompt-builder';
 
@@ -31,8 +32,6 @@ import type { Lang } from './prompt-builder';
 // ---------------------------------------------------------------------------
 
 const VALID_TIERS: ReadonlySet<Tier> = new Set<Tier>(['free', 'pro', 'lifetime', 'admin']);
-
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 function normalizeTier(value: string | null | undefined): Tier {
   if (value && VALID_TIERS.has(value as Tier)) return value as Tier;

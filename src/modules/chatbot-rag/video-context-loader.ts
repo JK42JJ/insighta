@@ -20,6 +20,7 @@
 
 import { getPrismaClient } from '@/modules/database/client';
 import { getCaptionExtractor } from '@/modules/caption/extractor';
+import { loadTranscriptConfig } from '@/config/transcript';
 import { logger } from '@/utils/logger';
 import { TRANSCRIPT_PROMPT_MAX_CHARS, type TranscriptContext } from './types';
 import type { V2Summary, Lang } from './prompt-builder';
@@ -194,9 +195,7 @@ async function tryFetchTranscript(
     // falling back; the Mac Mini path doesn't set a distinct flag on the
     // return value, but its env-gated success is the dominant prod path.
     // Heuristic: env present → assume Mac Mini took the first hit.
-    const macMiniEnabled = Boolean(
-      process.env['MAC_MINI_TRANSCRIPT_URL'] && process.env['MAC_MINI_TRANSCRIPT_TOKEN']
-    );
+    const { macMiniEnabled } = loadTranscriptConfig();
 
     return {
       full_text: fullText,
