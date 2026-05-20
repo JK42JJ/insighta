@@ -298,8 +298,6 @@
       "noSubscriptionDesc": "Start Pro or Lifetime to enable billing management",
       "viewPlans": "View Plans",
       "lifetimeNote": "No auto-renewal. Refund requests can be made via the billing portal",
-      "lifetimeBadgeNote": "Lifetime plan active — full access without further billing",
-      "adminNote": "Admin account — no billing management needed",
       "nextBilling": "Next billing date",
       "endingOn": "Ending on",
       "portalFooter": "Cancel / refund / payment method changes are handled in the Lemon Squeezy billing portal"

@@ -299,8 +299,6 @@
       "noSubscriptionDesc": "Pro 또는 평생 이용권을 시작하면 결제 관리가 활성화됩니다",
       "viewPlans": "플랜 보기",
       "lifetimeNote": "자동 갱신 없음. 환불은 결제 관리에서 신청 가능합니다",
-      "lifetimeBadgeNote": "평생 이용권 활성 — 결제 정보 없이도 모든 기능 사용 가능합니다",
-      "adminNote": "관리자 권한 — 결제 관리 불요",
       "nextBilling": "다음 결제일",
       "endingOn": "종료 예정일",
       "portalFooter": "취소 / 환불 / 결제 수단 변경은 Lemon Squeezy 결제 관리에서 처리됩니다"
