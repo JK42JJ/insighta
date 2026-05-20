@@ -66,6 +66,7 @@ describe('loadRichSummaryConfig', () => {
         v2CronEnabled: false,
         v2BatchSize: 50,
         v2CronSchedule: '0 17 * * *',
+        v2LowRetryCooldownHours: 12,
       });
     });
 
@@ -80,6 +81,7 @@ describe('loadRichSummaryConfig', () => {
         v2CronEnabled: false,
         v2BatchSize: 50,
         v2CronSchedule: '0 17 * * *',
+        v2LowRetryCooldownHours: 12,
       });
     });
   });
@@ -118,6 +120,33 @@ describe('loadRichSummaryConfig', () => {
       expect(loadRichSummaryConfig({ RICH_SUMMARY_V2_CRON_SCHEDULE: '' }).v2CronSchedule).toBe(
         '0 17 * * *'
       );
+    });
+  });
+
+  describe('v2 low-retry cooldown (CP475+)', () => {
+    it('default 12h when env unset', () => {
+      expect(loadRichSummaryConfig({}).v2LowRetryCooldownHours).toBe(12);
+    });
+
+    it('accepts positive float', () => {
+      expect(
+        loadRichSummaryConfig({ V2_LOW_RETRY_COOLDOWN_HOURS: '6' }).v2LowRetryCooldownHours
+      ).toBe(6);
+      expect(
+        loadRichSummaryConfig({ V2_LOW_RETRY_COOLDOWN_HOURS: '0.5' }).v2LowRetryCooldownHours
+      ).toBe(0.5);
+    });
+
+    it('invalid value falls back to 12', () => {
+      expect(
+        loadRichSummaryConfig({ V2_LOW_RETRY_COOLDOWN_HOURS: '0' }).v2LowRetryCooldownHours
+      ).toBe(12);
+      expect(
+        loadRichSummaryConfig({ V2_LOW_RETRY_COOLDOWN_HOURS: '-3' }).v2LowRetryCooldownHours
+      ).toBe(12);
+      expect(
+        loadRichSummaryConfig({ V2_LOW_RETRY_COOLDOWN_HOURS: 'garbage' }).v2LowRetryCooldownHours
+      ).toBe(12);
     });
   });
 });

@@ -35,6 +35,11 @@ const positiveInt = z.preprocess(
   z.number().finite().int().positive().optional()
 );
 
+const positiveFloat = z.preprocess(
+  (v) => (v == null || v === '' ? undefined : Number(v)),
+  z.number().finite().positive().optional()
+);
+
 export const richSummaryEnvSchema = z.object({
   RICH_SUMMARY_ENABLED: boolFlag.default(false as unknown as string),
   RICH_SUMMARY_CAPTION_SOURCE: captionSourceSchema.default('disabled'),
@@ -43,6 +48,7 @@ export const richSummaryEnvSchema = z.object({
   RICH_SUMMARY_V2_CRON_SCHEDULE: z
     .preprocess((v) => (v == null || v === '' ? '0 17 * * *' : String(v).trim()), z.string())
     .default('0 17 * * *'),
+  V2_LOW_RETRY_COOLDOWN_HOURS: positiveFloat.transform((v) => v ?? 12),
 });
 
 export interface RichSummaryConfig {
@@ -51,6 +57,7 @@ export interface RichSummaryConfig {
   v2CronEnabled: boolean;
   v2BatchSize: number;
   v2CronSchedule: string;
+  v2LowRetryCooldownHours: number;
 }
 
 const FALLBACK_CONFIG: RichSummaryConfig = {
@@ -59,6 +66,7 @@ const FALLBACK_CONFIG: RichSummaryConfig = {
   v2CronEnabled: false,
   v2BatchSize: 50,
   v2CronSchedule: '0 17 * * *',
+  v2LowRetryCooldownHours: 12,
 };
 
 export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): RichSummaryConfig {
@@ -68,6 +76,7 @@ export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): Ric
     RICH_SUMMARY_V2_CRON_ENABLED: env['RICH_SUMMARY_V2_CRON_ENABLED'],
     RICH_SUMMARY_V2_BATCH_SIZE: env['RICH_SUMMARY_V2_BATCH_SIZE'],
     RICH_SUMMARY_V2_CRON_SCHEDULE: env['RICH_SUMMARY_V2_CRON_SCHEDULE'],
+    V2_LOW_RETRY_COOLDOWN_HOURS: env['V2_LOW_RETRY_COOLDOWN_HOURS'],
   });
   if (!parsed.success) {
     return FALLBACK_CONFIG;
@@ -78,5 +87,6 @@ export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): Ric
     v2CronEnabled: parsed.data.RICH_SUMMARY_V2_CRON_ENABLED,
     v2BatchSize: parsed.data.RICH_SUMMARY_V2_BATCH_SIZE,
     v2CronSchedule: parsed.data.RICH_SUMMARY_V2_CRON_SCHEDULE,
+    v2LowRetryCooldownHours: parsed.data.V2_LOW_RETRY_COOLDOWN_HOURS,
   };
 }
