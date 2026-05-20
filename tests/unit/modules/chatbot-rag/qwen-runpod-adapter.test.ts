@@ -334,6 +334,32 @@ describe('QwenRunpodAdapter — process()', () => {
     expect(callArg.chat_template_kwargs).toEqual({ enable_thinking: false });
   });
 
+  it('CP477+4 — OMITS chat_template_kwargs when includeChatTemplateKwargs=false (OpenRouter failover)', async () => {
+    // OpenRouter is not vLLM and does not document `chat_template_kwargs`.
+    // Sending the field may be silently ignored OR 400-rejected depending
+    // on router strictness. The opt-out flag keeps the OpenRouter path
+    // strictly OpenAI-API-compatible.
+    mockChatCompletionsCreate.mockResolvedValueOnce(iterChunks([]));
+    const a = new QwenRunpodAdapter({
+      baseURL: BASE,
+      apiKey: KEY,
+      includeChatTemplateKwargs: false,
+    });
+    const es = makeEventSource();
+
+    await a.process({
+      messages: [makeTextMessage('user', 'hi') as never],
+      actions: [],
+      eventSource: es as never,
+    });
+
+    const callArg = mockChatCompletionsCreate.mock.calls[0]![0];
+    expect(callArg.chat_template_kwargs).toBeUndefined();
+    // tool_choice must still be 'none' — that one is OpenAI-API-standard
+    // and OpenRouter respects it.
+    expect(callArg.tool_choice).toBe('none');
+  });
+
   it('returns provided threadId when present', async () => {
     mockChatCompletionsCreate.mockResolvedValueOnce(iterChunks([]));
     const a = new QwenRunpodAdapter({ baseURL: BASE, apiKey: KEY });

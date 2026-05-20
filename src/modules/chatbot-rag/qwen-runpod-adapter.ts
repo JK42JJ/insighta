@@ -68,6 +68,20 @@ export interface QwenRunpodAdapterParams {
   apiKey: string;
   /** Served model name (vLLM's `--served-model-name`). Default 'insighta-chatbot'. */
   model?: string;
+  /**
+   * CP477+4 — Vendor-specific extras toggle.
+   *
+   * `chat_template_kwargs.enable_thinking=false` is a vLLM extension that
+   * suppresses Qwen3 reasoning blocks. OpenRouter (used as a Pod-down
+   * failover) does not document this field — it may be silently ignored or
+   * 400-rejected depending on the OpenRouter router strictness. Disable
+   * this flag when the adapter is pointed at OpenRouter (or any non-vLLM
+   * OpenAI-compatible backend).
+   *
+   * Default `true` (preserves existing QwenRunpodAdapter behaviour for
+   * the qwen-runpod provider).
+   */
+  includeChatTemplateKwargs?: boolean;
 }
 
 /**
@@ -88,6 +102,7 @@ export class QwenRunpodAdapter implements CopilotServiceAdapter {
   private readonly baseURL: string;
   private readonly apiKey: string;
   private readonly openaiSDK: OpenAI;
+  private readonly includeChatTemplateKwargs: boolean;
 
   constructor(params: QwenRunpodAdapterParams) {
     if (!params.baseURL) {
@@ -99,6 +114,7 @@ export class QwenRunpodAdapter implements CopilotServiceAdapter {
     this.baseURL = params.baseURL;
     this.apiKey = params.apiKey;
     this.model = params.model ?? DEFAULT_MODEL;
+    this.includeChatTemplateKwargs = params.includeChatTemplateKwargs ?? true;
     this.openaiSDK = new OpenAI({ baseURL: this.baseURL, apiKey: this.apiKey });
   }
 
@@ -159,7 +175,9 @@ export class QwenRunpodAdapter implements CopilotServiceAdapter {
       model: string;
       stream: true;
       messages: ReadonlyArray<{ role: 'system' | 'user' | 'assistant'; content: string }>;
-      chat_template_kwargs: { enable_thinking: boolean };
+      // vLLM-only extension (CP474). Omitted on non-vLLM backends
+      // (e.g. OpenRouter failover, CP477+4) where the field is undocumented.
+      chat_template_kwargs?: { enable_thinking: boolean };
       // CP475+4 — explicitly disable tool calling. vLLM Pod is started
       // without --enable-auto-tool-choice; any inbound tool_choice='auto'
       // (Vercel SDK default) produces 400 "auto" tool choice requires ...".
@@ -173,9 +191,11 @@ export class QwenRunpodAdapter implements CopilotServiceAdapter {
       model: this.model,
       stream: true,
       messages: openaiMessages,
-      chat_template_kwargs: CHAT_TEMPLATE_KWARGS,
       tool_choice: 'none',
     };
+    if (this.includeChatTemplateKwargs) {
+      body.chat_template_kwargs = CHAT_TEMPLATE_KWARGS;
+    }
     if (forwardedParameters?.maxTokens) body.max_completion_tokens = forwardedParameters.maxTokens;
     if (forwardedParameters?.temperature !== undefined)
       body.temperature = forwardedParameters.temperature;

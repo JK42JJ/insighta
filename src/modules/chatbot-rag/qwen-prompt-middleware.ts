@@ -213,12 +213,23 @@ export async function rewriteSystemContent(originalSystemContent: string): Promi
   // FE linkifier can convert every timestamp to a clickable seek button
   // (chatbot output was mixing `(M:SS-M:SS)` with `N초` / `N~M초`).
   const withTimestampRule = appendTimestampFormatRule(built, language);
-  // CP475+5 — suppress Qwen3 reasoning chain. The `chat_template_kwargs`
-  // path (`enable_thinking: false`) only works on the legacy process() body;
-  // Vercel AI SDK V3 strips provider-specific kwargs, so the textual
-  // `/no_think` directive is the reliable way to gate reasoning on every
-  // request that hits vLLM.
-  return appendNoThinkDirective(withTimestampRule);
+  // CP477+4 — system-prompt `/no_think` REMOVED.
+  //   - User-reported 2026-05-21: openrouter Qwen3.5-9B emitted `/no_think`
+  //     as a raw token (echo) at the start of every response, and the echo
+  //     in history corrupted the next turn (multi-turn break).
+  //   - Root cause: Qwen3 chat template only recognises `/no_think` at the
+  //     END OF THE USER MESSAGE, not in the system prompt. The vLLM path
+  //     gates reasoning via `chat_template_kwargs.enable_thinking=false`
+  //     (process()-only), so the system-prompt directive was always the
+  //     wrong tool — it just happened to be silently ignored by the LoRA
+  //     in CP475+5 testing and only surfaced as echo on the OpenRouter
+  //     base model.
+  //   - Trade-off: Vercel AI SDK V3 (`getLanguageModel()` path) still
+  //     strips `chat_template_kwargs`, so reasoning chain MAY leak on the
+  //     qwen-runpod path. Acceptable until a proper user-message-end
+  //     directive lands. The legacy process() path is unaffected (body
+  //     still carries `chat_template_kwargs.enable_thinking=false`).
+  return withTimestampRule;
 }
 
 // ---------------------------------------------------------------------------
