@@ -5,15 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
-import {
-  GripVertical,
-  NotepadText,
-  Loader2,
-  RotateCw,
-  Play,
-  Bookmark,
-  Archive,
-} from 'lucide-react';
+import { GripVertical, NotepadText, Loader2, Play, Bookmark, Archive } from 'lucide-react';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { useArchiveCard } from '@/features/card-management/model/useArchiveCard';
 import { useEnrichStream } from '@/features/card-management/model/useEnrichStream';
@@ -602,44 +594,17 @@ export function InsightCardItemV2({
                 );
               })()}
             </span>
-            {/* CP463 — right slot priority:
-                  failure  → Retry icon (user directive 2026-05-17:
-                            "재시도 아이콘이 현재 관련도 비율 위치에")
-                  scored   → relevance % (color-tiered)
-                  else     → empty */}
-            {!streamActive &&
-            !isEnriching &&
-            (isEnrichFailed || showFailedGlow || v2EnrichmentPending) ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  if (showFailedGlow && videoId && card.mandalaId) {
-                    like.mutate(
-                      {
-                        videoId,
-                        mandalaId: card.mandalaId,
-                        title: card.title,
-                        cellIndex: typeof card.cellIndex === 'number' ? card.cellIndex : undefined,
-                      },
-                      {
-                        onSuccess: () => {
-                          void enrichStream.open(videoId);
-                        },
-                      }
-                    );
-                  } else {
-                    onRetryEnrich?.(card.id, card.videoUrl);
-                  }
-                }}
-                className="shrink-0 text-white/50 hover:text-white transition-colors cursor-pointer"
-                aria-label="Retry enrichment (transcript missing)"
-                title={t('cards.retryEnrichmentTooltip')}
-              >
-                <RotateCw className="w-3.5 h-3.5" aria-hidden="true" />
-              </button>
-            ) : relevanceBadge ? (
+            {/* Right slot priority:
+                  scored → relevance % (color-tiered)
+                  else   → empty
+                The legacy "retry" icon was removed (user directive
+                2026-05-20: "'재시도 아이콘' 을 우선 제거해 — 이후 재설계
+                해서 올릴 기로 결정"). The failure / pending branches
+                used to render a RotateCw button that re-enqueued
+                enrichment, but the click path was unreliable (depended
+                on autoSummaryEnabled + showFailedGlow state) and the
+                whole signal will be redesigned. Until then, no icon. */}
+            {relevanceBadge ? (
               <span
                 className={cn(
                   'text-[10.5px] font-semibold shrink-0 tabular-nums',
