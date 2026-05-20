@@ -1,6 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Code, TrendingUp, Languages, Brain, Activity } from 'lucide-react';
+import {
+  Loader2,
+  Code,
+  TrendingUp,
+  Languages,
+  Brain,
+  Activity,
+  Sparkles,
+  Bot,
+  Wallet,
+  Bitcoin,
+} from 'lucide-react';
 
 import { apiClient } from '@/shared/lib/api-client';
 import type { MandalaSearchResult, GeneratedMandala } from '@/shared/types/mandala-ux';
@@ -9,6 +20,10 @@ import MandalaCard from './MandalaCard';
 import { WizardSearchBar } from './WizardSearchBar';
 
 const SUGGESTIONS = [
+  { key: 's_vibe', Icon: Sparkles },
+  { key: 's_agent', Icon: Bot },
+  { key: 's_side', Icon: Wallet },
+  { key: 's_crypto', Icon: Bitcoin },
   { key: 's1', Icon: Code },
   { key: 's2', Icon: TrendingUp },
   { key: 's3', Icon: Languages },

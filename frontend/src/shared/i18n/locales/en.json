@@ -1577,6 +1577,10 @@
       "placeholder": "Enter a goal — we'll use a mandala to find the best videos for you",
       "placeholderPrefix": "e.g.,",
       "suggestions": {
+        "s_vibe": "Build your own app with vibe coding",
+        "s_agent": "Automate work with AI agents",
+        "s_side": "Earn side income with generative AI",
+        "s_crypto": "Learn crypto properly before you start",
         "s1": "Switch career to software development",
         "s2": "Build retirement assets via ETF investing",
         "s3": "Achieve conversational English in 6 months",
