@@ -104,7 +104,17 @@ export async function generateRichSummaryV2Quick(input: V2QuickInput): Promise<V
     });
     let json: unknown;
     try {
-      json = JSON.parse(raw.trim());
+      // Haiku tends to wrap JSON output in a ```json … ``` markdown fence
+      // even when explicitly told not to. Strip the fence before parsing
+      // so the quick path doesn't fail and fall through to the slow
+      // (Sonnet) full generator. Same pattern as the Mac Mini batch
+      // scripts (`scripts/v2-partial-backfill.sh`, `scripts/v2-keyconcepts-lang-fix.sh`).
+      const stripped = raw
+        .trim()
+        .replace(/^\s*```(?:json)?\s*\n?/i, '')
+        .replace(/\n?\s*```\s*$/i, '')
+        .trim();
+      json = JSON.parse(stripped);
     } catch (parseErr) {
       log.warn('v2-quick JSON parse failed', {
         videoId: input.videoId,
