@@ -1,9 +1,24 @@
 name: Deploy
 
+# Display name on the Actions tab + `gh run list`. push triggers show the
+# commit message (default GH behaviour); manual `workflow_dispatch` runs
+# would otherwise display only "Deploy" — the `reason` input + this
+# expression label them like "Deploy (manual: rotate QWEN_LORA secret)".
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+      && format('Deploy (manual: {0})', inputs.reason || 'no reason given')
+      || format('Deploy {0}', github.event.head_commit.message) }}
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why are you running this manually? (shown in run-name)'
+        type: string
+        required: false
+        default: ''
 
 concurrency:
   group: deploy-production
@@ -214,7 +229,10 @@ jobs:
           REDIS_INSIGHTA_PW: ${{ secrets.REDIS_INSIGHTA_PASSWORD }}
           REDIS_INSIGHTA_UPSERT_PW: ${{ secrets.REDIS_INSIGHTA_UPSERT_PASSWORD }}
           TAILSCALE_IP: ${{ vars.INSIGHTA_TAILSCALE_IP }}
-          QWEN_LORA_API_URL: ${{ secrets.QWEN_LORA_API_URL }}
+          # CP475+1 — migrated from secrets.QWEN_LORA_API_URL because the URL is
+          # not a credential (CP392 Hard Rule "non-secret config is not a Secret").
+          # Post-merge cleanup: `gh secret delete QWEN_LORA_API_URL`.
+          QWEN_LORA_API_URL: ${{ vars.QWEN_LORA_API_URL }}
           RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
           # CP474 — selects which provider the CopilotKit chatbot route uses.
           # Values: 'gemini' | 'openrouter' | 'local' | 'qwen-runpod'.
