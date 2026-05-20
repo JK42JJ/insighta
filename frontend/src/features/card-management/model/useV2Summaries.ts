@@ -40,6 +40,13 @@ export interface V2SummaryItem {
   mandalaRelevancePct: number | null;
   qualityFlag: string | null;
   templateVersion: string;
+  /**
+   * CP475+ — true when v2 full path landed (segments.atoms > 0). Grid
+   * card promotes v2 essence over v1 summary_ko only when this is true,
+   * preventing the quick-only essence from overwriting a richer v1
+   * description while the full path is still running.
+   */
+  v2FullLanded: boolean;
 }
 
 const V2_SUMMARIES_STALE_MS = 60 * 1000;
