@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
-import { ChevronDown, ChevronUp, Loader2, Lock, RotateCcw, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, Lock, RotateCcw, Search, Undo2, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/shared/lib/utils';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
@@ -227,14 +227,52 @@ export function AddCardsPanel() {
     });
   }, [mandalaId, extraKeywords, filters, mutation, targetLevel, surfacedVideoIds]);
 
+  // In-memory snapshot of the last cleared search — enables a quick "Show
+  // previous results" undo when the user clicks 초기화 by mistake. Lost on
+  // panel close (use case is immediate undo, not long-term history; the
+  // existing localStorage layer already handles cross-session restore).
+  const [resetHistory, setResetHistory] = useState<{
+    cards: AddCardCandidate[];
+    picks: string[];
+    surfaced: string[];
+  } | null>(null);
+
   // Toggle: results visible → click clears them; empty → click searches.
   // Surfaced history is preserved across the toggle.
   const resetResults = useCallback(() => {
+    // Snapshot BEFORE clearing so the user can undo. Only useful when
+    // there's something to remember.
+    if (cards.length > 0) {
+      setResetHistory({
+        cards,
+        picks: Array.from(localPicks),
+        surfaced: surfacedVideoIds,
+      });
+    }
     mutation.reset();
     setRestoredCards(null);
     setLocalPicks(new Set());
+    // Re-expand the input zone so the user can pick filters / type a new
+    // keyword. Without this, if 초기화 was clicked while the auto-collapse
+    // (scroll-driven) was active, the header ChevronUp/Down toggle goes
+    // away with the results — leaving no way to expand the input again
+    // without closing the panel. (Bug report 2026-05-21.)
+    setInputCollapsed(false);
     if (mandalaId) clearSessionPicks(mandalaId);
-  }, [mutation, mandalaId]);
+  }, [mutation, mandalaId, cards, localPicks, surfacedVideoIds]);
+
+  // Restore the snapshot captured at the most recent 초기화 click. Pulls
+  // both the cards and the per-mandala picks back; re-persists picks to
+  // localStorage so subsequent panel close/reopen behaves as if 초기화
+  // had not happened.
+  const restorePrevious = useCallback(() => {
+    if (!resetHistory || !mandalaId) return;
+    setRestoredCards(resetHistory.cards);
+    setLocalPicks(new Set(resetHistory.picks));
+    setSurfacedVideoIds(resetHistory.surfaced);
+    saveSessionPicks(mandalaId, resetHistory.picks);
+    setResetHistory(null);
+  }, [resetHistory, mandalaId]);
   const triggerSearch = useCallback(() => {
     if (cards.length > 0) {
       resetResults();
@@ -439,6 +477,22 @@ export function AddCardsPanel() {
         {mutation.isSuccess && visibleCount > 0 && (
           <div className="px-5 py-1.5 text-[11px] text-muted-foreground sm:px-6">
             {t('addCards.panel.resultCount', '{{count}} matches', { count: visibleCount })}
+          </div>
+        )}
+
+        {cards.length === 0 && resetHistory && !mutation.isPending && (
+          <div className="px-5 py-2 sm:px-6">
+            <button
+              type="button"
+              onClick={restorePrevious}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border/40 px-3 py-1 text-[11.5px] text-muted-foreground hover:text-foreground hover:border-border hover:bg-foreground/[0.04] transition-colors"
+            >
+              <Undo2 className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
+              <span>
+                {t('addCards.panel.restorePrevious', 'Show previous results')}{' '}
+                <span className="opacity-60">({resetHistory.cards.length})</span>
+              </span>
+            </button>
           </div>
         )}
 
