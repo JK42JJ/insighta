@@ -59,9 +59,23 @@ interface ChatAssistantProps {
   onSeek?: (seconds: number) => void;
 }
 
-const TIMESTAMP_RE = /(\d{1,2}:\d{2}(?::\d{2})?)/g;
+// CP477+2 — match both the canonical M:SS / HH:MM:SS form AND the raw-seconds
+// variants the LoRA occasionally emits (`380초`, `380~682초`). The middleware
+// tightens the output contract via `appendTimestampFormatRule`, but the model
+// still drifts on long answers; we want every form to be clickable.
+//
+// Exported (with parseTimestamp) so the regex + parser can be unit-tested
+// without rendering the React tree.
+export const TIMESTAMP_RE = /(\d{1,2}:\d{2}(?::\d{2})?|\d+\s*~\s*\d+\s*초|\d+\s*초)/g;
 
-function parseTimestamp(ts: string): number {
+export function parseTimestamp(ts: string): number {
+  // Raw-seconds variants — read the leading integer as a second count.
+  // `380초` → 380, `380~682초` → 380 (range start, matching the UX of
+  // M:SS-M:SS ranges where the button seeks to the FIRST value).
+  if (/초/.test(ts)) {
+    const m = /^(\d+)/.exec(ts);
+    return m ? Number(m[1]) : 0;
+  }
   const parts = ts.split(':').map(Number);
   if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
   return parts[0] * 60 + parts[1];
