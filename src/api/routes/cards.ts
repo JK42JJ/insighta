@@ -1004,6 +1004,32 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           closeStream();
           return;
         }
+        // CP475+ — quick path completes long before the full job moves
+        // to 'completed'. Without this check the dashboard spinner
+        // stayed in 'analyzing' for the full Sonnet duration even
+        // though `core.one_liner` + `mandala_relevance_pct` (the only
+        // fields the grid card needs) were already in the DB. We
+        // surface 'scored' as soon as the row carries the quick
+        // payload and close the stream — full path keeps running in
+        // the background; the Learning Page subscribes separately
+        // (`PanelAISummary` + `/enrich-bg`).
+        const quickRows = await prisma.$queryRaw<Array<{ has_quick: boolean }>>`
+          SELECT (
+            template_version = 'v2'
+            AND core IS NOT NULL
+            AND (core->>'one_liner') IS NOT NULL
+            AND mandala_relevance_pct IS NOT NULL
+          ) AS has_quick
+          FROM video_rich_summaries
+          WHERE video_id = ${videoId}
+          LIMIT 1
+        `;
+        if (quickRows[0]?.has_quick && lastPhase !== 'scored') {
+          sendPhase('scored', { trigger: 'quick' });
+          lastPhase = 'scored';
+          closeStream();
+          return;
+        }
         const rows = await prisma.$queryRaw<Array<{ state: string }>>`
           SELECT state
             FROM pgboss.job
@@ -1064,7 +1090,10 @@ function isUuid(s: string): boolean {
 // noticeably (LLM call takes 5-15s anyway, so 2s polling still emits
 // the transition within one cycle of the actual state change).
 const ENRICH_STREAM_POLL_MS = 2000;
-const ENRICH_STREAM_MAX_MS = 5 * 60 * 1000;
+// CP475+ — match RICH_SUMMARY_RETRY_OPTIONS.expireInMinutes (10min). The
+// previous 5min cap fired 'timeout' before the BE job could complete,
+// stranding the FE spinner without a final phase.
+const ENRICH_STREAM_MAX_MS = 10 * 60 * 1000;
 /**
  * v2-summaries batch cap — bounds response time + pg query cost. A typical
  * mandala renders 64 cards (V3_TARGET_TOTAL); doubling that absorbs heavy

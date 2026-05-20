@@ -103,6 +103,19 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
       streamPhase === 'analyzing' ||
       (triggerKeyRef.current !== null && streamPhase === 'idle'));
 
+  // CP475+ — quick-pass closes the SSE stream long before the full path
+  // lands, so the FE needs a fallback poll until `segments` appear. 5s
+  // interval is gentle on the API and still feels live next to a Sonnet
+  // generation that averages ~90s.
+  useEffect(() => {
+    if (!youtubeId) return;
+    if (!isEnrichInProgress) return;
+    const interval = setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.video.richSummary(youtubeId) });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [youtubeId, isEnrichInProgress, queryClient]);
+
   // Empty state: nothing to render. Distinguish "still being generated"
   // (background enrich in flight, or core present but segments missing)
   // from "no AI output at all" (truly empty row).
