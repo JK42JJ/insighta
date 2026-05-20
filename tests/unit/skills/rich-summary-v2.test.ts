@@ -205,27 +205,26 @@ describe('scoreCompleteness', () => {
     expect(r.reasons.some((x) => x.includes('L1'))).toBe(true);
   });
 
-  // Segments hard gate — description-only fallback must fail.
-  test('hard gate: rejects when sections.length < 3', () => {
+  // CP475+ user directive 2026-05-20: short videos legitimately produce
+  // 1-2 sections / 2-3 atoms. Gate accepts 1+, rejects 0.
+  test('gate: accepts when sections.length = 1 (short video)', () => {
     const s = validSummary();
     s.segments = {
       sections: [{ idx: 0, from_sec: 0, to_sec: 60, title: 's', summary: 'x', relevance_pct: 50 }],
       atoms: s.segments!.atoms,
     };
     const r = scoreCompleteness(s);
-    expect(r.passed).toBe(false);
-    expect(r.reasons.some((x) => x.includes('segments.sections insufficient'))).toBe(true);
+    expect(r.passed).toBe(true);
   });
 
-  test('hard gate: rejects when atoms.length < 5', () => {
+  test('gate: accepts when atoms.length = 1 (sparse content)', () => {
     const s = validSummary();
     s.segments = {
       sections: s.segments!.sections,
       atoms: [{ idx: 0, type: 'fact', text: 'only one', timestamp_sec: 30 }],
     };
     const r = scoreCompleteness(s);
-    expect(r.passed).toBe(false);
-    expect(r.reasons.some((x) => x.includes('segments.atoms insufficient'))).toBe(true);
+    expect(r.passed).toBe(true);
   });
 
   test('hard gate: rejects description-only catch-all (all to_sec=0)', () => {
