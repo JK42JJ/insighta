@@ -202,3 +202,33 @@ export function countNewCardsByMandala(cards: InsightCard[]): Record<string, num
  * @deprecated Use {@link countNewCardsByMandala}.
  */
 export const countNewlySyncedByMandala = countNewCardsByMandala;
+
+/**
+ * Filter the candidate newly-synced list to drop entries whose video URL
+ * already lives in a placed-cell card. This is the CP475+8 dedupe fix:
+ * when the same YouTube video has both a placed-side row (user dropped
+ * it into a cell at some earlier point — older metadata snapshot) AND a
+ * mapping-sync row (mapper just re-pulled the same URL — fresher
+ * metadata), the user saw the same video listed under both the sector
+ * pill AND the "Updated" pill with mismatched view counts and dates.
+ *
+ * After this dedupe, the placed-side row wins (the chip count drops to
+ * 0 and the "Updated" pill disappears for that video), so the user sees
+ * exactly one canonical card with one consistent metadata view.
+ *
+ * @param candidates  newly-synced predicate already applied
+ * @param placedUrls  normalised URLs of cards already placed in any cell
+ *                    (drawn from mandalaLocalCards + mandalaVideoCards)
+ * @param normalize   URL normaliser (caller supplies normalizeUrl from
+ *                    @/shared/lib/url-normalize so this helper stays
+ *                    pure and dependency-free for tests).
+ */
+export function dedupeNewlySyncedAgainstPlaced<T extends Pick<InsightCard, 'videoUrl'>>(
+  candidates: T[],
+  placedUrls: Iterable<string>,
+  normalize: (url: string) => string
+): T[] {
+  const placedSet = new Set<string>();
+  for (const u of placedUrls) placedSet.add(u);
+  return candidates.filter((c) => !placedSet.has(normalize(c.videoUrl)));
+}
