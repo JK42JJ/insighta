@@ -107,7 +107,13 @@ const envSchema = z.object({
   // (`<base>/openai/v1/chat/completions`). The model id sent in requests
   // is `insighta-chatbot` (vLLM `--served-model-name`).
   CHATBOT_PROVIDER: z.enum(['gemini', 'openrouter', 'local', 'qwen-runpod']).default('openrouter'),
-  CHATBOT_MODEL: z.string().default('google/gemini-2.5-flash'),
+  // CHATBOT_MODEL — explicit override only. When unset, the route falls
+  // back to `getDefaultModel(provider)` so each provider picks its native
+  // model (qwen-runpod → `insighta-chatbot`, openrouter → gemini-flash).
+  // CP475+2: pre-fix the default was `google/gemini-2.5-flash`, which the
+  // route then force-injected into every provider's adapter — so the
+  // RunPod path sent `model=google/gemini-2.5-flash` to vLLM and 404'd.
+  CHATBOT_MODEL: z.string().optional(),
   CHATBOT_LOCAL_URL: z.string().default('http://localhost:11434/v1'),
 
   // Qwen-LoRA serving — RunPod Serverless endpoint base URL.
