@@ -176,7 +176,11 @@ export async function generateRichSummaryV2Quick(input: V2QuickInput): Promise<V
         mandala_relevance_pct: parsed.analysis.mandala_fit.mandala_relevance_pct,
         source_language: language,
         transcript_used: true,
-        quality_flag: 'pass',
+        // Quick path is not the final verdict — only `one_liner` + `core_argument`
+        // + `mandala_relevance_pct` are populated. Full generator (segments,
+        // atoms, entities, lora) flips this to 'pass' or 'low' on completion.
+        // Premature 'pass' here caused stuck rows when full path expired/failed.
+        quality_flag: 'pending',
         ...(input.userId ? { user_id: input.userId } : {}),
       },
     });

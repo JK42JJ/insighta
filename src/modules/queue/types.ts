@@ -81,12 +81,18 @@ export const ENRICH_RETRY_OPTIONS = {
 
 /**
  * Heart-triggered rich summary — user is actively waiting (SSE-subscribed),
- * so fail fast: no retry, short expiry. The FE will show a Retry button on
- * failure rather than silent backoff. CP462+ Issue #649.
+ * so fail fast: no retry, but expiry must cover the full Sonnet generation,
+ * not just the quick path. CP462+ Issue #649.
+ *
+ * Timeout sized from prod-dev measurements (CP475+, 2026-05-20):
+ *   completed jobs p95 = 87s, max = 90s
+ *   pre-CP475 expireInMinutes=5 → 15% expired rate (3/20)
+ *   10min = ~6.9× p95 headroom; absorbs LLM stalls / proxy hiccups
+ *   without indefinitely tying up a worker slot.
  */
 export const RICH_SUMMARY_RETRY_OPTIONS = {
   retryLimit: 0,
-  expireInMinutes: 5,
+  expireInMinutes: 10,
 } as const;
 
 /** Batch scan: no retries (runs on schedule) */
