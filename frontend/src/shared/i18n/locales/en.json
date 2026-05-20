@@ -1585,7 +1585,8 @@
         "s2": "Build retirement assets via ETF investing",
         "s3": "Achieve conversational English in 6 months",
         "s4": "Complete an AI/ML project portfolio",
-        "s5": "Finish a half marathon"
+        "s5": "Finish a half marathon",
+        "showMore": "Show more"
       },
       "inputAria": "Goal input",
       "submit": "Go",
