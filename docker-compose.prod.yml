@@ -101,9 +101,12 @@ services:
       # Tuning knob, not a secret (CP392 2-question test passes).
       # Revert: set to false or delete this line → cron stops at next process
       # restart (no in-flight call is interrupted).
-      # CP437 (2026-04-29) — DISABLED per user directive: 무조건적인 API 사용금지.
-      # OpenRouter 호출 차단. v2 요약은 CC 콘솔(claude-code-direct) 경유로만 진행.
-      - RICH_SUMMARY_V2_CRON_ENABLED=false
+      # CP475+ (2026-05-20) — ENABLED for service-path runtime backfill.
+      # CP437 freeze was a temporary cost-control measure; cron is service-only
+      # (prod user-facing enrichment) so the §"LLM API 호출 금지" rule
+      # (dataset/experiment/test) does not apply. Track A2 (PR #693/694) now
+      # retries pending/low rows on a 12h cooldown so this can stay on.
+      - RICH_SUMMARY_V2_CRON_ENABLED=true
       # CP437 (2026-04-29) — Operator flip: enable YouTube metadata backfill cron.
       # Default in code is `false` — cron stays dormant unless this env is
       # explicitly true. With this set, `startYouTubeMetadataCron()` schedules
