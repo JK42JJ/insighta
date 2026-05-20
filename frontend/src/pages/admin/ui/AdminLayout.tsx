@@ -10,6 +10,7 @@ import {
   Shield,
   HeartPulse,
   ToggleRight,
+  Bot,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { to: '/admin/billing', icon: ToggleRight, label: 'Billing Flag' },
   { to: '/admin/health', icon: HeartPulse, label: 'Health' },
   { to: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },
+  { to: '/admin/chatbot-models', icon: Bot, label: 'Chatbot Models' },
 ] as const;
 
 export function AdminLayout() {

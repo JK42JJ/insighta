@@ -16,6 +16,13 @@
  * Fix: `CHATBOT_MODEL` is now optional. When unset, this resolver picks
  * the provider's native default (vLLM `insighta-chatbot`, openrouter
  * `google/gemini-2.5-flash`, etc).
+ *
+ * CP475+3 — extends the resolver with an optional `overrides` source so
+ * the admin UI can persist per-provider model names in the DB without
+ * touching env / code. Resolver priority (top wins):
+ *   1. explicit env CHATBOT_MODEL
+ *   2. admin DB overrides (per-provider)
+ *   3. per-provider hardcoded default
  */
 
 export type ChatbotProvider = 'gemini' | 'openrouter' | 'local' | 'qwen-runpod';
@@ -29,19 +36,39 @@ export interface ProviderDefaults {
   qwenRunpod: string;
 }
 
+/**
+ * Admin-configured overrides (null = no override). CP475+3.
+ * Per-provider override slots; `local` has no admin slot (use env or default).
+ */
+export interface AdminOverrides {
+  qwenRunpodModel: string | null;
+  openrouterModel: string | null;
+}
+
+const EMPTY_OVERRIDES: AdminOverrides = {
+  qwenRunpodModel: null,
+  openrouterModel: null,
+};
+
 export function resolveChatbotModel(
   provider: ChatbotProvider,
   explicit: string | undefined,
-  defaults: ProviderDefaults
+  defaults: ProviderDefaults,
+  overrides: AdminOverrides = EMPTY_OVERRIDES
 ): string {
   if (explicit && explicit.length > 0) return explicit;
+
   switch (provider) {
     case 'gemini':
     case 'openrouter':
-      return defaults.openrouter;
+      return overrides.openrouterModel && overrides.openrouterModel.length > 0
+        ? overrides.openrouterModel
+        : defaults.openrouter;
     case 'local':
       return defaults.local;
     case 'qwen-runpod':
-      return defaults.qwenRunpod;
+      return overrides.qwenRunpodModel && overrides.qwenRunpodModel.length > 0
+        ? overrides.qwenRunpodModel
+        : defaults.qwenRunpod;
   }
 }
