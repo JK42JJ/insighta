@@ -69,8 +69,19 @@ export function createQwenPromptMiddleware(): LanguageModelV3Middleware {
     transformParams: async ({ params }) => {
       try {
         const rewritten = await rewriteSystemPrompt(params.prompt);
-        if (!rewritten) return params;
-        return { ...params, prompt: rewritten };
+        // CP475+4 — vLLM Pod started without --enable-auto-tool-choice +
+        // --tool-call-parser, so any inbound `tool_choice: 'auto'` (the
+        // Vercel AI SDK default when the route configures tools) produces:
+        //   400 "auto" tool choice requires --enable-auto-tool-choice ...
+        // The Insighta chatbot doesn't use tool calling, so we force tools
+        // off in the request that hits vLLM.
+        const next = {
+          ...params,
+          prompt: rewritten ?? params.prompt,
+          toolChoice: { type: 'none' as const },
+          tools: [],
+        };
+        return next;
       } catch (err) {
         log.warn('middleware failed; forwarding original params', {
           error: err instanceof Error ? err.message : String(err),
