@@ -639,16 +639,6 @@ export function InsightCardItemV2({
               >
                 <RotateCw className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
-            ) : !streamActive && !isEnriching && mandalaRelevancePct == null && !liked ? (
-              // Not-liked + no v2 → background cron will analyse; show a
-              // passive "queued" label so the user knows the card is in
-              // the pipeline (no click action required).
-              <span
-                className="shrink-0 text-[10.5px] text-muted-foreground/60 tabular-nums"
-                title={t('cards.statusQueuedTooltip')}
-              >
-                {t('cards.statusQueued')}
-              </span>
             ) : relevanceBadge ? (
               <span
                 className={cn(
