@@ -495,40 +495,10 @@ export function InsightCardItemV2({
           </button>
         )}
 
-        {/* CP463 — Heart SSE / legacy enrichment progress chip. Sits in
-            the BL corner (Archive is hidden while streamActive). Icon-
-            only (no "AI" label per user directive 2026-05-17). Phase
-            color encodes state:
-              fetching  → blue-500  (준비)
-              analyzing → amber-500 (진행중)
-              scored    → emerald-500 (완료, transient ~2.5s)
-            Legacy isEnriching prop falls into the blue fetching tier. */}
-        {(streamActive || isEnriching) && (
-          <div className="absolute bottom-2 left-2 z-[5] pointer-events-none">
-            <div
-              className={cn(
-                // CP463 — minimal dot per user directive 2026-05-17
-                // "보다 작게해서 점 형태로 하고 디밍으로 진행을 알리는
-                // 건 어떨까?". 8×8 colored dot, dim (animate-pulse =
-                // opacity 1 → 0.5 cycle) while in progress, stays
-                // solid on scored.
-                'w-2 h-2 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.5)]',
-                streamPhase === 'scored'
-                  ? 'bg-emerald-500'
-                  : streamPhase === 'analyzing'
-                    ? 'bg-blue-500 animate-pulse'
-                    : 'bg-amber-500 animate-pulse'
-              )}
-              aria-label={
-                streamPhase === 'scored'
-                  ? '평가 완료'
-                  : streamPhase === 'analyzing'
-                    ? '분석 중'
-                    : '준비 중'
-              }
-            />
-          </div>
-        )}
+        {/* CP475+ — bottom-left phase dot (yellow/blue/green) removed
+            per user directive 2026-05-20. Progress is now shown inline
+            with the relevance % slot as `⟳ NN%` (PR B2 spinner + phase
+            mapping). Less visual noise + single canonical location. */}
 
         {/* CP463 — failure Retry button moved to the footer meta row
             (right slot, where the % normally sits) per user directive
