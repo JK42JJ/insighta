@@ -595,15 +595,12 @@ export function InsightCardItemV2({
               })()}
             </span>
             {/* Right slot priority:
-                  scored → relevance % (color-tiered)
-                  else   → empty
-                The legacy "retry" icon was removed (user directive
-                2026-05-20: "'재시도 아이콘' 을 우선 제거해 — 이후 재설계
-                해서 올릴 기로 결정"). The failure / pending branches
-                used to render a RotateCw button that re-enqueued
-                enrichment, but the click path was unreliable (depended
-                on autoSummaryEnabled + showFailedGlow state) and the
-                whole signal will be redesigned. Until then, no icon. */}
+                  scored        → relevance % (color-tiered)
+                  liked && pending && !failed → spinner (Phase 2 fast-path
+                                                 ~3-4s window between bookmark
+                                                 click and quick-result arrival)
+                  else          → empty (retry signal redesign pending,
+                                  user directive 2026-05-20) */}
             {relevanceBadge ? (
               <span
                 className={cn(
@@ -613,6 +610,11 @@ export function InsightCardItemV2({
               >
                 {relevanceBadge.label}
               </span>
+            ) : v2EnrichmentPending && !showFailedGlow ? (
+              <Loader2
+                className="w-3.5 h-3.5 animate-spin text-white/40 shrink-0"
+                aria-label={t('cards.enrichingAria')}
+              />
             ) : null}
           </div>
         )}
