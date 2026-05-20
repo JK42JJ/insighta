@@ -46,6 +46,32 @@ jest.mock('@copilotkit/shared', () => ({
   randomUUID: () => 'mock-uuid-1234',
 }));
 
+// Mock the qwen prompt middleware so the adapter tests stay pure: no DB
+// calls, no caption extractor, just identity rewriting.
+jest.mock('@/modules/chatbot-rag/qwen-prompt-middleware', () => ({
+  createQwenPromptMiddleware: jest.fn(() => ({ specificationVersion: 'v3' })),
+  rewriteSystemContent: jest.fn(async (content: string) => content || 'REWRITTEN'),
+}));
+
+// Mock logger because the adapter imports it at module level.
+jest.mock('@/utils/logger', () => {
+  type Logger = {
+    info: jest.Mock;
+    warn: jest.Mock;
+    error: jest.Mock;
+    debug: jest.Mock;
+    child: () => Logger;
+  };
+  const childLogger: Logger = {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    child: () => childLogger,
+  };
+  return { logger: childLogger };
+});
+
 import { QwenRunpodAdapter } from '@/modules/chatbot-rag/qwen-runpod-adapter';
 
 const BASE = 'https://abc-8000.proxy.runpod.net/openai/v1';
@@ -125,9 +151,11 @@ describe('QwenRunpodAdapter — getLanguageModel() (Bug 1 fix)', () => {
     });
 
     const a = new QwenRunpodAdapter({ baseURL: BASE, apiKey: KEY, model: 'm-1' });
-    const lm = a.getLanguageModel();
+    // Returns wrapLanguageModel-wrapped LanguageModel (not the raw chat model).
+    // Identity isn't asserted; the critical assertion is that the chat
+    // factory was called, NOT the default (Responses) factory.
+    a.getLanguageModel();
 
-    expect(lm).toBe(mockChatModel);
     expect(capturedProvider!.chat).toHaveBeenCalledWith('m-1');
     // Critical: the default callable (Responses API) MUST NOT be invoked.
     expect(capturedProvider!).not.toHaveBeenCalled();
@@ -199,7 +227,7 @@ async function* iterChunks(chunks: Array<{ id?: string; delta?: string }>) {
 }
 
 describe('QwenRunpodAdapter — process()', () => {
-  it('forwards only text messages to chat.completions', async () => {
+  it('forwards only text messages to chat.completions, with system message rewritten', async () => {
     mockChatCompletionsCreate.mockResolvedValueOnce(iterChunks([]));
     const a = new QwenRunpodAdapter({ baseURL: BASE, apiKey: KEY });
     const es = makeEventSource();
@@ -216,6 +244,8 @@ describe('QwenRunpodAdapter — process()', () => {
 
     expect(mockChatCompletionsCreate).toHaveBeenCalledTimes(1);
     const callArg = mockChatCompletionsCreate.mock.calls[0]![0];
+    // System message goes through rewriteSystemContent (mocked as identity);
+    // non-system messages pass through untouched.
     expect(callArg.messages).toEqual([
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'hi' },

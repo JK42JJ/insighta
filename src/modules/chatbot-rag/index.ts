@@ -57,3 +57,11 @@ export {
 export { retrieveRAGContext, type RetrieveRAGContextParams } from './retriever';
 
 export { QwenRunpodAdapter, type QwenRunpodAdapterParams } from './qwen-runpod-adapter';
+
+// CP474 Stage 7a — Vercel AI SDK middleware that rewrites system prompts
+// at the LanguageModel layer (persona + v2/transcript fallback injection).
+export {
+  createQwenPromptMiddleware,
+  rewriteSystemPrompt,
+  rewriteSystemContent,
+} from './qwen-prompt-middleware';

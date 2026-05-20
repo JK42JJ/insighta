@@ -32,13 +32,17 @@
 
 import OpenAI from 'openai';
 import { createOpenAI } from '@ai-sdk/openai';
-import type { LanguageModel } from 'ai';
+import { wrapLanguageModel, type LanguageModel } from 'ai';
 import { randomUUID } from '@copilotkit/shared';
 import type {
   CopilotServiceAdapter,
   CopilotRuntimeChatCompletionRequest,
   CopilotRuntimeChatCompletionResponse,
 } from '@copilotkit/runtime';
+import { createQwenPromptMiddleware, rewriteSystemContent } from './qwen-prompt-middleware';
+import { logger } from '@/utils/logger';
+
+const log = logger.child({ module: 'chatbot-rag/qwen-runpod-adapter' });
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -105,13 +109,21 @@ export class QwenRunpodAdapter implements CopilotServiceAdapter {
    * 비교:
    *   - `createOpenAI({...})(modelId)` → Responses API (❌ Bug 1 source)
    *   - `createOpenAI({...}).chat(modelId)` → chat.completions (✅ vLLM compat)
+   *
+   * The base chat.completions model is wrapped with the qwen prompt middleware
+   * which rewrites the system message to the SFT-aligned format (persona +
+   * Block A-D or Block T) on every request.
    */
   getLanguageModel(): LanguageModel {
     const aiProvider = createOpenAI({
       baseURL: this.baseURL,
       apiKey: this.apiKey,
     });
-    return aiProvider.chat(this.model);
+    const baseModel = aiProvider.chat(this.model);
+    return wrapLanguageModel({
+      model: baseModel,
+      middleware: createQwenPromptMiddleware(),
+    });
   }
 
   /**
@@ -130,10 +142,15 @@ export class QwenRunpodAdapter implements CopilotServiceAdapter {
   ): Promise<CopilotRuntimeChatCompletionResponse> {
     const { messages, eventSource, threadId, forwardedParameters } = request;
 
-    const openaiMessages = messages.filter(textMessageGuard).map((m) => {
+    const rawMessages = messages.filter(textMessageGuard).map((m) => {
       const t = m as unknown as TextMessageLike;
       return { role: normalizeRole(t.role), content: t.content };
     });
+
+    // CP474 Stage 7a — rewrite the system prompt to the SFT-aligned format
+    // (Persona + Block A-D or Block T). Non-system messages pass through
+    // unchanged. Fail-safe: any error reverts to original messages.
+    const openaiMessages = await applySFTRewrite(rawMessages);
 
     // vLLM-specific: chat_template_kwargs (enable_thinking=false) is forwarded
     // as an extra body key. OpenAI SDK's chat.completions request type doesn't
@@ -217,6 +234,11 @@ export class QwenRunpodAdapter implements CopilotServiceAdapter {
 
 type TextMessageLike = { isTextMessage: () => boolean; role: string; content: string };
 
+interface OpenAIChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
 function textMessageGuard(m: unknown): m is TextMessageLike {
   if (!m || typeof m !== 'object') return false;
   const guard = m as { isTextMessage?: () => boolean };
@@ -227,4 +249,26 @@ function normalizeRole(role: string): 'system' | 'user' | 'assistant' {
   if (role === 'system' || role === 'developer') return 'system';
   if (role === 'assistant') return 'assistant';
   return 'user';
+}
+
+/**
+ * Concatenates all system messages, runs them through `rewriteSystemContent`,
+ * and returns a fresh messages array with a single rewritten system message
+ * followed by the original non-system messages.
+ *
+ * Fail-safe: any thrown error logs and returns the input unchanged.
+ */
+async function applySFTRewrite(messages: OpenAIChatMessage[]): Promise<OpenAIChatMessage[]> {
+  try {
+    const systemContents = messages.filter((m) => m.role === 'system').map((m) => m.content);
+    const otherMessages = messages.filter((m) => m.role !== 'system');
+
+    const newSystem = await rewriteSystemContent(systemContents.join('\n\n'));
+    return [{ role: 'system', content: newSystem }, ...otherMessages];
+  } catch (err) {
+    log.warn('SFT rewrite failed; falling back to raw messages', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return messages;
+  }
 }
