@@ -11,12 +11,14 @@
  *      - quality_flag = 'low'
  *      - actionables array < 3
  *      - completeness < 0.7 (v2 metric, when populated)
- *   2. Track A2 (CP475+): v2 rows where the first generation produced
- *      `quality_flag = 'low'` — cooldown V2_LOW_RETRY_COOLDOWN_HOURS (default 12h)
- *      since `updated_at` to avoid hammering transient failures. After one
- *      retry the row is marked `quality_flag = 'low_retried'` (permanent) so
- *      it is never re-picked by this track. Manual intervention required to
- *      reset.
+ *   2. Track A2 (CP475+): v2 rows whose full generation never landed —
+ *      either `quality_flag = 'low'` (full path ran and rejected) OR
+ *      `quality_flag = 'pending'` with empty segments (quick path stamped
+ *      the row then full path expired / failed mid-flight). Cooldown
+ *      V2_LOW_RETRY_COOLDOWN_HOURS (default 12h) since `updated_at` to avoid
+ *      hammering transient failures. After one retry the row is marked
+ *      `quality_flag = 'low_retried'` (permanent) so it is never re-picked
+ *      by this track. Manual intervention required to reset.
  *   3. Track B: youtube_videos with no rich_summary row at all
  *      - quality-pass (view_count ≥ 1000, duration 60-10800)
  *      - bookmark count desc, then view_count desc
@@ -86,17 +88,26 @@ export async function selectV2Candidates(limit: number): Promise<V2Candidate[]> 
   }));
   if (candidates.length >= limit) return candidates;
 
-  // Track A2 — v2 rows with quality_flag='low', cooldown
-  // `v2LowRetryCooldownHours` (env-tunable, default 12) since `updated_at`.
-  // One retry only — after this pass the row is marked 'low_retried' so it
-  // can never re-enter this track.
+  // Track A2 — v2 rows whose full generation never landed. Two shapes:
+  //   (i)  quality_flag='low'      — full path produced 'low'
+  //   (ii) quality_flag='pending' + empty atoms — quick path stamped row
+  //                                  but full path expired / failed mid-flight
+  // Cooldown `v2LowRetryCooldownHours` (env-tunable, default 12) since
+  // `updated_at`. One retry only — after this pass the row is marked
+  // 'low_retried' so it can never re-enter this track.
   const a2Remaining = limit - candidates.length;
   const cooldownHours = loadRichSummaryConfig().v2LowRetryCooldownHours;
   const trackA2 = await prisma.$queryRaw<{ video_id: string }[]>(Prisma.sql`
     SELECT video_id
     FROM video_rich_summaries
     WHERE template_version = 'v2'
-      AND quality_flag = 'low'
+      AND (
+        quality_flag = 'low'
+        OR (
+          quality_flag = 'pending'
+          AND COALESCE(jsonb_array_length(NULLIF(segments->'atoms', 'null'::jsonb)), 0) = 0
+        )
+      )
       AND updated_at < now() - make_interval(hours => ${Prisma.raw(String(cooldownHours))})
     ORDER BY updated_at ASC
     LIMIT ${Prisma.raw(String(a2Remaining))}
@@ -136,7 +147,8 @@ export async function selectV2Candidates(limit: number): Promise<V2Candidate[]> 
 /**
  * Mark a Track A2 row as `low_retried` so it can never re-enter the retry
  * track regardless of further `updated_at` ageing. Called after a Track A2
- * retry produces another `low` outcome.
+ * retry produces another `low` outcome. Accepts either of the two Track A2
+ * shapes (`low`, or `pending` with empty atoms).
  */
 async function markLowRetried(videoId: string): Promise<void> {
   const prisma = getPrismaClient();
@@ -145,7 +157,13 @@ async function markLowRetried(videoId: string): Promise<void> {
     SET quality_flag = ${V2_LOW_RETRIED_FLAG}
     WHERE video_id = ${videoId}
       AND template_version = 'v2'
-      AND quality_flag = 'low'
+      AND (
+        quality_flag = 'low'
+        OR (
+          quality_flag = 'pending'
+          AND COALESCE(jsonb_array_length(NULLIF(segments->'atoms', 'null'::jsonb)), 0) = 0
+        )
+      )
   `);
 }
 
