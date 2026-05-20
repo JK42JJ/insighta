@@ -611,10 +611,51 @@ export function InsightCardItemV2({
                 {relevanceBadge.label}
               </span>
             ) : v2EnrichmentPending && !showFailedGlow ? (
-              <Loader2
-                className="w-3.5 h-3.5 animate-spin text-white/40 shrink-0"
-                aria-label={t('cards.enrichingAria')}
-              />
+              (() => {
+                // 3-stage progress spinner — user directive 2026-05-20:
+                // "열린 스피너 → 닫힌 스피너 → 꽉찬 스피너 후 종료. 비율은
+                // 거슬려 제거. 조금 더 천천히 회전."
+                // Stage mapping (SSE phase → visual):
+                //   idle / fetching → open  (short arc, ~30% of ring)
+                //   analyzing       → closed (long arc, ~85% of ring)
+                //   scored          → filled (solid circle, transient — next
+                //                     render swaps to mandala_relevance_pct)
+                const circumference = 37.7; // 2π × 6
+                const arcLen =
+                  streamPhase === 'analyzing'
+                    ? 32 // closed (≈85%)
+                    : streamPhase === 'scored'
+                      ? 0 // filled (no stroke, see fill branch below)
+                      : 12; // open (≈30%) — covers idle/fetching/undefined
+                const isFilled = streamPhase === 'scored';
+                return (
+                  <svg
+                    viewBox="0 0 16 16"
+                    className={cn(
+                      'w-3.5 h-3.5 shrink-0',
+                      // 2.4s/rotation — slower than Tailwind default (1s).
+                      // Stops spinning on the filled stage.
+                      !isFilled && 'animate-[spin_2.4s_linear_infinite]'
+                    )}
+                    aria-label={t('cards.enrichingAria')}
+                  >
+                    {isFilled ? (
+                      <circle cx="8" cy="8" r="6" fill="rgba(255,255,255,0.55)" />
+                    ) : (
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r="6"
+                        stroke="rgba(255,255,255,0.55)"
+                        strokeWidth="2"
+                        fill="none"
+                        strokeDasharray={`${arcLen} ${circumference}`}
+                        strokeLinecap="round"
+                      />
+                    )}
+                  </svg>
+                );
+              })()
             ) : null}
           </div>
         )}
