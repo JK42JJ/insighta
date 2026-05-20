@@ -56,7 +56,12 @@ Schema:
 
 Rules:
 - Output language MUST be {language} ({language_label}).
-- core.one_liner: A short, direct label phrase. Think of how a Korean mandala sub-goal is labelled (e.g. "기초 체력", "장거리 지구력") — concise, scannable. NOT a sentence with verbs like "…을 설명합니다".
+- core.one_liner: A short, direct label phrase, **STRICT ≤ 18 characters** (count includes spaces). Think mandala sub-goal: "기초 체력", "월배당 ETF 전략", "절세 노하우".
+  - DO NOT write full sentences. DO NOT enumerate ("A, B, C 그리고 D"). DO NOT use verbs like "…을 설명합니다", "…에 대해 알아봅니다".
+  - GOOD: "월배당 ETF 전략" (10) / "노후 자산 관리" (8) / "온라인 창업 핵심" (8)
+  - BAD: "미국 10대 부자들이 SNS, 리셀, AI SaaS, 드롭쉬핑으로 돈 버는 4가지 방식" (a sentence)
+  - BAD: "이 영상은 ETF 전략을 설명합니다" (verb sentence)
+  - If you cannot summarize in 18 chars, output ONLY the most central concept noun phrase.
 - analysis.core_argument: 2-3 sentences that state the video's actual claim or insight directly. Forbidden filler: "이 영상은", "이 콘텐츠는", "…을 설명한다", "…을 주장한다", "…을 안내합니다", "…을 보여준다". Write as a declarative claim ("X 는 Y 다", "X 하려면 Y 가 핵심이다").
 - analysis.mandala_fit.mandala_relevance_pct: integer 0-100 measuring how well the video fits the user's mandala center goal below. Score 0 when the goal is empty or genuinely unrelated; reserve 90+ for videos that clearly address the exact goal. Be conservative.
 - Prefer transcript content over title/description for evidence. When transcript is empty, fall back to title + description.
@@ -122,6 +127,30 @@ function requireInteger(value: unknown, path: string, min = 0, max = 100): numbe
   return n;
 }
 
+/**
+ * CP476+ — hard cap on core.one_liner for sidebar entry legibility.
+ *
+ * The quick prompt instructs ≤ 20 chars + no trailing punctuation +
+ * mandala-sub-goal style (e.g. "기초 체력"). LLM compliance is good
+ * (15/16 mandalas pass) but the long tail produces full sentences.
+ * Rather than fail the whole quick path on a length violation, we
+ * truncate at 20 chars (slice + trim) and strip trailing
+ * `.!?,;:、。…` so the sidebar always renders a clean label.
+ */
+const ONE_LINER_HARD_CAP = 20;
+const TRAILING_PUNCT_RE = /[.!?,;:、。…\s]+$/;
+
+export function trimOneLinerLabel(raw: string): string {
+  let s = raw.trim();
+  if (s.length > ONE_LINER_HARD_CAP) {
+    s = s.slice(0, ONE_LINER_HARD_CAP);
+  }
+  // Strip trailing punctuation/whitespace AFTER truncation so a slice
+  // that lands on ", " or "." doesn't render mid-clause.
+  s = s.replace(TRAILING_PUNCT_RE, '');
+  return s;
+}
+
 export function validateV2Quick(raw: unknown): V2QuickResult {
   if (typeof raw !== 'object' || raw === null) {
     throw new V2QuickValidationError('root must be an object', '$');
@@ -145,7 +174,16 @@ export function validateV2Quick(raw: unknown): V2QuickResult {
 
   return {
     core: {
-      one_liner: requireString(cc['one_liner'], 'core.one_liner', 80),
+      // CP476+ — soft truncate at 20 chars. LLM occasionally ignores the
+      // "≤ 20 characters" prompt rule (~1 outlier per 80 rows observed in
+      // prod sampling 2026-05-20: one entry was a full 51-char sentence
+      // "미국 10대 부자들이 SNS, 리셀, AI SaaS..."). Sidebar legibility
+      // depends on a hard cap, but raising the validator error rate would
+      // also fail valid 21-25 char outputs, so we accept up to 200 chars
+      // raw and trim instead of rejecting. Also strip trailing punctuation
+      // (rule says "no trailing punctuation"; some outputs still include
+      // periods).
+      one_liner: trimOneLinerLabel(requireString(cc['one_liner'], 'core.one_liner', 200)),
     },
     analysis: {
       core_argument: requireString(aa['core_argument'], 'analysis.core_argument', 500),
