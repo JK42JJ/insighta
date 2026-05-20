@@ -275,7 +275,7 @@ export default function WizardStepGoal({
       </div>
 
       {!hasSubmitted && (
-        <div className="mx-auto mt-6 flex max-w-[720px] flex-col items-center gap-2">
+        <div className="mx-auto mt-6 flex max-w-[960px] flex-col items-center gap-2">
           {[SUGGESTIONS.slice(0, 4), SUGGESTIONS.slice(4, 7), SUGGESTIONS.slice(7, 9)].map(
             (row, ri) => (
               <div key={ri} className="flex flex-wrap justify-center gap-2">
