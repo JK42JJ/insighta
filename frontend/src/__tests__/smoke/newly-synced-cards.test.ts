@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isNewlySyncedCard,
   countNewlySyncedByMandala,
+  dedupeNewlySyncedAgainstPlaced,
 } from '@/features/card-management/lib/cardUtils';
 import type { InsightCard } from '@/entities/card/model/types';
 
@@ -186,5 +187,50 @@ describe('countNewlySyncedByMandala', () => {
 
   it('returns empty object for empty input (no mandalas)', () => {
     expect(countNewlySyncedByMandala([])).toEqual({});
+  });
+});
+
+describe('dedupeNewlySyncedAgainstPlaced (CP475+8)', () => {
+  // Trivial test normaliser — production uses normalizeUrl from
+  // @/shared/lib/url-normalize, but the helper itself only needs to be
+  // pure and deterministic.
+  const normalise = (u: string) => u.trim().toLowerCase();
+
+  it('drops candidates whose URL is already placed', () => {
+    // Bug 2026-05-20: same video lives both as a placed card (sector pill)
+    // and as a sync-side card (Updated pill). After dedupe, only the
+    // placed-side card should survive — the Updated chip count drops to 0
+    // and the chip disappears for that video.
+    const candidates = [
+      makeCard({ id: 'sync-1', videoUrl: 'https://youtu.be/abc' }),
+      makeCard({ id: 'sync-2', videoUrl: 'https://youtu.be/def' }),
+    ];
+    const placed = ['https://youtu.be/abc'];
+    const out = dedupeNewlySyncedAgainstPlaced(candidates, placed, normalise);
+    expect(out.map((c) => c.id)).toEqual(['sync-2']);
+  });
+
+  it('returns the full candidate list when no placed URL overlaps', () => {
+    const candidates = [
+      makeCard({ id: 's1', videoUrl: 'https://youtu.be/aaa' }),
+      makeCard({ id: 's2', videoUrl: 'https://youtu.be/bbb' }),
+    ];
+    expect(dedupeNewlySyncedAgainstPlaced(candidates, [], normalise).map((c) => c.id)).toEqual([
+      's1',
+      's2',
+    ]);
+  });
+
+  it('uses the supplied normaliser when comparing URLs', () => {
+    // Case difference alone should NOT prevent a match when the normaliser
+    // lower-cases. This mirrors the real normalizeUrl helper, which is
+    // case-insensitive on host and strips trailing slashes.
+    const candidates = [makeCard({ id: 's', videoUrl: 'HTTPS://youtu.be/CAPS' })];
+    const placed = ['https://youtu.be/caps'];
+    expect(dedupeNewlySyncedAgainstPlaced(candidates, placed, normalise)).toEqual([]);
+  });
+
+  it('returns [] when given empty candidates regardless of placed URLs', () => {
+    expect(dedupeNewlySyncedAgainstPlaced([], ['https://youtu.be/a'], normalise)).toEqual([]);
   });
 });

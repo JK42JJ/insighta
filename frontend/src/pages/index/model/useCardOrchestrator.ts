@@ -21,6 +21,7 @@ import {
   getCardById,
   isNewlySyncedCard,
   countNewlySyncedByMandala,
+  dedupeNewlySyncedAgainstPlaced,
 } from '@/features/card-management/lib/cardUtils';
 import {
   createMockCards,
@@ -301,10 +302,23 @@ export function useCardOrchestrator(
   // Issue #389: "Newly Synced" cards — mapped to a mandala via
   // source_mandala_mappings but not yet placed into a specific cell.
   // Predicate centralized in cardUtils.isNewlySyncedCard.
-  const newlySyncedCards = useMemo(
-    () => syncedCards.filter((c) => isNewlySyncedCard(c, mandalaId)),
-    [syncedCards, mandalaId]
-  );
+  //
+  // CP475+8 — dedupe against the current mandala's placed cards
+  // (`mandalaLocalCards` + `mandalaVideoCards`). When the same video URL
+  // already lives in a cell, the sync-side row should NOT also appear
+  // under the "Updated" chip — user-reported bug 2026-05-20: identical
+  // video showing in "전체 38" (placed) AND "Updated 1" (unplaced) with
+  // different metadata snapshots (5.5K vs 85.2K views). Each side is a
+  // different row with a different fetch timestamp; dedupe drops the
+  // sync-side row from "Updated" so the user sees the single canonical
+  // card under the sector pill with one consistent metadata view.
+  const newlySyncedCards = useMemo(() => {
+    const placedUrls: string[] = [];
+    for (const card of mandalaLocalCards) placedUrls.push(normalizeUrl(card.videoUrl));
+    for (const card of mandalaVideoCards) placedUrls.push(normalizeUrl(card.videoUrl));
+    const candidates = syncedCards.filter((c) => isNewlySyncedCard(c, mandalaId));
+    return dedupeNewlySyncedAgainstPlaced(candidates, placedUrls, normalizeUrl);
+  }, [syncedCards, mandalaId, mandalaLocalCards, mandalaVideoCards]);
 
   // Global per-mandala counts — drives sidebar dot+count indicator.
   // Not scoped to the current mandala so every mandala item can display
