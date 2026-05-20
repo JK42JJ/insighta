@@ -1,6 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Code, TrendingUp, Languages, Brain, Activity } from 'lucide-react';
+import {
+  Loader2,
+  Code,
+  TrendingUp,
+  Languages,
+  Brain,
+  Activity,
+  Sparkles,
+  Bot,
+  Wallet,
+  Bitcoin,
+  MoreHorizontal,
+} from 'lucide-react';
 
 import { apiClient } from '@/shared/lib/api-client';
 import type { MandalaSearchResult, GeneratedMandala } from '@/shared/types/mandala-ux';
@@ -9,11 +21,15 @@ import MandalaCard from './MandalaCard';
 import { WizardSearchBar } from './WizardSearchBar';
 
 const SUGGESTIONS = [
-  { key: 's1', Icon: Code },
-  { key: 's2', Icon: TrendingUp },
-  { key: 's3', Icon: Languages },
-  { key: 's4', Icon: Brain },
-  { key: 's5', Icon: Activity },
+  { key: 's_vibe', Icon: Sparkles, hoverIcon: 'group-hover:text-amber-400' },
+  { key: 's_agent', Icon: Bot, hoverIcon: 'group-hover:text-sky-400' },
+  { key: 's_side', Icon: Wallet, hoverIcon: 'group-hover:text-emerald-400' },
+  { key: 's_crypto', Icon: Bitcoin, hoverIcon: 'group-hover:text-orange-400' },
+  { key: 's1', Icon: Code, hoverIcon: 'group-hover:text-indigo-400' },
+  { key: 's2', Icon: TrendingUp, hoverIcon: 'group-hover:text-teal-400' },
+  { key: 's3', Icon: Languages, hoverIcon: 'group-hover:text-violet-400' },
+  { key: 's4', Icon: Brain, hoverIcon: 'group-hover:text-pink-400' },
+  { key: 's5', Icon: Activity, hoverIcon: 'group-hover:text-rose-400' },
 ] as const;
 
 // ─── CP361 Issue #375 — phased AI loading label thresholds ───
@@ -107,6 +123,9 @@ export default function WizardStepGoal({
 }: WizardStepGoalProps) {
   const { t } = useTranslation();
   const [localGoal, setLocalGoal] = useState(goalInput);
+  // Chip overflow toggle: show top-5 by default, '...' reveals remaining 4.
+  // Keeps the initial wizard surface compact without removing options.
+  const [showAllChips, setShowAllChips] = useState(false);
 
   // Sync local input with external state changes
   useEffect(() => {
@@ -261,36 +280,67 @@ export default function WizardStepGoal({
 
       {!hasSubmitted && (
         <div className="mx-auto mt-6 flex max-w-[720px] flex-wrap justify-center gap-2">
-          {SUGGESTIONS.map(({ key, Icon }) => {
-            const text = t(`wizard.goal.suggestions.${key}`, '');
-            if (!text) return null;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handleSuggestionClick(text)}
-                className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12.5px] font-medium transition-colors"
-                style={{
-                  background: 'transparent',
-                  border: '1px solid hsl(var(--border) / 0.4)',
-                  color: 'hsl(var(--muted-foreground))',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = 'hsl(var(--foreground))';
-                  e.currentTarget.style.borderColor = 'hsl(var(--border))';
-                  e.currentTarget.style.background = 'hsl(var(--accent) / 0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = 'hsl(var(--muted-foreground))';
-                  e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.4)';
-                  e.currentTarget.style.background = 'transparent';
-                }}
-              >
-                <Icon className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
-                {text}
-              </button>
-            );
-          })}
+          {(showAllChips ? SUGGESTIONS : SUGGESTIONS.slice(0, 5)).map(
+            ({ key, Icon, hoverIcon }) => {
+              const text = t(`wizard.goal.suggestions.${key}`, '');
+              if (!text) return null;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleSuggestionClick(text)}
+                  className="group inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12.5px] font-medium transition-colors"
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid hsl(var(--border) / 0.4)',
+                    color: 'hsl(var(--muted-foreground))',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = 'hsl(var(--foreground))';
+                    e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                    e.currentTarget.style.background = 'hsl(var(--accent) / 0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = 'hsl(var(--muted-foreground))';
+                    e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.4)';
+                    e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  <Icon
+                    className={`h-3.5 w-3.5 transition-colors ${hoverIcon}`}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                  {text}
+                </button>
+              );
+            }
+          )}
+          {!showAllChips && (
+            <button
+              type="button"
+              onClick={() => setShowAllChips(true)}
+              aria-label={t('wizard.goal.suggestions.showMore', 'Show more suggestions')}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[12.5px] font-medium transition-colors"
+              style={{
+                background: 'transparent',
+                border: '1px solid hsl(var(--border) / 0.4)',
+                color: 'hsl(var(--muted-foreground))',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'hsl(var(--foreground))';
+                e.currentTarget.style.borderColor = 'hsl(var(--border))';
+                e.currentTarget.style.background = 'hsl(var(--accent) / 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'hsl(var(--muted-foreground))';
+                e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.4)';
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+            </button>
+          )}
         </div>
       )}
 
