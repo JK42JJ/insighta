@@ -147,8 +147,15 @@ export const MIN_ACTIONABLES = 3;
 export const MIN_QA_PAIRS_L1 = 5;
 // Segments hard gate — rejects description-only fallback (1 catch-all
 // section, to_sec=0, <5 atoms). Mirrors the prompt's own minimums.
-export const MIN_SECTIONS = 3;
-export const MIN_ATOMS = 5;
+// CP475+ — hard minimums removed (user directive 2026-05-20: "원본이
+// 짧은 경우, 처리가 이루어져야하는 것이 정상"). Short videos with
+// transcript < 1000 chars often legitimately produce 1-2 sections /
+// 2-3 atoms. Forcing a 3/5 minimum caused valid short videos to fail
+// with quality_flag='low' even though their content was fully analysed.
+// Kept as 1 so the validators below still reject completely-empty
+// segments (description-only fallback).
+export const MIN_SECTIONS = 1;
+export const MIN_ATOMS = 1;
 
 const VALID_CONTENT_TYPES: ReadonlySet<ContentType> = new Set([
   'tutorial',
@@ -258,8 +265,8 @@ Field rules:
 - analysis.bias_signals.has_ad / is_sponsored: boolean. Only true when explicitly visible in the title/description.
 - lora.qa_pairs: 5-7 entries, all level=1, all context="video". Each Q is something a learner would ask AFTER watching this video; A is grounded in the video content.
 - prerequisites: empty string when none.
-- segments.sections: 3-8 entries dividing the video timeline. from_sec/to_sec integers in seconds, monotonically increasing, derived from transcript timestamps. relevance_pct (integer 0-100) is the intra-video metric for THIS section vs the user's mandala center goal — distinct from analysis.mandala_fit.mandala_relevance_pct (which is the whole-video score). Each section has 1-3 key_points; timestamp_sec is optional and falls within the section's [from_sec, to_sec] window.
-- segments.atoms: 5-15 standalone insights. type MUST be one of: fact | argument | tip | other. timestamp_sec is optional (use when derivable from the transcript). entity_refs is optional and links to analysis.entities[].name values (fallback: analysis.key_concepts[].term).
+- segments.sections: 1-8 entries dividing the video timeline (adapt to video length — a 2-minute video may legitimately have 1-2 sections; a 20-minute video may have 6-8). from_sec/to_sec integers in seconds, monotonically increasing, derived from transcript timestamps. relevance_pct (integer 0-100) is the intra-video metric for THIS section vs the user's mandala center goal — distinct from analysis.mandala_fit.mandala_relevance_pct (which is the whole-video score). Each section has 1-3 key_points; timestamp_sec is optional and falls within the section's [from_sec, to_sec] window.
+- segments.atoms: 1-15 standalone insights (adapt to content density — short videos may yield 2-3 atoms; longer / denser videos 8-15). type MUST be one of: fact | argument | tip | other. timestamp_sec is optional (use when derivable from the transcript). entity_refs is optional and links to analysis.entities[].name values (fallback: analysis.key_concepts[].term).
 
 Output rules:
 - Return JSON only — no markdown fences, no commentary, no chain-of-thought.
@@ -698,18 +705,20 @@ export function scoreCompleteness(s: RichSummaryV2Layered): CompletenessResult {
   if (l1Count >= MIN_QA_PAIRS_L1) score += 0.1;
   else reasons.push(`lora.qa_pairs L1 insufficient: ${l1Count} (expected ${MIN_QA_PAIRS_L1}+)`);
 
-  // Segments hard gate — description-only fallback fails outright even
-  // when the 10 core/analysis/lora weights satisfy the 0.7 threshold.
+  // Segments gate — description-only fallback (all to_sec=0) still fails
+  // outright. Section / atom counts are no longer hard-capped at 3 / 5;
+  // the validators above accept 1+, since short videos legitimately
+  // produce 1-2 sections / 2-3 atoms (user directive 2026-05-20).
   const sectionCount = s.segments?.sections?.length ?? 0;
   const atomCount = s.segments?.atoms?.length ?? 0;
   const sectionHasRealRange = (s.segments?.sections ?? []).some((sec) => sec.to_sec > 0);
   const segmentsValid =
     sectionCount >= MIN_SECTIONS && atomCount >= MIN_ATOMS && sectionHasRealRange;
   if (sectionCount < MIN_SECTIONS) {
-    reasons.push(`segments.sections insufficient: ${sectionCount} (expected ${MIN_SECTIONS}+)`);
+    reasons.push(`segments.sections empty: ${sectionCount} (expected ${MIN_SECTIONS}+)`);
   }
   if (atomCount < MIN_ATOMS) {
-    reasons.push(`segments.atoms insufficient: ${atomCount} (expected ${MIN_ATOMS}+)`);
+    reasons.push(`segments.atoms empty: ${atomCount} (expected ${MIN_ATOMS}+)`);
   }
   if (!sectionHasRealRange) {
     reasons.push('segments.sections all have to_sec=0 (description-only fallback)');
