@@ -241,12 +241,12 @@ jobs:
           # RunPod/vLLM path (also activates the Bug 1 chat.completions fix
           # via QwenRunpodAdapter + the persona/SFT prompt middleware).
           CHATBOT_PROVIDER: ${{ vars.CHATBOT_PROVIDER }}
-          LS_API_KEY: ${{ secrets.LEMONSQUEEZY_API_KEY }}
-          LS_WEBHOOK_SECRET: ${{ secrets.LEMONSQUEEZY_WEBHOOK_SECRET }}
-          LS_STORE_ID: ${{ vars.LEMONSQUEEZY_STORE_ID }}
-          LS_VARIANT_MONTHLY: ${{ vars.LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY }}
-          LS_VARIANT_YEARLY: ${{ vars.LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY }}
-          LS_VARIANT_LIFETIME: ${{ vars.LEMONSQUEEZY_VARIANT_ID_PRO_LIFETIME }}
+          LS_API_KEY: ${{ secrets.LEMONSQUEEZY_LIVE_API_KEY }}
+          LS_WEBHOOK_SECRET: ${{ secrets.LEMONSQUEEZY_LIVE_WEBHOOK_SECRET }}
+          LS_STORE_ID: ${{ vars.LEMONSQUEEZY_LIVE_STORE_ID }}
+          LS_VARIANT_MONTHLY: ${{ vars.LEMONSQUEEZY_LIVE_VARIANT_ID_PRO_MONTHLY }}
+          LS_VARIANT_YEARLY: ${{ vars.LEMONSQUEEZY_LIVE_VARIANT_ID_PRO_YEARLY }}
+          LS_VARIANT_LIFETIME: ${{ vars.LEMONSQUEEZY_LIVE_VARIANT_ID_PRO_LIFETIME }}
           # CP462+ Issue #649 — Heart-click on-demand v2 trigger.
           # Non-secret per CP392: toggle, not a credential. Default empty
           # ⇒ enrichRichSummary stays in its existing `enabled=false`
