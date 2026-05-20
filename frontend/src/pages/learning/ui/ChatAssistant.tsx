@@ -498,8 +498,21 @@ function ChatPanel({
 }
 
 export function ChatAssistant({ mandalaId, videoId, onSeek }: ChatAssistantProps) {
+  // CP475+6 — Bug 2 fix: chat history preserved across tab switches (chatbot ↔
+  // notes) within the same videoId.
+  //
+  // Pre-fix `headers` was a fresh `{ Authorization: ... }` object on every
+  // render. RightPanel re-renders on every `activeTab` change → ChatAssistant
+  // re-renders → new `headers` reference → CopilotKit Provider treats it as a
+  // config change and re-creates its internal runtime → `useCopilotChat()`'s
+  // visibleMessages reset to an empty array. User-reported symptom: "노트
+  // 탭 갔다 챗봇 탭 돌아오면 대화 사라짐."
+  //
+  // `useMemo` keyed on the token string stabilises the reference for the
+  // lifetime of a token. When the JWT rotates, headers _do_ change (correctly)
+  // and the runtime rebuilds — but for ordinary tab navigation it stays put.
   const token = apiClient.getAccessToken();
-  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
   return (
     <CopilotKit
