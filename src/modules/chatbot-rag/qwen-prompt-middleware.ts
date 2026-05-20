@@ -125,6 +125,23 @@ export async function rewriteSystemPrompt(
 }
 
 /**
+ * Append the Qwen3 `/no_think` directive to a system prompt to suppress the
+ * model's reasoning block. Required because the chat_template_kwargs path
+ * (`enable_thinking: false`) is only honoured on the legacy `process()`
+ * code path — the Vercel AI SDK V3 chat model in `getLanguageModel()` does
+ * not forward provider-specific kwargs, so without this textual directive
+ * the model leaks its full English reasoning chain into the response.
+ *
+ * CP475+5 — bug-report 2026-05-20: chatbot responses started with
+ * "Okay, let me try to figure out how to handle this..." (entire reasoning
+ * chain in English) before the actual Korean answer.
+ */
+export function appendNoThinkDirective(systemContent: string): string {
+  if (systemContent.includes('/no_think')) return systemContent;
+  return `${systemContent}\n\n/no_think`;
+}
+
+/**
  * Plain-string variant for the legacy SSE streaming path (QwenRunpodAdapter.process).
  *
  * Same pipeline as rewriteSystemPrompt but consumes/returns a single
@@ -145,13 +162,19 @@ export async function rewriteSystemContent(originalSystemContent: string): Promi
 
   const layer: ChatLayer = youtubeVideoId ? 'video' : 'global';
 
-  return buildQwenSystemPrompt({
+  const built = buildQwenSystemPrompt({
     layer,
     language,
     v2Data: videoCtx.v2Data,
     transcript: videoCtx.transcript,
     includePersona: true,
   });
+  // CP475+5 — suppress Qwen3 reasoning chain. The `chat_template_kwargs`
+  // path (`enable_thinking: false`) only works on the legacy process() body;
+  // Vercel AI SDK V3 strips provider-specific kwargs, so the textual
+  // `/no_think` directive is the reliable way to gate reasoning on every
+  // request that hits vLLM.
+  return appendNoThinkDirective(built);
 }
 
 // ---------------------------------------------------------------------------

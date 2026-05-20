@@ -42,6 +42,7 @@ import {
   rewriteSystemContent,
   rewriteSystemPrompt,
   createQwenPromptMiddleware,
+  appendNoThinkDirective,
   _resetMiddlewareCacheForTesting,
 } from '@/modules/chatbot-rag/qwen-prompt-middleware';
 import { PRODUCT_PERSONA_KO, PRODUCT_PERSONA_EN } from '@/modules/chatbot-rag/prompt-builder';
@@ -251,5 +252,34 @@ describe('createQwenPromptMiddleware', () => {
 
     expect(out.toolChoice).toEqual({ type: 'none' });
     expect(out.tools).toEqual([]);
+  });
+});
+
+describe('appendNoThinkDirective (CP475+5)', () => {
+  it('appends /no_think to a system prompt lacking it', () => {
+    expect(appendNoThinkDirective('You are Insighta...')).toBe('You are Insighta...\n\n/no_think');
+  });
+
+  it('is idempotent — does not add /no_think twice', () => {
+    const once = appendNoThinkDirective('hello');
+    const twice = appendNoThinkDirective(once);
+    expect(twice).toBe(once);
+  });
+
+  it('passes through if /no_think already appears anywhere in the content', () => {
+    const prompt = 'instructions\n/no_think\nmore instructions';
+    expect(appendNoThinkDirective(prompt)).toBe(prompt);
+  });
+});
+
+describe('rewriteSystemContent — CP475+5 /no_think suppression', () => {
+  it('appends /no_think to the generated system prompt (Korean)', async () => {
+    const out = await rewriteSystemContent('한국어 인사이트 챗봇 사용');
+    expect(out.endsWith('/no_think')).toBe(true);
+  });
+
+  it('appends /no_think to the generated system prompt (English)', async () => {
+    const out = await rewriteSystemContent("You are Insighta's learning assistant.");
+    expect(out.endsWith('/no_think')).toBe(true);
   });
 });
