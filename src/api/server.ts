@@ -2,6 +2,7 @@ import Fastify, { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import { registerRateLimit } from './plugins/rate-limit';
+import { sanitizeLogUrl } from './utils/log-url-sanitizer';
 import dotenv from 'dotenv';
 import { Prisma } from '@prisma/client';
 import { registerAuth } from './plugins/auth';
@@ -68,6 +69,27 @@ export async function buildServer() {
   const fastify = Fastify({
     logger: {
       level: process.env['LOG_LEVEL'] || 'info',
+      // CP475+7 — strip JWTs and other auth-bearing query values from
+      // logged URLs. EventSource (used by /videos/stream and friends)
+      // can't send Authorization headers, so the JWT is passed via
+      // `?access_token=...`; the default pino serializer would land
+      // that token in production logs in plaintext.
+      serializers: {
+        req(req) {
+          // Mirror fastify's default `req` serializer shape, replacing
+          // only the `url` field with a sanitised variant. Custom
+          // serializers fully replace the default — we keep every
+          // existing field so log shape stays compatible with
+          // downstream consumers (CloudWatch queries, dashboards).
+          return {
+            method: req.method,
+            url: sanitizeLogUrl(req.url),
+            hostname: req.hostname,
+            remoteAddress: req.ip,
+            remotePort: req.socket?.remotePort,
+          };
+        },
+      },
     },
     ajv: {
       customOptions: {
