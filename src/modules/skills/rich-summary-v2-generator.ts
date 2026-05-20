@@ -112,12 +112,20 @@ export async function generateRichSummaryV2(
       transcript_used: true,
     },
   });
-  if (!row) {
-    return { kind: 'skip', videoId: input.videoId, reason: 'no_rich_summary_row' };
-  }
+  // CP475+ — v1 path no longer creates the row in the enrich handler.
+  // The fast-path `generateRichSummaryV2Quick` upserts a minimal v2 row
+  // before this full generator runs, so the row should normally exist.
+  // If it still doesn't (quick path failed / standalone cron call), the
+  // UPSERT branches below (line ~203 + ~265) auto-INSERT — drop the
+  // legacy skip so this path never silently no-ops.
+  // (Original guard kept commented for traceability.)
+  // if (!row) {
+  //   return { kind: 'skip', videoId: input.videoId, reason: 'no_rich_summary_row' };
+  // }
   // description-only rows fall through so the next Heart click with a
   // working captioner can regenerate. forceRegen overrides.
   if (
+    row &&
     !input.forceRegen &&
     row.template_version === 'v2' &&
     row.mandala_relevance_pct != null &&
@@ -140,7 +148,7 @@ export async function generateRichSummaryV2(
   // if hangul ratio is high enough, force 'ko'; if it's clearly Latin-only,
   // force 'en'. Only fall back to source_language for ambiguous cases.
   const language: 'ko' | 'en' =
-    detectLanguageFromTitle(ytRow.title) ?? (row.source_language === 'en' ? 'en' : 'ko');
+    detectLanguageFromTitle(ytRow.title) ?? (row?.source_language === 'en' ? 'en' : 'ko');
   const prompt = buildV2Prompt({
     title: ytRow.title,
     description: ytRow.description ?? '',
@@ -200,9 +208,12 @@ export async function generateRichSummaryV2(
         continue;
       }
 
-      await prisma.video_rich_summaries.update({
+      // UPSERT — the quick-path normally creates the row first, but
+      // standalone callers (cron / scripts) may invoke this generator
+      // without the quick step. INSERT branch covers that case.
+      await prisma.video_rich_summaries.upsert({
         where: { video_id: input.videoId },
-        data: {
+        update: {
           template_version: 'v2',
           core: summary.core as unknown as Prisma.InputJsonValue,
           analysis: summary.analysis as unknown as Prisma.InputJsonValue,
@@ -222,6 +233,23 @@ export async function generateRichSummaryV2(
           transcript_used: Boolean(input.transcript && input.transcript.length > 0),
           ...(input.userId ? { user_id: input.userId } : {}),
           updated_at: new Date(),
+        },
+        create: {
+          video_id: input.videoId,
+          template_version: 'v2',
+          core: summary.core as unknown as Prisma.InputJsonValue,
+          analysis: summary.analysis as unknown as Prisma.InputJsonValue,
+          lora: summary.lora as unknown as Prisma.InputJsonValue,
+          ...(summary.segments
+            ? { segments: summary.segments as unknown as Prisma.InputJsonValue }
+            : {}),
+          completeness: score.score,
+          quality_flag: 'pass',
+          model: provider.model,
+          mandala_relevance_pct: summary.analysis.mandala_fit.mandala_relevance_pct,
+          source_language: language,
+          transcript_used: Boolean(input.transcript && input.transcript.length > 0),
+          ...(input.userId ? { user_id: input.userId } : {}),
         },
       });
 
@@ -262,14 +290,23 @@ export async function generateRichSummaryV2(
 
   // All attempts failed → mark `low` so the cron does not retry indefinitely
   // (spec §7-D: 1 retry → 'low' permanent until manual intervention).
-  await prisma.video_rich_summaries.update({
+  // UPSERT covers the case where the quick path also failed (row absent).
+  await prisma.video_rich_summaries.upsert({
     where: { video_id: input.videoId },
-    data: {
+    update: {
       template_version: 'v2',
       quality_flag: 'low',
       completeness: 0,
       ...(input.userId ? { user_id: input.userId } : {}),
       updated_at: new Date(),
+    },
+    create: {
+      video_id: input.videoId,
+      template_version: 'v2',
+      quality_flag: 'low',
+      completeness: 0,
+      source_language: language,
+      ...(input.userId ? { user_id: input.userId } : {}),
     },
   });
   log.warn('v2 marked low after retries exhausted', {

@@ -34,7 +34,11 @@
 
 import type PgBoss from 'pg-boss';
 
-import { enrichRichSummary } from '../../skills/rich-summary';
+// CP475+ — v1 `enrichRichSummary` removed from this handler path per user
+// directive "v1 은 코드는 유지, 패스에서는 제거". Cron / other callers can
+// still import from '../../skills/rich-summary'. The v2 quick + full
+// generators below take over the row-creation responsibility.
+import { generateRichSummaryV2Quick } from '../../skills/rich-summary-v2-quick-generator';
 import { generateRichSummaryV2 } from '../../skills/rich-summary-v2-generator';
 import { getMandalaManager } from '../../mandala/manager';
 import { getCaptionExtractor } from '../../caption/extractor';
@@ -78,7 +82,10 @@ export async function registerEnrichRichSummaryWorker(): Promise<void> {
  * via the SSE failure event (Phase 2 step 6 — SSE endpoint).
  */
 async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>): Promise<void> {
-  const { videoId, userId, mandalaId, title, description } = job.data;
+  // CP475+ — `title` / `description` from job payload are no longer needed
+  // in this handler (the v1 path that consumed them is removed; both the
+  // quick and full v2 generators re-read from youtube_videos directly).
+  const { videoId, userId, mandalaId } = job.data;
 
   logger.info('enrich-rich-summary: processing', {
     jobId: job.id,
@@ -154,20 +161,10 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     throw new Error(NO_TRANSCRIPT_ERROR);
   }
 
-  // v1 generate — transcript guaranteed; forceRegen overrides any prior
-  // description-only cache row.
-  const v1Result = await enrichRichSummary(videoId, {
-    userId,
-    title,
-    description,
-    transcript,
-    forceRegen: true,
-  });
-
-  // Step 2 — resolve the mandala center goal (root level, depth=0). When
-  // the mandala is missing or unreadable we still attempt v2 with an empty
-  // center goal so the LLM scores mandala_relevance_pct=0; the v2 row is
-  // still useful for `one_liner` / chapter relevance display.
+  // Resolve the mandala center goal (root level, depth=0). When the
+  // mandala is missing or unreadable we still attempt v2 with an empty
+  // center goal so the LLM scores mandala_relevance_pct=0; the v2 row
+  // is still useful for `one_liner` / chapter relevance display.
   let centerGoal = '';
   try {
     const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
@@ -181,8 +178,27 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     });
   }
 
-  // v2 upgrade — transcript guaranteed; forceRegen replaces any prior
-  // description-only v2 row with transcript-grounded content.
+  // ── Step 1: Quick path (Haiku, ~1s) ──
+  // Produces ONLY core.one_liner + analysis.core_argument +
+  // analysis.mandala_fit.mandala_relevance_pct so the FE can drop the
+  // bookmark spinner and show the relevance % within 3-4 seconds of
+  // the click (transcript fetch ~2-3s already happened upstream).
+  //
+  // The legacy v1 path (`enrichRichSummary`) used to run here to create
+  // the row. The full generator now upserts it directly — v1 is removed
+  // from this handler (code preserved for cron callers, but not invoked
+  // here). User directive 2026-05-20: "v1 은 코드는 유지, 패스에서는 제거".
+  const quickOutcome = await generateRichSummaryV2Quick({
+    videoId,
+    userId,
+    mandalaCenterGoal: centerGoal,
+    transcript,
+  });
+
+  // ── Step 2: Full path (Sonnet, ~30-60s) ──
+  // Same transcript, full v2 layered schema. UPDATEs the row the quick
+  // path just created; replaces the minimal core/analysis with the rich
+  // versions and adds segments / atoms / entities / key_concepts / lora.
   const v2Outcome = await generateRichSummaryV2({
     videoId,
     userId,
@@ -195,8 +211,11 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     jobId: job.id,
     videoId,
     hadTranscript: true,
-    v1QualityFlag: v1Result.qualityFlag,
-    v1QualityScore: v1Result.qualityScore,
+    quickKind: quickOutcome.kind,
+    quickDetail:
+      quickOutcome.kind === 'pass'
+        ? { mandalaRelevancePct: quickOutcome.mandalaRelevancePct }
+        : { reason: quickOutcome.reason },
     v2OutcomeKind: v2Outcome.kind,
     v2Detail:
       v2Outcome.kind === 'pass'
