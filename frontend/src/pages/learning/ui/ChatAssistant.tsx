@@ -444,15 +444,41 @@ function ChatPanel({
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper || !onSeek) return;
-    const observer = new MutationObserver((mutations) => {
-      for (const m of mutations)
-        for (const node of m.addedNodes) if (node instanceof HTMLElement) linkifyTimestamps(node);
+
+    // CP475+5 — streaming chat messages mutate via characterData on the
+    // existing textNode (Vercel SDK / CopilotKit incremental render),
+    // NOT childList additions. Pre-fix the observer only watched
+    // childList, so timestamps that arrived chunk-by-chunk (e.g. "0:",
+    // then "56") were never re-walked and stayed as plain text. The
+    // bug-report screenshot (2026-05-20) shows `(0:56-1:12)` rendered
+    // as plain text with no click affordance.
+    //
+    // We now (a) also observe characterData, (b) debounce 200ms past the
+    // last mutation so we only walk once React has finished settling a
+    // streamed message — without this, each streaming chunk would trigger
+    // a linkify pass that React's next reconciliation would immediately
+    // overwrite (textNode replace cycle), so the user never sees a button
+    // until streaming ends.
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    const reLinkify = () => {
+      if (debounce !== null) clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        debounce = null;
+        linkifyTimestamps(wrapper);
+      }, 200);
+    };
+
+    const observer = new MutationObserver(() => reLinkify());
+    observer.observe(wrapper, {
+      childList: true,
+      subtree: true,
+      characterData: true,
     });
-    observer.observe(wrapper, { childList: true, subtree: true });
     linkifyTimestamps(wrapper);
     wrapper.addEventListener('click', handleTsClick);
     return () => {
       observer.disconnect();
+      if (debounce !== null) clearTimeout(debounce);
       wrapper.removeEventListener('click', handleTsClick);
     };
   }, [onSeek, handleTsClick]);
