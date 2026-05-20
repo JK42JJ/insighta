@@ -115,8 +115,13 @@ export const QUEUE_CONFIG = {
    * Independent pool from ENRICH_CONCURRENCY so batch backfill cannot starve
    * interactive Heart clicks. Override via BULLMQ_ENRICH_CONCURRENCY env
    * (legacy name retained for compatibility even though pg-boss replaced BullMQ).
+   *
+   * CP475+ — raised 5 → 10 after the 2026-05-20 user report that liking 6
+   * cards in quick succession felt serial. p95 v2 job = 87s (CP475 measurement);
+   * 10 workers absorb a 6-10 card burst without blocking. Sonnet/OpenRouter
+   * tier headroom checked against the wizard path, which keeps its own quota.
    */
-  RICH_SUMMARY_CONCURRENCY: 5,
+  RICH_SUMMARY_CONCURRENCY: 10,
   /** Delay between polling for new jobs (seconds) */
   POLL_INTERVAL_SECONDS: 10,
   /** How long to keep completed jobs (days) */

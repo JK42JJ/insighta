@@ -115,6 +115,13 @@ interface InsightCardItemV2Props {
    */
   coreArgument?: string | null;
   /**
+   * CP475+ — true once the v2 full path landed segments+atoms. Only
+   * then is the v2 essence promoted over the v1 `summary_ko` description.
+   * Prevents the quick-only essence from overwriting a richer v1 summary
+   * while the full path is still running.
+   */
+  v2FullLanded?: boolean;
+  /**
    * True while the batch v2-summaries query is fetching (initial load or
    * background refetch). When true the card suppresses the v1 fallback so
    * the blockquote stays empty until v2 arrives — prevents the
@@ -151,6 +158,7 @@ export function InsightCardItemV2({
   mandalaRelevancePct,
   oneLiner,
   coreArgument,
+  v2FullLanded = false,
   isV2Loading = false,
   onArchived,
   sectorLabel,
@@ -284,22 +292,34 @@ export function InsightCardItemV2({
   const views = formatViewCount(ytMeta.viewCount);
   const relDate = formatRelativeDate(ytMeta.publishedAt ?? card.createdAt?.toISOString());
   const hasNote = !!card.userNote?.trim();
-  // CP474 — blockquote source priority (v2 essence wins, then v2 head-
-  // line, then v1 fallback when v2 is settled-absent):
-  //   1. v2 `analysis.core_argument` (2-3 sentences, the actual thesis).
-  //   2. v2 `core.one_liner` (≤ 20 chars headline) — only when essence
-  //      is missing (legacy rows pre-CP474 or generation gaps).
-  //   3. v1 `video_summaries.summary_ko` — only when the v2 query has
-  //      FINISHED and produced no row for this video. While v2 is in
-  //      flight the slot stays empty to prevent the v1 (long) -> v2
-  //      (short) shrink flicker on grid mutation refetch.
+  // CP475+ blockquote source priority (user-confirmed 2026-05-20):
+  // The v2 quick path's `core_argument` is a heavily-simplified Korean
+  // headline; it is intentionally short and often less rich than the
+  // v1 `summary_ko` description, which surfaces the YouTube long-form
+  // narrative. Promoting quick essence over v1 caused users to perceive
+  // a "richer summary got overwritten by a thinner one" the moment the
+  // next card's enrich job landed and forced a v2-summaries refetch.
+  //
+  // New order:
+  //   1. v2 essence — ONLY when the v2 full path has actually landed
+  //      (segments+atoms present). Full essence is regenerated against
+  //      the section structure and trusts the longer prompt budget.
+  //   2. v1 `video_summaries.summary_ko` — the YouTube-derived narrative.
+  //      Stable, doesn't shrink when a sibling card's job completes.
+  //   3. v2 quick essence — fallback when v1 is missing (e.g. fresh-
+  //      from-YouTube cards with no v1 row yet).
+  //   4. v2 `core.one_liner` — last-resort 20-char headline.
   const cardSummary = (() => {
-    const essence = coreArgument?.trim();
-    if (essence) return essence;
-    const headline = oneLiner?.trim();
-    if (headline) return headline;
+    if (v2FullLanded) {
+      const essence = coreArgument?.trim();
+      if (essence) return essence;
+    }
     if (isV2Loading) return undefined;
-    return card.videoSummary?.summary_ko?.trim();
+    const v1 = card.videoSummary?.summary_ko?.trim();
+    if (v1) return v1;
+    const quickEssence = coreArgument?.trim();
+    if (quickEssence) return quickEssence;
+    return oneLiner?.trim();
   })();
 
   const footerLeft = relDate || null;
@@ -581,51 +601,18 @@ export function InsightCardItemV2({
                 {relevanceBadge.label}
               </span>
             ) : v2EnrichmentPending && !showFailedGlow ? (
-              (() => {
-                // 3-stage progress spinner — user directive 2026-05-20:
-                // "열린 스피너 → 닫힌 스피너 → 꽉찬 스피너 후 종료. 비율은
-                // 거슬려 제거. 조금 더 천천히 회전."
-                // Stage mapping (SSE phase → visual):
-                //   idle / fetching → open  (short arc, ~30% of ring)
-                //   analyzing       → closed (long arc, ~85% of ring)
-                //   scored          → filled (solid circle, transient — next
-                //                     render swaps to mandala_relevance_pct)
-                const circumference = 37.7; // 2π × 6
-                const arcLen =
-                  streamPhase === 'analyzing'
-                    ? 32 // closed (≈85%)
-                    : streamPhase === 'scored'
-                      ? 0 // filled (no stroke, see fill branch below)
-                      : 12; // open (≈30%) — covers idle/fetching/undefined
-                const isFilled = streamPhase === 'scored';
-                return (
-                  <svg
-                    viewBox="0 0 16 16"
-                    className={cn(
-                      'w-3.5 h-3.5 shrink-0',
-                      // 2.4s/rotation — slower than Tailwind default (1s).
-                      // Stops spinning on the filled stage.
-                      !isFilled && 'animate-[spin_2.4s_linear_infinite]'
-                    )}
-                    aria-label={t('cards.enrichingAria')}
-                  >
-                    {isFilled ? (
-                      <circle cx="8" cy="8" r="6" fill="rgba(255,255,255,0.55)" />
-                    ) : (
-                      <circle
-                        cx="8"
-                        cy="8"
-                        r="6"
-                        stroke="rgba(255,255,255,0.55)"
-                        strokeWidth="2"
-                        fill="none"
-                        strokeDasharray={`${arcLen} ${circumference}`}
-                        strokeLinecap="round"
-                      />
-                    )}
-                  </svg>
-                );
-              })()
+              // CP475+ — subtle breathing dot replaces the previous 3-stage
+              // spinner per user directive 2026-05-20 ("품질이 안 좋아 —
+              // 직관적이되 과도하지 않게"). Minimal: a single 6px dot in
+              // the slot the relevance % will eventually occupy, breathing
+              // at 1.6s. Conveys "in progress" without competing with the
+              // surrounding type. Stops automatically — relevance % takes
+              // over the slot the moment it lands.
+              <span
+                className="block w-1.5 h-1.5 rounded-full bg-foreground/40 shrink-0 animate-[breathe_1.6s_ease-in-out_infinite]"
+                aria-label={t('cards.enrichingAria')}
+                role="status"
+              />
             ) : null}
           </div>
         )}

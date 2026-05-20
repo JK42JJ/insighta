@@ -1469,6 +1469,8 @@ class ApiClient {
         mandalaRelevancePct: number | null;
         qualityFlag: string | null;
         templateVersion: string;
+        /** CP475+ — true when v2 full path landed (segments.atoms > 0). */
+        v2FullLanded: boolean;
       }>;
     };
   }> {

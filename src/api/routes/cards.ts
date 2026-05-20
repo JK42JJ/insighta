@@ -839,6 +839,9 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               video_id: true,
               one_liner: true,
               analysis: true,
+              // CP475+ — `segments` for v2FullLanded detection (atoms count).
+              // FE promotes v2 essence over v1 description only when atoms > 0.
+              segments: true,
               mandala_relevance_pct: true,
               quality_flag: true,
               template_version: true,
@@ -883,6 +886,11 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
                       .slice(0, 3)
                   : [];
               const fallbackTags = (tagsByVideo.get(vid) ?? []).slice(0, 3);
+              const segments = (r?.segments ?? null) as { atoms?: unknown } | null;
+              const v2FullLanded =
+                segments != null &&
+                Array.isArray(segments.atoms) &&
+                (segments.atoms as unknown[]).length > 0;
               return {
                 videoId: vid,
                 oneLiner: r?.one_liner ?? null,
@@ -892,6 +900,7 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
                 mandalaRelevancePct: r?.mandala_relevance_pct ?? null,
                 qualityFlag: r?.quality_flag ?? null,
                 templateVersion: r?.template_version ?? '',
+                v2FullLanded,
               };
             }),
           },
