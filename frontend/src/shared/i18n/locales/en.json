@@ -1867,6 +1867,7 @@
       "removeKeyword": "Remove keyword {{keyword}}",
       "searchButton": "Search",
       "resetButton": "Reset",
+      "restorePrevious": "Show previous results",
       "resultCount": "{{count}} matches",
       "expandOptions": "Expand options",
       "collapseOptions": "Collapse options",
