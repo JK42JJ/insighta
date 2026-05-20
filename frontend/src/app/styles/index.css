@@ -565,6 +565,14 @@
     }
   }
 
+  /* Rolling ellipsis for "still being generated" labels (CP475+).
+     Three side-by-side dots each fade in turn — duration 1.4s with 0.2s
+     stagger between them. */
+  @keyframes enrich-dot {
+    0%, 80%, 100% { opacity: 0.2; }
+    40% { opacity: 1; }
+  }
+
   /* Card discovery progress animations */
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(4px); }

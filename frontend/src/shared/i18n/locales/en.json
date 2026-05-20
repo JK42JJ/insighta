@@ -1803,6 +1803,8 @@
     "reportPreparing": "Preparing report...",
     "contentCollecting": "Collecting content...",
     "aiSummaryNotReady": "No AI summary has been generated yet",
+    "aiSummaryGenerating": "Generating AI summary",
+    "richSummaryGenerating": "Generating detailed summary",
     "metaSummary": "Meta summary",
     "summaryLabel": "Summary",
     "keywordsLabel": "Keywords",
