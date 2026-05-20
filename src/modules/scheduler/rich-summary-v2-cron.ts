@@ -11,7 +11,13 @@
  *      - quality_flag = 'low'
  *      - actionables array < 3
  *      - completeness < 0.7 (v2 metric, when populated)
- *   2. Track B: youtube_videos with no rich_summary row at all
+ *   2. Track A2 (CP475+): v2 rows where the first generation produced
+ *      `quality_flag = 'low'` — cooldown V2_LOW_RETRY_COOLDOWN_HOURS (default 12h)
+ *      since `updated_at` to avoid hammering transient failures. After one
+ *      retry the row is marked `quality_flag = 'low_retried'` (permanent) so
+ *      it is never re-picked by this track. Manual intervention required to
+ *      reset.
+ *   3. Track B: youtube_videos with no rich_summary row at all
  *      - quality-pass (view_count ≥ 1000, duration 60-10800)
  *      - bookmark count desc, then view_count desc
  *
@@ -41,11 +47,20 @@ const log = logger.child({ module: 'RichSummaryV2Cron' });
 let cronTask: cron.ScheduledTask | null = null;
 let runInProgress = false;
 
+const V2_LOW_RETRIED_FLAG = 'low_retried';
+
+/** Distinct candidate kinds so retry rows can be tracked separately. */
+export type V2CandidateKind = 'trackA-v1' | 'trackA2-v2-low' | 'trackB-new';
+export interface V2Candidate {
+  videoId: string;
+  kind: V2CandidateKind;
+}
+
 /**
- * Pull up to `limit` videoIds for the next batch. Track A first; Track B fills
- * the remaining slots when Track A is exhausted.
+ * Pull up to `limit` candidates for the next batch. Track A → A2 → B in
+ * priority order; earlier tracks fill until exhausted.
  */
-export async function selectV2Candidates(limit: number): Promise<string[]> {
+export async function selectV2Candidates(limit: number): Promise<V2Candidate[]> {
   if (limit <= 0) return [];
   const prisma = getPrismaClient();
 
@@ -65,11 +80,34 @@ export async function selectV2Candidates(limit: number): Promise<string[]> {
     ORDER BY quality_score ASC NULLS FIRST
     LIMIT ${Prisma.raw(String(limit))}
   `);
-  const ids = trackA.map((r) => r.video_id);
-  if (ids.length >= limit) return ids;
+  const candidates: V2Candidate[] = trackA.map((r) => ({
+    videoId: r.video_id,
+    kind: 'trackA-v1' as const,
+  }));
+  if (candidates.length >= limit) return candidates;
+
+  // Track A2 — v2 rows with quality_flag='low', cooldown
+  // `v2LowRetryCooldownHours` (env-tunable, default 12) since `updated_at`.
+  // One retry only — after this pass the row is marked 'low_retried' so it
+  // can never re-enter this track.
+  const a2Remaining = limit - candidates.length;
+  const cooldownHours = loadRichSummaryConfig().v2LowRetryCooldownHours;
+  const trackA2 = await prisma.$queryRaw<{ video_id: string }[]>(Prisma.sql`
+    SELECT video_id
+    FROM video_rich_summaries
+    WHERE template_version = 'v2'
+      AND quality_flag = 'low'
+      AND updated_at < now() - make_interval(hours => ${Prisma.raw(String(cooldownHours))})
+    ORDER BY updated_at ASC
+    LIMIT ${Prisma.raw(String(a2Remaining))}
+  `);
+  for (const r of trackA2) {
+    candidates.push({ videoId: r.video_id, kind: 'trackA2-v2-low' });
+  }
+  if (candidates.length >= limit) return candidates;
 
   // Track B — youtube_videos with no rich_summary row, quality-pass, bookmark-priority
-  const remaining = limit - ids.length;
+  const remaining = limit - candidates.length;
   const trackB = await prisma.$queryRaw<{ youtube_video_id: string }[]>(Prisma.sql`
     SELECT yv.youtube_video_id
     FROM youtube_videos yv
@@ -89,8 +127,26 @@ export async function selectV2Candidates(limit: number): Promise<string[]> {
     ORDER BY COALESCE(book.bookmark_count, 0) DESC, yv.view_count DESC
     LIMIT ${Prisma.raw(String(remaining))}
   `);
-  for (const r of trackB) ids.push(r.youtube_video_id);
-  return ids;
+  for (const r of trackB) {
+    candidates.push({ videoId: r.youtube_video_id, kind: 'trackB-new' });
+  }
+  return candidates;
+}
+
+/**
+ * Mark a Track A2 row as `low_retried` so it can never re-enter the retry
+ * track regardless of further `updated_at` ageing. Called after a Track A2
+ * retry produces another `low` outcome.
+ */
+async function markLowRetried(videoId: string): Promise<void> {
+  const prisma = getPrismaClient();
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE video_rich_summaries
+    SET quality_flag = ${V2_LOW_RETRIED_FLAG}
+    WHERE video_id = ${videoId}
+      AND template_version = 'v2'
+      AND quality_flag = 'low'
+  `);
 }
 
 /**
@@ -103,46 +159,73 @@ export async function runV2BatchOnce(batchSize: number): Promise<{
   low: number;
   skip: number;
   errors: number;
+  lowRetried: number;
 }> {
   if (runInProgress) {
     log.warn('v2 cron tick skipped — previous run still in progress');
-    return { picked: 0, pass: 0, low: 0, skip: 0, errors: 0 };
+    return { picked: 0, pass: 0, low: 0, skip: 0, errors: 0, lowRetried: 0 };
   }
   runInProgress = true;
   const t0 = Date.now();
   try {
-    const ids = await selectV2Candidates(batchSize);
-    log.info('v2 cron batch start', { picked: ids.length, batchSize });
+    const candidates = await selectV2Candidates(batchSize);
+    log.info('v2 cron batch start', {
+      picked: candidates.length,
+      batchSize,
+      byKind: countByKind(candidates),
+    });
     let pass = 0;
     let low = 0;
     let skip = 0;
     let errors = 0;
-    for (const videoId of ids) {
+    let lowRetried = 0;
+    for (const cand of candidates) {
       try {
-        const outcome = await generateRichSummaryV2({ videoId });
+        const outcome = await generateRichSummaryV2({ videoId: cand.videoId });
         if (outcome.kind === 'pass') pass += 1;
-        else if (outcome.kind === 'low') low += 1;
-        else skip += 1;
+        else if (outcome.kind === 'low') {
+          low += 1;
+          // Track A2 retry that produced another 'low' → permanent stop marker.
+          if (cand.kind === 'trackA2-v2-low') {
+            await markLowRetried(cand.videoId);
+            lowRetried += 1;
+            log.info('v2 cron: row marked low_retried after retry', {
+              videoId: cand.videoId,
+            });
+          }
+        } else skip += 1;
       } catch (err) {
         errors += 1;
         log.error('v2 cron item failed', {
-          videoId,
+          videoId: cand.videoId,
+          kind: cand.kind,
           error: err instanceof Error ? err.message : String(err),
         });
       }
     }
     log.info('v2 cron batch done', {
-      picked: ids.length,
+      picked: candidates.length,
       pass,
       low,
       skip,
       errors,
+      lowRetried,
       elapsedMs: Date.now() - t0,
     });
-    return { picked: ids.length, pass, low, skip, errors };
+    return { picked: candidates.length, pass, low, skip, errors, lowRetried };
   } finally {
     runInProgress = false;
   }
+}
+
+function countByKind(candidates: V2Candidate[]): Record<V2CandidateKind, number> {
+  const out: Record<V2CandidateKind, number> = {
+    'trackA-v1': 0,
+    'trackA2-v2-low': 0,
+    'trackB-new': 0,
+  };
+  for (const c of candidates) out[c.kind] += 1;
+  return out;
 }
 
 /**
