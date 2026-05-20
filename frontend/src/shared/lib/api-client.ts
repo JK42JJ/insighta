@@ -1348,6 +1348,28 @@ class ApiClient {
     });
   }
 
+  /**
+   * Idempotent background enrich trigger (CP475+). Fired by Learning Page
+   * when the v2 row exists but its `segments` are empty. BE either starts
+   * a fresh enrich job, returns the in-flight one, or noops if already
+   * complete. Subscribe to GET /cards/:videoId/enrich-stream for progress.
+   */
+  async enrichCardBackground(
+    videoId: string,
+    mandalaId: string
+  ): Promise<{
+    status: string;
+    data: {
+      jobId: string | null;
+      reason: 'enqueued' | 'in_progress' | 'already_complete';
+    };
+  }> {
+    return this.request(`/cards/${videoId}/enrich-bg`, {
+      method: 'POST',
+      body: JSON.stringify({ mandalaId }),
+    });
+  }
+
   async archiveCard(videoId: string, mandalaId: string): Promise<void> {
     return this.request(`/cards/${videoId}/archive`, {
       method: 'POST',

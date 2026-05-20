@@ -12,22 +12,24 @@
  *
  * Design tokens: insighta-side-editor-mockup-v3.html
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { VideoSummary } from '@/entities/card/model/types';
 import { getYouTubeVideoId } from '@/widgets/video-player/model/youtube-api';
 import { queryKeys } from '@/shared/config/query-client';
-import type {
-  VideoRichSummaryAnalysis,
-  VideoRichSummaryAtom,
-  VideoRichSummaryCore,
-  VideoRichSummaryLora,
-  VideoRichSummarySegments,
+import {
+  apiClient,
+  type VideoRichSummaryAnalysis,
+  type VideoRichSummaryAtom,
+  type VideoRichSummaryCore,
+  type VideoRichSummaryLora,
+  type VideoRichSummarySegments,
 } from '@/shared/lib/api-client';
 import { Info, Quote, Lightbulb, Dot } from 'lucide-react';
 import { useRichSummary } from '../model/useRichSummary';
+import { useEnrichStream } from '@/features/card-management/model/useEnrichStream';
 
 export interface PanelAISummaryProps {
   videoSummary: VideoSummary | undefined;
@@ -56,7 +58,58 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   const hasRich = hasNewV2 || hasLegacyRich;
   const hasShort = Boolean(short) || tags.length > 0;
 
+  // CP475+ — background enrich + SSE wiring. Fire `/enrich-bg` once per
+  // (videoId, mandalaId) when the segments block is missing; subscribe
+  // to /enrich-stream so the UI flips to the completed state without a
+  // manual refresh.
+  const hasSegments =
+    (richSummary?.segments?.atoms?.length ?? 0) > 0 ||
+    (richSummary?.segments?.sections?.length ?? 0) > 0;
+  const triggerKeyRef = useRef<string | null>(null);
+  const { phase: streamPhase, isActive: isStreamActive, open: openStream } = useEnrichStream();
+  useEffect(() => {
+    if (!youtubeId || !mandalaId) return;
+    if (isRichLoading) return;
+    if (hasSegments) return;
+    const key = `${youtubeId}:${mandalaId}`;
+    if (triggerKeyRef.current === key) return;
+    triggerKeyRef.current = key;
+    void (async () => {
+      try {
+        const res = await apiClient.enrichCardBackground(youtubeId, mandalaId);
+        if (res.data.reason !== 'already_complete') {
+          void openStream(youtubeId);
+        }
+      } catch {
+        /* Silent — UI falls back to the "still being generated" message
+           and the cron Track A2 retry will eventually land. */
+      }
+    })();
+  }, [youtubeId, mandalaId, isRichLoading, hasSegments, openStream]);
+
+  // When the SSE stream terminates with `scored`, refetch the v2 row so
+  // the segments block lands without a manual reload.
+  useEffect(() => {
+    if (!youtubeId) return;
+    if (streamPhase === 'scored') {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.video.richSummary(youtubeId) });
+    }
+  }, [streamPhase, youtubeId, queryClient]);
+
+  const isEnrichInProgress =
+    !hasSegments &&
+    (isStreamActive ||
+      streamPhase === 'fetching' ||
+      streamPhase === 'analyzing' ||
+      (triggerKeyRef.current !== null && streamPhase === 'idle'));
+
+  // Empty state: nothing to render. Distinguish "still being generated"
+  // (background enrich in flight, or core present but segments missing)
+  // from "no AI output at all" (truly empty row).
   if (!hasNewV2 && !hasLegacyRich && !hasShort && !isRichLoading) {
+    if (isEnrichInProgress) {
+      return <EnrichInProgressMessage label={t('learning.aiSummaryGenerating')} />;
+    }
     return (
       <p className="py-8 text-center text-[13px] text-[#4e4f5c]">
         {t('learning.aiSummaryNotReady')}
@@ -75,6 +128,9 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
           youtubeId={youtubeId}
           mandalaId={mandalaId ?? null}
         />
+      )}
+      {hasNewV2 && !hasSegments && isEnrichInProgress && (
+        <EnrichInProgressMessage label={t('learning.richSummaryGenerating')} />
       )}
       {hasLegacyRich && richSummary?.structured && (
         <RichSummaryBlock structured={richSummary.structured} />
@@ -591,5 +647,28 @@ function AtomRow({ atom, jumpUrl }: { atom: VideoRichSummaryAtom; jumpUrl: strin
         )}
       </span>
     </li>
+  );
+}
+
+/**
+ * CP475+ — "still being generated" message with rolling ellipsis. Used
+ * both for the all-empty case (quick path still in flight) and the
+ * quick-done-full-pending case (segments block awaiting the SSE-tracked
+ * background job).
+ */
+function EnrichInProgressMessage({ label }: { label: string }) {
+  return (
+    <p
+      role="status"
+      aria-live="polite"
+      className="flex items-center justify-center gap-[1px] py-8 text-center text-[13px] text-[#4e4f5c]"
+    >
+      <span>{label}</span>
+      <span aria-hidden className="ml-1 inline-flex">
+        <span className="animate-[enrich-dot_1.4s_ease-in-out_infinite]">.</span>
+        <span className="animate-[enrich-dot_1.4s_ease-in-out_0.2s_infinite]">.</span>
+        <span className="animate-[enrich-dot_1.4s_ease-in-out_0.4s_infinite]">.</span>
+      </span>
+    </p>
   );
 }

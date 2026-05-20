@@ -548,6 +548,108 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   );
 
   /**
+   * POST /api/v1/cards/:videoId/enrich-bg — idempotent background enrich
+   * trigger (CP475+, 2026-05-20).
+   *
+   * The Learning Page mounts this when the side panel opens and the v2
+   * row is missing its `segments` block (full path expired / not yet
+   * generated). Heart-click also enqueues via `/like`; this endpoint
+   * exists separately so we can fire it without changing pinned state.
+   *
+   * Body: { mandalaId: string }
+   *
+   * Returns 202 with one of:
+   *   { jobId: string, reason: 'enqueued' }       → fresh job started
+   *   { jobId: null,   reason: 'in_progress' }    → existing job still running
+   *   { jobId: null,   reason: 'already_complete' } → row already has atoms
+   *
+   * Subscribe to GET /:videoId/enrich-stream for SSE phase updates.
+   */
+  fastify.post<{
+    Params: { videoId: string };
+    Body: { mandalaId: string };
+  }>('/:videoId/enrich-bg', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    if (!request.user || !('userId' in request.user)) {
+      return reply
+        .code(401)
+        .send({ status: 'error', code: 'UNAUTHORIZED', message: 'Unauthorized' });
+    }
+    const userId = request.user.userId;
+    const { videoId } = request.params;
+    const { mandalaId } = request.body ?? { mandalaId: '' };
+
+    if (!YOUTUBE_VIDEO_ID_RE.test(videoId)) {
+      return reply.code(400).send({
+        status: 'error',
+        code: 'INVALID_VIDEO_ID',
+        message: `videoId must be a YouTube 11-char id; got ${videoId.slice(0, VIDEO_ID_LOG_TRIM)}`,
+      });
+    }
+    if (!mandalaId || typeof mandalaId !== 'string') {
+      return reply.code(400).send({
+        status: 'error',
+        code: 'INVALID_MANDALA_ID',
+        message: 'mandalaId is required',
+      });
+    }
+
+    const prisma = getPrismaClient();
+    try {
+      // 1. Skip if the row already has segments — full path landed.
+      const rs = await prisma.$queryRaw<Array<{ atom_count: number; quality_flag: string | null }>>`
+        SELECT
+          COALESCE(jsonb_array_length(NULLIF(segments->'atoms', 'null'::jsonb)), 0)::int AS atom_count,
+          quality_flag
+        FROM video_rich_summaries
+        WHERE video_id = ${videoId}
+          AND template_version = 'v2'
+        LIMIT 1
+      `;
+      const row = rs[0];
+      if (row && row.atom_count > 0) {
+        return reply
+          .code(202)
+          .send({ status: 'ok', data: { jobId: null, reason: 'already_complete' } });
+      }
+      // 2. Skip if a recent job is still in-flight (created/active/retry).
+      const inflight = await prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT id::text AS id
+        FROM pgboss.job
+        WHERE name = 'enrich-rich-summary'
+          AND data->>'videoId' = ${videoId}
+          AND data->>'userId' = ${userId}
+          AND state IN ('created', 'active', 'retry')
+        ORDER BY createdon DESC
+        LIMIT 1
+      `;
+      if (inflight.length > 0) {
+        return reply
+          .code(202)
+          .send({ status: 'ok', data: { jobId: inflight[0]!.id, reason: 'in_progress' } });
+      }
+      // 3. Enqueue a fresh job.
+      const jobId = await enqueueEnrichRichSummary({
+        videoId,
+        userId,
+        mandalaId,
+        title: '',
+      });
+      return reply.code(202).send({
+        status: 'ok',
+        data: { jobId, reason: 'enqueued' },
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn(`enrich-bg failed: videoId=${videoId} userId=${userId} err=${msg}`);
+      return reply.code(500).send({
+        status: 'error',
+        code: 'ENRICH_BG_FAILED',
+        message: msg.slice(0, 200),
+      });
+    }
+  });
+
+  /**
    * POST /api/v1/cards/:videoId/archive — soft-hide the video within a
    * mandala (Phase 3 FE provides the visible undo affordance).
    *
