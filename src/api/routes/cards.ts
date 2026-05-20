@@ -53,6 +53,7 @@ import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { enqueueEnrichRichSummary } from '@/modules/queue';
+import { trimOneLinerLabel } from '@/modules/skills/rich-summary-v2-quick-prompt';
 import { config } from '../../config';
 
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -838,6 +839,13 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             select: {
               video_id: true,
               one_liner: true,
+              // CP476+ — `core` for jsonb `one_liner` priority (v2 path).
+              // The legacy `one_liner` column was authored by the v1
+              // pipeline and frequently exceeds the sidebar's 20-char
+              // budget (one 44-char sentence observed in prod). The v2
+              // jsonb path is trimOneLinerLabel-validated, so we prefer
+              // it when present.
+              core: true,
               analysis: true,
               // CP475+ — `segments` for v2FullLanded detection (atoms count).
               // FE promotes v2 essence over v1 description only when atoms > 0.
@@ -891,9 +899,32 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
                 segments != null &&
                 Array.isArray(segments.atoms) &&
                 (segments.atoms as unknown[]).length > 0;
+              // CP476+ — oneLiner priority:
+              //   (1) jsonb `core.one_liner` (v2 path, trimOneLinerLabel-
+              //       validated) → use as-is
+              //   (2) column `one_liner` (legacy v1) → trim to 20 chars,
+              //       strip trailing punctuation
+              //   (3) both null → null
+              // Background: prod sidebar showed a 44-char sentence sourced
+              // from the legacy column, while the jsonb path held a
+              // compliant 12-char label ("2026년 네이버 변화"). Same row,
+              // two source of truth. This response-layer normalisation
+              // bypasses the dual-column ambiguity without touching the
+              // DB or the legacy write path.
+              const core = (r?.core ?? null) as { one_liner?: unknown } | null;
+              const jsonbOneLiner =
+                core && typeof core.one_liner === 'string' && core.one_liner.length > 0
+                  ? core.one_liner
+                  : null;
+              const oneLinerOut =
+                jsonbOneLiner !== null
+                  ? jsonbOneLiner
+                  : r?.one_liner
+                    ? trimOneLinerLabel(r.one_liner)
+                    : null;
               return {
                 videoId: vid,
-                oneLiner: r?.one_liner ?? null,
+                oneLiner: oneLinerOut,
                 coreArgument,
                 keyConcepts,
                 fallbackTags,
