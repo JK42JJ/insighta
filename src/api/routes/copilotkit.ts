@@ -1,8 +1,14 @@
 import 'reflect-metadata';
 import { FastifyPluginCallback } from 'fastify';
-import { CopilotRuntime, OpenAIAdapter, copilotRuntimeNodeHttpEndpoint } from '@copilotkit/runtime';
+import {
+  CopilotRuntime,
+  OpenAIAdapter,
+  copilotRuntimeNodeHttpEndpoint,
+  type CopilotServiceAdapter,
+} from '@copilotkit/runtime';
 import OpenAI from 'openai';
 import { config } from '@/config/index';
+import { QwenRunpodAdapter } from '@/modules/chatbot-rag';
 
 type ChatbotProvider = 'gemini' | 'openrouter' | 'local' | 'qwen-runpod';
 
@@ -17,7 +23,7 @@ function toRunpodOpenAiBase(raw: string): string {
   return trimmed.replace(/\/(?:runsync|run)$/, '') + '/openai/v1';
 }
 
-function createServiceAdapter(provider: ChatbotProvider, model?: string): OpenAIAdapter {
+function createServiceAdapter(provider: ChatbotProvider, model?: string): CopilotServiceAdapter {
   switch (provider) {
     case 'gemini':
     case 'openrouter':
@@ -39,13 +45,16 @@ function createServiceAdapter(provider: ChatbotProvider, model?: string): OpenAI
       });
 
     case 'qwen-runpod':
+      // CP474 — QwenRunpodAdapter uses createOpenAI({...}).chat(model) so the
+      // request hits /v1/chat/completions (vLLM-compatible) instead of the
+      // /v1/responses path that OpenAIAdapter's getLanguageModel() routes to.
+      // This is the Bug 1 fix: multi-turn chats no longer fail with
+      // "Invalid Responses API request" on the second turn.
       if (!config.qwenLora.apiUrl) throw new Error('QWEN_LORA_API_URL not set');
       if (!config.runpod.apiKey) throw new Error('RUNPOD_API_KEY not set');
-      return new OpenAIAdapter({
-        openai: new OpenAI({
-          apiKey: config.runpod.apiKey,
-          baseURL: toRunpodOpenAiBase(config.qwenLora.apiUrl),
-        }),
+      return new QwenRunpodAdapter({
+        baseURL: toRunpodOpenAiBase(config.qwenLora.apiUrl),
+        apiKey: config.runpod.apiKey,
         model: model || config.qwenLora.model,
       });
   }

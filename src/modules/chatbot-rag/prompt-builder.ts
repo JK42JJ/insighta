@@ -10,7 +10,17 @@
  * Used by:
  *   - BE serving (qwen-lora mode):  /api/v1/chat/qwen route (TBD)
  *   - LoRA training data generator:  convert-to-sft-v2.py (Python mirror)
+ *
+ * CP474 extensions (inference-only, NOT in training data):
+ *   - PRODUCT_PERSONA prepended (Insighta intro + glossary) — eliminates
+ *     "Insighta = DAMO Academy" hallucination class.
+ *   - Block U: per-user session context (tier / mandala list / activity).
+ *   - Block T: raw transcript fallback when v2 rich summary is absent.
+ *   - Block H: RAG retrieval results (cards / notes / KG concepts).
+ *   - EXTENDED_RULES appended only when any of {U, T, H} present, so the
+ *     original SFT-aligned ROLE_AND_RULES_KO/EN stays byte-identical.
  */
+import type { UserContext, TranscriptContext, RAGContext, RAGResult } from './types';
 
 // ============================================================================
 // Types
@@ -116,18 +126,91 @@ You are Insighta's learning assistant. Help the user based on their mandala char
 - Quote the video; prefer concrete facts over abstract summary.`;
 
 // ============================================================================
+// Product persona + glossary (CP474 — NEW, prepended before role/rules)
+//
+// These two blocks eliminate the "Insighta = DAMO Academy" hallucination
+// class observed during raw-curl LoRA testing. The model has no product
+// docs in its SFT data — feeding the brief here grounds product Q&A.
+// ============================================================================
+
+export const PRODUCT_PERSONA_KO = `[Insighta 소개]
+Insighta 는 YouTube 영상 기반 개인 지식 관리 플랫폼입니다. 핵심 구조:
+- 9x9 만다라 차트로 학습 목표 체계화 (1 중심 목표 + 8 서브 목표 + 64 액션 cell = 총 81 cell)
+- 사용자가 YouTube 영상을 만다라 cell 에 매핑하여 학습 진행
+- AI 챗봇이 영상 내용 + 만다라 컨텍스트를 활용해 사용자 학습 지원
+- 결제 tier: Free (3 만다라/150 카드) / Pro (20 만다라/1K 카드) / Lifetime (무제한)
+
+[Insighta 용어 사전]
+- 만다라 (Mandala): 사용자의 9x9 학습 목표 차트. 81개 cell 로 구성
+- Center goal (중심 목표): 만다라 가운데 cell, 사용자의 최종 학습 목표
+- Sub-goal (서브 목표): 중심 목표 주변 8개 cell, 1차 분해된 학습 영역
+- Action cell (실행 cell): 각 sub-goal 의 8개 세부 액션, 영상이 매핑되는 단위
+- Card (카드): 만다라 cell 에 매핑된 YouTube 영상 1개
+- Wizard mode (위자드 모드): 만다라 자동 생성 도우미
+- Learning page (학습 페이지): 영상 + 노트 + 챗봇 3-panel UI`;
+
+export const PRODUCT_PERSONA_EN = `[About Insighta]
+Insighta is a YouTube-based personal knowledge management platform. Core structure:
+- 9x9 mandala chart to organize learning goals (1 center + 8 sub-goals + 64 action cells = 81 cells total)
+- Users map YouTube videos to mandala cells to track learning progress
+- AI chatbot leverages video content + mandala context to support learning
+- Tiers: Free (3 mandalas / 150 cards) / Pro (20 / 1K) / Lifetime (unlimited)
+
+[Insighta glossary]
+- Mandala: a user's 9x9 learning goal chart (81 cells)
+- Center goal: the chart's middle cell — the user's top-level learning objective
+- Sub-goal: each of the 8 cells around the center — a 1st-level decomposition
+- Action cell: 8 cells per sub-goal — granular learning actions; videos attach here
+- Card: a YouTube video mapped to a mandala cell
+- Wizard mode: assistant that auto-generates the initial mandala
+- Learning page: 3-panel UI combining video, notes, and chatbot`;
+
+// EXTENDED_RULES — appended only when any of Block {U, T, H} is present.
+// Keeps the SFT-aligned ROLE_AND_RULES_KO/EN byte-identical for layers that
+// don't use the CP474 extensions.
+export const EXTENDED_RULES_KO = `[추가 규칙]
+- Insighta 제품/기능 질문은 [Insighta 소개] 및 [용어 사전] 에 근거하여 답변
+- [관련 자료 (RAG)] 가 있으면 적극 활용 — 출처 명시 (예: "당신이 학습한 X 영상에서도…", "당신의 노트(YYYY-MM-DD)에 따르면…")
+- [영상 정보] 가 없고 [원본 자막] 만 있으면 자막에서 직접 발췌하여 답변 (추상 요약 X, 발화 인용)
+- [영상 정보] 와 [원본 자막] 둘 다 없으면 "이 영상은 아직 분석되지 않았어요" 명시 후 일반 답변`;
+
+export const EXTENDED_RULES_EN = `[Additional rules]
+- Product/feature questions about Insighta MUST be grounded in [About Insighta] and [Insighta glossary] above.
+- If [Related Materials (RAG)] is present, cite explicitly (e.g., "From the X video you watched…", "Your note (YYYY-MM-DD) states…").
+- If only [Raw Transcript] is present (no [Video info]), quote the transcript directly instead of summarising.
+- If neither [Video info] nor [Raw Transcript] is present, reply "This video hasn't been analysed yet" before answering generally.`;
+
+// ============================================================================
 // Layer → Blocks mapping (§3.3)
 // ============================================================================
 
-export type BlockId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
+export type BlockId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'T' | 'U' | 'H';
 
+/**
+ * v2-grounded layer mapping (Block A-D come from V2Summary).
+ * U (user) + H (RAG) are appended to every layer — they're orthogonal
+ * to the chat surface the user is hovering over.
+ */
 export const LAYER_BLOCKS: Record<ChatLayer, BlockId[]> = {
-  global: ['A'],
-  mandala: ['A', 'E'],
-  cell: ['A', 'B', 'C', 'E'],
-  video: ['A', 'B', 'C', 'D'],
-  'video-time': ['A', 'B', 'C', 'D', 'F'],
-  note: ['A', 'B', 'C', 'D', 'F', 'G'],
+  global: ['A', 'U', 'H'],
+  mandala: ['A', 'E', 'U', 'H'],
+  cell: ['A', 'B', 'C', 'E', 'U', 'H'],
+  video: ['A', 'B', 'C', 'D', 'U', 'H'],
+  'video-time': ['A', 'B', 'C', 'D', 'F', 'U', 'H'],
+  note: ['A', 'B', 'C', 'D', 'F', 'G', 'U', 'H'],
+};
+
+/**
+ * Transcript-fallback layer mapping (Block T replaces Block A-D when no
+ * v2 rich summary exists for the current video). U/H remain available.
+ */
+export const LAYER_BLOCKS_FALLBACK: Record<ChatLayer, BlockId[]> = {
+  global: ['T', 'U', 'H'],
+  mandala: ['T', 'E', 'U', 'H'],
+  cell: ['T', 'E', 'U', 'H'],
+  video: ['T', 'U', 'H'],
+  'video-time': ['T', 'F', 'U', 'H'],
+  note: ['T', 'F', 'G', 'U', 'H'],
 };
 
 // ============================================================================
@@ -251,6 +334,134 @@ function blockG(r: RegionContext, lang: Lang): string | null {
 }
 
 // ============================================================================
+// Block T — Transcript fallback (CP474 NEW)
+//
+// Emitted when no v2 rich summary exists. The transcript is already
+// truncated to TRANSCRIPT_PROMPT_MAX_CHARS upstream (video-context-loader.ts).
+// ============================================================================
+
+function blockT(t: TranscriptContext, lang: Lang): string {
+  if (lang === 'ko') {
+    const header = '[원본 자막] (AI 요약 미생성, 자막 원본 활용)';
+    const meta = `출처: ${t.source} / 언어: ${t.language}`;
+    const note = t.truncated ? '\n\n[자막 일부 잘림 — 위 내용만 활용]' : '';
+    return `${header}\n${meta}\n${t.full_text}${note}`;
+  }
+  const header = '[Raw Transcript] (no AI summary yet — quote captions directly)';
+  const meta = `Source: ${t.source} / Language: ${t.language}`;
+  const note = t.truncated ? '\n\n[Transcript truncated — use the above only]' : '';
+  return `${header}\n${meta}\n${t.full_text}${note}`;
+}
+
+// ============================================================================
+// Block U — User session context (CP474 NEW)
+// ============================================================================
+
+function blockU(u: UserContext, lang: Lang): string | null {
+  // Defensive: blank user context (no tier signal, empty mandalas, no email)
+  // → emit nothing rather than a near-empty block.
+  if (!u.email && u.tier === 'free' && u.mandala_count === 0) {
+    return null;
+  }
+
+  if (lang === 'ko') {
+    const lines = ['[사용자 컨텍스트]'];
+    lines.push(`사용자: ${u.display_name}${u.email ? ` (${u.email})` : ''}`);
+    lines.push(`Tier: ${u.tier}`);
+    if (u.join_date && u.days_active > 0) {
+      lines.push(`가입일: ${u.join_date} (${u.days_active}일째 학습 중)`);
+    }
+    if (u.mandala_count > 0 && u.mandala_titles.length > 0) {
+      const titles = u.mandala_titles.map((t) => `"${t}"`).join(', ');
+      lines.push(`운영 중인 만다라: ${u.mandala_count}개 (${titles})`);
+    }
+    if (u.current_mandala_name) {
+      lines.push(`현재 만다라: ${u.current_mandala_name}`);
+    }
+    if (u.recent_card_count_7d > 0) {
+      lines.push(`이번 주 학습 카드: ${u.recent_card_count_7d}개`);
+    }
+    return lines.join('\n');
+  }
+
+  const lines = ['[User context]'];
+  lines.push(`User: ${u.display_name}${u.email ? ` (${u.email})` : ''}`);
+  lines.push(`Tier: ${u.tier}`);
+  if (u.join_date && u.days_active > 0) {
+    lines.push(`Joined: ${u.join_date} (${u.days_active} days learning)`);
+  }
+  if (u.mandala_count > 0 && u.mandala_titles.length > 0) {
+    const titles = u.mandala_titles.map((t) => `"${t}"`).join(', ');
+    lines.push(`Active mandalas: ${u.mandala_count} (${titles})`);
+  }
+  if (u.current_mandala_name) {
+    lines.push(`Current mandala: ${u.current_mandala_name}`);
+  }
+  if (u.recent_card_count_7d > 0) {
+    lines.push(`Cards added this week: ${u.recent_card_count_7d}`);
+  }
+  return lines.join('\n');
+}
+
+// ============================================================================
+// Block H — RAG context (CP474 NEW)
+// ============================================================================
+
+function formatRAGResult(r: RAGResult, lang: Lang, index: number): string {
+  if (lang === 'ko') {
+    const lines: string[] = [];
+    const label =
+      r.source_type === 'card'
+        ? '저장 카드'
+        : r.source_type === 'note'
+          ? '내 노트'
+          : 'Knowledge Graph';
+    const where =
+      r.mandala_name && r.cell_name
+        ? ` — ${r.mandala_name} / ${r.cell_name}`
+        : r.mandala_name
+          ? ` — ${r.mandala_name}`
+          : '';
+    lines.push(`${index + 1}. ${label}${where}: "${r.title}"`);
+    if (r.excerpt) lines.push(`   ${r.excerpt}`);
+    if (r.date) lines.push(`   (${r.date})`);
+    if (r.kg_links && r.kg_links.length > 0) {
+      const kg = r.kg_links.map((k) => `${k.concept} (${k.card_count} 카드)`).join(', ');
+      lines.push(`   연결: ${kg}`);
+    }
+    return lines.join('\n');
+  }
+  const lines: string[] = [];
+  const label =
+    r.source_type === 'card'
+      ? 'Saved card'
+      : r.source_type === 'note'
+        ? 'My note'
+        : 'Knowledge Graph';
+  const where =
+    r.mandala_name && r.cell_name
+      ? ` — ${r.mandala_name} / ${r.cell_name}`
+      : r.mandala_name
+        ? ` — ${r.mandala_name}`
+        : '';
+  lines.push(`${index + 1}. ${label}${where}: "${r.title}"`);
+  if (r.excerpt) lines.push(`   ${r.excerpt}`);
+  if (r.date) lines.push(`   (${r.date})`);
+  if (r.kg_links && r.kg_links.length > 0) {
+    const kg = r.kg_links.map((k) => `${k.concept} (${k.card_count} cards)`).join(', ');
+    lines.push(`   Links: ${kg}`);
+  }
+  return lines.join('\n');
+}
+
+function blockH(rc: RAGContext, lang: Lang): string | null {
+  if (!rc.results || rc.results.length === 0) return null;
+  const header = lang === 'ko' ? '[관련 자료 (RAG)]' : '[Related Materials (RAG)]';
+  const items = rc.results.map((r, i) => formatRAGResult(r, lang, i));
+  return [header, ...items].join('\n\n');
+}
+
+// ============================================================================
 // Main builder
 // ============================================================================
 
@@ -260,25 +471,97 @@ export interface BuildQwenSystemPromptParams {
   v2Data?: V2Summary | null;
   mandalaContext?: MandalaContext | null;
   regionContext?: RegionContext | null;
+  /** CP474 — per-user session context (Block U). */
+  userContext?: UserContext | null;
+  /** CP474 — transcript fallback (Block T). Used only when v2Data absent. */
+  transcript?: TranscriptContext | null;
+  /** CP474 — RAG retrieval results (Block H). */
+  ragContext?: RAGContext | null;
+  /**
+   * CP474 — when false, omit PRODUCT_PERSONA / EXTENDED_RULES so the output
+   * is byte-identical to the legacy SFT-aligned format (used by training-
+   * data generation paths or A/B comparison). Default true (production).
+   */
+  includePersona?: boolean;
 }
 
 export function buildQwenSystemPrompt(params: BuildQwenSystemPromptParams): string {
-  const { layer, language, v2Data, mandalaContext, regionContext } = params;
+  const {
+    layer,
+    language,
+    v2Data,
+    mandalaContext,
+    regionContext,
+    userContext,
+    transcript,
+    ragContext,
+  } = params;
+  const includePersona = params.includePersona ?? true;
 
-  const wanted = LAYER_BLOCKS[layer] ?? LAYER_BLOCKS.global;
-  const blocks: string[] = [language === 'ko' ? ROLE_AND_RULES_KO : ROLE_AND_RULES_EN];
+  // Decide block set: v2 present → standard (A-D); else transcript exists
+  // → fallback (T); else still walk the standard set and let each block
+  // builder no-op when its source data is null.
+  const useFallback = !v2Data && Boolean(transcript);
+  const wanted = useFallback
+    ? (LAYER_BLOCKS_FALLBACK[layer] ?? LAYER_BLOCKS_FALLBACK.global)
+    : (LAYER_BLOCKS[layer] ?? LAYER_BLOCKS.global);
 
-  const push = (b: string | null) => {
+  const blocks: string[] = [];
+
+  // Persona + glossary (CP474 — always first when enabled).
+  if (includePersona) {
+    blocks.push(language === 'ko' ? PRODUCT_PERSONA_KO : PRODUCT_PERSONA_EN);
+  }
+
+  // SFT-aligned role + rules (byte-identical to training data).
+  blocks.push(language === 'ko' ? ROLE_AND_RULES_KO : ROLE_AND_RULES_EN);
+
+  // Extended rules — only when any CP474 block is in play. Keeps legacy
+  // layers free of training-data drift.
+  const hasExtended =
+    includePersona && (Boolean(userContext) || Boolean(transcript) || Boolean(ragContext));
+  if (hasExtended) {
+    blocks.push(language === 'ko' ? EXTENDED_RULES_KO : EXTENDED_RULES_EN);
+  }
+
+  const push = (b: string | null): void => {
     if (b) blocks.push(b);
   };
 
-  if (wanted.includes('A') && v2Data) push(blockA(v2Data, language));
-  if (wanted.includes('B') && v2Data) push(blockB(v2Data, language));
-  if (wanted.includes('C') && v2Data) push(blockC(v2Data, language));
-  if (wanted.includes('D') && v2Data) push(blockD(v2Data, language));
-  if (wanted.includes('E') && mandalaContext) push(blockE(mandalaContext, language));
-  if (wanted.includes('F') && regionContext) push(blockF(regionContext, language));
-  if (wanted.includes('G') && regionContext) push(blockG(regionContext, language));
+  for (const id of wanted) {
+    switch (id) {
+      case 'A':
+        if (v2Data) push(blockA(v2Data, language));
+        break;
+      case 'B':
+        if (v2Data) push(blockB(v2Data, language));
+        break;
+      case 'C':
+        if (v2Data) push(blockC(v2Data, language));
+        break;
+      case 'D':
+        if (v2Data) push(blockD(v2Data, language));
+        break;
+      case 'E':
+        if (mandalaContext) push(blockE(mandalaContext, language));
+        break;
+      case 'F':
+        if (regionContext) push(blockF(regionContext, language));
+        break;
+      case 'G':
+        if (regionContext) push(blockG(regionContext, language));
+        break;
+      case 'T':
+        if (transcript) push(blockT(transcript, language));
+        break;
+      case 'U':
+        if (userContext) push(blockU(userContext, language));
+        break;
+      case 'H':
+        if (ragContext) push(blockH(ragContext, language));
+        break;
+    }
+  }
 
   return blocks.join('\n\n');
 }

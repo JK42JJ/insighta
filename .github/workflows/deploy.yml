@@ -216,6 +216,13 @@ jobs:
           TAILSCALE_IP: ${{ vars.INSIGHTA_TAILSCALE_IP }}
           QWEN_LORA_API_URL: ${{ secrets.QWEN_LORA_API_URL }}
           RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          # CP474 — selects which provider the CopilotKit chatbot route uses.
+          # Values: 'gemini' | 'openrouter' | 'local' | 'qwen-runpod'.
+          # Default 'openrouter' per src/config/index.ts when unset; set the
+          # GitHub Variable CHATBOT_PROVIDER=qwen-runpod to activate the
+          # RunPod/vLLM path (also activates the Bug 1 chat.completions fix
+          # via QwenRunpodAdapter + the persona/SFT prompt middleware).
+          CHATBOT_PROVIDER: ${{ vars.CHATBOT_PROVIDER }}
           LS_API_KEY: ${{ secrets.LEMONSQUEEZY_API_KEY }}
           LS_WEBHOOK_SECRET: ${{ secrets.LEMONSQUEEZY_WEBHOOK_SECRET }}
           LS_STORE_ID: ${{ vars.LEMONSQUEEZY_STORE_ID }}
@@ -250,7 +257,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED,YOUTUBE_METADATA_BACKFILL_ENABLED,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN
+          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED,YOUTUBE_METADATA_BACKFILL_ENABLED,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN
           script: |
             set -e
             cd /opt/tubearchive
@@ -367,6 +374,12 @@ jobs:
             fi
             if [ -n "${RUNPOD_API_KEY}" ]; then
               grep -q '^RUNPOD_API_KEY=' .env 2>/dev/null && sed -i "s|^RUNPOD_API_KEY=.*|RUNPOD_API_KEY=${RUNPOD_API_KEY}|" .env || echo "RUNPOD_API_KEY=${RUNPOD_API_KEY}" >> .env
+            fi
+            # CP474 — chatbot provider selector. Empty/unset ⇒ BE default
+            # 'openrouter' (src/config/index.ts:109). Set 'qwen-runpod' to
+            # activate the RunPod/vLLM path + Bug 1 chat.completions fix.
+            if [ -n "${CHATBOT_PROVIDER}" ]; then
+              grep -q '^CHATBOT_PROVIDER=' .env 2>/dev/null && sed -i "s|^CHATBOT_PROVIDER=.*|CHATBOT_PROVIDER=${CHATBOT_PROVIDER}|" .env || echo "CHATBOT_PROVIDER=${CHATBOT_PROVIDER}" >> .env
             fi
             # CP456 — Lemon Squeezy billing. billingConfig.enabled requires
             # API_KEY + WEBHOOK_SECRET + STORE_ID + VARIANT_MONTHLY +
