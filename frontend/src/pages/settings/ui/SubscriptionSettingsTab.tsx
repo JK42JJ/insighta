@@ -87,10 +87,7 @@ export function SubscriptionSettingsTab() {
   const tierKey = subscription.tier?.toLowerCase() ?? 'free';
   const tierStyle = TIER_STYLES[tierKey] ?? TIER_STYLES.free;
 
-  const billingTier = billingData?.tier ?? 'free';
   const billingSub = billingData?.subscription ?? null;
-  const isAdmin = billingTier === 'admin';
-  const isLifetimeWithoutSub = billingTier === 'lifetime' && !billingSub;
   const showRenewalNote =
     billingSub?.planCode === 'lifetime' || billingSub?.planCode === 'pro_lifetime';
 
@@ -193,9 +190,7 @@ export function SubscriptionSettingsTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isAdmin ? (
-            <p className="text-sm text-muted-foreground">{t('settings.billing.adminNote')}</p>
-          ) : billingSub ? (
+          {billingSub ? (
             <>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
@@ -230,16 +225,6 @@ export function SubscriptionSettingsTab() {
               <p className="text-xs text-muted-foreground text-center">
                 {t('settings.billing.portalFooter')}
               </p>
-            </>
-          ) : isLifetimeWithoutSub ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                {t('settings.billing.lifetimeBadgeNote')}
-              </p>
-              <Button variant="outline" className="w-full gap-2" onClick={onViewPlans}>
-                {t('settings.billing.viewPlans')}
-                <ArrowRight className="w-4 h-4" />
-              </Button>
             </>
           ) : (
             <>
