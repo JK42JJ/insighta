@@ -9,6 +9,7 @@ import {
 import OpenAI from 'openai';
 import { config } from '@/config/index';
 import { QwenRunpodAdapter } from '@/modules/chatbot-rag';
+import { getChatbotSettings } from '@/modules/chatbot-settings/service';
 import { toRunpodOpenAiBase } from './copilotkit-base-url';
 import {
   resolveChatbotModel,
@@ -63,30 +64,54 @@ function createServiceAdapter(provider: ChatbotProvider, model: string): Copilot
   }
 }
 
+// ---------------------------------------------------------------------------
+// Lazy yoga handler — rebuilt only when admin settings change (CP475+3).
+//
+// `getChatbotSettings()` is cheap (5-min in-memory cache hit, O(1)). We rebuild
+// the yoga + serviceAdapter only when settings.updatedAt has advanced past
+// the last build timestamp. PUT /admin/chatbot/models invalidates the cache,
+// so the next request reads the new settings and rebuilds.
+// ---------------------------------------------------------------------------
+
+type YogaHandler = ReturnType<typeof copilotRuntimeNodeHttpEndpoint>;
+
+let lazyYoga: YogaHandler | null = null;
+let lazyBuildAt = 0;
+
+async function getYoga(): Promise<YogaHandler> {
+  const settings = await getChatbotSettings();
+  if (!lazyYoga || settings.updatedAt.getTime() > lazyBuildAt) {
+    const provider = config.chatbot.provider;
+    const model = resolveChatbotModel(provider, config.chatbot.model, buildProviderDefaults(), {
+      qwenRunpodModel: settings.qwenRunpodModel,
+      openrouterModel: settings.openrouterModel,
+    });
+    const serviceAdapter = createServiceAdapter(provider, model);
+    const runtime = new CopilotRuntime();
+    lazyYoga = copilotRuntimeNodeHttpEndpoint({
+      runtime,
+      serviceAdapter,
+      endpoint: '/api/v1/chat',
+    });
+    lazyBuildAt = Date.now();
+  }
+  return lazyYoga;
+}
+
 export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
-  const provider = config.chatbot.provider;
-  // CP475+2 — resolve via provider-aware fallback so `qwen-runpod` no
-  // longer inherits the openrouter gemini-flash default and sends a
-  // model name vLLM doesn't recognise. CHATBOT_MODEL env still wins.
-  const model = resolveChatbotModel(provider, config.chatbot.model, buildProviderDefaults());
-  const serviceAdapter = createServiceAdapter(provider, model);
-  const runtime = new CopilotRuntime();
-
-  const yoga = copilotRuntimeNodeHttpEndpoint({
-    runtime,
-    serviceAdapter,
-    endpoint: '/api/v1/chat',
-  });
-
-  // yoga is a graphql-yoga instance — register on raw HTTP server
-  // to bypass Fastify body parsing entirely.
+  // yoga is a graphql-yoga instance — register on raw HTTP server to bypass
+  // Fastify body parsing entirely. CP475+3: build lazily on first request so
+  // we can read admin DB settings async.
   const server = fastify.server;
   const originalListeners = server.listeners('request');
 
   server.removeAllListeners('request');
   server.on('request', (req, res) => {
     if (req.url?.startsWith('/api/v1/chat') && !req.url?.startsWith('/api/v1/chat/config')) {
-      void yoga(req, res);
+      void (async () => {
+        const handler = await getYoga();
+        await handler(req, res);
+      })();
       return;
     }
     for (const listener of originalListeners) {
@@ -95,13 +120,17 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
   });
 
   fastify.get('/config', { onRequest: [fastify.authenticate] }, async (_request, reply) => {
+    // Resolve the live model the same way getYoga() does so /config always
+    // reflects the value the next chat request will actually use.
+    const provider = config.chatbot.provider;
+    const settings = await getChatbotSettings();
+    const model = resolveChatbotModel(provider, config.chatbot.model, buildProviderDefaults(), {
+      qwenRunpodModel: settings.qwenRunpodModel,
+      openrouterModel: settings.openrouterModel,
+    });
     return reply.send({
       status: 200,
-      data: {
-        provider,
-        // `model` is already provider-resolved above (CP475+2 fix); send as-is.
-        model,
-      },
+      data: { provider, model },
     });
   });
 

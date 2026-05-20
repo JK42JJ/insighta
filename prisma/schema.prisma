@@ -2107,3 +2107,17 @@ model pipeline_events {
   @@index([created_at(sort: Desc)])
   @@schema("public")
 }
+
+/// Singleton (id=1) holding admin-overridable model names per chatbot provider.
+/// Resolver order: env CHATBOT_MODEL > this row > per-provider hardcoded default.
+/// Raw SQL DDL: prisma/migrations/chatbot-settings/001_create_table.sql
+/// CP475+3 — admin UI dynamic chatbot model control.
+model chatbot_settings {
+  id                Int      @id @default(1)
+  qwen_runpod_model String?
+  openrouter_model  String?
+  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_by        String?  @db.Uuid
+
+  @@schema("public")
+}

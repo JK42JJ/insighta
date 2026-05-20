@@ -13,6 +13,7 @@ import { AdminPayments } from '@/pages/admin/ui/AdminPayments';
 import { AdminModeration } from '@/pages/admin/ui/AdminModeration';
 import { AdminHealth } from '@/pages/admin/ui/AdminHealth';
 import { AdminBilling } from '@/pages/admin/ui/AdminBilling';
+import { AdminChatbotModels } from '@/pages/admin/ui/AdminChatbotModels';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -145,6 +146,7 @@ export function AppRouter() {
           <Route path="billing" element={<AdminBilling />} />
           <Route path="health" element={<AdminHealth />} />
           <Route path="audit-log" element={<AdminAuditLog />} />
+          <Route path="chatbot-models" element={<AdminChatbotModels />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

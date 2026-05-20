@@ -390,6 +390,25 @@ export interface TemplateTypeaheadResult {
   domain: string | null;
 }
 
+/** CP475+3 — per-provider chatbot model overrides + context for admin UI. */
+export interface AdminChatbotModelsResponse {
+  qwenRunpodModel: string | null;
+  openrouterModel: string | null;
+  updatedAt: string;
+  updatedBy: string | null;
+  /** Hardcoded fallbacks (when no env / DB override). */
+  defaults: { openrouter: string; local: string; qwenRunpod: string };
+  /** Explicit `CHATBOT_MODEL` env value, if set — wins over DB. */
+  envExplicit: string | null;
+}
+
+export interface AdminChatbotModelsUpdateResponse {
+  qwenRunpodModel: string | null;
+  openrouterModel: string | null;
+  updatedAt: string;
+  updatedBy: string | null;
+}
+
 interface MandalaResponse {
   id: string;
   userId: string;
@@ -942,6 +961,40 @@ class ApiClient {
       success: boolean;
       data: { key: string; value: unknown };
     }>(`/admin/settings/${encodeURIComponent(key)}`);
+    return res.data;
+  }
+
+  // ─── CP475+3 Chatbot model overrides (admin only) ─────────────────────────
+
+  /**
+   * Read per-provider model overrides + their hardcoded defaults so the admin
+   * UI can show "currently using X, default Y".
+   */
+  async getAdminChatbotModels(): Promise<AdminChatbotModelsResponse> {
+    const res = await this.request<{ success: boolean; data: AdminChatbotModelsResponse }>(
+      '/admin/chatbot/models'
+    );
+    return res.data;
+  }
+
+  /**
+   * Update per-provider chatbot model overrides. `null` clears an override;
+   * `undefined` (omitted field) leaves it unchanged.
+   *
+   * The next /api/v1/chat request will pick up the new value (BE invalidates
+   * its in-memory cache + rebuilds the CopilotRuntime).
+   */
+  async setAdminChatbotModels(input: {
+    qwenRunpodModel?: string | null;
+    openrouterModel?: string | null;
+  }): Promise<AdminChatbotModelsUpdateResponse> {
+    const res = await this.request<{ success: boolean; data: AdminChatbotModelsUpdateResponse }>(
+      '/admin/chatbot/models',
+      {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      }
+    );
     return res.data;
   }
 
