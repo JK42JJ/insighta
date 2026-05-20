@@ -9,6 +9,7 @@ import { GripVertical, NotepadText, Loader2, Play, Bookmark, Archive } from 'luc
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { useArchiveCard } from '@/features/card-management/model/useArchiveCard';
 import { useEnrichStream } from '@/features/card-management/model/useEnrichStream';
+import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import { extractYouTubeVideoId } from '@/shared/lib/url-normalize';
 import { type DragData, cardDragId } from '@/shared/lib/dnd';
 import {
@@ -216,12 +217,43 @@ export function InsightCardItemV2({
   // the empty payload until the next natural refetch. Force a refetch
   // here so the badge + footer one_liner appear the moment 'scored'
   // arrives.
+  //
+  // CP475+ — PR #704 moved the card grid v2 source from useV2Summaries
+  // (key ['cards','v2-summaries']) to the inlined fields on
+  // /local-cards/list (key localCardsKeys.list()). The old invalidate
+  // here became a no-op for the grid card. Both keys are now refreshed
+  // on 'scored', plus a single short follow-up after 1.5s to absorb the
+  // BE write-after-job-complete commit window (pgboss marks state=
+  // completed before the row's transactional commit is fully visible to
+  // a subsequent SELECT in rare cases).
   const queryClient = useQueryClient();
   useEffect(() => {
-    if (enrichStream.phase === 'scored') {
+    if (enrichStream.phase !== 'scored') return;
+    const invalidate = () => {
       void queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
-    }
+      void queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+    };
+    invalidate();
+    const t = window.setTimeout(invalidate, 1500);
+    return () => window.clearTimeout(t);
   }, [enrichStream.phase, queryClient]);
+
+  // CP475+ — safety-net polling for the case where the SSE stream
+  // closed (or never opened — page refresh after a like) but the
+  // server v2 row hasn't landed in our card payload yet. Only active
+  // while this card is liked AND its v2 essence is still empty. 5s
+  // interval matches PanelAISummary; the query auto-stops as soon as
+  // the row arrives (`coreArgument` becomes non-null on next refetch).
+  useEffect(() => {
+    if (!videoId) return;
+    if (!card.pinnedAt) return;
+    if ((card.v2CoreArgument ?? null) != null) return;
+    if ((card.v2OneLiner ?? null) != null) return;
+    const interval = window.setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [videoId, card.pinnedAt, card.v2CoreArgument, card.v2OneLiner, queryClient]);
 
   const handleHeartClick = useCallback(
     (e: React.MouseEvent) => {
