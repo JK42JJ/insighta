@@ -60,7 +60,18 @@ server {
         proxy_pass ${API_URL}/api/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
+        # CP477+13 — was hardcoded `Connection 'upgrade'`, which forced
+        # every BE request (including normal HTTP POST /api/v1/chat) to
+        # carry an `upgrade` connection header. CopilotKit 1.55.3 V2
+        # runtime sends JSON POSTs with no websocket; the forced upgrade
+        # combined with the BE raw HTTP `req.pause()`/`req.resume()` body
+        # buffering (PR #732 CP477+7) caused intermittent body stream
+        # loss -> `{"error":"invalid_request","message":"Invalid JSON
+        # payload"}` 400. Forward the client's own Connection header
+        # instead; real websocket clients still send `upgrade` and pass
+        # through, plain HTTP clients send `keep-alive` and avoid the
+        # upgrade negotiation entirely.
+        proxy_set_header Connection $http_connection;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
