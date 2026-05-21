@@ -31,12 +31,19 @@ function createServiceAdapter(provider: ChatbotProvider, model: string): Copilot
   switch (provider) {
     case 'gemini':
     case 'openrouter':
-      return new OpenAIAdapter({
-        openai: new OpenAI({
-          apiKey: config.openrouter.apiKey,
-          baseURL: 'https://openrouter.ai/api/v1',
-        }),
+      // CP477+4 — Use QwenRunpodAdapter (chat.completions forced) instead of
+      // CopilotKit's default OpenAIAdapter (which routes via Responses API
+      // -> not supported by OpenRouter -> Bug 1 "Invalid Responses API request"
+      // on turn 2). includeChatTemplateKwargs disabled because OpenRouter is
+      // not vLLM and the field is undocumented there.
+      if (!config.openrouter.apiKey) {
+        throw new Error('OPENROUTER_API_KEY not set');
+      }
+      return new QwenRunpodAdapter({
+        baseURL: 'https://openrouter.ai/api/v1',
+        apiKey: config.openrouter.apiKey,
         model,
+        includeChatTemplateKwargs: false,
       });
 
     case 'local':
