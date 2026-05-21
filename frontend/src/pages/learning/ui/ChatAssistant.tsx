@@ -387,15 +387,14 @@ function ChatPanel({
     convert: (v: string) => v,
   });
 
-  // Suppress Qwen3 chain-of-thought reasoning blocks. The `/no_think` flag
-  // is honored by Qwen3 chat templates when present in the prompt; for
-  // providers that ignore it (Gemini, OpenAI-router models) this is a
-  // harmless extra line.
-  useCopilotReadable({
-    description: 'Output formatting directives for the underlying model',
-    value: '/no_think',
-    convert: (v: string) => v,
-  });
+  // CP477+6 +2 — `/no_think` directive moved entirely to BE middleware
+  // (appendNoThinkToLastUserMessage in qwen-prompt-middleware.ts). Keeping
+  // it as a useCopilotReadable here placed `/no_think` in the system-side
+  // context, which Qwen3 chat templates do NOT recognise as a reasoning
+  // gate — instead the base model (notably OpenRouter Qwen3.5-9B) echoed
+  // the directive back as if it were a user command ("/no_think 명령어는
+  // 규칙에 없는 명령어입니다"). The user-message-end placement on the BE
+  // is the only path that both gates reasoning AND avoids echo.
 
   useCopilotReadable({
     description:
