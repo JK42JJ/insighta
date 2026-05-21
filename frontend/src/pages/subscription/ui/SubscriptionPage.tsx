@@ -7,12 +7,12 @@ import { useAuth } from '@/features/auth/model/useAuth';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
-import { Check, Crown, Zap, Star, X } from 'lucide-react';
+import { Check, Crown, Zap, Star, X, Clock, ExternalLink } from 'lucide-react';
 import { toast } from '@/shared/lib/use-toast';
 import { useBillingSubscription } from '@/features/billing/model/useBillingSubscription';
 import { useCheckoutUrl } from '@/features/billing/model/useCheckoutUrl';
 import { useBillingEnabled } from '@/features/billing/model/useBillingEnabled';
-import { SubscriptionStatusCard } from '@/features/billing/ui/SubscriptionStatusCard';
+import { usePortalUrl } from '@/features/billing/model/usePortalUrl';
 import { setupOverlay, openCheckout, closeCheckout } from '@/shared/lib/lemonsqueezy-overlay';
 import { queryKeys } from '@/shared/config/query-client';
 import { ApiHttpError } from '@/shared/lib/api-client';
@@ -23,13 +23,15 @@ import type {
 } from '@/shared/lib/api-client';
 
 /**
- * Subscription page — 3-card layout (Free / Pioneer Lifetime / Pro) with LS billing wiring.
+ * Subscription page — 3-card layout with current-plan integration (CP476+1):
+ *   - Top urgency banner (non-LTD users only) — "last chance" framing for LTD pricing.
+ *   - Active subscription state is rendered inline on the matching grid card (no
+ *     separate SubscriptionStatusCard above the grid — that caused information
+ *     duplication; mockup reference: ~/Downloads/subscription_page_redesign.html).
+ *   - Current plan card surfaces "현재 이용 중" badge + paid-state label
+ *     ("결제 완료 · 평생 유효" / "결제 완료 · 다음 결제일 X") + portal CTA.
  *
- * Design: preserved from prior prod design — Card + Badge + Crown/Zap/Star + Recommended
- * + ✓ feature list + urgency footer. CP456 wires `handleSelectPlan` to the LS hosted
- * checkout opened as an **in-page overlay** (Lemon.js, never leaves insighta.one).
- *
- * Strings: all via `t(...)` (i18n) — see `subscription.*` namespace in locales/{ko,en}.json.
+ * Strings: all via t(...); see `subscription.*` namespace in locales/{ko,en}.json.
  */
 
 type PlanRow = {
@@ -91,12 +93,6 @@ const LTD_FEATURES_FALLBACK = [
   'Priority support',
 ];
 
-/**
- * Map planCode → optimistic tier for setQueryData after Checkout.Success.
- * Lets the UI flip "Subscribe to Pro" → "Current Plan" instantly even when the
- * webhook hasn't landed yet (e.g., local dev without a tunnel). The eventual
- * webhook-driven invalidation overwrites this with authoritative server data.
- */
 function inferTierFromPlan(planCode: BillingPlanCode | null): BillingTier {
   if (planCode === 'pro_lifetime') return 'lifetime';
   return 'pro';
@@ -106,15 +102,14 @@ const POLLING_INTERVAL_MS = 5_000;
 const POLLING_TIMEOUT_MS = 30_000;
 
 export default function SubscriptionPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { userName } = useAuth();
   const queryClient = useQueryClient();
   const { data: billingData, isLoading: billingLoading } = useBillingSubscription();
   const checkout = useCheckoutUrl();
-  // CP456 Phase 5 (strict gate): flag=false → CTA disabled for everyone,
-  // admins included. Admins flip the flag from /admin/billing first.
+  const portal = usePortalUrl();
   const { data: flagData } = useBillingEnabled();
   const billingFlagOn = flagData?.enabled === true;
   const billingLocked = !billingFlagOn;
@@ -124,16 +119,9 @@ export default function SubscriptionPage() {
 
   const currentTier = billingData?.tier ?? 'free';
   const hasActiveSub = !!billingData?.subscription;
+  const sub = billingData?.subscription ?? null;
+  const showLtdBanner = currentTier !== 'lifetime';
 
-  // Register LS overlay event handler. Checkout.Success flow:
-  //   1. Close the overlay + cleanup loader DOM.
-  //   2. Optimistically set `billing.me` cache to the matching tier so the page
-  //      reflects the new plan immediately (webhook may take seconds to land,
-  //      or in local dev without a tunnel may never land — see project_prod_architecture).
-  //   3. Start a 30s polling window (every 5s) to invalidate the cache; webhook
-  //      arrival overrides the optimistic value with server truth. If polling
-  //      times out without server data catching up, surface an "activation
-  //      delayed" toast so the user understands the delay is expected.
   useEffect(() => {
     const cleanup = setupOverlay((event) => {
       if (event.event !== 'Checkout.Success') return;
@@ -160,7 +148,6 @@ export default function SubscriptionPage() {
           const fresh = queryClient.getQueryData<BillingSubscriptionMeResponse>(
             queryKeys.billing.me()
           );
-          // Webhook landed → server data has subscription row.
           if (fresh?.subscription) {
             webhookSynced = true;
             window.clearInterval(interval);
@@ -213,14 +200,9 @@ export default function SubscriptionPage() {
     try {
       const res = await checkout.mutateAsync(plan.planCode);
       openCheckout(res.checkoutUrl);
-      // setRedirecting cleared by Checkout.Success event OR manual close.
-      // Reset after a short delay in case the user closes the overlay without buying.
       setTimeout(() => setRedirecting(null), 1500);
     } catch (err) {
       setRedirecting(null);
-      // ALREADY_SUBSCRIBED: BE-side preflight detected an active LS subscription
-      // (webhook may not have synced to local DB). Open the portal URL provided
-      // in the error details instead of letting the user open a stuck checkout.
       if (
         err instanceof ApiHttpError &&
         err.statusCode === 409 &&
@@ -247,20 +229,15 @@ export default function SubscriptionPage() {
     }
   };
 
-  // Auto-checkout on landing from /pricing (or any deep link): when the URL
-  // carries `?plan=<code>&autoCheckout=1` and the user does not yet have that
-  // tier, fire handleSelectPlan once. Strips the query immediately so a refresh
-  // or in-app navigation does not re-trigger an infinite loop.
   useEffect(() => {
     if (autoCheckoutTriggeredRef.current) return;
-    if (billingLoading) return; // wait for tier resolution
+    if (billingLoading) return;
     const planParam = searchParams.get('plan');
     const auto = searchParams.get('autoCheckout');
     if (!planParam || auto !== '1') return;
     const target = PLANS.find((p) => p.planCode === (planParam as BillingPlanCode));
     if (!target) return;
     autoCheckoutTriggeredRef.current = true;
-    // Strip query first to avoid loop, then surface the disabled-feature toast.
     if (billingLocked) {
       navigate('/subscription', { replace: true });
       toast({
@@ -269,9 +246,7 @@ export default function SubscriptionPage() {
       });
       return;
     }
-    // Strip query before triggering (replace, no history entry).
     navigate('/subscription', { replace: true });
-    // Defer one tick so navigate completes before opening the overlay.
     setTimeout(() => {
       handleSelectPlan(target);
     }, 0);
@@ -285,10 +260,37 @@ export default function SubscriptionPage() {
     return false;
   };
 
+  const activeStateLabelFor = (planId: PlanRow['id']): string | null => {
+    if (!sub) return null;
+    if (planId === 'ltd' && currentTier === 'lifetime') {
+      return t('subscription.activeStateLifetime');
+    }
+    if (planId === 'pro' && currentTier === 'pro' && sub.currentPeriodEnd) {
+      const date = new Date(sub.currentPeriodEnd).toLocaleDateString(
+        i18n.language === 'ko' ? 'ko-KR' : 'en-US',
+        { year: 'numeric', month: 'long', day: 'numeric' }
+      );
+      return t('subscription.activeStateRecurring', { date });
+    }
+    return null;
+  };
+
+  const onPortal = async () => {
+    try {
+      const res = await portal.mutateAsync();
+      window.open(res.portalUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('billing.card.portalErrorDesc');
+      toast({
+        title: t('billing.card.portalErrorTitle'),
+        description: message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl relative">
-      {/* Close → back to dashboard. Mirrors the X button on the LS checkout overlay
-          so the user has a consistent escape affordance throughout the billing flow. */}
+    <div className="container mx-auto px-4 py-6 max-w-4xl relative">
       <button
         type="button"
         aria-label="Close and return to dashboard"
@@ -297,7 +299,8 @@ export default function SubscriptionPage() {
       >
         <X className="w-5 h-5" />
       </button>
-      <div className="text-center mb-8">
+
+      <div className="text-center mb-4">
         <h1 className="text-2xl font-bold text-foreground mb-2">{t('subscription.title')}</h1>
         <p className="text-muted-foreground">{t('subscription.subtitle')}</p>
         {userName && (
@@ -307,35 +310,47 @@ export default function SubscriptionPage() {
         )}
       </div>
 
-      {hasActiveSub && billingData && (
-        <div className="mb-8 max-w-md mx-auto">
-          <SubscriptionStatusCard data={billingData} />
+      {showLtdBanner && (
+        <div className="mb-4 max-w-md mx-auto flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-2.5 text-sm text-amber-400">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span>{t('subscription.urgencyBannerLtd')}</span>
         </div>
       )}
 
-      <div className="grid md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-3 gap-4">
         {PLANS.map((plan) => {
           const current = isCurrent(plan);
           const isLoading = !!plan.planCode && redirecting === plan.planCode;
-          // Paid plans gate behind the launch flag. Free stays clickable as it's not a checkout.
           const lockedForThisPlan = billingLocked && plan.id !== 'free';
+          const showCurrentBadge = current && hasActiveSub;
+          const showPopularBadge = plan.popular && !showCurrentBadge;
+          const showPortalCta = current && hasActiveSub;
+          const activeStateLabel = current ? activeStateLabelFor(plan.id) : null;
+
           const ctaLabel = isLoading
             ? t('subscription.checkoutInProgress')
-            : current
-              ? t('subscription.currentPlan')
-              : lockedForThisPlan
-                ? t('billing.disabled.cta')
-                : t(plan.ctaKey);
+            : showPortalCta
+              ? portal.isPending
+                ? t('subscription.checkoutInProgress')
+                : t('subscription.managePlanCta')
+              : current
+                ? t('subscription.currentPlan')
+                : lockedForThisPlan
+                  ? t('billing.disabled.cta')
+                  : t(plan.ctaKey);
+
           return (
             <Card
               key={plan.id}
               className={`bg-surface-mid border-border/50 relative transition-all duration-200 hover:border-primary/50 ${
-                plan.popular ? 'ring-2 ring-primary' : ''
+                plan.popular || showCurrentBadge ? 'ring-2 ring-primary' : ''
               }`}
             >
-              {plan.popular && (
+              {(showPopularBadge || showCurrentBadge) && (
                 <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
-                  {t('subscription.recommended')}
+                  {showCurrentBadge
+                    ? t('subscription.currentlyUsing')
+                    : t('subscription.recommended')}
                 </Badge>
               )}
               <CardHeader className="text-center pb-2">
@@ -346,7 +361,7 @@ export default function SubscriptionPage() {
                 <CardDescription>{t(plan.descriptionKey)}</CardDescription>
               </CardHeader>
               <CardContent className="text-center">
-                <div className="mb-6">
+                <div className="mb-4">
                   {plan.originalPrice && (
                     <span className="text-lg text-muted-foreground line-through mr-2">
                       {plan.originalPrice}
@@ -356,10 +371,13 @@ export default function SubscriptionPage() {
                   {plan.showPeriod && (
                     <span className="text-muted-foreground">/{t('subscription.monthly')}</span>
                   )}
-                  {plan.id === 'ltd' && (
+                  {plan.id === 'ltd' && !activeStateLabel && (
                     <p className="text-xs text-primary mt-1 font-medium">
                       {t('subscription.ltd.oneTime')}
                     </p>
+                  )}
+                  {activeStateLabel && (
+                    <p className="text-xs text-primary mt-1 font-medium">{activeStateLabel}</p>
                   )}
                 </div>
                 <ul className="space-y-3 text-left mb-6">
@@ -370,24 +388,34 @@ export default function SubscriptionPage() {
                     </li>
                   ))}
                 </ul>
-                <Button
-                  className="w-full"
-                  variant={current ? 'outline' : 'default'}
-                  disabled={current || isLoading || !plan.planCode || lockedForThisPlan}
-                  onClick={() => handleSelectPlan(plan)}
-                  title={lockedForThisPlan ? t('billing.disabled.desc') : undefined}
-                >
-                  {ctaLabel}
-                </Button>
+                {showPortalCta ? (
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={onPortal}
+                    disabled={portal.isPending}
+                  >
+                    {ctaLabel}
+                    <ExternalLink className="w-4 h-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    className="w-full"
+                    variant={current ? 'outline' : 'default'}
+                    disabled={current || isLoading || !plan.planCode || lockedForThisPlan}
+                    onClick={() => handleSelectPlan(plan)}
+                    title={lockedForThisPlan ? t('billing.disabled.desc') : undefined}
+                  >
+                    {ctaLabel}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           );
         })}
       </div>
 
-      <p className="text-center text-sm text-muted-foreground mt-6">{t('subscription.urgency')}</p>
-
-      <p className="text-xs text-muted-foreground text-center mt-8 max-w-xl mx-auto">
+      <p className="text-xs text-muted-foreground text-center mt-6 max-w-xl mx-auto">
         {t('subscription.footer')}
       </p>
     </div>

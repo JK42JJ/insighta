@@ -392,6 +392,11 @@
     "currentUser": "Logged in as {{name}}",
     "recommended": "Recommended",
     "urgency": "Pioneer pricing will transition to monthly subscription soon.",
+    "urgencyBannerLtd": "Pioneer Lifetime will soon become a monthly subscription — last chance",
+    "activeStateLifetime": "Paid · Lifetime",
+    "activeStateRecurring": "Paid · Next billing {{date}}",
+    "currentlyUsing": "Currently active",
+    "managePlanCta": "Manage billing",
     "checkoutInProgress": "Opening checkout…",
     "free": {
       "name": "Free",

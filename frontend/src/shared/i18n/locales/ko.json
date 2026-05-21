@@ -393,6 +393,11 @@
     "currentUser": "{{name}} 님으로 로그인됨",
     "recommended": "추천",
     "urgency": "파이오니어 가격은 곧 월간 구독제로 전환됩니다.",
+    "urgencyBannerLtd": "파이오니어 평생 이용권은 곧 월 구독제로 전환됩니다 — 지금이 마지막 기회",
+    "activeStateLifetime": "결제 완료 · 평생 유효",
+    "activeStateRecurring": "결제 완료 · 다음 결제일 {{date}}",
+    "currentlyUsing": "현재 이용 중",
+    "managePlanCta": "결제 관리",
     "checkoutInProgress": "결제 페이지로 이동 중…",
     "free": {
       "name": "무료",
