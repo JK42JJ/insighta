@@ -12,6 +12,7 @@ import {
   handleThumbnailError,
   handleThumbnailLoad,
 } from '@/shared/lib/image-utils';
+import { deriveCardShareText, openXShare } from '@/features/learning-share';
 
 interface DraggableCardProps {
   card: InsightCard;
@@ -31,25 +32,13 @@ export function DraggableCard({ card, onClick, compact = false }: DraggableCardP
 
   const handleShareToX = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/;
-    const linkMatch = card.userNote?.match(linkPattern);
-
-    let shareUrl: string;
-    let shareText: string;
-
-    if (linkMatch) {
-      const linkLabel = linkMatch[1];
-      const linkUrl = linkMatch[2];
-      const memoWithoutLink = card.userNote!.replace(linkMatch[0], '').trim();
-      shareText = memoWithoutLink ? `${linkLabel} ${memoWithoutLink}` : linkLabel;
-      shareUrl = linkUrl;
-    } else {
-      shareText = card.title || t('cards.defaultShareText');
-      shareUrl = card.videoUrl;
-    }
-
-    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
-    window.open(twitterUrl, '_blank', 'noopener,noreferrer,width=550,height=420');
+    const { title, url } = deriveCardShareText(
+      card.title,
+      card.videoUrl,
+      card.userNote,
+      t('cards.defaultShareText')
+    );
+    openXShare({ title, url });
     toast.success(t('videoPlayer.xShareOpened'));
   };
 
