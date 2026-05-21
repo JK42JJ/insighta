@@ -50,51 +50,72 @@ const OG_DEFAULTS = {
     'Organize, annotate, and gain insights from your saved content with AI-powered knowledge management.',
 };
 
+/** Resolve title / description / thumbnail / spaPath for a learning share
+ *  target. Same logic feeds both the HTML response (SNS bot) and the
+ *  `?format=json` response (FE preview card) so the two stay drift-free. */
+async function resolveOgMeta(
+  mandalaId: string,
+  videoId: string
+): Promise<{ title: string; description: string; thumbnail: string; spaPath: string }> {
+  const prisma = getPrismaClient();
+
+  // YouTube-id form (11 chars). Reject anything else so SQL is bounded.
+  const safeVideoId = /^[A-Za-z0-9_-]{11}$/.test(videoId) ? videoId : null;
+  const safeMandalaId = /^[0-9a-f-]{36}$/i.test(mandalaId) ? mandalaId : null;
+
+  let title = OG_DEFAULTS.title;
+  let description = OG_DEFAULTS.description;
+  let thumbnail = '';
+
+  if (safeVideoId) {
+    // YouTube's hqdefault thumbnail is deterministic (always exists for
+    // any valid video id) — avoid an extra DB read + the youtube_videos
+    // schema's `thumbnails` jsonb shape variance (CP475).
+    thumbnail = `https://i.ytimg.com/vi/${safeVideoId}/hqdefault.jpg`;
+
+    const yv = await prisma.youtube_videos.findFirst({
+      where: { youtube_video_id: safeVideoId },
+      select: { title: true },
+    });
+    if (yv?.title) title = yv.title;
+
+    const vrs = await prisma.video_rich_summaries.findFirst({
+      where: { video_id: safeVideoId },
+      select: { one_liner: true },
+    });
+    if (vrs?.one_liner) description = firstSentence(vrs.one_liner);
+  }
+
+  const spaPath = safeMandalaId && safeVideoId ? `/learning/${safeMandalaId}/${safeVideoId}` : '/';
+
+  return { title, description, thumbnail, spaPath };
+}
+
 export default function ogRoutes(fastify: FastifyInstance): void {
-  fastify.get<{ Params: { mandalaId: string; videoId: string } }>(
-    '/learning/:mandalaId/:videoId',
-    async (request, reply) => {
-      const { mandalaId, videoId } = request.params;
-      const prisma = getPrismaClient();
+  fastify.get<{
+    Params: { mandalaId: string; videoId: string };
+    Querystring: { format?: string };
+  }>('/learning/:mandalaId/:videoId', async (request, reply) => {
+    const { mandalaId, videoId } = request.params;
+    const meta = await resolveOgMeta(mandalaId, videoId);
 
-      // YouTube-id form (11 chars). Reject anything else so SQL is bounded.
-      const safeVideoId = /^[A-Za-z0-9_-]{11}$/.test(videoId) ? videoId : null;
-      const safeMandalaId = /^[0-9a-f-]{36}$/i.test(mandalaId) ? mandalaId : null;
+    // FE preview card path — returns the same fields the HTML response
+    // would have embedded into og:* meta. Single source of truth so the
+    // user-visible preview matches the actual SNS card byte-for-byte.
+    if (request.query.format === 'json') {
+      return reply
+        .header('Content-Type', 'application/json; charset=utf-8')
+        .header('Cache-Control', 'public, max-age=300')
+        .send(meta);
+    }
 
-      let title = OG_DEFAULTS.title;
-      let description = OG_DEFAULTS.description;
-      let thumbnail = '';
+    const { title, description, thumbnail, spaPath } = meta;
+    const safeTitle = escapeHtml(title);
+    const safeDescription = escapeHtml(description);
+    const safeThumbnail = escapeHtml(thumbnail);
+    const safeSpaPath = escapeHtml(spaPath);
 
-      if (safeVideoId) {
-        // YouTube's hqdefault thumbnail is deterministic (always exists for
-        // any valid video id) — avoid an extra DB read + the youtube_videos
-        // schema's `thumbnails` jsonb shape variance (CP475).
-        thumbnail = `https://i.ytimg.com/vi/${safeVideoId}/hqdefault.jpg`;
-
-        const yv = await prisma.youtube_videos.findFirst({
-          where: { youtube_video_id: safeVideoId },
-          select: { title: true },
-        });
-        if (yv?.title) title = yv.title;
-
-        const vrs = await prisma.video_rich_summaries.findFirst({
-          where: { video_id: safeVideoId },
-          select: { one_liner: true },
-        });
-        if (vrs?.one_liner) description = firstSentence(vrs.one_liner);
-      }
-
-      // SPA destination. Falls back to root on malformed input rather than
-      // 404'ing the SNS bot (which would suppress the share preview).
-      const spaPath =
-        safeMandalaId && safeVideoId ? `/learning/${safeMandalaId}/${safeVideoId}` : '/';
-
-      const safeTitle = escapeHtml(title);
-      const safeDescription = escapeHtml(description);
-      const safeThumbnail = escapeHtml(thumbnail);
-      const safeSpaPath = escapeHtml(spaPath);
-
-      const html = `<!doctype html>
+    const html = `<!doctype html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -120,14 +141,13 @@ export default function ogRoutes(fastify: FastifyInstance): void {
 </body>
 </html>`;
 
-      return (
-        reply
-          .header('Content-Type', 'text/html; charset=utf-8')
-          // Short-cache so SNS bots can hit the freshly-published share URL
-          // without seeing stale meta after a video re-title.
-          .header('Cache-Control', 'public, max-age=300')
-          .send(html)
-      );
-    }
-  );
+    return (
+      reply
+        .header('Content-Type', 'text/html; charset=utf-8')
+        // Short-cache so SNS bots can hit the freshly-published share URL
+        // without seeing stale meta after a video re-title.
+        .header('Cache-Control', 'public, max-age=300')
+        .send(html)
+    );
+  });
 }

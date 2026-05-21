@@ -282,12 +282,7 @@ export function CenterPanel({
                         })}
                 </TooltipContent>
               </Tooltip>
-              <LearningShareMenu
-                mandalaId={mandalaId}
-                videoId={videoId}
-                title={null}
-                oneLiner={highlightRich?.oneLiner}
-              />
+              <LearningShareMenu mandalaId={mandalaId} videoId={videoId} />
             </div>
           </div>
         </div>

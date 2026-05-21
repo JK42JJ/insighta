@@ -24,15 +24,12 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Copy, Link as LinkIcon, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import { cn } from '@/shared/lib/utils';
-import {
-  buildShareUrl,
-  openNaverShare,
-  openXShare,
-  youtubeThumbnailUrl,
-} from '../lib/build-share-urls';
+import { apiClient } from '@/shared/lib/api-client';
+import { buildShareUrl, openNaverShare, openXShare } from '../lib/build-share-urls';
 
 const KAKAO_JS_KEY: string | undefined = import.meta.env.VITE_KAKAO_JS_KEY as string | undefined;
 
@@ -65,10 +62,6 @@ export interface LearningShareMenuProps {
   mandalaId: string;
   /** YouTube video id (11-char). */
   videoId: string;
-  /** Video title — falls back to a generic share text key when null. */
-  title: string | null | undefined;
-  /** AI summary first sentence — fed into OG preview and Kakao description. */
-  oneLiner: string | null | undefined;
 }
 
 /**
@@ -94,22 +87,32 @@ const BrandNaverIcon = () => (
   </svg>
 );
 
-export function LearningShareMenu({ mandalaId, videoId, title, oneLiner }: LearningShareMenuProps) {
+export function LearningShareMenu({ mandalaId, videoId }: LearningShareMenuProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const effectiveTitle = title || t('cards.defaultShareText');
-  const effectiveDescription = oneLiner ?? '';
-  const thumbnail = youtubeThumbnailUrl(videoId);
+  // Single source of truth — fetch the same OG meta the BE serves to SNS
+  // crawlers. The user-visible preview now matches the actual SNS card
+  // byte-for-byte (CP454+ user review 2026-05-21).
+  // Lazy: only fetches once the popover is opened.
+  const ogQuery = useQuery({
+    queryKey: ['learning-share-og', mandalaId, videoId],
+    queryFn: () => apiClient.getLearningShareOgMeta(mandalaId, videoId),
+    enabled: open && Boolean(mandalaId) && Boolean(videoId),
+    staleTime: 5 * 60_000,
+  });
+
+  const previewTitle = ogQuery.data?.title ?? '';
+  const previewDescription = ogQuery.data?.description ?? '';
+  const previewThumbnail = ogQuery.data?.thumbnail ?? '';
   const shareUrl = buildShareUrl({ origin: window.location.origin, mandalaId, videoId });
 
   // Outbound share text — used as the tweet body / Naver share title.
-  // Priority: AI summary first sentence > video title > empty (URL-only).
-  // Skips the generic "이 영상을 확인해보세요!" fallback (bot review 2026-05-21):
-  // the OG card itself already carries title + description, so a generic
-  // text on top just adds noise.
-  const outboundShareText = oneLiner?.trim() || title?.trim() || '';
+  // Priority: BE-resolved description (AI summary first sentence) >
+  // BE-resolved title > empty (URL-only). All resolved server-side so
+  // SNS card and FE preview stay drift-free.
+  const outboundShareText = previewDescription.trim() || previewTitle.trim() || '';
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -133,9 +136,9 @@ export function LearningShareMenu({ mandalaId, videoId, title, oneLiner }: Learn
       window.Kakao!.Share.sendDefault({
         objectType: 'feed',
         content: {
-          title: effectiveTitle,
-          description: effectiveDescription,
-          imageUrl: thumbnail,
+          title: previewTitle,
+          description: previewDescription,
+          imageUrl: previewThumbnail,
           link: { mobileWebUrl: shareUrl, webUrl: shareUrl },
         },
         buttons: [
@@ -149,7 +152,7 @@ export function LearningShareMenu({ mandalaId, videoId, title, oneLiner }: Learn
     } catch {
       toast.error(t('learningShare.kakaoSendFailed'));
     }
-  }, [effectiveTitle, effectiveDescription, thumbnail, shareUrl, t, close]);
+  }, [previewTitle, previewDescription, previewThumbnail, shareUrl, t, close]);
 
   const handleX = useCallback(() => {
     openXShare({ title: outboundShareText, url: shareUrl });
@@ -196,16 +199,31 @@ export function LearningShareMenu({ mandalaId, videoId, title, oneLiner }: Learn
           </p>
           <div className="flex gap-2.5 rounded-lg border border-border/50 bg-foreground/[0.02] p-2">
             <div
-              className="h-11 w-16 shrink-0 rounded-md bg-cover bg-center"
-              style={{ backgroundImage: `url(${thumbnail})` }}
+              className={cn(
+                'h-11 w-16 shrink-0 rounded-md bg-cover bg-center',
+                !previewThumbnail && 'bg-foreground/[0.06] animate-pulse'
+              )}
+              style={previewThumbnail ? { backgroundImage: `url(${previewThumbnail})` } : undefined}
               aria-hidden="true"
             />
-            <div className="min-w-0">
-              <p className="text-[11.5px] font-medium text-foreground truncate">{effectiveTitle}</p>
-              {effectiveDescription && (
-                <p className="text-[10px] text-muted-foreground line-clamp-2 leading-snug mt-0.5">
-                  {effectiveDescription}
-                </p>
+            <div className="min-w-0 flex-1">
+              {ogQuery.isLoading || !previewTitle ? (
+                <>
+                  <div className="h-3.5 w-2/3 rounded bg-foreground/[0.06] animate-pulse" />
+                  <div className="h-2.5 w-full rounded bg-foreground/[0.04] animate-pulse mt-1.5" />
+                  <div className="h-2.5 w-4/5 rounded bg-foreground/[0.04] animate-pulse mt-1" />
+                </>
+              ) : (
+                <>
+                  <p className="text-[11.5px] font-medium text-foreground truncate">
+                    {previewTitle}
+                  </p>
+                  {previewDescription && (
+                    <p className="text-[10px] text-muted-foreground line-clamp-2 leading-snug mt-0.5">
+                      {previewDescription}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>

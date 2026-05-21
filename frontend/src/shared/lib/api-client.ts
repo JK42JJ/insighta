@@ -827,6 +827,20 @@ class ApiClient {
   }
 
   /**
+   * Fetch the same OG meta the BE serves at `/api/v1/og/learning/:m/:v` —
+   * single source of truth for the FE share-menu preview card so what the
+   * user sees matches the SNS-rendered card byte-for-byte. CP454+.
+   */
+  async getLearningShareOgMeta(
+    mandalaId: string,
+    videoId: string
+  ): Promise<{ title: string; description: string; thumbnail: string; spaPath: string }> {
+    return this.request<{ title: string; description: string; thumbnail: string; spaPath: string }>(
+      `/og/learning/${mandalaId}/${videoId}?format=json`
+    );
+  }
+
+  /**
    * Fetch publicly available YouTube captions (transcript) for a video.
    *
    * Used as the chatbot's video-summary fallback when no rich summary
