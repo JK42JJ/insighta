@@ -16,6 +16,7 @@ import {
   type ChatbotProvider,
   type ProviderDefaults,
 } from './copilotkit-model-resolver';
+import { getEffectiveProvider, startProviderHealthPoller } from './copilotkit-provider-poller';
 
 const OPENROUTER_DEFAULT_MODEL = 'google/gemini-2.5-flash';
 
@@ -84,11 +85,20 @@ type YogaHandler = ReturnType<typeof copilotRuntimeNodeHttpEndpoint>;
 
 let lazyYoga: YogaHandler | null = null;
 let lazyBuildAt = 0;
+// CP477+14 — tracks which provider the current lazyYoga was built for, so
+// the background poller's failover callback can force a rebuild when the
+// effective provider flips (qwen-runpod ↔ openrouter). With the flag off
+// `getEffectiveProvider()` always returns `config.chatbot.provider` and
+// this never changes, so the existing settings-only rebuild path is
+// preserved byte-for-byte.
+let lazyBuiltProvider: ChatbotProvider | null = null;
 
 async function getYoga(): Promise<YogaHandler> {
   const settings = await getChatbotSettings();
-  if (!lazyYoga || settings.updatedAt.getTime() > lazyBuildAt) {
-    const provider = config.chatbot.provider;
+  // Read-only synchronous lookup — no await, no health probe, no race with
+  // PR #732's `req.pause()` paused window.
+  const provider = getEffectiveProvider();
+  if (!lazyYoga || settings.updatedAt.getTime() > lazyBuildAt || provider !== lazyBuiltProvider) {
     const model = resolveChatbotModel(provider, config.chatbot.model, buildProviderDefaults(), {
       qwenRunpodModel: settings.qwenRunpodModel,
       openrouterModel: settings.openrouterModel,
@@ -101,6 +111,7 @@ async function getYoga(): Promise<YogaHandler> {
       endpoint: '/api/v1/chat',
     });
     lazyBuildAt = Date.now();
+    lazyBuiltProvider = provider;
   }
   return lazyYoga;
 }
@@ -153,17 +164,34 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
 
   fastify.get('/config', { onRequest: [fastify.authenticate] }, async (_request, reply) => {
     // Resolve the live model the same way getYoga() does so /config always
-    // reflects the value the next chat request will actually use.
-    const provider = config.chatbot.provider;
+    // reflects the value the next chat request will actually use —
+    // including the CP477+14 background-poller failover (qwen-runpod →
+    // openrouter when Pod /health probe fails). Returns both `effective`
+    // (what the next chat will use) and `configured` (the env value) so
+    // admin UIs can tell when failover is active.
+    const configured = config.chatbot.provider;
+    const effective = getEffectiveProvider();
     const settings = await getChatbotSettings();
-    const model = resolveChatbotModel(provider, config.chatbot.model, buildProviderDefaults(), {
+    const model = resolveChatbotModel(effective, config.chatbot.model, buildProviderDefaults(), {
       qwenRunpodModel: settings.qwenRunpodModel,
       openrouterModel: settings.openrouterModel,
     });
     return reply.send({
       status: 200,
-      data: { provider, model },
+      data: { provider: effective, configured, model },
     });
+  });
+
+  // CP477+14 — start the background provider-health poller. No-op when
+  // `CHATBOT_FAILOVER_ENABLED=false` (default) or when the configured
+  // provider has no failover target. When active, the poller updates the
+  // module-level `effectiveProvider` every 5 s; this callback invalidates
+  // the lazy yoga so the next chat request rebuilds against the new
+  // provider's service adapter.
+  startProviderHealthPoller(() => {
+    lazyYoga = null;
+    lazyBuiltProvider = null;
+    lazyBuildAt = 0;
   });
 
   done();

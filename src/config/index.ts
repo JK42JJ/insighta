@@ -115,6 +115,15 @@ const envSchema = z.object({
   // RunPod path sent `model=google/gemini-2.5-flash` to vLLM and 404'd.
   CHATBOT_MODEL: z.string().optional(),
   CHATBOT_LOCAL_URL: z.string().default('http://localhost:11434/v1'),
+  // CP477+14 — when 'true', a 5-second background poller updates the
+  // effective chatbot provider based on RunPod Pod /health. Default
+  // 'false' = no failover (current main HEAD behaviour exactly). Toggle
+  // via `gh variable set CHATBOT_FAILOVER_ENABLED=true` + redeploy.
+  // Rollback by setting back to 'false' + redeploy — no code revert.
+  CHATBOT_FAILOVER_ENABLED: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
 
   // Qwen-LoRA serving — RunPod Serverless endpoint base URL.
   // Accepts either the legacy runsync form (`.../<id>/runsync`) or the
@@ -329,6 +338,7 @@ export const config = {
     provider: env.CHATBOT_PROVIDER,
     model: env.CHATBOT_MODEL,
     localUrl: env.CHATBOT_LOCAL_URL,
+    failoverEnabled: env.CHATBOT_FAILOVER_ENABLED,
   },
 
   // Qwen-LoRA serving — consumed by CopilotKit OpenAIAdapter when provider
