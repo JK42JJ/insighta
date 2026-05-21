@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMandalaCards } from '../model/useMandalaCards';
 import { cn } from '@/shared/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 
 interface VideoStripProps {
   mandalaId: string;
@@ -56,36 +57,41 @@ export function VideoStrip({ mandalaId, currentVideoId }: VideoStripProps) {
         {mandalaCards.map((card) => {
           const isActive = card.ytId === currentVideoId;
           return (
-            <div
-              key={card.id}
-              data-active={isActive}
-              onClick={() => {
-                if (!isActive) navigate(`/learning/${mandalaId}/${card.ytId}`);
-              }}
-              title={card.title}
-              className={cn(
-                'group relative flex-shrink-0 cursor-pointer transition-transform duration-200 hover:-translate-y-1',
-                isActive
-                  ? 'group-hover/strip:ring-2 group-hover/strip:ring-primary group-hover/strip:ring-offset-1 group-hover/strip:ring-offset-background rounded'
-                  : 'grayscale hover:grayscale-0'
-              )}
-            >
-              <div
-                className="relative w-14 h-8 overflow-hidden rounded bg-muted"
-                style={{ boxShadow: 'var(--shadow-sm)' }}
-              >
-                {card.thumbnail ? (
-                  <img
-                    src={card.thumbnail}
-                    alt=""
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-muted" />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </div>
+            <Tooltip key={card.id}>
+              <TooltipTrigger asChild>
+                <div
+                  data-active={isActive}
+                  onClick={() => {
+                    if (!isActive) navigate(`/learning/${mandalaId}/${card.ytId}`);
+                  }}
+                  className={cn(
+                    'group relative flex-shrink-0 cursor-pointer transition-transform duration-200 hover:-translate-y-1',
+                    isActive
+                      ? 'group-hover/strip:ring-2 group-hover/strip:ring-primary group-hover/strip:ring-offset-1 group-hover/strip:ring-offset-background rounded'
+                      : 'grayscale hover:grayscale-0'
+                  )}
+                >
+                  <div
+                    className="relative w-14 h-8 overflow-hidden rounded bg-muted"
+                    style={{ boxShadow: 'var(--shadow-sm)' }}
+                  >
+                    {card.thumbnail ? (
+                      <img
+                        src={card.thumbnail}
+                        alt=""
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-muted" />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-[12px] max-w-[280px]">
+                {card.title}
+              </TooltipContent>
+            </Tooltip>
           );
         })}
       </div>

@@ -10,7 +10,7 @@ import {
 import { InsightCard } from '@/entities/card/model/types';
 import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 import { useTranslation } from 'react-i18next';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import { type DragData, type DropData, cardDragId, cellDragId, cellDropId } from '@/shared/lib/dnd';
 import { MandalaAvatar } from '@/entities/avatar';
 import type { MandalaSizeMode } from './MandalaGrid';
@@ -254,46 +254,44 @@ function ColorTileBlock({
   const totalRows = Math.ceil(displayCards.length / 4);
 
   return (
-    <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent>
-      <div className="flex-1 w-full min-h-0 flex items-start justify-center p-[8%]">
-        <div className="w-full grid grid-cols-4 gap-[2px]">
-          {displayCards.map((card, i) => {
-            const row = Math.floor(i / 4);
-            const col = i % 4;
-            const intensity = totalRows > 1 ? 100 - (row / (totalRows - 1)) * 40 : 100;
-            return (
-              <DraggableColorTile
-                key={card.id}
-                card={card}
-                index={i}
-                intensity={intensity}
-                gridCol={col}
-                gridRow={row}
-                totalCols={4}
-                totalRows={totalRows}
-                onCardClick={onCardClick}
-              />
-            );
-          })}
-          {hasOverflow && (
-            <div
-              className="aspect-video rounded-[2px] flex items-center justify-center"
-              style={{
-                background: 'hsl(var(--muted) / 60%)',
-                animation: `block-pop 0.4s ease-out ${maxVisible * 40}ms both`,
-              }}
+    <div className="flex-1 w-full min-h-0 flex items-start justify-center p-[8%]">
+      <div className="w-full grid grid-cols-4 gap-[2px]">
+        {displayCards.map((card, i) => {
+          const row = Math.floor(i / 4);
+          const col = i % 4;
+          const intensity = totalRows > 1 ? 100 - (row / (totalRows - 1)) * 40 : 100;
+          return (
+            <DraggableColorTile
+              key={card.id}
+              card={card}
+              index={i}
+              intensity={intensity}
+              gridCol={col}
+              gridRow={row}
+              totalCols={4}
+              totalRows={totalRows}
+              onCardClick={onCardClick}
+            />
+          );
+        })}
+        {hasOverflow && (
+          <div
+            className="aspect-video rounded-[2px] flex items-center justify-center"
+            style={{
+              background: 'hsl(var(--muted) / 60%)',
+              animation: `block-pop 0.4s ease-out ${maxVisible * 40}ms both`,
+            }}
+          >
+            <span
+              className="text-muted-foreground font-bold leading-none"
+              style={{ fontSize: 'clamp(6px, 1.8cqi, 10px)' }}
             >
-              <span
-                className="text-muted-foreground font-bold leading-none"
-                style={{ fontSize: 'clamp(6px, 1.8cqi, 10px)' }}
-              >
-                +{overflow}
-              </span>
-            </div>
-          )}
-        </div>
+              +{overflow}
+            </span>
+          </div>
+        )}
       </div>
-    </TooltipProvider>
+    </div>
   );
 }
 
@@ -310,15 +308,13 @@ function CardBlock({
   const maxW = len === 1 ? 'max-w-[55%]' : len === 2 ? 'max-w-[75%]' : '';
 
   return (
-    <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent>
-      <div className="flex-1 w-full min-h-0 flex items-start justify-center p-[8%]">
-        <div className={cn('w-full grid gap-[3px]', cols, maxW)}>
-          {cards.map((card, i) => (
-            <MiniThumbnail key={card.id} card={card} index={i} onCardClick={onCardClick} />
-          ))}
-        </div>
+    <div className="flex-1 w-full min-h-0 flex items-start justify-center p-[8%]">
+      <div className={cn('w-full grid gap-[3px]', cols, maxW)}>
+        {cards.map((card, i) => (
+          <MiniThumbnail key={card.id} card={card} index={i} onCardClick={onCardClick} />
+        ))}
       </div>
-    </TooltipProvider>
+    </div>
   );
 }
 

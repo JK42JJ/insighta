@@ -28,6 +28,7 @@ import {
   type VideoRichSummarySegments,
 } from '@/shared/lib/api-client';
 import { Info, Quote, Lightbulb, Dot } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import { useRichSummary } from '../model/useRichSummary';
 import { useEnrichStream } from '@/features/card-management/model/useEnrichStream';
 
@@ -361,11 +362,11 @@ function SectionRow({ section }: { section: SectionData }) {
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-semibold leading-[1.35] text-[rgba(237,237,240,0.92)]">
+          <p className="text-[14px] font-semibold leading-[1.35] text-[rgba(237,237,240,0.92)]">
             {section.title}
           </p>
           {section.summary && (
-            <p className="mt-[2px] text-[11px] text-[#4e4f5c]">{section.summary}</p>
+            <p className="mt-[2px] text-[13px] text-[#4e4f5c]">{section.summary}</p>
           )}
         </div>
         <div className="flex shrink-0 flex-col items-center gap-[1px]">
@@ -467,27 +468,33 @@ function RichSummaryV2NewBlock({
                     <span className="font-mono text-[10px] text-[#818cf8] shrink-0">
                       {formatSeconds(sec.from_sec)} — {formatSeconds(sec.to_sec)}
                     </span>
-                    <p className="flex-1 text-[12px] font-semibold leading-[1.35] text-[rgba(237,237,240,0.92)]">
+                    <p className="flex-1 text-[14px] font-semibold leading-[1.35] text-[rgba(237,237,240,0.92)]">
                       {sec.title}
                     </p>
                     {typeof sec.relevance_pct === 'number' && (
-                      <span
-                        className={[
-                          'shrink-0 font-mono text-[11px] font-bold tabular-nums',
-                          sec.relevance_pct >= 75
-                            ? 'text-[#2dd4bf]'
-                            : sec.relevance_pct >= 50
-                              ? 'text-[#f59e0b]'
-                              : 'text-[#94a3b8]',
-                        ].join(' ')}
-                        title={t('learning.relevanceLabel')}
-                      >
-                        {sec.relevance_pct}%
-                      </span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className={[
+                              'shrink-0 font-mono text-[11px] font-bold tabular-nums cursor-default',
+                              sec.relevance_pct >= 75
+                                ? 'text-[#2dd4bf]'
+                                : sec.relevance_pct >= 50
+                                  ? 'text-[#f59e0b]'
+                                  : 'text-[#94a3b8]',
+                            ].join(' ')}
+                          >
+                            {sec.relevance_pct}%
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="text-[12px]">
+                          {t('learning.relevanceLabel')}
+                        </TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
                   {sec.summary && (
-                    <p className="mt-[3px] pl-[88px] text-[11px] text-[rgba(237,237,240,0.66)]">
+                    <p className="mt-[3px] pl-[88px] text-[13px] text-[rgba(237,237,240,0.66)]">
                       {sec.summary}
                     </p>
                   )}
@@ -505,6 +512,28 @@ function RichSummaryV2NewBlock({
                 </div>
               );
             })}
+          </div>
+        </section>
+      )}
+
+      {entities.length > 0 && (
+        <section>
+          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
+            {t('learning.tags')}
+          </h3>
+          <div className="flex flex-wrap gap-x-1 gap-y-[3px]">
+            {entities.map((ent) => (
+              <Tooltip key={`${ent.type}:${ent.name}`}>
+                <TooltipTrigger asChild>
+                  <span className="inline-block rounded-[4px] bg-[rgba(129,140,248,0.08)] px-[7px] py-[2px] text-[10px] font-semibold text-[#818cf8] cursor-default">
+                    {ent.name}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-[12px]">
+                  {ent.type}
+                </TooltipContent>
+              </Tooltip>
+            ))}
           </div>
         </section>
       )}
@@ -553,8 +582,8 @@ function RichSummaryV2NewBlock({
           <ul className="space-y-2 text-[13px] leading-[1.5]">
             {keyConcepts.map((kc, idx) => (
               <li key={idx} className="rounded-[6px] bg-[rgba(255,255,255,0.02)] px-3 py-2">
-                <p className="text-[12px] font-semibold text-[#818cf8]">{kc.term}</p>
-                <p className="mt-[2px] text-[12px] text-[rgba(237,237,240,0.74)]">
+                <p className="text-[14px] font-semibold text-[#818cf8]">{kc.term}</p>
+                <p className="mt-[2px] text-[13px] text-[rgba(237,237,240,0.74)]">
                   {kc.definition}
                 </p>
               </li>
@@ -573,25 +602,6 @@ function RichSummaryV2NewBlock({
               <AtomRow key={idx} atom={atom} jumpUrl={tsUrl(atom.timestamp_sec)} />
             ))}
           </ul>
-        </section>
-      )}
-
-      {entities.length > 0 && (
-        <section>
-          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            {t('learning.tags')}
-          </h3>
-          <div className="flex flex-wrap gap-x-1 gap-y-[3px]">
-            {entities.map((ent) => (
-              <span
-                key={`${ent.type}:${ent.name}`}
-                className="inline-block rounded-[4px] bg-[rgba(129,140,248,0.08)] px-[7px] py-[2px] text-[10px] font-semibold text-[#818cf8]"
-                title={ent.type}
-              >
-                {ent.name}
-              </span>
-            ))}
-          </div>
         </section>
       )}
 
@@ -642,12 +652,17 @@ function AtomRow({ atom, jumpUrl }: { atom: VideoRichSummaryAtom; jumpUrl: strin
   const tooltip = t(tooltipKey);
 
   return (
-    <li className="flex items-start gap-2 text-[12px] leading-[1.5] text-[rgba(237,237,240,0.65)]">
-      <TypeIcon
-        aria-label={tooltip}
-        title={tooltip}
-        className="mt-[2px] h-3.5 w-3.5 shrink-0 text-white"
-      />
+    <li className="flex items-start gap-2 text-[13px] leading-[1.5] text-[rgba(237,237,240,0.65)]">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="mt-[2px] inline-flex shrink-0 cursor-default">
+            <TypeIcon aria-label={tooltip} className="h-3.5 w-3.5 text-white" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-[12px]">
+          {tooltip}
+        </TooltipContent>
+      </Tooltip>
       <span className="flex-1">
         {atom.text}
         {jumpUrl && Number.isFinite(atom.timestamp_sec) && (

@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import type { ViewMode } from '@/entities/user/model/types';
 
 interface ViewSwitcherProps {
@@ -29,28 +29,26 @@ export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {
 
   return (
     <DropdownMenu>
-      <TooltipProvider delayDuration={200}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label={t('view.switchView', 'Switch view')}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors hover:bg-foreground/[0.04]"
-                style={{
-                  borderColor: 'hsl(var(--border) / 0.4)',
-                  color: 'hsl(var(--foreground))',
-                }}
-              >
-                <CurrentIcon className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            {t(current.labelKey)}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={t('view.switchView', 'Switch view')}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors hover:bg-foreground/[0.04]"
+              style={{
+                borderColor: 'hsl(var(--border) / 0.4)',
+                color: 'hsl(var(--foreground))',
+              }}
+            >
+              <CurrentIcon className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          {t(current.labelKey)}
+        </TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="end" className="w-44">
         {VIEW_OPTIONS.map(({ value: v, icon: Icon, labelKey, isBeta }) => {
           const isActive = v === value;

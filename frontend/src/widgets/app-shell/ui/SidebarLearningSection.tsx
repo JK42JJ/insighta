@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, ChevronRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
+import { BookOpen, ChevronRight, ChevronsDownUp, ChevronsUpDown, PanelTop } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
@@ -11,6 +11,7 @@ import type { InsightCard } from '@/entities/card/model/types';
 import { extractYouTubeVideoId } from '@/shared/lib/url-normalize';
 import { useV2Summaries } from '@/features/card-management/model/useV2Summaries';
 import { cn } from '@/shared/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 
 interface SidebarLearningSectionProps {
   mandalaId: string;
@@ -29,6 +30,8 @@ export function SidebarLearningSection({
   const activeSectionRef = useLearningStore((s) => s.activeSectionRef);
   const setActiveRegion = useLearningStore((s) => s.setActiveRegion);
   const centerViewMode = useLearningStore((s) => s.centerViewMode);
+  const videoStripEnabled = useLearningStore((s) => s.videoStripEnabled);
+  const setVideoStripEnabled = useLearningStore((s) => s.setVideoStripEnabled);
   // CP445.x — multi-chapter expand state. `null` = default (모두 펼침).
   // 사용자가 individual/all 토글 시 explicit Set 으로 전환.
   const [expandedIdxs, setExpandedIdxs] = useState<Set<number> | null>(null);
@@ -150,36 +153,59 @@ export function SidebarLearningSection({
   };
 
   if (collapsed) {
+    const collapsedLabel = centerGoal || centerLabel || t('sidebar.learning', 'Learning');
     return (
       <div className="px-2 py-1" onMouseEnter={() => setActiveRegion('sidebar')}>
-        <button
-          className="w-full flex items-center justify-center px-2 py-2.5 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-          title={centerGoal || centerLabel || t('sidebar.learning', 'Learning')}
-        >
-          <BookOpen className="w-5 h-5" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              aria-label={collapsedLabel}
+              className="w-full flex items-center justify-center px-2 py-2.5 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            >
+              <BookOpen className="w-5 h-5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-[12px]">
+            {collapsedLabel}
+          </TooltipContent>
+        </Tooltip>
       </div>
     );
   }
 
-  // Header text prefers the short label; long goal moves to the tooltip.
-  const headerText = centerLabel?.trim() || centerGoal || t('sidebar.learning', 'Learning');
-  const headerTooltip = centerGoal && centerGoal !== headerText ? centerGoal : undefined;
+  // Header row text = short label (cell name). Tooltip = long-form goal.
+  // When the label is explicitly set, the tooltip always surfaces the goal
+  // (even if the two strings happen to match). When no label is set, the
+  // goal becomes the row text and the tooltip is suppressed to avoid a
+  // redundant duplicate.
+  const centerLabelText = centerLabel?.trim() ?? '';
+  const headerText = centerLabelText || centerGoal || t('sidebar.learning', 'Learning');
+  const headerTooltip = centerLabelText && centerGoal ? centerGoal : undefined;
 
   return (
     <div className="pl-5 pr-2 flex flex-col" onMouseEnter={() => setActiveRegion('sidebar')}>
       <div className="px-3 py-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <h3
-              className="text-[13px] font-bold text-sidebar-foreground leading-snug truncate"
-              title={headerTooltip}
-            >
-              {headerText}
-            </h3>
+            {headerTooltip ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <h3 className="text-[14px] font-bold text-sidebar-foreground leading-snug truncate cursor-default">
+                    {headerText}
+                  </h3>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-[12px] max-w-[280px]">
+                  {headerTooltip}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <h3 className="text-[14px] font-bold text-sidebar-foreground leading-snug truncate">
+                {headerText}
+              </h3>
+            )}
             {/* CP445 D18=B — 영상 모드 = 만다라 mapped 전체 영상 / 노트 모드 =
                 mandala_books 가 인용한 distinct vid 수 (필수 영상). */}
-            <p className="mt-0.5 text-[11px] text-sidebar-foreground/50">
+            <p className="mt-0.5 text-[13px] text-sidebar-foreground/50">
               {t('learning.videoCount', {
                 count:
                   centerViewMode === 'note' && typeof bookResponse?.book?.source_videos === 'number'
@@ -188,22 +214,51 @@ export function SidebarLearningSection({
               })}
             </p>
           </div>
-          {/* CP445.x — 전체 펼침/접힘 토글. default = 모두 펼침. */}
-          {totalChapters > 0 && (
-            <button
-              type="button"
-              onClick={toggleAll}
-              aria-label={isAllCollapsed ? '모두 펼치기' : '모두 접기'}
-              title={isAllCollapsed ? '모두 펼치기' : '모두 접기'}
-              className="mt-0.5 shrink-0 rounded p-1 text-sidebar-foreground/45 transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-foreground/85"
-            >
-              {isAllCollapsed ? (
-                <ChevronsUpDown className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronsDownUp className="h-3.5 w-3.5" />
-              )}
-            </button>
-          )}
+          <div className="mt-0.5 flex shrink-0 items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setVideoStripEnabled(!videoStripEnabled)}
+                  aria-label={videoStripEnabled ? '동영상 썸네일 바 끄기' : '동영상 썸네일 바 켜기'}
+                  aria-pressed={videoStripEnabled}
+                  className={cn(
+                    'rounded p-1 transition-colors hover:bg-sidebar-accent/40',
+                    videoStripEnabled
+                      ? 'text-sidebar-foreground/85 hover:text-sidebar-foreground'
+                      : 'text-sidebar-foreground/35 hover:text-sidebar-foreground/85'
+                  )}
+                >
+                  <PanelTop className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-[12px]">
+                {videoStripEnabled ? '동영상 썸네일 바 끄기' : '동영상 썸네일 바 켜기'}
+              </TooltipContent>
+            </Tooltip>
+            {/* CP445.x — 전체 펼침/접힘 토글. default = 모두 펼침. */}
+            {totalChapters > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={toggleAll}
+                    aria-label={isAllCollapsed ? '모두 펼치기' : '모두 접기'}
+                    className="rounded p-1 text-sidebar-foreground/45 transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-foreground/85"
+                  >
+                    {isAllCollapsed ? (
+                      <ChevronsUpDown className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronsDownUp className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-[12px]">
+                  {isAllCollapsed ? '모두 펼치기' : '모두 접기'}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </div>
       </div>
 
@@ -215,28 +270,43 @@ export function SidebarLearningSection({
         {subGoals.map((goal, idx) => {
           const bookChapter = bookChaptersByIdx.get(idx);
           const isExpanded = isChapterExpanded(idx);
-          // Row text shows the short label; long goal text is the tooltip.
-          const rowLabel = subjectLabels[idx]?.trim() || goal;
-          const rowTooltip = goal && goal !== rowLabel ? goal : undefined;
+          // Row text = short cell label; tooltip = long-form sub-goal.
+          // When the label is explicitly set, the tooltip always surfaces
+          // the goal (mirrors header logic above). When no label exists,
+          // the goal becomes the row text and the tooltip is suppressed.
+          const labelText = subjectLabels[idx]?.trim() ?? '';
+          const rowLabel = labelText || goal;
+          const rowTooltip = labelText && goal ? goal : undefined;
 
+          const chapterButton = (
+            <button
+              type="button"
+              onClick={() => toggleChapter(idx)}
+              className="group flex w-full items-center gap-2 px-2 py-1 text-left transition-colors"
+            >
+              <ChevronRight
+                className={cn(
+                  'h-3.5 w-3.5 shrink-0 text-sidebar-foreground/35 transition-colors group-hover:text-sidebar-foreground',
+                  isExpanded && 'rotate-90'
+                )}
+              />
+              <span className="flex-1 truncate text-[14px] font-medium tracking-[-0.01em] text-sidebar-foreground/80 transition-colors group-hover:text-sidebar-foreground">
+                {rowLabel}
+              </span>
+            </button>
+          );
           return (
             <div key={idx} className="mb-0.5">
-              <button
-                type="button"
-                onClick={() => toggleChapter(idx)}
-                title={rowTooltip}
-                className="group flex w-full items-center gap-2 px-2 py-1 text-left transition-colors"
-              >
-                <ChevronRight
-                  className={cn(
-                    'h-3.5 w-3.5 shrink-0 text-sidebar-foreground/35 transition-colors group-hover:text-sidebar-foreground',
-                    isExpanded && 'rotate-90'
-                  )}
-                />
-                <span className="flex-1 truncate text-[13px] font-medium tracking-[-0.01em] text-sidebar-foreground/80 transition-colors group-hover:text-sidebar-foreground">
-                  {rowLabel}
-                </span>
-              </button>
+              {rowTooltip ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>{chapterButton}</TooltipTrigger>
+                  <TooltipContent side="bottom" align="start" className="text-[12px] max-w-[280px]">
+                    {rowTooltip}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                chapterButton
+              )}
 
               {isExpanded && bookChapter && (
                 <div className="ml-9 pt-0.5">
@@ -289,9 +359,8 @@ export function SidebarLearningSection({
                           <li
                             key={entry.cardId}
                             onClick={() => navigate(`/learning/${mandalaId}/${entry.vid}`)}
-                            title={entry.indexName}
                             className={cn(
-                              'cursor-pointer pl-3 py-1.5 leading-[1.5] border-l-2 transition-colors',
+                              'cursor-pointer pl-3 py-1.5 leading-[1.5] border-l transition-colors',
                               isActive
                                 ? 'border-[#818cf8] text-[14px] font-medium text-[#818cf8]'
                                 : 'border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/80 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
@@ -357,7 +426,7 @@ function BookChapterPreview({
               }
             }}
             className={cn(
-              'cursor-pointer pl-3 py-1.5 leading-[1.5] border-l-2 transition-colors',
+              'cursor-pointer pl-3 py-1.5 leading-[1.5] border-l transition-colors',
               isActiveSection
                 ? 'border-[#818cf8] text-[14px] font-medium text-[#818cf8]'
                 : 'border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/80 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'

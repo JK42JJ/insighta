@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { Textarea } from '@/shared/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import type { YTPlayer } from '../model/youtube-api';
 import { formatTime } from '../model/youtube-api';
 import { SlashMenu } from '@/shared/ui/SlashMenu';
@@ -77,32 +78,38 @@ function CaptureGallery({
     <div className="flex-1 min-w-0 overflow-x-auto scrollbar-thin">
       <div className="flex gap-1.5 flex-nowrap">
         {captures.map((cap, i) => (
-          <button
-            key={`${cap.url}-${i}`}
-            onClick={() => {
-              if (cap.seconds !== null && playerRef.current && playerReady) {
-                playerRef.current.seekTo(cap.seconds, true);
-              }
-            }}
-            className="relative flex-shrink-0 rounded overflow-hidden border border-border/20 hover:border-primary/40 transition-colors group"
-            title={cap.alt}
-          >
-            <img
-              src={cap.url}
-              alt={cap.alt}
-              className="h-8 w-auto object-cover opacity-0 transition-opacity duration-200"
-              loading="lazy"
-              decoding="async"
-              onLoad={(e) => {
-                (e.currentTarget as HTMLImageElement).style.opacity = '1';
-              }}
-            />
-            {cap.seconds !== null && (
-              <span className="absolute bottom-0 right-0 text-[8px] bg-black/70 text-white px-0.5 rounded-tl">
-                {formatTime(cap.seconds)}
-              </span>
-            )}
-          </button>
+          <Tooltip key={`${cap.url}-${i}`}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => {
+                  if (cap.seconds !== null && playerRef.current && playerReady) {
+                    playerRef.current.seekTo(cap.seconds, true);
+                  }
+                }}
+                aria-label={cap.alt}
+                className="relative flex-shrink-0 rounded overflow-hidden border border-border/20 hover:border-primary/40 transition-colors group"
+              >
+                <img
+                  src={cap.url}
+                  alt={cap.alt}
+                  className="h-8 w-auto object-cover opacity-0 transition-opacity duration-200"
+                  loading="lazy"
+                  decoding="async"
+                  onLoad={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.opacity = '1';
+                  }}
+                />
+                {cap.seconds !== null && (
+                  <span className="absolute bottom-0 right-0 text-[8px] bg-black/70 text-white px-0.5 rounded-tl">
+                    {formatTime(cap.seconds)}
+                  </span>
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-[12px]">
+              {cap.alt}
+            </TooltipContent>
+          </Tooltip>
         ))}
       </div>
     </div>
@@ -444,26 +451,40 @@ export function MemoEditor({
           <div className="flex items-center gap-3 flex-shrink-0">
             {isYouTube && (
               <>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => insertTimestamp()}
-                  disabled={!playerReady}
-                  className="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-40"
-                  title={t('videoPlayer.addTimestamp')}
-                >
-                  <Timer className="w-3.5 h-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => insertCapture()}
-                  disabled={!playerReady}
-                  className="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-40"
-                  title={t('videoPlayer.insertCapture')}
-                >
-                  <Camera className="w-3.5 h-3.5" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => insertTimestamp()}
+                      disabled={!playerReady}
+                      className="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-40"
+                      aria-label={t('videoPlayer.addTimestamp')}
+                    >
+                      <Timer className="w-3.5 h-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-[12px]">
+                    {t('videoPlayer.addTimestamp')}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => insertCapture()}
+                      disabled={!playerReady}
+                      className="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-40"
+                      aria-label={t('videoPlayer.insertCapture')}
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-[12px]">
+                    {t('videoPlayer.insertCapture')}
+                  </TooltipContent>
+                </Tooltip>
               </>
             )}
             <div className="flex items-center gap-2">
@@ -484,27 +505,34 @@ export function MemoEditor({
           )}
           {/* Expand to full-featured side editor (Mode A → B transition) */}
           {card && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                // 1. Flush pending auto-save
-                if (autoSaveTimerRef.current) {
-                  clearTimeout(autoSaveTimerRef.current);
-                  onSave(cardId, note);
-                }
-                // 2. Close modal (Mode A → off)
-                onCloseModal?.();
-                // 3. Open sidebar panel (→ Mode B)
-                // Capture current playback position for seamless resume
-                const currentTime = playerRef.current?.getCurrentTime?.() ?? 0;
-                useVideoPanelStore.getState().expandToSidebar(card, Math.floor(currentTime));
-              }}
-              className="ml-auto h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
-              title={t('videoPlayer.expandEditor', 'Expand editor')}
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    // 1. Flush pending auto-save
+                    if (autoSaveTimerRef.current) {
+                      clearTimeout(autoSaveTimerRef.current);
+                      onSave(cardId, note);
+                    }
+                    // 2. Close modal (Mode A → off)
+                    onCloseModal?.();
+                    // 3. Open sidebar panel (→ Mode B)
+                    // Capture current playback position for seamless resume
+                    const currentTime = playerRef.current?.getCurrentTime?.() ?? 0;
+                    useVideoPanelStore.getState().expandToSidebar(card, Math.floor(currentTime));
+                  }}
+                  className="ml-auto h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                  aria-label={t('videoPlayer.expandEditor', 'Expand editor')}
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-[12px]">
+                {t('videoPlayer.expandEditor', 'Expand editor')}
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
 
