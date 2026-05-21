@@ -11,13 +11,11 @@ import { config } from '@/config/index';
 import { QwenRunpodAdapter } from '@/modules/chatbot-rag';
 import { getChatbotSettings } from '@/modules/chatbot-settings/service';
 import { toRunpodOpenAiBase } from './copilotkit-base-url';
-import { isQwenRunpodHealthy, resolveEffectiveProvider } from './copilotkit-health';
 import {
   resolveChatbotModel,
   type ChatbotProvider,
   type ProviderDefaults,
 } from './copilotkit-model-resolver';
-import { logger } from '@/utils/logger';
 
 const OPENROUTER_DEFAULT_MODEL = 'google/gemini-2.5-flash';
 
@@ -86,31 +84,16 @@ type YogaHandler = ReturnType<typeof copilotRuntimeNodeHttpEndpoint>;
 
 let lazyYoga: YogaHandler | null = null;
 let lazyBuildAt = 0;
-// CP477+11 — Restored from PR #720 (CP477+3, reverted at CP477+6 PR #729
-// due to race condition). Race is now neutralised by CP477+7 PR #732
-// `req.pause()`/`req.resume()` body buffering, so health-check failover
-// can return safely. Tracks the provider the current yoga handler was
-// built for so we can rebuild when failover flips qwen-runpod ↔ openrouter.
-let lazyEffectiveProvider: ChatbotProvider | null = null;
 
 async function getYoga(): Promise<YogaHandler> {
   const settings = await getChatbotSettings();
-  // Resolve which provider will actually serve this request. When
-  // `config.chatbot.provider === 'qwen-runpod'` and the RunPod Pod
-  // /health probe fails, this returns 'openrouter' so users keep getting
-  // responses even while the Pod is down (cost-pause or migration).
-  const configured = config.chatbot.provider;
-  const effective = await resolveEffectiveProvider(configured, config.qwenLora.apiUrl);
-  if (
-    !lazyYoga ||
-    settings.updatedAt.getTime() > lazyBuildAt ||
-    effective !== lazyEffectiveProvider
-  ) {
-    const model = resolveChatbotModel(effective, config.chatbot.model, buildProviderDefaults(), {
+  if (!lazyYoga || settings.updatedAt.getTime() > lazyBuildAt) {
+    const provider = config.chatbot.provider;
+    const model = resolveChatbotModel(provider, config.chatbot.model, buildProviderDefaults(), {
       qwenRunpodModel: settings.qwenRunpodModel,
       openrouterModel: settings.openrouterModel,
     });
-    const serviceAdapter = createServiceAdapter(effective, model);
+    const serviceAdapter = createServiceAdapter(provider, model);
     const runtime = new CopilotRuntime();
     lazyYoga = copilotRuntimeNodeHttpEndpoint({
       runtime,
@@ -118,7 +101,6 @@ async function getYoga(): Promise<YogaHandler> {
       endpoint: '/api/v1/chat',
     });
     lazyBuildAt = Date.now();
-    lazyEffectiveProvider = effective;
   }
   return lazyYoga;
 }
@@ -171,41 +153,18 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
 
   fastify.get('/config', { onRequest: [fastify.authenticate] }, async (_request, reply) => {
     // Resolve the live model the same way getYoga() does so /config always
-    // reflects the value the next chat request will actually use —
-    // including the CP477+11 health-check failover (qwen-runpod →
-    // openrouter when Pod /health probe fails).
-    const configured = config.chatbot.provider;
-    const effective = await resolveEffectiveProvider(configured, config.qwenLora.apiUrl);
+    // reflects the value the next chat request will actually use.
+    const provider = config.chatbot.provider;
     const settings = await getChatbotSettings();
-    const model = resolveChatbotModel(effective, config.chatbot.model, buildProviderDefaults(), {
+    const model = resolveChatbotModel(provider, config.chatbot.model, buildProviderDefaults(), {
       qwenRunpodModel: settings.qwenRunpodModel,
       openrouterModel: settings.openrouterModel,
     });
     return reply.send({
       status: 200,
-      data: { provider: effective, configured, model },
+      data: { provider, model },
     });
   });
-
-  // CP477+11 — Server-start warm-up: prime the vLLM health cache once at
-  // boot so the first user chat request can hit a warm cache and skip
-  // the 500ms /health probe entirely. Fire-and-forget — failure here is
-  // recoverable (per-request probe will retry).
-  if (config.chatbot.provider === 'qwen-runpod' && config.qwenLora.apiUrl) {
-    void isQwenRunpodHealthy(config.qwenLora.apiUrl)
-      .then((healthy) => {
-        logger.info('CP477+11 chatbot health warm-up complete', {
-          healthy,
-          apiUrl: config.qwenLora.apiUrl,
-        });
-      })
-      .catch((err) => {
-        logger.warn(
-          'CP477+11 chatbot health warm-up failed (continuing — per-request probe will retry)',
-          { err: err instanceof Error ? err.message : String(err) }
-        );
-      });
-  }
 
   done();
 };
