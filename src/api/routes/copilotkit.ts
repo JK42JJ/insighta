@@ -11,7 +11,6 @@ import { config } from '@/config/index';
 import { QwenRunpodAdapter } from '@/modules/chatbot-rag';
 import { getChatbotSettings } from '@/modules/chatbot-settings/service';
 import { toRunpodOpenAiBase } from './copilotkit-base-url';
-import { resolveEffectiveProvider } from './copilotkit-health';
 import {
   resolveChatbotModel,
   type ChatbotProvider,
@@ -32,20 +31,12 @@ function createServiceAdapter(provider: ChatbotProvider, model: string): Copilot
   switch (provider) {
     case 'gemini':
     case 'openrouter':
-      // CP477+4 — Use QwenRunpodAdapter (chat.completions forced) instead
-      // of CopilotKit's default OpenAIAdapter (which routes via Responses
-      // API → not supported by OpenRouter for many models → Bug 1
-      // "Invalid Responses API request" on turn 2). Same Bug 1 fix as
-      // qwen-runpod path. chat_template_kwargs disabled because OpenRouter
-      // is not vLLM and the field is undocumented there.
-      if (!config.openrouter.apiKey) {
-        throw new Error('OPENROUTER_API_KEY not set');
-      }
-      return new QwenRunpodAdapter({
-        baseURL: 'https://openrouter.ai/api/v1',
-        apiKey: config.openrouter.apiKey,
+      return new OpenAIAdapter({
+        openai: new OpenAI({
+          apiKey: config.openrouter.apiKey,
+          baseURL: 'https://openrouter.ai/api/v1',
+        }),
         model,
-        includeChatTemplateKwargs: false,
       });
 
     case 'local':
@@ -86,26 +77,16 @@ type YogaHandler = ReturnType<typeof copilotRuntimeNodeHttpEndpoint>;
 
 let lazyYoga: YogaHandler | null = null;
 let lazyBuildAt = 0;
-let lazyEffectiveProvider: ChatbotProvider | null = null;
-
-// CP477+3 — qwen-runpod ↔ openrouter health-check failover. Helpers live
-// in `./copilotkit-health` so they can be unit-tested without pulling in
-// the env-validating `config` module at jest import time.
 
 async function getYoga(): Promise<YogaHandler> {
   const settings = await getChatbotSettings();
-  const configured = config.chatbot.provider;
-  const effective = await resolveEffectiveProvider(configured, config.qwenLora.apiUrl);
-  if (
-    !lazyYoga ||
-    settings.updatedAt.getTime() > lazyBuildAt ||
-    effective !== lazyEffectiveProvider
-  ) {
-    const model = resolveChatbotModel(effective, config.chatbot.model, buildProviderDefaults(), {
+  if (!lazyYoga || settings.updatedAt.getTime() > lazyBuildAt) {
+    const provider = config.chatbot.provider;
+    const model = resolveChatbotModel(provider, config.chatbot.model, buildProviderDefaults(), {
       qwenRunpodModel: settings.qwenRunpodModel,
       openrouterModel: settings.openrouterModel,
     });
-    const serviceAdapter = createServiceAdapter(effective, model);
+    const serviceAdapter = createServiceAdapter(provider, model);
     const runtime = new CopilotRuntime();
     lazyYoga = copilotRuntimeNodeHttpEndpoint({
       runtime,
@@ -113,7 +94,6 @@ async function getYoga(): Promise<YogaHandler> {
       endpoint: '/api/v1/chat',
     });
     lazyBuildAt = Date.now();
-    lazyEffectiveProvider = effective;
   }
   return lazyYoga;
 }
@@ -141,26 +121,16 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
 
   fastify.get('/config', { onRequest: [fastify.authenticate] }, async (_request, reply) => {
     // Resolve the live model the same way getYoga() does so /config always
-    // reflects the value the next chat request will actually use — including
-    // the CP477+3 health-check failover (qwen-runpod → openrouter when
-    // Pod is unreachable).
-    const configured = config.chatbot.provider;
-    const effective = await resolveEffectiveProvider(configured, config.qwenLora.apiUrl);
+    // reflects the value the next chat request will actually use.
+    const provider = config.chatbot.provider;
     const settings = await getChatbotSettings();
-    const model = resolveChatbotModel(effective, config.chatbot.model, buildProviderDefaults(), {
+    const model = resolveChatbotModel(provider, config.chatbot.model, buildProviderDefaults(), {
       qwenRunpodModel: settings.qwenRunpodModel,
       openrouterModel: settings.openrouterModel,
     });
     return reply.send({
       status: 200,
-      data: {
-        provider: effective,
-        model,
-        // Surface the configured-vs-effective split so the admin UI can show
-        // "qwen-runpod (falling back to openrouter — Pod unreachable)".
-        configuredProvider: configured,
-        failoverActive: configured !== effective,
-      },
+      data: { provider, model },
     });
   });
 
