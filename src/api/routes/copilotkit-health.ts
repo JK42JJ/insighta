@@ -16,7 +16,13 @@ import { toRunpodOpenAiBase } from './copilotkit-base-url';
 import type { ChatbotProvider } from './copilotkit-model-resolver';
 
 const VLLM_HEALTH_CACHE_MS = 5_000;
-const VLLM_HEALTH_PROBE_TIMEOUT_MS = 2_000;
+// CP477+11 — shortened from 2000 to 500ms per CP477+6 handoff §4.1 spec.
+// 2s probe timeout was an obvious user-facing tax on every cache-miss
+// path (cold start + every 5min cache boundary). 500ms is still generous
+// for a RunPod /health response (typical p95 < 100ms warm) while
+// keeping the worst-case race window narrow enough that the
+// req.pause()/req.resume() body buffer in copilotkit.ts can absorb it.
+const VLLM_HEALTH_PROBE_TIMEOUT_MS = 500;
 
 interface VllmHealthCache {
   healthy: boolean;
