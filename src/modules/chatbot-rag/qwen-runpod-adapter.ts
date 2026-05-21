@@ -39,7 +39,11 @@ import type {
   CopilotRuntimeChatCompletionRequest,
   CopilotRuntimeChatCompletionResponse,
 } from '@copilotkit/runtime';
-import { createQwenPromptMiddleware, rewriteSystemContent } from './qwen-prompt-middleware';
+import {
+  createQwenPromptMiddleware,
+  rewriteSystemContent,
+  appendNoThinkToLastUserMessageString,
+} from './qwen-prompt-middleware';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'chatbot-rag/qwen-runpod-adapter' });
@@ -290,7 +294,10 @@ async function applySFTRewrite(messages: OpenAIChatMessage[]): Promise<OpenAICha
     const otherMessages = messages.filter((m) => m.role !== 'system');
 
     const newSystem = await rewriteSystemContent(systemContents.join('\n\n'));
-    return [{ role: 'system', content: newSystem }, ...otherMessages];
+    const withSystem = [{ role: 'system' as const, content: newSystem }, ...otherMessages];
+    // CP477+5 — Append `/no_think` at the end of the LAST USER message
+    // (Qwen3 chat-template standard position). Idempotent.
+    return appendNoThinkToLastUserMessageString(withSystem);
   } catch (err) {
     log.warn('SFT rewrite failed; falling back to raw messages', {
       error: err instanceof Error ? err.message : String(err),
