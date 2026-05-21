@@ -115,9 +115,34 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
   server.removeAllListeners('request');
   server.on('request', (req, res) => {
     if (req.url?.startsWith('/api/v1/chat') && !req.url?.startsWith('/api/v1/chat/config')) {
+      // CP477+7 — Pause the request stream BEFORE the async getYoga() wait
+      // so raw HTTP 'data'/'end' events don't fire and get lost while yoga
+      // is being lazily built or while chatbot_settings 5-min cache is being
+      // refreshed (DB query ~50-200ms). Without this pause the body is
+      // swallowed → yoga receives empty payload → "Invalid JSON payload" 400.
+      // Triggers: cold start (lazyYoga === null), settings cache miss every
+      // 5 min, admin model PUT (updatedAt advances).
+      req.pause();
       void (async () => {
-        const handler = await getYoga();
-        await handler(req, res);
+        try {
+          const handler = await getYoga();
+          req.resume();
+          await handler(req, res);
+        } catch (err) {
+          // Pre-handler async step failed (e.g., chatbot_settings DB
+          // unreachable, adapter env missing). Without this catch the
+          // rejection is silent and the client hangs until socket timeout.
+          if (!res.headersSent) {
+            res.statusCode = 500;
+            res.setHeader('content-type', 'application/json');
+            res.end(
+              JSON.stringify({
+                error: 'chat_runtime_unavailable',
+                message: err instanceof Error ? err.message : 'unknown error',
+              })
+            );
+          }
+        }
       })();
       return;
     }
