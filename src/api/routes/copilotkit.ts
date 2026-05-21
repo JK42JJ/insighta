@@ -11,7 +11,6 @@ import { config } from '@/config/index';
 import { QwenRunpodAdapter } from '@/modules/chatbot-rag';
 import { getChatbotSettings } from '@/modules/chatbot-settings/service';
 import { toRunpodOpenAiBase } from './copilotkit-base-url';
-import { resolveEffectiveProvider } from './copilotkit-health';
 import {
   resolveChatbotModel,
   type ChatbotProvider,
@@ -32,12 +31,11 @@ function createServiceAdapter(provider: ChatbotProvider, model: string): Copilot
   switch (provider) {
     case 'gemini':
     case 'openrouter':
-      // CP477+4 — Use QwenRunpodAdapter (chat.completions forced) instead
-      // of CopilotKit's default OpenAIAdapter (which routes via Responses
-      // API → not supported by OpenRouter for many models → Bug 1
-      // "Invalid Responses API request" on turn 2). Same Bug 1 fix as
-      // qwen-runpod path. chat_template_kwargs disabled because OpenRouter
-      // is not vLLM and the field is undocumented there.
+      // CP477+4 — Use QwenRunpodAdapter (chat.completions forced) instead of
+      // CopilotKit's default OpenAIAdapter (which routes via Responses API
+      // -> not supported by OpenRouter -> Bug 1 "Invalid Responses API request"
+      // on turn 2). includeChatTemplateKwargs disabled because OpenRouter is
+      // not vLLM and the field is undocumented there.
       if (!config.openrouter.apiKey) {
         throw new Error('OPENROUTER_API_KEY not set');
       }
@@ -86,26 +84,16 @@ type YogaHandler = ReturnType<typeof copilotRuntimeNodeHttpEndpoint>;
 
 let lazyYoga: YogaHandler | null = null;
 let lazyBuildAt = 0;
-let lazyEffectiveProvider: ChatbotProvider | null = null;
-
-// CP477+3 — qwen-runpod ↔ openrouter health-check failover. Helpers live
-// in `./copilotkit-health` so they can be unit-tested without pulling in
-// the env-validating `config` module at jest import time.
 
 async function getYoga(): Promise<YogaHandler> {
   const settings = await getChatbotSettings();
-  const configured = config.chatbot.provider;
-  const effective = await resolveEffectiveProvider(configured, config.qwenLora.apiUrl);
-  if (
-    !lazyYoga ||
-    settings.updatedAt.getTime() > lazyBuildAt ||
-    effective !== lazyEffectiveProvider
-  ) {
-    const model = resolveChatbotModel(effective, config.chatbot.model, buildProviderDefaults(), {
+  if (!lazyYoga || settings.updatedAt.getTime() > lazyBuildAt) {
+    const provider = config.chatbot.provider;
+    const model = resolveChatbotModel(provider, config.chatbot.model, buildProviderDefaults(), {
       qwenRunpodModel: settings.qwenRunpodModel,
       openrouterModel: settings.openrouterModel,
     });
-    const serviceAdapter = createServiceAdapter(effective, model);
+    const serviceAdapter = createServiceAdapter(provider, model);
     const runtime = new CopilotRuntime();
     lazyYoga = copilotRuntimeNodeHttpEndpoint({
       runtime,
@@ -113,7 +101,6 @@ async function getYoga(): Promise<YogaHandler> {
       endpoint: '/api/v1/chat',
     });
     lazyBuildAt = Date.now();
-    lazyEffectiveProvider = effective;
   }
   return lazyYoga;
 }
@@ -128,9 +115,34 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
   server.removeAllListeners('request');
   server.on('request', (req, res) => {
     if (req.url?.startsWith('/api/v1/chat') && !req.url?.startsWith('/api/v1/chat/config')) {
+      // CP477+7 — Pause the request stream BEFORE the async getYoga() wait
+      // so raw HTTP 'data'/'end' events don't fire and get lost while yoga
+      // is being lazily built or while chatbot_settings 5-min cache is being
+      // refreshed (DB query ~50-200ms). Without this pause the body is
+      // swallowed → yoga receives empty payload → "Invalid JSON payload" 400.
+      // Triggers: cold start (lazyYoga === null), settings cache miss every
+      // 5 min, admin model PUT (updatedAt advances).
+      req.pause();
       void (async () => {
-        const handler = await getYoga();
-        await handler(req, res);
+        try {
+          const handler = await getYoga();
+          req.resume();
+          await handler(req, res);
+        } catch (err) {
+          // Pre-handler async step failed (e.g., chatbot_settings DB
+          // unreachable, adapter env missing). Without this catch the
+          // rejection is silent and the client hangs until socket timeout.
+          if (!res.headersSent) {
+            res.statusCode = 500;
+            res.setHeader('content-type', 'application/json');
+            res.end(
+              JSON.stringify({
+                error: 'chat_runtime_unavailable',
+                message: err instanceof Error ? err.message : 'unknown error',
+              })
+            );
+          }
+        }
       })();
       return;
     }
@@ -141,26 +153,16 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
 
   fastify.get('/config', { onRequest: [fastify.authenticate] }, async (_request, reply) => {
     // Resolve the live model the same way getYoga() does so /config always
-    // reflects the value the next chat request will actually use — including
-    // the CP477+3 health-check failover (qwen-runpod → openrouter when
-    // Pod is unreachable).
-    const configured = config.chatbot.provider;
-    const effective = await resolveEffectiveProvider(configured, config.qwenLora.apiUrl);
+    // reflects the value the next chat request will actually use.
+    const provider = config.chatbot.provider;
     const settings = await getChatbotSettings();
-    const model = resolveChatbotModel(effective, config.chatbot.model, buildProviderDefaults(), {
+    const model = resolveChatbotModel(provider, config.chatbot.model, buildProviderDefaults(), {
       qwenRunpodModel: settings.qwenRunpodModel,
       openrouterModel: settings.openrouterModel,
     });
     return reply.send({
       status: 200,
-      data: {
-        provider: effective,
-        model,
-        // Surface the configured-vs-effective split so the admin UI can show
-        // "qwen-runpod (falling back to openrouter — Pod unreachable)".
-        configuredProvider: configured,
-        failoverActive: configured !== effective,
-      },
+      data: { provider, model },
     });
   });
 

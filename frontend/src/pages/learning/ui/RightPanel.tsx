@@ -144,12 +144,12 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
           activeTab !== 'notes' && 'hidden'
         )}
       >
-        <p
-          onClick={focusNoteEditor}
-          className="mb-3 cursor-text whitespace-pre-line text-[14px] leading-relaxed text-muted-foreground/60 group-focus-within:hidden group-has-[.ProseMirror>p:first-child:not(.is-editor-empty)]:hidden"
-        >
-          {t('learning.noteHint')}
-        </p>
+        {/* CP477+9 — Standalone hint `<p>` removed. TipTap Placeholder
+            extension (videoPlayer.panelPlaceholder via useNoteEditor)
+            already renders the placeholder text inside the editor's empty
+            first paragraph via ::before (content: attr(data-placeholder)
+            added in PanelNoteEditor), so the cursor sits at the hint
+            origin and the hint disappears on first keystroke (Notion-style). */}
         {(noteLoaded || !currentCard?.id) && (
           <PanelNoteEditor
             initialContent={noteContent}

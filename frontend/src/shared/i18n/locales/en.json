@@ -392,6 +392,11 @@
     "currentUser": "Logged in as {{name}}",
     "recommended": "Recommended",
     "urgency": "Pioneer pricing will transition to monthly subscription soon.",
+    "urgencyBannerLtd": "Pioneer Lifetime will soon become a monthly subscription — last chance",
+    "activeStateLifetime": "Paid · Lifetime",
+    "activeStateRecurring": "Paid · Next billing {{date}}",
+    "currentlyUsing": "Currently active",
+    "managePlanCta": "Manage billing",
     "checkoutInProgress": "Opening checkout…",
     "free": {
       "name": "Free",
@@ -1802,7 +1807,7 @@
     "quotaReached": "Daily video search limit reached. Recommendations will be available tomorrow."
   },
   "learning": {
-    "tabNotes": "Notes",
+    "tabNotes": "Memo",
     "tabChatbot": "AI Chatbot",
     "tabSummary": "AI Summary",
     "tabSection": "Section",
@@ -1826,6 +1831,9 @@
     "chatInitial": "Ask questions about this video",
     "chatPlaceholder": "Ask about the video content...",
     "feedbackSaved": "Feedback saved",
+    "addToNote": "Add to memo",
+    "addToNoteSuccess": "Added to memo",
+    "addToNoteFailed": "Memo not active yet",
     "noteNotReady": "Note hasn't been generated yet",
     "chatDisclaimer": "Chatbot can make mistakes. Please double-check responses.",
     "noteHint": "Take notes about this video, or type '/' for additional commands.",
