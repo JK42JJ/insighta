@@ -280,6 +280,21 @@ export default function SubscriptionPage() {
       const res = await portal.mutateAsync();
       window.open(res.portalUrl, '_blank', 'noopener,noreferrer');
     } catch (err) {
+      // BE returns BILLING_CUSTOMER_NOT_FOUND (404) when the user's row is
+      // orphaned in LS (mode mismatch / admin-granted lifetime). Show a
+      // distinct, actionable copy instead of a generic retry message.
+      if (
+        err instanceof ApiHttpError &&
+        err.statusCode === 404 &&
+        err.code === 'BILLING_CUSTOMER_NOT_FOUND'
+      ) {
+        toast({
+          title: t('billing.card.portalOrphanedTitle'),
+          description: t('billing.card.portalOrphanedDesc'),
+          variant: 'destructive',
+        });
+        return;
+      }
       const message = err instanceof Error ? err.message : t('billing.card.portalErrorDesc');
       toast({
         title: t('billing.card.portalErrorTitle'),
