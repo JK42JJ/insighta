@@ -91,7 +91,7 @@ async function resolveOgMeta(
   return { title, description, thumbnail, spaPath };
 }
 
-export default function ogRoutes(fastify: FastifyInstance): void {
+export default async function ogRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get<{
     Params: { mandalaId: string; videoId: string };
     Querystring: { format?: string };

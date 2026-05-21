@@ -18,6 +18,7 @@ import type { TiptapDoc } from '../lib/note-parser';
 import { EditorToolbar } from './EditorToolbar';
 import { EditorSlashMenu } from './EditorSlashMenu';
 import { formatTime, getYouTubeVideoId } from '@/widgets/video-player/model/youtube-api';
+import { setNoteEditorRef } from '@/pages/learning/model/noteEditorBridge';
 import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
 
 /** Delay before auto-focus — lets the slide animation settle. */
@@ -62,6 +63,19 @@ export function PanelNoteEditor({
     onTimestampClick,
     placeholder: t('videoPlayer.panelPlaceholder'),
   });
+
+  // CP477+10 — Publish this editor instance to the module-level bridge so
+  // ChatAssistant's "메모에 추가" custom message control can append text
+  // here. Replaces the earlier (incorrect) publish from useNoteDocument
+  // which targets the CenterPanel note-mode editor, not this RightPanel
+  // sidebar editor — that mismatch caused the "add succeeded but nothing
+  // appears" UX bug.
+  useEffect(() => {
+    setNoteEditorRef(editor ?? null);
+    return () => {
+      setNoteEditorRef(null);
+    };
+  }, [editor]);
 
   const videoId = videoUrl ? getYouTubeVideoId(videoUrl) : null;
 

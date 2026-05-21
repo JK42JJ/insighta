@@ -147,8 +147,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
         {/* CP477+9 — Standalone hint `<p>` removed. TipTap Placeholder
             extension (videoPlayer.panelPlaceholder via useNoteEditor)
             already renders the placeholder text inside the editor's empty
-            first paragraph via ::before (content: attr(data-placeholder)
-            added in PanelNoteEditor), so the cursor sits at the hint
+            first paragraph via ::before, so the cursor sits at the hint
             origin and the hint disappears on first keystroke (Notion-style). */}
         {(noteLoaded || !currentCard?.id) && (
           <PanelNoteEditor
