@@ -722,6 +722,22 @@
     "pdf": "PDF Document",
     "other": "Link"
   },
+  "learningShare": {
+    "button": "Share",
+    "preview": "Share preview",
+    "quickShare": "Quick share",
+    "more": "More",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied",
+    "linkCopyFailed": "Failed to copy link. Please try again.",
+    "kakao": "KakaoTalk",
+    "kakaoButtonViewLink": "View video",
+    "kakaoNotConfigured": "Kakao share will be available once configured",
+    "kakaoSendFailed": "Failed to send Kakao message",
+    "comingSoon": "Coming soon",
+    "x": "X",
+    "naver": "Naver"
+  },
   "videoPlayer": {
     "prevCard": "Previous card",
     "nextCard": "Next card",

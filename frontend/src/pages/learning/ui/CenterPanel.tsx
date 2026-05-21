@@ -17,6 +17,7 @@ import { EditorContent } from '@tiptap/react';
 import { toast } from 'sonner';
 import { PanelVideoPlayer } from '@/features/video-side-panel/ui/PanelVideoPlayer';
 import { PanelAISummary } from '@/features/video-side-panel/ui/PanelAISummary';
+import { LearningShareMenu } from '@/features/learning-share';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
 import { useHighlightReel, HIGHLIGHT_RELEVANCE_THRESHOLD } from '../model/useHighlightReel';
@@ -281,6 +282,7 @@ export function CenterPanel({
                         })}
                 </TooltipContent>
               </Tooltip>
+              <LearningShareMenu mandalaId={mandalaId} videoId={videoId} />
             </div>
           </div>
         </div>

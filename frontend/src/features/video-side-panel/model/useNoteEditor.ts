@@ -51,7 +51,12 @@ export function useNoteEditor({
         codeBlock: false, // replaced by CodeBlockLowlight below
       }),
       Placeholder.configure({ placeholder }),
-      Link.configure({ openOnClick: true, autolink: true }),
+      // CP477+10 — `openOnClick: false` so YouTube timestamp links inserted
+      // by "메모에 추가" are handled by TimestampPlugin (in-page seek) rather
+      // than the Link extension's default new-tab behaviour. Without this
+      // both fired in parallel — the new tab won the visible outcome and
+      // users were yanked out of the learning page.
+      Link.configure({ openOnClick: false, autolink: true }),
       CodeBlockLowlight.configure({ lowlight }),
       TimestampPlugin.configure({ onSeek: onTimestampClick }),
     ],

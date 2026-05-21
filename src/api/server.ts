@@ -31,6 +31,7 @@ import { addCardsRoutes } from './routes/add-cards';
 import { skillRoutes } from './routes/skills';
 import { copilotKitRoutes } from './routes/copilotkit';
 import { billingRoutes } from './routes/billing';
+import ogRoutes from './routes/og';
 import { internalBatchVideoCollectorRoutes } from './routes/internal/batch-video-collector';
 import { internalTrendCollectorRoutes } from './routes/internal/trend-collector';
 import { internalTranscriptRoutes } from './routes/internal/transcript';
@@ -315,6 +316,10 @@ export async function buildServer() {
 
       // Register sharing routes (mandala share links, clone)
       await instance.register(sharingRoutes, { prefix: '/sharing' });
+
+      // Register OG meta route (learning-share, CP454+). Public — SNS
+      // crawlers GET this URL for og:* meta + redirect to SPA learning page.
+      await instance.register(ogRoutes, { prefix: '/og' });
 
       // Register card routes (pin/bookmark toggle — CP457+)
       await instance.register(cardsRoutes, { prefix: '/cards' });

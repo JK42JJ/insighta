@@ -34,7 +34,6 @@ import type { TiptapDoc } from '@/features/video-side-panel/lib/note-parser';
 
 import { VideoBlock } from '../lib/video-block';
 import { buildInitialNoteDoc } from '../lib/note-document-generator';
-import { setNoteEditorRef } from './noteEditorBridge';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -163,15 +162,10 @@ export function useNoteDocument(input: UseNoteDocumentInput): UseNoteDocumentRes
     [editor]
   );
 
-  // CP477+9 — Publish editor instance to module-level ref so ChatAssistant's
-  // "메모에 추가" button can append text without prop-drilling through the
-  // CopilotKit provider tree.
-  useEffect(() => {
-    setNoteEditorRef(editor ?? null);
-    return () => {
-      setNoteEditorRef(null);
-    };
-  }, [editor]);
+  // CP477+10 — setNoteEditorRef publish moved to PanelNoteEditor so the
+  // bridge points at the RightPanel sidebar editor (which is where the
+  // user clicks "메모에 추가") rather than this CenterPanel note-mode
+  // editor.
 
   // 6. Auto-save with debounce 2s. On setIsEditing(false) we also flush.
   const updateMutation = useMutation({

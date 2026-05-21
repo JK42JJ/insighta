@@ -730,6 +730,22 @@
     "pdf": "PDF 문서",
     "other": "링크"
   },
+  "learningShare": {
+    "button": "공유",
+    "preview": "공유 미리보기",
+    "quickShare": "빠른 공유",
+    "more": "더보기",
+    "copyLink": "링크 복사",
+    "linkCopied": "링크가 복사되었습니다",
+    "linkCopyFailed": "링크 복사에 실패했어요. 다시 시도해주세요.",
+    "kakao": "카카오톡",
+    "kakaoButtonViewLink": "영상 보기",
+    "kakaoNotConfigured": "카카오 공유는 설정 후 사용할 수 있어요",
+    "kakaoSendFailed": "카카오 메시지 전송에 실패했어요",
+    "comingSoon": "준비중",
+    "x": "X",
+    "naver": "네이버"
+  },
   "videoPlayer": {
     "prevCard": "이전 카드",
     "nextCard": "다음 카드",

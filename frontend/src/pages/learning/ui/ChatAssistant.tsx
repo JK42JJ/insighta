@@ -14,9 +14,9 @@ import type { VideoRichSummaryResponse } from '@/shared/lib/api-client';
 import { useMandalaQuery } from '@/features/mandala';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
-import { appendToNote } from '@/pages/learning/model/noteEditorBridge';
 import { apiClient } from '@/shared/lib/api-client';
-import type { CopilotChatLabels } from '@copilotkit/react-ui';
+import { CustomAssistantMessage } from './CustomAssistantMessage';
+import type { AssistantMessageProps, CopilotChatLabels } from '@copilotkit/react-ui';
 
 export interface ChatContext {
   layer: 'note' | 'video-time' | 'video' | 'cell' | 'mandala' | 'global';
@@ -115,39 +115,6 @@ function linkifyTimestamps(root: Node) {
     if (lastIdx < content.length)
       fragment.appendChild(document.createTextNode(content.slice(lastIdx)));
     if (lastIdx > 0) textNode.parentNode?.replaceChild(fragment, textNode);
-  }
-}
-
-// CP477+9 — NotebookPen icon (lucide-react) inlined as SVG so the DOM
-// injection path can write it without React rendering.
-const ADD_TO_NOTE_ICON_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/></svg>';
-
-/**
- * CP477+9 — Inject "메모에 추가" button at the end of each assistant chat
- * bubble (`.copilotKitAssistantMessage`). Mirrors the timestamp-linkify
- * pattern: dedup per bubble, run from the same MutationObserver pass,
- * uses `data-*` payload + delegated click handler.
- *
- * Skipped when the bubble has no usable text content (e.g., still
- * streaming with only whitespace).
- */
-function addAddToNoteButtons(root: Node, label: string) {
-  const scope = root as Element & { querySelectorAll?: Element['querySelectorAll'] };
-  if (!scope.querySelectorAll) return;
-  const bubbles = scope.querySelectorAll('.copilotKitAssistantMessage');
-  for (const bubble of Array.from(bubbles)) {
-    if (bubble.querySelector(':scope > .chat-add-to-note')) continue;
-    const text = (bubble.textContent ?? '').trim();
-    if (!text) continue;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'chat-add-to-note';
-    btn.setAttribute('aria-label', label);
-    btn.title = label;
-    btn.dataset.copy = text;
-    btn.innerHTML = ADD_TO_NOTE_ICON_SVG;
-    bubble.appendChild(btn);
   }
 }
 
@@ -488,34 +455,6 @@ function ChatPanel({
     [onSeek]
   );
 
-  // CP477+9 — Click delegation for the injected "메모에 추가" button.
-  // Reads the bubble text from the button's data-copy attribute and calls
-  // the module-level appendToNote bridge. Shows success/failure toast.
-  const handleAddToNoteClick = useCallback(
-    (e: MouseEvent) => {
-      const target = (e.target as HTMLElement | null)?.closest?.(
-        '.chat-add-to-note'
-      ) as HTMLElement | null;
-      if (!target) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const text = (target.dataset['copy'] ?? '').trim();
-      if (!text) {
-        toast.error(t('learning.addToNoteFailed'));
-        return;
-      }
-      const ok = appendToNote(text);
-      if (ok) {
-        toast.success(t('learning.addToNoteSuccess'));
-      } else {
-        toast.error(t('learning.addToNoteFailed'));
-      }
-    },
-    [t]
-  );
-
-  const addToNoteLabel = t('learning.addToNote');
-
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
@@ -534,17 +473,12 @@ function ChatPanel({
     // a linkify pass that React's next reconciliation would immediately
     // overwrite (textNode replace cycle), so the user never sees a button
     // until streaming ends.
-    //
-    // CP477+9 — also drives the "메모에 추가" button injection per assistant
-    // bubble. Same debounce window so it runs once per settled stream
-    // (avoids per-chunk inject + dedup miss).
     let debounce: ReturnType<typeof setTimeout> | null = null;
     const reLinkify = () => {
       if (debounce !== null) clearTimeout(debounce);
       debounce = setTimeout(() => {
         debounce = null;
         linkifyTimestamps(wrapper);
-        addAddToNoteButtons(wrapper, addToNoteLabel);
       }, 200);
     };
 
@@ -555,16 +489,25 @@ function ChatPanel({
       characterData: true,
     });
     linkifyTimestamps(wrapper);
-    addAddToNoteButtons(wrapper, addToNoteLabel);
     wrapper.addEventListener('click', handleTsClick);
-    wrapper.addEventListener('click', handleAddToNoteClick);
     return () => {
       observer.disconnect();
       if (debounce !== null) clearTimeout(debounce);
       wrapper.removeEventListener('click', handleTsClick);
-      wrapper.removeEventListener('click', handleAddToNoteClick);
     };
-  }, [handleTsClick, handleAddToNoteClick, addToNoteLabel]);
+  }, [handleTsClick]);
+
+  // CP477+10 — close videoId over CustomAssistantMessage so the "메모에 추가"
+  // click can pass it to appendToNote, which uses it to mark timestamps as
+  // clickable YouTube links inside the note. useMemo on videoId so the
+  // CopilotKit prop reference is stable across renders of the same video.
+  const VideoAwareAssistantMessage = useMemo(() => {
+    const Component = (props: AssistantMessageProps): JSX.Element => (
+      <CustomAssistantMessage {...props} videoId={videoId} />
+    );
+    Component.displayName = 'VideoAwareAssistantMessage';
+    return Component;
+  }, [videoId]);
 
   return (
     <div ref={wrapperRef} className="copilotkit-chat-wrapper h-full">
@@ -575,6 +518,7 @@ function ChatPanel({
         suggestions={suggestions}
         onThumbsUp={() => toast(t('learning.feedbackSaved'))}
         onThumbsDown={() => toast(t('learning.feedbackSaved'))}
+        AssistantMessage={VideoAwareAssistantMessage}
       />
     </div>
   );
