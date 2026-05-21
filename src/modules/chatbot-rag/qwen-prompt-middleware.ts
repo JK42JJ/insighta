@@ -69,6 +69,13 @@ export function createQwenPromptMiddleware(): LanguageModelV3Middleware {
     transformParams: async ({ params }) => {
       try {
         const rewritten = await rewriteSystemPrompt(params.prompt);
+        // CP477+5 — Append `/no_think` at the END OF THE LAST USER MESSAGE
+        // (Qwen3 chat template standard location for reasoning gating).
+        // System-prompt placement caused echo + multi-turn break (CP475+5
+        // → CP477+4 regression). `@ai-sdk/openai@3.0.53` has no extraBody
+        // escape hatch so we cannot forward `chat_template_kwargs` here —
+        // user-message-end is the only Vercel-SDK-compatible path.
+        const withDirective = appendNoThinkToLastUserMessage(rewritten ?? params.prompt);
         // CP475+4 — vLLM Pod started without --enable-auto-tool-choice +
         // --tool-call-parser, so any inbound `tool_choice: 'auto'` (the
         // Vercel AI SDK default when the route configures tools) produces:
@@ -77,7 +84,7 @@ export function createQwenPromptMiddleware(): LanguageModelV3Middleware {
         // off in the request that hits vLLM.
         const next = {
           ...params,
-          prompt: rewritten ?? params.prompt,
+          prompt: withDirective,
           toolChoice: { type: 'none' as const },
           tools: [],
         };
@@ -139,6 +146,88 @@ export async function rewriteSystemPrompt(
 export function appendNoThinkDirective(systemContent: string): string {
   if (systemContent.includes('/no_think')) return systemContent;
   return `${systemContent}\n\n/no_think`;
+}
+
+/**
+ * Append `/no_think` to the END of the LAST USER MESSAGE in the prompt.
+ *
+ * CP477+5 — Qwen3 chat template recognises `/no_think` only when it
+ * appears at the end of the user turn's content (verified empirically:
+ * image 16 showed the directive emitted as a raw token when placed in
+ * system; images 17/18 showed multi-turn break caused by the echo). The
+ * vLLM-specific `chat_template_kwargs.enable_thinking=false` is forwarded
+ * on the legacy `process()` body but NOT by `@ai-sdk/openai@3.0.53` (no
+ * `extraBody` escape hatch in V3 — verified by reading
+ * `node_modules/@ai-sdk/openai/dist/index.js`), so the user-message-end
+ * placement is the only path that gates reasoning on both Vercel SDK and
+ * vLLM backends — and it works for OpenRouter Qwen3.5-9B too (same
+ * Qwen-family chat template).
+ *
+ * Idempotent — leaves the message unchanged if it already ends with
+ * `/no_think`.
+ */
+export function appendNoThinkToLastUserMessage(
+  prompt: LanguageModelV3Message[]
+): LanguageModelV3Message[] {
+  if (prompt.length === 0) return prompt;
+  let lastUserIdx = -1;
+  for (let i = prompt.length - 1; i >= 0; i--) {
+    if (prompt[i]!.role === 'user') {
+      lastUserIdx = i;
+      break;
+    }
+  }
+  if (lastUserIdx === -1) return prompt;
+
+  const userMsg = prompt[lastUserIdx]!;
+  if (userMsg.role !== 'user') return prompt;
+  const parts = userMsg.content;
+  if (!Array.isArray(parts) || parts.length === 0) return prompt;
+
+  let lastTextIdx = -1;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (parts[i]!.type === 'text') {
+      lastTextIdx = i;
+      break;
+    }
+  }
+  if (lastTextIdx === -1) return prompt;
+
+  const textPart = parts[lastTextIdx]!;
+  if (textPart.type !== 'text') return prompt;
+  const trimmed = textPart.text.trimEnd();
+  if (trimmed.endsWith('/no_think')) return prompt;
+
+  const newParts = [...parts];
+  newParts[lastTextIdx] = { ...textPart, text: `${trimmed} /no_think` };
+  const newPrompt = [...prompt];
+  newPrompt[lastUserIdx] = { ...userMsg, content: newParts };
+  return newPrompt;
+}
+
+/**
+ * Plain-string variant for the legacy `process()` path — message content
+ * there is already a flat `{role, content: string}` shape. Same
+ * idempotency + last-user semantics as the V3 variant.
+ */
+export function appendNoThinkToLastUserMessageString(
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
+): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+  if (messages.length === 0) return messages;
+  let lastUserIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]!.role === 'user') {
+      lastUserIdx = i;
+      break;
+    }
+  }
+  if (lastUserIdx === -1) return messages;
+  const msg = messages[lastUserIdx]!;
+  const trimmed = msg.content.trimEnd();
+  if (trimmed.endsWith('/no_think')) return messages;
+  const newMessages = messages.slice();
+  newMessages[lastUserIdx] = { ...msg, content: `${trimmed} /no_think` };
+  return newMessages;
 }
 
 /**

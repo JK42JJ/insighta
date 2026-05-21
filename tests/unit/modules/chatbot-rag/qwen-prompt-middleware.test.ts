@@ -43,6 +43,8 @@ import {
   rewriteSystemPrompt,
   createQwenPromptMiddleware,
   appendNoThinkDirective,
+  appendNoThinkToLastUserMessage,
+  appendNoThinkToLastUserMessageString,
   appendTimestampFormatRule,
   _resetMiddlewareCacheForTesting,
 } from '@/modules/chatbot-rag/qwen-prompt-middleware';
@@ -334,5 +336,156 @@ describe('rewriteSystemContent — CP477+2 timestamp rule injection', () => {
     const out = await rewriteSystemContent("You are Insighta's learning assistant.");
     expect(out).toContain('[Timestamp format]');
     expect(out).not.toContain('/no_think');
+  });
+});
+
+describe('appendNoThinkToLastUserMessage (CP477+5) — V3 prompt shape', () => {
+  // Tests cover the Vercel-SDK getLanguageModel() path. V3 user content is
+  // `Array<TextPart | FilePart>` (string for `system`, array for others).
+  type Msg = Parameters<typeof appendNoThinkToLastUserMessage>[0][number];
+
+  function userText(text: string): Msg {
+    return { role: 'user', content: [{ type: 'text', text }] } as Msg;
+  }
+  function assistantText(text: string): Msg {
+    return { role: 'assistant', content: [{ type: 'text', text }] } as Msg;
+  }
+  function systemText(text: string): Msg {
+    return { role: 'system', content: text } as Msg;
+  }
+
+  it('appends `/no_think` to the last user message text', () => {
+    const out = appendNoThinkToLastUserMessage([systemText('persona'), userText('영상 요약')]);
+    expect(out[1]!.role).toBe('user');
+    expect((out[1]! as { content: Array<{ type: string; text: string }> }).content[0]!.text).toBe(
+      '영상 요약 /no_think'
+    );
+  });
+
+  it('multi-turn — only the LAST user message gets the directive', () => {
+    const out = appendNoThinkToLastUserMessage([
+      systemText('persona'),
+      userText('first turn'),
+      assistantText('first answer'),
+      userText('second turn'),
+    ]);
+    expect((out[1]! as { content: Array<{ type: string; text: string }> }).content[0]!.text).toBe(
+      'first turn'
+    ); // untouched
+    expect((out[3]! as { content: Array<{ type: string; text: string }> }).content[0]!.text).toBe(
+      'second turn /no_think'
+    );
+  });
+
+  it('idempotent — second call leaves the message unchanged', () => {
+    const once = appendNoThinkToLastUserMessage([userText('hi')]);
+    const twice = appendNoThinkToLastUserMessage(once);
+    expect(twice).toBe(once);
+  });
+
+  it('preserves trailing whitespace normalization (uses trimEnd before appending)', () => {
+    const out = appendNoThinkToLastUserMessage([userText('hi   \n\n')]);
+    expect((out[0]! as { content: Array<{ type: string; text: string }> }).content[0]!.text).toBe(
+      'hi /no_think'
+    );
+  });
+
+  it('handles empty prompt without throwing', () => {
+    expect(appendNoThinkToLastUserMessage([])).toEqual([]);
+  });
+
+  it('no user message in prompt → passthrough', () => {
+    const input = [systemText('persona only')];
+    expect(appendNoThinkToLastUserMessage(input)).toBe(input);
+  });
+
+  it('user message with empty parts array → passthrough', () => {
+    const input = [{ role: 'user' as const, content: [] }] as unknown as Msg[];
+    expect(appendNoThinkToLastUserMessage(input)).toBe(input);
+  });
+
+  it('user message ending with a FilePart still gets directive on the last TextPart', () => {
+    const input = [
+      {
+        role: 'user' as const,
+        content: [
+          { type: 'text', text: '이 영상' },
+          { type: 'file', mediaType: 'image/png', data: 'base64...' },
+        ],
+      },
+    ] as unknown as Msg[];
+    const out = appendNoThinkToLastUserMessage(input);
+    expect((out[0]! as { content: Array<{ type: string; text?: string }> }).content[0]!.text).toBe(
+      '이 영상 /no_think'
+    );
+    // file part untouched
+    expect((out[0]! as { content: Array<{ type: string }> }).content[1]!.type).toBe('file');
+  });
+});
+
+describe('appendNoThinkToLastUserMessageString (CP477+5) — legacy process() path', () => {
+  it('appends `/no_think` to the last user message content string', () => {
+    const out = appendNoThinkToLastUserMessageString([
+      { role: 'system', content: 'persona' },
+      { role: 'user', content: '영상 요약' },
+    ]);
+    expect(out[1]!.content).toBe('영상 요약 /no_think');
+  });
+
+  it('multi-turn — only the LAST user message', () => {
+    const out = appendNoThinkToLastUserMessageString([
+      { role: 'system', content: 'persona' },
+      { role: 'user', content: 'first turn' },
+      { role: 'assistant', content: 'first answer' },
+      { role: 'user', content: 'second turn' },
+    ]);
+    expect(out[1]!.content).toBe('first turn');
+    expect(out[3]!.content).toBe('second turn /no_think');
+  });
+
+  it('idempotent', () => {
+    const once = appendNoThinkToLastUserMessageString([{ role: 'user', content: 'hi' }]);
+    const twice = appendNoThinkToLastUserMessageString(once);
+    expect(twice).toBe(once);
+  });
+
+  it('empty input → passthrough', () => {
+    const input: Parameters<typeof appendNoThinkToLastUserMessageString>[0] = [];
+    expect(appendNoThinkToLastUserMessageString(input)).toBe(input);
+  });
+
+  it('no user message in input → passthrough', () => {
+    const input: Parameters<typeof appendNoThinkToLastUserMessageString>[0] = [
+      { role: 'system', content: 'persona' },
+    ];
+    expect(appendNoThinkToLastUserMessageString(input)).toBe(input);
+  });
+});
+
+describe('createQwenPromptMiddleware — CP477+5 end-to-end shape', () => {
+  it('transformParams output has /no_think on the LAST user message (not in system)', async () => {
+    const mw = createQwenPromptMiddleware();
+    const out = await mw.transformParams!({
+      type: 'stream',
+      params: {
+        prompt: [
+          { role: 'system' as const, content: 'persona' },
+          {
+            role: 'user' as const,
+            content: [{ type: 'text', text: '영상 요약 부탁' }],
+          },
+        ],
+      } as never,
+      model: {} as never,
+    });
+    // system message rewritten by middleware — must NOT carry /no_think
+    expect((out.prompt[0]! as { content: string }).content).not.toContain('/no_think');
+    // user message tail — MUST carry /no_think
+    const userPart = (
+      out.prompt[1]! as {
+        content: Array<{ type: string; text: string }>;
+      }
+    ).content[0]!;
+    expect(userPart.text.endsWith('/no_think')).toBe(true);
   });
 });

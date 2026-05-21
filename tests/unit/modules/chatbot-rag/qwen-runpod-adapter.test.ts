@@ -51,6 +51,28 @@ jest.mock('@copilotkit/shared', () => ({
 jest.mock('@/modules/chatbot-rag/qwen-prompt-middleware', () => ({
   createQwenPromptMiddleware: jest.fn(() => ({ specificationVersion: 'v3' })),
   rewriteSystemContent: jest.fn(async (content: string) => content || 'REWRITTEN'),
+  // CP477+5 — adapter's applySFTRewrite now calls this on the final
+  // user-message-end. Mock it to use the real implementation so the
+  // adapter test stays end-to-end on the user-msg-append behaviour.
+  appendNoThinkToLastUserMessageString: jest.fn(
+    (messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>) => {
+      if (messages.length === 0) return messages;
+      let lastUserIdx = -1;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]!.role === 'user') {
+          lastUserIdx = i;
+          break;
+        }
+      }
+      if (lastUserIdx === -1) return messages;
+      const msg = messages[lastUserIdx]!;
+      const trimmed = msg.content.trimEnd();
+      if (trimmed.endsWith('/no_think')) return messages;
+      const next = messages.slice();
+      next[lastUserIdx] = { ...msg, content: `${trimmed} /no_think` };
+      return next;
+    }
+  ),
 }));
 
 // Mock logger because the adapter imports it at module level.
@@ -245,10 +267,11 @@ describe('QwenRunpodAdapter — process()', () => {
     expect(mockChatCompletionsCreate).toHaveBeenCalledTimes(1);
     const callArg = mockChatCompletionsCreate.mock.calls[0]![0];
     // System message goes through rewriteSystemContent (mocked as identity);
-    // non-system messages pass through untouched.
+    // user messages pass through untouched EXCEPT the last user gets the
+    // CP477+5 `/no_think` suffix (Qwen3 chat-template-standard placement).
     expect(callArg.messages).toEqual([
       { role: 'system', content: 'sys' },
-      { role: 'user', content: 'hi' },
+      { role: 'user', content: 'hi /no_think' },
     ]);
   });
 
@@ -404,5 +427,32 @@ describe('QwenRunpodAdapter — process()', () => {
     const callArg = mockChatCompletionsCreate.mock.calls[0]![0];
     expect(callArg.max_completion_tokens).toBe(800);
     expect(callArg.temperature).toBe(0.5);
+  });
+
+  it('CP477+5 — appends `/no_think` to the LAST user message in body.messages', async () => {
+    // Process path equivalent of the V3 middleware behaviour. Both code
+    // paths must agree on the Qwen3 chat-template-standard placement.
+    mockChatCompletionsCreate.mockResolvedValueOnce(iterChunks([]));
+    const a = new QwenRunpodAdapter({ baseURL: BASE, apiKey: KEY });
+    const es = makeEventSource();
+
+    await a.process({
+      messages: [
+        makeTextMessage('user', '첫 질문') as never,
+        makeTextMessage('assistant', '첫 응답') as never,
+        makeTextMessage('user', '두번째 질문') as never,
+      ],
+      actions: [],
+      eventSource: es as never,
+    });
+
+    const callArg = mockChatCompletionsCreate.mock.calls[0]![0];
+    const messages: Array<{ role: string; content: string }> = callArg.messages;
+    // First user message untouched.
+    expect(messages[1]!.content).toBe('첫 질문');
+    // Assistant turn untouched.
+    expect(messages[2]!.content).toBe('첫 응답');
+    // LAST user message ends with /no_think (CP477+5 contract).
+    expect(messages[3]!.content).toBe('두번째 질문 /no_think');
   });
 });
