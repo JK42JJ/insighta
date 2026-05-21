@@ -28,7 +28,9 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { NotebookPen } from 'lucide-react';
 import { Markdown, useChatContext, type AssistantMessageProps } from '@copilotkit/react-ui';
-import { copyToClipboard } from '@copilotkit/shared';
+// CP477+10+1 — @copilotkit/shared@1.55.3 does not export `copyToClipboard`
+// (added only in 1.56.x). Use the browser standard `navigator.clipboard.writeText`
+// directly so this works on both 1.55.x and 1.56.x.
 
 import { appendToNote } from '@/pages/learning/model/noteEditorBridge';
 
@@ -57,11 +59,13 @@ export function CustomAssistantMessage(props: CustomAssistantMessageProps) {
   const handleCopy = async (): Promise<void> => {
     const content = message?.content || '';
     if (!content) return;
-    const success = await copyToClipboard(content);
-    if (success) {
+    try {
+      await navigator.clipboard.writeText(content);
       setCopied(true);
       if (onCopy) onCopy(content);
       setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard write blocked (permissions / iframe / http context) — silent fail
     }
   };
 
