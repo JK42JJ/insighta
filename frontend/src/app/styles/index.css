@@ -1182,6 +1182,32 @@
   opacity: 0.7;
 }
 
+/* CP477+9 — "메모에 추가" button injected by ChatAssistant into each
+   assistant bubble via the same MutationObserver pass as chat-ts. */
+.copilotkit-chat-wrapper .chat-add-to-note {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  margin-top: 6px;
+  padding: 4px;
+  background: transparent;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  vertical-align: middle;
+  transition: all 0.15s ease;
+}
+.copilotkit-chat-wrapper .chat-add-to-note:hover {
+  color: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+  background: hsl(var(--accent));
+}
+.copilotkit-chat-wrapper .chat-add-to-note svg {
+  display: block;
+}
+
 /* CP456: LS overlay backdrop dark mode override.
    Lemon.js sets inline style `background: rgba(255,255,255,0.9)` on
    `.lemonsqueezy-loader` div. We force dark when Insighta is in dark mode.

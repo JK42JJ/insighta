@@ -1072,7 +1072,7 @@
     "switchView": "뷰 전환",
     "noCardSelected": "카드가 선택되지 않았습니다",
     "selectCardHint": "리스트에서 카드를 선택하면 상세 정보를 볼 수 있습니다",
-    "noteEditor": "노트",
+    "noteEditor": "메모",
     "preview": "미리보기",
     "edit": "편집",
     "saveNote": "메모 저장"
@@ -1799,7 +1799,7 @@
     "quotaReached": "일일 영상 검색 한도에 도달했습니다. 내일 다시 이용 가능합니다."
   },
   "learning": {
-    "tabNotes": "노트",
+    "tabNotes": "메모",
     "tabChatbot": "AI 챗봇",
     "tabSummary": "AI 요약",
     "tabSection": "섹션 내용",
@@ -1823,6 +1823,9 @@
     "chatInitial": "이 영상에 대해 질문하세요",
     "chatPlaceholder": "영상 내용에 대해 질문하세요...",
     "feedbackSaved": "피드백 저장됨",
+    "addToNote": "메모에 추가",
+    "addToNoteSuccess": "메모에 추가되었습니다",
+    "addToNoteFailed": "메모가 아직 활성화되지 않았어요",
     "noteNotReady": "노트가 아직 생성되지 않았어요",
     "chatDisclaimer": "챗봇은 실수할 수 있습니다. 답변을 다시 확인하세요.",
     "noteHint": "영상에 대한 메모를 작성하거나 '/' 를 입력해 명령어를 사용할 수 있습니다.",
@@ -1867,7 +1870,7 @@
     "downloadHtml": "HTML 다운로드",
     "restoreOriginal": "원본 복원",
     "viewModePlayer": "영상",
-    "viewModeNote": "노트"
+    "viewModeNote": "메모"
   },
   "addCards": {
     "triggerChip": "+ 카드 추가",
