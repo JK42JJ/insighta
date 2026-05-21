@@ -1064,7 +1064,7 @@
     "switchView": "Switch view",
     "noCardSelected": "No card selected",
     "selectCardHint": "Select a card from the list to view details",
-    "noteEditor": "Memo",
+    "noteEditor": "Note",
     "preview": "Preview",
     "edit": "Edit",
     "saveNote": "Save note"
@@ -1815,9 +1815,9 @@
     "chatInitial": "Ask questions about this video",
     "chatPlaceholder": "Ask about the video content...",
     "feedbackSaved": "Feedback saved",
-    "addToNote": "Add to notes",
-    "addToNoteSuccess": "Added to notes",
-    "addToNoteFailed": "Notes not active yet",
+    "addToNote": "Add to memo",
+    "addToNoteSuccess": "Added to memo",
+    "addToNoteFailed": "Memo not active yet",
     "noteNotReady": "Note hasn't been generated yet",
     "chatDisclaimer": "Chatbot can make mistakes. Please double-check responses.",
     "noteHint": "Take notes about this video, or type '/' for additional commands.",
@@ -1862,7 +1862,7 @@
     "downloadHtml": "Download HTML",
     "restoreOriginal": "Restore original",
     "viewModePlayer": "Video",
-    "viewModeNote": "Memo"
+    "viewModeNote": "Note"
   },
   "addCards": {
     "triggerChip": "+ Add Cards",

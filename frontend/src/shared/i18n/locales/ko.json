@@ -1072,7 +1072,7 @@
     "switchView": "뷰 전환",
     "noCardSelected": "카드가 선택되지 않았습니다",
     "selectCardHint": "리스트에서 카드를 선택하면 상세 정보를 볼 수 있습니다",
-    "noteEditor": "메모",
+    "noteEditor": "노트",
     "preview": "미리보기",
     "edit": "편집",
     "saveNote": "메모 저장"
@@ -1870,7 +1870,7 @@
     "downloadHtml": "HTML 다운로드",
     "restoreOriginal": "원본 복원",
     "viewModePlayer": "영상",
-    "viewModeNote": "메모"
+    "viewModeNote": "노트"
   },
   "addCards": {
     "triggerChip": "+ 카드 추가",

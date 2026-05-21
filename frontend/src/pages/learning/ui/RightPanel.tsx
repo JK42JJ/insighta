@@ -11,7 +11,7 @@ import { useMandalaCards } from '../model/useMandalaCards';
 import { useLearningStore } from '../model/useLearningStore';
 import { apiClient } from '@/shared/lib/api-client';
 import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
-import { isEmptyDoc, type TiptapDoc } from '@/features/video-side-panel/lib/note-parser';
+import type { TiptapDoc } from '@/features/video-side-panel/lib/note-parser';
 
 interface RightPanelProps {
   mandalaId: string;
@@ -40,15 +40,6 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
 
   const [richNote, setRichNote] = useState<TiptapDoc | null>(null);
   const [noteLoaded, setNoteLoaded] = useState(false);
-  // CP477+9 — Note hint visibility tracked as React state instead of a
-  // `:has()` CSS selector. The selector form
-  //   group-has-[.ProseMirror>p:first-child:not(.is-editor-empty)]:hidden
-  // proved brittle: TipTap's Placeholder only puts `.is-editor-empty` on
-  // the *current* empty paragraph, so once the user inserts a non-empty
-  // first paragraph + leaves cursor in a later empty one, the selector
-  // mis-evaluates and the hint never goes away. React state is the
-  // authoritative source.
-  const [isNoteEmpty, setIsNoteEmpty] = useState(true);
   const prevCardIdRef = useRef<string | null>(null);
   const noteWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -71,22 +62,9 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
 
   const noteContent = richNote ?? currentCard?.userNote ?? '';
 
-  // CP477+9 — Initial empty-state from the loaded content. Re-runs when
-  // the user navigates to a different card.
-  useEffect(() => {
-    if (richNote) {
-      setIsNoteEmpty(isEmptyDoc(richNote));
-    } else if (typeof currentCard?.userNote === 'string') {
-      setIsNoteEmpty(currentCard.userNote.trim().length === 0);
-    } else {
-      setIsNoteEmpty(true);
-    }
-  }, [richNote, currentCard?.userNote]);
-
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const handleDocChange = useCallback(
     (doc: unknown) => {
-      setIsNoteEmpty(isEmptyDoc(doc as TiptapDoc | null | undefined));
       if (!currentCard?.id) return;
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
@@ -166,14 +144,12 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
           activeTab !== 'notes' && 'hidden'
         )}
       >
-        {isNoteEmpty && (
-          <p
-            onClick={focusNoteEditor}
-            className="mb-3 cursor-text whitespace-pre-line text-[14px] leading-relaxed text-muted-foreground/60 group-focus-within:hidden"
-          >
-            {t('learning.noteHint')}
-          </p>
-        )}
+        {/* CP477+9 — Standalone hint `<p>` removed. TipTap Placeholder
+            extension (videoPlayer.panelPlaceholder via useNoteEditor)
+            already renders the placeholder text inside the editor's empty
+            first paragraph via ::before (content: attr(data-placeholder)
+            added in PanelNoteEditor), so the cursor sits at the hint
+            origin and the hint disappears on first keystroke (Notion-style). */}
         {(noteLoaded || !currentCard?.id) && (
           <PanelNoteEditor
             initialContent={noteContent}
