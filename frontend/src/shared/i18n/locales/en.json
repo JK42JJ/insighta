@@ -295,6 +295,8 @@
       "openingPortal": "Opening...",
       "portalErrorTitle": "Failed to open billing portal",
       "portalErrorDesc": "Please try again in a moment",
+      "portalOrphanedTitle": "Billing record not found",
+      "portalOrphanedDesc": "Your subscription is not registered with Lemon Squeezy. Please start a new checkout or contact support.",
       "noSubscriptionDesc": "Start Pro or Lifetime to enable billing management",
       "viewPlans": "View Plans",
       "lifetimeNote": "No auto-renewal. Refund requests can be made via the billing portal",
@@ -475,7 +477,9 @@
       "portalOpening": "Opening billing portal…",
       "portalFooter": "Update payment method or cancel from the Lemon Squeezy billing portal.",
       "portalErrorTitle": "Failed to open billing portal",
-      "portalErrorDesc": "An error occurred while opening the billing portal."
+      "portalErrorDesc": "An error occurred while opening the billing portal.",
+      "portalOrphanedTitle": "Billing record not found",
+      "portalOrphanedDesc": "Your subscription is not registered with Lemon Squeezy. Please start a new checkout or contact support."
     },
     "success": {
       "heading": "Preparing your plan",

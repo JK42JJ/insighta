@@ -64,6 +64,27 @@ export async function billingPortalRoutes(fastify: FastifyInstance): Promise<voi
       return reply.send(createSuccessResponse({ portalUrl }));
     } catch (err) {
       if (err instanceof LemonSqueezyApiError) {
+        // LS 404 = customer no longer resolves in the current API key's mode
+        // (test row vs live key, deleted customer, admin-granted lifetime
+        // without a real LS purchase). Surface as a distinct error code so
+        // the client can prompt re-checkout / admin contact instead of a
+        // generic "try again" message that won't help.
+        if (err.status === 404) {
+          logger.warn('billing.portal LS customer not found (orphaned row)', {
+            user_id: userId,
+            provider_subscription_id: sub.provider_subscription_id,
+            ls_status: err.status,
+          });
+          return reply
+            .code(404)
+            .send(
+              createErrorResponse(
+                ErrorCode.BILLING_CUSTOMER_NOT_FOUND,
+                'subscription row exists but LS customer is not resolvable',
+                request.url
+              )
+            );
+        }
         logger.warn('billing.portal LS error', { status: err.status });
         return reply
           .code(502)

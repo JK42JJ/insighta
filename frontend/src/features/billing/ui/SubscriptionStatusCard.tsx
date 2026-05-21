@@ -5,6 +5,7 @@ import { Badge } from '@/shared/ui/badge';
 import { ExternalLink, Crown } from 'lucide-react';
 import { usePortalUrl } from '../model/usePortalUrl';
 import { toast } from '@/shared/lib/use-toast';
+import { ApiHttpError } from '@/shared/lib/api-client';
 import type {
   BillingSubscriptionMeResponse,
   BillingSubscriptionStatus,
@@ -63,6 +64,18 @@ export function SubscriptionStatusCard({ data }: SubscriptionStatusCardProps) {
       const res = await portal.mutateAsync();
       window.open(res.portalUrl, '_blank', 'noopener,noreferrer');
     } catch (err) {
+      if (
+        err instanceof ApiHttpError &&
+        err.statusCode === 404 &&
+        err.code === 'BILLING_CUSTOMER_NOT_FOUND'
+      ) {
+        toast({
+          title: t('billing.card.portalOrphanedTitle'),
+          description: t('billing.card.portalOrphanedDesc'),
+          variant: 'destructive',
+        });
+        return;
+      }
       const message = err instanceof Error ? err.message : t('billing.card.portalErrorDesc');
       toast({
         title: t('billing.card.portalErrorTitle'),

@@ -82,6 +82,14 @@ export enum ErrorCode {
   RESOURCE_NOT_FOUND = 'RESOURCE_NOT_FOUND',
   PLAYLIST_NOT_FOUND = 'PLAYLIST_NOT_FOUND',
   VIDEO_NOT_FOUND = 'VIDEO_NOT_FOUND',
+  /**
+   * Billing-specific 404: the user has a `billing_subscriptions` row but the
+   * associated LS customer no longer resolves (mode mismatch, deleted in LS
+   * dashboard, or admin-granted lifetime without a real LS customer). Lets
+   * the client distinguish "no subscription" from "subscription row exists
+   * but is orphaned" so the UI can prompt re-checkout / admin contact.
+   */
+  BILLING_CUSTOMER_NOT_FOUND = 'BILLING_CUSTOMER_NOT_FOUND',
 
   // Validation errors (400)
   VALIDATION_ERROR = 'VALIDATION_ERROR',

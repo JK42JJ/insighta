@@ -10,6 +10,7 @@ import { useBillingSubscription } from '@/features/billing/model/useBillingSubsc
 import { usePortalUrl } from '@/features/billing/model/usePortalUrl';
 import { toast } from '@/shared/lib/use-toast';
 import { cn } from '@/shared/lib/utils';
+import { ApiHttpError } from '@/shared/lib/api-client';
 import type { BillingSubscriptionStatus } from '@/shared/lib/api-client';
 
 const TIER_STYLES: Record<string, string> = {
@@ -96,6 +97,18 @@ export function SubscriptionSettingsTab() {
       const res = await portal.mutateAsync();
       window.open(res.portalUrl, '_blank', 'noopener,noreferrer');
     } catch (err) {
+      if (
+        err instanceof ApiHttpError &&
+        err.statusCode === 404 &&
+        err.code === 'BILLING_CUSTOMER_NOT_FOUND'
+      ) {
+        toast({
+          title: t('settings.billing.portalOrphanedTitle'),
+          description: t('settings.billing.portalOrphanedDesc'),
+          variant: 'destructive',
+        });
+        return;
+      }
       const message = err instanceof Error ? err.message : t('settings.billing.portalErrorDesc');
       toast({
         title: t('settings.billing.portalErrorTitle'),
