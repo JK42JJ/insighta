@@ -18,6 +18,7 @@ import { SidebarLearningSection } from './SidebarLearningSection';
 import { SidebarTopSection } from './SidebarTopSection';
 import { SidebarProfileFooter } from './SidebarProfileFooter';
 import { SidebarHeatMinimap } from '@/widgets/sidebar-heat-minimap';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import { useUpdateSectorNames } from '@/features/mandala';
 import { toast } from '@/shared/lib/use-toast';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -245,15 +246,21 @@ export function Sidebar({
                   <ArrowLeft className="w-4 h-4" />
                   {t('settings.backToApp', 'Back to app')}
                 </button>
-                <button
-                  type="button"
-                  onClick={onToggleCollapse}
-                  aria-label={t('sidebar.collapse', 'Collapse sidebar')}
-                  title={t('sidebar.collapse', 'Collapse sidebar')}
-                  className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-                >
-                  <PanelLeft className="w-5 h-5 text-sidebar-foreground/70" />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={onToggleCollapse}
+                      aria-label={t('sidebar.collapse', 'Collapse sidebar')}
+                      className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                    >
+                      <PanelLeft className="w-5 h-5 text-sidebar-foreground/70" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-[12px]">
+                    {t('sidebar.collapse', 'Collapse sidebar')}
+                  </TooltipContent>
+                </Tooltip>
               </div>
             )}
           </div>

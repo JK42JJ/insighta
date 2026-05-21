@@ -2,11 +2,8 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, ExternalLink } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from '@/shared/ui/resizable';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
 import type { InsightCard } from '@/entities/card/model/types';
 import { SourceTypeBadge } from '@/entities/content';
 import { YouTubePlayer } from '@/widgets/video-player/ui/YouTubePlayer';
@@ -33,7 +30,14 @@ function formatDate(date: Date): string {
   });
 }
 
-export function DetailPanel({ card, onSaveNote, onSaveWatchPosition, watchPositionCache, panelSizeCache, onClose }: DetailPanelProps) {
+export function DetailPanel({
+  card,
+  onSaveNote,
+  onSaveWatchPosition,
+  watchPositionCache,
+  panelSizeCache,
+  onClose,
+}: DetailPanelProps) {
   const { t } = useTranslation();
   const playerRef = useRef<YTPlayer | null>(null);
   const cardIdRef = useRef<string | null>(null);
@@ -103,7 +107,8 @@ export function DetailPanel({ card, onSaveNote, onSaveWatchPosition, watchPositi
   const videoId = card.videoUrl ? getYouTubeVideoId(card.videoUrl) : null;
   const isYouTube = videoId !== null;
   const cachedPosition = watchPositionCache?.get(card.id);
-  const startTime = cachedPosition ?? (card.lastWatchPosition ? Math.floor(card.lastWatchPosition) : 0);
+  const startTime =
+    cachedPosition ?? (card.lastWatchPosition ? Math.floor(card.lastWatchPosition) : 0);
   const cachedPanelSize = panelSizeCache?.get(card.id) ?? DEFAULT_DETAIL_PANEL_RATIO;
 
   return (
@@ -118,15 +123,22 @@ export function DetailPanel({ card, onSaveNote, onSaveWatchPosition, watchPositi
         </div>
         <div className="flex items-center gap-1">
           {card.videoUrl && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={() => window.open(card.videoUrl, '_blank', 'noopener,noreferrer')}
-              title={t('videoPlayer.viewOriginal')}
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => window.open(card.videoUrl, '_blank', 'noopener,noreferrer')}
+                  aria-label={t('videoPlayer.viewOriginal')}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-[12px]">
+                {t('videoPlayer.viewOriginal')}
+              </TooltipContent>
+            </Tooltip>
           )}
           {onClose && (
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onClose}>
@@ -138,7 +150,11 @@ export function DetailPanel({ card, onSaveNote, onSaveWatchPosition, watchPositi
 
       {/* Content */}
       {isYouTube && videoId ? (
-        <ResizablePanelGroup direction="vertical" className="flex-1 min-h-0" onLayout={handleLayout}>
+        <ResizablePanelGroup
+          direction="vertical"
+          className="flex-1 min-h-0"
+          onLayout={handleLayout}
+        >
           <ResizablePanel defaultSize={cachedPanelSize} minSize={25}>
             <YouTubePlayer
               key={card.id}

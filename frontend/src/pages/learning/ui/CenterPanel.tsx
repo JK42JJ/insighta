@@ -25,6 +25,7 @@ import { useNoteDocument } from '@/pages/learning/model/useNoteDocument';
 import { useNoteAutoFollow } from '@/pages/learning/model/useNoteAutoFollow';
 import { exportToMarkdown, exportToHtml } from '@/pages/learning/lib/note-export';
 import { cn } from '@/shared/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import type { MandalaBookChapter, MandalaBookSection } from '@/shared/lib/api-client';
 import type { Editor } from '@tiptap/react';
 import type { TiptapDoc } from '@/features/video-side-panel/lib/note-parser';
@@ -250,12 +251,26 @@ export function CenterPanel({
                   )}
                 </span>
               )}
-              <button
-                type="button"
-                onClick={highlightReel.active ? highlightReel.stop : highlightReel.start}
-                disabled={!highlightReel.enabled}
-                title={
-                  !highlightReel.enabled
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={highlightReel.active ? highlightReel.stop : highlightReel.start}
+                    disabled={!highlightReel.enabled}
+                    aria-label={t('learning.highlightReel')}
+                    className={cn(
+                      'inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors',
+                      highlightReel.active
+                        ? 'text-[#818cf8]/80 hover:bg-[rgba(129,140,248,0.10)]'
+                        : 'text-white hover:bg-white/10',
+                      !highlightReel.enabled && 'opacity-40 cursor-not-allowed'
+                    )}
+                  >
+                    <Zap className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-[12px] max-w-[280px]">
+                  {!highlightReel.enabled
                     ? t('learning.highlightReelDisabledTooltip', {
                         threshold: HIGHLIGHT_RELEVANCE_THRESHOLD,
                       })
@@ -263,19 +278,9 @@ export function CenterPanel({
                       ? t('learning.highlightReelActiveTooltip')
                       : t('learning.highlightReelReadyTooltip', {
                           count: highlightReel.highlights.length,
-                        })
-                }
-                aria-label={t('learning.highlightReel')}
-                className={cn(
-                  'inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors',
-                  highlightReel.active
-                    ? 'text-[#818cf8]/80 hover:bg-[rgba(129,140,248,0.10)]'
-                    : 'text-white hover:bg-white/10',
-                  !highlightReel.enabled && 'opacity-40 cursor-not-allowed'
-                )}
-              >
-                <Zap className="h-5 w-5" aria-hidden="true" />
-              </button>
+                        })}
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>

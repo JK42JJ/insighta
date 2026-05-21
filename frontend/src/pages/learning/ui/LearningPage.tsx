@@ -31,6 +31,7 @@ export default function LearningPage() {
   }, [videoId]);
 
   const centerViewMode = useLearningStore((s) => s.centerViewMode);
+  const videoStripEnabled = useLearningStore((s) => s.videoStripEnabled);
   const [stripVisible, setStripVisible] = useState(false);
 
   // CP438+1: ?t=N query param drives in-page seek. When the user clicks
@@ -89,22 +90,25 @@ export default function LearningPage() {
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* VideoStrip slide-on-hover. Trigger = player wrapper only (via
             onPlayerHoverIn/Out from CenterPanel). Strip itself also
-            stays visible while hovered so the user can click a thumb. */}
-        <div
-          onMouseEnter={() => setStripVisible(true)}
-          onMouseLeave={() => setStripVisible(false)}
-          className={cn(
-            'absolute left-0 right-0 top-0 z-20 pl-4 pr-3 pt-[5px]',
-            'bg-[hsl(var(--bg-base))]/95 backdrop-blur-sm',
-            'transition-transform duration-300 ease-out',
-            stripVisible
-              ? 'translate-y-0 pointer-events-auto'
-              : '-translate-y-full pointer-events-none',
-            centerViewMode === 'note' && 'hidden'
-          )}
-        >
-          <VideoStrip mandalaId={mandalaId!} currentVideoId={videoId!} />
-        </div>
+            stays visible while hovered so the user can click a thumb.
+            Toggle (ON/OFF) lives in the left sidebar header. */}
+        {videoStripEnabled && (
+          <div
+            onMouseEnter={() => setStripVisible(true)}
+            onMouseLeave={() => setStripVisible(false)}
+            className={cn(
+              'absolute left-0 right-0 top-0 z-20 pl-4 pr-3 pt-[5px]',
+              'bg-[hsl(var(--bg-base))]/95 backdrop-blur-sm',
+              'transition-transform duration-300 ease-out',
+              stripVisible
+                ? 'translate-y-0 pointer-events-auto'
+                : '-translate-y-full pointer-events-none',
+              centerViewMode === 'note' && 'hidden'
+            )}
+          >
+            <VideoStrip mandalaId={mandalaId!} currentVideoId={videoId!} />
+          </div>
+        )}
         <CenterPanel
           mandalaId={mandalaId!}
           videoId={videoId!}

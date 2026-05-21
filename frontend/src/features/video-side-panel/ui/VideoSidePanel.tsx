@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { X, Minimize2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import { useTranslation } from 'react-i18next';
 import type { InsightCard } from '@/entities/card/model/types';
 import { useVideoPanelStore } from '../model/useVideoPanelStore';
@@ -89,26 +90,32 @@ export function VideoSidePanel({ onCollapseToPopup }: VideoSidePanelProps = {}) 
       <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
         {/* Collapse to popup button — captures current playback position */}
         {onCollapseToPopup && card && (
-          <button
-            type="button"
-            aria-label={t('videoPlayer.collapseToPopup', 'Switch to popup')}
-            title={t('videoPlayer.collapseToPopup', 'Switch to popup')}
-            onClick={() => {
-              // Capture current time → close sidebar → reopen as modal
-              const currentTime = playerRef.current?.getCurrentTime?.() ?? 0;
-              const cardWithResume = { ...card, lastWatchPosition: Math.floor(currentTime) };
-              closeSidebar();
-              onCollapseToPopup(cardWithResume);
-            }}
-            className={cn(
-              'flex h-7 w-7 items-center justify-center rounded-[6px]',
-              'bg-[rgba(0,0,0,0.45)] text-[rgba(255,255,255,0.6)]',
-              'backdrop-blur-[6px] transition-all duration-150',
-              'hover:bg-[rgba(0,0,0,0.65)] hover:text-white'
-            )}
-          >
-            <Minimize2 className="h-[13px] w-[13px]" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={t('videoPlayer.collapseToPopup', 'Switch to popup')}
+                onClick={() => {
+                  // Capture current time → close sidebar → reopen as modal
+                  const currentTime = playerRef.current?.getCurrentTime?.() ?? 0;
+                  const cardWithResume = { ...card, lastWatchPosition: Math.floor(currentTime) };
+                  closeSidebar();
+                  onCollapseToPopup(cardWithResume);
+                }}
+                className={cn(
+                  'flex h-7 w-7 items-center justify-center rounded-[6px]',
+                  'bg-[rgba(0,0,0,0.45)] text-[rgba(255,255,255,0.6)]',
+                  'backdrop-blur-[6px] transition-all duration-150',
+                  'hover:bg-[rgba(0,0,0,0.65)] hover:text-white'
+                )}
+              >
+                <Minimize2 className="h-[13px] w-[13px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-[12px]">
+              {t('videoPlayer.collapseToPopup', 'Switch to popup')}
+            </TooltipContent>
+          </Tooltip>
         )}
         {/* Close button */}
         <button

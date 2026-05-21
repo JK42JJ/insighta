@@ -6,6 +6,7 @@ import { QueryProvider } from './providers/QueryProvider';
 import { ThemeProvider } from './providers/ThemeProvider';
 import { AuthProvider } from '@/features/auth/model/AuthContext';
 import { Toaster } from '@/shared/ui/sonner';
+import { TooltipProvider } from '@/shared/ui/tooltip';
 import { OfflineBanner, SwUpdatePrompt } from '@/widgets/offline-banner';
 import { ErrorFallback } from '@/shared/ui/ErrorFallback';
 import { AppShell } from '@/widgets/app-shell';
@@ -26,13 +27,15 @@ function App() {
         <QueryProvider>
           <ThemeProvider>
             <AuthProvider>
-              <a href="#main-content" className="skip-nav">
-                {t('common.skipToContent', 'Skip to main content')}
-              </a>
-              <OfflineBanner />
-              <AppShell>{routerElement}</AppShell>
-              <Toaster />
-              <SwUpdatePrompt />
+              <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent>
+                <a href="#main-content" className="skip-nav">
+                  {t('common.skipToContent', 'Skip to main content')}
+                </a>
+                <OfflineBanner />
+                <AppShell>{routerElement}</AppShell>
+                <Toaster />
+                <SwUpdatePrompt />
+              </TooltipProvider>
             </AuthProvider>
           </ThemeProvider>
         </QueryProvider>
