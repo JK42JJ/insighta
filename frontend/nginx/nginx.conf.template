@@ -18,6 +18,36 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
+    # CP477+12 — PWA update entry points MUST NOT be aggressively cached.
+    # `sw.js`, `registerSW.js`, `workbox-*.js`, and `manifest.webmanifest`
+    # are fixed-name files (no content hash in the filename) that gate
+    # every future SW update. The 1-year immutable rule below catches
+    # every `.js` extension by regex and was freezing `sw.js` in user
+    # browsers for up to 30 days, so `autoUpdate` + `skipWaiting` +
+    # `clientsClaim` were powerless to roll out new builds — users stayed
+    # pinned to the old precache manifest indefinitely.
+    # These exact-match blocks (`location =`) take precedence over the
+    # regex below, so the immutable rule still applies to hashed assets
+    # like `assets/index-BGfM-roU.js`.
+    location = /sw.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header Pragma "no-cache" always;
+        expires 0;
+        access_log off;
+    }
+    location = /registerSW.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header Pragma "no-cache" always;
+        expires 0;
+        access_log off;
+    }
+    location = /manifest.webmanifest {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header Pragma "no-cache" always;
+        expires 0;
+        access_log off;
+    }
+
     # Static file caching - Vite uses content hashes in filenames
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 1y;
@@ -49,6 +79,18 @@ server {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
         add_header Pragma "no-cache";
         add_header Expires "0";
+
+        # CP477+12 — one-shot client-side cache clear so users whose
+        # browsers already have the previous (incorrectly cached) sw.js
+        # frozen for up to 30 days will fetch the new (no-cache) sw.js
+        # on their next navigation. `Clear-Site-Data: "cache"` empties
+        # the HTTP cache (including the stale sw.js) but preserves
+        # localStorage / IndexedDB / SW registration data, so users do
+        # not lose any app state. The new SW registers on the same load
+        # and uses the new chunk manifest.
+        # TODO (remove ~1-2 weeks after deploy): keeping this header
+        # long-term hurts cache hit rate. Tracked as a follow-up.
+        add_header Clear-Site-Data "\"cache\"" always;
     }
 
     # Error pages
