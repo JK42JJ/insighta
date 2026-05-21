@@ -104,6 +104,13 @@ export function LearningShareMenu({ mandalaId, videoId, title, oneLiner }: Learn
   const thumbnail = youtubeThumbnailUrl(videoId);
   const shareUrl = buildShareUrl({ origin: window.location.origin, mandalaId, videoId });
 
+  // Outbound share text — used as the tweet body / Naver share title.
+  // Priority: AI summary first sentence > video title > empty (URL-only).
+  // Skips the generic "이 영상을 확인해보세요!" fallback (bot review 2026-05-21):
+  // the OG card itself already carries title + description, so a generic
+  // text on top just adds noise.
+  const outboundShareText = oneLiner?.trim() || title?.trim() || '';
+
   const close = useCallback(() => setOpen(false), []);
 
   const handleCopyLink = useCallback(async () => {
@@ -145,15 +152,15 @@ export function LearningShareMenu({ mandalaId, videoId, title, oneLiner }: Learn
   }, [effectiveTitle, effectiveDescription, thumbnail, shareUrl, t, close]);
 
   const handleX = useCallback(() => {
-    openXShare({ title: effectiveTitle, url: shareUrl });
+    openXShare({ title: outboundShareText, url: shareUrl });
     toast.success(t('videoPlayer.xShareOpened'));
     close();
-  }, [effectiveTitle, shareUrl, t, close]);
+  }, [outboundShareText, shareUrl, t, close]);
 
   const handleNaver = useCallback(() => {
-    openNaverShare({ title: effectiveTitle, url: shareUrl });
+    openNaverShare({ title: outboundShareText, url: shareUrl });
     close();
-  }, [effectiveTitle, shareUrl, close]);
+  }, [outboundShareText, shareUrl, close]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
