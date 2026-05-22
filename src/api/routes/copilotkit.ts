@@ -1,5 +1,6 @@
 import 'reflect-metadata';
-import { FastifyPluginCallback } from 'fastify';
+import type { IncomingMessage } from 'node:http';
+import type { FastifyInstance, FastifyPluginCallback } from 'fastify';
 import {
   CopilotRuntime,
   OpenAIAdapter,
@@ -10,6 +11,7 @@ import OpenAI from 'openai';
 import { config } from '@/config/index';
 import { QwenRunpodAdapter } from '@/modules/chatbot-rag';
 import { getChatbotSettings } from '@/modules/chatbot-settings/service';
+import { extractTokenFromHeader } from '@/api/plugins/auth';
 import { toRunpodOpenAiBase } from './copilotkit-base-url';
 import {
   resolveChatbotModel,
@@ -17,6 +19,7 @@ import {
   type ProviderDefaults,
 } from './copilotkit-model-resolver';
 import { getEffectiveProvider, startProviderHealthPoller } from './copilotkit-provider-poller';
+import { runWithChatbotContext, type ChatbotRequestContext } from './chatbot-context-storage';
 
 const OPENROUTER_DEFAULT_MODEL = 'google/gemini-2.5-flash';
 
@@ -93,6 +96,53 @@ let lazyBuildAt = 0;
 // preserved byte-for-byte.
 let lazyBuiltProvider: ChatbotProvider | null = null;
 
+/**
+ * CP477+15 — Extract authenticated user identity from the request's
+ * Authorization header so the qwen prompt middleware can build Block U
+ * (mandala_count, mandala_titles, current_mandala_name). Returns an
+ * empty context on missing / malformed / invalid JWT — the middleware
+ * treats `{ userId: undefined }` as "skip Block U" and falls back to
+ * the pre-CP477+15 behaviour, so a failed extract never breaks the
+ * chatbot.
+ *
+ * Mirrors the JWT verify path in `src/api/plugins/auth.ts:167` but does
+ * not require the Fastify request lifecycle (raw HTTP listener bypasses
+ * it). Uses `fastify.jwt.verify(token)` directly — the same JWKS public
+ * key cache the `fastify.authenticate` decorator uses.
+ */
+async function extractChatbotContext(
+  fastify: FastifyInstance,
+  req: IncomingMessage
+): Promise<ChatbotRequestContext> {
+  const authHeader = req.headers['authorization'];
+  if (typeof authHeader !== 'string') return {};
+  const token = extractTokenFromHeader(authHeader);
+  if (!token) return {};
+  try {
+    const claims = fastify.jwt.verify<{
+      sub: string;
+      email?: string;
+      user_metadata?: Record<string, unknown>;
+    }>(token);
+    const userMeta = claims.user_metadata ?? {};
+    const displayName =
+      (userMeta['name'] as string | undefined) ??
+      (userMeta['full_name'] as string | undefined) ??
+      claims.email?.split('@')[0] ??
+      undefined;
+    return {
+      userId: claims.sub,
+      email: claims.email ?? '',
+      displayName,
+    };
+  } catch {
+    // JWT missing / expired / malformed — return empty context. The
+    // middleware will skip Block U and the chatbot still responds with
+    // the legacy persona + video context.
+    return {};
+  }
+}
+
 async function getYoga(): Promise<YogaHandler> {
   const settings = await getChatbotSettings();
   // Read-only synchronous lookup — no await, no health probe, no race with
@@ -136,9 +186,19 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
       req.pause();
       void (async () => {
         try {
+          // CP477+15 — Extract the authenticated user identity from the
+          // Authorization header so the qwen prompt middleware can build
+          // Block U (mandala_count / mandala_titles / current_mandala_name).
+          // JWT verify is a quick async hop (~5-20ms with the JWKS public
+          // key already cached), and it sits inside the `req.pause()` paused
+          // window so the body buffer absorbs it just like the existing
+          // `await getYoga()` hop.
+          const chatbotCtx = await extractChatbotContext(fastify, req);
           const handler = await getYoga();
-          req.resume();
-          await handler(req, res);
+          await runWithChatbotContext(chatbotCtx, async () => {
+            req.resume();
+            await handler(req, res);
+          });
         } catch (err) {
           // Pre-handler async step failed (e.g., chatbot_settings DB
           // unreachable, adapter env missing). Without this catch the

@@ -293,7 +293,19 @@ async function applySFTRewrite(messages: OpenAIChatMessage[]): Promise<OpenAICha
     const systemContents = messages.filter((m) => m.role === 'system').map((m) => m.content);
     const otherMessages = messages.filter((m) => m.role !== 'system');
 
-    const newSystem = await rewriteSystemContent(systemContents.join('\n\n'));
+    // CP477+15 — last user message text seeds the RAG retriever query.
+    // Walking from the end keeps multi-turn histories cheap.
+    let lastUserMessage: string | undefined;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i]!.role === 'user') {
+        lastUserMessage = messages[i]!.content;
+        break;
+      }
+    }
+
+    const newSystem = await rewriteSystemContent(systemContents.join('\n\n'), {
+      lastUserMessage,
+    });
     const withSystem = [{ role: 'system' as const, content: newSystem }, ...otherMessages];
     // CP477+5 — Append `/no_think` at the end of the LAST USER message
     // (Qwen3 chat-template standard position). Idempotent.

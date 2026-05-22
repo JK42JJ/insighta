@@ -53,8 +53,102 @@ export interface UserContext {
   mandala_titles: string[];
   /** Title of the mandala currently in focus (from request context); undefined when out-of-mandala. */
   current_mandala_name?: string;
+  // NOTE: per-mandala details (cards list, book chapters, note) now live
+  // in dedicated Blocks J / I / N respectively — see types below. Keeping
+  // them out of UserContext avoids prompt duplication and lets each
+  // loader fail independently.
   recent_card_count_7d: number;
   preferred_language: Lang;
+}
+
+// ============================================================================
+// Block J — Mandala card list (CP477+15)
+//
+// Mirrors the LeftPanel sidebar: `user_local_cards WHERE user_id AND
+// mandala_id AND cell_index >= 0`. The sidebar's "10개 영상" count comes
+// from this exact query, so the chatbot must use the same source to give
+// consistent answers ("만다라에 영상 몇개?").
+// ============================================================================
+
+export interface MandalaCardSummary {
+  /** YouTube 11-char id if the card is a video; null for non-video link types. */
+  video_id: string | null;
+  /** Human-set title (falls back to metadata_title). */
+  title: string;
+  /** 1-indexed cell position 1..8 (cell_index in DB; -1 = scratchpad — excluded). */
+  cell_index: number;
+  /** Optional cell label resolved from user_mandala_levels.subjects. */
+  cell_name?: string;
+}
+
+export interface MandalaCardsContext {
+  mandala_id: string;
+  total_count: number;
+  /** Up to MAX_MANDALA_CARDS items, most-recently-added first. */
+  cards: MandalaCardSummary[];
+}
+
+// ============================================================================
+// Block I — Mandala book index (CP477+15)
+//
+// Compact summary of `mandala_books.book_json`: chapter titles + section
+// titles. Atoms / qa are deliberately excluded — they would inflate the
+// prompt 5-10x with no proportional answer-quality gain (the model can
+// ask follow-ups against video context for atom-level detail).
+// ============================================================================
+
+export interface MandalaBookSectionSummary {
+  title: string;
+  /** Number of atoms in this section, for "이 챕터에 얼마나 자세한 내용이 있어?" type queries. */
+  atom_count: number;
+}
+
+export interface MandalaBookChapterSummary {
+  ch: number;
+  title: string;
+  intro?: string;
+  sections: MandalaBookSectionSummary[];
+}
+
+export interface MandalaBookContext {
+  mandala_id: string;
+  mandala_title: string;
+  source_videos: number;
+  source_atoms: number;
+  /** Up to MAX_BOOK_CHAPTERS chapters. */
+  chapters: MandalaBookChapterSummary[];
+  /**
+   * CP477+15 (Round 3) — Unique video ids surfaced by the book's atoms.
+   * Per user clarification: the sidebar's "N개 영상" count derives from
+   * this list (북마크 → v2 상세요약 → 북인덱스 atoms entry), so the chatbot
+   * needs this exact source to answer "이 만다라 영상 몇개?" with the
+   * number the user sees.
+   */
+  book_video_ids: string[];
+  /**
+   * CP477+15 (Round 3) — Titles for `book_video_ids` (resolved from
+   * `youtube_videos.title` JOIN). Empty when the title lookup fails;
+   * chatbot still has the count.
+   */
+  book_video_titles: string[];
+}
+
+// ============================================================================
+// Block N — Note draft context (CP477+15)
+//
+// Compact excerpt of `note_documents.content_json` for the current
+// (user, mandala). TipTap JSON is flattened to plain text and capped at
+// MAX_NOTE_EXCERPT_CHARS — enough for the chatbot to ground "내 노트에
+// 뭐 있어?" or "이 부분 어떻게 정리해?" type queries without bloating
+// the prompt.
+// ============================================================================
+
+export interface NoteDraftContext {
+  mandala_id: string;
+  total_chars: number;
+  excerpt: string;
+  truncated: boolean;
+  last_edited_at: string;
 }
 
 // ============================================================================
@@ -128,6 +222,27 @@ export interface RAGContext {
 
 /** Cap on mandala_titles array length to keep system prompt size bounded. */
 export const MAX_MANDALA_TITLES = 10;
+
+/**
+ * CP477+15 — Cap on per-mandala card list in Block J. Higher than the
+ * sidebar's count display but still bounded to keep the prompt small.
+ * If the mandala has more cards the chatbot can ask for clarification
+ * about which cell the user means.
+ */
+export const MAX_MANDALA_CARDS = 24;
+
+/**
+ * CP477+15 — Cap on chapters surfaced in Block I. The book index is
+ * primarily for navigation hints ("어느 챕터에 있어?"), not full content
+ * reproduction. Sections inside each chapter are emitted by title only.
+ */
+export const MAX_BOOK_CHAPTERS = 8;
+
+/** CP477+15 — Per-chapter section cap inside Block I. */
+export const MAX_BOOK_SECTIONS_PER_CHAPTER = 6;
+
+/** CP477+15 — Hard cap on Block N's note excerpt to keep prompt size bounded. */
+export const MAX_NOTE_EXCERPT_CHARS = 1_500;
 
 /** Activity window for recent_card_count_7d. */
 export const RECENT_DAYS_WINDOW = 7;
