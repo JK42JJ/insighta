@@ -20,7 +20,15 @@
  *   - EXTENDED_RULES appended only when any of {U, T, H} present, so the
  *     original SFT-aligned ROLE_AND_RULES_KO/EN stays byte-identical.
  */
-import type { UserContext, TranscriptContext, RAGContext, RAGResult } from './types';
+import type {
+  UserContext,
+  TranscriptContext,
+  RAGContext,
+  RAGResult,
+  MandalaCardsContext,
+  MandalaBookContext,
+  NoteDraftContext,
+} from './types';
 
 // ============================================================================
 // Types
@@ -184,33 +192,57 @@ export const EXTENDED_RULES_EN = `[Additional rules]
 // Layer → Blocks mapping (§3.3)
 // ============================================================================
 
-export type BlockId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'T' | 'U' | 'H';
+export type BlockId =
+  | 'A'
+  | 'B'
+  | 'C'
+  | 'D'
+  | 'E'
+  | 'F'
+  | 'G'
+  | 'T'
+  | 'U'
+  | 'H'
+  // CP477+15 — Insighta-structure blocks. I = book index, J = mandala
+  // cards list (matches LeftPanel), N = current-mandala note excerpt.
+  | 'I'
+  | 'J'
+  | 'N';
 
 /**
  * v2-grounded layer mapping (Block A-D come from V2Summary).
  * U (user) + H (RAG) are appended to every layer — they're orthogonal
  * to the chat surface the user is hovering over.
+ *
+ * CP477+15 — adds I (book), J (cards), N (note) to every mandala-scoped
+ * layer. These are the structural-context blocks: chatbot needs them to
+ * answer "내 만다라 영상 수?" / "이 책의 챕터?" / "내 노트에 뭐 있어?"
+ * type queries without depending on RAG retrieval. Order matters for
+ * legibility — block order in the prompt mirrors how a user reads the
+ * page: user → mandala → book → cards → note → video.
  */
 export const LAYER_BLOCKS: Record<ChatLayer, BlockId[]> = {
-  global: ['A', 'U', 'H'],
-  mandala: ['A', 'E', 'U', 'H'],
-  cell: ['A', 'B', 'C', 'E', 'U', 'H'],
-  video: ['A', 'B', 'C', 'D', 'U', 'H'],
-  'video-time': ['A', 'B', 'C', 'D', 'F', 'U', 'H'],
-  note: ['A', 'B', 'C', 'D', 'F', 'G', 'U', 'H'],
+  global: ['U', 'H'],
+  mandala: ['U', 'E', 'I', 'J', 'N', 'H'],
+  cell: ['U', 'E', 'I', 'J', 'N', 'A', 'B', 'C', 'H'],
+  video: ['U', 'E', 'I', 'J', 'N', 'A', 'B', 'C', 'D', 'H'],
+  'video-time': ['U', 'E', 'I', 'J', 'N', 'A', 'B', 'C', 'D', 'F', 'H'],
+  note: ['U', 'E', 'I', 'J', 'N', 'A', 'B', 'C', 'D', 'F', 'G', 'H'],
 };
 
 /**
  * Transcript-fallback layer mapping (Block T replaces Block A-D when no
- * v2 rich summary exists for the current video). U/H remain available.
+ * v2 rich summary exists for the current video). U/H + I/J/N remain
+ * available — the chatbot still answers mandala-level queries even when
+ * the specific video lacks an AI summary.
  */
 export const LAYER_BLOCKS_FALLBACK: Record<ChatLayer, BlockId[]> = {
-  global: ['T', 'U', 'H'],
-  mandala: ['T', 'E', 'U', 'H'],
-  cell: ['T', 'E', 'U', 'H'],
-  video: ['T', 'U', 'H'],
-  'video-time': ['T', 'F', 'U', 'H'],
-  note: ['T', 'F', 'G', 'U', 'H'],
+  global: ['U', 'H'],
+  mandala: ['U', 'E', 'I', 'J', 'N', 'T', 'H'],
+  cell: ['U', 'E', 'I', 'J', 'N', 'T', 'H'],
+  video: ['U', 'E', 'I', 'J', 'N', 'T', 'H'],
+  'video-time': ['U', 'E', 'I', 'J', 'N', 'T', 'F', 'H'],
+  note: ['U', 'E', 'I', 'J', 'N', 'T', 'F', 'G', 'H'],
 };
 
 // ============================================================================
@@ -462,6 +494,123 @@ function blockH(rc: RAGContext, lang: Lang): string | null {
 }
 
 // ============================================================================
+// Block J — Mandala cards list (CP477+15)
+//
+// Mirrors the LeftPanel sidebar's "10개 영상" count + cell-scoped list.
+// Used by the chatbot to answer "내 만다라에 영상 몇 개?", "X cell 에
+// 어떤 영상?" type queries with the same numbers the user sees.
+// ============================================================================
+
+function blockJ(j: MandalaCardsContext, lang: Lang): string | null {
+  if (lang === 'ko') {
+    const lines = ['[현재 만다라의 카드]'];
+    lines.push(`총 카드 수: ${j.total_count}개 (셀에 배치된 카드만, 스크래치패드 제외)`);
+    if (j.cards.length > 0) {
+      lines.push(`최근 카드 목록 (최대 ${j.cards.length}개, 최신순):`);
+      for (const card of j.cards) {
+        const where = card.cell_name
+          ? ` [셀 ${card.cell_index}: ${card.cell_name}]`
+          : ` [셀 ${card.cell_index}]`;
+        lines.push(`- "${card.title}"${where}`);
+      }
+    }
+    return lines.join('\n');
+  }
+  const lines = ['[Cards in current mandala]'];
+  lines.push(`Total cards: ${j.total_count} (placed cells only; scratchpad excluded)`);
+  if (j.cards.length > 0) {
+    lines.push(`Recent (newest first, max ${j.cards.length}):`);
+    for (const card of j.cards) {
+      const where = card.cell_name
+        ? ` [cell ${card.cell_index}: ${card.cell_name}]`
+        : ` [cell ${card.cell_index}]`;
+      lines.push(`- "${card.title}"${where}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+// ============================================================================
+// Block I — Mandala book index (CP477+15)
+//
+// Chapter + section titles from `mandala_books.book_json`. Atom-level
+// content is intentionally omitted — atom_count gives the chatbot a hint
+// of detail density without inflating the prompt.
+// ============================================================================
+
+function blockI(i: MandalaBookContext, lang: Lang): string | null {
+  if (i.chapters.length === 0 && i.book_video_ids.length === 0) return null;
+  // CP477+15 Round 3: the unique-video count (북인덱스 atoms 의 vid set)
+  // is the canonical "이 만다라 영상 N개" answer the sidebar surfaces.
+  // We render it explicitly so the chatbot can quote the number directly.
+  const uniqueVideos = i.book_video_ids.length;
+  if (lang === 'ko') {
+    const lines = ['[만다라 책 인덱스 (좌측 사이드바와 동일)]'];
+    lines.push(
+      `책 제목: "${i.mandala_title}" / 좌측 사이드바 영상 수 = ${uniqueVideos}개 (북인덱스 atoms 기반) / 원자 ${i.source_atoms}개`
+    );
+    if (i.book_video_titles.length > 0) {
+      const titles = i.book_video_titles
+        .slice(0, 10)
+        .map((t) => `"${t}"`)
+        .join(', ');
+      const more =
+        i.book_video_titles.length > 10 ? ` (외 ${i.book_video_titles.length - 10}개)` : '';
+      lines.push(`사이드바 영상 목록: ${titles}${more}`);
+    }
+    for (const ch of i.chapters) {
+      lines.push(`Ch.${ch.ch} ${ch.title}`);
+      if (ch.intro) lines.push(`  소개: ${ch.intro.slice(0, 120)}`);
+      for (const sec of ch.sections) {
+        lines.push(`  - ${sec.title} (원자 ${sec.atom_count}개)`);
+      }
+    }
+    return lines.join('\n');
+  }
+  const lines = ['[Mandala book index (matches sidebar)]'];
+  lines.push(
+    `Title: "${i.mandala_title}" / Sidebar video count = ${uniqueVideos} (from book index atoms) / ${i.source_atoms} atoms`
+  );
+  if (i.book_video_titles.length > 0) {
+    const titles = i.book_video_titles
+      .slice(0, 10)
+      .map((t) => `"${t}"`)
+      .join(', ');
+    const more =
+      i.book_video_titles.length > 10 ? ` (and ${i.book_video_titles.length - 10} more)` : '';
+    lines.push(`Sidebar video list: ${titles}${more}`);
+  }
+  for (const ch of i.chapters) {
+    lines.push(`Ch.${ch.ch} ${ch.title}`);
+    if (ch.intro) lines.push(`  Intro: ${ch.intro.slice(0, 120)}`);
+    for (const sec of ch.sections) {
+      lines.push(`  - ${sec.title} (${sec.atom_count} atoms)`);
+    }
+  }
+  return lines.join('\n');
+}
+
+// ============================================================================
+// Block N — Note draft (CP477+15)
+//
+// Plain-text excerpt of the per-(user, mandala) note in TipTap form.
+// Capped at MAX_NOTE_EXCERPT_CHARS upstream. The chatbot uses this for
+// "내 노트에 뭐 있어?" / "이 부분 어떻게 정리해?" queries.
+// ============================================================================
+
+function blockN(n: NoteDraftContext, lang: Lang): string | null {
+  if (!n.excerpt || n.excerpt.trim().length === 0) return null;
+  if (lang === 'ko') {
+    const header = '[현재 만다라 노트 (사용자 메모)]';
+    const meta = `총 ${n.total_chars}자 / 마지막 편집: ${n.last_edited_at.slice(0, 10)}${n.truncated ? ' / 일부만 표시' : ''}`;
+    return `${header}\n${meta}\n${n.excerpt}`;
+  }
+  const header = '[Current mandala note (user memo)]';
+  const meta = `${n.total_chars} chars / last edited ${n.last_edited_at.slice(0, 10)}${n.truncated ? ' / truncated' : ''}`;
+  return `${header}\n${meta}\n${n.excerpt}`;
+}
+
+// ============================================================================
 // Main builder
 // ============================================================================
 
@@ -477,6 +626,12 @@ export interface BuildQwenSystemPromptParams {
   transcript?: TranscriptContext | null;
   /** CP474 — RAG retrieval results (Block H). */
   ragContext?: RAGContext | null;
+  /** CP477+15 — Block I (book index). */
+  mandalaBook?: MandalaBookContext | null;
+  /** CP477+15 — Block J (mandala cards list). */
+  mandalaCards?: MandalaCardsContext | null;
+  /** CP477+15 — Block N (per-mandala note excerpt). */
+  noteDraft?: NoteDraftContext | null;
   /**
    * CP474 — when false, omit PRODUCT_PERSONA / EXTENDED_RULES so the output
    * is byte-identical to the legacy SFT-aligned format (used by training-
@@ -495,6 +650,9 @@ export function buildQwenSystemPrompt(params: BuildQwenSystemPromptParams): stri
     userContext,
     transcript,
     ragContext,
+    mandalaBook,
+    mandalaCards,
+    noteDraft,
   } = params;
   const includePersona = params.includePersona ?? true;
 
@@ -519,7 +677,13 @@ export function buildQwenSystemPrompt(params: BuildQwenSystemPromptParams): stri
   // Extended rules — only when any CP474 block is in play. Keeps legacy
   // layers free of training-data drift.
   const hasExtended =
-    includePersona && (Boolean(userContext) || Boolean(transcript) || Boolean(ragContext));
+    includePersona &&
+    (Boolean(userContext) ||
+      Boolean(transcript) ||
+      Boolean(ragContext) ||
+      Boolean(mandalaBook) ||
+      Boolean(mandalaCards) ||
+      Boolean(noteDraft));
   if (hasExtended) {
     blocks.push(language === 'ko' ? EXTENDED_RULES_KO : EXTENDED_RULES_EN);
   }
@@ -559,6 +723,15 @@ export function buildQwenSystemPrompt(params: BuildQwenSystemPromptParams): stri
         break;
       case 'H':
         if (ragContext) push(blockH(ragContext, language));
+        break;
+      case 'I':
+        if (mandalaBook) push(blockI(mandalaBook, language));
+        break;
+      case 'J':
+        if (mandalaCards) push(blockJ(mandalaCards, language));
+        break;
+      case 'N':
+        if (noteDraft) push(blockN(noteDraft, language));
         break;
     }
   }

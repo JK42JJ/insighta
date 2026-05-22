@@ -27,8 +27,27 @@
 
 import type { LanguageModelV3Middleware, LanguageModelV3Message } from '@ai-sdk/provider';
 import { logger } from '@/utils/logger';
-import { buildQwenSystemPrompt, type ChatLayer, type Lang } from './prompt-builder';
+import { getChatbotContext } from '@/api/routes/chatbot-context-storage';
+import {
+  buildQwenSystemPrompt,
+  type ChatLayer,
+  type Lang,
+  type MandalaContext as PromptMandalaContext,
+} from './prompt-builder';
 import { loadVideoContext, type VideoGroundingResult } from './video-context-loader';
+import { loadUserContext } from './user-context-loader';
+import { loadMandalaContext } from './mandala-context-loader';
+import { loadMandalaCards } from './mandala-cards-loader';
+import { loadMandalaBook } from './mandala-book-loader';
+import { loadNoteContext } from './note-loader';
+import { retrieveRAGContext } from './retriever';
+import type {
+  UserContext,
+  MandalaCardsContext,
+  MandalaBookContext,
+  NoteDraftContext,
+  RAGContext,
+} from './types';
 
 const log = logger.child({ module: 'chatbot-rag/qwen-prompt-middleware' });
 
@@ -38,6 +57,53 @@ const log = logger.child({ module: 'chatbot-rag/qwen-prompt-middleware' });
 
 /** Matches the FE's video URL pattern; group 1 = 11-char video id. */
 const VIDEO_ID_REGEX = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+
+/**
+ * CP477+15 — Pulls FE-emitted chatContext JSON fields out of the
+ * original system prompt.
+ *
+ * Why regex instead of JSON.parse: CopilotKit's `useCopilotReadable`
+ * embeds the readable value somewhere inside its own role-instructions
+ * template — the boundary is not stable across CopilotKit versions, so
+ * tolerant regex per field is more robust than trying to JSON.parse
+ * the entire system prompt.
+ *
+ * Source: `frontend/src/pages/learning/ui/ChatAssistant.tsx:358-366`.
+ */
+const MANDALA_ID_REGEX = /"mandala_id"\s*:\s*"([0-9a-fA-F-]{36})"/;
+const CELL_INDEX_REGEX = /"cell_index"\s*:\s*(-?\d+)/;
+
+function parseCurrentMandalaId(systemContent: string): string | undefined {
+  const match = MANDALA_ID_REGEX.exec(systemContent);
+  return match?.[1];
+}
+
+function parseCurrentCellIndex(systemContent: string): number | null {
+  const match = CELL_INDEX_REGEX.exec(systemContent);
+  if (!match) return null;
+  const n = Number(match[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Pulls the latest user message text out of a V3Message[] prompt — used
+ * as the RAG retriever's query. Returns undefined when the prompt has
+ * no user turn (e.g., the initial system-only setup).
+ */
+function extractLastUserMessageText(prompt: LanguageModelV3Message[]): string | undefined {
+  for (let i = prompt.length - 1; i >= 0; i--) {
+    const msg = prompt[i];
+    if (!msg || msg.role !== 'user') continue;
+    if (typeof msg.content === 'string') return msg.content;
+    if (Array.isArray(msg.content)) {
+      for (let j = msg.content.length - 1; j >= 0; j--) {
+        const part = msg.content[j];
+        if (part?.type === 'text' && typeof part.text === 'string') return part.text;
+      }
+    }
+  }
+  return undefined;
+}
 
 /** Per-videoId cache TTL for context loads. 5 minutes balances freshness vs latency. */
 const VIDEO_CONTEXT_CACHE_MS = 5 * 60 * 1000;
@@ -121,7 +187,15 @@ export async function rewriteSystemPrompt(
     }
   }
 
-  const newSystemContent = await rewriteSystemContent(systemContents.join('\n\n'));
+  // CP477+15 — pass the last user message text into the system rewriter
+  // as the RAG retrieval query. retrieveRAGContext returns 0 results
+  // when the query is empty or whitespace-only, so cold-start setup
+  // turns with no user text don't trigger an embedding call.
+  const lastUserMessage = extractLastUserMessageText(prompt);
+
+  const newSystemContent = await rewriteSystemContent(systemContents.join('\n\n'), {
+    lastUserMessage,
+  });
 
   const newSystemMsg: LanguageModelV3Message = {
     role: 'system',
@@ -278,24 +352,126 @@ export function appendTimestampFormatRule(systemContent: string, language: Lang)
  * string}` directly from CopilotKit TextMessages, so the V3Message shape
  * conversion isn't needed.
  */
-export async function rewriteSystemContent(originalSystemContent: string): Promise<string> {
+export async function rewriteSystemContent(
+  originalSystemContent: string,
+  opts?: { lastUserMessage?: string }
+): Promise<string> {
   const language = detectLanguage(originalSystemContent);
 
+  // Parse FE-emitted chatContext fields out of the system prompt.
   const videoMatch = VIDEO_ID_REGEX.exec(originalSystemContent);
   const youtubeVideoId = videoMatch?.[1] ?? null;
+  const currentMandalaId = parseCurrentMandalaId(originalSystemContent);
+  const currentCellIndex = parseCurrentCellIndex(originalSystemContent);
 
-  let videoCtx: VideoGroundingResult = { v2Data: null, transcript: null };
-  if (youtubeVideoId) {
-    videoCtx = await loadCachedVideoContext(youtubeVideoId, language);
+  const chatbotCtx = getChatbotContext();
+  const authenticated = Boolean(chatbotCtx?.userId);
+
+  // Step 1 — user-context (Block U). Needed even outside a mandala
+  // (chatbot must answer "내 만다라 몇개?").
+  let userContext: UserContext | null = null;
+  if (chatbotCtx?.userId) {
+    try {
+      userContext = await loadUserContext({
+        userId: chatbotCtx.userId,
+        email: chatbotCtx.email ?? '',
+        displayName: chatbotCtx.displayName,
+        currentMandalaId,
+        preferredLanguage: language,
+      });
+    } catch (err) {
+      log.warn('loadUserContext failed; skipping Block U', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
-  const layer: ChatLayer = youtubeVideoId ? 'video' : 'global';
+  // Step 2 — fetch all mandala-scoped contexts + video grounding +
+  // optional RAG in parallel. Each loader is fail-safe and returns
+  // null on error; prompt-builder treats null as "block omitted".
+  const mandalaName = userContext?.current_mandala_name ?? '';
+  const lastUserMessage = opts?.lastUserMessage;
+
+  const [videoCtx, mandalaCtxResult, mandalaCards, mandalaBook, noteDraft, ragContext] =
+    await Promise.all([
+      youtubeVideoId
+        ? loadCachedVideoContext(youtubeVideoId, language)
+        : Promise.resolve<VideoGroundingResult>({ v2Data: null, transcript: null }),
+      currentMandalaId && mandalaName
+        ? loadMandalaContext({
+            mandalaId: currentMandalaId,
+            mandalaName,
+            cellIndex: currentCellIndex,
+          })
+        : Promise.resolve(null),
+      authenticated && currentMandalaId && chatbotCtx?.userId
+        ? loadMandalaCards({
+            userId: chatbotCtx.userId,
+            mandalaId: currentMandalaId,
+          }).catch((err: unknown) => {
+            log.warn('loadMandalaCards failed', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+            return null;
+          })
+        : Promise.resolve<MandalaCardsContext | null>(null),
+      currentMandalaId
+        ? loadMandalaBook({ mandalaId: currentMandalaId }).catch((err: unknown) => {
+            log.warn('loadMandalaBook failed', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+            return null;
+          })
+        : Promise.resolve<MandalaBookContext | null>(null),
+      authenticated && currentMandalaId && chatbotCtx?.userId
+        ? loadNoteContext({
+            userId: chatbotCtx.userId,
+            mandalaId: currentMandalaId,
+          }).catch((err: unknown) => {
+            log.warn('loadNoteContext failed', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+            return null;
+          })
+        : Promise.resolve<NoteDraftContext | null>(null),
+      authenticated && lastUserMessage && lastUserMessage.trim().length > 0 && chatbotCtx?.userId
+        ? retrieveRAGContext({
+            userId: chatbotCtx.userId,
+            query: lastUserMessage,
+            mandalaId: currentMandalaId,
+          }).catch((err: unknown) => {
+            log.warn('retrieveRAGContext failed', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+            return null;
+          })
+        : Promise.resolve<RAGContext | null>(null),
+    ]);
+
+  const mandalaContext: PromptMandalaContext | null = mandalaCtxResult?.context ?? null;
+
+  // Layer selection follows the data we actually loaded: video page →
+  // 'video' (or 'cell' when a cell is selected), mandala-only → 'mandala',
+  // unauth or pre-mandala → 'global'.
+  const layer: ChatLayer = youtubeVideoId
+    ? currentCellIndex && currentCellIndex >= 1
+      ? 'cell'
+      : 'video'
+    : currentMandalaId
+      ? 'mandala'
+      : 'global';
 
   const built = buildQwenSystemPrompt({
     layer,
     language,
     v2Data: videoCtx.v2Data,
     transcript: videoCtx.transcript,
+    userContext,
+    mandalaContext,
+    mandalaCards,
+    mandalaBook,
+    noteDraft,
+    ragContext,
     includePersona: true,
   });
   // CP477+2 — tighten timestamp output to a single canonical form so the
