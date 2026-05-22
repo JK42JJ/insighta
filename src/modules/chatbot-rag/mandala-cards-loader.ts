@@ -1,21 +1,18 @@
 /**
  * src/modules/chatbot-rag/mandala-cards-loader.ts
  *
- * Block J source — the card list shown in the LearningPage left sidebar.
+ * Block J source — the mandala home page's "N장" count + recent video
+ * list. CP467b server-truth: the user-facing count combines BOTH
+ * `user_local_cards` (manual paste / D&D) AND `user_video_states`
+ * (mandala-mapped video subscriptions) and dedupes by YouTube video id
+ * (falling back to URL for non-YouTube cards). LeftPanel sidebar shows
+ * `user_local_cards` only (a subset), but the mandala grid header
+ * "N장" — which is what users actually see and ask about — uses the
+ * union. Block J mirrors the union so the chatbot answers the same
+ * number the user reads.
  *
- * Mirror invariant: this query MUST match the LeftPanel.tsx filter
- * (`c.mandalaId === mandalaId && c.cellIndex >= 0`). Drift would mean
- * the chatbot answers "영상 N개" while the sidebar shows a different
- * count — a credibility-breaking inconsistency.
- *
- *   LeftPanel.tsx:32-35
- *   const { cards } = useLocalCards();
- *   const mandalaCards = cards.filter(
- *     (c) => c.mandalaId === mandalaId && c.cellIndex >= 0
- *   );
- *
- * Cells with `cell_index = -1` (scratchpad) are excluded — these
- * represent rough captures the user has not yet placed in the mandala.
+ * Mirror of `src/modules/mandala/manager.ts:299-320` (`computeCardCount`).
+ * If that query changes, this one must change too.
  *
  * Failures degrade silently to `null` so the chatbot still answers via
  * the rest of the prompt blocks.
@@ -34,10 +31,20 @@ export interface LoadMandalaCardsParams {
   cellLabels?: ReadonlyArray<string | null>;
 }
 
+/** One row from the union below. `title` may be null for older video_states rows. */
+interface UnionRow {
+  source: 'local' | 'state';
+  dedup_key: string;
+  title: string | null;
+  metadata_title: string | null;
+  video_id: string | null;
+  cell_index: number | null;
+  created_at: Date;
+}
+
 /**
- * Loads the mandala's placed cards (cell_index >= 0) for Block J.
- * Returns null on missing mandalaId / DB error — caller treats null as
- * "block omitted".
+ * Loads the mandala's cards (manual + video-state union, deduped) for Block J.
+ * Returns null on missing mandalaId / DB error.
  */
 export async function loadMandalaCards(
   params: LoadMandalaCardsParams
@@ -46,53 +53,98 @@ export async function loadMandalaCards(
   const prisma = getPrismaClient();
 
   try {
-    // LeftPanel mirror: user_id + mandala_id + cell_index >= 0.
-    const [totalCount, recentRows] = await Promise.all([
-      prisma.user_local_cards.count({
-        where: {
-          user_id: params.userId,
-          mandala_id: params.mandalaId,
-          cell_index: { gte: 0 },
-        },
-      }),
-      prisma.user_local_cards.findMany({
-        where: {
-          user_id: params.userId,
-          mandala_id: params.mandalaId,
-          cell_index: { gte: 0 },
-        },
-        select: {
-          title: true,
-          metadata_title: true,
-          video_id: true,
-          cell_index: true,
-        },
-        orderBy: { created_at: 'desc' },
-        take: MAX_MANDALA_CARDS,
-      }),
+    // Mirror of manager.ts:299-320 `computeCardCount` — UNION of
+    // user_local_cards (placed cells, level_id != scratchpad) and
+    // user_video_states (mandala-mapped, level_id != scratchpad), with
+    // YouTube id from a JOIN on youtube_videos for the video_states
+    // branch. Dedup key: video_id (YouTube 11-char) when available,
+    // else url (for non-YouTube cards).
+    const [countRows, recentRows] = await Promise.all([
+      prisma.$queryRaw<Array<{ c: number }>>`
+        WITH all_cards AS (
+          SELECT COALESCE(video_id, url) AS dedup_key
+            FROM public.user_local_cards
+           WHERE user_id = ${params.userId}::uuid
+             AND mandala_id = ${params.mandalaId}::uuid
+             AND cell_index IS NOT NULL AND cell_index >= 0
+             AND (level_id IS NULL OR level_id <> 'scratchpad')
+          UNION
+          SELECT yv.youtube_video_id AS dedup_key
+            FROM public.user_video_states uvs
+            JOIN public.youtube_videos yv ON yv.id = uvs.video_id
+           WHERE uvs.user_id = ${params.userId}::uuid
+             AND uvs.mandala_id = ${params.mandalaId}::uuid
+             AND uvs.cell_index >= 0
+             AND uvs.level_id <> 'scratchpad'
+        )
+        SELECT COUNT(DISTINCT dedup_key)::int AS c FROM all_cards
+      `,
+      prisma.$queryRaw<UnionRow[]>`
+        SELECT * FROM (
+          SELECT
+            'local'::text AS source,
+            COALESCE(video_id, url) AS dedup_key,
+            title,
+            metadata_title,
+            video_id,
+            cell_index,
+            created_at
+            FROM public.user_local_cards
+           WHERE user_id = ${params.userId}::uuid
+             AND mandala_id = ${params.mandalaId}::uuid
+             AND cell_index IS NOT NULL AND cell_index >= 0
+             AND (level_id IS NULL OR level_id <> 'scratchpad')
+          UNION ALL
+          SELECT
+            'state'::text AS source,
+            yv.youtube_video_id AS dedup_key,
+            yv.title AS title,
+            NULL::text AS metadata_title,
+            yv.youtube_video_id AS video_id,
+            uvs.cell_index,
+            uvs.created_at
+            FROM public.user_video_states uvs
+            JOIN public.youtube_videos yv ON yv.id = uvs.video_id
+           WHERE uvs.user_id = ${params.userId}::uuid
+             AND uvs.mandala_id = ${params.mandalaId}::uuid
+             AND uvs.cell_index >= 0
+             AND uvs.level_id <> 'scratchpad'
+        ) combined
+        ORDER BY created_at DESC
+        LIMIT ${MAX_MANDALA_CARDS * 2}
+      `,
     ]);
 
-    const cards: MandalaCardSummary[] = recentRows
-      .map((row) => {
-        // Prefer human-set title; fall back to scraped metadata; drop rows
-        // with neither (typically link_type='note' scratchpads — already
-        // filtered by cell_index>=0 in most cases, defensive belt+braces).
-        const title = (row.title ?? row.metadata_title ?? '').trim();
-        if (title.length === 0) return null;
-        const cellIndex = row.cell_index ?? -1;
-        const cellName =
-          cellIndex >= 1 && cellIndex <= 8 && params.cellLabels
-            ? (params.cellLabels[cellIndex - 1] ?? undefined)
-            : undefined;
-        const summary: MandalaCardSummary = {
-          video_id: row.video_id,
-          title,
-          cell_index: cellIndex,
-        };
-        if (cellName) summary.cell_name = cellName;
-        return summary;
-      })
-      .filter((c): c is MandalaCardSummary => c !== null);
+    const totalCount = countRows[0]?.c ?? 0;
+
+    // Dedup recent rows by dedup_key (UNION ALL in the SQL keeps both
+    // sources; we drop duplicates here so a single video that appears
+    // in BOTH user_local_cards and user_video_states surfaces once).
+    const seen = new Set<string>();
+    const cards: MandalaCardSummary[] = [];
+    for (const row of recentRows) {
+      if (seen.has(row.dedup_key)) continue;
+      seen.add(row.dedup_key);
+
+      const title = (row.title ?? row.metadata_title ?? '').trim();
+      if (title.length === 0) continue;
+
+      const cellIndex = row.cell_index ?? -1;
+      const cellName =
+        cellIndex >= 1 && cellIndex <= 8 && params.cellLabels
+          ? (params.cellLabels[cellIndex - 1] ?? undefined)
+          : undefined;
+
+      const summary: MandalaCardSummary = {
+        video_id: row.video_id,
+        title,
+        cell_index: cellIndex,
+      };
+      if (cellName) summary.cell_name = cellName;
+      cards.push(summary);
+
+      if (cards.length >= MAX_MANDALA_CARDS) break;
+    }
 
     return {
       mandala_id: params.mandalaId,
