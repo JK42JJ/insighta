@@ -105,15 +105,23 @@ let lazyBuiltProvider: ChatbotProvider | null = null;
  * the pre-CP477+15 behaviour, so a failed extract never breaks the
  * chatbot.
  *
- * Mirrors the JWT verify path in `src/api/plugins/auth.ts:167` but does
- * not require the Fastify request lifecycle (raw HTTP listener bypasses
- * it). Uses `fastify.jwt.verify(token)` directly — the same JWKS public
- * key cache the `fastify.authenticate` decorator uses.
+ * SYNCHRONOUS — this MUST stay sync. The function is called BEFORE
+ * `req.pause()` (the PR #732 race-fix paused window), and adding an
+ * `await` inside it caused CP477+15's first ship to break the chat
+ * endpoint with 400 "Invalid JSON payload" — same failure mode as
+ * PR #737 (CP477+11) which proved "two async hops inside the paused
+ * window race against the HTTP parser's 'data' event delivery".
+ * `@fastify/jwt`'s `fastify.jwt.verify(token)` is itself synchronous
+ * (the async path is `request.jwtVerify()` which the raw HTTP listener
+ * cannot use); we keep the same JWKS public key cache `fastify.authenticate`
+ * uses, so verification is just a cached ES256 signature check.
+ *
+ * Mirrors the JWT verify path in `src/api/plugins/auth.ts:167`.
  */
-async function extractChatbotContext(
+function extractChatbotContext(
   fastify: FastifyInstance,
   req: IncomingMessage
-): Promise<ChatbotRequestContext> {
+): ChatbotRequestContext {
   const authHeader = req.headers['authorization'];
   if (typeof authHeader !== 'string') return {};
   const token = extractTokenFromHeader(authHeader);
@@ -176,6 +184,18 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
   server.removeAllListeners('request');
   server.on('request', (req, res) => {
     if (req.url?.startsWith('/api/v1/chat') && !req.url?.startsWith('/api/v1/chat/config')) {
+      // CP477+15 fix — Extract user identity from the Authorization header
+      // SYNCHRONOUSLY before `req.pause()`. Headers are already parsed by
+      // Node's HTTP parser by the time this 'request' event fires (the body
+      // is the only thing still streaming), so reading them needs no await.
+      // Keeping this OUT of the paused window is mandatory: PR #737
+      // (CP477+11) and the first CP477+15 ship both broke chat with 400
+      // "Invalid JSON payload" by putting a second `await` inside the
+      // pause window — body 'data' events race the awaits and get lost.
+      // PR #732's race-fix only tolerates a SINGLE async hop
+      // (`await getYoga()`); we keep it that way.
+      const chatbotCtx = extractChatbotContext(fastify, req);
+
       // CP477+7 — Pause the request stream BEFORE the async getYoga() wait
       // so raw HTTP 'data'/'end' events don't fire and get lost while yoga
       // is being lazily built or while chatbot_settings 5-min cache is being
@@ -186,14 +206,6 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
       req.pause();
       void (async () => {
         try {
-          // CP477+15 — Extract the authenticated user identity from the
-          // Authorization header so the qwen prompt middleware can build
-          // Block U (mandala_count / mandala_titles / current_mandala_name).
-          // JWT verify is a quick async hop (~5-20ms with the JWKS public
-          // key already cached), and it sits inside the `req.pause()` paused
-          // window so the body buffer absorbs it just like the existing
-          // `await getYoga()` hop.
-          const chatbotCtx = await extractChatbotContext(fastify, req);
           const handler = await getYoga();
           await runWithChatbotContext(chatbotCtx, async () => {
             req.resume();
