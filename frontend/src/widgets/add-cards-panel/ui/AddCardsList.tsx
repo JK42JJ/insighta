@@ -23,7 +23,7 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, Bookmark, Check, Loader2, RotateCw } from 'lucide-react';
+import { AlertCircle, Bookmark, Check, Loader2, RotateCw, X } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { formatRelativeDate } from '@/shared/lib/format-date';
 import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
@@ -107,14 +107,16 @@ export function AddCardsList({
     <ul className="grid grid-cols-3 gap-3 px-5 py-3 sm:px-6">
       {cards.map((card) => {
         const isPicked = pickedSet.has(card.videoId);
-        const disabled = isPicked || isPickPending;
-        const labelKey = isPicked ? 'addCards.actions.picked' : 'addCards.actions.addOne';
-        const labelDefault = isPicked ? 'Picked' : 'Add to mandala';
+        // CP480+ — picked cards are now clickable to unpick (idempotent
+        // toggle). Only mid-flight requests are disabled.
+        const disabled = isPickPending;
+        const labelKey = isPicked ? 'addCards.actions.unpick' : 'addCards.actions.addOne';
+        const labelDefault = isPicked ? 'Remove from mandala' : 'Add to mandala';
         return (
           <li
             key={card.videoId}
             role="button"
-            tabIndex={isPicked ? -1 : 0}
+            tabIndex={0}
             aria-pressed={isPicked}
             aria-disabled={disabled || undefined}
             aria-label={`${t(labelKey, labelDefault)}: ${card.title}`}
@@ -132,8 +134,8 @@ export function AddCardsList({
             className={cn(
               'group relative rounded-md overflow-hidden border bg-card transition-colors',
               'border-transparent',
-              !isPicked && 'cursor-pointer hover:border-border focus-visible:border-border',
-              isPicked && 'cursor-default',
+              !disabled && 'cursor-pointer hover:border-border focus-visible:border-border',
+              disabled && 'cursor-wait',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30'
             )}
           >
@@ -172,17 +174,28 @@ export function AddCardsList({
                 </div>
               )}
 
-              {/* Picked overlay — strong layered cue (post-click). */}
+              {/* Picked overlay — strong layered cue (post-click).
+                  Hover state (CP480+) reveals the unpick affordance:
+                  green check → red X, label → "추가 취소". Click toggles
+                  via the same parent onPick handler. */}
               {isPicked && (
                 <div
-                  className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/55 backdrop-blur-[2px] gap-1"
+                  className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/55 backdrop-blur-[2px] gap-1 transition-colors group-hover:bg-rose-950/70"
                   aria-hidden="true"
                 >
-                  <span className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 shadow-lg">
+                  {/* Default badge — visible at rest, hidden on hover. */}
+                  <span className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 shadow-lg transition-opacity duration-150 group-hover:opacity-0">
                     <Check className="w-5 h-5 text-white" strokeWidth={3} />
                   </span>
-                  <span className="text-[10.5px] font-semibold text-white tracking-wide">
+                  {/* Hover badge — X cue for unpick. */}
+                  <span className="absolute flex items-center justify-center w-9 h-9 rounded-full bg-rose-500 shadow-lg opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                    <X className="w-5 h-5 text-white" strokeWidth={3} />
+                  </span>
+                  <span className="text-[10.5px] font-semibold text-white tracking-wide transition-opacity duration-150 group-hover:opacity-0">
                     {t('addCards.actions.picked', 'Picked')}
+                  </span>
+                  <span className="absolute text-[10.5px] font-semibold text-white tracking-wide opacity-0 transition-opacity duration-150 group-hover:opacity-100 mt-12">
+                    {t('addCards.actions.unpick', 'Remove from mandala')}
                   </span>
                 </div>
               )}
