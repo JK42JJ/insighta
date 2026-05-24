@@ -88,7 +88,6 @@ export function AddCardsPanel() {
     if (!mandalaId) return;
     saveSessionPicks(mandalaId, Array.from(localPicks));
   }, [mandalaId, localPicks]);
-  const { like } = useLikeCard();
   const queryClient = useQueryClient();
 
   // Server-truth set of mandala-pre-existing videoIds. Used as a list
@@ -119,10 +118,48 @@ export function AddCardsPanel() {
   );
   const hasSearched = mutation.isSuccess || mutation.isError || restoredCards !== null;
 
+  const { like, unlike } = useLikeCard();
+
+  const handleUnpick = useCallback(
+    (videoId: string) => {
+      if (!mandalaId) return;
+      // Optimistic flip — strip from local picks immediately so the
+      // overlay clears before the API round-trip.
+      setLocalPicks((prev) => {
+        if (!prev.has(videoId)) return prev;
+        const next = new Set(prev);
+        next.delete(videoId);
+        return next;
+      });
+      unlike.mutate(videoId, {
+        onSuccess: () => {
+          // unlike already invalidates local-cards + v2-summaries.
+          // Also nudge the grid sources (uvs + recommendations) so the
+          // card disappears from the mandala without a manual reload.
+          queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+          queryClient.invalidateQueries({ queryKey: ['mandala', 'recommendations', mandalaId] });
+        },
+        onError: () => {
+          // Restore overlay on failure so user sees the picked state again.
+          setLocalPicks((prev) => {
+            const next = new Set(prev);
+            next.add(videoId);
+            return next;
+          });
+        },
+      });
+    },
+    [mandalaId, unlike, queryClient]
+  );
+
   const handlePick = useCallback(
     (videoId: string, title: string) => {
       if (!mandalaId) return;
-      if (pickedSet.has(videoId)) return;
+      // Toggle: picked → unpick (CP480+). Idempotent like+unlike round-trip.
+      if (pickedSet.has(videoId)) {
+        handleUnpick(videoId);
+        return;
+      }
       const candidate = (mutation.data?.cards ?? restoredCards ?? []).find(
         (c) => c.videoId === videoId
       );
@@ -173,7 +210,7 @@ export function AddCardsPanel() {
         }
       );
     },
-    [mandalaId, pickedSet, like, mutation.data, restoredCards, queryClient]
+    [mandalaId, pickedSet, like, mutation.data, restoredCards, queryClient, handleUnpick]
   );
 
   // Seed wizard meta (focus_tags + target_level) as soon as the mandala
@@ -518,7 +555,7 @@ export function AddCardsPanel() {
               errorMessage={mutation.error?.message}
               onRetry={triggerSearch}
               pickedSet={pickedSet}
-              isPickPending={like.isPending}
+              isPickPending={like.isPending || unlike.isPending}
               onPick={handlePick}
             />
           </div>

@@ -1935,7 +1935,8 @@
     },
     "actions": {
       "addOne": "Add to mandala",
-      "picked": "Picked"
+      "picked": "Picked",
+      "unpick": "Remove"
     }
   }
 }
