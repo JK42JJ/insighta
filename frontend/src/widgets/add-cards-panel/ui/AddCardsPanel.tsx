@@ -104,14 +104,23 @@ export function AddCardsPanel() {
     return set;
   }, [allVideoStates, mandalaId]);
 
-  const pickedSet = localPicks;
+  // Single picked set — server-stored picks (mandala already has the card)
+  // unioned with this session's local picks. Drives the "picked" overlay
+  // on each card but does NOT filter the list — the filter caused picked
+  // cards to silently disappear during the unlike → invalidate race window
+  // (user report 2026-05-25) and shifted neighbour positions, breaking
+  // toggle stability + visual continuity. Picked overlay alone provides
+  // the visual cue; the card row stays in place so unpick is reachable.
+  const pickedSet = useMemo(() => {
+    const set = new Set<string>(serverPickedSet);
+    for (const v of localPicks) set.add(v);
+    return set;
+  }, [serverPickedSet, localPicks]);
 
-  // Filter out mandala-pre-existing cards; keep this session's local
-  // picks so they show the green-check overlay until panel close.
-  const cards: AddCardCandidate[] = useMemo(() => {
-    const raw = mutation.data?.cards ?? restoredCards ?? [];
-    return raw.filter((c) => !serverPickedSet.has(c.videoId) || localPicks.has(c.videoId));
-  }, [mutation.data, restoredCards, serverPickedSet, localPicks]);
+  const cards: AddCardCandidate[] = useMemo(
+    () => mutation.data?.cards ?? restoredCards ?? [],
+    [mutation.data, restoredCards]
+  );
   const visibleCount = useMemo(
     () => cards.filter((c) => !pickedSet.has(c.videoId)).length,
     [cards, pickedSet]

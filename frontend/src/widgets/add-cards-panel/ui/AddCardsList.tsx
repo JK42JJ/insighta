@@ -174,45 +174,59 @@ export function AddCardsList({
                 </div>
               )}
 
-              {/* Picked overlay — strong layered cue (post-click).
-                  Hover state (CP480+) reveals the unpick affordance:
-                  green check → red X, label → "추가 취소". Click toggles
-                  via the same parent onPick handler. */}
+              {/* Picked overlay — post-click dim + center check. CP480+
+                  hover transitioned check → X but the affordance was only
+                  visible on hover; user report 2026-05-25 "토글 인지
+                  불안정" → unpick chip is now ALWAYS visible (top-right
+                  corner, brighter on hover) so the click outcome is
+                  obvious without hovering. */}
               {isPicked && (
-                <div
-                  className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/55 backdrop-blur-[2px] gap-1 transition-colors group-hover:bg-rose-950/70"
-                  aria-hidden="true"
-                >
-                  {/* Default badge — visible at rest, hidden on hover. */}
-                  <span className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 shadow-lg transition-opacity duration-150 group-hover:opacity-0">
-                    <Check className="w-5 h-5 text-white" strokeWidth={3} />
-                  </span>
-                  {/* Hover badge — X cue for unpick. */}
-                  <span className="absolute flex items-center justify-center w-9 h-9 rounded-full bg-rose-500 shadow-lg opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                    <X className="w-5 h-5 text-white" strokeWidth={3} />
-                  </span>
-                  <span className="text-[10.5px] font-semibold text-white tracking-wide transition-opacity duration-150 group-hover:opacity-0">
-                    {t('addCards.actions.picked', 'Picked')}
-                  </span>
-                  <span className="absolute text-[10.5px] font-semibold text-white tracking-wide opacity-0 transition-opacity duration-150 group-hover:opacity-100 mt-12">
-                    {t('addCards.actions.unpick', 'Remove from mandala')}
-                  </span>
-                </div>
-              )}
+                <>
+                  <div
+                    className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/55 backdrop-blur-[2px] gap-1 transition-colors group-hover:bg-rose-950/70"
+                    aria-hidden="true"
+                  >
+                    <span className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 shadow-lg transition-colors duration-150 group-hover:bg-rose-500">
+                      <Check
+                        className="w-5 h-5 text-white transition-opacity duration-150 group-hover:opacity-0"
+                        strokeWidth={3}
+                      />
+                      <X
+                        className="w-5 h-5 text-white absolute opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+                        strokeWidth={3}
+                      />
+                    </span>
+                    <span className="text-[10.5px] font-semibold text-white tracking-wide transition-opacity duration-150 group-hover:opacity-0">
+                      {t('addCards.actions.picked', 'Picked')}
+                    </span>
+                    <span className="absolute text-[10.5px] font-semibold text-white tracking-wide opacity-0 transition-opacity duration-150 group-hover:opacity-100 mt-12">
+                      {t('addCards.actions.unpick', 'Remove from mandala')}
+                    </span>
+                  </div>
 
-              {/* Bookmark indicator — picked cards only. Unpicked
-                  cards rely on the hover preview overlay above. */}
-              {isPicked && (
-                <span
-                  className="absolute bottom-1 right-1 z-10 w-6 h-6 flex items-center justify-center opacity-100"
-                  aria-hidden="true"
-                >
-                  <Bookmark
-                    className="w-[18px] h-[18px] text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
-                    fill="currentColor"
-                    strokeWidth={2.2}
-                  />
-                </span>
+                  {/* Always-visible unpick chip — top-right corner, brighter
+                      on hover. Tells the user the picked state is clickable
+                      without requiring a hover-discovery. Click bubbles up
+                      to the parent <li> which already toggles via onPick. */}
+                  <span
+                    className="absolute top-1 right-1 z-20 inline-flex items-center justify-center h-6 w-6 rounded-full bg-black/60 text-white shadow-md transition-colors group-hover:bg-rose-500"
+                    aria-hidden="true"
+                  >
+                    <X className="w-3.5 h-3.5" strokeWidth={2.6} />
+                  </span>
+
+                  {/* Bookmark anchor — bottom-right, kept for state continuity. */}
+                  <span
+                    className="absolute bottom-1 right-1 z-10 w-6 h-6 flex items-center justify-center opacity-100"
+                    aria-hidden="true"
+                  >
+                    <Bookmark
+                      className="w-[18px] h-[18px] text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+                      fill="currentColor"
+                      strokeWidth={2.2}
+                    />
+                  </span>
+                </>
               )}
             </div>
             <div className="px-1.5 py-1 space-y-0">
