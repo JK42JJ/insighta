@@ -182,32 +182,24 @@ export function AddCardsList({
                   obvious without hovering. */}
               {isPicked && (
                 <>
+                  {/* State indicator — picked state (always green check).
+                      Action (remove) lives ONLY on the top-right X chip
+                      below; separating state from action avoids the
+                      double-X confusion (user 2026-05-25 design review). */}
                   <div
-                    className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/55 backdrop-blur-[2px] gap-1 transition-colors group-hover:bg-rose-950/70"
+                    className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/55 backdrop-blur-[2px] gap-1"
                     aria-hidden="true"
                   >
-                    <span className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 shadow-lg transition-colors duration-150 group-hover:bg-rose-500">
-                      <Check
-                        className="w-5 h-5 text-white transition-opacity duration-150 group-hover:opacity-0"
-                        strokeWidth={3}
-                      />
-                      <X
-                        className="w-5 h-5 text-white absolute opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-                        strokeWidth={3}
-                      />
+                    <span className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 shadow-lg">
+                      <Check className="w-5 h-5 text-white" strokeWidth={3} />
                     </span>
-                    <span className="text-[10.5px] font-semibold text-white tracking-wide transition-opacity duration-150 group-hover:opacity-0">
+                    <span className="text-[10.5px] font-semibold text-white tracking-wide">
                       {t('addCards.actions.picked', 'Picked')}
-                    </span>
-                    <span className="absolute text-[10.5px] font-semibold text-white tracking-wide opacity-0 transition-opacity duration-150 group-hover:opacity-100 mt-12">
-                      {t('addCards.actions.unpick', 'Remove from mandala')}
                     </span>
                   </div>
 
-                  {/* Always-visible unpick chip — top-right corner, brighter
-                      on hover. Tells the user the picked state is clickable
-                      without requiring a hover-discovery. Click bubbles up
-                      to the parent <li> which already toggles via onPick. */}
+                  {/* Action — always-visible unpick chip. Single source of
+                      the remove affordance (no center hover-X transition). */}
                   <span
                     className="absolute top-1 right-1 z-20 inline-flex items-center justify-center h-6 w-6 rounded-full bg-black/60 text-white shadow-md transition-colors group-hover:bg-rose-500"
                     aria-hidden="true"
