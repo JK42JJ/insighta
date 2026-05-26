@@ -125,15 +125,12 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   // (background enrich in flight, or core present but segments missing)
   // from "no AI output at all" (truly empty row).
   if (!hasNewV2 && !hasLegacyRich && !hasShort && !isRichLoading) {
-    // CP488+ — qwen3_low row: surface a regeneration-pending message
-    // instead of the generic "not ready" copy so the user understands
-    // this is awaiting a model upgrade, not a missing generation.
+    // CP488+ — qwen3_low row: surface as an in-progress (dot-animated)
+    // message via the existing EnrichInProgressMessage component so the
+    // visual matches the rest of the loading states and the user
+    // understands this is awaiting regeneration, not a missing row.
     if (isQualityLow) {
-      return (
-        <p className="py-8 text-center text-[13px] text-[#4e4f5c]">
-          {t('learning.richSummaryQualityLowPendingRegen')}
-        </p>
-      );
+      return <EnrichInProgressMessage label={t('learning.richSummaryQualityLowPendingRegen')} />;
     }
     if (isEnrichInProgress) {
       return <EnrichInProgressMessage label={t('learning.aiSummaryGenerating')} />;
