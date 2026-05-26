@@ -106,7 +106,15 @@ services:
       # (prod user-facing enrichment) so the §"LLM API 호출 금지" rule
       # (dataset/experiment/test) does not apply. Track A2 (PR #693/694) now
       # retries pending/low rows on a 12h cooldown so this can stay on.
-      - RICH_SUMMARY_V2_CRON_ENABLED=true
+      #
+      # CP488+ (2026-05-26) — DISABLED. The cron path calls generateRichSummaryV2
+      # WITHOUT transcript (rich-summary-v2-cron.ts:202) and the provider
+      # (openrouter/qwen/qwen3-30b-a3b) produced broken segments — unsorted
+      # atom timestamps, narrator-perspective summaries, back-half of the
+      # video uncovered. 491 prod rows marked `quality_flag='qwen3_low'`.
+      # Re-enable AFTER (a) cron path captioner integration ships AND
+      # (b) the LLM provider is swapped to Sonnet 4.6 in the v2 path.
+      - RICH_SUMMARY_V2_CRON_ENABLED=false
       # CP437 (2026-04-29) — Operator flip: enable YouTube metadata backfill cron.
       # Default in code is `false` — cron stays dormant unless this env is
       # explicitly true. With this set, `startYouTubeMetadataCron()` schedules
