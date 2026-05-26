@@ -43,6 +43,7 @@ import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { logger } from '@/utils/logger';
 
 import { generateRichSummaryV2 } from '../skills/rich-summary-v2-generator';
+import { getCaptionExtractor } from '../caption/extractor';
 
 const log = logger.child({ module: 'RichSummaryV2Cron' });
 
@@ -199,7 +200,43 @@ export async function runV2BatchOnce(batchSize: number): Promise<{
     let lowRetried = 0;
     for (const cand of candidates) {
       try {
-        const outcome = await generateRichSummaryV2({ videoId: cand.videoId });
+        // CP488+ — fetch transcript before calling the generator. Without
+        // this, the generator ran in description-only fall-back and the
+        // LLM hallucinated segments (broken atoms / unsorted timestamps /
+        // back half of the video uncovered). Mirrors the enrich-rich-summary
+        // queue handler's hard rule: NO v2 row without a transcript.
+        const captionResult = await getCaptionExtractor()
+          .extractCaptions(cand.videoId)
+          .catch((err) => {
+            log.warn('v2 cron: caption fetch threw', {
+              videoId: cand.videoId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+            return null;
+          });
+        const transcript = captionResult?.success ? captionResult.caption?.fullText : undefined;
+        if (!transcript) {
+          // Stamp the attempt so this row enters the 7-day captioner
+          // cooldown — avoids hammering the same unavailable captions
+          // every cron tick.
+          await getPrismaClient()
+            .youtube_videos.update({
+              where: { youtube_video_id: cand.videoId },
+              data: { transcript_attempted_at: new Date() },
+            })
+            .catch(() => {
+              /* non-fatal */
+            });
+          skip += 1;
+          continue;
+        }
+        // forceRegen=true so legacy description-only / qwen3_low rows
+        // can be upgraded by this transcript-grounded run.
+        const outcome = await generateRichSummaryV2({
+          videoId: cand.videoId,
+          transcript,
+          forceRegen: true,
+        });
         if (outcome.kind === 'pass') pass += 1;
         else if (outcome.kind === 'low') {
           low += 1;
