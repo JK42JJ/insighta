@@ -1860,6 +1860,7 @@
     "aiSummaryNotReady": "아직 AI 요약이 생성되지 않았어요",
     "aiSummaryGenerating": "AI 요약을 생성하고 있습니다",
     "richSummaryGenerating": "상세 요약을 생성하고 있습니다",
+    "richSummaryQualityLowPendingRegen": "이 영상의 AI 분석을 개선하고 있습니다",
     "metaSummary": "메타 요약",
     "summaryLabel": "요약",
     "keywordsLabel": "키워드",

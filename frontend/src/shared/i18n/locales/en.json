@@ -1852,6 +1852,7 @@
     "aiSummaryNotReady": "No AI summary has been generated yet",
     "aiSummaryGenerating": "Generating AI summary",
     "richSummaryGenerating": "Generating detailed summary",
+    "richSummaryQualityLowPendingRegen": "Improving the AI analysis for this video",
     "metaSummary": "Meta summary",
     "summaryLabel": "Summary",
     "keywordsLabel": "Keywords",
