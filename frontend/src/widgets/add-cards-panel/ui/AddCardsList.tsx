@@ -199,9 +199,12 @@ export function AddCardsList({
                   </div>
 
                   {/* Action — always-visible unpick chip. Single source of
-                      the remove affordance (no center hover-X transition). */}
+                      the remove affordance (no center hover-X transition).
+                      Hover uses a subtle white wash rather than rose-500 —
+                      user 2026-05-26 design review: red on hover read as
+                      over-aggressive for a soft remove action. */}
                   <span
-                    className="absolute top-1 right-1 z-20 inline-flex items-center justify-center h-6 w-6 rounded-full bg-black/60 text-white shadow-md transition-colors group-hover:bg-rose-500"
+                    className="absolute top-1 right-1 z-20 inline-flex items-center justify-center h-6 w-6 rounded-full bg-black/60 text-white shadow-md transition-colors group-hover:bg-white/25"
                     aria-hidden="true"
                   >
                     <X className="w-3.5 h-3.5" strokeWidth={2.6} />
