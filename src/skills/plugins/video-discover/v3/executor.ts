@@ -371,30 +371,37 @@ async function executeImpl(
   //   delete  = global "do not recommend" → exclude across all of user's mandalas.
   // Both apply at the SOURCE so neither Tier 1 (video_pool) nor Tier 2 (YouTube
   // realtime) wastes a slot on a card the user already rejected.
-  try {
-    const signalRows = await getPrismaClient().card_interactions.findMany({
-      where: {
-        user_id: ctx.userId,
-        OR: [{ signal: 'delete' }, { signal: 'archive', mandala_id: mandalaId }],
-      },
-      select: { video_id: true, signal: true },
-    });
-    let archiveN = 0;
-    let deleteN = 0;
-    for (const r of signalRows) {
-      existingVideoIds.add(r.video_id);
-      if (r.signal === 'archive') archiveN++;
-      else if (r.signal === 'delete') deleteN++;
-    }
-    if (archiveN + deleteN > 0) {
-      log.info(
-        `[exclude] CP488 signals — archive=${archiveN} (this mandala) + delete=${deleteN} (global) excluded`
+  // FLAG: v3Config.enableSignalExclude (default true). Algorithm row can flip
+  //       this off to reproduce pre-CP488 behavior (signals recorded but
+  //       never consumed by discovery).
+  if (v3Config.enableSignalExclude) {
+    try {
+      const signalRows = await getPrismaClient().card_interactions.findMany({
+        where: {
+          user_id: ctx.userId,
+          OR: [{ signal: 'delete' }, { signal: 'archive', mandala_id: mandalaId }],
+        },
+        select: { video_id: true, signal: true },
+      });
+      let archiveN = 0;
+      let deleteN = 0;
+      for (const r of signalRows) {
+        existingVideoIds.add(r.video_id);
+        if (r.signal === 'archive') archiveN++;
+        else if (r.signal === 'delete') deleteN++;
+      }
+      if (archiveN + deleteN > 0) {
+        log.info(
+          `[exclude] CP488 signals — archive=${archiveN} (this mandala) + delete=${deleteN} (global) excluded`
+        );
+      }
+    } catch (err) {
+      log.warn(
+        `[exclude] card_interactions signal load failed (continuing): ${err instanceof Error ? err.message : String(err)}`
       );
     }
-  } catch (err) {
-    log.warn(
-      `[exclude] card_interactions signal load failed (continuing): ${err instanceof Error ? err.message : String(err)}`
-    );
+  } else {
+    log.info(`[exclude] CP488 signal exclude DISABLED via algorithm flag`);
   }
 
   const tier1Matches = v3Config.enableTier1Cache
@@ -907,7 +914,9 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   const ruleSearch = await runSearchTraced(ruleQueries, input.apiKeys, input.state.language, {
     // CP488 Phase 2b — 0-hit retry fallback uses the mandala centerGoal as the
     // broadest query (drops sub_goal token concat that often caused empties).
-    fallbackQuery: input.state.centerGoal,
+    // FLAG: v3Config.enableZeroHitRetry (default true). When false, fallback
+    // is undefined → runSearchTraced reverts to pre-CP488 behavior.
+    fallbackQuery: v3Config.enableZeroHitRetry ? input.state.centerGoal : undefined,
   });
   debug.timing.ruleSearchMs = Date.now() - tRuleSearchStart;
   const rulePool = ruleSearch.pool;
@@ -932,8 +941,8 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   if (extraLLM.length > 0) {
     const tLlmSearchStart = Date.now();
     const llmSearch = await runSearchTraced(extraLLM, input.apiKeys, input.state.language, {
-      // CP488 Phase 2b — same fallback for the LLM-generated fan-out.
-      fallbackQuery: input.state.centerGoal,
+      // CP488 Phase 2b — same fallback for the LLM-generated fan-out (flag-gated).
+      fallbackQuery: v3Config.enableZeroHitRetry ? input.state.centerGoal : undefined,
     });
     debug.timing.llmSearchMs = Date.now() - tLlmSearchStart;
     llmPool = llmSearch.pool;

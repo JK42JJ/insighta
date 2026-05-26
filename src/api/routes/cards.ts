@@ -474,8 +474,20 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       // 같은 사용자의 다른 만다라 + (V3_TIER1_SOURCES=v2_promoted,user_curated
       // 로 확장 시) 다른 사용자 추천에도 활용. embedding 도 함께 fire-and-forget.
       // Heart API latency 에는 영향 0.
+      // FLAG: algorithm `enableUserCuratedIngest` (default true). mandala-
+      //       level override 우선 → global active → env default. flag off
+      //       시 pre-CP488 동작 (Heart 만 record, pool 미반영).
       void (async () => {
         try {
+          const { resolveAlgorithm } = await import('../../modules/search/algorithm-resolver');
+          const algo = await resolveAlgorithm({
+            userId,
+            mandalaId: body.mandalaId ?? null,
+          });
+          if (!algo.parameters.enableUserCuratedIngest) {
+            log.info(`like → video_pool ingest DISABLED via algorithm flag (algo=${algo.id})`);
+            return;
+          }
           // 위에서 resolve된 `yt` row 가 있으면 그걸 쓰고, 없으면 한 번 더
           // 조회 (videoCacheHint 미수신 path).
           const ytFull = yt

@@ -306,6 +306,12 @@ export const v3EnvSchema = z.object({
   V3_TIER1_SOURCES: tier1Sources,
   V3_SEMANTIC_MIN_COSINE: semanticMinCosine,
   V3_TIER2_OVERFETCH: booleanFlag.optional().default(true as unknown as string),
+  // CP488 — toggleable code-path flags. Default ON to preserve current
+  // behavior; admin can flip to OFF via a new algorithm row to rollback
+  // any of the CP488 path additions without a code revert.
+  V3_ENABLE_SIGNAL_EXCLUDE: booleanFlag.optional().default(true as unknown as string),
+  V3_ENABLE_ZERO_HIT_RETRY: booleanFlag.optional().default(true as unknown as string),
+  V3_ENABLE_USER_CURATED_INGEST: booleanFlag.optional().default(true as unknown as string),
 });
 
 export interface V3Config {
@@ -335,6 +341,26 @@ export interface V3Config {
    * Tier 2 reverts to deficit-fill (`need = V3_TARGET_PER_CELL - have`).
    */
   tier2Overfetch: boolean;
+  /**
+   * CP488 — when true (default), card_interactions rows with signal='delete'
+   * (user-global) or signal='archive' (this mandala) are added to
+   * existingVideoIds before Tier 1 + Tier 2 source pulls. When false, the
+   * pipeline behaves as before CP488 (signals only recorded, never read).
+   */
+  enableSignalExclude: boolean;
+  /**
+   * CP488 — when true (default), runSearchTraced issues ONE broader fallback
+   * `search.list` call with the mandala centerGoal when ≥ 1 query in the
+   * fan-out returned 0 items. When false, 0-hit queries are dropped silently
+   * (pre-CP488 behavior).
+   */
+  enableZeroHitRetry: boolean;
+  /**
+   * CP488 — when true (default), every successful `/like` upserts a
+   * `source='user_curated'` row into `video_pool` (fire-and-forget). When
+   * false, Heart only records signals + pins; pool unchanged (pre-CP488).
+   */
+  enableUserCuratedIngest: boolean;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -359,6 +385,9 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_TIER1_SOURCES: env['V3_TIER1_SOURCES'],
     V3_SEMANTIC_MIN_COSINE: env['V3_SEMANTIC_MIN_COSINE'],
     V3_TIER2_OVERFETCH: env['V3_TIER2_OVERFETCH'],
+    V3_ENABLE_SIGNAL_EXCLUDE: env['V3_ENABLE_SIGNAL_EXCLUDE'],
+    V3_ENABLE_ZERO_HIT_RETRY: env['V3_ENABLE_ZERO_HIT_RETRY'],
+    V3_ENABLE_USER_CURATED_INGEST: env['V3_ENABLE_USER_CURATED_INGEST'],
   });
   if (!parsed.success) {
     return {
@@ -382,6 +411,9 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       tier1Sources: [...DEFAULT_TIER1_SOURCES],
       semanticMinCosine: SEMANTIC_MIN_COSINE,
       tier2Overfetch: true,
+      enableSignalExclude: true,
+      enableZeroHitRetry: true,
+      enableUserCuratedIngest: true,
     };
   }
   return {
@@ -405,6 +437,9 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     tier1Sources: parsed.data.V3_TIER1_SOURCES,
     semanticMinCosine: parsed.data.V3_SEMANTIC_MIN_COSINE,
     tier2Overfetch: parsed.data.V3_TIER2_OVERFETCH,
+    enableSignalExclude: parsed.data.V3_ENABLE_SIGNAL_EXCLUDE,
+    enableZeroHitRetry: parsed.data.V3_ENABLE_ZERO_HIT_RETRY,
+    enableUserCuratedIngest: parsed.data.V3_ENABLE_USER_CURATED_INGEST,
   };
 }
 
