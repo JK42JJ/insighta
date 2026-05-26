@@ -98,6 +98,9 @@ APPLY_FILES=(
   "prisma/migrations/search-quality-overhaul/001_algo_versions_catalog.sql"
   "prisma/migrations/search-quality-overhaul/002_trace_run_mandala_cols.sql"
   "prisma/migrations/search-quality-overhaul/003_surfaced_at_user_curated.sql"
+  # CP488 FLAG sub-PR — seed v0-pre-cp488 + update v1-current with explicit
+  # boolean flags so admin can toggle the 3 CP488 hardenings on/off.
+  "prisma/migrations/search-quality-overhaul/004_v0_pre_cp488_seed.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "

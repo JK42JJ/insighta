@@ -135,6 +135,9 @@ function materialize(id: string, parametersJson: unknown): ResolvedAlgorithm {
     V3_TIER1_SOURCES: asStr(j['tier1Sources']),
     V3_SEMANTIC_MIN_COSINE: asStr(j['semanticMinCosine']),
     V3_TIER2_OVERFETCH: asStr(j['tier2Overfetch']),
+    V3_ENABLE_SIGNAL_EXCLUDE: asStr(j['enableSignalExclude']),
+    V3_ENABLE_ZERO_HIT_RETRY: asStr(j['enableZeroHitRetry']),
+    V3_ENABLE_USER_CURATED_INGEST: asStr(j['enableUserCuratedIngest']),
   };
 
   const parsed = v3EnvSchema.safeParse(envLike);
@@ -166,6 +169,9 @@ function materialize(id: string, parametersJson: unknown): ResolvedAlgorithm {
     tier1Sources: d['V3_TIER1_SOURCES'] as readonly string[],
     semanticMinCosine: d['V3_SEMANTIC_MIN_COSINE'] as number,
     tier2Overfetch: d['V3_TIER2_OVERFETCH'] as boolean,
+    enableSignalExclude: d['V3_ENABLE_SIGNAL_EXCLUDE'] as boolean,
+    enableZeroHitRetry: d['V3_ENABLE_ZERO_HIT_RETRY'] as boolean,
+    enableUserCuratedIngest: d['V3_ENABLE_USER_CURATED_INGEST'] as boolean,
   };
 
   return { id, parameters: cfg };
