@@ -464,7 +464,7 @@ model user_mandalas {
   /// CP488 — per-mandala search algorithm override. NULL = use global active
   /// row from search_algorithm_versions. FK ON DELETE SET NULL so removing
   /// an algorithm row falls back to default rather than breaking the mandala.
-  search_algorithm_version String?                     @db.VarChar(50)
+  search_algorithm_version String?                    @db.VarChar(50)
   search_algorithm         search_algorithm_versions? @relation(fields: [search_algorithm_version], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([user_id], map: "idx_user_mandalas_user_id")
@@ -2020,6 +2020,18 @@ model video_pool {
   expires_at       DateTime  @default(dbgenerated("(now() + interval '30 days')")) @db.Timestamptz(6)
   is_active        Boolean   @default(true)
 
+  /// CP488+ — LLM-evaluated learning depth level. Sync source priority:
+  ///   1. video_rich_summaries.core->>'depth_level' (transcript-grounded, claude-code-direct or anthropic/*)
+  ///   2. Title regex + duration heuristics (CC console batch for rows without a rich_summary)
+  /// Values: 'beginner' | 'intermediate' | 'advanced' | 'mixed' | NULL.
+  /// Raw SQL DDL: prisma/migrations/video-pool-depth-level/001_add_columns.sql
+  depth_level            String?   @db.VarChar(15)
+  depth_level_confidence Float?
+  depth_level_source     String?   @db.VarChar(30)
+  depth_level_at         DateTime? @db.Timestamptz(6)
+  /// CP488+ — content type tag. Values: 'tutorial' | 'lecture' | 'vlog' | 'interview' | 'documentary' | 'review' | NULL.
+  content_type           String?   @db.VarChar(20)
+
   embeddings  video_pool_embeddings[]
   domain_tags video_pool_domain_tags[]
 
@@ -2027,6 +2039,8 @@ model video_pool {
   @@index([expires_at], map: "idx_vpool_expires")
   @@index([source], map: "idx_vpool_source")
   @@index([refreshed_at], map: "idx_vpool_refreshed")
+  @@index([depth_level], map: "idx_vpool_depth_level")
+  @@index([content_type], map: "idx_vpool_content_type")
   @@schema("public")
 }
 
@@ -2099,13 +2113,13 @@ model video_pool_collection_runs {
 /// per-mandala override. Raw SQL DDL:
 ///   prisma/migrations/search-quality-overhaul/001_algo_versions_catalog.sql
 model search_algorithm_versions {
-  id            String   @id @db.VarChar(50)
-  display_name  String
-  description   String?
-  parameters    Json
-  is_active     Boolean  @default(false)
-  created_at    DateTime @default(now()) @db.Timestamptz(6)
-  created_by    String?  @db.Uuid
+  id           String   @id @db.VarChar(50)
+  display_name String
+  description  String?
+  parameters   Json
+  is_active    Boolean  @default(false)
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  created_by   String?  @db.Uuid
 
   mandalas user_mandalas[]
 

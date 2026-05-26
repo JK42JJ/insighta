@@ -58,6 +58,8 @@ prisma/migrations/*
 !prisma/migrations/youtube-metadata-completeness/**
 !prisma/migrations/search-quality-overhaul/
 !prisma/migrations/search-quality-overhaul/**
+!prisma/migrations/video-pool-depth-level/
+!prisma/migrations/video-pool-depth-level/**
 
 # Logs
 logs/

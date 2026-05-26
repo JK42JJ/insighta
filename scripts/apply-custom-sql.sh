@@ -101,6 +101,10 @@ APPLY_FILES=(
   # CP488 FLAG sub-PR — seed v0-pre-cp488 + update v1-current with explicit
   # boolean flags so admin can toggle the 3 CP488 hardenings on/off.
   "prisma/migrations/search-quality-overhaul/004_v0_pre_cp488_seed.sql"
+  # CP488+ (2026-05-26) — video_pool.depth_level + companion columns for
+  # search-time difficulty filtering. ADD COLUMN IF NOT EXISTS +
+  # CREATE INDEX IF NOT EXISTS — fully idempotent.
+  "prisma/migrations/video-pool-depth-level/001_add_columns.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
