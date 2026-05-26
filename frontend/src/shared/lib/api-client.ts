@@ -820,6 +820,12 @@ class ApiClient {
       return res.data;
     } catch (err) {
       if (err instanceof ApiHttpError && err.statusCode === 404) {
+        // CP488+ — RICH_SUMMARY_QUALITY_LOW (row exists but quality_flag != pass)
+        // propagates so callers can show a pending-regeneration message and
+        // skip the auto-enrich trigger that would re-stamp the same row.
+        if (err.code === 'RICH_SUMMARY_QUALITY_LOW') {
+          throw err;
+        }
         return null;
       }
       throw err;

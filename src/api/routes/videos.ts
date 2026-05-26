@@ -529,12 +529,18 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         where: { video_id: id },
       });
       if (!row || row.quality_flag !== 'pass') {
+        // CP488+ — distinguish "no row" from "row exists but quality_flag != pass"
+        // so FE can render a different message (regeneration pending) for the
+        // latter and crucially NOT re-trigger enrich (which would re-stamp the
+        // same qwen3 row in a loop until B2 Sonnet model swap ships).
+        const isLowQuality = Boolean(row && row.quality_flag !== 'pass');
         return reply.code(404).send({
           status: 'error',
-          code: 'RICH_SUMMARY_NOT_FOUND',
-          message: row
-            ? `Rich summary exists but quality_flag=${row.quality_flag}`
+          code: isLowQuality ? 'RICH_SUMMARY_QUALITY_LOW' : 'RICH_SUMMARY_NOT_FOUND',
+          message: isLowQuality
+            ? `Rich summary quality_flag=${row!.quality_flag} — awaiting model upgrade regeneration`
             : 'No rich summary available for this video',
+          details: isLowQuality ? { qualityFlag: row!.quality_flag } : undefined,
         });
       }
       return reply.code(200).send({

@@ -48,7 +48,7 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
     if (!youtubeId) return;
     void queryClient.invalidateQueries({ queryKey: queryKeys.video.richSummary(youtubeId) });
   }, [youtubeId, queryClient]);
-  const { richSummary, isLoading: isRichLoading } = useRichSummary(youtubeId);
+  const { richSummary, isLoading: isRichLoading, isQualityLow } = useRichSummary(youtubeId);
 
   const short = videoSummary?.summary_ko || videoSummary?.summary_en || null;
   const tags = videoSummary?.tags ?? [];
@@ -72,6 +72,10 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
     if (!youtubeId || !mandalaId) return;
     if (isRichLoading) return;
     if (hasSegments) return;
+    // CP488+ — skip auto-enrich when the row is already marked qwen3_low.
+    // Re-enriching with the same qwen3 model just re-stamps the same row;
+    // the upcoming Sonnet 4.6 (B2) ship will handle regeneration globally.
+    if (isQualityLow) return;
     const key = `${youtubeId}:${mandalaId}`;
     if (triggerKeyRef.current === key) return;
     triggerKeyRef.current = key;
@@ -86,7 +90,7 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
            and the cron Track A2 retry will eventually land. */
       }
     })();
-  }, [youtubeId, mandalaId, isRichLoading, hasSegments, openStream]);
+  }, [youtubeId, mandalaId, isRichLoading, hasSegments, isQualityLow, openStream]);
 
   // When the SSE stream terminates with `scored`, refetch the v2 row so
   // the segments block lands without a manual reload.
@@ -121,6 +125,16 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   // (background enrich in flight, or core present but segments missing)
   // from "no AI output at all" (truly empty row).
   if (!hasNewV2 && !hasLegacyRich && !hasShort && !isRichLoading) {
+    // CP488+ — qwen3_low row: surface a regeneration-pending message
+    // instead of the generic "not ready" copy so the user understands
+    // this is awaiting a model upgrade, not a missing generation.
+    if (isQualityLow) {
+      return (
+        <p className="py-8 text-center text-[13px] text-[#4e4f5c]">
+          {t('learning.richSummaryQualityLowPendingRegen')}
+        </p>
+      );
+    }
     if (isEnrichInProgress) {
       return <EnrichInProgressMessage label={t('learning.aiSummaryGenerating')} />;
     }
