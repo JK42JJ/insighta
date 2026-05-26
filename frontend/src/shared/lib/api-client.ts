@@ -2697,6 +2697,104 @@ class ApiClient {
   // Health Check
   // ========================================
 
+  // ========================================
+  // Admin — Search Algorithm Versions (CP488)
+  // ========================================
+  // Catalog of named search-algorithm rows (parameters as JSONB). Lets
+  // super_admin flip the global default or apply a per-mandala override
+  // without a code release; the v3 executor's `resolveAlgorithm` reads
+  // each row fresh per run, so changes take effect on the next pipeline
+  // invocation (no container restart, no env-var swap).
+  //
+  // BE routes (super_admin only via fastify.authenticateAdmin):
+  //   GET    /admin/search-algorithms
+  //   POST   /admin/search-algorithms
+  //   PATCH  /admin/search-algorithms/:id
+  //   PATCH  /admin/search-algorithms/mandala/:mandalaId  body {algorithm_version | null}
+  //   DELETE /admin/search-algorithms/mandala/:mandalaId
+  //   GET    /admin/search-algorithms/comparison/:mandalaId
+
+  async listSearchAlgorithms(): Promise<{
+    status: 'ok';
+    data: {
+      count: number;
+      versions: Array<{
+        id: string;
+        display_name: string;
+        description: string | null;
+        parameters: Record<string, unknown>;
+        is_active: boolean;
+        created_at: string;
+        created_by: string | null;
+      }>;
+    };
+  }> {
+    return this.request('/admin/search-algorithms');
+  }
+
+  async createSearchAlgorithm(body: {
+    id: string;
+    display_name: string;
+    description?: string | null;
+    parameters: Record<string, unknown>;
+    is_active?: boolean;
+  }): Promise<{ status: 'ok'; data: { id: string } }> {
+    return this.request('/admin/search-algorithms', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async updateSearchAlgorithm(
+    id: string,
+    body: {
+      display_name?: string;
+      description?: string | null;
+      parameters?: Record<string, unknown>;
+      is_active?: boolean;
+    }
+  ): Promise<{ status: 'ok'; data: { id: string } }> {
+    return this.request(`/admin/search-algorithms/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
+   * Set or clear a per-mandala override. `algorithm_version: null` falls back
+   * to global active. Resolves to the matching DB row id on success.
+   */
+  async setMandalaAlgorithm(
+    mandalaId: string,
+    algorithmVersion: string | null
+  ): Promise<{ status: 'ok'; data: { mandala_id: string; algorithm_version: string | null } }> {
+    if (algorithmVersion === null) {
+      return this.request(`/admin/search-algorithms/mandala/${encodeURIComponent(mandalaId)}`, {
+        method: 'DELETE',
+      });
+    }
+    return this.request(`/admin/search-algorithms/mandala/${encodeURIComponent(mandalaId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ algorithm_version: algorithmVersion }),
+    });
+  }
+
+  async getAlgorithmComparison(mandalaId: string): Promise<{
+    status: 'ok';
+    data: {
+      mandala_id: string;
+      comparison: Array<{
+        algorithm_version: string | null;
+        run_count: number;
+        avg_duration_ms: number | null;
+        recent_run_at: string | null;
+        total_cost: unknown;
+      }>;
+    };
+  }> {
+    return this.request(`/admin/search-algorithms/comparison/${encodeURIComponent(mandalaId)}`);
+  }
+
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
     const response = await fetch(`${this.baseUrl}/health`);
     return response.json();

@@ -11,6 +11,7 @@ import {
   HeartPulse,
   ToggleRight,
   Bot,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
@@ -25,6 +26,8 @@ const NAV_ITEMS = [
   { to: '/admin/health', icon: HeartPulse, label: 'Health' },
   { to: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },
   { to: '/admin/chatbot-models', icon: Bot, label: 'Chatbot Models' },
+  // CP488 — search algorithm catalog + per-mandala override + A/B comparison.
+  { to: '/admin/search-algorithms', icon: SlidersHorizontal, label: 'Search Algorithms' },
 ] as const;
 
 export function AdminLayout() {

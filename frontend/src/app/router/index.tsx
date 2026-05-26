@@ -14,6 +14,7 @@ import { AdminModeration } from '@/pages/admin/ui/AdminModeration';
 import { AdminHealth } from '@/pages/admin/ui/AdminHealth';
 import { AdminBilling } from '@/pages/admin/ui/AdminBilling';
 import { AdminChatbotModels } from '@/pages/admin/ui/AdminChatbotModels';
+import { AdminSearchAlgorithms } from '@/pages/admin/ui/AdminSearchAlgorithms';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -147,6 +148,8 @@ export function AppRouter() {
           <Route path="health" element={<AdminHealth />} />
           <Route path="audit-log" element={<AdminAuditLog />} />
           <Route path="chatbot-models" element={<AdminChatbotModels />} />
+          {/* CP488 — search algorithm catalog + per-mandala override. */}
+          <Route path="search-algorithms" element={<AdminSearchAlgorithms />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
