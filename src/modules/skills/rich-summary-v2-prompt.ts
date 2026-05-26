@@ -14,6 +14,7 @@
  */
 
 import { DOMAIN_SLUGS, type DomainSlug } from '@/config/domains';
+import { loadRichSummaryConfig } from '@/config/rich-summary';
 
 // ============================================================================
 // Layered v2 schema types — match prisma columns
@@ -265,8 +266,8 @@ Field rules:
 - analysis.bias_signals.has_ad / is_sponsored: boolean. Only true when explicitly visible in the title/description.
 - lora.qa_pairs: 5-7 entries, all level=1, all context="video". Each Q is something a learner would ask AFTER watching this video; A is grounded in the video content.
 - prerequisites: empty string when none.
-- segments.sections: 1-8 entries dividing the video timeline (adapt to video length — a 2-minute video may legitimately have 1-2 sections; a 20-minute video may have 6-8). from_sec/to_sec integers in seconds, monotonically increasing, derived from transcript timestamps. relevance_pct (integer 0-100) is the intra-video metric for THIS section vs the user's mandala center goal — distinct from analysis.mandala_fit.mandala_relevance_pct (which is the whole-video score). Each section has 1-3 key_points; timestamp_sec is optional and falls within the section's [from_sec, to_sec] window.
-- segments.atoms: 1-15 standalone insights (adapt to content density — short videos may yield 2-3 atoms; longer / denser videos 8-15). type MUST be one of: fact | argument | tip | other. timestamp_sec is optional (use when derivable from the transcript). entity_refs is optional and links to analysis.entities[].name values (fallback: analysis.key_concepts[].term).
+- segments.sections: dividing the video timeline. Section count adapts to video length — a 2-minute video may legitimately have 1-2 sections; a 20-minute video 6-8; a 40-60 minute lecture 10-15; longer talks more as needed. from_sec/to_sec integers in seconds, monotonically increasing, derived from transcript timestamps. **CRITICAL: sections MUST cover the ENTIRE video timeline — the last section's to_sec must be at or near the final transcript timestamp. Do NOT stop after the first 20-30 minutes of a longer video.** If the transcript provided spans the full video, produce sections that tile it end-to-end (no gaps after the last section). relevance_pct (integer 0-100) is the intra-video metric for THIS section vs the user's mandala center goal — distinct from analysis.mandala_fit.mandala_relevance_pct (which is the whole-video score). Each section has 1-3 key_points; timestamp_sec is optional and falls within the section's [from_sec, to_sec] window.
+- segments.atoms: standalone insights spanning the FULL video timeline (not just the first quarter). Atom count adapts to content density — short videos may yield 2-3 atoms; 20-minute videos 8-15; longer/denser videos 15-30. type MUST be one of: fact | argument | tip | other. timestamp_sec is optional but, when provided, MUST be sorted ascending across the array AND the highest timestamp_sec should be at or near the final transcript timestamp (mirrors the "cover the full timeline" rule above). entity_refs is optional and links to analysis.entities[].name values (fallback: analysis.key_concepts[].term).
 
 Output rules:
 - Return JSON only — no markdown fences, no commentary, no chain-of-thought.
@@ -299,18 +300,12 @@ export interface PromptInput {
   mandalaCenterGoal?: string;
 }
 
-/**
- * Hard limit on transcript chars passed to the LLM. ~6,000 Korean chars ≈
- * ~3,000 tokens — leaves room for system prompt + JSON output budget under
- * 4,096 max tokens.
- */
-export const TRANSCRIPT_MAX_CHARS = 6000;
-
 export function buildV2Prompt(input: PromptInput): string {
   const languageLabel = input.language === 'ko' ? 'Korean' : 'English';
+  const { transcriptMaxChars } = loadRichSummaryConfig();
   const transcriptBlock =
     input.transcript && input.transcript.length > 0
-      ? input.transcript.slice(0, TRANSCRIPT_MAX_CHARS)
+      ? input.transcript.slice(0, transcriptMaxChars)
       : '(no transcript)';
   const centerGoalBlock =
     input.mandalaCenterGoal && input.mandalaCenterGoal.trim().length > 0

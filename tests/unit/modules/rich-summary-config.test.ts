@@ -67,6 +67,9 @@ describe('loadRichSummaryConfig', () => {
         v2BatchSize: 50,
         v2CronSchedule: '0 17 * * *',
         v2LowRetryCooldownHours: 12,
+        maxDurationSeconds: 5400,
+        transcriptMaxChars: 100000,
+        maxOutputTokens: 8192,
       });
     });
 
@@ -82,6 +85,9 @@ describe('loadRichSummaryConfig', () => {
         v2BatchSize: 50,
         v2CronSchedule: '0 17 * * *',
         v2LowRetryCooldownHours: 12,
+        maxDurationSeconds: 5400,
+        transcriptMaxChars: 100000,
+        maxOutputTokens: 8192,
       });
     });
   });
@@ -120,6 +126,37 @@ describe('loadRichSummaryConfig', () => {
       expect(loadRichSummaryConfig({ RICH_SUMMARY_V2_CRON_SCHEDULE: '' }).v2CronSchedule).toBe(
         '0 17 * * *'
       );
+    });
+  });
+
+  describe('CP488+ duration cap + transcript / output budgets', () => {
+    it('defaults to 5400s / 100000 chars / 8192 tokens', () => {
+      const cfg = loadRichSummaryConfig({});
+      expect(cfg.maxDurationSeconds).toBe(5400);
+      expect(cfg.transcriptMaxChars).toBe(100000);
+      expect(cfg.maxOutputTokens).toBe(8192);
+    });
+
+    it('accepts positive integer overrides', () => {
+      const cfg = loadRichSummaryConfig({
+        RICH_SUMMARY_V2_MAX_DURATION_SECONDS: '7200',
+        RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS: '150000',
+        RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS: '12000',
+      });
+      expect(cfg.maxDurationSeconds).toBe(7200);
+      expect(cfg.transcriptMaxChars).toBe(150000);
+      expect(cfg.maxOutputTokens).toBe(12000);
+    });
+
+    it('rejects non-positive + garbage, falls back to defaults', () => {
+      const cfg = loadRichSummaryConfig({
+        RICH_SUMMARY_V2_MAX_DURATION_SECONDS: '0',
+        RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS: '-1',
+        RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS: 'garbage',
+      });
+      expect(cfg.maxDurationSeconds).toBe(5400);
+      expect(cfg.transcriptMaxChars).toBe(100000);
+      expect(cfg.maxOutputTokens).toBe(8192);
     });
   });
 

@@ -24,6 +24,7 @@ import { Prisma } from '@prisma/client';
 
 import { getPrismaClient } from '@/modules/database/client';
 import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
+import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { logger } from '@/utils/logger';
 
 import {
@@ -72,13 +73,35 @@ export async function generateRichSummaryV2Quick(input: V2QuickInput): Promise<V
 
   const ytRow = await prisma.youtube_videos.findUnique({
     where: { youtube_video_id: input.videoId },
-    select: { title: true, description: true, channel_title: true, default_language: true },
+    select: {
+      title: true,
+      description: true,
+      channel_title: true,
+      default_language: true,
+      duration_seconds: true,
+    },
   });
   if (!ytRow || !ytRow.title) {
     return { kind: 'skip', videoId: input.videoId, reason: 'no_youtube_metadata' };
   }
   if (!input.transcript || input.transcript.trim().length === 0) {
     return { kind: 'skip', videoId: input.videoId, reason: 'no_transcript' };
+  }
+
+  // CP488+ — same duration cap as the full generator. Skips Heart-click
+  // path for long videos until chunked summarisation lands.
+  const richConfig = loadRichSummaryConfig();
+  if (ytRow.duration_seconds != null && ytRow.duration_seconds > richConfig.maxDurationSeconds) {
+    log.info('v2-quick skip: duration exceeds cap', {
+      videoId: input.videoId,
+      durationSec: ytRow.duration_seconds,
+      capSec: richConfig.maxDurationSeconds,
+    });
+    return {
+      kind: 'skip',
+      videoId: input.videoId,
+      reason: `duration_exceeds_cap_${richConfig.maxDurationSeconds}s`,
+    };
   }
 
   const language: 'ko' | 'en' =

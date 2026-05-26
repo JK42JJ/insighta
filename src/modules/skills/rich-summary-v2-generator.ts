@@ -18,6 +18,7 @@ import { Prisma } from '@prisma/client';
 
 import { getPrismaClient } from '@/modules/database/client';
 import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
+import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { logger } from '@/utils/logger';
 
 // CP488+ — v2 full generator pinned to Sonnet 4.6. Previously this path
@@ -56,11 +57,10 @@ function detectLanguageFromTitle(title: string): 'ko' | 'en' | null {
 const log = logger.child({ module: 'RichSummaryV2Generator' });
 
 const MAX_RETRIES = 1; // 1 retry → spec §7-D
-// CP474 — raised from 4096 to accommodate segments.sections (3-8 entries
-// with summary + key_points) and segments.atoms (5-15 entries). Empirical
-// upper bound for the full layered output is ~3000 tokens; 6144 leaves
-// safe buffer for verbose outputs without truncation.
-const MAX_TOKENS = 6144;
+// CP488+ — output token budget now sourced from config
+// (RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS, default 8192). Previously a
+// file-local const that drifted away from the actual transcript budget
+// when long videos started landing.
 const TEMPERATURE = 0.3;
 
 export type V2GenerationOutcome =
@@ -145,10 +145,29 @@ export async function generateRichSummaryV2(
 
   const ytRow = await prisma.youtube_videos.findUnique({
     where: { youtube_video_id: input.videoId },
-    select: { title: true, description: true, channel_title: true },
+    select: { title: true, description: true, channel_title: true, duration_seconds: true },
   });
   if (!ytRow || !ytRow.title) {
     return { kind: 'skip', videoId: input.videoId, reason: 'no_youtube_metadata' };
+  }
+
+  // CP488+ — duration cap. Videos longer than the configured cap (default
+  // 90min) skip v2 generation. The generator code path stays in place
+  // (no behavioural change beyond this guard) so flipping the env opens
+  // it back up without a code change. Long-form chunked summarisation
+  // is the follow-up that would justify raising the cap.
+  const richConfig = loadRichSummaryConfig();
+  if (ytRow.duration_seconds != null && ytRow.duration_seconds > richConfig.maxDurationSeconds) {
+    log.info('v2 skip: duration exceeds cap', {
+      videoId: input.videoId,
+      durationSec: ytRow.duration_seconds,
+      capSec: richConfig.maxDurationSeconds,
+    });
+    return {
+      kind: 'skip',
+      videoId: input.videoId,
+      reason: `duration_exceeds_cap_${richConfig.maxDurationSeconds}s`,
+    };
   }
 
   // Title-based language override — `source_language` is stamped from the
@@ -176,7 +195,7 @@ export async function generateRichSummaryV2(
       const raw = await provider.generate(prompt, {
         format: 'json',
         temperature: TEMPERATURE,
-        maxTokens: MAX_TOKENS,
+        maxTokens: richConfig.maxOutputTokens,
       });
       let parsed: unknown;
       try {
