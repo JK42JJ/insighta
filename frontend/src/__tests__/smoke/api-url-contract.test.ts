@@ -69,4 +69,36 @@ describe('API Client URL Contract', () => {
     expect(content).toContain('/mandalas/templates-public');
     expect(content).not.toMatch(/\/api\/v1\/mandalas\/templates-public/);
   });
+
+  // ─── CP488 — admin search-algorithm endpoints ─────────────────────────
+  it('admin search-algorithms uses /admin/search-algorithms (no double prefix)', () => {
+    expect(content).toContain('/admin/search-algorithms');
+    expect(content).not.toMatch(/\/api\/v1\/admin\/search-algorithms/);
+  });
+
+  it('admin search-algorithms exposes 5 methods (list/create/update/setMandala/comparison)', () => {
+    expect(content).toContain('listSearchAlgorithms');
+    expect(content).toContain('createSearchAlgorithm');
+    expect(content).toContain('updateSearchAlgorithm');
+    expect(content).toContain('setMandalaAlgorithm');
+    expect(content).toContain('getAlgorithmComparison');
+  });
+
+  it('setMandalaAlgorithm sends DELETE when override cleared, PATCH otherwise', () => {
+    // The method body must reference both verbs for the null vs id branches.
+    const block = content.slice(
+      content.indexOf('async setMandalaAlgorithm'),
+      content.indexOf('async getAlgorithmComparison')
+    );
+    expect(block).toContain("method: 'DELETE'");
+    expect(block).toContain("method: 'PATCH'");
+  });
+
+  it('admin search-algorithms paths use encodeURIComponent for ids', () => {
+    const block = content.slice(
+      content.indexOf('async updateSearchAlgorithm'),
+      content.indexOf('async healthCheck')
+    );
+    expect(block).toContain('encodeURIComponent');
+  });
 });
