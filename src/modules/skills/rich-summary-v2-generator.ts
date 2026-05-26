@@ -17,8 +17,17 @@
 import { Prisma } from '@prisma/client';
 
 import { getPrismaClient } from '@/modules/database/client';
-import { createGenerationProvider } from '@/modules/llm';
+import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
 import { logger } from '@/utils/logger';
+
+// CP488+ — v2 full generator pinned to Sonnet 4.6. Previously this path
+// inherited the global provider (createGenerationProvider) which resolved
+// to openrouter/qwen/qwen3-30b-a3b in prod and produced broken segments
+// (unsorted atom timestamps, narrator-perspective summaries, back half
+// uncovered). 491 rows marked `quality_flag='qwen3_low'`. Quick path
+// already uses claude-haiku-4.5 explicitly; this aligns the slow path on
+// the next tier up. Search-replace point for future model swaps.
+const SONNET_MODEL = 'anthropic/claude-sonnet-4-6';
 
 import {
   buildV2Prompt,
@@ -158,7 +167,8 @@ export async function generateRichSummaryV2(
     mandalaCenterGoal: input.mandalaCenterGoal,
   });
 
-  const provider = await createGenerationProvider();
+  // CP488+ — pinned Sonnet 4.6 (see SONNET_MODEL doc-comment above).
+  const provider = new OpenRouterGenerationProvider(SONNET_MODEL);
 
   let lastReason = 'unknown_error';
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
