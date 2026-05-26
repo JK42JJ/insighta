@@ -140,23 +140,23 @@ export function AddCardsPanel() {
         next.delete(videoId);
         return next;
       });
-      unlike.mutate(videoId, {
-        onSuccess: () => {
-          // unlike already invalidates local-cards + v2-summaries.
-          // Also nudge the grid sources (uvs + recommendations) so the
-          // card disappears from the mandala without a manual reload.
-          queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
-          queryClient.invalidateQueries({ queryKey: ['mandala', 'recommendations', mandalaId] });
-        },
-        onError: () => {
-          // Restore overlay on failure so user sees the picked state again.
-          setLocalPicks((prev) => {
-            const next = new Set(prev);
-            next.add(videoId);
-            return next;
-          });
-        },
-      });
+      unlike.mutate(
+        { videoId, mandalaId, removeFromMandala: true },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({
+              queryKey: ['mandala', 'recommendations', mandalaId],
+            });
+          },
+          onError: () => {
+            setLocalPicks((prev) => {
+              const next = new Set(prev);
+              next.add(videoId);
+              return next;
+            });
+          },
+        }
+      );
     },
     [mandalaId, unlike, queryClient]
   );

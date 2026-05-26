@@ -452,13 +452,20 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       //    metadata when omitted (downstream lookup in enrichRichSummary).
       let jobId: string | null = null;
       if (body.mandalaId) {
-        jobId = await enqueueEnrichRichSummary({
-          videoId,
-          userId,
-          mandalaId: body.mandalaId,
-          title: body.title ?? '',
-          description: body.description ?? undefined,
-        });
+        try {
+          jobId = await enqueueEnrichRichSummary({
+            videoId,
+            userId,
+            mandalaId: body.mandalaId,
+            title: body.title ?? '',
+            description: body.description ?? undefined,
+          });
+        } catch (enqueueErr) {
+          const enqueueMsg = enqueueErr instanceof Error ? enqueueErr.message : String(enqueueErr);
+          log.warn(
+            `like: enrich enqueue failed (continuing without v2 enrich): videoId=${videoId} err=${enqueueMsg}`
+          );
+        }
       }
 
       return reply.code(202).send({
@@ -493,59 +500,69 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
    *
    * Returns 204.
    */
-  fastify.post<{ Params: { videoId: string } }>(
-    '/:videoId/unlike',
-    { onRequest: [fastify.authenticate] },
-    async (request, reply) => {
-      if (!request.user || !('userId' in request.user)) {
-        return reply
-          .code(401)
-          .send({ status: 'error', code: 'UNAUTHORIZED', message: 'Unauthorized' });
-      }
-      const userId = request.user.userId;
-      const { videoId } = request.params;
+  fastify.post<{
+    Params: { videoId: string };
+    Body: { mandalaId?: string; removeFromMandala?: boolean };
+  }>('/:videoId/unlike', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    if (!request.user || !('userId' in request.user)) {
+      return reply
+        .code(401)
+        .send({ status: 'error', code: 'UNAUTHORIZED', message: 'Unauthorized' });
+    }
+    const userId = request.user.userId;
+    const { videoId } = request.params;
+    const body = request.body ?? {};
+    const removeFromMandala = Boolean(body.removeFromMandala && body.mandalaId);
 
-      if (!YOUTUBE_VIDEO_ID_RE.test(videoId)) {
-        return reply.code(400).send({
-          status: 'error',
-          code: 'INVALID_VIDEO_ID',
-          message: `videoId must be a YouTube 11-char id; got ${videoId.slice(0, VIDEO_ID_LOG_TRIM)}`,
-        });
-      }
+    if (!YOUTUBE_VIDEO_ID_RE.test(videoId)) {
+      return reply.code(400).send({
+        status: 'error',
+        code: 'INVALID_VIDEO_ID',
+        message: `videoId must be a YouTube 11-char id; got ${videoId.slice(0, VIDEO_ID_LOG_TRIM)}`,
+      });
+    }
 
-      const prisma = getPrismaClient();
-      try {
-        await prisma.card_interactions.deleteMany({
-          where: { user_id: userId, video_id: videoId, signal: 'like' },
-        });
-        await prisma.$executeRaw`
+    const prisma = getPrismaClient();
+    try {
+      await prisma.card_interactions.deleteMany({
+        where: { user_id: userId, video_id: videoId, signal: 'like' },
+      });
+      await prisma.$executeRaw`
           UPDATE public.user_local_cards
              SET pinned_at = NULL
            WHERE user_id = ${userId}::uuid AND video_id = ${videoId}
         `;
+      if (removeFromMandala) {
         await prisma.$executeRaw`
-          UPDATE public.user_video_states uvs
-             SET pinned_at = NULL,
-                 -- Preserve the user-owned mark so the auto-add eviction
-                 -- sweep never reclaims a previously-liked card.
-                 auto_added = false
-            FROM public.youtube_videos yv
-           WHERE uvs.user_id = ${userId}::uuid
-             AND uvs.video_id = yv.id
-             AND yv.youtube_video_id = ${videoId}
-        `;
-        return reply.code(204).send();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.warn(`unlike failed: videoId=${videoId} userId=${userId} err=${msg}`);
-        return reply.code(500).send({
-          status: 'error',
-          code: 'UNLIKE_FAILED',
-          message: msg.slice(0, 200),
-        });
+            DELETE FROM public.user_video_states uvs
+             USING public.youtube_videos yv
+             WHERE uvs.user_id = ${userId}::uuid
+               AND uvs.mandala_id = ${body.mandalaId}::uuid
+               AND uvs.video_id = yv.id
+               AND yv.youtube_video_id = ${videoId}
+          `;
+      } else {
+        await prisma.$executeRaw`
+            UPDATE public.user_video_states uvs
+               SET pinned_at = NULL,
+                   auto_added = false
+              FROM public.youtube_videos yv
+             WHERE uvs.user_id = ${userId}::uuid
+               AND uvs.video_id = yv.id
+               AND yv.youtube_video_id = ${videoId}
+          `;
       }
+      return reply.code(204).send();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn(`unlike failed: videoId=${videoId} userId=${userId} err=${msg}`);
+      return reply.code(500).send({
+        status: 'error',
+        code: 'UNLIKE_FAILED',
+        message: msg.slice(0, 200),
+      });
     }
-  );
+  });
 
   /**
    * POST /api/v1/cards/:videoId/enrich-bg — idempotent background enrich

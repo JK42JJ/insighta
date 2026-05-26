@@ -3,19 +3,16 @@ import { useMandalaStore } from '@/stores/mandalaStore';
 
 describe('mandalaStore', () => {
   beforeEach(() => {
-    // Reset store to initial state before each test
     useMandalaStore.setState({
       selectedMandalaId: null,
-      currentLevelId: 'root',
-      selectedCellIndex: null,
+      navigationByMandala: {},
     });
   });
 
   it('has correct initial state', () => {
     const state = useMandalaStore.getState();
     expect(state.selectedMandalaId).toBeNull();
-    expect(state.currentLevelId).toBe('root');
-    expect(state.selectedCellIndex).toBeNull();
+    expect(state.navigationByMandala).toEqual({});
   });
 
   it('selectMandala updates selectedMandalaId', () => {
@@ -30,30 +27,55 @@ describe('mandalaStore', () => {
     expect(useMandalaStore.getState().selectedMandalaId).toBeNull();
   });
 
-  it('setCurrentLevel updates currentLevelId', () => {
-    useMandalaStore.getState().setCurrentLevel('level-2');
-    expect(useMandalaStore.getState().currentLevelId).toBe('level-2');
+  it('setNavigation writes per-mandala state', () => {
+    useMandalaStore.getState().setNavigation('m1', { currentLevelId: 'level-2' });
+    const nav = useMandalaStore.getState().getNavigation('m1');
+    expect(nav.currentLevelId).toBe('level-2');
+    expect(nav.selectedCellIndex).toBeNull();
+    expect(nav.path).toEqual([]);
+    expect(nav.entryGridIndex).toBeNull();
   });
 
-  it('setSelectedCell updates selectedCellIndex', () => {
-    useMandalaStore.getState().setSelectedCell(5);
-    expect(useMandalaStore.getState().selectedCellIndex).toBe(5);
+  it('setNavigation patches without losing prior fields', () => {
+    useMandalaStore.getState().setNavigation('m1', { selectedCellIndex: 5 });
+    useMandalaStore.getState().setNavigation('m1', { currentLevelId: 'level-3' });
+    const nav = useMandalaStore.getState().getNavigation('m1');
+    expect(nav.selectedCellIndex).toBe(5);
+    expect(nav.currentLevelId).toBe('level-3');
   });
 
-  it('setSelectedCell accepts null to deselect', () => {
-    useMandalaStore.getState().setSelectedCell(3);
-    useMandalaStore.getState().setSelectedCell(null);
-    expect(useMandalaStore.getState().selectedCellIndex).toBeNull();
+  it('setNavigation accepts null to deselect a cell', () => {
+    useMandalaStore.getState().setNavigation('m1', { selectedCellIndex: 3 });
+    useMandalaStore.getState().setNavigation('m1', { selectedCellIndex: null });
+    expect(useMandalaStore.getState().getNavigation('m1').selectedCellIndex).toBeNull();
   });
 
-  it('actions are independent — updating one does not affect others', () => {
-    useMandalaStore.getState().selectMandala('m1');
-    useMandalaStore.getState().setCurrentLevel('lvl-3');
-    useMandalaStore.getState().setSelectedCell(7);
+  it('navigation state is isolated per mandala', () => {
+    useMandalaStore.getState().setNavigation('m1', { selectedCellIndex: 1 });
+    useMandalaStore.getState().setNavigation('m2', { selectedCellIndex: 7 });
+    expect(useMandalaStore.getState().getNavigation('m1').selectedCellIndex).toBe(1);
+    expect(useMandalaStore.getState().getNavigation('m2').selectedCellIndex).toBe(7);
+  });
 
-    const state = useMandalaStore.getState();
-    expect(state.selectedMandalaId).toBe('m1');
-    expect(state.currentLevelId).toBe('lvl-3');
-    expect(state.selectedCellIndex).toBe(7);
+  it('clearNavigation removes the entry for a single mandala', () => {
+    useMandalaStore.getState().setNavigation('m1', { selectedCellIndex: 1 });
+    useMandalaStore.getState().setNavigation('m2', { selectedCellIndex: 7 });
+    useMandalaStore.getState().clearNavigation('m1');
+    expect(useMandalaStore.getState().navigationByMandala['m1']).toBeUndefined();
+    expect(useMandalaStore.getState().getNavigation('m2').selectedCellIndex).toBe(7);
+  });
+
+  it('getNavigation returns defaults for an unknown mandala', () => {
+    const nav = useMandalaStore.getState().getNavigation('unknown');
+    expect(nav.currentLevelId).toBe('root');
+    expect(nav.selectedCellIndex).toBeNull();
+    expect(nav.path).toEqual([]);
+    expect(nav.entryGridIndex).toBeNull();
+  });
+
+  it('getNavigation returns defaults for null mandalaId', () => {
+    const nav = useMandalaStore.getState().getNavigation(null);
+    expect(nav.currentLevelId).toBe('root');
+    expect(nav.selectedCellIndex).toBeNull();
   });
 });
