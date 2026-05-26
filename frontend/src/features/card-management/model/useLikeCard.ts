@@ -1,22 +1,6 @@
-/**
- * useLikeCard — Heart-click a video card.
- *
- * CP462+ Issue #649 Phase 3. Mirrors usePinCard's invalidation
- * strategy: on success the local-cards list AND every cached
- * recommendation feed for the affected mandala refetch so the new
- * pinned_at / signal state surfaces without a manual reload.
- *
- * Two mutation modes:
- *   - like(videoId, {mandalaId, title?, description?}) — records
- *     signal='like', sets pinned_at=now() on source rows, enqueues
- *     v2 enrichment when mandalaId is provided. Returns the BE
- *     payload so callers (Heart UI) can read the new jobId and open
- *     the enrich-stream EventSource.
- *   - unlike(videoId) — DELETE signal + pinned_at=NULL.
- */
-
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/lib/api-client';
+import { youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
 import { localCardsKeys } from './useLocalCards';
 
 export interface LikeCardArgs {
@@ -24,12 +8,7 @@ export interface LikeCardArgs {
   mandalaId?: string;
   title?: string;
   description?: string;
-  /** CP466 — Add Cards panel pass the candidate's auto-assigned cell
-   *  so the BE UPSERT can place it in the right mandala sector. */
   cellIndex?: number;
-  /** CP467 — Tier 2 (fresh-from-YouTube) candidates have no
-   *  youtube_videos row yet. Sending the metadata lets BE INSERT
-   *  the row so the card actually reaches the mandala grid. */
   videoCacheHint?: {
     title?: string | null;
     description?: string | null;
@@ -39,6 +18,16 @@ export interface LikeCardArgs {
     viewCount?: number | null;
     publishedAt?: string | null;
   };
+}
+
+export type UnlikeCardArgs =
+  | string
+  | { videoId: string; mandalaId?: string; removeFromMandala?: boolean };
+
+function refreshCardSources(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
+  queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+  queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
 }
 
 export function useLikeCard() {
@@ -55,23 +44,22 @@ export function useLikeCard() {
         videoCacheHint,
       });
     },
-    onSuccess: () => {
-      // Skip the recommendation feed invalidate — the optimistic flip
-      // covers the grid and a full refetch causes flicker storms.
-      queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
-      // localCards drives the sidebar book-index; refetch so the new
-      // pinned card surfaces under its sub-goal without a manual reload.
-      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+    onSettled: () => {
+      refreshCardSources(queryClient);
     },
   });
 
   const unlike = useMutation({
-    mutationFn: async (videoId: string) => {
-      await apiClient.unlikeCard(videoId);
+    mutationFn: async (args: UnlikeCardArgs) => {
+      if (typeof args === 'string') {
+        await apiClient.unlikeCard(args);
+        return;
+      }
+      const { videoId, mandalaId, removeFromMandala } = args;
+      await apiClient.unlikeCard(videoId, { mandalaId, removeFromMandala });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cards', 'v2-summaries'] });
-      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
+    onSettled: () => {
+      refreshCardSources(queryClient);
     },
   });
 

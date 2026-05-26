@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { MandalaLevel, MandalaPath } from '@/entities/card/model/types';
 import { EMPTY_ROOT_LEVELS } from '@/shared/data/mockData';
+import { useMandalaStore } from '@/stores/mandalaStore';
 
 interface UseMandalaNavigationReturn {
   currentLevelId: string;
@@ -54,10 +55,17 @@ export function useMandalaNavigation(deps?: {
     () => initialLevels ?? EMPTY_ROOT_LEVELS
   );
 
-  const [currentLevelId, setCurrentLevelId] = useState('root');
-  const [path, setPath] = useState<MandalaPath[]>([]);
-  const [selectedCellIndex, setSelectedCellIndex] = useState<number | null>(null);
-  const [entryGridIndex, setEntryGridIndex] = useState<number | null>(null);
+  const restored = mandalaId
+    ? useMandalaStore.getState().navigationByMandala[mandalaId]
+    : undefined;
+  const [currentLevelId, setCurrentLevelId] = useState(() => restored?.currentLevelId ?? 'root');
+  const [path, setPath] = useState<MandalaPath[]>(() => restored?.path ?? []);
+  const [selectedCellIndex, setSelectedCellIndex] = useState<number | null>(
+    () => restored?.selectedCellIndex ?? null
+  );
+  const [entryGridIndex, setEntryGridIndex] = useState<number | null>(
+    () => restored?.entryGridIndex ?? null
+  );
 
   const currentLevel: MandalaLevel = mandalaLevels[currentLevelId] || mandalaLevels['root'];
 
@@ -71,12 +79,14 @@ export function useMandalaNavigation(deps?: {
 
     if (initialLevels) {
       if (mandalaChanged) {
-        // Mandala switched: full REPLACE + navigation reset
         setMandalaLevels(initialLevels);
-        setCurrentLevelId('root');
-        setPath([]);
-        setSelectedCellIndex(null);
-        setEntryGridIndex(null);
+        const nextRestored = mandalaId
+          ? useMandalaStore.getState().navigationByMandala[mandalaId]
+          : undefined;
+        setCurrentLevelId(nextRestored?.currentLevelId ?? 'root');
+        setPath(nextRestored?.path ?? []);
+        setSelectedCellIndex(nextRestored?.selectedCellIndex ?? null);
+        setEntryGridIndex(nextRestored?.entryGridIndex ?? null);
       } else {
         // Same mandala refetch (e.g., after save): MERGE to preserve local sub-levels
         setMandalaLevels((prev) => {

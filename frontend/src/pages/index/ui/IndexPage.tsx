@@ -199,17 +199,24 @@ function AuthenticatedApp() {
     t: (key, opts) => t(key, opts as Record<string, string>),
   });
 
-  // 5a. Bridge: sync UI selection state to Zustand store (additive — existing props untouched)
-  // Using store API directly (not hook) since these are write-only syncs — no re-render needed.
   useEffect(() => {
     useMandalaStore.getState().selectMandala(effectiveMandalaId);
   }, [effectiveMandalaId]);
   useEffect(() => {
-    useMandalaStore.getState().setCurrentLevel(navigation.currentLevelId);
-  }, [navigation.currentLevelId]);
-  useEffect(() => {
-    useMandalaStore.getState().setSelectedCell(navigation.selectedCellIndex);
-  }, [navigation.selectedCellIndex]);
+    if (!effectiveMandalaId) return;
+    useMandalaStore.getState().setNavigation(effectiveMandalaId, {
+      currentLevelId: navigation.currentLevelId,
+      selectedCellIndex: navigation.selectedCellIndex,
+      path: navigation.path,
+      entryGridIndex: navigation.entryGridIndex,
+    });
+  }, [
+    effectiveMandalaId,
+    navigation.currentLevelId,
+    navigation.selectedCellIndex,
+    navigation.path,
+    navigation.entryGridIndex,
+  ]);
 
   // Render-assigned ref mirroring navigation.selectedCellIndex. Native HTML5
   // drop handlers fire outside React's render cycle — reading the value via a
