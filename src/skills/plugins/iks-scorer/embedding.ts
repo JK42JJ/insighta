@@ -147,8 +147,12 @@ export async function embedBatch(
 
   const okCount = out.reduce((n, v) => (v ? n + 1 : n), 0);
   const firstVec = out.find((v): v is number[] => v != null);
+  const chunkCount = Math.ceil(texts.length / chunkSize);
   // CP457+ trace — text inputs + vector counts (skip the 4096d vectors
   // themselves to keep payload sane; record first-3-dim sample per vec).
+  // CP488 — embed cost rollup: chunkCount = number of provider round-trips
+  // (Mac Mini Ollama or OpenRouter); embed_chunks counter is meaningful for
+  // ops cost comparison across algorithm versions.
   recordTrace({
     step: 'embed.batch',
     status: okCount > 0 ? 'ok' : 'error',
@@ -163,6 +167,7 @@ export async function embedBatch(
         .map((v) => v.slice(0, 3)),
     },
     latencyMs: Date.now() - t0,
+    costUnits: { embed_calls: chunkCount, embed_chunks: chunkCount - failedChunks },
   });
   return out;
 }

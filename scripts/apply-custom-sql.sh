@@ -91,6 +91,13 @@ APPLY_FILES=(
   # CP474 — youtube_videos 14 missing fields from videos.list. ADD COLUMN
   # IF NOT EXISTS — idempotent.
   "prisma/migrations/youtube-metadata-completeness/001_add_columns.sql"
+  # CP488 — Search Quality Overhaul (D11 measurement oracle + D8 backlog +
+  # D5 user_curated source documentation). All 3 files use
+  # CREATE TABLE/COLUMN/INDEX IF NOT EXISTS + ON CONFLICT DO NOTHING +
+  # DO $$ guarded FK creation — fully idempotent.
+  "prisma/migrations/search-quality-overhaul/001_algo_versions_catalog.sql"
+  "prisma/migrations/search-quality-overhaul/002_trace_run_mandala_cols.sql"
+  "prisma/migrations/search-quality-overhaul/003_surfaced_at_user_curated.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "

@@ -43,7 +43,8 @@ import {
   MIN_SUB_RELEVANCE,
   type FilterCandidate,
 } from './mandala-filter';
-import { v3Config } from './config';
+import { v3Config, type V3Config } from './config';
+import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
 import { filterByQualityGate } from './quality-gate';
 import { applyHybridRerank } from './hybrid-rerank';
 import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
@@ -214,16 +215,45 @@ export const executor: SkillExecutor = {
   },
 
   async execute(ctx: ExecuteContext): Promise<ExecuteResult> {
+    // CP488 — resolve search algorithm BEFORE binding trace context so all
+    // nested recordTrace calls inherit the algorithm_version stamp via ALS.
+    // Mandala-level override > global active > 'v1-current' fallback >
+    // env-only defaults (resolveAlgorithm never throws).
+    const resolved = await resolveAlgorithm({
+      userId: ctx.userId ?? null,
+      mandalaId: ctx.mandalaId ?? null,
+    });
     // CP457+ — bind trace context so all nested LLM/YouTube/Cohere/embed
     // calls land in video_discover_traces with the same run_id. Flag-gated
     // by V3_TRACE_ENABLED inside the tracer; no overhead when off.
-    return withTraceContext({ mandalaId: ctx.mandalaId ?? null, userId: ctx.userId ?? null }, () =>
-      executeImpl(ctx)
+    return withTraceContext(
+      {
+        mandalaId: ctx.mandalaId ?? null,
+        userId: ctx.userId ?? null,
+        algorithmVersion: resolved.id,
+      },
+      () => executeImpl(ctx, resolved.parameters, resolved.id)
     );
   },
 };
 
-async function executeImpl(ctx: ExecuteContext): Promise<ExecuteResult> {
+async function executeImpl(
+  ctx: ExecuteContext,
+  /**
+   * CP488 — algorithm-resolved parameters for THIS run. Shadows the
+   * module-level `v3Config` via the local rebind below so the existing
+   * `v3Config.*` references throughout this function pick up the override
+   * with zero textual diff. Helpers (`runTier2`, `runSearchTraced`,
+   * `maybeApply*`) still read module-level `v3Config` (env defaults) for
+   * now — follow-up PR will thread `cfg` through them too. Until then
+   * algorithm override affects only the executeImpl-direct decisions
+   * (Redis gate, Tier 1 logic, Tier 2 overfetch toggle, semantic gate prep).
+   */
+  resolvedConfig: V3Config = v3Config,
+  algorithmVersion: string | null = null
+): Promise<ExecuteResult> {
+  // eslint-disable-next-line @typescript-eslint/no-shadow
+  const v3Config = resolvedConfig;
   const t0 = Date.now();
   const apiKeys = resolveSearchApiKeys(ctx.env ?? {});
   const openRouterApiKey = ctx.env?.['OPENROUTER_API_KEY'];
@@ -241,6 +271,8 @@ async function executeImpl(ctx: ExecuteContext): Promise<ExecuteResult> {
       language: state.language,
       focusTags: state.focusTags,
       targetLevel: state.targetLevel,
+      algorithm_version: algorithmVersion,
+      algorithm_parameters: v3Config,
     },
     response: null,
   });
@@ -330,6 +362,38 @@ async function executeImpl(ctx: ExecuteContext): Promise<ExecuteResult> {
       `[exclude] failed to load user-owned video ids (continuing unfiltered): ${
         err instanceof Error ? err.message : String(err)
       }`
+    );
+  }
+
+  // CP488 Phase 1b — exclude archived + deleted signal videos.
+  //   archive = mandala-scoped "soft hide" → don't surface again in THIS mandala
+  //             only (signal row's mandala_id field used for scoping).
+  //   delete  = global "do not recommend" → exclude across all of user's mandalas.
+  // Both apply at the SOURCE so neither Tier 1 (video_pool) nor Tier 2 (YouTube
+  // realtime) wastes a slot on a card the user already rejected.
+  try {
+    const signalRows = await getPrismaClient().card_interactions.findMany({
+      where: {
+        user_id: ctx.userId,
+        OR: [{ signal: 'delete' }, { signal: 'archive', mandala_id: mandalaId }],
+      },
+      select: { video_id: true, signal: true },
+    });
+    let archiveN = 0;
+    let deleteN = 0;
+    for (const r of signalRows) {
+      existingVideoIds.add(r.video_id);
+      if (r.signal === 'archive') archiveN++;
+      else if (r.signal === 'delete') deleteN++;
+    }
+    if (archiveN + deleteN > 0) {
+      log.info(
+        `[exclude] CP488 signals — archive=${archiveN} (this mandala) + delete=${deleteN} (global) excluded`
+      );
+    }
+  } catch (err) {
+    log.warn(
+      `[exclude] card_interactions signal load failed (continuing): ${err instanceof Error ? err.message : String(err)}`
     );
   }
 
@@ -840,7 +904,11 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   );
 
   const tRuleSearchStart = Date.now();
-  const ruleSearch = await runSearchTraced(ruleQueries, input.apiKeys, input.state.language);
+  const ruleSearch = await runSearchTraced(ruleQueries, input.apiKeys, input.state.language, {
+    // CP488 Phase 2b — 0-hit retry fallback uses the mandala centerGoal as the
+    // broadest query (drops sub_goal token concat that often caused empties).
+    fallbackQuery: input.state.centerGoal,
+  });
   debug.timing.ruleSearchMs = Date.now() - tRuleSearchStart;
   const rulePool = ruleSearch.pool;
   for (const t of ruleSearch.perQuery) {
@@ -863,7 +931,10 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   let llmPool: PoolItem[] = [];
   if (extraLLM.length > 0) {
     const tLlmSearchStart = Date.now();
-    const llmSearch = await runSearchTraced(extraLLM, input.apiKeys, input.state.language);
+    const llmSearch = await runSearchTraced(extraLLM, input.apiKeys, input.state.language, {
+      // CP488 Phase 2b — same fallback for the LLM-generated fan-out.
+      fallbackQuery: input.state.centerGoal,
+    });
     debug.timing.llmSearchMs = Date.now() - tLlmSearchStart;
     llmPool = llmSearch.pool;
     for (const t of llmSearch.perQuery) {
@@ -1201,7 +1272,14 @@ interface SearchTrace {
 async function runSearchTraced(
   queries: ReadonlyArray<SearchQuery>,
   apiKeys: string[],
-  language: KeywordLanguage
+  language: KeywordLanguage,
+  /**
+   * CP488 Phase 2b — 0-hit auto-retry fallback string. When ≥ 1 query in this
+   * fan-out returns 0 items, ONE additional `search.list` call is issued
+   * with this string as `q` (broader, mandala-wide). Pass undefined to keep
+   * the legacy behavior (no retry).
+   */
+  opts?: { fallbackQuery?: string | undefined; videoCategoryId?: string }
 ): Promise<SearchTrace> {
   if (queries.length === 0) return { pool: [], perQuery: [] };
   const regionCode = language === 'ko' ? 'KR' : 'US';
@@ -1232,6 +1310,7 @@ async function runSearchTraced(
           order,
           timeoutMs: v3Config.youtubeSearchTimeoutMs,
           ...(publishedAfter ? { publishedAfter } : {}),
+          ...(opts?.videoCategoryId ? { videoCategoryId: opts.videoCategoryId } : {}),
         });
         return { q, items, error: undefined as string | undefined };
       } catch (err) {
@@ -1278,6 +1357,58 @@ async function runSearchTraced(
       });
     }
   }
+
+  // CP488 Phase 2b — 0-hit auto-retry. When ≥ 1 query in this fan-out
+  // returned 0 items AND a fallback string is supplied, issue ONE broader
+  // search.list call (centerGoal only, default relevance order, no
+  // videoCategoryId restriction so YouTube's full breadth is searched).
+  // CP488 measurement showed 31% of search.list calls return 0 items
+  // (run 0a4cdad7); single retry typically rescues niche / over-specific
+  // queries to a workable pool without a runaway quota cost (1 extra
+  // 100-unit call per run, not per-query).
+  const zeroHits = perQuery.filter((p) => p.count === 0).length;
+  if (zeroHits > 0 && opts?.fallbackQuery && opts.fallbackQuery.trim().length > 0) {
+    try {
+      const fallbackItems = await searchVideos({
+        query: opts.fallbackQuery,
+        apiKey: apiKeys,
+        relevanceLanguage: language,
+        regionCode,
+        timeoutMs: v3Config.youtubeSearchTimeoutMs,
+        // intentionally no videoCategoryId on fallback — broaden the net.
+      });
+      perQuery.push({
+        query: `[CP488-fallback] ${opts.fallbackQuery}`,
+        count: fallbackItems.length,
+      });
+      for (const item of fallbackItems) {
+        const id = item.id?.videoId;
+        if (!id) continue;
+        pool.push({
+          videoId: id,
+          title: item.snippet?.title ?? '',
+          description: item.snippet?.description ?? '',
+          channelTitle: item.snippet?.channelTitle ?? null,
+          channelId: item.snippet?.channelId ?? null,
+          thumbnail: item.snippet?.thumbnails?.high?.url ?? null,
+          publishedAt: item.snippet?.publishedAt ?? null,
+          cellIndexHint: null, // fallback is mandala-wide
+        });
+      }
+      log.info(
+        `[cp488-retry] zeroHits=${zeroHits}/${queries.length} → fallback "${opts.fallbackQuery}" returned ${fallbackItems.length}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn(`[cp488-retry] fallback search failed (continuing): ${msg}`);
+      perQuery.push({
+        query: `[CP488-fallback] ${opts.fallbackQuery}`,
+        count: 0,
+        error: msg,
+      });
+    }
+  }
+
   return { pool, perQuery };
 }
 
@@ -1611,15 +1742,26 @@ export interface EphemeralDiscoverResult {
 export async function runDiscoverEphemeral(
   input: EphemeralDiscoverInput
 ): Promise<EphemeralDiscoverResult> {
+  // CP488 — ephemeral path has no mandala_id, so resolveAlgorithm only checks
+  // global active + 'v1-current' fallback + env. Result still stamps
+  // algorithm_version on every trace row from this run.
+  const resolved = await resolveAlgorithm({ userId: null, mandalaId: null });
   // CP457+ — bind trace context for ephemeral wizard path. mandalaId is
   // not yet known (wizard precompute), so use null and let downstream
   // consume-time copy the run_id forward.
-  return withTraceContext({ mandalaId: null, userId: null }, () => runDiscoverEphemeralImpl(input));
+  return withTraceContext({ mandalaId: null, userId: null, algorithmVersion: resolved.id }, () =>
+    runDiscoverEphemeralImpl(input, resolved.parameters, resolved.id)
+  );
 }
 
 async function runDiscoverEphemeralImpl(
-  input: EphemeralDiscoverInput
+  input: EphemeralDiscoverInput,
+  /** CP488 — algorithm-resolved parameters (same pattern as executeImpl). */
+  resolvedConfig: V3Config = v3Config,
+  algorithmVersion: string | null = null
 ): Promise<EphemeralDiscoverResult> {
+  // eslint-disable-next-line @typescript-eslint/no-shadow
+  const v3Config = resolvedConfig;
   const t0 = Date.now();
   const apiKeys = resolveSearchApiKeys(input.env);
   if (apiKeys.length === 0) {
@@ -1636,6 +1778,8 @@ async function runDiscoverEphemeralImpl(
       language: input.language,
       focusTags: input.focusTags,
       targetLevel: input.targetLevel,
+      algorithm_version: algorithmVersion,
+      algorithm_parameters: v3Config,
     },
     response: null,
   });

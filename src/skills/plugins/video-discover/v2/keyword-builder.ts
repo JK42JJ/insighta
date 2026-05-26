@@ -187,6 +187,10 @@ export async function runLLMQueries(
     const cap = resolveMaxQueries(opts.maxQueries);
     const result = queries.slice(0, cap).map((q) => ({ query: clip(q), source: 'llm' as const }));
     // CP457+ trace — capture prompt + raw LLM response + parsed queries.
+    // CP488 — `OpenRouterGenerationProvider.generate` returns raw text only;
+    // token usage isn't surfaced today. Rough estimate (char/3) keeps cost
+    // comparable across algorithm versions; refine when provider exposes
+    // `response.usage` (TODO follow-up).
     recordTrace({
       step: 'tier2.keyword_builder.llm',
       status: 'ok',
@@ -206,6 +210,11 @@ export async function runLLMQueries(
         queries_after_cap: result.map((q) => q.query),
       },
       latencyMs: Date.now() - t0,
+      costUnits: {
+        llm_calls: 1,
+        llm_input_tokens: Math.ceil(prompt.length / 3),
+        llm_output_tokens: Math.ceil(raw.length / 3),
+      },
     });
     return result;
   } catch (err) {
@@ -225,6 +234,9 @@ export async function runLLMQueries(
       },
       errorMessage: err instanceof Error ? err.message : String(err),
       latencyMs: Date.now() - t0,
+      // Failed call: still consumed an LLM round-trip (most providers bill
+      // failed completions if any tokens were generated). Conservative log.
+      costUnits: { llm_calls: 1, llm_input_tokens: Math.ceil(prompt.length / 3) },
     });
     return [];
   }
