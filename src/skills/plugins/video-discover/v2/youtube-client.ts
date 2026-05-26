@@ -141,6 +141,19 @@ export interface SearchOpts {
   timeoutMs?: number;
   /** YouTube search order. Default (undefined) = 'relevance'. */
   order?: 'relevance' | 'viewCount' | 'date';
+  /**
+   * CP488 Phase 2a — YouTube category filter. CSV of `videoCategoryId` values
+   * (e.g. '27,28,26' for Education + Science & Tech + Howto). When set,
+   * YouTube returns only videos in those categories. Default undefined = all
+   * categories (current behavior).
+   */
+  videoCategoryId?: string;
+  /**
+   * CP488 Phase 2a — duration bucket. 'short' (<4min), 'medium' (4-20min),
+   * 'long' (>20min). undefined / 'any' = no filter. Helpful for learning-
+   * domain bias (target_level=expert → 'long', etc.).
+   */
+  videoDuration?: 'any' | 'short' | 'medium' | 'long';
 }
 
 const MAX_SEARCH_KEY_SLOTS = 10;
@@ -194,6 +207,13 @@ async function searchVideosOne(
   }
   if (opts.order && opts.order !== 'relevance') {
     url.searchParams.set('order', opts.order);
+  }
+  // CP488 Phase 2a — domain-targeting params (default undefined = current behavior).
+  if (opts.videoCategoryId) {
+    url.searchParams.set('videoCategoryId', opts.videoCategoryId);
+  }
+  if (opts.videoDuration && opts.videoDuration !== 'any') {
+    url.searchParams.set('videoDuration', opts.videoDuration);
   }
   url.searchParams.set('safeSearch', 'moderate');
 
@@ -268,6 +288,9 @@ export async function searchVideos(opts: SearchOpts): Promise<YouTubeSearchItem[
           })),
         },
         latencyMs: Date.now() - t0,
+        // CP488 — YouTube Data API v3 search.list quota cost = 100 units/call.
+        // 1 call billed regardless of items returned (even 0-hit consumes quota).
+        costUnits: { youtube_search_units: 100, youtube_calls: 1 },
       });
       return items;
     } catch (err) {
@@ -279,6 +302,8 @@ export async function searchVideos(opts: SearchOpts): Promise<YouTubeSearchItem[
           request: traceReq,
           errorMessage: err instanceof Error ? err.message : String(err),
           latencyMs: Date.now() - t0,
+          // Non-quota error: call attempted but failed mid-RPC. Still counts.
+          costUnits: { youtube_calls: 1 },
         });
         throw err; // non-quota errors are terminal
       }
@@ -292,6 +317,10 @@ export async function searchVideos(opts: SearchOpts): Promise<YouTubeSearchItem[
     errorMessage:
       'all_keys_quota_exhausted: ' + (lastErr instanceof Error ? lastErr.message : String(lastErr)),
     latencyMs: Date.now() - t0,
+    // All keys exhausted — N calls all rejected with 403. Each tried call
+    // consumed nothing on YouTube's side (quota already 0), so units = 0;
+    // we still log the call counter so cost view can see the attempt.
+    costUnits: { youtube_calls: keys.length },
   });
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
@@ -349,6 +378,9 @@ export async function videosBatch(opts: VideosBatchOpts): Promise<YouTubeVideoSt
         })),
       },
       latencyMs: Date.now() - t0,
+      // CP488 — YouTube Data API v3 videos.list quota cost = 1 unit/call
+      // regardless of part count (statistics+contentDetails is still 1 unit).
+      costUnits: { youtube_videos_units: chunks.length, youtube_calls: chunks.length },
     });
     return flat;
   } catch (err) {
@@ -358,6 +390,7 @@ export async function videosBatch(opts: VideosBatchOpts): Promise<YouTubeVideoSt
       request: { video_id_count: opts.videoIds.length, chunks: chunks.length },
       errorMessage: err instanceof Error ? err.message : String(err),
       latencyMs: Date.now() - t0,
+      costUnits: { youtube_calls: chunks.length },
     });
     throw err;
   }

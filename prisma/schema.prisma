@@ -461,6 +461,12 @@ model user_mandalas {
   focus_tags         String[] @default([])
   target_level       String   @default("standard") @db.VarChar(20)
 
+  /// CP488 — per-mandala search algorithm override. NULL = use global active
+  /// row from search_algorithm_versions. FK ON DELETE SET NULL so removing
+  /// an algorithm row falls back to default rather than breaking the mandala.
+  search_algorithm_version String?                     @db.VarChar(50)
+  search_algorithm         search_algorithm_versions? @relation(fields: [search_algorithm_version], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
   @@index([user_id], map: "idx_user_mandalas_user_id")
   @@index([is_public], map: "idx_user_mandalas_is_public")
   @@index([is_public, is_template], map: "idx_user_mandalas_explore")
@@ -468,6 +474,7 @@ model user_mandalas {
   @@index([domain], map: "idx_user_mandalas_domain")
   @@index([like_count], map: "idx_user_mandalas_like_count")
   @@index([language], map: "idx_user_mandalas_language")
+  @@index([search_algorithm_version], map: "idx_user_mandalas_search_algo")
   @@schema("public")
 }
 
@@ -1714,12 +1721,17 @@ model mandala_pipeline_runs {
   updated_at   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
   completed_at DateTime? @db.Timestamptz(6)
 
+  /// CP488 — algorithm version + cost rollup for A/B comparison view.
+  algorithm_version String? @db.VarChar(50)
+  total_cost_units  Json?
+
   mandala user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade)
   user    users         @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([mandala_id], map: "idx_pipeline_runs_mandala")
   @@index([status], map: "idx_pipeline_runs_status")
   @@index([user_id], map: "idx_pipeline_runs_user")
+  @@index([algorithm_version, created_at(sort: Desc)], map: "idx_pipeline_runs_algo")
   @@schema("public")
 }
 
@@ -1838,10 +1850,15 @@ model video_discover_traces {
   created_at    DateTime @default(now()) @db.Timestamptz(6)
   expires_at    DateTime @default(dbgenerated("(now() + interval '7 days')")) @db.Timestamptz(6)
 
+  /// CP488 — search algorithm version that produced this trace + per-step cost.
+  algorithm_version String? @db.VarChar(50)
+  cost_units        Json?
+
   @@index([mandala_id, created_at(sort: Desc)], map: "idx_video_discover_traces_mandala_created")
   @@index([run_id, created_at(sort: Asc)], map: "idx_video_discover_traces_run")
   @@index([user_id, created_at(sort: Desc)], map: "idx_video_discover_traces_user_created")
   @@index([expires_at], map: "idx_video_discover_traces_expires")
+  @@index([algorithm_version, created_at(sort: Desc)], map: "idx_video_discover_traces_algo")
   @@schema("public")
 }
 
@@ -1873,6 +1890,10 @@ model recommendation_cache {
   /// YouTube publishedAt (CP360 — experiment #3). Persisted for post-hoc
   /// freshness auditing. Nullable because older rows predate this column.
   published_at   DateTime? @db.Timestamptz(6)
+  /// CP488 — backlog model: NULL = BE recommended but not yet surfaced to
+  /// user, timestamptz = first surfaced moment. Each call picks from
+  /// remaining NULL rows (ORDER BY rec_score DESC) → consistent 50-70 size.
+  surfaced_at    DateTime? @db.Timestamptz(6)
 
   users    users                     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   mandala  user_mandalas             @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -2068,6 +2089,27 @@ model video_pool_collection_runs {
 
   @@index([started_at(sort: Desc)], map: "idx_vpool_runs_started")
   @@index([status, run_type], map: "idx_vpool_runs_status_type")
+  @@schema("public")
+}
+
+/// CP488 — Search Quality Overhaul / D11 measurement oracle.
+/// Named + parameter-bundled discovery algorithm catalog. Every run trace +
+/// pipeline run stamps the version it executed under so A/B comparison can
+/// SELECT-GROUP-BY without code release. Admin endpoint flips is_active or
+/// per-mandala override. Raw SQL DDL:
+///   prisma/migrations/search-quality-overhaul/001_algo_versions_catalog.sql
+model search_algorithm_versions {
+  id            String   @id @db.VarChar(50)
+  display_name  String
+  description   String?
+  parameters    Json
+  is_active     Boolean  @default(false)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  created_by    String?  @db.Uuid
+
+  mandalas user_mandalas[]
+
+  @@index([created_at(sort: Desc)], map: "idx_search_algo_created")
   @@schema("public")
 }
 

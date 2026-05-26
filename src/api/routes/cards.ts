@@ -468,6 +468,68 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         }
       }
 
+      // CP488 Phase 1c — user_curated → video_pool 유입 (fire-and-forget).
+      // 사용자 Heart 는 강한 explicit signal: 이 영상은 학습 가치가 있다.
+      // video_pool 에 'user_curated' source 로 영구 적재 → 다음 검색에서
+      // 같은 사용자의 다른 만다라 + (V3_TIER1_SOURCES=v2_promoted,user_curated
+      // 로 확장 시) 다른 사용자 추천에도 활용. embedding 도 함께 fire-and-forget.
+      // Heart API latency 에는 영향 0.
+      void (async () => {
+        try {
+          // 위에서 resolve된 `yt` row 가 있으면 그걸 쓰고, 없으면 한 번 더
+          // 조회 (videoCacheHint 미수신 path).
+          const ytFull = yt
+            ? await prisma.youtube_videos.findFirst({
+                where: { youtube_video_id: videoId },
+                select: {
+                  title: true,
+                  description: true,
+                  channel_title: true,
+                  channel_id: true,
+                  view_count: true,
+                  like_count: true,
+                  duration_seconds: true,
+                  published_at: true,
+                  thumbnail_url: true,
+                },
+              })
+            : null;
+          if (!ytFull) return; // youtube_videos row 자체가 없으면 skip
+          const v = ytFull.view_count != null ? Number(ytFull.view_count) : 0;
+          const quality = v >= 100_000 ? 'gold' : v >= 10_000 ? 'silver' : 'bronze';
+          const lang = ytFull.title && /[가-힣]/.test(ytFull.title) ? 'ko' : 'en';
+          await prisma.video_pool.upsert({
+            where: { video_id: videoId },
+            create: {
+              video_id: videoId,
+              title: ytFull.title ?? '',
+              description: ytFull.description ?? null,
+              channel_name: ytFull.channel_title ?? null,
+              channel_id: ytFull.channel_id ?? null,
+              view_count: ytFull.view_count ?? 0n,
+              like_count: ytFull.like_count ?? 0n,
+              duration_seconds: ytFull.duration_seconds,
+              published_at: ytFull.published_at,
+              thumbnail_url: ytFull.thumbnail_url,
+              language: lang,
+              quality_tier: quality,
+              source: 'user_curated',
+              is_active: true,
+            },
+            update: {
+              // 같은 영상이 이미 다른 source (v2_promoted, batch_trend, …) 로
+              // 풀에 있을 수 있음. source 는 더 신뢰성 높은 기존 값을 보존
+              // 하고 refreshed_at 만 갱신 (UPSERT idempotent).
+              refreshed_at: new Date(),
+            },
+          });
+        } catch (err) {
+          log.warn(
+            `like → video_pool upsert failed (non-fatal): videoId=${videoId} err=${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      })();
+
       return reply.code(202).send({
         status: 'ok',
         data: {

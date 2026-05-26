@@ -157,6 +157,9 @@ export async function rerank(input: RerankInput): Promise<RerankResponse> {
   });
 
   // CP457+ trace — capture rerank input + scored output. fire-and-forget.
+  // CP488 — normalized cost: billed_units.search_units is Cohere's metering
+  // unit (1 unit per rerank call regardless of document count for v3).
+  const cohereUnits = json.meta?.billed_units?.search_units ?? 1;
   recordTrace({
     step: 'hybrid_rerank.cohere',
     status: 'ok',
@@ -169,6 +172,7 @@ export async function rerank(input: RerankInput): Promise<RerankResponse> {
     },
     response: { results, billedUnits: json.meta?.billed_units },
     latencyMs,
+    costUnits: { cohere_search_units: cohereUnits, cohere_calls: 1 },
   });
 
   return {

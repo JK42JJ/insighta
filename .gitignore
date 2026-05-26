@@ -56,6 +56,8 @@ prisma/migrations/*
 !prisma/migrations/user-video-states-guards/**
 !prisma/migrations/youtube-metadata-completeness/
 !prisma/migrations/youtube-metadata-completeness/**
+!prisma/migrations/search-quality-overhaul/
+!prisma/migrations/search-quality-overhaul/**
 
 # Logs
 logs/

@@ -21,6 +21,7 @@ import { adminChatbotRoutes } from './chatbot';
 import { adminQualityMetricsRoutes } from './quality-metrics';
 import { adminSystemSettingsRoutes } from './system-settings';
 import { adminDiscoverTracesRoutes } from './discover-traces';
+import { adminSearchAlgorithmsRoutes } from './search-algorithms';
 
 /**
  * Admin routes plugin.
@@ -52,5 +53,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminQualityMetricsRoutes, { prefix: '/quality-metrics' });
   await fastify.register(adminSystemSettingsRoutes, { prefix: '/settings' });
   await fastify.register(adminDiscoverTracesRoutes, { prefix: '/discover-traces' });
+  // CP488 — Search Quality Overhaul: algorithm catalog + per-mandala override
+  // + A/B comparison view (D11 measurement oracle).
+  await fastify.register(adminSearchAlgorithmsRoutes, { prefix: '/search-algorithms' });
   // await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }
