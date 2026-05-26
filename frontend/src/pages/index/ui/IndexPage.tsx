@@ -155,9 +155,11 @@ function AuthenticatedApp() {
   const isViewingPending = !!pendingMandala && effectiveMandalaId === pendingMandala.tempId;
 
   // 3. Mandala data from DB (by selected mandala ID)
-  const { mandalaLevels: queryMandalaLevels, isLoading: mandalaQueryLoading } = useMandalaQuery(
-    isViewingPending ? null : effectiveMandalaId
-  );
+  const {
+    mandalaLevels: queryMandalaLevels,
+    mandalaMeta,
+    isLoading: mandalaQueryLoading,
+  } = useMandalaQuery(isViewingPending ? null : effectiveMandalaId);
 
   // Suppress "Sector 1..8" + empty-title placeholders while the detail query
   // is still inflight AND we have no useful subjects yet. Treated as
@@ -933,7 +935,7 @@ function AuthenticatedApp() {
                     allCards={cards.allMandalaCards}
                     scratchPadCards={cards.scratchPadCards}
                     cardsByCell={cards.cardsByCell}
-                    totalCards={cards.totalCards}
+                    totalCards={mandalaMeta?.cardCount ?? cards.totalCards}
                     sectorSubjects={
                       navigation.currentLevel.subjectLabels?.length
                         ? navigation.currentLevel.subjectLabels
@@ -1031,7 +1033,7 @@ function AuthenticatedApp() {
                       }
                       selectedCellIndex={navigation.selectedCellIndex}
                       onCellClick={navigation.handleCellClick}
-                      totalCardCount={cards.totalCards}
+                      totalCardCount={mandalaMeta?.cardCount ?? cards.totalCards}
                       cardsByCell={cards.cardsByCell}
                       isExternalCardDragActive={activeDragData?.type === 'card'}
                       isInternalCardDragActive={
@@ -1088,7 +1090,7 @@ function AuthenticatedApp() {
         {isMobile && (
           <MandalaPanel
             mode="floating"
-            totalCards={cards.totalCards}
+            totalCards={mandalaMeta?.cardCount ?? cards.totalCards}
             onToggleMode={() => {}}
             isOpen={isFloatingPanelOpen}
             onOpenChange={setIsFloatingPanelOpen}
