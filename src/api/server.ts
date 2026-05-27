@@ -63,6 +63,10 @@ import {
   startV2QualityAuditCron,
   stopV2QualityAuditCron,
 } from '../modules/scheduler/v2-quality-audit-cron';
+import {
+  startV2QualityRegenCron,
+  stopV2QualityRegenCron,
+} from '../modules/scheduler/v2-quality-regen-cron';
 
 // Load environment variables
 dotenv.config();
@@ -608,6 +612,16 @@ export async function startServer() {
       fastify.log.warn({ err }, 'V2QualityAuditCron init failed (non-fatal)');
     }
 
+    // CP488+ Phase 3 — v2 Quality Regen worker (drains regen queue
+    // populated by the audit cron above). Default OFF; flip
+    // V2_QUALITY_REGEN_ENABLED=true once the audit has been running
+    // long enough for the operator to trust the score signal.
+    try {
+      startV2QualityRegenCron();
+    } catch (err) {
+      fastify.log.warn({ err }, 'V2QualityRegenCron init failed (non-fatal)');
+    }
+
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
@@ -638,6 +652,11 @@ export async function startServer() {
       }
       try {
         stopV2QualityAuditCron();
+      } catch {
+        /* ignore */
+      }
+      try {
+        stopV2QualityRegenCron();
       } catch {
         /* ignore */
       }
