@@ -238,6 +238,13 @@ export interface VideoRichSummaryResponse {
   segments?: VideoRichSummarySegments | null;
   lora?: VideoRichSummaryLora | null;
   qualityScore: number | null;
+  /**
+   * CP488+ Phase 4 — server-side quality_flag of the row ('pass' | 'low'
+   * | 'qwen3_low' | 'pending' | null). Anything other than 'pass'
+   * surfaces a subtle "auto-improving" indicator in the UI; the content
+   * still renders (Phase 4 "detection, not blocking" policy).
+   */
+  qualityFlag: string | null;
   model: string | null;
   updatedAt: string;
 }
@@ -819,13 +826,10 @@ class ApiClient {
       );
       return res.data;
     } catch (err) {
+      // CP488+ Phase 4 — BE now returns 200 with `qualityFlag` for non-pass
+      // rows (detection, not blocking). 404 means the row genuinely does
+      // not exist; null lets callers show an empty state.
       if (err instanceof ApiHttpError && err.statusCode === 404) {
-        // CP488+ — RICH_SUMMARY_QUALITY_LOW (row exists but quality_flag != pass)
-        // propagates so callers can show a pending-regeneration message and
-        // skip the auto-enrich trigger that would re-stamp the same row.
-        if (err.code === 'RICH_SUMMARY_QUALITY_LOW') {
-          throw err;
-        }
         return null;
       }
       throw err;
