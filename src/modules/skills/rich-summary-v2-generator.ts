@@ -20,6 +20,7 @@ import { getPrismaClient } from '@/modules/database/client';
 import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
 import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { logger } from '@/utils/logger';
+import { validateV2TimelineRange, V2TimelineRangeError } from './rich-summary-v2-validator-range';
 
 // CP488+ — v2 full generator pinned to Sonnet 4.6. Previously this path
 // inherited the global provider (createGenerationProvider) which resolved
@@ -184,6 +185,10 @@ export async function generateRichSummaryV2(
     language,
     transcript: input.transcript,
     mandalaCenterGoal: input.mandalaCenterGoal,
+    // CP488+ Phase 1.5 — duration is now a first-class prompt input so the
+    // LLM can produce sections/atoms timestamps that fit the wall-clock
+    // length. The validator below rejects outputs that still over-shoot.
+    durationSeconds: ytRow.duration_seconds,
   });
 
   // CP488+ — pinned Sonnet 4.6 (see SONNET_MODEL doc-comment above).
@@ -235,6 +240,33 @@ export async function generateRichSummaryV2(
           reasons: score.reasons,
         });
         continue;
+      }
+
+      // CP488+ Phase 1.5 — timeline range guard. Rejects Sonnet 4.6
+      // hallucinated outputs (XrlKWAIFQUY pattern: sections.last.to_sec
+      // overshooting wall-clock duration by 30-50%). No-op when duration
+      // is unknown.
+      if (ytRow.duration_seconds != null) {
+        try {
+          validateV2TimelineRange({
+            durationSeconds: ytRow.duration_seconds,
+            sections: summary.segments?.sections,
+            atoms: summary.segments?.atoms,
+          });
+        } catch (rangeErr) {
+          const reason =
+            rangeErr instanceof V2TimelineRangeError
+              ? `timeline_range: ${rangeErr.path}: observed=${rangeErr.observed} max=${rangeErr.maxAllowed}`
+              : `timeline_range_threw: ${rangeErr instanceof Error ? rangeErr.message : String(rangeErr)}`;
+          lastReason = reason;
+          log.warn('v2 timeline range rejected', {
+            videoId: input.videoId,
+            attempt,
+            reason,
+            durationSec: ytRow.duration_seconds,
+          });
+          continue;
+        }
       }
 
       // UPSERT — the quick-path normally creates the row first, but

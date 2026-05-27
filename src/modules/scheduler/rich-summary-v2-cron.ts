@@ -214,7 +214,14 @@ export async function runV2BatchOnce(batchSize: number): Promise<{
             });
             return null;
           });
-        const transcript = captionResult?.success ? captionResult.caption?.fullText : undefined;
+        // CP488+ Phase 1.5 — annotated [mm:ss] form (see
+        // enrich-rich-summary handler for full rationale). Falls back to
+        // fullText if segments are absent for any reason.
+        const { formatAnnotatedTranscript } = await import('@/modules/caption/format-transcript');
+        const transcript = captionResult?.success
+          ? formatAnnotatedTranscript(captionResult.caption?.segments) ||
+            captionResult.caption?.fullText
+          : undefined;
         if (!transcript) {
           // Stamp the attempt so this row enters the 7-day captioner
           // cooldown — avoids hammering the same unavailable captions
