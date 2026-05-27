@@ -272,6 +272,17 @@ jobs:
           # rows that were created with snippet-only data and never
           # received the full videos.list metadata enrichment.
           YOUTUBE_METADATA_BACKFILL_ENABLED: ${{ vars.YOUTUBE_METADATA_BACKFILL_ENABLED }}
+          # CP488+ — v2 Quality Audit daily scan cron activation. Non-secret
+          # per CP392 (boolean toggle, not a credential). Default empty ⇒
+          # config/v2-quality-audit.ts coerces to `false` ⇒
+          # startV2QualityAuditCron() logs "v2 quality audit cron disabled"
+          # at startup and never schedules. Set GitHub Variable
+          # V2_QUALITY_AUDIT_ENABLED to "true" to activate the daily
+          # 04:00 UTC scan that scores every v2 rich-summary row against
+          # 8 hallucination metrics and enqueues critical rows into
+          # v2_quality_regen_queue for Phase 3 background regeneration.
+          # Design: docs/design/v2-quality-audit-system-2026-05-27.md
+          V2_QUALITY_AUDIT_ENABLED: ${{ vars.V2_QUALITY_AUDIT_ENABLED }}
           # CP489 — video-discover trace capture toggle. Non-secret per CP392
           # (boolean flag, not a credential). Default empty ⇒ config/index.ts
           # coerces to `false` ⇒ discover-tracing fireAndForgetWrite no-ops,
@@ -293,7 +304,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED,YOUTUBE_METADATA_BACKFILL_ENABLED,V3_TRACE_ENABLED,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN
+          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED,YOUTUBE_METADATA_BACKFILL_ENABLED,V2_QUALITY_AUDIT_ENABLED,V3_TRACE_ENABLED,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN
           script: |
             set -e
             cd /opt/tubearchive
@@ -332,6 +343,15 @@ jobs:
             # --body true` then redeploy.
             if [ -n "${YOUTUBE_METADATA_BACKFILL_ENABLED}" ]; then
               grep -q '^YOUTUBE_METADATA_BACKFILL_ENABLED=' .env 2>/dev/null && sed -i "s|^YOUTUBE_METADATA_BACKFILL_ENABLED=.*|YOUTUBE_METADATA_BACKFILL_ENABLED=${YOUTUBE_METADATA_BACKFILL_ENABLED}|" .env || echo "YOUTUBE_METADATA_BACKFILL_ENABLED=${YOUTUBE_METADATA_BACKFILL_ENABLED}" >> .env
+            fi
+            # CP488+ — v2 Quality Audit daily scan cron activation. Same
+            # idempotent grep/sed/echo pattern. When unset/empty, the
+            # conditional skips and config/v2-quality-audit.ts default
+            # `false` stays in effect ⇒ startV2QualityAuditCron() never
+            # schedules. Activate via `gh variable set
+            # V2_QUALITY_AUDIT_ENABLED --body true` then redeploy.
+            if [ -n "${V2_QUALITY_AUDIT_ENABLED}" ]; then
+              grep -q '^V2_QUALITY_AUDIT_ENABLED=' .env 2>/dev/null && sed -i "s|^V2_QUALITY_AUDIT_ENABLED=.*|V2_QUALITY_AUDIT_ENABLED=${V2_QUALITY_AUDIT_ENABLED}|" .env || echo "V2_QUALITY_AUDIT_ENABLED=${V2_QUALITY_AUDIT_ENABLED}" >> .env
             fi
             # CP489 — video-discover trace capture toggle. Same idempotent
             # pattern as RICH_SUMMARY_ENABLED / YOUTUBE_METADATA_BACKFILL_ENABLED.
