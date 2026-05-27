@@ -6,7 +6,13 @@
  * we just ensure the prompt template path is wired correctly.
  */
 
-import { buildV2Prompt, TRANSCRIPT_MAX_CHARS } from '@/modules/skills/rich-summary-v2-prompt';
+import { buildV2Prompt } from '@/modules/skills/rich-summary-v2-prompt';
+import { loadRichSummaryConfig } from '@/config/rich-summary';
+
+// CP488+ — transcript char budget is no longer a magic constant; it comes
+// from RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS (default 100,000). Resolve
+// the default once for the truncation assertion below.
+const TRANSCRIPT_MAX_CHARS = loadRichSummaryConfig({}).transcriptMaxChars;
 
 describe('buildV2Prompt — transcript injection', () => {
   const base = {
@@ -26,7 +32,12 @@ describe('buildV2Prompt — transcript injection', () => {
     const transcript = '이 영상은 시간관리의 3단계를 다룬다. 계획 / 실행 / 회고.';
     const out = buildV2Prompt({ ...base, transcript });
     expect(out).toContain(transcript);
-    expect(out).not.toContain('(no transcript)');
+    // The instruction block legitimately mentions the literal string
+    // "(no transcript)" (it describes the empty-transcript fallback rule),
+    // so we cannot assert the whole prompt is free of it. Instead, assert
+    // the Transcript line itself carries the actual transcript, not the
+    // placeholder.
+    expect(out).toMatch(/Transcript[^\n]*:[^\n]*이 영상은 시간관리/);
   });
 
   test('long transcript is truncated to TRANSCRIPT_MAX_CHARS', () => {

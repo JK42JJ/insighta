@@ -49,6 +49,34 @@ export const richSummaryEnvSchema = z.object({
     .preprocess((v) => (v == null || v === '' ? '0 17 * * *' : String(v).trim()), z.string())
     .default('0 17 * * *'),
   V2_LOW_RETRY_COOLDOWN_HOURS: positiveFloat.transform((v) => v ?? 12),
+  /**
+   * CP488+ — maximum video duration (seconds) eligible for v2 generation.
+   *
+   * Default 5400s (90min). Videos longer than this skip with reason
+   * 'duration_exceeds_cap' — the generator code path exists but is not
+   * activated for long content until we ship chunked / multi-pass
+   * summarisation. Operators can raise this cap via env when that path
+   * lands.
+   */
+  RICH_SUMMARY_V2_MAX_DURATION_SECONDS: positiveInt.transform((v) => v ?? 5400),
+  /**
+   * CP488+ — transcript char budget passed to the LLM. Default 100,000
+   * comfortably covers a 90-minute English lecture (~150-250 wpm × 4
+   * chars/word ≈ 54-90K chars) and a 90-minute Korean lecture (~25-50K
+   * chars). Well under Sonnet 4.6 / Haiku 4.5 200K context.
+   *
+   * Operators can lower this for cost/latency control without a code
+   * change. NOT a magic number — derived from the 90-minute duration cap
+   * above; if the duration cap rises, this should rise proportionally.
+   */
+  RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS: positiveInt.transform((v) => v ?? 100000),
+  /**
+   * CP488+ — LLM output token budget. Default 8192. Raised from the
+   * historical 6144 because longer transcripts produce more sections +
+   * atoms; 8192 leaves headroom while staying under per-response output
+   * caps on Sonnet 4.6 / Haiku 4.5.
+   */
+  RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS: positiveInt.transform((v) => v ?? 8192),
 });
 
 export interface RichSummaryConfig {
@@ -58,6 +86,12 @@ export interface RichSummaryConfig {
   v2BatchSize: number;
   v2CronSchedule: string;
   v2LowRetryCooldownHours: number;
+  /** Max video duration (seconds) eligible for v2 generation. Default 5400 (90min). */
+  maxDurationSeconds: number;
+  /** Transcript char budget for the LLM prompt. Default 100000. */
+  transcriptMaxChars: number;
+  /** Output token budget. Default 8192. */
+  maxOutputTokens: number;
 }
 
 const FALLBACK_CONFIG: RichSummaryConfig = {
@@ -67,6 +101,9 @@ const FALLBACK_CONFIG: RichSummaryConfig = {
   v2BatchSize: 50,
   v2CronSchedule: '0 17 * * *',
   v2LowRetryCooldownHours: 12,
+  maxDurationSeconds: 5400,
+  transcriptMaxChars: 100000,
+  maxOutputTokens: 8192,
 };
 
 export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): RichSummaryConfig {
@@ -77,6 +114,9 @@ export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): Ric
     RICH_SUMMARY_V2_BATCH_SIZE: env['RICH_SUMMARY_V2_BATCH_SIZE'],
     RICH_SUMMARY_V2_CRON_SCHEDULE: env['RICH_SUMMARY_V2_CRON_SCHEDULE'],
     V2_LOW_RETRY_COOLDOWN_HOURS: env['V2_LOW_RETRY_COOLDOWN_HOURS'],
+    RICH_SUMMARY_V2_MAX_DURATION_SECONDS: env['RICH_SUMMARY_V2_MAX_DURATION_SECONDS'],
+    RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS: env['RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS'],
+    RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS: env['RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS'],
   });
   if (!parsed.success) {
     return FALLBACK_CONFIG;
@@ -88,5 +128,8 @@ export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): Ric
     v2BatchSize: parsed.data.RICH_SUMMARY_V2_BATCH_SIZE,
     v2CronSchedule: parsed.data.RICH_SUMMARY_V2_CRON_SCHEDULE,
     v2LowRetryCooldownHours: parsed.data.V2_LOW_RETRY_COOLDOWN_HOURS,
+    maxDurationSeconds: parsed.data.RICH_SUMMARY_V2_MAX_DURATION_SECONDS,
+    transcriptMaxChars: parsed.data.RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS,
+    maxOutputTokens: parsed.data.RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS,
   };
 }
