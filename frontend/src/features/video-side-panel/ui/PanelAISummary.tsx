@@ -48,7 +48,7 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
     if (!youtubeId) return;
     void queryClient.invalidateQueries({ queryKey: queryKeys.video.richSummary(youtubeId) });
   }, [youtubeId, queryClient]);
-  const { richSummary, isLoading: isRichLoading, isQualityLow } = useRichSummary(youtubeId);
+  const { richSummary, isLoading: isRichLoading, isQualityWarning } = useRichSummary(youtubeId);
 
   const short = videoSummary?.summary_ko || videoSummary?.summary_en || null;
   const tags = videoSummary?.tags ?? [];
@@ -72,10 +72,11 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
     if (!youtubeId || !mandalaId) return;
     if (isRichLoading) return;
     if (hasSegments) return;
-    // CP488+ — skip auto-enrich when the row is already marked qwen3_low.
-    // Re-enriching with the same qwen3 model just re-stamps the same row;
-    // the upcoming Sonnet 4.6 (B2) ship will handle regeneration globally.
-    if (isQualityLow) return;
+    // CP488+ Phase 4 — skip auto-enrich for warning rows (Phase 3 worker
+    // is processing them in the background; firing Heart-click enrich on
+    // top of that would just queue a duplicate. The user still sees the
+    // current content + auto-improving indicator below).
+    if (isQualityWarning) return;
     const key = `${youtubeId}:${mandalaId}`;
     if (triggerKeyRef.current === key) return;
     triggerKeyRef.current = key;
@@ -90,7 +91,7 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
            and the cron Track A2 retry will eventually land. */
       }
     })();
-  }, [youtubeId, mandalaId, isRichLoading, hasSegments, isQualityLow, openStream]);
+  }, [youtubeId, mandalaId, isRichLoading, hasSegments, isQualityWarning, openStream]);
 
   // When the SSE stream terminates with `scored`, refetch the v2 row so
   // the segments block lands without a manual reload.
@@ -124,14 +125,11 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   // Empty state: nothing to render. Distinguish "still being generated"
   // (background enrich in flight, or core present but segments missing)
   // from "no AI output at all" (truly empty row).
+  //
+  // CP488+ Phase 4 — quality-warning rows now fall through to the normal
+  // render path (they have content, just at lower quality) + display a
+  // subtle "auto-improving" indicator below. No more hide.
   if (!hasNewV2 && !hasLegacyRich && !hasShort && !isRichLoading) {
-    // CP488+ — qwen3_low row: surface as an in-progress (dot-animated)
-    // message via the existing EnrichInProgressMessage component so the
-    // visual matches the rest of the loading states and the user
-    // understands this is awaiting regeneration, not a missing row.
-    if (isQualityLow) {
-      return <EnrichInProgressMessage label={t('learning.richSummaryQualityLowPendingRegen')} />;
-    }
     if (isEnrichInProgress) {
       return <EnrichInProgressMessage label={t('learning.aiSummaryGenerating')} />;
     }
@@ -144,6 +142,7 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
 
   return (
     <div className="space-y-5">
+      {isQualityWarning && <AIQualityImprovingBadge />}
       {hasNewV2 && richSummary && (
         <RichSummaryV2NewBlock
           core={richSummary.core ?? null}
@@ -709,5 +708,31 @@ function EnrichInProgressMessage({ label }: { label: string }) {
         <span className="animate-[enrich-dot_1.4s_ease-in-out_0.4s_infinite]">.</span>
       </span>
     </p>
+  );
+}
+
+/**
+ * CP488+ Phase 4 — subtle indicator surfaced when the v2 row's
+ * `quality_flag !== 'pass'`. Per the user's "detection, not blocking"
+ * spec (docs/design/v2-quality-audit-system-2026-05-27.md §2 + §7), the
+ * content still renders normally and a small amber badge tells the user
+ * a background regeneration is in flight. No hide, no early return —
+ * users keep using whatever the current row contains; better content
+ * lands on the next view once Phase 3 worker resolves the queue row.
+ */
+function AIQualityImprovingBadge() {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300"
+      title={t('learning.aiQualityImprovingTooltip')}
+    >
+      <span aria-hidden className="text-amber-400">
+        ●
+      </span>
+      <span>{t('learning.aiQualityImproving')}</span>
+    </div>
   );
 }

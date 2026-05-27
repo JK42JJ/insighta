@@ -1853,6 +1853,8 @@
     "aiSummaryGenerating": "Generating AI summary",
     "richSummaryGenerating": "Generating detailed summary",
     "richSummaryQualityLowPendingRegen": "Improving the AI analysis for this video",
+    "aiQualityImproving": "AI analysis auto-improving in background",
+    "aiQualityImprovingTooltip": "This video's chapter breakdown is being re-generated with the latest model. The current content is shown as-is; better content will appear on your next view.",
     "metaSummary": "Meta summary",
     "summaryLabel": "Summary",
     "keywordsLabel": "Keywords",

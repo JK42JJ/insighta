@@ -528,21 +528,22 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const row = await getPrismaClient().video_rich_summaries.findUnique({
         where: { video_id: id },
       });
-      if (!row || row.quality_flag !== 'pass') {
-        // CP488+ — distinguish "no row" from "row exists but quality_flag != pass"
-        // so FE can render a different message (regeneration pending) for the
-        // latter and crucially NOT re-trigger enrich (which would re-stamp the
-        // same qwen3 row in a loop until B2 Sonnet model swap ships).
-        const isLowQuality = Boolean(row && row.quality_flag !== 'pass');
+      if (!row) {
         return reply.code(404).send({
           status: 'error',
-          code: isLowQuality ? 'RICH_SUMMARY_QUALITY_LOW' : 'RICH_SUMMARY_NOT_FOUND',
-          message: isLowQuality
-            ? `Rich summary quality_flag=${row!.quality_flag} — awaiting model upgrade regeneration`
-            : 'No rich summary available for this video',
-          details: isLowQuality ? { qualityFlag: row!.quality_flag } : undefined,
+          code: 'RICH_SUMMARY_NOT_FOUND',
+          message: 'No rich summary available for this video',
         });
       }
+      // CP488+ Phase 4 — "detection, not blocking" per user spec
+      // (docs/design/v2-quality-audit-system-2026-05-27.md §2). Previously
+      // any quality_flag != 'pass' row 404'd, hiding chapters from users
+      // entirely until regeneration finished. With Phase 1.5 producing
+      // good Sonnet 4.6 output + Phase 3 worker draining the regen
+      // queue + Phase 1 daily audit measuring drift, the right policy is
+      // to always serve whatever content exists and let the FE render a
+      // subtle "auto-improving" indicator. Users see the current best
+      // content; better content appears on the next view.
       return reply.code(200).send({
         status: 'ok',
         data: {
@@ -558,6 +559,10 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           segments: row.segments ?? null,
           lora: row.lora ?? null,
           qualityScore: row.quality_score,
+          // CP488+ Phase 4 — surface quality_flag so FE can decide
+          // whether to render the auto-improving badge. Values: 'pass'
+          // | 'low' | 'qwen3_low' | 'pending' | null.
+          qualityFlag: row.quality_flag,
           model: row.model,
           updatedAt: row.updated_at.toISOString(),
         },
