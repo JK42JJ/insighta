@@ -40,6 +40,16 @@
 - 데이터셋 생성: **CC 콘솔 직접 생성(Write tool)만 허용**. LLM API 호출 없이 CC 자체 지식으로 생성.
 - 위반 시: 해당 세션 즉시 종료. 사고 기록은 `memory/troubleshooting.md` 참조.
 
+### 🚨 벌크 작업 / 재처리 = Mac Mini Claude Code CLI 전용 (절대 규칙, 신설 2026-05-27 CP488+ Phase 3 incident)
+- **1회성 backfill / bulk regen / re-processing / re-work 는 반드시 Mac Mini Claude Code CLI ($0, user subscription) 로 진행**.
+- OpenRouter / Anthropic API / 자동 cron worker (Phase 3 류 BE worker) 로 backlog 처리 절대 금지. 단가 × 건수 = 사용자 부담 ($30+ burn).
+- 예외 없음 — "10건만", "테스트", "사용자 노출 영상만", "이미 코드 ship 했으니 효율" 등 어떤 명목도 불가.
+- 자동 cron worker (Phase 3 류) 가 OpenRouter 를 호출해도 되는 유일한 경우 = **신규 자연발생량** (예: daily audit 가 새로 surface 한 1-10/day). 기존 backlog 절대 안 됨.
+- Mac Mini path: `docs/runbook/qwen3-low-backfill-2026-05-26.md` (PR #755) + `scripts/fetch-transcripts-for-qwen3-backfill.ts` + `claude` CLI 세션 + ssh-connect 으로 prod UPDATE 적용.
+- Bulk 작업 명령 받으면 0순위 확인: (a) backlog 인가 ongoing 인가? (b) backlog 면 Mac Mini path 즉시 제안 + OpenRouter cron 비활성 확인 (c) ongoing 이면 cron 활성 OK.
+- 위반 시: 즉시 cron 중단 (gh variable false + .env sed + container force-recreate) + Mac Mini 로 전환 + retrospective 기록 + 사용자에게 burn 금액 보고.
+- 근거: CP488+ 2026-05-27 Phase 3 worker 가 508 backlog 에 OpenRouter $0.06/row × 4/5 success rate × ~$14/day 시작 → 사용자 정정 ("벌크작업, 재작업 재처리할때, 무조건 mac mini 에서 claude code 직접 활용하도록 명시. 하드 룰!") → 즉시 cron 비활성, Mac Mini path 로 전환.
+
 ### Credentials
 - NEVER guess secret names/API keys — read `memory/credentials.md`
 - GitHub Secrets name != env var name — check mapping in credentials.md
