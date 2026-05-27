@@ -173,6 +173,33 @@ docs/AUTO_SYNC_SCHEDULER.md
 docs/ADAPTER_SYSTEM.md
 docs/guides/TASK_HIERARCHY.md
 
+# CP488+ round 3 (2026-05-27) — user explicit: transcript collector + Mac
+# Mini operational scripts MUST NOT be public (past directive violated in
+# round 1 — "operational dependency" was a wrong call). All Mac Mini host
+# code goes here.
+mac-mini/
+openclaw/
+test-results/
+scripts/video-discover-tc/
+data/dataset-v4/
+# Internal CC operator helpers + ad-hoc backfill/run scripts (not part of
+# the public app build).
+scripts/agent-dashboard.sh
+scripts/ops-dashboard.sh
+scripts/cc-ci-check.sh
+scripts/cc-init-context.sh
+scripts/cc-save-context.sh
+scripts/work-context.sh
+scripts/backfill-rich-summaries.ts
+scripts/fetch-transcripts-for-qwen3-backfill.ts
+scripts/preview-llm-extract.ts
+scripts/retry-action-fill.ts
+scripts/run-auto-add.ts
+scripts/run-iks-scorer.ts
+scripts/run-trend-collector.ts
+scripts/run-video-discover.ts
+scripts/seed-trend-data.ts
+
 # Infrastructure (local only)
 supabase/
 !supabase/functions/
