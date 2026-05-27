@@ -1638,6 +1638,75 @@ model video_rich_summaries {
   @@schema("public")
 }
 
+/// CP488+ (2026-05-27) — v2 Quality Audit MVP per-video per-day score row.
+/// Raw SQL DDL: prisma/migrations/v2-quality-audit/001_create_audit_tables.sql
+/// Design: docs/design/v2-quality-audit-system-2026-05-27.md §4.2
+model v2_quality_audit_log {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  video_id              String   @db.VarChar(11)
+  audit_date            DateTime @db.Date
+  audit_run_id          String   @db.Uuid
+  overall_score         Int      @db.SmallInt
+  m1_range_fit          Int?     @db.SmallInt
+  m2_coverage_start     Int?     @db.SmallInt
+  m3_coverage_end       Int?     @db.SmallInt
+  m4_atoms_range        Int?     @db.SmallInt
+  m5_atoms_distribution Int?     @db.SmallInt
+  m6_atoms_sorted       Int?     @db.SmallInt
+  m7_sections_gap       Int?     @db.SmallInt
+  m8_oneliner_len       Int?     @db.SmallInt
+  model                 String?  @db.VarChar(80)
+  duration_seconds      Int?
+  violations            Json?
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([video_id, audit_date])
+  @@index([video_id, audit_date(sort: Desc)], map: "idx_v2_audit_video_date")
+  @@index([audit_date, overall_score], map: "idx_v2_audit_score_date")
+  @@index([audit_run_id], map: "idx_v2_audit_run")
+  @@schema("public")
+}
+
+/// CP488+ per-day audit run summary. One row per scheduled run.
+/// Raw SQL DDL: prisma/migrations/v2-quality-audit/001_create_audit_tables.sql
+model v2_quality_audit_runs {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_date       DateTime  @unique @db.Date
+  total_videos   Int
+  pass_count     Int
+  warning_count  Int
+  critical_count Int
+  avg_score      Float?    @db.Real
+  by_model       Json?
+  by_violation   Json?
+  llm_report_id  String?   @db.Uuid
+  started_at     DateTime  @db.Timestamptz(6)
+  completed_at   DateTime? @db.Timestamptz(6)
+  status         String    @db.VarChar(20)
+
+  @@index([status, run_date(sort: Desc)], map: "idx_v2_audit_runs_status")
+  @@schema("public")
+}
+
+/// CP488+ background regeneration queue. Phase 1 only enqueues; Phase 3
+/// reads. Critical audit rows insert here so a future worker can re-call
+/// generateRichSummaryV2 with forceRegen=true.
+/// Raw SQL DDL: prisma/migrations/v2-quality-audit/001_create_audit_tables.sql
+model v2_quality_regen_queue {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  video_id     String    @db.VarChar(11)
+  priority     Int       @default(5) @db.SmallInt
+  reason       String?
+  enqueued_at  DateTime  @default(now()) @db.Timestamptz(6)
+  attempted_at DateTime? @db.Timestamptz(6)
+  resolved_at  DateTime? @db.Timestamptz(6)
+  status       String    @default("pending") @db.VarChar(20)
+
+  @@index([priority, enqueued_at], map: "idx_v2_regen_pending")
+  @@index([video_id, status], map: "idx_v2_regen_video")
+  @@schema("public")
+}
+
 model newsletter_settings {
   id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id       String    @unique @db.Uuid

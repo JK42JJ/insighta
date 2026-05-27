@@ -2351,6 +2351,84 @@ class ApiClient {
     return this.request(`/admin/audit-log${qs}`);
   }
 
+  /** CP488+ — v2 Quality Audit admin endpoints (Phase 1 MVP). */
+  async getAdminV2QualityAuditLatestRun(): Promise<{
+    success: boolean;
+    data: {
+      run: {
+        id: string;
+        run_date: string;
+        total_videos: number;
+        pass_count: number;
+        warning_count: number;
+        critical_count: number;
+        avg_score: number | null;
+        by_model: Record<string, { count: number; avg_score: number }> | null;
+        by_violation: Record<string, number> | null;
+        started_at: string;
+        completed_at: string | null;
+        status: string;
+      } | null;
+    };
+  }> {
+    return this.request('/admin/v2-quality-audit/latest-run');
+  }
+
+  async getAdminV2QualityAuditCritical(params?: {
+    page?: number;
+    limit?: number;
+    scoreMax?: number;
+  }): Promise<{
+    success: boolean;
+    data: {
+      run_date: string | null;
+      items: Array<{
+        video_id: string;
+        title: string | null;
+        overall_score: number;
+        model: string | null;
+        duration_seconds: number | null;
+        violations: Array<{ metric: string; score: number; detail: string }> | null;
+        created_at: string;
+      }>;
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasPrev: boolean;
+        hasNext: boolean;
+      };
+    };
+  }> {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.scoreMax != null) query.set('scoreMax', String(params.scoreMax));
+    const qs = query.toString() ? `?${query}` : '';
+    return this.request(`/admin/v2-quality-audit/critical${qs}`);
+  }
+
+  async triggerAdminV2QualityAuditRun(): Promise<{
+    success: boolean;
+    data?: {
+      summary: {
+        runId: string;
+        total: number;
+        pass: number;
+        warning: number;
+        critical: number;
+        avgScore: number;
+        elapsedMs: number;
+        enqueuedForRegen: number;
+      };
+    };
+    error?: string;
+    message?: string;
+  }> {
+    return this.request('/admin/v2-quality-audit/run-now', { method: 'POST' });
+  }
+
   async bulkUpdateUsers(
     userIds: string[],
     changes: { tier?: string; localCardsLimit?: number; mandalaLimit?: number }

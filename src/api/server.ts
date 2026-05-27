@@ -59,6 +59,10 @@ import {
   startYouTubeMetadataCron,
   stopYouTubeMetadataCron,
 } from '../modules/scheduler/youtube-metadata-cron';
+import {
+  startV2QualityAuditCron,
+  stopV2QualityAuditCron,
+} from '../modules/scheduler/v2-quality-audit-cron';
 
 // Load environment variables
 dotenv.config();
@@ -594,6 +598,16 @@ export async function startServer() {
       fastify.log.warn({ err }, 'YouTubeMetadataCron init failed (non-fatal)');
     }
 
+    // CP488+ — v2 Quality Audit cron (daily score scan of v2 rows).
+    // Default OFF; flip V2_QUALITY_AUDIT_ENABLED=true once the admin
+    // dashboard is reviewed. Design:
+    // docs/design/v2-quality-audit-system-2026-05-27.md
+    try {
+      startV2QualityAuditCron();
+    } catch (err) {
+      fastify.log.warn({ err }, 'V2QualityAuditCron init failed (non-fatal)');
+    }
+
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
@@ -619,6 +633,11 @@ export async function startServer() {
       }
       try {
         stopYouTubeMetadataCron();
+      } catch {
+        /* ignore */
+      }
+      try {
+        stopV2QualityAuditCron();
       } catch {
         /* ignore */
       }
