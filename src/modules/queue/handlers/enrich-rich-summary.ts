@@ -124,7 +124,14 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
   try {
     const result = await getCaptionExtractor().extractCaptions(videoId, langHint);
     if (result.success && result.caption?.fullText) {
-      transcript = result.caption.fullText;
+      // CP488+ Phase 1.5 — annotated `[mm:ss] text\n` form gives the LLM
+      // real timestamp ground truth (legacy fullText join stripped them
+      // and forced Sonnet to guess timeline coverage → hallucination
+      // pattern Phase 3 dogfooding surfaced). Falls back to fullText if
+      // segments are absent.
+      const { formatAnnotatedTranscript } = await import('@/modules/caption/format-transcript');
+      const annotated = formatAnnotatedTranscript(result.caption.segments);
+      transcript = annotated || result.caption.fullText;
       logger.info('enrich-rich-summary: transcript fetched', {
         jobId: job.id,
         videoId,

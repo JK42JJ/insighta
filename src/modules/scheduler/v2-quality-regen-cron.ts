@@ -47,6 +47,8 @@ import {
   type AuditInputSection,
 } from '../skills/rich-summary-quality-audit';
 import { generateRichSummaryV2 } from '../skills/rich-summary-v2-generator';
+import { getCaptionExtractor } from '../caption/extractor';
+import { formatAnnotatedTranscript } from '../caption/format-transcript';
 
 const log = logger.child({ module: 'V2QualityRegenCron' });
 
@@ -166,9 +168,29 @@ export async function regenSingleVideo(
   let newScore: number | null = null;
 
   try {
+    // CP488+ Phase 1.5 — fetch transcript BEFORE calling the generator.
+    // Phase 3 dogfood (2026-05-27) ran 5 regens without transcripts,
+    // generator silently fell back to description-only mode, Sonnet
+    // hallucinated timeline coverage → 0/5 resolved. Mirrors the
+    // canonical pattern in enrich-rich-summary handler.
+    let transcript: string | undefined;
+    try {
+      const captionResult = await getCaptionExtractor().extractCaptions(videoId);
+      if (captionResult.success && captionResult.caption?.fullText) {
+        const annotated = formatAnnotatedTranscript(captionResult.caption.segments);
+        transcript = annotated || captionResult.caption.fullText;
+      }
+    } catch (capErr) {
+      log.warn('regen: caption fetch threw (will continue without transcript)', {
+        videoId,
+        error: capErr instanceof Error ? capErr.message : String(capErr),
+      });
+    }
+
     const generationResult = await generateRichSummaryV2({
       videoId,
       forceRegen: true,
+      transcript,
     });
 
     if (generationResult.kind !== 'pass') {

@@ -196,6 +196,7 @@ export const RICH_SUMMARY_V2_LAYERED_PROMPT = `You are a learning content analys
 Video title: {title}
 Video description: {description}
 Channel: {channel}
+Video duration: {video_duration_sec} seconds ({video_duration_human}) — the wall-clock length of the video. Section and atom timestamps MUST stay within this range.
 Transcript (when available; empty otherwise): {transcript_block}
 User mandala center goal (the learning objective the viewer is pursuing; empty when not provided): {mandala_center_goal}
 
@@ -273,7 +274,8 @@ Output rules:
 - Return JSON only — no markdown fences, no commentary, no chain-of-thought.
 - Use {language} consistently across every string field (Korean if 'ko', English if 'en').
 - When the Transcript block is non-empty, prefer transcript content over description/title for evidence in qa_pairs.a and analysis.core_argument. When empty, fall back to title + description.
-- When the Transcript block is empty (= "(no transcript)"): segments.sections should be a single catch-all entry (from_sec: 0, to_sec: 0, relevance_pct: 50) and segments.atoms entries should omit timestamp_sec — the LLM cannot infer real timestamps without transcript evidence. Do NOT fabricate timestamps.`;
+- When the Transcript block is empty (= "(no transcript)"): segments.sections should be a single catch-all entry (from_sec: 0, to_sec: 0, relevance_pct: 50) and segments.atoms entries should omit timestamp_sec — the LLM cannot infer real timestamps without transcript evidence. Do NOT fabricate timestamps.
+- When the Transcript block is non-empty, it is formatted as ONE LINE PER CAPTION segment prefixed with [mm:ss] (or [hh:mm:ss] past one hour) — for example: "[00:12] 안녕하세요" / "[01:05] 오늘 주제는". These prefixes are ground truth. Derive every section's from_sec/to_sec and every atom's timestamp_sec by READING the bracket prefixes directly; DO NOT estimate. The first section must start at 0 and the last section's to_sec must equal (or be within 5% of) the Video duration listed above. atoms.timestamp_sec MUST be monotonically ascending and the maximum value MUST not exceed (Video duration × 1.05).`;
 
 // ============================================================================
 // Prompt fill helper
@@ -289,6 +291,12 @@ export interface PromptInput {
    * prefer transcript-derived evidence over description/title. The
    * transcript is truncated to TRANSCRIPT_MAX_CHARS to stay within
    * provider token limits.
+   *
+   * CP488+ Phase 1.5 — callers should pass the annotated form
+   * (`[mm:ss] text\n…` produced by `formatAnnotatedTranscript`). The
+   * legacy fullText form still works (the LLM falls back to estimating
+   * timeline coverage) but produces the hallucination pattern Phase 3
+   * dogfooding surfaced.
    */
   transcript?: string;
   /**
@@ -298,6 +306,24 @@ export interface PromptInput {
    * model is instructed to return 0 for that field.
    */
   mandalaCenterGoal?: string;
+  /**
+   * CP488+ Phase 1.5 — video wall-clock length in seconds (sourced from
+   * `youtube_videos.duration_seconds`). When known, the prompt declares
+   * it explicitly so the LLM can produce sections/atoms timestamps that
+   * fit the actual timeline. When unknown (null/undefined), the
+   * placeholder renders as "unknown" and the timeline-range validator
+   * downstream is a no-op.
+   */
+  durationSeconds?: number | null;
+}
+
+function formatHumanDuration(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const hh = Math.floor(s / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  if (hh > 0) return `${hh}h${mm}m${ss}s`;
+  return `${mm}m${ss}s`;
 }
 
 export function buildV2Prompt(input: PromptInput): string {
@@ -311,11 +337,19 @@ export function buildV2Prompt(input: PromptInput): string {
     input.mandalaCenterGoal && input.mandalaCenterGoal.trim().length > 0
       ? input.mandalaCenterGoal.trim().slice(0, MANDALA_CENTER_GOAL_MAX_CHARS)
       : '(empty)';
+  const durationSec =
+    input.durationSeconds != null && Number.isFinite(input.durationSeconds)
+      ? Math.max(0, Math.floor(input.durationSeconds))
+      : null;
+  const durationSecText = durationSec != null ? String(durationSec) : 'unknown';
+  const durationHumanText = durationSec != null ? formatHumanDuration(durationSec) : 'unknown';
   return RICH_SUMMARY_V2_LAYERED_PROMPT.replace(/\{title\}/g, input.title.slice(0, 200))
     .replace(/\{description\}/g, input.description.slice(0, 800))
     .replace(/\{channel\}/g, input.channel.slice(0, 80))
     .replace(/\{transcript_block\}/g, transcriptBlock)
     .replace(/\{mandala_center_goal\}/g, centerGoalBlock)
+    .replace(/\{video_duration_sec\}/g, durationSecText)
+    .replace(/\{video_duration_human\}/g, durationHumanText)
     .replace(/\{language\}/g, input.language)
     .replace(/\{language_label\}/g, languageLabel);
 }
