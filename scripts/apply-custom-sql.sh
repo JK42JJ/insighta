@@ -105,6 +105,12 @@ APPLY_FILES=(
   # search-time difficulty filtering. ADD COLUMN IF NOT EXISTS +
   # CREATE INDEX IF NOT EXISTS — fully idempotent.
   "prisma/migrations/video-pool-depth-level/001_add_columns.sql"
+  # CP488+ (2026-05-27) — v2 Quality Audit Phase 1 MVP. 3 tables wrapped
+  # in BEGIN/COMMIT, every CREATE TABLE / CREATE INDEX uses IF NOT EXISTS
+  # — re-application safely no-ops. Default OFF behaviourally
+  # (V2_QUALITY_AUDIT_ENABLED=false), so empty tables on prod until
+  # operator flips the flag.
+  "prisma/migrations/v2-quality-audit/001_create_audit_tables.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
