@@ -12,6 +12,7 @@ import {
   ToggleRight,
   Bot,
   SlidersHorizontal,
+  Activity,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
@@ -28,6 +29,8 @@ const NAV_ITEMS = [
   { to: '/admin/chatbot-models', icon: Bot, label: 'Chatbot Models' },
   // CP488 — search algorithm catalog + per-mandala override + A/B comparison.
   { to: '/admin/search-algorithms', icon: SlidersHorizontal, label: 'Search Algorithms' },
+  // CP488+ — v2 quality audit daily scan dashboard.
+  { to: '/admin/v2-quality-audit', icon: Activity, label: 'V2 Quality Audit' },
 ] as const;
 
 export function AdminLayout() {

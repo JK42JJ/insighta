@@ -116,15 +116,27 @@ export async function runV2AuditOnce(): Promise<AuditRunSummary | null> {
   const config = loadV2QualityAuditConfig();
 
   try {
-    const runRow = await db.v2_quality_audit_runs.create({
-      data: {
-        run_date: new Date(new Date().toISOString().slice(0, 10)),
+    // Upsert (not create) — `run_date` is UNIQUE, so a same-day re-run
+    // (e.g. operator triggers `/run-now` twice while debugging) would
+    // otherwise hit P2002 and bubble a 500 from the admin route. We
+    // reset `started_at` + clear `completed_at` so the new run is the
+    // one of record for today.
+    const today = new Date(new Date().toISOString().slice(0, 10));
+    const runRow = await db.v2_quality_audit_runs.upsert({
+      where: { run_date: today },
+      create: {
+        run_date: today,
         total_videos: 0,
         pass_count: 0,
         warning_count: 0,
         critical_count: 0,
         avg_score: null,
         started_at: new Date(),
+        status: 'running',
+      },
+      update: {
+        started_at: new Date(),
+        completed_at: null,
         status: 'running',
       },
     });
@@ -146,7 +158,10 @@ export async function runV2AuditOnce(): Promise<AuditRunSummary | null> {
     const byViolation: Record<string, number> = {};
     const enqueueIds: Array<{ videoId: string; reason: string }> = [];
 
-    const auditDate = new Date(new Date().toISOString().slice(0, 10));
+    // Reuse `today` (computed before the run row upsert) so both the
+    // `audit_runs.run_date` and the per-video `audit_log.audit_date`
+    // resolve to the same UTC date even if the run straddles midnight.
+    const auditDate = today;
 
     for (const row of rows) {
       const score = computeAuditScore(
