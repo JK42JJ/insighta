@@ -45,6 +45,7 @@ import {
 import { getAddCardsConfig } from '@/config/add-cards';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
+import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -167,195 +168,241 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const t0 = Date.now();
 
     try {
-      // 1. resolve mandala — ownership check inside getMandalaById
-      const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
-      if (!mandala) {
-        return reply.code(404).send({
-          status: 'error',
-          code: 'MANDALA_NOT_FOUND',
-          message: `Mandala ${mandalaId} not found for this user`,
-        });
-      }
-      const root = mandala.levels.find((l) => l.depth === 0);
-      if (!root) {
-        return reply.code(500).send({
-          status: 'error',
-          code: 'MANDALA_ROOT_MISSING',
-          message: 'Mandala has no depth=0 level',
-        });
-      }
-      const centerGoal = root.centerGoal;
-      const subGoals = root.subjects.slice(0, 8);
-      // CP466 amendment 2 — pull wizard metadata (focus_tags +
-      // target_level + language + title) so the response exposes them
-      // to the FE. Per user directive 2026-05-18: title is the locked
-      // base (immutable, already rendered via center_goal); focus_tags
-      // + target_level are EDITABLE on the FE — sent up as chips in
-      // the request `extraKeywords` rather than auto-injected server-
-      // side. This endpoint just surfaces them in the response so the
-      // FE can prepopulate the panel state.
-      const mandalaMeta = await prisma.user_mandalas.findUnique({
-        where: { id: mandalaId },
-        select: { focus_tags: true, target_level: true, language: true, title: true },
-      });
-      const language: 'ko' | 'en' = mandalaMeta?.language === 'en' ? 'en' : 'ko';
-
-      // 2. embed center_goal + extraKeywords (1 batch, chunk-fail-safe).
-      const embedTexts = [centerGoal, ...extraKeywords];
-      const embeddings = await embedBatch(embedTexts);
-      const centerEmbedding = embeddings[0];
-      if (!centerEmbedding) {
-        return reply.code(503).send({
-          status: 'error',
-          code: 'EMBED_UNAVAILABLE',
-          message: 'Embedding service unavailable for center_goal',
-        });
-      }
-
-      // CP489 — Resolve the search-algorithm version that applies to this
-      // call (per-mandala override > global active row > seeded fallback >
-      // env defaults). Tier 1 cosine threshold + downstream consumers must
-      // honor the algorithm row so admin can A/B test without a code release.
-      // resolveAlgorithm never throws (DB outage falls back to env defaults).
+      // CP489 Phase B-2 — Resolve algorithm version FIRST (outside the
+      // trace context closure since algorithmVersion must be bound at
+      // context-open time), then wrap the entire body in
+      // `withTraceContext` so every nested `recordTrace` call
+      // (cache-matcher Tier 1, executor ephemeral path, embedding batch)
+      // writes to `video_discover_traces` with this run's `runId` +
+      // `algorithm_version` stamp. Without this wrap, ALS context is
+      // unbound and `fireAndForgetWrite` silently no-ops — the
+      // `/admin/search-algorithms/comparison/:mandalaId` A/B rollup
+      // reports NULL algorithm_version for add-cards traffic.
+      // `resolveAlgorithm` never throws; DB outage falls back to env
+      // defaults (see `algorithm-resolver.ts:92-100`).
       const resolved = await resolveAlgorithm({ userId, mandalaId });
 
-      // 3. Hybrid candidate fetch — reuse the SAME single-source-of-truth
-      //    helpers that wizard-precompute / video-discover v3 already use,
-      //    so any future tuning of either tier propagates here too:
-      //    - Tier 1 (video_pool cosine, mandala-scoped) via
-      //      `matchFromVideoPoolByCenterGoal` — same call wizard uses.
-      //    - Tier 2 (YouTube realtime fresh) via `runDiscoverEphemeral`
-      //      — same call wizard-precompute (Step 1) uses.
-      //    Both run in parallel; results merged by videoId, higher score
-      //    wins (Tier 1 cache typically scores 0..1 cosine; Tier 2
-      //    realtime scoring matches per v3 spec).
-      const [tier1Candidates, ephemeralResult] = await Promise.all([
-        matchFromVideoPoolByCenterGoal({
-          centerEmbedding,
-          language,
-          subGoals,
-          limit: cfg.tier1KnnLimit,
-          // CP489 — algorithm row wins; cfg.semanticThreshold (env) is now the
-          // 4th-tier fallback inside resolveAlgorithm (v3EnvSchema). Bypassing
-          // the algorithm system here would break A/B oracle parity with the
-          // v3 executor and wizard-precompute (both pull this value from the
-          // same resolveAlgorithm path).
-          threshold: resolved.parameters.semanticMinCosine,
-        }),
-        runDiscoverEphemeral({
-          centerGoal,
-          subGoals,
-          language,
-          focusTags: (mandalaMeta?.focus_tags ?? []).slice(0, 10),
-          targetLevel: mandalaMeta?.target_level ?? 'standard',
-          env: process.env,
-        }).catch((err) => {
-          // Tier 2 is best-effort — YouTube quota / Ollama outage must
-          // not 500 the panel. Log + fall through with empty slots so
-          // Tier 1 alone still answers.
-          const msg = err instanceof Error ? err.message : String(err);
-          log.warn(`add-cards Tier 2 ephemeral failed (Tier 1 only): ${msg}`);
-          return null;
-        }),
-      ]);
-      const tier2Slots: AssembledSlot[] = ephemeralResult?.slots ?? [];
-      const merged = mergeTierCandidates(tier1Candidates, tier2Slots);
-      const candidates: CachedMatch[] = merged.candidates;
-      const sourceMap = merged.sourceMap;
+      return await withTraceContext(
+        { mandalaId, userId, algorithmVersion: resolved.id },
+        async () => {
+          recordTrace({
+            step: 'add_cards.start',
+            status: 'ok',
+            request: {
+              mandalaId,
+              userId,
+              extra_keyword_count: extraKeywords.length,
+              exclude_count: excludeVideoIds.length,
+              filters,
+              algorithm_version: resolved.id,
+              want_trace: wantTrace,
+            },
+            response: null,
+          });
 
-      // 4. resolve exclude set in parallel
-      const excludeSet = await resolveExcludeSet({
-        prisma,
-        userId,
-        mandalaId,
-        requestExcludeIds: excludeVideoIds,
-      });
-
-      // 5. filter candidates by exclude set + request filters (CP466
-      //    amendment — post-filter in-memory: minViewCount + durationBucket
-      //    + publishedAfter). NULL fields fall through (kept).
-      const publishedAfterTs = filters.publishedAfter ? Date.parse(filters.publishedAfter) : null;
-      const durationRange = filters.durationBucket
-        ? DURATION_BUCKETS[filters.durationBucket]
-        : null;
-      const minViews = filters.minViewCount ?? null;
-      const filtered = candidates.filter((c) => {
-        if (excludeSet.has(c.videoId)) return false;
-        if (minViews != null && c.viewCount != null && c.viewCount < minViews) return false;
-        if (
-          durationRange &&
-          c.durationSec != null &&
-          (c.durationSec < durationRange.min || c.durationSec >= durationRange.max)
-        ) {
-          return false;
-        }
-        if (publishedAfterTs != null && c.publishedAt) {
-          const ts =
-            c.publishedAt instanceof Date
-              ? c.publishedAt.getTime()
-              : Date.parse(String(c.publishedAt));
-          if (Number.isFinite(ts) && ts < publishedAfterTs) return false;
-        }
-        return true;
-      });
-
-      // 6. Layer 4 feedback bias (channel match + drift guard).
-      //    candidate-level embedding cosine boost (alphaEmbed) deferred —
-      //    cache-matcher does not expose per-candidate raw embeddings.
-      //    Reserved for a follow-up PR per spec §8 v2+ ("alphaEmbed
-      //    candidate cosine — when cache-matcher exposes raw embeddings").
-      const feedback = await applyFeedbackBias({
-        prisma,
-        userId,
-        centerEmbedding,
-        candidates: filtered,
-        cfg,
-      });
-
-      // 7. caps + final sort
-      const result = applyCapsAndSort(feedback.boostedCandidates, cfg);
-
-      const cards: AddCardCandidate[] = result.accepted.map((c) => ({
-        videoId: c.videoId,
-        title: c.title,
-        channel: c.channelName,
-        thumbnail: c.thumbnail,
-        durationSec: c.durationSec,
-        viewCount: c.viewCount,
-        publishedAt: c.publishedAt?.toISOString() ?? null,
-        score: c.score,
-        cellIndex: c.cellIndex,
-        source: sourceMap.get(c.videoId) ?? 'video_pool',
-      }));
-
-      const trace: AddCardsTrace | undefined = wantTrace
-        ? {
-            layer1_count: tier1Candidates.length,
-            tier2_count: tier2Slots.length,
-            after_exclude: filtered.length,
-            layer4_boost_applied: feedback.boostedCount,
-            caps_enforced: { channel: result.capsChannel, subgoal: result.capsSubgoal },
-            drift_guard_fired: feedback.driftGuardFired,
-            duration_ms: Date.now() - t0,
+          // 1. resolve mandala — ownership check inside getMandalaById
+          const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
+          if (!mandala) {
+            return reply.code(404).send({
+              status: 'error',
+              code: 'MANDALA_NOT_FOUND',
+              message: `Mandala ${mandalaId} not found for this user`,
+            });
           }
-        : undefined;
+          const root = mandala.levels.find((l) => l.depth === 0);
+          if (!root) {
+            return reply.code(500).send({
+              status: 'error',
+              code: 'MANDALA_ROOT_MISSING',
+              message: 'Mandala has no depth=0 level',
+            });
+          }
+          const centerGoal = root.centerGoal;
+          const subGoals = root.subjects.slice(0, 8);
+          // CP466 amendment 2 — pull wizard metadata (focus_tags +
+          // target_level + language + title) so the response exposes them
+          // to the FE. Per user directive 2026-05-18: title is the locked
+          // base (immutable, already rendered via center_goal); focus_tags
+          // + target_level are EDITABLE on the FE — sent up as chips in
+          // the request `extraKeywords` rather than auto-injected server-
+          // side. This endpoint just surfaces them in the response so the
+          // FE can prepopulate the panel state.
+          const mandalaMeta = await prisma.user_mandalas.findUnique({
+            where: { id: mandalaId },
+            select: { focus_tags: true, target_level: true, language: true, title: true },
+          });
+          const language: 'ko' | 'en' = mandalaMeta?.language === 'en' ? 'en' : 'ko';
 
-      // CP466 amendment 2 — surface wizard meta so the FE panel can
-      // prepopulate editable chips (focus_tags) + level selector
-      // (target_level) on first open. title is informational (locked
-      // base already shown via center_goal).
-      const mandalaMetaOut = {
-        title: mandalaMeta?.title ?? '',
-        focusTags: mandalaMeta?.focus_tags ?? [],
-        targetLevel: mandalaMeta?.target_level ?? 'standard',
-        language,
-      };
+          // 2. embed center_goal + extraKeywords (1 batch, chunk-fail-safe).
+          const embedTexts = [centerGoal, ...extraKeywords];
+          const embeddings = await embedBatch(embedTexts);
+          const centerEmbedding = embeddings[0];
+          if (!centerEmbedding) {
+            return reply.code(503).send({
+              status: 'error',
+              code: 'EMBED_UNAVAILABLE',
+              message: 'Embedding service unavailable for center_goal',
+            });
+          }
 
-      const payload = trace
-        ? { cards, mandalaMeta: mandalaMetaOut, trace }
-        : { cards, mandalaMeta: mandalaMetaOut };
+          // 3. Hybrid candidate fetch — reuse the SAME single-source-of-truth
+          //    helpers that wizard-precompute / video-discover v3 already use,
+          //    so any future tuning of either tier propagates here too:
+          //    - Tier 1 (video_pool cosine, mandala-scoped) via
+          //      `matchFromVideoPoolByCenterGoal` — same call wizard uses.
+          //    - Tier 2 (YouTube realtime fresh) via `runDiscoverEphemeral`
+          //      — same call wizard-precompute (Step 1) uses.
+          //    Both run in parallel; results merged by videoId, higher score
+          //    wins (Tier 1 cache typically scores 0..1 cosine; Tier 2
+          //    realtime scoring matches per v3 spec).
+          const [tier1Candidates, ephemeralResult] = await Promise.all([
+            matchFromVideoPoolByCenterGoal({
+              centerEmbedding,
+              language,
+              subGoals,
+              limit: cfg.tier1KnnLimit,
+              // CP489 — algorithm row wins; cfg.semanticThreshold (env) is now the
+              // 4th-tier fallback inside resolveAlgorithm (v3EnvSchema). Bypassing
+              // the algorithm system here would break A/B oracle parity with the
+              // v3 executor and wizard-precompute (both pull this value from the
+              // same resolveAlgorithm path).
+              threshold: resolved.parameters.semanticMinCosine,
+            }),
+            runDiscoverEphemeral({
+              centerGoal,
+              subGoals,
+              language,
+              focusTags: (mandalaMeta?.focus_tags ?? []).slice(0, 10),
+              targetLevel: mandalaMeta?.target_level ?? 'standard',
+              env: process.env,
+            }).catch((err) => {
+              // Tier 2 is best-effort — YouTube quota / Ollama outage must
+              // not 500 the panel. Log + fall through with empty slots so
+              // Tier 1 alone still answers.
+              const msg = err instanceof Error ? err.message : String(err);
+              log.warn(`add-cards Tier 2 ephemeral failed (Tier 1 only): ${msg}`);
+              return null;
+            }),
+          ]);
+          const tier2Slots: AssembledSlot[] = ephemeralResult?.slots ?? [];
+          const merged = mergeTierCandidates(tier1Candidates, tier2Slots);
+          const candidates: CachedMatch[] = merged.candidates;
+          const sourceMap = merged.sourceMap;
 
-      return reply.code(200).send({ status: 'ok', data: payload });
+          // 4. resolve exclude set in parallel
+          const excludeSet = await resolveExcludeSet({
+            prisma,
+            userId,
+            mandalaId,
+            requestExcludeIds: excludeVideoIds,
+          });
+
+          // 5. filter candidates by exclude set + request filters (CP466
+          //    amendment — post-filter in-memory: minViewCount + durationBucket
+          //    + publishedAfter). NULL fields fall through (kept).
+          const publishedAfterTs = filters.publishedAfter
+            ? Date.parse(filters.publishedAfter)
+            : null;
+          const durationRange = filters.durationBucket
+            ? DURATION_BUCKETS[filters.durationBucket]
+            : null;
+          const minViews = filters.minViewCount ?? null;
+          const filtered = candidates.filter((c) => {
+            if (excludeSet.has(c.videoId)) return false;
+            if (minViews != null && c.viewCount != null && c.viewCount < minViews) return false;
+            if (
+              durationRange &&
+              c.durationSec != null &&
+              (c.durationSec < durationRange.min || c.durationSec >= durationRange.max)
+            ) {
+              return false;
+            }
+            if (publishedAfterTs != null && c.publishedAt) {
+              const ts =
+                c.publishedAt instanceof Date
+                  ? c.publishedAt.getTime()
+                  : Date.parse(String(c.publishedAt));
+              if (Number.isFinite(ts) && ts < publishedAfterTs) return false;
+            }
+            return true;
+          });
+
+          // 6. Layer 4 feedback bias (channel match + drift guard).
+          //    candidate-level embedding cosine boost (alphaEmbed) deferred —
+          //    cache-matcher does not expose per-candidate raw embeddings.
+          //    Reserved for a follow-up PR per spec §8 v2+ ("alphaEmbed
+          //    candidate cosine — when cache-matcher exposes raw embeddings").
+          const feedback = await applyFeedbackBias({
+            prisma,
+            userId,
+            centerEmbedding,
+            candidates: filtered,
+            cfg,
+          });
+
+          // 7. caps + final sort
+          const result = applyCapsAndSort(feedback.boostedCandidates, cfg);
+
+          const cards: AddCardCandidate[] = result.accepted.map((c) => ({
+            videoId: c.videoId,
+            title: c.title,
+            channel: c.channelName,
+            thumbnail: c.thumbnail,
+            durationSec: c.durationSec,
+            viewCount: c.viewCount,
+            publishedAt: c.publishedAt?.toISOString() ?? null,
+            score: c.score,
+            cellIndex: c.cellIndex,
+            source: sourceMap.get(c.videoId) ?? 'video_pool',
+          }));
+
+          const trace: AddCardsTrace | undefined = wantTrace
+            ? {
+                layer1_count: tier1Candidates.length,
+                tier2_count: tier2Slots.length,
+                after_exclude: filtered.length,
+                layer4_boost_applied: feedback.boostedCount,
+                caps_enforced: { channel: result.capsChannel, subgoal: result.capsSubgoal },
+                drift_guard_fired: feedback.driftGuardFired,
+                duration_ms: Date.now() - t0,
+              }
+            : undefined;
+
+          // CP466 amendment 2 — surface wizard meta so the FE panel can
+          // prepopulate editable chips (focus_tags) + level selector
+          // (target_level) on first open. title is informational (locked
+          // base already shown via center_goal).
+          const mandalaMetaOut = {
+            title: mandalaMeta?.title ?? '',
+            focusTags: mandalaMeta?.focus_tags ?? [],
+            targetLevel: mandalaMeta?.target_level ?? 'standard',
+            language,
+          };
+
+          const payload = trace
+            ? { cards, mandalaMeta: mandalaMetaOut, trace }
+            : { cards, mandalaMeta: mandalaMetaOut };
+
+          recordTrace({
+            step: 'add_cards.end',
+            status: 'ok',
+            request: null,
+            response: {
+              cards_count: cards.length,
+              tier1_count: tier1Candidates.length,
+              tier2_count: tier2Slots.length,
+              after_exclude: filtered.length,
+              layer4_boosted: feedback.boostedCount,
+              drift_guard_fired: feedback.driftGuardFired,
+              caps_channel: result.capsChannel,
+              caps_subgoal: result.capsSubgoal,
+            },
+            latencyMs: Date.now() - t0,
+          });
+
+          return reply.code(200).send({ status: 'ok', data: payload });
+        }
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn(`add-cards failed: mandalaId=${mandalaId} userId=${userId} err=${msg}`);
