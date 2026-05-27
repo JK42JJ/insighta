@@ -283,6 +283,21 @@ jobs:
           # v2_quality_regen_queue for Phase 3 background regeneration.
           # Design: docs/design/v2-quality-audit-system-2026-05-27.md
           V2_QUALITY_AUDIT_ENABLED: ${{ vars.V2_QUALITY_AUDIT_ENABLED }}
+          # CP488+ Phase 3 — v2 Quality Regen worker activation. Same
+          # CP392 non-secret pattern. Default empty ⇒
+          # config/v2-quality-audit.ts coerces regenEnabled=false ⇒
+          # startV2QualityRegenCron() logs "regen cron disabled" and never
+          # schedules. Set GitHub Variable V2_QUALITY_REGEN_ENABLED to
+          # "true" to activate the every-30-min drain of the
+          # v2_quality_regen_queue: each tick re-runs the v2 generator
+          # on up to V2_QUALITY_AUDIT_REGEN_BATCH_SIZE (default 5)
+          # critical videos with forceRegen=true, re-audits them, and
+          # resolves the queue row. Throughput: 5 × 48 = 240 videos/day
+          # max. Drain time for the initial 518-row backlog: ~2.2 days.
+          # OpenRouter Sonnet 4.6 cost: ~$0.06/video → ~$30 one-time +
+          # ongoing per audit-discovered critical row. Rollback: set
+          # variable to "false" + redeploy (no code revert).
+          V2_QUALITY_REGEN_ENABLED: ${{ vars.V2_QUALITY_REGEN_ENABLED }}
           # CP489 — video-discover trace capture toggle. Non-secret per CP392
           # (boolean flag, not a credential). Default empty ⇒ config/index.ts
           # coerces to `false` ⇒ discover-tracing fireAndForgetWrite no-ops,
@@ -304,7 +319,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED,YOUTUBE_METADATA_BACKFILL_ENABLED,V2_QUALITY_AUDIT_ENABLED,V3_TRACE_ENABLED,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN
+          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED,YOUTUBE_METADATA_BACKFILL_ENABLED,V2_QUALITY_AUDIT_ENABLED,V2_QUALITY_REGEN_ENABLED,V3_TRACE_ENABLED,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN
           script: |
             set -e
             cd /opt/tubearchive
@@ -352,6 +367,15 @@ jobs:
             # V2_QUALITY_AUDIT_ENABLED --body true` then redeploy.
             if [ -n "${V2_QUALITY_AUDIT_ENABLED}" ]; then
               grep -q '^V2_QUALITY_AUDIT_ENABLED=' .env 2>/dev/null && sed -i "s|^V2_QUALITY_AUDIT_ENABLED=.*|V2_QUALITY_AUDIT_ENABLED=${V2_QUALITY_AUDIT_ENABLED}|" .env || echo "V2_QUALITY_AUDIT_ENABLED=${V2_QUALITY_AUDIT_ENABLED}" >> .env
+            fi
+            # CP488+ Phase 3 — v2 Quality Regen worker activation. Same
+            # idempotent pattern. Default OFF ⇒ regen cron never schedules.
+            # Activate via `gh variable set V2_QUALITY_REGEN_ENABLED
+            # --body true` then redeploy. Drains v2_quality_regen_queue
+            # by re-running the v2 generator on critical rows
+            # (~$0.06/video × initial 518 critical = ~$30 one-time burn).
+            if [ -n "${V2_QUALITY_REGEN_ENABLED}" ]; then
+              grep -q '^V2_QUALITY_REGEN_ENABLED=' .env 2>/dev/null && sed -i "s|^V2_QUALITY_REGEN_ENABLED=.*|V2_QUALITY_REGEN_ENABLED=${V2_QUALITY_REGEN_ENABLED}|" .env || echo "V2_QUALITY_REGEN_ENABLED=${V2_QUALITY_REGEN_ENABLED}" >> .env
             fi
             # CP489 — video-discover trace capture toggle. Same idempotent
             # pattern as RICH_SUMMARY_ENABLED / YOUTUBE_METADATA_BACKFILL_ENABLED.
