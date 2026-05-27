@@ -133,6 +133,73 @@ CLAUDE.md
 # Internal / Non-public (local only)
 # ============================================
 
+# CP488+ 2026-05-27 — public-repo essentials-only Hard Rule
+# (memory/feedback_public_repo_essentials_only.md):
+# The repo is PUBLIC. Only content useful to external developers
+# (code, tests, schema, IaC, contributor-facing docs) belongs here.
+# Internal operator content stays local + untracked.
+backups/
+# Internal docs subdirs (handoffs, design w/ user quotes, reports,
+# research, policies, milestone reports, internal reviews, status).
+docs/runbook/
+docs/design/
+docs/reports/
+docs/research/
+docs/policies/
+docs/spec/
+docs/architecture/
+docs/ma3/
+docs/reviews/
+docs/status/
+docs/cli/
+# Internal meta-docs (operator session bootstrap, SSOT index, etc.).
+docs/SSOT.md
+docs/BOOT_SEQUENCE.md
+docs/DESIGN_DOCS_MAP.md
+docs/INDEX.md
+docs/operations-manual.md
+docs/OPERATIONS.md
+docs/test-history.md
+docs/CONVENTION_VIOLATIONS.md
+docs/infra-log.md
+docs/legal-draft-2026-03-11.md
+docs/self-improvement-cycle-redesign.md
+docs/RCA-2026-03-09-circuit-breaker.md
+docs/ma2-knowledge-graph-spec.md
+docs/graph-rag-roadmap.md
+docs/ontology-architecture.md
+docs/AUTO_SYNC_EXAMPLES.md
+docs/AUTO_SYNC_SCHEDULER.md
+docs/ADAPTER_SYSTEM.md
+docs/guides/TASK_HIERARCHY.md
+
+# CP488+ round 3 (2026-05-27) — user explicit: transcript collector + Mac
+# Mini operational scripts MUST NOT be public (past directive violated in
+# round 1 — "operational dependency" was a wrong call). All Mac Mini host
+# code goes here.
+mac-mini/
+openclaw/
+test-results/
+scripts/video-discover-tc/
+data/dataset-v4/
+# Internal CC operator helpers + ad-hoc backfill/run scripts (not part of
+# the public app build).
+scripts/agent-dashboard.sh
+scripts/ops-dashboard.sh
+scripts/cc-ci-check.sh
+scripts/cc-init-context.sh
+scripts/cc-save-context.sh
+scripts/work-context.sh
+scripts/backfill-rich-summaries.ts
+scripts/fetch-transcripts-for-qwen3-backfill.ts
+scripts/preview-llm-extract.ts
+scripts/retry-action-fill.ts
+scripts/run-auto-add.ts
+scripts/run-iks-scorer.ts
+scripts/run-trend-collector.ts
+scripts/run-video-discover.ts
+scripts/seed-trend-data.ts
+
 # Infrastructure (local only)
 supabase/
 !supabase/functions/
