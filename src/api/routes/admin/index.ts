@@ -22,6 +22,7 @@ import { adminQualityMetricsRoutes } from './quality-metrics';
 import { adminSystemSettingsRoutes } from './system-settings';
 import { adminDiscoverTracesRoutes } from './discover-traces';
 import { adminSearchAlgorithmsRoutes } from './search-algorithms';
+import { adminV2QualityAuditRoutes } from './v2-quality-audit';
 
 /**
  * Admin routes plugin.
@@ -56,5 +57,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // CP488 — Search Quality Overhaul: algorithm catalog + per-mandala override
   // + A/B comparison view (D11 measurement oracle).
   await fastify.register(adminSearchAlgorithmsRoutes, { prefix: '/search-algorithms' });
+  // CP488+ — v2 Quality Audit (daily score scan of v2 rich-summary rows).
+  // Design: docs/design/v2-quality-audit-system-2026-05-27.md
+  await fastify.register(adminV2QualityAuditRoutes, { prefix: '/v2-quality-audit' });
   // await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }

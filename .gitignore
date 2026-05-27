@@ -60,6 +60,8 @@ prisma/migrations/*
 !prisma/migrations/search-quality-overhaul/**
 !prisma/migrations/video-pool-depth-level/
 !prisma/migrations/video-pool-depth-level/**
+!prisma/migrations/v2-quality-audit/
+!prisma/migrations/v2-quality-audit/**
 
 # Logs
 logs/

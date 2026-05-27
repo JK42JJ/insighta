@@ -7,3 +7,4 @@ export { AdminAnalytics } from './ui/AdminAnalytics';
 export { AdminPayments } from './ui/AdminPayments';
 export { AdminModeration } from './ui/AdminModeration';
 export { AdminHealth } from './ui/AdminHealth';
+export { AdminV2QualityAudit } from './ui/AdminV2QualityAudit';
