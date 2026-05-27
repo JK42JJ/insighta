@@ -44,6 +44,7 @@ import {
 } from '@/skills/plugins/video-discover/v3/executor';
 import { getAddCardsConfig } from '@/config/add-cards';
 import { MS_PER_DAY } from '@/utils/time-constants';
+import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -211,6 +212,13 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         });
       }
 
+      // CP489 — Resolve the search-algorithm version that applies to this
+      // call (per-mandala override > global active row > seeded fallback >
+      // env defaults). Tier 1 cosine threshold + downstream consumers must
+      // honor the algorithm row so admin can A/B test without a code release.
+      // resolveAlgorithm never throws (DB outage falls back to env defaults).
+      const resolved = await resolveAlgorithm({ userId, mandalaId });
+
       // 3. Hybrid candidate fetch — reuse the SAME single-source-of-truth
       //    helpers that wizard-precompute / video-discover v3 already use,
       //    so any future tuning of either tier propagates here too:
@@ -227,7 +235,12 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           language,
           subGoals,
           limit: cfg.tier1KnnLimit,
-          threshold: cfg.semanticThreshold,
+          // CP489 — algorithm row wins; cfg.semanticThreshold (env) is now the
+          // 4th-tier fallback inside resolveAlgorithm (v3EnvSchema). Bypassing
+          // the algorithm system here would break A/B oracle parity with the
+          // v3 executor and wizard-precompute (both pull this value from the
+          // same resolveAlgorithm path).
+          threshold: resolved.parameters.semanticMinCosine,
         }),
         runDiscoverEphemeral({
           centerGoal,
