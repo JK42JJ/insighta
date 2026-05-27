@@ -352,9 +352,35 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
     const videoId = typeof body.videoId === 'string' ? body.videoId.trim() : '';
     if (!videoId) return reply.code(400).send({ error: 'videoId required' });
 
+    // CP488+ (2026-05-28) — defensive default for cron-driven backfill
+    // clients (Mac Mini process-one.sh) whose embedded prompt predates
+    // CP462+ (Issue #649) and does not emit `mandala_relevance_pct`.
+    // The validator requires it (integer 0-100); inject 0 when missing
+    // so the bulk Mac Mini path doesn't bottleneck on a single field
+    // the cron context legitimately doesn't know.
+    let analysisForValidation: unknown = body.analysis;
+    if (
+      analysisForValidation &&
+      typeof analysisForValidation === 'object' &&
+      'mandala_fit' in analysisForValidation
+    ) {
+      const a = analysisForValidation as Record<string, unknown>;
+      const mf = a['mandala_fit'];
+      if (mf && typeof mf === 'object' && !('mandala_relevance_pct' in mf)) {
+        analysisForValidation = {
+          ...a,
+          mandala_fit: { ...(mf as Record<string, unknown>), mandala_relevance_pct: 0 },
+        };
+      }
+    }
+
     let summary;
     try {
-      summary = validateV2Layered({ core: body.core, analysis: body.analysis, lora: body.lora });
+      summary = validateV2Layered({
+        core: body.core,
+        analysis: analysisForValidation,
+        lora: body.lora,
+      });
       // Strict key whitelist on segments — catches start_sec/end_sec/ts_sec
       // class typos at the API boundary so the bridge never silently stores
       // 0/null (CP437 incident).
