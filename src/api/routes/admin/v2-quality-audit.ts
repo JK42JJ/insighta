@@ -23,6 +23,7 @@ import { z } from 'zod';
 import { db } from '@/modules/database/client';
 import { createSuccessResponse } from '../../schemas/common.schema';
 import { runV2AuditOnce } from '@/modules/scheduler/v2-quality-audit-cron';
+import { regenSingleVideo, runRegenBatchOnce } from '@/modules/scheduler/v2-quality-regen-cron';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'AdminV2QualityAudit' });
@@ -138,5 +139,98 @@ export async function adminV2QualityAuditRoutes(fastify: FastifyInstance) {
       });
     }
     return reply.send(createSuccessResponse({ summary }));
+  });
+
+  /**
+   * POST /api/v1/admin/v2-quality-audit/regen-now
+   * Phase 3 — triggers a single regen batch (claims up to batchSize
+   * highest-priority pending queue rows + processes them serially).
+   * Useful for kicking off the drain manually without waiting for the
+   * next cron tick.
+   */
+  fastify.post('/regen-now', adminAuth, async (_request: FastifyRequest, reply: FastifyReply) => {
+    log.info('admin manual regen batch triggered');
+    const summary = await runRegenBatchOnce();
+    if (!summary) {
+      return reply.status(409).send({
+        success: false,
+        error: 'regen_in_progress',
+        message: 'A previous regen batch is still in progress.',
+      });
+    }
+    return reply.send(createSuccessResponse({ summary }));
+  });
+
+  /**
+   * POST /api/v1/admin/v2-quality-audit/regen-trigger/:videoId
+   * Phase 3 — regenerate a specific video on-demand. Does not touch
+   * the queue (queueRowId=null); useful when the operator wants to
+   * recover one user-visible bad row without waiting for the batch.
+   */
+  fastify.post<{ Params: { videoId: string } }>(
+    '/regen-trigger/:videoId',
+    adminAuth,
+    async (request, reply) => {
+      const { videoId } = request.params;
+      if (!/^[\w-]{6,15}$/.test(videoId)) {
+        return reply.status(400).send({
+          success: false,
+          error: 'invalid_video_id',
+          message: 'videoId must match the YouTube id charset.',
+        });
+      }
+      log.info('admin manual single-video regen triggered', { videoId });
+      const result = await regenSingleVideo(videoId, null);
+      return reply.send(createSuccessResponse({ result }));
+    }
+  );
+
+  /**
+   * GET /api/v1/admin/v2-quality-audit/regen-queue
+   * Phase 3 — paginated view of the queue (pending + in-progress +
+   * recent resolved/failed) so the operator can see what the worker
+   * is actually doing.
+   */
+  fastify.get('/regen-queue', adminAuth, async (request, reply) => {
+    const limit = Math.min(
+      Math.max(
+        parseInt(String((request.query as Record<string, string>)?.['limit'] ?? '50'), 10) || 50,
+        1
+      ),
+      200
+    );
+    const items = await db.$queryRawUnsafe<
+      Array<{
+        id: string;
+        video_id: string;
+        title: string | null;
+        priority: number;
+        status: string;
+        reason: string | null;
+        enqueued_at: Date;
+        attempted_at: Date | null;
+        resolved_at: Date | null;
+      }>
+    >(
+      `SELECT q.id, q.video_id, yv.title, q.priority, q.status, q.reason,
+              q.enqueued_at, q.attempted_at, q.resolved_at
+         FROM v2_quality_regen_queue q
+         LEFT JOIN youtube_videos yv ON yv.youtube_video_id = q.video_id
+        ORDER BY (CASE q.status WHEN 'in_progress' THEN 0
+                                WHEN 'pending'     THEN 1
+                                WHEN 'failed'      THEN 2
+                                WHEN 'resolved'    THEN 3
+                                ELSE 9 END) ASC,
+                 q.priority ASC,
+                 q.enqueued_at DESC
+        LIMIT $1`,
+      limit
+    );
+    const summary = await db.$queryRawUnsafe<Array<{ status: string; cnt: bigint }>>(
+      `SELECT status, COUNT(*) AS cnt FROM v2_quality_regen_queue GROUP BY status`
+    );
+    const counts: Record<string, number> = {};
+    for (const r of summary) counts[r.status] = Number(r.cnt);
+    return reply.send(createSuccessResponse({ items, counts }));
   });
 }
