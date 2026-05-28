@@ -51,6 +51,12 @@ export interface AddCardsMandalaMeta {
 interface AddCardsResponseData {
   cards: AddCardCandidate[];
   mandalaMeta: AddCardsMandalaMeta;
+  /** CP489 Phase 4 — uuid identifying this search round. Reuses the
+   *  trace runId so admin can pivot from a UI screenshot to the trace. */
+  roundId: string;
+  /** CP489 Phase 4 — ISO timestamp the response was produced. Drives
+   *  the per-round "방금" / "5분 전" label on the FE separator row. */
+  roundAt: string;
   trace?: {
     layer1_count: number;
     tier2_count: number;

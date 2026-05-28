@@ -18,6 +18,7 @@ import {
   mergeSurfacedVideoIds,
   saveAddCardsState,
   saveSessionPicks,
+  type AddCardsRound,
 } from '../lib/persistence';
 import { KeywordChipInput } from './KeywordChipInput';
 import { AddCardsFilters } from './AddCardsFilters';
@@ -46,33 +47,47 @@ export function AddCardsPanel() {
 
   const mutation = useAddCards();
 
-  // Hydrate from localStorage on panel open so reload/quit doesn't drop discovery context.
-  const [restoredCards, setRestoredCards] = useState<AddCardCandidate[] | null>(null);
+  // CP489 Phase 4 — rounds[] (newest-first) replaces the flat restoredCards.
+  // Each successful search PREPENDS a round so the cumulative result set
+  // grows across "Search" clicks instead of replacing the prior batch (user
+  // directive #785 "재검색 결과 1 - 재검색 결과 2 - …" cumulative model).
+  const [rounds, setRounds] = useState<AddCardsRound[]>([]);
   const [surfacedVideoIds, setSurfacedVideoIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open || !mandalaId) return;
     const stored = loadAddCardsState(mandalaId);
     if (stored) {
-      setRestoredCards(stored.cards);
+      setRounds(stored.rounds);
       setSurfacedVideoIds(stored.surfacedVideoIds);
     } else {
-      setRestoredCards(null);
+      setRounds([]);
       setSurfacedVideoIds([]);
     }
     mutation.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mandalaId]);
 
-  // Persist + grow surfaced set on each successful search.
+  // Append-on-success: each fresh response becomes a new round at the top
+  // (newest-first). Dedupes the round's cards against previously surfaced
+  // videoIds — BE already passes `excludeVideoIds`, but the FE guard is
+  // defence in depth for the edge case where two searches race.
   useEffect(() => {
     if (!mutation.isSuccess || !mandalaId) return;
-    const freshCards = mutation.data?.cards ?? [];
+    const data = mutation.data;
+    if (!data) return;
+    const freshCards = data.cards;
     const freshIds = freshCards.map((c) => c.videoId);
-    const nextSurfaced = mergeSurfacedVideoIds(surfacedVideoIds, freshIds);
-    setSurfacedVideoIds(nextSurfaced);
-    saveAddCardsState(mandalaId, freshCards, nextSurfaced);
-    setRestoredCards(null);
+    setRounds((prev) => {
+      const next: AddCardsRound[] = [
+        { id: data.roundId, at: data.roundAt, cards: freshCards },
+        ...prev,
+      ];
+      const nextSurfaced = mergeSurfacedVideoIds(surfacedVideoIds, freshIds);
+      setSurfacedVideoIds(nextSurfaced);
+      saveAddCardsState(mandalaId, next, nextSurfaced);
+      return next;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mutation.isSuccess, mutation.data, mandalaId]);
 
@@ -117,15 +132,15 @@ export function AddCardsPanel() {
     return set;
   }, [serverPickedSet, localPicks]);
 
-  const cards: AddCardCandidate[] = useMemo(
-    () => mutation.data?.cards ?? restoredCards ?? [],
-    [mutation.data, restoredCards]
-  );
+  // Flat view across rounds for the header chips + pick lookup. Order
+  // mirrors rounds[] (newest first) so card lookup hits the most recent
+  // copy if a videoId somehow appears twice (defensive — BE excludes).
+  const cards: AddCardCandidate[] = useMemo(() => rounds.flatMap((r) => r.cards), [rounds]);
   const visibleCount = useMemo(
     () => cards.filter((c) => !pickedSet.has(c.videoId)).length,
     [cards, pickedSet]
   );
-  const hasSearched = mutation.isSuccess || mutation.isError || restoredCards !== null;
+  const hasSearched = mutation.isSuccess || mutation.isError || rounds.length > 0;
 
   const { like, unlike } = useLikeCard();
 
@@ -169,9 +184,7 @@ export function AddCardsPanel() {
         handleUnpick(videoId);
         return;
       }
-      const candidate = (mutation.data?.cards ?? restoredCards ?? []).find(
-        (c) => c.videoId === videoId
-      );
+      const candidate = cards.find((c) => c.videoId === videoId);
       const cellIndex = candidate?.cellIndex;
       setLocalPicks((prev) => {
         const next = new Set(prev);
@@ -219,7 +232,7 @@ export function AddCardsPanel() {
         }
       );
     },
-    [mandalaId, pickedSet, like, mutation.data, restoredCards, queryClient, handleUnpick]
+    [mandalaId, pickedSet, like, cards, queryClient, handleUnpick]
   );
 
   // Seed wizard meta (focus_tags + target_level) as soon as the mandala
@@ -278,25 +291,19 @@ export function AddCardsPanel() {
   // panel close (use case is immediate undo, not long-term history; the
   // existing localStorage layer already handles cross-session restore).
   const [resetHistory, setResetHistory] = useState<{
-    cards: AddCardCandidate[];
+    rounds: AddCardsRound[];
     picks: string[];
     surfaced: string[];
   } | null>(null);
 
-  // Toggle: results visible → click clears them; empty → click searches.
+  // Toggle: results visible → click clears all rounds; empty → click searches.
   // Surfaced history is preserved across the toggle.
   const resetResults = useCallback(() => {
-    // Snapshot BEFORE clearing so the user can undo. Only useful when
-    // there's something to remember.
-    if (cards.length > 0) {
-      setResetHistory({
-        cards,
-        picks: Array.from(localPicks),
-        surfaced: surfacedVideoIds,
-      });
+    if (rounds.length > 0) {
+      setResetHistory({ rounds, picks: Array.from(localPicks), surfaced: surfacedVideoIds });
     }
     mutation.reset();
-    setRestoredCards(null);
+    setRounds([]);
     setLocalPicks(new Set());
     // Re-expand the input zone so the user can pick filters / type a new
     // keyword. Without this, if 초기화 was clicked while the auto-collapse
@@ -305,15 +312,12 @@ export function AddCardsPanel() {
     // without closing the panel. (Bug report 2026-05-21.)
     setInputCollapsed(false);
     if (mandalaId) clearSessionPicks(mandalaId);
-  }, [mutation, mandalaId, cards, localPicks, surfacedVideoIds]);
+  }, [mutation, mandalaId, rounds, localPicks, surfacedVideoIds]);
 
-  // Restore the snapshot captured at the most recent 초기화 click. Pulls
-  // both the cards and the per-mandala picks back; re-persists picks to
-  // localStorage so subsequent panel close/reopen behaves as if 초기화
-  // had not happened.
+  // Restore the snapshot captured at the most recent 초기화 click.
   const restorePrevious = useCallback(() => {
     if (!resetHistory || !mandalaId) return;
-    setRestoredCards(resetHistory.cards);
+    setRounds(resetHistory.rounds);
     setLocalPicks(new Set(resetHistory.picks));
     setSurfacedVideoIds(resetHistory.surfaced);
     saveSessionPicks(mandalaId, resetHistory.picks);
@@ -536,7 +540,9 @@ export function AddCardsPanel() {
               <Undo2 className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
               <span>
                 {t('addCards.panel.restorePrevious', 'Show previous results')}{' '}
-                <span className="opacity-60">({resetHistory.cards.length})</span>
+                <span className="opacity-60">
+                  ({resetHistory.rounds.reduce((n, r) => n + r.cards.length, 0)})
+                </span>
               </span>
             </button>
           </div>
@@ -557,7 +563,7 @@ export function AddCardsPanel() {
             }}
           >
             <AddCardsList
-              cards={cards}
+              rounds={rounds}
               isLoading={mutation.isPending}
               hasSearched={hasSearched}
               isError={mutation.isError}

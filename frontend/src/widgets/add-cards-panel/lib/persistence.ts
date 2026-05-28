@@ -1,30 +1,35 @@
 /**
- * Add Cards panel persistence (CP466 amendment 9).
+ * Add Cards panel persistence (CP489 Phase 4 — schema v2).
  *
- * Keeps the last search result + cumulative surfaced-videoId set in
- * localStorage so a non-graceful exit (reload, browser quit) does NOT
- * lose the user's discovery context. Per mandala — each mandala has
- * its own bucket so switching mandalas restores the per-mandala
- * history.
+ * v1 (CP466) stored a single `cards` array per mandala. The user's intent
+ * across multiple "Search" clicks was to GROW the visible result set
+ * (#785 ADD model), not replace it — so v2 stores `rounds: Round[]`
+ * newest-first and the panel renders separators between rounds.
  *
- * Surfaced set semantics (user directive 2026-05-18):
- *   - 검색 버튼 click → fresh fetch with `excludeVideoIds: [...surfaced]`
- *   - 응답 → 새 카드만. 이전 노출 카드 절대 다시 안 옴.
- *   - 응답의 videoId 들이 surfaced set 에 누적 (다음 검색에서 또 제외).
- *   - 패널 close 후 재open → 마지막 저장된 cards 다시 보임 (history).
- *   - 비정상 exit 후 → localStorage 에서 같은 cards + surfaced 복구.
+ * The surfacedVideoIds set + sessionPicks store layouts are unchanged.
  *
- * Storage shape limit: 카드 40개 + surfaced N개 (videoId 만, 11 char/each).
- * 패널 history 가 누적되어도 surfaced 만 늘어남, cards 는 최신 batch
- * 하나로 항상 overwrite. localStorage 용량 부담 낮음.
+ * Migration: v1 records load as a single round (round 1 = the saved
+ * `cards`, generated round_id, lastSearchedAt as round_at). v0 / corrupt
+ * / mandala-mismatched records return null (cold start).
  */
 
 import type { AddCardCandidate } from '../model/useAddCards';
 
 const STORAGE_PREFIX = 'addCards:state:';
-const STORAGE_VERSION = 1;
-const MAX_SURFACED_VIDEO_IDS = 5000; // hard cap to bound localStorage growth
+const STORAGE_VERSION = 2;
+const MAX_SURFACED_VIDEO_IDS = 5000;
+/** Cap the number of rounds we retain per mandala to bound localStorage
+ *  growth. Round oldest end is dropped first. 12 rounds × ~40 cards each
+ *  × ~200 bytes/card ≈ 96KB upper bound — safely under typical 5 MB
+ *  per-origin localStorage quotas. */
+const MAX_ROUNDS = 12;
 const SESSION_PICKS_PREFIX = 'addCards:sessionPicks:';
+
+export interface AddCardsRound {
+  id: string;
+  at: string; // ISO
+  cards: AddCardCandidate[];
+}
 
 /** Persisted "this session" picks per mandala. Survives panel close/reopen
  *  so picked cards keep their "추가됨" overlay until the user explicitly
@@ -59,13 +64,14 @@ export function clearSessionPicks(mandalaId: string): void {
   }
 }
 
-interface AddCardsPersistedState {
+export interface AddCardsPersistedState {
   version: number;
   mandalaId: string;
-  cards: AddCardCandidate[];
+  /** Newest-first. rounds[0] is the most recent search. */
+  rounds: AddCardsRound[];
   /** Cumulative set of videoIds the user has already been shown in
    *  the panel for this mandala. Used as `excludeVideoIds` on every
-   *  search button click. */
+   *  search click so BE never returns a duplicate across rounds. */
   surfacedVideoIds: string[];
   lastSearchedAt: string;
 }
@@ -74,41 +80,119 @@ function storageKey(mandalaId: string): string {
   return `${STORAGE_PREFIX}${mandalaId}`;
 }
 
+function isAddCardCandidate(v: unknown): v is AddCardCandidate {
+  return !!v && typeof v === 'object' && typeof (v as { videoId?: unknown }).videoId === 'string';
+}
+
+function isRound(v: unknown): v is AddCardsRound {
+  if (!v || typeof v !== 'object') return false;
+  const r = v as Partial<AddCardsRound>;
+  return (
+    typeof r.id === 'string' &&
+    typeof r.at === 'string' &&
+    Array.isArray(r.cards) &&
+    r.cards.every(isAddCardCandidate)
+  );
+}
+
+/**
+ * Loads + migrates persisted panel state for `mandalaId`.
+ *
+ *   v2 — preferred shape, returned as-is (defensively filtered).
+ *   v1 — single `cards` array wrapped as one round (id = `legacy-v1`,
+ *        at = parsed.lastSearchedAt OR now).
+ *   anything else (missing/corrupt/mandala mismatch/different version) →
+ *        null (cold start).
+ *
+ * Migration is one-way — the next `saveAddCardsState` overwrites the slot
+ * with v2 shape, so subsequent loads skip the migration path entirely.
+ */
 export function loadAddCardsState(mandalaId: string): AddCardsPersistedState | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(storageKey(mandalaId));
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<AddCardsPersistedState>;
-    if (parsed.version !== STORAGE_VERSION) return null;
-    if (parsed.mandalaId !== mandalaId) return null;
-    if (!Array.isArray(parsed.cards) || !Array.isArray(parsed.surfacedVideoIds)) return null;
-    return {
-      version: STORAGE_VERSION,
-      mandalaId,
-      cards: parsed.cards,
-      surfacedVideoIds: parsed.surfacedVideoIds.filter((v): v is string => typeof v === 'string'),
-      lastSearchedAt: typeof parsed.lastSearchedAt === 'string' ? parsed.lastSearchedAt : '',
-    };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed['mandalaId'] !== mandalaId) return null;
+
+    const version = typeof parsed['version'] === 'number' ? parsed['version'] : 0;
+    const surfacedRaw = parsed['surfacedVideoIds'];
+    const surfacedVideoIds = Array.isArray(surfacedRaw)
+      ? surfacedRaw.filter((v): v is string => typeof v === 'string')
+      : [];
+    const lastSearchedAt =
+      typeof parsed['lastSearchedAt'] === 'string' ? parsed['lastSearchedAt'] : '';
+
+    if (version === STORAGE_VERSION) {
+      const roundsRaw = parsed['rounds'];
+      if (!Array.isArray(roundsRaw)) return null;
+      const rounds = roundsRaw.filter(isRound);
+      return {
+        version: STORAGE_VERSION,
+        mandalaId,
+        rounds,
+        surfacedVideoIds,
+        lastSearchedAt,
+      };
+    }
+
+    if (version === 1) {
+      const cardsRaw = parsed['cards'];
+      if (!Array.isArray(cardsRaw)) return null;
+      const cards = cardsRaw.filter(isAddCardCandidate);
+      if (cards.length === 0) {
+        return {
+          version: STORAGE_VERSION,
+          mandalaId,
+          rounds: [],
+          surfacedVideoIds,
+          lastSearchedAt,
+        };
+      }
+      return {
+        version: STORAGE_VERSION,
+        mandalaId,
+        rounds: [
+          {
+            id: 'legacy-v1',
+            at: lastSearchedAt || new Date().toISOString(),
+            cards,
+          },
+        ],
+        surfacedVideoIds,
+        lastSearchedAt,
+      };
+    }
+
+    return null;
   } catch {
     return null;
   }
 }
 
+/**
+ * Persists the current `rounds[]` + cumulative `surfacedVideoIds`.
+ *
+ * Inputs are caller-owned ordering (newest-first). `rounds` is trimmed
+ * to `MAX_ROUNDS` (oldest end dropped first) and `surfacedVideoIds` to
+ * `MAX_SURFACED_VIDEO_IDS` (oldest entries dropped) to keep one mandala's
+ * footprint bounded.
+ */
 export function saveAddCardsState(
   mandalaId: string,
-  cards: AddCardCandidate[],
-  surfacedVideoIds: string[]
+  rounds: ReadonlyArray<AddCardsRound>,
+  surfacedVideoIds: ReadonlyArray<string>
 ): void {
   if (typeof window === 'undefined') return;
+  const trimmedRounds = rounds.length > MAX_ROUNDS ? rounds.slice(0, MAX_ROUNDS) : [...rounds];
   const trimmedSurfaced =
     surfacedVideoIds.length > MAX_SURFACED_VIDEO_IDS
       ? surfacedVideoIds.slice(-MAX_SURFACED_VIDEO_IDS)
-      : surfacedVideoIds;
+      : [...surfacedVideoIds];
   const payload: AddCardsPersistedState = {
     version: STORAGE_VERSION,
     mandalaId,
-    cards,
+    rounds: trimmedRounds,
     surfacedVideoIds: trimmedSurfaced,
     lastSearchedAt: new Date().toISOString(),
   };
