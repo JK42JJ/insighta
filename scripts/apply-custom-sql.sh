@@ -111,6 +111,12 @@ APPLY_FILES=(
   # (V2_QUALITY_AUDIT_ENABLED=false), so empty tables on prod until
   # operator flips the flag.
   "prisma/migrations/v2-quality-audit/001_create_audit_tables.sql"
+  # CP489 (2026-05-28) — center_goal embedding cache (level=0) partial
+  # unique index. Enables ON CONFLICT in
+  # src/modules/mandala/center-goal-embedding.ts so concurrent add-cards
+  # calls race-safely upsert one level=0 row per mandala. CREATE UNIQUE
+  # INDEX IF NOT EXISTS — idempotent.
+  "prisma/migrations/center-goal-cache/001_partial_unique_level0.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "

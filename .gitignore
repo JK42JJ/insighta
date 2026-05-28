@@ -62,6 +62,8 @@ prisma/migrations/*
 !prisma/migrations/video-pool-depth-level/**
 !prisma/migrations/v2-quality-audit/
 !prisma/migrations/v2-quality-audit/**
+!prisma/migrations/center-goal-cache/
+!prisma/migrations/center-goal-cache/**
 
 # Logs
 logs/
