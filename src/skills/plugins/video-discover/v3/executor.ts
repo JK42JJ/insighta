@@ -48,6 +48,7 @@ import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
 import { filterByQualityGate } from './quality-gate';
 import { applyHybridRerank } from './hybrid-rerank';
 import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
+import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
 import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
 import { resolveLanguage } from '@/utils/detect-language';
 
@@ -424,13 +425,19 @@ async function executeImpl(
       try {
         const cap = v3Config.semanticMaxCandidates;
         const capped = fresh.slice(0, cap);
-        const texts = [state.centerGoal, ...capped.map((m) => m.title)];
-        const vectors = await embedBatch(texts);
-        if (vectors.length === texts.length) {
-          const centerEmbedding = vectors[0] ?? undefined;
+        // CP489 — center_goal embed via cache; candidate title embeddings
+        // remain fresh (per-call YouTube candidates change every run).
+        const titles = capped.map((m) => m.title);
+        const [centerVec, titleVecs] = await Promise.all([
+          getCenterGoalEmbedding(mandalaId, state.centerGoal),
+          embedBatch(titles),
+        ]);
+        const vectorsOk = centerVec != null && titleVecs.length === titles.length;
+        if (vectorsOk) {
+          const centerEmbedding = centerVec;
           const candidateEmbeddings = new Map<string, number[]>();
           for (let i = 0; i < capped.length; i++) {
-            const vec = vectors[i + 1];
+            const vec = titleVecs[i];
             const id = capped[i]?.videoId;
             if (vec && id) candidateEmbeddings.set(id, vec);
           }
@@ -484,7 +491,7 @@ async function executeImpl(
           });
         } else {
           log.warn(
-            `[tier1] mandala-filter embed mismatch: got ${vectors.length}/${texts.length} — admitting unfiltered`
+            `[tier1] mandala-filter embed mismatch: center=${centerVec != null} titles=${titleVecs.length}/${titles.length} — admitting unfiltered`
           );
         }
       } catch (err) {
@@ -551,6 +558,8 @@ async function executeImpl(
       openRouterApiKey: openRouterApiKey || undefined,
       openRouterModel,
       existingVideoIds,
+      // CP489 — enable center_goal cache for mandala-bound runs.
+      mandalaId,
     });
     slots.push(...tier2Fill.slots);
     tier2Count = tier2Fill.slots.length;
@@ -772,6 +781,13 @@ interface Tier2Input {
   openRouterApiKey?: string;
   openRouterModel: string;
   existingVideoIds: ReadonlySet<string>;
+  /**
+   * CP489 — mandalaId for center_goal embedding cache lookup. Pass from
+   * mandala-bound caller (executeImpl). Undefined for ephemeral path
+   * (runDiscoverEphemeralImpl — no mandalaId yet), which then falls back
+   * to fresh embed.
+   */
+  mandalaId?: string;
 }
 
 interface Tier2Debug {
@@ -1095,20 +1111,31 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     const cap = v3Config.semanticMaxCandidates;
     const cappedFilterInputs = filterInputs.slice(0, cap);
     const overflow = Math.max(0, filterInputs.length - cap);
-    const texts: string[] = [input.state.centerGoal, ...cappedFilterInputs.map((f) => f.title)];
+    // CP489 — center_goal via cache when mandalaId known; titles always fresh.
+    // Ephemeral path (input.mandalaId undefined) falls back to embedBatch
+    // for the center as well via plain embedBatch call.
+    const titles = cappedFilterInputs.map((f) => f.title);
     try {
-      const vectors = await embedBatch(texts);
-      if (vectors.length === texts.length) {
-        centerEmbedding = vectors[0] ?? undefined;
+      const [centerVec, titleVecs] = await Promise.all([
+        input.mandalaId
+          ? getCenterGoalEmbedding(input.mandalaId, input.state.centerGoal)
+          : (async () => {
+              const [v] = await embedBatch([input.state.centerGoal]);
+              return v ?? null;
+            })(),
+        embedBatch(titles),
+      ]);
+      if (centerVec != null && titleVecs.length === titles.length) {
+        centerEmbedding = centerVec;
         candidateEmbeddings = new Map<string, number[]>();
         for (let i = 0; i < cappedFilterInputs.length; i++) {
-          const vec = vectors[i + 1];
+          const vec = titleVecs[i];
           const id = cappedFilterInputs[i]?.videoId;
           if (vec && id) candidateEmbeddings.set(id, vec);
         }
       } else {
         log.warn(
-          `semantic gate embed vector mismatch: got ${vectors.length}/${texts.length} — falling back to substring`
+          `semantic gate embed vector mismatch: center=${centerVec != null} titles=${titleVecs.length}/${titles.length} — falling back to substring`
         );
       }
     } catch (err) {

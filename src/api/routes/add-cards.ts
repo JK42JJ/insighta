@@ -33,7 +33,7 @@ import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { getMandalaManager } from '@/modules/mandala/manager';
-import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
+import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
 import {
   matchFromVideoPoolByCenterGoal,
   type CachedMatch,
@@ -233,10 +233,13 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           });
           const language: 'ko' | 'en' = mandalaMeta?.language === 'en' ? 'en' : 'ko';
 
-          // 2. embed center_goal + extraKeywords (1 batch, chunk-fail-safe).
-          const embedTexts = [centerGoal, ...extraKeywords];
-          const embeddings = await embedBatch(embedTexts);
-          const centerEmbedding = embeddings[0];
+          // 2. center_goal embedding via cache (CP489 — was: re-embedded
+          //    every call together with extraKeywords; extraKeywords vectors
+          //    were never read (Layer 4 alphaEmbed deferred per spec §8 v2+).
+          //    Now: cache-backed (mandala_embeddings level=0). First miss
+          //    ~0.3s warm / ~10s cold; hits ~5ms.
+          //    See: src/modules/mandala/center-goal-embedding.ts.
+          const centerEmbedding = await getCenterGoalEmbedding(mandalaId, centerGoal);
           if (!centerEmbedding) {
             return reply.code(503).send({
               status: 'error',
