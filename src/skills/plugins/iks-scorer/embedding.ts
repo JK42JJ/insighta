@@ -32,7 +32,17 @@ export const QWEN3_EMBED_MODEL = 'qwen3-embedding:8b';
 export const QWEN3_EMBED_DIMENSION = 4096;
 export const MAC_MINI_OLLAMA_DEFAULT_URL = 'http://100.91.173.17:11434';
 const HEALTH_CHECK_TIMEOUT_MS = 3000;
-const EMBED_TIMEOUT_MS = 60000;
+// CP489 — was 60000 (60s). Probe-verified actual call latencies:
+//   warm chunk (≤50 texts): ~0.3-3s
+//   cold start (Mac Mini Ollama reloads qwen3-embedding:8b 4.7GB): ~10s
+//   hang case (idle unload + concurrent load): observed 54.5s (CP489 incident)
+// 60s lets a hang block the entire user-facing pipeline (add-cards 60s
+// FE timeout fires before Ollama AbortController). 20s gives Mac Mini
+// enough headroom for cold start while triggering the OpenRouter
+// fallback (embedOneChunkViaOpenRouterRetrying) within the FE budget.
+// Cumulative worst case under fallback: 20s Ollama + 3× OpenRouter
+// chunks × ~1-3s typical = ~30s, still inside add-cards' 60s envelope.
+const EMBED_TIMEOUT_MS = 20000;
 
 /** OpenRouter cost-logger module label (Issue #543 fallback path). */
 const OPENROUTER_FALLBACK_MODULE = 'iks-embed-fallback';
