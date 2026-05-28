@@ -45,7 +45,8 @@ import {
 import { getAddCardsConfig } from '@/config/add-cards';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
-import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
+import { withTraceContext, recordTrace, getTraceContext } from '@/modules/discover-tracing';
+import { randomUUID } from 'node:crypto';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -439,9 +440,17 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             language,
           };
 
+          // CP489 Phase 4 — round_id + round_at let the FE append each
+          // response as a new "round" entry in the cumulative panel state
+          // (newest-first separators). round_id reuses the trace runId so
+          // operators can pivot from a UI screenshot back to the trace
+          // (one round = one runId = one chain of recordTrace rows).
+          const roundId = getTraceContext()?.runId ?? randomUUID();
+          const roundAt = new Date().toISOString();
+
           const payload = trace
-            ? { cards, mandalaMeta: mandalaMetaOut, trace }
-            : { cards, mandalaMeta: mandalaMetaOut };
+            ? { cards, mandalaMeta: mandalaMetaOut, roundId, roundAt, trace }
+            : { cards, mandalaMeta: mandalaMetaOut, roundId, roundAt };
 
           recordTrace({
             step: 'add_cards.end',

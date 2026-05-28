@@ -1948,6 +1948,11 @@
       "addOne": "만다라에 추가",
       "picked": "추가됨",
       "unpick": "추가 취소"
+    },
+    "round": {
+      "first": "1차 검색",
+      "nth": "{{n}}차 추가 검색",
+      "foundCount": "{{count}}개 발견"
     }
   }
 }

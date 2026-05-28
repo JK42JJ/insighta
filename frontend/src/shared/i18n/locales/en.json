@@ -1940,6 +1940,11 @@
       "addOne": "Add to mandala",
       "picked": "Picked",
       "unpick": "Remove"
+    },
+    "round": {
+      "first": "Round 1",
+      "nth": "Round {{n}} (more)",
+      "foundCount": "{{count}} new"
     }
   }
 }
