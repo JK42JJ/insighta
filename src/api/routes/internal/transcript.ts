@@ -25,7 +25,6 @@ import { getPrismaClient } from '@/modules/database/client';
 import { generateRichSummaryV2 } from '@/modules/skills/rich-summary-v2-generator';
 import {
   validateV2Layered,
-  validateV2Segments,
   scoreCompleteness,
   V2ValidationError,
 } from '@/modules/skills/rich-summary-v2-prompt';
@@ -333,6 +332,14 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
       sourceLanguage?: string;
       stampTranscriptFetchedAt?: boolean;
       /**
+       * CP488+ (2026-05-28) — when true, run validation + scoreCompleteness
+       * and return the result WITHOUT touching the DB. Used by Mac Mini
+       * verify-one.sh as a pre-bulk gate (proxy/fetch/chunker/claude/route
+       * all green before kicking off batch-backfill.sh). Side-effect-free:
+       * no pipeline_events, no video_pool promote, no transcript_fetched_at.
+       */
+      dryRun?: boolean;
+      /**
        * CP446+ — atom validation telemetry from process-one.sh's
        * validate-atoms.py. Optional; when present the route stamps a
        * `pipeline_events.stage='atom_validation'` row for downstream
@@ -376,15 +383,19 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
 
     let summary;
     try {
+      // CP488+ root fix — forward `segments` so summary.segments populates
+      // and scoreCompleteness can see sections/atoms. Before this fix the
+      // route omitted segments from the validateV2Layered input, so every
+      // Mac Mini payload 422'd with `segments.sections empty: 0` even when
+      // 2+ sections were present in body. Strict key whitelist (start_sec/
+      // end_sec/ts_sec typos) runs inside validateV2Layered → no separate
+      // validateV2Segments call needed here.
       summary = validateV2Layered({
         core: body.core,
         analysis: analysisForValidation,
         lora: body.lora,
+        segments: body.segments,
       });
-      // Strict key whitelist on segments — catches start_sec/end_sec/ts_sec
-      // class typos at the API boundary so the bridge never silently stores
-      // 0/null (CP437 incident).
-      validateV2Segments(body.segments);
     } catch (err) {
       const path = err instanceof V2ValidationError ? err.path : '';
       const msg = err instanceof Error ? err.message : String(err);
@@ -396,6 +407,20 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         error: 'completeness_below_threshold',
         score: score.score,
         reasons: score.reasons,
+      });
+    }
+
+    // CP488+ — dryRun pre-bulk gate. After validation + scoreCompleteness pass,
+    // short-circuit before any DB write so verify-one.sh can confirm the full
+    // route contract works without altering production state.
+    if (body.dryRun === true) {
+      return reply.code(200).send({
+        kind: 'dry-run-pass',
+        videoId,
+        completeness: score.score,
+        domain: summary.core.domain,
+        sectionsCount: summary.segments?.sections?.length ?? 0,
+        atomsCount: summary.segments?.atoms?.length ?? 0,
       });
     }
 
