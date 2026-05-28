@@ -22,7 +22,14 @@ name: batch-video-collector
 
 on:
   schedule:
+    # CP489 — 1×/day → 2×/day to double pool-growth rate toward the
+    # 30k-active target. 07:30 UTC (= 16:30 KST) right after the YouTube
+    # quota reset (00:00 PT), 19:30 UTC (= 04:30 KST) 12h later. Quota
+    # impact 6k/day → 12k/day at default limit=60, still safely under
+    # the 80k/day headroom (8 keys × 10k). With CP489 manifest bump to
+    # limit=200 the total becomes 40k/day — same headroom.
     - cron: '30 7 * * *'
+    - cron: '30 19 * * *'
   workflow_dispatch:
     inputs:
       limit:

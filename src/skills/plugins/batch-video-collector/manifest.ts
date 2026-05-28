@@ -16,24 +16,36 @@ import type { SkillManifest } from '@/skills/_shared/types';
 import { defineManifest } from '@/skills/_shared/runtime';
 
 /**
- * Full trend keyword pool target (9 domains × ~20). Source of truth for
- * the *total* surface area we want covered across a rotation cycle.
+ * Full trend keyword pool target. CP489 expansion: 180 → 600 (200 keywords
+ * × 3-day rotation). Probe-verified video_pool baseline 2026-05-28:
+ *   - active rows: 14,551
+ *   - last 14d avg videos_new/day: 464
+ *   - quota/day used: 6,035 of 80,000 available (8 API keys × 10k)
+ * 200/day × 100 units = 20k quota/day still safely under the headroom,
+ * even when paired with the 2×/day cron schedule (40k total).
  */
-export const BATCH_COLLECTOR_KEYWORD_POOL_SIZE = 180;
+export const BATCH_COLLECTOR_KEYWORD_POOL_SIZE = 600;
 /**
- * Keywords processed per daily run. 180/3 = 60 keeps each day's quota
- * under 6k units (60 × 100 search.list) + ~200 for videos.list, fitting
- * comfortably in the 10k/day limit while still refreshing the full pool
- * every 3 days.
+ * Keywords processed per daily run. CP489: 60 → 200. With the 2×/day
+ * cron schedule (07:30 + 19:30 UTC) net raw new ≈ 1,856/day vs prior
+ * 464/day. Combined with the TTL bump below the steady-state pool size
+ * targets ≥ 30,000 active rows within ~30 days.
  */
-export const BATCH_COLLECTOR_DAILY_KEYWORD_LIMIT = 60;
-/** Cycle length (days) — 60 × 3 covers the 180-keyword pool. */
+export const BATCH_COLLECTOR_DAILY_KEYWORD_LIMIT = 200;
+/** Cycle length (days) — 200 × 3 covers the 600-keyword pool. */
 export const BATCH_COLLECTOR_ROTATION_DAYS = 3;
 /** Kept for backwards compat with existing tests / callers. */
 export const BATCH_COLLECTOR_KEYWORD_LIMIT = BATCH_COLLECTOR_DAILY_KEYWORD_LIMIT;
 export const BATCH_COLLECTOR_SEARCH_MAX_RESULTS = 30;
 export const BATCH_COLLECTOR_SEARCH_PARALLELISM = 5;
-export const BATCH_COLLECTOR_TTL_DAYS = 30;
+/**
+ * CP489: 30 → 60. Doubles steady-state pool size at the same raw-new
+ * rate. video_pool already partitions by language + quality_tier + source,
+ * so older rows continue to provide useful coverage long after the
+ * trend-cron horizon. Soft-delete via is_active=false still happens
+ * on expires_at, so the change does not affect retrieval correctness.
+ */
+export const BATCH_COLLECTOR_TTL_DAYS = 60;
 
 // Quality tier thresholds (view_count)
 export const QUALITY_GOLD_VIEW_COUNT = 100_000;
