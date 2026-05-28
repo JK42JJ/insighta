@@ -37,7 +37,10 @@ export function AddCardsTriggerChip({ mandalaId }: AddCardsTriggerChipProps) {
       return;
     }
     const stored = loadAddCardsState(mandalaId);
-    setPersistedCount(stored?.cards.length ?? 0);
+    // CP489 Phase 4 — persistence shape changed `cards[]` → `rounds[]`.
+    // Sum across rounds for the badge total.
+    const total = stored?.rounds.reduce((n, r) => n + r.cards.length, 0) ?? 0;
+    setPersistedCount(total);
   }, [mandalaId]);
 
   const count = storeCount ?? persistedCount;
