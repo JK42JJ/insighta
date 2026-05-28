@@ -58,6 +58,35 @@ function validPayload(): RichSummaryV2Layered {
         { level: 1, q: 'Q5', a: 'A5', context: 'video' },
       ],
     },
+    // CP488+ — scoreCompleteness now requires segments (CP475+ segments gate
+    // added MIN_SECTIONS=1 + MIN_ATOMS=1 + to_sec>0). Without segments here
+    // the "valid payload passes completeness" assertion below was a no-op for
+    // the gate; include realistic segments so the test exercises the full
+    // contract that the upsert-direct route enforces.
+    segments: {
+      sections: [
+        {
+          idx: 0,
+          from_sec: 0,
+          to_sec: 120,
+          title: '도입',
+          summary: '문제 정의',
+          relevance_pct: 60,
+        },
+        {
+          idx: 1,
+          from_sec: 120,
+          to_sec: 300,
+          title: '핵심',
+          summary: '3단계 설명',
+          relevance_pct: 80,
+        },
+      ],
+      atoms: [
+        { idx: 0, type: 'fact', text: '시간관리는 3단계', timestamp_sec: 60 },
+        { idx: 1, type: 'tip', text: '포모도로 25분', timestamp_sec: 180 },
+      ],
+    },
   };
 }
 
