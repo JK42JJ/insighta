@@ -77,6 +77,13 @@ export const addCardsEnvSchema = z.object({
   // Older likes contribute less. Aligned with card-refresh-strategy.md §3
   // "Explicit Like → 14 days (exp)".
   ADD_CARDS_LIKED_DECAY_HALF_LIFE_DAYS: positiveNumber.transform((v) => v ?? 14),
+
+  // CP489 Phase 2+3 — reuse boost for previously surfaced (shown-but-not-picked)
+  // cards in the same mandala. Multiplies candidate score by (1 + boost) when
+  // candidate.videoId is in the surfacedSet. Default 0.05 (+5%) — small enough
+  // that fresh high-cosine matches still win, large enough that a borderline
+  // candidate surfaces back into the cumulative response across search rounds.
+  ADD_CARDS_SURFACE_BOOST: cosineRange.transform((v) => v ?? 0.05),
 });
 
 export interface AddCardsConfig {
@@ -91,6 +98,7 @@ export interface AddCardsConfig {
   semanticThreshold: number;
   likedHistoryLimit: number;
   likedDecayHalfLifeDays: number;
+  surfaceBoost: number;
 }
 
 const FALLBACK_CONFIG: AddCardsConfig = {
@@ -105,6 +113,7 @@ const FALLBACK_CONFIG: AddCardsConfig = {
   semanticThreshold: 0.45,
   likedHistoryLimit: 100,
   likedDecayHalfLifeDays: 14,
+  surfaceBoost: 0.05,
 };
 
 let cached: AddCardsConfig | null = null;
@@ -125,6 +134,7 @@ export function getAddCardsConfig(env: NodeJS.ProcessEnv = process.env): AddCard
       semanticThreshold: parsed.ADD_CARDS_SEMANTIC_THRESHOLD,
       likedHistoryLimit: parsed.ADD_CARDS_LIKED_HISTORY_LIMIT,
       likedDecayHalfLifeDays: parsed.ADD_CARDS_LIKED_DECAY_HALF_LIFE_DAYS,
+      surfaceBoost: parsed.ADD_CARDS_SURFACE_BOOST,
     };
   } catch {
     cached = FALLBACK_CONFIG;

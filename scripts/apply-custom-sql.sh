@@ -76,6 +76,11 @@ APPLY_FILES=(
   # IF NOT EXISTS / DO $$ EXCEPTION duplicate_object NULL — idempotent
   # re-application is safe.
   "prisma/migrations/card-interactions/001_create_table.sql"
+  # CP489 Phase 2+3 — add 'surfaced' value to card_signal enum so
+  # add-cards can record per-mandala "shown but not picked" history
+  # for reuse-priority scoring on subsequent searches. ADD VALUE IF
+  # NOT EXISTS — idempotent.
+  "prisma/migrations/card-interactions/002_add_surfaced_signal.sql"
   "prisma/migrations/rich-summary-v2/005_mandala_relevance_pct.sql"
   # CP474 — v2 regen gate based on transcript_used (boolean). ADD COLUMN
   # IF NOT EXISTS + idempotent backfill (WHERE transcript_used = false).
