@@ -53,8 +53,45 @@ const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const MAX_EXTRA_KEYWORDS = 10;
 const MAX_EXCLUDE_IDS = 500;
 const MAX_KEYWORD_LEN = 200;
+/**
+ * CP489 — focusTags cap forwarded into runDiscoverEphemeral. Mandala
+ * default `focus_tags` already capped at the helper site; this constant
+ * covers the combined (extraKeywords + mandala defaults) merged list so
+ * the downstream keyword-builder stays predictable.
+ */
+const MAX_FOCUS_TAGS = 10;
 
 const log = logger.child({ module: 'add-cards-routes' });
+
+/**
+ * CP489 — merge user-provided chip keywords with mandala default
+ * focus_tags for forwarding into the Tier 2 ephemeral discover path.
+ *
+ * Order: extraKeywords first (user intent wins), then mandala defaults.
+ * Dedupe by lowercase string. Cap at MAX_FOCUS_TAGS (10).
+ *
+ * Exported so unit tests can verify dedupe / cap / order without
+ * spinning the Fastify handler.
+ */
+export function buildEphemeralFocusTags(
+  mandalaFocusTags: string[] | null | undefined,
+  extraKeywords: string[],
+  cap = MAX_FOCUS_TAGS
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of [...extraKeywords, ...(mandalaFocusTags ?? [])]) {
+    if (typeof raw !== 'string') continue;
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+    if (out.length >= cap) break;
+  }
+  return out;
+}
 
 type DurationBucket = 'short' | 'medium' | 'long' | 'xlong';
 
@@ -275,7 +312,14 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               centerGoal,
               subGoals,
               language,
-              focusTags: (mandalaMeta?.focus_tags ?? []).slice(0, 10),
+              // CP489 — chip keywords + mandala defaults merged. Prior to
+              // this PR `extraKeywords` was parsed + traced but never
+              // forwarded into the Tier 2 keyword-builder / semantic gate
+              // — symptom: FE chip / level chip changes had zero effect
+              // on returned cards. The FE already packs the chosen
+              // `targetLevel` string into `extraKeywords` (see
+              // AddCardsPanel.tsx:267), so this single merge handles both.
+              focusTags: buildEphemeralFocusTags(mandalaMeta?.focus_tags, extraKeywords),
               targetLevel: mandalaMeta?.target_level ?? 'standard',
               env: process.env,
             }).catch((err) => {
