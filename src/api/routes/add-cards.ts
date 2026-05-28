@@ -457,6 +457,11 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               caps_channel: result.capsChannel,
               caps_subgoal: result.capsSubgoal,
               surfaced_set_size: surfacedSet.size,
+              // CP489 Phase 6 — emit returned videoIds so the Search Journey
+              // Ledger can join per-round trace rows ↔ card_interactions
+              // deterministically (no timestamp-window fuzziness). Bounded
+              // by cfg.limitDefault (~40), so payload growth is trivial.
+              returned_video_ids: cards.map((c) => c.videoId),
             },
             latencyMs: Date.now() - t0,
           });
