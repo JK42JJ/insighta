@@ -374,6 +374,19 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             return true;
           });
 
+          // 5b. CP489 Phase 2+3 — reuse-priority boost for cards previously
+          //     surfaced (shown but not picked) in this mandala. Cards in
+          //     card_interactions(signal='surfaced', mandala_id=current) get
+          //     a small score multiplier so the FE shows them again instead
+          //     of treating them as cold misses. Picked / archived / delete
+          //     remain exclude-only (handled in resolveExcludeSet above).
+          const surfacedSet = await loadSurfacedVideoIds({
+            prisma,
+            userId,
+            mandalaId,
+          });
+          const boostedBySurface = applySurfaceBoost(filtered, surfacedSet, cfg.surfaceBoost);
+
           // 6. Layer 4 feedback bias (channel match + drift guard).
           //    candidate-level embedding cosine boost (alphaEmbed) deferred —
           //    cache-matcher does not expose per-candidate raw embeddings.
@@ -383,7 +396,7 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             prisma,
             userId,
             centerEmbedding,
-            candidates: filtered,
+            candidates: boostedBySurface,
             cfg,
           });
 
@@ -443,8 +456,26 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               drift_guard_fired: feedback.driftGuardFired,
               caps_channel: result.capsChannel,
               caps_subgoal: result.capsSubgoal,
+              surfaced_set_size: surfacedSet.size,
             },
             latencyMs: Date.now() - t0,
+          });
+
+          // CP489 Phase 2+3 — fire-and-forget record of the surfaced cards
+          // so the NEXT add-cards round can reuse-priority-boost them and
+          // skip cold re-embed. UPSERT (latest wins) on the existing
+          // unique (user_id, video_id, signal) so the row count stays
+          // bounded — one row per user × video × signal regardless of
+          // how many rounds have surfaced the same video.
+          void recordSurfacedCards({
+            prisma,
+            userId,
+            mandalaId,
+            videoIds: cards.map((c) => c.videoId),
+          }).catch((err) => {
+            log.warn(
+              `surfaced recording failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
+            );
           });
 
           return reply.code(200).send({ status: 'ok', data: payload });
@@ -511,6 +542,110 @@ interface ApplyFeedbackBiasOpts {
   centerEmbedding: number[];
   candidates: CachedMatch[];
   cfg: ReturnType<typeof getAddCardsConfig>;
+}
+
+// ============================================================================
+// CP489 Phase 2+3 — surfaced (shown-but-not-picked) persistence + reuse boost
+// ============================================================================
+
+/**
+ * Load the set of videoIds previously surfaced to this user in this mandala
+ * (signal='surfaced'). Returns Set<string> for O(1) membership check during
+ * the candidate boost loop. Failure-quiet: any DB error returns empty set
+ * — the boost simply degrades to "no reuse priority" rather than blocking
+ * the response.
+ */
+export async function loadSurfacedVideoIds(opts: {
+  prisma: ReturnType<typeof getPrismaClient>;
+  userId: string;
+  mandalaId: string;
+}): Promise<Set<string>> {
+  try {
+    const rows = await opts.prisma.card_interactions.findMany({
+      where: {
+        user_id: opts.userId,
+        mandala_id: opts.mandalaId,
+        signal: 'surfaced',
+      },
+      select: { video_id: true },
+    });
+    const out = new Set<string>();
+    for (const r of rows) if (r.video_id) out.add(r.video_id);
+    return out;
+  } catch (err) {
+    log.warn(
+      `loadSurfacedVideoIds failed (non-fatal, returning empty set): ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+    return new Set();
+  }
+}
+
+/**
+ * Multiply the score of every candidate already in `surfacedSet` by
+ * `1 + boost`. Pure function — no DB, no side-effects, safe to unit
+ * test. Returns a new array (input unchanged).
+ *
+ * The score multiplier policy (small +5% by default) is deliberately
+ * subtle so the reuse boost surfaces previously-seen candidates back
+ * into the response without dominating fresh high-cosine matches.
+ */
+export function applySurfaceBoost(
+  candidates: CachedMatch[],
+  surfacedSet: ReadonlySet<string>,
+  boost: number
+): CachedMatch[] {
+  if (surfacedSet.size === 0 || boost <= 0) return candidates;
+  const multiplier = 1 + boost;
+  return candidates.map((c) =>
+    surfacedSet.has(c.videoId) ? { ...c, score: c.score * multiplier } : c
+  );
+}
+
+/**
+ * UPSERT the list of just-surfaced videoIds into card_interactions as
+ * signal='surfaced'. Fire-and-forget contract — caller MUST `.catch()`
+ * to keep response unblocked. Idempotent via the existing
+ * (user_id, video_id, signal) unique constraint.
+ *
+ * Empty input is a no-op.
+ */
+export async function recordSurfacedCards(opts: {
+  prisma: ReturnType<typeof getPrismaClient>;
+  userId: string;
+  mandalaId: string;
+  videoIds: string[];
+}): Promise<void> {
+  if (opts.videoIds.length === 0) return;
+  for (const videoId of opts.videoIds) {
+    try {
+      await opts.prisma.card_interactions.upsert({
+        where: {
+          user_id_video_id_signal: {
+            user_id: opts.userId,
+            video_id: videoId,
+            signal: 'surfaced',
+          },
+        },
+        create: {
+          user_id: opts.userId,
+          mandala_id: opts.mandalaId,
+          video_id: videoId,
+          signal: 'surfaced',
+        },
+        update: {
+          mandala_id: opts.mandalaId,
+        },
+      });
+    } catch (err) {
+      log.warn(
+        `recordSurfacedCards upsert failed (non-fatal): videoId=${videoId} err=${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  }
 }
 
 interface FeedbackBiasResult {

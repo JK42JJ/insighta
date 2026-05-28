@@ -759,6 +759,7 @@ enum CardSignal {
   delete
   watch_complete
   skip
+  surfaced
 
   @@map("card_signal")
   @@schema("public")
