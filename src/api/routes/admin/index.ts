@@ -23,6 +23,7 @@ import { adminSystemSettingsRoutes } from './system-settings';
 import { adminDiscoverTracesRoutes } from './discover-traces';
 import { adminSearchAlgorithmsRoutes } from './search-algorithms';
 import { adminV2QualityAuditRoutes } from './v2-quality-audit';
+import { adminV4ArbiterRunsRoutes } from './v4-arbiter-runs';
 
 /**
  * Admin routes plugin.
@@ -60,5 +61,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // CP488+ — v2 Quality Audit (daily score scan of v2 rich-summary rows).
   // Design: docs/design/v2-quality-audit-system-2026-05-27.md
   await fastify.register(adminV2QualityAuditRoutes, { prefix: '/v2-quality-audit' });
+  // CP489+ — v4 LLM-arbiter PoC runs dashboard data source.
+  await fastify.register(adminV4ArbiterRunsRoutes, { prefix: '/v4-arbiter-runs' });
   // await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }
