@@ -16,14 +16,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { logger } from '@/utils/logger';
+import { getV4ArbiterRunsDir } from '@/config/v4-arbiter-runs';
 
 const log = logger.child({ module: 'api/admin/v4-arbiter-runs' });
 
-const DEFAULT_DIR = '/var/insighta/v4-runs';
 const MAX_FILES = 50;
 
 function loadScenarios(): Record<string, unknown> {
-  const dir = process.env['V4_ARBITER_RUNS_DIR'] ?? DEFAULT_DIR;
+  const dir = getV4ArbiterRunsDir();
   if (!fs.existsSync(dir)) {
     log.info('v4-arbiter-runs dir missing — returning empty', { dir });
     return {};
@@ -59,7 +59,7 @@ export async function adminV4ArbiterRunsRoutes(fastify: FastifyInstance) {
     return reply.send({
       scenarios,
       count: Object.keys(scenarios).length,
-      source: process.env['V4_ARBITER_RUNS_DIR'] ?? DEFAULT_DIR,
+      source: getV4ArbiterRunsDir(),
     });
   });
 }
