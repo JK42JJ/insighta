@@ -9,6 +9,8 @@ import { CheckCircle2, Play } from 'lucide-react';
 // js/css/html/svg/png/woff2), so the SW install size is unaffected.
 const DEMO_VIDEO_SRC_KO = '/insighta-demo-ko.mp4';
 const DEMO_VIDEO_SRC_EN = '/insighta-demo-en.mp4';
+const DEMO_POSTER_SRC_KO = '/insighta-demo-ko-poster.jpg';
+const DEMO_POSTER_SRC_EN = '/insighta-demo-en-poster.jpg';
 
 export function HeroSection() {
   const { t, i18n } = useTranslation();
@@ -21,6 +23,7 @@ export function HeroSection() {
   }, []);
   const isKo = i18n.language === 'ko';
   const demoVideoSrc = isKo ? DEMO_VIDEO_SRC_KO : DEMO_VIDEO_SRC_EN;
+  const demoPosterSrc = isKo ? DEMO_POSTER_SRC_KO : DEMO_POSTER_SRC_EN;
 
   return (
     <section className="relative pt-20 pb-16 md:pt-28 md:pb-24 overflow-hidden">
@@ -114,9 +117,12 @@ export function HeroSection() {
             <video
               ref={videoRef}
               src={demoVideoSrc}
+              poster={demoPosterSrc}
+              preload="metadata"
               controls
               autoPlay
-              className="w-full rounded-lg shadow-2xl"
+              playsInline
+              className="w-full rounded-lg shadow-2xl bg-black"
             />
           </div>
         </div>
