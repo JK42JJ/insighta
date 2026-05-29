@@ -759,6 +759,29 @@ export function useCardOrchestrator(
     [toast, t, queryClient, mandalaId, triggerAutoEnrich]
   );
 
+  // CP489+ — Stream-card id resolution. SSE-pushed `recommendation_cache`
+  // backlog rows are surfaced in the grid as InsightCards with `stream-`
+  // prefixed ids (see `recommendationToInsightCard`). They are not present
+  // in syncedCards / persistedLocalCards / pendingLocalCards, so D&D
+  // mutations targeting them used to silently fail (getCardById === null
+  // → early return). Resolve them to the matching syncedCards /
+  // persistedLocalCards row by normalized videoUrl; return null when no
+  // backing row exists yet (the user must wait for the row to settle).
+  const resolveStreamCardId = useCallback(
+    (id: string): string | null => {
+      if (!id.startsWith('stream-')) return id;
+      const streamCard = streamMandalaCards.find((c) => c.id === id);
+      if (!streamCard) return null;
+      const normalized = normalizeUrl(streamCard.videoUrl);
+      const synced = syncedCards.find((c) => normalizeUrl(c.videoUrl) === normalized);
+      if (synced) return synced.id;
+      const local = persistedLocalCards.find((c) => normalizeUrl(c.videoUrl) === normalized);
+      if (local) return local.id;
+      return null;
+    },
+    [streamMandalaCards, syncedCards, persistedLocalCards]
+  );
+
   // Card drop on mandala cell
   const handleCardDrop = useCallback(
     (
@@ -772,6 +795,42 @@ export function useCardOrchestrator(
       if (files && files.length > 0) {
         handleFileDrop(cellIndex, files);
         return;
+      }
+
+      // CP489+ stream-card id resolution (see resolveStreamCardId comment).
+      if (cardId) {
+        const resolved = resolveStreamCardId(cardId);
+        if (resolved === null) {
+          toast({
+            title: t('index.cardSyncing', 'Card still syncing'),
+            description: t(
+              'index.cardSyncingDesc',
+              'Wait a moment for the card to settle, then try again.'
+            ),
+            variant: 'destructive',
+          });
+          return;
+        }
+        cardId = resolved;
+      }
+      if (multiCardIds && multiCardIds.length > 0) {
+        const resolved: string[] = [];
+        for (const id of multiCardIds) {
+          const r = resolveStreamCardId(id);
+          if (r === null) {
+            toast({
+              title: t('index.cardSyncing', 'Card still syncing'),
+              description: t(
+                'index.cardSyncingDesc',
+                'Wait a moment for the card to settle, then try again.'
+              ),
+              variant: 'destructive',
+            });
+            return;
+          }
+          resolved.push(r);
+        }
+        multiCardIds = resolved;
       }
 
       // Multi-card drop
@@ -789,7 +848,13 @@ export function useCardOrchestrator(
         }
 
         const pendingIds = multiCardIds.filter((id) => {
-          const c = getCardById(id, syncedCards, persistedLocalCards, pendingLocalCards);
+          const c = getCardById(
+            id,
+            syncedCards,
+            persistedLocalCards,
+            pendingLocalCards,
+            streamMandalaCards
+          );
           return detectCardSource(id, syncedCards, persistedLocalCards, c) === 'pending';
         });
         if (pendingIds.length > 0 && !canAddCard) {
@@ -803,7 +868,13 @@ export function useCardOrchestrator(
 
         const batchItems = multiCardIds
           .map((id) => {
-            const card = getCardById(id, syncedCards, persistedLocalCards, pendingLocalCards);
+            const card = getCardById(
+              id,
+              syncedCards,
+              persistedLocalCards,
+              pendingLocalCards,
+              streamMandalaCards
+            );
             if (!card) return null;
             const source = detectCardSource(id, syncedCards, persistedLocalCards, card);
             return { card, source, cellIndex, levelId: currentLevelId, mandalaId };
@@ -849,7 +920,13 @@ export function useCardOrchestrator(
           return;
         }
 
-        const card = getCardById(cardId, syncedCards, persistedLocalCards, pendingLocalCards);
+        const card = getCardById(
+          cardId,
+          syncedCards,
+          persistedLocalCards,
+          pendingLocalCards,
+          streamMandalaCards
+        );
         if (!card) return;
         const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
 
@@ -1061,6 +1138,8 @@ export function useCardOrchestrator(
       syncedCards,
       persistedLocalCards,
       pendingLocalCards,
+      streamMandalaCards,
+      resolveStreamCardId,
       toast,
       currentLevelId,
       handleFileDrop,
@@ -1173,7 +1252,26 @@ export function useCardOrchestrator(
   // Move card from mandala back to scratchpad
   const handleScratchPadCardDrop = useCallback(
     (cardId: string) => {
-      const card = getCardById(cardId, syncedCards, persistedLocalCards, pendingLocalCards);
+      const resolvedCardId = resolveStreamCardId(cardId);
+      if (resolvedCardId === null) {
+        toast({
+          title: t('index.cardSyncing', 'Card still syncing'),
+          description: t(
+            'index.cardSyncingDesc',
+            'Wait a moment for the card to settle, then try again.'
+          ),
+          variant: 'destructive',
+        });
+        return;
+      }
+      cardId = resolvedCardId;
+      const card = getCardById(
+        cardId,
+        syncedCards,
+        persistedLocalCards,
+        pendingLocalCards,
+        streamMandalaCards
+      );
       if (!card) return;
       const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
 
@@ -1211,6 +1309,8 @@ export function useCardOrchestrator(
       syncedCards,
       persistedLocalCards,
       pendingLocalCards,
+      streamMandalaCards,
+      resolveStreamCardId,
       updateVideoState,
       updateLocalCard,
       toast,
@@ -1221,9 +1321,32 @@ export function useCardOrchestrator(
   // Multi-card drop to scratchpad
   const handleScratchPadMultiCardDrop = useCallback(
     (cardIds: string[]) => {
+      const resolved: string[] = [];
+      for (const id of cardIds) {
+        const r = resolveStreamCardId(id);
+        if (r === null) {
+          toast({
+            title: t('index.cardSyncing', 'Card still syncing'),
+            description: t(
+              'index.cardSyncingDesc',
+              'Wait a moment for the card to settle, then try again.'
+            ),
+            variant: 'destructive',
+          });
+          return;
+        }
+        resolved.push(r);
+      }
+      cardIds = resolved;
       const batchItems = cardIds
         .map((cardId) => {
-          const card = getCardById(cardId, syncedCards, persistedLocalCards, pendingLocalCards);
+          const card = getCardById(
+            cardId,
+            syncedCards,
+            persistedLocalCards,
+            pendingLocalCards,
+            streamMandalaCards
+          );
           if (!card) return null;
           const source = detectCardSource(cardId, syncedCards, persistedLocalCards, card);
           return { card, source, cellIndex: -1, levelId: 'scratchpad', mandalaId: null };
@@ -1249,7 +1372,16 @@ export function useCardOrchestrator(
         }
       );
     },
-    [syncedCards, persistedLocalCards, pendingLocalCards, batchMoveCards, toast, t]
+    [
+      syncedCards,
+      persistedLocalCards,
+      pendingLocalCards,
+      streamMandalaCards,
+      resolveStreamCardId,
+      batchMoveCards,
+      toast,
+      t,
+    ]
   );
 
   // Save note
