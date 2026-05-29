@@ -40,6 +40,7 @@ import { v2SummaryPartialPatchRoutes } from './routes/internal/v2-summary-partia
 import { internalVideoPoolPromoteRoutes } from './routes/internal/video-pool-promote';
 import { internalGoogleCseRoutes } from './routes/internal/google-cse';
 import { internalPlaylistImportRoutes } from './routes/internal/playlist-import';
+import { internalPromptBuildRoutes } from './routes/internal/prompt-build';
 import { createErrorResponse, ErrorCode } from './schemas/common.schema';
 import { registerBotWriteGuard } from './plugins/bot-write-guard';
 import { registerBotUsageLogger } from './plugins/bot-usage-logger';
@@ -382,6 +383,11 @@ export async function buildServer() {
       // (source='user_playlist', quality_tier='gold', INSERT only).
       await instance.register(internalPlaylistImportRoutes, {
         prefix: '/internal/playlist-import',
+      });
+      // CP488+ — Mac Mini SSOT prompt builder. Returns the same prompt the
+      // prod cron generator uses (no fork drift).
+      await instance.register(internalPromptBuildRoutes, {
+        prefix: '/internal',
       });
     },
     { prefix: '/api/v1' }
