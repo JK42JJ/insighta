@@ -1,0 +1,132 @@
+name: batch-video-collector-watchdog
+
+# CP489+ (2026-05-29) — daily morning safeguard.
+#
+# Why: even after the fire-and-forget pivot, individual scheduled runs can
+# still fail (queue restart, EC2 hiccup, prod incident). The user requirement
+# is: "매일 오전 점검해서 전날 배치 안 돌면 반드시 다시 돌려야 한다."
+#
+# How: probe `/missed-yesterday` (read-only; returns `missed:true` when no
+# healthy `success`/`partial` row exists within the grace window). If
+# missed, fire trend-collector then enqueue batch-video-collector with
+# `trigger:"watchdog"`. The collector enqueue route ACKs in milliseconds
+# (CP489+ fire-and-forget) so this workflow never sees a 504.
+#
+# Trigger: 00:30 UTC (= 09:30 KST) daily. Late enough that overnight
+# 19:30-UTC schedule has had ample time to finish.
+#
+# Manual: `gh workflow run batch-video-collector-watchdog.yml`.
+#
+# Secrets required (same as batch-video-collector.yml):
+#   - INTERNAL_BATCH_TOKEN
+#   - DOMAIN
+
+on:
+  schedule:
+    - cron: '30 0 * * *'
+  workflow_dispatch:
+    inputs:
+      graceHours:
+        description: 'Freshness window in hours (default 25).'
+        required: false
+        type: string
+      forceRun:
+        description: 'Skip the missed-yesterday check and trigger anyway.'
+        required: false
+        default: 'false'
+        type: string
+
+jobs:
+  watchdog:
+    name: Catch yesterday's missed batch
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check secrets
+        run: |
+          if [ -z "${{ secrets.INTERNAL_BATCH_TOKEN }}" ]; then
+            echo "::error::INTERNAL_BATCH_TOKEN is not configured"
+            exit 1
+          fi
+          if [ -z "${{ secrets.DOMAIN }}" ]; then
+            echo "::error::DOMAIN is not configured"
+            exit 1
+          fi
+
+      - name: Probe missed-yesterday
+        id: probe
+        env:
+          TOKEN: ${{ secrets.INTERNAL_BATCH_TOKEN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+          GRACE: ${{ github.event.inputs.graceHours }}
+          FORCE: ${{ github.event.inputs.forceRun }}
+        run: |
+          GRACE_QS=""
+          if [ -n "$GRACE" ]; then
+            GRACE_QS="?graceHours=${GRACE}"
+          fi
+
+          if [ "$FORCE" = "true" ]; then
+            echo "forceRun=true — skipping probe, will fire trigger"
+            echo "missed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "GET → https://${DOMAIN}/api/v1/internal/skills/batch-video-collector/missed-yesterday${GRACE_QS}"
+          PROBE_RESPONSE=$(curl -sS --fail --show-error \
+            --max-time 30 \
+            "https://${DOMAIN}/api/v1/internal/skills/batch-video-collector/missed-yesterday${GRACE_QS}" \
+            -H "x-internal-token: $TOKEN")
+          echo "Probe response: $PROBE_RESPONSE"
+
+          MISSED=$(echo "$PROBE_RESPONSE" | jq -r '.missed // false')
+          echo "missed=${MISSED}" >> "$GITHUB_OUTPUT"
+
+          if [ "$MISSED" = "true" ]; then
+            echo "::warning::Yesterday's batch is missing — will re-trigger."
+          else
+            echo "Yesterday's batch is healthy — no action needed."
+          fi
+
+      - name: Fire trend-collector (only if missed)
+        if: steps.probe.outputs.missed == 'true'
+        env:
+          TOKEN: ${{ secrets.INTERNAL_BATCH_TOKEN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+        run: |
+          echo "POST → https://${DOMAIN}/api/v1/internal/skills/trend-collector/run"
+          TREND_RESPONSE=$(curl -sS --fail --show-error \
+            --max-time 300 \
+            -X POST "https://${DOMAIN}/api/v1/internal/skills/trend-collector/run" \
+            -H "content-type: application/json" \
+            -H "x-internal-token: $TOKEN" \
+            -d '{}')
+          echo "Trend response: $TREND_RESPONSE"
+          echo "$TREND_RESPONSE" | jq -e '.success == true' >/dev/null || {
+            echo "::warning::trend-collector returned success=false — batch may still fire"
+            echo "$TREND_RESPONSE"
+          }
+
+      - name: Enqueue batch-video-collector (only if missed)
+        if: steps.probe.outputs.missed == 'true'
+        env:
+          TOKEN: ${{ secrets.INTERNAL_BATCH_TOKEN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+        run: |
+          BODY=$(jq -nc '{trigger: "watchdog"}')
+          echo "POST → https://${DOMAIN}/api/v1/internal/skills/batch-video-collector/run"
+          echo "Body: $BODY"
+          RESPONSE=$(curl -sS --fail --show-error \
+            --max-time 30 \
+            -X POST "https://${DOMAIN}/api/v1/internal/skills/batch-video-collector/run" \
+            -H "content-type: application/json" \
+            -H "x-internal-token: $TOKEN" \
+            -d "$BODY")
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | jq -e '.success == true and .accepted == true' >/dev/null || {
+            echo "::error::Collector enqueue did not return success=true,accepted=true"
+            echo "$RESPONSE"
+            exit 1
+          }
+          JOB_ID=$(echo "$RESPONSE" | jq -r '.jobId')
+          echo "::notice::watchdog enqueued batch-video-collector job ${JOB_ID}"

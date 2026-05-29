@@ -13,6 +13,13 @@ export const JOB_NAMES = {
   BATCH_SCAN: 'batch-scan',
   /** CP462+ Issue #649 — Heart-click on-demand rich summary (direct enrichRichSummary). */
   ENRICH_RICH_SUMMARY: 'enrich-rich-summary',
+  /**
+   * CP489+ — fire-and-forget GHA trigger for the batch-video-collector skill.
+   * The route returns 202 immediately; this worker runs the actual skill in
+   * the background so prod nginx's 180s proxy_read_timeout cannot fail the
+   * GitHub Actions step when limit=200 takes >180s.
+   */
+  BATCH_VIDEO_COLLECTOR_RUN: 'batch-video-collector-run',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -60,6 +67,20 @@ export interface EnrichRichSummaryPayload {
   description?: string;
 }
 
+/**
+ * CP489+ — payload for BATCH_VIDEO_COLLECTOR_RUN.
+ *
+ * Both fields are advisory: the executor reads
+ * `BATCH_COLLECTOR_DAILY_KEYWORD_LIMIT` / `BATCH_COLLECTOR_RUN_TYPE`
+ * from env. These let the GHA workflow_dispatch override per-run.
+ */
+export interface BatchVideoCollectorRunPayload {
+  limit?: number;
+  runType?: string;
+  /** Source tag for logs (`gha-schedule`, `gha-dispatch`, `watchdog`, …). */
+  trigger?: string;
+}
+
 // ============================================================================
 // Job Options
 // ============================================================================
@@ -99,6 +120,17 @@ export const RICH_SUMMARY_RETRY_OPTIONS = {
 export const BATCH_SCAN_OPTIONS = {
   retryLimit: 0,
   expireInMinutes: 5,
+} as const;
+
+/**
+ * Batch video collector: no retries (the cron schedule itself is the retry
+ * surface, plus the watchdog catches missed days). Expiry sized for prod
+ * limit=200 worst-case (~6-8min observed pre-504 timeout) with generous
+ * headroom for quota-key rotation stalls.
+ */
+export const BATCH_VIDEO_COLLECTOR_RUN_OPTIONS = {
+  retryLimit: 0,
+  expireInMinutes: 30,
 } as const;
 
 // ============================================================================
