@@ -421,6 +421,8 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         domain: summary.core.domain,
         sectionsCount: summary.segments?.sections?.length ?? 0,
         atomsCount: summary.segments?.atoms?.length ?? 0,
+        enrichmentRich: score.enrichmentRich,
+        enrichmentReasons: score.enrichmentReasons,
       });
     }
 
@@ -500,7 +502,7 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
           lora: summary.lora as unknown as PrismaCli.InputJsonValue,
           ...(mutatedSegments ? { segments: mutatedSegments as PrismaCli.InputJsonValue } : {}),
           completeness: score.score,
-          quality_flag: 'pass',
+          quality_flag: score.enrichmentRich ? 'pass' : 'enrichment_low',
           model: 'claude-code-direct',
           ...(body.sourceLanguage === 'ko' || body.sourceLanguage === 'en'
             ? { source_language: body.sourceLanguage }
@@ -516,7 +518,7 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
           lora: summary.lora as unknown as PrismaCli.InputJsonValue,
           ...(mutatedSegments ? { segments: mutatedSegments as PrismaCli.InputJsonValue } : {}),
           completeness: score.score,
-          quality_flag: 'pass',
+          quality_flag: score.enrichmentRich ? 'pass' : 'enrichment_low',
           model: 'claude-code-direct',
           ...(body.sourceLanguage === 'ko' || body.sourceLanguage === 'en'
             ? { source_language: body.sourceLanguage }

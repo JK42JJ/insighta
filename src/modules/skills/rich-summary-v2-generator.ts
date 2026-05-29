@@ -287,7 +287,7 @@ export async function generateRichSummaryV2(
             ? { segments: summary.segments as unknown as Prisma.InputJsonValue }
             : {}),
           completeness: score.score,
-          quality_flag: 'pass',
+          quality_flag: score.enrichmentRich ? 'pass' : 'enrichment_low',
           model: provider.model,
           mandala_relevance_pct: summary.analysis.mandala_fit.mandala_relevance_pct,
           // CP474 — true only when the LLM actually saw a transcript.
@@ -305,7 +305,7 @@ export async function generateRichSummaryV2(
             ? { segments: summary.segments as unknown as Prisma.InputJsonValue }
             : {}),
           completeness: score.score,
-          quality_flag: 'pass',
+          quality_flag: score.enrichmentRich ? 'pass' : 'enrichment_low',
           model: provider.model,
           mandala_relevance_pct: summary.analysis.mandala_fit.mandala_relevance_pct,
           source_language: language,

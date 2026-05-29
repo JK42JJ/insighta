@@ -681,7 +681,31 @@ export interface CompletenessResult {
   score: number;
   passed: boolean;
   reasons: string[];
+  /**
+   * CP488+ — enrichment depth audit (NOT a pass/fail gate, just a flag).
+   * Set to true when the row passes basic completeness AND has all four
+   * enrichment fields populated:
+   *   - analysis.entities.length >= MIN_KEY_CONCEPTS
+   *   - every section has numeric relevance_pct
+   *   - at least half the sections carry >= 1 key_points entry
+   *   - at least half the atoms carry >= 1 entity_refs entry
+   *
+   * When `passed=true && enrichmentRich=false`, callers should stamp
+   * `quality_flag='enrichment_low'` (still serves the row) and queue
+   * regen on next opportunity — catches prompt drift at upsert time
+   * instead of via post-mortem (CP488+ Mac Mini fork incident).
+   */
+  enrichmentRich: boolean;
+  enrichmentReasons: string[];
 }
+
+/** CP488+ — minimum entity count for `enrichmentRich`. Mirrors MIN_KEY_CONCEPTS so the bar
+ *  matches the existing "minimum useful taxonomy" threshold. */
+export const MIN_ENRICHMENT_ENTITIES = MIN_KEY_CONCEPTS;
+/** CP488+ — at least this fraction of sections must carry >= 1 key_points entry. */
+export const ENRICHMENT_KEY_POINTS_SECTION_RATIO = 0.5;
+/** CP488+ — at least this fraction of atoms must carry >= 1 entity_refs entry. */
+export const ENRICHMENT_ENTITY_REFS_ATOM_RATIO = 0.5;
 
 export function scoreCompleteness(s: RichSummaryV2Layered): CompletenessResult {
   let score = 0;
@@ -755,9 +779,56 @@ export function scoreCompleteness(s: RichSummaryV2Layered): CompletenessResult {
 
   // round to 2 decimals
   score = Math.round(score * 100) / 100;
+
+  // CP488+ enrichment depth audit (warn-level, not a hard gate). Catches prompt
+  // drift at upsert time so the next Mac Mini PROMPT_HEADER / cron prompt fork
+  // doesn't silently ship rows missing the 4 enrichment fields (entities /
+  // sections.relevance_pct / sections.key_points / atoms.entity_refs).
+  const enrichmentReasons: string[] = [];
+  const entitiesCount = s.analysis.entities?.length ?? 0;
+  if (entitiesCount < MIN_ENRICHMENT_ENTITIES) {
+    enrichmentReasons.push(
+      `analysis.entities insufficient: ${entitiesCount} (expected ${MIN_ENRICHMENT_ENTITIES}+)`
+    );
+  }
+
+  const sectionsArr = s.segments?.sections ?? [];
+  if (sectionsArr.length > 0) {
+    const allHaveRelevance = sectionsArr.every((sec) => typeof sec.relevance_pct === 'number');
+    if (!allHaveRelevance) {
+      const missing = sectionsArr.filter((sec) => typeof sec.relevance_pct !== 'number').length;
+      enrichmentReasons.push(
+        `segments.sections missing relevance_pct: ${missing}/${sectionsArr.length}`
+      );
+    }
+    const sectionsWithKp = sectionsArr.filter(
+      (sec) => Array.isArray(sec.key_points) && sec.key_points.length > 0
+    ).length;
+    if (sectionsWithKp / sectionsArr.length < ENRICHMENT_KEY_POINTS_SECTION_RATIO) {
+      enrichmentReasons.push(
+        `segments.sections key_points coverage low: ${sectionsWithKp}/${sectionsArr.length}`
+      );
+    }
+  }
+
+  const atomsArr = s.segments?.atoms ?? [];
+  if (atomsArr.length > 0) {
+    const atomsWithEntityRefs = atomsArr.filter(
+      (a) => Array.isArray(a.entity_refs) && a.entity_refs.length > 0
+    ).length;
+    if (atomsWithEntityRefs / atomsArr.length < ENRICHMENT_ENTITY_REFS_ATOM_RATIO) {
+      enrichmentReasons.push(
+        `segments.atoms entity_refs coverage low: ${atomsWithEntityRefs}/${atomsArr.length}`
+      );
+    }
+  }
+  const enrichmentRich = enrichmentReasons.length === 0;
+
   return {
     score,
     passed: score >= PASS_THRESHOLD && segmentsValid,
     reasons,
+    enrichmentRich,
+    enrichmentReasons,
   };
 }
