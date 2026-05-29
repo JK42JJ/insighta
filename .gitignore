@@ -54,6 +54,8 @@ prisma/migrations/*
 !prisma/migrations/user-video-states-cleanup/**
 !prisma/migrations/user-video-states-guards/
 !prisma/migrations/user-video-states-guards/**
+!prisma/migrations/youtube-videos-decode-entities/
+!prisma/migrations/youtube-videos-decode-entities/**
 !prisma/migrations/youtube-metadata-completeness/
 !prisma/migrations/youtube-metadata-completeness/**
 !prisma/migrations/search-quality-overhaul/

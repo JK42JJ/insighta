@@ -1,5 +1,6 @@
 import { memo, useMemo, useState, useCallback } from 'react';
 import { cn } from '@/shared/lib/utils';
+import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { GripVertical, Plus, Play, FileText, Link as LinkIcon } from 'lucide-react';
 import {
@@ -103,10 +104,12 @@ function TileTooltipContent({
           <Play className="w-5 h-5 text-primary/30" />
         </div>
       )}
-      {/* Title — below thumbnail */}
+      {/* Title — below thumbnail. decodeHtmlEntities defends against YouTube
+          snippet.title entity-escaped rows the BE backfill hasn't reached yet
+          (DB trigger handles new writes; this is render-time defence). */}
       <div className="px-2.5 py-2">
         <p className="text-[11px] font-medium leading-snug line-clamp-2 text-foreground/85">
-          {card.title}
+          {decodeHtmlEntities(card.title)}
         </p>
       </div>
     </TooltipContent>

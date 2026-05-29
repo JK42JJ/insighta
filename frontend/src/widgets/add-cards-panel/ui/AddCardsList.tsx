@@ -20,6 +20,7 @@
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Bookmark, Check, Loader2, RotateCw, X } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 import { formatRelativeDate } from '@/shared/lib/format-date';
 import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
 import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
@@ -286,7 +287,7 @@ function CardItem({
             isPicked && 'text-muted-foreground'
           )}
         >
-          {card.title}
+          {decodeHtmlEntities(card.title)}
         </h4>
         {card.channel && (
           <p className="text-[9.5px] text-muted-foreground line-clamp-1">{card.channel}</p>

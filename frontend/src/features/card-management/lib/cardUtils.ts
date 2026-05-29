@@ -92,24 +92,26 @@ export function detectCardSourceFast(
 }
 
 /**
- * Get a card by ID from multiple sources
+ * Get a card by ID from multiple sources.
  *
- * @param cardId - The card ID to find
- * @param syncedCards - YouTube synced cards
- * @param persistedLocalCards - Persisted local cards
- * @param pendingCards - Pending local cards
- * @returns The card if found, null otherwise
+ * `streamCards` covers SSE-pushed recommendation_cache rows that are
+ * rendered in the grid via `streamMandalaCards` but whose ids carry the
+ * `stream-` prefix (see `recommendationToInsightCard`). Omitting this
+ * source caused multi-card D&D to silently drop stream-origin cards
+ * (handleCardDrop returned early on `getCardById === null`).
  */
 export function getCardById(
   cardId: string,
   syncedCards: InsightCard[],
   persistedLocalCards: InsightCard[],
-  pendingCards: InsightCard[]
+  pendingCards: InsightCard[],
+  streamCards: InsightCard[] = []
 ): InsightCard | null {
   return (
     syncedCards.find((c) => c.id === cardId) ||
     persistedLocalCards.find((c) => c.id === cardId) ||
     pendingCards.find((c) => c.id === cardId) ||
+    streamCards.find((c) => c.id === cardId) ||
     null
   );
 }
