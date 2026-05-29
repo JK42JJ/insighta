@@ -107,6 +107,13 @@ export function AddCardsPanel() {
 
   // Server-truth set of mandala-pre-existing videoIds. Used as a list
   // filter (not an overlay) to cover the localStorage-restored path.
+  //
+  // CP489+ — Explicit > Inferred (v0 decision #2) applied here too: wizard
+  // pre-fill rows (auto_added=true with no engagement) are NOT treated as
+  // "picked". Without this, every new candidate that happens to also be in
+  // the wizard pre-fill set is shown with the "추가됨" overlay even though
+  // the user never engaged with it. Mirrors the backend exclude policy
+  // (modules/exclude/excluded-videos.ts).
   const { data: allVideoStates } = useAllVideoStates();
   const serverPickedSet = useMemo(() => {
     if (!mandalaId) return new Set<string>();
@@ -114,7 +121,16 @@ export function AddCardsPanel() {
     for (const s of allVideoStates ?? []) {
       if (s.mandala_id !== mandalaId) continue;
       const yvid = s.video?.youtube_video_id;
-      if (yvid) set.add(yvid);
+      if (!yvid) continue;
+      const isWizardGhost =
+        s.auto_added === true &&
+        s.is_watched === false &&
+        s.is_in_ideation === false &&
+        !s.user_note &&
+        (s.watch_position_seconds ?? 0) === 0 &&
+        !s.pinned_at;
+      if (isWizardGhost) continue;
+      set.add(yvid);
     }
     return set;
   }, [allVideoStates, mandalaId]);
