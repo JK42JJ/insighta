@@ -122,6 +122,22 @@ APPLY_FILES=(
   # calls race-safely upsert one level=0 row per mandala. CREATE UNIQUE
   # INDEX IF NOT EXISTS — idempotent.
   "prisma/migrations/center-goal-cache/001_partial_unique_level0.sql"
+  # CP489 (2026-05-29) — cell_index regression trigger demote escape.
+  # 001 (PR #676) blocked EVERY cell_index >= 0 -> -1 to stop the bookmark
+  # loss incident. 002 adds the explicit-demote escape clause (NEW
+  # level_id='scratchpad' AND mandala_id IS NULL), restoring legitimate
+  # scratchpad/delete moves. CREATE OR REPLACE FUNCTION — atomic swap,
+  # idempotent. 001 is not in this allowlist because it was applied
+  # before this script existed; new deploys re-apply 002 on top of
+  # whatever 001 left in prod, which is fine because 002 is a
+  # function-body swap that keeps the same trigger row binding.
+  "prisma/migrations/user-video-states-guards/002_allow_intentional_scratchpad_move.sql"
+  # CP489 (2026-05-29) — youtube_videos title + channel_title HTML
+  # entity decode at DB boundary. CREATE OR REPLACE FUNCTION x2 +
+  # DROP TRIGGER IF EXISTS + CREATE TRIGGER + bounded UPDATE backfill
+  # (WHERE title/channel_title LIKE '%&%'). The backfill is idempotent
+  # because the decode function is a no-op on already-decoded text.
+  "prisma/migrations/youtube-videos-decode-entities/001_decode_entities.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
