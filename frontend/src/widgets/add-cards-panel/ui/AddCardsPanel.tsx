@@ -107,6 +107,13 @@ export function AddCardsPanel() {
 
   // Server-truth set of mandala-pre-existing videoIds. Used as a list
   // filter (not an overlay) to cover the localStorage-restored path.
+  //
+  // CP489+ — Explicit > Inferred (v0 decision #2) applied here too: wizard
+  // pre-fill rows (auto_added=true with no engagement) are NOT treated as
+  // "picked". Without this, every new candidate that happens to also be in
+  // the wizard pre-fill set is shown with the "추가됨" overlay even though
+  // the user never engaged with it. Mirrors the backend exclude policy
+  // (modules/exclude/excluded-videos.ts).
   const { data: allVideoStates } = useAllVideoStates();
   const serverPickedSet = useMemo(() => {
     if (!mandalaId) return new Set<string>();
@@ -114,7 +121,16 @@ export function AddCardsPanel() {
     for (const s of allVideoStates ?? []) {
       if (s.mandala_id !== mandalaId) continue;
       const yvid = s.video?.youtube_video_id;
-      if (yvid) set.add(yvid);
+      if (!yvid) continue;
+      const isWizardGhost =
+        s.auto_added === true &&
+        s.is_watched === false &&
+        s.is_in_ideation === false &&
+        !s.user_note &&
+        (s.watch_position_seconds ?? 0) === 0 &&
+        !s.pinned_at;
+      if (isWizardGhost) continue;
+      set.add(yvid);
     }
     return set;
   }, [allVideoStates, mandalaId]);
@@ -323,13 +339,12 @@ export function AddCardsPanel() {
     saveSessionPicks(mandalaId, resetHistory.picks);
     setResetHistory(null);
   }, [resetHistory, mandalaId]);
-  const triggerSearch = useCallback(() => {
-    if (cards.length > 0) {
-      resetResults();
-      return;
-    }
-    runSearch();
-  }, [cards.length, resetResults, runSearch]);
+  // CP489+ — single primary button always runs a new search. When cards
+  // are present the search response appends as Round N+1 (cumulative,
+  // per setRounds PREPEND logic above). Reset is now a separate secondary
+  // action so users can explicitly clear without conflating it with the
+  // primary "find more" intent.
+  const triggerSearch = runSearch;
 
   // Race-free close: keep mount during the 200ms slide-out so the grid never flashes.
   const [isClosingLocal, setIsClosingLocal] = useState(false);
@@ -462,31 +477,35 @@ export function AddCardsPanel() {
           <AddCardsFilters />
           <TargetLevelChips />
 
-          <div className="flex items-center justify-end px-5 py-2.5 sm:px-6">
+          <div className="flex items-center justify-end gap-2 px-5 py-2.5 sm:px-6">
+            {cards.length > 0 && (
+              <button
+                type="button"
+                onClick={resetResults}
+                disabled={mutation.isPending}
+                className="inline-flex items-center gap-1 h-8 px-3 rounded-full text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] transition-colors disabled:opacity-50"
+              >
+                <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.2} />
+                <span>{t('addCards.panel.resetButton', 'Reset')}</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={triggerSearch}
               disabled={mutation.isPending}
               className={cn(
                 'inline-flex items-center gap-1.5 h-8 rounded-full text-[12px] font-medium px-3.5 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2',
-                cards.length > 0
-                  ? // Reset state — secondary tone so it reads as
-                    // "clear/return", visually distinct from "search".
-                    'bg-secondary text-secondary-foreground hover:bg-secondary/80 focus-visible:ring-foreground/20'
-                  : // Search state — primary CTA.
-                    'bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-primary/30'
+                'bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-primary/30'
               )}
             >
               {mutation.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : cards.length > 0 ? (
-                <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.2} />
               ) : (
                 <Search className="h-3.5 w-3.5" strokeWidth={2.2} />
               )}
               <span>
                 {cards.length > 0
-                  ? t('addCards.panel.resetButton', 'Reset')
+                  ? t('addCards.panel.findMoreButton', 'Find more')
                   : t('addCards.panel.searchButton', 'Search')}
               </span>
             </button>
@@ -497,27 +516,31 @@ export function AddCardsPanel() {
           <div className="flex items-center gap-2 px-5 py-2 border-b border-border/40 text-[11.5px] text-muted-foreground sm:px-6">
             <Lock className="h-3 w-3 shrink-0" />
             <span className="truncate flex-1 text-foreground/80">{centerGoal || '…'}</span>
+            {cards.length > 0 && (
+              <button
+                type="button"
+                onClick={resetResults}
+                disabled={mutation.isPending}
+                className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] transition-colors"
+              >
+                <RotateCcw className="h-3 w-3" strokeWidth={2.2} />
+                <span>{t('addCards.panel.resetButton', 'Reset')}</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={triggerSearch}
               disabled={mutation.isPending}
-              className={cn(
-                'inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] transition-colors',
-                cards.length > 0
-                  ? 'text-foreground/80 hover:bg-foreground/[0.06]'
-                  : 'text-foreground hover:bg-foreground/[0.06]'
-              )}
+              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] text-foreground hover:bg-foreground/[0.06] transition-colors"
             >
               {mutation.isPending ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
-              ) : cards.length > 0 ? (
-                <RotateCcw className="h-3 w-3" strokeWidth={2.2} />
               ) : (
                 <Search className="h-3 w-3" strokeWidth={2.2} />
               )}
               <span>
                 {cards.length > 0
-                  ? t('addCards.panel.resetButton', 'Reset')
+                  ? t('addCards.panel.findMoreButton', 'Find more')
                   : t('addCards.panel.searchButton', 'Search')}
               </span>
             </button>

@@ -1895,6 +1895,7 @@
       "keywordPlaceholder": "Add keyword…",
       "removeKeyword": "Remove keyword {{keyword}}",
       "searchButton": "Search",
+      "findMoreButton": "Find more",
       "resetButton": "Reset",
       "restorePrevious": "Show previous results",
       "resultCount": "{{count}} matches",

@@ -1903,6 +1903,7 @@
       "keywordPlaceholder": "키워드 추가…",
       "removeKeyword": "키워드 {{keyword}} 제거",
       "searchButton": "검색",
+      "findMoreButton": "추가 검색",
       "resetButton": "초기화",
       "restorePrevious": "이전 결과 보기",
       "resultCount": "{{count}}개 결과",
