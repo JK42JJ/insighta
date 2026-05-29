@@ -45,6 +45,7 @@ import {
 import { getAddCardsConfig } from '@/config/add-cards';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
+import { getExcludedVideoIds } from '@/modules/exclude/excluded-videos';
 import { withTraceContext, recordTrace, getTraceContext } from '@/modules/discover-tracing';
 import { randomUUID } from 'node:crypto';
 
@@ -519,35 +520,10 @@ interface ResolveExcludeSetOpts {
 }
 
 async function resolveExcludeSet(opts: ResolveExcludeSetOpts): Promise<Set<string>> {
-  const { prisma, userId, mandalaId, requestExcludeIds } = opts;
-  const [ownLocal, ownStates, deleteSignals, archiveSignals] = await Promise.all([
-    prisma.user_local_cards.findMany({
-      where: { user_id: userId },
-      select: { video_id: true },
-    }),
-    prisma.$queryRaw<Array<{ youtube_video_id: string }>>(Prisma.sql`
-      SELECT yv.youtube_video_id
-        FROM public.user_video_states uvs
-        JOIN public.youtube_videos yv ON yv.id = uvs.video_id
-       WHERE uvs.user_id = ${userId}::uuid
-         AND uvs.mandala_id = ${mandalaId}::uuid
-    `),
-    prisma.card_interactions.findMany({
-      where: { user_id: userId, signal: 'delete' },
-      select: { video_id: true },
-    }),
-    prisma.card_interactions.findMany({
-      where: { user_id: userId, signal: 'archive', mandala_id: mandalaId },
-      select: { video_id: true },
-    }),
-  ]);
-  const excludeSet = new Set<string>();
-  for (const id of requestExcludeIds) excludeSet.add(id);
-  for (const r of ownLocal) if (r.video_id) excludeSet.add(r.video_id);
-  for (const r of ownStates) excludeSet.add(r.youtube_video_id);
-  for (const r of deleteSignals) excludeSet.add(r.video_id);
-  for (const r of archiveSignals) excludeSet.add(r.video_id);
-  return excludeSet;
+  // CP489+ dedup-bleed fix — delegates to shared SSOT helper that applies
+  // Explicit > Inferred policy (auto_added=true zero-engagement rows from
+  // wizard pre-fill are no longer excluded). See modules/exclude/.
+  return getExcludedVideoIds(opts);
 }
 
 interface ApplyFeedbackBiasOpts {
