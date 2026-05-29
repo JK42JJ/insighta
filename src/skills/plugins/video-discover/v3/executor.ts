@@ -352,8 +352,26 @@ async function executeImpl(
   // from computing + SSE-streaming candidates that auto-add would silently
   // drop, which is what made the dashboard count shrink on refresh.
   try {
+    // CP489+ dedup-bleed fix — Explicit > Inferred (v0 decision #2).
+    // wizard pre-fill (auto_added=true, all engagement signals zero) no
+    // longer excludes; only rows with real engagement OR auto_added=false
+    // (user explicit add) are excluded. See modules/exclude/excluded-videos.ts.
     const owned = await getPrismaClient().youtube_videos.findMany({
-      where: { userState: { some: { user_id: ctx.userId } } },
+      where: {
+        userState: {
+          some: {
+            user_id: ctx.userId,
+            OR: [
+              { is_watched: true },
+              { is_in_ideation: true },
+              { user_note: { not: null } },
+              { watch_position_seconds: { gt: 0 } },
+              { pinned_at: { not: null } },
+              { auto_added: false },
+            ],
+          },
+        },
+      },
       select: { youtube_video_id: true },
     });
     for (const v of owned) existingVideoIds.add(v.youtube_video_id);
