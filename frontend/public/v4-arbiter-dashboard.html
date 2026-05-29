@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>v4 LLM-arbiter · health dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{--paper:#F4F1EA;--card:#FBF9F4;--ink-3:#65628C;--ink-5:#2A2A50;--tx:#2A2824;--tx-2:#6B655A;--tx-3:#9A9384;--line:rgba(42,40,36,.10);--serif:'Newsreader',Georgia,serif;--sans:'Inter',system-ui,sans-serif;--mono:'IBM Plex Mono',monospace}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:var(--sans);background:var(--paper);color:var(--tx);padding:36px;line-height:1.5}
+.head{margin-bottom:24px}.eyebrow{font:500 11px var(--sans);letter-spacing:.18em;color:var(--tx-3);text-transform:uppercase}
+.title{font:600 28px var(--serif);margin:6px 0 4px}.subtitle{font:400 14px var(--mono);color:var(--tx-2)}
+.controls{margin:20px 0;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:6px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ctrl-lbl{font:500 11px var(--mono);color:var(--tx-3);margin-right:8px;letter-spacing:.1em;text-transform:uppercase}
+.pill{padding:6px 12px;border:1px solid var(--line);background:transparent;font:400 12px var(--mono);color:var(--tx-2);border-radius:14px;cursor:pointer}
+.pill.on{background:var(--ink-5);color:#fff;border-color:var(--ink-5)}.pill:hover:not(.on){background:var(--paper)}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(4,1fr);margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px}
+.kpi-lbl{font:500 10px var(--mono);color:var(--tx-3);letter-spacing:.1em;text-transform:uppercase}
+.kpi-val{font:500 32px var(--serif);margin-top:4px}.kpi-note{font:400 11px var(--mono);color:var(--tx-2);margin-top:6px}
+.row{display:grid;gap:14px;grid-template-columns:1fr 1fr;margin-bottom:14px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:18px}.panel.full{grid-column:1/-1}
+.panel-h{font:600 14px var(--serif);margin-bottom:14px;display:flex;justify-content:space-between;align-items:baseline}
+.panel-h .ask{font:400 11px var(--mono);color:var(--tx-3)}
+.panel-empty{padding:50px 20px;text-align:center;color:var(--tx-3);font-style:italic;font-size:13px}
+.chart-wrap{position:relative;height:200px}
+.cell-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font:500 12px var(--mono)}
+.cell-name{flex:0 0 200px;color:var(--tx-2);font-size:11px}
+.cell-track{flex:1;height:14px;background:var(--paper);border-radius:2px;overflow:hidden}
+.cell-fill{height:100%;background:var(--ink-3)}.cell-num{flex:0 0 30px;text-align:right;color:var(--tx-2)}
+.funnel-row{display:flex;align-items:center;gap:12px;margin-bottom:6px;font:500 12px var(--mono)}
+.funnel-lbl{flex:0 0 110px;color:var(--tx-3);font-size:11px}
+.funnel-track{flex:1;height:16px;background:var(--paper);border-radius:2px;overflow:hidden}
+.funnel-fill{height:100%;background:var(--ink-3)}.funnel-num{flex:0 0 110px;text-align:right;color:var(--tx-2)}
+.funnel-num .pass{color:var(--tx-3);margin-left:6px;font-size:10px}
+table.cmp{width:100%;font:400 12px var(--mono);border-collapse:collapse}
+table.cmp th{font:500 11px var(--mono);color:var(--tx-3);padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.08em}
+table.cmp td{padding:8px 10px;border-bottom:1px solid var(--line)}
+table.cmp tr.cur{background:rgba(101,98,140,.06)}
+table.cmp tr.placeholder td{color:var(--tx-3);font-style:italic}
+.foot{font:400 12px var(--mono);color:var(--tx-3);margin-top:24px;padding-top:16px;border-top:1px solid var(--line)}
+.foot p{margin-bottom:6px}.foot b{color:var(--tx-2)}
+.empty-state{padding:80px 40px;text-align:center;background:var(--card);border:1px solid var(--line);border-radius:6px}
+.empty-state h2{font:500 18px var(--serif);margin-bottom:12px;color:var(--tx-2)}
+.empty-state p{font:400 13px var(--mono);color:var(--tx-3);margin-bottom:8px;line-height:1.7}
+.empty-state code{font:400 12px var(--mono);background:var(--paper);padding:2px 6px;border-radius:3px;color:var(--tx-2)}
+</style>
+</head>
+<body>
+<div class="head">
+  <div class="eyebrow">v4 LLM-arbiter · health</div>
+  <div class="title" id="title">v4 PoC runs</div>
+  <div class="subtitle" id="ctx">data source: <code>/api/v1/admin/v4-arbiter-runs</code></div>
+</div>
+<div id="empty-state" class="empty-state" style="display:none">
+  <h2>측정 데이터 없음</h2>
+  <p>v4 LLM-arbiter PoC run 결과를 보려면:</p>
+  <p>1. operator: PoC script 실행 → <code>handoff §11.4 JSON schema</code> 결과 생성</p>
+  <p>2. 결과를 prod-side 저장소 (<code>V4_ARBITER_RUNS_DIR</code> 환경변수 또는 기본 <code>/var/insighta/v4-runs/</code>) 에 업로드</p>
+  <p>3. 백엔드 <code>/api/v1/admin/v4-arbiter-runs</code> endpoint 가 최신 run 목록 반환</p>
+  <p>현재 dir 미존재 또는 run 0건.</p>
+</div>
+<div id="main-content" style="display:none">
+  <div class="controls"><span class="ctrl-lbl">scenario</span><div id="scenario-buttons"></div></div>
+  <div class="grid">
+    <div class="kpi"><div class="kpi-lbl">검색 풀</div><div class="kpi-val" id="k-pool">—</div><div class="kpi-note">video_pool</div></div>
+    <div class="kpi"><div class="kpi-lbl">surface (conf ≥70)</div><div class="kpi-val" id="k-pass">—</div><div class="kpi-note" id="k-pass-note">—</div></div>
+    <div class="kpi"><div class="kpi-lbl">사용자 picked</div><div class="kpi-val" id="k-picked">—</div><div class="kpi-note" id="k-picked-note">북극성 — 실측 필요</div></div>
+    <div class="kpi"><div class="kpi-lbl">latency p95 · cost</div><div class="kpi-val" id="k-lat">—</div><div class="kpi-note" id="k-cost">—</div></div>
+  </div>
+  <div class="panel full" style="margin-bottom:14px">
+    <div class="panel-h">깔때기 — funnel <span class="ask">어디서 가장 좁아지나?</span></div>
+    <div id="funnel"></div>
+    <div style="margin-top:10px;font:400 11px var(--mono);color:var(--tx-2)" id="bottleneck">—</div>
+  </div>
+  <div class="row">
+    <div class="panel">
+      <div class="panel-h">confidence 분포 <span class="ask">강한 후보를 찾았나?</span></div>
+      <div class="chart-wrap"><canvas id="confChart"></canvas><div class="panel-empty" id="conf-empty" style="display:none">실측 없음</div></div>
+      <div style="margin-top:10px;font:400 11px var(--mono);color:var(--tx-2)" id="conf-mode">—</div>
+    </div>
+    <div class="panel">
+      <div class="panel-h">cell 분포 <span class="ask">균형 vs 편중?</span></div>
+      <div id="cells"></div>
+      <div style="margin-top:10px;font:400 11px var(--mono);color:var(--tx-2)" id="cell-note">—</div>
+    </div>
+  </div>
+  <div class="panel full" style="margin-bottom:14px">
+    <div class="panel-h">cosine score by rank <span class="ask">후보 수를 얼마로 잡나?</span></div>
+    <div class="chart-wrap"><canvas id="cosChart"></canvas><div class="panel-empty" id="cos-empty" style="display:none">실측 없음</div></div>
+    <div style="margin-top:10px;font:400 11px var(--mono);color:var(--tx-2)" id="cutoff-note">—</div>
+  </div>
+  <div class="panel full">
+    <div class="panel-h">scenario 비교</div>
+    <table class="cmp"><thead><tr><th>scenario</th><th>picked% / pass%</th><th>cell ratio</th><th>conf 분포</th><th>latency p95</th><th>$/call</th></tr></thead><tbody id="cmp-body"></tbody></table>
+    <div style="margin-top:12px;font:400 11px var(--mono);color:var(--tx-3)"><b>주의</b>: picked% 컬럼이 실측이 아닌 conf≥70 통과율 (proxy)이면 v3 와 비교 무의미. 실제 picked 신호 = PR #788 surfaced + user_local_cards.</div>
+  </div>
+  <div class="foot">
+    <p><b>신호등 금지</b> · 단일 hue 농도만. 측정 중립.</p>
+    <p><b>picked % 가 북극성</b> · 다른 지표는 중간 신호.</p>
+    <p><b>v3 baseline 실측 필요</b> · 비교 전제 시 PR #788 + user_local_cards.</p>
+  </div>
+</div>
+<script>
+var SCENARIOS = {}; var state = { scenario: null }; var confChart = null, cosChart = null;
+async function loadScenarios(){
+  try {
+    var resp = await fetch('/api/v1/admin/v4-arbiter-runs', { credentials: 'include' });
+    if (!resp.ok) throw new Error('endpoint ' + resp.status);
+    var data = await resp.json();
+    SCENARIOS = data.scenarios || data;
+  } catch (e) { console.warn('scenarios fetch failed:', e.message); SCENARIOS = {}; }
+  if (Object.keys(SCENARIOS).length === 0) {
+    document.getElementById('empty-state').style.display = 'block';
+    document.getElementById('main-content').style.display = 'none'; return;
+  }
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('main-content').style.display = 'block';
+  buildButtons(); render();
+}
+function buildButtons(){
+  var html = Object.keys(SCENARIOS).map(function(k, i){ return '<button class="pill' + (i===0?' on':'') + '" data-k="'+k+'">'+(SCENARIOS[k].label || k)+'</button>'; }).join('');
+  document.getElementById('scenario-buttons').innerHTML = html;
+  document.querySelectorAll('#scenario-buttons .pill').forEach(function(p){
+    p.addEventListener('click', function(){
+      document.querySelectorAll('#scenario-buttons .pill').forEach(function(x){x.classList.remove('on')});
+      p.classList.add('on'); state.scenario = p.dataset.k; render();
+    });
+  });
+  state.scenario = Object.keys(SCENARIOS)[0];
+}
+function renderKPI(d){
+  document.getElementById('title').innerText = d.label || state.scenario;
+  document.getElementById('ctx').innerText = (d.meta && d.meta.title || 'mandala') + ' · ' + state.scenario + ' · ' + (d.candidates || '?') + ' candidates';
+  document.getElementById('k-pool').innerText = d.pool ? d.pool.toLocaleString() : '—';
+  if (d.confPass != null) { document.getElementById('k-pass').innerText = d.confPass; document.getElementById('k-pass-note').innerText = d.candidates ? Math.round(d.confPass/d.candidates*100)+'% of LLM input' : '—'; }
+  else { document.getElementById('k-pass').innerText = '—'; document.getElementById('k-pass-note').innerText = '실측 미완'; }
+  if (d.pickedPct != null) { document.getElementById('k-picked').innerText = d.pickedPct.toFixed(1)+'%'; document.getElementById('k-picked-note').innerText = d.baselineDelta || '비교 baseline 미실측'; }
+  else { document.getElementById('k-picked').innerText = '— (실측 미완)'; document.getElementById('k-picked-note').innerText = 'PR #788 + user_local_cards 실측 필요'; }
+  document.getElementById('k-lat').innerText = d.latencyP95 != null ? d.latencyP95.toFixed(1) + 's' : '—';
+  document.getElementById('k-cost').innerText = (d.cost != null ? '$' + d.cost.toFixed(4) : '—') + ' / call';
+}
+function renderFunnel(d){
+  if (d.pool == null) { document.getElementById('funnel').innerHTML = '<div class="panel-empty">funnel 데이터 실측 미완</div>'; document.getElementById('bottleneck').innerText = d.bottleneckNote || '—'; return; }
+  var steps = [{l:'video_pool', v:d.pool},{l:'retrieval (cosine top N)', v:d.retrieval},{l:'LLM input', v:d.llmIn},{l:'conf ≥70', v:d.confPass != null ? d.confPass : '—'},{l:'picked (실측)', v:d.picked != null ? d.picked : null}];
+  var prev = d.pool;
+  var html = steps.map(function(s){
+    if (s.v == null) return '<div class="funnel-row"><div class="funnel-lbl">'+s.l+'</div><div class="funnel-track"></div><div class="funnel-num"><i style="color:var(--tx-3)">— 실측 미완</i></div></div>';
+    var pct = (typeof s.v === 'number') ? Math.max(s.v/d.pool*100, 0.5) : 0.5;
+    var pass = (typeof s.v === 'number' && typeof prev === 'number') ? Math.round(s.v/prev*100) : '—';
+    var row = '<div class="funnel-row"><div class="funnel-lbl">'+s.l+'</div><div class="funnel-track"><div class="funnel-fill" style="width:'+pct+'%"></div></div><div class="funnel-num">'+(typeof s.v==='number'?s.v.toLocaleString():s.v)+'<span class="pass">· '+pass+'%</span></div></div>';
+    prev = s.v; return row;
+  }).join('');
+  document.getElementById('funnel').innerHTML = html;
+  document.getElementById('bottleneck').innerText = d.bottleneckNote || '—';
+}
+function renderConfHist(d){
+  if (confChart) { confChart.destroy(); confChart = null; }
+  var total = (d.confHist || []).reduce(function(a,b){return a+b}, 0);
+  document.getElementById('conf-empty').style.display = total === 0 ? 'flex' : 'none';
+  document.getElementById('confChart').style.display = total === 0 ? 'none' : 'block';
+  document.getElementById('conf-mode').innerText = d.confMode || '—';
+  if (total === 0) return;
+  confChart = new Chart(document.getElementById('confChart'),{type:'bar',data:{labels:['0','10','20','30','40','50','60','70','80','90','100'],datasets:[{data:d.confHist,backgroundColor:'#65628C',borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10,family:'IBM Plex Mono'},color:'#9A9384'}},y:{grid:{color:'rgba(42,40,36,.08)'},ticks:{font:{size:10,family:'IBM Plex Mono'},color:'#9A9384'},beginAtZero:true}}}});
+}
+function renderCells(d){
+  var entries = Object.entries(d.cells || {});
+  if (entries.length === 0) { document.getElementById('cells').innerHTML = '<div class="panel-empty">cell 분포 실측 없음</div>'; document.getElementById('cell-note').innerText = d.cellRatio || '— 실측 필요'; return; }
+  var max = Math.max.apply(null, entries.map(function(e){return e[1]}));
+  document.getElementById('cells').innerHTML = entries.map(function(e){
+    var pct = e[1]/max*100;
+    return '<div class="cell-row"><div class="cell-name">'+e[0]+'</div><div class="cell-track"><div class="cell-fill" style="width:'+Math.max(pct,2)+'%"></div></div><div class="cell-num">'+e[1]+'</div></div>';
+  }).join('');
+  document.getElementById('cell-note').innerText = d.cellRatio || '—';
+}
+function renderCos(d){
+  if (cosChart) { cosChart.destroy(); cosChart = null; }
+  var series = (d.cosineByRank || []).map(function(p){return {x:p.x, y:p.y};});
+  document.getElementById('cos-empty').style.display = series.length === 0 ? 'flex' : 'none';
+  document.getElementById('cosChart').style.display = series.length === 0 ? 'none' : 'block';
+  document.getElementById('cutoff-note').innerText = d.cutoffNote || '—';
+  if (series.length === 0) return;
+  cosChart = new Chart(document.getElementById('cosChart'),{type:'line',data:{datasets:[{data:series,borderColor:'#65628C',backgroundColor:'rgba(101,98,140,.08)',fill:true,pointRadius:0,borderWidth:1.5,tension:.2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{type:'linear',grid:{display:false},ticks:{font:{size:10,family:'IBM Plex Mono'},color:'#9A9384'}},y:{grid:{color:'rgba(42,40,36,.08)'},ticks:{font:{size:10,family:'IBM Plex Mono'},color:'#9A9384'},min:0,max:1}}}});
+}
+function renderComparison(curKey){
+  var rows = Object.keys(SCENARIOS).map(function(k){
+    var d = SCENARIOS[k];
+    var cls = k === curKey ? 'cur' : (d.isPlaceholder ? 'placeholder' : '');
+    var pp = d.pickedPct != null ? d.pickedPct.toFixed(1)+'%' : '— 실측 미완';
+    var ratio = (d.cellRatio || '—').split('=').pop().trim();
+    var confSpread = (d.confHist || []).reduce(function(a,b){return a+b}, 0) > 0 ? d.confMode : '— 측정 없음';
+    var lat = d.latencyP95 != null ? d.latencyP95.toFixed(1)+'s' : '—';
+    var cost = d.cost != null ? '$'+d.cost.toFixed(4) : '—';
+    return '<tr class="'+cls+'"><td>'+(d.label || k)+'</td><td>'+pp+'</td><td>'+ratio+'</td><td>'+confSpread+'</td><td>'+lat+'</td><td>'+cost+'</td></tr>';
+  }).join('');
+  document.getElementById('cmp-body').innerHTML = rows;
+}
+function render(){
+  var d = SCENARIOS[state.scenario]; if (!d) return;
+  renderKPI(d); renderFunnel(d); renderConfHist(d); renderCells(d); renderCos(d); renderComparison(state.scenario);
+}
+loadScenarios();
+</script>
+</body>
+</html>

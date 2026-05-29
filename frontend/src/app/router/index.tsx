@@ -16,6 +16,7 @@ import { AdminBilling } from '@/pages/admin/ui/AdminBilling';
 import { AdminChatbotModels } from '@/pages/admin/ui/AdminChatbotModels';
 import { AdminSearchAlgorithms } from '@/pages/admin/ui/AdminSearchAlgorithms';
 import { AdminV2QualityAudit } from '@/pages/admin/ui/AdminV2QualityAudit';
+import { AdminV4ArbiterRuns } from '@/pages/admin/ui/AdminV4ArbiterRuns';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -153,6 +154,8 @@ export function AppRouter() {
           <Route path="search-algorithms" element={<AdminSearchAlgorithms />} />
           {/* CP488+ — v2 quality audit daily scan dashboard. */}
           <Route path="v2-quality-audit" element={<AdminV2QualityAudit />} />
+          {/* CP489+ — v4 LLM-arbiter PoC runs dashboard (embeds /v4-arbiter-dashboard.html). */}
+          <Route path="v4-arbiter-runs" element={<AdminV4ArbiterRuns />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

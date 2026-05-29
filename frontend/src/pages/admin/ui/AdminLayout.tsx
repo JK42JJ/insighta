@@ -31,6 +31,8 @@ const NAV_ITEMS = [
   { to: '/admin/search-algorithms', icon: SlidersHorizontal, label: 'Search Algorithms' },
   // CP488+ — v2 quality audit daily scan dashboard.
   { to: '/admin/v2-quality-audit', icon: Activity, label: 'V2 Quality Audit' },
+  // CP489+ — v4 LLM-arbiter PoC runs dashboard (operator-only mockup).
+  { to: '/admin/v4-arbiter-runs', icon: Activity, label: 'V4 Arbiter Runs' },
 ] as const;
 
 export function AdminLayout() {

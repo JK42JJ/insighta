@@ -76,8 +76,22 @@ CREATE TRIGGER trg_decode_youtube_videos_titles
 
 -- ---------- 3. One-shot backfill of existing rows ----------
 -- Only touch rows that still carry entity markup — bounded UPDATE.
+--
+-- Wrap in a transaction with `SET LOCAL statement_timeout = 0` so this
+-- single UPDATE escapes the apply-custom-sql.sh session-level
+-- statement_timeout=180000 (CP421). Deploy run 26644645620 (PR #797)
+-- hit that 3-min cap on prod's larger youtube_videos table: the seq
+-- scan on `LIKE '%&%' OR channel_title LIKE '%&%'` plus the
+-- per-row decode function ran ~120s+, abort. Function+trigger had
+-- already applied successfully at that point — only the backfill failed.
+--
+-- Decode is a no-op on already-decoded text, so re-application after
+-- a partial run is safe; the next deploy resumes whatever was left.
+BEGIN;
+SET LOCAL statement_timeout = 0;
 UPDATE public.youtube_videos
 SET    title         = public.decode_html_entities(title),
        channel_title = public.decode_html_entities(channel_title)
 WHERE  title         LIKE '%&%'
    OR  channel_title LIKE '%&%';
+COMMIT;
