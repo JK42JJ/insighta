@@ -1,0 +1,11 @@
+{
+  "$comment": "Branch WIP registry. Listed branches are protected from /save 's branch-responsibility prompt and from scripts/branch-audit.sh stale-flagging. See .claude/commands/save.md Step 3.5.",
+  "wip_branches": [
+    {
+      "branch": "data/channel-whitelist-seed-launch",
+      "target_date": null,
+      "reason": "Long-running dev branch (CP410~CP457). Diff vs main not fully audited — keeping until 1:1 commit-content comparison confirms zero unique work. CP490+ 2026-05-30.",
+      "registered_at": "2026-05-30"
+    }
+  ]
+}
