@@ -27,10 +27,8 @@ import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database/client';
 import { logger } from '@/utils/logger';
 import { loadWizardPrecomputeConfig } from '@/config/wizard-precompute';
-import {
-  runDiscoverEphemeral,
-  type EphemeralDiscoverResult,
-} from '@/skills/plugins/video-discover/v3/executor';
+import type { EphemeralDiscoverResult } from '@/skills/plugins/video-discover/v3/executor';
+import { runV5ForWizard } from '@/skills/plugins/video-discover/v5/wizard-adapter';
 import { notifyCardAdded, type CardPayload } from '@/modules/recommendations/publisher';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { randomUUID } from 'crypto';
@@ -112,7 +110,10 @@ export async function startPrecompute(input: StartPrecomputeInput): Promise<void
 
   // Step 3: runDiscoverEphemeral → persist result
   try {
-    const result = await runDiscoverEphemeral({
+    // CP490+ — wizard now uses the v5 LLM-pick path (Haiku via OpenRouter)
+    // for parity with /add-cards. v3 cosine + Mac-mini Ollama dependency
+    // was producing 70s+ runs returning 0 cards.
+    const result = await runV5ForWizard({
       centerGoal: input.goal,
       subGoals: input.subGoals,
       language: input.language,
