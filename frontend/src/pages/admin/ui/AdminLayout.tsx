@@ -13,6 +13,7 @@ import {
   Bot,
   SlidersHorizontal,
   Activity,
+  Gauge,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
@@ -33,6 +34,8 @@ const NAV_ITEMS = [
   { to: '/admin/v2-quality-audit', icon: Activity, label: 'V2 Quality Audit' },
   // CP489+ — v4 LLM-arbiter PoC runs dashboard (operator-only mockup).
   { to: '/admin/v4-arbiter-runs', icon: Activity, label: 'V4 Arbiter Runs' },
+  // Content Pool Health — 5-section dashboard (volume/enrich/source/reuse/promote).
+  { to: '/admin/pool-health', icon: Gauge, label: 'Pool Health' },
 ] as const;
 
 export function AdminLayout() {

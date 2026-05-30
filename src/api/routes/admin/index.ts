@@ -24,6 +24,7 @@ import { adminDiscoverTracesRoutes } from './discover-traces';
 import { adminSearchAlgorithmsRoutes } from './search-algorithms';
 import { adminV2QualityAuditRoutes } from './v2-quality-audit';
 import { adminV4ArbiterRunsRoutes } from './v4-arbiter-runs';
+import { adminPoolHealthRoutes } from './pool-health';
 
 /**
  * Admin routes plugin.
@@ -63,5 +64,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminV2QualityAuditRoutes, { prefix: '/v2-quality-audit' });
   // CP489+ — v4 LLM-arbiter PoC runs dashboard data source.
   await fastify.register(adminV4ArbiterRunsRoutes, { prefix: '/v4-arbiter-runs' });
+  // Content Pool Health — 5-section dashboard (volume / enrich / source /
+  // reuse / promote) with 5min cache + JSON snapshot fallback.
+  await fastify.register(adminPoolHealthRoutes, { prefix: '/pool-health' });
   // await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }
