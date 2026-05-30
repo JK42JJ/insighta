@@ -563,6 +563,14 @@ export interface AdminPoolHealthResponse {
   knownIssues: ReadonlyArray<{ id: string; text: string }>;
 }
 
+export interface AdminPoolHealthDetailResponse {
+  metric: string;
+  generatedAt: string;
+  rows: Array<Record<string, unknown>>;
+  series?: Array<{ bucket: string; n: number }>;
+  notes?: string;
+}
+
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
@@ -2526,6 +2534,12 @@ class ApiClient {
   async getAdminPoolHealth(refresh = false): Promise<AdminPoolHealthResponse> {
     return this.request<AdminPoolHealthResponse>(
       refresh ? '/admin/pool-health?refresh=1' : '/admin/pool-health'
+    );
+  }
+
+  async getAdminPoolHealthDetail(metric: string): Promise<AdminPoolHealthDetailResponse> {
+    return this.request<AdminPoolHealthDetailResponse>(
+      `/admin/pool-health/details/${encodeURIComponent(metric)}`
     );
   }
 

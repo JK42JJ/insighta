@@ -15,7 +15,7 @@ export interface HealthBand {
   readonly ok: number;
   readonly warn: number;
   readonly direction: HealthDirection;
-  readonly unit: '%' | 'count' | 'ratio' | 'days';
+  readonly unit: '%' | 'count' | 'ratio' | 'days' | 'hours';
   readonly label: string;
   /**
    * Optional kill-switch. When `false`, the metric is shown but its status
@@ -95,7 +95,7 @@ export const POOL_HEALTH_THRESHOLDS = {
     ok: 2,
     warn: 6,
     direction: 'lower_is_better',
-    unit: 'days',
+    unit: 'hours',
     label: 'Hours since last bulk fire',
   },
   userInflowPct: {
