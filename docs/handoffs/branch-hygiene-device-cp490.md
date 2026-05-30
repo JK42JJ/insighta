@@ -22,35 +22,43 @@ because it carries the cross-machine list of protected branches.
 
 ## §1 Architecture
 
+Three active pieces (priority order ① ② ③) plus a deferred fourth. Note
+that the "L1 / L2 / L5" labels come from an earlier 5-layer enumeration;
+that vocabulary is preserved only where it is unambiguous (L1, L2). The
+`/save` Step 3.5 piece has **no L-number** — it is a new layer added on
+top of the original taxonomy.
+
 ```
 ┌────────────────────────────────────────────────────────┐
-│  L1  GitHub repo setting (cross-machine, in-platform)  │
+│  ①  L1 — GitHub repo setting (cross-machine, platform) │
 │      "Automatically delete head branches" = ON         │
 │      Prevents future merge → dangling accumulation.    │
 └────────────────────────────────────────────────────────┘
                           ↓
 ┌────────────────────────────────────────────────────────┐
-│  L2  /save Step 3.5 (per-machine, .claude/ — gitignored)│
+│  ②  /save Step 3.5 (per-machine, .claude/ gitignored)  │
 │      Session-end branch responsibility prompt.         │
 │      Forces (a/b/c/d) disposition before /save finishes.│
 └────────────────────────────────────────────────────────┘
                           ↓
 ┌────────────────────────────────────────────────────────┐
-│  L5  scripts/branch-audit.sh (per-machine, gitignored) │
+│  ③  L5 — scripts/branch-audit.sh (per-machine, gitignored)│
 │      On-demand classification + optional bulk delete.  │
 │      Reads .branch-wip.json to skip protected entries. │
 └────────────────────────────────────────────────────────┘
                           ↑
 ┌────────────────────────────────────────────────────────┐
 │  .branch-wip.json (cross-machine, committed to repo)   │
+│      Storage mechanism for ② / ③ — NOT a layer itself. │
 │      Single source of truth for "protected" branches.  │
-│      Both L2 and L5 honor it.                          │
 └────────────────────────────────────────────────────────┘
-```
 
-L2 deferred-and-replaced (was: weekly stale-branch issue). Auto-issue
-creation only moves dirt from branches to issues — discipline at the
-action moment (`/save`) catches the editor while context is still loaded.
+  ④  L2 — weekly stale-branch issue: DEFERRED.
+      Original 5-layer plan included a weekly GitHub Action that opens
+      an issue listing stale branches. Demoted because auto-issue creation
+      just moves dirt from branches to issues. ② catches the editor
+      while context is still loaded; reconsider L2 only if ② + ③ fail.
+```
 
 ---
 
@@ -70,13 +78,13 @@ action moment (`/save`) catches the editor while context is still loaded.
 ```
 
 - `target_date: null` is allowed for indefinitely-protected branches but
-  L2 should re-prompt for a concrete date at every /save until one is set.
-- L5 surfaces entries whose `target_date < today` under category **E**
+  ② should re-prompt for a concrete date at every /save until one is set.
+- ③ surfaces entries whose `target_date < today` under category **E**
   (expired) for review.
 
 ---
 
-## §3 L2 — `/save` Step 3.5 spec
+## §3 ② — `/save` Step 3.5 spec
 
 Insert into `.claude/commands/save.md` immediately before "Step 4: Memory
 Hygiene Check".
@@ -107,7 +115,7 @@ Procedure:
 
 ---
 
-## §4 L5 — `scripts/branch-audit.sh` spec
+## §4 ③ — `scripts/branch-audit.sh` spec (L5)
 
 Categories computed from `gh pr list --head <branch>`:
 
@@ -136,17 +144,19 @@ Implementation notes:
 
 ## §5 Rule update path
 
-- If GitHub introduces native session-end branch checks → L2 can be retired.
+- If GitHub introduces native session-end branch checks → ② can be retired.
 - If `.branch-wip.json` exceeds 20 entries → fold review into a regular
   /retro Step instead of every /save.
 - If a machine's CC config lacks Step 3.5 (e.g., fresh checkout) → CC
   recreates it from §3 of this doc on first /save invocation.
+- If ② + ③ prove insufficient (stale accumulation returns) → revisit ④
+  (L2 weekly issue) with a clear mitigation for the issue-neglect risk.
 
 ---
 
 ## §6 Related
 
-- `memory/feedback_public_repo_essentials_only.md` — explains why L2/L5
+- `memory/feedback_public_repo_essentials_only.md` — explains why ② / ③
   files stay local (`.claude/` and `scripts/*` gitignored).
 - `docs/handoffs/readme-rewrite-cp490.md` — sibling handoff doc with the
   same 2-layer in-file/in-repo pattern.
