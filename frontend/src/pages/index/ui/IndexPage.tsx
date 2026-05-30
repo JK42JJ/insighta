@@ -31,7 +31,6 @@ import { useMandalaQuery, useMandalaList } from '@/features/mandala';
 import { useMandalaStore } from '@/stores/mandalaStore';
 import { youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
-import { useVideoStream } from '@/features/recommendation-feed/model/useVideoStream';
 import { useSearchCards, SearchBar } from '@/features/search';
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
 import { useLayoutPreferences } from '../model/useLayoutPreferences';
@@ -226,31 +225,21 @@ function AuthenticatedApp() {
   const selectedCellIndexRef = useRef(navigation.selectedCellIndex);
   selectedCellIndexRef.current = navigation.selectedCellIndex;
 
-  // 5a. SSE card stream — subscribe to `recommendation_cache` +
-  // `user_video_states` notifications. Stream cards are fed directly
-  // into the card orchestrator so the grid renders recommendation_cache
-  // backlog immediately, without waiting for maybeAutoAddRecommendations
-  // to copy them into user_video_states (~15-30s pipeline delay).
-  const cardStream = useVideoStream(effectiveMandalaId);
-  const cardStreamCountRef = useRef(0);
-  useEffect(() => {
-    if (cardStream.cards.length > cardStreamCountRef.current) {
-      cardStreamCountRef.current = cardStream.cards.length;
-      queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
-      queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
-    }
-    if (cardStream.cards.length === 0 && cardStreamCountRef.current !== 0) {
-      cardStreamCountRef.current = 0;
-    }
-  }, [cardStream.cards.length, queryClient]);
-
-  // 5b. Card orchestrator (needs navigation state + stream cards)
+  // CP489+ — SSE backlog stream removed from dashboard. User intent:
+  // grid renders only user-owned rows (mandalaLocalCards / mandalaVideoCards /
+  // pendingMandalaCards). The recommendation_cache → SSE → grid path
+  // (PR #430/#431/#439) bypassed user_video_states and surfaced
+  // 8-day-stale rec_cache rows as "just now" cards that couldn't be
+  // moved between cells (no backing user_video_states row). The
+  // useCardOrchestrator streamCards prop + resolveStreamCardId helper
+  // are kept (with empty input) so D&D smoke + regression tests stay
+  // intact; the orchestrator's streamMandalaCards memo returns [] when
+  // the prop is undefined.
   const cards = useCardOrchestrator(
     {
       currentLevelId: navigation.currentLevelId,
       currentLevel: navigation.currentLevel,
       mandalaId: effectiveMandalaId,
-      streamCards: cardStream.cards,
     },
     navigation.selectedCellIndex
   );
