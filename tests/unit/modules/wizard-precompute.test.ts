@@ -40,8 +40,8 @@ jest.mock('@prisma/client', () => ({
   },
 }));
 
-jest.mock('@/skills/plugins/video-discover/v3/executor', () => ({
-  runDiscoverEphemeral: mockRunDiscoverEphemeral,
+jest.mock('@/skills/plugins/video-discover/v5/wizard-adapter', () => ({
+  runV5ForWizard: mockRunDiscoverEphemeral,
 }));
 
 jest.mock('@/modules/recommendations/publisher', () => ({
