@@ -509,8 +509,33 @@ export interface AdminPoolHealthResponse {
     derived: { videoPoolAvgDaily30d: number; videoPoolBlankDays30d: number };
   };
   enrich: {
-    richSummary: { total: number; covered: number; missing: number; pct: number };
+    richSummaryV1: {
+      total: number;
+      covered: number;
+      missing: number;
+      pct: number;
+      llmCovered: number;
+      llmPct: number;
+      fallbackCovered: number;
+      fallbackPct: number;
+    };
+    richSummaryV2: {
+      total: number;
+      covered: number;
+      missing: number;
+      pct: number;
+      modelBreakdown: Array<{ model: string; n: number }>;
+    };
     embedding: { total: number; covered: number; missing: number; pct: number };
+  };
+  captionPipeline: {
+    attemptedTotal: number;
+    attempted7d: number;
+    pass7d: number;
+    fail7d: number;
+    failRate7d: number;
+    lastAttemptedAt: string | null;
+    hoursSinceLastFire: number;
   };
   source: {
     youtube_videos: Array<{ source: string; n: number }>;

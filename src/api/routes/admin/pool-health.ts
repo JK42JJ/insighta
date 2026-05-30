@@ -81,8 +81,36 @@ export interface PoolHealthSnapshot {
     };
   };
   enrich: {
-    richSummary: { total: number; covered: number; missing: number; pct: number };
+    /** V1 video_summaries (legacy, mostly metadata-enriched fallback). */
+    richSummaryV1: {
+      total: number;
+      covered: number;
+      missing: number;
+      pct: number;
+      llmCovered: number;
+      llmPct: number;
+      fallbackCovered: number;
+      fallbackPct: number;
+    };
+    /** V2 video_rich_summaries pass-quality coverage — the real enrich gauge. */
+    richSummaryV2: {
+      total: number;
+      covered: number;
+      missing: number;
+      pct: number;
+      modelBreakdown: Array<{ model: string; n: number }>;
+    };
     embedding: { total: number; covered: number; missing: number; pct: number };
+  };
+  /** Mac Mini CC bulk pipeline health (proxy via DB). */
+  captionPipeline: {
+    attemptedTotal: number;
+    attempted7d: number;
+    pass7d: number;
+    fail7d: number;
+    failRate7d: number;
+    lastAttemptedAt: string | null;
+    hoursSinceLastFire: number;
   };
   source: {
     youtube_videos: SourceRow[];
@@ -201,6 +229,9 @@ async function compute(): Promise<PoolHealthSnapshot> {
     statusBreakdown,
     surfacedRow,
     promoteRow,
+    enrichV2,
+    v2ModelBreakdown,
+    captionPipeline,
   ] = await Promise.all([
     queryRows<Record<string, unknown>>(`
       SELECT
@@ -227,11 +258,23 @@ async function compute(): Promise<PoolHealthSnapshot> {
       GROUP BY 1 ORDER BY 1 DESC
     `),
     queryRows<Record<string, unknown>>(`
+      -- V1 video_summaries — split LLM-authored vs metadata-enriched fallback.
+      -- 2026-05-30 prod baseline: 4,289 total, 4,235 metadata-enriched
+      -- (98.7% of covered = LLM never ran). The flat coverage number alone
+      -- was structurally misleading — surface the split.
       SELECT
-        count(*)::int                                             AS total,
-        count(vs.video_id)::int                                   AS covered,
-        (count(*) - count(vs.video_id))::int                      AS missing,
-        round(100.0 * count(vs.video_id) / nullif(count(*),0), 1) AS pct
+        count(*)::int                                                                              AS total,
+        count(vs.video_id)::int                                                                    AS covered,
+        (count(*) - count(vs.video_id))::int                                                       AS missing,
+        round(100.0 * count(vs.video_id) / nullif(count(*),0), 1)                                  AS pct,
+        count(*) FILTER (WHERE vs.model IS NOT NULL
+                          AND vs.model <> 'metadata-enriched'
+                          AND vs.model <> 'no-caption')::int                                       AS llm_covered,
+        round(100.0 * count(*) FILTER (WHERE vs.model IS NOT NULL
+                          AND vs.model <> 'metadata-enriched'
+                          AND vs.model <> 'no-caption') / nullif(count(*),0), 1)                   AS llm_pct,
+        count(*) FILTER (WHERE vs.model = 'metadata-enriched')::int                                AS fallback_covered,
+        round(100.0 * count(*) FILTER (WHERE vs.model = 'metadata-enriched') / nullif(count(*),0), 1) AS fallback_pct
       FROM youtube_videos yv
       LEFT JOIN video_summaries vs ON vs.video_id = yv.youtube_video_id
     `),
@@ -322,11 +365,68 @@ async function compute(): Promise<PoolHealthSnapshot> {
       FROM rec_30d r
       LEFT JOIN auto_30d a USING (user_id, mandala_id)
     `),
+    queryRows<Record<string, unknown>>(`
+      -- V2 video_rich_summaries pass-quality coverage. This is the real
+      -- enrich gauge — V1 above is largely metadata-fallback noise.
+      SELECT
+        count(*)::int                                                                AS total,
+        count(*) FILTER (WHERE vrs.video_id IS NOT NULL
+                          AND vrs.quality_flag = 'pass')::int                        AS covered,
+        (count(*) - count(*) FILTER (WHERE vrs.video_id IS NOT NULL
+                                       AND vrs.quality_flag = 'pass'))::int          AS missing,
+        round(100.0 * count(*) FILTER (WHERE vrs.video_id IS NOT NULL
+                                        AND vrs.quality_flag = 'pass')
+              / nullif(count(*),0), 1)                                               AS pct
+      FROM youtube_videos yv
+      LEFT JOIN video_rich_summaries vrs ON vrs.video_id = yv.youtube_video_id
+    `),
+    queryRows<{ model: string; n: number }>(`
+      -- V2 model breakdown — surfaces the CC-direct vs Sonnet vs Qwen split.
+      -- 2026-05-30 baseline: cc-direct 1,676 / qwen 2,551 / sonnet 43 / null 3.
+      SELECT coalesce(model, '(null)') AS model, count(*)::int AS n
+      FROM video_rich_summaries
+      GROUP BY 1 ORDER BY n DESC
+    `),
+    queryRows<Record<string, unknown>>(`
+      -- Caption-pipeline pulse (Mac Mini bulk path proxy).
+      -- attempted_total = lifetime stamps; 7d window measures recent
+      -- pulse + fail rate. last_attempted_at = the freshest stamp from any
+      -- process-one.sh exit path, used as the launchd-fire proxy.
+      SELECT
+        count(*) FILTER (WHERE yv.transcript_attempted_at IS NOT NULL)::int                                       AS attempted_total,
+        count(*) FILTER (WHERE yv.transcript_attempted_at > now() - interval '7 days')::int                       AS attempted_7d,
+        count(*) FILTER (WHERE yv.transcript_attempted_at > now() - interval '7 days'
+                          AND EXISTS (
+                            SELECT 1 FROM video_rich_summaries vrs
+                            WHERE vrs.video_id = yv.youtube_video_id
+                              AND vrs.quality_flag = 'pass'
+                          ))::int                                                                                 AS pass_7d,
+        count(*) FILTER (WHERE yv.transcript_attempted_at > now() - interval '7 days'
+                          AND NOT EXISTS (
+                            SELECT 1 FROM video_rich_summaries vrs
+                            WHERE vrs.video_id = yv.youtube_video_id
+                              AND vrs.quality_flag = 'pass'
+                          ))::int                                                                                 AS fail_7d,
+        round(
+          100.0 * count(*) FILTER (WHERE yv.transcript_attempted_at > now() - interval '7 days'
+                                     AND NOT EXISTS (
+                                       SELECT 1 FROM video_rich_summaries vrs
+                                       WHERE vrs.video_id = yv.youtube_video_id
+                                         AND vrs.quality_flag = 'pass'
+                                     ))
+          / nullif(count(*) FILTER (WHERE yv.transcript_attempted_at > now() - interval '7 days'), 0)
+        , 1)                                                                                                      AS fail_rate_7d,
+        max(yv.transcript_attempted_at)::text                                                                     AS last_attempted_at,
+        extract(epoch FROM (now() - max(yv.transcript_attempted_at))) / 3600.0                                    AS hours_since
+      FROM youtube_videos yv
+    `),
   ]);
 
   const tot = normalizeRow(totals[0] ?? {});
   const enrSummary = normalizeRow(enrichSummary[0] ?? {});
   const enrEmbed = normalizeRow(enrichEmbedding[0] ?? {});
+  const enrV2 = normalizeRow(enrichV2[0] ?? {});
+  const cap = normalizeRow(captionPipeline[0] ?? {});
   const reuse = normalizeRow(reuseSummary[0] ?? {});
   const surfaced = normalizeRow(surfacedRow[0] ?? {});
   const promote = normalizeRow(promoteRow[0] ?? {});
@@ -340,8 +440,12 @@ async function compute(): Promise<PoolHealthSnapshot> {
     vpDaily30.length > 0 ? Math.round(vpDaily30.reduce((acc, r) => acc + n(r.n), 0) / 30) : 0;
   const videoPoolBlankDays30d = Math.max(0, 30 - vpDaily30.length);
 
-  const richSummaryPct = n(enrSummary['pct']);
+  const richSummaryV1Pct = n(enrSummary['pct']);
+  const richSummaryV1LlmPct = n(enrSummary['llm_pct']);
+  const richSummaryV2Pct = n(enrV2['pct']);
   const embeddingPct = n(enrEmbed['pct']);
+  const captionFailRate7d = n(cap['fail_rate_7d']);
+  const lastBulkFireHours = n(cap['hours_since']);
 
   const vpSourceRows = sourceVp;
   const vpSourceTotal = vpSourceRows.reduce((acc, r) => acc + n(r.n), 0);
@@ -373,8 +477,12 @@ async function compute(): Promise<PoolHealthSnapshot> {
     [
       ['volumeDailyAvg30d', videoPoolAvgDaily30d],
       ['blankDays30d', videoPoolBlankDays30d],
-      ['richSummaryPct', richSummaryPct],
+      ['richSummaryV1Pct', richSummaryV1Pct],
+      ['richSummaryV1LlmPct', richSummaryV1LlmPct],
+      ['richSummaryV2Pct', richSummaryV2Pct],
       ['embeddingPct', embeddingPct],
+      ['captionFailRate7d', captionFailRate7d],
+      ['lastBulkFireHours', lastBulkFireHours],
       ['userInflowPct', userInflowPct],
       ['nullSourcePct', nullSourcePct],
       ['avgReusePerVideo', avgReusePerVideo],
@@ -412,11 +520,22 @@ async function compute(): Promise<PoolHealthSnapshot> {
       derived: { videoPoolAvgDaily30d, videoPoolBlankDays30d },
     },
     enrich: {
-      richSummary: {
+      richSummaryV1: {
         total: n(enrSummary['total']),
         covered: n(enrSummary['covered']),
         missing: n(enrSummary['missing']),
-        pct: richSummaryPct,
+        pct: richSummaryV1Pct,
+        llmCovered: n(enrSummary['llm_covered']),
+        llmPct: richSummaryV1LlmPct,
+        fallbackCovered: n(enrSummary['fallback_covered']),
+        fallbackPct: n(enrSummary['fallback_pct']),
+      },
+      richSummaryV2: {
+        total: n(enrV2['total']),
+        covered: n(enrV2['covered']),
+        missing: n(enrV2['missing']),
+        pct: richSummaryV2Pct,
+        modelBreakdown: v2ModelBreakdown,
       },
       embedding: {
         total: n(enrEmbed['total']),
@@ -424,6 +543,15 @@ async function compute(): Promise<PoolHealthSnapshot> {
         missing: n(enrEmbed['missing']),
         pct: embeddingPct,
       },
+    },
+    captionPipeline: {
+      attemptedTotal: n(cap['attempted_total']),
+      attempted7d: n(cap['attempted_7d']),
+      pass7d: n(cap['pass_7d']),
+      fail7d: n(cap['fail_7d']),
+      failRate7d: captionFailRate7d,
+      lastAttemptedAt: (cap['last_attempted_at'] as string | null) ?? null,
+      hoursSinceLastFire: lastBulkFireHours,
     },
     source: {
       youtube_videos: yvSourceRows,

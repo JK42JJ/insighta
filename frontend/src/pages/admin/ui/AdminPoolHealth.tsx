@@ -162,36 +162,128 @@ function GaugeBar({ pct, status }: { pct: number; status: PoolHealthMetric['stat
 }
 
 function EnrichSection({ data }: { data: AdminPoolHealthResponse }) {
-  const rs = data.enrich.richSummary;
+  const v1 = data.enrich.richSummaryV1;
+  const v2 = data.enrich.richSummaryV2;
   const em = data.enrich.embedding;
-  const rsStatus = data.metrics.find((m) => m.key === 'richSummaryPct')?.status ?? 'critical';
+  const v1Status = data.metrics.find((m) => m.key === 'richSummaryV1Pct')?.status ?? 'critical';
+  const v1LlmStatus =
+    data.metrics.find((m) => m.key === 'richSummaryV1LlmPct')?.status ?? 'critical';
+  const v2Status = data.metrics.find((m) => m.key === 'richSummaryV2Pct')?.status ?? 'critical';
   const emStatus = data.metrics.find((m) => m.key === 'embeddingPct')?.status ?? 'critical';
   return (
     <section className="rounded-lg border border-border bg-card p-5">
-      <h2 className="text-sm font-semibold text-foreground mb-3">2. Enrich Coverage</h2>
-      <div className="grid grid-cols-2 gap-4 text-sm">
+      <h2 className="text-sm font-semibold text-foreground mb-3">
+        2. Enrich Coverage — V1 (legacy) / V2 (real) / embedding
+      </h2>
+      <div className="grid grid-cols-2 gap-4 text-sm mb-4">
         <div>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-muted-foreground">rich-summary</span>
-            <PoolHealthBadge status={rsStatus} />
+            <span className="text-xs text-muted-foreground">V1 video_summaries (legacy)</span>
+            <PoolHealthBadge status={v1Status} />
           </div>
-          <div className="text-lg font-semibold text-foreground tabular-nums mb-2">{rs.pct}%</div>
-          <GaugeBar pct={rs.pct} status={rsStatus} />
+          <div className="text-lg font-semibold text-foreground tabular-nums mb-2">{v1.pct}%</div>
+          <GaugeBar pct={v1.pct} status={v1Status} />
           <div className="text-[10px] text-muted-foreground mt-1">
-            {formatNumber(rs.covered)} / {formatNumber(rs.total)} — missing{' '}
-            {formatNumber(rs.missing)}
+            {formatNumber(v1.covered)} / {formatNumber(v1.total)} — missing{' '}
+            {formatNumber(v1.missing)}
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[10px]">
+            <span className="text-muted-foreground">↳ LLM-authored</span>
+            <span className="flex items-center gap-2">
+              <span className="text-foreground tabular-nums">
+                {v1.llmPct}% ({formatNumber(v1.llmCovered)})
+              </span>
+              <PoolHealthBadge status={v1LlmStatus} />
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[10px]">
+            <span className="text-muted-foreground">↳ metadata fallback (no LLM)</span>
+            <span className="text-foreground tabular-nums">
+              {v1.fallbackPct}% ({formatNumber(v1.fallbackCovered)})
+            </span>
           </div>
         </div>
         <div>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-muted-foreground">embedding</span>
-            <PoolHealthBadge status={emStatus} />
+            <span className="text-xs text-muted-foreground">V2 video_rich_summaries (pass)</span>
+            <PoolHealthBadge status={v2Status} />
           </div>
-          <div className="text-lg font-semibold text-foreground tabular-nums mb-2">{em.pct}%</div>
-          <GaugeBar pct={em.pct} status={emStatus} />
+          <div className="text-lg font-semibold text-foreground tabular-nums mb-2">{v2.pct}%</div>
+          <GaugeBar pct={v2.pct} status={v2Status} />
           <div className="text-[10px] text-muted-foreground mt-1">
-            {formatNumber(em.covered)} / {formatNumber(em.total)} — missing{' '}
-            {formatNumber(em.missing)}
+            {formatNumber(v2.covered)} / {formatNumber(v2.total)} — missing{' '}
+            {formatNumber(v2.missing)}
+          </div>
+          {v2.modelBreakdown.length > 0 && (
+            <div className="mt-2 space-y-0.5">
+              {v2.modelBreakdown.slice(0, 4).map((m) => (
+                <div key={m.model} className="flex items-center justify-between text-[10px]">
+                  <span className="text-muted-foreground truncate max-w-[200px]">{m.model}</span>
+                  <span className="text-foreground tabular-nums">{formatNumber(m.n)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs text-muted-foreground">embedding (video_pool)</span>
+          <PoolHealthBadge status={emStatus} />
+        </div>
+        <div className="text-lg font-semibold text-foreground tabular-nums mb-2">{em.pct}%</div>
+        <GaugeBar pct={em.pct} status={emStatus} />
+        <div className="text-[10px] text-muted-foreground mt-1">
+          {formatNumber(em.covered)} / {formatNumber(em.total)} — missing {formatNumber(em.missing)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CaptionPipelineSection({ data }: { data: AdminPoolHealthResponse }) {
+  const c = data.captionPipeline;
+  const failStatus = data.metrics.find((m) => m.key === 'captionFailRate7d')?.status ?? 'critical';
+  const fireStatus = data.metrics.find((m) => m.key === 'lastBulkFireHours')?.status ?? 'critical';
+  return (
+    <section className="rounded-lg border border-border bg-card p-5">
+      <h2 className="text-sm font-semibold text-foreground mb-3">
+        2b. Caption Pipeline — Mac Mini CC bulk
+      </h2>
+      <div className="grid grid-cols-4 gap-3 text-sm">
+        <div>
+          <div className="text-xs text-muted-foreground">Attempts (7d)</div>
+          <div className="text-lg font-semibold text-foreground tabular-nums">
+            {formatNumber(c.attempted7d)}
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            lifetime {formatNumber(c.attemptedTotal)}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">Pass / Fail (7d)</div>
+          <div className="text-lg font-semibold text-foreground tabular-nums">
+            {formatNumber(c.pass7d)} / {formatNumber(c.fail7d)}
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Fail rate (7d)</span>
+            <PoolHealthBadge status={failStatus} />
+          </div>
+          <div className="text-lg font-semibold text-foreground tabular-nums">{c.failRate7d}%</div>
+          <div className="text-[10px] text-muted-foreground">awk + webshare mixed</div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Last fire</span>
+            <PoolHealthBadge status={fireStatus} />
+          </div>
+          <div className="text-lg font-semibold text-foreground tabular-nums">
+            {c.hoursSinceLastFire.toFixed(1)}h ago
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            {c.lastAttemptedAt ? new Date(c.lastAttemptedAt).toLocaleString() : 'never'}
           </div>
         </div>
       </div>
@@ -450,6 +542,7 @@ export function AdminPoolHealth() {
           <KnownIssuesBanner issues={data.knownIssues} />
           <VolumeSection data={data} />
           <EnrichSection data={data} />
+          <CaptionPipelineSection data={data} />
           <SourceSection data={data} />
           <ReuseSection data={data} />
           <PromoteSection data={data} />
