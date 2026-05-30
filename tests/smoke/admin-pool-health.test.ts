@@ -133,8 +133,28 @@ describe('n() — Prisma raw-query numeric coercion', () => {
 });
 
 describe('POOL_HEALTH_THRESHOLDS — baseline expectations', () => {
-  it('rich-summary 33.3% (2026-05-30 prod) maps to critical', () => {
-    expect(evaluateHealth(33.3, POOL_HEALTH_THRESHOLDS.richSummaryPct)).toBe('critical');
+  it('V1 rich-summary 33.3% (2026-05-30 prod) maps to warn — legacy band', () => {
+    expect(evaluateHealth(33.3, POOL_HEALTH_THRESHOLDS.richSummaryV1Pct)).toBe('warn');
+  });
+
+  it('V1 LLM-only 0.4% (21 of 4,289 rows ran LLM) maps to critical', () => {
+    expect(evaluateHealth(0.4, POOL_HEALTH_THRESHOLDS.richSummaryV1LlmPct)).toBe('critical');
+  });
+
+  it('V2 rich-summary 34.1% (2026-05-30 prod, real enrich) maps to critical', () => {
+    expect(evaluateHealth(34.1, POOL_HEALTH_THRESHOLDS.richSummaryV2Pct)).toBe('critical');
+  });
+
+  it('caption fail rate 58% (2026-05-30 prod, awk + webshare mixed) maps to critical', () => {
+    expect(evaluateHealth(58, POOL_HEALTH_THRESHOLDS.captionFailRate7d)).toBe('critical');
+  });
+
+  it('last bulk fire 0.5h ago maps to ok — pipeline alive', () => {
+    expect(evaluateHealth(0.5, POOL_HEALTH_THRESHOLDS.lastBulkFireHours)).toBe('ok');
+  });
+
+  it('last bulk fire 8h ago maps to critical — scheduler likely stuck', () => {
+    expect(evaluateHealth(8, POOL_HEALTH_THRESHOLDS.lastBulkFireHours)).toBe('critical');
   });
 
   it('embedding 96.8% (2026-05-30 prod) maps to ok', () => {
@@ -160,5 +180,19 @@ describe('POOL_HEALTH_THRESHOLDS — baseline expectations', () => {
 
   it('NULL/legacy 43% (2026-05-30 prod youtube_videos.source) maps to critical', () => {
     expect(evaluateHealth(43, POOL_HEALTH_THRESHOLDS.nullSourcePct)).toBe('critical');
+  });
+
+  it('n() coerces Decimal from caption fail rate path (rounded pct)', () => {
+    // Caption-fail-rate path uses round(..., 1) → Prisma.Decimal. This test
+    // would have caught the original PR #807 Decimal bug if it had existed.
+    const dec = new Prisma.Decimal('58.0');
+    expect(n(dec)).toBe(58);
+    expect(evaluateHealth(n(dec), POOL_HEALTH_THRESHOLDS.captionFailRate7d)).toBe('critical');
+  });
+
+  it('n() coerces hours_since (extract epoch / 3600) — float8 path', () => {
+    // hours_since uses `extract(epoch FROM ...) / 3600.0` → numeric → Decimal.
+    expect(n(new Prisma.Decimal('0.5'))).toBe(0.5);
+    expect(n(new Prisma.Decimal('8.25'))).toBe(8.25);
   });
 });

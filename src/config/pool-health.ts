@@ -43,12 +43,31 @@ export const POOL_HEALTH_THRESHOLDS = {
     unit: 'days',
     label: 'Blank inflow days (30d)',
   },
-  richSummaryPct: {
+  // 2026-05-30 diagnosis: video_summaries (V1, deprecated) was 33.3%
+  // covered but 98.7% of those rows are model='metadata-enriched' (no
+  // LLM call) — measurement was structurally wrong. The real enrich
+  // pipeline writes to video_rich_summaries. Both metrics are surfaced
+  // separately so the v1 → v2 transition stays observable.
+  richSummaryV1Pct: {
+    ok: 50,
+    warn: 30,
+    direction: 'higher_is_better',
+    unit: '%',
+    label: 'V1 video_summaries coverage (legacy)',
+  },
+  richSummaryV1LlmPct: {
+    ok: 30,
+    warn: 5,
+    direction: 'higher_is_better',
+    unit: '%',
+    label: 'V1 LLM-authored share (excl. metadata fallback)',
+  },
+  richSummaryV2Pct: {
     ok: 80,
     warn: 50,
     direction: 'higher_is_better',
     unit: '%',
-    label: 'Rich-summary coverage',
+    label: 'V2 video_rich_summaries pass coverage',
   },
   embeddingPct: {
     ok: 95,
@@ -56,6 +75,28 @@ export const POOL_HEALTH_THRESHOLDS = {
     direction: 'higher_is_better',
     unit: '%',
     label: 'Embedding coverage',
+  },
+  // CC bulk pipeline health — Mac Mini /transcript/candidates path.
+  // Caption fail = transcript_attempted_at stamped but the video has no
+  // v2 row with quality_flag='pass'. Two known root causes mix here
+  // (yt-dlp/WebShare proxy block + BSD-vs-gawk parsing) — split would
+  // require Mac Mini log shipping, future work.
+  captionFailRate7d: {
+    ok: 24,
+    warn: 50,
+    direction: 'lower_is_better',
+    unit: '%',
+    label: 'Caption fail rate (last 7d)',
+  },
+  // Hours since the last Mac Mini bulk-pipeline pulse. Proxy =
+  // max(youtube_videos.transcript_attempted_at) — every Mac Mini
+  // process-one.sh exit path stamps this. > 6h = scheduler likely stuck.
+  lastBulkFireHours: {
+    ok: 2,
+    warn: 6,
+    direction: 'lower_is_better',
+    unit: 'days',
+    label: 'Hours since last bulk fire',
   },
   userInflowPct: {
     ok: 5,
@@ -124,8 +165,16 @@ export function evaluateHealth(value: number, band: HealthBand): HealthStatus {
  */
 export const POOL_HEALTH_KNOWN_ISSUES: ReadonlyArray<{ id: string; text: string }> = [
   {
-    id: 'rich-summary-deficit',
-    text: 'rich-summary 67% 결손 (enrich cron 부진)',
+    id: 'v1-metadata-fallback',
+    text: 'V1 video_summaries — 98.7% metadata-enriched (LLM 안 거친 fallback). 실 enrich 측정은 richSummaryV2Pct.',
+  },
+  {
+    id: 'v2-cron-disabled',
+    text: 'RICH_SUMMARY_V2_CRON_ENABLED=false (prod). V2 backfill 은 Mac Mini bulk path (claude-code-direct).',
+  },
+  {
+    id: 'caption-fail-mixed-cause',
+    text: 'Caption fail = (yt-dlp WebShare proxy block) + (BSD-vs-gawk parsing). awk fail 만 gawk 로 fix 완료 (2026-05-30).',
   },
   {
     id: 'surfaced-at-dead',
