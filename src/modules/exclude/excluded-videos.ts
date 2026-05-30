@@ -6,20 +6,21 @@
  * same set of videos is filtered everywhere.
  *
  * Policy — Explicit > Inferred (v0 decision #2 applied to exclude semantics):
- *   user_video_states is INCLUDED only when at least one engagement signal
- *   is non-zero. Wizard-pre-fill rows (auto_added=true with all engagement
- *   fields zero) are NOT excluded — they are inferred candidates, not
- *   explicit rejections.
+ *   Only 3 signals from user_video_states are treated as "user really
+ *   engaged" — everything else (in-ideation, partial watch, ghost rows)
+ *   is left in the candidate pool for the LLM picker to re-evaluate.
  *
- *   Engagement signals (any one = explicit engagement):
- *     - is_watched = true
- *     - is_in_ideation = true
- *     - user_note IS NOT NULL
- *     - watch_position_seconds > 0
- *     - pinned_at IS NOT NULL
+ *   user_video_states engagement signals (CP490+ shrink from 6 → 3):
+ *     - is_watched = TRUE       (definitely consumed)
+ *     - pinned_at IS NOT NULL   (definitely bookmarked)
+ *     - user_note IS NOT NULL   (definitely annotated)
+ *
+ *   Dropped (CP490 directive): is_in_ideation, watch_position_seconds > 0,
+ *   auto_added = FALSE. These rows are now re-surfaceable by the LLM
+ *   picker.
  *
  *   Explicit signals always excluded:
- *     - user_local_cards.video_id (user explicitly added)
+ *     - user_local_cards.video_id (user explicitly added to a mandala)
  *     - card_interactions.signal = 'delete' (explicit "do not recommend")
  *     - card_interactions.signal = 'archive' (explicit hide for mandala)
  *
@@ -69,11 +70,8 @@ export async function getExcludedVideoIds(opts: ExcludeSetOpts): Promise<Set<str
          AND uvs.mandala_id = ${mandalaId}::uuid
          AND (
            uvs.is_watched = TRUE
-           OR uvs.is_in_ideation = TRUE
-           OR uvs.user_note IS NOT NULL
-           OR uvs.watch_position_seconds > 0
            OR uvs.pinned_at IS NOT NULL
-           OR uvs.auto_added = FALSE
+           OR uvs.user_note IS NOT NULL
          )
     `),
     prisma.card_interactions.findMany({

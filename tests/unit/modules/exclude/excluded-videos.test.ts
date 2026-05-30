@@ -44,7 +44,7 @@ function makeMockPrisma(returnedStateRows: StateRow[]): {
 }
 
 describe('getExcludedVideoIds — Explicit > Inferred policy (CP489+)', () => {
-  test('SQL filter includes all 6 engagement clauses + auto_added=FALSE', async () => {
+  test('SQL filter includes the 3 explicit engagement clauses (CP490+)', async () => {
     const { prisma, calls } = makeMockPrisma([]);
     await getExcludedVideoIds({
       prisma,
@@ -53,11 +53,21 @@ describe('getExcludedVideoIds — Explicit > Inferred policy (CP489+)', () => {
     });
     const sql = calls.rawWhere.join(' ');
     expect(sql).toMatch(/is_watched\s*=\s*TRUE/);
-    expect(sql).toMatch(/is_in_ideation\s*=\s*TRUE/);
-    expect(sql).toMatch(/user_note\s+IS\s+NOT\s+NULL/);
-    expect(sql).toMatch(/watch_position_seconds\s*>\s*0/);
     expect(sql).toMatch(/pinned_at\s+IS\s+NOT\s+NULL/);
-    expect(sql).toMatch(/auto_added\s*=\s*FALSE/);
+    expect(sql).toMatch(/user_note\s+IS\s+NOT\s+NULL/);
+  });
+
+  test('SQL filter does NOT include the dropped CP490 clauses', async () => {
+    const { prisma, calls } = makeMockPrisma([]);
+    await getExcludedVideoIds({
+      prisma,
+      userId: '00000000-0000-0000-0000-000000000001',
+      mandalaId: '00000000-0000-0000-0000-000000000002',
+    });
+    const sql = calls.rawWhere.join(' ');
+    expect(sql).not.toMatch(/is_in_ideation/);
+    expect(sql).not.toMatch(/watch_position_seconds/);
+    expect(sql).not.toMatch(/auto_added\s*=\s*FALSE/);
   });
 
   test('rows returned by SQL filter are added to the exclude set verbatim', async () => {
@@ -127,13 +137,8 @@ describe('getExcludedVideoIds — documented row classes (intent guard)', () => 
   });
 
   test('auto_added=true with all engagement zero is NO LONGER excluded (wizard pre-fill ghost)', async () => {
-    // The wizard pre-fill row pattern is:
-    //   auto_added=true, is_watched=false, is_in_ideation=false,
-    //   user_note=NULL, watch_position_seconds=0, pinned_at=NULL
-    // None of the 6 OR clauses match → row falls outside the SELECT.
-    // Tested structurally by confirming NONE of the engagement clauses
-    // would match such a row (verified by inspecting the SQL — actual
-    // DB filtering is exercised by integration tests / prod measurement).
+    // Wizard pre-fill row = auto_added=true + 0 engagement → none of the
+    // 3 CP490+ OR clauses match → row stays in pool for LLM re-evaluation.
     const { prisma, calls } = makeMockPrisma([]);
     await getExcludedVideoIds({
       prisma,
@@ -141,23 +146,19 @@ describe('getExcludedVideoIds — documented row classes (intent guard)', () => 
       mandalaId: '00000000-0000-0000-0000-000000000002',
     });
     const sql = calls.rawWhere.join(' ');
-    // The fix is: the SELECT has an AND clause that requires at least one
-    // engagement-or-explicit signal. Without that AND, wizard pre-fill is
-    // included → dedup bleed. Verify the AND structure.
     expect(sql).toMatch(/AND\s*\(/);
-    expect(sql).toMatch(/auto_added\s*=\s*FALSE/);
   });
 
-  test('auto_added=false with all engagement zero IS still excluded (user-created row, intentional)', async () => {
-    // user explicitly created the row even without engagement = explicit
-    // signal of intent → exclude path remains. Verified by the auto_added
-    // = FALSE clause being part of the OR.
+  test('auto_added=false zero-engagement is NO LONGER excluded (CP490+ relaxation)', async () => {
+    // CP490 directive: user_local_cards + delete/archive signals are the
+    // only explicit-add exclude sources; user_video_states row without one
+    // of the 3 engagement signals is re-surfaceable.
     const { prisma, calls } = makeMockPrisma([]);
     await getExcludedVideoIds({
       prisma,
       userId: '00000000-0000-0000-0000-000000000001',
       mandalaId: '00000000-0000-0000-0000-000000000002',
     });
-    expect(calls.rawWhere.join(' ')).toContain('auto_added = FALSE');
+    expect(calls.rawWhere.join(' ')).not.toContain('auto_added = FALSE');
   });
 });
