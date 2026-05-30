@@ -101,4 +101,18 @@ describe('API Client URL Contract', () => {
     );
     expect(block).toContain('encodeURIComponent');
   });
+
+  it('admin pool-health uses /admin/pool-health (no double prefix)', () => {
+    expect(content).toContain('/admin/pool-health');
+    expect(content).not.toMatch(/\/api\/v1\/admin\/pool-health/);
+  });
+
+  it('getAdminPoolHealth exposes refresh bypass via ?refresh=1', () => {
+    const block = content.slice(
+      content.indexOf('async getAdminPoolHealth'),
+      content.indexOf('async getAdminPoolHealth') + 400
+    );
+    expect(block).toContain('/admin/pool-health?refresh=1');
+    expect(block).toContain('/admin/pool-health');
+  });
 });

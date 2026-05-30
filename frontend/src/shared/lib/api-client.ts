@@ -477,6 +477,67 @@ export class ApiHttpError extends Error {
   }
 }
 
+// Admin Pool Health — kept in sync with src/api/routes/admin/pool-health.ts
+// (PoolHealthSnapshot) + src/config/pool-health.ts (POOL_HEALTH_THRESHOLDS).
+export type PoolHealthStatus = 'ok' | 'warn' | 'critical' | 'na';
+
+export interface PoolHealthMetric {
+  key: string;
+  label: string;
+  value: number;
+  unit: string;
+  status: PoolHealthStatus;
+  threshold: { ok: number; warn: number; direction: string };
+}
+
+export interface AdminPoolHealthResponse {
+  generatedAt: string;
+  fromCache: boolean;
+  stale: boolean;
+  metrics: PoolHealthMetric[];
+  volume: {
+    totals: {
+      video_pool: number;
+      youtube_videos: number;
+      recommendation_cache: number;
+    };
+    daily30d: {
+      video_pool: Array<{ day: string; n: number }>;
+      youtube_videos: Array<{ day: string; n: number }>;
+      recommendation_cache: Array<{ day: string; n: number }>;
+    };
+    derived: { videoPoolAvgDaily30d: number; videoPoolBlankDays30d: number };
+  };
+  enrich: {
+    richSummary: { total: number; covered: number; missing: number; pct: number };
+    embedding: { total: number; covered: number; missing: number; pct: number };
+  };
+  source: {
+    youtube_videos: Array<{ source: string; n: number }>;
+    video_pool: Array<{ source: string; n: number }>;
+    derived: { userInflowPct: number; nullSourcePct: number };
+  };
+  reuse: {
+    totalRecs30d: number;
+    uniqueVideos30d: number;
+    avgReusePerVideo: number;
+    videosIn2PlusMandalas: number;
+    videosIn2PlusUsers: number;
+    reuse2PlusMandalaPct: number;
+    top15: Array<{ video_id: string; mandalas: number; users: number; recs: number }>;
+  };
+  promote: {
+    statusBreakdown: Array<{ status: string; n: number }>;
+    surfacedAtPresent: number;
+    surfacedAtPct: number;
+    mandalasWithRecs: number;
+    totalDistinctRecs: number;
+    totalAutoOwned: number;
+    promotePct: number;
+  };
+  knownIssues: ReadonlyArray<{ id: string; text: string }>;
+}
+
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
@@ -2431,6 +2492,16 @@ class ApiClient {
     message?: string;
   }> {
     return this.request('/admin/v2-quality-audit/run-now', { method: 'POST' });
+  }
+
+  // ========================================
+  // Admin Pool Health (5-section content pool dashboard)
+  // ========================================
+
+  async getAdminPoolHealth(refresh = false): Promise<AdminPoolHealthResponse> {
+    return this.request<AdminPoolHealthResponse>(
+      refresh ? '/admin/pool-health?refresh=1' : '/admin/pool-health'
+    );
   }
 
   async bulkUpdateUsers(
