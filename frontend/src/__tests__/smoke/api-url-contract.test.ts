@@ -115,4 +115,17 @@ describe('API Client URL Contract', () => {
     expect(block).toContain('/admin/pool-health?refresh=1');
     expect(block).toContain('/admin/pool-health');
   });
+
+  it('admin pool-health detail uses /admin/pool-health/details/:metric (no double prefix)', () => {
+    expect(content).toContain('/admin/pool-health/details/');
+    expect(content).not.toMatch(/\/api\/v1\/admin\/pool-health\/details/);
+  });
+
+  it('getAdminPoolHealthDetail encodes metric path segment', () => {
+    const block = content.slice(
+      content.indexOf('async getAdminPoolHealthDetail'),
+      content.indexOf('async getAdminPoolHealthDetail') + 400
+    );
+    expect(block).toContain('encodeURIComponent');
+  });
 });

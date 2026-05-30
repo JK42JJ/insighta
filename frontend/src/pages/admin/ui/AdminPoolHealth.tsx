@@ -20,28 +20,68 @@ import {
 } from '@/shared/lib/api-client';
 import { cn } from '@/shared/lib/utils';
 import { PoolHealthBadge } from './PoolHealthBadge';
+import { PoolHealthDetailDialog } from './PoolHealthDetailDialog';
+
+// Metrics whose click opens a drill-down dialog (BE endpoint exists).
+const DRILLDOWN_KEYS: ReadonlySet<string> = new Set([
+  'richSummaryV1Pct',
+  'richSummaryV1LlmPct',
+  'richSummaryV2Pct',
+  'captionFailRate7d',
+  'lastBulkFireHours',
+  'nullSourcePct',
+]);
 
 function formatNumber(n: number): string {
   return n.toLocaleString('en-US');
 }
 
+// All metric values render through one funnel — 2-decimal floats, locale
+// integers, suffix on percent/hours/days. Prevents the 14-digit raw
+// float rendering (CP807-style polish) and keeps thresholds consistent.
 function formatMetricValue(m: PoolHealthMetric): string {
-  if (m.unit === '%') return `${m.value}%`;
+  if (m.unit === '%') return `${m.value.toFixed(2)}%`;
   if (m.unit === 'ratio') return m.value.toFixed(2);
-  if (m.unit === 'days') return `${m.value} day${m.value === 1 ? '' : 's'}`;
+  if (m.unit === 'hours') return `${m.value.toFixed(2)}h ago`;
+  if (m.unit === 'days') {
+    const rounded = Math.round(m.value);
+    return `${rounded} day${rounded === 1 ? '' : 's'}`;
+  }
   return formatNumber(m.value);
 }
 
 function thresholdText(m: PoolHealthMetric): string {
   const arrow = m.threshold.direction === 'higher_is_better' ? '≥' : '≤';
-  const suffix = m.unit === '%' ? '%' : '';
-  return `${arrow} ${m.threshold.ok}${suffix} ok · ${arrow} ${m.threshold.warn}${suffix} warn`;
+  const fmt = (v: number): string => {
+    if (m.unit === '%') return `${v}%`;
+    if (m.unit === 'hours') return `${v}h`;
+    if (m.unit === 'ratio') return v.toFixed(2);
+    if (m.unit === 'days') return `${v}d`;
+    return String(v);
+  };
+  return `${arrow} ${fmt(m.threshold.ok)} ok · ${arrow} ${fmt(m.threshold.warn)} warn`;
 }
 
-function MetricCard({ metric }: { metric: PoolHealthMetric }) {
+function MetricCard({
+  metric,
+  onClick,
+}: {
+  metric: PoolHealthMetric;
+  onClick?: (metric: PoolHealthMetric) => void;
+}) {
   const isNa = metric.status === 'na';
+  const clickable = !isNa && DRILLDOWN_KEYS.has(metric.key);
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <button
+      type="button"
+      onClick={clickable && onClick ? () => onClick(metric) : undefined}
+      disabled={!clickable}
+      aria-label={clickable ? `Open detail for ${metric.label}` : metric.label}
+      className={cn(
+        'text-left rounded-lg border border-border bg-card p-4 transition-colors',
+        clickable ? 'hover:border-primary/40 hover:bg-card/80 cursor-pointer' : 'cursor-default'
+      )}
+    >
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs text-muted-foreground">{metric.label}</span>
         <PoolHealthBadge status={metric.status} />
@@ -55,10 +95,11 @@ function MetricCard({ metric }: { metric: PoolHealthMetric }) {
         {formatMetricValue(metric)}
         {isNa && <span className="ml-2 text-xs font-normal">(측정 대기)</span>}
       </div>
-      <div className="text-[10px] text-muted-foreground mt-1">
-        {isNa ? 'Disabled until launch (see Known Issues)' : thresholdText(metric)}
+      <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1">
+        <span>{isNa ? 'Disabled until launch (see Known Issues)' : thresholdText(metric)}</span>
+        {clickable && <span className="text-primary/70 ml-2 shrink-0">details ›</span>}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -489,6 +530,7 @@ function KnownIssuesBanner({ issues }: { issues: ReadonlyArray<{ id: string; tex
 
 export function AdminPoolHealth() {
   const [refreshTick, setRefreshTick] = useState(0);
+  const [activeMetric, setActiveMetric] = useState<PoolHealthMetric | null>(null);
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['admin', 'pool-health', refreshTick],
     queryFn: () => apiClient.getAdminPoolHealth(refreshTick > 0),
@@ -536,9 +578,14 @@ export function AdminPoolHealth() {
         <>
           <div className="grid grid-cols-3 gap-3">
             {data.metrics.map((m) => (
-              <MetricCard key={m.key} metric={m} />
+              <MetricCard key={m.key} metric={m} onClick={(metric) => setActiveMetric(metric)} />
             ))}
           </div>
+          <PoolHealthDetailDialog
+            metric={activeMetric}
+            open={activeMetric !== null}
+            onOpenChange={(o) => !o && setActiveMetric(null)}
+          />
           <KnownIssuesBanner issues={data.knownIssues} />
           <VolumeSection data={data} />
           <EnrichSection data={data} />

@@ -580,6 +580,194 @@ async function compute(): Promise<PoolHealthSnapshot> {
   };
 }
 
+// ── Drill-down details ────────────────────────────────────────────────
+// Lazy-loaded per metric — keeps the main /pool-health payload light.
+// Each detail SQL is targeted at the specific question a metric raises:
+// "what are the actual rows behind this number?"
+
+export type PoolHealthDetailKey =
+  | 'richSummaryV1Pct'
+  | 'richSummaryV1LlmPct'
+  | 'richSummaryV2Pct'
+  | 'captionFailRate7d'
+  | 'lastBulkFireHours'
+  | 'nullSourcePct';
+
+export interface PoolHealthDetail {
+  metric: PoolHealthDetailKey;
+  generatedAt: string;
+  rows: Array<Record<string, unknown>>;
+  series?: Array<{ bucket: string; n: number }>;
+  notes?: string;
+}
+
+const DETAIL_SAMPLE_LIMIT = 25;
+
+async function fetchDetail(metric: PoolHealthDetailKey): Promise<PoolHealthDetail> {
+  const prisma = getPrismaClient();
+  const queryRows = async <T>(sql: string): Promise<T[]> => await prisma.$queryRawUnsafe(sql);
+
+  const base: PoolHealthDetail = {
+    metric,
+    generatedAt: new Date().toISOString(),
+    rows: [],
+  };
+
+  switch (metric) {
+    case 'richSummaryV1Pct': {
+      // Split breakdown by model — surfaces the metadata-fallback share.
+      const rows = await queryRows<Record<string, unknown>>(`
+        SELECT coalesce(model, '(null)') AS model, count(*)::int AS n,
+               min(created_at)::text AS first_at,
+               max(created_at)::text AS last_at
+        FROM video_summaries
+        GROUP BY 1 ORDER BY n DESC
+      `);
+      return {
+        ...base,
+        rows: rows.map(normalizeRow),
+        notes: 'V1 video_summaries by model. metadata-enriched = LLM never ran (description-only).',
+      };
+    }
+    case 'richSummaryV1LlmPct': {
+      // The actual LLM-authored V1 rows (small set, list each).
+      const rows = await queryRows<Record<string, unknown>>(`
+        SELECT vs.video_id, vs.model, vs.created_at::text AS created_at,
+               yv.title, yv.channel_title, yv.duration_seconds
+        FROM video_summaries vs
+        LEFT JOIN youtube_videos yv ON yv.youtube_video_id = vs.video_id
+        WHERE vs.model IS NOT NULL
+          AND vs.model <> 'metadata-enriched'
+          AND vs.model <> 'no-caption'
+        ORDER BY vs.created_at DESC
+        LIMIT ${DETAIL_SAMPLE_LIMIT}
+      `);
+      return {
+        ...base,
+        rows: rows.map(normalizeRow),
+        notes:
+          'Every V1 row whose model field is NOT the metadata fallback or no-caption placeholder.',
+      };
+    }
+    case 'richSummaryV2Pct': {
+      const rows = await queryRows<Record<string, unknown>>(`
+        SELECT coalesce(model, '(null)') AS model,
+               quality_flag,
+               count(*)::int AS n,
+               max(updated_at)::text AS last_updated_at
+        FROM video_rich_summaries
+        GROUP BY 1, 2 ORDER BY n DESC
+      `);
+      const series = await queryRows<{ bucket: string; n: number }>(`
+        SELECT date_trunc('day', updated_at)::date::text AS bucket, count(*)::int AS n
+        FROM video_rich_summaries
+        WHERE updated_at >= now() - interval '30 days'
+        GROUP BY 1 ORDER BY 1 ASC
+      `);
+      return {
+        ...base,
+        rows: rows.map(normalizeRow),
+        series,
+        notes:
+          'V2 rows by (model, quality_flag) + 30d daily updated_at series. quick path (Haiku) writes model=null; full path (Sonnet) overwrites.',
+      };
+    }
+    case 'captionFailRate7d': {
+      // Sample failures + per-day pass/fail series for the 7d window.
+      const rows = await queryRows<Record<string, unknown>>(`
+        SELECT yv.youtube_video_id, yv.title, yv.channel_title,
+               yv.default_language, yv.duration_seconds,
+               yv.transcript_attempted_at::text AS attempted_at,
+               yv.source
+        FROM youtube_videos yv
+        WHERE yv.transcript_attempted_at > now() - interval '7 days'
+          AND NOT EXISTS (
+            SELECT 1 FROM video_rich_summaries vrs
+            WHERE vrs.video_id = yv.youtube_video_id
+              AND vrs.quality_flag = 'pass'
+          )
+        ORDER BY yv.transcript_attempted_at DESC
+        LIMIT ${DETAIL_SAMPLE_LIMIT}
+      `);
+      const series = await queryRows<{ bucket: string; n: number }>(`
+        SELECT date_trunc('day', yv.transcript_attempted_at)::date::text AS bucket,
+               count(*)::int AS n
+        FROM youtube_videos yv
+        WHERE yv.transcript_attempted_at > now() - interval '14 days'
+          AND NOT EXISTS (
+            SELECT 1 FROM video_rich_summaries vrs
+            WHERE vrs.video_id = yv.youtube_video_id
+              AND vrs.quality_flag = 'pass'
+          )
+        GROUP BY 1 ORDER BY 1 ASC
+      `);
+      return {
+        ...base,
+        rows: rows.map(normalizeRow),
+        series,
+        notes:
+          'Recent fails = attempted but no v2 pass. Cause split (awk vs WebShare proxy) requires Mac Mini log shipping.',
+      };
+    }
+    case 'lastBulkFireHours': {
+      // 24h hourly distribution of transcript_attempted_at stamps.
+      const series = await queryRows<{ bucket: string; n: number }>(`
+        SELECT date_trunc('hour', transcript_attempted_at)::text AS bucket,
+               count(*)::int AS n
+        FROM youtube_videos
+        WHERE transcript_attempted_at > now() - interval '48 hours'
+        GROUP BY 1 ORDER BY 1 ASC
+      `);
+      const rows = await queryRows<Record<string, unknown>>(`
+        SELECT youtube_video_id, title, channel_title,
+               transcript_attempted_at::text AS attempted_at,
+               source
+        FROM youtube_videos
+        WHERE transcript_attempted_at IS NOT NULL
+        ORDER BY transcript_attempted_at DESC
+        LIMIT ${DETAIL_SAMPLE_LIMIT}
+      `);
+      return {
+        ...base,
+        rows: rows.map(normalizeRow),
+        series,
+        notes:
+          'transcript_attempted_at proxies the Mac Mini bulk pipeline pulse — each process-one.sh exit stamps it.',
+      };
+    }
+    case 'nullSourcePct': {
+      // Sample of NULL-source rows + 30d cohort breakdown.
+      const rows = await queryRows<Record<string, unknown>>(`
+        SELECT youtube_video_id, title, channel_title,
+               created_at::text AS created_at, view_count::text AS view_count
+        FROM youtube_videos
+        WHERE source IS NULL
+          AND created_at >= now() - interval '30 days'
+        ORDER BY created_at DESC
+        LIMIT ${DETAIL_SAMPLE_LIMIT}
+      `);
+      const series = await queryRows<{ bucket: string; n: number }>(`
+        SELECT date_trunc('day', created_at)::date::text AS bucket,
+               count(*) FILTER (WHERE source IS NULL)::int AS n
+        FROM youtube_videos
+        WHERE created_at >= now() - interval '30 days'
+        GROUP BY 1 ORDER BY 1 ASC
+      `);
+      return {
+        ...base,
+        rows: rows.map(normalizeRow),
+        series,
+        notes:
+          'Pre-CP438 (2026-04-29) rows are unconditionally NULL. New rows with NULL = collector path missed the source stamp.',
+      };
+    }
+    default: {
+      const exhaustive: never = metric;
+      throw new Error(`unknown metric: ${exhaustive as string}`);
+    }
+  }
+}
+
 export async function adminPoolHealthRoutes(fastify: FastifyInstance) {
   const adminAuth = { onRequest: [fastify.authenticate, fastify.authenticateAdmin] };
 
@@ -610,6 +798,45 @@ export async function adminPoolHealthRoutes(fastify: FastifyInstance) {
         return reply.code(503).send({
           status: 'error',
           code: 'POOL_HEALTH_UNAVAILABLE',
+          message,
+        });
+      }
+    }
+  );
+
+  // Drill-down per-metric detail. Lazy-loaded so the main /pool-health
+  // payload stays light; each click on a dashboard card fetches the
+  // detail for that one metric.
+  const DETAIL_KEYS: ReadonlySet<PoolHealthDetailKey> = new Set([
+    'richSummaryV1Pct',
+    'richSummaryV1LlmPct',
+    'richSummaryV2Pct',
+    'captionFailRate7d',
+    'lastBulkFireHours',
+    'nullSourcePct',
+  ]);
+
+  fastify.get<{ Params: { metric: string } }>(
+    '/details/:metric',
+    adminAuth,
+    async (request: FastifyRequest<{ Params: { metric: string } }>, reply: FastifyReply) => {
+      const metric = request.params.metric as PoolHealthDetailKey;
+      if (!DETAIL_KEYS.has(metric)) {
+        return reply.code(400).send({
+          status: 'error',
+          code: 'UNKNOWN_DETAIL_METRIC',
+          message: `Unknown detail metric: ${metric}`,
+        });
+      }
+      try {
+        const detail = await fetchDetail(metric);
+        return reply.send(detail);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.error('pool-health detail failed', { metric, error: message });
+        return reply.code(503).send({
+          status: 'error',
+          code: 'POOL_HEALTH_DETAIL_UNAVAILABLE',
           message,
         });
       }
