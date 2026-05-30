@@ -5,7 +5,9 @@
  * picked from the 2026-05-30 prod measurement. No DB, no network.
  */
 
+import { Prisma } from '@prisma/client';
 import { POOL_HEALTH_THRESHOLDS, evaluateHealth, type HealthBand } from '@/config/pool-health';
+import { n } from '@/api/routes/admin/pool-health';
 
 describe('evaluateHealth — higher_is_better', () => {
   const band: HealthBand = {
@@ -69,6 +71,64 @@ describe('evaluateHealth — invalid input', () => {
   it('treats NaN / Infinity as critical', () => {
     expect(evaluateHealth(Number.NaN, band)).toBe('critical');
     expect(evaluateHealth(Number.POSITIVE_INFINITY, band)).toBe('critical');
+  });
+});
+
+describe('n() — Prisma raw-query numeric coercion', () => {
+  // Root cause of the first-ship hotfix: PG `round(numeric, 1)` arrives
+  // through Prisma's raw-query path as a `Prisma.Decimal` instance, not
+  // a string. Fixture strings like '33.3' will not reproduce the bug —
+  // the test MUST use the real Decimal class so a regression that drops
+  // the valueOf-funnel re-zeros the metric.
+
+  it('extracts the numeric value from a Prisma.Decimal instance', () => {
+    const dec = new Prisma.Decimal('33.3');
+    // Sanity: the instance carries the documented internal shape
+    // (constructor + sign / exponent / digit-array). If Prisma drops
+    // these, the test still asserts behaviour via Number().
+    expect(typeof dec).toBe('object');
+    expect(typeof dec.toString).toBe('function');
+    expect(typeof dec.valueOf).toBe('function');
+    expect(n(dec)).toBe(33.3);
+  });
+
+  it('extracts the numeric value from a fresh Decimal that round() would emit', () => {
+    // Mirrors `round(100.0 * count(...) / nullif(count(*), 0), 1)` →
+    // Decimal('96.8') in the embedding coverage path.
+    expect(n(new Prisma.Decimal('96.8'))).toBe(96.8);
+    expect(n(new Prisma.Decimal('1.21'))).toBe(1.21);
+    expect(n(new Prisma.Decimal('90.6'))).toBe(90.6);
+  });
+
+  it('extracts the numeric value from a Decimal-shaped duck-typed object', () => {
+    // Same internal shape Prisma.Decimal exposes ({s, e, d, valueOf,
+    // toString}) — guards against a future Prisma rewrite that keeps
+    // the contract but swaps the class.
+    const duck = {
+      s: 1,
+      e: 1,
+      d: [33, 3000000],
+      toString(): string {
+        return '33.3';
+      },
+      valueOf(): number {
+        return 33.3;
+      },
+    };
+    expect(n(duck)).toBe(33.3);
+  });
+
+  it('returns fallback for null / undefined / unparseable', () => {
+    expect(n(null)).toBe(0);
+    expect(n(undefined)).toBe(0);
+    expect(n({ not: 'numeric' })).toBe(0);
+    expect(n(null, 42)).toBe(42);
+  });
+
+  it('still handles the original number / string / bigint shapes', () => {
+    expect(n(33.3)).toBe(33.3);
+    expect(n('33.3')).toBe(33.3);
+    expect(n(BigInt(12505))).toBe(12505);
   });
 });
 

@@ -165,14 +165,19 @@ function normalizeRow(r: unknown): Record<string, unknown> {
   return out;
 }
 
-function n(value: unknown, fallback = 0): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  if (typeof value === 'bigint') return Number(value);
-  return fallback;
+// Exported for unit testing — accepts every numeric shape Prisma's
+// raw-query path actually returns: JS number, string, bigint, or
+// Prisma.Decimal (a class instance with `valueOf` / `toString`).
+//
+// `Number(v)` delegates to `valueOf` for Decimal, parses strings, and
+// widens bigints — single funnel for every shape. The first ship only
+// branched on number/string/bigint, so Decimal fell to fallback 0
+// silently, zeroing every rounded pct in the payload
+// (richSummary / embedding / avgReuse / promote).
+export function n(value: unknown, fallback = 0): number {
+  if (value === null || value === undefined) return fallback;
+  const parsed = Number(value as never);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 async function compute(): Promise<PoolHealthSnapshot> {
