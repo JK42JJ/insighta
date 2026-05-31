@@ -386,6 +386,8 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               v5_stage_ms: v5Result.diagnostics.stageMs,
               v5_aborted_batches: v5Result.diagnostics.abortedBatches,
               v5_picker_timed_out: v5Result.diagnostics.pickerTimedOut,
+              // CP491 F5c — per-query raw count + q_ok (parity with wizard.discover.end).
+              v5_per_query: v5Result.diagnostics.perQuery,
               // CP489 Phase 6 — emit returned videoIds so the Search Journey
               // Ledger can join per-round trace rows ↔ card_interactions
               // deterministically (no timestamp-window fuzziness). Bounded

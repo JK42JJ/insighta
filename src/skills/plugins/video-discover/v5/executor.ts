@@ -16,7 +16,7 @@
 import { logger } from '@/utils/logger';
 import { videosBatchFullMetadata, resolveSearchApiKeys } from '../v2/youtube-client';
 import type { YouTubeVideoFullMetadata } from '../v2/youtube-client';
-import { runYouTubeFanout, type FanoutCandidate } from './youtube-fanout';
+import { runYouTubeFanout, type FanoutCandidate, type FanoutPerQuery } from './youtube-fanout';
 import { getV5Config } from './config';
 import { getVideoPicker } from '@/modules/llm-picker/registry';
 import { getLlmPickerConfig } from '@/config/llm-picker';
@@ -81,6 +81,8 @@ export interface V5ExecuteResult {
     abortedBatches: number;
     /** CP491 F5 — whether the picker batchTimer fired (ac.signal.aborted). */
     pickerTimedOut: boolean;
+    /** CP491 F5c — per-query raw count + q_ok (from fanout). */
+    perQuery: FanoutPerQuery[];
   };
 }
 
@@ -234,6 +236,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       stageMs: stage,
       abortedBatches,
       pickerTimedOut,
+      perQuery: fanout.perQuery ?? [],
     },
   };
 }
@@ -244,6 +247,7 @@ function emptyResult(args: {
     queriesSucceeded: number;
     rawItemCount: number;
     quotaUnitsApprox: number;
+    perQuery?: FanoutPerQuery[];
   };
   afterTitleFilter: number;
   afterExcludeFilter: number;
@@ -270,6 +274,7 @@ function emptyResult(args: {
       stageMs: args.stage,
       abortedBatches: args.abortedBatches,
       pickerTimedOut: args.pickerTimedOut,
+      perQuery: args.fanout.perQuery ?? [],
     },
   };
 }

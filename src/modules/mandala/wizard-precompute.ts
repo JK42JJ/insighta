@@ -412,11 +412,37 @@ export async function consumePrecompute(
   // step3 will retry the same logic ~30s later as a safety net.
   try {
     const { maybeAutoAddRecommendations } = await import('./auto-add-recommendations');
-    const { withTraceContext } = await import('@/modules/discover-tracing');
+    const { withTraceContext, recordTrace } = await import('@/modules/discover-tracing');
     // CP457+ bind trace context for auto_add.user_video_states row.
     const autoAddResult = await withTraceContext(
       { mandalaId: input.mandalaId, userId: input.userId },
-      () => maybeAutoAddRecommendations(input.userId, input.mandalaId)
+      () => {
+        // CP491 F5c — emit the v5 discover diagnostics as a trace keyed by
+        // mandala_id (mandala did not exist at precompute time). Mirrors the
+        // /add-cards `add_cards.end` shape so F3 before/after is one query
+        // across both surfaces. Fire-and-forget; does not affect save SLO.
+        const diag = discover?.diagnostics;
+        if (diag) {
+          const cellDistribution: Record<string, number> = {};
+          for (const slot of slots) {
+            const key = String(slot.cellIndex ?? 0);
+            cellDistribution[key] = (cellDistribution[key] ?? 0) + 1;
+          }
+          const durMs = diag['durationMs'];
+          recordTrace({
+            step: 'wizard.discover.end',
+            status: 'ok',
+            response: {
+              cards_count: slots.length,
+              inserted,
+              cell_distribution: cellDistribution,
+              ...diag,
+            },
+            latencyMs: typeof durMs === 'number' ? durMs : discover?.duration_ms,
+          });
+        }
+        return maybeAutoAddRecommendations(input.userId, input.mandalaId);
+      }
     );
     log.info(
       `precompute consume → auto-add inline: ok=${autoAddResult.ok}` +

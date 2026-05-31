@@ -77,5 +77,8 @@ export async function runV5ForWizard(input: V5WizardInput): Promise<EphemeralDis
     tier1_matches: 0,
     tier2_matches: result.diagnostics.afterTitleFilter,
     duration_ms: Date.now() - t0,
+    // CP491 F5c — transport diagnostics so consumePrecompute can emit a
+    // mandala-keyed wizard.discover.end trace (see EphemeralDiscoverResult).
+    diagnostics: result.diagnostics as unknown as Record<string, unknown>,
   };
 }
