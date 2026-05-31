@@ -381,6 +381,11 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               v5_picks_raw: v5Result.diagnostics.picksRaw,
               v5_llm_batches: v5Result.diagnostics.llmBatches,
               v5_quota_units: v5Result.diagnostics.quotaUnitsApprox,
+              // CP491 F5 — per-stage ms + abort observability (makes the
+              // "videos.list dominant" claim directly measurable in prod).
+              v5_stage_ms: v5Result.diagnostics.stageMs,
+              v5_aborted_batches: v5Result.diagnostics.abortedBatches,
+              v5_picker_timed_out: v5Result.diagnostics.pickerTimedOut,
               // CP489 Phase 6 — emit returned videoIds so the Search Journey
               // Ledger can join per-round trace rows ↔ card_interactions
               // deterministically (no timestamp-window fuzziness). Bounded

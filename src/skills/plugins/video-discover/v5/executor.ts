@@ -48,6 +48,20 @@ export interface V5Card {
   reason: string;
 }
 
+/**
+ * Per-stage wall-clock breakdown (ms) of a single executor run. CP491 F5 —
+ * the executor was previously a black box (only total durationMs), so the
+ * "videos.list dominant" claim was elimination-inferred, not measured. These
+ * markers make the dominant stage directly observable in prod traces.
+ */
+export interface V5StageMs {
+  fanoutMs: number;
+  excludeMs: number;
+  llmMs: number;
+  videosMs: number;
+  assembleMs: number;
+}
+
 export interface V5ExecuteResult {
   cards: V5Card[];
   diagnostics: {
@@ -61,6 +75,12 @@ export interface V5ExecuteResult {
     quotaUnitsApprox: number;
     durationMs: number;
     pickerModel: string;
+    /** CP491 F5 — per-stage ms. Stages not reached on an early return are 0. */
+    stageMs: V5StageMs;
+    /** CP491 F5 — batches that returned [] due to the 5s external abort (U2). */
+    abortedBatches: number;
+    /** CP491 F5 — whether the picker batchTimer fired (ac.signal.aborted). */
+    pickerTimedOut: boolean;
   };
 }
 
@@ -69,7 +89,13 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   const cfg = getV5Config(input.env);
   const pickerCfg = getLlmPickerConfig(input.env);
 
+  // CP491 F5 — per-stage wall-clock markers (stages not reached stay 0).
+  const stage: V5StageMs = { fanoutMs: 0, excludeMs: 0, llmMs: 0, videosMs: 0, assembleMs: 0 };
+  let abortedBatches = 0;
+  let pickerTimedOut = false;
+
   // 1. YouTube fanout
+  const tFanout0 = Date.now();
   const fanout = await runYouTubeFanout({
     centerGoal: input.centerGoal,
     subGoals: input.subGoals,
@@ -78,11 +104,14 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
     language: input.language,
     env: input.env,
   });
+  stage.fanoutMs = Date.now() - tFanout0;
   const afterTitleFilter = fanout.candidates.length;
 
   // 2. exclude BEFORE LLM (save LLM tokens)
+  const tExclude0 = Date.now();
   const survivors = fanout.candidates.filter((c) => !input.excludeVideoIds.has(c.videoId));
   const afterExcludeFilter = survivors.length;
+  stage.excludeMs = Date.now() - tExclude0;
 
   if (survivors.length === 0) {
     log.info(
@@ -94,6 +123,9 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       afterExcludeFilter,
       pickerCfg,
       t0,
+      stage,
+      abortedBatches,
+      pickerTimedOut,
     });
   }
 
@@ -106,6 +138,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
     6
   );
 
+  const tLlm0 = Date.now();
   const ac = new AbortController();
   const batchTimer = setTimeout(() => ac.abort(), pickerCfg.timeoutMs);
   let pickResults: PickResult[][];
@@ -127,7 +160,10 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
             ac.signal
           );
         } catch (err) {
-          log.warn(`v5 picker batch failed: ${err instanceof Error ? err.message : String(err)}`);
+          const msg = err instanceof Error ? err.message : String(err);
+          // CP491 F5 — distinguish abort-induced empty picks (U2) from other failures.
+          if (msg.includes('cancelled by external signal')) abortedBatches += 1;
+          log.warn(`v5 picker batch failed: ${msg}`);
           return [] as PickResult[];
         }
       })
@@ -135,6 +171,8 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   } finally {
     clearTimeout(batchTimer);
   }
+  stage.llmMs = Date.now() - tLlm0;
+  pickerTimedOut = ac.signal.aborted;
 
   const picksMerged = mergePicks(pickResults, cfg.targetPicks);
 
@@ -147,10 +185,14 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       pickerCfg,
       t0,
       llmBatches: limitedBatches.length,
+      stage,
+      abortedBatches,
+      pickerTimedOut,
     });
   }
 
   // 4. videos.list for picked only (stats + duration)
+  const tVideos0 = Date.now();
   const fanoutById = new Map(survivors.map((c) => [c.videoId, c]));
   const pickedIds = picksMerged.map((p) => p.videoId);
   const apiKeys = resolveSearchApiKeys(input.env);
@@ -165,13 +207,16 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
     }
   }
   const metaById = new Map(fullMeta.map((m) => [m.id ?? '', m]));
+  stage.videosMs = Date.now() - tVideos0;
 
   // 5. assemble cards in pick order
+  const tAssemble0 = Date.now();
   const cards: V5Card[] = picksMerged.map((p) => {
     const fan = fanoutById.get(p.videoId);
     const meta = metaById.get(p.videoId);
     return assembleCard(p, fan, meta);
   });
+  stage.assembleMs = Date.now() - tAssemble0;
 
   return {
     cards,
@@ -186,6 +231,9 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       quotaUnitsApprox: fanout.quotaUnitsApprox + (pickedIds.length > 0 ? 1 : 0),
       durationMs: Date.now() - t0,
       pickerModel: picker.model,
+      stageMs: stage,
+      abortedBatches,
+      pickerTimedOut,
     },
   };
 }
@@ -202,6 +250,9 @@ function emptyResult(args: {
   pickerCfg: ReturnType<typeof getLlmPickerConfig>;
   t0: number;
   llmBatches?: number;
+  stage: V5StageMs;
+  abortedBatches: number;
+  pickerTimedOut: boolean;
 }): V5ExecuteResult {
   return {
     cards: [],
@@ -216,6 +267,9 @@ function emptyResult(args: {
       quotaUnitsApprox: args.fanout.quotaUnitsApprox,
       durationMs: Date.now() - args.t0,
       pickerModel: args.pickerCfg.model,
+      stageMs: args.stage,
+      abortedBatches: args.abortedBatches,
+      pickerTimedOut: args.pickerTimedOut,
     },
   };
 }

@@ -24,6 +24,9 @@
 
 import type { AssembledSlot, EphemeralDiscoverResult } from '../v3/executor';
 import { runV5Executor, type V5ExecuteInput } from './executor';
+import { logger } from '@/utils/logger';
+
+const log = logger.child({ module: 'video-discover/v5/wizard-adapter' });
 
 export type V5WizardInput = Omit<V5ExecuteInput, 'excludeVideoIds'> & {
   excludeVideoIds?: Set<string>;
@@ -40,6 +43,16 @@ export async function runV5ForWizard(input: V5WizardInput): Promise<EphemeralDis
     excludeVideoIds: input.excludeVideoIds ?? new Set<string>(),
     env: input.env,
   });
+
+  // CP491 F5 — surface the per-stage breakdown for the wizard path too
+  // (same runV5Executor as /add-cards, C8). Lets prod logs show whether
+  // videos.list dominates the wizard discover_ms without a separate trace.
+  const s = result.diagnostics.stageMs;
+  log.info(
+    `v5 wizard stages ms: fanout=${s.fanoutMs} exclude=${s.excludeMs} llm=${s.llmMs} ` +
+      `videos=${s.videosMs} assemble=${s.assembleMs} total=${result.diagnostics.durationMs} ` +
+      `abortedBatches=${result.diagnostics.abortedBatches} pickerTimedOut=${result.diagnostics.pickerTimedOut}`
+  );
 
   const slots: AssembledSlot[] = result.cards.map((c) => ({
     videoId: c.videoId,
