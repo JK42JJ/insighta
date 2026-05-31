@@ -33,6 +33,8 @@ export interface FanoutInput {
   targetLevel: string;
   language: 'ko' | 'en';
   env: NodeJS.ProcessEnv;
+  /** CP491 ROI1 — forwarded to search.list publishedAfter (ISO date). */
+  publishedAfter?: string;
 }
 
 export interface FanoutCandidate {
@@ -110,6 +112,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         maxResults: cfg.searchMaxResults,
         relevanceLanguage: input.language,
         timeoutMs: cfg.searchTimeoutMs,
+        publishedAfter: input.publishedAfter,
       }).then((items) => ({ items, cellIndex: q.cellIndex ?? null }))
     )
   );

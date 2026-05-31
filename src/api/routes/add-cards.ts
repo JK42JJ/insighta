@@ -281,6 +281,11 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             language,
             excludeVideoIds: excludeSet,
             env: process.env,
+            // CP491 ROI1 — push the date filter into search.list so YouTube
+            // returns date-valid candidates instead of fetch-then-discard at
+            // the post-pick filter below. Post-pick filter retained as a
+            // safety net (no-op once search already filters).
+            publishedAfter: filters.publishedAfter,
           });
 
           // Request-level filter pass (durationBucket / minViewCount /

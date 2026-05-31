@@ -32,6 +32,12 @@ export interface V5ExecuteInput {
   language: 'ko' | 'en';
   excludeVideoIds: Set<string>;
   env: NodeJS.ProcessEnv;
+  /**
+   * CP491 ROI1 — ISO date passed to YouTube search.list (publishedAfter) so
+   * date-filtered candidates are fetched at SEARCH stage, not fetched-then-
+   * discarded post-pick. Undefined = no date filter (unchanged behavior).
+   */
+  publishedAfter?: string;
 }
 
 export interface V5Card {
@@ -105,6 +111,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
     targetLevel: input.targetLevel,
     language: input.language,
     env: input.env,
+    publishedAfter: input.publishedAfter,
   });
   stage.fanoutMs = Date.now() - tFanout0;
   const afterTitleFilter = fanout.candidates.length;
