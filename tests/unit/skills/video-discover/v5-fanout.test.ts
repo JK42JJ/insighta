@@ -83,4 +83,40 @@ describe('runYouTubeFanout — F5c perQuery', () => {
     expect(res.queriesSucceeded).toBe(2);
     expect(res.candidates).toHaveLength(8); // 5 + 3, all unique
   });
+
+  test('ROI1: forwards publishedAfter to every searchVideos call', async () => {
+    buildRuleBasedQueriesSync.mockReturnValue([
+      { query: 'q0', source: 'core', cellIndex: null },
+      { query: 'q1', source: 'subgoal', cellIndex: 1 },
+    ]);
+    searchVideos.mockResolvedValue(items(2, 'q'));
+    const iso = '2025-06-01T00:00:00.000Z';
+    await runYouTubeFanout({
+      centerGoal: 'goal',
+      subGoals: [],
+      focusTags: [],
+      targetLevel: 'standard',
+      language: 'en',
+      env: {} as NodeJS.ProcessEnv,
+      publishedAfter: iso,
+    });
+    expect(searchVideos).toHaveBeenCalled();
+    for (const call of searchVideos.mock.calls) {
+      expect(call[0]).toMatchObject({ publishedAfter: iso });
+    }
+  });
+
+  test('ROI1: publishedAfter undefined when not provided (unchanged behavior)', async () => {
+    buildRuleBasedQueriesSync.mockReturnValue([{ query: 'q0', source: 'core', cellIndex: null }]);
+    searchVideos.mockResolvedValue(items(2, 'q'));
+    await runYouTubeFanout({
+      centerGoal: 'goal',
+      subGoals: [],
+      focusTags: [],
+      targetLevel: 'standard',
+      language: 'en',
+      env: {} as NodeJS.ProcessEnv,
+    });
+    expect(searchVideos.mock.calls[0]![0].publishedAfter).toBeUndefined();
+  });
 });
