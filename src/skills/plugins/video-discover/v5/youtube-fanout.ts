@@ -46,12 +46,23 @@ export interface FanoutCandidate {
   cellIndex: number | null;
 }
 
+/** CP491 F5c — per-query observability (raw count + q_ok), independent of dedup/hardcap. */
+export interface FanoutPerQuery {
+  query: string;
+  source: string;
+  cellIndex: number | null;
+  rawCount: number;
+  fulfilled: boolean;
+}
+
 export interface FanoutResult {
   candidates: FanoutCandidate[];
   queriesAttempted: number;
   queriesSucceeded: number;
   rawItemCount: number;
   quotaUnitsApprox: number;
+  /** CP491 F5c — one entry per attempted query (order = queries order). */
+  perQuery: FanoutPerQuery[];
 }
 
 export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult> {
@@ -65,6 +76,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       queriesSucceeded: 0,
       rawItemCount: 0,
       quotaUnitsApprox: 0,
+      perQuery: [],
     };
   }
 
@@ -86,6 +98,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       queriesSucceeded: 0,
       rawItemCount: 0,
       quotaUnitsApprox: 0,
+      perQuery: [],
     };
   }
 
@@ -124,12 +137,28 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     if (seen.size >= cfg.dedupHardCap) break;
   }
 
+  // CP491 F5c — per-query raw count + q_ok, computed independently of the
+  // dedup/hardcap loop above so every attempted query is recorded even when
+  // the cohort hits dedupHardCap early. `results` order == `queries` order
+  // (Promise.allSettled preserves it).
+  const perQuery: FanoutPerQuery[] = results.map((r, i) => {
+    const qm = queries[i]!;
+    return {
+      query: qm.query,
+      source: qm.source,
+      cellIndex: qm.cellIndex ?? null,
+      rawCount: r.status === 'fulfilled' ? r.value.items.length : 0,
+      fulfilled: r.status === 'fulfilled',
+    };
+  });
+
   return {
     candidates: Array.from(seen.values()),
     queriesAttempted: queries.length,
     queriesSucceeded,
     rawItemCount,
     quotaUnitsApprox: queries.length * 100,
+    perQuery,
   };
 }
 

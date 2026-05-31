@@ -1777,6 +1777,15 @@ export interface EphemeralDiscoverResult {
   tier2_matches: number;
   duration_ms: number;
   debug?: Tier2Debug;
+  /**
+   * CP491 F5c — v5 executor diagnostics (stageMs / perQuery / picksRaw / ...).
+   * Transport only: carried in mandala_wizard_precompute.discover_result so
+   * consumePrecompute can emit a `wizard.discover.end` trace keyed by the
+   * mandala_id (which does not exist yet at precompute time). Final queryable
+   * storage is the trace, not this JSON. Decoupled (Record) to avoid v3↔v5
+   * import coupling.
+   */
+  diagnostics?: Record<string, unknown>;
 }
 
 /**

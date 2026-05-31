@@ -248,4 +248,34 @@ describe('runV5Executor (orchestration smoke)', () => {
     // Only the 'cancelled by external signal' batch is counted.
     expect(result.diagnostics.abortedBatches).toBe(1);
   });
+
+  test('F5c: diagnostics pass through fanout perQuery', async () => {
+    const perQuery = [
+      { query: 'core q', source: 'core', cellIndex: null, rawCount: 4, fulfilled: true },
+      { query: 'sub q', source: 'subgoal', cellIndex: 2, rawCount: 0, fulfilled: false },
+    ];
+    runYouTubeFanout.mockResolvedValue({
+      candidates: [makeFanoutCandidate('a')],
+      queriesAttempted: 2,
+      queriesSucceeded: 1,
+      rawItemCount: 4,
+      quotaUnitsApprox: 200,
+      perQuery,
+    });
+    setVideoPickerForTest(
+      new FakePicker((input) =>
+        input.candidates.map((c) => ({ videoId: c.videoId, score: 0.9, reason: 'ok' }))
+      )
+    );
+    const result = await runV5Executor({
+      centerGoal: 'goal',
+      subGoals: [],
+      focusTags: [],
+      targetLevel: 'standard',
+      language: 'en',
+      excludeVideoIds: new Set(),
+      env: {} as NodeJS.ProcessEnv,
+    });
+    expect(result.diagnostics.perQuery).toEqual(perQuery);
+  });
 });
