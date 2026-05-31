@@ -182,4 +182,70 @@ describe('runV5Executor (orchestration smoke)', () => {
     });
     expect(result.cards.length).toBeGreaterThan(0);
   });
+
+  // CP491 F5 — instrumentation: per-stage ms + abort observability.
+  test('F5: diagnostics expose per-stage ms for all 5 stages', async () => {
+    runYouTubeFanout.mockResolvedValue({
+      candidates: [makeFanoutCandidate('a'), makeFanoutCandidate('b')],
+      queriesAttempted: 1,
+      queriesSucceeded: 1,
+      rawItemCount: 2,
+      quotaUnitsApprox: 100,
+    });
+    setVideoPickerForTest(
+      new FakePicker((input) =>
+        input.candidates.map((c) => ({ videoId: c.videoId, score: 0.9, reason: 'ok' }))
+      )
+    );
+    const result = await runV5Executor({
+      centerGoal: 'goal',
+      subGoals: [],
+      focusTags: [],
+      targetLevel: 'standard',
+      language: 'en',
+      excludeVideoIds: new Set(),
+      env: {} as NodeJS.ProcessEnv,
+    });
+    const s = result.diagnostics.stageMs;
+    expect(s).toBeDefined();
+    for (const k of ['fanoutMs', 'excludeMs', 'llmMs', 'videosMs', 'assembleMs'] as const) {
+      expect(typeof s[k]).toBe('number');
+      expect(s[k]).toBeGreaterThanOrEqual(0);
+    }
+    expect(result.diagnostics.pickerTimedOut).toBe(false);
+    expect(result.diagnostics.abortedBatches).toBe(0);
+  });
+
+  test('F5: abortedBatches counts only external-abort errors, not generic failures', async () => {
+    runYouTubeFanout.mockResolvedValue({
+      candidates: Array.from({ length: 24 }, (_, i) => makeFanoutCandidate(`v${i}`)),
+      queriesAttempted: 1,
+      queriesSucceeded: 1,
+      rawItemCount: 24,
+      quotaUnitsApprox: 100,
+    });
+    // 24 candidates / batchSize 12 = 2 batches: one external-abort, one generic.
+    let callCount = 0;
+    setVideoPickerForTest(
+      new FakePicker((input) => {
+        callCount += 1;
+        if (callCount === 1) throw new Error('OpenRouter request cancelled by external signal');
+        if (callCount === 2) throw new Error('boom generic');
+        return input.candidates
+          .slice(0, 2)
+          .map((c) => ({ videoId: c.videoId, score: 0.8, reason: 'ok' }));
+      })
+    );
+    const result = await runV5Executor({
+      centerGoal: 'goal',
+      subGoals: [],
+      focusTags: [],
+      targetLevel: 'standard',
+      language: 'en',
+      excludeVideoIds: new Set(),
+      env: {} as NodeJS.ProcessEnv,
+    });
+    // Only the 'cancelled by external signal' batch is counted.
+    expect(result.diagnostics.abortedBatches).toBe(1);
+  });
 });
