@@ -19,21 +19,32 @@ interface StateRow {
 
 interface MockPrismaCalls {
   rawWhere: string[];
+  /** Captured `where` args from recommendation_cache.findMany (CP492 live-feed exclude). */
+  recCacheWhere: Array<Record<string, unknown>>;
 }
 
 /**
  * Build a minimal mock prisma that captures the raw SQL filter, returns
- * configured rows for user_video_states (=$queryRaw), and empty arrays
- * for the other 3 sources (user_local_cards, deleteSignals, archiveSignals).
+ * configured rows for user_video_states (=$queryRaw) + recommendation_cache,
+ * and empty arrays for the other sources (user_local_cards, delete/archive).
  */
-function makeMockPrisma(returnedStateRows: StateRow[]): {
+function makeMockPrisma(
+  returnedStateRows: StateRow[],
+  recCacheRows: Array<{ video_id: string }> = []
+): {
   prisma: Parameters<typeof getExcludedVideoIds>[0]['prisma'];
   calls: MockPrismaCalls;
 } {
-  const calls: MockPrismaCalls = { rawWhere: [] };
+  const calls: MockPrismaCalls = { rawWhere: [], recCacheWhere: [] };
   const prisma = {
     user_local_cards: { findMany: async () => [] },
     card_interactions: { findMany: async () => [] },
+    recommendation_cache: {
+      findMany: async (args: { where: Record<string, unknown> }) => {
+        calls.recCacheWhere.push(args.where);
+        return recCacheRows;
+      },
+    },
     $queryRaw: async (sqlTagged: { strings: string[]; values: unknown[] }) => {
       const joined = sqlTagged.strings.join(' ');
       calls.rawWhere.push(joined);
@@ -160,5 +171,43 @@ describe('getExcludedVideoIds — documented row classes (intent guard)', () => 
       mandalaId: '00000000-0000-0000-0000-000000000002',
     });
     expect(calls.rawWhere.join(' ')).not.toContain('auto_added = FALSE');
+  });
+});
+
+/**
+ * CP492 — live-feed dedup. Add Cards re-surfaced the wizard's own cards
+ * (85-93% overlap measured) because the exclude set never included the
+ * mandala's current recommendation_cache. The fix adds it MANDALA-SCOPED +
+ * non-expired only, distinct from the CP489 user_video_states ghost policy.
+ */
+describe('getExcludedVideoIds — live-feed dedup (CP492)', () => {
+  const userId = '00000000-0000-0000-0000-000000000001';
+  const mandalaId = '00000000-0000-0000-0000-000000000002';
+
+  test('recommendation_cache video_ids for this mandala are excluded', async () => {
+    const { prisma } = makeMockPrisma([], [{ video_id: 'wizardVid1' }, { video_id: 'wizardVid2' }]);
+    const excluded = await getExcludedVideoIds({ prisma, userId, mandalaId });
+    expect(excluded.has('wizardVid1')).toBe(true);
+    expect(excluded.has('wizardVid2')).toBe(true);
+  });
+
+  test('rec_cache query is MANDALA-SCOPED (no cross-mandala bleed)', async () => {
+    const { prisma, calls } = makeMockPrisma([], []);
+    await getExcludedVideoIds({ prisma, userId, mandalaId });
+    expect(calls.recCacheWhere).toHaveLength(1);
+    expect(calls.recCacheWhere[0]).toMatchObject({ user_id: userId, mandala_id: mandalaId });
+  });
+
+  test('rec_cache query filters expires_at > now (expired cards re-surfaceable, not permanent)', async () => {
+    const { prisma, calls } = makeMockPrisma([], []);
+    await getExcludedVideoIds({ prisma, userId, mandalaId });
+    const where = calls.recCacheWhere[0] as { expires_at?: { gt?: Date } };
+    expect(where.expires_at?.gt).toBeInstanceOf(Date);
+  });
+
+  test('empty rec_cache (fresh mandala) adds nothing — no starvation source', async () => {
+    const { prisma } = makeMockPrisma([], []);
+    const excluded = await getExcludedVideoIds({ prisma, userId, mandalaId });
+    expect(excluded.size).toBe(0);
   });
 });
