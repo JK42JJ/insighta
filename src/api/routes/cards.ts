@@ -54,6 +54,7 @@ import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { enqueueEnrichRichSummary } from '@/modules/queue';
 import { config } from '../../config';
+import { shortGateFields } from '@/modules/video-pool/is-short';
 
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const VIDEO_ID_LOG_TRIM = 60;
@@ -510,9 +511,12 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           const v = ytFull.view_count != null ? Number(ytFull.view_count) : 0;
           const quality = v >= 100_000 ? 'gold' : v >= 10_000 ? 'silver' : 'bronze';
           const lang = ytFull.title && /[가-힣]/.test(ytFull.title) ? 'ko' : 'en';
+          // CP491 step 4 — short gate (demote Shorts at promote).
+          const shortGate = await shortGateFields(videoId, ytFull.duration_seconds);
           await prisma.video_pool.upsert({
             where: { video_id: videoId },
             create: {
+              ...shortGate,
               video_id: videoId,
               title: ytFull.title ?? '',
               description: ytFull.description ?? null,

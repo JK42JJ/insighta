@@ -144,3 +144,34 @@ export async function isShortCached(
 export function resetShortCacheForTest(): void {
   _cache.clear();
 }
+
+/** Columns to merge into a video_pool create when gating Shorts (CP491). */
+export interface ShortGateFields {
+  is_short?: boolean;
+  short_signal?: ShortSignal;
+  short_probed_at?: Date;
+  is_active?: boolean;
+}
+
+/**
+ * Shared promote gate (CP491, step 4). Returns the video_pool columns to spread
+ * into a `.create({ data })` so a Short is inserted DEMOTED (is_active=false,
+ * preserved for audit/undo, excluded from search/pick) and a normal video is
+ * tagged is_short=false. On probe_error: fail-open — returns {} (no tag,
+ * is_active default true), leaving the row for the backfill to re-probe.
+ * One implementation for all 4 promote paths — no per-path drift.
+ */
+export async function shortGateFields(
+  videoId: string,
+  durationSec?: number | null,
+  opts: IsShortOpts = {}
+): Promise<ShortGateFields> {
+  const { isShort: short, signal } = await isShortCached(videoId, durationSec, opts);
+  if (signal === SHORT_SIGNAL.PROBE_ERROR) return {};
+  return {
+    is_short: short,
+    short_signal: signal,
+    short_probed_at: new Date(),
+    ...(short ? { is_active: false } : {}),
+  };
+}

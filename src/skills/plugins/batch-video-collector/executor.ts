@@ -54,6 +54,7 @@ import {
   QWEN3_EMBED_MODEL,
   vectorToLiteral,
 } from '../iks-scorer/embedding';
+import { shortGateFields } from '@/modules/video-pool/is-short';
 
 const log = logger.child({ module: 'batch-video-collector' });
 
@@ -444,9 +445,14 @@ async function upsertAll(
         where: { video_id: v.videoId },
         select: { video_id: true },
       });
+      // CP491 step 4 — short gate (demote Shorts at promote; 60s floor leaves
+      // 60-180s through, so probe explicitly). Create branch only — existing
+      // rows are handled by the backfill.
+      const shortGate = await shortGateFields(v.videoId, v.durationSec);
       await db.video_pool.upsert({
         where: { video_id: v.videoId },
         create: {
+          ...shortGate,
           video_id: v.videoId,
           title: v.title.slice(0, 5000),
           description: v.description?.slice(0, 5000) ?? null,

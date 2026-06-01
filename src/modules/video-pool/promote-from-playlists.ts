@@ -37,6 +37,7 @@ import {
   VideoMetadata,
 } from '@/modules/youtube/api';
 import { logger } from '@/utils/logger';
+import { shortGateFields } from './is-short';
 
 const log = logger.child({ module: 'modules/video-pool/promote-from-playlists' });
 
@@ -226,8 +227,11 @@ export async function promotePlaylistsToVideoPool(
         : null;
       const langSafe = (meta.defaultLanguage ?? DEFAULT_LANGUAGE).slice(0, LANGUAGE_MAX_CHARS);
 
+      // CP491 step 4 — short gate (demote Shorts at promote).
+      const shortGate = await shortGateFields(meta.videoId, meta.durationSeconds ?? null);
       await prisma.video_pool.create({
         data: {
+          ...shortGate,
           video_id: meta.videoId,
           title: titleSafe,
           description: descSafe,

@@ -38,6 +38,7 @@ import {
   MAC_MINI_OLLAMA_DEFAULT_URL,
 } from '@/skills/plugins/iks-scorer/embedding';
 import { logger } from '@/utils/logger';
+import { shortGateFields } from './is-short';
 
 const log = logger.child({ module: 'modules/video-pool/promote-from-v2' });
 
@@ -215,8 +216,11 @@ export async function promoteV2ToVideoPool(opts: PromoteOptions = {}): Promise<P
       const channelSafe = c.yv_channel_title ? c.yv_channel_title.slice(0, 200) : null;
       const langSafe = (c.yv_default_language ?? c.source_language ?? 'ko').slice(0, 5);
 
+      // CP491 step 4 — short gate (demote Shorts at promote; consumers filter is_active).
+      const shortGate = await shortGateFields(c.video_id, c.yv_duration_seconds);
       await prisma.video_pool.create({
         data: {
+          ...shortGate,
           video_id: c.video_id,
           title: titleSafe,
           description: descSafe,

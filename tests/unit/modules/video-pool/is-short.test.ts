@@ -4,6 +4,7 @@
 import {
   isShort,
   isShortCached,
+  shortGateFields,
   resetShortCacheForTest,
   SHORT_SIGNAL,
 } from '@/modules/video-pool/is-short';
@@ -84,5 +85,46 @@ describe('isShortCached', () => {
     await isShortCached('err1', undefined, { fetchImpl: failing });
     await isShortCached('err1', undefined, { fetchImpl: failing });
     expect(calls).toBe(2); // not cached → re-probed
+  });
+});
+
+describe('shortGateFields', () => {
+  beforeEach(() => resetShortCacheForTest());
+
+  test('Short → is_active:false (demote) + tag', async () => {
+    const g = await shortGateFields('sh', undefined, { fetchImpl: mockFetch(200) });
+    expect(g).toEqual({
+      is_short: true,
+      short_signal: SHORT_SIGNAL.URL_REDIRECT,
+      short_probed_at: expect.any(Date),
+      is_active: false,
+    });
+  });
+
+  test('normal → tag, no is_active (stays active)', async () => {
+    const g = await shortGateFields('no', undefined, { fetchImpl: mockFetch(303) });
+    expect(g.is_short).toBe(false);
+    expect(g.short_signal).toBe(SHORT_SIGNAL.URL_REDIRECT);
+    expect(g.is_active).toBeUndefined();
+  });
+
+  test('probe_error → {} (fail-open, no tag, stays active for retry)', async () => {
+    const throwing = (async () => {
+      throw new Error('x');
+    }) as unknown as typeof fetch;
+    const g = await shortGateFields('err', undefined, { fetchImpl: throwing });
+    expect(g).toEqual({});
+  });
+
+  test('duration>=180 → not short, no is_active, no HTTP', async () => {
+    let calls = 0;
+    const counting = (async () => {
+      calls += 1;
+      return { status: 200 } as Response;
+    }) as unknown as typeof fetch;
+    const g = await shortGateFields('long', 300, { fetchImpl: counting });
+    expect(g.is_short).toBe(false);
+    expect(g.is_active).toBeUndefined();
+    expect(calls).toBe(0);
   });
 });
