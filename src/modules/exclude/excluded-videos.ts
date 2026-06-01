@@ -57,7 +57,7 @@ export interface ExcludeSetOpts {
  */
 export async function getExcludedVideoIds(opts: ExcludeSetOpts): Promise<Set<string>> {
   const { prisma, userId, mandalaId, requestExcludeIds = [] } = opts;
-  const [ownLocal, ownStates, deleteSignals, archiveSignals] = await Promise.all([
+  const [ownLocal, ownStates, deleteSignals, archiveSignals, liveFeed] = await Promise.all([
     prisma.user_local_cards.findMany({
       where: { user_id: userId },
       select: { video_id: true },
@@ -82,6 +82,18 @@ export async function getExcludedVideoIds(opts: ExcludeSetOpts): Promise<Set<str
       where: { user_id: userId, signal: 'archive', mandala_id: mandalaId },
       select: { video_id: true },
     }),
+    // CP492 — cards currently in THIS mandala's feed (wizard pre-fill + already
+    // added). Without this, Add Cards re-surfaces the wizard's own cards (85-93%
+    // overlap measured). MANDALA-SCOPED + non-expired only — distinct from the
+    // CP489 user_video_states ghost policy (different source), so it does NOT
+    // re-introduce CP489's starvation (that was 58 static ghost rows; this is
+    // ~30 cards out of a fresh ~120-candidate Tier 2 fanout) and causes NO
+    // cross-mandala bleed (other mandalas' cards still surface). Expired rows
+    // are left re-surfaceable (not a permanent exclude).
+    prisma.recommendation_cache.findMany({
+      where: { user_id: userId, mandala_id: mandalaId, expires_at: { gt: new Date() } },
+      select: { video_id: true },
+    }),
   ]);
   const excludeSet = new Set<string>();
   for (const id of requestExcludeIds) excludeSet.add(id);
@@ -89,5 +101,6 @@ export async function getExcludedVideoIds(opts: ExcludeSetOpts): Promise<Set<str
   for (const r of ownStates) excludeSet.add(r.youtube_video_id);
   for (const r of deleteSignals) excludeSet.add(r.video_id);
   for (const r of archiveSignals) excludeSet.add(r.video_id);
+  for (const r of liveFeed) if (r.video_id) excludeSet.add(r.video_id);
   return excludeSet;
 }
