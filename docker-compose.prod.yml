@@ -50,6 +50,19 @@ services:
       # top-N cap before embed (e.g. top 30), (c) domain-tuned embedding.
       # See docs/design/realtime-search-pipeline.md (Phase 3A).
       - V3_CENTER_GATE_MODE=subword
+      # CP492 (2026-06-01) — A/B: cell_binning picker. Default in code is 'llm'
+      # (current OpenRouter Haiku batch picker). Measured problems with 'llm':
+      # it is the discover bottleneck (llmMs 5.8-7.7s = 85-90% of discover; its
+      # 5s abort is cosmetic — pickerTimedOut=true while llmMs runs full) AND it
+      # ignores cellIndex, so output fills only 1-4 of 9 cells (cell skew). This
+      # flag skips the LLM and round-robins fanout candidates by query cellIndex
+      # → ~1s discover (precompute MISS disappears) + 9-cell balance. Open A/B
+      # question this exists to answer: does dropping the LLM let YouTube garbage
+      # through (the picker's original purpose)? Affects BOTH wizard precompute
+      # AND add-cards (shared runV5Executor).
+      # Revert: delete this line and redeploy — code default 'llm' restores the
+      # batch picker bit-identically.
+      - V5_PICKER_MODE=cell_binning
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
