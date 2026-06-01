@@ -1,0 +1,35 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# CP491 — block DIRECT pushes to main. Changes reach main via PR only
+# (gh pr create → CI → gh pr merge --squash). A direct `git push origin main`
+# (or `git push` / `git push origin HEAD` while on main) bypasses CI, review,
+# and the deploy gate and triggers deploy.yml unreviewed. Reject it here.
+#
+# Server-side PR merges (gh pr merge) do NOT run this local hook — unaffected.
+# Emergency override (operator, deliberate): INSIGHTA_PUSH_MAIN_OK=1 git push ...
+#
+# Why committed (not a local .claude hook): a local guard is gitignored and
+# absent on a fresh checkout — exactly how the CP491 direct-push slip happened.
+# In-repo husky hook = durable, machine-independent, applies to everyone.
+
+if [ "$INSIGHTA_PUSH_MAIN_OK" = "1" ]; then
+  exit 0
+fi
+
+protected="refs/heads/main"
+blocked=0
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [ "$remote_ref" = "$protected" ]; then
+    blocked=1
+  fi
+done
+
+if [ "$blocked" = "1" ]; then
+  echo "🚫 BLOCKED: direct push to main is not allowed (CP491 guard)." >&2
+  echo "   Use a branch + PR:  gh pr create  →  gh pr merge --squash --delete-branch" >&2
+  echo "   Emergency override:  INSIGHTA_PUSH_MAIN_OK=1 git push ..." >&2
+  exit 1
+fi
+
+exit 0
