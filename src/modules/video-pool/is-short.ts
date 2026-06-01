@@ -23,6 +23,8 @@
  * `video_pool.short_signal` (varchar 30) — keep this vocabulary single-source.
  */
 
+import { MS_PER_DAY } from '@/utils/time-constants';
+
 /** Vocabulary shared with `video_pool.short_signal`. Do not diverge. */
 export const SHORT_SIGNAL = {
   URL_REDIRECT: 'shorts_url_redirect',
@@ -110,7 +112,7 @@ export async function isShort(
 // to cache against. A per-process Map dedupes repeat videos within a container's
 // lifetime (restart = cold; acceptable). No Redis/schema/new write-path. If
 // cross-container dedupe is later needed (rate-limit pressure), promote to Redis.
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h — Short status doesn't change
+const CACHE_TTL_MS = MS_PER_DAY; // Short status doesn't change
 const CACHE_MAX = 10_000; // soft cap; clear wholesale if exceeded
 const _cache = new Map<string, { isShort: boolean; signal: ShortSignal; at: number }>();
 
