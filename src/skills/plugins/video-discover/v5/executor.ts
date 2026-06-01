@@ -20,6 +20,7 @@ import { runYouTubeFanout, type FanoutCandidate, type FanoutPerQuery } from './y
 import { getV5Config } from './config';
 import { getVideoPicker } from '@/modules/llm-picker/registry';
 import { getLlmPickerConfig } from '@/config/llm-picker';
+import { isShortCached, SHORT_MAX_DURATION_SEC } from '@/modules/video-pool/is-short';
 import type { PickCandidate, PickResult } from '@/modules/llm-picker/types';
 
 const log = logger.child({ module: 'video-discover/v5/executor' });
@@ -66,6 +67,8 @@ export interface V5StageMs {
   llmMs: number;
   videosMs: number;
   assembleMs: number;
+  /** CP491 — short-gate probe phase (bounded by V5_SHORT_PROBE_DEADLINE_MS). */
+  shortMs: number;
 }
 
 export interface V5ExecuteResult {
@@ -89,6 +92,8 @@ export interface V5ExecuteResult {
     pickerTimedOut: boolean;
     /** CP491 F5c — per-query raw count + q_ok (from fanout). */
     perQuery: FanoutPerQuery[];
+    /** CP491 — Shorts dropped by the post-pick short gate. */
+    shortsDropped: number;
   };
 }
 
@@ -98,7 +103,14 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   const pickerCfg = getLlmPickerConfig(input.env);
 
   // CP491 F5 — per-stage wall-clock markers (stages not reached stay 0).
-  const stage: V5StageMs = { fanoutMs: 0, excludeMs: 0, llmMs: 0, videosMs: 0, assembleMs: 0 };
+  const stage: V5StageMs = {
+    fanoutMs: 0,
+    excludeMs: 0,
+    llmMs: 0,
+    videosMs: 0,
+    assembleMs: 0,
+    shortMs: 0,
+  };
   let abortedBatches = 0;
   let pickerTimedOut = false;
 
@@ -142,8 +154,12 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   const batches = chunk(survivors, pickerCfg.batchSize);
   const limitedBatches = batches.slice(0, pickerCfg.maxParallel);
   const picker = getVideoPicker();
+  // CP491 short gate — over-pick a buffer so dropping Shorts later still leaves
+  // ~targetPicks. The picker must PRODUCE the buffer, so size per-batch picks to
+  // `overpick` (not targetPicks); final slice to targetPicks happens post-drop.
+  const overpick = Math.ceil(cfg.targetPicks * cfg.shortOverpickFactor);
   const perBatchMaxPicks = Math.max(
-    Math.ceil(cfg.targetPicks / Math.max(limitedBatches.length, 1)) + 2,
+    Math.ceil(overpick / Math.max(limitedBatches.length, 1)) + 2,
     6
   );
 
@@ -183,7 +199,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   stage.llmMs = Date.now() - tLlm0;
   pickerTimedOut = ac.signal.aborted;
 
-  const picksMerged = mergePicks(pickResults, cfg.targetPicks);
+  const picksMerged = mergePicks(pickResults, overpick);
 
   if (picksMerged.length === 0) {
     log.info(`v5 executor: picker returned 0 (batches=${limitedBatches.length})`);
@@ -227,8 +243,39 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   });
   stage.assembleMs = Date.now() - tAssemble0;
 
+  // 6. Short gate (CP491) — drop YouTube Shorts. Probe only <180s cards
+  // (YouTube cap; >=180s short-circuits with no HTTP). A single shared
+  // AbortController deadline bounds TOTAL wall-clock regardless of probe
+  // count/waves; probes still in-flight at the deadline fail open (kept).
+  const tShort0 = Date.now();
+  let shortsDropped = 0;
+  let gatedCards = cards;
+  if (cfg.shortProbeDeadlineMs > 0 && cards.length > 0) {
+    const shortCtl = new AbortController();
+    const shortTimer = setTimeout(() => shortCtl.abort(), cfg.shortProbeDeadlineMs);
+    try {
+      const shortFlags = await Promise.all(
+        cards.map(async (c) => {
+          if (c.durationSec != null && c.durationSec >= SHORT_MAX_DURATION_SEC) return false;
+          const { isShort } = await isShortCached(c.videoId, c.durationSec, {
+            signal: shortCtl.signal,
+          });
+          return isShort;
+        })
+      );
+      gatedCards = cards.filter((_, i) => !shortFlags[i]);
+      shortsDropped = cards.length - gatedCards.length;
+    } finally {
+      clearTimeout(shortTimer);
+    }
+  }
+  stage.shortMs = Date.now() - tShort0;
+
+  // 7. Final slice to targetPicks (cards are score-sorted; filter preserved order).
+  const finalCards = gatedCards.slice(0, cfg.targetPicks);
+
   return {
-    cards,
+    cards: finalCards,
     diagnostics: {
       queriesAttempted: fanout.queriesAttempted,
       queriesSucceeded: fanout.queriesSucceeded,
@@ -240,6 +287,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       quotaUnitsApprox: fanout.quotaUnitsApprox + (pickedIds.length > 0 ? 1 : 0),
       durationMs: Date.now() - t0,
       pickerModel: picker.model,
+      shortsDropped,
       stageMs: stage,
       abortedBatches,
       pickerTimedOut,
@@ -278,6 +326,7 @@ function emptyResult(args: {
       quotaUnitsApprox: args.fanout.quotaUnitsApprox,
       durationMs: Date.now() - args.t0,
       pickerModel: args.pickerCfg.model,
+      shortsDropped: 0,
       stageMs: args.stage,
       abortedBatches: args.abortedBatches,
       pickerTimedOut: args.pickerTimedOut,

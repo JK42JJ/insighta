@@ -21,7 +21,15 @@ jest.mock('@/skills/plugins/video-discover/v2/youtube-client', () => ({
   resolveSearchApiKeys: jest.fn().mockReturnValue([]),
 }));
 
+// CP491 short gate — mock the detector so orchestration tests never hit the
+// network. Default: everything is non-short (no drops).
+jest.mock('@/modules/video-pool/is-short', () => ({
+  isShortCached: jest.fn(),
+  SHORT_MAX_DURATION_SEC: 180,
+}));
+
 const { runYouTubeFanout } = jest.requireMock('@/skills/plugins/video-discover/v5/youtube-fanout');
+const { isShortCached } = jest.requireMock('@/modules/video-pool/is-short');
 
 function makeFanoutCandidate(id: string, title = `Title ${id}`) {
   return {
@@ -51,6 +59,8 @@ describe('runV5Executor (orchestration smoke)', () => {
     resetLlmPickerConfigForTest();
     resetVideoPickerForTest();
     runYouTubeFanout.mockReset();
+    isShortCached.mockReset();
+    isShortCached.mockResolvedValue({ isShort: false, signal: 'shorts_url_redirect' });
   });
 
   afterAll(() => {
@@ -277,5 +287,75 @@ describe('runV5Executor (orchestration smoke)', () => {
       env: {} as NodeJS.ProcessEnv,
     });
     expect(result.diagnostics.perQuery).toEqual(perQuery);
+  });
+
+  // CP491 — short gate: drop Shorts after pick; over-pick buffer preserves count.
+  test('short gate drops Shorts and reports shortsDropped', async () => {
+    runYouTubeFanout.mockResolvedValue({
+      candidates: Array.from({ length: 24 }, (_, i) => makeFanoutCandidate(`v${i}`)),
+      queriesAttempted: 1,
+      queriesSucceeded: 1,
+      rawItemCount: 24,
+      quotaUnitsApprox: 100,
+      perQuery: [],
+    });
+    setVideoPickerForTest(
+      new FakePicker((input) =>
+        input.candidates.map((c, i) => ({ videoId: c.videoId, score: 0.9 - i * 0.01, reason: 'p' }))
+      )
+    );
+    // v0, v1, v2 are Shorts; everything else is not.
+    isShortCached.mockImplementation(async (videoId: string) => ({
+      isShort: ['v0', 'v1', 'v2'].includes(videoId),
+      signal: 'shorts_url_redirect',
+    }));
+
+    const result = await runV5Executor({
+      centerGoal: 'goal',
+      subGoals: [],
+      focusTags: [],
+      targetLevel: 'standard',
+      language: 'en',
+      excludeVideoIds: new Set(),
+      env: {} as NodeJS.ProcessEnv,
+    });
+
+    expect(result.diagnostics.shortsDropped).toBe(3);
+    const ids = result.cards.map((c) => c.videoId);
+    expect(ids).not.toContain('v0');
+    expect(ids).not.toContain('v1');
+    expect(ids).not.toContain('v2');
+    expect(typeof result.diagnostics.stageMs.shortMs).toBe('number');
+  });
+
+  test('short gate disabled via V5_SHORT_PROBE_DEADLINE_MS=0 → no probe, no drop', async () => {
+    runYouTubeFanout.mockResolvedValue({
+      candidates: [makeFanoutCandidate('a'), makeFanoutCandidate('b')],
+      queriesAttempted: 1,
+      queriesSucceeded: 1,
+      rawItemCount: 2,
+      quotaUnitsApprox: 100,
+      perQuery: [],
+    });
+    setVideoPickerForTest(
+      new FakePicker((input) =>
+        input.candidates.map((c) => ({ videoId: c.videoId, score: 0.9, reason: 'p' }))
+      )
+    );
+    isShortCached.mockResolvedValue({ isShort: true, signal: 'shorts_url_redirect' });
+
+    const result = await runV5Executor({
+      centerGoal: 'goal',
+      subGoals: [],
+      focusTags: [],
+      targetLevel: 'standard',
+      language: 'en',
+      excludeVideoIds: new Set(),
+      env: { V5_SHORT_PROBE_DEADLINE_MS: '0' } as unknown as NodeJS.ProcessEnv,
+    });
+
+    expect(result.diagnostics.shortsDropped).toBe(0); // gate off → nothing dropped
+    expect(isShortCached).not.toHaveBeenCalled();
+    expect(result.cards.length).toBe(2);
   });
 });

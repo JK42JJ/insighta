@@ -50,7 +50,8 @@ export async function runV5ForWizard(input: V5WizardInput): Promise<EphemeralDis
   const s = result.diagnostics.stageMs;
   log.info(
     `v5 wizard stages ms: fanout=${s.fanoutMs} exclude=${s.excludeMs} llm=${s.llmMs} ` +
-      `videos=${s.videosMs} assemble=${s.assembleMs} total=${result.diagnostics.durationMs} ` +
+      `videos=${s.videosMs} assemble=${s.assembleMs} short=${s.shortMs} total=${result.diagnostics.durationMs} ` +
+      `shortsDropped=${result.diagnostics.shortsDropped} ` +
       `abortedBatches=${result.diagnostics.abortedBatches} pickerTimedOut=${result.diagnostics.pickerTimedOut}`
   );
 
