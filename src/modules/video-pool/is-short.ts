@@ -23,6 +23,8 @@
  * `video_pool.short_signal` (varchar 30) — keep this vocabulary single-source.
  */
 
+import { MS_PER_DAY } from '@/utils/time-constants';
+
 /** Vocabulary shared with `video_pool.short_signal`. Do not diverge. */
 export const SHORT_SIGNAL = {
   URL_REDIRECT: 'shorts_url_redirect',
@@ -49,6 +51,12 @@ export interface IsShortOpts {
   fetchImpl?: typeof fetch;
   /** Per-probe timeout. Default 8s. */
   timeoutMs?: number;
+  /**
+   * External abort signal (e.g. a shared deadline across many probes). When it
+   * fires, this probe aborts and fails open (probe_error → not-short). Lets a
+   * caller bound TOTAL wall-clock regardless of how many probes run.
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -67,6 +75,13 @@ export async function isShort(
   const fetchFn = opts.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  // Link an external shared deadline: when it fires, abort this probe too.
+  const ext = opts.signal;
+  const onExt = (): void => controller.abort();
+  if (ext) {
+    if (ext.aborted) controller.abort();
+    else ext.addEventListener('abort', onExt, { once: true });
+  }
   try {
     const res = await fetchFn(SHORTS_URL(videoId), {
       method: 'GET',
@@ -84,9 +99,48 @@ export async function isShort(
     // Unexpected status (404/5xx/etc) — fail open, leave for retry.
     return { isShort: false, signal: SHORT_SIGNAL.PROBE_ERROR };
   } catch {
-    // Timeout / network error — fail open.
+    // Timeout / network error / external-deadline abort — fail open.
     return { isShort: false, signal: SHORT_SIGNAL.PROBE_ERROR };
   } finally {
     clearTimeout(timer);
+    if (ext) ext.removeEventListener('abort', onExt);
   }
+}
+
+// ── In-process result cache (CP491 step "v5-live gate") ──────────────────────
+// Live add-cards/wizard videos are NOT in video_pool, so there is no DB column
+// to cache against. A per-process Map dedupes repeat videos within a container's
+// lifetime (restart = cold; acceptable). No Redis/schema/new write-path. If
+// cross-container dedupe is later needed (rate-limit pressure), promote to Redis.
+const CACHE_TTL_MS = MS_PER_DAY; // Short status doesn't change
+const CACHE_MAX = 10_000; // soft cap; clear wholesale if exceeded
+const _cache = new Map<string, { isShort: boolean; signal: ShortSignal; at: number }>();
+
+/**
+ * Memoized {@link isShort}. duration>=180 short-circuits (no HTTP, no cache).
+ * probe_error results are NOT cached (left to retry). Honors opts.signal.
+ */
+export async function isShortCached(
+  videoId: string,
+  durationSec?: number | null,
+  opts: IsShortOpts = {}
+): Promise<ShortResult> {
+  if (durationSec != null && durationSec >= SHORT_MAX_DURATION_SEC) {
+    return { isShort: false, signal: SHORT_SIGNAL.DURATION_GE_180 };
+  }
+  const hit = _cache.get(videoId);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
+    return { isShort: hit.isShort, signal: hit.signal };
+  }
+  const result = await isShort(videoId, durationSec, opts);
+  if (result.signal !== SHORT_SIGNAL.PROBE_ERROR) {
+    if (_cache.size >= CACHE_MAX) _cache.clear();
+    _cache.set(videoId, { isShort: result.isShort, signal: result.signal, at: Date.now() });
+  }
+  return result;
+}
+
+/** Test helper — reset the in-process cache. */
+export function resetShortCacheForTest(): void {
+  _cache.clear();
 }

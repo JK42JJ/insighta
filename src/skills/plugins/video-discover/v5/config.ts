@@ -17,6 +17,12 @@ const v5EnvSchema = z.object({
   V5_SEARCH_MAX_RESULTS: z.coerce.number().int().min(10).max(50).default(25),
   V5_TARGET_PICKS: z.coerce.number().int().min(10).max(60).default(30),
   V5_DEDUP_HARDCAP: z.coerce.number().int().min(40).max(400).default(120),
+  // CP491 — short gate. Over-pick by this factor before dropping Shorts so
+  // the final count holds at targetPicks (drop happens pre-final-slice).
+  V5_SHORT_OVERPICK_FACTOR: z.coerce.number().min(1).max(3).default(1.5),
+  // Hard wall-clock cap for the whole short-probe phase (shared deadline
+  // across all probes). 0 disables the gate. Fail-open past this.
+  V5_SHORT_PROBE_DEADLINE_MS: z.coerce.number().int().min(0).max(15000).default(8000),
 });
 
 export interface V5Config {
@@ -25,6 +31,8 @@ export interface V5Config {
   searchMaxResults: number;
   targetPicks: number;
   dedupHardCap: number;
+  shortOverpickFactor: number;
+  shortProbeDeadlineMs: number;
 }
 
 let cached: V5Config | null = null;
@@ -38,6 +46,8 @@ export function getV5Config(env: NodeJS.ProcessEnv = process.env): V5Config {
     searchMaxResults: p.V5_SEARCH_MAX_RESULTS,
     targetPicks: p.V5_TARGET_PICKS,
     dedupHardCap: p.V5_DEDUP_HARDCAP,
+    shortOverpickFactor: p.V5_SHORT_OVERPICK_FACTOR,
+    shortProbeDeadlineMs: p.V5_SHORT_PROBE_DEADLINE_MS,
   };
   return cached;
 }
