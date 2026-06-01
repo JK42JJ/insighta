@@ -154,12 +154,14 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   const batches = chunk(survivors, pickerCfg.batchSize);
   const limitedBatches = batches.slice(0, pickerCfg.maxParallel);
   const picker = getVideoPicker();
-  // CP491 short gate — over-pick a buffer so dropping Shorts later still leaves
-  // ~targetPicks. The picker must PRODUCE the buffer, so size per-batch picks to
-  // `overpick` (not targetPicks); final slice to targetPicks happens post-drop.
+  // CP491 short gate — keep a buffer for dropping Shorts via mergePicks(overpick)
+  // below (free: just a wider slice of picks the LLM already produced). Per-batch
+  // maxPicks stays sized to targetPicks: sizing it to `overpick` made the LLM
+  // generate far more per batch → llmMs 67s → 68s timeout (CP491 regression).
+  // Do NOT raise this to overpick (the over-pick trap). Buffer = natural surplus.
   const overpick = Math.ceil(cfg.targetPicks * cfg.shortOverpickFactor);
   const perBatchMaxPicks = Math.max(
-    Math.ceil(overpick / Math.max(limitedBatches.length, 1)) + 2,
+    Math.ceil(cfg.targetPicks / Math.max(limitedBatches.length, 1)) + 2,
     6
   );
 
