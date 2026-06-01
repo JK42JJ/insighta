@@ -2102,6 +2102,15 @@ model video_pool {
   /// CP488+ — content type tag. Values: 'tutorial' | 'lecture' | 'vlog' | 'interview' | 'documentary' | 'review' | NULL.
   content_type           String?   @db.VarChar(20)
 
+  /// CP491 — YouTube Shorts detection. is_short=true rows are demoted
+  /// (is_active=false), never promoted to search/pick. NULL = not yet probed.
+  /// Only <180s videos can be shorts (YouTube cap); >=180s left NULL = non-short.
+  /// Signal: /shorts/<id> redirect probe (authoritative). Raw SQL DDL:
+  /// prisma/migrations/video-pool-is-short/001_add_columns.sql
+  is_short        Boolean?
+  short_signal    String?   @db.VarChar(30)
+  short_probed_at DateTime? @db.Timestamptz(6)
+
   embeddings  video_pool_embeddings[]
   domain_tags video_pool_domain_tags[]
 
