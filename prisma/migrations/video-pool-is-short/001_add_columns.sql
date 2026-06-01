@@ -11,8 +11,15 @@
 -- -> restart supabase-rest-dev -> PR -> CI migrate prod -> verify prod \d.
 
 ALTER TABLE public.video_pool ADD COLUMN IF NOT EXISTS is_short boolean;
-ALTER TABLE public.video_pool ADD COLUMN IF NOT EXISTS short_signal text;
+ALTER TABLE public.video_pool ADD COLUMN IF NOT EXISTS short_signal varchar(30);
 ALTER TABLE public.video_pool ADD COLUMN IF NOT EXISTS short_probed_at timestamptz;
+
+-- short_signal must match the Prisma schema (@db.VarChar(30)). Earlier applies
+-- of this file created it as `text`, which made `prisma db push` (deploy schema
+-- sync) demand --accept-data-loss on the text->varchar cast and fail the deploy.
+-- Coerce idempotently: a no-op where it is already varchar(30); safe cast where
+-- it is still text (all signal slugs are <=30 chars).
+ALTER TABLE public.video_pool ALTER COLUMN short_signal TYPE varchar(30);
 
 -- Partial index: only rows still pending a probe within the shorts-eligible
 -- duration band (<180s). Keeps backfill + ongoing probe scans cheap.
