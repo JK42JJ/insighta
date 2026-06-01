@@ -23,6 +23,11 @@ const v5EnvSchema = z.object({
   // Hard wall-clock cap for the whole short-probe phase (shared deadline
   // across all probes). 0 disables the gate. Fail-open past this.
   V5_SHORT_PROBE_DEADLINE_MS: z.coerce.number().int().min(0).max(15000).default(8000),
+  // CP492 — picker mode. 'llm' (default, current behavior) runs the OpenRouter
+  // batch picker. 'cell_binning' skips the LLM and round-robins fanout
+  // candidates by query cellIndex (9-cell balance + ~1s discover, no garbage
+  // filter). A/B flag: does cell_binning let YouTube garbage through vs the LLM?
+  V5_PICKER_MODE: z.enum(['llm', 'cell_binning']).default('llm'),
 });
 
 export interface V5Config {
@@ -33,6 +38,7 @@ export interface V5Config {
   dedupHardCap: number;
   shortOverpickFactor: number;
   shortProbeDeadlineMs: number;
+  pickerMode: 'llm' | 'cell_binning';
 }
 
 let cached: V5Config | null = null;
@@ -48,6 +54,7 @@ export function getV5Config(env: NodeJS.ProcessEnv = process.env): V5Config {
     dedupHardCap: p.V5_DEDUP_HARDCAP,
     shortOverpickFactor: p.V5_SHORT_OVERPICK_FACTOR,
     shortProbeDeadlineMs: p.V5_SHORT_PROBE_DEADLINE_MS,
+    pickerMode: p.V5_PICKER_MODE,
   };
   return cached;
 }

@@ -150,68 +150,88 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
     });
   }
 
-  // 3. chunk + parallel LLM picks
-  const batches = chunk(survivors, pickerCfg.batchSize);
-  const limitedBatches = batches.slice(0, pickerCfg.maxParallel);
-  const picker = getVideoPicker();
-  // CP491 short gate — keep a buffer for dropping Shorts via mergePicks(overpick)
-  // below (free: just a wider slice of picks the LLM already produced). Per-batch
-  // maxPicks stays sized to targetPicks: sizing it to `overpick` made the LLM
-  // generate far more per batch → llmMs 67s → 68s timeout (CP491 regression).
-  // Do NOT raise this to overpick (the over-pick trap). Buffer = natural surplus.
-  const overpick = Math.ceil(cfg.targetPicks * cfg.shortOverpickFactor);
-  const perBatchMaxPicks = Math.max(
-    Math.ceil(cfg.targetPicks / Math.max(limitedBatches.length, 1)) + 2,
-    6
-  );
-
+  // 3. pick — LLM curation (default) or cell-binning (V5_PICKER_MODE).
+  // cell_binning skips the LLM entirely: it bins fanout survivors by their
+  // source query's cellIndex and round-robins the top YouTube-relevance items
+  // across the cells, so the downstream targetPicks slice stays cell-balanced.
+  // Goal: discover ~1s (no LLM) + 9-cell balance the LLM picker cannot give
+  // (it optimizes relevance only → clusters in the core cell). Whether the LLM
+  // picker's garbage-filtering is worth keeping is the A/B this flag answers.
   const tLlm0 = Date.now();
-  const ac = new AbortController();
-  const batchTimer = setTimeout(() => ac.abort(), pickerCfg.timeoutMs);
-  let pickResults: PickResult[][];
-  try {
-    pickResults = await Promise.all(
-      limitedBatches.map(async (batch) => {
-        try {
-          return await picker.pick(
-            {
-              cellTopic: input.centerGoal,
-              parentGoal: input.centerGoal,
-              subGoals: input.subGoals,
-              focusTags: input.focusTags,
-              targetLevel: input.targetLevel,
-              language: input.language,
-              candidates: batch.map(toPickCandidate),
-              maxPicks: perBatchMaxPicks,
-            },
-            ac.signal
-          );
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          // CP491 F5 — distinguish abort-induced empty picks (U2) from other failures.
-          if (msg.includes('cancelled by external signal')) abortedBatches += 1;
-          log.warn(`v5 picker batch failed: ${msg}`);
-          return [] as PickResult[];
-        }
-      })
-    );
-  } finally {
-    clearTimeout(batchTimer);
-  }
-  stage.llmMs = Date.now() - tLlm0;
-  pickerTimedOut = ac.signal.aborted;
+  let picksMerged: PickResult[];
+  let llmBatchesCount = 0;
+  let picksRawCount = 0;
+  let pickerModelStr = 'cell_binning';
 
-  const picksMerged = mergePicks(pickResults, overpick);
+  if (cfg.pickerMode === 'cell_binning') {
+    picksMerged = binByCells(survivors, cfg.targetPicks, cfg.shortOverpickFactor);
+    picksRawCount = picksMerged.length;
+    stage.llmMs = Date.now() - tLlm0; // ~0 — no network call
+  } else {
+    // chunk + parallel LLM picks
+    const batches = chunk(survivors, pickerCfg.batchSize);
+    const limitedBatches = batches.slice(0, pickerCfg.maxParallel);
+    const picker = getVideoPicker();
+    pickerModelStr = picker.model;
+    // CP491 short gate — keep a buffer for dropping Shorts via mergePicks(overpick)
+    // below (free: just a wider slice of picks the LLM already produced). Per-batch
+    // maxPicks stays sized to targetPicks: sizing it to `overpick` made the LLM
+    // generate far more per batch → llmMs 67s → 68s timeout (CP491 regression).
+    // Do NOT raise this to overpick (the over-pick trap). Buffer = natural surplus.
+    const overpick = Math.ceil(cfg.targetPicks * cfg.shortOverpickFactor);
+    const perBatchMaxPicks = Math.max(
+      Math.ceil(cfg.targetPicks / Math.max(limitedBatches.length, 1)) + 2,
+      6
+    );
+
+    const ac = new AbortController();
+    const batchTimer = setTimeout(() => ac.abort(), pickerCfg.timeoutMs);
+    let pickResults: PickResult[][];
+    try {
+      pickResults = await Promise.all(
+        limitedBatches.map(async (batch) => {
+          try {
+            return await picker.pick(
+              {
+                cellTopic: input.centerGoal,
+                parentGoal: input.centerGoal,
+                subGoals: input.subGoals,
+                focusTags: input.focusTags,
+                targetLevel: input.targetLevel,
+                language: input.language,
+                candidates: batch.map(toPickCandidate),
+                maxPicks: perBatchMaxPicks,
+              },
+              ac.signal
+            );
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            // CP491 F5 — distinguish abort-induced empty picks (U2) from other failures.
+            if (msg.includes('cancelled by external signal')) abortedBatches += 1;
+            log.warn(`v5 picker batch failed: ${msg}`);
+            return [] as PickResult[];
+          }
+        })
+      );
+    } finally {
+      clearTimeout(batchTimer);
+    }
+    stage.llmMs = Date.now() - tLlm0;
+    pickerTimedOut = ac.signal.aborted;
+    picksMerged = mergePicks(pickResults, overpick);
+    llmBatchesCount = limitedBatches.length;
+    picksRawCount = pickResults.reduce((acc, b) => acc + b.length, 0);
+  }
 
   if (picksMerged.length === 0) {
-    log.info(`v5 executor: picker returned 0 (batches=${limitedBatches.length})`);
+    log.info(`v5 executor: picker returned 0 (batches=${llmBatchesCount})`);
     return emptyResult({
       fanout,
       afterTitleFilter,
       afterExcludeFilter,
       pickerCfg,
       t0,
-      llmBatches: limitedBatches.length,
+      llmBatches: llmBatchesCount,
       stage,
       abortedBatches,
       pickerTimedOut,
@@ -284,11 +304,11 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       rawItemCount: fanout.rawItemCount,
       afterTitleFilter,
       afterExcludeFilter,
-      llmBatches: limitedBatches.length,
-      picksRaw: pickResults.reduce((acc, b) => acc + b.length, 0),
+      llmBatches: llmBatchesCount,
+      picksRaw: picksRawCount,
       quotaUnitsApprox: fanout.quotaUnitsApprox + (pickedIds.length > 0 ? 1 : 0),
       durationMs: Date.now() - t0,
-      pickerModel: picker.model,
+      pickerModel: pickerModelStr,
       shortsDropped,
       stageMs: stage,
       abortedBatches,
@@ -350,6 +370,45 @@ function chunk<T>(arr: T[], size: number): T[][] {
   if (size <= 0) return [arr];
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+/**
+ * cell_binning picker (V5_PICKER_MODE=cell_binning) — no LLM. Bins fanout
+ * survivors by their source query's cellIndex and round-robins the top
+ * YouTube-relevance items across cells. Round-robin order means the downstream
+ * `slice(0, targetPicks)` drops the deepest per-cell rank last, so every cell
+ * stays represented (vs the LLM picker clustering all picks in the core cell).
+ *
+ * survivors preserve search.list relevance order within each cell, so taking
+ * index r across cells = the r-th best per cell. Score decreases with rank so
+ * the FE's score-desc display sort stays sensible. `reason` is empty (no LLM).
+ * overpickFactor widens the slice so the short gate has surplus to drop without
+ * unbalancing the final targetPicks.
+ */
+export function binByCells(
+  survivors: FanoutCandidate[],
+  targetPicks: number,
+  overpickFactor: number
+): PickResult[] {
+  const byCell = new Map<number, FanoutCandidate[]>();
+  for (const c of survivors) {
+    const key = c.cellIndex ?? -1; // -1 = center/core (null cellIndex query)
+    const bucket = byCell.get(key);
+    if (bucket) bucket.push(c);
+    else byCell.set(key, [c]);
+  }
+  const cells = Array.from(byCell.keys()).sort((a, b) => a - b);
+  const perCell = Math.ceil((targetPicks * overpickFactor) / Math.max(cells.length, 1));
+
+  const out: PickResult[] = [];
+  for (let r = 0; r < perCell; r += 1) {
+    for (const cell of cells) {
+      const cand = byCell.get(cell)![r];
+      if (!cand) continue;
+      out.push({ videoId: cand.videoId, score: 1 - r / (perCell + 1), reason: '' });
+    }
+  }
   return out;
 }
 
