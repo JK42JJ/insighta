@@ -67,6 +67,18 @@ export interface FanoutResult {
   perQuery: FanoutPerQuery[];
 }
 
+/**
+ * Rotate `keys` so index `i` starts at `keys[i % len]`, with the remaining keys
+ * following as failover order. Spreads N parallel queries across N keys so each
+ * key sees ~1 concurrent request instead of N (which 429s on keys[0]). Returns
+ * the array unchanged for 0/1-key inputs. Exported for tests.
+ */
+export function rotateKeys(keys: string[], i: number): string[] {
+  if (keys.length <= 1) return keys;
+  const offset = ((i % keys.length) + keys.length) % keys.length;
+  return [...keys.slice(offset), ...keys.slice(0, offset)];
+}
+
 export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult> {
   const cfg = getV5Config(input.env);
   const apiKeys = resolveSearchApiKeys(input.env);
@@ -105,10 +117,18 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
   }
 
   const results = await Promise.allSettled(
-    queries.map((q) =>
+    queries.map((q, i) =>
       searchVideos({
         query: q.query,
-        apiKey: apiKeys,
+        // CP492 — distribute the primary key per query. searchVideos tries keys
+        // in array order (failover). Passing the same array to all N parallel
+        // queries made every query hammer keys[0] simultaneously → YouTube
+        // 429 rateLimitExceeded → cascade through all keys → queriesSucceeded
+        // collapsed (observed 4/8 normally, 0/8 under burst = the "0 results"
+        // add-cards bug AND a silent ~50% supply loss). Rotating the start
+        // index spreads N queries across N keys (~1 concurrent/key) while
+        // keeping the rest as failover.
+        apiKey: rotateKeys(apiKeys, i),
         maxResults: cfg.searchMaxResults,
         relevanceLanguage: input.language,
         timeoutMs: cfg.searchTimeoutMs,
