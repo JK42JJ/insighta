@@ -28,6 +28,14 @@ const v5EnvSchema = z.object({
   // candidates by query cellIndex (9-cell balance + ~1s discover, no garbage
   // filter). A/B flag: does cell_binning let YouTube garbage through vs the LLM?
   V5_PICKER_MODE: z.enum(['llm', 'cell_binning']).default('llm'),
+  // CP492 — query generation mode. 'rule' (default, current behavior) uses the
+  // synchronous rule-based concat (buildRuleBasedQueriesSync). 'llm' generates
+  // one searchable query per cell via a single OpenRouter Haiku call (zod-validated,
+  // per-cell rule fallback). Rule-based concat produced broad/garbage queries
+  // ("...학습할 수", 9-word) → YouTube sparse backfill (Chinese drama / generic
+  // self-help / EN-AR leak). LLM translates each cell label into a focused
+  // searchable query. unset = 'rule' = no-op (flag-off rollback).
+  V5_QUERY_GEN: z.enum(['rule', 'llm']).default('rule'),
 });
 
 export interface V5Config {
@@ -39,6 +47,7 @@ export interface V5Config {
   shortOverpickFactor: number;
   shortProbeDeadlineMs: number;
   pickerMode: 'llm' | 'cell_binning';
+  queryGen: 'rule' | 'llm';
 }
 
 let cached: V5Config | null = null;
@@ -55,6 +64,7 @@ export function getV5Config(env: NodeJS.ProcessEnv = process.env): V5Config {
     shortOverpickFactor: p.V5_SHORT_OVERPICK_FACTOR,
     shortProbeDeadlineMs: p.V5_SHORT_PROBE_DEADLINE_MS,
     pickerMode: p.V5_PICKER_MODE,
+    queryGen: p.V5_QUERY_GEN,
   };
   return cached;
 }
