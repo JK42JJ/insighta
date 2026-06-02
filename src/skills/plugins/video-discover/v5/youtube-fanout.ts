@@ -79,6 +79,27 @@ export function rotateKeys(keys: string[], i: number): string[] {
   return [...keys.slice(offset), ...keys.slice(0, offset)];
 }
 
+/**
+ * Conservative off-language detector. YouTube ignores relevanceLanguage for
+ * sparse queries and backfills high-view global content — a Korean basketball
+ * query surfaced Chinese dramas (彩礼加倍 / 重生换嫁). Drop a title ONLY when it
+ * is dominated by a non-target script, so legitimate content survives:
+ *   - ko: Korean titles always contain Hangul. Zero Hangul + ≥2 CJK ideographs
+ *         (Han) = Chinese/Japanese → drop. English-titled ("[Team Drill]") has
+ *         no Han → kept; Hanja-mixed Korean has Hangul → kept.
+ *   - en: Latin-script. Zero Latin letters + ≥2 Han = CJK content → drop.
+ * Exported for tests.
+ */
+export function isOffLanguageTitle(title: string, lang: 'ko' | 'en'): boolean {
+  const t = title ?? '';
+  const hangul = (t.match(/[가-힣]/g) ?? []).length;
+  const han = (t.match(/[一-鿿]/g) ?? []).length;
+  const latin = (t.match(/[A-Za-z]/g) ?? []).length;
+  if (han < 2) return false; // not CJK-ideograph-dominant → never drop (conservative)
+  if (lang === 'ko') return hangul === 0; // a Korean title would carry Hangul
+  return latin === 0; // en: an English title would carry Latin letters
+}
+
 export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult> {
   const cfg = getV5Config(input.env);
   const apiKeys = resolveSearchApiKeys(input.env);
@@ -131,6 +152,11 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         apiKey: rotateKeys(apiKeys, i),
         maxResults: cfg.searchMaxResults,
         relevanceLanguage: input.language,
+        // CP492 — region bias (ko→KR, en→US). relevanceLanguage alone is a soft
+        // hint YouTube ignores for sparse queries (it backfilled "드리블 핸들링"
+        // with a high-view Chinese drama). regionCode nudges toward the locale;
+        // the hard guard is the off-language title drop in the loop below.
+        regionCode: input.language === 'ko' ? 'KR' : 'US',
         timeoutMs: cfg.searchTimeoutMs,
         publishedAfter: input.publishedAfter,
       }).then((items) => ({ items, cellIndex: q.cellIndex ?? null }))
@@ -154,6 +180,11 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       if (!cand) continue;
       if (seen.has(cand.videoId)) continue;
       if (titleHitsBlocklist(cand.title) || titleIndicatesShorts(cand.title)) continue;
+      // CP492 — off-language hard drop. YouTube backfills sparse queries with
+      // high-view global content (Chinese dramas on a Korean basketball query).
+      // Conservative: only drop titles dominated by a non-target script (see
+      // isOffLanguageTitle) so English-titled or Hanja-mixed Korean content is kept.
+      if (isOffLanguageTitle(cand.title, input.language)) continue;
       seen.set(cand.videoId, cand);
       if (seen.size >= cfg.dedupHardCap) break;
     }
