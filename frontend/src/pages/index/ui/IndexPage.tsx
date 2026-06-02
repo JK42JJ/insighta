@@ -270,6 +270,13 @@ function AuthenticatedApp() {
     const POLL_TIMEOUT_MS = 90_000;
 
     const interval = setInterval(() => {
+      // A2 (CP492): skip this tick while an allVideoStates refetch is in
+      // flight. Invalidating an in-flight query queues ANOTHER refetch, and
+      // with a 5-7s response the 2s ticks stacked into a serial pileup — the
+      // wizard's ~96s symptom. Non-overlapping ticks = no pileup; the next
+      // free tick re-invalidates within POLL_INTERVAL_MS so cards still get
+      // picked up promptly. Auto-stop (cards.totalCards > 0) still ends it.
+      if (queryClient.isFetching({ queryKey: youtubeSyncKeys.allVideoStates })) return;
       queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
       queryClient.invalidateQueries({ queryKey: localCardsKeys.all });
     }, POLL_INTERVAL_MS);
