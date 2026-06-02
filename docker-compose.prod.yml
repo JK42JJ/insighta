@@ -63,6 +63,17 @@ services:
       # Revert: delete this line and redeploy — code default 'llm' restores the
       # batch picker bit-identically.
       - V5_PICKER_MODE=cell_binning
+      # CP492 (2026-06-02) — per-cell LLM query generation ON. Rule-based concat
+      # collapsed each cell label into a bare-noun tail on the full center goal
+      # ("...학습할 수", 9-word) → YouTube sparse → high-view global backfill
+      # (Chinese drama / generic self-help / EN-AR leak). Measured: rule "시간관리"
+      # cell q = 0/4 relevant. One Haiku call (~2.2s) translates each cell label
+      # into a focused searchable query → 7/8 cells relevant, 0 garbage. Also lifts
+      # unique supply (distinct per-cell queries overlap less than the shared
+      # center-prefix rule queries — the dedup-collapse the Step1/Step3 knobs above
+      # were band-aiding). Never throws: any failure → rule-based (== prior behavior).
+      # Revert: delete this line and redeploy — code default 'rule' restores it.
+      - V5_QUERY_GEN=llm
       # CP492 Step 1 (2026-06-02) — card-volume supply lift. Wizard/add-cards
       # under-fill (30 / 17 vs 50-70 target). Measured root: the 8 cell queries
       # all share the full center-goal prefix → YouTube returns overlapping
