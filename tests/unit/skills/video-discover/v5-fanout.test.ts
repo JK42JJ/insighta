@@ -4,7 +4,7 @@
  * of fulfillment (rejected query → rawCount 0, fulfilled false).
  */
 
-import { runYouTubeFanout } from '@/skills/plugins/video-discover/v5/youtube-fanout';
+import { runYouTubeFanout, rotateKeys } from '@/skills/plugins/video-discover/v5/youtube-fanout';
 import { resetV5ConfigForTest } from '@/skills/plugins/video-discover/v5/config';
 
 jest.mock('@/skills/plugins/video-discover/v2/youtube-client', () => ({
@@ -118,5 +118,46 @@ describe('runYouTubeFanout — F5c perQuery', () => {
       env: {} as NodeJS.ProcessEnv,
     });
     expect(searchVideos.mock.calls[0]![0].publishedAfter).toBeUndefined();
+  });
+});
+
+/**
+ * CP492 — per-query key rotation. All N parallel queries previously shared the
+ * same key array → every query hit keys[0] first → YouTube 429 rateLimitExceeded
+ * cascade (0 results under burst, ~50% supply loss normally). rotateKeys spreads
+ * the primary key across queries while keeping failover order.
+ */
+describe('rotateKeys', () => {
+  const keys = ['k0', 'k1', 'k2', 'k3'];
+
+  test('query 0 starts at k0 (unchanged order)', () => {
+    expect(rotateKeys(keys, 0)).toEqual(['k0', 'k1', 'k2', 'k3']);
+  });
+
+  test('query i starts at keys[i] with the rest as failover', () => {
+    expect(rotateKeys(keys, 1)).toEqual(['k1', 'k2', 'k3', 'k0']);
+    expect(rotateKeys(keys, 2)).toEqual(['k2', 'k3', 'k0', 'k1']);
+    expect(rotateKeys(keys, 3)).toEqual(['k3', 'k0', 'k1', 'k2']);
+  });
+
+  test('wraps when i >= keyCount (more queries than keys)', () => {
+    expect(rotateKeys(keys, 4)).toEqual(rotateKeys(keys, 0)); // 4 % 4 = 0
+    expect(rotateKeys(keys, 5)).toEqual(rotateKeys(keys, 1));
+  });
+
+  test('N distinct queries get N distinct primary keys (no pile-up on keys[0])', () => {
+    const primaries = Array.from({ length: keys.length }, (_, i) => rotateKeys(keys, i)[0]);
+    expect(new Set(primaries).size).toBe(keys.length); // all distinct
+  });
+
+  test('every rotation is a permutation (failover still covers all keys)', () => {
+    for (let i = 0; i < keys.length; i += 1) {
+      expect([...rotateKeys(keys, i)].sort()).toEqual([...keys].sort());
+    }
+  });
+
+  test('0/1-key inputs returned unchanged (no rotation possible)', () => {
+    expect(rotateKeys([], 3)).toEqual([]);
+    expect(rotateKeys(['only'], 3)).toEqual(['only']);
   });
 });
