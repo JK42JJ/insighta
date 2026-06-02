@@ -4,7 +4,11 @@
  * of fulfillment (rejected query → rawCount 0, fulfilled false).
  */
 
-import { runYouTubeFanout, rotateKeys } from '@/skills/plugins/video-discover/v5/youtube-fanout';
+import {
+  runYouTubeFanout,
+  rotateKeys,
+  isOffLanguageTitle,
+} from '@/skills/plugins/video-discover/v5/youtube-fanout';
 import { resetV5ConfigForTest } from '@/skills/plugins/video-discover/v5/config';
 
 jest.mock('@/skills/plugins/video-discover/v2/youtube-client', () => ({
@@ -159,5 +163,41 @@ describe('rotateKeys', () => {
   test('0/1-key inputs returned unchanged (no rotation possible)', () => {
     expect(rotateKeys([], 3)).toEqual([]);
     expect(rotateKeys(['only'], 3)).toEqual(['only']);
+  });
+});
+
+/**
+ * CP492 — off-language hard drop. YouTube backfilled sparse Korean queries with
+ * high-view Chinese dramas. Must drop CLEAR off-language titles only (no false
+ * positives on English-titled or Hanja-mixed Korean content).
+ */
+describe('isOffLanguageTitle (CP492)', () => {
+  test('ko: drops Chinese-drama titles (no Hangul + Han-dominant)', () => {
+    expect(isOffLanguageTitle('【MULTISUB】《彩礼加倍？反手向新娘闺蜜求婚》', 'ko')).toBe(true);
+    expect(isOffLanguageTitle('重生换嫁，长命百岁了', 'ko')).toBe(true);
+    expect(isOffLanguageTitle('仙武狂婿都市无敌', 'ko')).toBe(true);
+  });
+
+  test('ko: KEEPS English-titled Korean content (no Han)', () => {
+    expect(isOffLanguageTitle('[Team Drill] Run & Chase Drill (레이업 훈련)', 'ko')).toBe(false);
+    expect(isOffLanguageTitle('농구 훈련 4인 pass cut meet out 연습', 'ko')).toBe(false);
+    expect(isOffLanguageTitle('Basketball Shooting Form Drills', 'ko')).toBe(false);
+  });
+
+  test('ko: KEEPS Hanja-mixed Korean (Hangul present)', () => {
+    expect(isOffLanguageTitle('농구 戰術 훈련법', 'ko')).toBe(false);
+    expect(isOffLanguageTitle('통일 농구 방북단', 'ko')).toBe(false);
+  });
+
+  test('conservative: a single Han char is never dropped', () => {
+    expect(isOffLanguageTitle('球 basketball', 'ko')).toBe(false); // han=1 < 2
+  });
+
+  test('en: drops CJK-dominant titles (no Latin + Han)', () => {
+    expect(isOffLanguageTitle('彩礼加倍反手向新娘', 'en')).toBe(true);
+  });
+
+  test('en: KEEPS Latin titles even with stray Han', () => {
+    expect(isOffLanguageTitle('Kung Fu 功夫 basics', 'en')).toBe(false); // latin present
   });
 });
