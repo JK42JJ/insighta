@@ -60,61 +60,79 @@ describe('parsePerCellResponse', () => {
 });
 
 describe('buildLLMQueriesPerCell', () => {
-  it('uses LLM queries per cell on good JSON', async () => {
-    const out = await buildLLMQueriesPerCell(INPUT, {
+  it('uses LLM queries per cell on good JSON + meta', async () => {
+    const { queries, meta } = await buildLLMQueriesPerCell(INPUT, {
       openRouterApiKey: 'k',
       generateImpl: async () => GOOD_JSON,
     });
-    const llm = out.filter((q) => q.source === 'llm');
+    const llm = queries.filter((q) => q.source === 'llm');
     expect(llm).toHaveLength(3);
     expect(llm.find((q) => q.cellIndex === 0)?.query).toBe('공부 시간관리 루틴');
     expect(llm.find((q) => q.cellIndex === 2)?.query).toBe('창업 아이디어 시장 검증');
+    // meta: full LLM coverage → not fellBack
+    expect(meta.mode).toBe('llm');
+    expect(meta.llmCells).toBe(3);
+    expect(meta.totalCells).toBe(3);
+    expect(meta.fellBack).toBe(false);
+    expect(meta.model).toBe('anthropic/claude-haiku-4.5');
   });
 
-  it('falls back to rule-based when no API key', async () => {
-    const out = await buildLLMQueriesPerCell(INPUT, { generateImpl: async () => GOOD_JSON });
-    expect(out.every((q) => q.source !== 'llm')).toBe(true);
-    expect(out.length).toBeGreaterThan(0);
+  it('falls back to rule-based when no API key (meta: no-key)', async () => {
+    const { queries, meta } = await buildLLMQueriesPerCell(INPUT, {
+      generateImpl: async () => GOOD_JSON,
+    });
+    expect(queries.every((q) => q.source !== 'llm')).toBe(true);
+    expect(queries.length).toBeGreaterThan(0);
+    expect(meta.fellBack).toBe(true);
+    expect(meta.fallbackReason).toBe('no-key');
+    expect(meta.latencyMs).toBe(0);
   });
 
-  it('falls back to rule-based on unparseable LLM output', async () => {
-    const out = await buildLLMQueriesPerCell(INPUT, {
+  it('falls back to rule-based on unparseable LLM output (meta: parse-fail)', async () => {
+    const { queries, meta } = await buildLLMQueriesPerCell(INPUT, {
       openRouterApiKey: 'k',
       generateImpl: async () => 'garbage not json',
     });
-    expect(out.every((q) => q.source !== 'llm')).toBe(true);
+    expect(queries.every((q) => q.source !== 'llm')).toBe(true);
+    expect(meta.fellBack).toBe(true);
+    expect(meta.fallbackReason).toBe('parse-fail');
   });
 
-  it('falls back to rule-based when the LLM call throws', async () => {
-    const out = await buildLLMQueriesPerCell(INPUT, {
+  it('falls back to rule-based when the LLM call throws (meta: error)', async () => {
+    const { queries, meta } = await buildLLMQueriesPerCell(INPUT, {
       openRouterApiKey: 'k',
       generateImpl: async () => {
         throw new Error('timeout');
       },
     });
-    expect(out.every((q) => q.source !== 'llm')).toBe(true);
-    expect(out.length).toBeGreaterThan(0);
+    expect(queries.every((q) => q.source !== 'llm')).toBe(true);
+    expect(queries.length).toBeGreaterThan(0);
+    expect(meta.fellBack).toBe(true);
+    expect(meta.fallbackReason).toMatch(/^error:/);
   });
 
-  it('per-cell fallback: LLM for present cells, rule for missing cells', async () => {
+  it('per-cell fallback: LLM for present cells, rule for missing (meta: partial)', async () => {
     // LLM only returns cell 0 → cells 1,2 should be filled from rule-based.
-    const out = await buildLLMQueriesPerCell(INPUT, {
+    const { queries, meta } = await buildLLMQueriesPerCell(INPUT, {
       openRouterApiKey: 'k',
       generateImpl: async () => JSON.stringify({ '0': '공부 시간관리 루틴' }),
     });
-    const cell0 = out.find((q) => q.cellIndex === 0);
+    const cell0 = queries.find((q) => q.cellIndex === 0);
     expect(cell0?.source).toBe('llm');
     expect(cell0?.query).toBe('공부 시간관리 루틴');
-    // cells 1 and 2 present from rule fallback (source 'subgoal')
-    expect(out.find((q) => q.cellIndex === 1)?.source).toBe('subgoal');
-    expect(out.find((q) => q.cellIndex === 2)?.source).toBe('subgoal');
+    expect(queries.find((q) => q.cellIndex === 1)?.source).toBe('subgoal');
+    expect(queries.find((q) => q.cellIndex === 2)?.source).toBe('subgoal');
+    expect(meta.llmCells).toBe(1);
+    expect(meta.fellBack).toBe(true);
+    expect(meta.fallbackReason).toBe('partial');
   });
 
-  it('returns [] for empty centerGoal', async () => {
-    const out = await buildLLMQueriesPerCell(
+  it('returns [] for empty centerGoal (meta: empty-center)', async () => {
+    const { queries, meta } = await buildLLMQueriesPerCell(
       { ...INPUT, centerGoal: '  ' },
       { openRouterApiKey: 'k' }
     );
-    expect(out).toEqual([]);
+    expect(queries).toEqual([]);
+    expect(meta.fallbackReason).toBe('empty-center');
   });
 });

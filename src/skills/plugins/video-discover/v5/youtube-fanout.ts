@@ -21,8 +21,8 @@ import {
   titleHitsBlocklist,
   type YouTubeSearchItem,
 } from '../v2/youtube-client';
-import { buildRuleBasedQueriesSync } from '../v2/keyword-builder';
-import { buildLLMQueriesPerCell } from './llm-query-gen';
+import { buildRuleBasedQueriesSync, type SearchQuery } from '../v2/keyword-builder';
+import { buildLLMQueriesPerCell, type QueryGenMeta } from './llm-query-gen';
 import { getV5Config } from './config';
 
 const log = logger.child({ module: 'video-discover/v5/youtube-fanout' });
@@ -66,7 +66,20 @@ export interface FanoutResult {
   quotaUnitsApprox: number;
   /** CP491 F5c — one entry per attempted query (order = queries order). */
   perQuery: FanoutPerQuery[];
+  /** CP492 Track-1 — query-gen wall-time (ms), split out of the search portion. */
+  queryGenMs: number;
+  /** CP492 Track-1 — query-gen telemetry (mode/model/latency/fallback). */
+  queryGen: QueryGenMeta;
 }
+
+/** CP492 Track-1 — meta for the rule branch (LLM never attempted). */
+const RULE_QUERY_GEN_META = (totalCells: number): QueryGenMeta => ({
+  mode: 'rule',
+  latencyMs: 0,
+  llmCells: 0,
+  totalCells,
+  fellBack: false,
+});
 
 /**
  * Rotate `keys` so index `i` starts at `keys[i % len]`, with the remaining keys
@@ -113,6 +126,8 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       rawItemCount: 0,
       quotaUnitsApprox: 0,
       perQuery: [],
+      queryGenMs: 0,
+      queryGen: RULE_QUERY_GEN_META(0),
     };
   }
 
@@ -127,13 +142,22 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
   // searchable query (1 Haiku call, per-cell rule fallback). Default 'rule'
   // keeps the synchronous rule-based concat. buildLLMQueriesPerCell never
   // throws — it returns rule-based queries on any failure.
-  const queries =
-    cfg.queryGen === 'llm'
-      ? await buildLLMQueriesPerCell(queryInput, {
-          openRouterApiKey: input.env['OPENROUTER_API_KEY'],
-          maxQueries: cfg.maxQueries,
-        })
-      : buildRuleBasedQueriesSync(queryInput, cfg.maxQueries);
+  const totalCells = queryInput.subGoals.map((s) => s.trim()).filter(Boolean).length;
+  const tQueryGen0 = Date.now();
+  let queries: SearchQuery[];
+  let queryGen: QueryGenMeta;
+  if (cfg.queryGen === 'llm') {
+    const r = await buildLLMQueriesPerCell(queryInput, {
+      openRouterApiKey: input.env['OPENROUTER_API_KEY'],
+      maxQueries: cfg.maxQueries,
+    });
+    queries = r.queries;
+    queryGen = r.meta;
+  } else {
+    queries = buildRuleBasedQueriesSync(queryInput, cfg.maxQueries);
+    queryGen = RULE_QUERY_GEN_META(totalCells);
+  }
+  const queryGenMs = Date.now() - tQueryGen0;
 
   if (queries.length === 0) {
     return {
@@ -143,6 +167,8 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       rawItemCount: 0,
       quotaUnitsApprox: 0,
       perQuery: [],
+      queryGenMs,
+      queryGen,
     };
   }
 
@@ -222,6 +248,8 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     rawItemCount,
     quotaUnitsApprox: queries.length * 100,
     perQuery,
+    queryGenMs,
+    queryGen,
   };
 }
 

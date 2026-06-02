@@ -45,6 +45,34 @@ export interface LLMQueryGenOpts {
 }
 
 /**
+ * CP492 Track-1 — query-gen telemetry. Emitted on EVERY path (success, partial,
+ * no-key, parse-fail, throw) so admin traces can compare rule vs llm and surface
+ * latency / fallback rate. `mode` is 'llm' whenever the LLM was attempted (even
+ * if it then fell back); the fanout sets 'rule' when V5_QUERY_GEN=rule and this
+ * function is never called.
+ */
+export interface QueryGenMeta {
+  mode: 'rule' | 'llm';
+  /** SEARCH_QUERY_MODEL when the LLM was attempted; undefined otherwise. */
+  model?: string;
+  /** LLM call wall-time (ms). 0 when no LLM call was made (no-key / rule). */
+  latencyMs: number;
+  /** Cells that received an LLM-generated query. */
+  llmCells: number;
+  /** Sub-goal (cell) count. */
+  totalCells: number;
+  /** True when the LLM was attempted but did not fully cover all cells. */
+  fellBack: boolean;
+  /** 'no-key' | 'parse-fail' | 'empty-merge' | 'partial' | 'error:<msg>' | 'empty-center'. */
+  fallbackReason?: string;
+}
+
+export interface QueryGenResult {
+  queries: SearchQuery[];
+  meta: QueryGenMeta;
+}
+
+/**
  * Parse + validate the LLM JSON object `{ "0": "q", ... }`. Tolerates code
  * fences and surrounding prose. Returns a cellIndex→query map of trimmed,
  * non-empty, non-sentence-length entries, or null when nothing usable parses.
@@ -83,16 +111,42 @@ export function parsePerCellResponse(raw: string, cellCount: number): Map<number
 export async function buildLLMQueriesPerCell(
   input: KeywordBuilderInput,
   opts: LLMQueryGenOpts = {}
-): Promise<SearchQuery[]> {
+): Promise<QueryGenResult> {
   const center = input.centerGoal.trim();
-  if (!center) return [];
+  const subLabels = input.subGoals.map((s) => s.trim()).filter(Boolean);
+  const totalCells = subLabels.length;
+
+  if (!center) {
+    return {
+      queries: [],
+      meta: {
+        mode: 'llm',
+        latencyMs: 0,
+        llmCells: 0,
+        totalCells,
+        fellBack: true,
+        fallbackReason: 'empty-center',
+      },
+    };
+  }
 
   // Fallback floor — always available, never throws.
   const ruleQueries = buildRuleBasedQueriesSync(input, opts.maxQueries);
-  const subLabels = input.subGoals.map((s) => s.trim()).filter(Boolean);
 
   // No key / no labels → current rule-based behavior (flag-off-equivalent).
-  if (!opts.openRouterApiKey || subLabels.length === 0) return ruleQueries;
+  if (!opts.openRouterApiKey || totalCells === 0) {
+    return {
+      queries: ruleQueries,
+      meta: {
+        mode: 'llm',
+        latencyMs: 0,
+        llmCells: 0,
+        totalCells,
+        fellBack: true,
+        fallbackReason: 'no-key',
+      },
+    };
+  }
 
   // Rule query indexed by cell, for gap-filling cells the LLM missed.
   const ruleByCell = new Map<number, SearchQuery>();
@@ -118,17 +172,29 @@ export async function buildLLMQueriesPerCell(
       maxTokens: SEARCH_QUERY_MAX_TOKENS,
       format: 'json',
     });
+    const latencyMs = Date.now() - t0;
 
-    const parsed = parsePerCellResponse(raw, subLabels.length);
+    const parsed = parsePerCellResponse(raw, totalCells);
     if (!parsed) {
       log.warn('v5 llm-query-gen: parse/validate failed — rule-based fallback');
-      return ruleQueries;
+      return {
+        queries: ruleQueries,
+        meta: {
+          mode: 'llm',
+          model: SEARCH_QUERY_MODEL,
+          latencyMs,
+          llmCells: 0,
+          totalCells,
+          fellBack: true,
+          fallbackReason: 'parse-fail',
+        },
+      };
     }
 
     // One query per cell: LLM where valid, rule for the gaps.
     const out: SearchQuery[] = [];
     let llmCells = 0;
-    for (let i = 0; i < subLabels.length; i++) {
+    for (let i = 0; i < totalCells; i++) {
       const llmQ = parsed.get(i);
       if (llmQ) {
         out.push({ query: llmQ, source: 'llm', cellIndex: i });
@@ -138,14 +204,51 @@ export async function buildLLMQueriesPerCell(
         if (r) out.push(r);
       }
     }
-    log.info(
-      `v5 llm-query-gen: ${llmCells}/${subLabels.length} cells from LLM (${Date.now() - t0}ms)`
-    );
-    return out.length > 0 ? out : ruleQueries;
+
+    if (out.length === 0) {
+      return {
+        queries: ruleQueries,
+        meta: {
+          mode: 'llm',
+          model: SEARCH_QUERY_MODEL,
+          latencyMs,
+          llmCells: 0,
+          totalCells,
+          fellBack: true,
+          fallbackReason: 'empty-merge',
+        },
+      };
+    }
+
+    const fellBack = llmCells < totalCells;
+    log.info(`v5 llm-query-gen: ${llmCells}/${totalCells} cells from LLM (${latencyMs}ms)`);
+    return {
+      queries: out,
+      meta: {
+        mode: 'llm',
+        model: SEARCH_QUERY_MODEL,
+        latencyMs,
+        llmCells,
+        totalCells,
+        fellBack,
+        fallbackReason: fellBack ? 'partial' : undefined,
+      },
+    };
   } catch (err) {
-    log.warn(
-      `v5 llm-query-gen failed (${err instanceof Error ? err.message : String(err)}) — rule-based fallback`
-    );
-    return ruleQueries;
+    const latencyMs = Date.now() - t0;
+    const msg = err instanceof Error ? err.message : String(err);
+    log.warn(`v5 llm-query-gen failed (${msg}) — rule-based fallback`);
+    return {
+      queries: ruleQueries,
+      meta: {
+        mode: 'llm',
+        model: SEARCH_QUERY_MODEL,
+        latencyMs,
+        llmCells: 0,
+        totalCells,
+        fellBack: true,
+        fallbackReason: `error:${msg.slice(0, 40)}`,
+      },
+    };
   }
 }
