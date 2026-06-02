@@ -87,3 +87,68 @@ how-to / stories / tools / mistakes / routine
 JSON array only:
 ["query1", "query2", "query3", "query4", "query5"]`;
 }
+
+export interface PerCellSearchQueryPromptInput {
+  centerGoal: string;
+  /** Cell labels in cell order (index 0..N-1). */
+  subLabels: string[];
+  language: string;
+  focusTags?: string[];
+}
+
+/**
+ * Per-cell query generation: ONE prompt → ONE searchable query per cell, as a
+ * JSON object keyed by cell index. A single LLM call sees all cells at once, so
+ * it keeps the center context consistent and avoids cross-cell duplicate queries
+ * (the rule-based path emitted e.g. center+"세계 일주" duplicating the center).
+ *
+ * Same anti-failure guidance as buildSearchQueryPrompt: each query 12-20 chars,
+ * goal+area combined — never too-short (→ generic self-help) nor sentence-long
+ * (→ no YouTube match → high-view global backfill). Verified (CP492): Haiku 4.5
+ * produced clean per-cell queries in ~2.2s, JSON-stable, search.list pools 5-10/10
+ * relevant vs rule-based 0/4 garbage.
+ */
+export function buildPerCellSearchQueryPrompt(input: PerCellSearchQueryPromptInput): string {
+  const { centerGoal, subLabels, language, focusTags } = input;
+  const n = subLabels.length;
+  const areas = subLabels.map((l, i) => `${i}. ${l}`).join('\n');
+  const focusLine = focusTags?.length
+    ? language === 'ko'
+      ? `- 집중 분야: ${focusTags.join(', ')}`
+      : `- Focus: ${focusTags.join(', ')}`
+    : '';
+
+  if (language === 'ko') {
+    return `당신은 YouTube 검색어 생성기입니다. 목표와 ${n}개 세부영역이 주어집니다. 각 세부영역마다 실제 사용자가 YouTube 검색창에 입력할 한국어 검색어 1개를 만드세요.
+
+목표: "${centerGoal}"
+세부영역:
+${areas}
+${focusLine ? '\n' + focusLine : ''}
+
+[규칙]
+- 각 검색어 12~20자. {목표 핵심어 1~2개} + {세부영역 핵심어 1~2개} 결합. 의미가 살아있는 검색가능한 표현.
+- 너무 짧으면(예: "시간 관리", "보험") 일반 콘텐츠로 확산 → 금지.
+- 너무 길거나 문장형(예: "매일 학습할 수 있는 시간 블록 설정하는 방법")이면 YouTube 매칭 실패 → 금지.
+- 세부영역의 실제 의도를 반영 (예: "시간 블록 설정"→"공부 시간관리 루틴", "프로토타입 개발"→"노코드 MVP 제작").
+
+[출력] JSON 객체만, 키는 세부영역 번호(문자열 "0"~"${n - 1}"), 값은 검색어:
+{"0":"검색어", ..., "${n - 1}":"검색어"}`;
+  }
+
+  return `You are a YouTube search query generator. Given a goal and ${n} sub-areas, write ONE search query a real user would type, for each sub-area.
+
+Goal: "${centerGoal}"
+Sub-areas:
+${areas}
+${focusLine ? '\n' + focusLine : ''}
+
+[Rules]
+- Each query 3-6 words. {goal keyword 1-2} + {area keyword 1-2}. A real, searchable phrase.
+- Too short (e.g. "time management", "insurance") → spreads to generic content → forbidden.
+- Too long / sentence-like → no YouTube match → forbidden.
+- Reflect the sub-area's real intent (e.g. "prototype dev" → "no-code MVP build").
+
+[Output] JSON object only, keys are sub-area indices (strings "0".."${n - 1}"), values are queries:
+{"0":"query", ..., "${n - 1}":"query"}`;
+}

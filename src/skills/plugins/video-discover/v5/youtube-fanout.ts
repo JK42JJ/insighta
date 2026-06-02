@@ -22,6 +22,7 @@ import {
   type YouTubeSearchItem,
 } from '../v2/youtube-client';
 import { buildRuleBasedQueriesSync } from '../v2/keyword-builder';
+import { buildLLMQueriesPerCell } from './llm-query-gen';
 import { getV5Config } from './config';
 
 const log = logger.child({ module: 'video-discover/v5/youtube-fanout' });
@@ -115,16 +116,24 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     };
   }
 
-  const queries = buildRuleBasedQueriesSync(
-    {
-      centerGoal: input.centerGoal,
-      subGoals: input.subGoals,
-      focusTags: input.focusTags,
-      targetLevel: input.targetLevel,
-      language: input.language,
-    },
-    cfg.maxQueries
-  );
+  const queryInput = {
+    centerGoal: input.centerGoal,
+    subGoals: input.subGoals,
+    focusTags: input.focusTags,
+    targetLevel: input.targetLevel,
+    language: input.language,
+  };
+  // CP492 — V5_QUERY_GEN=llm translates each cell label into a focused,
+  // searchable query (1 Haiku call, per-cell rule fallback). Default 'rule'
+  // keeps the synchronous rule-based concat. buildLLMQueriesPerCell never
+  // throws — it returns rule-based queries on any failure.
+  const queries =
+    cfg.queryGen === 'llm'
+      ? await buildLLMQueriesPerCell(queryInput, {
+          openRouterApiKey: input.env['OPENROUTER_API_KEY'],
+          maxQueries: cfg.maxQueries,
+        })
+      : buildRuleBasedQueriesSync(queryInput, cfg.maxQueries);
 
   if (queries.length === 0) {
     return {
