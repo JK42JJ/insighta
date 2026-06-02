@@ -48,9 +48,12 @@ export async function runV5ForWizard(input: V5WizardInput): Promise<EphemeralDis
   // (same runV5Executor as /add-cards, C8). Lets prod logs show whether
   // videos.list dominates the wizard discover_ms without a separate trace.
   const s = result.diagnostics.stageMs;
+  const qg = result.diagnostics.queryGen;
   log.info(
-    `v5 wizard stages ms: fanout=${s.fanoutMs} exclude=${s.excludeMs} llm=${s.llmMs} ` +
+    `v5 wizard stages ms: queryGen=${s.queryGenMs} fanout=${s.fanoutMs} exclude=${s.excludeMs} llm=${s.llmMs} ` +
       `videos=${s.videosMs} assemble=${s.assembleMs} short=${s.shortMs} total=${result.diagnostics.durationMs} ` +
+      `queryGenMode=${qg.mode} llmCells=${qg.llmCells}/${qg.totalCells} fellBack=${qg.fellBack}` +
+      `${qg.fallbackReason ? '(' + qg.fallbackReason + ')' : ''} ` +
       `shortsDropped=${result.diagnostics.shortsDropped} ` +
       `abortedBatches=${result.diagnostics.abortedBatches} pickerTimedOut=${result.diagnostics.pickerTimedOut}`
   );

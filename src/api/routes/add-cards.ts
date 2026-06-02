@@ -391,6 +391,9 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               v5_stage_ms: v5Result.diagnostics.stageMs,
               v5_aborted_batches: v5Result.diagnostics.abortedBatches,
               v5_picker_timed_out: v5Result.diagnostics.pickerTimedOut,
+              // CP492 Track-1 — query-gen telemetry (mode/model/latency/llmCells/fellBack).
+              // stageMs.queryGenMs already carries the latency via v5_stage_ms.
+              v5_query_gen: v5Result.diagnostics.queryGen,
               // CP491 F5c — per-query raw count + q_ok (parity with wizard.discover.end).
               v5_per_query: v5Result.diagnostics.perQuery,
               // CP491 — Shorts dropped by the post-pick short gate (before→after observability).

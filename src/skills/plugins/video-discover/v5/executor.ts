@@ -17,6 +17,7 @@ import { logger } from '@/utils/logger';
 import { videosBatchFullMetadata, resolveVideosApiKeys } from '../v2/youtube-client';
 import type { YouTubeVideoFullMetadata } from '../v2/youtube-client';
 import { runYouTubeFanout, type FanoutCandidate, type FanoutPerQuery } from './youtube-fanout';
+import type { QueryGenMeta } from './llm-query-gen';
 import { getV5Config } from './config';
 import { getVideoPicker } from '@/modules/llm-picker/registry';
 import { getLlmPickerConfig } from '@/config/llm-picker';
@@ -69,6 +70,8 @@ export interface V5StageMs {
   assembleMs: number;
   /** CP491 — short-gate probe phase (bounded by V5_SHORT_PROBE_DEADLINE_MS). */
   shortMs: number;
+  /** CP492 Track-1 — query generation, split out of fanoutMs (which is now search-only). */
+  queryGenMs: number;
 }
 
 export interface V5ExecuteResult {
@@ -94,6 +97,8 @@ export interface V5ExecuteResult {
     perQuery: FanoutPerQuery[];
     /** CP491 — Shorts dropped by the post-pick short gate. */
     shortsDropped: number;
+    /** CP492 Track-1 — query-gen telemetry (mode/model/latency/llmCells/fellBack). */
+    queryGen: QueryGenMeta;
   };
 }
 
@@ -110,6 +115,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
     videosMs: 0,
     assembleMs: 0,
     shortMs: 0,
+    queryGenMs: 0,
   };
   let abortedBatches = 0;
   let pickerTimedOut = false;
@@ -125,7 +131,10 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
     env: input.env,
     publishedAfter: input.publishedAfter,
   });
-  stage.fanoutMs = Date.now() - tFanout0;
+  // CP492 Track-1 — split query-gen out of fanout. fanoutMs is now search-only.
+  // `?? 0` guards older/mocked FanoutResults that predate the queryGenMs field.
+  stage.queryGenMs = fanout.queryGenMs ?? 0;
+  stage.fanoutMs = Date.now() - tFanout0 - (fanout.queryGenMs ?? 0);
   const afterTitleFilter = fanout.candidates.length;
 
   // 2. exclude BEFORE LLM (save LLM tokens)
@@ -314,6 +323,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       abortedBatches,
       pickerTimedOut,
       perQuery: fanout.perQuery ?? [],
+      queryGen: fanout.queryGen,
     },
   };
 }
@@ -325,6 +335,7 @@ function emptyResult(args: {
     rawItemCount: number;
     quotaUnitsApprox: number;
     perQuery?: FanoutPerQuery[];
+    queryGen: QueryGenMeta;
   };
   afterTitleFilter: number;
   afterExcludeFilter: number;
@@ -353,6 +364,7 @@ function emptyResult(args: {
       abortedBatches: args.abortedBatches,
       pickerTimedOut: args.pickerTimedOut,
       perQuery: args.fanout.perQuery ?? [],
+      queryGen: args.fanout.queryGen,
     },
   };
 }
