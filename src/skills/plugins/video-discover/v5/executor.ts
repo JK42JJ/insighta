@@ -14,7 +14,7 @@
  */
 
 import { logger } from '@/utils/logger';
-import { videosBatchFullMetadata, resolveSearchApiKeys } from '../v2/youtube-client';
+import { videosBatchFullMetadata, resolveVideosApiKeys } from '../v2/youtube-client';
 import type { YouTubeVideoFullMetadata } from '../v2/youtube-client';
 import { runYouTubeFanout, type FanoutCandidate, type FanoutPerQuery } from './youtube-fanout';
 import { getV5Config } from './config';
@@ -242,7 +242,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   const tVideos0 = Date.now();
   const fanoutById = new Map(survivors.map((c) => [c.videoId, c]));
   const pickedIds = picksMerged.map((p) => p.videoId);
-  const apiKeys = resolveSearchApiKeys(input.env);
+  const apiKeys = resolveVideosApiKeys(input.env);
   let fullMeta: YouTubeVideoFullMetadata[] = [];
   if (apiKeys.length > 0) {
     try {

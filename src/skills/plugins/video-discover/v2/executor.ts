@@ -38,6 +38,7 @@ import { totalAssigned, type CellAssignment } from './cell-assigner';
 import {
   searchVideos,
   videosBatch,
+  resolveVideosApiKeys,
   parseIsoDuration,
   isShortsByDuration,
   titleIndicatesShorts,
@@ -230,7 +231,9 @@ export const executor: SkillExecutor = {
     const videoIds = pool.map((p) => p.videoId);
     let stats: YouTubeVideoStatsItem[] = [];
     try {
-      stats = await videosBatch({ videoIds, apiKey });
+      // CP492 — videos.list on the separate VIDEOS pool (falls back to search
+      // keys until dedicated YOUTUBE_API_KEY_VIDEOS keys are provisioned).
+      stats = await videosBatch({ videoIds, apiKey: resolveVideosApiKeys(ctx.env ?? {}) });
     } catch (err) {
       log.warn(`videos.list failed: ${err instanceof Error ? err.message : String(err)}`);
     }

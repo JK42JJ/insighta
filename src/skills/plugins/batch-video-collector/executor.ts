@@ -43,6 +43,7 @@ import {
   videosBatch,
   parseIsoDuration,
   resolveSearchApiKeys,
+  resolveVideosApiKeys,
   VIDEOS_LIST_MAX_IDS_PER_CALL,
   type YouTubeSearchItem,
   type YouTubeVideoStatsItem,
@@ -63,6 +64,10 @@ const DEFAULT_RUN_TYPE = 'daily_trend';
 
 interface HydratedState {
   apiKeys: string[];
+  /** CP492 — separate pool for bulk videos.list so it doesn't drain the
+   *  user-facing search.list Queries quota. Falls back to apiKeys when no
+   *  dedicated YOUTUBE_API_KEY_VIDEOS keys exist. */
+  videosApiKeys: string[];
   ollamaUrl: string;
   limit: number;
   offset: number;
@@ -131,7 +136,8 @@ export const executor: SkillExecutor = {
         ? parseInt(envOffset, 10)
         : computeRotationOffset(Date.now(), limit, BATCH_COLLECTOR_ROTATION_DAYS);
 
-    const state: HydratedState = { apiKeys, ollamaUrl, limit, offset, runType };
+    const videosApiKeys = resolveVideosApiKeys(ctx.env);
+    const state: HydratedState = { apiKeys, videosApiKeys, ollamaUrl, limit, offset, runType };
     return { ok: true, hydrated: state as unknown as Record<string, unknown> };
   },
 
@@ -217,7 +223,7 @@ export const executor: SkillExecutor = {
       const allIds = Array.from(hitsByVideoId.keys());
       let stats: YouTubeVideoStatsItem[] = [];
       try {
-        stats = await videosBatch({ videoIds: allIds, apiKey: state.apiKeys });
+        stats = await videosBatch({ videoIds: allIds, apiKey: state.videosApiKeys });
         quotaUsed += Math.ceil(allIds.length / VIDEOS_LIST_MAX_IDS_PER_CALL);
       } catch (err) {
         log.warn(
