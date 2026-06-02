@@ -70,6 +70,8 @@ export interface FanoutResult {
   queryGenMs: number;
   /** CP492 Track-1 — query-gen telemetry (mode/model/latency/fallback). */
   queryGen: QueryGenMeta;
+  /** CP492 2차 gate — candidates dropped by the off-language script filter. */
+  offLangDropped: number;
 }
 
 /** CP492 Track-1 — meta for the rule branch (LLM never attempted). */
@@ -109,9 +111,45 @@ export function isOffLanguageTitle(title: string, lang: 'ko' | 'en'): boolean {
   const hangul = (t.match(/[가-힣]/g) ?? []).length;
   const han = (t.match(/[一-鿿]/g) ?? []).length;
   const latin = (t.match(/[A-Za-z]/g) ?? []).length;
-  if (han < 2) return false; // not CJK-ideograph-dominant → never drop (conservative)
-  if (lang === 'ko') return hangul === 0; // a Korean title would carry Hangul
-  return latin === 0; // en: an English title would carry Latin letters
+
+  if (lang === 'ko') {
+    // A legitimate Korean title carries Hangul (incl. English-titled or
+    // Hanja-mixed Korean) → always keep.
+    if (hangul > 0) return false;
+    // No Hangul + dominated by a clearly-foreign script → drop.
+    //  - CJK ideographs (CP491 #831): Chinese / Japanese.
+    //  - T1 (CP492): Arabic / Thai / Cyrillic / Devanagari / Hebrew.
+    //  - T2 (CP492): Turkish is Latin-based (script-invisible); its diacritics
+    //    (çÇıİşŞğĞ) are the only cheap signal — ≥2 keeps false positives near
+    //    zero (a Korean/English title virtually never carries 2+ of these).
+    const arabic = (t.match(/[؀-ۿ]/g) ?? []).length;
+    const thai = (t.match(/[฀-๿]/g) ?? []).length;
+    const cyrillic = (t.match(/[Ѐ-ӿ]/g) ?? []).length;
+    const devanagari = (t.match(/[ऀ-ॿ]/g) ?? []).length;
+    const hebrew = (t.match(/[֐-׿]/g) ?? []).length;
+    const turkish = (t.match(/[çÇıİşŞğĞ]/g) ?? []).length;
+    if (
+      han >= 2 ||
+      arabic >= 2 ||
+      thai >= 2 ||
+      cyrillic >= 2 ||
+      devanagari >= 2 ||
+      hebrew >= 2 ||
+      turkish >= 2
+    ) {
+      return true;
+    }
+    // Pure Latin / English (no Hangul) is a TOPIC-relevance question — off-topic
+    // English like "Inside SpaceX's Flywheel" is VALID English, just wrong topic.
+    // That is NOT a language drop; it is handled by Track 3 (cell-card semantic
+    // fit). English is intentionally NEVER dropped here (would also false-drop
+    // English-titled Korean content + valid English for AI/global mandalas).
+    return false;
+  }
+
+  // en mandala — unchanged conservative behavior (CP491 #831).
+  if (han < 2) return false;
+  return latin === 0; // an English title would carry Latin letters
 }
 
 export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult> {
@@ -128,6 +166,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       perQuery: [],
       queryGenMs: 0,
       queryGen: RULE_QUERY_GEN_META(0),
+      offLangDropped: 0,
     };
   }
 
@@ -169,6 +208,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       perQuery: [],
       queryGenMs,
       queryGen,
+      offLangDropped: 0,
     };
   }
 
@@ -200,6 +240,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
 
   let rawItemCount = 0;
   let queriesSucceeded = 0;
+  let offLangDropped = 0;
   const seen = new Map<string, FanoutCandidate>();
 
   for (const r of results) {
@@ -219,7 +260,10 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       // high-view global content (Chinese dramas on a Korean basketball query).
       // Conservative: only drop titles dominated by a non-target script (see
       // isOffLanguageTitle) so English-titled or Hanja-mixed Korean content is kept.
-      if (isOffLanguageTitle(cand.title, input.language)) continue;
+      if (isOffLanguageTitle(cand.title, input.language)) {
+        offLangDropped += 1;
+        continue;
+      }
       seen.set(cand.videoId, cand);
       if (seen.size >= cfg.dedupHardCap) break;
     }
@@ -250,6 +294,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     perQuery,
     queryGenMs,
     queryGen,
+    offLangDropped,
   };
 }
 

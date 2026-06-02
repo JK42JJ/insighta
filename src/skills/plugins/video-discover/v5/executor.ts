@@ -99,6 +99,8 @@ export interface V5ExecuteResult {
     shortsDropped: number;
     /** CP492 Track-1 — query-gen telemetry (mode/model/latency/llmCells/fellBack). */
     queryGen: QueryGenMeta;
+    /** CP492 2차 gate — candidates dropped by the off-language script filter. */
+    offLangDropped: number;
   };
 }
 
@@ -324,6 +326,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       pickerTimedOut,
       perQuery: fanout.perQuery ?? [],
       queryGen: fanout.queryGen,
+      offLangDropped: fanout.offLangDropped ?? 0,
     },
   };
 }
@@ -336,6 +339,7 @@ function emptyResult(args: {
     quotaUnitsApprox: number;
     perQuery?: FanoutPerQuery[];
     queryGen: QueryGenMeta;
+    offLangDropped?: number;
   };
   afterTitleFilter: number;
   afterExcludeFilter: number;
@@ -365,6 +369,7 @@ function emptyResult(args: {
       pickerTimedOut: args.pickerTimedOut,
       perQuery: args.fanout.perQuery ?? [],
       queryGen: args.fanout.queryGen,
+      offLangDropped: args.fanout.offLangDropped ?? 0,
     },
   };
 }

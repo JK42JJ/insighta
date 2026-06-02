@@ -200,4 +200,34 @@ describe('isOffLanguageTitle (CP492)', () => {
   test('en: KEEPS Latin titles even with stray Han', () => {
     expect(isOffLanguageTitle('Kung Fu 功夫 basics', 'en')).toBe(false); // latin present
   });
+
+  // CP492 2차 gate — T1 (non-Latin foreign scripts) + T2 (Turkish diacritics).
+  test('ko T1: drops Arabic / Thai / Cyrillic / Devanagari / Hebrew (no Hangul)', () => {
+    expect(isOffLanguageTitle('استرجع شغفك في الحياة', 'ko')).toBe(true); // Arabic
+    expect(isOffLanguageTitle('วิธีเรียนรู้ทักษะใหม่อย่างรวดเร็ว', 'ko')).toBe(true); // Thai
+    expect(isOffLanguageTitle('Как быстро выучить навык', 'ko')).toBe(true); // Cyrillic
+    expect(isOffLanguageTitle('कौशल कैसे सीखें', 'ko')).toBe(true); // Devanagari
+  });
+
+  test('ko T2: drops Turkish (Latin-based) via ≥2 Turkish diacritics', () => {
+    // Real leaked title — mostly Latin, but Çıktı/İndirimler carry ç/ı/İ.
+    expect(
+      isOffLanguageTitle('Star Atlas Town Hall - C4 PTR Çıktı, UE5 ve Dev İndirimler!', 'ko')
+    ).toBe(true);
+  });
+
+  test('ko: KEEPS off-topic ENGLISH (Track 3, not a language drop)', () => {
+    // Off-topic but valid English → kept here; topic relevance is Track 3.
+    expect(isOffLanguageTitle("Inside SpaceX's Flywheel: What Tesla Investors Missed", 'ko')).toBe(
+      false
+    );
+    expect(isOffLanguageTitle('Part 5 How Influencer Helped Rebuild After Disaster', 'ko')).toBe(
+      false
+    );
+  });
+
+  test('ko T2 conservative: a single stray Turkish diacritic is NOT dropped', () => {
+    // façade-style loanword (one ç) must not false-drop English.
+    expect(isOffLanguageTitle('The façade of productivity', 'ko')).toBe(false); // turkish=1 < 2
+  });
 });
