@@ -66,6 +66,7 @@ import {
   titleIndicatesShorts,
   titleHitsBlocklist,
   resolveSearchApiKeys,
+  resolveVideosApiKeys,
   type YouTubeVideoStatsItem,
   type YouTubeSearchItem,
 } from '../v2/youtube-client';
@@ -573,6 +574,7 @@ async function executeImpl(
       deficitCells,
       state,
       apiKeys,
+      videosApiKeys: resolveVideosApiKeys(ctx.env ?? {}),
       openRouterApiKey: openRouterApiKey || undefined,
       openRouterModel,
       existingVideoIds,
@@ -794,6 +796,9 @@ export async function maybeApplyWhitelistGate(
 interface Tier2Input {
   deficitCells: Array<{ cellIndex: number; need: number }>;
   state: HydratedState;
+  /** CP492 — separate pool for videos.list (falls back to apiKeys until
+   *  YOUTUBE_API_KEY_VIDEOS keys are provisioned). */
+  videosApiKeys: string[];
   /** Ordered API keys — rotated on quota (403) errors. */
   apiKeys: string[];
   openRouterApiKey?: string;
@@ -1000,7 +1005,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   try {
     stats = await videosBatch({
       videoIds: combined.map((p) => p.videoId),
-      apiKey: input.apiKeys,
+      apiKey: input.videosApiKeys,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1991,6 +1996,7 @@ async function runDiscoverEphemeralImpl(
         targetLevel: input.targetLevel,
       },
       apiKeys,
+      videosApiKeys: resolveVideosApiKeys(input.env),
       openRouterApiKey: openRouterApiKey || undefined,
       openRouterModel,
       existingVideoIds,

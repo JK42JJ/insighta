@@ -181,6 +181,30 @@ export function resolveSearchApiKeys(env: Readonly<Record<string, string | undef
   return keys;
 }
 
+/**
+ * Resolve the key pool for NON-search calls — videos.list (stats/duration) and
+ * bulk pool collection (batch-video-collector). CP492: these share each Google
+ * project's daily Queries quota with search.list (search.list = 100 units/call;
+ * videos.list = 1 unit). A pool-build run (thousands of videos.list) drained the
+ * search projects' Queries → user-facing wizard search.list got 429 → 0 cards.
+ *
+ * Reads YOUTUBE_API_KEY_VIDEOS / _2..N (dedicated projects for the cheap,
+ * high-volume videos.list). Falls back to the SEARCH pool when no dedicated
+ * VIDEOS keys are configured — so behavior is unchanged until the operator
+ * provisions separate video projects (then the separation actually takes hold).
+ */
+export function resolveVideosApiKeys(env: Readonly<Record<string, string | undefined>>): string[] {
+  const keys: string[] = [];
+  const primary = env['YOUTUBE_API_KEY_VIDEOS']?.trim();
+  if (primary) keys.push(primary);
+  for (let i = 2; i <= MAX_SEARCH_KEY_SLOTS; i++) {
+    const k = env[`YOUTUBE_API_KEY_VIDEOS_${i}`]?.trim();
+    if (k) keys.push(k);
+  }
+  if (keys.length === 0) return resolveSearchApiKeys(env); // unchanged until VIDEOS keys exist
+  return keys;
+}
+
 function isQuotaError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return msg.includes('search.list HTTP 403') || msg.includes('search.list HTTP 429');

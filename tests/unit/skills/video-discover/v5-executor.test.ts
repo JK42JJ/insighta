@@ -19,6 +19,7 @@ jest.mock('@/skills/plugins/video-discover/v5/youtube-fanout', () => ({
 jest.mock('@/skills/plugins/video-discover/v2/youtube-client', () => ({
   videosBatchFullMetadata: jest.fn().mockResolvedValue([]),
   resolveSearchApiKeys: jest.fn().mockReturnValue([]),
+  resolveVideosApiKeys: jest.fn().mockReturnValue([]),
 }));
 
 // CP491 short gate — mock the detector so orchestration tests never hit the
