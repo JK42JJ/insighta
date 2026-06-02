@@ -74,6 +74,18 @@ services:
       # the riskier query-diversification or the TARGET_PICKS cap raise.
       # Revert: delete this line → code default 25.
       - V5_SEARCH_MAX_RESULTS=40
+      # CP492 Step 3 (2026-06-02) — card-volume cap raise. After Step 1 lifted
+      # unique supply 68→120 (now DEDUP_HARDCAP-bound), the bottleneck moved to
+      # the targetPicks slice (30) + Shorts drop: wizard still inserted ~23.
+      # Raise the slice to 60 (binByCells over-picks 60×1.5=90 → Shorts drop →
+      # ~50-60). MUST raise DEDUP_HARDCAP in lockstep: at targetPicks 60 with
+      # ~40% Shorts, 120 unique → ~72 non-short → only just clears 60; 180 gives
+      # headroom. Raising targetPicks alone would re-hit the 120 unique wall.
+      # No quota change (caps are post-fetch). Latency: a wider dedup keep +
+      # bigger binning set — measure fanoutMs stays sub-second post-deploy.
+      # Revert: delete both lines → code defaults 30 / 120.
+      - V5_TARGET_PICKS=60
+      - V5_DEDUP_HARDCAP=180
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
