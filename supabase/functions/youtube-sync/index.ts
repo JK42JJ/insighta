@@ -650,11 +650,16 @@ Deno.serve(async (req) => {
 
       case 'get-all-video-states': {
         const mandalaId = url.searchParams.get('mandala_id');
+        // B2 (CP492): narrow the embedded youtube_videos select to the 9 columns
+        // convertToInsightCard actually reads. The previous `(*)` pulled all ~35
+        // columns including fat Json (thumbnails, region_restriction) and arrays
+        // (tags, topic_categories) — the dominant cost in the 667kB / multi-second
+        // payload for heavy users (5047 rows). DB-side this is ~20x cheaper.
         let query = supabase
           .from('user_video_states')
           .select(`
             *,
-            video:youtube_videos (*)
+            video:youtube_videos (youtube_video_id, title, description, thumbnail_url, channel_title, duration_seconds, published_at, view_count, like_count)
           `)
           .eq('user_id', user.id)
           .order('added_to_ideation_at', { ascending: false });
