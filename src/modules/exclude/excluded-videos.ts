@@ -62,17 +62,28 @@ export async function getExcludedVideoIds(opts: ExcludeSetOpts): Promise<Set<str
       where: { user_id: userId },
       select: { video_id: true },
     }),
+    // CP492 — GLOBAL owned-video exclusion. user_video_states has a GLOBAL
+    // unique([user_id, video_id]); a video the user owns in ANY mandala cannot
+    // be re-added (the /cards/:id/like UPSERT only touches pinned_at, never
+    // moves mandala_id — cards.ts:202). Recommending such a video = silent
+    // no-op ("no reaction" + card-count loss: measured 20/35 Add Cards recs
+    // already owned, 14 of them in OTHER mandalas). So exclude EVERY owned
+    // video, regardless of mandala or engagement signal.
+    //
+    // Replaces the prior mandala+signal-scoped exclusion, whose "let other
+    // mandalas' cards surface" intent was incompatible with the global unique
+    // (they surfaced as un-addable). recommendation_cache exclusion below stays
+    // mandala-scoped (#826) — different table, no unique conflict, re-addable.
+    //
+    // CP489 note: do NOT narrow this back to dodge starvation. Owned videos are
+    // un-addable; if net-new candidates run low, that is a SUPPLY signal — fix
+    // via fanout (V5_SEARCH_MAX_RESULTS / V5_TARGET_PICKS), not by re-surfacing
+    // un-addable dupes. Watch exclude_set_size in the add_cards.end trace.
     prisma.$queryRaw<Array<{ youtube_video_id: string }>>(Prisma.sql`
       SELECT yv.youtube_video_id
         FROM public.user_video_states uvs
         JOIN public.youtube_videos yv ON yv.id = uvs.video_id
        WHERE uvs.user_id = ${userId}::uuid
-         AND uvs.mandala_id = ${mandalaId}::uuid
-         AND (
-           uvs.is_watched = TRUE
-           OR uvs.pinned_at IS NOT NULL
-           OR uvs.user_note IS NOT NULL
-         )
     `),
     prisma.card_interactions.findMany({
       where: { user_id: userId, signal: 'delete' },

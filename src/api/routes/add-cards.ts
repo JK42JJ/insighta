@@ -406,6 +406,12 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               // deterministically (no timestamp-window fuzziness). Bounded
               // by cfg.limitDefault (~40), so payload growth is trivial.
               returned_video_ids: cards.map((c) => c.videoId),
+              // CP492 funnel — exclude-set size (now GLOBAL owned + rec_cache +
+              // signals). Watch alongside v5_raw_item_count / after_exclude /
+              // cards_count: a large exclude_set_size with low cards_count is a
+              // SUPPLY signal (heavy user owns most candidates), NOT a reason to
+              // re-narrow the exclusion (see excluded-videos.ts CP489 note).
+              exclude_set_size: excludeSet.size,
             },
             latencyMs: Date.now() - t0,
           });

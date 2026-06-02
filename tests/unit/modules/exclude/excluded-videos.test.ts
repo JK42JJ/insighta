@@ -1,10 +1,13 @@
 /**
- * Dedup bleed fix — exclude-set policy regression guard (CP489+).
+ * Exclude-set policy regression guard.
  *
- * Per addendum acceptance gate: the new filter MUST release wizard
- * pre-fill ghost rows AND continue to exclude every real engagement
- * signal. Without this guard, future schema/query refactors could
- * silently revert to "exclude everything" (the dedup bleed).
+ * CP492 supersedes the CP489/CP490 "release wizard-ghost rows" policy: because
+ * user_video_states has a GLOBAL unique([user_id, video_id]) and the like UPSERT
+ * never moves mandala_id, ANY owned video is un-addable. Re-surfacing one =
+ * silent no-op + card-count loss (measured 20/35 Add Cards recs already owned,
+ * 14 in OTHER mandalas). So the user_video_states exclude is now GLOBAL — every
+ * owned video, regardless of mandala or engagement signal. recommendation_cache
+ * stays mandala-scoped (#826) — different table, no unique conflict, re-addable.
  *
  * Test scope: query semantics through mocked prisma — no DB required.
  */
@@ -54,8 +57,8 @@ function makeMockPrisma(
   return { prisma, calls };
 }
 
-describe('getExcludedVideoIds — Explicit > Inferred policy (CP489+)', () => {
-  test('SQL filter includes the 3 explicit engagement clauses (CP490+)', async () => {
+describe('getExcludedVideoIds — GLOBAL owned exclusion (CP492)', () => {
+  test('user_video_states SQL is GLOBAL: user_id only, no mandala_id, no signal clauses', async () => {
     const { prisma, calls } = makeMockPrisma([]);
     await getExcludedVideoIds({
       prisma,
@@ -63,12 +66,17 @@ describe('getExcludedVideoIds — Explicit > Inferred policy (CP489+)', () => {
       mandalaId: '00000000-0000-0000-0000-000000000002',
     });
     const sql = calls.rawWhere.join(' ');
-    expect(sql).toMatch(/is_watched\s*=\s*TRUE/);
-    expect(sql).toMatch(/pinned_at\s+IS\s+NOT\s+NULL/);
-    expect(sql).toMatch(/user_note\s+IS\s+NOT\s+NULL/);
+    expect(sql).toMatch(/user_id\s*=/);
+    // Global → no mandala scoping, no engagement-signal narrowing on the
+    // user_video_states query (every owned video is un-addable → excluded).
+    expect(sql).not.toMatch(/mandala_id\s*=/);
+    expect(sql).not.toMatch(/is_watched/);
+    expect(sql).not.toMatch(/pinned_at/);
+    expect(sql).not.toMatch(/user_note/);
+    expect(sql).not.toMatch(/AND\s*\(/);
   });
 
-  test('SQL filter does NOT include the dropped CP490 clauses', async () => {
+  test('SQL does NOT include the long-dropped CP490 clauses either', async () => {
     const { prisma, calls } = makeMockPrisma([]);
     await getExcludedVideoIds({
       prisma,
@@ -78,21 +86,21 @@ describe('getExcludedVideoIds — Explicit > Inferred policy (CP489+)', () => {
     const sql = calls.rawWhere.join(' ');
     expect(sql).not.toMatch(/is_in_ideation/);
     expect(sql).not.toMatch(/watch_position_seconds/);
-    expect(sql).not.toMatch(/auto_added\s*=\s*FALSE/);
+    expect(sql).not.toMatch(/auto_added/);
   });
 
-  test('rows returned by SQL filter are added to the exclude set verbatim', async () => {
+  test('owned videos returned by SQL are added to the exclude set verbatim', async () => {
     const { prisma } = makeMockPrisma([
-      { youtube_video_id: 'engagedVid1' },
-      { youtube_video_id: 'engagedVid2' },
+      { youtube_video_id: 'ownedVid1' },
+      { youtube_video_id: 'ownedVid2' },
     ]);
     const excluded = await getExcludedVideoIds({
       prisma,
       userId: '00000000-0000-0000-0000-000000000001',
       mandalaId: '00000000-0000-0000-0000-000000000002',
     });
-    expect(excluded.has('engagedVid1')).toBe(true);
-    expect(excluded.has('engagedVid2')).toBe(true);
+    expect(excluded.has('ownedVid1')).toBe(true);
+    expect(excluded.has('ownedVid2')).toBe(true);
   });
 
   test('requestExcludeIds always pass through to the result set', async () => {
@@ -109,47 +117,26 @@ describe('getExcludedVideoIds — Explicit > Inferred policy (CP489+)', () => {
 });
 
 /**
- * Policy intent checks — these aren't SQL-execution tests; they are
- * documentation-as-tests that pin the design decision so a future PR
- * cannot silently reverse it without updating the spec here too.
- *
- * For each documented row class the test asserts whether the SQL clause
- * structure CONTAINS the predicate that handles it.
+ * Intent guard (documentation-as-tests). CP492 REVERSES the CP489/CP490 ghost
+ * policy: an owned video — engaged or not, this mandala or another — is
+ * un-addable under the global unique, so it MUST be excluded. A future PR must
+ * not silently re-narrow this (it reintroduces the silent-no-op / card-count
+ * bug); fix supply via fanout knobs instead.
  */
-describe('getExcludedVideoIds — documented row classes (intent guard)', () => {
-  test('is_watched=true row is still excluded (real engagement)', async () => {
-    const { prisma, calls } = makeMockPrisma([]);
-    await getExcludedVideoIds({
+describe('getExcludedVideoIds — owned rows excluded regardless of signal (CP492)', () => {
+  test('an owned video with ZERO engagement is now excluded (global), not released', async () => {
+    // The mock returns rows for whatever the (now signal-less) SQL matches.
+    // A zero-engagement / auto-added ghost is among the owned set → excluded.
+    const { prisma } = makeMockPrisma([{ youtube_video_id: 'ghostVid' }]);
+    const excluded = await getExcludedVideoIds({
       prisma,
       userId: '00000000-0000-0000-0000-000000000001',
       mandalaId: '00000000-0000-0000-0000-000000000002',
     });
-    expect(calls.rawWhere.join(' ')).toContain('is_watched = TRUE');
+    expect(excluded.has('ghostVid')).toBe(true);
   });
 
-  test('user_note IS NOT NULL row is still excluded (user took notes)', async () => {
-    const { prisma, calls } = makeMockPrisma([]);
-    await getExcludedVideoIds({
-      prisma,
-      userId: '00000000-0000-0000-0000-000000000001',
-      mandalaId: '00000000-0000-0000-0000-000000000002',
-    });
-    expect(calls.rawWhere.join(' ')).toContain('user_note IS NOT NULL');
-  });
-
-  test('pinned_at IS NOT NULL row is still excluded (user bookmarked)', async () => {
-    const { prisma, calls } = makeMockPrisma([]);
-    await getExcludedVideoIds({
-      prisma,
-      userId: '00000000-0000-0000-0000-000000000001',
-      mandalaId: '00000000-0000-0000-0000-000000000002',
-    });
-    expect(calls.rawWhere.join(' ')).toContain('pinned_at IS NOT NULL');
-  });
-
-  test('auto_added=true with all engagement zero is NO LONGER excluded (wizard pre-fill ghost)', async () => {
-    // Wizard pre-fill row = auto_added=true + 0 engagement → none of the
-    // 3 CP490+ OR clauses match → row stays in pool for LLM re-evaluation.
+  test('SQL no longer carries the engagement-OR block (signal-agnostic)', async () => {
     const { prisma, calls } = makeMockPrisma([]);
     await getExcludedVideoIds({
       prisma,
@@ -157,20 +144,8 @@ describe('getExcludedVideoIds — documented row classes (intent guard)', () => 
       mandalaId: '00000000-0000-0000-0000-000000000002',
     });
     const sql = calls.rawWhere.join(' ');
-    expect(sql).toMatch(/AND\s*\(/);
-  });
-
-  test('auto_added=false zero-engagement is NO LONGER excluded (CP490+ relaxation)', async () => {
-    // CP490 directive: user_local_cards + delete/archive signals are the
-    // only explicit-add exclude sources; user_video_states row without one
-    // of the 3 engagement signals is re-surfaceable.
-    const { prisma, calls } = makeMockPrisma([]);
-    await getExcludedVideoIds({
-      prisma,
-      userId: '00000000-0000-0000-0000-000000000001',
-      mandalaId: '00000000-0000-0000-0000-000000000002',
-    });
-    expect(calls.rawWhere.join(' ')).not.toContain('auto_added = FALSE');
+    expect(sql).not.toMatch(/is_watched\s*=\s*TRUE/);
+    expect(sql).not.toMatch(/user_note\s+IS\s+NOT\s+NULL/);
   });
 });
 
