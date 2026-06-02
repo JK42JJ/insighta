@@ -63,6 +63,17 @@ services:
       # Revert: delete this line and redeploy — code default 'llm' restores the
       # batch picker bit-identically.
       - V5_PICKER_MODE=cell_binning
+      # CP492 Step 1 (2026-06-02) — card-volume supply lift. Wizard/add-cards
+      # under-fill (30 / 17 vs 50-70 target). Measured root: the 8 cell queries
+      # all share the full center-goal prefix → YouTube returns overlapping
+      # results → dedup collapses raw 200 → 68 unique (the supply ceiling).
+      # search.list quota is 100 units PER CALL regardless of maxResults, so
+      # raising maxResults 25→40 grows the per-query result set (+60% raw) at
+      # ZERO added quota (still 8 calls = 801 units) and no extra latency (same
+      # 1 call per query, fanout stays sub-second). Measure-first lever before
+      # the riskier query-diversification or the TARGET_PICKS cap raise.
+      # Revert: delete this line → code default 25.
+      - V5_SEARCH_MAX_RESULTS=40
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
