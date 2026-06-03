@@ -7,7 +7,8 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { Inbox } from 'lucide-react';
+import { Inbox, Loader2 } from 'lucide-react';
+import { apiClient } from '@/shared/lib/api-client';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { BootShell } from '@/shared/ui/BootShell';
 import { trackCardViewed } from '@/shared/lib/posthog';
@@ -291,12 +292,41 @@ function AuthenticatedApp() {
     };
   }, [isNewMandalaActive, queryClient, clearJustCreated]);
 
-  // Auto-stop polling when cards appear
+  // CP492 #2 — stop polling when the discovery pipeline reports completed,
+  // NOT on the first card. The pipeline (discover + auto-add) lands cards over
+  // ~3-6s; ending at the first card made the count jump (e.g. 18 → 25) with no
+  // loading cue. We poll pipeline-status (the same endpoint CardDiscoveryProgress
+  // uses); on completed/failed we do a final reconcile-refetch so the grid
+  // catches the last arrivals, then clear (which removes the "더 찾는 중"
+  // indicator). The 90s timeout in the poll effect above is the safety net so
+  // the indicator never sticks if the pipeline never reports completed.
   useEffect(() => {
-    if (isNewMandalaActive && cards.totalCards > 0) {
-      clearJustCreated(null);
-    }
-  }, [isNewMandalaActive, cards.totalCards, clearJustCreated]);
+    if (!isNewMandalaActive || !effectiveMandalaId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const check = async () => {
+      try {
+        const res = await apiClient.getPipelineStatus(effectiveMandalaId);
+        if (cancelled) return;
+        if (res.status === 'completed' || res.status === 'failed') {
+          // Final reconcile so the grid reflects every just-landed card before
+          // the indicator disappears (no empty flicker).
+          queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
+          queryClient.invalidateQueries({ queryKey: localCardsKeys.all });
+          clearJustCreated(null);
+          return;
+        }
+      } catch {
+        // ignore — 90s timeout (poll effect above) is the safety net.
+      }
+      if (!cancelled) timer = setTimeout(check, 2_000);
+    };
+    timer = setTimeout(check, 1_500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [isNewMandalaActive, effectiveMandalaId, queryClient, clearJustCreated]);
 
   // Patch refs after orchestrator init
   useEffect(() => {
@@ -955,6 +985,16 @@ function AuthenticatedApp() {
                   <>
                     {isNewMandalaActive && cards.totalCards === 0 && effectiveMandalaId && (
                       <CardDiscoveryProgress mandalaId={effectiveMandalaId} isComplete={false} />
+                    )}
+                    {/* CP492 #2 — cards already showing but discovery still running
+                        (pipeline not yet completed). Subtle non-blocking cue so the
+                        sequential 18→25 arrival reads as progress, not a glitch.
+                        Removed when the pipeline-completed effect clears justCreated. */}
+                    {isNewMandalaActive && cards.totalCards > 0 && !search.isSearchActive && (
+                      <div className="mb-2 flex items-center gap-2 px-1 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                        <span>{t('index.discoveringMore', '관련 영상 더 찾는 중…')}</span>
+                      </div>
                     )}
                     <CardListView
                       cards={search.isSearchActive ? search.results : cards.displayCards}
