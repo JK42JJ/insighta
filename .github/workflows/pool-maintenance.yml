@@ -1,0 +1,60 @@
+name: pool-maintenance
+
+# CP494 — video_pool ToS hygiene. POSTs to the internal pool-maintenance
+# endpoint on prod; the API container runs two 0-quota DB ops in the
+# background (fire-and-forget pg-boss job):
+#   1. soft-expire  — is_active=false for rows past expires_at (decoupled from
+#      the batch-video-collector success path, which skips its inline copy on
+#      quota-exhaustion / empty-trend days).
+#   2. scrub        — NULL/blank stored YouTube metadata >30 days old
+#      (refreshed_at), keeping video_id + embeddings. Satisfies the YouTube
+#      Developer Policy "refresh OR delete within 30 days".
+#
+# No YouTube quota. Trigger: 03:13 UTC daily (= 12:13 KST), clear of the
+# batch-video-collector windows (07:30 / 19:30 UTC).
+#
+# Manual: `gh workflow run pool-maintenance.yml`.
+#
+# Secrets required:
+#   - INTERNAL_BATCH_TOKEN — shared token matching prod /opt/tubearchive/.env.
+#   - DOMAIN               — already used by Deploy (e.g. insighta.one).
+
+on:
+  schedule:
+    - cron: '13 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    name: Trigger pool-maintenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check secrets
+        run: |
+          if [ -z "${{ secrets.INTERNAL_BATCH_TOKEN }}" ]; then
+            echo "::error::INTERNAL_BATCH_TOKEN is not configured"
+            exit 1
+          fi
+          if [ -z "${{ secrets.DOMAIN }}" ]; then
+            echo "::error::DOMAIN is not configured"
+            exit 1
+          fi
+
+      - name: Run pool-maintenance (soft-expire + scrub)
+        env:
+          TOKEN: ${{ secrets.INTERNAL_BATCH_TOKEN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+        run: |
+          echo "POST → https://${DOMAIN}/api/v1/internal/pool-maintenance/run"
+          RESPONSE=$(curl -sS --fail --show-error \
+            --max-time 60 \
+            -X POST "https://${DOMAIN}/api/v1/internal/pool-maintenance/run" \
+            -H "content-type: application/json" \
+            -H "x-internal-token: $TOKEN" \
+            -d '{"trigger":"gha-schedule"}')
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | jq -e '.accepted == true' >/dev/null || {
+            echo "::error::pool-maintenance enqueue not accepted"
+            exit 1
+          }

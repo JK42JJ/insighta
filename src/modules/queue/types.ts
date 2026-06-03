@@ -20,6 +20,11 @@ export const JOB_NAMES = {
    * GitHub Actions step when limit=200 takes >180s.
    */
   BATCH_VIDEO_COLLECTOR_RUN: 'batch-video-collector-run',
+  /**
+   * CP494 — video_pool ToS hygiene (independent cron). Soft-expire + scrub of
+   * stale YouTube metadata, decoupled from the collector success path. 0 quota.
+   */
+  POOL_MAINTENANCE_RUN: 'pool-maintenance-run',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -81,6 +86,11 @@ export interface BatchVideoCollectorRunPayload {
   trigger?: string;
 }
 
+/** CP494 — payload for POOL_MAINTENANCE_RUN. Source tag for logs only. */
+export interface PoolMaintenanceRunPayload {
+  trigger?: string;
+}
+
 // ============================================================================
 // Job Options
 // ============================================================================
@@ -131,6 +141,15 @@ export const BATCH_SCAN_OPTIONS = {
 export const BATCH_VIDEO_COLLECTOR_RUN_OPTIONS = {
   retryLimit: 0,
   expireInMinutes: 30,
+} as const;
+
+/**
+ * Pool maintenance: no retries (daily cron is the retry surface). Two bounded
+ * UPDATEs over video_pool — fast, but give headroom for a large scrub backlog.
+ */
+export const POOL_MAINTENANCE_RUN_OPTIONS = {
+  retryLimit: 0,
+  expireInMinutes: 10,
 } as const;
 
 // ============================================================================
