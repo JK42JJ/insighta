@@ -201,6 +201,18 @@ services:
       # Table: mandala_wizard_precompute (10min TTL, pg_cron sweep */5 min).
       # Revert: delete this line → feature no-ops.
       - WIZARD_PRECOMPUTE_ENABLED=true
+      # CP493 (2026-06-03) — merged structure+queries generation (canary). ONE
+      # Haiku call yields the mandala structure AND a searchable per-cell query
+      # in a single continuous context, replacing the two disconnected calls
+      # (structure-gen at creation + query-gen at fanout). The query inherits
+      # the goal-structure reasoning instead of re-interpreting a bare cell
+      # label → diverse, non-clustered queries (fixes the near-duplicate
+      # clustering noise — a cell filled with same-brand videos). Wizard path
+      # only; add-cards unaffected. 3-stage fallback: partial cell coverage →
+      # fanout query-gen; merged throw → legacy structure-gen; never dies.
+      # Revert: delete this line and redeploy → code default off restores the
+      # two-call path bit-identically (no code revert).
+      - WIZARD_MERGED_GEN=true
       # CP426 (2026-04-25) — Switch pipeline executor from v1 (3 recs/cell,
       # max 24 with channel diversity drop → ~5 actual) to v3 (12/cell target,
       # 96 max). v3 degrades gracefully to Tier 2 when video_pool is empty.
