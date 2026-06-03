@@ -105,15 +105,14 @@ services:
       # Measure: GCP search.list before/after delta + trace v5_pool_backfill.
       # Revert: delete this line + redeploy → code default false (full live).
       - V5_POOL_BACKFILL=true
-      # CP494 Fork-3 canary — expand pool source from v2_promoted (~1.1k ko,
-      # high quality) to ALL (+ batch_trend ~28k, cross-domain). P1 measured
-      # only 2/8 cells reached the floor on v2_promoted (25% quota saved on a
-      # 1-click add-cards: 6 live vs 8). The thicker batch_trend pool should
-      # raise pool_only_cells; noise safety net = the existing off-language /
-      # blocklist / shorts gates the pool candidates already pass.
-      # Measure: same 1-click add-cards → pool_only_cells 2/8 → ? + GCP delta.
-      # Revert: delete this line → code default 'v2_promoted'.
-      - V5_POOL_SOURCE=all
+      # CP494 Fork-3 REJECTED — V5_POOL_SOURCE=all measured WORSE than the
+      # v2_promoted default on a same-mandala A/B (poolOnlyCells 2→1, units
+      # 601→701). batch_trend (~28k) floods the ts_rank top-128 with generic
+      # centerGoal matches that skew to one cell + lack subgoal overlap, so they
+      # DISPLACE the well-distributed v2_promoted rows within LIMIT 128
+      # (hybrid-rerank.ts:224). Source left UNSET → code default 'v2_promoted'.
+      # Using the 28k pool needs a design change (per-cell tsquery / separate
+      # fetch+merge / batch_trend gold-only), NOT this flag — see P1.1.
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
