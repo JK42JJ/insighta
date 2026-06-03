@@ -9,7 +9,6 @@ import { cn } from '@/shared/lib/utils';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import { useAllVideoStates, youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
-import { queryKeys } from '@/shared/config/query-client';
 import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
 import { useAddCards, type AddCardCandidate } from '../model/useAddCards';
 import {
@@ -234,11 +233,6 @@ export function AddCardsPanel() {
             queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });
             queryClient.invalidateQueries({ queryKey: youtubeSyncKeys.allVideoStates });
             queryClient.invalidateQueries({ queryKey: ['mandala', 'recommendations', mandalaId] });
-            // CP492 #1 — the header count is mandalaMeta.cardCount (server-truth,
-            // staleTime 5min). Without this it stayed stale until reload while
-            // allVideoStates (the grid) slowly refetched. Invalidating the mandala
-            // detail re-runs the cheap server COUNT → header reflects +N immediately.
-            queryClient.invalidateQueries({ queryKey: queryKeys.mandala.detail(mandalaId) });
             // Card stays in the panel list — DO NOT strip from
             // localStorage. `pickedSet` (server picks ∪ local picks)
             // drives the disabled overlay so the user can see what was
