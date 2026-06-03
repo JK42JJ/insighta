@@ -9,6 +9,7 @@ import { cn } from '@/shared/lib/utils';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import { useAllVideoStates, youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
+import type { UserVideoStateWithVideo } from '@/entities/youtube/model/types';
 import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
 import { useAddCards, type AddCardCandidate } from '../model/useAddCards';
 import {
@@ -207,6 +208,54 @@ export function AddCardsPanel() {
         next.add(videoId);
         return next;
       });
+
+      // CP492 — optimistic grid insert. get-all-video-states is a ~5-7s global
+      // fetch; relying on invalidate→refetch left the picked card invisible
+      // until it landed (or a reload). Prepend a row matching exactly what the
+      // BE INSERTs (cards.ts:388 — level_id 'root', the sent cellIndex) so the
+      // orchestrator's mandalaVideoCards picks it up immediately. The slow
+      // refetch (onSuccess) then overwrites this with server truth.
+      const optimisticId = `optimistic-${videoId}`;
+      const nowIso = new Date().toISOString();
+      if (typeof cellIndex === 'number' && cellIndex >= 0) {
+        const optimisticRow: UserVideoStateWithVideo = {
+          id: optimisticId,
+          user_id: '',
+          video_id: optimisticId,
+          is_in_ideation: false,
+          user_note: null,
+          watch_position_seconds: 0,
+          is_watched: false,
+          cell_index: cellIndex,
+          level_id: 'root',
+          mandala_id: mandalaId,
+          sort_order: null,
+          added_to_ideation_at: nowIso,
+          created_at: nowIso,
+          updated_at: nowIso,
+          pinned_at: nowIso,
+          auto_added: false,
+          video: {
+            id: optimisticId,
+            youtube_video_id: videoId,
+            title: candidate?.title ?? title,
+            description: null,
+            thumbnail_url: candidate?.thumbnail ?? null,
+            channel_title: candidate?.channel ?? null,
+            duration_seconds: candidate?.durationSec ?? null,
+            published_at: candidate?.publishedAt ?? null,
+            view_count: candidate?.viewCount ?? null,
+            like_count: null,
+            created_at: nowIso,
+            updated_at: nowIso,
+          },
+        };
+        queryClient.setQueryData<UserVideoStateWithVideo[]>(
+          youtubeSyncKeys.allVideoStates,
+          (prev) => (prev ? [optimisticRow, ...prev] : prev)
+        );
+      }
+
       like.mutate(
         {
           videoId,
@@ -244,6 +293,11 @@ export function AddCardsPanel() {
               next.delete(videoId);
               return next;
             });
+            // Roll back the optimistic grid insert.
+            queryClient.setQueryData<UserVideoStateWithVideo[]>(
+              youtubeSyncKeys.allVideoStates,
+              (prev) => (prev ? prev.filter((r) => r.id !== optimisticId) : prev)
+            );
           },
         }
       );
