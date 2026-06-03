@@ -34,6 +34,7 @@ import { billingRoutes } from './routes/billing';
 import ogRoutes from './routes/og';
 import { internalBatchVideoCollectorRoutes } from './routes/internal/batch-video-collector';
 import { internalTrendCollectorRoutes } from './routes/internal/trend-collector';
+import { internalPoolMaintenanceRoutes } from './routes/internal/pool-maintenance';
 import { internalTranscriptRoutes } from './routes/internal/transcript';
 import { internalVideosBulkUpsertRoutes } from './routes/internal/videos-bulk-upsert';
 import { v2SummaryPartialPatchRoutes } from './routes/internal/v2-summary-partial-patch';
@@ -359,6 +360,10 @@ export async function buildServer() {
       });
       // CP437 — Mac Mini transcript pipeline (yt-dlp memory-only).
       await instance.register(internalTranscriptRoutes, {
+        prefix: '/internal',
+      });
+      // CP494 — video_pool ToS hygiene (soft-expire + scrub) via GHA cron.
+      await instance.register(internalPoolMaintenanceRoutes, {
         prefix: '/internal',
       });
       // CP438 — Mac Mini new-collector bulk video metadata upsert.

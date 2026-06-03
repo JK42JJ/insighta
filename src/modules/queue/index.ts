@@ -14,16 +14,19 @@ export type {
   BatchScanPayload,
   EnrichRichSummaryPayload,
   BatchVideoCollectorRunPayload,
+  PoolMaintenanceRunPayload,
 } from './types';
 export { enqueueEnrichVideo } from './handlers/enrich-video';
 export { enqueueEnrichRichSummary } from './handlers/enrich-rich-summary';
 export { enqueueBatchVideoCollectorRun } from './handlers/batch-video-collector';
+export { enqueuePoolMaintenanceRun } from './handlers/pool-maintenance';
 
 import { getJobQueue } from './manager';
 import { registerEnrichVideoWorker } from './handlers/enrich-video';
 import { registerBatchScanWorker } from './handlers/batch-scan';
 import { registerEnrichRichSummaryWorker } from './handlers/enrich-rich-summary';
 import { registerBatchVideoCollectorWorker } from './handlers/batch-video-collector';
+import { registerPoolMaintenanceWorker } from './handlers/pool-maintenance';
 import { logger } from '../../utils/logger';
 
 /**
@@ -42,6 +45,7 @@ export async function initJobQueue(): Promise<void> {
   await registerBatchScanWorker();
   await registerEnrichRichSummaryWorker();
   await registerBatchVideoCollectorWorker();
+  await registerPoolMaintenanceWorker();
 
-  logger.info('Job queue fully initialized (pg-boss + 4 workers)');
+  logger.info('Job queue fully initialized (pg-boss + 5 workers)');
 }

@@ -183,6 +183,13 @@ const envSchema = z.object({
   V3_TRACE_ENABLED: z
     .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
     .default(false),
+
+  // CP494 — video_pool ToS hygiene cron (soft-expire + scrub of stale metadata).
+  // Default true: this is a compliance job. Kill-switch only — set 'false' to
+  // pause the maintenance worker (the GHA cron will then no-op at the handler).
+  POOL_MAINTENANCE_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() !== 'false', z.boolean())
+    .default(true),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -325,6 +332,11 @@ export const config = {
   // Discover-pipeline tracing (CP457+).
   discoverTracing: {
     enabled: env.V3_TRACE_ENABLED,
+  },
+
+  // video_pool ToS hygiene cron (CP494).
+  poolMaintenance: {
+    enabled: env.POOL_MAINTENANCE_ENABLED,
   },
 
   // Gemini
