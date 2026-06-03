@@ -21,6 +21,7 @@ import {
   type FanoutCandidate,
   type FanoutPerQuery,
   type PrecomputedQuery,
+  type PoolBackfillMeta,
 } from './youtube-fanout';
 import type { QueryGenMeta } from './llm-query-gen';
 import { getV5Config } from './config';
@@ -111,6 +112,8 @@ export interface V5ExecuteResult {
     queryGen: QueryGenMeta;
     /** CP492 2차 gate — candidates dropped by the off-language script filter. */
     offLangDropped: number;
+    /** CP494 — pool-first backfill telemetry (quota delta + Fork-2 quality surface). */
+    poolBackfill: PoolBackfillMeta;
   };
 }
 
@@ -338,6 +341,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       perQuery: fanout.perQuery ?? [],
       queryGen: fanout.queryGen,
       offLangDropped: fanout.offLangDropped ?? 0,
+      poolBackfill: fanout.poolBackfill,
     },
   };
 }
@@ -351,6 +355,7 @@ function emptyResult(args: {
     perQuery?: FanoutPerQuery[];
     queryGen: QueryGenMeta;
     offLangDropped?: number;
+    poolBackfill: PoolBackfillMeta;
   };
   afterTitleFilter: number;
   afterExcludeFilter: number;
@@ -381,6 +386,7 @@ function emptyResult(args: {
       perQuery: args.fanout.perQuery ?? [],
       queryGen: args.fanout.queryGen,
       offLangDropped: args.fanout.offLangDropped ?? 0,
+      poolBackfill: args.fanout.poolBackfill,
     },
   };
 }

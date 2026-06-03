@@ -25,6 +25,7 @@ import { buildRuleBasedQueriesSync, type SearchQuery } from '../v2/keyword-build
 import { buildLLMQueriesPerCell, type QueryGenMeta } from './llm-query-gen';
 import { getV5Config } from './config';
 import { MERGED_GEN_MODEL } from '@/prompts/mandala-with-queries-generator';
+import { tsvectorKeywordCandidates, type KeywordCandidate } from '../v3/hybrid-rerank';
 
 const log = logger.child({ module: 'video-discover/v5/youtube-fanout' });
 
@@ -89,6 +90,76 @@ export interface FanoutResult {
   queryGen: QueryGenMeta;
   /** CP492 2차 gate — candidates dropped by the off-language script filter. */
   offLangDropped: number;
+  /** CP494 — pool-first backfill telemetry (quota delta + Fork-2 quality tradeoff). */
+  poolBackfill: PoolBackfillMeta;
+}
+
+/**
+ * CP494 — pool-first gate observability. `poolOnlyCells` = cells that went 100%
+ * lexical (live query dropped) → the Fork-2(A) quality tradeoff surface.
+ * `liveCells` × 100 ≈ quota spent; (totalCells − liveCells) × 100 ≈ quota saved.
+ */
+export interface PoolBackfillMeta {
+  /** flag on (V5_POOL_BACKFILL). */
+  enabled: boolean;
+  /** pool query timed out or threw → fell back to full live fanout (hot-path safety). */
+  fellBackToLive: boolean;
+  /** pool tsvector query wall-time (ms). */
+  poolQueryMs: number;
+  /** pool candidates kept after the same blocklist/shorts/off-language gates as live. */
+  poolCandidates: number;
+  /** cells the pool satisfied (≥ poolMinPerCell) → live query dropped (100% lexical). */
+  poolOnlyCells: number;
+  /** cells whose live search.list query still ran. */
+  liveCells: number;
+  /** resolved pool source label (v2_promoted | all). */
+  source: string;
+}
+
+/** CP494 — no-op meta for the flag-off / pre-gate paths. */
+const POOL_BACKFILL_OFF = (liveCells: number): PoolBackfillMeta => ({
+  enabled: false,
+  fellBackToLive: false,
+  poolQueryMs: 0,
+  poolCandidates: 0,
+  poolOnlyCells: 0,
+  liveCells,
+  source: 'off',
+});
+
+/**
+ * CP494 — reject after `ms` so a slow pool query never blocks the discover
+ * hot path. The underlying Postgres query is not cancelled (it completes and is
+ * discarded), but the caller falls through to full live fanout.
+ */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`pool query timeout after ${ms}ms`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
+}
+
+/** CP494 — map a video_pool KeywordCandidate to the fanout candidate contract. */
+function keywordCandidateToFanoutCandidate(kc: KeywordCandidate): FanoutCandidate {
+  return {
+    videoId: kc.videoId,
+    title: kc.title,
+    description: kc.description ?? '',
+    channelTitle: kc.channelName ?? '',
+    channelId: kc.channelId ?? '',
+    publishedAt: kc.publishedAt ? kc.publishedAt.toISOString() : '',
+    thumbnailUrl: kc.thumbnail ?? '',
+    cellIndex: kc.cellIndex,
+  };
 }
 
 /** CP492 Track-1 — meta for the rule branch (LLM never attempted). */
@@ -184,6 +255,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       queryGenMs: 0,
       queryGen: RULE_QUERY_GEN_META(0),
       offLangDropped: 0,
+      poolBackfill: POOL_BACKFILL_OFF(0),
     };
   }
 
@@ -244,11 +316,79 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       queryGenMs,
       queryGen,
       offLangDropped: 0,
+      poolBackfill: POOL_BACKFILL_OFF(0),
     };
   }
 
+  // CP494 — pool-first gate. Fill cells from the quota-FREE + embedding-FREE
+  // video_pool tsvector match BEFORE live search; cells the pool satisfies
+  // (≥ poolMinPerCell) drop their live query → quota saved. Hot-path safety
+  // (non-negotiable): timeout + try/catch → ANY failure falls back to full live
+  // fanout. Pool candidates pass the SAME blocklist/shorts/off-language gates as
+  // live below (lexical match = supplier; existing gates = quality judge).
+  let liveQueries: SearchQuery[] = queries;
+  const poolSeed: FanoutCandidate[] = [];
+  let poolMeta: PoolBackfillMeta = POOL_BACKFILL_OFF(queries.length);
+  if (cfg.poolBackfill) {
+    const tPool0 = Date.now();
+    try {
+      const poolLimit = totalCells * (cfg.poolMinPerCell + 5);
+      const pool = await withTimeout(
+        // exclude=[] — the executor applies excludeVideoIds AFTER fanout, so
+        // already-owned cards are dropped downstream (minor pool waste, no bug).
+        tsvectorKeywordCandidates(input.centerGoal, input.subGoals, [], poolLimit, cfg.poolSources),
+        cfg.poolTimeoutMs
+      );
+      const byCell = new Map<number, FanoutCandidate[]>();
+      for (const kc of pool) {
+        const cand = keywordCandidateToFanoutCandidate(kc);
+        // Fork-1 caveat: pool candidates run the SAME gates as live items.
+        if (titleHitsBlocklist(cand.title) || titleIndicatesShorts(cand.title)) continue;
+        if (isOffLanguageTitle(cand.title, input.language)) continue;
+        const ci = cand.cellIndex ?? -1;
+        if (ci < 0) continue;
+        const bucket = byCell.get(ci);
+        if (bucket) bucket.push(cand);
+        else byCell.set(ci, [cand]);
+      }
+      const satisfied = new Set<number>();
+      for (const [ci, cands] of byCell) {
+        // ALL pool candidates feed supply (deficit cells get pool + live);
+        // only cells at/above the floor drop their live query.
+        poolSeed.push(...cands);
+        if (cands.length >= cfg.poolMinPerCell) satisfied.add(ci);
+      }
+      liveQueries = queries.filter((q) => !(q.cellIndex != null && satisfied.has(q.cellIndex)));
+      poolMeta = {
+        enabled: true,
+        fellBackToLive: false,
+        poolQueryMs: Date.now() - tPool0,
+        poolCandidates: poolSeed.length,
+        poolOnlyCells: satisfied.size,
+        liveCells: liveQueries.length,
+        source: cfg.poolSourceLabel,
+      };
+    } catch (err) {
+      // Hot-path safety: any pool failure → full live fanout (current behavior).
+      liveQueries = queries;
+      poolSeed.length = 0;
+      poolMeta = {
+        enabled: true,
+        fellBackToLive: true,
+        poolQueryMs: Date.now() - tPool0,
+        poolCandidates: 0,
+        poolOnlyCells: 0,
+        liveCells: queries.length,
+        source: cfg.poolSourceLabel,
+      };
+      log.warn(
+        `v5 fanout: pool backfill failed → full live fallback: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
   const results = await Promise.allSettled(
-    queries.map((q, i) =>
+    liveQueries.map((q, i) =>
       searchVideos({
         query: q.query,
         // CP492 — distribute the primary key per query. searchVideos tries keys
@@ -277,6 +417,13 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
   let queriesSucceeded = 0;
   let offLangDropped = 0;
   const seen = new Map<string, FanoutCandidate>();
+
+  // CP494 — seed pool candidates first (already gate-filtered above) so they get
+  // priority position in the dedup map; live results merge in after.
+  for (const cand of poolSeed) {
+    if (seen.size >= cfg.dedupHardCap) break;
+    if (!seen.has(cand.videoId)) seen.set(cand.videoId, cand);
+  }
 
   for (const r of results) {
     if (r.status !== 'fulfilled') {
@@ -310,7 +457,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
   // the cohort hits dedupHardCap early. `results` order == `queries` order
   // (Promise.allSettled preserves it).
   const perQuery: FanoutPerQuery[] = results.map((r, i) => {
-    const qm = queries[i]!;
+    const qm = liveQueries[i]!;
     return {
       query: qm.query,
       source: qm.source,
@@ -322,14 +469,17 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
 
   return {
     candidates: Array.from(seen.values()),
-    queriesAttempted: queries.length,
+    // CP494 — attempted/quota now reflect ONLY the live queries actually fired
+    // (pool-satisfied cells dropped theirs). poolBackfill carries the delta.
+    queriesAttempted: liveQueries.length,
     queriesSucceeded,
     rawItemCount,
-    quotaUnitsApprox: queries.length * 100,
+    quotaUnitsApprox: liveQueries.length * 100,
     perQuery,
     queryGenMs,
     queryGen,
     offLangDropped,
+    poolBackfill: poolMeta,
   };
 }
 

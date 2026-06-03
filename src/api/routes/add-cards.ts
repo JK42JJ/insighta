@@ -397,6 +397,10 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               // CP492 2차 gate — off-language candidates dropped (Arabic/Thai/Cyrillic/
               // CJK/Turkish). English is intentionally NOT dropped (Track 3 topic fit).
               v5_off_lang_dropped: v5Result.diagnostics.offLangDropped,
+              // CP494 — pool-first backfill telemetry: quota delta (liveCells ×
+              // 100 spent vs poolOnlyCells × 100 saved), poolQueryMs latency, and
+              // poolOnlyCells (Fork-2(A) 100%-lexical quality tradeoff surface).
+              v5_pool_backfill: v5Result.diagnostics.poolBackfill,
               // CP491 F5c — per-query raw count + q_ok (parity with wizard.discover.end).
               v5_per_query: v5Result.diagnostics.perQuery,
               // CP491 — Shorts dropped by the post-pick short gate (before→after observability).

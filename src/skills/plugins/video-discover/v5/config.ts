@@ -11,6 +11,14 @@
 
 import { z } from 'zod';
 
+// Env boolean: "true" (case-insensitive) → true, anything else → false.
+// Mirrors the v3/config.ts booleanFlag pattern (no z.coerce.boolean, which
+// treats the string "false" as true).
+const booleanFlag = z.preprocess(
+  (v) => (typeof v === 'string' ? v.trim().toLowerCase() === 'true' : Boolean(v)),
+  z.boolean()
+);
+
 const v5EnvSchema = z.object({
   V5_MAX_QUERIES: z.coerce.number().int().min(1).max(20).default(8),
   V5_SEARCH_TIMEOUT_MS: z.coerce.number().int().min(500).max(8000).default(2000),
@@ -36,6 +44,22 @@ const v5EnvSchema = z.object({
   // self-help / EN-AR leak). LLM translates each cell label into a focused
   // searchable query. unset = 'rule' = no-op (flag-off rollback).
   V5_QUERY_GEN: z.enum(['rule', 'llm']).default('rule'),
+  // CP494 — pool-first backfill gate. When on, fill cells from the quota-FREE +
+  // embedding-FREE video_pool tsvector match BEFORE live search; a cell the pool
+  // satisfies (≥ V5_POOL_MIN_PER_CELL gold/silver candidates) drops its live
+  // search.list query → quota saved. Covers wizard + add-cards (shared executor).
+  // unset = false = no-op (full live fanout, flag-off rollback).
+  V5_POOL_BACKFILL: booleanFlag.optional().default(false as unknown as string),
+  // CP494 — pool source range (Fork 3). 'v2_promoted' = ~1.1k high-quality ko
+  // only; 'all' = + batch_trend (~28k, cross-domain; downstream gates are the
+  // noise safety net). Canary starts at v2_promoted, expand after measuring.
+  V5_POOL_SOURCE: z.enum(['v2_promoted', 'all']).default('v2_promoted'),
+  // CP494 — quality floor N. A cell needs ≥ this many pool candidates to skip
+  // live search. Do NOT raise on speculation (measure pool_only_cells first).
+  V5_POOL_MIN_PER_CELL: z.coerce.number().int().min(1).max(20).default(3),
+  // CP494 — hot-path safety: pool query timeout (ms). On timeout/throw → full
+  // live fanout fallback. tsvector on ~1.1k rows is sub-100ms; cap conservatively.
+  V5_POOL_TIMEOUT_MS: z.coerce.number().int().min(200).max(5000).default(1500),
 });
 
 export interface V5Config {
@@ -48,6 +72,16 @@ export interface V5Config {
   shortProbeDeadlineMs: number;
   pickerMode: 'llm' | 'cell_binning';
   queryGen: 'rule' | 'llm';
+  /** CP494 — pool-first backfill gate enabled. */
+  poolBackfill: boolean;
+  /** CP494 — resolved video_pool source filter (tsvector match). */
+  poolSources: string[];
+  /** CP494 — raw V5_POOL_SOURCE value, for trace observability. */
+  poolSourceLabel: string;
+  /** CP494 — quality floor: pool candidates per cell to skip live search. */
+  poolMinPerCell: number;
+  /** CP494 — pool query timeout (ms) before full-live fallback. */
+  poolTimeoutMs: number;
 }
 
 let cached: V5Config | null = null;
@@ -65,6 +99,11 @@ export function getV5Config(env: NodeJS.ProcessEnv = process.env): V5Config {
     shortProbeDeadlineMs: p.V5_SHORT_PROBE_DEADLINE_MS,
     pickerMode: p.V5_PICKER_MODE,
     queryGen: p.V5_QUERY_GEN,
+    poolBackfill: p.V5_POOL_BACKFILL,
+    poolSources: p.V5_POOL_SOURCE === 'all' ? ['v2_promoted', 'batch_trend'] : ['v2_promoted'],
+    poolSourceLabel: p.V5_POOL_SOURCE,
+    poolMinPerCell: p.V5_POOL_MIN_PER_CELL,
+    poolTimeoutMs: p.V5_POOL_TIMEOUT_MS,
   };
   return cached;
 }
