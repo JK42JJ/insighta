@@ -52,7 +52,7 @@ export interface LLMQueryGenOpts {
  * function is never called.
  */
 export interface QueryGenMeta {
-  mode: 'rule' | 'llm';
+  mode: 'rule' | 'llm' | 'merged';
   /** SEARCH_QUERY_MODEL when the LLM was attempted; undefined otherwise. */
   model?: string;
   /** LLM call wall-time (ms). 0 when no LLM call was made (no-key / rule). */

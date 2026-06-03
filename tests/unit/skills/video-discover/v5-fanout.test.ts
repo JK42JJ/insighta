@@ -126,6 +126,64 @@ describe('runYouTubeFanout — F5c perQuery', () => {
 });
 
 /**
+ * CP493 — merged-gen precomputedQueries. When the wizard's merged structure+
+ * queries call produced full per-cell coverage, fanout must use those queries
+ * verbatim and SKIP its own query-gen (preserving goal-context continuity).
+ */
+describe('runYouTubeFanout — CP493 precomputedQueries (merged-gen)', () => {
+  beforeEach(() => {
+    resetV5ConfigForTest();
+    searchVideos.mockReset();
+    buildRuleBasedQueriesSync.mockReset();
+  });
+
+  test('uses precomputedQueries verbatim, skips query-gen, mode=merged', async () => {
+    searchVideos.mockImplementation(({ query }: { query: string }) =>
+      Promise.resolve(items(3, query))
+    );
+    const res = await runYouTubeFanout({
+      centerGoal: 'goal',
+      subGoals: ['a', 'b'],
+      focusTags: [],
+      targetLevel: 'standard',
+      language: 'en',
+      env: {} as NodeJS.ProcessEnv,
+      precomputedQueries: [
+        { cellIndex: 0, query: 'merged q0' },
+        { cellIndex: 1, query: 'merged q1' },
+      ],
+    });
+    // query-gen must NOT be invoked when precomputed queries are supplied.
+    expect(buildRuleBasedQueriesSync).not.toHaveBeenCalled();
+    const searched = searchVideos.mock.calls.map(
+      (c: unknown[]) => (c[0] as { query: string }).query
+    );
+    expect(searched.sort()).toEqual(['merged q0', 'merged q1']);
+    expect(res.queryGen.mode).toBe('merged');
+    expect(res.queryGen.llmCells).toBe(2);
+    expect(res.queryGen.fellBack).toBe(false);
+    expect(res.perQuery.map((p) => p.source)).toEqual(['merged', 'merged']);
+    expect(res.perQuery.map((p) => p.cellIndex)).toEqual([0, 1]);
+  });
+
+  test('empty precomputedQueries → falls through to rule query-gen (unchanged)', async () => {
+    buildRuleBasedQueriesSync.mockReturnValue([{ query: 'rq', source: 'core', cellIndex: null }]);
+    searchVideos.mockResolvedValue(items(2, 'rq'));
+    const res = await runYouTubeFanout({
+      centerGoal: 'goal',
+      subGoals: ['a'],
+      focusTags: [],
+      targetLevel: 'standard',
+      language: 'en',
+      env: {} as NodeJS.ProcessEnv,
+      precomputedQueries: [],
+    });
+    expect(buildRuleBasedQueriesSync).toHaveBeenCalled();
+    expect(res.queryGen.mode).toBe('rule');
+  });
+});
+
+/**
  * CP492 — per-query key rotation. All N parallel queries previously shared the
  * same key array → every query hit keys[0] first → YouTube 429 rateLimitExceeded
  * cascade (0 results under burst, ~50% supply loss normally). rotateKeys spreads

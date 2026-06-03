@@ -71,7 +71,7 @@ export interface KeywordBuilderOpts {
   maxQueries?: number;
 }
 
-export type QuerySource = 'core' | 'llm' | 'focus' | 'level' | 'subgoal';
+export type QuerySource = 'core' | 'llm' | 'focus' | 'level' | 'subgoal' | 'merged';
 
 export interface SearchQuery {
   query: string;
