@@ -6,11 +6,13 @@ import { getPrismaClient } from '../../modules/database/client';
 import {
   generateMandalaRace,
   generateMandalaStructure,
+  generateMandalaWithQueries,
   generateLabels,
   getCachedMandala,
   setCachedMandala,
   MandalaGenError,
 } from '../../modules/mandala/generator';
+import { loadWizardMergedGenConfig } from '../../config/wizard-merged-gen';
 import { searchMandalasByGoal, MandalaSearchError } from '../../modules/mandala/search';
 import {
   EXPLORE_SOURCES,
@@ -860,13 +862,42 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           return [];
         });
 
-      const structurePromise = generateMandalaStructure({
-        goal: trimmedGoal,
-        language: lang,
-        focusTags,
-        targetLevel,
-      })
-        .then((structure) => {
+      // CP493 — structure source. WIZARD_MERGED_GEN on → ONE Haiku call yields
+      // structure + per-cell queries (goal-context continuous, anti-clustering);
+      // the queries flow to precompute so fanout skips its own query-gen. On
+      // merged failure, fall back to the legacy structure-only call (fanout then
+      // runs query-gen) so the wizard never dies. Off → legacy path unchanged.
+      const resolveStructure = async (): Promise<{
+        structure: Awaited<ReturnType<typeof generateMandalaStructure>>;
+        cellQueries?: { cellIndex: number; query: string }[];
+      }> => {
+        if (loadWizardMergedGenConfig().enabled) {
+          try {
+            const merged = await generateMandalaWithQueries({
+              goal: trimmedGoal,
+              language: lang,
+              focusTags,
+              targetLevel,
+            });
+            return { structure: merged.structure, cellQueries: merged.cellQueries };
+          } catch (err) {
+            request.log.warn(
+              { err },
+              'wizard merged-gen failed — falling back to structure-gen + fanout query-gen'
+            );
+          }
+        }
+        const structure = await generateMandalaStructure({
+          goal: trimmedGoal,
+          language: lang,
+          focusTags,
+          targetLevel,
+        });
+        return { structure };
+      };
+
+      const structurePromise = resolveStructure()
+        .then(({ structure, cellQueries }) => {
           write('structure_ready', {
             structure,
             duration_ms: Date.now() - t0,
@@ -875,7 +906,8 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           // resolves so we have real sub_goals. No await: the wizard SSE stream
           // is not blocked by discover latency (Tier 2 YouTube search ~5-15s).
           // Feature-flag + session_id gated inside startPrecompute; callers pass
-          // unconditionally.
+          // unconditionally. CP493 — cellQueries forwarded when merged-gen
+          // produced full coverage (undefined → fanout query-gen).
           if (sessionId && Array.isArray(structure.sub_goals) && structure.sub_goals.length === 8) {
             setImmediate(() => {
               // eslint-disable-next-line @typescript-eslint/no-floating-promises
@@ -888,6 +920,7 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
                   focusTags: focusTags ?? [],
                   targetLevel,
                   subGoals: structure.sub_goals,
+                  cellQueries,
                 }).catch((err) => {
                   request.log.warn(
                     { err, sessionId, userId },

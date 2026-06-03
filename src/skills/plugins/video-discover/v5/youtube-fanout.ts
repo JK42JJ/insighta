@@ -24,8 +24,19 @@ import {
 import { buildRuleBasedQueriesSync, type SearchQuery } from '../v2/keyword-builder';
 import { buildLLMQueriesPerCell, type QueryGenMeta } from './llm-query-gen';
 import { getV5Config } from './config';
+import { MERGED_GEN_MODEL } from '@/prompts/mandala-with-queries-generator';
 
 const log = logger.child({ module: 'video-discover/v5/youtube-fanout' });
+
+/**
+ * CP493 — a per-cell query produced upstream by the merged structure+queries
+ * generation (generateMandalaWithQueries). Structurally identical to the
+ * generator's CellQuery; kept local so the v5 layer owns its own input type.
+ */
+export interface PrecomputedQuery {
+  cellIndex: number;
+  query: string;
+}
 
 export interface FanoutInput {
   centerGoal: string;
@@ -36,6 +47,12 @@ export interface FanoutInput {
   env: NodeJS.ProcessEnv;
   /** CP491 ROI1 — forwarded to search.list publishedAfter (ISO date). */
   publishedAfter?: string;
+  /**
+   * CP493 — merged-gen queries (one per cell, full coverage). When present,
+   * fanout uses these verbatim and SKIPS query-gen (the disconnected Haiku #2
+   * call), preserving the goal-structure context. Absent = legacy query-gen.
+   */
+  precomputedQueries?: PrecomputedQuery[];
 }
 
 export interface FanoutCandidate {
@@ -185,7 +202,25 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
   const tQueryGen0 = Date.now();
   let queries: SearchQuery[];
   let queryGen: QueryGenMeta;
-  if (cfg.queryGen === 'llm') {
+  const precomputed = input.precomputedQueries;
+  if (precomputed && precomputed.length > 0) {
+    // CP493 — merged-gen path: queries were generated upstream in the SAME
+    // Haiku call as the structure (goal-context continuous). Use verbatim, skip
+    // the disconnected query-gen call. latencyMs=0 here (cost was at gen time).
+    queries = precomputed.map((p) => ({
+      query: p.query,
+      source: 'merged' as const,
+      cellIndex: p.cellIndex,
+    }));
+    queryGen = {
+      mode: 'merged',
+      model: MERGED_GEN_MODEL,
+      latencyMs: 0,
+      llmCells: precomputed.length,
+      totalCells,
+      fellBack: false,
+    };
+  } else if (cfg.queryGen === 'llm') {
     const r = await buildLLMQueriesPerCell(queryInput, {
       openRouterApiKey: input.env['OPENROUTER_API_KEY'],
       maxQueries: cfg.maxQueries,

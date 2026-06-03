@@ -21,6 +21,12 @@ import {
   STRUCTURE_MAX_TOKENS as PROMPT_STRUCTURE_MAX_TOKENS,
 } from '@/prompts/structure-generator';
 import {
+  buildMandalaWithQueriesPrompt,
+  MERGED_GEN_MODEL,
+  MERGED_GEN_TEMPERATURE,
+  MERGED_GEN_MAX_TOKENS,
+} from '@/prompts/mandala-with-queries-generator';
+import {
   buildActionsPrompt,
   ACTIONS_MODEL,
   ACTIONS_TEMPERATURE,
@@ -640,6 +646,183 @@ export async function generateMandalaStructure(
   );
 
   return parsed;
+}
+
+// ─── Merged structure + per-cell queries (CP493, WIZARD_MERGED_GEN) ───
+
+/** A query longer than this is sentence-like → reject (same guard as v5 query-gen). */
+const MAX_MERGED_QUERY_CHARS = 60;
+
+/** Plain per-cell query shape — kept skills-type-free so generator has no v5 dep. */
+export interface CellQuery {
+  cellIndex: number;
+  query: string;
+}
+
+export interface MandalaWithQueriesResult {
+  structure: GeneratedMandala;
+  /**
+   * Per-cell search queries, one per sub_goal, ONLY when the LLM covered ALL
+   * cells. Undefined (degraded) when queries were missing/invalid/partial — the
+   * caller then leaves fanout to run its own query-gen (no sparse-cell risk).
+   */
+  cellQueries?: CellQuery[];
+  meta: {
+    latencyMs: number;
+    totalCells: number;
+    cellQueryCount: number;
+    /** True when structure parsed but full-coverage queries did not → fanout query-gen. */
+    degraded: boolean;
+  };
+}
+
+/**
+ * Parse the merged JSON. `extractJsonRobust` JSON.parses the whole object, so
+ * the extra `cell_queries` key survives on the (cast) result — we read it back
+ * untyped and validate. Returns null only when the STRUCTURE itself fails to
+ * parse (caller falls back to legacy generateMandalaStructure).
+ *
+ * Exported for unit testing the parse/validate/degrade logic without a network
+ * call (mirrors parsePerCellResponse in llm-query-gen.ts).
+ */
+export function parseMergedResponse(
+  raw: string,
+  cellCount = 8
+): { structure: GeneratedMandala; cellQueries: Map<number, string> | null } | null {
+  const structure = extractJsonRobust(raw);
+  if (!structure) return null;
+  const rawCq = (structure as unknown as Record<string, unknown>)['cell_queries'];
+  const cellQueries = parseCellQueriesMap(rawCq, cellCount);
+  return { structure, cellQueries };
+}
+
+function parseCellQueriesMap(rawCq: unknown, cellCount: number): Map<number, string> | null {
+  if (!rawCq || typeof rawCq !== 'object' || Array.isArray(rawCq)) return null;
+  const out = new Map<number, string>();
+  for (const [k, v] of Object.entries(rawCq as Record<string, unknown>)) {
+    if (typeof v !== 'string') continue;
+    const idx = Number(k);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= cellCount) continue;
+    const q = v.trim();
+    if (q.length === 0 || q.length > MAX_MERGED_QUERY_CHARS) continue;
+    out.set(idx, q);
+  }
+  return out.size > 0 ? out : null;
+}
+
+export interface GenerateMergedOpts {
+  /** Test injection — bypasses OpenRouter so unit tests never hit the network. */
+  generateImpl?: (
+    prompt: string,
+    options?: { temperature?: number; maxTokens?: number; format?: 'json' }
+  ) => Promise<string>;
+}
+
+/**
+ * CP493 — ONE Haiku call producing the mandala structure AND a searchable
+ * YouTube query per cell in a single continuous context. Replaces the two
+ * disconnected calls (structure-gen here + query-gen at fanout) for the wizard
+ * path, so each query inherits the goal-structure reasoning instead of
+ * re-interpreting a bare label (the split that produced clustering noise).
+ *
+ * Structure validation matches generateMandalaStructure (same HARD RULE:
+ * center_goal := user goal). On structure parse/validation failure this THROWS
+ * — the route catches and falls back to generateMandalaStructure. Query
+ * coverage is best-effort: full coverage → cellQueries returned; otherwise
+ * degraded (undefined) so fanout runs its own query-gen (no sparse cells).
+ *
+ * Gated by WIZARD_MERGED_GEN at the call site (src/config/wizard-merged-gen.ts).
+ */
+export async function generateMandalaWithQueries(
+  input: MandalaGenerateInput,
+  opts: GenerateMergedOpts = {}
+): Promise<MandalaWithQueriesResult> {
+  const t0 = Date.now();
+  logger.info(`Mandala merged structure+queries generation started: goal="${input.goal}"`);
+
+  const similar = await searchMandalasByGoal(input.goal, {
+    limit: 1,
+    threshold: 0.4,
+    language: input.language,
+  });
+
+  const lang = input.language ?? 'ko';
+  const domain = input.domain ?? 'general';
+  const ref = similar[0];
+  const reference = ref
+    ? `Reference:\n{"center_goal":"${ref.center_goal}","center_label":"${ref.center_label ?? ''}","sub_goals":${JSON.stringify((ref.sub_goals ?? []).slice(0, 4))},"sub_labels":${JSON.stringify((ref.sub_labels ?? []).slice(0, 4))}}`
+    : undefined;
+
+  const prompt = buildMandalaWithQueriesPrompt({
+    goal: input.goal,
+    domain,
+    language: lang,
+    reference,
+    focusTags: input.focusTags,
+    targetLevel: input.targetLevel,
+  });
+
+  const generate =
+    opts.generateImpl ??
+    ((p: string, o?: { temperature?: number; maxTokens?: number; format?: 'json' }) =>
+      new OpenRouterGenerationProvider(MERGED_GEN_MODEL).generate(p, o));
+
+  const raw = await generate(prompt, {
+    temperature: MERGED_GEN_TEMPERATURE,
+    maxTokens: MERGED_GEN_MAX_TOKENS,
+    format: 'json',
+  });
+  const latencyMs = Date.now() - t0;
+
+  const merged = parseMergedResponse(raw);
+  if (!merged) {
+    throw new MandalaGenError('Merged generation: failed to parse JSON', 'PARSE_FAILED');
+  }
+  const parsed = merged.structure;
+
+  if (!parsed.center_goal || !Array.isArray(parsed.sub_goals) || parsed.sub_goals.length !== 8) {
+    throw new MandalaGenError(
+      `Merged generation: invalid structure — sub_goals=${parsed.sub_goals?.length ?? 0}`,
+      'VALIDATION_FAILED'
+    );
+  }
+
+  // HARD RULE (same as generateMandalaStructure): center_goal := user goal.
+  parsed.center_goal = input.goal;
+  if (!parsed.actions) parsed.actions = {};
+  if (!parsed.language) parsed.language = lang;
+  if (!parsed.domain) parsed.domain = domain;
+  // Strip the merged-only key so the persisted structure shape is unchanged.
+  delete (parsed as unknown as Record<string, unknown>)['cell_queries'];
+
+  normalizeStructureLabels(parsed, lang);
+
+  const totalCells = parsed.sub_goals.length;
+  const cqMap = merged.cellQueries;
+  const cellQueryCount = cqMap?.size ?? 0;
+  // Use merged queries ONLY at full coverage — a partial set would starve the
+  // uncovered cells (fewer search.list calls → sparse backfill). Partial =
+  // degrade to fanout query-gen, which always emits one query per cell.
+  let cellQueries: CellQuery[] | undefined;
+  if (cqMap && cellQueryCount === totalCells) {
+    cellQueries = [];
+    for (let i = 0; i < totalCells; i++) {
+      const q = cqMap.get(i);
+      if (q) cellQueries.push({ cellIndex: i, query: q });
+    }
+  }
+  const degraded = !cellQueries;
+
+  logger.info(
+    `[TIMING] merged-gen: ${latencyMs}ms | cellQueries=${cellQueryCount}/${totalCells} ` +
+      `degraded=${degraded}`
+  );
+
+  return {
+    structure: parsed,
+    cellQueries,
+    meta: { latencyMs, totalCells, cellQueryCount, degraded },
+  };
 }
 
 /**

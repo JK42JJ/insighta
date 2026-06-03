@@ -16,7 +16,12 @@
 import { logger } from '@/utils/logger';
 import { videosBatchFullMetadata, resolveVideosApiKeys } from '../v2/youtube-client';
 import type { YouTubeVideoFullMetadata } from '../v2/youtube-client';
-import { runYouTubeFanout, type FanoutCandidate, type FanoutPerQuery } from './youtube-fanout';
+import {
+  runYouTubeFanout,
+  type FanoutCandidate,
+  type FanoutPerQuery,
+  type PrecomputedQuery,
+} from './youtube-fanout';
 import type { QueryGenMeta } from './llm-query-gen';
 import { getV5Config } from './config';
 import { getVideoPicker } from '@/modules/llm-picker/registry';
@@ -40,6 +45,11 @@ export interface V5ExecuteInput {
    * discarded post-pick. Undefined = no date filter (unchanged behavior).
    */
   publishedAfter?: string;
+  /**
+   * CP493 — merged-gen per-cell queries (full coverage). When present, fanout
+   * uses them verbatim and skips its own query-gen. Undefined = legacy.
+   */
+  precomputedQueries?: PrecomputedQuery[];
 }
 
 export interface V5Card {
@@ -132,6 +142,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
     language: input.language,
     env: input.env,
     publishedAfter: input.publishedAfter,
+    precomputedQueries: input.precomputedQueries,
   });
   // CP492 Track-1 — split query-gen out of fanout. fanoutMs is now search-only.
   // `?? 0` guards older/mocked FanoutResults that predate the queryGenMs field.

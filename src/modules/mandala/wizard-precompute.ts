@@ -51,6 +51,13 @@ export interface StartPrecomputeInput {
   focusTags: string[];
   targetLevel?: string;
   subGoals: string[]; // length 8 — from Haiku structure response
+  /**
+   * CP493 — merged-gen per-cell queries (one per cell, full coverage) produced
+   * in the SAME Haiku call as the structure. When present, forwarded to fanout
+   * as precomputedQueries → fanout skips its own query-gen. Undefined = legacy
+   * (fanout runs V5_QUERY_GEN).
+   */
+  cellQueries?: { cellIndex: number; query: string }[];
 }
 
 /**
@@ -120,6 +127,8 @@ export async function startPrecompute(input: StartPrecomputeInput): Promise<void
       focusTags: input.focusTags,
       targetLevel: input.targetLevel ?? 'standard',
       env: process.env,
+      // CP493 — when WIZARD_MERGED_GEN produced full per-cell coverage.
+      precomputedQueries: input.cellQueries,
     });
 
     await db.mandala_wizard_precompute.update({

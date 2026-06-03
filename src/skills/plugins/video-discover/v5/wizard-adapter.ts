@@ -42,6 +42,8 @@ export async function runV5ForWizard(input: V5WizardInput): Promise<EphemeralDis
     language: input.language,
     excludeVideoIds: input.excludeVideoIds ?? new Set<string>(),
     env: input.env,
+    // CP493 — merged-gen queries (when WIZARD_MERGED_GEN produced full coverage).
+    precomputedQueries: input.precomputedQueries,
   });
 
   // CP491 F5 — surface the per-stage breakdown for the wizard path too
