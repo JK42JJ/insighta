@@ -97,6 +97,14 @@ services:
       # Revert: delete both lines → code defaults 30 / 120.
       - V5_TARGET_PICKS=60
       - V5_DEDUP_HARDCAP=180
+      # CP494 canary — pool-first backfill gate. Fill cells from the quota-FREE +
+      # embedding-FREE video_pool (tsvector, v2_promoted ~1.1k) BEFORE live search;
+      # a cell with ≥3 pool candidates drops its live search.list query → quota
+      # saved. Covers wizard + add-cards (shared v5 executor). Hot-path safe
+      # (timeout + try/catch → full live fallback). Source default v2_promoted.
+      # Measure: GCP search.list before/after delta + trace v5_pool_backfill.
+      # Revert: delete this line + redeploy → code default false (full live).
+      - V5_POOL_BACKFILL=true
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
