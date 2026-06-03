@@ -105,6 +105,15 @@ services:
       # Measure: GCP search.list before/after delta + trace v5_pool_backfill.
       # Revert: delete this line + redeploy → code default false (full live).
       - V5_POOL_BACKFILL=true
+      # CP494 Fork-3 canary — expand pool source from v2_promoted (~1.1k ko,
+      # high quality) to ALL (+ batch_trend ~28k, cross-domain). P1 measured
+      # only 2/8 cells reached the floor on v2_promoted (25% quota saved on a
+      # 1-click add-cards: 6 live vs 8). The thicker batch_trend pool should
+      # raise pool_only_cells; noise safety net = the existing off-language /
+      # blocklist / shorts gates the pool candidates already pass.
+      # Measure: same 1-click add-cards → pool_only_cells 2/8 → ? + GCP delta.
+      # Revert: delete this line → code default 'v2_promoted'.
+      - V5_POOL_SOURCE=all
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
