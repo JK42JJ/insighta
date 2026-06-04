@@ -25,13 +25,14 @@ import { Prisma } from '@prisma/client';
 import { classifyQuality } from '@/skills/plugins/batch-video-collector/quality';
 import { shortGateFields } from '@/modules/video-pool/is-short';
 import { getPrismaClient } from '@/modules/database/client';
+import { MS_PER_DAY } from '@/utils/time-constants';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'video-pool/reuse-from-v5' });
 
 export const REUSE_SOURCE = 'user_live';
 const TTL_DAYS = 30;
-const ttlFromNow = () => new Date(Date.now() + TTL_DAYS * 24 * 60 * 60 * 1000);
+const ttlFromNow = () => new Date(Date.now() + TTL_DAYS * MS_PER_DAY);
 
 /** Minimal picked-card shape (structural — avoids importing V5Card from executor). */
 export interface ReuseCard {
