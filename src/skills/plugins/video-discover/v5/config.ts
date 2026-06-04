@@ -60,6 +60,11 @@ const v5EnvSchema = z.object({
   // CP494 — hot-path safety: pool query timeout (ms). On timeout/throw → full
   // live fanout fallback. tsvector on ~1.1k rows is sub-100ms; cap conservatively.
   V5_POOL_TIMEOUT_MS: z.coerce.number().int().min(200).max(5000).default(1500),
+  // CP494 ③ reuse loop (keystone). When on, v5 upserts PICKED live-discovered
+  // cards back to video_pool (source='user_live', fire-and-forget) AND the v5
+  // pool-first match reads 'user_live' so the next request reuses them
+  // (write↔read pair = loop closed). unset = false = no-op (write 0 = current).
+  V5_REUSE_LOOP: booleanFlag.optional().default(false as unknown as string),
 });
 
 export interface V5Config {
@@ -82,6 +87,8 @@ export interface V5Config {
   poolMinPerCell: number;
   /** CP494 — pool query timeout (ms) before full-live fallback. */
   poolTimeoutMs: number;
+  /** CP494 ③ — reuse loop enabled (write picked → pool + read 'user_live'). */
+  reuseLoop: boolean;
 }
 
 let cached: V5Config | null = null;
@@ -100,10 +107,16 @@ export function getV5Config(env: NodeJS.ProcessEnv = process.env): V5Config {
     pickerMode: p.V5_PICKER_MODE,
     queryGen: p.V5_QUERY_GEN,
     poolBackfill: p.V5_POOL_BACKFILL,
-    poolSources: p.V5_POOL_SOURCE === 'all' ? ['v2_promoted', 'batch_trend'] : ['v2_promoted'],
+    // CP494 ③ — when reuse loop is on, the pool-first match ALSO reads
+    // 'user_live' so reused picks are consumed next request (loop closed).
+    poolSources: [
+      ...(p.V5_POOL_SOURCE === 'all' ? ['v2_promoted', 'batch_trend'] : ['v2_promoted']),
+      ...(p.V5_REUSE_LOOP ? ['user_live'] : []),
+    ],
     poolSourceLabel: p.V5_POOL_SOURCE,
     poolMinPerCell: p.V5_POOL_MIN_PER_CELL,
     poolTimeoutMs: p.V5_POOL_TIMEOUT_MS,
+    reuseLoop: p.V5_REUSE_LOOP,
   };
   return cached;
 }
