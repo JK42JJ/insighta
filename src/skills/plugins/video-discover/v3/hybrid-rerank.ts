@@ -308,6 +308,169 @@ export async function tsvectorKeywordCandidates(
   }
 }
 
+/**
+ * Build a Postgres `to_tsquery('simple', …)` OR-string from free text.
+ * Mirrors the inline tokenization of tsvectorKeywordCandidates (lines ~172-178)
+ * deliberately, so the legacy v3 path stays byte-identical (no shared-refactor
+ * risk on that function). Returns '' when no usable token remains.
+ */
+function buildTsqueryString(text: string): string {
+  const tokens = text
+    .split(/[\s,/.;()[\]{}!?"'`~&|<>:*+\-=]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+    .map((t) => t.replace(/[':!&|()<>*]/g, ''))
+    .filter((t) => t.length > 0)
+    .filter((t, i, arr) => arr.indexOf(t) === i);
+  return tokens.join(' | ');
+}
+
+/**
+ * CP494 안 A (per-cell tsquery) — video_pool match WITHOUT the global top-N
+ * competition. The global tsvectorKeywordCandidates runs ONE centerGoal-OR query
+ * with a global LIMIT, so vocabulary-rich cells occupy the top-N and starve the
+ * others (displacement; measured Fork-3 13/17 → cell 5). Here each cell runs its
+ * OWN query and keeps its OWN top-N, and cellIndex comes from the query itself —
+ * the argmax-overlap drop (the displacement driver) is gone.
+ *
+ * One LATERAL round-trip (8 cells × LIMIT 8 = 42ms server-side, prod EXPLAIN
+ * ANALYZE, GIN bitmap scan on idx_vpool_title_desc_tsv). KEPT SEPARATE from
+ * tsvectorKeywordCandidates: the v3 pipeline + the global pool path use that
+ * function unchanged.
+ */
+export async function tsvectorKeywordCandidatesPerCell(
+  perCellQueries: ReadonlyArray<{ cellIndex: number; query: string }>,
+  excludeVideoIds: ReadonlyArray<string>,
+  perCellLimit: number,
+  sources: ReadonlyArray<string> = ['v2_promoted']
+): Promise<KeywordCandidate[]> {
+  // Tokenize each cell's query → tsquery; drop cells whose token set is empty
+  // (an empty to_tsquery would error / match nothing — no centerGoal fallback
+  // here, the per-cell contract is "this cell's query or nothing for this cell").
+  const cells = perCellQueries
+    .map((c) => ({ cellIndex: c.cellIndex, tsq: buildTsqueryString(c.query) }))
+    .filter((c) => c.tsq.length > 0);
+  if (cells.length === 0) return [];
+  const t0 = Date.now();
+
+  try {
+    const prisma = getPrismaClient();
+    const exclude = excludeVideoIds.length > 0 ? excludeVideoIds : [''];
+    const valuesRows = cells.map((c) => Prisma.sql`(${c.cellIndex}::int, ${c.tsq}::text)`);
+
+    const rows = await prisma.$queryRaw<
+      Array<{
+        cell_index: number;
+        video_id: string;
+        title: string;
+        description: string | null;
+        channel_name: string | null;
+        channel_id: string | null;
+        thumbnail_url: string | null;
+        view_count: bigint | null;
+        like_count: bigint | null;
+        duration_seconds: number | null;
+        published_at: Date | null;
+        rank: number;
+      }>
+    >(Prisma.sql`
+      SELECT
+        c.cell_index AS cell_index,
+        vp.video_id,
+        vp.title,
+        vp.description,
+        vp.channel_name,
+        vp.channel_id,
+        vp.thumbnail_url,
+        vp.view_count,
+        vp.like_count,
+        vp.duration_seconds,
+        vp.published_at,
+        vp.rank
+      FROM (VALUES ${Prisma.join(valuesRows)}) AS c(cell_index, q)
+      CROSS JOIN LATERAL (
+        SELECT
+          v.video_id,
+          v.title,
+          v.description,
+          v.channel_name,
+          v.channel_id,
+          v.thumbnail_url,
+          v.view_count,
+          v.like_count,
+          v.duration_seconds,
+          v.published_at,
+          ts_rank(
+            to_tsvector('simple', coalesce(v.title,'') || ' ' || coalesce(v.description,'')),
+            to_tsquery('simple', c.q)
+          ) AS rank
+        FROM public.video_pool v
+        WHERE v.is_active = true
+          AND v.quality_tier IN ('gold', 'silver')
+          AND v.source = ANY(${sources}::text[])
+          AND v.video_id <> ALL(${exclude}::text[])
+          AND to_tsvector('simple', coalesce(v.title,'') || ' ' || coalesce(v.description,''))
+              @@ to_tsquery('simple', c.q)
+        ORDER BY rank DESC
+        LIMIT ${perCellLimit}
+      ) vp
+    `);
+
+    const out: KeywordCandidate[] = rows.map((r) => ({
+      videoId: r.video_id,
+      title: r.title,
+      description: r.description,
+      channelName: r.channel_name,
+      channelId: r.channel_id,
+      thumbnail: r.thumbnail_url,
+      viewCount: r.view_count != null ? Number(r.view_count) : null,
+      likeCount: r.like_count != null ? Number(r.like_count) : null,
+      durationSec: r.duration_seconds,
+      publishedAt: r.published_at,
+      cellIndex: r.cell_index,
+      rec_score: Number(r.rank) || 0,
+    }));
+
+    const byCell: Record<number, number> = {};
+    for (const o of out) byCell[o.cellIndex] = (byCell[o.cellIndex] ?? 0) + 1;
+
+    recordTrace({
+      step: 'hybrid_rerank.tsvector_per_cell',
+      status: 'ok',
+      request: {
+        cells: cells.map((c) => ({ cellIndex: c.cellIndex, tsqueryString: c.tsq })),
+        sources: [...sources],
+        perCellLimit,
+        exclude_count: excludeVideoIds.length,
+      },
+      response: {
+        sql_row_count: rows.length,
+        rows_by_cell: byCell,
+        rows: out.slice(0, 60).map((o) => ({
+          videoId: o.videoId,
+          title: o.title,
+          cell_index: o.cellIndex,
+          rec_score: o.rec_score,
+        })),
+      },
+      latencyMs: Date.now() - t0,
+    });
+    return out;
+  } catch (err) {
+    log.warn('per-cell tsvector keyword search failed (non-fatal)', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    recordTrace({
+      step: 'hybrid_rerank.tsvector_per_cell',
+      status: 'error',
+      request: { cell_count: cells.length, sources: [...sources], perCellLimit },
+      errorMessage: err instanceof Error ? err.message : String(err),
+      latencyMs: Date.now() - t0,
+    });
+    return [];
+  }
+}
+
 function tokenizeLower(s: string): string[] {
   return s
     .toLowerCase()

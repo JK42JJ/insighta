@@ -73,6 +73,13 @@ const v5EnvSchema = z.object({
   // CP494 ④-1 — per-cell "full" threshold. ≥ this many grid cards → skip.
   // 12 favors "user may want to see more" (cells with 7-11 still searched).
   V5_CELL_SKIP_THRESHOLD: z.coerce.number().int().min(1).max(60).default(12),
+  // CP494 안 A — pool match strategy. 'global' (default, current) runs ONE
+  // centerGoal-OR tsquery with a global LIMIT (vocabulary-rich cells starve the
+  // others = displacement). 'per_cell' runs each cell's own query with its own
+  // top-N in a single LATERAL round-trip (prod EXPLAIN 42ms, GIN bitmap scan) so
+  // cellIndex comes from the query (no argmax-overlap drop). unset = 'global' =
+  // no-op. Only takes effect when V5_POOL_BACKFILL is on.
+  V5_POOL_MATCH: z.enum(['global', 'per_cell']).default('global'),
 });
 
 export interface V5Config {
@@ -101,6 +108,8 @@ export interface V5Config {
   cellSkip: boolean;
   /** CP494 ④-1 — per-cell card count threshold for skip. */
   cellSkipThreshold: number;
+  /** CP494 안 A — pool match strategy ('global' | 'per_cell'). */
+  poolMatch: 'global' | 'per_cell';
 }
 
 let cached: V5Config | null = null;
@@ -131,6 +140,7 @@ export function getV5Config(env: NodeJS.ProcessEnv = process.env): V5Config {
     reuseLoop: p.V5_REUSE_LOOP,
     cellSkip: p.V5_CELL_SKIP,
     cellSkipThreshold: p.V5_CELL_SKIP_THRESHOLD,
+    poolMatch: p.V5_POOL_MATCH,
   };
   return cached;
 }
