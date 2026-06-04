@@ -28,6 +28,7 @@ import { getV5Config } from './config';
 import { getVideoPicker } from '@/modules/llm-picker/registry';
 import { getLlmPickerConfig } from '@/config/llm-picker';
 import { isShortCached, SHORT_MAX_DURATION_SEC } from '@/modules/video-pool/is-short';
+import { reusePickedToPool } from '@/modules/video-pool/reuse-from-v5';
 import type { PickCandidate, PickResult } from '@/modules/llm-picker/types';
 
 const log = logger.child({ module: 'video-discover/v5/executor' });
@@ -320,6 +321,19 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
 
   // 7. Final slice to targetPicks (cards are score-sorted; filter preserved order).
   const finalCards = gatedCards.slice(0, cfg.targetPicks);
+
+  // CP494 ③ reuse loop (keystone) — return picked live discoveries to video_pool
+  // so the next request's pool-first match reuses them (user↑ ≠ API↑). Fire-and-
+  // forget: NEVER awaited → zero hot-path impact (12s add-cards cap). flag-gated;
+  // off = write 0 (current behavior). Consumer reads 'user_live' only when on.
+  if (cfg.reuseLoop && finalCards.length > 0) {
+    void reusePickedToPool({
+      cards: finalCards,
+      fanoutById,
+      metaById,
+      language: input.language,
+    }).catch((e) => log.warn(`reuse-loop failed: ${e instanceof Error ? e.message : String(e)}`));
+  }
 
   return {
     cards: finalCards,
