@@ -54,6 +54,12 @@ export interface FanoutInput {
    * call), preserving the goal-structure context. Absent = legacy query-gen.
    */
   precomputedQueries?: PrecomputedQuery[];
+  /**
+   * CP494 ④-1 — cellIndices the user has already filled (≥ threshold). Their
+   * queries are dropped upstream of the pool gate (searched neither pool nor
+   * live). Empty/absent = search all cells (current behavior).
+   */
+  fullCellIndices?: number[];
 }
 
 export interface FanoutCandidate {
@@ -92,6 +98,8 @@ export interface FanoutResult {
   offLangDropped: number;
   /** CP494 — pool-first backfill telemetry (quota delta + Fork-2 quality tradeoff). */
   poolBackfill: PoolBackfillMeta;
+  /** CP494 ④-1 — # of cell queries skipped because the cell was already full. */
+  skippedFullCells: number;
 }
 
 /**
@@ -256,6 +264,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       queryGen: RULE_QUERY_GEN_META(0),
       offLangDropped: 0,
       poolBackfill: POOL_BACKFILL_OFF(0),
+      skippedFullCells: 0,
     };
   }
 
@@ -317,6 +326,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       queryGen,
       offLangDropped: 0,
       poolBackfill: POOL_BACKFILL_OFF(0),
+      skippedFullCells: 0,
     };
   }
 
@@ -326,9 +336,20 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
   // (non-negotiable): timeout + try/catch → ANY failure falls back to full live
   // fanout. Pool candidates pass the SAME blocklist/shorts/off-language gates as
   // live below (lexical match = supplier; existing gates = quality judge).
-  let liveQueries: SearchQuery[] = queries;
+  // CP494 ④-1 full-cell skip — drop queries for cells the user already filled
+  // (≥ threshold), UPSTREAM of the pool gate so the cell is searched neither in
+  // pool nor live. Separate counter (not pool 'satisfied') → no meta pollution.
+  const fullCellSet = new Set<number>(input.fullCellIndices ?? []);
+  const skippedFullCells = fullCellSet.size
+    ? queries.filter((q) => q.cellIndex != null && fullCellSet.has(q.cellIndex)).length
+    : 0;
+  const activeQueries: SearchQuery[] = fullCellSet.size
+    ? queries.filter((q) => !(q.cellIndex != null && fullCellSet.has(q.cellIndex)))
+    : queries;
+
+  let liveQueries: SearchQuery[] = activeQueries;
   const poolSeed: FanoutCandidate[] = [];
-  let poolMeta: PoolBackfillMeta = POOL_BACKFILL_OFF(queries.length);
+  let poolMeta: PoolBackfillMeta = POOL_BACKFILL_OFF(activeQueries.length);
   if (cfg.poolBackfill) {
     const tPool0 = Date.now();
     try {
@@ -358,7 +379,9 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         poolSeed.push(...cands);
         if (cands.length >= cfg.poolMinPerCell) satisfied.add(ci);
       }
-      liveQueries = queries.filter((q) => !(q.cellIndex != null && satisfied.has(q.cellIndex)));
+      liveQueries = activeQueries.filter(
+        (q) => !(q.cellIndex != null && satisfied.has(q.cellIndex))
+      );
       poolMeta = {
         enabled: true,
         fellBackToLive: false,
@@ -369,8 +392,8 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         source: cfg.poolSourceLabel,
       };
     } catch (err) {
-      // Hot-path safety: any pool failure → full live fanout (current behavior).
-      liveQueries = queries;
+      // Hot-path safety: any pool failure → full live fanout (active cells only).
+      liveQueries = activeQueries;
       poolSeed.length = 0;
       poolMeta = {
         enabled: true,
@@ -378,7 +401,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         poolQueryMs: Date.now() - tPool0,
         poolCandidates: 0,
         poolOnlyCells: 0,
-        liveCells: queries.length,
+        liveCells: activeQueries.length,
         source: cfg.poolSourceLabel,
       };
       log.warn(
@@ -480,6 +503,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     queryGen,
     offLangDropped,
     poolBackfill: poolMeta,
+    skippedFullCells,
   };
 }
 

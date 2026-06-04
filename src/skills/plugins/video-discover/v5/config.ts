@@ -65,6 +65,14 @@ const v5EnvSchema = z.object({
   // pool-first match reads 'user_live' so the next request reuses them
   // (write↔read pair = loop closed). unset = false = no-op (write 0 = current).
   V5_REUSE_LOOP: booleanFlag.optional().default(false as unknown as string),
+  // CP494 ④-1 full-cell skip. When on, add-cards skips searching (pool + live)
+  // any cell whose existing grid-card count ≥ V5_CELL_SKIP_THRESHOLD — no
+  // candidate generation for "full enough" cells (pure quota/latency save; the
+  // cell's cards are already excluded anyway). unset = false = no-op.
+  V5_CELL_SKIP: booleanFlag.optional().default(false as unknown as string),
+  // CP494 ④-1 — per-cell "full" threshold. ≥ this many grid cards → skip.
+  // 12 favors "user may want to see more" (cells with 7-11 still searched).
+  V5_CELL_SKIP_THRESHOLD: z.coerce.number().int().min(1).max(60).default(12),
 });
 
 export interface V5Config {
@@ -89,6 +97,10 @@ export interface V5Config {
   poolTimeoutMs: number;
   /** CP494 ③ — reuse loop enabled (write picked → pool + read 'user_live'). */
   reuseLoop: boolean;
+  /** CP494 ④-1 — full-cell skip enabled. */
+  cellSkip: boolean;
+  /** CP494 ④-1 — per-cell card count threshold for skip. */
+  cellSkipThreshold: number;
 }
 
 let cached: V5Config | null = null;
@@ -117,6 +129,8 @@ export function getV5Config(env: NodeJS.ProcessEnv = process.env): V5Config {
     poolMinPerCell: p.V5_POOL_MIN_PER_CELL,
     poolTimeoutMs: p.V5_POOL_TIMEOUT_MS,
     reuseLoop: p.V5_REUSE_LOOP,
+    cellSkip: p.V5_CELL_SKIP,
+    cellSkipThreshold: p.V5_CELL_SKIP_THRESHOLD,
   };
   return cached;
 }

@@ -52,6 +52,11 @@ export interface V5ExecuteInput {
    * uses them verbatim and skips its own query-gen. Undefined = legacy.
    */
   precomputedQueries?: PrecomputedQuery[];
+  /**
+   * CP494 ④-1 — cellIndices already filled (≥ threshold) → fanout skips them
+   * (pool + live). Computed by the caller (add-cards). Undefined = search all.
+   */
+  fullCellIndices?: number[];
 }
 
 export interface V5Card {
@@ -115,6 +120,8 @@ export interface V5ExecuteResult {
     offLangDropped: number;
     /** CP494 — pool-first backfill telemetry (quota delta + Fork-2 quality surface). */
     poolBackfill: PoolBackfillMeta;
+    /** CP494 ④-1 — # cell queries skipped (cell already full). */
+    skippedFullCells: number;
   };
 }
 
@@ -147,6 +154,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
     env: input.env,
     publishedAfter: input.publishedAfter,
     precomputedQueries: input.precomputedQueries,
+    fullCellIndices: input.fullCellIndices,
   });
   // CP492 Track-1 — split query-gen out of fanout. fanoutMs is now search-only.
   // `?? 0` guards older/mocked FanoutResults that predate the queryGenMs field.
@@ -356,6 +364,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       queryGen: fanout.queryGen,
       offLangDropped: fanout.offLangDropped ?? 0,
       poolBackfill: fanout.poolBackfill,
+      skippedFullCells: fanout.skippedFullCells,
     },
   };
 }
@@ -370,6 +379,7 @@ function emptyResult(args: {
     queryGen: QueryGenMeta;
     offLangDropped?: number;
     poolBackfill: PoolBackfillMeta;
+    skippedFullCells?: number;
   };
   afterTitleFilter: number;
   afterExcludeFilter: number;
@@ -401,6 +411,7 @@ function emptyResult(args: {
       queryGen: args.fanout.queryGen,
       offLangDropped: args.fanout.offLangDropped ?? 0,
       poolBackfill: args.fanout.poolBackfill,
+      skippedFullCells: args.fanout.skippedFullCells ?? 0,
     },
   };
 }

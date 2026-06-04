@@ -36,6 +36,8 @@ import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
 import { getExcludedVideoIds } from '@/modules/exclude/excluded-videos';
 import { withTraceContext, recordTrace, getTraceContext } from '@/modules/discover-tracing';
 import { runV5Executor } from '@/skills/plugins/video-discover/v5/executor';
+import { getV5Config } from '@/skills/plugins/video-discover/v5/config';
+import { getFullCellIndices } from '@/modules/mandala/cell-fill';
 import { randomUUID } from 'node:crypto';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -273,6 +275,17 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           const focusTags = buildEphemeralFocusTags(mandalaMeta?.focus_tags, extraKeywords);
           const targetLevel = mandalaMeta?.target_level ?? 'standard';
 
+          // CP494 ④-1 full-cell skip — don't search cells the user already
+          // filled (≥ threshold). flag-gated; off → undefined → search all.
+          // DB error → [] (safe: no skip). fire-before to keep it off the
+          // executor's hot-path measurement.
+          const v5cfg = getV5Config(process.env);
+          const fullCellIndices = v5cfg.cellSkip
+            ? await getFullCellIndices(prisma, userId, mandalaId, v5cfg.cellSkipThreshold).catch(
+                () => [] as number[]
+              )
+            : undefined;
+
           const v5Result = await runV5Executor({
             centerGoal,
             subGoals,
@@ -281,6 +294,7 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             language,
             excludeVideoIds: excludeSet,
             env: process.env,
+            fullCellIndices,
             // CP491 ROI1 — push the date filter into search.list so YouTube
             // returns date-valid candidates instead of fetch-then-discard at
             // the post-pick filter below. Post-pick filter retained as a
@@ -401,6 +415,8 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               // 100 spent vs poolOnlyCells × 100 saved), poolQueryMs latency, and
               // poolOnlyCells (Fork-2(A) 100%-lexical quality tradeoff surface).
               v5_pool_backfill: v5Result.diagnostics.poolBackfill,
+              // CP494 ④-1 — cell queries skipped (cell already ≥ threshold full).
+              v5_skipped_full_cells: v5Result.diagnostics.skippedFullCells,
               // CP491 F5c — per-query raw count + q_ok (parity with wizard.discover.end).
               v5_per_query: v5Result.diagnostics.perQuery,
               // CP491 — Shorts dropped by the post-pick short gate (before→after observability).
