@@ -25,7 +25,18 @@ import { buildRuleBasedQueriesSync, type SearchQuery } from '../v2/keyword-build
 import { buildLLMQueriesPerCell, type QueryGenMeta } from './llm-query-gen';
 import { getV5Config } from './config';
 import { MERGED_GEN_MODEL } from '@/prompts/mandala-with-queries-generator';
-import { tsvectorKeywordCandidates, type KeywordCandidate } from '../v3/hybrid-rerank';
+import {
+  tsvectorKeywordCandidates,
+  tsvectorKeywordCandidatesPerCell,
+  type KeywordCandidate,
+} from '../v3/hybrid-rerank';
+
+/**
+ * CP494 안 A — extra pool candidates fetched per cell beyond poolMinPerCell,
+ * so a cell at the floor still has headroom after the shared blocklist/shorts/
+ * off-language gates drop some. Mirrors the global path's `+5` buffer.
+ */
+const POOL_PER_CELL_BUFFER = 5;
 
 const log = logger.child({ module: 'video-discover/v5/youtube-fanout' });
 
@@ -122,6 +133,8 @@ export interface PoolBackfillMeta {
   liveCells: number;
   /** resolved pool source label (v2_promoted | all). */
   source: string;
+  /** CP494 안 A — which pool match ran ('global' | 'per_cell'). */
+  matchMode: string;
 }
 
 /** CP494 — no-op meta for the flag-off / pre-gate paths. */
@@ -133,7 +146,26 @@ const POOL_BACKFILL_OFF = (liveCells: number): PoolBackfillMeta => ({
   poolOnlyCells: 0,
   liveCells,
   source: 'off',
+  matchMode: 'off',
 });
+
+/**
+ * CP494 안 A — collapse a query list into one {cellIndex, query} per cell for the
+ * per-cell pool match. Queries without a cellIndex (rule-mode core/focus/level)
+ * are skipped; multiple queries on one cell are token-merged (space-joined).
+ */
+export function perCellQueriesFrom(
+  queries: ReadonlyArray<SearchQuery>
+): { cellIndex: number; query: string }[] {
+  const byCell = new Map<number, string[]>();
+  for (const q of queries) {
+    if (q.cellIndex == null) continue;
+    const bucket = byCell.get(q.cellIndex);
+    if (bucket) bucket.push(q.query);
+    else byCell.set(q.cellIndex, [q.query]);
+  }
+  return Array.from(byCell, ([cellIndex, qs]) => ({ cellIndex, query: qs.join(' ') }));
+}
 
 /**
  * CP494 — reject after `ms` so a slow pool query never blocks the discover
@@ -352,12 +384,31 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
   let poolMeta: PoolBackfillMeta = POOL_BACKFILL_OFF(activeQueries.length);
   if (cfg.poolBackfill) {
     const tPool0 = Date.now();
+    // CP494 안 A — per-cell match when V5_POOL_MATCH=per_cell AND active cells
+    // carry queries with cellIndex (prod V5_QUERY_GEN=llm / merged-gen always do).
+    // Else fall back to the global centerGoal-OR match (current behavior).
+    const perCellQueries = cfg.poolMatch === 'per_cell' ? perCellQueriesFrom(activeQueries) : [];
+    const usePerCell = perCellQueries.length > 0;
+    const matchMode = usePerCell ? 'per_cell' : 'global';
     try {
-      const poolLimit = totalCells * (cfg.poolMinPerCell + 5);
+      const poolLimit = totalCells * (cfg.poolMinPerCell + POOL_PER_CELL_BUFFER);
       const pool = await withTimeout(
         // exclude=[] — the executor applies excludeVideoIds AFTER fanout, so
         // already-owned cards are dropped downstream (minor pool waste, no bug).
-        tsvectorKeywordCandidates(input.centerGoal, input.subGoals, [], poolLimit, cfg.poolSources),
+        usePerCell
+          ? tsvectorKeywordCandidatesPerCell(
+              perCellQueries,
+              [],
+              cfg.poolMinPerCell + POOL_PER_CELL_BUFFER,
+              cfg.poolSources
+            )
+          : tsvectorKeywordCandidates(
+              input.centerGoal,
+              input.subGoals,
+              [],
+              poolLimit,
+              cfg.poolSources
+            ),
         cfg.poolTimeoutMs
       );
       const byCell = new Map<number, FanoutCandidate[]>();
@@ -390,6 +441,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         poolOnlyCells: satisfied.size,
         liveCells: liveQueries.length,
         source: cfg.poolSourceLabel,
+        matchMode,
       };
     } catch (err) {
       // Hot-path safety: any pool failure → full live fanout (active cells only).
@@ -403,6 +455,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         poolOnlyCells: 0,
         liveCells: activeQueries.length,
         source: cfg.poolSourceLabel,
+        matchMode,
       };
       log.warn(
         `v5 fanout: pool backfill failed → full live fallback: ${err instanceof Error ? err.message : String(err)}`
