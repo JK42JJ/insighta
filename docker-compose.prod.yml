@@ -127,6 +127,19 @@ services:
       # Revert: delete this line + redeploy → code default false (bridge
       # no-op + poolSources unchanged). Off after measurement window.
       - SUPPLY_YT_BRIDGE_ENABLED=true
+      # CP494 ⑤ Phase B (measurement window — flags off after ⑤ decision).
+      # Baseline ①: avg 7.95 live calls/req, pool 1.5/8 cells, req_live_zero=0.
+      # Read via video_discover_traces (V3_TRACE_ENABLED already on) —
+      # poolOnlyCells / liveCells / quotaUnitsApprox per request.
+      # per_cell: each cell's own tsquery top-N (kill displacement, #854).
+      # Revert: delete these 3 lines + redeploy → code defaults restore
+      # global match / no reuse write / no cell skip.
+      - V5_POOL_MATCH=per_cell
+      # reuse loop (#852): picked live discoveries upsert back to pool
+      # (source='user_live') + poolSources reads them next request.
+      - V5_REUSE_LOOP=true
+      # full-cell skip (#853): cells with >=12 grid cards skip pool+live search.
+      - V5_CELL_SKIP=true
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
