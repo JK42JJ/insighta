@@ -34,6 +34,8 @@ const log = logger.child({ module: 'api/internal/video-pool-promote' });
 interface PromoteBody {
   limit?: number;
   dry_run?: boolean;
+  /** yt-bridge only (CP494 ⑤): promote without video_pool_embeddings writes. */
+  skip_embeddings?: boolean;
 }
 
 const MAX_LIMIT = 500;
@@ -99,12 +101,14 @@ export const internalVideoPoolPromoteRoutes: FastifyPluginAsync = async (fastify
         Math.min(MAX_LIMIT, typeof request.body?.limit === 'number' ? request.body.limit : 100)
       );
       const dryRun = request.body?.dry_run === true;
+      const skipEmbeddings = request.body?.skip_embeddings === true;
 
       try {
-        const result = await promoteYoutubeVideosToPool({ limit, dryRun });
+        const result = await promoteYoutubeVideosToPool({ limit, dryRun, skipEmbeddings });
         log.info('promote-from-youtube-videos endpoint done', {
           limit,
           dry_run: dryRun,
+          skip_embeddings: skipEmbeddings,
           ...result,
           errors: result.errors.length,
         });

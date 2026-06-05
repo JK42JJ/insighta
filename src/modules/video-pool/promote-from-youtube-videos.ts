@@ -6,17 +6,25 @@
  * (`video_pool`, what v5 pool-first match reads) never saw those rows —
  * supply and consumption were two disconnected systems. This bridges them:
  *
- *   1. SELECT candidates: youtube_videos with usable metadata
- *      (title + view_count present) AND NOT already in video_pool.
+ *   1. SELECT candidates: youtube_videos with usable metadata AND NOT already
+ *      in video_pool. SQL prefilter mirrors the HARD floors of the JS gate
+ *      (view >= silver floor, duration within range) so definitely-skip rows
+ *      never occupy the recency window — without it, persistent skip rows
+ *      accumulate at the window top and repeated drains stall around ~1.5k
+ *      of ~7k admissible (B-pre dryRun finding, CP494 ⑤). Boundary/blocklist
+ *      judgment stays in classifyQuality (single authority).
  *   2. classifyQuality (batch-video-collector gate, same as reuse-from-v5):
  *      rejected OR bronze → skip. Consumers read gold/silver only, and the
  *      Free Plan 500MB budget shouldn't pay for rows nobody reads.
  *   3. shortGateFields → demote Shorts at promote (CP491 convention).
  *   4. INSERT video_pool with source='yt_promoted' — create-only (no UPDATE,
  *      no DELETE; NOT-EXISTS dedup makes re-runs no-ops).
- *   5. Embedding via Mac Mini Ollama, fail-open (mirrors promote-from-v2:
- *      unreachable/timeout → promote without embeddings, tsvector still
- *      matches immediately; dense rerank can backfill later).
+ *   5. Embedding via Mac Mini Ollama, fail-open (mirrors promote-from-v2).
+ *      `skipEmbeddings` mirrors the reuse-loop (③) precedent instead:
+ *      v5 pool-match is tsvector-based (embedding-free) and the cosine
+ *      readers gate on v2_promoted, so yt_promoted embeddings have no
+ *      consumer today — write them only when one exists (later backfill),
+ *      not at drain time (batch_trend +532MB unread-embeddings lesson).
  *
  * Flag: SUPPLY_YT_BRIDGE_ENABLED (default off) gates the write at the route
  * (video-pool-promote.ts) AND the read in v5 poolSources (v5/config.ts) —
@@ -36,6 +44,11 @@ import {
   MAC_MINI_OLLAMA_DEFAULT_URL,
 } from '@/skills/plugins/iks-scorer/embedding';
 import { classifyQuality } from '@/skills/plugins/batch-video-collector/quality';
+import {
+  QUALITY_SILVER_VIEW_COUNT,
+  MIN_DURATION_SEC,
+  MAX_DURATION_SEC,
+} from '@/skills/plugins/batch-video-collector/manifest';
 import { logger } from '@/utils/logger';
 import { shortGateFields } from './is-short';
 
@@ -86,6 +99,12 @@ export interface YtPromoteOptions {
   limit?: number;
   /** When true, skip writes and return planned action counts only. */
   dryRun?: boolean;
+  /**
+   * When true, promote WITHOUT writing video_pool_embeddings (③ reuse-loop
+   * precedent: tsvector matches immediately, dense rerank via later backfill).
+   * Default false = promote-from-v2 behavior.
+   */
+  skipEmbeddings?: boolean;
   /** Override the Ollama URL (default Mac Mini Tailscale). */
   ollamaUrl?: string;
 }
@@ -99,6 +118,11 @@ export async function promoteYoutubeVideosToPool(
 
   // 1. Candidates: usable metadata + not already pooled. Recency-first so a
   // capped batch drains the freshest supply (collector runs daily).
+  // Hard-floor prefilter (definitely-skip only): skip-class rows are never
+  // inserted, so without this they re-enter every window and repeated drains
+  // stall (~1.5k of ~7k). Floors are the SAME constants the JS gate uses;
+  // boundary semantics match classifyQuality (>= silver floor, 60..3600
+  // inclusive). Blocklist + tier stay JS-side (classifyQuality authority).
   const candidates = await prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
     SELECT
       yv.youtube_video_id   AS video_id,
@@ -114,7 +138,8 @@ export async function promoteYoutubeVideosToPool(
       yv.default_language   AS default_language
     FROM youtube_videos yv
     WHERE yv.title IS NOT NULL
-      AND yv.view_count IS NOT NULL
+      AND yv.view_count >= ${QUALITY_SILVER_VIEW_COUNT}
+      AND yv.duration_seconds BETWEEN ${MIN_DURATION_SEC} AND ${MAX_DURATION_SEC}
       AND NOT EXISTS (
         SELECT 1 FROM video_pool vp WHERE vp.video_id = yv.youtube_video_id
       )
@@ -164,7 +189,9 @@ export async function promoteYoutubeVideosToPool(
   }
 
   // 5(pre). Embeddings up-front, fail-open (promote-from-v2 mirror).
-  const reachable = await isOllamaReachable({ baseUrl: ollamaUrl });
+  // skipEmbeddings short-circuits the whole embed path (③ precedent —
+  // yt_promoted has no embedding consumer today; backfill when one exists).
+  const reachable = opts.skipEmbeddings ? false : await isOllamaReachable({ baseUrl: ollamaUrl });
   let embeddings: (number[] | null)[] = [];
   if (reachable) {
     try {
@@ -183,7 +210,7 @@ export async function promoteYoutubeVideosToPool(
       });
       embeddings = [];
     }
-  } else {
+  } else if (!opts.skipEmbeddings) {
     log.warn('Ollama unreachable — promoting without embeddings');
   }
 
@@ -262,7 +289,8 @@ export async function promoteYoutubeVideosToPool(
     silver,
     skipped_bronze: skippedBronze,
     skipped_rejected: skippedRejected,
-    embeddings_skipped_unreachable: !reachable,
+    // skip-by-request is not "unreachable" — keep the flag truthful.
+    embeddings_skipped_unreachable: opts.skipEmbeddings ? false : !reachable,
     errors,
   };
 }
