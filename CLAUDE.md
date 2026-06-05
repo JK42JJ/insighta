@@ -208,6 +208,7 @@
 ### 계획 → 승인 → 실행 (절대 규칙, LEVEL-2, CP388→CP391→CP392)
 - 모든 side-effect 작업 (Write, Edit, git, gh, ssh, install, docker) **전에** plan 제시: 파일 경로 + diff 요지 + 롤백 방법.
 - 사용자 명시 승인 ("해", "ok", "실행", "approved") 수신 후에만 실행. 제안·질문형 ("~어때?", "~해볼까?") 은 실행 트리거 아님.
+- **조건부 승인 ("X 확인/재확인 후 실행") 은 자동 실행권이 아니다 (CP494+1, /retro 2026-06-05)**: 조건 X 의 검증 결과를 **보고한 뒤 1-turn 정지**가 default. 검증 PASS ≠ 실행 트리거 — 보고와 실행을 같은 turn 에 묶지 말 것. (family: CP489/491/492/494+1, `.husky/pre-push` 는 main-push 만 커버.)
 - Read-only 명령 (`ls`, `grep`, `git status`, `cat`) 은 plan 불필요.
 - 범위 이탈 ("이왕이면 이것도") 발견 시 별도 plan.
 - 위반 4회 (CP391×2, CP392×2) 후 CLAUDE.md 본문 승격. 상세: `memory/feedback_plan_before_execute.md`.
