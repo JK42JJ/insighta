@@ -225,9 +225,10 @@ export async function promoteV2ToVideoPool(opts: PromoteOptions = {}): Promise<P
           title: titleSafe,
           description: descSafe,
           channel_name: channelSafe,
-          // channel_id intentionally null — youtube_videos table doesn't
-          // store the channel UC* id (only channel_title). Could be
-          // backfilled later via a separate metadata-enrich pass.
+          // channel_id intentionally null here — this query doesn't select it.
+          // (youtube_videos DOES have a channel_id column since CP494 ②; the
+          // supply bridge promote-from-youtube-videos.ts carries it. A v2-path
+          // backfill can follow once coverage matters.)
           channel_id: null,
           view_count: c.yv_view_count ?? BigInt(0),
           like_count: c.yv_like_count ?? BigInt(0),

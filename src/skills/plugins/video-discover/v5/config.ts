@@ -80,6 +80,12 @@ const v5EnvSchema = z.object({
   // cellIndex comes from the query (no argmax-overlap drop). unset = 'global' =
   // no-op. Only takes effect when V5_POOL_BACKFILL is on.
   V5_POOL_MATCH: z.enum(['global', 'per_cell']).default('global'),
+  // CP494 ② supply bridge — SAME env var the promote endpoint reads
+  // (src/config/index.ts). When on, the pool-first match ALSO reads
+  // 'yt_promoted' rows so bridged supply is consumable (write↔read pair —
+  // the ③ reuse-loop lesson: a pool source nobody reads is a dead write).
+  // unset = false = no-op (poolSources unchanged).
+  SUPPLY_YT_BRIDGE_ENABLED: booleanFlag.optional().default(false as unknown as string),
 });
 
 export interface V5Config {
@@ -130,9 +136,12 @@ export function getV5Config(env: NodeJS.ProcessEnv = process.env): V5Config {
     poolBackfill: p.V5_POOL_BACKFILL,
     // CP494 ③ — when reuse loop is on, the pool-first match ALSO reads
     // 'user_live' so reused picks are consumed next request (loop closed).
+    // CP494 ② — when the supply bridge is on, ALSO read 'yt_promoted'
+    // (single flag controls the bridge's write AND this read).
     poolSources: [
       ...(p.V5_POOL_SOURCE === 'all' ? ['v2_promoted', 'batch_trend'] : ['v2_promoted']),
       ...(p.V5_REUSE_LOOP ? ['user_live'] : []),
+      ...(p.SUPPLY_YT_BRIDGE_ENABLED ? ['yt_promoted'] : []),
     ],
     poolSourceLabel: p.V5_POOL_SOURCE,
     poolMinPerCell: p.V5_POOL_MIN_PER_CELL,

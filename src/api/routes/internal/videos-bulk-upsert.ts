@@ -55,6 +55,11 @@ const BLOCKLIST_TOKENS: readonly string[] = [
 interface VideoMeta {
   youtube_video_id?: string;
   title?: string;
+  /** CP494 ② — full description from videos.list snippet (was dropped at
+   *  extraction). Populates youtube_videos.description → video_pool tsvector. */
+  description?: string | null;
+  /** CP494 ② — UC* channel id (snippet.channelId). */
+  channel_id?: string | null;
   channel_title?: string | null;
   duration_seconds?: number | null;
   view_count?: number | null;
@@ -180,6 +185,8 @@ export const internalVideosBulkUpsertRoutes: FastifyPluginAsync = async (fastify
               INSERT INTO youtube_videos (
                 youtube_video_id,
                 title,
+                description,
+                channel_id,
                 channel_title,
                 duration_seconds,
                 view_count,
@@ -192,6 +199,8 @@ export const internalVideosBulkUpsertRoutes: FastifyPluginAsync = async (fastify
               VALUES (
                 ${v.youtube_video_id},
                 ${v.title},
+                ${v.description ?? null},
+                ${v.channel_id ?? null},
                 ${v.channel_title ?? null},
                 ${v.duration_seconds ?? null},
                 ${v.view_count ?? null},
@@ -202,7 +211,12 @@ export const internalVideosBulkUpsertRoutes: FastifyPluginAsync = async (fastify
                 ${v.source ?? null}
               )
               ON CONFLICT (youtube_video_id) DO UPDATE
-                SET source = COALESCE(EXCLUDED.source, youtube_videos.source)
+                SET source = COALESCE(EXCLUDED.source, youtube_videos.source),
+                    -- CP494 ② — backfill description/channel_id when a re-submit
+                    -- carries them and the existing row is NULL (prefer existing
+                    -- non-null so a stale dump can't blank a populated row).
+                    description = COALESCE(youtube_videos.description, EXCLUDED.description),
+                    channel_id = COALESCE(youtube_videos.channel_id, EXCLUDED.channel_id)
               RETURNING (xmax = 0) AS inserted
             `);
           if (result.length > 0 && result[0]!.inserted) {

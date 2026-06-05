@@ -190,6 +190,14 @@ const envSchema = z.object({
   POOL_MAINTENANCE_ENABLED: z
     .preprocess((v) => String(v).toLowerCase() !== 'false', z.boolean())
     .default(true),
+
+  // CP494 ② — supply bridge: promote youtube_videos (Mac Mini quota-0 sink)
+  // into video_pool (source='yt_promoted'). ONE flag controls the write↔read
+  // pair: off = promote endpoint no-ops AND v5 poolSources omits 'yt_promoted'
+  // (current behavior, code-revert-free rollback). See v5/config.ts.
+  SUPPLY_YT_BRIDGE_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -337,6 +345,11 @@ export const config = {
   // video_pool ToS hygiene cron (CP494).
   poolMaintenance: {
     enabled: env.POOL_MAINTENANCE_ENABLED,
+  },
+
+  // Supply bridge: youtube_videos → video_pool promotion (CP494 ②).
+  supplyYtBridge: {
+    enabled: env.SUPPLY_YT_BRIDGE_ENABLED,
   },
 
   // Gemini
