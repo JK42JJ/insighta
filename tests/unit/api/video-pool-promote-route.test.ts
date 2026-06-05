@@ -98,10 +98,11 @@ describe('POST /internal/video-pool/promote-from-youtube-videos', () => {
       method: 'POST',
       url: URL,
       headers: HEADERS,
-      payload: { limit: 9999, dry_run: true },
+      payload: { limit: 9999, dry_run: true, skip_embeddings: true },
     });
     expect(res.statusCode).toBe(200);
-    expect(mockPromoteYt).toHaveBeenCalledWith({ limit: 500, dryRun: true }); // MAX_LIMIT clamp
+    // MAX_LIMIT clamp + skip_embeddings pass-through
+    expect(mockPromoteYt).toHaveBeenCalledWith({ limit: 500, dryRun: true, skipEmbeddings: true });
     const body = JSON.parse(res.body) as { enabled: boolean; dry_run: boolean };
     expect(body.enabled).toBe(true);
     expect(body.dry_run).toBe(true);

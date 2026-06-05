@@ -70,6 +70,30 @@ describe('promoteYoutubeVideosToPool', () => {
     expect(sql).toContain('video_pool');
   });
 
+  test('candidate SQL prefilters hard floors so skip rows never occupy the window', async () => {
+    mockQueryRaw.mockResolvedValueOnce([]);
+    await promoteYoutubeVideosToPool({ limit: 100 });
+    const sql = JSON.stringify(mockQueryRaw.mock.calls[0]);
+    // bound values = same constants the JS gate uses (silver floor + duration range)
+    expect(sql).toContain('view_count >=');
+    expect(sql).toContain('duration_seconds BETWEEN');
+    expect(sql).toContain('10000'); // QUALITY_SILVER_VIEW_COUNT
+    expect(sql).toContain('3600'); // MAX_DURATION_SEC
+  });
+
+  test('skipEmbeddings: no probe, no embed, no embeddings INSERT; flag stays truthful', async () => {
+    mockQueryRaw.mockResolvedValueOnce([
+      { ...baseRow, video_id: 'g1', view_count: BigInt(200_000) },
+    ]);
+    const r = await promoteYoutubeVideosToPool({ limit: 100, skipEmbeddings: true });
+    expect(r.promoted).toBe(1);
+    expect(r.embedded).toBe(0);
+    expect(r.embeddings_skipped_unreachable).toBe(false); // skipped by request ≠ unreachable
+    expect(mockIsOllamaReachable).not.toHaveBeenCalled();
+    expect(mockEmbedBatch).not.toHaveBeenCalled();
+    expect(mockExecuteRaw).not.toHaveBeenCalled();
+  });
+
   test('gold/silver promoted; bronze and rejected skipped', async () => {
     mockQueryRaw.mockResolvedValueOnce([
       { ...baseRow, video_id: 'g1', view_count: BigInt(200_000) }, // gold
