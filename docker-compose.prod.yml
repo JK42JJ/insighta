@@ -113,6 +113,20 @@ services:
       # (hybrid-rerank.ts:224). Source left UNSET → code default 'v2_promoted'.
       # Using the 28k pool needs a design change (per-cell tsquery / separate
       # fetch+merge / batch_trend gold-only), NOT this flag — see P1.1.
+      # NOTE (CP494 ⑤ Phase C): per-cell tsquery shipped as V5_POOL_MATCH
+      # (#854) — the rejection above was measured under GLOBAL match, so
+      # batch_trend gets a per-cell re-measurement in Phase C before any
+      # deletion decision (data-bad vs read-method-bad still unresolved).
+      # CP494 ② supply bridge (⑤ Phase B-pre canary). ONE flag, write+read pair:
+      # write = POST /internal/video-pool/promote-from-youtube-videos drains
+      # quota-0 Mac Mini supply (youtube_videos) into video_pool as
+      # 'yt_promoted' (gold/silver only, create-only); read = v5 poolSources
+      # gains 'yt_promoted'. Prod measurement is a sanctioned dev-first
+      # EXCEPTION: dev video_pool is empty and batch_trend 29k is prod-only,
+      # so ⑤ cannot be measured on dev (same class as the P0 EXPLAIN read).
+      # Revert: delete this line + redeploy → code default false (bridge
+      # no-op + poolSources unchanged). Off after measurement window.
+      - SUPPLY_YT_BRIDGE_ENABLED=true
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
