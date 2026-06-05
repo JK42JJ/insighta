@@ -225,4 +225,58 @@ describe('POST /internal/videos/bulk-upsert', () => {
     expect(body.inserted).toBe(1);
     await app.close();
   });
+
+  // CP494 ② — description/channel_id flow into the INSERT + COALESCE backfill.
+  test('description and channel_id are bound into the INSERT', async () => {
+    mockQueryRaw.mockResolvedValue([{ inserted: true }]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/internal/videos/bulk-upsert',
+      headers: HEADERS,
+      payload: {
+        videos: [
+          {
+            youtube_video_id: 'withdesc',
+            title: 'a long enough title here',
+            duration_seconds: 600,
+            description: 'full snippet description text body',
+            channel_id: 'UCdescchannel1',
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const sql = JSON.stringify(mockQueryRaw.mock.calls[0]);
+    // values bound
+    expect(sql).toContain('full snippet description text body');
+    expect(sql).toContain('UCdescchannel1');
+    // NULL-only backfill: existing non-null wins over a stale re-submit
+    expect(sql).toContain('COALESCE(youtube_videos.description, EXCLUDED.description)');
+    expect(sql).toContain('COALESCE(youtube_videos.channel_id, EXCLUDED.channel_id)');
+    await app.close();
+  });
+
+  test('omitted description/channel_id bind as null (legacy callers unaffected)', async () => {
+    mockQueryRaw.mockResolvedValue([{ inserted: true }]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/internal/videos/bulk-upsert',
+      headers: HEADERS,
+      payload: {
+        videos: [
+          {
+            youtube_video_id: 'nodesc',
+            title: 'a long enough title here',
+            duration_seconds: 600,
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { inserted: number };
+    expect(body.inserted).toBe(1);
+    await app.close();
+  });
 });
