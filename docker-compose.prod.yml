@@ -135,6 +135,11 @@ services:
       # reuse loop (#852): picked live discoveries upsert back to pool
       # (source='user_live') + poolSources reads them next request.
       # full-cell skip (#853): cells with >=12 grid cards skip pool+live search.
+      # CP497 isolated re-enable — cell skip ONLY; all pool flags stay OFF.
+      # Incident-independent: removes queries upstream of the pool gate,
+      # injects no content. Canary: trace v5_skipped_full_cells + quota delta.
+      # Revert: delete this line + redeploy → code default false (search all).
+      - V5_CELL_SKIP=true
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
