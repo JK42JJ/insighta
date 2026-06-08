@@ -48,6 +48,9 @@ const envSchema = z.object({
   // Sync Configuration
   DEFAULT_SYNC_INTERVAL: z.coerce.number().default(3600000), // 1 hour
   MAX_CONCURRENT_SYNCS: z.coerce.number().default(5),
+  // CP498 PR2 — pg-boss enrich-rich-summary (Heart path) worker concurrency.
+  // unset ⇒ 4. Roll back to serial via RICH_SUMMARY_CONCURRENCY=1.
+  RICH_SUMMARY_CONCURRENCY: z.coerce.number().int().min(1).default(4),
   RETRY_ATTEMPTS: z.coerce.number().default(3),
   BACKOFF_MULTIPLIER: z.coerce.number().default(2),
 
@@ -274,6 +277,11 @@ export const config = {
     maxConcurrent: env.MAX_CONCURRENT_SYNCS,
     retryAttempts: env.RETRY_ATTEMPTS,
     backoffMultiplier: env.BACKOFF_MULTIPLIER,
+  },
+
+  // Queue (pg-boss worker concurrency)
+  queue: {
+    richSummaryConcurrency: env.RICH_SUMMARY_CONCURRENCY,
   },
 
   // YouTube API Quota
