@@ -25,6 +25,14 @@ export const JOB_NAMES = {
    * stale YouTube metadata, decoupled from the collector success path. 0 quota.
    */
   POOL_MAINTENANCE_RUN: 'pool-maintenance-run',
+  /**
+   * CP498 PR3b — A-stage relevance backfill. One quick-Haiku score (0-100) per
+   * user-scoped card ROW (user_video_states or user_local_cards). NOT
+   * video-keyed: relevance is a relation (video × this row's centerGoal), so
+   * the unit of work is the row, never the video. See
+   * docs/handoffs/pr3-relevance-backfill-cp498.md.
+   */
+  ENRICH_RELEVANCE_QUICK: 'enrich-relevance-quick',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -91,6 +99,24 @@ export interface PoolMaintenanceRunPayload {
   trigger?: string;
 }
 
+/**
+ * CP498 PR3b — payload for ENRICH_RELEVANCE_QUICK.
+ *
+ * Carries ALL scoring inputs so the worker does ZERO DB reads before its
+ * single write. `rowId` is the PK of the user-scoped row
+ * (UserVideoState.id for table='uvs', user_local_cards.id for table='ulc').
+ * The fan-out unit is the ROW, never the video id — the same video placed in
+ * two rows/cells gets two independent scores against each row's centerGoal, so
+ * the score never collapses into a video attribute (= no cross-user leak).
+ */
+export interface RelevanceQuickPayload {
+  table: 'uvs' | 'ulc';
+  rowId: string;
+  title: string;
+  description?: string;
+  centerGoal: string;
+}
+
 // ============================================================================
 // Job Options
 // ============================================================================
@@ -150,6 +176,16 @@ export const BATCH_VIDEO_COLLECTOR_RUN_OPTIONS = {
 export const POOL_MAINTENANCE_RUN_OPTIONS = {
   retryLimit: 0,
   expireInMinutes: 10,
+} as const;
+
+/**
+ * Relevance backfill — quick Haiku only (~1-3s), not interactive. Short expiry;
+ * one retry absorbs a transient 429/5xx that slips past the OpenRouter backoff
+ * (PR1 #864). A second failure (or no_title) is handled in the worker.
+ */
+export const RELEVANCE_QUICK_RETRY_OPTIONS = {
+  retryLimit: 1,
+  expireInMinutes: 5,
 } as const;
 
 // ============================================================================
