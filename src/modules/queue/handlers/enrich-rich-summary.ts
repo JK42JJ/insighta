@@ -45,12 +45,9 @@ import { getCaptionExtractor } from '../../caption/extractor';
 import { getPrismaClient } from '../../database/client';
 import { logger } from '../../../utils/logger';
 import { getJobQueue } from '../manager';
-import {
-  JOB_NAMES,
-  QUEUE_CONFIG,
-  RICH_SUMMARY_RETRY_OPTIONS,
-  type EnrichRichSummaryPayload,
-} from '../types';
+import { JOB_NAMES, RICH_SUMMARY_RETRY_OPTIONS, type EnrichRichSummaryPayload } from '../types';
+import { config } from '@/config/index';
+import { richSummaryWorkOptions } from './rich-summary-work-options';
 
 /** Thrown when captions are unavailable so the worker fails fast and the
  *  grid surfaces a retry affordance instead of a description-only row. */
@@ -63,15 +60,15 @@ export const NO_TRANSCRIPT_ERROR = 'NO_TRANSCRIPT';
 export async function registerEnrichRichSummaryWorker(): Promise<void> {
   const boss = getJobQueue().getInstance();
 
+  // N via env (RICH_SUMMARY_CONCURRENCY, default 4). Rollback = set to 1.
+  const concurrency = config.queue.richSummaryConcurrency;
   await boss.work<EnrichRichSummaryPayload>(
     JOB_NAMES.ENRICH_RICH_SUMMARY,
-    { teamConcurrency: QUEUE_CONFIG.RICH_SUMMARY_CONCURRENCY, teamSize: 1 },
+    richSummaryWorkOptions(concurrency),
     handleEnrichRichSummary
   );
 
-  logger.info('enrich-rich-summary worker registered', {
-    concurrency: QUEUE_CONFIG.RICH_SUMMARY_CONCURRENCY,
-  });
+  logger.info('enrich-rich-summary worker registered', { concurrency });
 }
 
 /**
