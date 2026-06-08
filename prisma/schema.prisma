@@ -688,6 +688,12 @@ model user_local_cards {
   mandala_id           String?        @db.Uuid
   sort_order           Int?
   video_id             String?        @db.VarChar(11)
+  /// CP498 PR3 — A-stage relevance: Haiku score (0-100) of this card vs its
+  /// mandala centerGoal. USER-SCOPED here (NOT the video-keyed
+  /// video_rich_summaries.mandala_relevance_pct, which leaks across users).
+  /// NULL = not yet backfilled; filled by the relevance-backfill queue (PR3b).
+  relevance_pct        Int?
+  relevance_at         DateTime?      @db.Timestamptz(6)
   created_at           DateTime?      @default(now()) @db.Timestamptz(6)
   updated_at           DateTime?      @default(now()) @db.Timestamptz(6)
   /// CP457+ pin/bookmark: NULL = unpinned, timestamp = pinned moment.
