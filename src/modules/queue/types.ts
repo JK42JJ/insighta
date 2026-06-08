@@ -162,19 +162,20 @@ export const QUEUE_CONFIG = {
   /** Max concurrent enrichment workers */
   ENRICH_CONCURRENCY: 1,
   /**
-   * Max concurrent Heart-triggered rich-summary workers. CP462+ Issue #649.
-   * Independent pool from ENRICH_CONCURRENCY so batch backfill cannot starve
-   * interactive Heart clicks. Override via BULLMQ_ENRICH_CONCURRENCY env
-   * (legacy name retained for compatibility even though pg-boss replaced BullMQ).
+   * Concurrency ceiling for Heart-triggered rich-summary workers (CP462+
+   * Issue #649). Independent pool from ENRICH_CONCURRENCY so batch backfill
+   * cannot starve interactive Heart clicks.
    *
-   * CP475+ — raised 5 → 10 after the 2026-05-20 user report that liking 6
-   * cards in quick succession felt serial. p95 v2 job = 87s (CP475 measurement);
-   * 10 workers absorb a 6-10 card burst without blocking. Sonnet/OpenRouter
-   * tier headroom checked against the wizard path, which keeps its own quota.
+   * ⚠️ NOTE (CP498): this value is currently INERT. The worker registers with
+   * `teamSize:1` and no `teamRefill`, so pg-boss fetches exactly one job per
+   * poll and awaits it to completion before the next fetch — `teamConcurrency`
+   * never engages (see enrich-rich-summary.ts + pg-boss manager.js fetch =
+   * `teamSize - queueSize`). The CP475 "raised 5→10" change was therefore a
+   * no-op. Activating real concurrency requires `teamSize:N` + `teamRefill:true`
+   * at the registration site. There is NO env override despite older comments —
+   * this is a plain literal.
    */
   RICH_SUMMARY_CONCURRENCY: 10,
-  /** Delay between polling for new jobs (seconds) */
-  POLL_INTERVAL_SECONDS: 10,
   /** How long to keep completed jobs (days) */
   ARCHIVE_COMPLETED_AFTER_DAYS: 7,
   /** How long to keep failed jobs (days) */
