@@ -52,6 +52,15 @@ export interface CardRelevanceInput {
   description?: string;
   /** The card's mandala centerGoal. Empty ⇒ model returns 0 per the prompt. */
   centerGoal: string;
+  /**
+   * CP499 — the cell (sub-goal) this card is placed into. When present, the goal
+   * text passed to the scorer is a 2-label block (center + cell + criterion) so
+   * the score reflects cell-fit AND center contribution. When absent, the goal
+   * is `centerGoal` verbatim — byte-identical to the pre-CP499 string, so the
+   * SHARED v2 Heart path (rich-summary-v2-quick-generator, which never passes
+   * cellGoal) is unchanged. SSOT param, routed from wizard/manual/backfill.
+   */
+  cellGoal?: string;
   /** Optional transcript; '' ⇒ prompt uses title+description fallback. */
   transcript?: string;
 }
@@ -69,13 +78,23 @@ export async function computeCardRelevance(
   }
 
   const language = detectLanguage(input.title);
+  // CP499 — cell-aware goal. cellGoal present ⇒ labeled 2-line block + criterion
+  // (cell-fit AND center contribution). Absent ⇒ `centerGoal` verbatim, i.e. the
+  // exact same string passed to the SHARED buildV2QuickPrompt before CP499, so
+  // the v2 Heart path (no cellGoal) is byte-for-byte unchanged.
+  const goal =
+    input.cellGoal && input.cellGoal.trim().length > 0
+      ? `중심 목표: ${input.centerGoal}\n` +
+        `이 카드가 배치될 셀: ${input.cellGoal}\n` +
+        `→ 이 영상이 셀에 적합하면서 중심 목표에 기여하는 정도로 평가`
+      : input.centerGoal;
   const prompt = buildV2QuickPrompt({
     title: input.title,
     description: input.description ?? '',
     channel: '',
     language,
     transcript: input.transcript ?? '',
-    mandalaCenterGoal: input.centerGoal,
+    mandalaCenterGoal: goal,
   });
 
   let raw: string;
