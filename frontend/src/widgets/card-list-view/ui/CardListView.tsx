@@ -32,11 +32,23 @@ import { Slider } from '@/shared/ui/slider';
 import { ContextHeader, SORT_OPTIONS, type SortMode } from './ContextHeader';
 import { LabelFilterPillsV2 } from './LabelFilterPillsV2';
 
+/**
+ * CP498 PR3c — A-stage relevance comparator: DESC, NULLS LAST. `?? -1` sinks
+ * null/undefined relevancePct below any real 0-100 score. Pure + exported so
+ * the ordering contract (highest-first, unscored-last) is unit-tested against a
+ * sign-flip regression. NEVER reads the video-keyed v2MandalaRelevancePct.
+ */
+export const compareByRelevanceDesc = (a: InsightCard, b: InsightCard): number =>
+  (b.relevancePct ?? -1) - (a.relevancePct ?? -1);
+
 const SORT_ICON_BY_VALUE: Record<SortMode, typeof ArrowDownWideNarrow> = {
   latest: ArrowDownWideNarrow,
   oldest: ArrowUpWideNarrow,
   'title-asc': ArrowDownAZ,
   'title-desc': ArrowDownZA,
+  // CP498 PR3c — reuse the descending icon; a dedicated relevance glyph /
+  // numeric badge is deferred (visual signal = later per spec).
+  'relevance-desc': ArrowDownWideNarrow,
 };
 
 const MIN_GRID_COLUMNS = 2;
@@ -328,6 +340,10 @@ export function CardListView({
         return arr.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
       case 'title-desc':
         return arr.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
+      case 'relevance-desc':
+        // CP498 PR3c — A-stage relevance: highest first, unscored cards last
+        // (DESC NULLS LAST). Cards are reordered, never removed (reversible).
+        return arr.sort(compareByRelevanceDesc);
       default:
         return arr;
     }

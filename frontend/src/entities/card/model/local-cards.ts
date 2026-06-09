@@ -66,6 +66,13 @@ export interface LocalCard {
   v2_template_version?: string | null;
   v2_full_landed?: boolean;
   /**
+   * CP498 PR3c — A-stage relevance score (0-100), USER-SCOPED on
+   * user_local_cards (distinct from the video-keyed v2_mandala_relevance_pct
+   * above). Null = not yet backfilled. Added to /local-cards/list SELECT.
+   */
+  relevance_pct?: number | null;
+  relevance_at?: string | null;
+  /**
    * CP475+ — true only when the BE has every foundational field the grid
    * card needs (published_at, duration_seconds for YouTube). False means
    * the youtube_videos pipeline is still catching up; the FE renders the
@@ -172,6 +179,8 @@ export function localCardToInsightCard(card: LocalCard): InsightCard {
     videoSummary: card.video_summary,
     sourceTable: 'user_local_cards',
     pinnedAt: card.pinned_at ?? null,
+    // CP498 PR3c — user-scoped A-stage relevance score (ulc.relevance_pct).
+    relevancePct: card.relevance_pct ?? null,
     // CP475+ — v2 fields from the unified /local-cards/list payload. Older
     // BE responses without these keys leave them undefined, which the
     // grid card treats the same as "no v2 row yet".

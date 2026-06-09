@@ -242,7 +242,7 @@ Deno.serve(async (req) => {
         // Parallel fetch: subscription + cards
         let cardsQuery = supabase
           .from('user_local_cards')
-          .select('id, url, title, thumbnail, link_type, user_note, metadata_title, metadata_description, metadata_image, cell_index, level_id, mandala_id, sort_order, video_id, created_at, updated_at, pinned_at')
+          .select('id, url, title, thumbnail, link_type, user_note, metadata_title, metadata_description, metadata_image, cell_index, level_id, mandala_id, sort_order, video_id, created_at, updated_at, pinned_at, relevance_pct, relevance_at')
           .eq('user_id', user.id)
           // CP457+ deterministic tie-break + pinned_at column. sort_order
           // is null for many cards (never touched by D&D); without a

@@ -3,13 +3,15 @@ import { Trash2 } from 'lucide-react';
 import type { ViewMode } from '@/entities/user/model/types';
 import { ViewSwitcher } from '@/features/view-mode';
 
-export type SortMode = 'latest' | 'oldest' | 'title-asc' | 'title-desc';
+export type SortMode = 'latest' | 'oldest' | 'title-asc' | 'title-desc' | 'relevance-desc';
 
 export const SORT_OPTIONS: { value: SortMode; labelKey: string }[] = [
   { value: 'latest', labelKey: 'contextHeader.sortLatest' },
   { value: 'oldest', labelKey: 'contextHeader.sortOldest' },
   { value: 'title-asc', labelKey: 'contextHeader.sortTitleAZ' },
   { value: 'title-desc', labelKey: 'contextHeader.sortTitleZA' },
+  // CP498 PR3c — A-stage relevance. Opt-in only (default stays 'latest').
+  { value: 'relevance-desc', labelKey: 'contextHeader.sortRelevance' },
 ];
 
 interface ContextHeaderProps {
