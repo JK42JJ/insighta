@@ -459,6 +459,34 @@ export async function consumePrecompute(
           ? ` inserted=${autoAddResult.rowsInserted ?? 0} preserved=${autoAddResult.rowsPreserved ?? 0}`
           : ` reason=${autoAddResult.reason ?? 'unknown'}`)
     );
+
+    // CP499 — A-stage relevance trigger MUST fire on THIS path: the wizard
+    // places cards via this inline auto-add, NOT pipeline-runner step3. step3
+    // then sees 'no pending recommendation_cache rows' (auto-add flips them to
+    // 'shown') and no-ops, so its relevance trigger (gated on result.ok) never
+    // fires for wizard mandalas — #873 was mis-wired into that dead path, so
+    // new wizard cards were never scored (relevance_pct stayed NULL). Mirror
+    // the pipeline-runner block here: fire-and-forget, applyCutoff:false.
+    // Mutually exclusive with step3 (whichever consumes the 'pending' rows
+    // fires; the other gets ok:false); the trigger's relevance_pct IS NULL
+    // filter is an idempotent backstop against any double-enqueue edge.
+    if (autoAddResult.ok && (autoAddResult.rowsInserted ?? 0) > 0) {
+      setImmediate(() => {
+        void import('@/modules/relevance/relevance-backfill-trigger')
+          .then(({ enqueueRelevanceBackfillForMandala }) =>
+            enqueueRelevanceBackfillForMandala({
+              userId: input.userId,
+              mandalaId: input.mandalaId,
+              applyCutoff: false,
+            })
+          )
+          .then((r) => log.info(`relevance trigger (precompute path): enqueued=${r.enqueued}`))
+          .catch((err) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            log.warn(`relevance trigger (precompute path) failed (non-fatal): ${msg}`);
+          });
+      });
+    }
   } catch (err) {
     log.warn(
       `precompute consume → auto-add inline threw (non-fatal — pipeline-runner step3 will retry): ${
