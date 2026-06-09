@@ -69,7 +69,7 @@ number ≠ the sorted-by number (dual-number confusion).
 ### 4. Compute location per entrance (all via the one SSOT).
 | entrance | when | context available | call site |
 |---|---|---|---|
-| **Wizard** | inline at placement | centerGoal + subGoals[cellIndex] already in scope, **0 DB round-trip** | `v5/executor.ts:295-299` (assemble) → compute → write `uvs.relevance_pct` |
+| **Wizard** | **async**, on creation (fire-and-forget) | cellGoal from the already-fetched mandala `levels[0].subjects[cell_index]` (0 extra query) | `pipeline-runner.ts` fires the relevance trigger after auto-add (next to rich-summary). ⚠️ NOT sync-inline at `executor.ts:295` — that only assembles in-memory; the DB write is `auto-add-recommendations.ts:305`, and ~64 sync Haiku calls would blow the wizard latency cap. The worker scores off the hot path; the badge appears once `relevance_pct` lands. NOT flag-gated. |
 | **Manual** | on panel **close** (batch) | centerGoal + the cell each pick targets | batch commit (decision 3) |
 | **Backfill** | existing worker | centerGoal (+ cellGoal from row's cell) | `enrich-relevance-quick.ts` (already routes to `computeCardRelevance`) |
 
@@ -123,7 +123,8 @@ that reads `relevance_pct` (NOT the old `mandala_relevance_pct`):
 
 ## Impacted files (no migration)
 - `compute-card-relevance.ts` — `+cellGoal` param + prompt.
-- `v5/executor.ts` — wizard inline compute + write at placement.
+- `pipeline-runner.ts` — fire the relevance trigger (async, fire-and-forget) on wizard creation, next to the rich-summary trigger. (`executor.ts` only assembles; no DB write there.)
+- `relevance-backfill-trigger.ts` — resolve `cellGoal` per row from the fetched mandala's `subjects[cell_index]` + pass to the worker; `RelevanceQuickPayload` + worker forward `cellGoal`.
 - `add-cards-panel/*` + `cards.ts` (or new batch endpoint) — manual batch-on-close.
 - `enrich-relevance-quick.ts` / trigger — pass cellGoal (backfill).
 - `rich-summary-v2-*generator.ts` — stop sourcing relevance from `mandala_relevance_pct`.

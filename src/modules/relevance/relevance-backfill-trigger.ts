@@ -50,9 +50,13 @@ export async function enqueueRelevanceBackfillForMandala(params: {
   // Resolve the mandala centerGoal once (root level depth=0) — same source as
   // enrich-rich-summary.ts:174. Empty ⇒ compute returns 0 per the quick prompt.
   let centerGoal = '';
+  let cellGoals: string[] = [];
   try {
     const mandala = await getMandalaManager().getMandalaById(params.userId, params.mandalaId);
     centerGoal = mandala?.levels[0]?.centerGoal ?? '';
+    // CP499 — the 8 cell sub-goals from the SAME fetched mandala (0 extra query).
+    // cellGoals[cell_index] is the per-card cell goal forwarded to the SSOT scorer.
+    cellGoals = mandala?.levels[0]?.subjects ?? [];
   } catch (err) {
     log.warn('mandala lookup failed (continuing with empty centerGoal)', {
       userId: params.userId,
@@ -74,7 +78,7 @@ export async function enqueueRelevanceBackfillForMandala(params: {
         relevance_pct: null,
         ...(cutoffDate ? { createdAt: { gt: cutoffDate } } : {}),
       },
-      select: { id: true, video: { select: { title: true } } },
+      select: { id: true, cell_index: true, video: { select: { title: true } } },
     }),
     prisma.user_local_cards.findMany({
       where: {
@@ -84,7 +88,13 @@ export async function enqueueRelevanceBackfillForMandala(params: {
         relevance_pct: null,
         ...(cutoffDate ? { created_at: { gt: cutoffDate } } : {}),
       },
-      select: { id: true, title: true, metadata_title: true, metadata_description: true },
+      select: {
+        id: true,
+        cell_index: true,
+        title: true,
+        metadata_title: true,
+        metadata_description: true,
+      },
     }),
   ]);
 
@@ -99,6 +109,7 @@ export async function enqueueRelevanceBackfillForMandala(params: {
         rowId: row.id,
         title: row.video?.title ?? '',
         centerGoal,
+        cellGoal: row.cell_index != null ? cellGoals[row.cell_index] : undefined,
       });
       if (jobId) enqueued += 1;
       else skipped += 1;
@@ -120,6 +131,7 @@ export async function enqueueRelevanceBackfillForMandala(params: {
         title: row.title ?? row.metadata_title ?? '',
         description: row.metadata_description ?? undefined,
         centerGoal,
+        cellGoal: row.cell_index != null ? cellGoals[row.cell_index] : undefined,
       });
       if (jobId) enqueued += 1;
       else skipped += 1;
