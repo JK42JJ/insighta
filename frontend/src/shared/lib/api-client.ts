@@ -1001,6 +1001,19 @@ class ApiClient {
     );
   }
 
+  /**
+   * CP499 #3 — A-stage relevance trigger. Fired fire-and-forget by the Add Cards
+   * panel on close (when ≥1 pick happened this session). Scores the mandala's
+   * unscored placed cards via the SSOT (cellGoal-aware), idempotent. Errors are
+   * swallowed by the caller's void pattern — never blocks the close UX.
+   */
+  async triggerMandalaRelevance(mandalaId: string): Promise<void> {
+    await this.request<{ status: 'ok'; data: unknown }>(
+      `/mandalas/${mandalaId}/relevance-trigger`,
+      { method: 'POST', body: JSON.stringify({}) }
+    );
+  }
+
   // ─── CP456 Billing (Lemon Squeezy, MoR subscription) ──────────────────────
 
   /**
