@@ -205,6 +205,17 @@ services:
       # Re-enable AFTER (a) cron path captioner integration ships AND
       # (b) the LLM provider is swapped to Sonnet 4.6 in the v2 path.
       - RICH_SUMMARY_V2_CRON_ENABLED=false
+      # CP499 (2026-06-10) — A-stage relevance backfill worker concurrency.
+      # Measured: 38-card mandala scored in 38.3s = 38 Haiku calls (~2.3s each) ÷
+      # 4 parallel (code default). Raise 4→8 to ~halve to ~19s. Network-bound
+      # (worker awaits OpenRouter, no CPU) so 8 is fine on t3.medium 2-vCPU; the
+      # real ceiling is OpenRouter per-key 429, not CPU. ISOLATED queue
+      # (enrich-relevance-quick ≠ enrich-rich-summary's RICH_SUMMARY_CONCURRENCY),
+      # but the OpenRouter key is SHARED — post-deploy must verify 429=0 across
+      # ALL OpenRouter paths (merged-gen / summary), not just relevance. Rollback:
+      # set 4 (or delete → code default 4) + redeploy. Raise to 12-16 only after
+      # measuring 429=0 (for 64+ card mandalas).
+      - RELEVANCE_BACKFILL_CONCURRENCY=8
       # CP437 (2026-04-29) — Operator flip: enable YouTube metadata backfill cron.
       # Default in code is `false` — cron stays dormant unless this env is
       # explicitly true. With this set, `startYouTubeMetadataCron()` schedules
