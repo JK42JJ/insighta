@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useTranslation } from 'react-i18next';
 import { FileVideo } from 'lucide-react';
@@ -18,14 +18,14 @@ export function ListView({ cards, activeCardId, onCardSelect, onCardClick }: Lis
   const [activeIndex, setActiveIndex] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const sortedCards = useMemo(() => {
-    return [...cards].sort((a, b) => {
-      if (a.sortOrder !== undefined && b.sortOrder !== undefined) {
-        return a.sortOrder - b.sortOrder;
-      }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-  }, [cards]);
+  // CP498 PR3c — cards arrive ALREADY sorted by the host (CardListView applies
+  // the user's sortMode chip: latest / oldest / title / relevance). Re-sorting
+  // here by sortOrder silently overrode ALL of those — the new "관련도순" sort
+  // surfaced it (off-target cards floated to the top). This is the same bug
+  // CardList (grid) already fixed ("5d ago in the middle"); ListView was the
+  // one place it was missed. Render in the order given — do NOT re-sort here.
+  // The regression test pins this: a pre-sorted input must come out unchanged.
+  const sortedCards = cards;
 
   const virtualizer = useVirtualizer({
     count: sortedCards.length,
