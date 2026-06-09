@@ -23,9 +23,33 @@ import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 
 // ── Constants ──────────────────────────────────────────────
 
+// CP499 #4 — A-stage relevance badge tiers (USER-SCOPED relevance_pct, 0-100).
+const RELEVANCE_BADGE_THRESHOLD_HIGH = 90;
+const RELEVANCE_BADGE_THRESHOLD_MID = 80;
+const RELEVANCE_BADGE_THRESHOLD_LOW = 70;
+
 // ── Helpers ────────────────────────────────────────────────
 // formatDuration / formatViewCount live in shared/lib/format-number so
 // the Add Cards panel + future card surfaces share the same rules.
+
+/**
+ * CP499 #4 — A-stage relevance badge from the USER-SCOPED relevance_pct
+ * (InsightCard.relevancePct), NOT the video-keyed mandala_relevance_pct (which
+ * stays the v2-completion signal for the dot/SSE only). Plain coloured text
+ * (CP463 directive). null ⇒ no badge — the card is not yet scored; it appears
+ * once wizard/manual/backfill fills relevance_pct (display = stored value).
+ */
+export function getRelevanceBadge(
+  pct: number | null | undefined
+): { label: string; className: string } | null {
+  if (pct == null) return null;
+  const value = Math.max(0, Math.min(100, Math.round(pct)));
+  const label = `${value}%`;
+  if (value >= RELEVANCE_BADGE_THRESHOLD_HIGH) return { label, className: 'text-[#818cf8]' };
+  if (value >= RELEVANCE_BADGE_THRESHOLD_MID) return { label, className: 'text-[#34d399]' };
+  if (value >= RELEVANCE_BADGE_THRESHOLD_LOW) return { label, className: 'text-[#fbbf24]' };
+  return { label, className: 'text-[#94a3b8]' };
+}
 
 /** Extract YouTube metadata from InsightCard.metadata (runtime fields beyond UrlMetadata type) */
 function extractYouTubeMeta(card: InsightCard) {
@@ -299,6 +323,11 @@ export function InsightCardItemV2({
 
   // ── Data extraction ──
   const ytMeta = extractYouTubeMeta(card);
+  // CP499 #4 — user-scoped A-stage relevance badge. Read directly off the card
+  // (converters populate card.relevancePct from uvs/ulc relevance_pct) — no new
+  // prop needed (unlike mandalaRelevancePct, which isn't on the card for uvs and
+  // stays a separate prop feeding only the v2-completion dot).
+  const relevanceBadge = getRelevanceBadge(card.relevancePct);
   const duration = formatDuration(ytMeta.durationSec);
   const views = formatViewCount(ytMeta.viewCount);
   // CP475+ — when the BE has not yet caught up on this row's
@@ -567,7 +596,12 @@ export function InsightCardItemV2({
           {decodeHtmlEntities(card.title)}
         </h4>
 
-        {(footerLeft || footerRight || sectorLabel || isEnrichFailed || showFailedGlow) && (
+        {(footerLeft ||
+          footerRight ||
+          sectorLabel ||
+          relevanceBadge ||
+          isEnrichFailed ||
+          showFailedGlow) && (
           <div className="mt-2 flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground/70">
             <span className="truncate flex items-center gap-1.5 min-w-0">
               {(() => {
@@ -604,17 +638,25 @@ export function InsightCardItemV2({
                 );
               })()}
             </span>
-            {/* Right slot — CP498 PR3c removed the per-card relevance % badge
-                (relevance is now the "관련도순" sort, not a card number — kills
-                the video-keyed leak + the dual-number confusion). The slot now
-                shows only the Heart-enrichment in-progress dot:
-                  liked && pending && !failed → breathing dot
-                  else                        → empty */}
-            {v2EnrichmentPending && !showFailedGlow ? (
-              // CP475+ — subtle breathing dot for the Heart-enrichment window
-              // (bookmark click → quick-result arrival). Single 6px dot
-              // breathing at 1.6s; stops when v2 lands. (CP498 PR3c: it no
-              // longer leads into a relevance % — that badge was removed.)
+            {/* Right slot priority (CP499 #4 — badge revived on the USER-SCOPED
+                relevance_pct, NOT the video-keyed mandala_relevance_pct):
+                  scored (relevancePct != null) → relevance % (color-tiered)
+                  else liked && v2-pending && !failed → breathing dot
+                  else → empty
+                The dot still keys off mandalaRelevancePct==null (v2-completion
+                signal) — distinct source from this user-scoped badge. */}
+            {relevanceBadge ? (
+              <span
+                className={cn(
+                  'text-[10.5px] font-semibold shrink-0 tabular-nums',
+                  relevanceBadge.className
+                )}
+              >
+                {relevanceBadge.label}
+              </span>
+            ) : v2EnrichmentPending && !showFailedGlow ? (
+              // CP475+ — breathing dot for the Heart-enrichment window (bookmark
+              // click → quick-result arrival); stops when v2 lands.
               <span
                 className="block w-1.5 h-1.5 rounded-full bg-foreground/40 shrink-0 animate-[breathe_1.6s_ease-in-out_infinite]"
                 aria-label={t('cards.enrichingAria')}
