@@ -38,20 +38,28 @@ number ≠ the sorted-by number (dual-number confusion).
   provided; centerGoal-only when not (back-compat / non-cell entrances).
 - **All three entrances route through this one function** (Q4-confirmed it's the
   right shape): wizard, manual, backfill. No other code computes relevance.
-- **`mandala_relevance_pct` is removed as a relevance source:**
-  - Stop *sourcing relevance* from it. The v2 summary may keep computing it as
-    an internal artifact, but nothing reads it as "relevance". Prefer removing
-    the write (`v2-quick-generator.ts:187/199`, `v2-generator.ts:292/310`) once
-    the dot signal is repointed; until then, leave the column unused.
-  - **Repoint the "v2 done?" dot signal**: `InsightCardItemV2.tsx:364`
-    `v2EnrichmentPending = liked && mandalaRelevancePct == null` → use a
-    summary-presence signal instead (e.g. `card.v2OneLiner == null`), so the dot
-    no longer depends on `mandalaRelevancePct`.
-  - **Clean up the leaky fetch**: `/cards/v2-summaries` (`cards.ts:1027`, no user
-    filter) + `useV2Summaries` + `CardList.tsx:447-450` prop threading — once the
-    dot is repointed and the badge is user-scoped, stop fetching
-    `mandalaRelevancePct`. (This also closes the separate "/v2-summaries leak"
-    backlog item.)
+- **`mandala_relevance_pct` is removed as a relevance source — but the WRITE STAYS:**
+  - ⚠️⚠️ **DECOMMISSION REFUTED (CP499 #4 investigation — DO NOT re-attempt).**
+    `mandala_relevance_pct` is **load-bearing as the v2-quick-COMPLETE signal**,
+    in TWO places: (1) **BE SSE** `cards.ts:1157` — `has_quick = … AND
+    mandala_relevance_pct IS NOT NULL` is how the enrich-stream emits `'scored'`
+    and closes the spinner; (2) **FE dot** `InsightCardItemV2.tsx` —
+    `v2EnrichmentPending = liked && mandalaRelevancePct == null`. **Stopping the
+    write would stall the dashboard spinner forever.** So: **KEEP the write**
+    (`v2-quick-generator` / `v2-generator`), **KEEP the dot** (no repoint), **KEEP
+    the SSE check.** The earlier "remove the write + repoint the dot →
+    v2OneLiner" plan is WRONG and must not be revived.
+  - **What "removed as a relevance source" actually means**: `mandala_relevance_pct`
+    is simply **never DISPLAYED** anymore (the #870 badge removal did that). It is
+    now purely a behind-the-scenes v2-completion signal. The only displayed
+    relevance is the user-scoped `relevance_pct` badge (#4). One displayed number
+    = the sort value → confusion + display-leak resolved.
+  - **Leak status**: the *display* leak is closed (#870 — nothing shows the
+    video-keyed value). The undisplayed value still *transits* via
+    `/cards/v2-summaries` (no user filter) only for the dot's null-check — not
+    shown. **Strict transit-closure (dot uses a non-leaky completion signal so
+    the value stops crossing the wire) = OPTIONAL follow-up, deferred.** Not a
+    regression fix.
 
 ### 3. Manual add = batched prompt on panel close.
 - Today: each pick → immediate `POST /cards/:videoId/like` (single), which
@@ -125,10 +133,12 @@ that reads `relevance_pct` (NOT the old `mandala_relevance_pct`):
 - `compute-card-relevance.ts` — `+cellGoal` param + prompt.
 - `pipeline-runner.ts` — fire the relevance trigger (async, fire-and-forget) on wizard creation, next to the rich-summary trigger. (`executor.ts` only assembles; no DB write there.)
 - `relevance-backfill-trigger.ts` — resolve `cellGoal` per row from the fetched mandala's `subjects[cell_index]` + pass to the worker; `RelevanceQuickPayload` + worker forward `cellGoal`.
-- `add-cards-panel/*` + `cards.ts` (or new batch endpoint) — manual batch-on-close.
-- `enrich-relevance-quick.ts` / trigger — pass cellGoal (backfill).
-- `rich-summary-v2-*generator.ts` — stop sourcing relevance from `mandala_relevance_pct`.
-- `InsightCardItemV2.tsx` — dot signal repoint + (re-add) user-scoped badge reading `relevance_pct`.
-- `cards.ts:1027` `/v2-summaries` + `useV2Summaries` + `CardList.tsx` — drop `mandalaRelevancePct` fetch/threading.
+- `add-cards-panel/*` + `cards.ts`/`mandalas.ts` — manual: panel close fires `POST /mandalas/:id/relevance-trigger` (trigger-reuse, no batch endpoint). [#3, shipped]
+- `enrich-relevance-quick.ts` / trigger — pass cellGoal (backfill). [#2, shipped]
+- `rich-summary-v2-*generator.ts` — **NO CHANGE.** The `mandala_relevance_pct` write STAYS (v2-completion signal — see the REFUTED-decommission note above).
+- `InsightCardItemV2.tsx` — re-add user-scoped badge reading `card.relevancePct`. **Dot UNCHANGED** (no repoint — still `mandalaRelevancePct == null`). [#4, shipped]
+- `cards.ts:1027` `/v2-summaries` + `useV2Summaries` + `CardList.tsx` — **unchanged** (still feed the dot's null-check). Strict transit-leak closure = optional deferred follow-up, NOT done.
+
+> **CP499 status (all merged + deployed)**: #1 `8fd…`→#872, #2 #873, #3 #874, #4 #875. A-stage relevance SSOT closed. mandala_relevance_pct kept as the v2-completion signal.
 - Mandala-goal-edit path — null affected `relevance_pct` (forced recompute trigger).
 - `prisma/schema.prisma` — **no change** (columns exist, key unchanged).
