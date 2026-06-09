@@ -23,39 +23,9 @@ import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 
 // ── Constants ──────────────────────────────────────────────
 
-const QUALITY_BADGE_THRESHOLD_HIGH = 90;
-const QUALITY_BADGE_THRESHOLD_MID = 80;
-const QUALITY_BADGE_THRESHOLD_LOW = 70;
-// CP463 — Heart'd cards always show the % badge regardless of score
-// (user directive 2026-05-17: "하트 선택된 내용은 관련도가 백분율로
-// 표기되어야해"). Color stays score-tiered (high/mid/low) but the
-// previous "hide below 70" cut-off is dropped — a 50 or 60 score still
-// renders, just in the lower-tier color.
-
 // ── Helpers ────────────────────────────────────────────────
 // formatDuration / formatViewCount live in shared/lib/format-number so
 // the Add Cards panel + future card surfaces share the same rules.
-
-/**
- * Quality badge built from the CP462+ `mandala_relevance_pct` (0-100,
- * Heart'd cards only). The generic rec_score badge was retired per
- * handoff decision #8: only Heart'd cards earn a TL badge.
- */
-function getMandalaRelevanceBadge(
-  pct: number | null | undefined
-): { label: string; className: string } | null {
-  if (pct == null) return null;
-  const value = Math.max(0, Math.min(100, Math.round(pct)));
-  const label = `${value}%`;
-  // CP463 — user directive 2026-05-17: "관련도 는 배지가 아닌 텍스트
-  // (비율별 칼라 다르게 적용)". Drop the background/padding/rounded
-  // chrome; keep only the per-tier text color so the relevance reads
-  // as plain coloured text in the footer row.
-  if (value >= QUALITY_BADGE_THRESHOLD_HIGH) return { label, className: 'text-[#818cf8]' };
-  if (value >= QUALITY_BADGE_THRESHOLD_MID) return { label, className: 'text-[#34d399]' };
-  if (value >= QUALITY_BADGE_THRESHOLD_LOW) return { label, className: 'text-[#fbbf24]' };
-  return { label, className: 'text-[#94a3b8]' };
-}
 
 /** Extract YouTube metadata from InsightCard.metadata (runtime fields beyond UrlMetadata type) */
 function extractYouTubeMeta(card: InsightCard) {
@@ -329,7 +299,6 @@ export function InsightCardItemV2({
 
   // ── Data extraction ──
   const ytMeta = extractYouTubeMeta(card);
-  const relevanceBadge = getMandalaRelevanceBadge(mandalaRelevancePct);
   const duration = formatDuration(ytMeta.durationSec);
   const views = formatViewCount(ytMeta.viewCount);
   // CP475+ — when the BE has not yet caught up on this row's
@@ -598,12 +567,7 @@ export function InsightCardItemV2({
           {decodeHtmlEntities(card.title)}
         </h4>
 
-        {(footerLeft ||
-          footerRight ||
-          sectorLabel ||
-          relevanceBadge ||
-          isEnrichFailed ||
-          showFailedGlow) && (
+        {(footerLeft || footerRight || sectorLabel || isEnrichFailed || showFailedGlow) && (
           <div className="mt-2 flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground/70">
             <span className="truncate flex items-center gap-1.5 min-w-0">
               {(() => {
@@ -640,30 +604,17 @@ export function InsightCardItemV2({
                 );
               })()}
             </span>
-            {/* Right slot priority:
-                  scored        → relevance % (color-tiered)
-                  liked && pending && !failed → spinner (Phase 2 fast-path
-                                                 ~3-4s window between bookmark
-                                                 click and quick-result arrival)
-                  else          → empty (retry signal redesign pending,
-                                  user directive 2026-05-20) */}
-            {relevanceBadge ? (
-              <span
-                className={cn(
-                  'text-[10.5px] font-semibold shrink-0 tabular-nums',
-                  relevanceBadge.className
-                )}
-              >
-                {relevanceBadge.label}
-              </span>
-            ) : v2EnrichmentPending && !showFailedGlow ? (
-              // CP475+ — subtle breathing dot replaces the previous 3-stage
-              // spinner per user directive 2026-05-20 ("품질이 안 좋아 —
-              // 직관적이되 과도하지 않게"). Minimal: a single 6px dot in
-              // the slot the relevance % will eventually occupy, breathing
-              // at 1.6s. Conveys "in progress" without competing with the
-              // surrounding type. Stops automatically — relevance % takes
-              // over the slot the moment it lands.
+            {/* Right slot — CP498 PR3c removed the per-card relevance % badge
+                (relevance is now the "관련도순" sort, not a card number — kills
+                the video-keyed leak + the dual-number confusion). The slot now
+                shows only the Heart-enrichment in-progress dot:
+                  liked && pending && !failed → breathing dot
+                  else                        → empty */}
+            {v2EnrichmentPending && !showFailedGlow ? (
+              // CP475+ — subtle breathing dot for the Heart-enrichment window
+              // (bookmark click → quick-result arrival). Single 6px dot
+              // breathing at 1.6s; stops when v2 lands. (CP498 PR3c: it no
+              // longer leads into a relevance % — that badge was removed.)
               <span
                 className="block w-1.5 h-1.5 rounded-full bg-foreground/40 shrink-0 animate-[breathe_1.6s_ease-in-out_infinite]"
                 aria-label={t('cards.enrichingAria')}
