@@ -79,4 +79,36 @@ describe('computeCardRelevance (CP498 PR3a)', () => {
     const out = await computeCardRelevance({ title: 'T', centerGoal: 'g' });
     expect(out).toEqual({ ok: true, relevancePct: 55 });
   });
+
+  // CP499 — cellGoal: SSOT cell-aware scoring + back-compat (v2-path-identical).
+  it('cellGoal present → prompt carries BOTH center goal and cell goal + criterion', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(okResponse(haikuJson(70)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await computeCardRelevance({
+      title: '집중력 높이는 법',
+      centerGoal: '목표 달성',
+      cellGoal: '집중 환경 만들기',
+    });
+
+    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as string;
+    expect(body).toContain('목표 달성'); // centerGoal
+    expect(body).toContain('집중 환경 만들기'); // cellGoal
+    expect(body).toContain('이 카드가 배치될 셀'); // cell label injected
+    expect(body).toContain('셀에 적합하면서 중심 목표에 기여'); // explicit criterion
+  });
+
+  it('cellGoal absent → goal is centerGoal VERBATIM (no cell label) = v2-path-identical', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(okResponse(haikuJson(60)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await computeCardRelevance({ title: 'T', centerGoal: '운동 습관 만들기' });
+
+    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as string;
+    // verbatim single-line goal — byte-identical to the pre-CP499 string the
+    // shared buildV2QuickPrompt received (so the v2 Heart path is unchanged).
+    expect(body).toContain('MANDALA CENTER GOAL: 운동 습관 만들기');
+    expect(body).not.toContain('이 카드가 배치될 셀'); // no cell injection
+    expect(body).not.toContain('셀에 적합하면서'); // no criterion line
+  });
 });
