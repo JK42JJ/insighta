@@ -201,6 +201,23 @@ const envSchema = z.object({
   SUPPLY_YT_BRIDGE_ENABLED: z
     .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
     .default(false),
+
+  // CP498 PR3b — A-stage relevance backfill (user-scoped score on uvs/ulc).
+  // Gates the AUTO path only (pipeline-runner uvs + add-cards ulc). Default
+  // OFF ⇒ no automatic scoring fires. The admin manual route deliberately
+  // bypasses this flag so a controlled 1-mandala measurement can run while it
+  // stays off (config-only rollback, no code revert).
+  BACKFILL_RELEVANCE_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
+  // Worker concurrency for the enrich-relevance-quick pool. Independent from
+  // RICH_SUMMARY_CONCURRENCY (Heart path); both hit the same t3.medium, so
+  // lower this if measurement B's CPU ceiling reappears. unset ⇒ 4.
+  RELEVANCE_BACKFILL_CONCURRENCY: z.coerce.number().int().min(1).default(4),
+  // ISO timestamp — the AUTO path only scores cards created strictly after
+  // this (new cards only; existing cards are never auto-backfilled). Unset ⇒
+  // the auto path applies no cutoff filter. The admin manual route ignores it.
+  RELEVANCE_BACKFILL_CUTOFF: z.string().optional(),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -282,6 +299,13 @@ export const config = {
   // Queue (pg-boss worker concurrency)
   queue: {
     richSummaryConcurrency: env.RICH_SUMMARY_CONCURRENCY,
+    relevanceBackfillConcurrency: env.RELEVANCE_BACKFILL_CONCURRENCY,
+  },
+
+  // CP498 PR3b — A-stage relevance backfill (auto-path gate + cutoff).
+  relevanceBackfill: {
+    enabled: env.BACKFILL_RELEVANCE_ENABLED,
+    cutoff: env.RELEVANCE_BACKFILL_CUTOFF,
   },
 
   // YouTube API Quota

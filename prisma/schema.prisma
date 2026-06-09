@@ -40,6 +40,11 @@ model UserVideoState {
   /// NULL = never surfaced. Layer 1 Coverage prefers un-surfaced rows
   /// for diversity (도배 회피). Spec: docs/design/add-cards-2026-05-18.md.
   surfaced_at            DateTime?      @db.Timestamptz(6)
+  /// CP498 PR3b — A-stage relevance: Haiku score (0-100) of this card vs its
+  /// mandala centerGoal. USER-SCOPED (unique user_id+videoId) — no cross-user
+  /// leak. NULL = not yet backfilled; filled by the relevance-backfill queue.
+  relevance_pct          Int?
+  relevance_at           DateTime?      @db.Timestamptz(6)
   createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   users                  users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)

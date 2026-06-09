@@ -25,6 +25,7 @@ import { adminSearchAlgorithmsRoutes } from './search-algorithms';
 import { adminV2QualityAuditRoutes } from './v2-quality-audit';
 import { adminV4ArbiterRunsRoutes } from './v4-arbiter-runs';
 import { adminPoolHealthRoutes } from './pool-health';
+import { adminRelevanceBackfillRoutes } from './relevance-backfill';
 
 /**
  * Admin routes plugin.
@@ -67,5 +68,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // Content Pool Health — 5-section dashboard (volume / enrich / source /
   // reuse / promote) with 5min cache + JSON snapshot fallback.
   await fastify.register(adminPoolHealthRoutes, { prefix: '/pool-health' });
+  // CP498 PR3b — A-stage relevance backfill manual trigger (1-mandala
+  // measurement surface; bypasses BACKFILL_RELEVANCE_ENABLED + cutoff).
+  await fastify.register(adminRelevanceBackfillRoutes, { prefix: '/relevance-backfill' });
   // await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }

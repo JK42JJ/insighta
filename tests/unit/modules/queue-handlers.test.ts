@@ -30,17 +30,24 @@ jest.mock('../../../src/config', () => ({
       directUrl: undefined,
     },
     app: { isDevelopment: true, isProduction: false, isTest: true },
+    // CP498: enrich-rich-summary (PR2) + enrich-relevance-quick (PR3b) workers
+    // read these at registration.
+    queue: { richSummaryConcurrency: 4, relevanceBackfillConcurrency: 4 },
   },
 }));
 
-jest.mock('../../../src/utils/logger', () => ({
-  logger: {
+jest.mock('../../../src/utils/logger', () => {
+  // call-logger.ts (imported transitively via the rich-summary handler chain
+  // when queue/index.ts is required) calls logger.child() at module load.
+  const base: Record<string, unknown> = {
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
     debug: jest.fn(),
-  },
-}));
+  };
+  base['child'] = jest.fn(() => base);
+  return { logger: base };
+});
 
 jest.mock('../../../src/modules/database/client', () => ({
   getPrismaClient: jest.fn().mockReturnValue({
@@ -190,7 +197,7 @@ describe('batch-scan handler', () => {
 // ============================================================================
 
 describe('initJobQueue integration', () => {
-  test('initJobQueue registers both workers', async () => {
+  test('initJobQueue registers all workers', async () => {
     // Reset mocks to count fresh
     mockBossInstance.work.mockClear();
     mockBossInstance.schedule.mockClear();
@@ -198,8 +205,10 @@ describe('initJobQueue integration', () => {
     const { initJobQueue } = require('../../../src/modules/queue');
     await initJobQueue();
 
-    // Should register 2 workers
-    expect(mockBossInstance.work).toHaveBeenCalledTimes(2);
+    // Should register all 6 workers: enrich-video, batch-scan,
+    // enrich-rich-summary, batch-video-collector, pool-maintenance,
+    // enrich-relevance-quick (CP498 PR3b).
+    expect(mockBossInstance.work).toHaveBeenCalledTimes(6);
 
     // Should schedule batch-scan
     expect(mockBossInstance.schedule).toHaveBeenCalledTimes(1);

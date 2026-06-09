@@ -317,6 +317,15 @@ jobs:
           # or `--body 6` (raise) + redeploy — no code revert. Non-secret per
           # CP392 (tuning knob).
           RICH_SUMMARY_CONCURRENCY: ${{ vars.RICH_SUMMARY_CONCURRENCY }}
+          # CP498 PR3b — A-stage relevance backfill. 3 non-secret tuning knobs
+          # (CP392). BACKFILL_RELEVANCE_ENABLED gates the AUTO path (default
+          # OFF); RELEVANCE_BACKFILL_CONCURRENCY = worker pool size (default 4);
+          # RELEVANCE_BACKFILL_CUTOFF = ISO ts (auto path scores only newer
+          # cards). All unset ⇒ config zod defaults; the admin manual route
+          # works regardless of the flag. Rollback: unset/false + redeploy.
+          BACKFILL_RELEVANCE_ENABLED: ${{ vars.BACKFILL_RELEVANCE_ENABLED }}
+          RELEVANCE_BACKFILL_CONCURRENCY: ${{ vars.RELEVANCE_BACKFILL_CONCURRENCY }}
+          RELEVANCE_BACKFILL_CUTOFF: ${{ vars.RELEVANCE_BACKFILL_CUTOFF }}
           # Mac Mini transcript proxy. EC2 outbound to YouTube is blocked
           # for caption fetch; the Mac Mini (KR ISP IP, Tailscale 4242)
           # successfully fetches and forwards via x-transcript-token auth.
@@ -328,7 +337,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,YT_VIDEOS_KEY,YT_VIDEOS_KEY_2,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED,YOUTUBE_METADATA_BACKFILL_ENABLED,V2_QUALITY_AUDIT_ENABLED,V2_QUALITY_REGEN_ENABLED,V3_TRACE_ENABLED,RICH_SUMMARY_CONCURRENCY,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN
+          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,YT_VIDEOS_KEY,YT_VIDEOS_KEY_2,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED,YOUTUBE_METADATA_BACKFILL_ENABLED,V2_QUALITY_AUDIT_ENABLED,V2_QUALITY_REGEN_ENABLED,V3_TRACE_ENABLED,RICH_SUMMARY_CONCURRENCY,BACKFILL_RELEVANCE_ENABLED,RELEVANCE_BACKFILL_CONCURRENCY,RELEVANCE_BACKFILL_CUTOFF,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN
           script: |
             set -e
             cd /opt/tubearchive
@@ -407,6 +416,19 @@ jobs:
             # + redeploy — no code revert.
             if [ -n "${RICH_SUMMARY_CONCURRENCY}" ]; then
               grep -q '^RICH_SUMMARY_CONCURRENCY=' .env 2>/dev/null && sed -i "s|^RICH_SUMMARY_CONCURRENCY=.*|RICH_SUMMARY_CONCURRENCY=${RICH_SUMMARY_CONCURRENCY}|" .env || echo "RICH_SUMMARY_CONCURRENCY=${RICH_SUMMARY_CONCURRENCY}" >> .env
+            fi
+            # CP498 PR3b — A-stage relevance backfill knobs. Same idempotent
+            # pattern. All unset/empty ⇒ conditional skips ⇒ config zod defaults
+            # (enabled=false / concurrency=4 / cutoff=unset). Tune/rollback via
+            # `gh variable set <NAME> --body <v>` + redeploy — no code revert.
+            if [ -n "${BACKFILL_RELEVANCE_ENABLED}" ]; then
+              grep -q '^BACKFILL_RELEVANCE_ENABLED=' .env 2>/dev/null && sed -i "s|^BACKFILL_RELEVANCE_ENABLED=.*|BACKFILL_RELEVANCE_ENABLED=${BACKFILL_RELEVANCE_ENABLED}|" .env || echo "BACKFILL_RELEVANCE_ENABLED=${BACKFILL_RELEVANCE_ENABLED}" >> .env
+            fi
+            if [ -n "${RELEVANCE_BACKFILL_CONCURRENCY}" ]; then
+              grep -q '^RELEVANCE_BACKFILL_CONCURRENCY=' .env 2>/dev/null && sed -i "s|^RELEVANCE_BACKFILL_CONCURRENCY=.*|RELEVANCE_BACKFILL_CONCURRENCY=${RELEVANCE_BACKFILL_CONCURRENCY}|" .env || echo "RELEVANCE_BACKFILL_CONCURRENCY=${RELEVANCE_BACKFILL_CONCURRENCY}" >> .env
+            fi
+            if [ -n "${RELEVANCE_BACKFILL_CUTOFF}" ]; then
+              grep -q '^RELEVANCE_BACKFILL_CUTOFF=' .env 2>/dev/null && sed -i "s|^RELEVANCE_BACKFILL_CUTOFF=.*|RELEVANCE_BACKFILL_CUTOFF=${RELEVANCE_BACKFILL_CUTOFF}|" .env || echo "RELEVANCE_BACKFILL_CUTOFF=${RELEVANCE_BACKFILL_CUTOFF}" >> .env
             fi
             # 2026-04-18 — sync DB URLs from GitHub Secrets so password
             # rotations propagate to prod .env without manual SSH. Was
