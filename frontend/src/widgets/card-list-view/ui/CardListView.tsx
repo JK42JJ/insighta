@@ -38,8 +38,13 @@ import { LabelFilterPillsV2 } from './LabelFilterPillsV2';
  * the ordering contract (highest-first, unscored-last) is unit-tested against a
  * sign-flip regression. NEVER reads the video-keyed v2MandalaRelevancePct.
  */
-export const compareByRelevanceDesc = (a: InsightCard, b: InsightCard): number =>
-  (b.relevancePct ?? -1) - (a.relevancePct ?? -1);
+export const compareByRelevanceDesc = (a: InsightCard, b: InsightCard): number => {
+  // DESC by relevancePct (NULLS LAST via ?? -1) + stable tiebreak by id so the
+  // large equal-score band (title-only "70s cluster") does NOT reshuffle on
+  // refetch — e.g. after a Heart/like invalidates the cards query. CP498 PR3c.
+  const d = (b.relevancePct ?? -1) - (a.relevancePct ?? -1);
+  return d !== 0 ? d : a.id.localeCompare(b.id);
+};
 
 const SORT_ICON_BY_VALUE: Record<SortMode, typeof ArrowDownWideNarrow> = {
   latest: ArrowDownWideNarrow,

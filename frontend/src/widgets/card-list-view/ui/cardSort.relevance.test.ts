@@ -59,4 +59,15 @@ describe('compareByRelevanceDesc — DESC NULLS LAST', () => {
     const firstThree = new Set(sorted.slice(0, 3));
     expect(firstThree).toEqual(new Set(['rel-8가지', 'rel-결심', 'rel-성공이유']));
   });
+
+  it('ties (equal relevancePct) break by id ascending — stable, no reshuffle on refetch', () => {
+    // The title-only "70s cluster" produces many equal scores; without a
+    // tiebreak they reshuffled when a Heart/like invalidated + refetched the
+    // cards query (input order changed → tie order changed). id-asc pins it.
+    const a = [card('z-id', 72), card('a-id', 72), card('m-id', 72)];
+    const b = [card('m-id', 72), card('z-id', 72), card('a-id', 72)]; // different input order
+    expect([...a].sort(compareByRelevanceDesc).map((c) => c.id)).toEqual(['a-id', 'm-id', 'z-id']);
+    // same output regardless of input order = stable across refetch
+    expect([...b].sort(compareByRelevanceDesc).map((c) => c.id)).toEqual(['a-id', 'm-id', 'z-id']);
+  });
 });
