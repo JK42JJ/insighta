@@ -55,6 +55,15 @@ jest.mock('@/modules/mandala/auto-add-recommendations', () => ({
   maybeAutoAddRecommendations: mockMaybeAutoAdd,
 }));
 
+// CP499 — the wizard's relevance trigger fires from THIS path (inline auto-add),
+// not pipeline-runner step3. Mock it to assert the wizard path reaches it.
+const mockEnqueueRelevanceBackfill = jest
+  .fn()
+  .mockResolvedValue({ enqueued: 0, skipped: 0, uvsRows: 0, ulcRows: 0 });
+jest.mock('@/modules/relevance/relevance-backfill-trigger', () => ({
+  enqueueRelevanceBackfillForMandala: mockEnqueueRelevanceBackfill,
+}));
+
 jest.mock('@/config/wizard-precompute', () => ({
   loadWizardPrecomputeConfig: mockLoadConfig,
 }));
@@ -327,6 +336,57 @@ describe('wizard-precompute — consumePrecompute', () => {
     expect(r.consumed).toBe(true);
     expect(r.cardsInserted).toBe(1);
     expect(mockExecuteRaw).toHaveBeenCalledTimes(1);
+  }, 15_000);
+
+  // CP499 regression — the wizard places cards via THIS inline auto-add, so the
+  // relevance trigger MUST fire here. #873 wired it into pipeline-runner step3,
+  // which is a no-op for wizard mandalas ('no pending recommendation_cache rows')
+  // → wizard cards were never scored (relevance_pct NULL). This locks the fix.
+  test('auto-add inserts >0 → relevance trigger fires on the precompute path', async () => {
+    mockMaybeAutoAdd.mockResolvedValueOnce({ ok: true, rowsInserted: 5, rowsPreserved: 0 });
+    mockFindUnique.mockResolvedValue({
+      session_id: SESSION,
+      user_id: USER,
+      goal: 'g',
+      status: 'done',
+      expires_at: FUTURE,
+      discover_result: { slots: [makeSlot(0, 'v1')] },
+    });
+    await consumePrecompute({
+      sessionId: SESSION,
+      userId: USER,
+      mandalaId: MANDALA,
+      centerGoal: 'g',
+    });
+    // trigger runs in setImmediate + a dynamic import → flush both ticks.
+    await new Promise((res) => setImmediate(res));
+    await new Promise((res) => setImmediate(res));
+    expect(mockEnqueueRelevanceBackfill).toHaveBeenCalledWith({
+      userId: USER,
+      mandalaId: MANDALA,
+      applyCutoff: false,
+    });
+  }, 15_000);
+
+  test('auto-add inserts 0 → relevance trigger does NOT fire (nothing new to score)', async () => {
+    mockMaybeAutoAdd.mockResolvedValueOnce({ ok: true, rowsInserted: 0, rowsPreserved: 0 });
+    mockFindUnique.mockResolvedValue({
+      session_id: SESSION,
+      user_id: USER,
+      goal: 'g',
+      status: 'done',
+      expires_at: FUTURE,
+      discover_result: { slots: [makeSlot(0, 'v1')] },
+    });
+    await consumePrecompute({
+      sessionId: SESSION,
+      userId: USER,
+      mandalaId: MANDALA,
+      centerGoal: 'g',
+    });
+    await new Promise((res) => setImmediate(res));
+    await new Promise((res) => setImmediate(res));
+    expect(mockEnqueueRelevanceBackfill).not.toHaveBeenCalled();
   }, 15_000);
 
   test('status=failed → reason=not-done (no poll, immediate miss)', async () => {
