@@ -6,6 +6,7 @@ import { useMandalaQuery } from '@/features/mandala';
 import { ChevronDown, ChevronUp, Loader2, Lock, RotateCcw, Search, Undo2, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/shared/lib/utils';
+import { apiClient } from '@/shared/lib/api-client';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import { useAllVideoStates, youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
@@ -406,6 +407,17 @@ export function AddCardsPanel() {
 
   const handleClose = useCallback(() => {
     if (isClosingLocal) return;
+    // CP499 #3 — A-stage relevance trigger on close. Fire only when this mandala
+    // has picks (guard: idle open of a fresh mandala → localPicks empty → no
+    // fire). Fire-and-forget + idempotent (BE skip-if-null) → safe to re-fire;
+    // for a curated mandala it's a cheap no-op scan or a free catch-up if a
+    // prior close was missed. Scores the mandala's unscored placed cards
+    // (cellGoal-aware) off the hot path. Errors swallowed — never block close.
+    if (mandalaId && localPicks.size > 0) {
+      void apiClient.triggerMandalaRelevance(mandalaId).catch(() => {
+        /* never block close UX; idempotent trigger self-heals on the next close */
+      });
+    }
     setIsClosingLocal(true);
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => {
@@ -413,7 +425,7 @@ export function AddCardsPanel() {
       setIsClosingLocal(false);
       closeTimerRef.current = null;
     }, CLOSE_ANIMATION_MS);
-  }, [closePanel, isClosingLocal]);
+  }, [closePanel, isClosingLocal, mandalaId, localPicks]);
 
   useEffect(() => {
     return () => {

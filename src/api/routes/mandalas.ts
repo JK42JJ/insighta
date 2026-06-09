@@ -2748,6 +2748,45 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   );
 
   /**
+   * POST /api/v1/mandalas/:id/relevance-trigger — CP499 #3 (A-stage relevance).
+   *
+   * User-facing twin of /rich-summary-trigger. Called fire-and-forget by the FE
+   * when the Add Cards panel closes after ≥1 pick. Scores the mandala's unscored
+   * placed cards via the SSOT (computeCardRelevance), cellGoal-aware. Idempotent
+   * (skip-if-null) — re-firing only scores not-yet-scored rows. NOT flag-gated:
+   * the user is actively curating this mandala (BACKFILL_RELEVANCE_ENABLED gates
+   * only the fleet/bulk sweep). 'all-unscored' scope = a one-time lazy mini-
+   * backfill of the mandala being curated (bounded to one mandala).
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/:id/relevance-trigger',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+
+      const { id: mandalaId } = request.params;
+
+      const owned = await getPrismaClient().user_mandalas.findFirst({
+        where: { id: mandalaId, user_id: userId },
+        select: { id: true },
+      });
+      if (!owned) {
+        return reply.code(404).send({ status: 'error', error: 'Mandala not found' });
+      }
+
+      const { enqueueRelevanceBackfillForMandala } =
+        await import('../../modules/relevance/relevance-backfill-trigger');
+      const result = await enqueueRelevanceBackfillForMandala({
+        userId,
+        mandalaId,
+        applyCutoff: false,
+      });
+      return reply.code(202).send({ status: 'ok', data: result });
+    }
+  );
+
+  /**
    * GET /api/v1/mandalas/:id/book — CP438+1 PoC.
    *
    * Returns the generated book index (chapters + sections + atoms + qa)

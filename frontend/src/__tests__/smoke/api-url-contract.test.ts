@@ -65,6 +65,12 @@ describe('API Client URL Contract', () => {
     expect(content).not.toMatch(/\/api\/v1\/mandalas\/templates\/typeahead/);
   });
 
+  // CP499 #3 — A-stage relevance trigger (user-facing twin of rich-summary-trigger).
+  it('triggerMandalaRelevance posts /mandalas/:id/relevance-trigger (no double prefix)', () => {
+    expect(content).toContain('/mandalas/${mandalaId}/relevance-trigger');
+    expect(content).not.toMatch(/\/api\/v1\/mandalas\/\$\{mandalaId\}\/relevance-trigger/);
+  });
+
   it('listPublicTemplates uses /mandalas/templates-public (no double prefix)', () => {
     expect(content).toContain('/mandalas/templates-public');
     expect(content).not.toMatch(/\/api\/v1\/mandalas\/templates-public/);
