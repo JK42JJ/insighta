@@ -740,11 +740,16 @@ export async function generateMandalaWithQueries(
   const t0 = Date.now();
   logger.info(`Mandala merged structure+queries generation started: goal="${input.goal}"`);
 
+  // CP499 — sub-step timing: the only two awaited steps are searchMandalasByGoal
+  // (embed + cosine) and the generate() LLM call. Splitting them in the [TIMING]
+  // log decomposes the merged-gen total (66s reproductions) into its real parts.
+  const tSearch = Date.now();
   const similar = await searchMandalasByGoal(input.goal, {
     limit: 1,
     threshold: 0.4,
     language: input.language,
   });
+  const searchMs = Date.now() - tSearch;
 
   const lang = input.language ?? 'ko';
   const domain = input.domain ?? 'general';
@@ -767,11 +772,13 @@ export async function generateMandalaWithQueries(
     ((p: string, o?: { temperature?: number; maxTokens?: number; format?: 'json' }) =>
       new OpenRouterGenerationProvider(MERGED_GEN_MODEL).generate(p, o));
 
+  const tGen = Date.now();
   const raw = await generate(prompt, {
     temperature: MERGED_GEN_TEMPERATURE,
     maxTokens: MERGED_GEN_MAX_TOKENS,
     format: 'json',
   });
+  const genMs = Date.now() - tGen;
   const latencyMs = Date.now() - t0;
 
   const merged = parseMergedResponse(raw);
@@ -813,8 +820,11 @@ export async function generateMandalaWithQueries(
   }
   const degraded = !cellQueries;
 
+  // CP499 — `other` = latency − search − gen = synchronous parse/validate +
+  // any gap. If `other` is large, the cost is NOT in the two awaits (surprise).
   logger.info(
-    `[TIMING] merged-gen: ${latencyMs}ms | cellQueries=${cellQueryCount}/${totalCells} ` +
+    `[TIMING] merged-gen: ${latencyMs}ms (search=${searchMs}ms gen=${genMs}ms ` +
+      `other=${latencyMs - searchMs - genMs}ms) | cellQueries=${cellQueryCount}/${totalCells} ` +
       `degraded=${degraded}`
   );
 
