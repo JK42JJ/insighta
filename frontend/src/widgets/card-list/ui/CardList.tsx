@@ -18,6 +18,21 @@ import { useV2Summaries } from '@/features/card-management/model/useV2Summaries'
 import { useArchiveCard } from '@/features/card-management/model/useArchiveCard';
 import { extractYouTubeVideoId } from '@/shared/lib/url-normalize';
 
+/**
+ * CP499 #2 — order-INDEPENDENT set key for the visibleCount reset. The lazy
+ * pagination window must reset only when the card SET changes (cell switch),
+ * NOT when the same cards reorder (sort pick / live relevance re-sort). The old
+ * order-sensitive key (`cards.map(id).join`) reset visibleCount→PAGE_SIZE on
+ * every reorder; under relevance-sort's continuous background re-sort that made
+ * an infinite-skeleton loop. Sorted ids = stable set identity (reorder = same).
+ */
+export function cardSetKey(cards: { id: string }[]): string {
+  return cards
+    .map((c) => c.id)
+    .sort()
+    .join(',');
+}
+
 function safeVideoId(videoUrl: string): string | null {
   try {
     return extractYouTubeVideoId(new URL(videoUrl));
@@ -226,7 +241,7 @@ export function CardList({
   );
 
   // Reset visible count when card list changes (e.g., cell switch)
-  const cardListKey = useMemo(() => cards.map((c) => c.id).join(','), [cards]);
+  const cardListKey = useMemo(() => cardSetKey(cards), [cards]);
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [cardListKey]);

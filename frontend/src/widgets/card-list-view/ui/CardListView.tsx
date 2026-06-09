@@ -220,6 +220,37 @@ export function CardListView({
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>('latest');
+  // CP499 freeze — snapshot of the relevance order (id→rank), captured when
+  // relevance-sort is (re)selected, so background scoring (~17s of relevance_pct
+  // updates) does NOT live-reorder cards under the user. Cleared on sort/mandala
+  // change → re-snapshot with the latest scores on re-pick.
+  const [relevanceRank, setRelevanceRank] = useState<Map<string, number> | null>(null);
+
+  // CP499 #1 — persist sort PER-MANDALA (was ephemeral useState → reset to
+  // 'latest' on every refresh). Each mandala keeps its own fit (new w/ scores →
+  // relevance, old → latest).
+  const sortStorageKey = mandalaId ? `insighta:cardSortMode:${mandalaId}` : null;
+  useEffect(() => {
+    if (!sortStorageKey) {
+      setSortMode('latest');
+      setRelevanceRank(null);
+      return;
+    }
+    const saved = localStorage.getItem(sortStorageKey);
+    const valid = SORT_OPTIONS.some((o) => o.value === saved);
+    setSortMode(valid ? (saved as SortMode) : 'latest');
+    setRelevanceRank(null); // freeze effect re-snapshots below if relevance
+  }, [sortStorageKey]);
+
+  const handleSortChange = useCallback(
+    (v: SortMode) => {
+      setSortMode(v);
+      setRelevanceRank(null); // clear → freeze effect re-snapshots if relevance
+      if (sortStorageKey) localStorage.setItem(sortStorageKey, v);
+    },
+    [sortStorageKey]
+  );
+
   const [isExternalDragOver, setIsExternalDragOver] = useState(false);
   // Issue #389: Newly Synced pill is mutually exclusive with All/sector pills.
   // Kept as local state (rather than lifting to parent) because the filter is
@@ -300,6 +331,46 @@ export function CardListView({
   // `cards` flow (All / sector pills / search) intact.
   const effectiveCards = isNewlySyncedActive && newlySyncedCards ? newlySyncedCards : cards;
 
+  // CP499 freeze-then-settle — relevance order is snapshotted (id→rank) so
+  // background scoring (~17s of relevance_pct arriving via the ~2s pending-
+  // mandala poll) doesn't reorder cards under the user. James's intent:
+  // "중엔 고정 → 끝나면 1회 제대로 정렬." Two effects:
+  //   (a) take the initial snapshot on pick / saved-sort-load;
+  //   (b) re-snapshot ONCE when scoring SETTLES (scored-count stops rising for
+  //       the window) so the final order is correct — one allowed movement.
+  // Settle (not "all non-null") is robust to permanent-NULL cards (failed /
+  // no-title): the count plateaus below total and the timer still fires.
+  const relevanceScoredCount = useMemo(
+    () => effectiveCards.reduce((n, c) => n + (c.relevancePct != null ? 1 : 0), 0),
+    [effectiveCards]
+  );
+  const snapshotScoredCountRef = useRef(0);
+
+  // (a) initial snapshot
+  useEffect(() => {
+    if (sortMode === 'relevance-desc' && relevanceRank === null && effectiveCards.length > 0) {
+      const ordered = [...effectiveCards].sort(compareByRelevanceDesc);
+      setRelevanceRank(new Map(ordered.map((c, i) => [c.id, i])));
+      snapshotScoredCountRef.current = relevanceScoredCount;
+    }
+  }, [sortMode, relevanceRank, effectiveCards, relevanceScoredCount]);
+
+  // (b) re-snapshot once when more scores arrived and then settled. While the
+  // ~2s poll keeps bringing scores the timer resets (order stays frozen, no
+  // shuffle); the 4s settle window (> the 2s poll) fires only after scoring
+  // stops, re-sorting once with the final scores.
+  useEffect(() => {
+    if (sortMode !== 'relevance-desc' || relevanceRank === null) return;
+    if (relevanceScoredCount <= snapshotScoredCountRef.current) return;
+    const RELEVANCE_RESORT_SETTLE_MS = 4000;
+    const timer = setTimeout(() => {
+      const ordered = [...effectiveCards].sort(compareByRelevanceDesc);
+      setRelevanceRank(new Map(ordered.map((c, i) => [c.id, i])));
+      snapshotScoredCountRef.current = relevanceScoredCount;
+    }, RELEVANCE_RESORT_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [sortMode, relevanceRank, relevanceScoredCount, effectiveCards]);
+
   // "latest"/"oldest" rank by source publish date (YouTube upload) ONLY.
   // Cards without a publish date sort to the end instead of inheriting
   // `createdAt` — otherwise newly-cached items inherit "today" and leak
@@ -346,13 +417,22 @@ export function CardListView({
       case 'title-desc':
         return arr.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
       case 'relevance-desc':
-        // CP498 PR3c — A-stage relevance: highest first, unscored cards last
-        // (DESC NULLS LAST). Cards are reordered, never removed (reversible).
+        // CP499 — render in the FROZEN snapshot order (relevanceRank) so the
+        // ~17s of background relevance_pct updates don't reorder cards under the
+        // user. Cards added after the snapshot sort to the end. Before the
+        // snapshot exists (first frame) fall back to a live DESC-NULLS-LAST sort.
+        if (relevanceRank) {
+          return arr.sort((a, b) => {
+            const ra = relevanceRank.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+            const rb = relevanceRank.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+            return ra !== rb ? ra - rb : a.id.localeCompare(b.id);
+          });
+        }
         return arr.sort(compareByRelevanceDesc);
       default:
         return arr;
     }
-  }, [effectiveCards, sortMode]);
+  }, [effectiveCards, sortMode, relevanceRank]);
 
   // Sector card counts (0-7)
   const sectorCounts = useMemo(() => {
@@ -456,7 +536,7 @@ export function CardListView({
         <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuRadioGroup
             value={sortMode}
-            onValueChange={(v) => setSortMode(v as SortMode)}
+            onValueChange={(v) => handleSortChange(v as SortMode)}
           >
             {SORT_OPTIONS.map((opt) => {
               const OptIcon = SORT_ICON_BY_VALUE[opt.value];
