@@ -263,6 +263,23 @@ export async function executePipelineRun(runId: string): Promise<void> {
                 log.warn(`[${runId}] rich-summary trigger failed (non-fatal): ${msg}`);
               });
           });
+          // CP499 #2 — relevance trigger (fire-and-forget, async, OFF the hot
+          // path). Scores every newly-placed wizard card via the SSOT
+          // (computeCardRelevance) at worker concurrency. NOT flag-gated: new
+          // wizard cards always get relevance so the badge shows once the worker
+          // fills relevance_pct (display-revival "new = immediate"). cellGoal is
+          // resolved inside the trigger from the mandala's cell subjects.
+          setImmediate(() => {
+            void import('../relevance/relevance-backfill-trigger')
+              .then(({ enqueueRelevanceBackfillForMandala }) =>
+                enqueueRelevanceBackfillForMandala({ userId, mandalaId, applyCutoff: false })
+              )
+              .then((r) => log.info(`[${runId}] relevance trigger: enqueued=${r.enqueued}`))
+              .catch((err) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                log.warn(`[${runId}] relevance trigger failed (non-fatal): ${msg}`);
+              });
+          });
         } else {
           await updateStep(runId, 3, 'completed', result); // not-applicable ≠ failed
           log.info(`[${runId}] step3 skipped: ${result.reason}`);

@@ -49,9 +49,9 @@ export async function registerEnrichRelevanceQuickWorker(): Promise<void> {
  * so pg-boss retries once per RELEVANCE_QUICK_RETRY_OPTIONS.
  */
 async function handleEnrichRelevanceQuick(job: PgBoss.Job<RelevanceQuickPayload>): Promise<void> {
-  const { table, rowId, title, description, centerGoal } = job.data;
+  const { table, rowId, title, description, centerGoal, cellGoal } = job.data;
 
-  const result = await computeCardRelevance({ title, description, centerGoal });
+  const result = await computeCardRelevance({ title, description, centerGoal, cellGoal });
 
   if (!result.ok) {
     if (result.reason === 'no_title') {

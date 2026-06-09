@@ -104,6 +104,48 @@ describe('enqueueRelevanceBackfillForMandala — row-not-video fan-out (regressi
     expect(result).toMatchObject({ enqueued: 2, uvsRows: 1, ulcRows: 1 });
   });
 
+  // CP499 #2 — cellGoal resolved from the fetched mandala's subjects[cell_index].
+  test('cellGoal = mandala.subjects[cell_index] per row (uvs + ulc)', async () => {
+    mockGetMandalaById.mockResolvedValueOnce({
+      levels: [{ centerGoal: 'C', subjects: ['cell0 goal', 'cell1 goal', 'cell2 goal'] }],
+    });
+    mockUvsFindMany.mockResolvedValueOnce([
+      { id: 'uvs-c0', cell_index: 0, video: { title: 'T0' } },
+      { id: 'uvs-c2', cell_index: 2, video: { title: 'T2' } },
+    ]);
+    mockUlcFindMany.mockResolvedValueOnce([
+      {
+        id: 'ulc-c1',
+        cell_index: 1,
+        title: 'L1',
+        metadata_title: null,
+        metadata_description: null,
+      },
+    ]);
+
+    await enqueueRelevanceBackfillForMandala({ userId: 'u1', mandalaId: 'm1', applyCutoff: false });
+
+    expect(mockEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ rowId: 'uvs-c0', cellGoal: 'cell0 goal' })
+    );
+    expect(mockEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ rowId: 'uvs-c2', cellGoal: 'cell2 goal' })
+    );
+    expect(mockEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ rowId: 'ulc-c1', cellGoal: 'cell1 goal' })
+    );
+  });
+
+  test('cellGoal undefined when subjects absent / out-of-bounds (centerGoal-only fallback)', async () => {
+    mockGetMandalaById.mockResolvedValueOnce({ levels: [{ centerGoal: 'C' }] }); // no subjects
+    mockUvsFindMany.mockResolvedValueOnce([{ id: 'uvs-x', cell_index: 5, video: { title: 'T' } }]);
+
+    await enqueueRelevanceBackfillForMandala({ userId: 'u1', mandalaId: 'm1', applyCutoff: false });
+
+    const call = mockEnqueue.mock.calls.find((c) => (c[0] as { rowId: string }).rowId === 'uvs-x');
+    expect((call![0] as { cellGoal?: string }).cellGoal).toBeUndefined();
+  });
+
   test('ulc title falls back to metadata_title when title is null', async () => {
     mockUlcFindMany.mockResolvedValueOnce([
       { id: 'ulc-2', title: null, metadata_title: 'Meta Title', metadata_description: null },

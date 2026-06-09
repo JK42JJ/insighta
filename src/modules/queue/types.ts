@@ -115,6 +115,10 @@ export interface RelevanceQuickPayload {
   title: string;
   description?: string;
   centerGoal: string;
+  /** CP499 — the card's cell sub-goal (`mandala.levels[0].subjects[cell_index]`).
+   *  Forwarded to the SSOT `computeCardRelevance` so the score reflects cell-fit
+   *  AND center contribution. Absent ⇒ centerGoal-only (back-compat). */
+  cellGoal?: string;
 }
 
 // ============================================================================
