@@ -331,16 +331,45 @@ export function CardListView({
   // `cards` flow (All / sector pills / search) intact.
   const effectiveCards = isNewlySyncedActive && newlySyncedCards ? newlySyncedCards : cards;
 
-  // CP499 freeze — capture the relevance order once when relevance-sort is
-  // active and not yet snapshotted (covers re-pick AND saved-sort-on-load).
-  // Frozen until sort/mandala change, so the ~17s of background relevance_pct
-  // updates never reorder cards under the user (= also fixes the #3 shuffle).
+  // CP499 freeze-then-settle — relevance order is snapshotted (id→rank) so
+  // background scoring (~17s of relevance_pct arriving via the ~2s pending-
+  // mandala poll) doesn't reorder cards under the user. James's intent:
+  // "중엔 고정 → 끝나면 1회 제대로 정렬." Two effects:
+  //   (a) take the initial snapshot on pick / saved-sort-load;
+  //   (b) re-snapshot ONCE when scoring SETTLES (scored-count stops rising for
+  //       the window) so the final order is correct — one allowed movement.
+  // Settle (not "all non-null") is robust to permanent-NULL cards (failed /
+  // no-title): the count plateaus below total and the timer still fires.
+  const relevanceScoredCount = useMemo(
+    () => effectiveCards.reduce((n, c) => n + (c.relevancePct != null ? 1 : 0), 0),
+    [effectiveCards]
+  );
+  const snapshotScoredCountRef = useRef(0);
+
+  // (a) initial snapshot
   useEffect(() => {
     if (sortMode === 'relevance-desc' && relevanceRank === null && effectiveCards.length > 0) {
       const ordered = [...effectiveCards].sort(compareByRelevanceDesc);
       setRelevanceRank(new Map(ordered.map((c, i) => [c.id, i])));
+      snapshotScoredCountRef.current = relevanceScoredCount;
     }
-  }, [sortMode, relevanceRank, effectiveCards]);
+  }, [sortMode, relevanceRank, effectiveCards, relevanceScoredCount]);
+
+  // (b) re-snapshot once when more scores arrived and then settled. While the
+  // ~2s poll keeps bringing scores the timer resets (order stays frozen, no
+  // shuffle); the 4s settle window (> the 2s poll) fires only after scoring
+  // stops, re-sorting once with the final scores.
+  useEffect(() => {
+    if (sortMode !== 'relevance-desc' || relevanceRank === null) return;
+    if (relevanceScoredCount <= snapshotScoredCountRef.current) return;
+    const RELEVANCE_RESORT_SETTLE_MS = 4000;
+    const timer = setTimeout(() => {
+      const ordered = [...effectiveCards].sort(compareByRelevanceDesc);
+      setRelevanceRank(new Map(ordered.map((c, i) => [c.id, i])));
+      snapshotScoredCountRef.current = relevanceScoredCount;
+    }, RELEVANCE_RESORT_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [sortMode, relevanceRank, relevanceScoredCount, effectiveCards]);
 
   // "latest"/"oldest" rank by source publish date (YouTube upload) ONLY.
   // Cards without a publish date sort to the end instead of inheriting
