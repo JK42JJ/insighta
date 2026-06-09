@@ -15,6 +15,7 @@ import { Prisma } from '@prisma/client';
 import { config } from '../../config';
 import { getPrismaClient } from '../database/client';
 import { logger } from '../../utils/logger';
+import { TtlLruCache } from '../../utils/ttl-lru-cache';
 
 // ─── Types ───
 
@@ -71,6 +72,27 @@ const SOFT_RESULTS_TARGET = 3;
 const MAX_LIMIT = 20;
 const EMBED_TIMEOUT_MS = 30_000;
 
+/**
+ * CP499 — goal-embed cache. The same goal-string is embedded independently by
+ * the FE /search-by-goal endpoint AND the server merged-gen (generator.ts:743),
+ * plus any manual "다시 시도" retries — each paying ~3.7s (qwen3-embedding-8b via
+ * OpenRouter). The embed is goal-deterministic — `language` affects only the
+ * downstream cosine FILTER, not the vector — so caching the (goal → vector)
+ * result collapses those N embeds into one. Key = `${provider}:${goal}` so a
+ * MANDALA_EMBED_PROVIDER flip never serves a stale-provider vector. The cosine
+ * search is NOT cached, so results stay fresh as mandala_embeddings is written.
+ *
+ * Size 256 ≈ many concurrent users' recent goals (one goal-entry fires
+ * submit + merged-gen + retries within minutes); ~32KB/vector → ~8MB bound.
+ * TTL 5min is a memory bound only — the goal vector itself never goes stale.
+ */
+const EMBED_CACHE_MAX_ENTRIES = 256;
+const EMBED_CACHE_TTL_MS = 5 * 60 * 1000;
+const goalEmbedCache = new TtlLruCache<string, number[]>(
+  EMBED_CACHE_MAX_ENTRIES,
+  EMBED_CACHE_TTL_MS
+);
+
 /** UUID of the system-templates@insighta.one user that owns all explore templates */
 const SYSTEM_TEMPLATES_USER_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -92,10 +114,16 @@ const SYSTEM_TEMPLATES_USER_ID = '00000000-0000-0000-0000-000000000001';
  */
 export async function embedGoalForMandala(goalText: string): Promise<number[]> {
   const provider = config.mandalaEmbed.provider;
-  if (provider === 'openrouter') {
-    return embedViaOpenRouter(goalText);
-  }
-  return embedViaOllama(goalText);
+  // CP499 — cache by provider+goal: the embed is goal-deterministic, so the FE
+  // search + server merged-gen + retries share one embed instead of N × ~3.7s.
+  const cacheKey = `${provider}:${goalText.trim()}`;
+  const cached = goalEmbedCache.get(cacheKey);
+  if (cached) return cached;
+
+  const vector =
+    provider === 'openrouter' ? await embedViaOpenRouter(goalText) : await embedViaOllama(goalText);
+  goalEmbedCache.set(cacheKey, vector);
+  return vector;
 }
 
 async function embedViaOllama(goalText: string): Promise<number[]> {
