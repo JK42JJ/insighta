@@ -7,11 +7,13 @@ export type SortMode = 'latest' | 'oldest' | 'title-asc' | 'title-desc' | 'relev
 
 export const SORT_OPTIONS: { value: SortMode; labelKey: string }[] = [
   { value: 'latest', labelKey: 'contextHeader.sortLatest' },
+  // CP498 PR3c — A-stage relevance placed 2nd (right after the familiar default
+  // 최신순, above title sorts): "핵심이지만 명시 선택" signal. Default selection
+  // stays 'latest' (CardListView sortMode default) — position only, not default.
+  { value: 'relevance-desc', labelKey: 'contextHeader.sortRelevance' },
   { value: 'oldest', labelKey: 'contextHeader.sortOldest' },
   { value: 'title-asc', labelKey: 'contextHeader.sortTitleAZ' },
   { value: 'title-desc', labelKey: 'contextHeader.sortTitleZA' },
-  // CP498 PR3c — A-stage relevance. Opt-in only (default stays 'latest').
-  { value: 'relevance-desc', labelKey: 'contextHeader.sortRelevance' },
 ];
 
 interface ContextHeaderProps {
