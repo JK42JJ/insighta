@@ -74,6 +74,14 @@ export interface InsightCard {
   v2QualityFlag?: string | null;
   v2FullLanded?: boolean;
   /**
+   * CP498 PR3c — A-stage relevance score (0-100), USER-SCOPED (the per-row
+   * relevance_pct on user_video_states / user_local_cards). Distinct from
+   * v2MandalaRelevancePct above, which is the video-keyed (cross-user-leaky)
+   * column — never use that for sorting. Null = not yet backfilled; drives the
+   * optional "관련도순" sort (NULLS LAST).
+   */
+  relevancePct?: number | null;
+  /**
    * CP475+ — true only when the BE has every foundational field the grid
    * card needs (published_at, duration_seconds for YouTube). False = the
    * youtube_videos pipeline is still catching up; the FE renders the row

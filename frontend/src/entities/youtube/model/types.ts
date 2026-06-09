@@ -85,6 +85,13 @@ export interface UserVideoState {
    * never appear as if they were YouTube-synced.
    */
   auto_added?: boolean;
+  /**
+   * CP498 PR3c — A-stage relevance score (0-100) of this card vs its mandala
+   * centerGoal. USER-SCOPED on user_video_states (no cross-user leak).
+   * Null = not yet backfilled. Surfaced by get-all-video-states (SELECT *).
+   */
+  relevance_pct?: number | null;
+  relevance_at?: string | null;
 }
 
 export interface YouTubeSyncHistory {

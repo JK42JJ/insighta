@@ -42,6 +42,8 @@ export function convertToInsightCard(data: UserVideoStateWithVideo): InsightCard
     // CP474 — propagate auto-add origin so the "New Cards" predicate can
     // distinguish sync-engine rows from recommendation rows.
     autoAdded: data.auto_added ?? false,
+    // CP498 PR3c — user-scoped A-stage relevance score (uvs.relevance_pct).
+    relevancePct: data.relevance_pct ?? null,
   };
 }
 

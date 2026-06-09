@@ -683,6 +683,7 @@
     "sortOldest": "오래된순",
     "sortTitleAZ": "제목 A-Z",
     "sortTitleZA": "제목 Z-A",
+    "sortRelevance": "관련도순",
     "selectSectorFirst": "섹터를 선택하세요",
     "selectSectorDesc": "카드를 배치할 섹터를 먼저 선택해주세요."
   },

@@ -675,6 +675,7 @@
     "sortOldest": "Oldest",
     "sortTitleAZ": "Title A-Z",
     "sortTitleZA": "Title Z-A",
+    "sortRelevance": "By relevance",
     "selectSectorFirst": "Select a sector",
     "selectSectorDesc": "Choose a sector from the pills above to assign cards."
   },

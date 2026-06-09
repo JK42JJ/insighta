@@ -76,4 +76,15 @@ describe('convertToInsightCard — B2 9-column contract', () => {
     delete (state as { video?: unknown }).video;
     expect(convertToInsightCard(state)).toBeNull();
   });
+
+  // CP498 PR3c — user-scoped relevance plumbing (uvs.relevance_pct → relevancePct).
+  it('maps uvs.relevance_pct → relevancePct', () => {
+    const state = narrowedState();
+    state.relevance_pct = 73;
+    expect(convertToInsightCard(state)!.relevancePct).toBe(73);
+  });
+
+  it('relevancePct defaults to null when relevance_pct is absent', () => {
+    expect(convertToInsightCard(narrowedState())!.relevancePct).toBeNull();
+  });
 });
