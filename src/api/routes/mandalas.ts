@@ -1512,6 +1512,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         if (err instanceof MandalaSearchError) {
           const statusCode =
             err.code === 'SERVICE_UNAVAILABLE' || err.code === 'TIMEOUT' ? 503 : 422;
+          // CP499+ — embed failures (TIMEOUT/RATE_LIMITED/...) previously left
+          // ZERO log trace: the 2026-06-10 86s-stall diagnosis had to be
+          // reconstructed from absence-of-completion lines. Keep this warn.
+          request.log.warn(
+            { code: err.code, statusCode, userId, goal: goal.trim().slice(0, 80) },
+            `Mandala search error: ${err.message}`
+          );
           return reply.code(statusCode).send({
             status: statusCode,
             code: err.code,

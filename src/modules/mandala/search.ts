@@ -112,6 +112,17 @@ const SYSTEM_TEMPLATES_USER_ID = '00000000-0000-0000-0000-000000000001';
  *
  * Both return a same-dim vector matching mandala_embeddings.
  */
+/**
+ * CP499+ single-flight — cold-key concurrent callers (FE /search-by-goal +
+ * wizard-stream template search + merged-gen fire in the same instant) share
+ * ONE in-flight embed instead of racing N identical provider calls. In the
+ * 2026-06-10 prod repro, one of two simultaneous identical embeds stalled
+ * ~85s while the other returned in 2.5s — the stalled one pushed the FE past
+ * its 15s abort. Entries live only for the call duration; failures are NOT
+ * cached (`finally` removes the entry, so the next caller retries fresh).
+ */
+const inflightEmbeds = new Map<string, Promise<number[]>>();
+
 export async function embedGoalForMandala(goalText: string): Promise<number[]> {
   const provider = config.mandalaEmbed.provider;
   // CP499 — cache by provider+goal: the embed is goal-deterministic, so the FE
@@ -120,10 +131,21 @@ export async function embedGoalForMandala(goalText: string): Promise<number[]> {
   const cached = goalEmbedCache.get(cacheKey);
   if (cached) return cached;
 
-  const vector =
-    provider === 'openrouter' ? await embedViaOpenRouter(goalText) : await embedViaOllama(goalText);
-  goalEmbedCache.set(cacheKey, vector);
-  return vector;
+  const inflight = inflightEmbeds.get(cacheKey);
+  if (inflight) return inflight;
+
+  const pending = (
+    provider === 'openrouter' ? embedViaOpenRouter(goalText) : embedViaOllama(goalText)
+  )
+    .then((vector) => {
+      goalEmbedCache.set(cacheKey, vector);
+      return vector;
+    })
+    .finally(() => {
+      inflightEmbeds.delete(cacheKey);
+    });
+  inflightEmbeds.set(cacheKey, pending);
+  return pending;
 }
 
 async function embedViaOllama(goalText: string): Promise<number[]> {
@@ -136,6 +158,10 @@ async function embedViaOllama(goalText: string): Promise<number[]> {
   }
 
   const controller = new AbortController();
+  // CP499+ — the timer must cover the BODY read too: fetch() resolves on
+  // response HEADERS, so clearing the timer there left response.json()
+  // unguarded — a stalled body stream ran ~86s past the 30s cap in the
+  // 2026-06-10 prod repro. clearTimeout now lives in `finally`.
   const timeout = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS);
 
   try {
@@ -145,8 +171,6 @@ async function embedViaOllama(goalText: string): Promise<number[]> {
       body: JSON.stringify({ model, input: goalText }),
       signal: controller.signal,
     });
-
-    clearTimeout(timeout);
 
     if (!response.ok) {
       const body = await response.text();
@@ -172,7 +196,6 @@ async function embedViaOllama(goalText: string): Promise<number[]> {
 
     return vector;
   } catch (err) {
-    clearTimeout(timeout);
     if (err instanceof MandalaSearchError) throw err;
     if (err instanceof Error && err.name === 'AbortError') {
       throw new MandalaSearchError('Embedding request timed out', 'TIMEOUT');
@@ -185,6 +208,8 @@ async function embedViaOllama(goalText: string): Promise<number[]> {
       );
     }
     throw new MandalaSearchError(message, 'EMBED_FAILED');
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -211,6 +236,8 @@ async function embedViaOpenRouter(goalText: string): Promise<number[]> {
   }
 
   const controller = new AbortController();
+  // CP499+ — same body-read coverage as the Ollama path: the 30s cap must
+  // span response.json(), not just the headers. See embedViaOllama.
   const timeout = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS);
 
   try {
@@ -223,8 +250,6 @@ async function embedViaOpenRouter(goalText: string): Promise<number[]> {
       body: JSON.stringify({ model, input: goalText, encoding_format: 'float' }),
       signal: controller.signal,
     });
-
-    clearTimeout(timeout);
 
     if (!response.ok) {
       const body = await response.text();
@@ -258,13 +283,14 @@ async function embedViaOpenRouter(goalText: string): Promise<number[]> {
 
     return vector;
   } catch (err) {
-    clearTimeout(timeout);
     if (err instanceof MandalaSearchError) throw err;
     if (err instanceof Error && err.name === 'AbortError') {
       throw new MandalaSearchError('OpenRouter embed request timed out', 'TIMEOUT');
     }
     const message = err instanceof Error ? err.message : String(err);
     throw new MandalaSearchError(`OpenRouter embed failed: ${message}`, 'EMBED_FAILED');
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
