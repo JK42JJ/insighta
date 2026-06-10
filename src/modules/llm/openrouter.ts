@@ -62,9 +62,21 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
 
     const activeModel = this.modelOverride ?? config.openrouter.model;
 
+    // W2 (CP499+) — prompt-level thinking suppression for Qwen models.
+    // The `reasoning: {enabled:false}` param below is IGNORED by some
+    // OpenRouter providers (prod 2026-06-10: reasoning-only 1024-cap
+    // responses + 20-48s latencies DESPITE the param). `/no_think` is the
+    // Qwen chat-template soft switch — applied at the template layer, so it
+    // holds regardless of which provider serves the call. Idempotent: skipped
+    // when the caller (e.g. chatbot qwen-prompt-middleware) already added it.
+    const effectivePrompt =
+      config.openrouter.qwenNoThink && activeModel.includes('qwen') && !prompt.includes('/no_think')
+        ? `${prompt}\n/no_think`
+        : prompt;
+
     const body: Record<string, unknown> = {
       model: activeModel,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: effectivePrompt }],
       temperature: options?.temperature ?? 0.3,
       max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
     };
