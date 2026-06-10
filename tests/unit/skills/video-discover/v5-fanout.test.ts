@@ -88,7 +88,11 @@ describe('runYouTubeFanout — F5c perQuery', () => {
     expect(res.candidates).toHaveLength(8); // 5 + 3, all unique
   });
 
-  test("CP499+ '영문 카드 포함': ko+ON drops relevanceLanguage; ko+OFF keeps 'ko' (the toggle's effective lever)", async () => {
+  test("CP499+ '영문 카드 포함' EN-only: ON without translation (no key) falls back to the ko run; OFF keeps 'ko'", async () => {
+    // No OPENROUTER_API_KEY in env → translateQueriesToEn fail-opens to null
+    // → the run falls back to the normal ko pass (relevanceLanguage 'ko').
+    // The EN-only success path (rl='en', replace-mode) is pinned in
+    // v5-en-pass.test.ts.
     buildRuleBasedQueriesSync.mockReturnValue([{ query: 'q0', source: 'core', cellIndex: null }]);
     searchVideos.mockResolvedValue(items(2, 'q'));
     const base = {
@@ -102,7 +106,7 @@ describe('runYouTubeFanout — F5c perQuery', () => {
 
     await runYouTubeFanout({ ...base, includeEnCards: true });
     for (const call of searchVideos.mock.calls) {
-      expect(call[0].relevanceLanguage).toBeUndefined(); // ko bias dropped -> EN can enter
+      expect(call[0].relevanceLanguage).toBe('ko'); // fail-open ko fallback
     }
 
     searchVideos.mockClear();

@@ -1,15 +1,16 @@
 /**
- * CP499+ EN query pass — fire/assign separation (James re-correction).
+ * CP499+ EN-ONLY search ('영문 카드 포함' — James final re-correction).
  *
- * FIRE: toggle ON ⇒ EVERY searched cell gets its EN query (unconditional —
- * the toggle is an explicit user request for English). No weak-cell gate.
- * ASSIGN: EN supplements, never displaces — per-cell buckets keep insertion
- * order (KO first, EN appended) and binByCells round-robins by rank, so
- * KO-poor cells reach EN at shallow ranks while KO-rich cells keep KO ahead.
+ * Intent: the English action fetches ENGLISH CARDS ONLY — not a ko+en mix
+ * (mixing measured: KO crowds EN out; floor/mix binning removed). ON ⇒ the
+ * ko cell queries are translated and REPLACE the live set: no KO pass, no
+ * competition, quota-NEUTRAL (same N search.list calls). Translation failure
+ * ⇒ fall back to the normal ko run (results over nothing). Empty/low-cell
+ * priority is unchanged (binByCells round-robin over per-cell buckets).
  *
- * Pins: fire-all / EN params (KR + no relevanceLanguage) / cell-preserved
- * merge / OFF bit-identical / translate fail-open skip / binByCells
- * assignment invariants (KO-before-EN in a rich cell; EN early in a poor cell).
+ * Pins: replace-mode fire (ko queries NOT searched) / EN params (rl=en,
+ * KR region) / hangul titles dropped from results / cellIndex preserved /
+ * OFF bit-identical / translation-null ko fallback.
  */
 
 jest.mock('@/skills/plugins/video-discover/v2/youtube-client', () => ({
@@ -45,9 +46,7 @@ const { translateQueriesToEn } = jest.requireMock(
 );
 
 import { runYouTubeFanout } from '@/skills/plugins/video-discover/v5/youtube-fanout';
-import { binByCells } from '@/skills/plugins/video-discover/v5/executor';
 import { parseEnTranslateResponse } from '@/skills/plugins/video-discover/v5/en-query-translate';
-import type { FanoutCandidate } from '@/skills/plugins/video-discover/v5/youtube-fanout';
 
 const { translateQueriesToEn: realTranslate } = jest.requireActual(
   '@/skills/plugins/video-discover/v5/en-query-translate'
@@ -64,8 +63,6 @@ const item = (id: string, title: string) => ({
     thumbnails: { high: { url: 'u' } },
   },
 });
-const koItems = (n: number, p: string) =>
-  Array.from({ length: n }, (_, i) => item(`${p}-${i}`, `한국어 영상 ${p} ${i}`));
 
 const baseInput = {
   centerGoal: '바이브 코딩',
@@ -101,39 +98,44 @@ describe('translate fail-open (real impl)', () => {
   });
 });
 
-describe('fanout EN pass — FIRE is unconditional on the toggle', () => {
-  it('ko+ON: EVERY cell is translated + fired, even KO-rich ones (no weak gate)', async () => {
-    // BOTH cells rich (30 raw each) — pre-correction code would fire nothing.
-    searchVideos.mockImplementation(({ query }: { query: string }) =>
-      Promise.resolve(
-        query === 'vibe coding basics'
-          ? [item('en-0', 'Vibe Coding Basics in English')]
-          : query === 'vibe coding advanced'
-            ? [item('en-1', 'Advanced Vibe Coding Guide')]
-            : koItems(30, query.includes('기초') ? 'rich0' : 'rich1')
-      )
-    );
+describe('EN-only replace mode', () => {
+  it('ON: ko queries are NOT searched — EN queries replace them (quota-neutral), rl=en + KR region', async () => {
     translateQueriesToEn.mockResolvedValue(
       new Map([
         [0, 'vibe coding basics'],
         [1, 'vibe coding advanced'],
       ])
     );
+    searchVideos.mockImplementation(({ query }: { query: string }) =>
+      Promise.resolve(
+        query === 'vibe coding basics'
+          ? [item('en-0', 'Vibe Coding Basics'), item('ko-x', '한국어 섞임 영상')]
+          : [item('en-1', 'Advanced Vibe Coding')]
+      )
+    );
 
     const res = await runYouTubeFanout({ ...baseInput, includeEnCards: true });
 
-    expect(translateQueriesToEn).toHaveBeenCalledTimes(1);
-    expect(translateQueriesToEn.mock.calls[0][0]).toEqual([
-      { cellIndex: 0, query: '바이브 코딩 기초' },
-      { cellIndex: 1, query: '바이브 코딩 심화' },
-    ]);
-
-    // 2 ko + 2 EN calls; EN calls carry KR region and NO relevanceLanguage
-    expect(searchVideos).toHaveBeenCalledTimes(4);
-    for (const call of searchVideos.mock.calls.slice(2)) {
-      expect(call[0].regionCode).toBe('KR');
-      expect(call[0].relevanceLanguage).toBeUndefined();
+    // exactly 2 searches — the EN ones; quota neutral
+    expect(searchVideos).toHaveBeenCalledTimes(2);
+    const queries = searchVideos.mock.calls.map(
+      (c: unknown[]) => (c[0] as { query: string }).query
+    );
+    expect(queries.sort()).toEqual(['vibe coding advanced', 'vibe coding basics']);
+    for (const c of searchVideos.mock.calls) {
+      expect(c[0].relevanceLanguage).toBe('en');
+      expect(c[0].regionCode).toBe('KR');
     }
+    expect(res.quotaUnitsApprox).toBe(200);
+
+    // English-only result set: the hangul title is dropped
+    const ids = res.candidates.map((c) => c.videoId).sort();
+    expect(ids).toEqual(['en-0', 'en-1']);
+    expect(res.offLangDropped).toBe(1);
+
+    // cellIndex preserved through translation
+    expect(res.candidates.find((c) => c.videoId === 'en-0')?.cellIndex).toBe(0);
+    expect(res.candidates.find((c) => c.videoId === 'en-1')?.cellIndex).toBe(1);
 
     expect(res.enPass).toMatchObject({
       fired: true,
@@ -142,71 +144,36 @@ describe('fanout EN pass — FIRE is unconditional on the toggle', () => {
       queriesFired: 2,
       candidatesAdded: 2,
     });
-    expect(res.candidates.find((c) => c.videoId === 'en-0')?.cellIndex).toBe(0);
-    expect(res.candidates.find((c) => c.videoId === 'en-1')?.cellIndex).toBe(1);
-    expect(res.quotaUnitsApprox).toBe((2 + 2) * 100);
+    expect(res.perQuery.every((q) => q.source === 'en_only')).toBe(true);
   });
 
-  it('ko+OFF: single pass bit-identical — no translate, no extra search', async () => {
-    searchVideos.mockResolvedValue(koItems(2, 'q'));
+  it('OFF: bit-identical normal ko run — no translate call', async () => {
+    searchVideos.mockResolvedValue([item('ko-1', '한국어 영상')]);
     const res = await runYouTubeFanout({ ...baseInput, includeEnCards: false });
     expect(translateQueriesToEn).not.toHaveBeenCalled();
     expect(searchVideos).toHaveBeenCalledTimes(2);
+    expect(searchVideos.mock.calls[0][0].relevanceLanguage).toBe('ko');
     expect(res.enPass.fired).toBe(false);
-    expect(res.quotaUnitsApprox).toBe(200);
+    expect(res.candidates.map((c) => c.videoId)).toContain('ko-1');
   });
 
-  it('translation null (fail-open): EN pass skipped, ko results untouched', async () => {
-    searchVideos.mockResolvedValue(koItems(3, 'q'));
+  it('translation null: falls back to the normal ko run (results over nothing)', async () => {
     translateQueriesToEn.mockResolvedValue(null);
+    searchVideos.mockResolvedValue([item('ko-1', '한국어 영상')]);
     const res = await runYouTubeFanout({ ...baseInput, includeEnCards: true });
-    expect(res.enPass).toMatchObject({ fired: false, translated: false, cellsFired: [0, 1] });
-    expect(searchVideos).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('binByCells ASSIGN — EN supplements, never displaces (James spec 2)', () => {
-  const cand = (videoId: string, cellIndex: number): FanoutCandidate => ({
-    videoId,
-    title: videoId,
-    description: '',
-    channelTitle: '',
-    channelId: '',
-    publishedAt: '',
-    thumbnailUrl: '',
-    cellIndex,
-    fromEnPass: videoId.startsWith('en'),
+    const queries = searchVideos.mock.calls.map(
+      (c: unknown[]) => (c[0] as { query: string }).query
+    );
+    expect(queries).toEqual(['바이브 코딩 기초', '바이브 코딩 심화']); // ko queries ran
+    expect(res.enPass).toMatchObject({ fired: false, translated: false });
+    expect(res.candidates.map((c) => c.videoId)).toContain('ko-1'); // user still gets cards
   });
 
-  it('KO-rich cell keeps KO ahead of EN; KO-poor cell receives EN at shallow rank', () => {
-    // cell 0: 4 KO then 1 EN appended; cell 1: 1 KO then 1 EN appended.
-    const survivors = [
-      cand('ko0-a', 0),
-      cand('ko0-b', 0),
-      cand('ko0-c', 0),
-      cand('ko0-d', 0),
-      cand('ko1-a', 1),
-      cand('en0-x', 0),
-      cand('en1-x', 1),
-    ];
-    // floor=0 (OFF / pre-floor): tight budget drops the rich cell's EN.
-    const noFloor = binByCells(survivors, 8, 1, 0).map((p) => p.videoId);
-    expect(noFloor).not.toContain('en0-x');
-    expect(noFloor).toContain('en1-x');
-
-    // ★ floor=2 (toggle fired): the rich cell now SURFACES its EN inside the
-    // slice (criterion ③ — "toggle ON = English visible" even in KO-rich
-    // cells) while KO keeps the slice front (only the reserved tail yields).
-    const floored = binByCells(survivors, 8, 1, 2).map((p) => p.videoId);
-    expect(floored).toContain('en0-x');
-    expect(floored.indexOf('en0-x')).toBeGreaterThan(floored.indexOf('ko0-c')); // KO front intact
-    expect(floored).toContain('en1-x');
-    expect(floored.indexOf('en1-x')).toBeGreaterThan(floored.indexOf('ko1-a'));
-  });
-
-  it('floor gives unused EN slots back to KO (cell with no EN unchanged)', () => {
-    const survivors = [cand('ko-a', 0), cand('ko-b', 0), cand('ko-c', 0), cand('ko-d', 0)];
-    const out = binByCells(survivors, 4, 1, 2).map((p) => p.videoId);
-    expect(out).toEqual(['ko-a', 'ko-b', 'ko-c', 'ko-d']);
+  it('en mandala: toggle is a no-op (en path unchanged)', async () => {
+    searchVideos.mockResolvedValue([item('en-a', 'English Video')]);
+    const res = await runYouTubeFanout({ ...baseInput, language: 'en', includeEnCards: true });
+    expect(translateQueriesToEn).not.toHaveBeenCalled();
+    expect(searchVideos.mock.calls[0][0].relevanceLanguage).toBe('en');
+    expect(res.enPass.fired).toBe(false);
   });
 });
