@@ -98,7 +98,20 @@ function ChipRow<V extends string>({ label, presets, selectedValue, onSelect }: 
   );
 }
 
-export function AddCardsFilters() {
+interface AddCardsFiltersProps {
+  /** T2 (CP499+) — 한/영 search-language chip (ko mandalas only). Per-request
+   *  override semantics (option (a)): transient panel state, NOT persisted —
+   *  pressing 영 makes THIS search EN-only; reopening the panel resets to 한. */
+  searchLanguage?: 'ko' | 'en';
+  onSearchLanguageChange?: (v: 'ko' | 'en') => void;
+  showLanguageChips?: boolean;
+}
+
+export function AddCardsFilters({
+  searchLanguage = 'ko',
+  onSearchLanguageChange,
+  showLanguageChips = false,
+}: AddCardsFiltersProps = {}) {
   const { t } = useTranslation();
   const filters = useAddCardsPanelStore((s) => s.filters);
   const setFilters = useAddCardsPanelStore((s) => s.setFilters);
@@ -120,8 +133,29 @@ export function AddCardsFilters() {
   }));
   const publishedPresetsTr = PUBLISHED_PRESETS.map((p) => ({ ...p, defaultLabel: tr(p) }));
 
+  const languagePresets: ReadonlyArray<FacetPreset<'ko' | 'en'>> = [
+    {
+      value: 'ko',
+      labelKey: 'addCards.filters.language.ko',
+      defaultLabel: t('addCards.filters.language.ko', '한국어') as string,
+    },
+    {
+      value: 'en',
+      labelKey: 'addCards.filters.language.en',
+      defaultLabel: t('addCards.filters.language.en', 'English') as string,
+    },
+  ];
+
   return (
     <div className="py-1 space-y-0.5">
+      {showLanguageChips && onSearchLanguageChange && (
+        <ChipRow
+          label={t('addCards.filters.language.label', 'Language')}
+          presets={languagePresets}
+          selectedValue={searchLanguage}
+          onSelect={onSearchLanguageChange}
+        />
+      )}
       <ChipRow
         label={t('addCards.filters.viewCount.label', 'Views')}
         presets={viewPresetsTr}

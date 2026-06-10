@@ -36,6 +36,8 @@ export interface AddCardsFilters {
 
 interface AddCardsRequest {
   mandalaId: string;
+  /** T2 — 'en' = EN-only search for this request (한/영 chip). */
+  searchLanguage?: 'ko' | 'en';
   extraKeywords: string[];
   excludeVideoIds: string[];
   filters?: AddCardsFilters;
@@ -70,10 +72,11 @@ interface AddCardsResponseData {
 
 export function useAddCards() {
   return useMutation<AddCardsResponseData, Error, AddCardsRequest>({
-    mutationFn: async ({ mandalaId, extraKeywords, excludeVideoIds, filters }) => {
+    mutationFn: async ({ mandalaId, extraKeywords, excludeVideoIds, filters, searchLanguage }) => {
       const result = await apiClient.addCards(mandalaId, {
         extraKeywords,
         excludeVideoIds,
+        ...(searchLanguage && { searchLanguage }),
         ...(filters && { filters }),
       });
       return result.data;

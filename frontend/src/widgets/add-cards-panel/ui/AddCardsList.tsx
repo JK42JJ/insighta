@@ -17,6 +17,7 @@
  * Spec: docs/design/add-cards-2026-05-18.md §6 + issue #785.
  */
 
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Bookmark, Check, Loader2, RotateCw, X } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
@@ -57,6 +58,16 @@ export function AddCardsList({
 }: AddCardsListProps) {
   const { t } = useTranslation();
   const totalCards = rounds.reduce((n, r) => n + r.cards.length, 0);
+
+  // Active tab follows the NEWEST round: initial mount and every newly
+  // prepended round auto-activate rounds[0] (the user just searched — show
+  // them their result); manual tab clicks win until the next new round.
+  const newestRoundId = rounds[0]?.id ?? null;
+  const [activeRoundId, setActiveRoundId] = useState<string | null>(newestRoundId);
+  useEffect(() => {
+    setActiveRoundId(newestRoundId);
+  }, [newestRoundId]);
+  const activeRound = rounds.find((r) => r.id === activeRoundId) ?? rounds[0] ?? null;
 
   if (isLoading) {
     return (
@@ -106,63 +117,74 @@ export function AddCardsList({
     );
   }
 
-  // Total round count drives the per-round label. "1차 검색" is the
-  // OLDEST entry (last in newest-first array); each newer round above
-  // increments. With 3 rounds: rounds[0] = "3차 추가", rounds[1] =
-  // "2차 추가", rounds[2] = "1차 검색".
+  // T2 (CP499+, James 확정 — 드롭 금지) — rounds are TABS, not a vertical
+  // stack of separator sections: the cumulative model made users scroll past
+  // every earlier round to reach the newest. One tab per round (newest first,
+  // newest auto-active — including when a NEW round lands mid-session), only
+  // the active round's grid renders. Label semantics unchanged: "1차 검색" is
+  // the OLDEST entry (last in the newest-first array).
   const totalRounds = rounds.length;
 
   return (
     <div className="flex flex-col">
-      {rounds.map((round, idx) => {
-        const roundNumber = totalRounds - idx;
-        const isFirstRound = roundNumber === 1;
-        const label = isFirstRound
-          ? t('addCards.round.first', 'Round 1')
-          : t('addCards.round.nth', 'Round {{n}} (more)', { n: roundNumber });
-        return (
-          <section key={round.id} aria-label={label}>
-            <RoundSeparator label={label} foundCount={round.cards.length} roundAt={round.at} />
-            <ul className="grid grid-cols-3 gap-3 px-5 py-3 sm:px-6">
-              {round.cards.map((card) => (
-                <CardItem
-                  key={card.videoId}
-                  card={card}
-                  isPicked={pickedSet.has(card.videoId)}
-                  isPickPending={isPickPending}
-                  onPick={onPick}
-                />
-              ))}
-            </ul>
-          </section>
-        );
-      })}
-    </div>
-  );
-}
-
-function RoundSeparator({
-  label,
-  foundCount,
-  roundAt,
-}: {
-  label: string;
-  foundCount: number;
-  roundAt: string;
-}) {
-  const { t } = useTranslation();
-  const age = formatRelativeDate(roundAt);
-  return (
-    <div className="flex items-center gap-2 px-5 pt-3 pb-1 sm:px-6">
-      <span className="h-px flex-1 bg-border/50" aria-hidden="true" />
-      <span className="text-[11px] font-medium text-muted-foreground tracking-wide">
-        {label}{' '}
-        <span className="opacity-60">
-          ({t('addCards.round.foundCount', '{{count}} new', { count: foundCount })})
-        </span>
-        {age && <span className="ml-1 opacity-50">· {age}</span>}
-      </span>
-      <span className="h-px flex-1 bg-border/50" aria-hidden="true" />
+      <div
+        role="tablist"
+        aria-label={t('addCards.round.tablist', 'Search rounds')}
+        className="flex items-center gap-1.5 px-5 pt-3 pb-1 sm:px-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {rounds.map((round, idx) => {
+          const roundNumber = totalRounds - idx;
+          const label =
+            roundNumber === 1
+              ? t('addCards.round.first', 'Round 1')
+              : t('addCards.round.nth', 'Round {{n}} (more)', { n: roundNumber });
+          const isActive = round.id === activeRoundId;
+          return (
+            <button
+              key={round.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`add-cards-round-${round.id}`}
+              onClick={() => setActiveRoundId(round.id)}
+              className={cn(
+                'shrink-0 inline-flex items-center gap-1 h-7 rounded-full border px-3 text-[11.5px] font-medium transition-colors',
+                isActive
+                  ? 'bg-foreground text-background border-foreground'
+                  : 'bg-transparent text-foreground/80 border-border/50 hover:border-border hover:bg-foreground/[0.04]'
+              )}
+            >
+              {label}
+              <span className={cn('text-[10.5px]', isActive ? 'opacity-70' : 'opacity-50')}>
+                ({round.cards.length})
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {activeRound && (
+        <section
+          key={activeRound.id}
+          id={`add-cards-round-${activeRound.id}`}
+          role="tabpanel"
+          aria-label={t('addCards.round.activePanel', 'Active round results')}
+        >
+          <div className="px-5 pt-1 sm:px-6 text-[11px] text-muted-foreground">
+            {formatRelativeDate(activeRound.at)}
+          </div>
+          <ul className="grid grid-cols-3 gap-3 px-5 py-3 sm:px-6">
+            {activeRound.cards.map((card) => (
+              <CardItem
+                key={card.videoId}
+                card={card}
+                isPicked={pickedSet.has(card.videoId)}
+                isPickPending={isPickPending}
+                onPick={onPick}
+              />
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
