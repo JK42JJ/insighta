@@ -247,6 +247,15 @@ export function useWizard() {
   const precomputeSessionIdRef = useRef<string | null>(null);
 
   // ─── Tier 1: Embedding search (instant) ───
+  //
+  // PR-C (CP499+) — the template search is DECORATION for the generation wait:
+  // its failure must never surface to the user (no error card, no retry), and
+  // a batch that resolves AFTER the custom result is already on screen is
+  // DISCARDED — late templates popping in would shift the user's choice
+  // mid-decision. generateSettledRef marks "the main result landed";
+  // discardLateSearchRef freezes that verdict for this goal's lifecycle.
+  const generateSettledRef = useRef(false);
+  const discardLateSearchRef = useRef(false);
   const searchMutation = useMutation({
     mutationFn: (goal: string) =>
       apiClient.searchMandalasByGoal(goal, {
@@ -254,6 +263,9 @@ export function useWizard() {
         language: detectGoalLanguage(goal),
         signal: goalAbortRef.current?.signal,
       }),
+    onSuccess: () => {
+      if (generateSettledRef.current) discardLateSearchRef.current = true;
+    },
   });
 
   // ─── Tier 2: AI generation ───
@@ -307,6 +319,11 @@ export function useWizard() {
           signal: goalAbortRef.current?.signal,
         });
       }
+    },
+    // PR-C — the main result is on screen from here: any template batch that
+    // resolves after this point is discarded (see searchMutation.onSuccess).
+    onSuccess: () => {
+      generateSettledRef.current = true;
     },
   });
 
@@ -907,6 +924,9 @@ export function useWizard() {
       goalAbortRef.current = new AbortController();
       searchMutation.reset();
       generateMutation.reset();
+      // PR-C — fresh goal: re-arm the late-arrival discard window.
+      generateSettledRef.current = false;
+      discardLateSearchRef.current = false;
       setState((prev) => ({ ...prev, goalInput: trimmed }));
       searchMutation.mutate(trimmed);
       generateMutation.mutate(trimmed);
@@ -930,18 +950,17 @@ export function useWizard() {
     setState((prev) => ({ ...prev, goalInput: '' }));
   }, [cancelGoal]);
 
-  /** Retry template search only (leaves in-flight AI generation untouched). */
-  const retrySearch = useCallback(() => {
-    const goal = state.goalInput.trim();
-    if (!goal) return;
-    searchMutation.reset();
-    searchMutation.mutate(goal);
-  }, [state.goalInput, searchMutation]);
+  // PR-C — retrySearch removed: the template section is decoration and its
+  // failure is silent (no retry affordance). A new goal submit re-fires both.
 
   /** Retry AI generation only (leaves in-flight template search untouched). */
   const retryGenerate = useCallback(() => {
     const goal = state.goalInput.trim();
     if (!goal) return;
+    // PR-C — main result leaves the screen for a re-run: re-open the window
+    // so a template batch landing during the retry can still show.
+    generateSettledRef.current = false;
+    discardLateSearchRef.current = false;
     generateMutation.reset();
     generateMutation.mutate(goal);
   }, [state.goalInput, generateMutation]);
@@ -1159,7 +1178,9 @@ export function useWizard() {
     selectSearchResult,
     selectGeneratedMandala,
     selectGeneratedAndComplete,
-    searchResults: searchMutation.data ?? [],
+    // PR-C — late-arrival discard: templates that resolved after the custom
+    // result settled never surface (decoration must not shift a decision).
+    searchResults: discardLateSearchRef.current ? [] : (searchMutation.data ?? []),
     isSearching: searchMutation.isPending,
     // CP358: isSuccess gates the empty-state UI to eliminate the 1-frame
     // race where reset() flips isPending to false before mutate() runs.
@@ -1169,7 +1190,6 @@ export function useWizard() {
     // CP361 Issue #375 — split soft-slow vs failed states
     isSearchSoftSlow,
     isSearchFailed,
-    retrySearch,
     aiGenerated: generateMutation.data?.mandala ?? null,
     aiSource: generateMutation.data?.source ?? null,
     isGenerating: generateMutation.isPending,

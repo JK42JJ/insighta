@@ -51,6 +51,24 @@ const AI_PROGRESS_POLL_MS = 1_000;
 
 // ─── Component ───
 
+/**
+ * PR-C (CP499+) — template slot render decision, pure for testability.
+ * INVARIANT: a FAILED search is 'hidden' (indistinguishable from "no
+ * result"), never an error/retry surface — the template strip is decoration
+ * for the generation wait and its failure must not be user-visible.
+ */
+export type TemplateSlotKind = 'result' | 'loading' | 'hidden';
+export function templateSlotKind(
+  hasResult: boolean,
+  isSearchFailed: boolean,
+  isSearching: boolean
+): TemplateSlotKind {
+  if (hasResult) return 'result';
+  if (isSearchFailed) return 'hidden';
+  if (isSearching) return 'loading';
+  return 'hidden';
+}
+
 interface WizardStepGoalProps {
   goalInput: string;
   searchResults: MandalaSearchResult[];
@@ -62,10 +80,10 @@ interface WizardStepGoalProps {
   /** CP361 Issue #375 — search has crossed the soft-slow threshold but is
    *  still in flight (no error). Caller should show inline hint, NOT amber. */
   isSearchSoftSlow: boolean;
-  /** CP361 Issue #375 — search mutation has actually errored. Show amber
-   *  DelayedCard with Retry button. */
+  /** CP361 Issue #375 → PR-C (CP499+) — search mutation errored. The template
+   *  strip is DECORATION for the generation wait: failure renders NOTHING
+   *  (silent hide), never an error card or retry affordance. */
   isSearchFailed: boolean;
-  onRetrySearch: () => void;
   aiGenerated: GeneratedMandala | null;
   aiSource: 'lora' | 'llm-fallback' | null;
   isGenerating: boolean;
@@ -103,7 +121,6 @@ export default function WizardStepGoal({
   searchSucceeded,
   isSearchSoftSlow,
   isSearchFailed,
-  onRetrySearch,
   aiGenerated,
   isGenerating,
   isGenerateSoftSlow,
@@ -390,20 +407,15 @@ export default function WizardStepGoal({
                     />
                   );
                 }
-                if (isSearchFailed) {
-                  // Real error — amber card with Retry in slot 0 only
-                  if (slotIdx === 0) {
-                    return (
-                      <MandalaCard
-                        key="tpl-delayed"
-                        variant="template-delayed"
-                        onRetry={onRetrySearch}
-                      />
-                    );
-                  }
+                const slotKind = templateSlotKind(false, isSearchFailed, isSearching);
+                if (slotKind === 'hidden') {
+                  // PR-C (CP499+) — silent hide (covers FAILED too). The
+                  // template strip is decoration for the generation wait;
+                  // surfacing its failure (amber card + Retry) defeated that
+                  // purpose. The user must not be able to tell it failed.
                   return <div key={`tpl-empty-${slotIdx}`} aria-hidden="true" />;
                 }
-                if (isSearching) {
+                if (slotKind === 'loading') {
                   // Soft-slow shows inline hint, otherwise plain skeleton.
                   // Hint rendered ONLY on slot 0 so it doesn't repeat 3x.
                   return (
