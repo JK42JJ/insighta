@@ -90,6 +90,8 @@ export interface FanoutCandidate {
   publishedAt: string;
   thumbnailUrl: string;
   cellIndex: number | null;
+  /** CP499+ — candidate came from the EN query pass (assignment floor input). */
+  fromEnPass?: boolean;
 }
 
 /** CP491 F5c — per-query observability (raw count + q_ok), independent of dedup/hardcap. */
@@ -679,7 +681,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
               offLangDropped += 1;
               continue;
             }
-            seen.set(cand.videoId, cand);
+            seen.set(cand.videoId, { ...cand, fromEnPass: true });
             enPass.candidatesAdded += 1;
             if (seen.size >= cfg.dedupHardCap) break;
           }

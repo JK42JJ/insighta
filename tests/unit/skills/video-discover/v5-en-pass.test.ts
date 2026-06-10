@@ -175,6 +175,7 @@ describe('binByCells ASSIGN — EN supplements, never displaces (James spec 2)',
     publishedAt: '',
     thumbnailUrl: '',
     cellIndex,
+    fromEnPass: videoId.startsWith('en'),
   });
 
   it('KO-rich cell keeps KO ahead of EN; KO-poor cell receives EN at shallow rank', () => {
@@ -188,16 +189,24 @@ describe('binByCells ASSIGN — EN supplements, never displaces (James spec 2)',
       cand('en0-x', 0),
       cand('en1-x', 1),
     ];
-    // Tight budget (perCell=4): the rich cell's EN (rank 4) is DROPPED —
-    // EN never displaces KO — while the poor cell's EN is picked at rank 1.
-    const tight = binByCells(survivors, 8, 1).map((p) => p.videoId);
-    expect(tight).not.toContain('en0-x');
-    expect(tight).toContain('en1-x');
-    expect(tight.indexOf('en1-x')).toBeGreaterThan(tight.indexOf('ko1-a'));
+    // floor=0 (OFF / pre-floor): tight budget drops the rich cell's EN.
+    const noFloor = binByCells(survivors, 8, 1, 0).map((p) => p.videoId);
+    expect(noFloor).not.toContain('en0-x');
+    expect(noFloor).toContain('en1-x');
 
-    // Wider budget: the rich cell's EN now fits, but still AFTER all its KO.
-    const wide = binByCells(survivors, 12, 1).map((p) => p.videoId);
-    expect(wide.indexOf('en0-x')).toBeGreaterThan(wide.indexOf('ko0-d'));
-    expect(wide.indexOf('en1-x')).toBeLessThan(wide.indexOf('en0-x'));
+    // ★ floor=2 (toggle fired): the rich cell now SURFACES its EN inside the
+    // slice (criterion ③ — "toggle ON = English visible" even in KO-rich
+    // cells) while KO keeps the slice front (only the reserved tail yields).
+    const floored = binByCells(survivors, 8, 1, 2).map((p) => p.videoId);
+    expect(floored).toContain('en0-x');
+    expect(floored.indexOf('en0-x')).toBeGreaterThan(floored.indexOf('ko0-c')); // KO front intact
+    expect(floored).toContain('en1-x');
+    expect(floored.indexOf('en1-x')).toBeGreaterThan(floored.indexOf('ko1-a'));
+  });
+
+  it('floor gives unused EN slots back to KO (cell with no EN unchanged)', () => {
+    const survivors = [cand('ko-a', 0), cand('ko-b', 0), cand('ko-c', 0), cand('ko-d', 0)];
+    const out = binByCells(survivors, 4, 1, 2).map((p) => p.videoId);
+    expect(out).toEqual(['ko-a', 'ko-b', 'ko-c', 'ko-d']);
   });
 });
