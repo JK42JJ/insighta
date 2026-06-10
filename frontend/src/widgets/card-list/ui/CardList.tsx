@@ -17,6 +17,7 @@ import type { SummaryRating } from '@/features/card-management/model/useSummaryR
 import { useV2Summaries } from '@/features/card-management/model/useV2Summaries';
 import { useArchiveCard } from '@/features/card-management/model/useArchiveCard';
 import { extractYouTubeVideoId } from '@/shared/lib/url-normalize';
+import { useSentinelPagination } from '../model/useSentinelPagination';
 
 /**
  * CP499 #2 — order-INDEPENDENT set key for the visibleCount reset. The lazy
@@ -217,10 +218,8 @@ export function CardList({
   );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // Cards arrive already sorted by the host (CardListView applies the user's
   // sortMode chip). Re-sorting here would override publishedAt ranking with
@@ -240,28 +239,21 @@ export function CardList({
     [cards, hiddenVideoIds]
   );
 
+  // Infinite scroll — CP499+: observer attachment follows the sentinel node
+  // lifecycle (callback ref in the hook). The previous effect keyed on
+  // [sortedCards.length] never re-attached when the sentinel remounted on a
+  // same-length list → infinite scroll died, tail skeletons stuck forever
+  // (prod 2026-06-10: 25 rendered vs 34 placed). See useSentinelPagination.
+  const { visibleCount, sentinelRef, resetVisibleCount } = useSentinelPagination(
+    sortedCards.length,
+    PAGE_SIZE
+  );
+
   // Reset visible count when card list changes (e.g., cell switch)
   const cardListKey = useMemo(() => cardSetKey(cards), [cards]);
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
-  }, [cardListKey]);
-
-  // Infinite scroll: observe sentinel at bottom of grid
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, sortedCards.length));
-        }
-      },
-      { rootMargin: '200px' }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [sortedCards.length]);
+    resetVisibleCount();
+  }, [cardListKey, resetVisibleCount]);
 
   const visibleCards = useMemo(
     () => sortedCards.slice(0, visibleCount),
