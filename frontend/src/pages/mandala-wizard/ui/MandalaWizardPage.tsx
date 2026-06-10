@@ -207,7 +207,6 @@ export default function MandalaWizardPage() {
               searchSucceeded={false}
               isSearchSoftSlow={false}
               isSearchFailed={false}
-              onRetrySearch={() => {}}
               aiGenerated={null}
               aiSource={null}
               isGenerating={false}
@@ -249,7 +248,6 @@ export default function MandalaWizardPage() {
               searchSucceeded={wizard.searchSucceeded}
               isSearchSoftSlow={wizard.isSearchSoftSlow}
               isSearchFailed={wizard.isSearchFailed}
-              onRetrySearch={wizard.retrySearch}
               aiGenerated={wizard.aiGenerated}
               aiSource={wizard.aiSource}
               isGenerating={wizard.isGenerating}
