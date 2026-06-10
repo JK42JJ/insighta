@@ -203,7 +203,12 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   let pickerModelStr = 'cell_binning';
 
   if (cfg.pickerMode === 'cell_binning') {
-    picksMerged = binByCells(survivors, cfg.targetPicks, cfg.shortOverpickFactor);
+    picksMerged = binByCells(
+      survivors,
+      cfg.targetPicks,
+      cfg.shortOverpickFactor,
+      fanout.enPass.fired ? cfg.enFloorPerCell : 0
+    );
     picksRawCount = picksMerged.length;
     stage.llmMs = Date.now() - tLlm0; // ~0 — no network call
   } else {
@@ -456,7 +461,8 @@ function chunk<T>(arr: T[], size: number): T[][] {
 export function binByCells(
   survivors: FanoutCandidate[],
   targetPicks: number,
-  overpickFactor: number
+  overpickFactor: number,
+  enFloorPerCell = 0
 ): PickResult[] {
   const byCell = new Map<number, FanoutCandidate[]>();
   for (const c of survivors) {
@@ -467,6 +473,28 @@ export function binByCells(
   }
   const cells = Array.from(byCell.keys()).sort((a, b) => a - b);
   const perCell = Math.ceil((targetPicks * overpickFactor) / Math.max(cells.length, 1));
+
+  // CP499+ EN floor (toggle ON only; 0 = pre-floor behaviour bit-identical).
+  // KO-rich buckets carry 23-40 KO before any EN, so a plain rank slice
+  // (perCell ~12) would NEVER surface EN there — defeating "toggle ON =
+  // English visible" (verification criterion ③). Reserve up to enFloorPerCell
+  // tail slots of each cell's slice for its first EN candidates: KO keeps the
+  // front (never displaced by more than the reserved tail), EN is guaranteed
+  // presence. Cells with fewer EN than the floor give the slots back to KO.
+  if (enFloorPerCell > 0) {
+    for (const [key, bucket] of byCell) {
+      const ens = bucket.filter((c) => c.fromEnPass);
+      if (ens.length === 0) continue;
+      const kos = bucket.filter((c) => !c.fromEnPass);
+      const reserved = Math.min(enFloorPerCell, ens.length, perCell);
+      byCell.set(key, [
+        ...kos.slice(0, Math.max(perCell - reserved, 0)),
+        ...ens.slice(0, reserved),
+        ...kos.slice(Math.max(perCell - reserved, 0)),
+        ...ens.slice(reserved),
+      ]);
+    }
+  }
 
   const out: PickResult[] = [];
   for (let r = 0; r < perCell; r += 1) {

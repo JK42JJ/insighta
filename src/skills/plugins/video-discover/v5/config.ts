@@ -73,12 +73,12 @@ const v5EnvSchema = z.object({
   // CP494 ④-1 — per-cell "full" threshold. ≥ this many grid cards → skip.
   // 12 favors "user may want to see more" (cells with 7-11 still searched).
   V5_CELL_SKIP_THRESHOLD: z.coerce.number().int().min(1).max(60).default(12),
-  // CP499+ EN query pass ('영문 카드 포함' toggle, weak-cell-only). A ko cell
-  // whose first-pass raw item total is BELOW this threshold gets its query
-  // translated to English and re-fired — auto-targets KO-absent domains
-  // without manual domain classification. Only consulted when the
-  // per-mandala includeEnCards toggle is ON; unset = 8.
-  V5_EN_PASS_RAW_THRESHOLD: z.coerce.number().int().min(1).max(40).default(8),
+  // CP499+ EN pass ASSIGNMENT floor — when the toggle fired, reserve up to
+  // this many slots of each cell's candidate slice for EN candidates, so
+  // KO-rich cells (raw 23-40 >> perCell ~12) still surface SOME English
+  // ("toggle ON = English visible" — James verification criterion ③).
+  // 0 disables the floor (pre-floor binning, bit-identical).
+  V5_EN_FLOOR_PER_CELL: z.coerce.number().int().min(0).max(10).default(2),
   // CP494 안 A — pool match strategy. 'global' (default, current) runs ONE
   // centerGoal-OR tsquery with a global LIMIT (vocabulary-rich cells starve the
   // others = displacement). 'per_cell' runs each cell's own query with its own
@@ -120,8 +120,8 @@ export interface V5Config {
   cellSkip: boolean;
   /** CP494 ④-1 — per-cell card count threshold for skip. */
   cellSkipThreshold: number;
-  /** CP499+ EN pass — first-pass raw floor below which a cell gets the EN query. */
-  enPassRawThreshold: number;
+  /** CP499+ EN pass — per-cell candidate slots reserved for EN when fired. */
+  enFloorPerCell: number;
   /** CP494 안 A — pool match strategy ('global' | 'per_cell'). */
   poolMatch: 'global' | 'per_cell';
 }
@@ -157,7 +157,7 @@ export function getV5Config(env: NodeJS.ProcessEnv = process.env): V5Config {
     reuseLoop: p.V5_REUSE_LOOP,
     cellSkip: p.V5_CELL_SKIP,
     cellSkipThreshold: p.V5_CELL_SKIP_THRESHOLD,
-    enPassRawThreshold: p.V5_EN_PASS_RAW_THRESHOLD,
+    enFloorPerCell: p.V5_EN_FLOOR_PER_CELL,
     poolMatch: p.V5_POOL_MATCH,
   };
   return cached;

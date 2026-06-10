@@ -1,13 +1,15 @@
 /**
- * CP499+ EN query pass — weak-cell-only (James-approved design (B)).
+ * CP499+ EN query pass — fire/assign separation (James re-correction).
  *
- * Pins:
- *   - weak-cell math (raw < threshold; failed queries count 0)
- *   - translate fail-open (no key / LLM throw / parse mismatch → null)
- *   - fanout integration: ONLY weak cells get translated+fired; EN calls
- *     carry regionCode KR and NO relevanceLanguage; results merge with the
- *     cell's index through the same gates; OFF = single pass bit-identical;
- *     translation-null = EN pass skipped, ko results untouched.
+ * FIRE: toggle ON ⇒ EVERY searched cell gets its EN query (unconditional —
+ * the toggle is an explicit user request for English). No weak-cell gate.
+ * ASSIGN: EN supplements, never displaces — per-cell buckets keep insertion
+ * order (KO first, EN appended) and binByCells round-robins by rank, so
+ * KO-poor cells reach EN at shallow ranks while KO-rich cells keep KO ahead.
+ *
+ * Pins: fire-all / EN params (KR + no relevanceLanguage) / cell-preserved
+ * merge / OFF bit-identical / translate fail-open skip / binByCells
+ * assignment invariants (KO-before-EN in a rich cell; EN early in a poor cell).
  */
 
 jest.mock('@/skills/plugins/video-discover/v2/youtube-client', () => ({
@@ -43,13 +45,10 @@ const { translateQueriesToEn } = jest.requireMock(
 );
 
 import { runYouTubeFanout } from '@/skills/plugins/video-discover/v5/youtube-fanout';
-import {
-  computeWeakCells,
-  parseEnTranslateResponse,
-} from '@/skills/plugins/video-discover/v5/en-query-translate';
+import { binByCells } from '@/skills/plugins/video-discover/v5/executor';
+import { parseEnTranslateResponse } from '@/skills/plugins/video-discover/v5/en-query-translate';
+import type { FanoutCandidate } from '@/skills/plugins/video-discover/v5/youtube-fanout';
 
-// The module is mocked above for the fanout integration; pull the REAL
-// translate impl for the fail-open unit tests.
 const { translateQueriesToEn: realTranslate } = jest.requireActual(
   '@/skills/plugins/video-discover/v5/en-query-translate'
 );
@@ -82,94 +81,73 @@ beforeEach(() => {
   resetV5ConfigForTest();
   buildRuleBasedQueriesSync.mockReturnValue([
     { query: '바이브 코딩 기초', source: 'subgoal', cellIndex: 0 },
-    { query: '바이브 코딩 심화 희귀주제', source: 'subgoal', cellIndex: 1 },
+    { query: '바이브 코딩 심화', source: 'subgoal', cellIndex: 1 },
   ]);
 });
 
-describe('computeWeakCells (pure)', () => {
-  it('selects cells strictly below the threshold; failed/0-raw cells included', () => {
-    const m = new Map([
-      [0, 30],
-      [1, 7],
-      [2, 0],
-      [3, 8],
-    ]);
-    expect(computeWeakCells(m, 8)).toEqual([1, 2]); // 8 itself is NOT weak
-  });
-});
-
 describe('translate fail-open (real impl)', () => {
-  it('parse mismatch / missing key / empty value → null', () => {
+  it('parse mismatch / LLM throw / no key → null', async () => {
     const targets = [{ cellIndex: 1, query: 'q' }];
     expect(parseEnTranslateResponse('not-json', targets)).toBeNull();
-    expect(parseEnTranslateResponse('{"9":"x"}', targets)).toBeNull();
-    expect(parseEnTranslateResponse('{"1":""}', targets)).toBeNull();
-    expect(parseEnTranslateResponse('{"1":"vibe coding basics"}', targets)?.get(1)).toBe(
-      'vibe coding basics'
-    );
-  });
-
-  it('LLM throw → null (caller skips EN pass)', async () => {
-    const out = await realTranslate([{ cellIndex: 1, query: 'q' }], {
-      generateImpl: async () => {
-        throw new Error('503');
-      },
-    });
-    expect(out).toBeNull();
-  });
-
-  it('no key and no impl → null', async () => {
-    expect(await realTranslate([{ cellIndex: 1, query: 'q' }], {})).toBeNull();
+    expect(parseEnTranslateResponse('{"1":"vibe coding"}', targets)?.get(1)).toBe('vibe coding');
+    expect(
+      await realTranslate(targets, {
+        generateImpl: async () => {
+          throw new Error('503');
+        },
+      })
+    ).toBeNull();
+    expect(await realTranslate(targets, {})).toBeNull();
   });
 });
 
-describe('fanout EN pass integration', () => {
-  it('ko+ON: only the weak cell is translated + fired (KR region, NO relevanceLanguage), results merge into its cell', async () => {
-    // cell0 rich (30 raw), cell1 weak (0 raw)
+describe('fanout EN pass — FIRE is unconditional on the toggle', () => {
+  it('ko+ON: EVERY cell is translated + fired, even KO-rich ones (no weak gate)', async () => {
+    // BOTH cells rich (30 raw each) — pre-correction code would fire nothing.
     searchVideos.mockImplementation(({ query }: { query: string }) =>
       Promise.resolve(
-        query.startsWith('바이브 코딩 기초')
-          ? koItems(30, 'rich')
-          : query === 'vibe coding advanced rare topic'
-            ? [item('en-1', 'Vibe Coding Advanced Rare Topic Guide')]
-            : []
+        query === 'vibe coding basics'
+          ? [item('en-0', 'Vibe Coding Basics in English')]
+          : query === 'vibe coding advanced'
+            ? [item('en-1', 'Advanced Vibe Coding Guide')]
+            : koItems(30, query.includes('기초') ? 'rich0' : 'rich1')
       )
     );
-    translateQueriesToEn.mockResolvedValue(new Map([[1, 'vibe coding advanced rare topic']]));
+    translateQueriesToEn.mockResolvedValue(
+      new Map([
+        [0, 'vibe coding basics'],
+        [1, 'vibe coding advanced'],
+      ])
+    );
 
     const res = await runYouTubeFanout({ ...baseInput, includeEnCards: true });
 
-    // translate got ONLY the weak cell's query
     expect(translateQueriesToEn).toHaveBeenCalledTimes(1);
     expect(translateQueriesToEn.mock.calls[0][0]).toEqual([
-      { cellIndex: 1, query: '바이브 코딩 심화 희귀주제' },
+      { cellIndex: 0, query: '바이브 코딩 기초' },
+      { cellIndex: 1, query: '바이브 코딩 심화' },
     ]);
 
-    // 2 ko calls + 1 EN call; the EN call = KR region, relevanceLanguage absent
-    expect(searchVideos).toHaveBeenCalledTimes(3);
-    const enCall = searchVideos.mock.calls[2][0];
-    expect(enCall.query).toBe('vibe coding advanced rare topic');
-    expect(enCall.regionCode).toBe('KR');
-    expect(enCall.relevanceLanguage).toBeUndefined();
-
-    // EN candidate merged with the weak cell's index
-    const en = res.candidates.find((c) => c.videoId === 'en-1');
-    expect(en?.cellIndex).toBe(1);
+    // 2 ko + 2 EN calls; EN calls carry KR region and NO relevanceLanguage
+    expect(searchVideos).toHaveBeenCalledTimes(4);
+    for (const call of searchVideos.mock.calls.slice(2)) {
+      expect(call[0].regionCode).toBe('KR');
+      expect(call[0].relevanceLanguage).toBeUndefined();
+    }
 
     expect(res.enPass).toMatchObject({
       fired: true,
       translated: true,
-      weakCells: [1],
-      queriesFired: 1,
-      candidatesAdded: 1,
+      cellsFired: [0, 1],
+      queriesFired: 2,
+      candidatesAdded: 2,
     });
-    // quota counts the EN pass (+100u per fired query)
-    expect(res.quotaUnitsApprox).toBe((2 + 1) * 100);
-    // perQuery carries the EN entry
-    expect(res.perQuery.find((q) => q.source === 'en_pass')?.cellIndex).toBe(1);
+    expect(res.candidates.find((c) => c.videoId === 'en-0')?.cellIndex).toBe(0);
+    expect(res.candidates.find((c) => c.videoId === 'en-1')?.cellIndex).toBe(1);
+    expect(res.quotaUnitsApprox).toBe((2 + 2) * 100);
   });
 
-  it('ko+OFF: single pass — translate never called, no extra search', async () => {
+  it('ko+OFF: single pass bit-identical — no translate, no extra search', async () => {
     searchVideos.mockResolvedValue(koItems(2, 'q'));
     const res = await runYouTubeFanout({ ...baseInput, includeEnCards: false });
     expect(translateQueriesToEn).not.toHaveBeenCalled();
@@ -179,11 +157,56 @@ describe('fanout EN pass integration', () => {
   });
 
   it('translation null (fail-open): EN pass skipped, ko results untouched', async () => {
-    searchVideos.mockResolvedValue([]); // every cell weak
+    searchVideos.mockResolvedValue(koItems(3, 'q'));
     translateQueriesToEn.mockResolvedValue(null);
     const res = await runYouTubeFanout({ ...baseInput, includeEnCards: true });
-    expect(res.enPass).toMatchObject({ fired: false, translated: false });
-    expect(res.enPass.weakCells).toEqual([0, 1]);
-    expect(searchVideos).toHaveBeenCalledTimes(2); // no second pass
+    expect(res.enPass).toMatchObject({ fired: false, translated: false, cellsFired: [0, 1] });
+    expect(searchVideos).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('binByCells ASSIGN — EN supplements, never displaces (James spec 2)', () => {
+  const cand = (videoId: string, cellIndex: number): FanoutCandidate => ({
+    videoId,
+    title: videoId,
+    description: '',
+    channelTitle: '',
+    channelId: '',
+    publishedAt: '',
+    thumbnailUrl: '',
+    cellIndex,
+    fromEnPass: videoId.startsWith('en'),
+  });
+
+  it('KO-rich cell keeps KO ahead of EN; KO-poor cell receives EN at shallow rank', () => {
+    // cell 0: 4 KO then 1 EN appended; cell 1: 1 KO then 1 EN appended.
+    const survivors = [
+      cand('ko0-a', 0),
+      cand('ko0-b', 0),
+      cand('ko0-c', 0),
+      cand('ko0-d', 0),
+      cand('ko1-a', 1),
+      cand('en0-x', 0),
+      cand('en1-x', 1),
+    ];
+    // floor=0 (OFF / pre-floor): tight budget drops the rich cell's EN.
+    const noFloor = binByCells(survivors, 8, 1, 0).map((p) => p.videoId);
+    expect(noFloor).not.toContain('en0-x');
+    expect(noFloor).toContain('en1-x');
+
+    // ★ floor=2 (toggle fired): the rich cell now SURFACES its EN inside the
+    // slice (criterion ③ — "toggle ON = English visible" even in KO-rich
+    // cells) while KO keeps the slice front (only the reserved tail yields).
+    const floored = binByCells(survivors, 8, 1, 2).map((p) => p.videoId);
+    expect(floored).toContain('en0-x');
+    expect(floored.indexOf('en0-x')).toBeGreaterThan(floored.indexOf('ko0-c')); // KO front intact
+    expect(floored).toContain('en1-x');
+    expect(floored.indexOf('en1-x')).toBeGreaterThan(floored.indexOf('ko1-a'));
+  });
+
+  it('floor gives unused EN slots back to KO (cell with no EN unchanged)', () => {
+    const survivors = [cand('ko-a', 0), cand('ko-b', 0), cand('ko-c', 0), cand('ko-d', 0)];
+    const out = binByCells(survivors, 4, 1, 2).map((p) => p.videoId);
+    expect(out).toEqual(['ko-a', 'ko-b', 'ko-c', 'ko-d']);
   });
 });
