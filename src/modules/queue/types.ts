@@ -33,6 +33,15 @@ export const JOB_NAMES = {
    * docs/handoffs/pr3-relevance-backfill-cp498.md.
    */
   ENRICH_RELEVANCE_QUICK: 'enrich-relevance-quick',
+  /**
+   * W1' (CP499+) — guaranteed actions fill. Replaces the in-memory
+   * fire-and-forget IIFE in mandala-post-creation (lost on restart, gone
+   * after its single inline attempt). pg-boss persistence + retries keep the
+   * absolute rule "missing actions ⇒ LLM-generate and store in DB" alive
+   * across crashes/restarts. Worker = fillMissingActionsIfNeeded (idempotent:
+   * 'skipped-full' on a no-op re-run).
+   */
+  MANDALA_ACTIONS_FILL: 'mandala-actions-fill',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -191,6 +200,26 @@ export const RELEVANCE_QUICK_RETRY_OPTIONS = {
   retryLimit: 1,
   expireInMinutes: 5,
 } as const;
+
+/**
+ * Actions fill — one Haiku batch call (~20s observed worst case). 3 retries
+ * with backoff: the job is the GUARANTEE layer for the absolute rule
+ * "missing actions ⇒ generate and store", so transient LLM failures must not
+ * leave a mandala permanently actions-less (the old inline IIFE did exactly
+ * that after its single attempt).
+ */
+export const MANDALA_ACTIONS_FILL_OPTIONS = {
+  retryLimit: 3,
+  retryDelay: 30,
+  retryBackoff: true,
+  expireInMinutes: 10,
+} as const;
+
+export interface MandalaActionsFillPayload {
+  mandalaId: string;
+  userId?: string;
+  trigger?: string;
+}
 
 // ============================================================================
 // Queue Configuration

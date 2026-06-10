@@ -30,6 +30,7 @@ import { registerEnrichRichSummaryWorker } from './handlers/enrich-rich-summary'
 import { registerBatchVideoCollectorWorker } from './handlers/batch-video-collector';
 import { registerPoolMaintenanceWorker } from './handlers/pool-maintenance';
 import { registerEnrichRelevanceQuickWorker } from './handlers/enrich-relevance-quick';
+import { registerMandalaActionsFillWorker } from './handlers/mandala-actions-fill';
 import { logger } from '../../utils/logger';
 
 /**
@@ -50,6 +51,7 @@ export async function initJobQueue(): Promise<void> {
   await registerBatchVideoCollectorWorker();
   await registerPoolMaintenanceWorker();
   await registerEnrichRelevanceQuickWorker();
+  await registerMandalaActionsFillWorker();
 
-  logger.info('Job queue fully initialized (pg-boss + 6 workers)');
+  logger.info('Job queue fully initialized (pg-boss + 7 workers)');
 }

@@ -205,10 +205,10 @@ describe('initJobQueue integration', () => {
     const { initJobQueue } = require('../../../src/modules/queue');
     await initJobQueue();
 
-    // Should register all 6 workers: enrich-video, batch-scan,
+    // Should register all 7 workers: enrich-video, batch-scan,
     // enrich-rich-summary, batch-video-collector, pool-maintenance,
-    // enrich-relevance-quick (CP498 PR3b).
-    expect(mockBossInstance.work).toHaveBeenCalledTimes(6);
+    // enrich-relevance-quick (CP498 PR3b), mandala-actions-fill (W1' CP499+).
+    expect(mockBossInstance.work).toHaveBeenCalledTimes(7);
 
     // Should schedule batch-scan
     expect(mockBossInstance.schedule).toHaveBeenCalledTimes(1);

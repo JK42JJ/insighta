@@ -54,17 +54,32 @@ export function triggerMandalaPostCreationAsync(
     });
 
     (async () => {
-      // Lazy require so that test-time module graphs that do not need the
-      // generator / OpenRouter imports (e.g. `mandala-post-creation.test.ts`
-      // which mocks only a narrow surface) are not forced to resolve them.
-      const { fillMissingActionsIfNeeded } = await import('./fill-missing-actions');
-      const result = await fillMissingActionsIfNeeded(mandalaId);
-      log.info(
-        `actions-fill result for mandala=${mandalaId}: ${JSON.stringify({
-          action: result.action,
-          cellsFilled: result.cellsFilled ?? 0,
-        })}`
-      );
+      // W1' (CP499+) — actions fill is now a pg-boss job, not an in-memory
+      // attempt: the old inline call died with the process (deploy restarts)
+      // and never retried, so a single LLM failure left the mandala
+      // permanently actions-less. The job gives persistence + 3 backoff
+      // retries (absolute rule: missing actions ⇒ generate and store).
+      // Lazy import keeps narrow test module graphs unchanged.
+      const { enqueueMandalaActionsFill } =
+        await import('@/modules/queue/handlers/mandala-actions-fill');
+      try {
+        const jobId = await enqueueMandalaActionsFill({ mandalaId, userId, trigger });
+        log.info(`actions-fill enqueued: job=${jobId} mandala=${mandalaId}`);
+      } catch (enqueueErr) {
+        // Queue down (pg-boss unavailable) — fall back to the old inline
+        // attempt so the rule still has SOME execution path right now.
+        log.warn(
+          `actions-fill enqueue failed (${enqueueErr instanceof Error ? enqueueErr.message : String(enqueueErr)}) — falling back to inline fill for mandala=${mandalaId}`
+        );
+        const { fillMissingActionsIfNeeded } = await import('./fill-missing-actions');
+        const result = await fillMissingActionsIfNeeded(mandalaId);
+        log.info(
+          `actions-fill inline-fallback result for mandala=${mandalaId}: ${JSON.stringify({
+            action: result.action,
+            cellsFilled: result.cellsFilled ?? 0,
+          })}`
+        );
+      }
     })().catch((err) => {
       log.warn(
         `fill-missing-actions crashed for user=${userId} mandala=${mandalaId}: ${err instanceof Error ? err.message : String(err)}`
