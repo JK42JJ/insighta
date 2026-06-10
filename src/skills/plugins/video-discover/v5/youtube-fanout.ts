@@ -90,8 +90,6 @@ export interface FanoutCandidate {
   publishedAt: string;
   thumbnailUrl: string;
   cellIndex: number | null;
-  /** CP499+ — candidate came from the EN query pass (assignment floor input). */
-  fromEnPass?: boolean;
 }
 
 /** CP491 F5c — per-query observability (raw count + q_ok), independent of dedup/hardcap. */
@@ -526,6 +524,55 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     }
   }
 
+  // ── CP499+ EN-only search ('영문 카드 포함' re-corrected to EN-ONLY) ─────
+  // James final intent: the English action fetches ENGLISH CARDS ONLY — not a
+  // ko+en mix (mixing measured: KO crowds EN out). ON ⇒ the ko cell queries
+  // are translated (one fail-open LLM call) and REPLACE the live query set,
+  // so the run searches English only: no KO pass, no competition, and the
+  // quota cost is NEUTRAL (same N search.list calls as a normal run).
+  // Translation failure ⇒ fall back to the normal ko run (user gets results
+  // rather than nothing); meta records translated=false for the verdict.
+  // Empty/low-cell-first assignment is unchanged (binByCells round-robin).
+  const enOnly = Boolean(input.includeEnCards) && input.language === 'ko';
+  const enPass: EnPassMeta = {
+    fired: false,
+    cellsFired: [],
+    translated: false,
+    queriesFired: 0,
+    rawItems: 0,
+    candidatesAdded: 0,
+  };
+  if (enOnly && liveQueries.length > 0) {
+    const targetByCell = new Map<number, string>();
+    for (const q of liveQueries) {
+      if (typeof q.cellIndex === 'number' && !targetByCell.has(q.cellIndex)) {
+        targetByCell.set(q.cellIndex, q.query);
+      }
+    }
+    const targets = [...targetByCell.entries()].map(([cellIndex, query]) => ({
+      cellIndex,
+      query,
+    }));
+    const translated = targets.length
+      ? await translateQueriesToEn(targets, { apiKey: input.env['OPENROUTER_API_KEY'] })
+      : null;
+    if (translated) {
+      enPass.translated = true;
+      enPass.fired = true;
+      enPass.cellsFired = [...translated.keys()].sort((a, b) => a - b);
+      liveQueries = [...translated.entries()].map(([cellIndex, query]) => ({
+        query,
+        source: 'en_only',
+        cellIndex,
+      }));
+      enPass.queriesFired = liveQueries.length;
+      log.info(`v5 en-only: cells=[${enPass.cellsFired.join(',')}] queries=${liveQueries.length}`);
+    } else {
+      log.info('v5 en-only: translation unavailable — falling back to the ko run (fail-open)');
+    }
+  }
+  const enOnlyActive = enPass.fired;
+
   const results = await Promise.allSettled(
     liveQueries.map((q, i) =>
       searchVideos({
@@ -540,11 +587,9 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         // keeping the rest as failover.
         apiKey: rotateKeys(apiKeys, i),
         maxResults: cfg.searchMaxResults,
-        // CP499+ toggle — ON drops the ko bias so EN candidates can actually
-        // enter live results (the pool is 5.9% EN; live is the supply body).
-        // searchVideos omits the param when undefined (youtube-client :223).
-        relevanceLanguage:
-          input.includeEnCards && input.language === 'ko' ? undefined : input.language,
+        // CP499+ EN-only — the run searches English: bias to 'en'. regionCode
+        // stays KR ("EN content consumed in Korea" slant, James-approved).
+        relevanceLanguage: enOnlyActive ? 'en' : input.language,
         // CP492 — region bias (ko→KR, en→US). relevanceLanguage alone is a soft
         // hint YouTube ignores for sparse queries (it backfilled "드리블 핸들링"
         // with a high-view Chinese drama). regionCode nudges toward the locale;
@@ -559,6 +604,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
   let rawItemCount = 0;
   let queriesSucceeded = 0;
   let offLangDropped = 0;
+  let liveAdded = 0;
   const seen = new Map<string, FanoutCandidate>();
 
   // CP494 — seed pool candidates first (already gate-filtered above) so they get
@@ -585,117 +631,29 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       // high-view global content (Chinese dramas on a Korean basketball query).
       // Conservative: only drop titles dominated by a non-target script (see
       // isOffLanguageTitle) so English-titled or Hanja-mixed Korean content is kept.
-      if (isOffLanguageTitleToggled(cand.title, input.language, input.includeEnCards)) {
+      // EN-only: the result set must be English — drop hangul titles outright
+      // (the en script-gate alone only blocks CJK Han and would pass Korean).
+      if (
+        enOnlyActive
+          ? /[가-힣]/.test(cand.title)
+          : isOffLanguageTitleToggled(cand.title, input.language, input.includeEnCards)
+      ) {
         offLangDropped += 1;
         continue;
       }
       seen.set(cand.videoId, cand);
+      liveAdded += 1;
       if (seen.size >= cfg.dedupHardCap) break;
     }
     if (seen.size >= cfg.dedupHardCap) break;
   }
 
-  // ── CP499+ EN query pass ('영문 카드 포함') — fire/assign separation ─────
-  // James re-correction (2026-06-10): FIRE is unconditional — the toggle is
-  // an explicit user request for English, so every searched cell gets its EN
-  // query (+100u each, ON-only). The earlier weak-cell cut belonged to
-  // ASSIGNMENT, not firing (it silenced the pass on KO-rich domains).
-  // Assignment priority lives downstream in binByCells: per-cell buckets keep
-  // insertion order (KO first, EN appended) + rank round-robin → KO-poor
-  // cells reach their EN entries at shallow ranks while KO-rich cells keep KO
-  // in front — EN supplements, never displaces. Per-cell ceiling stays with
-  // the cellSkip(12) gate.
-  const enPass: EnPassMeta = {
-    fired: false,
-    cellsFired: [],
-    translated: false,
-    queriesFired: 0,
-    rawItems: 0,
-    candidatesAdded: 0,
-  };
-  const enPerQuery: FanoutPerQuery[] = [];
-  if (input.includeEnCards && input.language === 'ko' && liveQueries.length > 0) {
-    const targetByCell = new Map<number, string>();
-    for (const q of liveQueries) {
-      if (typeof q.cellIndex === 'number' && !targetByCell.has(q.cellIndex)) {
-        targetByCell.set(q.cellIndex, q.query);
-      }
-    }
-    enPass.cellsFired = [...targetByCell.keys()].sort((a, b) => a - b);
-
-    if (targetByCell.size > 0) {
-      const targets = [...targetByCell.entries()].map(([cellIndex, query]) => ({
-        cellIndex,
-        query,
-      }));
-      const translated = await translateQueriesToEn(targets, {
-        apiKey: input.env['OPENROUTER_API_KEY'],
-      });
-
-      if (translated) {
-        enPass.translated = true;
-        enPass.fired = true;
-        const enResults = await Promise.allSettled(
-          [...translated.entries()].map(([cellIndex, query], i) =>
-            searchVideos({
-              query,
-              apiKey: rotateKeys(apiKeys, liveQueries.length + i),
-              maxResults: cfg.searchMaxResults,
-              // No language bias on purpose; regionCode KR keeps the
-              // "EN content consumed in Korea" slant (James-approved).
-              regionCode: 'KR',
-              timeoutMs: cfg.searchTimeoutMs,
-              publishedAfter: input.publishedAfter,
-            }).then((items) => ({ items, cellIndex, query }))
-          )
-        );
-        enPass.queriesFired = targets.length;
-
-        for (const r of enResults) {
-          if (r.status !== 'fulfilled') {
-            enPerQuery.push({
-              query: '(en-pass)',
-              source: 'en_pass',
-              cellIndex: null,
-              rawCount: 0,
-              fulfilled: false,
-            });
-            continue;
-          }
-          const { items, cellIndex, query } = r.value;
-          enPerQuery.push({
-            query,
-            source: 'en_pass',
-            cellIndex,
-            rawCount: items.length,
-            fulfilled: true,
-          });
-          for (const it of items) {
-            enPass.rawItems += 1;
-            rawItemCount += 1;
-            const cand = toFanoutCandidate(it, cellIndex);
-            if (!cand) continue;
-            if (seen.has(cand.videoId)) continue;
-            if (titleHitsBlocklist(cand.title) || titleIndicatesShorts(cand.title)) continue;
-            if (isOffLanguageTitleToggled(cand.title, input.language, input.includeEnCards)) {
-              offLangDropped += 1;
-              continue;
-            }
-            seen.set(cand.videoId, { ...cand, fromEnPass: true });
-            enPass.candidatesAdded += 1;
-            if (seen.size >= cfg.dedupHardCap) break;
-          }
-          if (seen.size >= cfg.dedupHardCap) break;
-        }
-        log.info(
-          `v5 en-pass: cells=[${enPass.cellsFired.join(',')}] fired=${enPass.queriesFired} raw=${enPass.rawItems} added=${enPass.candidatesAdded}`
-        );
-      } else {
-        log.info(
-          `v5 en-pass: ON for cells [${enPass.cellsFired.join(',')}] but translation unavailable — skipped (fail-open)`
-        );
-      }
-    }
+  // EN-only observability: in replace-mode the main loop IS the EN pass.
+  // (Pool seeds are not hangul-purged here — V5_POOL_* is OFF in prod; the
+  // pool×en-only interplay is a TODO for the pool re-enable track.)
+  if (enOnlyActive) {
+    enPass.rawItems = rawItemCount;
+    enPass.candidatesAdded = liveAdded;
   }
 
   // CP491 F5c — per-query raw count + q_ok, computed independently of the
@@ -717,12 +675,13 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     candidates: Array.from(seen.values()),
     // CP494 — attempted/quota now reflect ONLY the live queries actually fired
     // (pool-satisfied cells dropped theirs). poolBackfill carries the delta.
-    // CP499+ — the EN pass adds its fired queries to quota (100u each).
+    // CP499+ EN-only is REPLACE-mode: liveQueries already is the fired set
+    // (EN when ON+translated, ko otherwise) — quota is N×100 either way.
     queriesAttempted: liveQueries.length,
     queriesSucceeded,
     rawItemCount,
-    quotaUnitsApprox: (liveQueries.length + enPass.queriesFired) * 100,
-    perQuery: [...perQuery, ...enPerQuery],
+    quotaUnitsApprox: liveQueries.length * 100,
+    perQuery,
     queryGenMs,
     queryGen,
     offLangDropped,
