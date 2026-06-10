@@ -428,6 +428,9 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               v5_stage_ms: v5Result.diagnostics.stageMs,
               v5_aborted_batches: v5Result.diagnostics.abortedBatches,
               v5_picker_timed_out: v5Result.diagnostics.pickerTimedOut,
+              // CP499+ EN query pass — prod verification surface for the
+              // includeEnCards toggle (weakCells/fired/added per run).
+              v5_en_pass: v5Result.diagnostics.enPass,
               // CP492 Track-1 — query-gen telemetry (mode/model/latency/llmCells/fellBack).
               // stageMs.queryGenMs already carries the latency via v5_stage_ms.
               v5_query_gen: v5Result.diagnostics.queryGen,

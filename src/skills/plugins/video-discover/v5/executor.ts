@@ -124,6 +124,8 @@ export interface V5ExecuteResult {
     poolBackfill: PoolBackfillMeta;
     /** CP494 ④-1 — # cell queries skipped (cell already full). */
     skippedFullCells: number;
+    /** CP499+ EN query pass observability. */
+    enPass: import('./youtube-fanout').EnPassMeta;
   };
 }
 
@@ -368,6 +370,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       offLangDropped: fanout.offLangDropped ?? 0,
       poolBackfill: fanout.poolBackfill,
       skippedFullCells: fanout.skippedFullCells,
+      enPass: fanout.enPass,
     },
   };
 }
@@ -383,6 +386,7 @@ function emptyResult(args: {
     offLangDropped?: number;
     poolBackfill: PoolBackfillMeta;
     skippedFullCells?: number;
+    enPass: import('./youtube-fanout').EnPassMeta;
   };
   afterTitleFilter: number;
   afterExcludeFilter: number;
@@ -415,6 +419,7 @@ function emptyResult(args: {
       offLangDropped: args.fanout.offLangDropped ?? 0,
       poolBackfill: args.fanout.poolBackfill,
       skippedFullCells: args.fanout.skippedFullCells ?? 0,
+      enPass: args.fanout.enPass,
     },
   };
 }
