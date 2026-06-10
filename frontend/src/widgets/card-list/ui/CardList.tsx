@@ -8,7 +8,7 @@ import { FileVideo, Check } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDragSelect } from '@/features/drag-select/model/useDragSelect';
 import { cardSlotDropId } from '@/shared/lib/dnd';
-import { CardSkeleton } from './CardSkeleton';
+import { CardSkeleton, CardSkeletonCell } from './CardSkeleton';
 import {
   useSummaryRatings,
   useRateSummary,
@@ -504,14 +504,21 @@ export function CardList({
             </CardSlot>
           );
         })}
-      </div>
 
-      {hasMore && (
-        <>
-          <CardSkeleton count={Math.min(sortedCards.length - visibleCount, 6)} />
-          <div ref={sentinelRef} aria-hidden className="h-1" />
-        </>
-      )}
+        {/* CP499+ — the loading tail lives INSIDE the grid: skeleton cells fill
+            the next cells right after the last card (flush, same gridColumns)
+            instead of a sibling block pushed below the grid's stretched
+            minHeight (the "big gap before skeletons" defect). The minHeight
+            itself is untouched — it keeps the empty area a drag/drop target. */}
+        {hasMore && (
+          <>
+            {Array.from({ length: Math.min(sortedCards.length - visibleCount, 6) }).map((_, i) => (
+              <CardSkeletonCell key={`skeleton-${i}`} index={i} className="w-[95%]" />
+            ))}
+            <div ref={sentinelRef} aria-hidden className="col-span-full h-1" />
+          </>
+        )}
+      </div>
     </div>
   );
 }
