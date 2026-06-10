@@ -7,6 +7,8 @@ import { Sparkles, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 interface MandalaGridProps {
+  /** W1b — current sub-level's actions-fill job still pending. */
+  actionsPending?: boolean;
   mandalaId?: string | null;
   level: MandalaLevel;
   cardsByCell: Record<number, InsightCard[]>;
@@ -43,6 +45,7 @@ export type MandalaSizeMode = 'compact' | 'standard' | 'spacious';
 export const MandalaGrid = memo(function MandalaGrid({
   mandalaId,
   level,
+  actionsPending = false,
   cardsByCell,
   selectedCellIndex,
   onCellClick,
@@ -355,6 +358,7 @@ export const MandalaGrid = memo(function MandalaGrid({
                   index={gridIndex}
                   label={cellData.label}
                   isCenter={cellData.isCenter}
+                  isActionsPending={actionsPending}
                   cards={cellCards}
                   sizeMode={sizeMode}
                   totalCards={totalCards}

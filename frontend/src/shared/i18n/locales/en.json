@@ -799,7 +799,8 @@
     "collapse": "Collapse",
     "switchToFloating": "Switch to floating",
     "switchToDock": "Dock",
-    "navigateToSub": "Navigate to {{subject}}"
+    "navigateToSub": "Navigate to {{subject}}",
+    "actionsFilling": "Filling…"
   },
   "scratchPad": {
     "title": "Scratch Pad",

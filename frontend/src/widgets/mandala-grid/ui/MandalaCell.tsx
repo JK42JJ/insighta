@@ -20,6 +20,9 @@ export interface MandalaCellProps {
   index: number;
   label: string;
   isCenter: boolean;
+  /** W1b (CP499+) — actions-fill job still running for this sub-level:
+   *  empty subject cells show a "filling" pulse instead of blank. */
+  isActionsPending?: boolean;
   cards: InsightCard[];
   isDropTarget: boolean;
   isCellSwapTarget: boolean;
@@ -357,6 +360,7 @@ export const MandalaCell = memo(
     index,
     label,
     isCenter,
+    isActionsPending = false,
     cards,
     isDropTarget,
     isCellSwapTarget,
@@ -591,6 +595,17 @@ export const MandalaCell = memo(
             }}
           >
             {label}
+          </span>
+        )}
+
+        {/* W1b — actions are being generated (pg-boss job in flight): an
+            empty sub-level cell is "filling", not permanently blank. */}
+        {!isCenter && !label && isActionsPending && (
+          <span
+            className="animate-pulse text-muted-foreground/70 px-1 text-center"
+            style={{ fontSize: 'clamp(8px, 2.2cqi, 12px)' }}
+          >
+            {t('mandala.actionsFilling', 'Filling…')}
           </span>
         )}
 
