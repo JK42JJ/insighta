@@ -41,23 +41,39 @@ export function buildEnTranslatePrompt(targets: EnTranslateTarget[]): string {
   ].join('\n');
 }
 
-/** Strict parse: same keys back, non-empty string values. Anything else → null. */
+/**
+ * Lenient parse, mirroring the PROVEN parsePerCellResponse (llm-query-gen):
+ * strip a markdown fence, extract the first {...} block, then accept any
+ * subset of the requested keys (partial translation ⇒ only those cells are
+ * searched this run — EN-only purity over coverage). Empty set ⇒ null.
+ * The original strict all-keys naive-JSON.parse version died on Haiku's
+ * fenced output in prod (2026-06-10 15:38 — call 200, parser null).
+ */
 export function parseEnTranslateResponse(
   raw: string,
   targets: EnTranslateTarget[]
 ): Map<number, string> | null {
+  let text = (raw ?? '').trim();
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence?.[1]) text = fence[1].trim();
+  const brace = text.match(/\{[\s\S]*\}/);
+  if (brace) text = brace[0];
+
+  let obj: unknown;
   try {
-    const obj = JSON.parse(raw) as Record<string, unknown>;
-    const out = new Map<number, string>();
-    for (const t of targets) {
-      const v = obj[String(t.cellIndex)];
-      if (typeof v !== 'string' || v.trim().length === 0) return null;
-      out.set(t.cellIndex, v.trim());
-    }
-    return out;
+    obj = JSON.parse(text);
   } catch {
     return null;
   }
+  if (typeof obj !== 'object' || obj === null) return null;
+  const rec = obj as Record<string, unknown>;
+
+  const out = new Map<number, string>();
+  for (const t of targets) {
+    const v = rec[String(t.cellIndex)];
+    if (typeof v === 'string' && v.trim().length > 0) out.set(t.cellIndex, v.trim());
+  }
+  return out.size > 0 ? out : null;
 }
 
 /**

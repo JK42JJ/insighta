@@ -83,9 +83,32 @@ beforeEach(() => {
 });
 
 describe('translate fail-open (real impl)', () => {
+  it('REGRESSION: fenced/prefixed Haiku output parses (prod 2026-06-10 15:38 — call 200, old parser null)', () => {
+    const targets = [
+      { cellIndex: 0, query: 'q0' },
+      { cellIndex: 1, query: 'q1' },
+    ];
+    const fenced =
+      'Here are the translations:\n```json\n{"0":"vibe coding basics","1":"advanced vibe coding"}\n```';
+    const out = parseEnTranslateResponse(fenced, targets);
+    expect(out?.get(0)).toBe('vibe coding basics');
+    expect(out?.get(1)).toBe('advanced vibe coding');
+  });
+
+  it('partial translation is accepted (only translated cells get searched)', () => {
+    const targets = [
+      { cellIndex: 0, query: 'q0' },
+      { cellIndex: 1, query: 'q1' },
+    ];
+    const out = parseEnTranslateResponse('{"0":"vibe coding basics"}', targets);
+    expect(out?.size).toBe(1);
+    expect(out?.get(0)).toBe('vibe coding basics');
+  });
+
   it('parse mismatch / LLM throw / no key → null', async () => {
     const targets = [{ cellIndex: 1, query: 'q' }];
     expect(parseEnTranslateResponse('not-json', targets)).toBeNull();
+    expect(parseEnTranslateResponse('{"9":"wrong-key-only"}', targets)).toBeNull();
     expect(parseEnTranslateResponse('{"1":"vibe coding"}', targets)?.get(1)).toBe('vibe coding');
     expect(
       await realTranslate(targets, {
