@@ -34,6 +34,19 @@ export function cardSetKey(cards: { id: string }[]): string {
     .join(',');
 }
 
+/**
+ * CP499+ — when the card SET changes, the scrollable ancestor must return to
+ * the top alongside the visibleCount reset. Without it, switching mandala
+ * A→B while scrolled deep left the viewport past B's first-page window —
+ * only skeletons visible until a scroll nudge re-fired the observer
+ * (prod 2026-06-10). `scrollTo?.` is optional-called: jsdom lacks
+ * Element.scrollTo, and a missing scroller must never throw.
+ */
+export function scrollCardSetContainerToTop(from: Element | null): void {
+  const scroller = from?.closest('[data-scroll-container]') as HTMLElement | null;
+  scroller?.scrollTo?.({ top: 0 });
+}
+
 function safeVideoId(videoUrl: string): string | null {
   try {
     return extractYouTubeVideoId(new URL(videoUrl));
@@ -253,6 +266,14 @@ export function CardList({
   const cardListKey = useMemo(() => cardSetKey(cards), [cards]);
   useEffect(() => {
     resetVisibleCount();
+    // CP499+ — also reset the SCROLL position: visibleCount collapses to the
+    // first page but the scrollable ancestor kept the previous set's offset
+    // (prod 2026-06-10: switch mandala A→B while scrolled deep → viewport sat
+    // past B's rendered window → only skeletons until a scroll nudge re-fired
+    // the observer). A new card set starts at the top — which also guarantees
+    // the sentinel begins below the viewport, so the observer's first real
+    // trigger is a clean user-scroll intersection change.
+    scrollCardSetContainerToTop(gridRef.current);
   }, [cardListKey, resetVisibleCount]);
 
   const visibleCards = useMemo(
