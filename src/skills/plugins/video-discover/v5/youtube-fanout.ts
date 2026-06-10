@@ -56,6 +56,13 @@ export interface FanoutInput {
   focusTags: string[];
   targetLevel: string;
   language: 'ko' | 'en';
+  /**
+   * CP499+ '영문 카드 포함' toggle (user_skill_config.config.includeEnCards).
+   * ko mandala + true → live search drops the relevanceLanguage=ko bias and
+   * the off-language gate widens to ko ∪ en (third-script content stays
+   * blocked). Undefined/false = current ko-only behaviour, bit-identical.
+   */
+  includeEnCards?: boolean;
   env: NodeJS.ProcessEnv;
   /** CP491 ROI1 — forwarded to search.list publishedAfter (ISO date). */
   publishedAfter?: string;
@@ -234,6 +241,26 @@ export function rotateKeys(keys: string[], i: number): string[] {
  *   - en: Latin-script. Zero Latin letters + ≥2 Han = CJK content → drop.
  * Exported for tests.
  */
+/**
+ * CP499+ — toggle-aware off-language gate ('영문 카드 포함').
+ *
+ * DESIGN FINDING (test-caught): the ko-rules ALREADY pass pure-English titles
+ * (hangul 0 + no dominant third script = kept), so the gate needs NO widening
+ * for the toggle — and a ko∪en union would be actively WRONG: the en-rules
+ * only block CJK, so Arabic/Thai/Cyrillic titles would re-enter through the
+ * en side. The toggle's effective EN-inflow lever is therefore the
+ * relevanceLanguage drop in the search call alone; this function keeps the
+ * toggle branch explicit at both call sites and pins the EN-passes invariant.
+ * Exported for tests.
+ */
+export function isOffLanguageTitleToggled(
+  title: string,
+  lang: 'ko' | 'en',
+  _includeEnCards: boolean | undefined
+): boolean {
+  return isOffLanguageTitle(title, lang);
+}
+
 export function isOffLanguageTitle(title: string, lang: 'ko' | 'en'): boolean {
   const t = title ?? '';
   const hangul = (t.match(/[가-힣]/g) ?? []).length;
@@ -416,7 +443,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         const cand = keywordCandidateToFanoutCandidate(kc);
         // Fork-1 caveat: pool candidates run the SAME gates as live items.
         if (titleHitsBlocklist(cand.title) || titleIndicatesShorts(cand.title)) continue;
-        if (isOffLanguageTitle(cand.title, input.language)) continue;
+        if (isOffLanguageTitleToggled(cand.title, input.language, input.includeEnCards)) continue;
         const ci = cand.cellIndex ?? -1;
         if (ci < 0) continue;
         const bucket = byCell.get(ci);
@@ -477,7 +504,11 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         // keeping the rest as failover.
         apiKey: rotateKeys(apiKeys, i),
         maxResults: cfg.searchMaxResults,
-        relevanceLanguage: input.language,
+        // CP499+ toggle — ON drops the ko bias so EN candidates can actually
+        // enter live results (the pool is 5.9% EN; live is the supply body).
+        // searchVideos omits the param when undefined (youtube-client :223).
+        relevanceLanguage:
+          input.includeEnCards && input.language === 'ko' ? undefined : input.language,
         // CP492 — region bias (ko→KR, en→US). relevanceLanguage alone is a soft
         // hint YouTube ignores for sparse queries (it backfilled "드리블 핸들링"
         // with a high-view Chinese drama). regionCode nudges toward the locale;
@@ -518,7 +549,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       // high-view global content (Chinese dramas on a Korean basketball query).
       // Conservative: only drop titles dominated by a non-target script (see
       // isOffLanguageTitle) so English-titled or Hanja-mixed Korean content is kept.
-      if (isOffLanguageTitle(cand.title, input.language)) {
+      if (isOffLanguageTitleToggled(cand.title, input.language, input.includeEnCards)) {
         offLangDropped += 1;
         continue;
       }

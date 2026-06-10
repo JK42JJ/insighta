@@ -88,6 +88,31 @@ describe('runYouTubeFanout — F5c perQuery', () => {
     expect(res.candidates).toHaveLength(8); // 5 + 3, all unique
   });
 
+  test("CP499+ '영문 카드 포함': ko+ON drops relevanceLanguage; ko+OFF keeps 'ko' (the toggle's effective lever)", async () => {
+    buildRuleBasedQueriesSync.mockReturnValue([{ query: 'q0', source: 'core', cellIndex: null }]);
+    searchVideos.mockResolvedValue(items(2, 'q'));
+    const base = {
+      centerGoal: 'goal',
+      subGoals: [],
+      focusTags: [],
+      targetLevel: 'standard',
+      language: 'ko' as const,
+      env: {} as NodeJS.ProcessEnv,
+    };
+
+    await runYouTubeFanout({ ...base, includeEnCards: true });
+    for (const call of searchVideos.mock.calls) {
+      expect(call[0].relevanceLanguage).toBeUndefined(); // ko bias dropped -> EN can enter
+    }
+
+    searchVideos.mockClear();
+    searchVideos.mockResolvedValue(items(2, 'q'));
+    await runYouTubeFanout({ ...base, includeEnCards: false });
+    for (const call of searchVideos.mock.calls) {
+      expect(call[0].relevanceLanguage).toBe('ko'); // OFF = current behaviour
+    }
+  });
+
   test('ROI1: forwards publishedAfter to every searchVideos call', async () => {
     buildRuleBasedQueriesSync.mockReturnValue([
       { query: 'q0', source: 'core', cellIndex: null },
