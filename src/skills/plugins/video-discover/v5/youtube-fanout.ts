@@ -23,7 +23,7 @@ import {
 } from '../v2/youtube-client';
 import { buildRuleBasedQueriesSync, type SearchQuery } from '../v2/keyword-builder';
 import { buildLLMQueriesPerCell, type QueryGenMeta } from './llm-query-gen';
-import { translateQueriesToEn, computeWeakCells } from './en-query-translate';
+import { translateQueriesToEn } from './en-query-translate';
 import { getV5Config } from './config';
 import { MERGED_GEN_MODEL } from '@/prompts/mandala-with-queries-generator';
 import {
@@ -103,11 +103,13 @@ export interface FanoutPerQuery {
 
 /** CP499+ EN query pass observability (verification surface for the toggle). */
 export interface EnPassMeta {
-  /** Pass attempted (toggle ON + ko + weak cells existed + translation ok). */
+  /** Pass attempted (toggle ON + ko + translation ok). */
   fired: boolean;
-  /** Cells below the raw threshold after the ko first pass. */
-  weakCells: number[];
-  /** Translation call succeeded (false + weakCells>0 = fail-open skip). */
+  /** Cells whose query was translated+fired — ALL searched cells when ON
+   *  (James re-correction: fire is UNCONDITIONAL on toggle; the weak-cell
+   *  cut was an assignment concern wrongly applied at the fire stage). */
+  cellsFired: number[];
+  /** Translation call succeeded (false while ON = fail-open skip). */
   translated: boolean;
   queriesFired: number;
   rawItems: number;
@@ -342,7 +344,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       skippedFullCells: 0,
       enPass: {
         fired: false,
-        weakCells: [],
+        cellsFired: [],
         translated: false,
         queriesFired: 0,
         rawItems: 0,
@@ -412,7 +414,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       skippedFullCells: 0,
       enPass: {
         fired: false,
-        weakCells: [],
+        cellsFired: [],
         translated: false,
         queriesFired: 0,
         rawItems: 0,
@@ -591,16 +593,19 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     if (seen.size >= cfg.dedupHardCap) break;
   }
 
-  // ── CP499+ EN query pass ('영문 카드 포함', weak-cell-only) ──────────────
-  // T1 measurement: dropping relevanceLanguage alone moved EN inflow 7%→5%
-  // (noise) — the dominant variable is the QUERY language. So when the toggle
-  // is ON, cells whose ko first-pass raw total is below the threshold get
-  // their query translated to English (1 fail-open LLM call) and re-fired
-  // (+100u per weak cell, vs +800u full-mandala). The weak-cell cut
-  // auto-targets KO-absent domains — no manual domain classification.
+  // ── CP499+ EN query pass ('영문 카드 포함') — fire/assign separation ─────
+  // James re-correction (2026-06-10): FIRE is unconditional — the toggle is
+  // an explicit user request for English, so every searched cell gets its EN
+  // query (+100u each, ON-only). The earlier weak-cell cut belonged to
+  // ASSIGNMENT, not firing (it silenced the pass on KO-rich domains).
+  // Assignment priority lives downstream in binByCells: per-cell buckets keep
+  // insertion order (KO first, EN appended) + rank round-robin → KO-poor
+  // cells reach their EN entries at shallow ranks while KO-rich cells keep KO
+  // in front — EN supplements, never displaces. Per-cell ceiling stays with
+  // the cellSkip(12) gate.
   const enPass: EnPassMeta = {
     fired: false,
-    weakCells: [],
+    cellsFired: [],
     translated: false,
     queriesFired: 0,
     rawItems: 0,
@@ -608,23 +613,15 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
   };
   const enPerQuery: FanoutPerQuery[] = [];
   if (input.includeEnCards && input.language === 'ko' && liveQueries.length > 0) {
-    const perCellRaw = new Map<number, number>();
-    results.forEach((r, i) => {
-      const ci = liveQueries[i]!.cellIndex;
-      if (typeof ci !== 'number') return;
-      const raw = r.status === 'fulfilled' ? r.value.items.length : 0;
-      perCellRaw.set(ci, (perCellRaw.get(ci) ?? 0) + raw);
-    });
-    enPass.weakCells = computeWeakCells(perCellRaw, cfg.enPassRawThreshold);
-
-    if (enPass.weakCells.length > 0) {
-      const weakSet = new Set(enPass.weakCells);
-      const targetByCell = new Map<number, string>();
-      for (const q of liveQueries) {
-        if (typeof q.cellIndex === 'number' && weakSet.has(q.cellIndex)) {
-          if (!targetByCell.has(q.cellIndex)) targetByCell.set(q.cellIndex, q.query);
-        }
+    const targetByCell = new Map<number, string>();
+    for (const q of liveQueries) {
+      if (typeof q.cellIndex === 'number' && !targetByCell.has(q.cellIndex)) {
+        targetByCell.set(q.cellIndex, q.query);
       }
+    }
+    enPass.cellsFired = [...targetByCell.keys()].sort((a, b) => a - b);
+
+    if (targetByCell.size > 0) {
       const targets = [...targetByCell.entries()].map(([cellIndex, query]) => ({
         cellIndex,
         query,
@@ -689,11 +686,11 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
           if (seen.size >= cfg.dedupHardCap) break;
         }
         log.info(
-          `v5 en-pass: cells=[${enPass.weakCells.join(',')}] fired=${enPass.queriesFired} raw=${enPass.rawItems} added=${enPass.candidatesAdded}`
+          `v5 en-pass: cells=[${enPass.cellsFired.join(',')}] fired=${enPass.queriesFired} raw=${enPass.rawItems} added=${enPass.candidatesAdded}`
         );
       } else {
         log.info(
-          `v5 en-pass: weak cells [${enPass.weakCells.join(',')}] but translation unavailable — skipped (fail-open)`
+          `v5 en-pass: ON for cells [${enPass.cellsFired.join(',')}] but translation unavailable — skipped (fail-open)`
         );
       }
     }

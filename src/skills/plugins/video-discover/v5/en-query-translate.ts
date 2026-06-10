@@ -8,8 +8,9 @@
  * affected (fail-open ⇒ null).
  *
  * Cost: 1 Haiku-class call per toggle-ON add-cards run that HAS weak cells
- * (~$0.002, ~1-2s) + 100 search.list units per weak cell (vs +800u for a
- * full-mandala EN pass — the weak-cell cut auto-targets KO-absent domains).
+ * (~$0.002, ~1-2s) + 100 search.list units per searched cell (fire is
+ * unconditional on the toggle — James re-correction; assignment priority
+ * for empty/low cells lives in binByCells, not here).
  */
 
 import { logger } from '@/utils/logger';
@@ -90,16 +91,4 @@ export async function translateQueriesToEn(
     );
     return null;
   }
-}
-
-/**
- * Weak-cell selection: cells whose first-pass raw item total is below the
- * threshold (cells with NO successful query count as 0). Pure, exported for
- * tests — this cut is what auto-targets KO-absent domains.
- */
-export function computeWeakCells(perCellRaw: Map<number, number>, threshold: number): number[] {
-  return [...perCellRaw.entries()]
-    .filter(([, raw]) => raw < threshold)
-    .map(([cell]) => cell)
-    .sort((a, b) => a - b);
 }
