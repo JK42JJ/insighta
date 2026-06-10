@@ -1583,6 +1583,10 @@ class ApiClient {
     body: {
       extraKeywords: string[];
       excludeVideoIds: string[];
+      /** T2 (CP499+) — per-request language override for the EN-only search.
+       *  'en' = this search fetches English cards only (한/영 chip).
+       *  Absent = server falls back to the persisted config (DB-set mandalas). */
+      searchLanguage?: 'ko' | 'en';
       filters?: {
         minViewCount?: number;
         durationBucket?: 'short' | 'medium' | 'long' | 'xlong';

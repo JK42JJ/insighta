@@ -49,6 +49,16 @@ export function AddCardsPanel() {
 
   const mutation = useAddCards();
 
+  // T2 (CP499+) — 한/영 search-language chip, option (a) per James: transient
+  // per-panel-open state (NOT persisted). 영 = THIS search is EN-only;
+  // reopening the panel (or switching mandala) resets to 한. The persisted
+  // config (includeEnCards) stays as the server-side fallback when no
+  // explicit override is sent — the two coexist, request override wins.
+  const [searchLanguage, setSearchLanguage] = useState<'ko' | 'en'>('ko');
+  useEffect(() => {
+    setSearchLanguage('ko');
+  }, [open, mandalaId]);
+
   // CP489 Phase 4 — rounds[] (newest-first) replaces the flat restoredCards.
   // Each successful search PREPENDS a round so the cumulative result set
   // grows across "Search" clicks instead of replacing the prior batch (user
@@ -353,9 +363,12 @@ export function AddCardsPanel() {
       mandalaId,
       extraKeywords: keywords,
       excludeVideoIds: surfacedVideoIds,
+      // explicit override every time the chips are visible — 'ko' keeps a
+      // DB-toggled mandala deterministic from the UI (chip state wins).
+      searchLanguage,
       filters,
     });
-  }, [mandalaId, extraKeywords, filters, mutation, targetLevel, surfacedVideoIds]);
+  }, [mandalaId, extraKeywords, filters, mutation, targetLevel, surfacedVideoIds, searchLanguage]);
 
   // In-memory snapshot of the last cleared search — enables a quick "Show
   // previous results" undo when the user clicks 초기화 by mistake. Lost on
@@ -540,7 +553,11 @@ export function AddCardsPanel() {
           </div>
 
           <KeywordChipInput />
-          <AddCardsFilters />
+          <AddCardsFilters
+            searchLanguage={searchLanguage}
+            onSearchLanguageChange={setSearchLanguage}
+            showLanguageChips={mandalaMetaFromQuery?.language === 'ko'}
+          />
           <TargetLevelChips />
 
           <div className="flex items-center justify-end gap-2 px-5 py-2.5 sm:px-6">

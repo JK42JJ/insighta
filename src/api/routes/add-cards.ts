@@ -95,6 +95,10 @@ interface AddCardsFilters {
 }
 
 interface AddCardsBody {
+  /** T2 (CP499+) — per-request language override for the EN-only search.
+   *  'en' ⇒ this search is EN-only; 'ko' ⇒ force normal ko run; absent ⇒
+   *  fall back to the persisted config (DB-toggled mandalas keep working). */
+  searchLanguage?: 'ko' | 'en';
   extraKeywords?: string[];
   excludeVideoIds?: string[];
   filters?: AddCardsFilters;
@@ -292,20 +296,27 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           // (current behaviour preserved — the safe default).
           let includeEnCards = false;
           if (language === 'ko') {
-            const skillCfg = await prisma.user_skill_config
-              .findUnique({
-                where: {
-                  user_id_mandala_id_skill_type: {
-                    user_id: userId,
-                    mandala_id: mandalaId,
-                    skill_type: 'video_discover',
+            // T2 — explicit request override (한/영 chip) wins over the
+            // persisted config; absent = config fallback (option (a)).
+            const requested = request.body?.searchLanguage;
+            if (requested === 'en' || requested === 'ko') {
+              includeEnCards = requested === 'en';
+            } else {
+              const skillCfg = await prisma.user_skill_config
+                .findUnique({
+                  where: {
+                    user_id_mandala_id_skill_type: {
+                      user_id: userId,
+                      mandala_id: mandalaId,
+                      skill_type: 'video_discover',
+                    },
                   },
-                },
-                select: { config: true },
-              })
-              .catch(() => null);
-            includeEnCards =
-              (skillCfg?.config as Record<string, unknown> | null)?.['includeEnCards'] === true;
+                  select: { config: true },
+                })
+                .catch(() => null);
+              includeEnCards =
+                (skillCfg?.config as Record<string, unknown> | null)?.['includeEnCards'] === true;
+            }
           }
 
           const v5Result = await runV5Executor({

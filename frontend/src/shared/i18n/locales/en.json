@@ -81,17 +81,10 @@
     "recentActivity": "Recent Activity",
     "noActivity": "No activity yet",
     "modal": {
-      "aiTemplate": "Insighta AI Template",
-      "copyLink": "Copy link",
-      "start": "Start with this template",
-      "starting": "Starting…",
-      "whatNextLabel": "When you start with this template",
-      "whatNext1": "9×9 structure cloned automatically",
-      "whatNext2": "AI places 3 videos per cell",
-      "whatNext3": "Land on the dashboard, ready to watch",
-      "startedCount": "{{count}} started",
-      "cloneCount": "{{count}} clones",
-      "updatedAt": "Updated {{date}}"
+      "clone": "Clone to My Mandalas",
+      "copyLink": "Copy Link",
+      "improve": "Improve with AI",
+      "loading": "Loading full mandala..."
     },
     "hero": {
       "badge": "Explore Mandalas",
@@ -152,12 +145,6 @@
       "dAgo": "d ago",
       "wAgo": "w ago",
       "moAgo": "mo ago"
-    },
-    "modal": {
-      "clone": "Clone to My Mandalas",
-      "copyLink": "Copy Link",
-      "improve": "Improve with AI",
-      "loading": "Loading full mandala..."
     },
     "sharePrompt": {
       "title": "Share yours too!",
@@ -1930,6 +1917,11 @@
         "30d": "Past month",
         "180d": "Past 6 months",
         "365d": "Past year"
+      },
+      "language": {
+        "label": "Language",
+        "ko": "Korean",
+        "en": "English"
       }
     },
     "targetLevel": {
@@ -1946,7 +1938,9 @@
     "round": {
       "first": "Round 1",
       "nth": "Round {{n}} (more)",
-      "foundCount": "{{count}} new"
+      "foundCount": "{{count}} new",
+      "tablist": "Search rounds",
+      "activePanel": "Active round results"
     }
   }
 }
