@@ -91,6 +91,16 @@ const envSchema = z.object({
   // OpenRouter
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_MODEL: z.string().default('qwen/qwen3.5-9b'),
+  // W2 (CP499+) — belt-and-suspenders thinking suppression for Qwen models.
+  // generate() already sends `reasoning: {enabled:false}`, but some OpenRouter
+  // providers ignore it (prod 2026-06-10: reasoning-only 1024-token responses
+  // + 20-48s calls DESPITE the param). 'true' additionally appends the Qwen
+  // chat-template soft switch `/no_think` to the prompt — provider-agnostic.
+  // Default false = 기존 동작 (rollback = unset; CLAUDE.md env-default rule).
+  OPENROUTER_QWEN_NO_THINK: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
   // OpenRouter embedding endpoint (Phase 1). Same OPENROUTER_API_KEY is
   // reused for auth. Base URL is OpenAI-compatible; model id is exact
   // string as listed on the OpenRouter model catalogue. Dim must match
@@ -355,6 +365,7 @@ export const config = {
   openrouter: {
     apiKey: env.OPENROUTER_API_KEY,
     model: env.OPENROUTER_MODEL,
+    qwenNoThink: env.OPENROUTER_QWEN_NO_THINK,
   },
 
   // Cohere Rerank (cross-encoder reranking, hybrid-retrieval spec 2026-05-12)

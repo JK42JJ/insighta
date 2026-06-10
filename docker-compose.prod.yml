@@ -267,6 +267,12 @@ services:
       # Revert: delete this line and redeploy → code default off restores the
       # two-call path bit-identically (no code revert).
       - WIZARD_MERGED_GEN=true
+      # W2 (CP499+, 2026-06-10) — prompt-level `/no_think` for Qwen models on
+      # top of the existing reasoning:{enabled:false} param, which some
+      # OpenRouter providers ignore (prod: reasoning-only 1024-cap responses +
+      # 20-48s calls despite the param). Revert: delete this line + redeploy
+      # (code default off = param-only behaviour, no code revert).
+      - OPENROUTER_QWEN_NO_THINK=true
       # CP426 (2026-04-25) — Switch pipeline executor from v1 (3 recs/cell,
       # max 24 with channel diversity drop → ~5 actual) to v3 (12/cell target,
       # 96 max). v3 degrades gracefully to Tier 2 when video_pool is empty.
