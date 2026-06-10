@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDroppable } from '@dnd-kit/core';
 import { toast } from 'sonner';
@@ -8,7 +8,7 @@ import { FileVideo, Check } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDragSelect } from '@/features/drag-select/model/useDragSelect';
 import { cardSlotDropId } from '@/shared/lib/dnd';
-import { CardSkeleton, CardSkeletonCell } from './CardSkeleton';
+import { CardSkeletonCell } from './CardSkeleton';
 import {
   useSummaryRatings,
   useRateSummary,
@@ -103,6 +103,23 @@ function CardSlot({ card, children }: { card: InsightCard; children: React.React
 }
 
 const PAGE_SIZE = 24;
+
+/**
+ * CP499+ — SINGLE SOURCE for the card-grid markup. The initial-load skeleton
+ * grid MUST stay identical to the real card grid (column count, gap, padding,
+ * minHeight): the two diverging is exactly the 4-col-skeleton vs 3-col-cards
+ * bug (CardSkeleton used to bring its own breakpoint grid). Both render sites
+ * below reference THESE — never inline a copy.
+ * The minHeight keeps the empty area a drag/drop target; do not remove.
+ */
+const CARD_GRID_CLASS =
+  'grid grid-cols-1 gap-4 p-3 min-h-full flex-1 pb-20 justify-items-center transition-all duration-200';
+function cardGridStyle(gridColumns: number): CSSProperties {
+  return {
+    minHeight: 'calc(100vh - 200px)',
+    gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
+  };
+}
 
 export function CardList({
   cards,
@@ -403,7 +420,16 @@ export function CardList({
   );
 
   if (isLoading && cards.length === 0) {
-    return <CardSkeleton count={6} />;
+    // CP499+ — initial-load skeleton renders in the SAME grid as the cards
+    // (shared CARD_GRID_CLASS / cardGridStyle): same column count as the
+    // user's gridColumns, two full rows, no layout jump when cards land.
+    return (
+      <div className={CARD_GRID_CLASS} style={cardGridStyle(gridColumns)}>
+        {Array.from({ length: gridColumns * 2 }).map((_, i) => (
+          <CardSkeletonCell key={i} index={i} className="w-[95%]" />
+        ))}
+      </div>
+    );
   }
 
   if (cards.length === 0) {
@@ -426,17 +452,7 @@ export function CardList({
   return (
     <div className="animate-fade-in -mx-4 px-4 relative select-none" ref={containerRef}>
       {selectionStyle && <div style={selectionStyle} />}
-      <div
-        ref={gridRef}
-        className={cn(
-          'grid grid-cols-1 gap-4 p-3 min-h-full flex-1 pb-20 justify-items-center transition-all duration-200',
-          false
-        )}
-        style={{
-          minHeight: 'calc(100vh - 200px)',
-          gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
-        }}
-      >
+      <div ref={gridRef} className={CARD_GRID_CLASS} style={cardGridStyle(gridColumns)}>
         {visibleCards.map((card, idx) => {
           const isSelected = selectedCardIds.has(card.id);
           return (

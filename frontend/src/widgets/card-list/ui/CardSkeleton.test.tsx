@@ -1,14 +1,15 @@
 /**
- * CP499+ — skeleton tail moved inside CardList's grid. CardSkeletonCell must
- * stay grid-agnostic (no own grid wrapper) so it inherits the host grid's
- * gridColumns; the standalone CardSkeleton block keeps its own grid for the
- * no-cards isLoading state.
+ * CP499+ — skeleton cells are grid-agnostic BY DESIGN: CardSkeleton.tsx owns
+ * no grid. All render sites (initial-load + lazy-pagination tail) place the
+ * cells inside CardList's shared card grid (CARD_GRID_CLASS/cardGridStyle) so
+ * skeleton columns always match the user's gridColumns. The old standalone
+ * block with its own breakpoint grid was the 4-col vs 3-col mismatch defect.
  */
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
-import { CardSkeleton, CardSkeletonCell } from './CardSkeleton';
+import { CardSkeletonCell } from './CardSkeleton';
 
-describe('CardSkeletonCell (CP499+ grid-internal tail)', () => {
+describe('CardSkeletonCell (CP499+ grid-agnostic invariant)', () => {
   it('renders a single cell WITHOUT its own grid wrapper', () => {
     const { container } = render(<CardSkeletonCell />);
     const root = container.firstElementChild!;
@@ -20,13 +21,9 @@ describe('CardSkeletonCell (CP499+ grid-internal tail)', () => {
     const { container } = render(<CardSkeletonCell className="w-[95%]" />);
     expect(container.firstElementChild!.className).toContain('w-[95%]');
   });
-});
 
-describe('CardSkeleton (standalone block)', () => {
-  it('renders count cells inside its own grid', () => {
-    const { container } = render(<CardSkeleton count={3} />);
-    const root = container.firstElementChild!;
-    expect(root.className).toContain('grid');
-    expect(root.querySelectorAll('.aspect-video')).toHaveLength(3);
+  it('the module exports NO standalone grid block (regression guard)', async () => {
+    const mod = await import('./CardSkeleton');
+    expect(Object.keys(mod)).toEqual(['CardSkeletonCell']);
   });
 });

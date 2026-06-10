@@ -1,11 +1,13 @@
 import { cn } from '@/shared/lib/utils';
 
 /**
- * CP499+ — single skeleton cell, grid-agnostic. CardList renders these INSIDE
- * its own grid (next cell after the last visible card) so the loading tail
- * sits flush under the cards instead of below the grid's stretched minHeight
- * (the "big gap before skeletons" defect, prod 2026-06-10) — and inherits the
- * user's gridColumns instead of this file's own breakpoint columns.
+ * CP499+ — single skeleton cell, grid-agnostic BY DESIGN: this file owns NO
+ * grid. Every render site (CardList initial-load skeleton AND the lazy-
+ * pagination tail) places these cells inside CardList's own card grid
+ * (shared CARD_GRID_CLASS / cardGridStyle), so skeletons always match the
+ * user's gridColumns. The old standalone <CardSkeleton> block with its own
+ * breakpoint grid (md:2/lg:3/xl:4) was the 4-col-skeleton vs 3-col-cards
+ * defect — do not reintroduce a grid wrapper here.
  */
 export function CardSkeletonCell({ index = 0, className }: { index?: number; className?: string }) {
   return (
@@ -24,18 +26,6 @@ export function CardSkeletonCell({ index = 0, className }: { index?: number; cla
           animation: `shimmer 1.5s ease-in-out infinite ${index * 100}ms`,
         }}
       />
-    </div>
-  );
-}
-
-/** Standalone block variant — used when there are no cards to align with
- *  (initial isLoading full-replace). Brings its own responsive grid. */
-export function CardSkeleton({ count = 6 }: { count?: number }) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-3">
-      {Array.from({ length: count }).map((_, i) => (
-        <CardSkeletonCell key={i} index={i} />
-      ))}
     </div>
   );
 }
