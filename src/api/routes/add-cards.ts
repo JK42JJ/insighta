@@ -286,12 +286,35 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               )
             : undefined;
 
+          // CP499+ '영문 카드 포함' toggle — per-mandala persistent state in
+          // user_skill_config(video_discover).config.includeEnCards. ko
+          // mandalas only; missing row / missing key / DB error = OFF
+          // (current behaviour preserved — the safe default).
+          let includeEnCards = false;
+          if (language === 'ko') {
+            const skillCfg = await prisma.user_skill_config
+              .findUnique({
+                where: {
+                  user_id_mandala_id_skill_type: {
+                    user_id: userId,
+                    mandala_id: mandalaId,
+                    skill_type: 'video_discover',
+                  },
+                },
+                select: { config: true },
+              })
+              .catch(() => null);
+            includeEnCards =
+              (skillCfg?.config as Record<string, unknown> | null)?.['includeEnCards'] === true;
+          }
+
           const v5Result = await runV5Executor({
             centerGoal,
             subGoals,
             focusTags,
             targetLevel,
             language,
+            includeEnCards,
             excludeVideoIds: excludeSet,
             env: process.env,
             fullCellIndices,

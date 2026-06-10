@@ -39,6 +39,8 @@ export interface V5ExecuteInput {
   focusTags: string[];
   targetLevel: string;
   language: 'ko' | 'en';
+  /** CP499+ '영문 카드 포함' toggle — forwarded to fanout. See FanoutInput. */
+  includeEnCards?: boolean;
   excludeVideoIds: Set<string>;
   env: NodeJS.ProcessEnv;
   /**
@@ -151,6 +153,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
     focusTags: input.focusTags,
     targetLevel: input.targetLevel,
     language: input.language,
+    includeEnCards: input.includeEnCards,
     env: input.env,
     publishedAfter: input.publishedAfter,
     precomputedQueries: input.precomputedQueries,
