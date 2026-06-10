@@ -23,6 +23,7 @@ import {
 } from '../v2/youtube-client';
 import { buildRuleBasedQueriesSync, type SearchQuery } from '../v2/keyword-builder';
 import { buildLLMQueriesPerCell, type QueryGenMeta } from './llm-query-gen';
+import { translateQueriesToEn, computeWeakCells } from './en-query-translate';
 import { getV5Config } from './config';
 import { MERGED_GEN_MODEL } from '@/prompts/mandala-with-queries-generator';
 import {
@@ -100,6 +101,19 @@ export interface FanoutPerQuery {
   fulfilled: boolean;
 }
 
+/** CP499+ EN query pass observability (verification surface for the toggle). */
+export interface EnPassMeta {
+  /** Pass attempted (toggle ON + ko + weak cells existed + translation ok). */
+  fired: boolean;
+  /** Cells below the raw threshold after the ko first pass. */
+  weakCells: number[];
+  /** Translation call succeeded (false + weakCells>0 = fail-open skip). */
+  translated: boolean;
+  queriesFired: number;
+  rawItems: number;
+  candidatesAdded: number;
+}
+
 export interface FanoutResult {
   candidates: FanoutCandidate[];
   queriesAttempted: number;
@@ -118,6 +132,8 @@ export interface FanoutResult {
   poolBackfill: PoolBackfillMeta;
   /** CP494 ④-1 — # of cell queries skipped because the cell was already full. */
   skippedFullCells: number;
+  /** CP499+ EN query pass observability ('영문 카드 포함' toggle). */
+  enPass: EnPassMeta;
 }
 
 /**
@@ -324,6 +340,14 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       offLangDropped: 0,
       poolBackfill: POOL_BACKFILL_OFF(0),
       skippedFullCells: 0,
+      enPass: {
+        fired: false,
+        weakCells: [],
+        translated: false,
+        queriesFired: 0,
+        rawItems: 0,
+        candidatesAdded: 0,
+      },
     };
   }
 
@@ -386,6 +410,14 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       offLangDropped: 0,
       poolBackfill: POOL_BACKFILL_OFF(0),
       skippedFullCells: 0,
+      enPass: {
+        fired: false,
+        weakCells: [],
+        translated: false,
+        queriesFired: 0,
+        rawItems: 0,
+        candidatesAdded: 0,
+      },
     };
   }
 
@@ -559,6 +591,114 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     if (seen.size >= cfg.dedupHardCap) break;
   }
 
+  // ── CP499+ EN query pass ('영문 카드 포함', weak-cell-only) ──────────────
+  // T1 measurement: dropping relevanceLanguage alone moved EN inflow 7%→5%
+  // (noise) — the dominant variable is the QUERY language. So when the toggle
+  // is ON, cells whose ko first-pass raw total is below the threshold get
+  // their query translated to English (1 fail-open LLM call) and re-fired
+  // (+100u per weak cell, vs +800u full-mandala). The weak-cell cut
+  // auto-targets KO-absent domains — no manual domain classification.
+  const enPass: EnPassMeta = {
+    fired: false,
+    weakCells: [],
+    translated: false,
+    queriesFired: 0,
+    rawItems: 0,
+    candidatesAdded: 0,
+  };
+  const enPerQuery: FanoutPerQuery[] = [];
+  if (input.includeEnCards && input.language === 'ko' && liveQueries.length > 0) {
+    const perCellRaw = new Map<number, number>();
+    results.forEach((r, i) => {
+      const ci = liveQueries[i]!.cellIndex;
+      if (typeof ci !== 'number') return;
+      const raw = r.status === 'fulfilled' ? r.value.items.length : 0;
+      perCellRaw.set(ci, (perCellRaw.get(ci) ?? 0) + raw);
+    });
+    enPass.weakCells = computeWeakCells(perCellRaw, cfg.enPassRawThreshold);
+
+    if (enPass.weakCells.length > 0) {
+      const weakSet = new Set(enPass.weakCells);
+      const targetByCell = new Map<number, string>();
+      for (const q of liveQueries) {
+        if (typeof q.cellIndex === 'number' && weakSet.has(q.cellIndex)) {
+          if (!targetByCell.has(q.cellIndex)) targetByCell.set(q.cellIndex, q.query);
+        }
+      }
+      const targets = [...targetByCell.entries()].map(([cellIndex, query]) => ({
+        cellIndex,
+        query,
+      }));
+      const translated = await translateQueriesToEn(targets, {
+        apiKey: input.env['OPENROUTER_API_KEY'],
+      });
+
+      if (translated) {
+        enPass.translated = true;
+        enPass.fired = true;
+        const enResults = await Promise.allSettled(
+          [...translated.entries()].map(([cellIndex, query], i) =>
+            searchVideos({
+              query,
+              apiKey: rotateKeys(apiKeys, liveQueries.length + i),
+              maxResults: cfg.searchMaxResults,
+              // No language bias on purpose; regionCode KR keeps the
+              // "EN content consumed in Korea" slant (James-approved).
+              regionCode: 'KR',
+              timeoutMs: cfg.searchTimeoutMs,
+              publishedAfter: input.publishedAfter,
+            }).then((items) => ({ items, cellIndex, query }))
+          )
+        );
+        enPass.queriesFired = targets.length;
+
+        for (const r of enResults) {
+          if (r.status !== 'fulfilled') {
+            enPerQuery.push({
+              query: '(en-pass)',
+              source: 'en_pass',
+              cellIndex: null,
+              rawCount: 0,
+              fulfilled: false,
+            });
+            continue;
+          }
+          const { items, cellIndex, query } = r.value;
+          enPerQuery.push({
+            query,
+            source: 'en_pass',
+            cellIndex,
+            rawCount: items.length,
+            fulfilled: true,
+          });
+          for (const it of items) {
+            enPass.rawItems += 1;
+            rawItemCount += 1;
+            const cand = toFanoutCandidate(it, cellIndex);
+            if (!cand) continue;
+            if (seen.has(cand.videoId)) continue;
+            if (titleHitsBlocklist(cand.title) || titleIndicatesShorts(cand.title)) continue;
+            if (isOffLanguageTitleToggled(cand.title, input.language, input.includeEnCards)) {
+              offLangDropped += 1;
+              continue;
+            }
+            seen.set(cand.videoId, cand);
+            enPass.candidatesAdded += 1;
+            if (seen.size >= cfg.dedupHardCap) break;
+          }
+          if (seen.size >= cfg.dedupHardCap) break;
+        }
+        log.info(
+          `v5 en-pass: cells=[${enPass.weakCells.join(',')}] fired=${enPass.queriesFired} raw=${enPass.rawItems} added=${enPass.candidatesAdded}`
+        );
+      } else {
+        log.info(
+          `v5 en-pass: weak cells [${enPass.weakCells.join(',')}] but translation unavailable — skipped (fail-open)`
+        );
+      }
+    }
+  }
+
   // CP491 F5c — per-query raw count + q_ok, computed independently of the
   // dedup/hardcap loop above so every attempted query is recorded even when
   // the cohort hits dedupHardCap early. `results` order == `queries` order
@@ -578,16 +718,18 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     candidates: Array.from(seen.values()),
     // CP494 — attempted/quota now reflect ONLY the live queries actually fired
     // (pool-satisfied cells dropped theirs). poolBackfill carries the delta.
+    // CP499+ — the EN pass adds its fired queries to quota (100u each).
     queriesAttempted: liveQueries.length,
     queriesSucceeded,
     rawItemCount,
-    quotaUnitsApprox: liveQueries.length * 100,
-    perQuery,
+    quotaUnitsApprox: (liveQueries.length + enPass.queriesFired) * 100,
+    perQuery: [...perQuery, ...enPerQuery],
     queryGenMs,
     queryGen,
     offLangDropped,
     poolBackfill: poolMeta,
     skippedFullCells,
+    enPass,
   };
 }
 
