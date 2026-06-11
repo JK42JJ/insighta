@@ -614,6 +614,23 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     if (!seen.has(cand.videoId)) seen.set(cand.videoId, cand);
   }
 
+  // CP499+ B7 — poorest-cell-wins dedup. first-cell-wins starved tail cells:
+  // overlapping query families (measured: "Claude Code…" mandala, raw 40/40 on
+  // every cell but rec_cache cells 6·7 = 0) return the same videos for many
+  // cells, and the EARLIER cell swallowed every duplicate, hollowing later
+  // buckets before binning. A duplicate now YIELDS to the strictly poorer
+  // cell (fewer assigned candidates at that moment) — same candidate set,
+  // balanced buckets. Null-cell (core) candidates never reassign.
+  const cellAssignCounts = new Map<number, number>();
+  for (const c of seen.values()) {
+    if (typeof c.cellIndex === 'number') {
+      cellAssignCounts.set(c.cellIndex, (cellAssignCounts.get(c.cellIndex) ?? 0) + 1);
+    }
+  }
+  const countAssigned = (ci: number | null) => {
+    if (typeof ci === 'number') cellAssignCounts.set(ci, (cellAssignCounts.get(ci) ?? 0) + 1);
+  };
+
   for (const r of results) {
     if (r.status !== 'fulfilled') {
       log.debug(`v5 fanout query rejected: ${String(r.reason)}`);
@@ -625,7 +642,20 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       rawItemCount += 1;
       const cand = toFanoutCandidate(it, cellIndex);
       if (!cand) continue;
-      if (seen.has(cand.videoId)) continue;
+      const dup = seen.get(cand.videoId);
+      if (dup) {
+        if (
+          typeof cand.cellIndex === 'number' &&
+          typeof dup.cellIndex === 'number' &&
+          cand.cellIndex !== dup.cellIndex &&
+          (cellAssignCounts.get(cand.cellIndex) ?? 0) < (cellAssignCounts.get(dup.cellIndex) ?? 0)
+        ) {
+          cellAssignCounts.set(dup.cellIndex, (cellAssignCounts.get(dup.cellIndex) ?? 1) - 1);
+          countAssigned(cand.cellIndex);
+          seen.set(cand.videoId, { ...dup, cellIndex: cand.cellIndex });
+        }
+        continue;
+      }
       if (titleHitsBlocklist(cand.title) || titleIndicatesShorts(cand.title)) continue;
       // CP492 — off-language hard drop. YouTube backfills sparse queries with
       // high-view global content (Chinese dramas on a Korean basketball query).
@@ -642,6 +672,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         continue;
       }
       seen.set(cand.videoId, cand);
+      countAssigned(cand.cellIndex);
       liveAdded += 1;
       if (seen.size >= cfg.dedupHardCap) break;
     }
