@@ -40,6 +40,7 @@ import { useVideoModal } from '../model/useVideoModal';
 import { useToast } from '@/shared/lib/use-toast';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/shared/config/query-client';
 import {
   DragOverlayContent,
   snapToCursor,
@@ -736,11 +737,42 @@ function AuthenticatedApp() {
     onToggleFloating: () => setScratchPadOpen(false),
   });
 
+  // W1b — poll cadence for the actions-fill watch (named per no-magic-numbers).
+  const ACTIONS_POLL_INTERVAL_MS = 4000;
+  const ACTIONS_POLL_MAX_MS = 120_000;
+
+  // W1b (CP499+) — sub-level with ALL-empty subjects = the actions-fill
+  // pg-boss job hasn't landed yet (absolute rule: missing actions are always
+  // generated). Show "filling" cells and poll the detail query until the
+  // subjects arrive, bounded so a permanently-failed job (3 retries spent)
+  // degrades back to plain empty cells instead of polling forever.
+  const actionsPending = Boolean(
+    navigation.currentLevel.parentId !== null &&
+    navigation.currentLevel.subjects.every((s) => !s || s.trim() === '')
+  );
+  const actionsPollStartedAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (!actionsPending || !effectiveMandalaId) {
+      actionsPollStartedAt.current = null;
+      return;
+    }
+    actionsPollStartedAt.current = actionsPollStartedAt.current ?? Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - (actionsPollStartedAt.current ?? 0) > ACTIONS_POLL_MAX_MS) {
+        clearInterval(timer);
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.detail(effectiveMandalaId) });
+    }, ACTIONS_POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [actionsPending, effectiveMandalaId, queryClient]);
+
   // Shared MandalaGrid element
   const mandalaGridElement = () => (
     <MandalaGrid
       mandalaId={effectiveMandalaId}
       level={navigation.currentLevel}
+      actionsPending={actionsPending}
       cardsByCell={cards.cardsByCell}
       selectedCellIndex={navigation.selectedCellIndex}
       onCellClick={navigation.handleCellClick}
