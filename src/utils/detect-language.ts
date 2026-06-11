@@ -9,21 +9,31 @@
  * Korean results. This helper recovers the input language from the text
  * itself so the YouTube search is issued in the right language/region.
  *
- * Zero-dependency, deterministic — pure character-class counting.
+ * CP499+ (diagnosis A-3): Hangul PRESENCE now wins outright. The previous
+ * count-comparison (`hangul >= latin`) let long Latin proper nouns outvote
+ * Korean particles — "Claude Code로 프로덕션 앱 개발" (latin 10 vs hangul 8)
+ * was judged 'en' although a Korean user typed it on a Korean keyboard.
+ * Proper nouns are NOT a language signal; particles are. Measured fleet
+ * impact (2026-06-11 prod, full scan): exactly 3 en-misjudged mandalas
+ * corrected, 0 reverse flips (no stored-ko mandala has a Latin-only goal).
+ *
+ * Zero-dependency, deterministic — pure character-class testing.
  */
 
 export type DetectedLanguage = 'ko' | 'en';
 
 /** Hangul Syllables block (U+AC00–U+D7A3) — Korean pre-composed syllables. */
-const HANGUL_RE = /[가-힣]/gu;
+const HANGUL_RE = /[가-힣]/u;
 /** Basic Latin letters — the English signal. */
-const LATIN_RE = /[A-Za-z]/g;
+const LATIN_RE = /[A-Za-z]/;
 
 /**
- * Detect the dominant script of `text`.
+ * Detect the input language of `text`.
  *
- *   - Any Hangul that is at least as frequent as Latin letters → 'ko'.
- *   - Latin letters present, little/no Hangul → 'en'.
+ *   - ANY Hangul → 'ko'. Typing even one Hangul syllable means a Korean
+ *     keyboard/user; Latin tokens around it are proper nouns (tool names,
+ *     brands) and are excluded from the judgement.
+ *   - No Hangul, Latin letters present → 'en'.
  *   - No script signal at all (digits/symbols only, or empty) → 'ko',
  *     preserving the pre-CP458 default so this is never *more* surprising
  *     than the behavior it replaces.
@@ -34,10 +44,9 @@ const LATIN_RE = /[A-Za-z]/g;
  */
 export function detectLanguage(text: string | null | undefined): DetectedLanguage {
   if (!text) return 'ko';
-  const hangulCount = (text.match(HANGUL_RE) ?? []).length;
-  const latinCount = (text.match(LATIN_RE) ?? []).length;
-  if (hangulCount === 0 && latinCount === 0) return 'ko';
-  return hangulCount >= latinCount ? 'ko' : 'en';
+  if (HANGUL_RE.test(text)) return 'ko';
+  if (LATIN_RE.test(text)) return 'en';
+  return 'ko';
 }
 
 /**
