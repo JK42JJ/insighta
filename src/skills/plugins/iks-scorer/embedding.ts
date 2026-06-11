@@ -86,6 +86,12 @@ export interface EmbeddingClientOptions {
   chunkSize?: number;
   /** Injectable fetch for testability. Defaults to global fetch. */
   fetchImpl?: typeof fetch;
+  /** Per-call timeout override (ms). Defaults to EMBED_TIMEOUT_MS. */
+  timeoutMs?: number;
+  /** W3 (CP499+) — external abort (e.g. the calling pipeline gave up).
+   *  Linked into the per-call controller so an abandoned pipeline doesn't
+   *  leave embeds running to completion. */
+  signal?: AbortSignal;
 }
 
 interface OllamaEmbedResponse {
@@ -204,6 +210,8 @@ async function embedOneChunk(texts: string[], opts: EmbeddingClientOptions): Pro
     try {
       return await embedOneChunkViaOpenRouterRetrying(texts, opts);
     } catch (err) {
+      // W3 — the pipeline gave up: do NOT fall back to the other provider.
+      if (opts.signal?.aborted) throw err;
       const reason = err instanceof Error ? err.message : String(err);
       log.warn(
         `OpenRouter embed failed after retries (chunk size=${texts.length}), falling back to Ollama: ${reason}`
@@ -216,6 +224,8 @@ async function embedOneChunk(texts: string[], opts: EmbeddingClientOptions): Pro
   try {
     return await embedOneChunkViaOllama(texts, opts);
   } catch (err) {
+    // W3 — the pipeline gave up: do NOT fall back to the other provider.
+    if (opts.signal?.aborted) throw err;
     const reason = err instanceof Error ? err.message : String(err);
     log.warn(
       `Ollama embed failed (chunk size=${texts.length}), falling back to OpenRouter: ${reason}`
@@ -233,35 +243,52 @@ async function embedOneChunkViaOllama(
   const fetchFn = opts.fetchImpl ?? fetch;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? EMBED_TIMEOUT_MS);
+  // W3 — external pipeline abort propagates into this call. An ALREADY
+  // aborted signal must abort immediately (listeners never fire post-abort
+  // — without this, the Ollama→OpenRouter fallback of an abandoned pipeline
+  // runs its full timeout).
+  const onExternalAbort = () => controller.abort();
+  if (opts.signal?.aborted) controller.abort();
+  else opts.signal?.addEventListener('abort', onExternalAbort, { once: true });
 
-  let res: Response;
+  // W3 (#882 mirror) — the timer must cover the BODY read too: clearing it
+  // after headers left res.text()/res.json() untimed, the exact zombie
+  // window measured at 86s/102.8s on the goal-embed path before #882.
+  let data: OllamaEmbedResponse;
   try {
-    res = await fetchFn(`${baseUrl}/api/embed`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, input: texts }),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    throw new EmbeddingError(
-      `Ollama embed call failed: ${err instanceof Error ? err.message : String(err)}`
-    );
-  }
-  clearTimeout(timer);
-
-  if (!res.ok) {
-    let body = '';
+    let res: Response;
     try {
-      body = await res.text();
-    } catch {
-      // ignore
+      res = await fetchFn(`${baseUrl}/api/embed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, input: texts }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      throw new EmbeddingError(
+        `Ollama embed call failed: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
-    throw new EmbeddingError(`Ollama embed HTTP ${res.status}: ${body.slice(0, 200)}`, res.status);
-  }
 
-  const data = (await res.json()) as OllamaEmbedResponse;
+    if (!res.ok) {
+      let body = '';
+      try {
+        body = await res.text();
+      } catch {
+        // ignore
+      }
+      throw new EmbeddingError(
+        `Ollama embed HTTP ${res.status}: ${body.slice(0, 200)}`,
+        res.status
+      );
+    }
+
+    data = (await res.json()) as OllamaEmbedResponse;
+  } finally {
+    clearTimeout(timer);
+    opts.signal?.removeEventListener('abort', onExternalAbort);
+  }
   if (data.error) {
     throw new EmbeddingError(`Ollama embed error: ${data.error}`);
   }
@@ -315,93 +342,102 @@ async function embedOneChunkViaOpenRouter(
   const fetchFn = opts.fetchImpl ?? fetch;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? EMBED_TIMEOUT_MS);
+  // W3 — external pipeline abort (pre-aborted handled; see Ollama twin).
+  const onExternalAbort = () => controller.abort();
+  if (opts.signal?.aborted) controller.abort();
+  else opts.signal?.addEventListener('abort', onExternalAbort, { once: true });
   const t0 = Date.now();
 
-  let res: Response;
+  // W3 (#882 mirror) — timer covers the BODY read (json/text), not just
+  // headers; see embedOneChunkViaOllama for the measured zombie rationale.
   try {
-    res = await fetchFn(`${baseUrl}/embeddings`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({ model, input: texts }),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    const reason = err instanceof Error ? err.message : String(err);
-    void logLLMCall({
-      module: OPENROUTER_FALLBACK_MODULE,
-      model: `openrouter/${model}`,
-      latencyMs: Date.now() - t0,
-      status: 'error',
-      errorMessage: reason,
-    });
-    // Network / timeout / abort — transient, safe to retry.
-    throw new EmbeddingError(`OpenRouter embed call failed: ${reason}`, undefined, true);
-  }
-  clearTimeout(timer);
-
-  if (!res.ok) {
-    let body = '';
+    let res: Response;
     try {
-      body = await res.text();
-    } catch {
-      // ignore
+      res = await fetchFn(`${baseUrl}/embeddings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ model, input: texts }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      void logLLMCall({
+        module: OPENROUTER_FALLBACK_MODULE,
+        model: `openrouter/${model}`,
+        latencyMs: Date.now() - t0,
+        status: 'error',
+        errorMessage: reason,
+      });
+      // Network / timeout / abort — transient, safe to retry.
+      throw new EmbeddingError(`OpenRouter embed call failed: ${reason}`, undefined, true);
     }
-    const errMsg = `OpenRouter embed HTTP ${res.status}: ${body.slice(0, 200)}`;
-    void logLLMCall({
-      module: OPENROUTER_FALLBACK_MODULE,
-      model: `openrouter/${model}`,
-      latencyMs: Date.now() - t0,
-      status: 'error',
-      errorMessage: errMsg,
-    });
-    // 404 is intermittent on OpenRouter /embeddings (~11%, CP458); 5xx is
-    // standard-transient. Both are retryable. 4xx-other (auth/bad request)
-    // is deterministic — not retryable.
-    const retryable = res.status === 404 || res.status >= 500;
-    throw new EmbeddingError(errMsg, res.status, retryable);
-  }
 
-  const data = (await res.json()) as {
-    data?: Array<{ embedding?: number[] }>;
-    usage?: { prompt_tokens?: number; total_tokens?: number };
-    error?: { message?: string };
-  };
-  if (data.error) {
-    throw new EmbeddingError(`OpenRouter embed error: ${data.error.message ?? 'unknown'}`);
-  }
+    if (!res.ok) {
+      let body = '';
+      try {
+        body = await res.text();
+      } catch {
+        // ignore
+      }
+      const errMsg = `OpenRouter embed HTTP ${res.status}: ${body.slice(0, 200)}`;
+      void logLLMCall({
+        module: OPENROUTER_FALLBACK_MODULE,
+        model: `openrouter/${model}`,
+        latencyMs: Date.now() - t0,
+        status: 'error',
+        errorMessage: errMsg,
+      });
+      // 404 is intermittent on OpenRouter /embeddings (~11%, CP458); 5xx is
+      // standard-transient. Both are retryable. 4xx-other (auth/bad request)
+      // is deterministic — not retryable.
+      const retryable = res.status === 404 || res.status >= 500;
+      throw new EmbeddingError(errMsg, res.status, retryable);
+    }
 
-  const items = data.data ?? [];
-  if (items.length !== texts.length) {
-    throw new EmbeddingError(
-      `OpenRouter embed returned ${items.length} vectors, expected ${texts.length}`
-    );
-  }
+    const data = (await res.json()) as {
+      data?: Array<{ embedding?: number[] }>;
+      usage?: { prompt_tokens?: number; total_tokens?: number };
+      error?: { message?: string };
+    };
+    if (data.error) {
+      throw new EmbeddingError(`OpenRouter embed error: ${data.error.message ?? 'unknown'}`);
+    }
 
-  const vectors: number[][] = [];
-  for (const item of items) {
-    const vec = item.embedding;
-    if (!vec || vec.length !== expectedDim) {
+    const items = data.data ?? [];
+    if (items.length !== texts.length) {
       throw new EmbeddingError(
-        `OpenRouter embedding dimension mismatch: got ${vec?.length ?? 0}, expected ${expectedDim}`
+        `OpenRouter embed returned ${items.length} vectors, expected ${texts.length}`
       );
     }
-    vectors.push(vec);
+
+    const vectors: number[][] = [];
+    for (const item of items) {
+      const vec = item.embedding;
+      if (!vec || vec.length !== expectedDim) {
+        throw new EmbeddingError(
+          `OpenRouter embedding dimension mismatch: got ${vec?.length ?? 0}, expected ${expectedDim}`
+        );
+      }
+      vectors.push(vec);
+    }
+
+    void logLLMCall({
+      module: OPENROUTER_FALLBACK_MODULE,
+      model: `openrouter/${model}`,
+      inputTokens: data.usage?.prompt_tokens,
+      latencyMs: Date.now() - t0,
+      status: 'success',
+    });
+
+    return vectors;
+  } finally {
+    clearTimeout(timer);
+    opts.signal?.removeEventListener('abort', onExternalAbort);
   }
-
-  void logLLMCall({
-    module: OPENROUTER_FALLBACK_MODULE,
-    model: `openrouter/${model}`,
-    inputTokens: data.usage?.prompt_tokens,
-    latencyMs: Date.now() - t0,
-    status: 'success',
-  });
-
-  return vectors;
 }
 
 /** Promise-based sleep for retry backoff. */
@@ -433,7 +469,8 @@ async function embedOneChunkViaOpenRouterRetrying(
       return await embedOneChunkViaOpenRouter(texts, opts);
     } catch (err) {
       lastErr = err;
-      const retryable = err instanceof EmbeddingError && err.retryable;
+      // W3 — external abort is terminal: the pipeline gave up, never retry.
+      const retryable = err instanceof EmbeddingError && err.retryable && !opts.signal?.aborted;
       if (!retryable || attempt === OPENROUTER_EMBED_MAX_RETRIES) {
         throw err;
       }
