@@ -55,5 +55,5 @@ export async function initJobQueue(): Promise<void> {
   await registerPoolServeFillWorker();
   await registerMandalaActionsFillWorker();
 
-  logger.info('Job queue fully initialized (pg-boss + 7 workers)');
+  logger.info('Job queue fully initialized (pg-boss + 8 workers)');
 }
