@@ -70,6 +70,10 @@ const v5EnvSchema = z.object({
   // candidate generation for "full enough" cells (pure quota/latency save; the
   // cell's cards are already excluded anyway). unset = false = no-op.
   V5_CELL_SKIP: booleanFlag.optional().default(false as unknown as string),
+  // CP499+ UX 원칙 1 (언어 일관성) — ko 만다라 자동유입에서 영어-우세 제목
+  // drop. DEFAULT ON (컨벤션 편차: 기존 동작 자체가 제품 결함 판정 — James
+  // 2026-06-11). env = 롤백 레버 (off = 기존 영어-통과 동작).
+  V5_KO_EN_TITLE_DROP: booleanFlag.optional().default(true as unknown as string),
   // CP494 ④-1 — per-cell "full" threshold. ≥ this many grid cards → skip.
   // 12 favors "user may want to see more" (cells with 7-11 still searched).
   V5_CELL_SKIP_THRESHOLD: z.coerce.number().int().min(1).max(60).default(12),
@@ -112,6 +116,8 @@ export interface V5Config {
   reuseLoop: boolean;
   /** CP494 ④-1 — full-cell skip enabled. */
   cellSkip: boolean;
+  /** CP499+ — ko 만다라 자동유입 영어-우세 제목 drop (UX 원칙 1). */
+  koEnTitleDrop: boolean;
   /** CP494 ④-1 — per-cell card count threshold for skip. */
   cellSkipThreshold: number;
   /** CP494 안 A — pool match strategy ('global' | 'per_cell'). */
@@ -148,6 +154,7 @@ export function getV5Config(env: NodeJS.ProcessEnv = process.env): V5Config {
     poolTimeoutMs: p.V5_POOL_TIMEOUT_MS,
     reuseLoop: p.V5_REUSE_LOOP,
     cellSkip: p.V5_CELL_SKIP,
+    koEnTitleDrop: p.V5_KO_EN_TITLE_DROP,
     cellSkipThreshold: p.V5_CELL_SKIP_THRESHOLD,
     poolMatch: p.V5_POOL_MATCH,
   };

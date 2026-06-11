@@ -140,6 +140,12 @@ services:
       # injects no content. Canary: trace v5_skipped_full_cells + quota delta.
       # Revert: delete this line + redeploy → code default false (search all).
       - V5_CELL_SKIP=true
+      # CP499+ flag-pair simultaneity (James 2026-06-11): code default is ON,
+      # but deploy must keep EXISTING behavior — the EN-drop must activate in
+      # the SAME [GO] that turns pool-serve on (V5_POOL_SERVE=true), so users
+      # see "English becomes Korean", never "English becomes empty cells".
+      # [GO] = flip this to true + add V5_POOL_SERVE=true, one redeploy.
+      - V5_KO_EN_TITLE_DROP=false
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the

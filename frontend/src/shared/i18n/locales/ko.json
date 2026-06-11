@@ -808,7 +808,8 @@
     "switchToFloating": "플로팅으로 전환",
     "switchToDock": "도킹하기",
     "navigateToSub": "{{subject}}로 이동",
-    "actionsFilling": "채워지는 중…"
+    "actionsFilling": "채워지는 중…",
+    "cardsFilling": "채워지는 중…"
   },
   "scratchPad": {
     "title": "스크래치패드",

@@ -487,6 +487,31 @@ export async function consumePrecompute(
           });
       });
     }
+
+    // CP499+ pool-serve (UX 원칙 2): after wizard placement, fill DEFICIT
+    // cells from the ko pool through the semantic relevance gate. Fires on
+    // THIS path for the same reason as the relevance trigger above (#879
+    // flow-reach lesson) — the wizard never reaches pipeline-runner step3.
+    // Fire-and-forget; flag-gated inside (V5_POOL_SERVE, default off).
+    // Runs regardless of autoAddResult shape: a fully-failed auto-add IS the
+    // deficit case pool-serve exists for.
+    setImmediate(() => {
+      void import('@/modules/queue/handlers/pool-serve-fill')
+        .then(({ dispatchPoolServeForMandala }) =>
+          dispatchPoolServeForMandala(input.userId, input.mandalaId)
+        )
+        .then((r) => {
+          if (r.runId) {
+            log.info(
+              `pool-serve dispatched (precompute path): run=${r.runId} cells=[${r.deficitCells.join(',')}]`
+            );
+          }
+        })
+        .catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          log.warn(`pool-serve dispatch (precompute path) failed (non-fatal): ${msg}`);
+        });
+    });
   } catch (err) {
     log.warn(
       `precompute consume → auto-add inline threw (non-fatal — pipeline-runner step3 will retry): ${

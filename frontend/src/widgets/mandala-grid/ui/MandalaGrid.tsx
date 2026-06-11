@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 interface MandalaGridProps {
   /** W1b — current sub-level's actions-fill job still pending. */
   actionsPending?: boolean;
+  /** Pool-serve (CP499+) — cell indices with an async deficit-fill in flight. */
+  fillPendingCells?: number[];
   mandalaId?: string | null;
   level: MandalaLevel;
   cardsByCell: Record<number, InsightCard[]>;
@@ -46,6 +48,7 @@ export const MandalaGrid = memo(function MandalaGrid({
   mandalaId,
   level,
   actionsPending = false,
+  fillPendingCells,
   cardsByCell,
   selectedCellIndex,
   onCellClick,
@@ -359,6 +362,7 @@ export const MandalaGrid = memo(function MandalaGrid({
                   label={cellData.label}
                   isCenter={cellData.isCenter}
                   isActionsPending={actionsPending}
+                  isFillPending={fillPendingCells?.includes(index)}
                   cards={cellCards}
                   sizeMode={sizeMode}
                   totalCards={totalCards}

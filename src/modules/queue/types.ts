@@ -13,6 +13,9 @@ export const JOB_NAMES = {
   BATCH_SCAN: 'batch-scan',
   /** CP462+ Issue #649 — Heart-click on-demand rich summary (direct enrichRichSummary). */
   ENRICH_RICH_SUMMARY: 'enrich-rich-summary',
+  /** CP499+ pool-serve — async deficit-cell fill from the ko pool through the
+   *  semantic relevance gate (video_mandala_relevance cache). One job per cell. */
+  POOL_SERVE_FILL: 'pool-serve-fill',
   /**
    * CP489+ — fire-and-forget GHA trigger for the batch-video-collector skill.
    * The route returns 202 immediately; this worker runs the actual skill in
@@ -199,6 +202,33 @@ export const POOL_MAINTENANCE_RUN_OPTIONS = {
 export const RELEVANCE_QUICK_RETRY_OPTIONS = {
   retryLimit: 1,
   expireInMinutes: 5,
+} as const;
+
+/** CP499+ pool-serve fill payload — one DEFICIT CELL per job. */
+export interface PoolServeFillPayload {
+  userId: string;
+  mandalaId: string;
+  cellIndex: number;
+  /** The cell sub-goal (relevance judged cell-fit AND center contribution). */
+  cellGoal: string;
+  centerGoal: string;
+  language: 'ko' | 'en';
+  /** Pool tsquery for candidate recruitment (cell query from merged-gen / fanout). */
+  cellQuery: string;
+  /** How many cards this cell still needs (placed < minPerCell). */
+  deficit: number;
+  /** skill_runs row id recording this fill batch (FE fill-pending signal). */
+  runId: string;
+}
+
+/**
+ * Pool-serve fill — per-cell batch of gate-scored pool candidates. Worst case
+ * ~12 Haiku calls in bursts; generous expiry, single retry (idempotent: the
+ * uvs upsert keys on (user_id, videoId) and vmr caching makes a retry cheap).
+ */
+export const POOL_SERVE_FILL_RETRY_OPTIONS = {
+  retryLimit: 1,
+  expireInMinutes: 10,
 } as const;
 
 /**

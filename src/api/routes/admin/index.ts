@@ -26,6 +26,7 @@ import { adminV2QualityAuditRoutes } from './v2-quality-audit';
 import { adminV4ArbiterRunsRoutes } from './v4-arbiter-runs';
 import { adminPoolHealthRoutes } from './pool-health';
 import { adminRelevanceBackfillRoutes } from './relevance-backfill';
+import { adminPoolServeRoutes } from './pool-serve';
 
 /**
  * Admin routes plugin.
@@ -71,5 +72,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // CP498 PR3b — A-stage relevance backfill manual trigger (1-mandala
   // measurement surface; bypasses BACKFILL_RELEVANCE_ENABLED + cutoff).
   await fastify.register(adminRelevanceBackfillRoutes, { prefix: '/relevance-backfill' });
+  // CP499+ — pool-serve canary trigger (deficit-cell fill, flag bypassed).
+  await fastify.register(adminPoolServeRoutes, { prefix: '/pool-serve' });
   // await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }

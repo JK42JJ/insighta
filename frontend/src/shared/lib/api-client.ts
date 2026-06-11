@@ -431,6 +431,8 @@ interface MandalaResponse {
   language?: string;
   // CP467b — server-truth card count for grid layout commitment.
   cardCount?: number;
+  // CP499+ pool-serve — cells with an async deficit-fill in flight (W1b pulse).
+  fillPendingCells?: number[];
   createdAt: string;
   updatedAt: string;
   levels: Array<{
