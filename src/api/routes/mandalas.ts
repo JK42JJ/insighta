@@ -986,7 +986,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           const tSaveStart = Date.now();
           try {
             const manager = getMandalaManager();
-            const saved = await manager.createMandala(userId, structure.center_goal, levels);
+            // CP499+ — volatility from merged-gen [3단계] (undefined on the
+            // legacy structure path / non-enum output). Persist is flag-gated
+            // inside createMandala (column exists only after the score-pipeline
+            // DDL — separate per-step approval).
+            const saved = await manager.createMandala(userId, structure.center_goal, levels, {
+              volatility: structure.volatility,
+            });
             mandalaId = saved.id;
             write('mandala_saved', {
               mandalaId: saved.id,

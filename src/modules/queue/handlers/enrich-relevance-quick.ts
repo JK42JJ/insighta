@@ -19,6 +19,8 @@ import type PgBoss from 'pg-boss';
 
 import { computeCardRelevance } from '@/modules/relevance/compute-card-relevance';
 import { getPrismaClient } from '@/modules/database/client';
+import { loadRelevanceRubricConfig } from '@/config/relevance-rubric';
+import { resolveLanguage } from '@/utils/detect-language';
 import { logger } from '@/utils/logger';
 import { getJobQueue } from '../manager';
 import { JOB_NAMES, RELEVANCE_QUICK_RETRY_OPTIONS, type RelevanceQuickPayload } from '../types';
@@ -51,7 +53,28 @@ export async function registerEnrichRelevanceQuickWorker(): Promise<void> {
 async function handleEnrichRelevanceQuick(job: PgBoss.Job<RelevanceQuickPayload>): Promise<void> {
   const { table, rowId, title, description, centerGoal, cellGoal } = job.data;
 
-  const result = await computeCardRelevance({ title, description, centerGoal, cellGoal });
+  // CP499+ score pipeline (RELEVANCE_RUBRIC_ENABLED): fetch the row's mandala
+  // language/volatility + video published_at and run the 3-axis rubric.
+  // Fail-open: a context-fetch failure falls back to the legacy single-axis
+  // call. Flag off ⇒ legacy call with NO new selects (volatility column may
+  // not exist yet — prod DDL is a separate per-step approval).
+  const rubricEnabled = loadRelevanceRubricConfig().enabled;
+  const context = rubricEnabled ? await fetchRelevanceContext(table, rowId, centerGoal) : null;
+
+  const result = await computeCardRelevance({
+    title,
+    description,
+    centerGoal,
+    cellGoal,
+    ...(context
+      ? {
+          rubric: true,
+          language: context.language,
+          publishedAt: context.publishedAt,
+          volatility: context.volatility,
+        }
+      : {}),
+  });
 
   if (!result.ok) {
     if (result.reason === 'no_title') {
@@ -87,7 +110,69 @@ async function handleEnrichRelevanceQuick(job: PgBoss.Job<RelevanceQuickPayload>
     table,
     rowId,
     relevancePct: result.relevancePct,
+    // relevance_detail = LOG-ONLY for now (James decision 2026-06-11: no
+    // speculative column; persist axes only if gate measurement justifies it).
+    ...(result.detail ? { detail: result.detail } : {}),
   });
+}
+
+export interface RelevanceContext {
+  language: 'ko' | 'en';
+  publishedAt: Date | null;
+  volatility: string | null;
+}
+
+/**
+ * CP499+ — per-row scoring context: mandala language (#902 정합) + volatility
+ * (recency gate) + video published_at (recency input). Called ONLY when the
+ * rubric flag is on (the volatility column must exist by then — DDL is a
+ * deploy precondition for the flag). Returns null on any failure so the
+ * caller falls back to legacy single-axis scoring (fail-open).
+ */
+export async function fetchRelevanceContext(
+  table: 'uvs' | 'ulc',
+  rowId: string,
+  goalText?: string
+): Promise<RelevanceContext | null> {
+  const prisma = getPrismaClient();
+  // $queryRaw (not the typed client): the volatility column ships in this PR's
+  // schema but the shared generated client may predate it, and prod gets the
+  // column via the manual DDL step — raw SQL keeps this path decoupled from
+  // client-generation state. Read-only single-row lookup, tagged template.
+  try {
+    const rows =
+      table === 'uvs'
+        ? await prisma.$queryRaw<
+            { language: string | null; volatility: string | null; published_at: Date | null }[]
+          >`
+            SELECT m.language, m.volatility, yv.published_at
+            FROM user_video_states uvs
+            LEFT JOIN user_mandalas m ON m.id = uvs.mandala_id
+            LEFT JOIN youtube_videos yv ON yv.id = uvs.video_id
+            WHERE uvs.id = ${rowId}::uuid`
+        : await prisma.$queryRaw<
+            { language: string | null; volatility: string | null; published_at: Date | null }[]
+          >`
+            SELECT m.language, m.volatility, NULL::timestamptz AS published_at
+            FROM user_local_cards ulc
+            LEFT JOIN user_mandalas m ON m.id = ulc.mandala_id
+            WHERE ulc.id = ${rowId}::uuid`;
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      language: resolveLanguage(row.language, goalText ?? null),
+      // ulc rows have no clean youtube_videos FK — recency skipped (0 bonus).
+      publishedAt: row.published_at ?? null,
+      volatility: row.volatility ?? null,
+    };
+  } catch (err) {
+    logger.warn('enrich-relevance-quick: context fetch failed — legacy fallback', {
+      table,
+      rowId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }
 
 /**

@@ -58,8 +58,10 @@ ${koFocusLine ? '  - ' + koFocusLine.slice(2) + '을 자연스럽게 반영\n' :
 - 너무 길거나 문장형(예: "매일 학습할 수 있는 시간 블록 설정하는 방법")이면 YouTube 매칭 실패 → 금지.
 - 8개 검색어는 서로 다른 각도(방법론/경험담/도구/실수방지/루틴 등)로 분산 — 같은 표현 반복 금지 (한 셀이 동일 브랜드/채널로 뭉치는 노이즈 방지).
 
+[3단계 — 도메인 휘발성] volatility: 이 목표의 콘텐츠가 시간이 지나면 낡는가? 기술/도구/트렌드(예: AI 도구, 코딩, 투자 트렌드)면 "volatile", 시간 무관(예: 운동, 요가, 어학, 마음수련)이면 "evergreen". 한 단어만.
+
 ${example}JSON만 출력 (cell_queries 키는 sub_goals 순서 "0"~"7"):
-{"center_goal":"...","center_label":"...","language":"ko","domain":"${domain}","sub_goals":["8개"],"sub_labels":["8개"],"cell_queries":{"0":"검색어",...,"7":"검색어"}}
+{"center_goal":"...","center_label":"...","language":"ko","domain":"${domain}","volatility":"volatile|evergreen","sub_goals":["8개"],"sub_labels":["8개"],"cell_queries":{"0":"검색어",...,"7":"검색어"}}
 
 목표: ${goal}`;
   }
@@ -79,8 +81,10 @@ ${focusLine ? '  - Incorporate focus areas naturally: ' + (focusTags ?? []).join
 - Too long / sentence-like → no YouTube match → forbidden.
 - Spread the 8 queries across different angles (how-to / stories / tools / mistakes / routine) — never repeat a phrase (prevents a cell clustering on one brand/channel).
 
+[Step 3 — domain volatility] volatility: does content for this goal go stale over time? Tech/tools/trends (AI tools, coding, investing trends) = "volatile"; timeless (fitness, yoga, language learning, mindfulness) = "evergreen". One word only.
+
 ${example}JSON only (cell_queries keys are sub_goals order "0".."7"):
-{"center_goal":"...","center_label":"...","language":"en","domain":"${domain}","sub_goals":["8 items"],"sub_labels":["8 items"],"cell_queries":{"0":"query",...,"7":"query"}}
+{"center_goal":"...","center_label":"...","language":"en","domain":"${domain}","volatility":"volatile|evergreen","sub_goals":["8 items"],"sub_labels":["8 items"],"cell_queries":{"0":"query",...,"7":"query"}}
 
 Goal: ${goal}`;
 }

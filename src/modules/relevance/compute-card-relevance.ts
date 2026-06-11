@@ -26,24 +26,16 @@ import {
   validateV2Quick,
   V2QuickValidationError,
 } from '@/modules/skills/rich-summary-v2-quick-prompt';
+import { applyRecency, recencyBonus } from '@/modules/relevance/relevance-composition';
+// CP499+ lang 정합 (#902): the prompt language follows the MANDALA language
+// (caller passes it). The previous LOCAL ratio-based detector (a 3rd variant of
+// detectLanguage in the codebase) is removed — fallback when the caller has no
+// mandala language is the single utils detector (Hangul-presence rule).
+import { detectLanguage } from '@/utils/detect-language';
 
 const HAIKU_MODEL = 'anthropic/claude-haiku-4.5';
 const MAX_TOKENS = 800;
 const TEMPERATURE = 0.2;
-
-const HANGUL_RANGE = /[가-힣]/g;
-const LATIN_RANGE = /[A-Za-z]/g;
-
-/** Best-effort ko/en hint from the card title (default ko). */
-function detectLanguage(title: string): 'ko' | 'en' {
-  const stripped = title.replace(/\s+/g, '');
-  if (stripped.length === 0) return 'ko';
-  const hangul = (stripped.match(HANGUL_RANGE) ?? []).length / stripped.length;
-  const latin = (stripped.match(LATIN_RANGE) ?? []).length / stripped.length;
-  if (hangul >= 0.2) return 'ko';
-  if (latin >= 0.5 && hangul < 0.05) return 'en';
-  return 'ko';
-}
 
 export interface CardRelevanceInput {
   /** Card title (required — the minimal signal). */
@@ -63,10 +55,35 @@ export interface CardRelevanceInput {
   cellGoal?: string;
   /** Optional transcript; '' ⇒ prompt uses title+description fallback. */
   transcript?: string;
+  /**
+   * CP499+ lang 정합 (#902) — the MANDALA's language (judging/display language).
+   * Absent ⇒ utils detectLanguage(title) fallback (Hangul-presence rule). The
+   * card-title language is a content attribute, not the judging language.
+   */
+  language?: 'ko' | 'en';
+  /**
+   * CP499+ rubric mode (RELEVANCE_RUBRIC_ENABLED — caller reads config; this
+   * module stays config-free). 3-axis LLM scoring + code composition + recency.
+   * Absent/false ⇒ legacy single-axis behavior, byte-identical prompt.
+   */
+  rubric?: boolean;
+  /** Video published_at — recency-bonus input (rubric mode, volatile only). */
+  publishedAt?: Date | null;
+  /** Mandala volatility ('volatile' | 'evergreen' | null) — recency gate. */
+  volatility?: string | null;
+}
+
+/** Rubric-mode raw axes + bonus, returned for logging (relevance_detail = log-only for now). */
+export interface CardRelevanceDetail {
+  cellFitPct: number | null;
+  goalContributionPct: number;
+  actionabilityPct: number;
+  basePct: number;
+  recencyBonus: number;
 }
 
 export type CardRelevanceResult =
-  | { ok: true; relevancePct: number }
+  | { ok: true; relevancePct: number; detail?: CardRelevanceDetail }
   | { ok: false; reason: string };
 
 /** Compute a 0-100 relevance score. No persistence — caller writes the result. */
@@ -77,13 +94,17 @@ export async function computeCardRelevance(
     return { ok: false, reason: 'no_title' };
   }
 
-  const language = detectLanguage(input.title);
-  // CP499 — cell-aware goal. cellGoal present ⇒ labeled 2-line block + criterion
-  // (cell-fit AND center contribution). Absent ⇒ `centerGoal` verbatim, i.e. the
+  // CP499+ lang 정합 (#902): mandala language wins; title detection is fallback.
+  const language = input.language ?? detectLanguage(input.title);
+  const hasCell = Boolean(input.cellGoal && input.cellGoal.trim().length > 0);
+  // CP499 — cell-aware goal (legacy single-axis path). cellGoal present ⇒
+  // labeled 2-line block + criterion. Absent ⇒ `centerGoal` verbatim, i.e. the
   // exact same string passed to the SHARED buildV2QuickPrompt before CP499, so
   // the v2 Heart path (no cellGoal) is byte-for-byte unchanged.
+  // Rubric mode passes centerGoal + cellGoal SEPARATELY (the prompt has a
+  // dedicated CELL GOAL line and per-axis rules).
   const goal =
-    input.cellGoal && input.cellGoal.trim().length > 0
+    !input.rubric && hasCell
       ? `중심 목표: ${input.centerGoal}\n` +
         `이 카드가 배치될 셀: ${input.cellGoal}\n` +
         `→ 이 영상이 셀에 적합하면서 중심 목표에 기여하는 정도로 평가`
@@ -95,6 +116,8 @@ export async function computeCardRelevance(
     language,
     transcript: input.transcript ?? '',
     mandalaCenterGoal: goal,
+    rubric: input.rubric,
+    cellGoal: input.rubric ? input.cellGoal : undefined,
   });
 
   let raw: string;
@@ -127,8 +150,26 @@ export async function computeCardRelevance(
   }
 
   try {
-    const parsed = validateV2Quick(json);
-    return { ok: true, relevancePct: parsed.analysis.mandala_fit.mandala_relevance_pct };
+    const parsed = validateV2Quick(json, { rubric: input.rubric });
+    const fit = parsed.analysis.mandala_fit;
+    if (input.rubric && fit.rubric) {
+      // Composite came from composeRubricScore (in the validator). Recency:
+      // volatile-only additive bonus, capped at 100 — evergreen / NULL
+      // volatility / NULL published_at are all 0 = unchanged.
+      const bonus = recencyBonus(input.publishedAt, input.volatility);
+      return {
+        ok: true,
+        relevancePct: applyRecency(fit.mandala_relevance_pct, bonus),
+        detail: {
+          cellFitPct: fit.rubric.cell_fit_pct,
+          goalContributionPct: fit.rubric.goal_contribution_pct,
+          actionabilityPct: fit.rubric.actionability_pct,
+          basePct: fit.mandala_relevance_pct,
+          recencyBonus: bonus,
+        },
+      };
+    }
+    return { ok: true, relevancePct: fit.mandala_relevance_pct };
   } catch (err) {
     const reason =
       err instanceof V2QuickValidationError
