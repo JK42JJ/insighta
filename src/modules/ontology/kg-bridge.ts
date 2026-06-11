@@ -107,7 +107,7 @@ async function findResourceNode(
            SELECT 1 FROM user_video_states uvs
            JOIN youtube_videos yv ON yv.id = uvs.video_id
            WHERE uvs.id::text = source_ref->>'id'
-             AND yv.video_id = ${videoId}
+             AND yv.youtube_video_id = ${videoId}
          ))
       )
     LIMIT 1
