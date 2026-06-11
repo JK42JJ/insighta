@@ -17,6 +17,8 @@
  * convention). Callers read flags and pass data in.
  */
 
+import { MS_PER_MONTH_AVG } from '@/utils/time-constants';
+
 /** Rubric weights when a cell goal is present (cell-fit AND center contribution). */
 export const RUBRIC_WEIGHTS = {
   cellFit: 0.4,
@@ -35,8 +37,6 @@ export const RECENCY_FRESH_MONTHS = 6;
 export const RECENCY_MID_MONTHS = 12;
 export const RECENCY_FRESH_BONUS = 5;
 export const RECENCY_MID_BONUS = 2;
-
-const MS_PER_MONTH = 30.44 * 24 * 60 * 60 * 1000; // mean Gregorian month
 
 export interface RubricAxes {
   /** null ⇒ no cell goal was given (weights fall back to NO_CELL). */
@@ -72,7 +72,7 @@ export function recencyBonus(
   if (volatility !== 'volatile' || !publishedAt) return 0;
   const ageMs = now.getTime() - publishedAt.getTime();
   if (ageMs < 0) return RECENCY_FRESH_BONUS; // future-dated (premiere) = fresh
-  const months = ageMs / MS_PER_MONTH;
+  const months = ageMs / MS_PER_MONTH_AVG;
   if (months < RECENCY_FRESH_MONTHS) return RECENCY_FRESH_BONUS;
   if (months < RECENCY_MID_MONTHS) return RECENCY_MID_BONUS;
   return 0;

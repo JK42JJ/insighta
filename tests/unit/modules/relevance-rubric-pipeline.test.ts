@@ -26,6 +26,7 @@ import {
 } from '@/modules/skills/rich-summary-v2-quick-prompt';
 import { buildMandalaWithQueriesPrompt } from '@/prompts/mandala-with-queries-generator';
 import { loadRelevanceRubricConfig } from '@/config/relevance-rubric';
+import { MS_PER_MONTH_AVG } from '@/utils/time-constants';
 
 describe('composeRubricScore (PROVISIONAL weights — gate-validation targets)', () => {
   it('weights 0.4/0.4/0.2 with a cell goal', () => {
@@ -61,7 +62,7 @@ describe('composeRubricScore (PROVISIONAL weights — gate-validation targets)',
 
 describe('recencyBonus (volatile-only, additive)', () => {
   const now = new Date('2026-06-11T00:00:00Z');
-  const monthsAgo = (m: number) => new Date(now.getTime() - m * 30.44 * 24 * 3600 * 1000);
+  const monthsAgo = (m: number) => new Date(now.getTime() - m * MS_PER_MONTH_AVG);
 
   it('volatile + fresh (<6m) → +5', () => {
     expect(recencyBonus(monthsAgo(5), 'volatile', now)).toBe(RECENCY_FRESH_BONUS);
