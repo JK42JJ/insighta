@@ -913,10 +913,14 @@ class ApiClient {
    * Returns null on 404 (no passing row) so callers can show an empty-state
    * instead of throwing. Other errors (401/5xx) propagate.
    */
-  async getVideoRichSummary(videoId: string): Promise<VideoRichSummaryResponse | null> {
+  async getVideoRichSummary(
+    videoId: string,
+    opts?: { lang?: 'ko' | 'en' }
+  ): Promise<VideoRichSummaryResponse | null> {
     try {
+      const qs = opts?.lang ? `?lang=${opts.lang}` : '';
       const res = await this.request<{ data: VideoRichSummaryResponse }>(
-        `/videos/${videoId}/rich-summary`
+        `/videos/${videoId}/rich-summary${qs}`
       );
       return res.data;
     } catch (err) {

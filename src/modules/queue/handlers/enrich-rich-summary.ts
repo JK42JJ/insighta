@@ -170,9 +170,11 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
   // center goal so the LLM scores mandala_relevance_pct=0; the v2 row
   // is still useful for `one_liner` / chapter relevance display.
   let centerGoal = '';
+  let mandalaLanguage: 'ko' | 'en' | null = null;
   try {
     const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
     centerGoal = mandala?.levels[0]?.centerGoal ?? '';
+    mandalaLanguage = mandala?.language === 'en' ? 'en' : mandala ? 'ko' : null;
   } catch (err) {
     logger.warn('enrich-rich-summary: mandala lookup failed (continuing with empty center goal)', {
       jobId: job.id,
@@ -210,6 +212,54 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     transcript,
     forceRegen: true,
   });
+
+  // CP499+ v2 translations — co-generate ONLY when the mandala language
+  // differs from the summary's source language (ko video on ko mandala =
+  // no call, cost 0). Fail-open: a failure here never fails the job —
+  // the on-demand display path retries up to the failure cap.
+  if (v2Outcome.kind === 'pass' && mandalaLanguage) {
+    try {
+      const prisma = getPrismaClient();
+      const fresh = await prisma.video_rich_summaries.findUnique({
+        where: { video_id: videoId },
+        select: {
+          source_language: true,
+          translations: true,
+          one_liner: true,
+          core: true,
+          analysis: true,
+          segments: true,
+        },
+      });
+      if (
+        fresh?.source_language &&
+        fresh.source_language !== mandalaLanguage &&
+        (mandalaLanguage === 'ko' || mandalaLanguage === 'en')
+      ) {
+        const { getStoredTranslation, translateAndStore } =
+          await import('@/modules/skills/rich-summary-translator');
+        if (!getStoredTranslation(fresh.translations, mandalaLanguage)) {
+          await translateAndStore({
+            videoId,
+            targetLang: mandalaLanguage,
+            payload: {
+              one_liner: fresh.one_liner,
+              core: fresh.core ?? null,
+              analysis: fresh.analysis ?? null,
+              segments: fresh.segments ?? null,
+            },
+            translations: fresh.translations,
+          });
+        }
+      }
+    } catch (err) {
+      logger.warn('enrich-rich-summary: translation co-generation failed (non-fatal)', {
+        jobId: job.id,
+        videoId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   logger.info('enrich-rich-summary: completed', {
     jobId: job.id,

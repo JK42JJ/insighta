@@ -14,6 +14,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useMandalaQuery } from '@/features/mandala';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { VideoSummary } from '@/entities/card/model/types';
@@ -48,7 +49,15 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
     if (!youtubeId) return;
     void queryClient.invalidateQueries({ queryKey: queryKeys.video.richSummary(youtubeId) });
   }, [youtubeId, queryClient]);
-  const { richSummary, isLoading: isRichLoading, isQualityWarning } = useRichSummary(youtubeId);
+  // CP499+ v2 translations — display in the MANDALA's language; an en-source
+  // v2 on a ko mandala is served (or on-demand translated) as Korean.
+  const { mandalaMeta } = useMandalaQuery(mandalaId ?? null);
+  const displayLang = mandalaMeta?.language === 'en' ? ('en' as const) : ('ko' as const);
+  const {
+    richSummary,
+    isLoading: isRichLoading,
+    isQualityWarning,
+  } = useRichSummary(youtubeId, mandalaMeta ? displayLang : undefined);
 
   const short = videoSummary?.summary_ko || videoSummary?.summary_en || null;
   const tags = videoSummary?.tags ?? [];

@@ -517,7 +517,7 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
    * Generation itself is gated by RICH_SUMMARY_ENABLED and happens via enrichVideo() /
    * pool gold-tier eager hook. This endpoint does NOT trigger generation.
    */
-  fastify.get<{ Params: { id: string } }>(
+  fastify.get<{ Params: { id: string }; Querystring: { lang?: string } }>(
     '/:id/rich-summary',
     { onRequest: [fastify.authenticate] },
     async (request, reply) => {
@@ -544,19 +544,73 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       // to always serve whatever content exists and let the FE render a
       // subtle "auto-improving" indicator. Users see the current best
       // content; better content appears on the next view.
+      // CP499+ v2 translations — display follows the MANDALA language
+      // (?lang=ko|en from the FE). v2 row whose source language differs:
+      // serve the stored translation, or translate on-demand ONCE and
+      // cache it in the reserved `translations` jsonb (revisit = 0 cost).
+      // Fail-open: failure serves the original; after MAX_TRANSLATE_FAILURES
+      // the original is pinned (no per-view re-fire).
+      let displayed = {
+        oneLiner: row.one_liner,
+        core: row.core ?? null,
+        analysis: row.analysis ?? null,
+        segments: row.segments ?? null,
+        displayLanguage: row.source_language ?? null,
+        translated: false,
+      };
+      const reqLang =
+        request.query?.lang === 'ko' || request.query?.lang === 'en' ? request.query.lang : null;
+      if (
+        reqLang &&
+        row.template_version === 'v2' &&
+        row.source_language &&
+        reqLang !== row.source_language
+      ) {
+        const { getStoredTranslation, translateAndStore } =
+          await import('@/modules/skills/rich-summary-translator');
+        const payload = {
+          one_liner: row.one_liner,
+          core: row.core ?? null,
+          analysis: row.analysis ?? null,
+          segments: row.segments ?? null,
+        };
+        const t =
+          getStoredTranslation(row.translations, reqLang) ??
+          (await translateAndStore({
+            videoId: row.video_id,
+            targetLang: reqLang,
+            payload,
+            translations: row.translations,
+          }));
+        if (t) {
+          displayed = {
+            oneLiner: t.one_liner ?? row.one_liner,
+            core: t.core ?? row.core ?? null,
+            analysis: t.analysis ?? row.analysis ?? null,
+            segments: t.segments ?? row.segments ?? null,
+            displayLanguage: reqLang,
+            translated: true,
+          };
+        }
+      }
+
       return reply.code(200).send({
         status: 'ok',
         data: {
           videoId: row.video_id,
-          oneLiner: row.one_liner,
+          oneLiner: displayed.oneLiner,
           structured: row.structured,
           // CP438+1: expose v2 layered jsonb (CP437 schema). FE V2NewBlock
           // renders these directly when `core` is non-null.
           templateVersion: row.template_version ?? null,
           completeness: row.completeness ?? null,
-          core: row.core ?? null,
-          analysis: row.analysis ?? null,
-          segments: row.segments ?? null,
+          core: displayed.core,
+          analysis: displayed.analysis,
+          segments: displayed.segments,
+          // CP499+ — which language the served payload is in + whether it
+          // came from the translations cache (FE indicator optional).
+          displayLanguage: displayed.displayLanguage,
+          translated: displayed.translated,
           lora: row.lora ?? null,
           qualityScore: row.quality_score,
           // CP488+ Phase 4 — surface quality_flag so FE can decide
