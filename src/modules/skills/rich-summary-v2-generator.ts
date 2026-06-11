@@ -31,6 +31,7 @@ import { validateV2TimelineRange, V2TimelineRangeError } from './rich-summary-v2
 // the next tier up. Search-replace point for future model swaps.
 const SONNET_MODEL = 'anthropic/claude-sonnet-4-6';
 
+import { detectContentLanguageFromTitle as detectLanguageFromTitle } from '@/utils/detect-language';
 import {
   buildV2Prompt,
   scoreCompleteness,
@@ -39,21 +40,7 @@ import {
   type RichSummaryV2Layered,
 } from './rich-summary-v2-prompt';
 
-const HANGUL_RANGE = /[가-힯]/g;
-const LATIN_RANGE = /[A-Za-z]/g;
-
-function detectLanguageFromTitle(title: string): 'ko' | 'en' | null {
-  if (!title) return null;
-  const stripped = title.replace(/\s+/g, '');
-  if (stripped.length === 0) return null;
-  const hangulCount = (stripped.match(HANGUL_RANGE) ?? []).length;
-  const latinCount = (stripped.match(LATIN_RANGE) ?? []).length;
-  const hangulRatio = hangulCount / stripped.length;
-  const latinRatio = latinCount / stripped.length;
-  if (hangulRatio >= 0.2) return 'ko';
-  if (latinRatio >= 0.5 && hangulRatio < 0.05) return 'en';
-  return null;
-}
+// CP499+ 전수 통일 — detectLanguageFromTitle now lives in @/utils/detect-language.
 
 const log = logger.child({ module: 'RichSummaryV2Generator' });
 

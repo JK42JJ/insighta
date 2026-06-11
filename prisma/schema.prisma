@@ -436,6 +436,9 @@ model user_mandalas {
   is_template     Boolean                   @default(false)
   domain          String?
   language        String?                   @db.VarChar(10)
+  /// CP499+ score pipeline — merged-gen 1-line judgement ('volatile' | 'evergreen').
+  /// NULL (pre-existing / non-wizard mandalas) ⇒ recency bonus never applies.
+  volatility      String?                   @db.VarChar(10)
   like_count      Int                       @default(0)
   clone_count     Int                       @default(0)
   share_slug      String?                   @unique

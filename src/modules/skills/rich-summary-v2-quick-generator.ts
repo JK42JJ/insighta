@@ -27,6 +27,7 @@ import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
 import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { logger } from '@/utils/logger';
 
+import { detectContentLanguageFromTitle as detectLanguageFromTitle } from '@/utils/detect-language';
 import {
   buildV2QuickPrompt,
   validateV2Quick,
@@ -40,21 +41,7 @@ const HAIKU_MODEL = 'anthropic/claude-haiku-4.5';
 const MAX_TOKENS = 800;
 const TEMPERATURE = 0.2;
 
-const HANGUL_RANGE = /[가-힯]/g;
-const LATIN_RANGE = /[A-Za-z]/g;
-
-function detectLanguageFromTitle(title: string): 'ko' | 'en' | null {
-  if (!title) return null;
-  const stripped = title.replace(/\s+/g, '');
-  if (stripped.length === 0) return null;
-  const hangulCount = (stripped.match(HANGUL_RANGE) ?? []).length;
-  const latinCount = (stripped.match(LATIN_RANGE) ?? []).length;
-  const hangulRatio = hangulCount / stripped.length;
-  const latinRatio = latinCount / stripped.length;
-  if (hangulRatio >= 0.2) return 'ko';
-  if (latinRatio >= 0.5 && hangulRatio < 0.05) return 'en';
-  return null;
-}
+// CP499+ 전수 통일 — detectLanguageFromTitle now lives in @/utils/detect-language.
 
 export type V2QuickOutcome =
   | { kind: 'pass'; videoId: string; mandalaRelevancePct: number }

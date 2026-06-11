@@ -18,6 +18,8 @@
  *   - JSON output only — caller validates with `validateV2Quick` below.
  */
 
+import { composeRubricScore } from '@/modules/relevance/relevance-composition';
+
 export interface V2QuickResult {
   core: {
     one_liner: string;
@@ -26,6 +28,12 @@ export interface V2QuickResult {
     core_argument: string;
     mandala_fit: {
       mandala_relevance_pct: number;
+      /** Present ONLY in rubric mode — raw axes (logged, not persisted yet). */
+      rubric?: {
+        cell_fit_pct: number | null;
+        goal_contribution_pct: number;
+        actionability_pct: number;
+      };
     };
   };
 }
@@ -37,6 +45,17 @@ export interface QuickPromptInput {
   language: 'ko' | 'en';
   transcript: string;
   mandalaCenterGoal: string;
+  /**
+   * CP499+ rubric mode (RELEVANCE_RUBRIC_ENABLED) — the LLM scores 3 axes
+   * (cell_fit / goal_contribution / actionability) and the COMPOSITE is
+   * computed in code (relevance-composition.ts). Why: a single LLM composite
+   * collapses into round-number modes and compresses on abstract goals
+   * (sd 6.8 measured). Absent/false ⇒ the legacy single-axis prompt,
+   * byte-identical to pre-CP499+ output.
+   */
+  rubric?: boolean;
+  /** Rubric mode only — the cell sub-goal, printed as a separate CELL GOAL line. */
+  cellGoal?: string;
 }
 
 const RICH_SUMMARY_V2_QUICK_PROMPT = `You are a learning content analyst. Output ONLY valid JSON matching this exact shape — no markdown fences, no commentary, no chain-of-thought.
@@ -75,6 +94,28 @@ TRANSCRIPT (truncated 4000 chars):
 {transcript}
 `;
 
+/**
+ * CP499+ rubric variant — same prompt body, but mandala_fit asks for 3 raw
+ * axes instead of one composite. The composite is computed in code
+ * (relevance-composition.ts), which is the score-compression fix. Weights and
+ * axis definitions are PROVISIONAL gate-validation targets, not law.
+ */
+const RUBRIC_MANDALA_FIT_SCHEMA = `"mandala_fit": {
+      "cell_fit_pct": <integer 0..100, or null when CELL GOAL is "(none)">,
+      "goal_contribution_pct": <integer 0..100>,
+      "actionability_pct": <integer 0..100>
+    }`;
+
+const RUBRIC_MANDALA_FIT_RULES = `- analysis.mandala_fit.cell_fit_pct: integer 0-100 — how well the video fits the CELL GOAL below. Output null when CELL GOAL is "(none)".
+- analysis.mandala_fit.goal_contribution_pct: integer 0-100 — how much watching this video contributes to the MANDALA CENTER GOAL below. Score 0 when the goal is empty or genuinely unrelated; reserve 90+ for videos that clearly address the exact goal. Be conservative.
+- analysis.mandala_fit.actionability_pct: integer 0-100 — how directly a viewer can ACT on this video toward the goal. Concrete methods/steps/tools score high; abstract motivation/general talk scores low. Judge this axis independently from the other two.`;
+
+const SINGLE_AXIS_SCHEMA = `"mandala_fit": {
+      "mandala_relevance_pct": <integer 0..100>
+    }`;
+
+const SINGLE_AXIS_RULE = `- analysis.mandala_fit.mandala_relevance_pct: integer 0-100 measuring how well the video fits the user's mandala center goal below. Score 0 when the goal is empty or genuinely unrelated; reserve 90+ for videos that clearly address the exact goal. Be conservative.`;
+
 const MAX_DESC_CHARS = 400;
 const MAX_TRANSCRIPT_CHARS = 4000;
 
@@ -90,12 +131,25 @@ export function buildV2QuickPrompt(input: QuickPromptInput): string {
       ? `${transcriptText.slice(0, MAX_TRANSCRIPT_CHARS)}…`
       : transcriptText || '(no transcript)';
 
-  return RICH_SUMMARY_V2_QUICK_PROMPT.replace(/\{language\}/g, input.language)
+  let template = RICH_SUMMARY_V2_QUICK_PROMPT;
+  if (input.rubric) {
+    template = template
+      .replace(SINGLE_AXIS_SCHEMA, RUBRIC_MANDALA_FIT_SCHEMA)
+      .replace(SINGLE_AXIS_RULE, RUBRIC_MANDALA_FIT_RULES)
+      .replace(
+        'MANDALA CENTER GOAL: {mandala_center_goal}',
+        'MANDALA CENTER GOAL: {mandala_center_goal}\nCELL GOAL: {cell_goal}'
+      );
+  }
+
+  return template
+    .replace(/\{language\}/g, input.language)
     .replace(/\{language_label\}/g, languageLabel)
     .replace(/\{title\}/g, input.title)
     .replace(/\{channel\}/g, input.channel)
     .replace(/\{description\}/g, descTrim)
     .replace(/\{mandala_center_goal\}/g, input.mandalaCenterGoal || '(empty)')
+    .replace(/\{cell_goal\}/g, input.cellGoal?.trim() || '(none)')
     .replace(/\{transcript\}/g, transcriptTrim);
 }
 
@@ -151,7 +205,13 @@ export function trimOneLinerLabel(raw: string): string {
   return s;
 }
 
-export function validateV2Quick(raw: unknown): V2QuickResult {
+/**
+ * CP499+ — rubric-mode validation. The LLM emits 3 raw axes; the composite
+ * `mandala_relevance_pct` is computed HERE (composeRubricScore) so every
+ * consumer keeps reading the same field. opts.rubric MUST match the
+ * buildV2QuickPrompt rubric flag of the call that produced `raw`.
+ */
+export function validateV2Quick(raw: unknown, opts: { rubric?: boolean } = {}): V2QuickResult {
   if (typeof raw !== 'object' || raw === null) {
     throw new V2QuickValidationError('root must be an object', '$');
   }
@@ -172,6 +232,41 @@ export function validateV2Quick(raw: unknown): V2QuickResult {
   }
   const mff = mf as Record<string, unknown>;
 
+  let mandalaFit: V2QuickResult['analysis']['mandala_fit'];
+  if (opts.rubric) {
+    const cellFit =
+      mff['cell_fit_pct'] === null || mff['cell_fit_pct'] === undefined
+        ? null
+        : requireInteger(mff['cell_fit_pct'], 'analysis.mandala_fit.cell_fit_pct');
+    const goalContribution = requireInteger(
+      mff['goal_contribution_pct'],
+      'analysis.mandala_fit.goal_contribution_pct'
+    );
+    const actionability = requireInteger(
+      mff['actionability_pct'],
+      'analysis.mandala_fit.actionability_pct'
+    );
+    mandalaFit = {
+      mandala_relevance_pct: composeRubricScore({
+        cellFitPct: cellFit,
+        goalContributionPct: goalContribution,
+        actionabilityPct: actionability,
+      }),
+      rubric: {
+        cell_fit_pct: cellFit,
+        goal_contribution_pct: goalContribution,
+        actionability_pct: actionability,
+      },
+    };
+  } else {
+    mandalaFit = {
+      mandala_relevance_pct: requireInteger(
+        mff['mandala_relevance_pct'],
+        'analysis.mandala_fit.mandala_relevance_pct'
+      ),
+    };
+  }
+
   return {
     core: {
       // CP476+ — soft truncate at 20 chars. LLM occasionally ignores the
@@ -187,12 +282,7 @@ export function validateV2Quick(raw: unknown): V2QuickResult {
     },
     analysis: {
       core_argument: requireString(aa['core_argument'], 'analysis.core_argument', 500),
-      mandala_fit: {
-        mandala_relevance_pct: requireInteger(
-          mff['mandala_relevance_pct'],
-          'analysis.mandala_fit.mandala_relevance_pct'
-        ),
-      },
+      mandala_fit: mandalaFit,
     },
   };
 }

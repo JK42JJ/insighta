@@ -77,6 +77,26 @@ describe('parseMergedResponse', () => {
 describe('generateMandalaWithQueries', () => {
   const baseInput = { goal: '한국어 목표', language: 'ko' as const };
 
+  test('CP499+ volatility: enum value survives, garbage is dropped', async () => {
+    const withVol = (v: unknown) => {
+      const obj = JSON.parse(mergedJson(FULL_CQ)) as Record<string, unknown>;
+      obj['volatility'] = v;
+      return JSON.stringify(obj);
+    };
+    const ok = await generateMandalaWithQueries(baseInput, {
+      generateImpl: async () => withVol('volatile'),
+    });
+    expect(ok.structure.volatility).toBe('volatile');
+    const bad = await generateMandalaWithQueries(baseInput, {
+      generateImpl: async () => withVol('sometimes'),
+    });
+    expect(bad.structure.volatility).toBeUndefined();
+    const absent = await generateMandalaWithQueries(baseInput, {
+      generateImpl: async () => mergedJson(FULL_CQ),
+    });
+    expect(absent.structure.volatility).toBeUndefined();
+  });
+
   test('full coverage → 8 cellQueries, not degraded, center_goal overridden', async () => {
     const res = await generateMandalaWithQueries(baseInput, {
       generateImpl: async () => mergedJson(FULL_CQ),

@@ -62,3 +62,34 @@ export function resolveLanguage(
   if (stored === 'ko' || stored === 'en') return stored;
   return detectLanguage(goalText);
 }
+
+/**
+ * CP499+ 전수 통일 — CONTENT-language detection from a VIDEO TITLE.
+ *
+ * Distinct from detectLanguage (INPUT language of user-typed goal text, where
+ * Hangul presence wins): this asks "what language is the video itself in?" so
+ * the v2 summary is GENERATED in the source language (accuracy; display-side
+ * translation handles the user's language — the v2-translations design).
+ * Tri-state: null = no confident signal; callers fall back to
+ * youtube default_language or their own default.
+ *
+ * Extracted from 3 byte-identical local copies (rich-summary-v2-quick-generator,
+ * rich-summary-v2-generator, internal/prompt-build). The original copies used
+ * the range 가-힯 (U+D7AF); normalized to 가-힣 (U+D7A3) — U+D7A4..D7AF are
+ * unassigned code points, so behavior on real text is identical.
+ */
+const TITLE_HANGUL_RE = /[가-힣]/g;
+const TITLE_LATIN_RE = /[A-Za-z]/g;
+
+export function detectContentLanguageFromTitle(title: string): 'ko' | 'en' | null {
+  if (!title) return null;
+  const stripped = title.replace(/\s+/g, '');
+  if (stripped.length === 0) return null;
+  const hangulCount = (stripped.match(TITLE_HANGUL_RE) ?? []).length;
+  const latinCount = (stripped.match(TITLE_LATIN_RE) ?? []).length;
+  const hangulRatio = hangulCount / stripped.length;
+  const latinRatio = latinCount / stripped.length;
+  if (hangulRatio >= 0.2) return 'ko';
+  if (latinRatio >= 0.5 && hangulRatio < 0.05) return 'en';
+  return null;
+}

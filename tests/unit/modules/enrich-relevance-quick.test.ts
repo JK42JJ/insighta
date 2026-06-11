@@ -28,10 +28,12 @@ jest.mock('pg-boss', () => jest.fn().mockImplementation(() => mockBossInstance))
 
 const mockUvsUpdate = jest.fn().mockResolvedValue({});
 const mockUlcUpdate = jest.fn().mockResolvedValue({});
+const mockQueryRaw = jest.fn().mockResolvedValue([]);
 jest.mock('@/modules/database/client', () => ({
   getPrismaClient: () => ({
     userVideoState: { update: mockUvsUpdate },
     user_local_cards: { update: mockUlcUpdate },
+    $queryRaw: (...args: unknown[]) => mockQueryRaw(...args),
   }),
 }));
 
@@ -188,5 +190,64 @@ describe('enqueueRelevanceQuick', () => {
       centerGoal: 'G',
     });
     expect(result).toBeNull();
+  });
+});
+
+describe('CP499+ rubric flag-on context fetch ($queryRaw, fail-open)', () => {
+  afterEach(() => {
+    delete process.env['RELEVANCE_RUBRIC_ENABLED'];
+  });
+
+  test('flag on: context row -> compute called with rubric + language/volatility/publishedAt', async () => {
+    process.env['RELEVANCE_RUBRIC_ENABLED'] = 'true';
+    const published = new Date('2026-06-01T00:00:00Z');
+    mockQueryRaw.mockResolvedValueOnce([
+      { language: 'ko', volatility: 'volatile', published_at: published },
+    ]);
+    mockCompute.mockResolvedValueOnce({ ok: true, relevancePct: 81 });
+    const handler = await getHandler();
+
+    await handler({
+      id: 'j-rubric',
+      data: { table: 'uvs', rowId: 'row-uvs-9', title: 'T', centerGoal: 'G' },
+    });
+
+    expect(mockCompute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rubric: true,
+        language: 'ko',
+        volatility: 'volatile',
+        publishedAt: published,
+      })
+    );
+    expect(mockUvsUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'row-uvs-9' } })
+    );
+  });
+
+  test('flag on + context fetch throws -> fail-open legacy call (no rubric key)', async () => {
+    process.env['RELEVANCE_RUBRIC_ENABLED'] = 'true';
+    mockQueryRaw.mockRejectedValueOnce(new Error('column volatility does not exist'));
+    mockCompute.mockResolvedValueOnce({ ok: true, relevancePct: 55 });
+    const handler = await getHandler();
+
+    await handler({
+      id: 'j-failopen',
+      data: { table: 'uvs', rowId: 'row-uvs-10', title: 'T', centerGoal: 'G' },
+    });
+
+    const arg = mockCompute.mock.calls[0][0] as Record<string, unknown>;
+    expect(arg['rubric']).toBeUndefined();
+    expect(mockUvsUpdate).toHaveBeenCalled();
+  });
+
+  test('flag off (default): no $queryRaw at all — zero new selects', async () => {
+    mockCompute.mockResolvedValueOnce({ ok: true, relevancePct: 60 });
+    const handler = await getHandler();
+    await handler({
+      id: 'j-off',
+      data: { table: 'uvs', rowId: 'row-uvs-11', title: 'T', centerGoal: 'G' },
+    });
+    expect(mockQueryRaw).not.toHaveBeenCalled();
   });
 });

@@ -10,7 +10,11 @@
  *   3 en-misjudged corrected, 0 reverse flips).
  */
 
-import { detectLanguage, resolveLanguage } from '@/utils/detect-language';
+import {
+  detectLanguage,
+  resolveLanguage,
+  detectContentLanguageFromTitle,
+} from '@/utils/detect-language';
 
 describe('detectLanguage', () => {
   it('detects an English goal as en (the CP458 bug case)', () => {
@@ -68,5 +72,20 @@ describe('resolveLanguage', () => {
 
   it('CP499+ — NULL stored + mixed proper-noun goal resolves ko via detection', () => {
     expect(resolveLanguage(null, 'Claude Code로 프로덕션 앱 개발')).toBe('ko');
+  });
+});
+
+describe('detectContentLanguageFromTitle (CP499+ 전수 통일 — content language, tri-state)', () => {
+  it('matches the prior local-copy behavior (ratio-based)', () => {
+    expect(detectContentLanguageFromTitle('ETF 투자로 노후 자산 만들기')).toBe('ko');
+    expect(detectContentLanguageFromTitle('Build retirement assets via ETF investing')).toBe('en');
+  });
+  it('tri-state: no confident signal → null (caller falls back)', () => {
+    expect(detectContentLanguageFromTitle('')).toBeNull();
+    expect(detectContentLanguageFromTitle('2026 — 100%')).toBeNull();
+  });
+  it('mixed title below thresholds → null (NOT the input-language rule)', () => {
+    // hangul ratio < 0.2 AND >= 0.05 → neither branch fires
+    expect(detectContentLanguageFromTitle('AAAAAAAAAAAAAAAAAA 한')).toBeNull();
   });
 });

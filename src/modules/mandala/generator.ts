@@ -49,6 +49,9 @@ export interface GeneratedMandala {
   center_label: string;
   language: string;
   domain: string;
+  /** CP499+ score pipeline — merged-gen 1-line judgement. Sanitized to
+   *  'volatile' | 'evergreen' | undefined (anything else dropped). */
+  volatility?: 'volatile' | 'evergreen';
   sub_goals: string[];
   sub_labels?: string[];
   actions: Record<string, string[]>;
@@ -799,6 +802,11 @@ export async function generateMandalaWithQueries(
   if (!parsed.actions) parsed.actions = {};
   if (!parsed.language) parsed.language = lang;
   if (!parsed.domain) parsed.domain = domain;
+  // CP499+ — sanitize the volatility judgement (merged-gen [3단계]); anything
+  // other than the two enum values is dropped (NULL ⇒ recency bonus off).
+  if (parsed.volatility !== 'volatile' && parsed.volatility !== 'evergreen') {
+    delete (parsed as unknown as Record<string, unknown>)['volatility'];
+  }
   // Strip the merged-only key so the persisted structure shape is unchanged.
   delete (parsed as unknown as Record<string, unknown>)['cell_queries'];
 

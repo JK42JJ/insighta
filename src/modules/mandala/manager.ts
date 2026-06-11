@@ -5,6 +5,7 @@ import { user_mandalas, Prisma } from '@prisma/client';
 import { nanoid } from 'nanoid';
 import { DEFAULT_TIER, getMandalaLimit, type Tier } from '@/config/quota';
 import { detectLanguage } from '@/utils/detect-language';
+import { loadRelevanceRubricConfig } from '@/config/relevance-rubric';
 import {
   EXPLORE_PAGE_LIMIT,
   EXPLORE_DEFAULT_PAGE_SIZE,
@@ -443,7 +444,7 @@ export class MandalaManager {
     userId: string,
     title: string,
     levels: MandalaLevelData[],
-    options: { promoteToDefault?: boolean } = {}
+    options: { promoteToDefault?: boolean; volatility?: 'volatile' | 'evergreen' } = {}
   ): Promise<MandalaWithLevels> {
     // Per-step wall-clock timing so P2028 incidents have a data-driven
     // root cause trail. Emitted via console.info at function exit so the
@@ -531,6 +532,12 @@ export class MandalaManager {
               language: detectLanguage(title),
               is_default: isDefault,
               position,
+              // CP499+ — flag-gated: the volatility column exists only after
+              // the score-pipeline DDL (per-step approval). Flag off ⇒ field
+              // omitted ⇒ INSERT identical to pre-CP499+.
+              ...(options.volatility && loadRelevanceRubricConfig().enabled
+                ? { volatility: options.volatility }
+                : {}),
             },
           });
           timings['tx_mandala_create'] = Date.now() - tMandalaCreate;
