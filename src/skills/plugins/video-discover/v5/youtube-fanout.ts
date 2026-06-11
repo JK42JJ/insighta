@@ -25,6 +25,7 @@ import { buildRuleBasedQueriesSync, type SearchQuery } from '../v2/keyword-build
 import { buildLLMQueriesPerCell, type QueryGenMeta } from './llm-query-gen';
 import { translateQueriesToEn } from './en-query-translate';
 import { getV5Config } from './config';
+import { detectLanguage } from '@/utils/detect-language';
 import { MERGED_GEN_MODEL } from '@/prompts/mandala-with-queries-generator';
 import {
   tsvectorKeywordCandidates,
@@ -262,21 +263,30 @@ export function rotateKeys(keys: string[], i: number): string[] {
 /**
  * CP499+ — toggle-aware off-language gate ('영문 카드 포함').
  *
- * DESIGN FINDING (test-caught): the ko-rules ALREADY pass pure-English titles
- * (hangul 0 + no dominant third script = kept), so the gate needs NO widening
- * for the toggle — and a ko∪en union would be actively WRONG: the en-rules
- * only block CJK, so Arabic/Thai/Cyrillic titles would re-enter through the
- * en side. The toggle's effective EN-inflow lever is therefore the
- * relevanceLanguage drop in the search call alone; this function keeps the
- * toggle branch explicit at both call sites and pins the EN-passes invariant.
- * Exported for tests.
+ * UX 원칙 1 (언어 일관성, James 2026-06-11): 입력 언어 = 경험 언어. ko 만다라의
+ * AUTO inflow (wizard / add-cards 기본) drops English-DOMINANT titles — the
+ * prior "English intentionally NEVER dropped" stance was re-judged a product
+ * defect on screen evidence (K8s mandala: "Kubernetes Monitoring with
+ * Prometheus & Grafana" etc. mixed into a ko grid). Signal = #902
+ * detectLanguage: ANY Hangul ⇒ ko ⇒ kept ("[용어]…쿠버네티스 보안",
+ * "Kubernetes란?"), zero Hangul + Latin ⇒ en ⇒ dropped.
+ *
+ * The explicit EN chip (includeEnCards=true) is opt-in and UNAFFECTED — that
+ * path wants English. Third-script rules (isOffLanguageTitle) still apply
+ * first in every mode. koEnTitleDrop = V5_KO_EN_TITLE_DROP rollback lever
+ * (off ⇒ legacy English-passes behavior). Exported for tests.
  */
 export function isOffLanguageTitleToggled(
   title: string,
   lang: 'ko' | 'en',
-  _includeEnCards: boolean | undefined
+  includeEnCards: boolean | undefined,
+  koEnTitleDrop = true
 ): boolean {
-  return isOffLanguageTitle(title, lang);
+  if (isOffLanguageTitle(title, lang)) return true;
+  if (lang === 'ko' && !includeEnCards && koEnTitleDrop) {
+    return detectLanguage(title) === 'en';
+  }
+  return false;
 }
 
 export function isOffLanguageTitle(title: string, lang: 'ko' | 'en'): boolean {
@@ -477,7 +487,15 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         const cand = keywordCandidateToFanoutCandidate(kc);
         // Fork-1 caveat: pool candidates run the SAME gates as live items.
         if (titleHitsBlocklist(cand.title) || titleIndicatesShorts(cand.title)) continue;
-        if (isOffLanguageTitleToggled(cand.title, input.language, input.includeEnCards)) continue;
+        if (
+          isOffLanguageTitleToggled(
+            cand.title,
+            input.language,
+            input.includeEnCards,
+            cfg.koEnTitleDrop
+          )
+        )
+          continue;
         const ci = cand.cellIndex ?? -1;
         if (ci < 0) continue;
         const bucket = byCell.get(ci);
@@ -666,7 +684,12 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       if (
         enOnlyActive
           ? /[가-힣]/.test(cand.title)
-          : isOffLanguageTitleToggled(cand.title, input.language, input.includeEnCards)
+          : isOffLanguageTitleToggled(
+              cand.title,
+              input.language,
+              input.includeEnCards,
+              cfg.koEnTitleDrop
+            )
       ) {
         offLangDropped += 1;
         continue;
