@@ -85,6 +85,12 @@ APPLY_FILES=(
   # CP474 — v2 regen gate based on transcript_used (boolean). ADD COLUMN
   # IF NOT EXISTS + idempotent backfill (WHERE transcript_used = false).
   "prisma/migrations/rich-summary-v2/006_add_transcript_used.sql"
+  # CP499+ score pipeline (A-2 통합 스키마). 001 = user_mandalas.volatility
+  # (merged-gen 1-line judgement, flag-gated writes). 002 = pre-placement
+  # relevance gate cache (video x mandala), inert until consumer PRs.
+  # Both ADD COLUMN/CREATE TABLE IF NOT EXISTS — idempotent.
+  "prisma/migrations/score-pipeline/001_add_user_mandalas_volatility.sql"
+  "prisma/migrations/score-pipeline/002_video_mandala_relevance.sql"
   # CP466 — Add Cards Phase 1 (surfacing). `surfaced_at` column + partial
   # index on user_video_states for Layer 1 Coverage dedup. ADD COLUMN IF
   # NOT EXISTS / CREATE INDEX IF NOT EXISTS — idempotent.
