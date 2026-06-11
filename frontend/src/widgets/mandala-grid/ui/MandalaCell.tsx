@@ -23,6 +23,9 @@ export interface MandalaCellProps {
   /** W1b (CP499+) — actions-fill job still running for this sub-level:
    *  empty subject cells show a "filling" pulse instead of blank. */
   isActionsPending?: boolean;
+  /** Pool-serve (CP499+) — async deficit-fill job running for THIS cell:
+   *  show the same "filling" pulse on the empty-card state (display-only). */
+  isFillPending?: boolean;
   cards: InsightCard[];
   isDropTarget: boolean;
   isCellSwapTarget: boolean;
@@ -361,6 +364,7 @@ export const MandalaCell = memo(
     label,
     isCenter,
     isActionsPending = false,
+    isFillPending = false,
     cards,
     isDropTarget,
     isCellSwapTarget,
@@ -627,13 +631,22 @@ export const MandalaCell = memo(
           </div>
         )}
 
-        {/* Empty state — subtle + icon only */}
+        {/* Empty state — subtle + icon only. Pool-serve fill in flight ⇒
+            the cell is "filling" (W1b pattern), not permanently blank. */}
         {!isCenter && cardCount === 0 && (
-          <div className="flex-1 flex items-center justify-center w-full">
+          <div className="flex-1 flex flex-col items-center justify-center w-full gap-0.5">
             <Plus
               className="text-muted-foreground/20"
               style={{ width: 'clamp(12px, 4cqi, 24px)', height: 'clamp(12px, 4cqi, 24px)' }}
             />
+            {isFillPending && (
+              <span
+                className="animate-pulse text-muted-foreground/70 px-1 text-center"
+                style={{ fontSize: 'clamp(8px, 2.2cqi, 12px)' }}
+              >
+                {t('mandala.cardsFilling', 'Filling…')}
+              </span>
+            )}
           </div>
         )}
 

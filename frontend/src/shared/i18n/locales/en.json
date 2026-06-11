@@ -800,7 +800,8 @@
     "switchToFloating": "Switch to floating",
     "switchToDock": "Dock",
     "navigateToSub": "Navigate to {{subject}}",
-    "actionsFilling": "Filling…"
+    "actionsFilling": "Filling…",
+    "cardsFilling": "Filling…"
   },
   "scratchPad": {
     "title": "Scratch Pad",

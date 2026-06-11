@@ -65,6 +65,10 @@ export interface MandalaWithLevels {
   // skeleton placeholders fill unloaded cells, eliminating the staggered
   // arrival jitter.
   cardCount: number;
+  // CP499+ pool-serve — cells with an ACTIVE fill run (skill_runs
+  // 'pool-serve-fill', status=running, ≤3min old). FE shows the W1b
+  // "filling" pulse on these cells and bounded-polls until they clear.
+  fillPendingCells: number[];
   createdAt: Date;
   updatedAt: Date;
   levels: {
@@ -160,7 +164,8 @@ export class MandalaManager {
         parent_level_id: string | null;
       }[];
     },
-    cardCount?: number
+    cardCount?: number,
+    fillPendingCells?: number[]
   ): MandalaWithLevels {
     return {
       id: mandala.id,
@@ -174,6 +179,7 @@ export class MandalaManager {
       targetLevel: mandala.target_level ?? 'standard',
       language: mandala.language ?? 'ko',
       cardCount: cardCount ?? 0,
+      fillPendingCells: fillPendingCells ?? [],
       createdAt: mandala.created_at,
       updatedAt: mandala.updated_at,
       levels: mandala.levels.map((l) => ({
@@ -356,7 +362,32 @@ export class MandalaManager {
     if (!mandala) return null;
 
     const cardCount = await this.computeCardCount(userId, mandalaId);
-    return this.mapMandala(mandala, cardCount);
+    const fillPendingCells = await this.computeFillPendingCells(userId, mandalaId);
+    return this.mapMandala(mandala, cardCount, fillPendingCells);
+  }
+
+  /**
+   * CP499+ pool-serve — cells with an active fill run: input.cells minus
+   * reported output keys on running 'pool-serve-fill' skill_runs rows
+   * (≤3min TTL so a dead worker degrades to plain empty cells, mirroring
+   * the W1b actions-poll bound). Fail-open: any error ⇒ [].
+   */
+  private async computeFillPendingCells(userId: string, mandalaId: string): Promise<number[]> {
+    try {
+      const rows = await this.prisma.$queryRaw<{ cell: number }[]>`
+        SELECT DISTINCT (c.value)::int AS cell
+        FROM skill_runs sr,
+             jsonb_array_elements_text(sr.input -> 'cells') AS c(value)
+        WHERE sr.skill_id = 'pool-serve-fill'
+          AND sr.status = 'running'
+          AND sr.user_id = ${userId}::uuid
+          AND sr.input ->> 'mandalaId' = ${mandalaId}
+          AND sr.started_at > now() - interval '3 minutes'
+          AND NOT (COALESCE(sr.output, '{}'::jsonb) ? c.value)`;
+      return rows.map((r) => r.cell);
+    } catch {
+      return [];
+    }
   }
 
   /**
