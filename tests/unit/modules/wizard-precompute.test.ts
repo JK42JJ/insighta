@@ -19,6 +19,7 @@ const mockFindUnique = jest.fn();
 const mockCreate = jest.fn();
 const mockUpdate = jest.fn();
 const mockExecuteRaw = jest.fn();
+const mockQueryRaw = jest.fn();
 const mockRunDiscoverEphemeral = jest.fn();
 const mockNotifyCardAdded = jest.fn();
 const mockLoadConfig = jest.fn();
@@ -31,6 +32,7 @@ jest.mock('@/modules/database/client', () => ({
       update: mockUpdate,
     },
     $executeRaw: mockExecuteRaw,
+    $queryRaw: mockQueryRaw,
   }),
 }));
 
@@ -210,6 +212,51 @@ describe('wizard-precompute — startPrecompute', () => {
     expect(mockCreate).toHaveBeenCalledTimes(1);
     expect(mockUpdate).not.toHaveBeenCalled();
     expect(mockRunDiscoverEphemeral).not.toHaveBeenCalled();
+  });
+
+  test('CP500+ B-1 증발 regression — discover receives the OWNED youtube ids as excludeVideoIds', async () => {
+    mockCreate.mockResolvedValueOnce({});
+    mockUpdate.mockResolvedValue({});
+    mockQueryRaw.mockResolvedValueOnce([
+      { youtube_video_id: 'ownedA' },
+      { youtube_video_id: 'ownedB' },
+    ]);
+    mockRunDiscoverEphemeral.mockResolvedValueOnce({ slots: [], queriesUsed: 0, duration_ms: 1 });
+
+    await startPrecompute({
+      sessionId: SESSION,
+      userId: USER,
+      goal: 'g',
+      language: 'ko',
+      focusTags: [],
+      subGoals: SUB_GOALS,
+    });
+
+    const arg = mockRunDiscoverEphemeral.mock.calls[0]![0];
+    expect(arg.excludeVideoIds).toBeInstanceOf(Set);
+    expect(arg.excludeVideoIds.has('ownedA')).toBe(true);
+    expect(arg.excludeVideoIds.has('ownedB')).toBe(true);
+    expect(arg.excludeVideoIds.size).toBe(2);
+  });
+
+  test('CP500+ B-1 fail-open — owned lookup failure ⇒ EMPTY exclude set, discover still runs', async () => {
+    mockCreate.mockResolvedValueOnce({});
+    mockUpdate.mockResolvedValue({});
+    mockQueryRaw.mockRejectedValueOnce(new Error('db down'));
+    mockRunDiscoverEphemeral.mockResolvedValueOnce({ slots: [], queriesUsed: 0, duration_ms: 1 });
+
+    await startPrecompute({
+      sessionId: SESSION,
+      userId: USER,
+      goal: 'g',
+      language: 'ko',
+      focusTags: [],
+      subGoals: SUB_GOALS,
+    });
+
+    const arg = mockRunDiscoverEphemeral.mock.calls[0]![0];
+    expect(arg.excludeVideoIds).toBeInstanceOf(Set);
+    expect(arg.excludeVideoIds.size).toBe(0);
   });
 });
 

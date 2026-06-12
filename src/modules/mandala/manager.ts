@@ -69,6 +69,10 @@ export interface MandalaWithLevels {
   // 'pool-serve-fill', status=running, ≤3min old). FE shows the W1b
   // "filling" pulse on these cells and bounded-polls until they clear.
   fillPendingCells: number[];
+  // CP500+ C-fix — cells whose fill run COMPLETED within the last 60s
+  // (completed-grace). FE invalidates its card cache ONCE when it lands
+  // inside this window (fast runs finish before the first meta fetch).
+  fillCompletedCells: number[];
   createdAt: Date;
   updatedAt: Date;
   levels: {
@@ -165,7 +169,8 @@ export class MandalaManager {
       }[];
     },
     cardCount?: number,
-    fillPendingCells?: number[]
+    fillPendingCells?: number[],
+    fillCompletedCells?: number[]
   ): MandalaWithLevels {
     return {
       id: mandala.id,
@@ -180,6 +185,7 @@ export class MandalaManager {
       language: mandala.language ?? 'ko',
       cardCount: cardCount ?? 0,
       fillPendingCells: fillPendingCells ?? [],
+      fillCompletedCells: fillCompletedCells ?? [],
       createdAt: mandala.created_at,
       updatedAt: mandala.updated_at,
       levels: mandala.levels.map((l) => ({
@@ -362,31 +368,49 @@ export class MandalaManager {
     if (!mandala) return null;
 
     const cardCount = await this.computeCardCount(userId, mandalaId);
-    const fillPendingCells = await this.computeFillPendingCells(userId, mandalaId);
-    return this.mapMandala(mandala, cardCount, fillPendingCells);
+    const fill = await this.computeFillSignals(userId, mandalaId);
+    return this.mapMandala(mandala, cardCount, fill.pending, fill.recentlyCompleted);
   }
 
   /**
-   * CP499+ pool-serve — cells with an active fill run: input.cells minus
-   * reported output keys on running 'pool-serve-fill' skill_runs rows
-   * (≤3min TTL so a dead worker degrades to plain empty cells, mirroring
-   * the W1b actions-poll bound). Fail-open: any error ⇒ [].
+   * CP499+ pool-serve fill signals.
+   * - pending: cells with an ACTIVE fill run — input.cells minus reported
+   *   output keys on running rows (≤3min TTL so a dead worker degrades to
+   *   plain empty cells, mirroring the W1b actions-poll bound). FE pulses +
+   *   bounded-polls these.
+   * - recentlyCompleted (CP500+ C-fix, completed-grace 60s): cells whose fill
+   *   run COMPLETED within the last 60s. A fast run (measured 17s on the
+   *   2026-06-12 N잡 run) can finish BEFORE the FE ever fetches mandalaMeta —
+   *   pending is then already empty, no poll fires, and the card cache stays
+   *   stale until a manual refresh. The grace signal lets the FE invalidate
+   *   ONCE when it lands inside the window.
+   * Fail-open: any error ⇒ both empty.
    */
-  private async computeFillPendingCells(userId: string, mandalaId: string): Promise<number[]> {
+  private async computeFillSignals(
+    userId: string,
+    mandalaId: string
+  ): Promise<{ pending: number[]; recentlyCompleted: number[] }> {
     try {
-      const rows = await this.prisma.$queryRaw<{ cell: number }[]>`
-        SELECT DISTINCT (c.value)::int AS cell
+      const rows = await this.prisma.$queryRaw<{ cell: number; status: string }[]>`
+        SELECT DISTINCT (c.value)::int AS cell, sr.status
         FROM skill_runs sr,
              jsonb_array_elements_text(sr.input -> 'cells') AS c(value)
         WHERE sr.skill_id = 'pool-serve-fill'
-          AND sr.status = 'running'
           AND sr.user_id = ${userId}::uuid
           AND sr.input ->> 'mandalaId' = ${mandalaId}
-          AND sr.started_at > now() - interval '3 minutes'
-          AND NOT (COALESCE(sr.output, '{}'::jsonb) ? c.value)`;
-      return rows.map((r) => r.cell);
+          AND (
+            (sr.status = 'running'
+              AND sr.started_at > now() - interval '3 minutes'
+              AND NOT (COALESCE(sr.output, '{}'::jsonb) ? c.value))
+            OR (sr.status = 'completed'
+              AND sr.ended_at > now() - interval '60 seconds')
+          )`;
+      return {
+        pending: rows.filter((r) => r.status === 'running').map((r) => r.cell),
+        recentlyCompleted: rows.filter((r) => r.status === 'completed').map((r) => r.cell),
+      };
     } catch {
-      return [];
+      return { pending: [], recentlyCompleted: [] };
     }
   }
 

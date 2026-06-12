@@ -795,6 +795,23 @@ function AuthenticatedApp() {
     return () => clearInterval(timer);
   }, [fillPending, effectiveMandalaId, queryClient]);
 
+  // CP500+ C-fix (completed-grace) — a FAST fill run (measured 17s) can finish
+  // BEFORE this page ever fetches mandalaMeta: fillPendingCells is then already
+  // empty, the poll above never starts, and the card cache stays stale until a
+  // manual refresh. When the meta lands inside the 60s completed-grace window,
+  // invalidate the card sources ONCE (ref-guarded per mandala — the refetched
+  // meta may still carry the grace cells, which must not loop).
+  const fillCompletedCells = mandalaMeta?.fillCompletedCells ?? [];
+  const fillGraceInvalidatedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!effectiveMandalaId || fillPending) return; // poll path already refreshes
+    if (fillCompletedCells.length === 0) return;
+    if (fillGraceInvalidatedFor.current === effectiveMandalaId) return;
+    fillGraceInvalidatedFor.current = effectiveMandalaId;
+    queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.localCards.all });
+  }, [fillCompletedCells.length, fillPending, effectiveMandalaId, queryClient]);
+
   // Shared MandalaGrid element
   const mandalaGridElement = () => (
     <MandalaGrid

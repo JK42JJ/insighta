@@ -433,6 +433,8 @@ interface MandalaResponse {
   cardCount?: number;
   // CP499+ pool-serve — cells with an async deficit-fill in flight (W1b pulse).
   fillPendingCells?: number[];
+  // CP500+ — cells whose fill run completed <60s ago (grace: invalidate once).
+  fillCompletedCells?: number[];
   createdAt: string;
   updatedAt: string;
   levels: Array<{
