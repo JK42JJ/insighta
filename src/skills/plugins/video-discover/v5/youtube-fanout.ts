@@ -25,6 +25,7 @@ import { buildRuleBasedQueriesSync, type SearchQuery } from '../v2/keyword-build
 import { buildLLMQueriesPerCell, type QueryGenMeta } from './llm-query-gen';
 import { translateQueriesToEn } from './en-query-translate';
 import { getV5Config } from './config';
+import { logChannelDistribution } from '../diversity-guard';
 import { detectLanguage } from '@/utils/detect-language';
 import { MERGED_GEN_MODEL } from '@/prompts/mandala-with-queries-generator';
 import {
@@ -724,6 +725,12 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
       fulfilled: r.status === 'fulfilled',
     };
   });
+
+  // CP500+ diversity funnel observability — the recruitment-stage channel
+  // distribution was NOT persisted anywhere (CP500 diagnosis known-limit:
+  // pick-stage 22% top3 was measurable via recommendation_cache, recruitment
+  // was not). One line, unconditional, no flag.
+  logChannelDistribution('v5 fanout recruit', Array.from(seen.values()));
 
   return {
     candidates: Array.from(seen.values()),

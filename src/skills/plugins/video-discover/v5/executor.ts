@@ -25,6 +25,8 @@ import {
 } from './youtube-fanout';
 import type { QueryGenMeta } from './llm-query-gen';
 import { getV5Config } from './config';
+import { dedupeSeries, softChannelCap } from '../diversity-guard';
+import { loadDiversityGuardConfig } from '@/config/diversity-guard';
 import { getVideoPicker } from '@/modules/llm-picker/registry';
 import { getLlmPickerConfig } from '@/config/llm-picker';
 import { isShortCached, SHORT_MAX_DURATION_SEC } from '@/modules/video-pool/is-short';
@@ -169,9 +171,23 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
 
   // 2. exclude BEFORE LLM (save LLM tokens)
   const tExclude0 = Date.now();
-  const survivors = fanout.candidates.filter((c) => !input.excludeVideoIds.has(c.videoId));
+  let survivors = fanout.candidates.filter((c) => !input.excludeVideoIds.has(c.videoId));
   const afterExcludeFilter = survivors.length;
   stage.excludeMs = Date.now() - tExclude0;
+
+  // 2.5 CP500+ diversity guard (UX 원칙 2 다양성 축) — same-channel series
+  // episodes collapse to the latest one, then the cap-th+ card per channel is
+  // DEMOTED within its cell bucket (soft — a thin-supply single-channel cell
+  // keeps everything). Runs before the picker so BOTH picker modes consume the
+  // diversified order. Flag-gated; unset = 기존 동작.
+  const diversity = loadDiversityGuardConfig(input.env);
+  if (diversity.enabled && survivors.length > 0) {
+    const d = dedupeSeries(survivors, { simThreshold: diversity.seriesSim });
+    survivors = softChannelCap(d.kept, diversity.channelSoftCap);
+    if (d.dropped > 0) {
+      log.info(`v5 diversity guard: series-dedup dropped ${d.dropped}/${afterExcludeFilter}`);
+    }
+  }
 
   if (survivors.length === 0) {
     log.info(
