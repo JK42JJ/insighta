@@ -36,10 +36,15 @@ import { loadRelevanceRubricConfig } from '@/config/relevance-rubric';
 import { tsvectorKeywordCandidatesPerCell } from '@/skills/plugins/video-discover/v3/hybrid-rerank';
 import {
   resolveSearchApiKeys,
+  resolveVideosApiKeys,
   searchVideos,
   titleHitsBlocklist,
   titleIndicatesShorts,
+  videosBatch,
 } from '@/skills/plugins/video-discover/v2/youtube-client';
+import { isShortCached, SHORT_MAX_DURATION_SEC } from '@/modules/video-pool/is-short';
+import { getV5Config } from '@/skills/plugins/video-discover/v5/config';
+import { parseIsoDurationSeconds } from '@/skills/plugins/video-discover/v5/executor';
 import { isOffLanguageTitleToggled } from '@/skills/plugins/video-discover/v5/youtube-fanout';
 import { dedupeSeries, softChannelCap } from '@/skills/plugins/video-discover/diversity-guard';
 import { loadDiversityGuardConfig } from '@/config/diversity-guard';
@@ -76,6 +81,8 @@ export interface GateCandidate {
   channelTitle: string | null;
   thumbnail: string | null;
   publishedAt: Date | null;
+  /** CP500+ shorts gate — pool rows carry it; live rows get it via videos.list. */
+  durationSec?: number | null;
 }
 
 interface PassedCandidate extends GateCandidate {
@@ -91,6 +98,8 @@ export interface PoolServeCellResult {
   liveRecruited: number;
   livePassed: number;
   inserted: number;
+  /** CP500+ — dropped by the replicated v5 shorts gate (duration<180 + URL probe). */
+  shortsDropped: number;
 }
 
 /** One deficit cell: 1차 pool → 2차 live fallback → 3차 honest-empty. */
@@ -107,6 +116,7 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
     liveRecruited: 0,
     livePassed: 0,
     inserted: 0,
+    shortsDropped: 0,
   };
 
   try {
@@ -142,6 +152,36 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
       if (!diversity.enabled) return cands;
       const d = dedupeSeries(cands, { simThreshold: diversity.seriesSim, against });
       return softChannelCap(d.kept, diversity.channelSoftCap);
+    };
+
+    // CP500+ shorts gate — EXACT replica of the v5 placement gate
+    // (v5/executor.ts step 6): duration>=180 short-circuits with no HTTP;
+    // <180 (or unknown) probes the /shorts/ URL via isShortCached; probes
+    // still in-flight at the shared deadline fail OPEN (kept) — identical
+    // semantics, same knob (V5_SHORT_PROBE_DEADLINE_MS). This path shipped
+    // (#907) with only the title heuristic — the guard-replication gap
+    // (troubleshooting LEVEL-2, recurrence=2 with the channel-cap loss).
+    const shortDeadlineMs = getV5Config(process.env).shortProbeDeadlineMs;
+    const dropShorts = async (cands: GateCandidate[]): Promise<GateCandidate[]> => {
+      if (cands.length === 0 || shortDeadlineMs <= 0) return cands;
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), shortDeadlineMs);
+      try {
+        const flags = await Promise.all(
+          cands.map(async (c) => {
+            if (c.durationSec != null && c.durationSec >= SHORT_MAX_DURATION_SEC) return false;
+            const { isShort } = await isShortCached(c.youtubeVideoId, c.durationSec ?? null, {
+              signal: ctl.signal,
+            });
+            return isShort;
+          })
+        );
+        const kept = cands.filter((_, i) => !flags[i]);
+        result.shortsDropped += cands.length - kept.length;
+        return kept;
+      } finally {
+        clearTimeout(timer);
+      }
     };
 
     /** Semantic gate: vmr cache first, score on miss, threshold; early-exit. */
@@ -197,18 +237,21 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
     result.recruited = recruits.length;
     const passed: PassedCandidate[] = [];
     await gate(
-      applyDiversity(
-        hygienic(
-          recruits.map((c) => ({
-            youtubeVideoId: c.videoId,
-            title: c.title,
-            description: c.description,
-            channelTitle: c.channelName,
-            thumbnail: c.thumbnail,
-            publishedAt: c.publishedAt,
-          }))
-        ),
-        []
+      await dropShorts(
+        applyDiversity(
+          hygienic(
+            recruits.map((c) => ({
+              youtubeVideoId: c.videoId,
+              title: c.title,
+              description: c.description,
+              channelTitle: c.channelName,
+              thumbnail: c.thumbnail,
+              publishedAt: c.publishedAt,
+              durationSec: c.durationSec,
+            }))
+          ),
+          []
+        )
       ),
       passed
     );
@@ -237,8 +280,30 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
           }))
         );
         result.liveRecruited = liveCands.length;
+        // CP500+ — live candidates carry NO duration (search.list snippet
+        // only); fetch it with ONE videos.list call (quota 1 unit) so the
+        // replicated shorts gate can run the same duration<180 + probe
+        // semantics as the v5 placement path.
+        if (liveCands.length > 0) {
+          try {
+            const metas = await videosBatch({
+              videoIds: liveCands.map((c) => c.youtubeVideoId),
+              apiKey: resolveVideosApiKeys(process.env),
+            });
+            const durById = new Map(
+              metas.map((m) => [m.id, parseIsoDurationSeconds(m.contentDetails?.duration)])
+            );
+            for (const c of liveCands) c.durationSec = durById.get(c.youtubeVideoId) ?? null;
+          } catch (err) {
+            // Duration fetch failure ⇒ unknown durations ⇒ the gate probes
+            // each id (fail-open on probe timeout) — never fails the job.
+            log.warn(
+              `pool-serve live videos.list failed (gate falls back to probe-only): ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        }
         const before = passed.length;
-        await gate(applyDiversity(liveCands, passed), passed);
+        await gate(await dropShorts(applyDiversity(liveCands, passed)), passed);
         result.livePassed = passed.length - before;
       } catch (err) {
         // Live failure never fails the job — pool passes still insert.
