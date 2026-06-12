@@ -38,13 +38,17 @@ export interface DiversityCandidate {
 // ── episode tokens ──────────────────────────────────────────────────────────
 
 // Order matters: compound forms ([6-2강], 5주 차) before bare N강/N회.
+// NOTE: \b does NOT work after Hangul (Hangul ∉ \w, so 강+":" is non-word/
+// non-word = no boundary) — use a Hangul negative lookahead instead, which
+// also keeps "N강의/N부작" (강의=lecture) from false-matching.
 const EPISODE_PATTERNS: RegExp[] = [
   /[[(]\s*\d+\s*[-–]\s*\d+\s*강?\s*[\])]/g, // [6-2강], (5-1)
   /\d+\s*주\s*차/g, // 5주 차
-  /\d+\s*강\b/g,
-  /\d+\s*부\b/g,
-  /\d+\s*회\b/g,
-  /\d+\s*화\b/g,
+  /\d+\s*회\s*차/g, // 3회차
+  /\d+\s*강(?![가-힣])/g,
+  /\d+\s*부(?![가-힣])/g,
+  /\d+\s*회(?![가-힣])/g,
+  /\d+\s*화(?![가-힣])/g,
   /\bEP\.?\s*\d+\b/gi,
   /\bPart\s*\d+\b/gi,
   /#\d+\b/g,
@@ -94,8 +98,9 @@ export function episodeOrdinals(title: string): number[] {
     }
   };
   grab(/(\d+)\s*주\s*차/g);
-  grab(/(\d+)\s*강\b/g);
-  grab(/(\d+)\s*[부회화]\b/g);
+  grab(/(\d+)\s*회\s*차/g);
+  grab(/(\d+)\s*강(?![가-힣])/g);
+  grab(/(\d+)\s*[부회화](?![가-힣])/g);
   grab(/\bEP\.?\s*(\d+)\b/gi);
   grab(/\bPart\s*(\d+)\b/gi);
   grab(/[[(]\s*(\d+)\s*[-–]\s*(\d+)/g);
@@ -176,7 +181,6 @@ export function dedupeSeries<T extends DiversityCandidate>(
     bestIdx: number; // representative (latest episode)
     members: number[];
   }
-  const groups: Group[] = [];
   const groupOf = new Map<number, Group>();
   const markerGroups = new Map<string, Group>();
   const simGroupsByChannel = new Map<string, Group[]>();
@@ -204,9 +208,6 @@ export function dedupeSeries<T extends DiversityCandidate>(
         simGroupsByChannel.set(ch, list);
       }
     }
-    if (g.members.length === 0 && g.firstIdx === i) {
-      groups.push(g);
-    }
     g.members.push(i);
     groupOf.set(i, g);
     if (i !== g.bestIdx && isLaterEpisode(c, candidates[g.bestIdx]!)) {
@@ -227,45 +228,21 @@ export function dedupeSeries<T extends DiversityCandidate>(
     });
   };
 
-  const kept: T[] = [];
-  let dropped = 0;
+  // Emit walk — the series representative occupies its group's FIRST slot
+  // (stable for downstream rank-order consumers); other members drop.
+  const emit: T[] = [];
   candidates.forEach((c, i) => {
     const g = groupOf.get(i);
     if (g && g.members.length > 1) {
-      if (i !== g.bestIdx) {
-        dropped += 1;
-        return;
+      if (i === g.firstIdx) {
+        const rep = candidates[g.bestIdx]!;
+        if (!inAgainstSeries(rep)) emit.push(rep);
       }
-    }
-    if (inAgainstSeries(c)) {
-      dropped += 1;
       return;
     }
-    kept.push(c);
+    if (!inAgainstSeries(c)) emit.push(c);
   });
-
-  // Stable positioning: representative should sit at the group's first slot.
-  // Rebuild order: walk original indices; emit representative at firstIdx.
-  if (dropped > 0) {
-    const emit: T[] = [];
-    const emitted = new Set<number>();
-    candidates.forEach((c, i) => {
-      const g = groupOf.get(i);
-      if (g && g.members.length > 1) {
-        if (i === g.firstIdx && !emitted.has(g.bestIdx)) {
-          const rep = candidates[g.bestIdx]!;
-          if (!inAgainstSeries(rep)) {
-            emit.push(rep);
-            emitted.add(g.bestIdx);
-          }
-        }
-        return;
-      }
-      if (!inAgainstSeries(c)) emit.push(c);
-    });
-    return { kept: emit, dropped: candidates.length - emit.length };
-  }
-  return { kept, dropped };
+  return { kept: emit, dropped: candidates.length - emit.length };
 }
 
 // ── soft channel cap ────────────────────────────────────────────────────────
