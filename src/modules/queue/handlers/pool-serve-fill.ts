@@ -111,8 +111,9 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
 
   try {
     const need = Math.min(p.deficit, cfg.maxFillPerCell);
+    // CP500+ 축 분리: rubric = PURE 3-axis score (no freshness term). The
+    // volatile-only recency quota is a PLACEMENT-layer follow-up, not here.
     const rubric = loadRelevanceRubricConfig().enabled;
-    const volatility = rubric ? await fetchVolatility(p.mandalaId) : null;
 
     const owned = await prisma.$queryRaw<{ youtube_video_id: string }[]>`
       SELECT yv.youtube_video_id
@@ -162,7 +163,7 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
               centerGoal: p.centerGoal,
               cellGoal: p.cellGoal,
               language: p.language,
-              ...(rubric ? { rubric: true, publishedAt: c.publishedAt, volatility } : {}),
+              ...(rubric ? { rubric: true } : {}),
             });
             result.scored += 1;
             if (!r.ok) {
@@ -307,17 +308,6 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
         `pool-serve run record failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
       )
     );
-  }
-}
-
-async function fetchVolatility(mandalaId: string): Promise<string | null> {
-  const prisma = getPrismaClient();
-  try {
-    const rows = await prisma.$queryRaw<{ volatility: string | null }[]>`
-      SELECT volatility FROM user_mandalas WHERE id = ${mandalaId}::uuid`;
-    return rows[0]?.volatility ?? null;
-  } catch {
-    return null; // fail-open — recency bonus simply stays 0
   }
 }
 

@@ -198,12 +198,9 @@ describe('CP499+ rubric flag-on context fetch ($queryRaw, fail-open)', () => {
     delete process.env['RELEVANCE_RUBRIC_ENABLED'];
   });
 
-  test('flag on: context row -> compute called with rubric + language/volatility/publishedAt', async () => {
+  test('flag on: context row -> compute called with rubric + language ONLY (CP500+ 축 분리 — no freshness inputs)', async () => {
     process.env['RELEVANCE_RUBRIC_ENABLED'] = 'true';
-    const published = new Date('2026-06-01T00:00:00Z');
-    mockQueryRaw.mockResolvedValueOnce([
-      { language: 'ko', volatility: 'volatile', published_at: published },
-    ]);
+    mockQueryRaw.mockResolvedValueOnce([{ language: 'ko' }]);
     mockCompute.mockResolvedValueOnce({ ok: true, relevancePct: 81 });
     const handler = await getHandler();
 
@@ -213,13 +210,11 @@ describe('CP499+ rubric flag-on context fetch ($queryRaw, fail-open)', () => {
     });
 
     expect(mockCompute).toHaveBeenCalledWith(
-      expect.objectContaining({
-        rubric: true,
-        language: 'ko',
-        volatility: 'volatile',
-        publishedAt: published,
-      })
+      expect.objectContaining({ rubric: true, language: 'ko' })
     );
+    const rubricArg = mockCompute.mock.calls[0][0] as Record<string, unknown>;
+    expect(rubricArg['volatility']).toBeUndefined();
+    expect(rubricArg['publishedAt']).toBeUndefined();
     expect(mockUvsUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'row-uvs-9' } })
     );

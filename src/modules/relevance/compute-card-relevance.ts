@@ -26,7 +26,6 @@ import {
   validateV2Quick,
   V2QuickValidationError,
 } from '@/modules/skills/rich-summary-v2-quick-prompt';
-import { applyRecency, recencyBonus } from '@/modules/relevance/relevance-composition';
 // CP499+ lang 정합 (#902): the prompt language follows the MANDALA language
 // (caller passes it). The previous LOCAL ratio-based detector (a 3rd variant of
 // detectLanguage in the codebase) is removed — fallback when the caller has no
@@ -63,23 +62,20 @@ export interface CardRelevanceInput {
   language?: 'ko' | 'en';
   /**
    * CP499+ rubric mode (RELEVANCE_RUBRIC_ENABLED — caller reads config; this
-   * module stays config-free). 3-axis LLM scoring + code composition + recency.
+   * module stays config-free). PURE 3-axis LLM scoring + code composition.
    * Absent/false ⇒ legacy single-axis behavior, byte-identical prompt.
+   * CP500+ 축 분리 (James 2026-06-12): freshness is NOT a score axis —
+   * relevance ≠ recency. The volatile-only 70/30 recency QUOTA lives at the
+   * PLACEMENT layer (separate follow-up; uses user_mandalas.volatility there).
    */
   rubric?: boolean;
-  /** Video published_at — recency-bonus input (rubric mode, volatile only). */
-  publishedAt?: Date | null;
-  /** Mandala volatility ('volatile' | 'evergreen' | null) — recency gate. */
-  volatility?: string | null;
 }
 
-/** Rubric-mode raw axes + bonus, returned for logging (relevance_detail = log-only for now). */
+/** Rubric-mode raw axes, returned for logging (relevance_detail = log-only for now). */
 export interface CardRelevanceDetail {
   cellFitPct: number | null;
   goalContributionPct: number;
   actionabilityPct: number;
-  basePct: number;
-  recencyBonus: number;
 }
 
 export type CardRelevanceResult =
@@ -153,19 +149,16 @@ export async function computeCardRelevance(
     const parsed = validateV2Quick(json, { rubric: input.rubric });
     const fit = parsed.analysis.mandala_fit;
     if (input.rubric && fit.rubric) {
-      // Composite came from composeRubricScore (in the validator). Recency:
-      // volatile-only additive bonus, capped at 100 — evergreen / NULL
-      // volatility / NULL published_at are all 0 = unchanged.
-      const bonus = recencyBonus(input.publishedAt, input.volatility);
+      // Composite came from composeRubricScore (in the validator) — PURE
+      // 3-axis, no freshness term (CP500+ 축 분리: relevance ≠ recency; the
+      // volatile-only recency quota is a placement-layer follow-up).
       return {
         ok: true,
-        relevancePct: applyRecency(fit.mandala_relevance_pct, bonus),
+        relevancePct: fit.mandala_relevance_pct,
         detail: {
           cellFitPct: fit.rubric.cell_fit_pct,
           goalContributionPct: fit.rubric.goal_contribution_pct,
           actionabilityPct: fit.rubric.actionability_pct,
-          basePct: fit.mandala_relevance_pct,
-          recencyBonus: bonus,
         },
       };
     }
