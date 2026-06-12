@@ -41,6 +41,8 @@ import {
   titleIndicatesShorts,
 } from '@/skills/plugins/video-discover/v2/youtube-client';
 import { isOffLanguageTitleToggled } from '@/skills/plugins/video-discover/v5/youtube-fanout';
+import { dedupeSeries, softChannelCap } from '@/skills/plugins/video-discover/diversity-guard';
+import { loadDiversityGuardConfig } from '@/config/diversity-guard';
 import { logger } from '@/utils/logger';
 import { getJobQueue } from '../manager';
 import { JOB_NAMES, POOL_SERVE_FILL_RETRY_OPTIONS, type PoolServeFillPayload } from '../types';
@@ -129,6 +131,18 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
           !isOffLanguageTitleToggled(c.title, p.language, false)
       );
 
+    // CP500+ diversity guard — series-dedup BEFORE the gate (saves scoring
+    // calls), soft channel cap reorders the scoring order. `against` makes the
+    // live pass series-aware of what the pool pass already accepted. Known
+    // limit: already-OWNED cards' titles are not loaded (id-only exclude), so
+    // cross-run series dups are out of scope here (backlog).
+    const diversity = loadDiversityGuardConfig();
+    const applyDiversity = (cands: GateCandidate[], against: GateCandidate[]): GateCandidate[] => {
+      if (!diversity.enabled) return cands;
+      const d = dedupeSeries(cands, { simThreshold: diversity.seriesSim, against });
+      return softChannelCap(d.kept, diversity.channelSoftCap);
+    };
+
     /** Semantic gate: vmr cache first, score on miss, threshold; early-exit. */
     const gate = async (cands: GateCandidate[], passed: PassedCandidate[]): Promise<void> => {
       for (let i = 0; i < cands.length && passed.length < need; i += SCORE_BURST_SIZE) {
@@ -182,15 +196,18 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
     result.recruited = recruits.length;
     const passed: PassedCandidate[] = [];
     await gate(
-      hygienic(
-        recruits.map((c) => ({
-          youtubeVideoId: c.videoId,
-          title: c.title,
-          description: c.description,
-          channelTitle: c.channelName,
-          thumbnail: c.thumbnail,
-          publishedAt: c.publishedAt,
-        }))
+      applyDiversity(
+        hygienic(
+          recruits.map((c) => ({
+            youtubeVideoId: c.videoId,
+            title: c.title,
+            description: c.description,
+            channelTitle: c.channelName,
+            thumbnail: c.thumbnail,
+            publishedAt: c.publishedAt,
+          }))
+        ),
+        []
       ),
       passed
     );
@@ -220,7 +237,7 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
         );
         result.liveRecruited = liveCands.length;
         const before = passed.length;
-        await gate(liveCands, passed);
+        await gate(applyDiversity(liveCands, passed), passed);
         result.livePassed = passed.length - before;
       } catch (err) {
         // Live failure never fails the job — pool passes still insert.
