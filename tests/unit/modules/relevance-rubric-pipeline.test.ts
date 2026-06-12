@@ -1,24 +1,21 @@
 /**
- * CP499+ score pipeline — R1 rubric + volatile-only recency + lang 정합.
+ * CP499+ score pipeline — R1 PURE 3-axis rubric + lang 정합 (CP500+ 축 분리).
  *
  * Locks the pipeline invariants:
  *   - composition is CODE-side (weights are PROVISIONAL gate targets);
- *   - recency bonus fires ONLY for volatile + known published_at (additive,
- *     never a penalty; evergreen / NULL volatility / NULL date = 0);
+ *   - the score is PURE 3-axis — NO freshness term (James 2026-06-12 축 분리:
+ *     relevance ≠ recency; the volatile-only 70/30 recency QUOTA is a
+ *     placement-layer follow-up, score-independent);
  *   - rubric prompt actually swaps the mandala_fit block (guards against a
  *     silent .replace no-op on template drift) and the legacy prompt is
  *     byte-identical to pre-CP499+ output;
  *   - validator parses both shapes and composes in rubric mode;
- *   - merged-gen prompt asks the volatility judgement in BOTH languages.
+ *   - merged-gen prompt asks the volatility judgement in BOTH languages
+ *     (volatility persistence STAYS — the placement-layer quota consumes it).
  */
 
-import {
-  composeRubricScore,
-  recencyBonus,
-  applyRecency,
-  RECENCY_FRESH_BONUS,
-  RECENCY_MID_BONUS,
-} from '@/modules/relevance/relevance-composition';
+import * as composition from '@/modules/relevance/relevance-composition';
+import { composeRubricScore } from '@/modules/relevance/relevance-composition';
 import {
   buildV2QuickPrompt,
   validateV2Quick,
@@ -26,7 +23,6 @@ import {
 } from '@/modules/skills/rich-summary-v2-quick-prompt';
 import { buildMandalaWithQueriesPrompt } from '@/prompts/mandala-with-queries-generator';
 import { loadRelevanceRubricConfig } from '@/config/relevance-rubric';
-import { MS_PER_MONTH_AVG } from '@/utils/time-constants';
 
 describe('composeRubricScore (PROVISIONAL weights — gate-validation targets)', () => {
   it('weights 0.4/0.4/0.2 with a cell goal', () => {
@@ -60,30 +56,11 @@ describe('composeRubricScore (PROVISIONAL weights — gate-validation targets)',
   });
 });
 
-describe('recencyBonus (volatile-only, additive)', () => {
-  const now = new Date('2026-06-11T00:00:00Z');
-  const monthsAgo = (m: number) => new Date(now.getTime() - m * MS_PER_MONTH_AVG);
-
-  it('volatile + fresh (<6m) → +5', () => {
-    expect(recencyBonus(monthsAgo(5), 'volatile', now)).toBe(RECENCY_FRESH_BONUS);
-  });
-  it('volatile + mid (6-12m) → +2', () => {
-    expect(recencyBonus(monthsAgo(11), 'volatile', now)).toBe(RECENCY_MID_BONUS);
-  });
-  it('volatile + old (>12m) → 0', () => {
-    expect(recencyBonus(monthsAgo(13), 'volatile', now)).toBe(0);
-  });
-  it('evergreen / NULL volatility / NULL published_at → 0 (unchanged behavior)', () => {
-    expect(recencyBonus(monthsAgo(1), 'evergreen', now)).toBe(0);
-    expect(recencyBonus(monthsAgo(1), null, now)).toBe(0);
-    expect(recencyBonus(null, 'volatile', now)).toBe(0);
-  });
-  it('future-dated (premiere) counts as fresh', () => {
-    expect(recencyBonus(monthsAgo(-1), 'volatile', now)).toBe(RECENCY_FRESH_BONUS);
-  });
-  it('applyRecency caps at 100', () => {
-    expect(applyRecency(98, 5)).toBe(100);
-    expect(applyRecency(60, 2)).toBe(62);
+describe('축 분리 — NO freshness term in the score module (CP500+ regression pin)', () => {
+  it('relevance-composition exports no recency surface', () => {
+    const exported = Object.keys(composition);
+    expect(exported).toContain('composeRubricScore');
+    expect(exported.filter((k) => /recency/i.test(k))).toEqual([]);
   });
 });
 

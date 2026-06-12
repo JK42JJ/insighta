@@ -54,10 +54,10 @@ async function handleEnrichRelevanceQuick(job: PgBoss.Job<RelevanceQuickPayload>
   const { table, rowId, title, description, centerGoal, cellGoal } = job.data;
 
   // CP499+ score pipeline (RELEVANCE_RUBRIC_ENABLED): fetch the row's mandala
-  // language/volatility + video published_at and run the 3-axis rubric.
+  // language and run the PURE 3-axis rubric (CP500+ 축 분리: no freshness term
+  // — the volatile-only recency quota is a placement-layer follow-up).
   // Fail-open: a context-fetch failure falls back to the legacy single-axis
-  // call. Flag off ⇒ legacy call with NO new selects (volatility column may
-  // not exist yet — prod DDL is a separate per-step approval).
+  // call. Flag off ⇒ legacy call with NO new selects.
   const rubricEnabled = loadRelevanceRubricConfig().enabled;
   const context = rubricEnabled ? await fetchRelevanceContext(table, rowId, centerGoal) : null;
 
@@ -70,8 +70,6 @@ async function handleEnrichRelevanceQuick(job: PgBoss.Job<RelevanceQuickPayload>
       ? {
           rubric: true,
           language: context.language,
-          publishedAt: context.publishedAt,
-          volatility: context.volatility,
         }
       : {}),
   });
@@ -118,16 +116,14 @@ async function handleEnrichRelevanceQuick(job: PgBoss.Job<RelevanceQuickPayload>
 
 export interface RelevanceContext {
   language: 'ko' | 'en';
-  publishedAt: Date | null;
-  volatility: string | null;
 }
 
 /**
- * CP499+ — per-row scoring context: mandala language (#902 정합) + volatility
- * (recency gate) + video published_at (recency input). Called ONLY when the
- * rubric flag is on (the volatility column must exist by then — DDL is a
- * deploy precondition for the flag). Returns null on any failure so the
- * caller falls back to legacy single-axis scoring (fail-open).
+ * CP499+ — per-row scoring context: mandala language (#902 정합). CP500+ 축
+ * 분리 removed volatility/published_at from here (freshness is not a score
+ * axis; the placement-layer recency quota reads user_mandalas.volatility in
+ * its own follow-up). Returns null on any failure so the caller falls back
+ * to legacy single-axis scoring (fail-open).
  */
 export async function fetchRelevanceContext(
   table: 'uvs' | 'ulc',
@@ -135,25 +131,17 @@ export async function fetchRelevanceContext(
   goalText?: string
 ): Promise<RelevanceContext | null> {
   const prisma = getPrismaClient();
-  // $queryRaw (not the typed client): the volatility column ships in this PR's
-  // schema but the shared generated client may predate it, and prod gets the
-  // column via the manual DDL step — raw SQL keeps this path decoupled from
-  // client-generation state. Read-only single-row lookup, tagged template.
+  // Read-only single-row lookup, tagged template.
   try {
     const rows =
       table === 'uvs'
-        ? await prisma.$queryRaw<
-            { language: string | null; volatility: string | null; published_at: Date | null }[]
-          >`
-            SELECT m.language, m.volatility, yv.published_at
+        ? await prisma.$queryRaw<{ language: string | null }[]>`
+            SELECT m.language
             FROM user_video_states uvs
             LEFT JOIN user_mandalas m ON m.id = uvs.mandala_id
-            LEFT JOIN youtube_videos yv ON yv.id = uvs.video_id
             WHERE uvs.id = ${rowId}::uuid`
-        : await prisma.$queryRaw<
-            { language: string | null; volatility: string | null; published_at: Date | null }[]
-          >`
-            SELECT m.language, m.volatility, NULL::timestamptz AS published_at
+        : await prisma.$queryRaw<{ language: string | null }[]>`
+            SELECT m.language
             FROM user_local_cards ulc
             LEFT JOIN user_mandalas m ON m.id = ulc.mandala_id
             WHERE ulc.id = ${rowId}::uuid`;
@@ -161,9 +149,6 @@ export async function fetchRelevanceContext(
     if (!row) return null;
     return {
       language: resolveLanguage(row.language, goalText ?? null),
-      // ulc rows have no clean youtube_videos FK — recency skipped (0 bonus).
-      publishedAt: row.published_at ?? null,
-      volatility: row.volatility ?? null,
     };
   } catch (err) {
     logger.warn('enrich-relevance-quick: context fetch failed — legacy fallback', {

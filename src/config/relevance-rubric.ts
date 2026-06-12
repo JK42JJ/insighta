@@ -1,20 +1,17 @@
 /**
  * Relevance rubric config (CP499+ diagnosis A score pipeline).
  *
- * Single feature flag gates the WHOLE new score pipeline as one unit:
- * - 3-axis rubric scoring (cell_fit / goal_contribution / actionability,
- *   composed in code — see src/modules/relevance/relevance-composition.ts)
- * - volatile-only recency bonus (needs user_mandalas.volatility)
- * - volatility persistence from merged-gen output
+ * Single feature flag gates the new score pipeline as one unit:
+ * - PURE 3-axis rubric scoring (cell_fit / goal_contribution / actionability,
+ *   composed in code — see src/modules/relevance/relevance-composition.ts).
+ *   CP500+ 축 분리 (James 2026-06-12): NO freshness term in the score —
+ *   relevance ≠ recency; the volatile-only 70/30 recency QUOTA is a
+ *   placement-layer follow-up (score-independent).
+ * - volatility persistence from merged-gen output (STAYS — the placement-layer
+ *   quota is its consumer).
  *
  * Default: OFF (unset = legacy single-axis scoring, byte-identical prompt).
  * Rollback = flip env; no code revert.
- *
- * ⚠️ Deploy-order precondition: the `user_mandalas.volatility` column DDL
- * (prisma/migrations/score-pipeline/001) must be applied to an environment
- * BEFORE this flag is turned on there — the worker/persist paths select the
- * column only when enabled. Prod DDL execution is a separate per-step
- * approval (NOT automatic with the PR merge).
  */
 
 import { z } from 'zod';
