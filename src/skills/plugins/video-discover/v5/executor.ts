@@ -541,7 +541,7 @@ function assembleCard(
   };
 }
 
-function parseIsoDurationSeconds(iso: string | null | undefined): number | null {
+export function parseIsoDurationSeconds(iso: string | null | undefined): number | null {
   if (!iso) return null;
   const m = iso.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
   if (!m) return null;

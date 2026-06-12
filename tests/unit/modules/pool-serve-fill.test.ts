@@ -66,8 +66,29 @@ jest.mock('@/skills/plugins/video-discover/v2/youtube-client', () => {
     ...actual,
     searchVideos: (...a: unknown[]) => mockSearchVideos(...a),
     resolveSearchApiKeys: () => ['key-1'],
+    resolveVideosApiKeys: () => ['vkey-1'],
+    videosBatch: (...a: unknown[]) => mockVideosBatch(...a),
   };
 });
+
+// CP500+ shorts gate replica deps — probe is stubbed (no HTTP in unit tests);
+// duration>=180 short-circuits in the handler itself so the stub is only hit
+// for <180/unknown candidates.
+const mockVideosBatch = jest.fn().mockResolvedValue([]);
+const mockIsShortCached = jest
+  .fn()
+  .mockResolvedValue({ isShort: false, signal: 'probe_2xx_watch' });
+jest.mock('@/modules/video-pool/is-short', () => ({
+  SHORT_MAX_DURATION_SEC: 180,
+  isShortCached: (...a: unknown[]) => mockIsShortCached(...a),
+}));
+jest.mock('@/skills/plugins/video-discover/v5/config', () => ({
+  getV5Config: () => ({ shortProbeDeadlineMs: 4000 }),
+}));
+jest.mock('@/skills/plugins/video-discover/v5/executor', () => ({
+  parseIsoDurationSeconds: (iso: string | null | undefined) =>
+    iso === 'PT45S' ? 45 : iso === 'PT10M' ? 600 : null,
+}));
 
 jest.mock('@/utils/logger', () => ({
   logger: {
@@ -284,5 +305,79 @@ describe('dispatchPoolServeForMandala', () => {
     expect(mockBossInstance.send).toHaveBeenCalledTimes(2);
     const job1 = mockBossInstance.send.mock.calls[0][1];
     expect(job1).toMatchObject({ cellIndex: 1, deficit: 2, cellGoal: '모니터링' });
+  });
+});
+
+// ── CP500+ shorts gate (v5 placement gate replica) ───────────────────────────
+
+describe('CP500+ shorts gate — guard-replication fix', () => {
+  it('pool candidate <180s flagged short by the probe is dropped BEFORE scoring', async () => {
+    mockPoolCandidates.mockResolvedValueOnce([
+      { ...poolCand('vidS1234567', '쿠버네티스 1분 요약'), durationSec: 45 },
+    ]);
+    mockIsShortCached.mockResolvedValueOnce({ isShort: true, signal: 'probe_redirect_shorts' });
+    mockSearchVideos.mockResolvedValueOnce([]); // live empty
+    const handler = await getHandler();
+
+    await handler({ id: 'js1', data: basePayload });
+
+    expect(mockIsShortCached).toHaveBeenCalledWith('vidS1234567', 45, expect.anything());
+    expect(mockCompute).not.toHaveBeenCalled(); // dropped pre-gate (no Haiku spend)
+    expect(mockUvsCreateMany).not.toHaveBeenCalled();
+  });
+
+  it('duration>=180 short-circuits — kept WITHOUT a probe call (v5 semantics)', async () => {
+    mockPoolCandidates.mockResolvedValueOnce([
+      { ...poolCand('vidL1234567', '쿠버네티스 풀강의'), durationSec: 600 },
+    ]);
+    mockCompute.mockResolvedValueOnce({ ok: true, relevancePct: 80 });
+    const handler = await getHandler();
+
+    await handler({ id: 'js2', data: basePayload });
+
+    expect(mockIsShortCached).not.toHaveBeenCalled();
+    expect(mockUvsCreateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('live candidates get durations via ONE videos.list call, then the SAME gate drops shorts', async () => {
+    mockPoolCandidates.mockResolvedValueOnce([]); // pool empty → live fires
+    mockSearchVideos.mockResolvedValueOnce([
+      { id: { videoId: 'liveShort01' }, snippet: { title: '도커 쇼츠 모음' } },
+      { id: { videoId: 'liveLong001' }, snippet: { title: '도커 운영 강의 풀버전' } },
+    ]);
+    mockVideosBatch.mockResolvedValueOnce([
+      { id: 'liveShort01', contentDetails: { duration: 'PT45S' } },
+      { id: 'liveLong001', contentDetails: { duration: 'PT10M' } },
+    ]);
+    mockIsShortCached.mockResolvedValueOnce({ isShort: true, signal: 'probe_redirect_shorts' });
+    mockCompute.mockResolvedValueOnce({ ok: true, relevancePct: 75 });
+    const handler = await getHandler();
+
+    await handler({ id: 'js3', data: basePayload });
+
+    expect(mockVideosBatch).toHaveBeenCalledTimes(1);
+    expect(mockVideosBatch.mock.calls[0][0].videoIds).toEqual(['liveShort01', 'liveLong001']);
+    // short(45s) probed+dropped; long(600s) kept with NO probe → exactly 1 probe call
+    expect(mockIsShortCached).toHaveBeenCalledTimes(1);
+    expect(mockIsShortCached).toHaveBeenCalledWith('liveShort01', 45, expect.anything());
+    expect(mockUvsCreateMany).toHaveBeenCalledTimes(1);
+    const row = mockUvsCreateMany.mock.calls[0][0].data[0];
+    expect(row.relevance_pct).toBe(75);
+  });
+
+  it('videos.list failure is non-fatal — gate falls back to probe-only on unknown durations', async () => {
+    mockPoolCandidates.mockResolvedValueOnce([]);
+    mockSearchVideos.mockResolvedValueOnce([
+      { id: { videoId: 'liveUnknown' }, snippet: { title: '도커 강의' } },
+    ]);
+    mockVideosBatch.mockRejectedValueOnce(new Error('videos.list HTTP 403'));
+    mockIsShortCached.mockResolvedValueOnce({ isShort: false, signal: 'probe_2xx_watch' });
+    mockCompute.mockResolvedValueOnce({ ok: true, relevancePct: 70 });
+    const handler = await getHandler();
+
+    await handler({ id: 'js4', data: basePayload });
+
+    expect(mockIsShortCached).toHaveBeenCalledWith('liveUnknown', null, expect.anything());
+    expect(mockUvsCreateMany).toHaveBeenCalledTimes(1);
   });
 });
