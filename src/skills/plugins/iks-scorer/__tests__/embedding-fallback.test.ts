@@ -186,3 +186,71 @@ describe('embedBatch — IKS_EMBED_PROVIDER fallback (Issue #543)', () => {
     expect(out).toEqual([null]);
   });
 });
+
+// ─── CP500+ PR2 — single-flight over identical chunks (#882/#899 family) ────
+
+describe('embedBatch — single-flight (CP500+ PR2)', () => {
+  beforeEach(() => {
+    configMock.iksEmbed.provider = 'ollama';
+    logLLMCallMock.mockClear();
+  });
+
+  function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
+    let resolve!: (v: T) => void;
+    const promise = new Promise<T>((r) => (resolve = r));
+    return { promise, resolve };
+  }
+
+  it('identical concurrent chunks share ONE provider call', async () => {
+    const gate = deferred<Response>();
+    const fetchImpl = jest.fn().mockReturnValue(gate.promise);
+
+    const a = embedBatch(['t1', 't2'], { fetchImpl });
+    const b = embedBatch(['t1', 't2'], { fetchImpl });
+    gate.resolve(makeOllamaResponse(2));
+
+    const [ra, rb] = await Promise.all([a, b]);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(ra[0]).toEqual(FAKE_OLLAMA_VECTOR);
+    expect(rb[0]).toEqual(FAKE_OLLAMA_VECTOR);
+  });
+
+  it('different texts do NOT share', async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(makeOllamaResponse(1))
+      .mockResolvedValueOnce(makeOllamaResponse(1));
+    await Promise.all([embedBatch(['x'], { fetchImpl }), embedBatch(['y'], { fetchImpl })]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("one caller's external abort rejects ONLY that caller — the joiner still gets vectors", async () => {
+    const gate = deferred<Response>();
+    const fetchImpl = jest.fn().mockReturnValue(gate.promise);
+    const ac = new AbortController();
+
+    const keeper = embedBatch(['s1'], { fetchImpl });
+    const aborter = embedBatch(['s1'], { fetchImpl, signal: ac.signal });
+    ac.abort();
+    gate.resolve(makeOllamaResponse(1));
+
+    const [kept, aborted] = await Promise.all([keeper, aborter]);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(kept[0]).toEqual(FAKE_OLLAMA_VECTOR); // shared call survived the abort
+    expect(aborted[0]).toBeNull(); // aborter's chunk failed per-chunk-isolation
+  });
+
+  it('failures are NOT cached — the next call retries fresh', async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockRejectedValueOnce(new TypeError('fetch failed')) // ollama
+      .mockRejectedValueOnce(new TypeError('fetch failed')) // openrouter retry 1
+      .mockRejectedValueOnce(new TypeError('fetch failed')) // openrouter retry 2
+      .mockRejectedValueOnce(new TypeError('fetch failed')) // openrouter retry 3
+      .mockResolvedValueOnce(makeOllamaResponse(1)); // fresh second call succeeds
+    const first = await embedBatch(['f1'], { fetchImpl });
+    expect(first[0]).toBeNull();
+    const second = await embedBatch(['f1'], { fetchImpl });
+    expect(second[0]).toEqual(FAKE_OLLAMA_VECTOR);
+  });
+});

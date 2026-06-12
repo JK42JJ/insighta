@@ -311,7 +311,13 @@ export async function searchMandalasByGoal(
   const limit = Math.min(options.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
   const threshold = options.threshold ?? DEFAULT_THRESHOLD;
 
+  // CP500+ PR2 — decompose the searchMs that [TIMING] merged-gen reports:
+  // embed (provider call, the volatile 3.0-5.8s component measured 6/11-12)
+  // vs match (pgvector cosine + meta SQL, warm ~24ms per CP499 EXPLAIN).
+  const tEmbed = Date.now();
   const queryVector = await embedGoalForMandala(goalText);
+  const embedMs = Date.now() - tEmbed;
+  const tMatch = Date.now();
   const embeddingStr = `[${queryVector.join(',')}]`;
 
   const prisma = getPrismaClient();
@@ -378,7 +384,8 @@ export async function searchMandalasByGoal(
   logger.info(
     `Mandala search: threshold=${threshold} floor=${HARD_SIMILARITY_FLOOR} ` +
       `goal="${goalText}" results=${topRows.length} ` +
-      `(soft_target=${SOFT_RESULTS_TARGET})`
+      `(soft_target=${SOFT_RESULTS_TARGET}) ` +
+      `[TIMING] embed=${embedMs}ms match=${Date.now() - tMatch}ms`
   );
 
   if (topRows.length === 0) {
