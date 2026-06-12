@@ -93,6 +93,58 @@ async function handleEnrichRelevanceQuick(job: PgBoss.Job<RelevanceQuickPayload>
   }
 
   const prisma = getPrismaClient();
+
+  // CP500+ R1 bundle — batch gate prune (BATCH_GATE_PRUNE, default OFF).
+  // James rule: "the system may delete ONLY what it inserted" — DELETE is
+  // guarded by auto_added=true + the user-trace columns, so a MANUALLY added
+  // card is preserved regardless of its score (UX 원칙 3), and a traced auto
+  // card likewise. uvs only (user_local_cards are user-authored — never).
+  // Loop guard: pool-serve refills carry a copied relevance_pct, and the
+  // backfill trigger only enqueues relevance_pct IS NULL rows — a pruned
+  // cell's refill is never re-scored/re-pruned by this path.
+  const rubricCfg = loadRelevanceRubricConfig();
+  if (
+    table === 'uvs' &&
+    rubricCfg.prune &&
+    context &&
+    result.detail &&
+    result.detail.goalContributionPct < rubricCfg.pruneGcMin
+  ) {
+    const del = await prisma.$queryRaw<{ user_id: string; mandala_id: string | null }[]>`
+      DELETE FROM user_video_states
+      WHERE id = ${rowId}::uuid AND auto_added = true
+        AND pinned_at IS NULL AND user_note IS NULL AND is_watched = false
+        AND COALESCE(watch_position_seconds, 0) = 0 AND is_in_ideation = false
+      RETURNING user_id::text, mandala_id::text`;
+    if (del[0]) {
+      logger.info('enrich-relevance-quick: batch-gate pruned (gc below gate)', {
+        jobId: job.id,
+        rowId,
+        gc: result.detail.goalContributionPct,
+        gcMin: rubricCfg.pruneGcMin,
+      });
+      const { user_id, mandala_id } = del[0];
+      if (mandala_id) {
+        // Fire-and-forget refill — the W1b fill-pending/completed-grace
+        // signals cover the "정리되는 중" UX.
+        setImmediate(() => {
+          void import('./pool-serve-fill')
+            .then(({ dispatchPoolServeForMandala }) =>
+              dispatchPoolServeForMandala(user_id, mandala_id)
+            )
+            .catch((err) =>
+              logger.warn('batch-gate refill dispatch failed (non-fatal)', {
+                mandala_id,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            );
+        });
+      }
+      return; // row deleted — nothing to persist
+    }
+    // Not eligible (manual card or user-traced) → keep the row AND its score.
+  }
+
   const data = { relevance_pct: result.relevancePct, relevance_at: new Date() };
 
   // Persist keyed by ROW PK — never by video_id (relation-not-attribute

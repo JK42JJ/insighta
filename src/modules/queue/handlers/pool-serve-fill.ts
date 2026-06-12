@@ -184,18 +184,36 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
       }
     };
 
-    /** Semantic gate: vmr cache first, score on miss, threshold; early-exit. */
+    /** Semantic gate: vmr cache first, score on miss, threshold; early-exit.
+     *  CP500+ R1 bundle — GATE AXIS depends on the rubric flag:
+     *    rubric ON  → gatePct = goal_contribution (detail.goalContributionPct,
+     *                 measured discriminator; threshold 65 spec). Cached rows
+     *                 WITHOUT detail (legacy composite scores) are treated as
+     *                 MISS and re-scored — legacy 62-72 mode scores must not
+     *                 leak through the gc gate.
+     *    rubric OFF → gatePct = composite (legacy behavior, byte-identical).
+     *  The COMPOSITE is always what gets copied to uvs.relevance_pct (sort/badge). */
     const gate = async (cands: GateCandidate[], passed: PassedCandidate[]): Promise<void> => {
       for (let i = 0; i < cands.length && passed.length < need; i += SCORE_BURST_SIZE) {
         const burst = cands.slice(i, i + SCORE_BURST_SIZE);
         const scores = await Promise.all(
           burst.map(async (c) => {
-            const cached = await prisma.$queryRaw<{ relevance_pct: number }[]>`
-              SELECT relevance_pct FROM video_mandala_relevance
+            const cached = await prisma.$queryRaw<
+              { relevance_pct: number; detail: { goalContributionPct?: number } | null }[]
+            >`
+              SELECT relevance_pct, detail FROM video_mandala_relevance
               WHERE video_id = ${c.youtubeVideoId} AND mandala_id = ${p.mandalaId}::uuid`;
             if (cached[0]) {
-              result.cacheHits += 1;
-              return { c, pct: cached[0].relevance_pct };
+              const cachedGc = cached[0].detail?.goalContributionPct;
+              if (!rubric) {
+                result.cacheHits += 1;
+                return { c, gatePct: cached[0].relevance_pct, displayPct: cached[0].relevance_pct };
+              }
+              if (typeof cachedGc === 'number') {
+                result.cacheHits += 1;
+                return { c, gatePct: cachedGc, displayPct: cached[0].relevance_pct };
+              }
+              // rubric ON + legacy cache row (no axes) → fall through to re-score.
             }
             const r = await computeCardRelevance({
               title: c.title,
@@ -208,19 +226,27 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
             result.scored += 1;
             if (!r.ok) {
               log.warn(`pool-serve gate score failed (skip): ${r.reason}`);
-              return { c, pct: null };
+              return { c, gatePct: null, displayPct: null };
             }
+            const detailJson = r.detail ? JSON.stringify(r.detail) : null;
             await prisma.$executeRaw`
-              INSERT INTO video_mandala_relevance (video_id, mandala_id, relevance_pct)
-              VALUES (${c.youtubeVideoId}, ${p.mandalaId}::uuid, ${r.relevancePct})
+              INSERT INTO video_mandala_relevance (video_id, mandala_id, relevance_pct, detail)
+              VALUES (${c.youtubeVideoId}, ${p.mandalaId}::uuid, ${r.relevancePct}, ${detailJson}::jsonb)
               ON CONFLICT (video_id, mandala_id)
-              DO UPDATE SET relevance_pct = EXCLUDED.relevance_pct, relevance_at = now()`;
-            return { c, pct: r.relevancePct };
+              DO UPDATE SET relevance_pct = EXCLUDED.relevance_pct,
+                            detail = EXCLUDED.detail, relevance_at = now()`;
+            const gatePct = rubric && r.detail ? r.detail.goalContributionPct : r.relevancePct;
+            return { c, gatePct, displayPct: r.relevancePct };
           })
         );
-        for (const { c, pct } of scores) {
-          if (pct !== null && pct >= cfg.relevanceMin && passed.length < need) {
-            passed.push({ ...c, relevancePct: pct });
+        for (const { c, gatePct, displayPct } of scores) {
+          if (
+            gatePct !== null &&
+            displayPct !== null &&
+            gatePct >= cfg.relevanceMin &&
+            passed.length < need
+          ) {
+            passed.push({ ...c, relevancePct: displayPct });
             seen.add(c.youtubeVideoId);
           }
         }

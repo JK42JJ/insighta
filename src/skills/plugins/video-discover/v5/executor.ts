@@ -484,13 +484,31 @@ export function binByCells(
   const cells = Array.from(byCell.keys()).sort((a, b) => a - b);
   const perCell = Math.ceil((targetPicks * overpickFactor) / Math.max(cells.length, 1));
 
+  // CP500+ PR3 ("상한 → 최소 확보", James spec): the per-cell rank cut used to
+  // DISCARD surplus — a starved cell's unused budget was thrown away while a
+  // rich cell's rank-(perCell+1) candidate evaporated (the "12 limit" loss in
+  // the 2026-06-12 funnel diagnosis). Round-robin now CONTINUES past perCell
+  // while the total budget has room, so rich-cell surplus backfills the count.
+  // Per-cell MINIMUMS remain pool-serve's job (MIN_PER_CELL refill); the
+  // first perCell rounds are byte-identical to the previous output.
+  const budget = Math.ceil(targetPicks * overpickFactor);
   const out: PickResult[] = [];
-  for (let r = 0; r < perCell; r += 1) {
+  let r = 0;
+  let advanced = true;
+  while (out.length < budget && advanced) {
+    advanced = false;
     for (const cell of cells) {
+      if (out.length >= budget) break;
       const cand = byCell.get(cell)![r];
       if (!cand) continue;
-      out.push({ videoId: cand.videoId, score: 1 - r / (perCell + 1), reason: '' });
+      out.push({
+        videoId: cand.videoId,
+        score: Math.max(0.01, 1 - r / (perCell + 1)),
+        reason: '',
+      });
+      advanced = true;
     }
+    r += 1;
   }
   return out;
 }
