@@ -107,7 +107,10 @@ const RUBRIC_MANDALA_FIT_SCHEMA = `"mandala_fit": {
     }`;
 
 const RUBRIC_MANDALA_FIT_RULES = `- analysis.mandala_fit.cell_fit_pct: integer 0-100 — how well the video fits the CELL GOAL below. Output null when CELL GOAL is "(none)".
-- analysis.mandala_fit.goal_contribution_pct: integer 0-100 — how much watching this video contributes to the MANDALA CENTER GOAL below. Score 0 when the goal is empty or genuinely unrelated; reserve 90+ for videos that clearly address the exact goal. Be conservative.
+- analysis.mandala_fit.goal_contribution_pct: integer 0-100 — ask ONE question: "if a person whose goal is the MANDALA CENTER GOAL below watches this video, do they make REAL PROGRESS toward that goal?" Score the progress, NOT topical overlap.
+  * SURFACE OVERLAP is NOT contribution: sharing words/domain/mood with the goal while leaving the viewer no closer scores LOW (≤40). Example: center goal "행복한 삶을 위한 나만의 프레임워크 만들기" + video "다른그림찾기 두뇌운동 — 매일 꾸준히 하면 좋은 습관" → shares "일상/습관" framing but builds no framework → 30.
+  * INDIRECT CONTRIBUTION COUNTS: a video that never names the goal but transfers experience, methods, or hard-won lessons that move this exact journey forward scores HIGH (≥70). Example: center goal "클로드 코드로 1인 SaaS 빌드하기" + video "비개발자가 바이브코딩으로 500만원 벌며 깨달은 점" → real solo-builder economics for the same journey → 75.
+  * Score 0 when the goal is empty or genuinely unrelated; reserve 90+ for videos that clearly address the exact goal.
 - analysis.mandala_fit.actionability_pct: integer 0-100 — how directly a viewer can ACT on this video toward the goal. Concrete methods/steps/tools score high; abstract motivation/general talk scores low. Judge this axis independently from the other two.`;
 
 const SINGLE_AXIS_SCHEMA = `"mandala_fit": {
