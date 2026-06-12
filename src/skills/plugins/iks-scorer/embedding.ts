@@ -19,6 +19,8 @@
  * is the goal_relevance signal at IKS scoring time.
  */
 
+import { createHash } from 'crypto';
+
 import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database';
 import { Prisma } from '@prisma/client';
@@ -201,7 +203,63 @@ export async function embedBatch(
  * step1 ensureMandalaEmbeddings threw → step2/3 skipped → 0 cards in
  * dashboard while recommendation_cache had 74 rows).
  */
+/**
+ * CP500+ PR2 (#882/#899 family) — single-flight over identical chunks.
+ *
+ * Identical concurrent chunks (e.g. racing pipeline runs re-embedding the
+ * same centerGoal+titles — CP499 measured the wizard multiple-fire 2-4×/goal)
+ * share ONE provider round-trip. The 2026-06-09/10 `iks-embed-fallback` tail
+ * (p95 12-14.7s, max 102.8-114.3s) is the same stall class the goal-embed
+ * single-flight in mandala/search.ts already removes — this extends the cover
+ * to the batch path. Failures are NOT cached (`finally` evicts).
+ *
+ * Signal semantics: the SHARED call runs WITHOUT any caller's external signal
+ * (internal per-attempt timeouts still bound it — W3); each signal-bearing
+ * caller instead races the shared promise against its own abort, so one
+ * caller's abort rejects ONLY that caller and never kills a joiner's result.
+ */
+const inflightChunks = new Map<string, Promise<number[][]>>();
+
 async function embedOneChunk(texts: string[], opts: EmbeddingClientOptions): Promise<number[][]> {
+  // Key = full route (provider + host + model), not just texts — the same
+  // texts against a different host/model must NOT share a result.
+  const key = createHash('sha1')
+    .update(`${config.iksEmbed.provider}|${opts.baseUrl ?? ''}|${opts.model ?? ''}|`)
+    .update(texts.join('\u001f'))
+    .digest('hex');
+  let shared = inflightChunks.get(key);
+  if (!shared) {
+    shared = embedOneChunkRouted(texts, { ...opts, signal: undefined }).finally(() => {
+      inflightChunks.delete(key);
+    });
+    inflightChunks.set(key, shared);
+  }
+  if (!opts.signal) return shared;
+  return raceExternalAbort(shared, opts.signal);
+}
+
+function raceExternalAbort(shared: Promise<number[][]>, signal: AbortSignal): Promise<number[][]> {
+  if (signal.aborted) return Promise.reject(new Error('embed cancelled by external signal'));
+  return new Promise<number[][]>((resolve, reject) => {
+    const onAbort = () => reject(new Error('embed cancelled by external signal'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    shared.then(
+      (v) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(v);
+      },
+      (e) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(e);
+      }
+    );
+  });
+}
+
+async function embedOneChunkRouted(
+  texts: string[],
+  opts: EmbeddingClientOptions
+): Promise<number[][]> {
   const provider = config.iksEmbed.provider;
   if (provider === 'openrouter') {
     // OpenRouter primary (retry on transient errors) → Ollama fallback once
