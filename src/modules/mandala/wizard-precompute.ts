@@ -127,6 +127,12 @@ export async function startPrecompute(input: StartPrecomputeInput): Promise<void
       focusTags: input.focusTags,
       targetLevel: input.targetLevel ?? 'standard',
       env: process.env,
+      // CP500+ B-1 — exclude ALREADY-OWNED videos at recruitment. uvs has a
+      // GLOBAL @@unique(user_id, videoId), so picks overlapping ANY existing
+      // mandala silently evaporate at auto-add insert (measured 24/39 = 62%
+      // lost, 2026-06-12 SaaS run). add-cards already excludes owned; the
+      // wizard path did not. Fail-open: lookup failure ⇒ empty set.
+      excludeVideoIds: await fetchOwnedYoutubeIds(input.userId),
       // CP493 — when WIZARD_MERGED_GEN produced full per-cell coverage.
       precomputedQueries: input.cellQueries,
     });
@@ -521,4 +527,29 @@ export async function consumePrecompute(
   }
 
   return { consumed: true, cardsInserted: inserted, slotsCount: slots.length };
+}
+
+/**
+ * CP500+ B-1 — the user's ALREADY-OWNED youtube video ids (all mandalas).
+ * Recruitment-stage exclude set for the wizard discover: uvs carries a GLOBAL
+ * @@unique(user_id, videoId), so any pick the user already owns can never be
+ * inserted — excluding it up front lets the picker spend the slot on a NEW
+ * video instead of silently evaporating at auto-add (measured 24/39 lost).
+ * Fail-open: any failure returns an empty set (= pre-CP500 behavior).
+ */
+export async function fetchOwnedYoutubeIds(userId: string): Promise<Set<string>> {
+  try {
+    const db = getPrismaClient();
+    const rows = await db.$queryRaw<{ youtube_video_id: string }[]>`
+      SELECT DISTINCT yv.youtube_video_id
+      FROM user_video_states uvs
+      JOIN youtube_videos yv ON yv.id = uvs.video_id
+      WHERE uvs.user_id = ${userId}::uuid`;
+    return new Set(rows.map((r) => r.youtube_video_id));
+  } catch (err) {
+    log.warn(
+      `fetchOwnedYoutubeIds failed (fail-open, empty exclude): ${err instanceof Error ? err.message : String(err)}`
+    );
+    return new Set();
+  }
 }
