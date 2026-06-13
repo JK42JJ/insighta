@@ -42,6 +42,7 @@ import { generateRichSummaryV2Quick } from '../../skills/rich-summary-v2-quick-g
 import { generateRichSummaryV2 } from '../../skills/rich-summary-v2-generator';
 import { getMandalaManager } from '../../mandala/manager';
 import { getCaptionExtractor } from '../../caption/extractor';
+import { ensureYoutubeVideoRow } from '../../youtube/ensure-video-row';
 import { getPrismaClient } from '../../database/client';
 import { logger } from '../../../utils/logger';
 import { getJobQueue } from '../manager';
@@ -114,6 +115,13 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
       error: err instanceof Error ? err.message : String(err),
     });
   }
+
+  // CP500+ H fix — chokepoint: guarantee a youtube_videos row exists before the
+  // v2 generators re-read it for title/description. Inflow paths (notably
+  // IdeaSpot D&D via the local-cards Edge Function) can place a card without
+  // ingesting metadata; without the row the job completes writing no v2 row,
+  // leaving the FE bookmark spinner blinking forever. Fail-open / never throws.
+  await ensureYoutubeVideoRow(videoId);
 
   // Hard rule: NO v2 row without a transcript. Captions absent ⇒ throw
   // NO_TRANSCRIPT ⇒ SSE `failed` ⇒ grid renders the retry icon.
