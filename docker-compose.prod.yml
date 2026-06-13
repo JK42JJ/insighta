@@ -234,6 +234,13 @@ services:
       # set 4 (or delete → code default 4) + redeploy. Raise to 12-16 only after
       # measuring 429=0 (for 64+ card mandalas).
       - RELEVANCE_BACKFILL_CONCURRENCY=8
+      # CP500+ (2026-06-13, James [GO]) — R1 rubric scoring canary ON. Scoring
+      # switches to the R4 3-axis rubric (goal_contribution gate @ BATCH_GATE_GC_MIN
+      # default 65). BATCH_GATE_PRUNE stays UNSET (default false) → score/badge only,
+      # ZERO card pruning. Canary: James new wizard observes R4 scores render +
+      # off-topic cards demoted (gc<65) WITHOUT deletion. PASS → flip BATCH_GATE_PRUNE
+      # (separate [GO]). Rollback: delete this line + redeploy → code default false.
+      - RELEVANCE_RUBRIC_ENABLED=true
       # CP437 (2026-04-29) — Operator flip: enable YouTube metadata backfill cron.
       # Default in code is `false` — cron stays dormant unless this env is
       # explicitly true. With this set, `startYouTubeMetadataCron()` schedules
