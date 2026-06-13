@@ -149,6 +149,7 @@ Claude의 최종 설계(2단계) 위에서 James가 **출시 라인 + ① 범위
 | 시청위치 | watch_position_seconds | (없음) | uvs only | uvs only | ⚠️ ulc 잠복 |
 | 셀 위치 | cell_index | cell_index | 테이블별 | 테이블별 | △ 각자 자기 테이블 |
 
+- **★두 정합 축 — 저장 대칭 / 도달 대칭 (James, CP500+ 일반화)★**: 관련도 트리아지가 드러낸 핵심 — per-card 콘텐츠 정합은 **두 축**이다. (1) **저장 대칭**: 양 테이블(uvs/ulc)에 컬럼이 있고 read/write가 양쪽을 보나. (2) **도달 대칭**: 그 컬럼을 실제로 **채우는/갱신하는 경로**(채점 trigger, save 핸들러, ingest)가 **모든 카드 유입 경로**(특히 수동-add ulc)에 도달하나. 관련도 = 저장 ✅ / 도달 ❌(ulc placed 0/82). 노트 = 저장 ❌(write uvs-only) — 더 깊은 단계. **감사 1단계 의무**: §6 표의 6개 콘텐츠(노트·핀·관련도·완료·시청위치·셀)를 **두 축 모두**로 재감사 — "저장은 양쪽인데 도달은 한쪽"인 잠복이 노트·관련도 외에 더 있나(완료·시청위치는 저장도 ulc 부재라 도달 이전 단계, 핀은 저장·도달 양쪽 dual로 보이나 *도달*도 정말 양쪽인지 확인). 단일 "정합" 칸으로 뭉뚱그리지 말 것 — 축 분리.
 - **카드 조립 (공통 뿌리)**: `useMandalaCards`(frontend/src/pages/learning/model/useMandalaCards.ts:13-37)가 localCards(ulc)+syncedCards(uvs) 머지 → URL dedup(local 우선). `currentCard.id`가 ulc.id 또는 uvs.id, **둘 다 uuid라 구분 불가** → 소비자가 id만 받으면 어느 테이블인지 모름. 이게 모든 비대칭의 공통 뿌리.
 - **메모 measure 결과**: ulc-only(uvs 없음) 138장 / 6users. 123 빈 문자열(영구유실) / 11 AI 자동주입("🤖 AI Summary", 사용자 메모 아님) / 4 사용자 작성(ulc 잔존, 편집 가능). James 케이스(xuUHWCT6gN4) = len 0, 영구 유실. → 복구 마이그레이션 불요, fix는 향후 방지 중심.
 - **AI-autofill 오염 주의**: dual-read가 자동주입 11건을 "메모"로 표시 중 → 4단 fix 시 사용자 입력만 write, 소스 구분 필요.
