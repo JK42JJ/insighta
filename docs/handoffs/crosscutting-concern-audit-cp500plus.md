@@ -143,7 +143,8 @@ Claude의 최종 설계(2단계) 위에서 James가 **출시 라인 + ① 범위
 |---|---|---|---|---|---|
 | 노트 | user_note_json | user_note | uvs only | dual | ❌ 비대칭 = 유실 (터짐) |
 | 핀/하트 | pinned_at | pinned_at | dual-write | dual | ✅ |
-| 관련도 | relevance_pct/at | relevance_pct/at | dual-table (CP498) | dual | ✅ (수리됨) |
+| 관련도 (저장) | relevance_pct/at | relevance_pct/at | dual-table (CP498) | dual (local-cards.ts:183 / youtubeToInsightCard.ts:46) | ✅ 저장 대칭 |
+| 관련도 (★채점 도달★) | (채점→write) | (채점→write) | trigger=discovery/wizard/pipeline 한정 | — | ❌ **수동-add ulc 미도달: ulc placed 82장 0 scored (prod 측정)** |
 | 시청완료 | is_watched | (없음) | uvs only | uvs only | ⚠️ ulc 카드 미작동 (잠복) |
 | 시청위치 | watch_position_seconds | (없음) | uvs only | uvs only | ⚠️ ulc 잠복 |
 | 셀 위치 | cell_index | cell_index | 테이블별 | 테이블별 | △ 각자 자기 테이블 |
@@ -158,6 +159,14 @@ Claude의 최종 설계(2단계) 위에서 James가 **출시 라인 + ① 범위
 ## 6-bis. 직전 grep-level 부분 감사 (①③④⑦) — ★출발점, 전수 아님★
 
 > 메모 진단 세션에서 grep + 타겟 read 로 잡은 **부분** 결과. 전문(全文) 읽기 아님 → **이 세션이 full-file read로 검증·확장.** file:line 은 검증 대상.
+
+### ★관련도(%) — 저장 vs 채점-도달 분리 (CP500+ 추가 관측, James prod)★
+- **증상**: 그리드에서 자동(uvs) 카드는 관련도 % 있으나 수동(ulc) 카드는 없음 (유시민 xuUHWCT6gN4).
+- **트리아지 (read-only, fix 금지)**: (a)채점 미도달 — **확정**. xuUHWCT6gN4 ulc.relevance_pct=null, **fleet ulc placed 82장 0 scored (100% null, prod 측정)**.
+- **(b)/(c) 배제**: 채점 코드는 dual-table 능력 보유 — trigger가 ulc 행 enqueue (`relevance-backfill-trigger.ts:83`), FE가 `relevancePct` 매핑 (`local-cards.ts:183` / `youtubeToInsightCard.ts:46`). → 렌더 경로(b) 아님, 설계미채점(c) 아님.
+- **갭**: `enqueueRelevanceBackfillForMandala` 발화 = discovery/wizard/pipeline 한정 (`mandalas.ts:2787` / `pipeline-runner.ts:275` / `wizard-precompute.ts:477`) — **수동-add(IdeaSpot D&D, local-cards EF) 경로엔 trigger 없음** → ulc placed 카드 미채점.
+- **★구분 (James)★**: §6 "✅ dual-table"는 **저장 대칭**(맞음). **채점-도달(scoring-reach)은 별개 축** — 저장소가 양쪽이어도 *점수를 실제로 계산·write 하는 trigger가 ulc 유입 경로에 도달하나*는 다름. 노트의 read/write 비대칭과 같은 계열의 "능력은 있으나 경로 미도달".
+- **needs full-read (감사 1단계)**: (1) trigger의 ulc 쿼리(:83) 필터가 placed ulc를 포함하나 — 0/82가 "trigger 미발화" 때문인지 "ulc enqueue→write 실패" 때문인지. (2) 수동-add 경로에 채점 trigger를 붙일 자리(정본 chokepoint) 후보. = 메타-ingest(③)·노트(②)와 동일한 "새 유입 경로가 횡단 가드 미복제" 패턴의 또 다른 인스턴스.
 
 ### ① 카드 정체성 (부분)
 - 두 PK·키: uvs `@@unique(user_id, videoId=youtube_videos.id uuid)` (prisma:36 부근) / ulc `@@unique(user_id, url)`, video_id=youtube_id **문자열**(11) (prisma:680 부근) / card_interactions `@@unique(user_id, video_id 문자열, signal)` = **3번째 정체성 키** (prisma:744).
