@@ -89,6 +89,19 @@ export interface V2GenerationInput {
   /** CP474 — bypass the "complete v2" skip gate so a description-only row
    *  can be regenerated when a transcript becomes available. */
   forceRegen?: boolean;
+  /**
+   * CP500+ — effective (covered) duration in seconds. When the handler
+   * truncated a long video's transcript to the first N seconds, this is N
+   * (= the duration cap), NOT the full video length. Drives the prompt's
+   * `durationSeconds` + the timeline-range validator so the model scopes
+   * timestamps to the covered window. Falls back to the full duration.
+   */
+  effectiveDurationSec?: number | null;
+  /**
+   * CP500+ — truncation marker recorded into `core.truncation` for the FE
+   * "first N min of M min" badge. Absent ⇒ full video (no badge).
+   */
+  truncation?: { truncated: true; coveredSec: number; fullSec: number };
 }
 
 export async function generateRichSummaryV2(
@@ -139,24 +152,13 @@ export async function generateRichSummaryV2(
     return { kind: 'skip', videoId: input.videoId, reason: 'no_youtube_metadata' };
   }
 
-  // CP488+ — duration cap. Videos longer than the configured cap (default
-  // 90min) skip v2 generation. The generator code path stays in place
-  // (no behavioural change beyond this guard) so flipping the env opens
-  // it back up without a code change. Long-form chunked summarisation
-  // is the follow-up that would justify raising the cap.
+  // CP500+ — the duration cap no longer skips. The handler truncates long
+  // videos to the first `maxDurationSeconds` of transcript and passes
+  // `effectiveDurationSec` (= cap when truncated). The prompt + timeline
+  // validator below use it so the model treats the truncated text as a full
+  // short video instead of hallucinating coverage of the whole length.
   const richConfig = loadRichSummaryConfig();
-  if (ytRow.duration_seconds != null && ytRow.duration_seconds > richConfig.maxDurationSeconds) {
-    log.info('v2 skip: duration exceeds cap', {
-      videoId: input.videoId,
-      durationSec: ytRow.duration_seconds,
-      capSec: richConfig.maxDurationSeconds,
-    });
-    return {
-      kind: 'skip',
-      videoId: input.videoId,
-      reason: `duration_exceeds_cap_${richConfig.maxDurationSeconds}s`,
-    };
-  }
+  const effectiveDurationSec = input.effectiveDurationSec ?? ytRow.duration_seconds;
 
   // Title-based language override — `source_language` is stamped from the
   // transcript track YouTube returned, which is sometimes the wrong track
@@ -175,7 +177,9 @@ export async function generateRichSummaryV2(
     // CP488+ Phase 1.5 — duration is now a first-class prompt input so the
     // LLM can produce sections/atoms timestamps that fit the wall-clock
     // length. The validator below rejects outputs that still over-shoot.
-    durationSeconds: ytRow.duration_seconds,
+    // CP500+ — `effectiveDurationSec` (= cap when truncated) so the model
+    // scopes timestamps to the covered window, not the full video length.
+    durationSeconds: effectiveDurationSec,
   });
 
   // CP488+ — pinned Sonnet 4.6 (see SONNET_MODEL doc-comment above).
@@ -233,10 +237,10 @@ export async function generateRichSummaryV2(
       // hallucinated outputs (XrlKWAIFQUY pattern: sections.last.to_sec
       // overshooting wall-clock duration by 30-50%). No-op when duration
       // is unknown.
-      if (ytRow.duration_seconds != null) {
+      if (effectiveDurationSec != null) {
         try {
           validateV2TimelineRange({
-            durationSeconds: ytRow.duration_seconds,
+            durationSeconds: effectiveDurationSec,
             sections: summary.segments?.sections,
             atoms: summary.segments?.atoms,
           });
@@ -256,6 +260,12 @@ export async function generateRichSummaryV2(
         }
       }
 
+      // CP500+ — stamp truncation marker into core (post-validation merge) for
+      // the FE "first N min of M min" badge. Display-only jsonb sub-field.
+      const coreWithTruncation = input.truncation
+        ? { ...summary.core, truncation: input.truncation }
+        : summary.core;
+
       // UPSERT — the quick-path normally creates the row first, but
       // standalone callers (cron / scripts) may invoke this generator
       // without the quick step. INSERT branch covers that case.
@@ -263,7 +273,7 @@ export async function generateRichSummaryV2(
         where: { video_id: input.videoId },
         update: {
           template_version: 'v2',
-          core: summary.core as unknown as Prisma.InputJsonValue,
+          core: coreWithTruncation as unknown as Prisma.InputJsonValue,
           analysis: summary.analysis as unknown as Prisma.InputJsonValue,
           lora: summary.lora as unknown as Prisma.InputJsonValue,
           // CP474 — persist segments emitted by the same LLM call.
@@ -285,7 +295,7 @@ export async function generateRichSummaryV2(
         create: {
           video_id: input.videoId,
           template_version: 'v2',
-          core: summary.core as unknown as Prisma.InputJsonValue,
+          core: coreWithTruncation as unknown as Prisma.InputJsonValue,
           analysis: summary.analysis as unknown as Prisma.InputJsonValue,
           lora: summary.lora as unknown as Prisma.InputJsonValue,
           ...(summary.segments

@@ -1848,6 +1848,7 @@
     "reportPreparing": "보고서 작성 준비중 ...",
     "contentCollecting": "콘텐츠 수집 중...",
     "aiSummaryNotReady": "아직 AI 요약이 생성되지 않았어요",
+    "aiSummaryTruncated": "앞 {{covered}}분 기준 요약 (전체 {{full}}분)",
     "aiSummaryGenerating": "AI 요약을 생성하고 있습니다",
     "richSummaryGenerating": "상세 요약을 생성하고 있습니다",
     "richSummaryQualityLowPendingRegen": "이 영상의 AI 분석을 개선하고 있습니다",

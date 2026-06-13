@@ -32,6 +32,22 @@ function formatStamp(seconds: number): string {
   return `[${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}]`;
 }
 
+/**
+ * Truncate caption segments to those starting at or before `maxStartSec`
+ * (CP500+ long-video v2 support). Feeds the v2 generators the first N minutes
+ * of a video that exceeds RICH_SUMMARY_V2_MAX_DURATION_SECONDS instead of
+ * skipping it. Time-based (segment.start) so the cut lands on a clean caption
+ * boundary; the prompt builders' char-slice is a separate secondary bound
+ * applied after this. Empty/absent input ⇒ [].
+ */
+export function truncateSegmentsToDuration(
+  segments: ReadonlyArray<CaptionSegment> | undefined | null,
+  maxStartSec: number
+): CaptionSegment[] {
+  if (!segments || segments.length === 0) return [];
+  return segments.filter((seg) => seg && typeof seg.start === 'number' && seg.start <= maxStartSec);
+}
+
 export function formatAnnotatedTranscript(
   segments: ReadonlyArray<CaptionSegment> | undefined | null
 ): string {

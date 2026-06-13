@@ -8,7 +8,46 @@
  * back to hallucinating coverage.
  */
 
-import { formatAnnotatedTranscript } from '@/modules/caption/format-transcript';
+import {
+  formatAnnotatedTranscript,
+  truncateSegmentsToDuration,
+} from '@/modules/caption/format-transcript';
+
+describe('truncateSegmentsToDuration (CP500+ long-video v2)', () => {
+  const segs = [
+    { start: 0, duration: 5, text: 'a' },
+    { start: 5400, duration: 4, text: 'b (exactly at cap)' },
+    { start: 5401, duration: 4, text: 'c (just over cap)' },
+    { start: 6440, duration: 4, text: 'd (way over)' },
+  ];
+
+  it('keeps segments starting at or before the cap (inclusive boundary)', () => {
+    const out = truncateSegmentsToDuration(segs, 5400);
+    expect(out.map((s) => s.text)).toEqual(['a', 'b (exactly at cap)']);
+  });
+
+  it('returns [] for empty / null / undefined input', () => {
+    expect(truncateSegmentsToDuration([], 5400)).toEqual([]);
+    expect(truncateSegmentsToDuration(null, 5400)).toEqual([]);
+    expect(truncateSegmentsToDuration(undefined, 5400)).toEqual([]);
+  });
+
+  it('returns all segments when none exceed the cap', () => {
+    const short = [
+      { start: 0, duration: 5, text: 'x' },
+      { start: 100, duration: 5, text: 'y' },
+    ];
+    expect(truncateSegmentsToDuration(short, 5400)).toHaveLength(2);
+  });
+
+  it('feeds a truncated transcript whose last stamp is within the cap', () => {
+    const out = formatAnnotatedTranscript(truncateSegmentsToDuration(segs, 5400));
+    expect(out).toContain('[00:00] a');
+    expect(out).toContain('[01:30:00] b (exactly at cap)');
+    expect(out).not.toContain('c (just over cap)');
+    expect(out).not.toContain('d (way over)');
+  });
+});
 
 describe('formatAnnotatedTranscript', () => {
   it('returns empty string for empty input', () => {

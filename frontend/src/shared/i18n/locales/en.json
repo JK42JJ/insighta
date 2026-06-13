@@ -1840,6 +1840,7 @@
     "reportPreparing": "Preparing report...",
     "contentCollecting": "Collecting content...",
     "aiSummaryNotReady": "No AI summary has been generated yet",
+    "aiSummaryTruncated": "Summary of the first {{covered}} min (of {{full}} min total)",
     "aiSummaryGenerating": "Generating AI summary",
     "richSummaryGenerating": "Generating detailed summary",
     "richSummaryQualityLowPendingRegen": "Improving the AI analysis for this video",
