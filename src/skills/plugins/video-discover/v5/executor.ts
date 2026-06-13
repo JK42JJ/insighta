@@ -334,6 +334,9 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       const shortFlags = await Promise.all(
         cards.map(async (c) => {
           if (c.durationSec != null && c.durationSec >= SHORT_MAX_DURATION_SEC) return false;
+          // E-final (CP500+) — known sub-180s dropped on inflow without probing;
+          // learning content under 3 min lacks depth. Only unknown duration probes.
+          if (c.durationSec != null && c.durationSec < SHORT_MAX_DURATION_SEC) return true;
           const { isShort } = await isShortCached(c.videoId, c.durationSec, {
             signal: shortCtl.signal,
           });

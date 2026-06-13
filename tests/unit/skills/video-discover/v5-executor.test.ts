@@ -31,6 +31,9 @@ jest.mock('@/modules/video-pool/is-short', () => ({
 
 const { runYouTubeFanout } = jest.requireMock('@/skills/plugins/video-discover/v5/youtube-fanout');
 const { isShortCached } = jest.requireMock('@/modules/video-pool/is-short');
+const { videosBatchFullMetadata, resolveVideosApiKeys } = jest.requireMock(
+  '@/skills/plugins/video-discover/v2/youtube-client'
+);
 
 function makeFanoutCandidate(id: string, title = `Title ${id}`) {
   return {
@@ -62,6 +65,10 @@ describe('runV5Executor (orchestration smoke)', () => {
     runYouTubeFanout.mockReset();
     isShortCached.mockReset();
     isShortCached.mockResolvedValue({ isShort: false, signal: 'shorts_url_redirect' });
+    resolveVideosApiKeys.mockReset();
+    resolveVideosApiKeys.mockReturnValue([]);
+    videosBatchFullMetadata.mockReset();
+    videosBatchFullMetadata.mockResolvedValue([]);
   });
 
   afterAll(() => {
@@ -327,6 +334,56 @@ describe('runV5Executor (orchestration smoke)', () => {
     expect(ids).not.toContain('v1');
     expect(ids).not.toContain('v2');
     expect(typeof result.diagnostics.stageMs.shortMs).toBe('number');
+  });
+
+  // E-final (CP500+) — known sub-180s hard-dropped on inflow without probing;
+  // only unknown duration falls through to the URL probe.
+  test('short gate hard-drops known sub-180s without probing; null duration still probes', async () => {
+    runYouTubeFanout.mockResolvedValue({
+      candidates: [
+        makeFanoutCandidate('shortDur'),
+        makeFanoutCandidate('longDur'),
+        makeFanoutCandidate('nullDur'),
+      ],
+      queriesAttempted: 1,
+      queriesSucceeded: 1,
+      rawItemCount: 3,
+      quotaUnitsApprox: 100,
+      perQuery: [],
+    });
+    setVideoPickerForTest(
+      new FakePicker((input) =>
+        input.candidates.map((c, i) => ({ videoId: c.videoId, score: 0.9 - i * 0.01, reason: 'p' }))
+      )
+    );
+    // videos.list returns known durations for shortDur (60s) + longDur (10m);
+    // nullDur is absent → durationSec null → must fall through to the probe.
+    resolveVideosApiKeys.mockReturnValue(['k']);
+    videosBatchFullMetadata.mockResolvedValue([
+      { id: 'shortDur', contentDetails: { duration: 'PT60S' } },
+      { id: 'longDur', contentDetails: { duration: 'PT10M' } },
+    ]);
+    isShortCached.mockResolvedValue({ isShort: false, signal: 'shorts_url_redirect' });
+
+    const result = await runV5Executor({
+      centerGoal: 'goal',
+      subGoals: [],
+      focusTags: [],
+      targetLevel: 'standard',
+      language: 'en',
+      excludeVideoIds: new Set(),
+      env: {} as NodeJS.ProcessEnv,
+    });
+
+    const ids = result.cards.map((c) => c.videoId);
+    expect(ids).not.toContain('shortDur'); // <180 hard-dropped
+    expect(ids).toContain('longDur'); // >=180 kept (short-circuit, no probe)
+    expect(ids).toContain('nullDur'); // null duration probed → non-short → kept
+
+    const probed = isShortCached.mock.calls.map((c: unknown[]) => c[0]);
+    expect(probed).toContain('nullDur'); // only unknown duration is probed
+    expect(probed).not.toContain('shortDur'); // hard-drop path skips probe
+    expect(probed).not.toContain('longDur'); // >=180 short-circuit skips probe
   });
 
   test('short gate disabled via V5_SHORT_PROBE_DEADLINE_MS=0 → no probe, no drop', async () => {
