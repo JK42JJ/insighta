@@ -63,14 +63,20 @@ describe('binByCells', () => {
     expect(picks.map((p) => p.videoId)).toEqual(['c0_v0', 'c0_v1', 'c0_v2', 'c0_v3', 'c0_v4']);
   });
 
-  test('under-filled cell contributes what it has, others still fill', () => {
-    // cell 0 has 1 candidate, cell 1 has 5
+  test('CP500+ PR3 — under-filled cell contributes what it has; rich-cell SURPLUS backfills the budget (상한→최소확보)', () => {
+    // cell 0 has 1 candidate, cell 1 has 5. Budget = 6×1 = 6. Pre-PR3 the
+    // perCell cut (3) DISCARDED cell 1's rank-4/5 while the total ran short
+    // (4 picks for a 6 budget) — the "12 limit" loss. Now the round-robin
+    // continues past perCell while the budget has room.
     const survivors = [cand('c0_v0', 0), ...survivorsFor([1], 5)];
-    const picks = binByCells(survivors, 6, 1); // perCell = ceil(6/2) = 3
+    const picks = binByCells(survivors, 6, 1); // perCell = ceil(6/2) = 3, budget = 6
     const byCell = new Map<number, number>();
     for (const p of picks) byCell.set(cellOf(p.videoId), (byCell.get(cellOf(p.videoId)) ?? 0) + 1);
     expect(byCell.get(0)).toBe(1); // only had 1
-    expect(byCell.get(1)).toBe(3); // perCell
+    expect(byCell.get(1)).toBe(5); // 3 (perCell) + 2 surplus — budget filled
+    expect(picks).toHaveLength(6);
+    // surplus picks clamp to a small positive score (FE sort stays sane)
+    expect(picks.every((x) => x.score > 0)).toBe(true);
   });
 
   test('null cellIndex grouped as a single center bucket', () => {

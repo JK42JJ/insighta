@@ -50,6 +50,12 @@ jest.mock('@/config/index', () => ({
   },
 }));
 
+// CP500+ batch-gate prune — refill dispatch is a fire-and-forget dynamic import.
+const mockDispatchRefill = jest.fn().mockResolvedValue({ runId: null, deficitCells: [] });
+jest.mock('@/modules/queue/handlers/pool-serve-fill', () => ({
+  dispatchPoolServeForMandala: (...a: unknown[]) => mockDispatchRefill(...a),
+}));
+
 jest.mock('@/utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
@@ -244,5 +250,90 @@ describe('CP499+ rubric flag-on context fetch ($queryRaw, fail-open)', () => {
       data: { table: 'uvs', rowId: 'row-uvs-11', title: 'T', centerGoal: 'G' },
     });
     expect(mockQueryRaw).not.toHaveBeenCalled();
+  });
+});
+
+// ── CP500+ R1 bundle — batch-gate prune ("시스템은 자기가 넣은 것만 지울 수 있다") ──
+
+describe('CP500+ batch-gate prune', () => {
+  const RUBRIC_DETAIL = { cellFitPct: 60, goalContributionPct: 40, actionabilityPct: 70 };
+  beforeEach(() => {
+    process.env['RELEVANCE_RUBRIC_ENABLED'] = 'true';
+    process.env['BATCH_GATE_PRUNE'] = 'true';
+    mockDispatchRefill.mockClear();
+  });
+  afterEach(() => {
+    delete process.env['RELEVANCE_RUBRIC_ENABLED'];
+    delete process.env['BATCH_GATE_PRUNE'];
+  });
+  const flush = () => new Promise((r) => setImmediate(() => setImmediate(r)));
+
+  test('auto-added row with gc<65 is PRUNED (no persist) + refill dispatched', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ language: 'ko' }]) // context fetch
+      .mockResolvedValueOnce([{ user_id: 'u-1', mandala_id: 'm-1' }]); // guarded DELETE hit
+    mockCompute.mockResolvedValueOnce({ ok: true, relevancePct: 52, detail: RUBRIC_DETAIL });
+    const handler = await getHandler();
+
+    await handler({
+      id: 'jp1',
+      data: { table: 'uvs', rowId: 'row-prune-1', title: 'T', centerGoal: 'G' },
+    });
+    await flush();
+
+    expect(mockUvsUpdate).not.toHaveBeenCalled(); // row deleted — nothing persisted
+    expect(mockDispatchRefill).toHaveBeenCalledWith('u-1', 'm-1');
+  });
+
+  test('★REGRESSION — MANUAL card (guard rejects DELETE) keeps the row AND its score, gc<65 무관', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ language: 'ko' }]) // context fetch
+      .mockResolvedValueOnce([]); // guarded DELETE: auto_added=false ⇒ 0 rows
+    mockCompute.mockResolvedValueOnce({ ok: true, relevancePct: 52, detail: RUBRIC_DETAIL });
+    const handler = await getHandler();
+
+    await handler({
+      id: 'jp2',
+      data: { table: 'uvs', rowId: 'row-manual-1', title: 'T', centerGoal: 'G' },
+    });
+    await flush();
+
+    expect(mockUvsUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'row-manual-1' } })
+    );
+    expect(mockDispatchRefill).not.toHaveBeenCalled();
+  });
+
+  test('gc≥65 ⇒ no DELETE attempted, normal persist', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ language: 'ko' }]);
+    mockCompute.mockResolvedValueOnce({
+      ok: true,
+      relevancePct: 78,
+      detail: { ...RUBRIC_DETAIL, goalContributionPct: 80 },
+    });
+    const handler = await getHandler();
+
+    await handler({
+      id: 'jp3',
+      data: { table: 'uvs', rowId: 'row-keep-1', title: 'T', centerGoal: 'G' },
+    });
+
+    expect(mockQueryRaw).toHaveBeenCalledTimes(1); // context only — no DELETE
+    expect(mockUvsUpdate).toHaveBeenCalled();
+  });
+
+  test('BATCH_GATE_PRUNE off ⇒ scoring path unchanged (no DELETE)', async () => {
+    delete process.env['BATCH_GATE_PRUNE'];
+    mockQueryRaw.mockResolvedValueOnce([{ language: 'ko' }]);
+    mockCompute.mockResolvedValueOnce({ ok: true, relevancePct: 52, detail: RUBRIC_DETAIL });
+    const handler = await getHandler();
+
+    await handler({
+      id: 'jp4',
+      data: { table: 'uvs', rowId: 'row-flagoff-1', title: 'T', centerGoal: 'G' },
+    });
+
+    expect(mockQueryRaw).toHaveBeenCalledTimes(1);
+    expect(mockUvsUpdate).toHaveBeenCalled();
   });
 });
