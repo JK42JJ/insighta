@@ -48,6 +48,7 @@ import { logger } from '../../../utils/logger';
 import { getJobQueue } from '../manager';
 import { JOB_NAMES, RICH_SUMMARY_RETRY_OPTIONS, type EnrichRichSummaryPayload } from '../types';
 import { config } from '@/config/index';
+import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { richSummaryWorkOptions } from './rich-summary-work-options';
 
 /** Thrown when captions are unavailable so the worker fails fast and the
@@ -123,6 +124,27 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
   // leaving the FE bookmark spinner blinking forever. Fail-open / never throws.
   await ensureYoutubeVideoRow(videoId);
 
+  // CP500+ long-video v2 — videos over the duration cap are TRUNCATED to the
+  // first `maxDurationSeconds` of transcript (not skipped). Fetch duration AFTER
+  // ensureYoutubeVideoRow so a freshly-created row is seen. effectiveDurationSec
+  // (= cap when long) is passed to the generators' prompt + timeline validator
+  // so they treat the truncated transcript as a full short video (no "covered
+  // the whole 107min" hallucination).
+  const richCfg = loadRichSummaryConfig();
+  let ytDurationSec: number | null = null;
+  try {
+    const yt = await getPrismaClient().youtube_videos.findUnique({
+      where: { youtube_video_id: videoId },
+      select: { duration_seconds: true },
+    });
+    ytDurationSec = yt?.duration_seconds ?? null;
+  } catch {
+    /* non-fatal — unknown duration ⇒ no truncation */
+  }
+  const isLongVideo = ytDurationSec != null && ytDurationSec > richCfg.maxDurationSeconds;
+  const effectiveDurationSec = isLongVideo ? richCfg.maxDurationSeconds : ytDurationSec;
+  let truncation: { truncated: true; coveredSec: number; fullSec: number } | undefined;
+
   // Hard rule: NO v2 row without a transcript. Captions absent ⇒ throw
   // NO_TRANSCRIPT ⇒ SSE `failed` ⇒ grid renders the retry icon.
   let transcript: string | undefined;
@@ -134,15 +156,28 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
       // and forced Sonnet to guess timeline coverage → hallucination
       // pattern Phase 3 dogfooding surfaced). Falls back to fullText if
       // segments are absent.
-      const { formatAnnotatedTranscript } = await import('@/modules/caption/format-transcript');
-      const annotated = formatAnnotatedTranscript(result.caption.segments);
+      const { formatAnnotatedTranscript, truncateSegmentsToDuration } =
+        await import('@/modules/caption/format-transcript');
+      const segs = isLongVideo
+        ? truncateSegmentsToDuration(result.caption.segments, richCfg.maxDurationSeconds)
+        : result.caption.segments;
+      const annotated = formatAnnotatedTranscript(segs);
       transcript = annotated || result.caption.fullText;
+      if (isLongVideo && ytDurationSec != null) {
+        truncation = {
+          truncated: true,
+          coveredSec: richCfg.maxDurationSeconds,
+          fullSec: ytDurationSec,
+        };
+      }
       logger.info('enrich-rich-summary: transcript fetched', {
         jobId: job.id,
         videoId,
         chars: transcript.length,
         language: result.language,
         langHint: langHint ?? null,
+        truncatedToSec: truncation?.coveredSec ?? null,
+        fullDurationSec: ytDurationSec,
       });
     } else {
       logger.info('enrich-rich-summary: transcript unavailable — surfacing retry', {
@@ -205,6 +240,7 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     userId,
     mandalaCenterGoal: centerGoal,
     transcript,
+    truncation,
   });
 
   // ── Step 2: Full path (Sonnet, ~30-60s) ──
@@ -217,6 +253,8 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     mandalaCenterGoal: centerGoal,
     transcript,
     forceRegen: true,
+    effectiveDurationSec,
+    truncation,
   });
 
   logger.info('enrich-rich-summary: completed', {

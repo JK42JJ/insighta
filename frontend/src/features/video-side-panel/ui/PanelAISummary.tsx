@@ -59,6 +59,10 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   const hasRich = hasNewV2 || hasLegacyRich;
   const hasShort = Boolean(short) || tags.length > 0;
 
+  // CP500+ — `truncation` rides in core for long-video summaries generated from
+  // the first N minutes (renders a "first N min of M min" badge).
+  const truncation = richSummary?.core?.truncation;
+
   // CP475+ — background enrich + SSE wiring. Fire `/enrich-bg` once per
   // (videoId, mandalaId) when the segments block is missing; subscribe
   // to /enrich-stream so the UI flips to the completed state without a
@@ -143,6 +147,9 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   return (
     <div className="space-y-5">
       {isQualityWarning && <AIQualityImprovingBadge />}
+      {truncation?.truncated && (
+        <TruncatedBadge coveredSec={truncation.coveredSec} fullSec={truncation.fullSec} />
+      )}
       {hasNewV2 && richSummary && (
         <RichSummaryV2NewBlock
           core={richSummary.core ?? null}
@@ -733,6 +740,28 @@ function AIQualityImprovingBadge() {
         ●
       </span>
       <span>{t('learning.aiQualityImproving')}</span>
+    </div>
+  );
+}
+
+/**
+ * CP500+ — badge shown on a v2 summary generated from only the first N minutes
+ * of a video that exceeds the duration cap. Tells the user the summary covers a
+ * partial window so a "the conclusion is…" line isn't mistaken for the whole video.
+ */
+function TruncatedBadge({ coveredSec, fullSec }: { coveredSec: number; fullSec: number }) {
+  const { t } = useTranslation();
+  const coveredMin = Math.round(coveredSec / 60);
+  const fullMin = Math.round(fullSec / 60);
+  return (
+    <div
+      role="status"
+      className="flex items-center gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-[12px] text-sky-300"
+    >
+      <span aria-hidden className="text-sky-400">
+        ⚠
+      </span>
+      <span>{t('learning.aiSummaryTruncated', { covered: coveredMin, full: fullMin })}</span>
     </div>
   );
 }

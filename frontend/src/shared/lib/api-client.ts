@@ -143,6 +143,12 @@ export interface VideoRichSummaryCore {
   depth_level?: string;
   content_type?: string;
   target_audience?: string;
+  /**
+   * CP500+ — present when the source video exceeded the v2 duration cap and
+   * the summary was generated from the first `coveredSec` of `fullSec`
+   * seconds. The FE renders a "first N min of M min" badge.
+   */
+  truncation?: { truncated: boolean; coveredSec: number; fullSec: number };
 }
 
 export interface VideoRichSummaryKeyConcept {

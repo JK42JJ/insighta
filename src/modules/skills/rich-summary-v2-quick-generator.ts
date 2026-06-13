@@ -24,7 +24,6 @@ import { Prisma } from '@prisma/client';
 
 import { getPrismaClient } from '@/modules/database/client';
 import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
-import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { logger } from '@/utils/logger';
 
 import { detectContentLanguageFromTitle as detectLanguageFromTitle } from '@/utils/detect-language';
@@ -53,6 +52,12 @@ export interface V2QuickInput {
   userId?: string | null;
   mandalaCenterGoal?: string;
   transcript: string;
+  /**
+   * CP500+ — set by the handler when the transcript was truncated to the first
+   * N seconds of a long video (duration > cap). Recorded into `core.truncation`
+   * so the FE renders the "first N min of M min" badge. Absent ⇒ full video.
+   */
+  truncation?: { truncated: true; coveredSec: number; fullSec: number };
 }
 
 export async function generateRichSummaryV2Quick(input: V2QuickInput): Promise<V2QuickOutcome> {
@@ -75,21 +80,9 @@ export async function generateRichSummaryV2Quick(input: V2QuickInput): Promise<V
     return { kind: 'skip', videoId: input.videoId, reason: 'no_transcript' };
   }
 
-  // CP488+ — same duration cap as the full generator. Skips Heart-click
-  // path for long videos until chunked summarisation lands.
-  const richConfig = loadRichSummaryConfig();
-  if (ytRow.duration_seconds != null && ytRow.duration_seconds > richConfig.maxDurationSeconds) {
-    log.info('v2-quick skip: duration exceeds cap', {
-      videoId: input.videoId,
-      durationSec: ytRow.duration_seconds,
-      capSec: richConfig.maxDurationSeconds,
-    });
-    return {
-      kind: 'skip',
-      videoId: input.videoId,
-      reason: `duration_exceeds_cap_${richConfig.maxDurationSeconds}s`,
-    };
-  }
+  // CP500+ — the duration cap no longer skips here. The handler truncates long
+  // videos to the first `maxDurationSeconds` of transcript and passes
+  // `input.truncation`; this generator proceeds on the (already-bounded) text.
 
   const language: 'ko' | 'en' =
     detectLanguageFromTitle(ytRow.title) ?? (ytRow.default_language === 'en' ? 'en' : 'ko');
@@ -157,7 +150,12 @@ export async function generateRichSummaryV2Quick(input: V2QuickInput): Promise<V
 
   // UPSERT minimal v2 row. core/analysis only contain the quick fields;
   // the full generator will merge in segments/atoms/entities/etc.
-  const minimalCore = parsed.core;
+  // CP500+ — stamp the truncation marker into core (post-validation merge) so
+  // the FE can render the "first N min of M min" badge. Display-only; no schema
+  // change (jsonb sub-field, not a column).
+  const minimalCore = input.truncation
+    ? { ...parsed.core, truncation: input.truncation }
+    : parsed.core;
   const minimalAnalysis = parsed.analysis;
 
   try {
