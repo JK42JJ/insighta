@@ -25,6 +25,7 @@ import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database/client';
 import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
 import { logger } from '@/utils/logger';
+import { markSkippedSummary } from './mark-skipped-summary';
 
 import { detectContentLanguageFromTitle as detectLanguageFromTitle } from '@/utils/detect-language';
 import {
@@ -74,9 +75,13 @@ export async function generateRichSummaryV2Quick(input: V2QuickInput): Promise<V
     },
   });
   if (!ytRow || !ytRow.title) {
+    // CP500+ PR-B — terminal skipped row so the FE stops spinning (no metadata
+    // means ensureYoutubeVideoRow could not create the row, e.g. API failure).
+    await markSkippedSummary(input.videoId, 'no_youtube_metadata', input.userId);
     return { kind: 'skip', videoId: input.videoId, reason: 'no_youtube_metadata' };
   }
   if (!input.transcript || input.transcript.trim().length === 0) {
+    await markSkippedSummary(input.videoId, 'no_transcript', input.userId);
     return { kind: 'skip', videoId: input.videoId, reason: 'no_transcript' };
   }
 

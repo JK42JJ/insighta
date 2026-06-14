@@ -43,6 +43,7 @@ import { generateRichSummaryV2 } from '../../skills/rich-summary-v2-generator';
 import { getMandalaManager } from '../../mandala/manager';
 import { getCaptionExtractor } from '../../caption/extractor';
 import { ensureYoutubeVideoRow } from '../../youtube/ensure-video-row';
+import { markSkippedSummary } from '../../skills/mark-skipped-summary';
 import { getPrismaClient } from '../../database/client';
 import { logger } from '../../../utils/logger';
 import { getJobQueue } from '../manager';
@@ -205,6 +206,11 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
     } catch {
       /* non-fatal — stamping failure does not change retry semantics */
     }
+    // CP500+ PR-B — write a terminal skipped row BEFORE throwing so the FE
+    // learning panel renders "summary unavailable" instead of an eternal
+    // spinner + re-enqueue churn. The throw is kept (grid retry icon via SSE
+    // `failed`); a later attempt with a working captioner overwrites this row.
+    await markSkippedSummary(videoId, 'no_transcript', userId);
     throw new Error(NO_TRANSCRIPT_ERROR);
   }
 
