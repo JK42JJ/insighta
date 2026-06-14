@@ -149,6 +149,12 @@ export interface VideoRichSummaryCore {
    * seconds. The FE renders a "first N min of M min" badge.
    */
   truncation?: { truncated: boolean; coveredSec: number; fullSec: number };
+  /**
+   * CP500+ PR-B — set on a terminal `quality_flag='skipped'` row (no transcript
+   * / no youtube metadata). The FE renders "summary unavailable: <reason>"
+   * instead of an eternal spinner.
+   */
+  skip_reason?: string;
 }
 
 export interface VideoRichSummaryKeyConcept {

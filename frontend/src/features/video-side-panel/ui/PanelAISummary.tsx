@@ -62,6 +62,10 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   // CP500+ — `truncation` rides in core for long-video summaries generated from
   // the first N minutes (renders a "first N min of M min" badge).
   const truncation = richSummary?.core?.truncation;
+  // CP500+ PR-B — terminal "skipped" row (no transcript / no metadata) ⇒ show an
+  // "unavailable" message, not an eternal spinner. isQualityWarning(≠'pass')
+  // already suppresses the auto-enrich re-trigger above, ending the churn.
+  const isSkipped = richSummary?.qualityFlag === 'skipped';
 
   // CP475+ — background enrich + SSE wiring. Fire `/enrich-bg` once per
   // (videoId, mandalaId) when the segments block is missing; subscribe
@@ -133,6 +137,13 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   // CP488+ Phase 4 — quality-warning rows now fall through to the normal
   // render path (they have content, just at lower quality) + display a
   // subtle "auto-improving" indicator below. No more hide.
+  // CP500+ PR-B — terminal "unavailable" (skipped) takes priority: a skipped
+  // row carries core={skip_reason} which would otherwise trip hasNewV2 and
+  // render a garbage block.
+  if (isSkipped && !isRichLoading) {
+    return <SummaryUnavailableMessage reason={richSummary?.core?.skip_reason} />;
+  }
+
   if (!hasNewV2 && !hasLegacyRich && !hasShort && !isRichLoading) {
     if (isEnrichInProgress) {
       return <EnrichInProgressMessage label={t('learning.aiSummaryGenerating')} />;
@@ -727,6 +738,29 @@ function EnrichInProgressMessage({ label }: { label: string }) {
  * users keep using whatever the current row contains; better content
  * lands on the next view once Phase 3 worker resolves the queue row.
  */
+/**
+ * CP500+ PR-B — terminal "summary unavailable" state for a
+ * `quality_flag='skipped'` row (genuine cannot-generate: no transcript / no
+ * metadata). Replaces the eternal "generating…" spinner; no re-enqueue (caller
+ * already guards on quality_flag ≠ 'pass').
+ */
+function SummaryUnavailableMessage({ reason }: { reason?: string }) {
+  const { t } = useTranslation();
+  const reasonText =
+    reason === 'no_transcript'
+      ? t('learning.aiSummaryUnavailableNoTranscript')
+      : reason === 'no_youtube_metadata'
+        ? t('learning.aiSummaryUnavailableNoMetadata')
+        : t('learning.aiSummaryUnavailableGeneric');
+  return (
+    <p className="py-8 text-center text-[13px] text-[#4e4f5c]" role="status" aria-live="polite">
+      {t('learning.aiSummaryUnavailable')}
+      <br />
+      <span className="text-[12px] text-[#3e3f4a]">{reasonText}</span>
+    </p>
+  );
+}
+
 function AIQualityImprovingBadge() {
   const { t } = useTranslation();
   return (
