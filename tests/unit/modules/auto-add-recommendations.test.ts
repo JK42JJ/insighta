@@ -67,7 +67,13 @@ jest.mock('@/modules/discover-tracing', () => ({
   recordTrace: jest.fn(),
 }));
 
+const mockCollectAndUpsertMetadata = jest.fn();
+jest.mock('@/modules/youtube/metadata-collector', () => ({
+  collectAndUpsertMetadata: (...args: unknown[]) => mockCollectAndUpsertMetadata(...args),
+}));
+
 import { maybeAutoAddRecommendations } from '../../../src/modules/mandala/auto-add-recommendations';
+import { passesViewCountGate } from '../../../src/config/recommendations';
 
 const USER = '00000000-0000-0000-0000-000000000001';
 const MANDALA = '00000000-0000-0000-0000-000000000002';
@@ -130,6 +136,14 @@ beforeEach(() => {
   mockRecCacheUpdateMany.mockResolvedValue({ count: 0 });
   // Default: no existing youtube_videos for dedup / existing checks
   mockYoutubeVideosFindMany.mockResolvedValue([]);
+  // Meta enrich defaults to a successful no-op; only called when
+  // AUTO_ADD_META_ENRICH=true (default off → never invoked).
+  mockCollectAndUpsertMetadata.mockResolvedValue({
+    videoIds: [],
+    fetched: 0,
+    upserted: 0,
+    errors: 0,
+  });
 });
 
 describe('maybeAutoAddRecommendations — opt-in gates', () => {
@@ -321,5 +335,120 @@ describe('maybeAutoAddRecommendations — bookkeeping', () => {
     await maybeAutoAddRecommendations(USER, MANDALA);
 
     expect(mockRecCacheUpdateMany).not.toHaveBeenCalled();
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// CP500+ chokepoint guards: view-count gate + meta enrich.
+// Diagnosis: v5 live 'realtime' auto-add bypassed the pool's view floor + meta
+// ingest (mandala bdc5505f: 13/43 recs <1k views, a 2-view scribble scored 65%;
+// 49/49 metadata_fetched_at NULL). Gate sits at the single auto-add confluence.
+// ───────────────────────────────────────────────────────────────────────────
+describe('passesViewCountGate — pure predicate', () => {
+  it('blocks a 2-view video at floor 1000', () => {
+    expect(passesViewCountGate(2, 1000)).toBe(false);
+    expect(passesViewCountGate(2n, 1000)).toBe(false);
+  });
+  it('passes a video at/above floor 1000', () => {
+    expect(passesViewCountGate(1000, 1000)).toBe(true);
+    expect(passesViewCountGate(1001, 1000)).toBe(true);
+  });
+  it('fail-open: null/undefined view passes (enrich failed or absent)', () => {
+    expect(passesViewCountGate(null, 1000)).toBe(true);
+    expect(passesViewCountGate(undefined, 1000)).toBe(true);
+  });
+  it('no-op when floor <= 0 (default disabled)', () => {
+    expect(passesViewCountGate(2, 0)).toBe(true);
+  });
+});
+
+describe('maybeAutoAddRecommendations — view-count gate (CP500+)', () => {
+  const OLD_ENV = process.env;
+  beforeEach(() => {
+    process.env = { ...OLD_ENV };
+  });
+  afterAll(() => {
+    process.env = OLD_ENV;
+  });
+
+  // (1) 2뷰 차단 + (2) 1001뷰 통과
+  it('blocks the 2-view rec and materializes only the 1001-view rec at floor 1000', async () => {
+    process.env['AUTO_ADD_MIN_VIEW_COUNT'] = '1000';
+    mockRecCacheFindMany.mockResolvedValue([makeRec(0, 0.9, 'low'), makeRec(0, 0.8, 'high')]);
+    mockYoutubeVideosFindMany
+      .mockResolvedValueOnce([]) // dedup
+      .mockResolvedValueOnce([]) // (a) existing — all new
+      .mockResolvedValueOnce([
+        { id: 'yt-low', youtube_video_id: 'low', view_count: 2n },
+        { id: 'yt-high', youtube_video_id: 'high', view_count: 1001n },
+      ]); // (c) refetch with authoritative view_count
+    mockYoutubeVideosCreateMany.mockResolvedValue({ count: 2 });
+    mockUserVideoStateCreateMany.mockResolvedValue({ count: 1 });
+
+    const result = await maybeAutoAddRecommendations(USER, MANDALA);
+
+    const createCall = mockUserVideoStateCreateMany.mock.calls.find(
+      (c) => (c[0]?.data as Array<{ cell_index: number }>)?.[0]?.cell_index === 0
+    );
+    const rows = (createCall?.[0].data as Array<{ videoId: string }>) ?? [];
+    expect(rows.length).toBe(1);
+    expect(rows[0]?.videoId).toBe('yt-high');
+    expect(result.ok).toBe(true);
+  });
+
+  // (3) 유저-터치(이미 링크된) 2뷰 카드 보존 — dedup 선제외로 게이트가 못 봄
+  it('a 2-view card already linked to the user is deduped out before the gate — never re-evaluated/dropped by it', async () => {
+    process.env['AUTO_ADD_MIN_VIEW_COUNT'] = '1000';
+    mockRecCacheFindMany.mockResolvedValue([makeRec(0, 0.9, 'touched')]);
+    // dedup (call 1) reports it already linked → cellRecs empty → loop continues
+    // before the gate ever runs. The existing uvs row is untouched by this module.
+    mockYoutubeVideosFindMany.mockResolvedValueOnce([{ youtube_video_id: 'touched' }]);
+
+    const result = await maybeAutoAddRecommendations(USER, MANDALA);
+
+    expect(mockUserVideoStateCreateMany).not.toHaveBeenCalled();
+    expect(mockCollectAndUpsertMetadata).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+  });
+
+  // (4) wizard inline reach — 동일 공유 함수라 caller 무관하게 게이트 상속
+  it('gate lives inside the shared function — wizard inline auto-add inherits it', async () => {
+    // wizard-precompute.consumePrecompute calls maybeAutoAddRecommendations
+    // inline (#879), so a floor set here applies to the wizard path identically.
+    process.env['AUTO_ADD_MIN_VIEW_COUNT'] = '1000';
+    mockRecCacheFindMany.mockResolvedValue([makeRec(0, 0.9, 'low')]);
+    mockYoutubeVideosFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'yt-low', youtube_video_id: 'low', view_count: 2n }]);
+
+    const result = await maybeAutoAddRecommendations(USER, MANDALA);
+
+    // 2-view filtered → cell yields no survivors → no card materialized.
+    expect(mockUserVideoStateCreateMany).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+  });
+
+  // (5) fail-open 재실행 무중복 — enrich 실패 시 카드 생성 + skipDuplicates
+  it('meta-enrich failure is fail-open (card created) and createMany stays skipDuplicates (re-run safe)', async () => {
+    process.env['AUTO_ADD_MIN_VIEW_COUNT'] = '1000';
+    process.env['AUTO_ADD_META_ENRICH'] = 'true';
+    mockCollectAndUpsertMetadata.mockRejectedValue(new Error('quota exceeded'));
+    mockRecCacheFindMany.mockResolvedValue([makeRec(0, 0.9, 'v1')]);
+    mockYoutubeVideosFindMany
+      .mockResolvedValueOnce([]) // dedup
+      .mockResolvedValueOnce([]) // (a) existing — all new (so enrich attempted)
+      .mockResolvedValueOnce([{ id: 'yt-v1', youtube_video_id: 'v1', view_count: null }]); // post-enrich still null (failed)
+    mockYoutubeVideosCreateMany.mockResolvedValue({ count: 1 });
+    mockUserVideoStateCreateMany.mockResolvedValue({ count: 1 });
+
+    const result = await maybeAutoAddRecommendations(USER, MANDALA);
+
+    expect(mockCollectAndUpsertMetadata).toHaveBeenCalledWith(['v1']);
+    const createCall = mockUserVideoStateCreateMany.mock.calls[0];
+    expect(createCall?.[0].skipDuplicates).toBe(true);
+    // null view → fail-open → the card is still created.
+    expect((createCall?.[0].data as unknown[]).length).toBe(1);
+    expect(result.ok).toBe(true);
   });
 });

@@ -53,9 +53,14 @@
 
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
-import { VIDEO_DISCOVER_SKILL_TYPE } from '@/config/recommendations';
+import {
+  VIDEO_DISCOVER_SKILL_TYPE,
+  loadAutoAddGuardConfig,
+  passesViewCountGate,
+} from '@/config/recommendations';
 import { notifyCardAdded, type CardPayload } from '@/modules/recommendations/publisher';
 import { recordTrace } from '@/modules/discover-tracing';
+import { collectAndUpsertMetadata } from '@/modules/youtube/metadata-collector';
 
 const log = logger.child({ module: 'auto-add-recommendations' });
 
@@ -125,6 +130,11 @@ export async function maybeAutoAddRecommendations(
   if (recs.length === 0) {
     return { ok: false, reason: 'no pending recommendation_cache rows' };
   }
+
+  // Chokepoint guards (CP500+): view-count floor + metadata enrich. Both
+  // default no-op (env unset). This is the single confluence ALL automatic
+  // inflow passes through (live/pool/wizard) — see loadAutoAddGuardConfig.
+  const guard = loadAutoAddGuardConfig();
 
   // Group by cell_index. No per-cell cap (2026-04-18): the upstream
   // pipeline already sets V3_TARGET_PER_CELL / V3_TARGET_TOTAL, so every
@@ -229,12 +239,16 @@ export async function maybeAutoAddRecommendations(
     // ─────────────────────────────────────────────────────────────────────────
     const cellVideoIds = cellRecs.map((r) => r.video_id);
 
-    // (a) Look up existing youtube_videos for this cell's recs.
+    // (a) Look up existing youtube_videos for this cell's recs. metadata_fetched_at
+    //     drives enrich-scoping below (only enrich rows that lack authoritative meta).
     const existingYt = await db.youtube_videos.findMany({
       where: { youtube_video_id: { in: cellVideoIds } },
-      select: { id: true, youtube_video_id: true },
+      select: { id: true, youtube_video_id: true, metadata_fetched_at: true },
     });
     const existingYtMap = new Map(existingYt.map((y) => [y.youtube_video_id, y.id]));
+    const existingMetaNull = new Set(
+      existingYt.filter((y) => y.metadata_fetched_at == null).map((y) => y.youtube_video_id)
+    );
 
     // (b) createMany for new youtube_videos only (skipDuplicates handles races).
     const newYtRows = cellRecs
@@ -274,16 +288,51 @@ export async function maybeAutoAddRecommendations(
       }
     }
 
-    // (c) Re-fetch full id map so we can build userVideoState rows.
+    // Meta enrich (chokepoint guard ②): now that the youtube_videos rows exist
+    // (createMany above), fill authoritative view_count/published_at/
+    // metadata_fetched_at so the view gate decides on real counts, not sparse
+    // search-snippet data. UPDATE-only (metadata-collector:73) → must run AFTER
+    // row creation. Idempotent + fail-open: a failure leaves view_count null
+    // and the gate passes the card (re-evaluated on the next refresh once
+    // enrichment succeeds, or by the nightly metadata cron backstop).
+    if (guard.metaEnrich) {
+      const idsToEnrich = cellVideoIds.filter(
+        (vid) => !existingYtMap.has(vid) || existingMetaNull.has(vid)
+      );
+      if (idsToEnrich.length > 0) {
+        try {
+          await collectAndUpsertMetadata(idsToEnrich);
+        } catch (err) {
+          log.warn(
+            `auto-add meta-enrich failed (cell=${cellIndex}, n=${idsToEnrich.length}): ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+    }
+
+    // (c) Re-fetch full id map so we can build userVideoState rows. view_count
+    //     is the authoritative value (post-enrich) the gate below reads.
     const allYt = await db.youtube_videos.findMany({
       where: { youtube_video_id: { in: cellVideoIds } },
-      select: { id: true, youtube_video_id: true },
+      select: { id: true, youtube_video_id: true, view_count: true },
     });
     const ytIdByVideoId = new Map(allYt.map((y) => [y.youtube_video_id, y.id]));
+    const viewByVideoId = new Map(allYt.map((y) => [y.youtube_video_id, y.view_count]));
+
+    // View gate (chokepoint guard ①): drop ultra-low-view garbage from the
+    // AUTO path. Pure filter on insert candidates — issues NO delete and
+    // operates on cellRecs, which already excludes videos linked to this user
+    // (dedup at existingVideoIdSet above). So user-touched cards are never seen
+    // by the gate → immutable. fail-open on null view; min<=0 = no-op (default).
+    const survivingRecs = cellRecs.filter((r) =>
+      passesViewCountGate(viewByVideoId.get(r.video_id), guard.minViewCount)
+    );
+    if (survivingRecs.length === 0) continue;
 
     // (d) createMany userVideoState. skipDuplicates handles concurrent re-runs
-    //     hitting unique(user_id, videoId).
-    const uvsRows = cellRecs
+    //     hitting unique(user_id, videoId). Built from survivingRecs so gated
+    //     (ultra-low-view) candidates never materialize a card.
+    const uvsRows = survivingRecs
       .map((r, i) => {
         const videoId = ytIdByVideoId.get(r.video_id);
         if (!videoId) return null;
@@ -314,12 +363,12 @@ export async function maybeAutoAddRecommendations(
       }
     }
 
-    // SSE: fire notifyCardAdded for each rec the batch touched. Pre-existing
-    // user_video_states rows (filtered out at line 184) are not in cellRecs,
-    // so iterating cellRecs only emits events for actually-inserted-or-tried
-    // cards. notifyCardAdded is in-process EventEmitter — non-blocking.
-    for (let i = 0; i < cellRecs.length; i++) {
-      const rec = cellRecs[i];
+    // SSE: fire notifyCardAdded for each rec the batch touched. Iterate
+    // survivingRecs only — gated candidates have no uvs row, so emitting an
+    // event for them would surface a phantom card. notifyCardAdded is an
+    // in-process EventEmitter — non-blocking.
+    for (let i = 0; i < survivingRecs.length; i++) {
+      const rec = survivingRecs[i];
       if (!rec) continue;
       try {
         const payload: CardPayload = {
