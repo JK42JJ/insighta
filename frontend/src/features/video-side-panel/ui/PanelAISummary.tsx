@@ -101,11 +101,16 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
     })();
   }, [youtubeId, mandalaId, isRichLoading, hasSegments, isQualityWarning, openStream]);
 
-  // When the SSE stream terminates with `scored`, refetch the v2 row so
-  // the segments block lands without a manual reload.
+  // When the SSE stream reaches a TERMINAL phase, refetch the v2 row so the
+  // result lands without a manual reload. CP500+ PR-B-followup — `failed` /
+  // `timeout` were missing: a no_transcript job throws NO_TRANSCRIPT → SSE
+  // `failed`, and the PR-B skipped row written server-side was never fetched,
+  // so the panel stayed spinning until a manual refresh. Refetching here also
+  // makes isQualityWarning(≠'pass') true → the auto-enrich re-trigger guard
+  // engages → churn stops.
   useEffect(() => {
     if (!youtubeId) return;
-    if (streamPhase === 'scored') {
+    if (streamPhase === 'scored' || streamPhase === 'failed' || streamPhase === 'timeout') {
       void queryClient.invalidateQueries({ queryKey: queryKeys.video.richSummary(youtubeId) });
     }
   }, [streamPhase, youtubeId, queryClient]);
