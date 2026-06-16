@@ -73,7 +73,7 @@ per-card 콘텐츠에 이미 한 그 감사를 **횡단 전체로 확장**한다
 | ① | 카드 정체성 (uvs / ulc) | 두 테이블 키·병합 지점·id 네임스페이스 충돌. #911 증발과 한 줄기인가 | ★확장 — §6은 일부만, 전체 정합으로 |
 | ② | per-card 사용자 콘텐츠 | 노트·하트·완료·시청위치·셀위치 — 각 read 경로 vs write 경로 | ✅ 감사 완료 (§6 입력) — 그대로 편입 |
 | ③ | 영상 ingest / 메타 | 모든 카드유입 경로 × `ensureYoutubeVideoRow` 정합. #917 chokepoint가 전 경로를 실제로 커버하나 | ★신규 — 이번 세션 핵심 |
-| ④ | 추천 게이트 (유입경로) | 유입경로 × 관련도게이트·쇼츠·다양성. executor 단일점이 진짜 정본인가, 아직 우회 경로 있나 | △ 우회 여부 **확인만** (대부분 executor로 수렴됨) |
+| ④ | 추천 게이트 (유입경로) | 유입경로 × 관련도게이트·쇼츠·다양성·**조회수 floor·메타 ingest**. executor 단일점이 진짜 정본인가, 아직 우회 경로 있나 | ★**우회 확인됨 (5th instance, §10-B)** — v5 라이브('realtime') 자동추가가 풀 가드 2종(조회수 floor·메타 ingest) 미복제. auto-add 는 *우연한* chokepoint(구조 강제 아님) |
 | ⑤ | transcript / 요약 | truncate·skip·char-cap 경로 정합. 생성기 두 개·핸들러·standalone caller 간 | ⏸ 출시 후 (오늘 안 터짐) |
 | ⑥ | auth / quota | 서버키 vs OAuth 토큰. video-discover·trend-collector 경로별 quota 출처 | ⏸ 출시 후 (오늘 안 터짐) |
 | ⑦ | **행동 텔레메트리 → 페르소나 토대** | 진입·재생·반복 이벤트가 잡히나(이벤트 vs 상태) / 어디 떨어지나 / 만다라로 롤업되나 / ①정체성이 anchor하나 | ★map-only — 토대 봉쇄 여부 확인 (구현은 출시 후) |
@@ -241,3 +241,31 @@ Claude의 최종 설계(2단계) 위에서 James가 **출시 라인 + ① 범위
 - 대기 [GO]: 쇼츠 잔존 4장 / 소급 C(캐너리 후)
 
 이들은 이 감사 세션과 무관하게 굴러간다. 감사는 그 위/아래 층의 일.
+
+---
+
+## 10. 증분 트랙 박제 (CP500++ 2026-06-15, 경로 1 모드 전환 — 정본 위에서 일괄 재fix)
+
+**James 결정**: 증상별 대응(풀오염→배선→drift 두더지잡기) 중단, 전수 감사로 탈출. 아래 모든 fix 는 "증상 대응분"으로 박제 — **2단계 정본층 설계 후 그 위에서 한 번에 재fix**. 개별로 더 파지 말 것.
+
+### A. 박제 항목 (정본 후 일괄 재fix)
+- **풀오염 fix (#922 view-gate + meta-enrich)**: 코드 **prod live + default-off → 게이트 inert, prod 무변동**. `maybeAutoAddRecommendations` 에 chokepoint guard 2종(`AUTO_ADD_MIN_VIEW_COUNT`/`AUTO_ADD_META_ENRICH`). **★배선 누락**: deploy.yml 에 AUTO_ADD_* 0줄. **★.env↔process drift = ROOT-CAUSED (미규명 아님)**: prod 활성 compose=`docker-compose.prod.yml`, `environment:` 리터럴(line 268 `YOUTUBE_METADATA_BACKFILL_ENABLED=false`)이 `env_file: .env`(line52 `=true`) 를 override(Docker 우선순위 environment>env_file) → process=false. 즉 deploy.yml→gh-variable→.env sed 경로는 compose-리터럴 키에 DEAD. **env 켜지 말 것(켜도 no-op).** 정본 = 토글 활성 SSOT 단일화.
+- **R4 채점** (낙서 2뷰→65%, 조회수 높은 무관 영상 미해결) = secondary. 층1(유입 floor) 막으면 다수 미도달하나 채점 자체(title-only 표면어 속음)는 정본 후 별도.
+- **무자막 카드 #920/#921 자동전환** = James 화면 확인 미완(edge). 정본 후 검증.
+- **prune flip (BATCH_GATE_PRUNE)** = 정본 후.
+→ 전부 "증상 대응분, 정본층 위에서 재fix" 표시.
+
+### B. ★5th instance — "새 유입 경로가 횡단 가드 미복제" 패턴★
+v5 라이브('realtime') 자동추가 경로가 풀 경로의 가드 2종(① 조회수 floor ② 메타 ingest)을 **둘 다 미복제**. 계보: 노트(②) · 메타-ingest(③, #917) · 채널 cap(#909) · 쇼츠(#913) · 관련도(4th, ulc 0/82) **에 이은 5번째**. prod 실측(mandala bdc5505f): 추천 13/43(30%) <1k뷰(min 2뷰), 49/49 metafetch null. = §2 ④ 의 우회 인스턴스 확정.
+
+### C. config 전파 횡단 (⑥ auth/quota 인접 — 신규 관심사)
+토글 활성 경로가 제각각: (a) compose `environment:` 리터럴 / (b) deploy.yml→gh-variable→.env sed / (c) 코드 default — 셋이 **우선순위 충돌**(b 가 a 에 가려 silent DEAD). RICH_SUMMARY 는 a·b 우연 일치로 은폐, BACKFILL 은 a=false·b=true 충돌로 수개월 잠복. **정본 = 토글 활성 SSOT 1개 + 검증은 `docker exec printenv`(truth, .env 아님)**. 감사 ⑥ 에 편입.
+
+### D. ★Phase 2 0순위 — 전제 강제 장치 부재 (오늘의 빈틈1, 핵심)★
+오늘 모든 fix(auto-add chokepoint·view 게이트·정합)는 **"현 코드가 우연히 모든 자동유입을 그 경로로 보내서"** 성립 — 미래의 새 유입 경로(새 executor / 직접 uvs·ulc INSERT / 새 placement)가 chokepoint 를 우회해 같은 병을 재발시키는 걸 **구조가 막지 못함**. convention(우연) ≠ invariant(강제). **2단계 정본층 설계 0순위 = "카드 생성·콘텐츠·메타의 유일 통로"를 type/lint/test/DB-constraint 로 우회 불가능하게 강제**하는 장치. 이게 없으면 정본도 또 우연이 된다 — 1~5th instance 가 계속 새로 생기는 근본 원인.
+
+### E. 감사 1단계 출발 준비 (확인 완료)
+- 핸드오프 origin 최신(behind 0, `46befc18` + 본 박제 커밋).
+- 두 축(저장/도달) 방법론 = line 152, §6-bis 마커 present.
+- needs-full-read 마커 = 170/176/181/185/190 present.
+- **감사 1단계 = 별도 신규 세션** (현 세션 더 파면 "절반짜리 지도" 위배). 본 세션은 박제+준비 확인까지.
