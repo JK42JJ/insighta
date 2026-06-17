@@ -52,10 +52,10 @@ import { logger } from '@/utils/logger';
 import { getJobQueue } from '../manager';
 import { JOB_NAMES, POOL_SERVE_FILL_RETRY_OPTIONS, type PoolServeFillPayload } from '../types';
 import { richSummaryWorkOptions } from './rich-summary-work-options';
+import { placeAutoAddedCards } from '@/modules/mandala/place-auto-added-cards';
 
 const log = logger.child({ module: 'pool-serve-fill' });
 
-const ROOT_LEVEL_ID = 'root';
 /** Candidates scored concurrently (OpenRouter key shared — bursts of 4, CP499). */
 const SCORE_BURST_SIZE = 4;
 /** Live fallback fetch size — one search.list call, gated downstream. */
@@ -339,45 +339,30 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
       }
     }
 
-    // ── Insert (1차+2차 합산) — auto-add 파이프라인과 동일 shape; 게이트
-    //    점수를 행에 복사 (재채점 0콜). live 후보는 youtube_videos 행이 없을
-    //    수 있어 minimal upsert 로 보강 (정상 파이프라인의 cache-hint 동작).
-    for (const cand of passed) {
-      let yv = await prisma.youtube_videos.findUnique({
-        where: { youtube_video_id: cand.youtubeVideoId },
-        select: { id: true },
-      });
-      if (!yv) {
-        yv = await prisma.youtube_videos.create({
-          data: {
-            youtube_video_id: cand.youtubeVideoId,
-            title: cand.title,
-            description: cand.description,
-            thumbnail_url: cand.thumbnail,
-            channel_title: cand.channelTitle,
-            published_at: cand.publishedAt,
-          },
-          select: { id: true },
-        });
-      }
-      const created = await prisma.userVideoState.createMany({
-        data: [
-          {
-            user_id: p.userId,
-            videoId: yv.id,
-            mandala_id: p.mandalaId,
-            cell_index: p.cellIndex,
-            level_id: ROOT_LEVEL_ID,
-            is_in_ideation: false,
-            auto_added: true,
-            relevance_pct: cand.relevancePct,
-            relevance_at: new Date(),
-          },
-        ],
-        skipDuplicates: true,
-      });
-      result.inserted += created.count;
-    }
+    // ── Insert (1차+2차 합산) via the shared auto-add chokepoint
+    //    `placeAutoAddedCards` — CP500++ PR-2 (INV-CHOKEPOINT-ENFORCED). The
+    //    gate score (relevancePct) is copied to uvs.relevance_pct; live
+    //    candidates whose youtube_videos row is missing get a minimal create
+    //    inside the primitive (same cache-hint behaviour). No view-gate / no
+    //    notify here — pool-serve drives FE state via skill_runs, not SSE.
+    const placed = await placeAutoAddedCards(
+      prisma,
+      p.userId,
+      p.mandalaId,
+      p.cellIndex,
+      passed.map((cand) => ({
+        videoId: cand.youtubeVideoId,
+        title: cand.title,
+        description: cand.description,
+        thumbnail: cand.thumbnail,
+        channelTitle: cand.channelTitle,
+        durationSec: cand.durationSec ?? null,
+        viewCount: null,
+        publishedAt: cand.publishedAt,
+        relevancePct: cand.relevancePct,
+      }))
+    );
+    result.inserted += placed.inserted;
     // 3차: passed가 비면 아무것도 넣지 않는다 — 정직한 빈 셀.
 
     log.info(
