@@ -88,6 +88,17 @@ jobs:
           path: reports/hardcode-audit/latest.json
           retention-days: 30
 
+  config-ssot:
+    name: Config SSOT
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toggle single-source-of-truth guard
+        # INV-CONFIG-SSOT — fails on (a) a toggle in both compose environment:
+        # and deploy.yml .env-write, or (b) a duplicate key within compose
+        # environment: (silent-override class, §10-C). See the script header.
+        run: bash scripts/ci/check-config-ssot.sh
+
   # Combined: test-backend + build-api (saves 1 npm ci)
   test-and-build-api:
     name: Test Backend & Build API

@@ -220,6 +220,9 @@ scripts/*
 !scripts/apply-custom-sql.sh
 !scripts/hooks/
 !scripts/hooks/**
+# CP500++ — CI guards (tracked so GitHub Actions can run them).
+!scripts/ci/
+!scripts/ci/**
 prompt/
 
 # Dev tool configs
