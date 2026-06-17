@@ -49,7 +49,13 @@ services:
       # Re-enable path: (a) pool >= 10k rows (Phase 3B), (b) candidate
       # top-N cap before embed (e.g. top 30), (c) domain-tuned embedding.
       # See docs/design/realtime-search-pipeline.md (Phase 3A).
-      - V3_CENTER_GATE_MODE=subword
+      # CP500++ CONFIG-SSOT (2026-06-16) — REMOVED dead duplicate
+      # `V3_CENTER_GATE_MODE=subword`. The later `=semantic` definition below
+      # (~:320) wins (Docker Compose keeps the LAST of a duplicated key), so this
+      # earlier line was a silent no-op (prod printenv = semantic). Live value
+      # preserved = semantic. NOTE: the CP418 subword-rollback intent above is
+      # HISTORICAL and was silently overridden — possibly unintended; flagged for
+      # SEPARATE review (PR-1 is value-invariant SSOT cleanup, behavior unchanged).
       # CP492 (2026-06-01) — A/B: cell_binning picker. Default in code is 'llm'
       # (current OpenRouter Haiku batch picker). Measured problems with 'llm':
       # it is the discover bottleneck (llmMs 5.8-7.7s = 85-90% of discover; its
@@ -223,6 +229,13 @@ services:
       # Re-enable AFTER (a) cron path captioner integration ships AND
       # (b) the LLM provider is swapped to Sonnet 4.6 in the v2 path.
       - RICH_SUMMARY_V2_CRON_ENABLED=false
+      # CP500++ CONFIG-SSOT (2026-06-16) — MIGRATED from deploy.yml→.env to compose
+      # (single SSOT; removes the §10-C dual-channel where compose silently wins).
+      # Values preserved verbatim from prod printenv 2026-06-16 (value-invariant).
+      # v2 quality audit/regen cron toggles (config/v2-quality-audit.ts coerces
+      # unset→false). Rollback: set false / delete line + redeploy → code default.
+      - V2_QUALITY_AUDIT_ENABLED=true
+      - V2_QUALITY_REGEN_ENABLED=false
       # CP499 (2026-06-10) — A-stage relevance backfill worker concurrency.
       # Measured: 38-card mandala scored in 38.3s = 38 Haiku calls (~2.3s each) ÷
       # 4 parallel (code default). Raise 4→8 to ~halve to ~19s. Network-bound

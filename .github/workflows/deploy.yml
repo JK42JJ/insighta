@@ -257,75 +257,12 @@ jobs:
           LS_VARIANT_MONTHLY: ${{ vars.LEMONSQUEEZY_LIVE_VARIANT_ID_PRO_MONTHLY }}
           LS_VARIANT_YEARLY: ${{ vars.LEMONSQUEEZY_LIVE_VARIANT_ID_PRO_YEARLY }}
           LS_VARIANT_LIFETIME: ${{ vars.LEMONSQUEEZY_LIVE_VARIANT_ID_PRO_LIFETIME }}
-          # CP462+ Issue #649 — Heart-click on-demand v2 trigger.
-          # Non-secret per CP392: toggle, not a credential. Default empty
-          # ⇒ enrichRichSummary stays in its existing `enabled=false`
-          # state (config/rich-summary.ts:39). Set GitHub Variable
-          # RICH_SUMMARY_ENABLED to "true" to activate.
-          RICH_SUMMARY_ENABLED: ${{ vars.RICH_SUMMARY_ENABLED }}
-          # CP474 — YouTube metadata backfill cron activation.
-          # Non-secret per CP392: boolean toggle, not a credential. Default
-          # empty ⇒ startYouTubeMetadataCron() exits early per
-          # src/modules/scheduler/youtube-metadata-cron.ts:111 (cron never
-          # registered, no API calls). Set GitHub Variable
-          # YOUTUBE_METADATA_BACKFILL_ENABLED to "true" to activate the
-          # backfill of tags / topic_categories / has_caption /
-          # default_language / comment_count for the ~11K youtube_videos
-          # rows that were created with snippet-only data and never
-          # received the full videos.list metadata enrichment.
-          YOUTUBE_METADATA_BACKFILL_ENABLED: ${{ vars.YOUTUBE_METADATA_BACKFILL_ENABLED }}
-          # CP488+ — v2 Quality Audit daily scan cron activation. Non-secret
-          # per CP392 (boolean toggle, not a credential). Default empty ⇒
-          # config/v2-quality-audit.ts coerces to `false` ⇒
-          # startV2QualityAuditCron() logs "v2 quality audit cron disabled"
-          # at startup and never schedules. Set GitHub Variable
-          # V2_QUALITY_AUDIT_ENABLED to "true" to activate the daily
-          # 04:00 UTC scan that scores every v2 rich-summary row against
-          # 8 hallucination metrics and enqueues critical rows into
-          # v2_quality_regen_queue for Phase 3 background regeneration.
-          # Design: docs/design/v2-quality-audit-system-2026-05-27.md
-          V2_QUALITY_AUDIT_ENABLED: ${{ vars.V2_QUALITY_AUDIT_ENABLED }}
-          # CP488+ Phase 3 — v2 Quality Regen worker activation. Same
-          # CP392 non-secret pattern. Default empty ⇒
-          # config/v2-quality-audit.ts coerces regenEnabled=false ⇒
-          # startV2QualityRegenCron() logs "regen cron disabled" and never
-          # schedules. Set GitHub Variable V2_QUALITY_REGEN_ENABLED to
-          # "true" to activate the every-30-min drain of the
-          # v2_quality_regen_queue: each tick re-runs the v2 generator
-          # on up to V2_QUALITY_AUDIT_REGEN_BATCH_SIZE (default 5)
-          # critical videos with forceRegen=true, re-audits them, and
-          # resolves the queue row. Throughput: 5 × 48 = 240 videos/day
-          # max. Drain time for the initial 518-row backlog: ~2.2 days.
-          # OpenRouter Sonnet 4.6 cost: ~$0.06/video → ~$30 one-time +
-          # ongoing per audit-discovered critical row. Rollback: set
-          # variable to "false" + redeploy (no code revert).
-          V2_QUALITY_REGEN_ENABLED: ${{ vars.V2_QUALITY_REGEN_ENABLED }}
-          # CP489 — video-discover trace capture toggle. Non-secret per CP392
-          # (boolean flag, not a credential). Default empty ⇒ config/index.ts
-          # coerces to `false` ⇒ discover-tracing fireAndForgetWrite no-ops,
-          # so the algorithm versioning A/B oracle has no per-mandala data
-          # to attribute. Set GitHub Variable V3_TRACE_ENABLED=true to
-          # activate fire-and-forget INSERTs into public.video_discover_traces
-          # for every LLM/YouTube/Cohere/embed step. Volume: O(10-20 rows per
-          # discovery call). Rollback: unset (or set to false) + redeploy —
-          # no code revert needed.
-          V3_TRACE_ENABLED: ${{ vars.V3_TRACE_ENABLED }}
-          # CP498 PR2 — enrich-rich-summary (Heart) worker concurrency. unset ⇒
-          # config zod default 4 (the -n guard in the script skips the write, so
-          # no empty value reaches .env → process.env unset → default). Tune /
-          # rollback: `gh variable set RICH_SUMMARY_CONCURRENCY --body 1` (serial)
-          # or `--body 6` (raise) + redeploy — no code revert. Non-secret per
-          # CP392 (tuning knob).
-          RICH_SUMMARY_CONCURRENCY: ${{ vars.RICH_SUMMARY_CONCURRENCY }}
-          # CP498 PR3b — A-stage relevance backfill. 3 non-secret tuning knobs
-          # (CP392). BACKFILL_RELEVANCE_ENABLED gates the AUTO path (default
-          # OFF); RELEVANCE_BACKFILL_CONCURRENCY = worker pool size (default 4);
-          # RELEVANCE_BACKFILL_CUTOFF = ISO ts (auto path scores only newer
-          # cards). All unset ⇒ config zod defaults; the admin manual route
-          # works regardless of the flag. Rollback: unset/false + redeploy.
-          BACKFILL_RELEVANCE_ENABLED: ${{ vars.BACKFILL_RELEVANCE_ENABLED }}
-          RELEVANCE_BACKFILL_CONCURRENCY: ${{ vars.RELEVANCE_BACKFILL_CONCURRENCY }}
-          RELEVANCE_BACKFILL_CUTOFF: ${{ vars.RELEVANCE_BACKFILL_CUTOFF }}
+          # CP500++ CONFIG-SSOT (2026-06-16) — runtime toggle env vars removed
+          # from this env: block (their .env-write blocks in the script were also
+          # deleted). Toggle activation SSOT now lives in docker-compose.prod.yml
+          # `environment:`. Only secrets remain here + in the script's .env writes.
+          # Guard: scripts/ci/check-config-ssot.sh. Design: docs/handoffs/
+          # crosscutting-audit-phase2-design.md (PR-1).
           # Mac Mini transcript proxy. EC2 outbound to YouTube is blocked
           # for caption fetch; the Mac Mini (KR ISP IP, Tailscale 4242)
           # successfully fetches and forwards via x-transcript-token auth.
@@ -337,7 +274,9 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,YT_VIDEOS_KEY,YT_VIDEOS_KEY_2,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,RICH_SUMMARY_ENABLED,YOUTUBE_METADATA_BACKFILL_ENABLED,V2_QUALITY_AUDIT_ENABLED,V2_QUALITY_REGEN_ENABLED,V3_TRACE_ENABLED,RICH_SUMMARY_CONCURRENCY,BACKFILL_RELEVANCE_ENABLED,RELEVANCE_BACKFILL_CONCURRENCY,RELEVANCE_BACKFILL_CUTOFF,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN
+          # CP500++ CONFIG-SSOT — toggle keys removed from this forward list
+          # (now compose-SSOT); only secrets + non-conflicting config remain.
+          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,YT_VIDEOS_KEY,YT_VIDEOS_KEY_2,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN
           script: |
             set -e
             cd /opt/tubearchive
@@ -351,85 +290,17 @@ jobs:
             if [ -n "${COHERE_KEY}" ]; then
               grep -q '^COHERE_API_KEY=' .env 2>/dev/null && sed -i "s|^COHERE_API_KEY=.*|COHERE_API_KEY=${COHERE_KEY}|" .env || echo "COHERE_API_KEY=${COHERE_KEY}" >> .env
             fi
-            # CP416 Phase 3 — activate v3 semantic center gate (cosine over
-            # qwen3-embedding:8b). Replaces lexical gate recall 0.27 that
-            # surfaced the "2 cards" symptom. Non-secret tuning knob per
-            # CP392: stdout-safe + open-source-safe → hardcoded here, not
-            # GH Secret. Rollback: change value to "substring" or delete row.
-            grep -q '^V3_CENTER_GATE_MODE=' .env 2>/dev/null && sed -i "s|^V3_CENTER_GATE_MODE=.*|V3_CENTER_GATE_MODE=semantic|" .env || echo "V3_CENTER_GATE_MODE=semantic" >> .env
-            # CP462+ Issue #649 — Heart-click v2 generation trigger.
-            # When RICH_SUMMARY_ENABLED GitHub Variable is unset/empty the
-            # sed branch falls through to NOT writing the row, leaving the
-            # config/rich-summary.ts default (false) in effect. Activate
-            # by `gh variable set RICH_SUMMARY_ENABLED --body true` then
-            # redeploy. Non-secret per CP392 (boolean tuning knob).
-            if [ -n "${RICH_SUMMARY_ENABLED}" ]; then
-              grep -q '^RICH_SUMMARY_ENABLED=' .env 2>/dev/null && sed -i "s|^RICH_SUMMARY_ENABLED=.*|RICH_SUMMARY_ENABLED=${RICH_SUMMARY_ENABLED}|" .env || echo "RICH_SUMMARY_ENABLED=${RICH_SUMMARY_ENABLED}" >> .env
-            fi
-            # CP474 — YouTube metadata backfill cron activation. Same
-            # idempotent grep/sed/echo pattern as RICH_SUMMARY_ENABLED.
-            # When the Variable is unset/empty the conditional skips,
-            # leaving the youtube-metadata config default (false) in
-            # effect (src/config/youtube-metadata.ts:32) and the cron
-            # logs "metadata cron disabled (...)" at startup. Activate
-            # via `gh variable set YOUTUBE_METADATA_BACKFILL_ENABLED
-            # --body true` then redeploy.
-            if [ -n "${YOUTUBE_METADATA_BACKFILL_ENABLED}" ]; then
-              grep -q '^YOUTUBE_METADATA_BACKFILL_ENABLED=' .env 2>/dev/null && sed -i "s|^YOUTUBE_METADATA_BACKFILL_ENABLED=.*|YOUTUBE_METADATA_BACKFILL_ENABLED=${YOUTUBE_METADATA_BACKFILL_ENABLED}|" .env || echo "YOUTUBE_METADATA_BACKFILL_ENABLED=${YOUTUBE_METADATA_BACKFILL_ENABLED}" >> .env
-            fi
-            # CP488+ — v2 Quality Audit daily scan cron activation. Same
-            # idempotent grep/sed/echo pattern. When unset/empty, the
-            # conditional skips and config/v2-quality-audit.ts default
-            # `false` stays in effect ⇒ startV2QualityAuditCron() never
-            # schedules. Activate via `gh variable set
-            # V2_QUALITY_AUDIT_ENABLED --body true` then redeploy.
-            if [ -n "${V2_QUALITY_AUDIT_ENABLED}" ]; then
-              grep -q '^V2_QUALITY_AUDIT_ENABLED=' .env 2>/dev/null && sed -i "s|^V2_QUALITY_AUDIT_ENABLED=.*|V2_QUALITY_AUDIT_ENABLED=${V2_QUALITY_AUDIT_ENABLED}|" .env || echo "V2_QUALITY_AUDIT_ENABLED=${V2_QUALITY_AUDIT_ENABLED}" >> .env
-            fi
-            # CP488+ Phase 3 — v2 Quality Regen worker activation. Same
-            # idempotent pattern. Default OFF ⇒ regen cron never schedules.
-            # Activate via `gh variable set V2_QUALITY_REGEN_ENABLED
-            # --body true` then redeploy. Drains v2_quality_regen_queue
-            # by re-running the v2 generator on critical rows
-            # (~$0.06/video × initial 518 critical = ~$30 one-time burn).
-            if [ -n "${V2_QUALITY_REGEN_ENABLED}" ]; then
-              grep -q '^V2_QUALITY_REGEN_ENABLED=' .env 2>/dev/null && sed -i "s|^V2_QUALITY_REGEN_ENABLED=.*|V2_QUALITY_REGEN_ENABLED=${V2_QUALITY_REGEN_ENABLED}|" .env || echo "V2_QUALITY_REGEN_ENABLED=${V2_QUALITY_REGEN_ENABLED}" >> .env
-            fi
-            # CP489 — video-discover trace capture toggle. Same idempotent
-            # pattern as RICH_SUMMARY_ENABLED / YOUTUBE_METADATA_BACKFILL_ENABLED.
-            # When the Variable is unset/empty the conditional skips and the
-            # src/config/index.ts default (`false` per :185) stays in effect
-            # — discover-tracing fireAndForgetWrite no-ops, video_discover_traces
-            # gets no rows, /admin/search-algorithms/comparison shows NULL
-            # algorithm_version for add-cards traffic. Activate via
-            # `gh variable set V3_TRACE_ENABLED --body true` then redeploy.
-            # Rollback: `gh variable set V3_TRACE_ENABLED --body false` or
-            # `gh variable delete V3_TRACE_ENABLED` + redeploy — no code revert.
-            if [ -n "${V3_TRACE_ENABLED}" ]; then
-              grep -q '^V3_TRACE_ENABLED=' .env 2>/dev/null && sed -i "s|^V3_TRACE_ENABLED=.*|V3_TRACE_ENABLED=${V3_TRACE_ENABLED}|" .env || echo "V3_TRACE_ENABLED=${V3_TRACE_ENABLED}" >> .env
-            fi
-            # CP498 PR2 — enrich-rich-summary worker concurrency. Same idempotent
-            # pattern. When the Variable is unset/empty the conditional skips and
-            # the config zod default (4, src/config/index.ts) stays in effect, so
-            # no empty value is ever written to .env (avoids coerce-of-"" crash).
-            # Tune/rollback via `gh variable set RICH_SUMMARY_CONCURRENCY --body N`
-            # + redeploy — no code revert.
-            if [ -n "${RICH_SUMMARY_CONCURRENCY}" ]; then
-              grep -q '^RICH_SUMMARY_CONCURRENCY=' .env 2>/dev/null && sed -i "s|^RICH_SUMMARY_CONCURRENCY=.*|RICH_SUMMARY_CONCURRENCY=${RICH_SUMMARY_CONCURRENCY}|" .env || echo "RICH_SUMMARY_CONCURRENCY=${RICH_SUMMARY_CONCURRENCY}" >> .env
-            fi
-            # CP498 PR3b — A-stage relevance backfill knobs. Same idempotent
-            # pattern. All unset/empty ⇒ conditional skips ⇒ config zod defaults
-            # (enabled=false / concurrency=4 / cutoff=unset). Tune/rollback via
-            # `gh variable set <NAME> --body <v>` + redeploy — no code revert.
-            if [ -n "${BACKFILL_RELEVANCE_ENABLED}" ]; then
-              grep -q '^BACKFILL_RELEVANCE_ENABLED=' .env 2>/dev/null && sed -i "s|^BACKFILL_RELEVANCE_ENABLED=.*|BACKFILL_RELEVANCE_ENABLED=${BACKFILL_RELEVANCE_ENABLED}|" .env || echo "BACKFILL_RELEVANCE_ENABLED=${BACKFILL_RELEVANCE_ENABLED}" >> .env
-            fi
-            if [ -n "${RELEVANCE_BACKFILL_CONCURRENCY}" ]; then
-              grep -q '^RELEVANCE_BACKFILL_CONCURRENCY=' .env 2>/dev/null && sed -i "s|^RELEVANCE_BACKFILL_CONCURRENCY=.*|RELEVANCE_BACKFILL_CONCURRENCY=${RELEVANCE_BACKFILL_CONCURRENCY}|" .env || echo "RELEVANCE_BACKFILL_CONCURRENCY=${RELEVANCE_BACKFILL_CONCURRENCY}" >> .env
-            fi
-            if [ -n "${RELEVANCE_BACKFILL_CUTOFF}" ]; then
-              grep -q '^RELEVANCE_BACKFILL_CUTOFF=' .env 2>/dev/null && sed -i "s|^RELEVANCE_BACKFILL_CUTOFF=.*|RELEVANCE_BACKFILL_CUTOFF=${RELEVANCE_BACKFILL_CUTOFF}|" .env || echo "RELEVANCE_BACKFILL_CUTOFF=${RELEVANCE_BACKFILL_CUTOFF}" >> .env
-            fi
+            # CP500++ CONFIG-SSOT (2026-06-16) — runtime TOGGLES removed from the
+            # .env-write path. Toggle activation SSOT = docker-compose.prod.yml
+            # `environment:` (compose literal wins over env_file per Docker
+            # precedence; the old dual-write let compose silently override .env =
+            # the §10-C silent-DEAD bug, e.g. YOUTUBE_METADATA_BACKFILL_ENABLED
+            # was compose=false while .env=... → process=false). deploy.yml now
+            # writes ONLY secrets to .env. To flip a toggle: edit the compose
+            # `environment:` literal + redeploy; verify with
+            # `docker exec insighta-api printenv | grep KEY`. CI guard prevents
+            # re-introducing a dual definition: scripts/ci/check-config-ssot.sh.
+            # Design: docs/handoffs/crosscutting-audit-phase2-design.md (PR-1).
             # 2026-04-18 — sync DB URLs from GitHub Secrets so password
             # rotations propagate to prod .env without manual SSH. Was
             # blocking deploy after Supabase password rotation (container
