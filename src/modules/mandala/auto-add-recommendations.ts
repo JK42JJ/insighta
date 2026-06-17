@@ -53,10 +53,7 @@
 
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
-import {
-  VIDEO_DISCOVER_SKILL_TYPE,
-  loadAutoAddGuardConfig,
-} from '@/config/recommendations';
+import { VIDEO_DISCOVER_SKILL_TYPE, loadAutoAddGuardConfig } from '@/config/recommendations';
 import { recordTrace } from '@/modules/discover-tracing';
 import { placeAutoAddedCards } from './place-auto-added-cards';
 
