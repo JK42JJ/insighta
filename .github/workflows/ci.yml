@@ -99,6 +99,16 @@ jobs:
         # environment: (silent-override class, §10-C). See the script header.
         run: bash scripts/ci/check-config-ssot.sh
 
+  card-chokepoint:
+    name: Card Chokepoint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: auto_added card-placement chokepoint guard
+        # INV-CHOKEPOINT-ENFORCED — auto_added:true (discovery inflow) may be
+        # inserted only via placeAutoAddedCards; flags any new bypass path.
+        run: bash scripts/ci/check-card-chokepoint.sh
+
   # Combined: test-backend + build-api (saves 1 npm ci)
   test-and-build-api:
     name: Test Backend & Build API
