@@ -28,10 +28,19 @@ const boolFlag = z.preprocess((v) => {
 
 export const wizardMergedGenEnvSchema = z.object({
   WIZARD_MERGED_GEN: boolFlag.default(false as unknown as string),
+  // CP500+ — timeout (ms) for the OPTIONAL few-shot reference search inside
+  // merged-gen. searchMandalasByGoal does a qwen3-embedding-8b embed on the
+  // wizard critical path; when the embed provider degrades it can take ~5s and
+  // block the wizard, but the reference is optional (the prompt builds without
+  // it). Cap it so an embed-latency spike never blocks generation. Measured
+  // healthy embed p50 ~530-800ms → 1500 keeps the reference when fast, skips it
+  // when degraded. 0 = no timeout (legacy blocking behavior).
+  MERGED_GEN_REF_TIMEOUT_MS: z.coerce.number().int().min(0).default(1500),
 });
 
 export interface WizardMergedGenConfig {
   enabled: boolean;
+  refTimeoutMs: number;
 }
 
 export function loadWizardMergedGenConfig(
@@ -39,9 +48,13 @@ export function loadWizardMergedGenConfig(
 ): WizardMergedGenConfig {
   const parsed = wizardMergedGenEnvSchema.safeParse({
     WIZARD_MERGED_GEN: env['WIZARD_MERGED_GEN'],
+    MERGED_GEN_REF_TIMEOUT_MS: env['MERGED_GEN_REF_TIMEOUT_MS'],
   });
   if (!parsed.success) {
-    return { enabled: false };
+    return { enabled: false, refTimeoutMs: 1500 };
   }
-  return { enabled: parsed.data.WIZARD_MERGED_GEN };
+  return {
+    enabled: parsed.data.WIZARD_MERGED_GEN,
+    refTimeoutMs: parsed.data.MERGED_GEN_REF_TIMEOUT_MS,
+  };
 }
