@@ -22,8 +22,17 @@ const paramsSchema = z.object({
   cardId: z.string().uuid(),
 });
 
+// Origin table of the card id (CP501). Optional ⇒ defaults to user_video_states
+// in the service (back-compat with callers that don't pass it).
+const noteSourceSchema = z.enum(['user_video_states', 'user_local_cards']).optional();
+
+const getQuerySchema = z.object({
+  source: noteSourceSchema,
+});
+
 const patchBodySchema = z.object({
   note: tiptapDocSchema,
+  sourceTable: noteSourceSchema,
 });
 
 export const videoRichNotesRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
@@ -48,8 +57,12 @@ export const videoRichNotesRoutes: FastifyPluginCallback = (fastify, _opts, done
       }
       const { cardId } = parseResult.data;
 
+      // Source is optional; an invalid value falls back to the service default.
+      const queryResult = getQuerySchema.safeParse(request.query);
+      const source = queryResult.success ? queryResult.data.source : undefined;
+
       try {
-        const view = await service().getRichNote(request.user.userId, cardId);
+        const view = await service().getRichNote(request.user.userId, cardId, source);
         return reply.code(200).send({
           cardId,
           video: view.video,
@@ -105,7 +118,12 @@ export const videoRichNotesRoutes: FastifyPluginCallback = (fastify, _opts, done
       }
 
       try {
-        const result = await service().saveRichNote(request.user.userId, cardId, doc);
+        const result = await service().saveRichNote(
+          request.user.userId,
+          cardId,
+          doc,
+          bodyResult.data.sourceTable
+        );
         return reply.code(200).send({ updatedAt: result.updatedAt });
       } catch (err) {
         if (err instanceof RichNoteNotFoundError) {

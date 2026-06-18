@@ -53,12 +53,12 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
     setNoteLoaded(false);
     setRichNote(null);
     apiClient
-      .getRichNote(currentCard.id)
+      .getRichNote(currentCard.id, currentCard.sourceTable)
       .then((res) => {
         if (res?.note) setRichNote(res.note as TiptapDoc);
       })
       .finally(() => setNoteLoaded(true));
-  }, [currentCard?.id]);
+  }, [currentCard?.id, currentCard?.sourceTable]);
 
   const noteContent = richNote ?? currentCard?.userNote ?? '';
 
@@ -66,12 +66,20 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
   const handleDocChange = useCallback(
     (doc: unknown) => {
       if (!currentCard?.id) return;
+      const cardId = currentCard.id;
+      const sourceTable = currentCard.sourceTable;
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
-        apiClient.saveRichNote(currentCard.id, doc).catch(() => {});
+        // CP501 — route by sourceTable so ulc notes persist; surface failures
+        // instead of swallowing them (previously `.catch(() => {})` hid the
+        // ulc 404 → silent data loss).
+        apiClient.saveRichNote(cardId, doc, sourceTable).catch((err) => {
+          console.error('saveRichNote failed', err);
+          toast.error(t('learning.noteSaveFailed', '노트 저장에 실패했어요. 다시 시도해 주세요.'));
+        });
       }, 1500);
     },
-    [currentCard?.id]
+    [currentCard?.id, currentCard?.sourceTable, t]
   );
 
   const handleSeek = useCallback(
