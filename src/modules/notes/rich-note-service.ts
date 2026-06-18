@@ -2,16 +2,25 @@
  * Rich Note Service
  *
  * Backs the Notion-style side editor (Phase 1-4 MVP).
- * Persists Tiptap JSON in `user_video_states.user_note_json` (source of truth)
- * AND a plain-text extract in `user_video_states.user_note` so that the
- * existing eviction rule (WHERE user_note IS NULL) continues to work unchanged.
+ *
+ * Source-aware routing (CP501 — ① note write-dead fix):
+ *   A card id is an opaque uuid that can belong to EITHER user_video_states
+ *   (uvs) OR user_local_cards (ulc). The caller passes the origin table via
+ *   `sourceTable` so this single service routes read/write to the right table
+ *   — no per-call-site branching (canonical-layer first application).
+ *   - uvs: dual-writes Tiptap JSON (`user_note_json`, source of truth) + a
+ *     plain-text extract (`user_note`) so the eviction rule (WHERE user_note
+ *     IS NULL) keeps working.
+ *   - ulc: has NO `user_note_json` column → stores the plain-text extract only
+ *     (`user_note`). Rich formatting is not persisted for ulc cards (full rich
+ *     parity would require a DDL column-add — tracked as (a)-B, out of scope).
  *
  * Contract:
- *   - getRichNote(): returns Tiptap JSON if available; if only legacy plain text exists,
- *     wraps it into a read-only paragraph doc (DB is NOT modified here — write-through
- *     migration happens on the first PATCH).
- *   - saveRichNote(): dual-writes both columns atomically in a single UPDATE.
- *     Empty docs clear both columns so the card returns to eviction eligibility.
+ *   - getRichNote(): returns Tiptap JSON if available; if only legacy/plain text
+ *     exists, wraps it into a read-only paragraph doc (DB is NOT modified here).
+ *   - saveRichNote(): persists the user-edited doc. Empty docs clear the note
+ *     column(s) so the card returns to eviction eligibility. Only the edited
+ *     doc is written — no legacy/bulk write-through migration.
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { getPrismaClient } from '../database';
@@ -19,12 +28,15 @@ import type { TiptapDoc, TiptapNode } from './tiptap-schema';
 import { extractPlainText, isEmptyDoc } from './tiptap-text-extract';
 import { logger } from '../../utils/logger';
 
+/** Origin table of a card id. Mirrors InsightCard.sourceTable on the FE. */
+export type NoteSourceTable = 'user_video_states' | 'user_local_cards';
+
 export interface RichNoteView {
   /** Tiptap JSON to render in the editor. Never null — legacy text is wrapped. */
   note: TiptapDoc | null;
-  /** True when returned note was synthesized from a legacy plain-text value. */
+  /** True when returned note was synthesized from a legacy/plain-text value. */
   isLegacy: boolean;
-  /** Last-updated timestamp (ISO string) from user_video_states.updatedAt. */
+  /** Last-updated timestamp (ISO string). */
   updatedAt: string | null;
   /** Video metadata for the editor header. */
   video: {
@@ -39,7 +51,7 @@ export interface RichNoteView {
 }
 
 export class RichNoteNotFoundError extends Error {
-  constructor(message = 'user_video_state row not found') {
+  constructor(message = 'card row not found') {
     super(message);
     this.name = 'RichNoteNotFoundError';
   }
@@ -67,10 +79,47 @@ function coerceTiptapDoc(value: Prisma.JsonValue | null): TiptapDoc | null {
   return value as unknown as TiptapDoc;
 }
 
+/** True when the Prisma error signals "row not found" for an update. */
+function isRowNotFound(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code?: string }).code === 'P2025'
+  );
+}
+
 export class RichNoteService {
   constructor(private readonly db: PrismaClient = getPrismaClient()) {}
 
-  async getRichNote(userId: string, cardId: string): Promise<RichNoteView> {
+  /** Route a read to the correct origin table. Defaults to uvs (back-compat). */
+  async getRichNote(
+    userId: string,
+    cardId: string,
+    sourceTable: NoteSourceTable = 'user_video_states'
+  ): Promise<RichNoteView> {
+    return sourceTable === 'user_local_cards'
+      ? this.getRichNoteFromLocalCard(userId, cardId)
+      : this.getRichNoteFromVideoState(userId, cardId);
+  }
+
+  /** Route a write to the correct origin table. Defaults to uvs (back-compat). */
+  async saveRichNote(
+    userId: string,
+    cardId: string,
+    doc: TiptapNode,
+    sourceTable: NoteSourceTable = 'user_video_states'
+  ): Promise<{ updatedAt: string }> {
+    return sourceTable === 'user_local_cards'
+      ? this.saveRichNoteToLocalCard(userId, cardId, doc)
+      : this.saveRichNoteToVideoState(userId, cardId, doc);
+  }
+
+  // ---------------------------------------------------------------------------
+  // user_video_states (uvs) — dual-write JSON + plain extract (unchanged)
+  // ---------------------------------------------------------------------------
+
+  private async getRichNoteFromVideoState(userId: string, cardId: string): Promise<RichNoteView> {
     const row = await this.db.userVideoState.findFirst({
       where: { id: cardId, user_id: userId },
       select: {
@@ -130,7 +179,7 @@ export class RichNoteService {
    * Ownership is enforced by checking user_id before the UPDATE so an attacker
    * cannot overwrite another user's note by guessing a card UUID.
    */
-  async saveRichNote(
+  private async saveRichNoteToVideoState(
     userId: string,
     cardId: string,
     doc: TiptapNode
@@ -158,15 +207,94 @@ export class RichNoteService {
       });
       return { updatedAt: updated.updatedAt.toISOString() };
     } catch (err) {
-      if (
-        typeof err === 'object' &&
-        err !== null &&
-        'code' in err &&
-        (err as { code?: string }).code === 'P2025'
-      ) {
+      if (isRowNotFound(err)) {
         throw new RichNoteNotFoundError(`No user_video_state for user=${userId} card=${cardId}`);
       }
-      logger.error('rich-note-service: save failed', { err, userId, cardId, empty });
+      logger.error('rich-note-service: uvs save failed', { err, userId, cardId, empty });
+      throw err;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // user_local_cards (ulc) — plain-text only (no user_note_json column)
+  // ---------------------------------------------------------------------------
+
+  private async getRichNoteFromLocalCard(userId: string, cardId: string): Promise<RichNoteView> {
+    const row = await this.db.user_local_cards.findFirst({
+      where: { id: cardId, user_id: userId },
+      select: {
+        user_note: true,
+        updated_at: true,
+        title: true,
+        metadata_title: true,
+        metadata_image: true,
+        video_id: true,
+        mandala_id: true,
+        cell_index: true,
+      },
+    });
+
+    if (!row) {
+      throw new RichNoteNotFoundError(`No user_local_card for user=${userId} card=${cardId}`);
+    }
+
+    // ulc stores plain text only → any existing note is wrapped (always legacy).
+    const note =
+      row.user_note && row.user_note.length > 0 ? wrapLegacyPlainText(row.user_note) : null;
+
+    return {
+      note,
+      isLegacy: note !== null,
+      updatedAt: row.updated_at ? row.updated_at.toISOString() : null,
+      video: {
+        id: row.video_id ?? cardId,
+        title: row.title ?? row.metadata_title ?? '',
+        channel: null,
+        durationSec: null,
+        thumbnail: row.metadata_image ?? null,
+      },
+      mandalaCell:
+        row.mandala_id && typeof row.cell_index === 'number' && row.cell_index >= 0
+          ? { mandalaId: row.mandala_id, cellIndex: row.cell_index }
+          : null,
+    };
+  }
+
+  /**
+   * Write the plain-text extract to user_local_cards.user_note. ulc has no
+   * user_note_json column, so rich formatting is not persisted (the editor
+   * round-trips as plain text). Empty docs clear the note. updated_at is set
+   * explicitly because ulc.updated_at is `@default(now())` without `@updatedAt`.
+   */
+  private async saveRichNoteToLocalCard(
+    userId: string,
+    cardId: string,
+    doc: TiptapNode
+  ): Promise<{ updatedAt: string }> {
+    const empty = isEmptyDoc(doc);
+    const plainText = empty ? null : extractPlainText(doc);
+
+    const existing = await this.db.user_local_cards.findUnique({
+      where: { id: cardId },
+      select: { user_id: true },
+    });
+    if (!existing || existing.user_id !== userId) {
+      throw new RichNoteNotFoundError(`No user_local_card for user=${userId} card=${cardId}`);
+    }
+
+    try {
+      const now = new Date();
+      const updated = await this.db.user_local_cards.update({
+        where: { id: cardId },
+        data: { user_note: plainText, updated_at: now },
+        select: { updated_at: true },
+      });
+      return { updatedAt: (updated.updated_at ?? now).toISOString() };
+    } catch (err) {
+      if (isRowNotFound(err)) {
+        throw new RichNoteNotFoundError(`No user_local_card for user=${userId} card=${cardId}`);
+      }
+      logger.error('rich-note-service: ulc save failed', { err, userId, cardId, empty });
       throw err;
     }
   }

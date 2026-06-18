@@ -1217,18 +1217,29 @@ class ApiClient {
     });
   }
 
-  async getRichNote(cardId: string): Promise<{ note: unknown; updatedAt: string } | null> {
+  async getRichNote(
+    cardId: string,
+    sourceTable?: 'user_video_states' | 'user_local_cards'
+  ): Promise<{ note: unknown; updatedAt: string } | null> {
     try {
-      return await this.request<{ note: unknown; updatedAt: string }>(`/rich-notes/${cardId}`);
+      // CP501 — route read to the card's origin table (uvs vs ulc).
+      const qs = sourceTable ? `?source=${sourceTable}` : '';
+      return await this.request<{ note: unknown; updatedAt: string }>(`/rich-notes/${cardId}${qs}`);
     } catch {
       return null;
     }
   }
 
-  async saveRichNote(cardId: string, note: unknown): Promise<{ updatedAt: string }> {
+  async saveRichNote(
+    cardId: string,
+    note: unknown,
+    sourceTable?: 'user_video_states' | 'user_local_cards'
+  ): Promise<{ updatedAt: string }> {
+    // CP501 — route write to the card's origin table so ulc notes persist
+    // (previously uvs-only → ulc saves 404'd and were silently dropped).
     return this.request<{ updatedAt: string }>(`/rich-notes/${cardId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ note }),
+      body: JSON.stringify({ note, sourceTable }),
     });
   }
 
