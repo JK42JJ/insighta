@@ -164,6 +164,19 @@ services:
       # V5_SERIES_DEDUP_SIM (0.8) / V5_CHANNEL_SOFT_CAP (2 = demote from 3rd).
       # Revert: delete this line + redeploy → code default false (기존 동작).
       - V5_DIVERSITY_GUARD=true
+      # CP500++ (2026-06-18, James [GO]) — restore the min-view floor on the
+      # wizard/auto-add path. #804 (2026-05-30) switched the wizard v3→v5; the v3
+      # quality gate (filterByQualityGate, MIN_VIEW 1000) was NOT carried into v5,
+      # so live-search niche topics admit garbage (measured: a new "Claude Code"
+      # mandala had a 5-view card). The #922 view gate already exists at the
+      # placeAutoAddedCards chokepoint (auto-add passes applyViewGate:true) — this
+      # just sets its floor. Measured on the offending mandala: 1000 cuts 37% (the
+      # <1000 garbage), every cell keeps >=2 cards (no empty cell). rec_cache
+      # view_count null=0% (7d) so the gate input is reliable (no meta-enrich
+      # needed). NULL view = fail-open. Revert: set 0 (or delete) → no-op default.
+      # pool-serve does NOT yet pass applyViewGate (places ~0 now, fail-closed) —
+      # wire it when the pool is reactivated.
+      - AUTO_ADD_MIN_VIEW_COUNT=1000
       # Wizard redesign Phase 1 activation (2026-04-22).
       # Flips embedGoalForMandala from Mac-mini Ollama to OpenRouter's
       # hosted Qwen3-Embedding-8B. Same model family and 4096d so the
