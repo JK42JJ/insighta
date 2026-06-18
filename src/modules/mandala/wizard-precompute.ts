@@ -29,6 +29,7 @@ import { logger } from '@/utils/logger';
 import { loadWizardPrecomputeConfig } from '@/config/wizard-precompute';
 import type { EphemeralDiscoverResult } from '@/skills/plugins/video-discover/v3/executor';
 import { runV5ForWizard } from '@/skills/plugins/video-discover/v5/wizard-adapter';
+import { loadInflowGateConfig } from '@/config/inflow-gate';
 import { notifyCardAdded, type CardPayload } from '@/modules/recommendations/publisher';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { randomUUID } from 'crypto';
@@ -136,6 +137,59 @@ export async function startPrecompute(input: StartPrecomputeInput): Promise<void
       // CP493 — when WIZARD_MERGED_GEN produced full per-cell coverage.
       precomputedQueries: input.cellQueries,
     });
+
+    // CP500++ PR-3 (INV-INFLOW-GATE) — Layer-2 relevance judge for the wizard
+    // v5 path (cell_binning has no relevance judge, unlike v3 cosine / pool-serve
+    // Haiku). Runs HERE (off the consume/save SLO; fire-and-forget precompute).
+    // Stage 1 (INFLOW_GATE_ENABLED) traces would-cut WITHOUT dropping; stage 2
+    // (INFLOW_GATE_CUT) drops below-threshold slots. Fail-open at every level —
+    // a judge failure keeps slots. mandala_id does not exist yet (precompute is
+    // pre-save), so the trace is step-keyed by user_id, not mandala_id.
+    const gateCfg = loadInflowGateConfig(process.env);
+    if (gateCfg.enabled && result.slots.length > 0) {
+      try {
+        // Dynamic import — keeps the Haiku scorer / openrouter / config chain
+        // out of the static graph (load only when the gate is on; default off).
+        const { judgeWizardSlots } = await import('@/modules/inflow-gate/judge');
+        const verdict = await judgeWizardSlots(result.slots, {
+          centerGoal: input.goal,
+          subGoals: input.subGoals,
+          language: input.language,
+          cfg: gateCfg,
+        });
+        if (verdict.wouldCut.length > 0) {
+          const { withTraceContext, recordTrace } = await import('@/modules/discover-tracing');
+          await withTraceContext({ mandalaId: null, userId: input.userId }, async () => {
+            recordTrace({
+              step: gateCfg.cut ? 'inflow_gate.cut' : 'inflow_gate.would_cut',
+              status: 'ok',
+              response: {
+                session_id: input.sessionId,
+                scored: verdict.scored,
+                failed_open: verdict.failedOpen,
+                relevance_min: gateCfg.relevanceMin,
+                cut_count: verdict.wouldCut.length,
+                cut: verdict.wouldCut.slice(0, 50),
+              },
+            });
+          });
+        }
+        if (gateCfg.cut) {
+          result.slots = verdict.kept;
+        }
+        log.info(
+          `inflow-gate: scored=${verdict.scored} would_cut=${verdict.wouldCut.length} ` +
+            `cut=${gateCfg.cut} failed_open=${verdict.failedOpen} session=${input.sessionId}`,
+          { sessionId: input.sessionId }
+        );
+      } catch (err) {
+        // Orchestration-level fail-open: judge failure must not break precompute.
+        log.warn(
+          `inflow-gate judge threw (fail-open, slots kept): ${err instanceof Error ? err.message : String(err)}`,
+          { sessionId: input.sessionId }
+        );
+      }
+    }
 
     await db.mandala_wizard_precompute.update({
       where: { session_id: input.sessionId },
