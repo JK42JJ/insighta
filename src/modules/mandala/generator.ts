@@ -12,7 +12,8 @@ import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { MemoryCache } from '../../utils/memory-cache';
 import { getPrismaClient } from '../database/client';
-import { searchMandalasByGoal, formatMandalasForFewShot } from './search';
+import { searchMandalasByGoal, formatMandalasForFewShot, type MandalaSearchResult } from './search';
+import { loadWizardMergedGenConfig } from '@/config/wizard-merged-gen';
 import { OpenRouterGenerationProvider } from '../llm/openrouter';
 import {
   buildStructurePrompt,
@@ -747,11 +748,42 @@ export async function generateMandalaWithQueries(
   // (embed + cosine) and the generate() LLM call. Splitting them in the [TIMING]
   // log decomposes the merged-gen total (66s reproductions) into its real parts.
   const tSearch = Date.now();
-  const similar = await searchMandalasByGoal(input.goal, {
+  // CP500+ — the few-shot reference is OPTIONAL (the prompt builds without it,
+  // see buildMandalaWithQueriesPrompt: example = reference ? ... : ''). The
+  // search does a qwen3-embedding-8b embed that, when the embed provider
+  // degrades, takes ~5s on the wizard critical path. Cap it so a slow embed
+  // never blocks generation: on timeout/error we proceed with no reference.
+  // MERGED_GEN_REF_TIMEOUT_MS=0 disables the cap (legacy blocking behavior).
+  const refTimeoutMs = loadWizardMergedGenConfig().refTimeoutMs;
+  const searchPromise = searchMandalasByGoal(input.goal, {
     limit: 1,
     threshold: 0.4,
     language: input.language,
+  }).catch((err) => {
+    logger.warn(
+      `merged-gen reference search failed (proceeding without reference): ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+    return [] as MandalaSearchResult[];
   });
+  let refTimer: ReturnType<typeof setTimeout> | undefined;
+  const similar =
+    refTimeoutMs > 0
+      ? await Promise.race([
+          searchPromise.finally(() => {
+            if (refTimer) clearTimeout(refTimer);
+          }),
+          new Promise<MandalaSearchResult[]>((resolve) => {
+            refTimer = setTimeout(() => {
+              logger.warn(
+                `merged-gen reference search exceeded ${refTimeoutMs}ms — proceeding without reference`
+              );
+              resolve([]);
+            }, refTimeoutMs);
+          }),
+        ])
+      : await searchPromise;
   const searchMs = Date.now() - tSearch;
 
   const lang = input.language ?? 'ko';

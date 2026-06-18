@@ -17,6 +17,9 @@ import {
   generateMandalaWithQueries,
   MandalaGenError,
 } from '@/modules/mandala/generator';
+import { searchMandalasByGoal } from '@/modules/mandala/search';
+
+const mockSearch = searchMandalasByGoal as jest.Mock;
 
 const SUB_GOALS = Array.from({ length: 8 }, (_, i) => `sub goal ${i}`);
 const SUB_LABELS = Array.from({ length: 8 }, (_, i) => `label ${i}`);
@@ -131,5 +134,61 @@ describe('generateMandalaWithQueries', () => {
     await expect(
       generateMandalaWithQueries(baseInput, { generateImpl: async () => 'garbage' })
     ).rejects.toThrow(MandalaGenError);
+  });
+});
+
+describe('generateMandalaWithQueries — reference search timeout (CP500+)', () => {
+  const baseInput = { goal: '한국어 목표', language: 'ko' as const };
+  const orig = process.env['MERGED_GEN_REF_TIMEOUT_MS'];
+  const REF = [
+    { center_goal: '비슷한 목표', center_label: '짧은', sub_goals: ['a'], sub_labels: ['b'] },
+  ];
+
+  afterEach(() => {
+    if (orig === undefined) delete process.env['MERGED_GEN_REF_TIMEOUT_MS'];
+    else process.env['MERGED_GEN_REF_TIMEOUT_MS'] = orig;
+    mockSearch.mockReset();
+    mockSearch.mockResolvedValue([]);
+  });
+
+  test('slow reference search → timeout → gen proceeds WITHOUT reference', async () => {
+    process.env['MERGED_GEN_REF_TIMEOUT_MS'] = '50';
+    // resolves AFTER the timeout — race returns [] first
+    mockSearch.mockReturnValue(new Promise((r) => setTimeout(() => r(REF), 400)));
+    let seenPrompt = '';
+    const res = await generateMandalaWithQueries(baseInput, {
+      generateImpl: async (p: string) => {
+        seenPrompt = p;
+        return mergedJson(FULL_CQ);
+      },
+    });
+    expect(res.structure.sub_goals).toHaveLength(8); // valid gen despite slow search
+    expect(seenPrompt).not.toContain('Reference:'); // reference skipped
+  });
+
+  test('fast reference search → reference injected into prompt', async () => {
+    process.env['MERGED_GEN_REF_TIMEOUT_MS'] = '2000';
+    mockSearch.mockResolvedValue(REF);
+    let seenPrompt = '';
+    await generateMandalaWithQueries(baseInput, {
+      generateImpl: async (p: string) => {
+        seenPrompt = p;
+        return mergedJson(FULL_CQ);
+      },
+    });
+    expect(seenPrompt).toContain('Reference:'); // fast search → reference used
+  });
+
+  test('MERGED_GEN_REF_TIMEOUT_MS=0 → no cap, search fully awaited (reference used)', async () => {
+    process.env['MERGED_GEN_REF_TIMEOUT_MS'] = '0';
+    mockSearch.mockResolvedValue(REF);
+    let seenPrompt = '';
+    await generateMandalaWithQueries(baseInput, {
+      generateImpl: async (p: string) => {
+        seenPrompt = p;
+        return mergedJson(FULL_CQ);
+      },
+    });
+    expect(seenPrompt).toContain('Reference:');
   });
 });
