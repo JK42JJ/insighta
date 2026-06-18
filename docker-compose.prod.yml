@@ -254,14 +254,6 @@ services:
       # off-topic cards demoted (gc<65) WITHOUT deletion. PASS → flip BATCH_GATE_PRUNE
       # (separate [GO]). Rollback: delete this line + redeploy → code default false.
       - RELEVANCE_RUBRIC_ENABLED=true
-      # CP500++ PR-3 (2026-06-18, James [GO] stage1) — wizard inflow-gate canary.
-      # The wizard v5 path (cell_binning) has NO relevance judge (v3=cosine,
-      # pool-serve=Haiku already gated). INFLOW_GATE_ENABLED runs the Layer-2
-      # Haiku judge at startPrecompute and TRACES `inflow_gate.would_cut` WITHOUT
-      # dropping (score/log-only). INFLOW_GATE_CUT stays UNSET → ZERO card cut.
-      # Canary: James inspects would_cut traces (only garbage flagged?). PASS →
-      # flip INFLOW_GATE_CUT (separate [GO]). Rollback: delete this line + redeploy.
-      - INFLOW_GATE_ENABLED=true
       # CP437 (2026-04-29) — Operator flip: enable YouTube metadata backfill cron.
       # Default in code is `false` — cron stays dormant unless this env is
       # explicitly true. With this set, `startYouTubeMetadataCron()` schedules
