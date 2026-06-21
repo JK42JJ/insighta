@@ -270,13 +270,18 @@ jobs:
           # youtube-transcript on EC2 (known to fail) — set both to enable.
           MAC_MINI_TRANSCRIPT_URL: ${{ secrets.MAC_MINI_TRANSCRIPT_URL }}
           MAC_MINI_TRANSCRIPT_TOKEN: ${{ secrets.MAC_MINI_TRANSCRIPT_TOKEN }}
+          # ⑤ snapshot get-or-extract — pod slidegen-service. URL = Variable
+          # (CP392, not a credential), TOKEN = Secret. Both unset ⇒ extract
+          # disabled (numerize-client returns []); serve-from-cache still works.
+          SNAPSHOT_SERVICE_URL: ${{ vars.SNAPSHOT_SERVICE_URL }}
+          SNAPSHOT_SERVICE_TOKEN: ${{ secrets.SNAPSHOT_SERVICE_TOKEN }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           # CP500++ CONFIG-SSOT — toggle keys removed from this forward list
           # (now compose-SSOT); only secrets + non-conflicting config remain.
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,YT_VIDEOS_KEY,YT_VIDEOS_KEY_2,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN
+          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,YT_VIDEOS_KEY,YT_VIDEOS_KEY_2,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN,SNAPSHOT_SERVICE_URL,SNAPSHOT_SERVICE_TOKEN
           script: |
             set -e
             cd /opt/tubearchive
@@ -320,6 +325,16 @@ jobs:
             fi
             if [ -n "${MAC_MINI_TRANSCRIPT_TOKEN}" ]; then
               grep -q '^MAC_MINI_TRANSCRIPT_TOKEN=' .env 2>/dev/null && sed -i "s|^MAC_MINI_TRANSCRIPT_TOKEN=.*|MAC_MINI_TRANSCRIPT_TOKEN=${MAC_MINI_TRANSCRIPT_TOKEN}|" .env || echo "MAC_MINI_TRANSCRIPT_TOKEN=${MAC_MINI_TRANSCRIPT_TOKEN}" >> .env
+            fi
+            # ⑤ snapshot get-or-extract — pod slidegen-service URL + token. New
+            # keys (not in docker-compose.prod.yml `environment:` literals) so the
+            # .env (env_file) value flows through — no compose-override (CP500++).
+            # Idempotent set; unset ⇒ skipped (extract stays disabled, safe).
+            if [ -n "${SNAPSHOT_SERVICE_URL}" ]; then
+              grep -q '^SNAPSHOT_SERVICE_URL=' .env 2>/dev/null && sed -i "s|^SNAPSHOT_SERVICE_URL=.*|SNAPSHOT_SERVICE_URL=${SNAPSHOT_SERVICE_URL}|" .env || echo "SNAPSHOT_SERVICE_URL=${SNAPSHOT_SERVICE_URL}" >> .env
+            fi
+            if [ -n "${SNAPSHOT_SERVICE_TOKEN}" ]; then
+              grep -q '^SNAPSHOT_SERVICE_TOKEN=' .env 2>/dev/null && sed -i "s|^SNAPSHOT_SERVICE_TOKEN=.*|SNAPSHOT_SERVICE_TOKEN=${SNAPSHOT_SERVICE_TOKEN}|" .env || echo "SNAPSHOT_SERVICE_TOKEN=${SNAPSHOT_SERVICE_TOKEN}" >> .env
             fi
             # CP360 — primary YouTube API key for video-discover search.list.
             # Mirrors the OPENROUTER pattern: idempotent add-or-update.
