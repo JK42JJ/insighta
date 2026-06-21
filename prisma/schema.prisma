@@ -2318,3 +2318,26 @@ model video_mandala_segment_relevance {
   @@index([mandala_id, video_id], map: "idx_vmsr_mandala")
   @@schema("public")
 }
+
+/// Figure snapshot cache (⑤ get-or-extract). Content-scoped — one row per
+/// (video_id, ts_sec, kind); a figure is a property of the video frame, shared
+/// across mandalas/users (no user/mandala key). chart/diagram/table → struct
+/// (numerize JSON); equation → latex; keyframe → asset_path (binary deferred,
+/// NULLable). No FK on video_id (content cache, mirrors video_pool).
+model video_figure_snapshots {
+  video_id            String   @db.VarChar(11)
+  ts_sec              Int
+  kind                String   @db.VarChar(16)
+  struct              Json?    @db.JsonB
+  latex               String?
+  asset_path          String?
+  verification_status String   @default("unverified") @db.VarChar(16)
+  source              String   @default("numerize") @db.VarChar(16)
+  computed_at         DateTime @default(now()) @db.Timestamptz(6)
+  expires_at          DateTime @default(dbgenerated("(now() + '30 days'::interval)")) @db.Timestamptz(6)
+
+  @@id([video_id, ts_sec, kind])
+  @@index([video_id], map: "idx_vfs_video")
+  @@index([expires_at], map: "idx_vfs_expires")
+  @@schema("public")
+}
