@@ -148,6 +148,10 @@ APPLY_FILES=(
   # (WHERE title/channel_title LIKE '%&%'). The backfill is idempotent
   # because the decode function is a no-op on already-decoded text.
   "prisma/migrations/youtube-videos-decode-entities/001_decode_entities.sql"
+  # ⑤ snapshot track — figure snapshot cache (video_id, ts_sec, kind). CREATE
+  # TABLE IF NOT EXISTS + CHECK constraint — idempotent. Inert until the
+  # get-or-extract endpoint / slidegen consume it.
+  "prisma/migrations/snapshot/001_video_figure_snapshots.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
