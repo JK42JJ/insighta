@@ -4,6 +4,7 @@ export {
   useCreateMandala,
   useDeleteMandala,
   useRenameMandala,
+  useGenerateSlideDeck,
   useSwitchMandala,
   useMandalaQuota,
   useToggleMandalaShare,

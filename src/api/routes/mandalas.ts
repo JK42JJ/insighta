@@ -1,5 +1,7 @@
 import { FastifyPluginCallback } from 'fastify';
 import { getMandalaManager } from '../../modules/mandala';
+import { enqueueMandalaBookFill } from '../../modules/queue/handlers/mandala-book-fill';
+import { enqueueSegmentRelevanceForMandala } from '../../modules/relevance/segment-relevance-trigger';
 import { getMood } from '../../modules/mandala/mood';
 import { triggerMandalaPostCreationAsync } from '../../modules/mandala/mandala-post-creation';
 import { getPrismaClient } from '../../modules/database/client';
@@ -390,6 +392,35 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       } catch {
         return reply.code(404).send({ error: 'Mandala not found' });
       }
+    }
+  );
+
+  /**
+   * POST /api/v1/mandalas/:id/generate-deck — slide-deck data prep (③).
+   *
+   * HONEST scope: this triggers the DATA-PREP for a slide deck, NOT the deck
+   * render (deck render ④⑥ is slidegen's job). It enqueues:
+   *   - book-index fill (#932): mandala_books from v2 summaries;
+   *   - segment-relevance fill (#933): video_mandala_segment_relevance.
+   * Ownership-checked (own mandala only); reuses the already-verified enqueue
+   * contracts (no new generation logic).
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/:id/generate-deck',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+      const mandalaId = request.params.id;
+
+      // Ownership: getMandalaById is scoped to (userId, mandalaId) → null if not owned.
+      const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
+      if (!mandala) return reply.code(404).send({ error: 'Mandala not found' });
+
+      const bookJobId = await enqueueMandalaBookFill({ userId, mandalaId, trigger: 'deck-button' });
+      const segmentResult = await enqueueSegmentRelevanceForMandala({ userId, mandalaId });
+
+      return reply.send({ success: true, data: { bookJobId, segmentResult } });
     }
   );
 

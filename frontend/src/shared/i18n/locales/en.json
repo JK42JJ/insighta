@@ -1352,6 +1352,10 @@
     "upgrade": "Upgrade",
     "mandalaActions": {
       "openMenu": "Open menu",
+      "generateDeck": "Generate slide deck",
+      "generatingDeck": "Preparing",
+      "deckPrepStarted": "Started preparing the book index",
+      "deckPrepError": "Couldn't start preparation. Please try again in a moment.",
       "share": "Share",
       "archive": "Archive",
       "delete": "Delete",

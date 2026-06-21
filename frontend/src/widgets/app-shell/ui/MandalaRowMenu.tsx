@@ -14,7 +14,7 @@
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MoreHorizontal, Share2, Archive, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Share2, Archive, Trash2, Presentation } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import {
   DropdownMenu,
@@ -41,9 +41,19 @@ interface MandalaRowMenuProps {
   /** Parent-hosted delete handler. Called on AlertDialog confirm with the
    * mandala id. The parent runs the mutation + toast + optimistic mask. */
   onConfirmDelete: (mandalaId: string) => void;
+  /** Slide-deck data-prep trigger (③). Parent fires the enqueue + toast. */
+  onGenerateDeck: (mandalaId: string) => void;
+  /** True while this mandala's deck data-prep is in flight (shows "준비중"). */
+  isGeneratingDeck: boolean;
 }
 
-export function MandalaRowMenu({ mandalaId, isLastMandala, onConfirmDelete }: MandalaRowMenuProps) {
+export function MandalaRowMenu({
+  mandalaId,
+  isLastMandala,
+  onConfirmDelete,
+  onGenerateDeck,
+  isGeneratingDeck,
+}: MandalaRowMenuProps) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -66,7 +76,25 @@ export function MandalaRowMenu({ mandalaId, isLastMandala, onConfirmDelete }: Ma
             <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={2.5} />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenuItem
+            disabled={isGeneratingDeck}
+            onSelect={(e) => {
+              e.preventDefault();
+              onGenerateDeck(mandalaId);
+              setMenuOpen(false);
+            }}
+            className="focus:bg-foreground/[0.04] focus:text-foreground"
+          >
+            <Presentation className="mr-2 h-4 w-4" />
+            <span>{t('sidebar.mandalaActions.generateDeck')}</span>
+            {isGeneratingDeck && (
+              <span className="ml-auto text-[10px] text-muted-foreground/70">
+                {t('sidebar.mandalaActions.generatingDeck')}
+              </span>
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled
             className="opacity-60 focus:bg-foreground/[0.04] focus:text-foreground"
