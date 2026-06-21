@@ -91,6 +91,10 @@ APPLY_FILES=(
   # Both ADD COLUMN/CREATE TABLE IF NOT EXISTS — idempotent.
   "prisma/migrations/score-pipeline/001_add_user_mandalas_volatility.sql"
   "prisma/migrations/score-pipeline/002_video_mandala_relevance.sql"
+  # Book-index track — segment-level relevance sidecar of video_mandala_relevance
+  # (PK video_id+mandala_id+segment_idx). CREATE TABLE IF NOT EXISTS + CHECK
+  # constraints — idempotent. Inert until the slidegen gate / fill job consume it.
+  "prisma/migrations/bookindex/001_video_mandala_segment_relevance.sql"
   # CP466 — Add Cards Phase 1 (surfacing). `surfaced_at` column + partial
   # index on user_video_states for Layer 1 Coverage dedup. ADD COLUMN IF
   # NOT EXISTS / CREATE INDEX IF NOT EXISTS — idempotent.

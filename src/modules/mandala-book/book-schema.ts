@@ -1,0 +1,100 @@
+// Book-index (mandala_books.book_json) v2 contract.
+//
+// SSOT for the per-mandala distilled book index. The book stays a JSONB blob
+// on mandala_books.book_json (normalization deferred — prod legacy is 1 row,
+// 4 consumers read the blob whole). This zod schema is the shape the auto-fill
+// (살붙임) job MUST emit and the validator a write path SHOULD run before upsert.
+//
+// Granularity note: book sections are THEMATIC (chapter -> section -> atoms),
+// distinct from video_rich_summaries.segments.sections which are time-ranges.
+// Book atoms carry {vid, ts} back-links to video timestamps; an optional
+// seg_ref ties an atom to the rich-summary time-segment it was distilled from.
+
+import { z } from 'zod';
+
+const YT_ID = z.string().min(1).max(11);
+
+/** Atom = one standalone insight, linked to a source video timestamp. */
+export const bookAtomSchema = z.object({
+  vid: YT_ID,
+  ts: z.number().int().min(0),
+  text: z.string(),
+  // Optional — unused in current prod data (0/98 rows); kept for generator freedom.
+  type: z.string().optional(),
+  // Optional back-link to the rich_summary time-segment this atom came from.
+  // Travels by time coords because rich_summary sections[] index is unstable
+  // across regeneration (see video_mandala_segment_relevance migration).
+  seg_ref: z
+    .object({ from_sec: z.number().int().min(0), to_sec: z.number().int().min(0) })
+    .optional(),
+});
+
+const bookQaSchema = z.object({ q: z.string(), a: z.string() });
+
+/** Fork D placeholders — reserved fields, fill job not implemented (v1 scope = skeleton + body only). */
+const provenanceSchema = z
+  .object({
+    video_ids: z.array(YT_ID).default([]),
+    rich_summary_versions: z.array(z.string()).default([]),
+  })
+  .nullish();
+
+const verificationSchema = z
+  .object({
+    status: z.enum(['unverified', 'verified', 'flagged']).default('unverified'),
+    notes: z.string().optional(),
+  })
+  .nullish();
+
+export const bookSectionSchema = z.object({
+  title: z.string(),
+  narrative: z.string(), // 살붙임 body assembled from v2 analysis + segments
+  atoms: z.array(bookAtomSchema).default([]),
+  qa: z.array(bookQaSchema).default([]),
+  provenance: provenanceSchema, // Fork D placeholder
+  verification: verificationSchema, // Fork D placeholder
+});
+
+export const bookChapterSchema = z.object({
+  ch: z.number().int(),
+  title: z.string(),
+  intro: z.string(),
+  sections: z.array(bookSectionSchema),
+});
+
+export const bookJsonSchema = z.object({
+  // NEW in v2 — drives validation + future migration. Existing PoC rows (no
+  // schema_version) are treated as legacy v1 by callers before this validator.
+  schema_version: z.literal(2),
+  mandala_id: z.string().uuid(),
+  mandala_title: z.string(),
+  generated_at: z.string(),
+  // source_videos = count of source videos distilled into this book.
+  source_videos: z.number().int().min(0),
+  // source_atoms = total INPUT atom pool harvested from those videos' v2
+  // summaries — NOT the count of atoms included in the book (curated subset
+  // is smaller; observed prod row: 213 input vs 98 included).
+  source_atoms: z.number().int().min(0),
+  estimated_pages: z.number().int().min(0).optional(),
+  stats: z.record(z.unknown()).optional(),
+  // Fork D placeholder — book-level completeness, fill job not implemented.
+  completeness: z.object({ status: z.string(), checked_at: z.string() }).nullish(),
+  chapters: z.array(bookChapterSchema),
+});
+
+/** Pre-parse input shape (defaults + Fork-D placeholders optional) — for fixtures/generators. */
+export type BookJsonInput = z.input<typeof bookJsonSchema>;
+export type BookAtom = z.infer<typeof bookAtomSchema>;
+export type BookSection = z.infer<typeof bookSectionSchema>;
+export type BookChapter = z.infer<typeof bookChapterSchema>;
+export type BookJson = z.infer<typeof bookJsonSchema>;
+
+/** Throws ZodError on shape violation — call before upserting a generated book. */
+export function parseBookJson(input: unknown): BookJson {
+  return bookJsonSchema.parse(input);
+}
+
+/** Non-throwing variant for read paths that must tolerate legacy/partial rows. */
+export function safeParseBookJson(input: unknown): z.SafeParseReturnType<unknown, BookJson> {
+  return bookJsonSchema.safeParse(input);
+}

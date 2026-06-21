@@ -448,6 +448,7 @@ model user_mandalas {
   users           users                     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   levels          user_mandala_levels[]
   videoRelevance  video_mandala_relevance[]
+  segmentRelevance video_mandala_segment_relevance[]
   videoStates     UserVideoState[]
   localCards      user_local_cards[]
   subscriptions   mandala_subscriptions[]
@@ -2292,5 +2293,28 @@ model video_mandala_relevance {
 
   @@id([video_id, mandala_id])
   @@index([mandala_id], map: "idx_vmr_mandala")
+  @@schema("public")
+}
+
+/// Segment-level relevance (book-index track). Finer-grain sibling of
+/// video_mandala_relevance: one row per (video_id, mandala_id, segment_idx)
+/// where segment_idx mirrors rich_summary segments.sections[]. mandala-keyed
+/// = leak-safe (a mandala is single-user-owned; same segment scores per its
+/// own centerGoal). slidegen's relevance gate reads this to narrow a video to
+/// its on-goal time ranges. from_sec/to_sec are the stable transcript-anchored
+/// re-match anchor (sections[] index drifts across rich-summary regeneration);
+/// computed_at flags staleness vs video_rich_summaries.updated_at.
+model video_mandala_segment_relevance {
+  video_id      String        @db.VarChar(11)
+  mandala_id    String        @db.Uuid
+  segment_idx   Int
+  from_sec      Int
+  to_sec        Int
+  relevance_pct Int
+  computed_at   DateTime      @default(now()) @db.Timestamptz(6)
+  mandala       user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([video_id, mandala_id, segment_idx])
+  @@index([mandala_id, video_id], map: "idx_vmsr_mandala")
   @@schema("public")
 }
