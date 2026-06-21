@@ -51,6 +51,13 @@ export const JOB_NAMES = {
    * overwrites book_json + bumps version. Worker = fillMandalaBook.
    */
   MANDALA_BOOK_FILL: 'mandala-book-fill',
+  /**
+   * Segment-level relevance fill (§2-D #2) — score each rich-summary time
+   * segment of a placed video against the mandala centerGoal (computeCardRelevance
+   * reuse, mandala-keyed) and upsert video_mandala_segment_relevance. One job
+   * per segment. relevance_pct comes ONLY from the scorer (no interpolation).
+   */
+  SEGMENT_RELEVANCE_FILL: 'segment-relevance-fill',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -139,6 +146,25 @@ export interface RelevanceQuickPayload {
   cellGoal?: string;
 }
 
+/**
+ * Segment-relevance fill (§2-D #2). Carries all scoring inputs + the table key
+ * so the worker does one scorer call + one upsert, ZERO extra DB reads. Keyed
+ * by (videoId, mandalaId, segmentIdx) → video_mandala_segment_relevance.
+ * mandala-keyed = leak-safe (a mandala is single-user-owned, scored vs its own
+ * centerGoal — the video-global segments[].relevance_pct cannot serve N mandalas).
+ */
+export interface SegmentRelevanceFillPayload {
+  videoId: string;
+  mandalaId: string;
+  segmentIdx: number;
+  fromSec: number;
+  toSec: number;
+  title: string;
+  summary?: string;
+  centerGoal: string;
+  cellGoal?: string;
+}
+
 // ============================================================================
 // Job Options
 // ============================================================================
@@ -206,6 +232,16 @@ export const POOL_MAINTENANCE_RUN_OPTIONS = {
  * (PR1 #864). A second failure (or no_title) is handled in the worker.
  */
 export const RELEVANCE_QUICK_RETRY_OPTIONS = {
+  retryLimit: 1,
+  expireInMinutes: 5,
+} as const;
+
+/**
+ * Segment-relevance fill: one Haiku scorer call + one upsert per segment.
+ * Mirror the relevance-quick retry shape (transient provider errors retry once;
+ * a missing title is a terminal skip, not a retry).
+ */
+export const SEGMENT_RELEVANCE_FILL_OPTIONS = {
   retryLimit: 1,
   expireInMinutes: 5,
 } as const;

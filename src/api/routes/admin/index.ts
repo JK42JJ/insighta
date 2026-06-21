@@ -27,6 +27,7 @@ import { adminV4ArbiterRunsRoutes } from './v4-arbiter-runs';
 import { adminPoolHealthRoutes } from './pool-health';
 import { adminRelevanceBackfillRoutes } from './relevance-backfill';
 import { adminMandalaBookFillRoutes } from './mandala-book-fill';
+import { adminSegmentRelevanceFillRoutes } from './segment-relevance-fill';
 import { adminPoolServeRoutes } from './pool-serve';
 
 /**
@@ -75,6 +76,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminRelevanceBackfillRoutes, { prefix: '/relevance-backfill' });
   // §2-D #1 — book-index fill (assemble mandala_books from v2 summaries).
   await fastify.register(adminMandalaBookFillRoutes, { prefix: '/mandala-book-fill' });
+  // §2-D #2 — segment-relevance fill (score v2 segments → video_mandala_segment_relevance).
+  await fastify.register(adminSegmentRelevanceFillRoutes, { prefix: '/segment-relevance-fill' });
   // CP499+ — pool-serve canary trigger (deficit-cell fill, flag bypassed).
   await fastify.register(adminPoolServeRoutes, { prefix: '/pool-serve' });
   // await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
