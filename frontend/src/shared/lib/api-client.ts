@@ -1486,6 +1486,9 @@ class ApiClient {
   async generateSlideDeck(mandalaId: string): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>(`/mandalas/${mandalaId}/generate-deck`, {
       method: 'POST',
+      // Empty `{}` body to satisfy the default `Content-Type: application/json`
+      // — a body-less POST 400s with FST_ERR_CTP_EMPTY_JSON_BODY (see #935 prod).
+      body: JSON.stringify({}),
     });
   }
 
