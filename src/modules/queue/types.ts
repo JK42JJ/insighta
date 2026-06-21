@@ -45,6 +45,12 @@ export const JOB_NAMES = {
    * 'skipped-full' on a no-op re-run).
    */
   MANDALA_ACTIONS_FILL: 'mandala-actions-fill',
+  /**
+   * Book-index fill (§2-D #1) — assemble a mandala's book_json from its placed
+   * videos' v2 rich summaries (LLM-free, mechanical). Idempotent: re-run
+   * overwrites book_json + bumps version. Worker = fillMandalaBook.
+   */
+  MANDALA_BOOK_FILL: 'mandala-book-fill',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -248,6 +254,23 @@ export const MANDALA_ACTIONS_FILL_OPTIONS = {
 export interface MandalaActionsFillPayload {
   mandalaId: string;
   userId?: string;
+  trigger?: string;
+}
+
+/**
+ * Book-index fill — pure DB+assembly, no LLM. Retry on transient DB errors so a
+ * triggered fill is not lost; the work is idempotent (version bump + overwrite).
+ */
+export const MANDALA_BOOK_FILL_OPTIONS = {
+  retryLimit: 3,
+  retryDelay: 30,
+  retryBackoff: true,
+  expireInMinutes: 10,
+} as const;
+
+export interface MandalaBookFillPayload {
+  userId: string;
+  mandalaId: string;
   trigger?: string;
 }
 
