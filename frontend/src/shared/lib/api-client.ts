@@ -1479,6 +1479,17 @@ class ApiClient {
   }
 
   /**
+   * Trigger slide-deck DATA PREP for a mandala (③). Enqueues book-index +
+   * segment-relevance fills (the verified #932/#933 contracts). Does NOT render
+   * a deck — that is slidegen's job; this only readies the data.
+   */
+  async generateSlideDeck(mandalaId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/mandalas/${mandalaId}/generate-deck`, {
+      method: 'POST',
+    });
+  }
+
+  /**
    * Toggle pin/bookmark state on a grid view card (CP457+).
    *
    * `source` must match `InsightCard.sourceTable` — the FE-only discriminator

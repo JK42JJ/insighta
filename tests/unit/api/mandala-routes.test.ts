@@ -64,6 +64,16 @@ jest.mock('../../../src/modules/mandala', () => ({
   }),
 }));
 
+// ③ slide-deck data-prep enqueues (verified contracts #932/#933).
+const mockEnqueueBookFill = jest.fn().mockResolvedValue('book-job-1');
+jest.mock('../../../src/modules/queue/handlers/mandala-book-fill', () => ({
+  enqueueMandalaBookFill: (...a: unknown[]) => mockEnqueueBookFill(...a),
+}));
+const mockEnqueueSegments = jest.fn().mockResolvedValue({ enqueued: 5, segments: 5 });
+jest.mock('../../../src/modules/relevance/segment-relevance-trigger', () => ({
+  enqueueSegmentRelevanceForMandala: (...a: unknown[]) => mockEnqueueSegments(...a),
+}));
+
 import { mandalaRoutes } from '../../../src/api/routes/mandalas';
 
 // ─── Test Fixtures ───
@@ -890,6 +900,50 @@ describe('Mandala API Routes', () => {
       });
 
       expect(res.statusCode).toBe(404);
+    });
+  });
+
+  // ─── POST /:id/generate-deck (③ slide-deck data prep) ───
+
+  describe('POST /:id/generate-deck', () => {
+    test('owned mandala → 200 + enqueues book-fill AND segment-relevance', async () => {
+      mockGetMandalaById.mockResolvedValue({
+        id: 'm1',
+        levels: [{ centerGoal: 'g', subjects: [] }],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `${PREFIX}/m1/generate-deck`,
+        headers: authHeaders(),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(mockEnqueueBookFill).toHaveBeenCalledWith({
+        userId: 'test-user-id',
+        mandalaId: 'm1',
+        trigger: 'deck-button',
+      });
+      expect(mockEnqueueSegments).toHaveBeenCalledWith({ userId: 'test-user-id', mandalaId: 'm1' });
+    });
+
+    test('not-owned mandala → 404 + NO enqueue', async () => {
+      mockGetMandalaById.mockResolvedValue(null);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `${PREFIX}/m1/generate-deck`,
+        headers: authHeaders(),
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(mockEnqueueBookFill).not.toHaveBeenCalled();
+      expect(mockEnqueueSegments).not.toHaveBeenCalled();
+    });
+
+    test('no auth → 401', async () => {
+      const res = await app.inject({ method: 'POST', url: `${PREFIX}/m1/generate-deck` });
+      expect(res.statusCode).toBe(401);
     });
   });
 });

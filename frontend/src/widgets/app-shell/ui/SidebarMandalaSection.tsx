@@ -4,7 +4,12 @@ import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, RefreshCw } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { useMandalaList, useSwitchMandala, useDeleteMandala } from '@/features/mandala';
+import {
+  useMandalaList,
+  useSwitchMandala,
+  useDeleteMandala,
+  useGenerateSlideDeck,
+} from '@/features/mandala';
 import { useMandalaStore } from '@/stores/mandalaStore';
 import { queryKeys } from '@/shared/config/query-client';
 import type { InsightCard } from '@/entities/card/model/types';
@@ -59,6 +64,38 @@ export function SidebarMandalaSection({
   // the inline { onSuccess } callback can fire, swallowing the toast.
   const queryClient = useQueryClient();
   const deleteMandala = useDeleteMandala();
+  const generateDeck = useGenerateSlideDeck();
+  // Mandalas whose deck data-prep is in flight (drives the menu "준비중" label).
+  const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
+
+  // Slide-deck data prep (③): fire the verified book + segment-relevance fills.
+  // HONEST: this readies data; the deck render (slidegen) is not wired here yet.
+  const handleGenerateDeck = useCallback(
+    (mandalaId: string) => {
+      setGeneratingIds((prev) => new Set(prev).add(mandalaId));
+      generateDeck.mutate(mandalaId, {
+        onSuccess: () => {
+          toast.success(t('sidebar.mandalaActions.deckPrepStarted', '북인덱스 생성을 시작했어요'));
+        },
+        onError: () => {
+          toast.error(
+            t(
+              'sidebar.mandalaActions.deckPrepError',
+              '생성을 시작하지 못했어요. 잠시 후 다시 시도해주세요.'
+            )
+          );
+        },
+        onSettled: () => {
+          setGeneratingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(mandalaId);
+            return next;
+          });
+        },
+      });
+    },
+    [generateDeck, t]
+  );
 
   const switchMandala = useSwitchMandala();
 
@@ -303,6 +340,8 @@ export function SidebarMandalaSection({
                   mandalaId={mandala.id}
                   isLastMandala={sortedMandalas.length <= 1}
                   onConfirmDelete={handleConfirmDelete}
+                  onGenerateDeck={handleGenerateDeck}
+                  isGeneratingDeck={generatingIds.has(mandala.id)}
                 />
               </div>
             );

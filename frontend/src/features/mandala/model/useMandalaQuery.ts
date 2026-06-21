@@ -263,6 +263,17 @@ export function useRenameMandala() {
   });
 }
 
+/**
+ * Trigger slide-deck DATA PREP (③) — enqueues book-index + segment-relevance
+ * fills for a mandala. Fire-and-forget (the jobs run async on the server); the
+ * caller shows a "준비중" progress state. Does NOT render a deck (slidegen).
+ */
+export function useGenerateSlideDeck() {
+  return useMutation({
+    mutationFn: (mandalaId: string) => apiClient.generateSlideDeck(mandalaId),
+  });
+}
+
 export function useSwitchMandala() {
   const queryClient = useQueryClient();
 
