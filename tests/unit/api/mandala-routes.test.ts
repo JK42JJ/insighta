@@ -73,6 +73,14 @@ const mockEnqueueSegments = jest.fn().mockResolvedValue({ enqueued: 5, segments:
 jest.mock('../../../src/modules/relevance/segment-relevance-trigger', () => ({
   enqueueSegmentRelevanceForMandala: (...a: unknown[]) => mockEnqueueSegments(...a),
 }));
+// ③ deck UI scaffold — mock slide_decks read/write (no DB in route tests).
+const mockMarkDeckPending = jest.fn().mockResolvedValue(undefined);
+const mockGetDeckState = jest.fn().mockResolvedValue(null);
+jest.mock('../../../src/modules/deck/deck-status', () => ({
+  markDeckPending: (...a: unknown[]) => mockMarkDeckPending(...a),
+  getDeckState: (...a: unknown[]) => mockGetDeckState(...a),
+  deckPptxDiskPath: (id: string) => `/srv/data/decks/${id}.pptx`,
+}));
 
 import { mandalaRoutes } from '../../../src/api/routes/mandalas';
 
@@ -919,6 +927,7 @@ describe('Mandala API Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
+      expect(mockMarkDeckPending).toHaveBeenCalledWith('m1');
       expect(mockEnqueueBookFill).toHaveBeenCalledWith({
         userId: 'test-user-id',
         mandalaId: 'm1',
@@ -944,6 +953,51 @@ describe('Mandala API Routes', () => {
     test('no auth → 401', async () => {
       const res = await app.inject({ method: 'POST', url: `${PREFIX}/m1/generate-deck` });
       expect(res.statusCode).toBe(401);
+    });
+  });
+
+  // ─── GET /:id/deck-status (③ deck lifecycle for FE button) ───
+
+  describe('GET /:id/deck-status', () => {
+    test('owned mandala with a deck → 200 + status', async () => {
+      mockGetMandalaById.mockResolvedValue({ id: 'm1', levels: [{ centerGoal: 'g', subjects: [] }] });
+      mockGetDeckState.mockResolvedValue({
+        mandalaId: 'm1',
+        status: 'done',
+        pptxUrl: `${PREFIX}/m1/deck.pptx`,
+        error: null,
+        generatedAt: new Date('2026-06-22T00:00:00Z'),
+      });
+      const res = await app.inject({
+        method: 'GET',
+        url: `${PREFIX}/m1/deck-status`,
+        headers: authHeaders(),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.status).toBe('done');
+      expect(res.json().data.pptxUrl).toBe(`${PREFIX}/m1/deck.pptx`);
+    });
+
+    test('owned mandala, no deck → 200 + null status', async () => {
+      mockGetMandalaById.mockResolvedValue({ id: 'm1', levels: [{ centerGoal: 'g', subjects: [] }] });
+      mockGetDeckState.mockResolvedValue(null);
+      const res = await app.inject({
+        method: 'GET',
+        url: `${PREFIX}/m1/deck-status`,
+        headers: authHeaders(),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.status).toBeNull();
+    });
+
+    test('not-owned mandala → 404', async () => {
+      mockGetMandalaById.mockResolvedValue(null);
+      const res = await app.inject({
+        method: 'GET',
+        url: `${PREFIX}/m1/deck-status`,
+        headers: authHeaders(),
+      });
+      expect(res.statusCode).toBe(404);
     });
   });
 });

@@ -1492,6 +1492,43 @@ class ApiClient {
     });
   }
 
+  /** ③ deck lifecycle for the FE button (없음/생성중/완료+링크). */
+  async getDeckStatus(mandalaId: string): Promise<{
+    status: 'pending' | 'building' | 'done' | 'failed' | null;
+    pptxUrl: string | null;
+    generatedAt: string | null;
+    error: string | null;
+  }> {
+    const res = await this.request<{
+      success: boolean;
+      data: {
+        status: 'pending' | 'building' | 'done' | 'failed' | null;
+        pptxUrl: string | null;
+        generatedAt: string | null;
+        error: string | null;
+      };
+    }>(`/mandalas/${mandalaId}/deck-status`);
+    return res.data;
+  }
+
+  /**
+   * Open a finished deck's .pptx. The serving route is JWT-authenticated, so a
+   * plain `window.open` (browser nav, no auth header) would 401 — fetch it with
+   * the token, then open an object URL. Throws if the deck is not ready.
+   */
+  async openDeckPptx(mandalaId: string): Promise<void> {
+    const token = await this.getFreshToken();
+    const resp = await fetch(`${this.baseUrl}/api/v1/mandalas/${mandalaId}/deck.pptx`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!resp.ok) throw new Error(`deck not ready (${resp.status})`);
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    // Revoke after a minute — long enough for the browser to load it.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
   /**
    * Toggle pin/bookmark state on a grid view card (CP457+).
    *

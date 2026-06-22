@@ -274,6 +274,23 @@ export function useGenerateSlideDeck() {
   });
 }
 
+/**
+ * Deck lifecycle for a mandala (③ button state). `enabled` gates the query so
+ * it only runs while the row menu is open (avoids N background polls across the
+ * sidebar). Polls every 3s while pending/building so 생성중→완료 flips live.
+ */
+export function useDeckStatus(mandalaId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['deck-status', mandalaId],
+    queryFn: () => apiClient.getDeckStatus(mandalaId),
+    enabled,
+    refetchInterval: (query) => {
+      const s = query.state.data?.status;
+      return s === 'pending' || s === 'building' ? 3000 : false;
+    },
+  });
+}
+
 export function useSwitchMandala() {
   const queryClient = useQueryClient();
 

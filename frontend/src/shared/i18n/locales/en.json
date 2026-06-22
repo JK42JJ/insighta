@@ -1353,9 +1353,11 @@
     "mandalaActions": {
       "openMenu": "Open menu",
       "generateDeck": "Generate slide deck",
+      "openDeck": "Open deck",
       "generatingDeck": "Preparing",
       "deckPrepStarted": "Started preparing the book index",
       "deckPrepError": "Couldn't start preparation. Please try again in a moment.",
+      "deckOpenError": "Couldn't open the deck.",
       "share": "Share",
       "archive": "Archive",
       "delete": "Delete",
