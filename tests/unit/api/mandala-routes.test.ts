@@ -79,7 +79,11 @@ const mockGetDeckState = jest.fn().mockResolvedValue(null);
 jest.mock('../../../src/modules/deck/deck-status', () => ({
   markDeckPending: (...a: unknown[]) => mockMarkDeckPending(...a),
   getDeckState: (...a: unknown[]) => mockGetDeckState(...a),
-  deckPptxDiskPath: (id: string) => `/srv/data/decks/${id}.pptx`,
+}));
+// ③ deck-build job enqueue (no queue in route tests).
+const mockEnqueueDeckBuild = jest.fn().mockResolvedValue('deck-job-1');
+jest.mock('../../../src/modules/queue/handlers/deck-build', () => ({
+  enqueueDeckBuild: (...a: unknown[]) => mockEnqueueDeckBuild(...a),
 }));
 
 import { mandalaRoutes } from '../../../src/api/routes/mandalas';
@@ -934,6 +938,7 @@ describe('Mandala API Routes', () => {
         trigger: 'deck-button',
       });
       expect(mockEnqueueSegments).toHaveBeenCalledWith({ userId: 'test-user-id', mandalaId: 'm1' });
+      expect(mockEnqueueDeckBuild).toHaveBeenCalledWith({ userId: 'test-user-id', mandalaId: 'm1' });
     });
 
     test('not-owned mandala → 404 + NO enqueue', async () => {

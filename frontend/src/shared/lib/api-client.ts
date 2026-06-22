@@ -1511,23 +1511,8 @@ class ApiClient {
     return res.data;
   }
 
-  /**
-   * Open a finished deck's .pptx. The serving route is JWT-authenticated, so a
-   * plain `window.open` (browser nav, no auth header) would 401 — fetch it with
-   * the token, then open an object URL. Throws if the deck is not ready.
-   */
-  async openDeckPptx(mandalaId: string): Promise<void> {
-    const token = await this.getFreshToken();
-    const resp = await fetch(`${this.baseUrl}/api/v1/mandalas/${mandalaId}/deck.pptx`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!resp.ok) throw new Error(`deck not ready (${resp.status})`);
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-    // Revoke after a minute — long enough for the browser to load it.
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  }
+  // (No openDeckPptx — pptx_url is a public Supabase Storage URL; the FE opens it
+  // directly with window.open. getDeckStatus returns that URL.)
 
   /**
    * Toggle pin/bookmark state on a grid view card (CP457+).

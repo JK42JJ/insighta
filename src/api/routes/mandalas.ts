@@ -2,9 +2,8 @@ import { FastifyPluginCallback } from 'fastify';
 import { getMandalaManager } from '../../modules/mandala';
 import { enqueueMandalaBookFill } from '../../modules/queue/handlers/mandala-book-fill';
 import { enqueueSegmentRelevanceForMandala } from '../../modules/relevance/segment-relevance-trigger';
-import { markDeckPending, getDeckState, deckPptxDiskPath } from '../../modules/deck/deck-status';
-import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { markDeckPending, getDeckState } from '../../modules/deck/deck-status';
+import { enqueueDeckBuild } from '../../modules/queue/handlers/deck-build';
 import { getMood } from '../../modules/mandala/mood';
 import { triggerMandalaPostCreationAsync } from '../../modules/mandala/mandala-post-creation';
 import { getPrismaClient } from '../../modules/database/client';
@@ -426,13 +425,22 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       if (!mandala) return reply.code(404).send({ error: 'Mandala not found' });
 
       // Persist the deck lifecycle so the button shows 생성중 across reloads
-      // (replaces the transient toast). status='pending' until deck-build lands.
+      // (replaces the transient toast). status='pending' → deck-build drives it
+      // to building → done | failed.
       await markDeckPending(mandalaId);
 
+      // ①② keep their verified contracts (#932/#933) — book + segment + warming
+      // signal. deck-build owns the deterministic build chain: it re-ensures book
+      // (fillMandalaBook is idempotent) → figures → /slides/build → Supabase
+      // upload → done, so it does not race on the ① job completing.
       const bookJobId = await enqueueMandalaBookFill({ userId, mandalaId, trigger: 'deck-button' });
       const segmentResult = await enqueueSegmentRelevanceForMandala({ userId, mandalaId });
+      const deckJobId = await enqueueDeckBuild({ userId, mandalaId });
 
-      return reply.send({ success: true, data: { status: 'pending', bookJobId, segmentResult } });
+      return reply.send({
+        success: true,
+        data: { status: 'pending', bookJobId, segmentResult, deckJobId },
+      });
     }
   );
 
@@ -541,40 +549,8 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     }
   );
 
-  /**
-   * GET /api/v1/mandalas/:id/deck.pptx — serve the generated .pptx from EC2
-   * disk (authenticated + ownership-checked; no Drive). 404 until status=done
-   * with a file on disk. This is the URL stored in slide_decks.pptx_url.
-   */
-  fastify.get<{ Params: { id: string } }>(
-    '/:id/deck.pptx',
-    { onRequest: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = getUserId(request, reply);
-      if (!userId) return;
-      const mandalaId = request.params.id;
-      const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
-      if (!mandala) return reply.code(404).send({ error: 'Mandala not found' });
-
-      const deck = await getDeckState(mandalaId);
-      if (!deck || deck.status !== 'done' || !deck.pptxUrl) {
-        return reply.code(404).send({ error: 'Deck not ready' });
-      }
-      const diskPath = deckPptxDiskPath(mandalaId);
-      try {
-        await stat(diskPath); // 404 (not 500) if the file is missing
-      } catch {
-        return reply.code(404).send({ error: 'Deck file missing' });
-      }
-      return reply
-        .header(
-          'Content-Type',
-          'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-        )
-        .header('Content-Disposition', `inline; filename="deck-${mandalaId}.pptx"`)
-        .send(createReadStream(diskPath));
-    }
-  );
+  // (No EC2 deck.pptx serving route — the deck lives in Supabase Storage; the FE
+  // opens slide_decks.pptx_url, a public Supabase URL, directly.)
 
   /**
    * POST /api/v1/mandalas/:id/clone - Clone a public mandala (auth required)

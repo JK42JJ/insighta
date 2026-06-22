@@ -18,7 +18,6 @@ import { MoreHorizontal, Share2, Archive, Trash2, Presentation, Loader2 } from '
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { useDeckStatus } from '@/features/mandala/model/useMandalaQuery';
-import { apiClient } from '@/shared/lib/api-client';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,9 +68,12 @@ export function MandalaRowMenu({
   const deckDone = deckStatus === 'done';
 
   const handleOpenDeck = (): void => {
-    apiClient.openDeckPptx(mandalaId).catch(() => {
+    // pptx_url is a public Supabase Storage URL — open it directly (no auth fetch).
+    if (deck?.pptxUrl) {
+      window.open(deck.pptxUrl, '_blank', 'noopener');
+    } else {
       toast.error(t('sidebar.mandalaActions.deckOpenError', '덱을 열지 못했어요.'));
-    });
+    }
   };
 
   return (

@@ -52,6 +52,12 @@ export const JOB_NAMES = {
    */
   MANDALA_BOOK_FILL: 'mandala-book-fill',
   /**
+   * Deck build (③ e2e) — assemble book_json + figures, call slidegen
+   * /slides/build (job poll), store the returned presigned pptx_url in
+   * slide_decks. Worker = handleDeckBuild.
+   */
+  DECK_BUILD: 'deck-build',
+  /**
    * Segment-level relevance fill (§2-D #2) — score each rich-summary time
    * segment of a placed video against the mandala centerGoal (computeCardRelevance
    * reuse, mandala-keyed) and upsert video_mandala_segment_relevance. One job
@@ -308,6 +314,21 @@ export interface MandalaBookFillPayload {
   userId: string;
   mandalaId: string;
   trigger?: string;
+}
+
+// Deck build runs the full slidegen pipeline (minutes); allow a long expiry so
+// pg-boss doesn't reap an in-flight build. Retry once — a failed build is more
+// likely a real error (missing book / slidegen down) than a transient blip.
+export const DECK_BUILD_OPTIONS = {
+  retryLimit: 1,
+  retryDelay: 30,
+  retryBackoff: true,
+  expireInMinutes: 15,
+} as const;
+
+export interface DeckBuildPayload {
+  userId: string;
+  mandalaId: string;
 }
 
 // ============================================================================
