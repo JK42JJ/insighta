@@ -23,8 +23,10 @@ const optionalStr = z.preprocess((v) => {
 export const snapshotEnvSchema = z.object({
   SNAPSHOT_SERVICE_URL: optionalStr.default(''),
   SNAPSHOT_SERVICE_TOKEN: optionalStr.default(''),
-  // Per-extract-call budget. Frame fetch + numerize can be slow; generous.
-  SNAPSHOT_SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  // Overall budget for one numerize JOB (POST + poll + result). The job runs
+  // the full acquire→frames→select→YOLO+Qwen pipeline — measured ~222s for a
+  // single ts. 5min gives headroom; prod leaves this unset → default applies.
+  SNAPSHOT_SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
 });
 
 export interface SnapshotConfig {
