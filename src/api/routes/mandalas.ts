@@ -2,6 +2,9 @@ import { FastifyPluginCallback } from 'fastify';
 import { getMandalaManager } from '../../modules/mandala';
 import { enqueueMandalaBookFill } from '../../modules/queue/handlers/mandala-book-fill';
 import { enqueueSegmentRelevanceForMandala } from '../../modules/relevance/segment-relevance-trigger';
+import { markDeckPending, getDeckState, deckPptxDiskPath } from '../../modules/deck/deck-status';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import { getMood } from '../../modules/mandala/mood';
 import { triggerMandalaPostCreationAsync } from '../../modules/mandala/mandala-post-creation';
 import { getPrismaClient } from '../../modules/database/client';
@@ -88,6 +91,11 @@ function getUserId(request: any, reply: any): string | null {
   }
   return request.user.userId;
 }
+
+// deck-stream SSE caps (mirror cards enrich-stream). Poll slide_decks every 2s;
+// give up after 10min (a deck-build job is minutes, not hours).
+const DECK_STREAM_POLL_MS = 2000;
+const DECK_STREAM_MAX_MS = 10 * 60 * 1000;
 
 /**
  * Build skill_config rows for a freshly created mandala. Always ensures
@@ -417,10 +425,154 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
       if (!mandala) return reply.code(404).send({ error: 'Mandala not found' });
 
+      // Persist the deck lifecycle so the button shows 생성중 across reloads
+      // (replaces the transient toast). status='pending' until deck-build lands.
+      await markDeckPending(mandalaId);
+
       const bookJobId = await enqueueMandalaBookFill({ userId, mandalaId, trigger: 'deck-button' });
       const segmentResult = await enqueueSegmentRelevanceForMandala({ userId, mandalaId });
 
-      return reply.send({ success: true, data: { bookJobId, segmentResult } });
+      return reply.send({ success: true, data: { status: 'pending', bookJobId, segmentResult } });
+    }
+  );
+
+  /**
+   * GET /api/v1/mandalas/:id/deck-status — current deck lifecycle for the FE
+   * button (없음/생성중/완료+링크). Ownership-checked. Returns null status when
+   * the deck was never requested.
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/deck-status',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+      const mandalaId = request.params.id;
+      const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
+      if (!mandala) return reply.code(404).send({ error: 'Mandala not found' });
+
+      const deck = await getDeckState(mandalaId);
+      return reply.send({
+        success: true,
+        data: deck
+          ? {
+              status: deck.status,
+              pptxUrl: deck.pptxUrl,
+              generatedAt: deck.generatedAt,
+              error: deck.error,
+            }
+          : { status: null, pptxUrl: null, generatedAt: null, error: null },
+      });
+    }
+  );
+
+  /**
+   * GET /api/v1/mandalas/:id/deck-stream — SSE of the deck lifecycle, mirroring
+   * the cards enrich-stream pattern (reply.hijack + 1s slide_decks poll). Emits
+   * a `status` event on each transition; closes on done/failed or the cap.
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/deck-stream',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+      const mandalaId = request.params.id;
+      const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
+      if (!mandala) return reply.code(404).send({ error: 'Mandala not found' });
+
+      void reply.hijack();
+      const raw = reply.raw;
+      const reqOrigin = request.headers.origin;
+      const allowed = config.cors.allowedOrigins;
+      if (reqOrigin && (allowed.includes('*') || allowed.includes(reqOrigin))) {
+        raw.setHeader('Access-Control-Allow-Origin', reqOrigin);
+        raw.setHeader('Access-Control-Allow-Credentials', 'true');
+        raw.setHeader('Vary', 'Origin');
+      }
+      raw.setHeader('Content-Type', 'text/event-stream');
+      raw.setHeader('Cache-Control', 'no-cache');
+      raw.setHeader('Connection', 'keep-alive');
+      raw.setHeader('X-Accel-Buffering', 'no');
+      raw.statusCode = 200;
+      raw.write('retry: 5000\n\n');
+      raw.write(`: connected mandala=${mandalaId}\n\n`);
+
+      const startedAt = Date.now();
+      let lastStatus: string | null = null;
+      let closed = false;
+
+      const send = (status: string, extra?: Record<string, unknown>): void => {
+        if (closed || raw.destroyed) return;
+        raw.write(`event: status\ndata: ${JSON.stringify({ status, mandalaId, ...extra })}\n\n`);
+      };
+      const close = (): void => {
+        if (closed) return;
+        closed = true;
+        clearInterval(interval);
+        try {
+          raw.end();
+        } catch {
+          /* connection may already be closed */
+        }
+      };
+      const pollOnce = async (): Promise<void> => {
+        if (Date.now() - startedAt > DECK_STREAM_MAX_MS) {
+          send('timeout');
+          close();
+          return;
+        }
+        const deck = await getDeckState(mandalaId);
+        const status = deck?.status ?? 'none';
+        if (status !== lastStatus) {
+          send(status, { pptxUrl: deck?.pptxUrl ?? null });
+          lastStatus = status;
+          if (status === 'done' || status === 'failed') close();
+        }
+      };
+
+      const interval = setInterval(() => {
+        pollOnce().catch(() => {
+          /* single poll failure not fatal — retry until the cap */
+        });
+      }, DECK_STREAM_POLL_MS);
+      void pollOnce();
+      request.raw.on('close', close);
+    }
+  );
+
+  /**
+   * GET /api/v1/mandalas/:id/deck.pptx — serve the generated .pptx from EC2
+   * disk (authenticated + ownership-checked; no Drive). 404 until status=done
+   * with a file on disk. This is the URL stored in slide_decks.pptx_url.
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/deck.pptx',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+      const mandalaId = request.params.id;
+      const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
+      if (!mandala) return reply.code(404).send({ error: 'Mandala not found' });
+
+      const deck = await getDeckState(mandalaId);
+      if (!deck || deck.status !== 'done' || !deck.pptxUrl) {
+        return reply.code(404).send({ error: 'Deck not ready' });
+      }
+      const diskPath = deckPptxDiskPath(mandalaId);
+      try {
+        await stat(diskPath); // 404 (not 500) if the file is missing
+      } catch {
+        return reply.code(404).send({ error: 'Deck file missing' });
+      }
+      return reply
+        .header(
+          'Content-Type',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        )
+        .header('Content-Disposition', `inline; filename="deck-${mandalaId}.pptx"`)
+        .send(createReadStream(diskPath));
     }
   );
 

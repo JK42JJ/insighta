@@ -464,6 +464,7 @@ model user_mandalas {
   pipeline_runs        mandala_pipeline_runs[]
   create_timings       mandala_create_timings[]
   book                 mandala_books?
+  slide_deck           slide_decks?
   note_documents       note_documents[]
   card_interactions    card_interactions[]
 
@@ -654,6 +655,25 @@ model mandala_books {
   generated_at  DateTime      @default(now()) @db.Timestamptz(6)
   updated_at    DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
   mandala       user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("public")
+}
+
+/// ③ deck UI scaffold — one slide deck per mandala (PK = mandala_id).
+/// Lifecycle: pending (data-prep) → building (slidegen /slides/build) → done
+/// (pptx_url set) | failed. The FE button reads `status` to show 없음/생성중/
+/// 완료+링크 across reloads. `pptx_url` is the authenticated serving route path
+/// (deck.pptx); the file lives on EC2 disk (no Drive). DDL: prisma/migrations/
+/// slide-decks/001_create_table.sql.
+model slide_decks {
+  mandala_id   String        @id @db.Uuid
+  status       String        @default("pending")
+  pptx_url     String?
+  error        String?
+  generated_at DateTime?     @db.Timestamptz(6)
+  created_at   DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  mandala      user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@schema("public")
 }

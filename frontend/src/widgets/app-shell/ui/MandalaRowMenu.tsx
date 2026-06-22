@@ -14,8 +14,11 @@
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MoreHorizontal, Share2, Archive, Trash2, Presentation } from 'lucide-react';
+import { MoreHorizontal, Share2, Archive, Trash2, Presentation, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
+import { useDeckStatus } from '@/features/mandala/model/useMandalaQuery';
+import { apiClient } from '@/shared/lib/api-client';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,6 +61,19 @@ export function MandalaRowMenu({
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  // Persistent deck lifecycle — only polled while the menu is open. Combined
+  // with the transient isGeneratingDeck for instant post-click feedback.
+  const { data: deck } = useDeckStatus(mandalaId, menuOpen);
+  const deckStatus = deck?.status ?? null;
+  const deckBuilding = isGeneratingDeck || deckStatus === 'pending' || deckStatus === 'building';
+  const deckDone = deckStatus === 'done';
+
+  const handleOpenDeck = (): void => {
+    apiClient.openDeckPptx(mandalaId).catch(() => {
+      toast.error(t('sidebar.mandalaActions.deckOpenError', '덱을 열지 못했어요.'));
+    });
+  };
+
   return (
     <>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -78,17 +94,29 @@ export function MandalaRowMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
           <DropdownMenuItem
-            disabled={isGeneratingDeck}
+            disabled={deckBuilding}
             onSelect={(e) => {
               e.preventDefault();
-              onGenerateDeck(mandalaId);
+              if (deckDone) {
+                handleOpenDeck();
+              } else if (!deckBuilding) {
+                onGenerateDeck(mandalaId);
+              }
               setMenuOpen(false);
             }}
             className="focus:bg-foreground/[0.04] focus:text-foreground"
           >
-            <Presentation className="mr-2 h-4 w-4" />
-            <span>{t('sidebar.mandalaActions.generateDeck')}</span>
-            {isGeneratingDeck && (
+            {deckBuilding ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Presentation className="mr-2 h-4 w-4" />
+            )}
+            <span>
+              {deckDone
+                ? t('sidebar.mandalaActions.openDeck', '덱 열기')
+                : t('sidebar.mandalaActions.generateDeck')}
+            </span>
+            {deckBuilding && (
               <span className="ml-auto text-[10px] text-muted-foreground/70">
                 {t('sidebar.mandalaActions.generatingDeck')}
               </span>

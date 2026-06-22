@@ -1361,9 +1361,11 @@
     "mandalaActions": {
       "openMenu": "메뉴 열기",
       "generateDeck": "슬라이드 덱 생성",
+      "openDeck": "덱 열기",
       "generatingDeck": "준비중",
       "deckPrepStarted": "북인덱스 생성을 시작했어요",
       "deckPrepError": "생성을 시작하지 못했어요. 잠시 후 다시 시도해주세요.",
+      "deckOpenError": "덱을 열지 못했어요.",
       "share": "공유",
       "archive": "아카이브에 보관",
       "delete": "삭제",

@@ -152,6 +152,9 @@ APPLY_FILES=(
   # TABLE IF NOT EXISTS + CHECK constraint — idempotent. Inert until the
   # get-or-extract endpoint / slidegen consume it.
   "prisma/migrations/snapshot/001_video_figure_snapshots.sql"
+  # ③ deck UI scaffold — one slide deck per mandala. CREATE TABLE IF NOT
+  # EXISTS — idempotent. Drives the FE 없음/생성중/완료+링크 button state.
+  "prisma/migrations/slide-decks/001_create_table.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
