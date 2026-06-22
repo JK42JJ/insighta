@@ -662,9 +662,9 @@ model mandala_books {
 /// ③ deck UI scaffold — one slide deck per mandala (PK = mandala_id).
 /// Lifecycle: pending (data-prep) → building (slidegen /slides/build) → done
 /// (pptx_url set) | failed. The FE button reads `status` to show 없음/생성중/
-/// 완료+링크 across reloads. `pptx_url` is the authenticated serving route path
-/// (deck.pptx); the file lives on EC2 disk (no Drive). DDL: prisma/migrations/
-/// slide-decks/001_create_table.sql.
+/// 완료+링크 across reloads. `pptx_url` is the Supabase Storage public URL of the
+/// deck .pptx (insighta uploads the bytes slidegen returns; browser-openable).
+/// DDL: prisma/migrations/slide-decks/001_create_table.sql.
 model slide_decks {
   mandala_id   String        @id @db.Uuid
   status       String        @default("pending")

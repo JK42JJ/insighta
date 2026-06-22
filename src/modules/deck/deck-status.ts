@@ -2,13 +2,11 @@
 //
 // The deck button reads `status` to render 없음 / 생성중 / 완료+링크 across
 // reloads. Lifecycle: pending (data-prep enqueued) → building (deck-build calls
-// slidegen /slides/build — wired when that endpoint deploys) → done (pptx_url
-// set) | failed. This module owns slide_decks read/write; the serving route and
-// SSE read through it. No fabrication — pptx_url is set only by a real build.
+// slidegen /slides/build) → done (pptx_url = Supabase Storage public URL) |
+// failed. This module owns slide_decks read/write. No fabrication — pptx_url is
+// set only by a real, uploaded build.
 
-import path from 'node:path';
 import { getPrismaClient } from '@/modules/database/client';
-import { config } from '@/config/index';
 
 export type DeckStatus = 'pending' | 'building' | 'done' | 'failed';
 
@@ -18,19 +16,6 @@ export interface DeckState {
   pptxUrl: string | null;
   error: string | null;
   generatedAt: Date | null;
-}
-
-/** The authenticated serving-route path for a mandala's .pptx (stored in pptx_url). */
-export function deckPptxRoutePath(mandalaId: string): string {
-  return `/api/v1/mandalas/${mandalaId}/deck.pptx`;
-}
-
-/**
- * On-disk path where the deck-build job writes the .pptx (EC2 local disk, served
- * via the authenticated route — no Drive). Under config.paths.data/decks.
- */
-export function deckPptxDiskPath(mandalaId: string): string {
-  return path.join(config.paths.data, 'decks', `${mandalaId}.pptx`);
 }
 
 /** Read the deck row, or null if the deck was never requested for this mandala. */
@@ -56,5 +41,31 @@ export async function markDeckPending(mandalaId: string): Promise<void> {
     where: { mandala_id: mandalaId },
     create: { mandala_id: mandalaId, status: 'pending' },
     update: { status: 'pending', pptx_url: null, error: null, generated_at: null },
+  });
+}
+
+/** Move a deck to 'building' (deck-build job started the slidegen call). */
+export async function markDeckBuilding(mandalaId: string): Promise<void> {
+  await getPrismaClient().slide_decks.update({
+    where: { mandala_id: mandalaId },
+    data: { status: 'building', error: null },
+  });
+}
+
+/**
+ * Mark a deck done with its Supabase Storage public URL (what the FE opens).
+ */
+export async function markDeckDone(mandalaId: string, pptxUrl: string): Promise<void> {
+  await getPrismaClient().slide_decks.update({
+    where: { mandala_id: mandalaId },
+    data: { status: 'done', pptx_url: pptxUrl, error: null, generated_at: new Date() },
+  });
+}
+
+/** Mark a deck failed with a short reason (honest — no fake success). */
+export async function markDeckFailed(mandalaId: string, error: string): Promise<void> {
+  await getPrismaClient().slide_decks.update({
+    where: { mandala_id: mandalaId },
+    data: { status: 'failed', error: error.slice(0, 500) },
   });
 }
