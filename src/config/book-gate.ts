@@ -62,3 +62,16 @@ export function passesBookGate(relevance: number | null, cfg: BookGateConfig): b
   if (relevance == null) return cfg.passNull;
   return relevance >= cfg.minRelevance;
 }
+
+/**
+ * §1⑤ topic synthesis on/off. Default FALSE (unset = legacy one-section-per-video,
+ * no LLM cost, byte-identical books) per the "new env default = prior behavior"
+ * rule. Flip to 'true' to make fill-book synthesize content topics (adds one
+ * Haiku call per non-empty cell). Code-revert-free rollback = flag off.
+ */
+export function isBookTopicSynthesisEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = String(env['BOOK_TOPIC_SYNTHESIS_ENABLED'] ?? '')
+    .trim()
+    .toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes';
+}
