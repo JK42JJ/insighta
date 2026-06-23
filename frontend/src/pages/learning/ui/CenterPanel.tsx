@@ -460,12 +460,13 @@ const NOTE_PROSE_STYLE = `
   word-break: keep-all;
 }
 .note-prose-root .ProseMirror h2 {
+  /* chapter title = doc-title (시안 40px). */
   font-family: var(--nm-serif);
   font-weight: 700;
-  font-size: 30px;
+  font-size: 40px;
   line-height: 1.22;
   letter-spacing: -0.02em;
-  margin: 0 0 16px;
+  margin: 8px 0 16px;
   color: var(--nm-strong);
 }
 .note-prose-root .ProseMirror h3 {

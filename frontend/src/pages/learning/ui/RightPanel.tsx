@@ -28,8 +28,15 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
   const setNoteContext = useLearningStore((s) => s.setNoteContext);
   const centerViewMode = useLearningStore((s) => s.centerViewMode);
   const setCenterViewMode = useLearningStore((s) => s.setCenterViewMode);
+  const activeSectionRef = useLearningStore((s) => s.activeSectionRef);
   const { cards } = useMandalaCards(mandalaId);
   const { book, isLoading: bookLoading } = useMandalaBook(mandalaId);
+  // §redesign — "지금 읽는 구간" context for the chatbot header (시안 chat-ctx).
+  const activeSectionTitle = (() => {
+    if (!activeSectionRef || !book?.book?.chapters) return null;
+    const ch = book.book.chapters.find((c) => c.ch === activeSectionRef.chapterIdx);
+    return ch?.sections?.[activeSectionRef.sectionIdx]?.title ?? null;
+  })();
 
   const currentCard = cards.find((c) => {
     const match = c.videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
@@ -177,6 +184,12 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
           activeTab !== 'chatbot' && 'hidden'
         )}
       >
+        {activeSectionTitle && (
+          // §redesign — chat context (시안 chat-ctx): "지금 읽는 구간 · {제목}".
+          <div className="border-b border-white/[0.06] px-1 pb-2.5 pt-0.5 text-[12px] text-muted-foreground/70">
+            지금 읽는 구간 · <span className="text-muted-foreground">{activeSectionTitle}</span>
+          </div>
+        )}
         <ChatAssistant key={videoId} mandalaId={mandalaId} videoId={videoId} onSeek={handleSeek} />
         <p className="absolute bottom-2 left-0 w-full text-center text-[10px] text-muted-foreground/60">
           {t('learning.chatDisclaimer')}

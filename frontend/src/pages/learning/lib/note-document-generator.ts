@@ -165,10 +165,13 @@ function renderSection(
     }
   }
 
-  // Section narrative (if present) — placed AFTER atoms so it reads as a
-  // wrap-up summary rather than a video preface.
+  // Section narrative (if present) — placed AFTER atoms as a wrap-up. Rendered
+  // as a blockquote so note-mode CSS styles it as the gold "핵심 포인트" keypoint.
   if (section.narrative && section.narrative.trim()) {
-    out.push(paragraph(section.narrative));
+    out.push({
+      type: 'blockquote',
+      content: [paragraph(section.narrative)],
+    });
   }
 
   // Section divider (skip after the last section — handled by caller).
@@ -180,8 +183,15 @@ function renderSection(
 function renderChapter(chapter: MandalaBookChapter): TiptapNode[] {
   const out: TiptapNode[] = [];
 
-  // Chapter eyebrow + h2
-  out.push(paragraph(`Ch.${chapter.ch + 1}`, [{ type: 'italic' }]));
+  // Chapter kicker ("CHAPTER NN · 챕터명 · 영상 N · 토픽 N") + h2 doc-title.
+  // Counts derived from the book (distinct vids + section count) so the meta is
+  // honest, not invented. Rendered as the gold kicker (italic-only paragraph →
+  // .ProseMirror p em:only-child in note-mode CSS).
+  const secs = chapter.sections ?? [];
+  const vidSet = new Set<string>();
+  for (const s of secs) for (const a of s.atoms ?? []) if (a.vid) vidSet.add(a.vid);
+  const kicker = `CHAPTER ${String(chapter.ch + 1).padStart(2, '0')} · ${chapter.title} · 영상 ${vidSet.size} · 토픽 ${secs.length}`;
+  out.push(paragraph(kicker, [{ type: 'italic' }]));
   out.push(heading(2, chapter.title));
 
   // Optional intro paragraph (mandala_books schema: chapter.intro?)
