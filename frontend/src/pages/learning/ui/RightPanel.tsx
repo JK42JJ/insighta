@@ -28,8 +28,15 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
   const setNoteContext = useLearningStore((s) => s.setNoteContext);
   const centerViewMode = useLearningStore((s) => s.centerViewMode);
   const setCenterViewMode = useLearningStore((s) => s.setCenterViewMode);
+  const activeSectionRef = useLearningStore((s) => s.activeSectionRef);
   const { cards } = useMandalaCards(mandalaId);
   const { book, isLoading: bookLoading } = useMandalaBook(mandalaId);
+  // §redesign — "지금 읽는 구간" context for the chatbot header (시안 chat-ctx).
+  const activeSectionTitle = (() => {
+    if (!activeSectionRef || !book?.book?.chapters) return null;
+    const ch = book.book.chapters.find((c) => c.ch === activeSectionRef.chapterIdx);
+    return ch?.sections?.[activeSectionRef.sectionIdx]?.title ?? null;
+  })();
 
   const currentCard = cards.find((c) => {
     const match = c.videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
@@ -96,10 +103,10 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
 
   return (
     <div
-      // §3 #4 — subtle left divider so the chatbot panel isn't visually fused
-      // with the note body. 6% white (matches sidebar separators); pl-5 gives the
-      // line breathing room without changing the 400px panel width.
-      className="flex w-[400px] shrink-0 flex-col border-l border-white/[0.06] pl-5 pr-5"
+      // §redesign — left divider EXACTLY matches the left sidebar's right divider
+      // (Sidebar.tsx: border-sidebar-border/40) so both panel seams are identical.
+      // Previous border-white/[0.06] read heavier/cruder than the left edge.
+      className="flex w-[400px] shrink-0 flex-col border-l border-sidebar-border/40 pl-5 pr-5"
       onMouseEnter={() => setActiveRegion(activeTab === 'notes' ? 'notes' : 'chat')}
     >
       {/* CP445 (사용자 directive) — ViewModeToggle + [⋯] 우측 사이드바 상단
@@ -177,6 +184,12 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
           activeTab !== 'chatbot' && 'hidden'
         )}
       >
+        {activeSectionTitle && (
+          // §redesign — chat context (시안 chat-ctx): "지금 읽는 구간 · {제목}".
+          <div className="border-b border-white/[0.06] px-1 pb-2.5 pt-0.5 text-[12px] text-muted-foreground/70">
+            지금 읽는 구간 · <span className="text-muted-foreground">{activeSectionTitle}</span>
+          </div>
+        )}
         <ChatAssistant key={videoId} mandalaId={mandalaId} videoId={videoId} onSeek={handleSeek} />
         <p className="absolute bottom-2 left-0 w-full text-center text-[10px] text-muted-foreground/60">
           {t('learning.chatDisclaimer')}

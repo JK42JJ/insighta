@@ -460,12 +460,13 @@ const NOTE_PROSE_STYLE = `
   word-break: keep-all;
 }
 .note-prose-root .ProseMirror h2 {
+  /* chapter title = doc-title (시안 40px). */
   font-family: var(--nm-serif);
   font-weight: 700;
-  font-size: 30px;
+  font-size: 40px;
   line-height: 1.22;
   letter-spacing: -0.02em;
-  margin: 0 0 16px;
+  margin: 8px 0 16px;
   color: var(--nm-strong);
 }
 .note-prose-root .ProseMirror h3 {
@@ -483,6 +484,8 @@ const NOTE_PROSE_STYLE = `
 }
 .note-prose-root .ProseMirror p strong { font-weight: 600; color: var(--nm-strong); }
 .note-prose-root .ProseMirror p em:only-child {
+  /* editorial label (kicker / sec-eyebrow) — gold, uppercase, small. Visible in
+     BOTH read & edit mode (these are design labels, not editing-only eyebrows). */
   font-style: normal;
   font-family: var(--nm-sans);
   font-size: 12px;
@@ -490,8 +493,20 @@ const NOTE_PROSE_STYLE = `
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--nm-accent);
+  margin: 0 0 14px;
 }
-.note-prose-root:not(.editing) .ProseMirror p:has(> em:only-child) { display: none; }
+/* doc-meta = the italic paragraph immediately AFTER the kicker (영상 N · 토픽 N).
+   Dimmer, not uppercase, sits under the kicker as a meta dot-row (시안 doc-meta). */
+.note-prose-root .ProseMirror p:has(> em:only-child) + p:has(> em:only-child) em:only-child {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  font-size: 12.5px;
+  color: var(--nm-dim);
+}
+.note-prose-root .ProseMirror p:has(> em:only-child) + p:has(> em:only-child) {
+  margin: -8px 0 22px; /* pull up under the kicker */
+}
 .note-prose-root .ProseMirror hr {
   border: none;
   border-top: 1px solid var(--nm-line);
@@ -552,6 +567,15 @@ const NOTE_PROSE_STYLE = `
   box-shadow: 0 0 0 1px rgba(194,168,120,0.12);
 }
 .note-prose-root .video-block-iframe { width: 100%; height: 100%; border: 0; display: block; }
+/* gold playing progress bar (시안) — overlaid at the bottom of the active frame */
+.note-prose-root .video-block-progress {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  background: rgba(255,255,255,0.12); z-index: 3; pointer-events: none;
+}
+.note-prose-root .video-block-progress > i {
+  display: block; height: 100%; width: 0;
+  background: var(--nm-accent); transition: width 0.5s linear;
+}
 .note-prose-root .video-block-thumb {
   width: 100%; height: 100%;
   object-fit: cover;

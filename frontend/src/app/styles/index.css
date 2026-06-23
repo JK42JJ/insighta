@@ -1153,6 +1153,27 @@
   font-size: 12px;
 }
 
+/* §redesign [5b] — chat chips + bubbles editorial styling, scoped to .note-mode
+   (learning only). Suggestion chips → hairline border + transparent (시안 .chip);
+   user bubble → subtle surface instead of the bright white primary. */
+.note-mode .copilotkit-chat-wrapper .copilotKitMessages footer .suggestions .suggestion {
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  background: transparent !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  color: var(--nm-dim) !important;
+  font-size: 0.72rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+.note-mode .copilotkit-chat-wrapper .copilotKitMessages footer .suggestions .suggestion:hover {
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  color: var(--nm-text) !important;
+}
+.note-mode .copilotkit-chat-wrapper .copilotKitMessage.copilotKitUserMessage {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--nm-text) !important;
+}
+
 .copilotkit-chat-wrapper .copilotKitInput > textarea::placeholder {
   font-size: 12px;
 }

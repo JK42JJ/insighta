@@ -290,7 +290,11 @@ export function SidebarLearningSection({
                   isExpanded && 'rotate-90'
                 )}
               />
-              <span className="flex-1 truncate text-[14px] font-medium tracking-[-0.01em] text-sidebar-foreground/80 transition-colors group-hover:text-sidebar-foreground">
+              {/* §redesign — chapter numbering "01·02·03" (시안 .toc-chapter .n) */}
+              <span className="shrink-0 font-mono text-[11px] tabular-nums text-sidebar-foreground/35">
+                {String(idx + 1).padStart(2, '0')}
+              </span>
+              <span className="flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.10em] text-sidebar-foreground/55 transition-colors group-hover:text-sidebar-foreground/80">
                 {rowLabel}
               </span>
             </button>
@@ -426,10 +430,12 @@ function BookChapterPreview({
               }
             }}
             className={cn(
-              'cursor-pointer pl-3 py-1.5 leading-[1.5] border-l transition-colors',
+              'cursor-pointer pl-3 py-1.5 leading-[1.5] transition-colors',
+              // §redesign — active section: 2px gold bar + strong text (시안).
+              // sidebar-primary is gold within .note-mode (overridden in index.css).
               isActiveSection
-                ? 'border-[#818cf8] text-[14px] font-medium text-[#818cf8]'
-                : 'border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/80 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
+                ? 'border-l-2 border-sidebar-primary text-[14px] font-medium text-sidebar-primary'
+                : 'border-l border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/80 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
             )}
           >
             {sec.title}

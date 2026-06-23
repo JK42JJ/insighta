@@ -68,6 +68,10 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
   // CP445.x — img onError 시 thumbnail 깨진 vid → block 숨김 (간단 path).
   // 더 strict 한 youtube_videos 테이블 query / fetch 검증은 별 PR.
   const [thumbBroken, setThumbBroken] = useState(false);
+  // §redesign — playing-state progress bar. The active block owns its own
+  // YT.Player (playerRef below); we poll getCurrentTime/getDuration so the
+  // gold progress bar reflects THIS segment's playback (not the main player).
+  const [progressPct, setProgressPct] = useState(0);
 
   // getPos() can return undefined transiently; coerce to a stable key.
   const pos = typeof getPos === 'function' ? (getPos() as number | undefined) : undefined;
@@ -85,6 +89,7 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
     if (!isActive || isEditable) return;
     let cancelled = false;
     let player: YTPlayer | null = null;
+    let pollId: ReturnType<typeof setInterval> | null = null;
 
     loadYouTubeAPI().then(() => {
       if (cancelled) return;
@@ -107,6 +112,18 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
           },
         });
         playerRef.current = player;
+        // Progress polling (500ms) — drives the gold progress bar.
+        pollId = setInterval(() => {
+          const p = playerRef.current;
+          if (!p) return;
+          try {
+            const dur = p.getDuration();
+            const cur = p.getCurrentTime();
+            if (dur > 0) setProgressPct(Math.min(100, Math.max(0, (cur / dur) * 100)));
+          } catch {
+            // player not ready — skip this tick
+          }
+        }, 500);
       } catch {
         // YT.Player init failed — let iframe play without state tracking.
       }
@@ -114,6 +131,8 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
 
     return () => {
       cancelled = true;
+      if (pollId) clearInterval(pollId);
+      setProgressPct(0);
       const p = playerRef.current;
       playerRef.current = null;
       if (p) {
@@ -169,6 +188,10 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
             allowFullScreen
             className="video-block-iframe"
           />
+          {/* §redesign — gold playing progress bar (driven by this block's player). */}
+          <span className="video-block-progress" aria-hidden>
+            <i style={{ width: `${progressPct}%` }} />
+          </span>
         </div>
       ) : (
         <button
