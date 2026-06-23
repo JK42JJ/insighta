@@ -96,7 +96,10 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
 
   return (
     <div
-      className="flex w-[400px] shrink-0 flex-col pr-5"
+      // §3 #4 — subtle left divider so the chatbot panel isn't visually fused
+      // with the note body. 6% white (matches sidebar separators); pl-5 gives the
+      // line breathing room without changing the 400px panel width.
+      className="flex w-[400px] shrink-0 flex-col border-l border-white/[0.06] pl-5 pr-5"
       onMouseEnter={() => setActiveRegion(activeTab === 'notes' ? 'notes' : 'chat')}
     >
       {/* CP445 (사용자 directive) — ViewModeToggle + [⋯] 우측 사이드바 상단
