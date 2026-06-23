@@ -445,53 +445,74 @@ export function ViewModeToggle({
 // ---------------------------------------------------------------------------
 
 const NOTE_PROSE_STYLE = `
+/* §3 editorial design tokens (시안 spec). Defined ONCE here; all rules below
+   reference these vars (no scattered color literals). Scoped to .note-prose-root
+   so the global theme is untouched (regression 0). */
+.note-prose-root {
+  --note-gold: #c9a36a;
+  --note-gold-text: #e7c79a;
+  --note-title: #f5f3ee;
+  --note-body: #e8e6e1;
+  --note-sub: #9a9893;
+  --note-meta: #6f6d68;
+  --note-serif: 'Noto Serif KR', 'Source Serif 4', Georgia, serif;
+  --note-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+  --note-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Top-light editorial backdrop (not flat black). */
+  background: radial-gradient(120% 80% at 50% -10%, #121319 0%, #0a0b0d 60%);
+}
 .note-prose-root .ProseMirror {
-  font-family: 'Source Serif 4', 'Noto Serif KR', Georgia, serif;
+  /* 시안: body = system sans (serif is reserved for titles). */
+  font-family: var(--note-sans);
   font-size: 18px;
   line-height: 1.78;
   letter-spacing: -0.003em;
-  color: hsl(var(--foreground));
-  /* CP445.x v3(1) — max-width 제거 (중앙 column 가용 폭 전체). padding
-     48px 48px 140px (mockup spec). */
-  padding: 48px 48px 140px;
+  color: var(--note-body);
+  /* 시안: centered 680px reading column. */
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 48px 24px 140px;
   outline: none;
   word-break: keep-all;
 }
 .note-prose-root .ProseMirror h2 {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 1.22;
+  /* 시안: 대제목 = Noto Serif KR 700 (editorial serif). */
+  font-family: var(--note-serif);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.25;
   letter-spacing: -0.015em;
-  margin: 0 0 16px;
-  color: hsl(var(--foreground));
+  margin: 0 0 18px;
+  color: var(--note-title);
 }
 .note-prose-root .ProseMirror h3 {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 21px;
-  font-weight: 500;
+  font-family: var(--note-serif);
+  font-size: 22px;
+  font-weight: 700;
   line-height: 1.3;
   letter-spacing: -0.01em;
   margin: 0 0 24px;
-  color: hsl(var(--foreground));
+  color: var(--note-title);
 }
 .note-prose-root .ProseMirror p {
   margin: 0 0 1.6em;
-  color: hsl(var(--foreground) / 0.92);
+  color: var(--note-body);
 }
 .note-prose-root .ProseMirror p strong {
   font-weight: 600;
-  color: hsl(var(--foreground));
+  color: var(--note-title);
 }
 .note-prose-root .ProseMirror p em:only-child {
   /* Eyebrow paragraph (italic-only by generator convention) — sans, 11px,
      uppercase, tertiary color. */
   font-style: normal;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--note-sans);
   font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: hsl(var(--muted-foreground));
+  /* 시안: kicker/eyebrow = gold accent. */
+  color: var(--note-gold);
 }
 /* CP445.x v3(2) — eyebrow paragraphs hidden in read mode; visible only
    when the editor wrapper has class "editing" (toggled from isEditing). */
@@ -504,26 +525,32 @@ const NOTE_PROSE_STYLE = `
   margin: 3.2em 0;
 }
 .note-prose-root .ProseMirror blockquote {
-  border-left: 2.5px solid rgba(129, 140, 248, 0.4);
+  /* 시안: pull-quote = gold left rule + larger serif. */
+  border-left: 2px solid var(--note-gold);
   padding: 2px 0 2px 24px;
-  color: hsl(var(--foreground) / 0.75);
+  color: var(--note-title);
   margin: 2em 0 2.2em;
-  font-style: italic;
-  font-family: 'Source Serif 4', 'Noto Serif KR', Georgia, serif;
-  font-size: 18px;
-  line-height: 1.78;
-  letter-spacing: -0.003em;
+  font-style: normal;
+  font-family: var(--note-serif);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
 }
 .note-prose-root .ProseMirror code {
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 14px;
-  background: hsl(var(--secondary));
-  padding: 1px 5px;
-  border-radius: 3px;
+  /* 시안: code chip = JetBrains Mono, gold tint. */
+  font-family: var(--note-mono);
+  font-size: 0.86em;
+  color: var(--note-gold-text);
+  background: rgba(201, 163, 106, 0.10);
+  border: 1px solid rgba(201, 163, 106, 0.16);
+  padding: 1px 6px;
+  border-radius: 5px;
 }
 .note-prose-root .ProseMirror a {
-  color: #818cf8;
+  color: var(--note-gold);
   text-decoration: underline;
+  text-decoration-color: rgba(201, 163, 106, 0.4);
 }
 .note-prose-root .ProseMirror[contenteditable='false'] p:hover,
 .note-prose-root .ProseMirror[contenteditable='false'] h2:hover,
@@ -533,7 +560,7 @@ const NOTE_PROSE_STYLE = `
 .note-prose-root .ProseMirror[contenteditable='true'] p:focus,
 .note-prose-root .ProseMirror[contenteditable='true'] h2:focus,
 .note-prose-root .ProseMirror[contenteditable='true'] h3:focus {
-  outline: 1.5px solid #818cf8;
+  outline: 1.5px solid var(--note-gold);
   outline-offset: 2px;
   border-radius: 3px;
 }
@@ -623,8 +650,11 @@ const NOTE_PROSE_STYLE = `
   pointer-events: none;
 }
 .note-prose-root .video-block-caption {
+  /* 시안: segment caption = mono timecode, sub-color, tight tracking. */
+  font-family: var(--note-mono);
   font-size: 12px;
-  color: hsl(var(--muted-foreground));
+  letter-spacing: -0.01em;
+  color: var(--note-sub);
   text-align: center;
   margin: 0 0 28px;
 }
