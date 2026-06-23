@@ -553,6 +553,15 @@ const NOTE_PROSE_STYLE = `
   box-shadow: 0 0 0 1px rgba(194,168,120,0.12);
 }
 .note-prose-root .video-block-iframe { width: 100%; height: 100%; border: 0; display: block; }
+/* gold playing progress bar (시안) — overlaid at the bottom of the active frame */
+.note-prose-root .video-block-progress {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  background: rgba(255,255,255,0.12); z-index: 3; pointer-events: none;
+}
+.note-prose-root .video-block-progress > i {
+  display: block; height: 100%; width: 0;
+  background: var(--nm-accent); transition: width 0.5s linear;
+}
 .note-prose-root .video-block-thumb {
   width: 100%; height: 100%;
   object-fit: cover;
