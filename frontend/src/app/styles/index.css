@@ -1189,3 +1189,60 @@
 html.dark .lemonsqueezy-loader {
   background: rgba(0, 0, 0, 0.9) !important;
 }
+
+/* ============================================================================
+   NOTE-MODE — learning/note view editorial theme (시안 spec, scope A).
+   Applied only when AppShell root has `.note-mode` (=/learning route), so the
+   global sidebar/theme on other routes is untouched (regression 0).
+   Strategy: override the theme bg/border tokens WITHIN this scope so all
+   var-based panels (--bg-base / --background / --sidebar-background) unify to a
+   single surface — separation is by 1px hairline + blended scrollbar ONLY.
+   ============================================================================ */
+.note-mode {
+  /* unified surface — every panel resolves to this one near-black */
+  --bg-base: 210 7% 6%;            /* #0e0f10 */
+  --background: 210 7% 6%;
+  --card: 210 7% 6%;
+  --sidebar-background: 210 7% 6%;
+  /* hairline divider (≈ rgba(255,255,255,0.07) over #0e0f10) — replaces the
+     heavier 0 0% 22% theme border so panel separators are whisper-thin */
+  --border: 210 6% 14%;
+  --sidebar-border: 210 6% 14%;
+  /* bg-secondary is dual-use (panel highlights + chips/hovers). In learning it
+     becomes a near-surface faint tone so active tabs / hovers read as subtle
+     editorial highlights, not bright blocks (text-secondary is unused here). */
+  --secondary: 210 7% 11%;
+  /* TOC active accent → muted editorial gold (#c2a878) instead of indigo, so the
+     current chapter/section marker matches the 시안 accent. */
+  --sidebar-primary: 38 39% 62%;
+  --sidebar-accent: 210 7% 11%;
+
+  /* editorial tokens (referenced by NOTE_PROSE_STYLE + components) */
+  --nm-line: rgba(255,255,255,0.07);
+  --nm-accent: #c2a878;
+  --nm-text: rgba(238,236,232,0.90);
+  --nm-strong: #f4f2ee;
+  --nm-dim: rgba(238,236,232,0.45);
+  --nm-faint: rgba(238,236,232,0.28);
+  --nm-serif: 'Noto Serif KR', Georgia, 'Times New Roman', serif;
+  --nm-sans: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --nm-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  background: #0e0f10;
+}
+
+/* Scrollbar — blends into the unified surface. Thin, near-invisible, no contrast.
+   Covers every learning scroll container (scrollbar-pro). */
+.note-mode .scrollbar-pro::-webkit-scrollbar,
+.note-mode .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.note-mode .scrollbar-pro::-webkit-scrollbar-track,
+.note-mode .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.note-mode .scrollbar-pro::-webkit-scrollbar-thumb,
+.note-mode .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.07);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.note-mode .scrollbar-pro::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); background-clip: padding-box; }
+.note-mode .scrollbar-pro { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.10) transparent; }
