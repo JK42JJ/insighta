@@ -38,9 +38,9 @@ describe('passesBookGate', () => {
 });
 
 describe('loadBookGateConfig', () => {
-  it('defaults: min 50, passNull true', () => {
+  it('defaults: min 40, passNull true', () => {
     const c = loadBookGateConfig({});
-    expect(c.minRelevance).toBe(50);
+    expect(c.minRelevance).toBe(40);
     expect(c.passNull).toBe(true);
   });
 

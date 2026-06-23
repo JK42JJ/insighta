@@ -27,8 +27,11 @@ const boolFromEnv = z.preprocess((v) => {
 }, z.boolean());
 
 export const bookGateEnvSchema = z.object({
-  // A placed card needs relevance_pct >= this to be sectioned. 0 disables the gate.
-  BOOK_GATE_MIN_RELEVANCE: z.coerce.number().min(0).max(100).default(50),
+  // A placed card needs relevance_pct >= this to be sectioned. 0 disables the
+  // gate. Default 40: drops clearly-off-topic cards (rel=5 stock video, the
+  // defect-2 case) while keeping borderline-relevant ones (e.g. rel=45 marketing
+  // automation in an automation mandala) — avoids over-exclusion.
+  BOOK_GATE_MIN_RELEVANCE: z.coerce.number().min(0).max(100).default(40),
   // true ⇒ cards with null relevance_pct (unscored) pass; false ⇒ they are dropped.
   BOOK_GATE_PASS_NULL_RELEVANCE: boolFromEnv.default(true),
 });
