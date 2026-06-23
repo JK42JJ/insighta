@@ -196,7 +196,9 @@ function renderChapter(chapter: MandalaBookChapter): TiptapNode[] {
   // CSS styles the first as the gold CHAPTER kicker and the adjacent one as the
   // dimmer meta dot-row (adjacent-sibling selector — no schema change needed).
   const kicker = `CHAPTER ${String(chapter.ch + 1).padStart(2, '0')} · ${chapter.title}`;
-  const docMeta = `영상 ${vidSet.size} · 토픽 ${secs.length}`;
+  // Duration ("약 N분") omitted — book data has no reliable per-chapter runtime,
+  // so we don't invent it (honest meta only: video count + topic count).
+  const docMeta = `${vidSet.size}개 영상에서 재구성 · 토픽 ${secs.length}`;
   out.push(paragraph(kicker, [{ type: 'italic' }]));
   out.push(paragraph(docMeta, [{ type: 'italic' }]));
   out.push(heading(2, chapter.title));
