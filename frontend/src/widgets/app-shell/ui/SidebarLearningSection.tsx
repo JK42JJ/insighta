@@ -366,7 +366,7 @@ export function SidebarLearningSection({
                             className={cn(
                               'cursor-pointer pl-3 py-1.5 leading-[1.5] border-l transition-colors',
                               isActive
-                                ? 'border-[#818cf8] text-[14px] font-medium text-[#818cf8]'
+                                ? 'border-sidebar-primary text-[14px] font-medium text-sidebar-primary'
                                 : 'border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/80 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
                             )}
                           >

@@ -79,7 +79,11 @@ export function CenterPanel({
   const setCenterTab = useLearningStore((s) => s.setCenterTab);
   const centerViewMode = useLearningStore((s) => s.centerViewMode);
   const activeSectionRef = useLearningStore((s) => s.activeSectionRef);
+  const setActiveSection = useLearningStore((s) => s.setActiveSection);
   const setActiveRegion = useLearningStore((s) => s.setActiveRegion);
+  // scrollspy guard — marks the "ch:sec" that was set BY scrolling, so the
+  // scroll-to effect below doesn't re-scroll (which would fight free scrolling).
+  const scrollSpyRef = useRef<string | null>(null);
   const setPlayerState = useLearningStore((s) => s.setPlayerState);
   const { book } = useMandalaBook(mandalaId);
   const setActiveNoteVideoKey = useLearningStore((s) => s.setActiveNoteVideoKey);
@@ -148,6 +152,13 @@ export function CenterPanel({
   // h3 element in editor DOM (deterministic order from generator).
   useEffect(() => {
     if (centerViewMode !== 'note' || !activeSectionRef || !noteDoc.editor || !book?.book) return;
+    const key = `${activeSectionRef.chapterIdx}:${activeSectionRef.sectionIdx}`;
+    // Scroll-driven change (from the scrollspy below) → do NOT re-scroll, just
+    // clear the marker. Only click-driven changes (TOC) scroll into view.
+    if (scrollSpyRef.current === key) {
+      scrollSpyRef.current = null;
+      return;
+    }
     const chapters = (book.book.chapters ?? []).slice().sort((a, b) => (a.ch ?? 0) - (b.ch ?? 0));
     let flatIdx = 0;
     let found = false;
@@ -168,6 +179,54 @@ export function CenterPanel({
     // makes the target ambiguous. Player seek stays user-initiated via
     // VideoBlock click.
   }, [activeSectionRef, centerViewMode, noteDoc.editor, book]);
+
+  // Scrollspy — observe section <h3> headings; the topmost one in view drives
+  // the active section (→ left TOC highlight + chatbot "지금 읽는 구간", both
+  // derived from activeSectionRef). Read-position sync that was missing; the
+  // §2 VIDEO auto-follow (useNoteAutoFollow) is separate and untouched.
+  useEffect(() => {
+    if (centerViewMode !== 'note' || !noteDoc.editor || !book?.book) return;
+    const editorEl = noteDoc.editor.view.dom as HTMLElement;
+    // Flat list of {ch, sec} in the same order the generator emits <h3>s.
+    const chapters = (book.book.chapters ?? []).slice().sort((a, b) => (a.ch ?? 0) - (b.ch ?? 0));
+    const flat: Array<{ ch: number; sec: number }> = [];
+    for (const ch of chapters) {
+      const n = ch.sections?.length ?? 0;
+      for (let s = 0; s < n; s++) flat.push({ ch: ch.ch, sec: s });
+    }
+    const h3s = Array.from(editorEl.querySelectorAll('h3'));
+    if (h3s.length === 0 || flat.length === 0) return;
+
+    // Find the editor's scroll container so visibility is relative to it.
+    let root: HTMLElement | null = editorEl.parentElement;
+    while (root && root !== document.body) {
+      const oy = getComputedStyle(root).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && root.scrollHeight > root.clientHeight) break;
+      root = root.parentElement;
+    }
+    const visible = new Set<number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const i = h3s.indexOf(e.target as HTMLElement);
+          if (i < 0) continue;
+          if (e.isIntersecting) visible.add(i);
+          else visible.delete(i);
+        }
+        if (visible.size === 0) return;
+        const topIdx = Math.min(...visible);
+        const ref = flat[topIdx];
+        if (!ref) return;
+        const cur = useLearningStore.getState().activeSectionRef;
+        if (cur && cur.chapterIdx === ref.ch && cur.sectionIdx === ref.sec) return;
+        scrollSpyRef.current = `${ref.ch}:${ref.sec}`; // mark scroll-driven (no re-scroll)
+        setActiveSection({ chapterIdx: ref.ch, sectionIdx: ref.sec });
+      },
+      { root: root ?? null, rootMargin: '0px 0px -70% 0px', threshold: 0 }
+    );
+    h3s.forEach((h) => observer.observe(h));
+    return () => observer.disconnect();
+  }, [centerViewMode, noteDoc.editor, book, setActiveSection]);
 
   const activeSection = (() => {
     if (!activeSectionRef || !book?.book?.chapters) return null;
@@ -243,7 +302,7 @@ export function CenterPanel({
                 <span
                   className={cn(
                     'text-[11px] tabular-nums font-medium transition-colors',
-                    highlightReel.active ? 'text-[#818cf8]/80' : 'text-white/60'
+                    highlightReel.active ? 'text-white/90' : 'text-white/60'
                   )}
                   aria-live="polite"
                 >
@@ -262,7 +321,7 @@ export function CenterPanel({
                     className={cn(
                       'inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors',
                       highlightReel.active
-                        ? 'text-[#818cf8]/80 hover:bg-[rgba(129,140,248,0.10)]'
+                        ? 'text-white/90 hover:bg-white/10'
                         : 'text-white hover:bg-white/10',
                       !highlightReel.enabled && 'opacity-40 cursor-not-allowed'
                     )}
@@ -365,7 +424,7 @@ function SectionContentView({
                 {atom.vid && Number.isFinite(atom.ts) && (
                   <Link
                     to={`/learning/${mandalaId}/${atom.vid}?t=${Math.floor(atom.ts ?? 0)}`}
-                    className="ml-1 inline-block rounded-[3px] bg-[rgba(129,140,248,0.15)] px-1 font-mono text-[10px] text-[#818cf8]"
+                    className="ml-1 inline-block rounded-[3px] bg-white/10 px-1 font-mono text-[10px] text-white/80"
                   >
                     {`▶ ${Math.floor((atom.ts ?? 0) / 60)}:${String(Math.floor((atom.ts ?? 0) % 60)).padStart(2, '0')}`}
                   </Link>
@@ -448,34 +507,36 @@ const NOTE_PROSE_STYLE = `
 /* §-redesign — editorial note prose (시안 spec). Color/font tokens come from
    .note-mode (index.css); this block styles the TipTap document + inline players. */
 .note-prose-root .ProseMirror {
+  /* Korean longform: 16.5px (≈ Medium 18px English feel — Korean glyphs are
+     denser, so 19px read as a picture-book). line-height kept generous. */
   font-family: var(--nm-serif);
-  font-size: 19px;
-  line-height: 1.92;
+  font-size: 16.5px;
+  line-height: 1.9;
   letter-spacing: 0.001em;
   color: var(--nm-text);
   max-width: 680px;
   margin: 0 auto;
-  padding: 72px 24px 200px;
+  padding: 64px 24px 200px;
   outline: none;
   word-break: keep-all;
 }
 .note-prose-root .ProseMirror h2 {
-  /* chapter title = doc-title (시안 40px). */
+  /* chapter doc-title — 29px (Korean-comfortable; 40px read oversized). */
   font-family: var(--nm-serif);
   font-weight: 700;
-  font-size: 40px;
-  line-height: 1.22;
-  letter-spacing: -0.02em;
-  margin: 8px 0 16px;
+  font-size: 29px;
+  line-height: 1.24;
+  letter-spacing: -0.018em;
+  margin: 8px 0 14px;
   color: var(--nm-strong);
 }
 .note-prose-root .ProseMirror h3 {
   font-family: var(--nm-serif);
   font-weight: 700;
-  font-size: 27px;
-  line-height: 1.34;
-  letter-spacing: -0.014em;
-  margin: 72px 0 26px;
+  font-size: 21px;
+  line-height: 1.36;
+  letter-spacing: -0.012em;
+  margin: 64px 0 22px;
   color: var(--nm-strong);
 }
 .note-prose-root .ProseMirror p {
@@ -505,7 +566,13 @@ const NOTE_PROSE_STYLE = `
   color: var(--nm-dim);
 }
 .note-prose-root .ProseMirror p:has(> em:only-child) + p:has(> em:only-child) {
-  margin: -8px 0 22px; /* pull up under the kicker */
+  /* pull up under the kicker + 1px hairline rule below (시안 doc-meta 하단 rule) */
+  margin: -8px 0 0;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--nm-line);
+}
+.note-prose-root .ProseMirror p:has(> em:only-child) + p:has(> em:only-child) + * {
+  margin-top: 32px; /* breathing room after the meta rule */
 }
 .note-prose-root .ProseMirror hr {
   border: none;
@@ -520,8 +587,20 @@ const NOTE_PROSE_STYLE = `
   font-style: normal;
   font-family: var(--nm-serif);
   font-weight: 500;
-  font-size: 20px;
+  font-size: 17.5px;
   line-height: 1.7;
+}
+/* "핵심 포인트" label above the keypoint (시안 .lbl) — CSS-only, no generator change. */
+.note-prose-root .ProseMirror blockquote::before {
+  content: "핵심 포인트";
+  display: block;
+  font-family: var(--nm-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nm-accent);
+  margin-bottom: 10px;
 }
 .note-prose-root .ProseMirror code {
   font-family: var(--nm-mono);
