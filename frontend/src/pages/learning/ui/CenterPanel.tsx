@@ -484,6 +484,8 @@ const NOTE_PROSE_STYLE = `
 }
 .note-prose-root .ProseMirror p strong { font-weight: 600; color: var(--nm-strong); }
 .note-prose-root .ProseMirror p em:only-child {
+  /* editorial label (kicker / sec-eyebrow) — gold, uppercase, small. Visible in
+     BOTH read & edit mode (these are design labels, not editing-only eyebrows). */
   font-style: normal;
   font-family: var(--nm-sans);
   font-size: 12px;
@@ -491,8 +493,20 @@ const NOTE_PROSE_STYLE = `
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--nm-accent);
+  margin: 0 0 14px;
 }
-.note-prose-root:not(.editing) .ProseMirror p:has(> em:only-child) { display: none; }
+/* doc-meta = the italic paragraph immediately AFTER the kicker (영상 N · 토픽 N).
+   Dimmer, not uppercase, sits under the kicker as a meta dot-row (시안 doc-meta). */
+.note-prose-root .ProseMirror p:has(> em:only-child) + p:has(> em:only-child) em:only-child {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  font-size: 12.5px;
+  color: var(--nm-dim);
+}
+.note-prose-root .ProseMirror p:has(> em:only-child) + p:has(> em:only-child) {
+  margin: -8px 0 22px; /* pull up under the kicker */
+}
 .note-prose-root .ProseMirror hr {
   border: none;
   border-top: 1px solid var(--nm-line);

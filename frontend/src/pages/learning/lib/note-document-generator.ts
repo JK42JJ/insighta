@@ -146,7 +146,9 @@ function renderSection(
   // shape simple/portable, we use an italic-ish small text mark family
   // already supported by StarterKit ("italic"). Visual eyebrow styling is
   // applied in note-mode CSS via the surrounding heading.
-  const eyebrow = `Ch.${chapterIdx + 1} · ${chapterIdx + 1}.${sectionIdx + 1}`;
+  // sec-eyebrow ("N.N" first topic / "N.N · 다음 토픽" for subsequent topics).
+  const secNum = `${chapterIdx + 1}.${sectionIdx + 1}`;
+  const eyebrow = sectionIdx > 0 ? `${secNum} · 다음 토픽` : secNum;
   out.push(paragraph(eyebrow, [{ type: 'italic' }]));
 
   // Section heading (h3 inside chapter h2)
@@ -190,8 +192,13 @@ function renderChapter(chapter: MandalaBookChapter): TiptapNode[] {
   const secs = chapter.sections ?? [];
   const vidSet = new Set<string>();
   for (const s of secs) for (const a of s.atoms ?? []) if (a.vid) vidSet.add(a.vid);
-  const kicker = `CHAPTER ${String(chapter.ch + 1).padStart(2, '0')} · ${chapter.title} · 영상 ${vidSet.size} · 토픽 ${secs.length}`;
+  // kicker (gold) + doc-meta (dim) = two consecutive italic paragraphs. note-mode
+  // CSS styles the first as the gold CHAPTER kicker and the adjacent one as the
+  // dimmer meta dot-row (adjacent-sibling selector — no schema change needed).
+  const kicker = `CHAPTER ${String(chapter.ch + 1).padStart(2, '0')} · ${chapter.title}`;
+  const docMeta = `영상 ${vidSet.size} · 토픽 ${secs.length}`;
   out.push(paragraph(kicker, [{ type: 'italic' }]));
+  out.push(paragraph(docMeta, [{ type: 'italic' }]));
   out.push(heading(2, chapter.title));
 
   // Optional intro paragraph (mandala_books schema: chapter.intro?)
