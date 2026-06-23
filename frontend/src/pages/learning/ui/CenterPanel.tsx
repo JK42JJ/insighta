@@ -445,218 +445,150 @@ export function ViewModeToggle({
 // ---------------------------------------------------------------------------
 
 const NOTE_PROSE_STYLE = `
-/* §3 editorial design tokens (시안 spec). Defined ONCE here; all rules below
-   reference these vars (no scattered color literals). Scoped to .note-prose-root
-   so the global theme is untouched (regression 0). */
-.note-prose-root {
-  --note-gold: #c9a36a;
-  --note-gold-text: #e7c79a;
-  --note-title: #f5f3ee;
-  --note-body: #e8e6e1;
-  --note-sub: #9a9893;
-  --note-meta: #6f6d68;
-  --note-serif: 'Noto Serif KR', 'Source Serif 4', Georgia, serif;
-  --note-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
-  --note-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  /* Top-light editorial backdrop (not flat black). */
-  background: radial-gradient(120% 80% at 50% -10%, #121319 0%, #0a0b0d 60%);
-}
+/* §-redesign — editorial note prose (시안 spec). Color/font tokens come from
+   .note-mode (index.css); this block styles the TipTap document + inline players. */
 .note-prose-root .ProseMirror {
-  /* 시안: body = system sans (serif is reserved for titles). */
-  font-family: var(--note-sans);
-  font-size: 18px;
-  line-height: 1.78;
-  letter-spacing: -0.003em;
-  color: var(--note-body);
-  /* 시안: centered 680px reading column. */
+  font-family: var(--nm-serif);
+  font-size: 19px;
+  line-height: 1.92;
+  letter-spacing: 0.001em;
+  color: var(--nm-text);
   max-width: 680px;
   margin: 0 auto;
-  padding: 48px 24px 140px;
+  padding: 72px 24px 200px;
   outline: none;
   word-break: keep-all;
 }
 .note-prose-root .ProseMirror h2 {
-  /* 시안: 대제목 = Noto Serif KR 700 (editorial serif). */
-  font-family: var(--note-serif);
-  font-size: 30px;
+  font-family: var(--nm-serif);
   font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: -0.015em;
-  margin: 0 0 18px;
-  color: var(--note-title);
+  font-size: 30px;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  margin: 0 0 16px;
+  color: var(--nm-strong);
 }
 .note-prose-root .ProseMirror h3 {
-  font-family: var(--note-serif);
-  font-size: 22px;
+  font-family: var(--nm-serif);
   font-weight: 700;
-  line-height: 1.3;
-  letter-spacing: -0.01em;
-  margin: 0 0 24px;
-  color: var(--note-title);
+  font-size: 27px;
+  line-height: 1.34;
+  letter-spacing: -0.014em;
+  margin: 72px 0 26px;
+  color: var(--nm-strong);
 }
 .note-prose-root .ProseMirror p {
-  margin: 0 0 1.6em;
-  color: var(--note-body);
+  margin: 0 0 1.55em;
+  color: var(--nm-text);
 }
-.note-prose-root .ProseMirror p strong {
-  font-weight: 600;
-  color: var(--note-title);
-}
+.note-prose-root .ProseMirror p strong { font-weight: 600; color: var(--nm-strong); }
 .note-prose-root .ProseMirror p em:only-child {
-  /* Eyebrow paragraph (italic-only by generator convention) — sans, 11px,
-     uppercase, tertiary color. */
   font-style: normal;
-  font-family: var(--note-sans);
-  font-size: 11px;
+  font-family: var(--nm-sans);
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  /* 시안: kicker/eyebrow = gold accent. */
-  color: var(--note-gold);
+  color: var(--nm-accent);
 }
-/* CP445.x v3(2) — eyebrow paragraphs hidden in read mode; visible only
-   when the editor wrapper has class "editing" (toggled from isEditing). */
-.note-prose-root:not(.editing) .ProseMirror p:has(> em:only-child) {
-  display: none;
-}
+.note-prose-root:not(.editing) .ProseMirror p:has(> em:only-child) { display: none; }
 .note-prose-root .ProseMirror hr {
   border: none;
-  border-top: 0.5px solid hsl(var(--border));
-  margin: 3.2em 0;
+  border-top: 1px solid var(--nm-line);
+  margin: 64px 0;
 }
 .note-prose-root .ProseMirror blockquote {
-  /* 시안: pull-quote = gold left rule + larger serif. */
-  border-left: 2px solid var(--note-gold);
-  padding: 2px 0 2px 24px;
-  color: var(--note-title);
-  margin: 2em 0 2.2em;
+  border-left: 2px solid var(--nm-accent);
+  padding: 2px 0 2px 26px;
+  margin: 40px 0;
+  color: var(--nm-strong);
   font-style: normal;
-  font-family: var(--note-serif);
-  font-size: 20px;
+  font-family: var(--nm-serif);
   font-weight: 500;
-  line-height: 1.6;
-  letter-spacing: -0.005em;
+  font-size: 20px;
+  line-height: 1.7;
 }
 .note-prose-root .ProseMirror code {
-  /* 시안: code chip = JetBrains Mono, gold tint. */
-  font-family: var(--note-mono);
-  font-size: 0.86em;
-  color: var(--note-gold-text);
-  background: rgba(201, 163, 106, 0.10);
-  border: 1px solid rgba(201, 163, 106, 0.16);
-  padding: 1px 6px;
+  font-family: var(--nm-mono);
+  font-size: 0.82em;
+  color: #dcc69e;
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 1.5px 6px;
   border-radius: 5px;
+  white-space: nowrap;
 }
 .note-prose-root .ProseMirror a {
-  color: var(--note-gold);
+  color: var(--nm-accent);
   text-decoration: underline;
-  text-decoration-color: rgba(201, 163, 106, 0.4);
-}
-.note-prose-root .ProseMirror[contenteditable='false'] p:hover,
-.note-prose-root .ProseMirror[contenteditable='false'] h2:hover,
-.note-prose-root .ProseMirror[contenteditable='false'] h3:hover {
-  background: transparent;
+  text-decoration-color: rgba(194,168,120,0.4);
 }
 .note-prose-root .ProseMirror[contenteditable='true'] p:focus,
 .note-prose-root .ProseMirror[contenteditable='true'] h2:focus,
 .note-prose-root .ProseMirror[contenteditable='true'] h3:focus {
-  outline: 1.5px solid var(--note-gold);
+  outline: 1.5px solid var(--nm-accent);
   outline-offset: 2px;
   border-radius: 3px;
 }
 
-/* CP445.x — VideoBlock styling (mockup-aligned, inline-iframe ready). */
-/* CP445.x v3(2) — 영상만 560px 컴팩트 중앙 정렬. 본문 텍스트는 가용 폭 전체. */
-.note-prose-root .video-block-wrap {
-  margin: 18px auto 6px;
-  max-width: 560px;
-}
+/* inline player — clean 16:9, no youtube chrome (시안). 2 states: paused
+   (thumbnail dim + minimal play + timecode), playing (iframe + accent ring). */
+.note-prose-root .video-block-wrap { margin: 38px auto; max-width: 600px; }
 .note-prose-root .video-block-frame {
   position: relative;
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
-  border: none;
+  border: 1px solid var(--nm-line);
+  border-radius: 12px;
   padding: 0;
-  background: #111;
+  background: #000;
   overflow: hidden;
   cursor: pointer;
 }
 .note-prose-root .video-block-frame--active {
   cursor: default;
+  border-color: rgba(194,168,120,0.38);
+  box-shadow: 0 0 0 1px rgba(194,168,120,0.12);
 }
-.note-prose-root .video-block-iframe {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  display: block;
-}
+.note-prose-root .video-block-iframe { width: 100%; height: 100%; border: 0; display: block; }
 .note-prose-root .video-block-thumb {
-  width: 100%;
-  height: 100%;
+  width: 100%; height: 100%;
   object-fit: cover;
-  opacity: 0.85;
+  opacity: 0.42;
+  filter: grayscale(0.2);
   transition: opacity 0.2s;
 }
-.note-prose-root .video-block-frame:hover .video-block-thumb {
-  opacity: 1;
-}
+.note-prose-root .video-block-frame:hover .video-block-thumb { opacity: 0.6; }
 .note-prose-root .video-block-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(to bottom, transparent 60%, rgba(0,0,0,0.30));
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0.55) 100%);
 }
 .note-prose-root .video-block-play {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  /* CP445.x v3(2) — 48px (이전 52px) — 컴팩트 frame 에 비례. */
-  width: 48px;
-  height: 48px;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.10);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 50%;
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  width: 54px; height: 54px; border-radius: 50%;
+  background: rgba(20,20,20,0.55);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.22);
+  display: flex; align-items: center; justify-content: center;
   color: #fff;
-  pointer-events: none;
-  transition: opacity 0.2s, transform 0.2s;
+  transition: background 0.2s;
 }
-.note-prose-root .video-block-play-icon {
-  width: 18px;
-  height: 18px;
-  fill: currentColor;
-  stroke: none;
-  margin-left: 1px;
-}
-.note-prose-root .video-block-frame:hover .video-block-play {
-  transform: translate(-50%, -50%) scale(1.08);
-  background: rgba(255, 255, 255, 0.18);
-}
+.note-prose-root .video-block-frame:hover .video-block-play { background: rgba(20,20,20,0.72); }
+.note-prose-root .video-block-play-icon { width: 18px; height: 18px; margin-left: 3px; }
 .note-prose-root .video-block-ts {
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 11px;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.55);
-  padding: 2px 7px;
-  border-radius: 4px;
-  pointer-events: none;
+  position: absolute; left: 12px; bottom: 12px;
+  font-family: var(--nm-mono); font-size: 11.5px; letter-spacing: -0.02em;
+  color: #fff; background: rgba(0,0,0,0.5);
+  padding: 2px 7px; border-radius: 5px;
 }
 .note-prose-root .video-block-caption {
-  /* 시안: segment caption = mono timecode, sub-color, tight tracking. */
-  font-family: var(--note-mono);
+  margin: 12px 0 28px;
+  text-align: center;
+  font-family: var(--nm-mono);
   font-size: 12px;
   letter-spacing: -0.01em;
-  color: var(--note-sub);
-  text-align: center;
-  margin: 0 0 28px;
+  color: var(--nm-dim);
 }
 `;
 

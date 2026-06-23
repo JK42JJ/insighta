@@ -8,6 +8,7 @@ import { useShellStore, dndHandlersRef } from '@/stores/shellStore';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { useDndSensors, pointerWithinThenClosest } from '@/shared/lib/dnd';
 import type { DragData } from '@/shared/lib/dnd';
+import { cn } from '@/shared/lib/utils';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -107,7 +108,15 @@ export function AppShell({ children }: AppShellProps) {
       onDragEnd={(e) => dndHandlersRef.current?.onDragEnd(e)}
       onDragCancel={() => dndHandlersRef.current?.onDragCancel()}
     >
-      <div className="h-screen flex flex-col bg-surface-base overflow-hidden">
+      <div
+        className={cn(
+          'h-screen flex flex-col bg-surface-base overflow-hidden',
+          // §-redesign — scope the learning note-mode editorial theme to the
+          // /learning route only (A: no global sidebar regression). All bg/divider/
+          // scrollbar tokens live under `.note-mode` in index.css.
+          location.pathname.startsWith('/learning') && 'note-mode'
+        )}
+      >
         <div className="flex-1 flex overflow-hidden">
           {showSidebar && (
             <Sidebar
