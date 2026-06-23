@@ -13,7 +13,12 @@ import { getMandalaManager } from '@/modules/mandala/manager';
 import { logger } from '@/utils/logger';
 import { buildBookJson, type CellInput, type CellVideoV2 } from './build-book';
 import { parseBookJson } from './book-schema';
-import { loadBookGateConfig, passesBookGate } from '@/config/book-gate';
+import {
+  loadBookGateConfig,
+  passesBookGate,
+  isBookTopicSynthesisEnabled,
+} from '@/config/book-gate';
+import { synthesizeCellTopics } from './topic-synthesis';
 import type {
   RichSummaryAnalysis,
   RichSummarySegments,
@@ -171,6 +176,33 @@ export async function fillMandalaBook(params: {
       });
     }
     cells.push({ cellIndex: i, title, videos });
+  }
+
+  // 3b. §1⑤ topic synthesis (flag-gated; off = legacy per-video). For each
+  // non-empty cell, pool its videos' atoms → synthesizeCellTopics → attach
+  // topics. build-book then builds sections per TOPIC (not per video), removing
+  // defect-1 (section title = video title). A cell whose synthesis fails keeps
+  // topics undefined → build-book falls back to per-video for THAT cell (safe).
+  // This is the only non-deterministic step; build-book stays pure.
+  if (isBookTopicSynthesisEnabled()) {
+    let synthOk = 0;
+    let synthFail = 0;
+    for (const cell of cells) {
+      const atoms = cell.videos.flatMap((v) =>
+        (v.segments?.atoms ?? [])
+          .filter((a) => typeof a.timestamp_sec === 'number')
+          .map((a) => ({ vid: v.videoId, ts: a.timestamp_sec as number, text: a.text }))
+      );
+      if (atoms.length === 0) continue; // empty cell → no synthesis, no topics
+      const r = await synthesizeCellTopics(cell.title, atoms);
+      if (r.ok) {
+        cell.topics = r.topics;
+        synthOk += 1;
+      } else {
+        synthFail += 1; // leave topics undefined → legacy per-video for this cell
+      }
+    }
+    log.info('topic synthesis', { mandalaId, cellsSynthesized: synthOk, cellsFallback: synthFail });
   }
 
   // 4. Assemble (pure, LLM-free) + validate (hard gate).

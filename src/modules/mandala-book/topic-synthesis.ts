@@ -64,6 +64,7 @@ export function buildTopicSynthesisPrompt(cellTitle: string, atoms: TopicAtom[])
     `3. 토픽 수는 내용에 맞게 자연스럽게 정하되 최대 ${MAX_TOPICS_PER_CELL}개를 넘지 않는다.`,
     `4. summary는 토픽의 1-2문장 요약. 조각에 없는 사실을 지어내지 마라(라벨링·요약만, 창작 금지).`,
     `5. 각 토픽은 atom_idx 배열로 자신이 묶은 조각 번호들을 가리킨다(출처 보존). 한 조각은 한 토픽에만.`,
+    `6. 명백한 중복·완전 무관 조각만 제외하고, 나머지 조각은 반드시 어느 토픽엔가 배치하라. 임의로 빠뜨리지 마라 — 누락된 조각은 책 내용 손실이다(절삭 금지).`,
     ``,
     `JSON만 출력(코드펜스 금지):`,
     `{"topics":[{"topic_title":"...","summary":"...","atom_idx":[0,3,5]}]}`,

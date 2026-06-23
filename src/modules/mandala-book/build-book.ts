@@ -13,6 +13,7 @@
 // atom without a timestamp yields no book atom (book atom.ts is required).
 
 import type { BookJsonInput } from './book-schema';
+import type { TopicSection } from './topic-synthesis';
 import type {
   RichSummaryAnalysis,
   RichSummarySegments,
@@ -33,6 +34,10 @@ export interface CellInput {
   cellIndex: number; // 0..N-1, becomes chapter.ch
   title: string; // subject label / sub-goal, becomes chapter.title
   videos: CellVideoV2[];
+  // §1⑤ topic synthesis output (set by fill-book when enabled). Present ⇒
+  // sections are built per-topic (content), resolving atom_refs against `videos`.
+  // Absent ⇒ legacy one-section-per-video. build-book stays pure either way.
+  topics?: TopicSection[];
 }
 
 export interface BuildBookInput {
@@ -87,50 +92,78 @@ function assembleNarrative(video: CellVideoV2): string {
 }
 
 /**
+ * v2 atoms (with a real timestamp) → book atoms. NO interpolation: atoms without
+ * a timestamp are skipped (book atom.ts is required). Shared by both assembly
+ * modes so a book atom is built identically whether grouped by video or topic.
+ */
+function bookAtomsForVideo(video: CellVideoV2) {
+  const segments = video.segments;
+  return (segments?.atoms ?? [])
+    .filter((a) => typeof a.timestamp_sec === 'number')
+    .map((a) => {
+      const ts = a.timestamp_sec as number;
+      const seg_ref = segments ? segRefForTimestamp(segments, ts) : undefined;
+      return {
+        vid: video.videoId,
+        ts,
+        text: a.text,
+        ...(a.type ? { type: a.type } : {}),
+        ...(seg_ref ? { seg_ref } : {}),
+      };
+    });
+}
+
+/**
  * Assemble book_json from mandala cells + their v2 summaries. Pure: same input
- * → same output. Returns the book plus the two source counters.
+ * → same output (NO LLM here — topic synthesis runs upstream in fill-book and
+ * arrives as cell.topics). Returns the book plus the two source counters.
  */
 export function buildBookJson(input: BuildBookInput): BuildBookResult {
   let sourceVideos = 0;
   let sourceAtoms = 0;
 
   const chapters = input.cells.map((cell) => {
-    const sections = cell.videos.map((video) => {
+    // Source counters (both modes draw from the same videos/atoms pool).
+    for (const v of cell.videos) {
       sourceVideos += 1;
+      sourceAtoms += v.segments?.atoms?.length ?? 0; // input pool: every harvested atom
+    }
 
-      const segments = video.segments;
-      const rawAtoms = segments?.atoms ?? [];
-      sourceAtoms += rawAtoms.length; // input pool: every harvested atom counts
-
-      // Book atoms = v2 atoms that have a real timestamp. Atoms without one are
-      // skipped (book atom.ts is required; no interpolation of fake timestamps).
-      const atoms = rawAtoms
-        .filter((a) => typeof a.timestamp_sec === 'number')
-        .map((a) => {
-          const ts = a.timestamp_sec as number;
-          const seg_ref = segments ? segRefForTimestamp(segments, ts) : undefined;
-          return {
-            vid: video.videoId,
-            ts,
-            text: a.text,
-            ...(a.type ? { type: a.type } : {}),
-            ...(seg_ref ? { seg_ref } : {}),
-          };
-        });
-
-      // qa: v2 lora.qa_pairs are all context='video' (rich-summary-v2-prompt.ts
-      // :268); map them as-is to the book's {q, a} shape. No context filter
-      // (the handoff's 'mandala_cell' filter would drop every row — corrected
-      // against code).
-      const qa = (video.lora?.qa_pairs ?? []).map((p) => ({ q: p.q, a: p.a }));
-
-      return {
+    let sections;
+    if (cell.topics && cell.topics.length > 0) {
+      // TOPIC mode (§1⑤): one section per CONTENT topic (not per video). Resolve
+      // synthesis atom_refs {vid,ts} → full book atoms from this cell's videos —
+      // provenance preserved, so figure/relevance (keyed on {vid,ts}) travel with
+      // the topic. narrative = the topic summary (light synthesis, no fabrication);
+      // qa = gathered from the topic's source videos.
+      const atomByKey = new Map<string, ReturnType<typeof bookAtomsForVideo>[number]>();
+      const qaByVid = new Map<string, Array<{ q: string; a: string }>>();
+      for (const v of cell.videos) {
+        for (const a of bookAtomsForVideo(v)) atomByKey.set(`${a.vid}:${a.ts}`, a);
+        qaByVid.set(
+          v.videoId,
+          (v.lora?.qa_pairs ?? []).map((p) => ({ q: p.q, a: p.a }))
+        );
+      }
+      sections = cell.topics.map((topic) => {
+        const atoms = topic.atom_refs
+          .map((r) => atomByKey.get(`${r.vid}:${r.ts}`))
+          .filter((a): a is NonNullable<typeof a> => a != null);
+        const vids = Array.from(new Set(topic.atom_refs.map((r) => r.vid)));
+        const qa = vids.flatMap((v) => qaByVid.get(v) ?? []);
+        return { title: topic.topic_title, narrative: topic.summary, atoms, qa };
+      });
+    } else {
+      // LEGACY mode: one section per video (synthesis off/failed → safe fallback;
+      // byte-identical to pre-§1⑤ output).
+      sections = cell.videos.map((video) => ({
         title: video.title,
         narrative: assembleNarrative(video),
-        atoms,
-        qa,
-      };
-    });
+        atoms: bookAtomsForVideo(video),
+        // qa: v2 lora.qa_pairs are all context='video'; map as-is to {q,a}.
+        qa: (video.lora?.qa_pairs ?? []).map((p) => ({ q: p.q, a: p.a })),
+      }));
+    }
 
     return {
       ch: cell.cellIndex,
