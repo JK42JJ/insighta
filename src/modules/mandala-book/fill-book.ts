@@ -186,7 +186,7 @@ export async function fillMandalaBook(params: {
   // This is the only non-deterministic step; build-book stays pure.
   if (isBookTopicSynthesisEnabled()) {
     let synthOk = 0;
-    let synthFail = 0;
+    const failedCells: string[] = [];
     for (const cell of cells) {
       const atoms = cell.videos.flatMap((v) =>
         (v.segments?.atoms ?? [])
@@ -194,15 +194,27 @@ export async function fillMandalaBook(params: {
           .map((a) => ({ vid: v.videoId, ts: a.timestamp_sec as number, text: a.text }))
       );
       if (atoms.length === 0) continue; // empty cell → no synthesis, no topics
-      const r = await synthesizeCellTopics(cell.title, atoms);
+      const r = await synthesizeCellTopics(cell.title, atoms); // retries internally
       if (r.ok) {
         cell.topics = r.topics;
         synthOk += 1;
       } else {
-        synthFail += 1; // leave topics undefined → legacy per-video for this cell
+        // HARD fail after retries. This cell falls to legacy per-video (defect-1
+        // clickbait titles) — surfaced LOUDLY here so it is NOT a silent revert.
+        // (8000 tokens makes 942's cells fit; a hard fail signals a too-large
+        // cell that needs chunking — see backlog.)
+        failedCells.push(cell.title);
       }
     }
-    log.info('topic synthesis', { mandalaId, cellsSynthesized: synthOk, cellsFallback: synthFail });
+    if (failedCells.length > 0) {
+      log.error('topic synthesis HARD-FAILED cells → legacy/clickbait fallback (NOT silent)', {
+        mandalaId,
+        cellsSynthesized: synthOk,
+        failedCells,
+      });
+    } else {
+      log.info('topic synthesis', { mandalaId, cellsSynthesized: synthOk, failedCells: 0 });
+    }
   }
 
   // 4. Assemble (pure, LLM-free) + validate (hard gate).
