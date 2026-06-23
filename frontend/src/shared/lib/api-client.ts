@@ -283,6 +283,9 @@ export interface MandalaBookAtom {
   ts: number;
   text: string;
   type?: string;
+  // §1⑤/§2 — the rich-summary time-segment this atom came from. Used to bound
+  // segment playback (end = the segment's to_sec) in the note video player.
+  seg_ref?: { from_sec: number; to_sec: number };
 }
 
 export interface MandalaBookSection {
