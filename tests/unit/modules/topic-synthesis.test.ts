@@ -29,10 +29,11 @@ beforeEach(() => mockGenerate.mockReset());
 
 describe('buildTopicSynthesisPrompt', () => {
   it('indexes atoms and forbids video-title labels', () => {
-    const p = buildTopicSynthesisPrompt('백엔드', atoms);
+    const p = buildTopicSynthesisPrompt('백엔드', atoms, 6);
     expect(p).toContain('[0] REST 라우터');
     expect(p).toContain('[2] 스키마로');
     expect(p).toContain('영상 제목·채널명·클릭베이트 금지');
+    expect(p).toContain('최대 6개');
   });
 });
 
@@ -59,7 +60,7 @@ describe('synthesizeCellTopics', () => {
     expect(r.droppedAtomIdx).toEqual([]);
   });
 
-  it('drops out-of-range and duplicate indices (no fabrication)', async () => {
+  it('ignores out-of-range/dup indices, then fallback-assigns the unplaced (no fabrication, drop 0)', async () => {
     mockGenerate.mockResolvedValue(
       JSON.stringify({
         topics: [{ topic_title: 'T', summary: '', atom_idx: [0, 0, 9, -1] }],
@@ -68,9 +69,40 @@ describe('synthesizeCellTopics', () => {
     const r = await synthesizeCellTopics('c', atoms);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    // only idx 0 is valid+unique; 0(dup), 9(oob), -1(oob) dropped
-    expect(r.topics[0]!.atom_refs).toEqual([{ vid: 'vidA', ts: 10 }]);
-    expect(r.droppedAtomIdx).toEqual([1, 2]);
+    // idx 0 valid; 0(dup)/9(oob)/-1(oob) ignored. atoms 1,2 were unplaced →
+    // fallback assigns them to the nearest topic (only one) → drop 0.
+    expect(r.droppedAtomIdx).toEqual([]);
+    const refs = r.topics[0]!.atom_refs;
+    expect(refs).toContainEqual({ vid: 'vidA', ts: 10 });
+    expect(refs).toContainEqual({ vid: 'vidA', ts: 50 }); // atom 1, fallback
+    expect(refs).toContainEqual({ vid: 'vidB', ts: 30 }); // atom 2, fallback
+    expect(refs).toHaveLength(3);
+  });
+
+  it('fallback assigns an orphan to the SAME-video topic (proximity, not last topic)', async () => {
+    // 4 atoms: vidA@10, vidA@50, vidB@30, vidB@200. LLM places 0,1 (vidA) in T1
+    // and 2 (vidB) in T2, leaving 3 (vidB@200) unplaced. Fallback → T2 (same vid).
+    const four = [
+      { vid: 'vidA', ts: 10, text: 'a' },
+      { vid: 'vidA', ts: 50, text: 'b' },
+      { vid: 'vidB', ts: 30, text: 'c' },
+      { vid: 'vidB', ts: 200, text: 'd' },
+    ];
+    mockGenerate.mockResolvedValue(
+      JSON.stringify({
+        topics: [
+          { topic_title: 'T1', summary: '', atom_idx: [0, 1] },
+          { topic_title: 'T2', summary: '', atom_idx: [2] },
+        ],
+      })
+    );
+    const r = await synthesizeCellTopics('c', four);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.droppedAtomIdx).toEqual([]);
+    // orphan vidB@200 → T2 (holds vidB@30), NOT T1 (vidA)
+    expect(r.topics[1]!.atom_refs).toContainEqual({ vid: 'vidB', ts: 200 });
+    expect(r.topics[0]!.atom_refs).not.toContainEqual({ vid: 'vidB', ts: 200 });
   });
 
   it('drops a topic with no valid atoms', async () => {
