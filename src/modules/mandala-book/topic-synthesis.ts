@@ -19,10 +19,16 @@ import { logger } from '@/utils/logger';
 const log = logger.child({ module: 'mandala-book/topic-synthesis' });
 
 const HAIKU_MODEL = 'anthropic/claude-haiku-4.5';
-// Large cells (e.g. 434 atoms) need a long completion to list every atom_idx;
-// 2000 truncated the index lists → atoms went unplaced (34% drop). 4000 + the
-// proportional topic cap + the proximity fallback below together guarantee 0 drop.
-const MAX_TOKENS = 4000;
+// Large cells need a long completion to list every atom_idx. 4000 still
+// truncated ch0 (434 atoms, completion hit the 4000 ceiling exactly → invalid
+// JSON → synthesis failed → cell fell to legacy per-video = clickbait titles
+// resurfaced). 8000 holds 942's largest cell (~434). >~600-atom cells need
+// chunking (backlog). With the truncation guard below, a still-truncated cell
+// is RETRIED then surfaced loudly — never a silent legacy/clickbait revert.
+const MAX_TOKENS = 8000;
+// Synthesis is retried once on a parse/provider failure (transient or a one-off
+// truncation) before the cell is reported as a hard failure.
+const SYNTHESIS_ATTEMPTS = 2;
 const TEMPERATURE = 0.2;
 // Topics scale with atom count (~12 atoms/topic) so a big cell isn't forced into
 // 6 over-stuffed topics; clamped so it neither collapses (min 2) nor fragments
@@ -99,6 +105,40 @@ export async function synthesizeCellTopics(
 ): Promise<TopicSynthesisResult> {
   if (atoms.length === 0) return { ok: false, reason: 'no_atoms' };
 
+  // Truncation guard: retry on a parse/provider failure (truncated JSON, transient
+  // error) before reporting a HARD failure. A hard failure is surfaced LOUDLY —
+  // the caller must NOT silently revert the cell to legacy per-video (which would
+  // resurrect defect-1 clickbait titles). The retry is the primary guard; 8000
+  // tokens makes 942's largest cell fit so it should not be reached for 942.
+  let lastReason = 'unknown';
+  for (let attempt = 1; attempt <= SYNTHESIS_ATTEMPTS; attempt++) {
+    const r = await attemptSynthesis(cellTitle, atoms);
+    if (r.ok) {
+      if (attempt > 1) log.info('topic-synthesis recovered on retry', { cellTitle, attempt });
+      return r;
+    }
+    lastReason = r.reason;
+    if (attempt < SYNTHESIS_ATTEMPTS) {
+      log.warn('topic-synthesis attempt failed — retrying', {
+        cellTitle,
+        attempt,
+        reason: r.reason,
+      });
+    }
+  }
+  log.error('topic-synthesis HARD FAIL after retries (NOT a silent legacy revert)', {
+    cellTitle,
+    atoms: atoms.length,
+    reason: lastReason,
+  });
+  return { ok: false, reason: `hard_fail: ${lastReason}` };
+}
+
+/** One synthesis attempt: generate → parse → resolve + fallback. Pure-ish (LLM call). */
+async function attemptSynthesis(
+  cellTitle: string,
+  atoms: TopicAtom[]
+): Promise<TopicSynthesisResult> {
   const maxTopics = topicCapFor(atoms.length);
   const prompt = buildTopicSynthesisPrompt(cellTitle, atoms, maxTopics);
 

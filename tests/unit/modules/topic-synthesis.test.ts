@@ -126,4 +126,26 @@ describe('synthesizeCellTopics', () => {
     expect(r.ok).toBe(false);
     expect(mockGenerate).not.toHaveBeenCalled();
   });
+
+  it('retries once on a truncated/parse failure, then succeeds (no silent revert)', async () => {
+    mockGenerate
+      .mockResolvedValueOnce('{"topics":[{"topic_title":"T","atom_idx":[0,1') // truncated
+      .mockResolvedValueOnce(
+        JSON.stringify({ topics: [{ topic_title: 'API', summary: '', atom_idx: [0, 1, 2] }] })
+      );
+    const r = await synthesizeCellTopics('c', atoms);
+    expect(mockGenerate).toHaveBeenCalledTimes(2); // retried
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.topics[0]!.topic_title).toBe('API');
+  });
+
+  it('hard-fails (loud) after all retries exhausted', async () => {
+    mockGenerate.mockResolvedValue('not json'); // both attempts fail
+    const r = await synthesizeCellTopics('c', atoms);
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toContain('hard_fail'); // surfaced as hard fail, not silent
+  });
 });
