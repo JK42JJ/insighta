@@ -69,6 +69,38 @@ function paragraph(
   };
 }
 
+/**
+ * strong(4) heuristic — pick the section title's most specific token that also
+ * appears in the atom text (longest-first, length ≥ 2). Returns null if none →
+ * no emphasis. Conservative by design: emphasis only when the atom literally
+ * restates a section key term, at most one phrase per atom (Medium-sparse).
+ */
+function pickKeyPhrase(sectionTitle: string, atomText: string): string | null {
+  const terms = sectionTitle
+    .split(/[\s·,，()/[\]{}]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2)
+    .sort((a, b) => b.length - a.length);
+  for (const t of terms) {
+    if (atomText.includes(t)) return t;
+  }
+  return null;
+}
+
+/** Paragraph whose first occurrence of `phrase` is wrapped in <strong>. */
+function paragraphWithBold(text: string, phrase: string): TiptapNode {
+  const norm = normalizeText(text);
+  const idx = norm.indexOf(phrase);
+  if (idx < 0) return paragraph(text);
+  const before = norm.slice(0, idx);
+  const after = norm.slice(idx + phrase.length);
+  const content: Array<{ type: 'text'; text: string; marks?: Array<{ type: string }> }> = [];
+  if (before) content.push({ type: 'text', text: before });
+  content.push({ type: 'text', text: phrase, marks: [{ type: 'bold' }] });
+  if (after) content.push({ type: 'text', text: after });
+  return { type: 'paragraph', content } as TiptapNode;
+}
+
 function heading(level: 2 | 3, text: string): TiptapNode {
   return {
     type: 'heading',
@@ -162,8 +194,13 @@ function renderSection(
     const endSec = groupEndSec(g.atoms);
     out.push(videoBlockNode(g.vid, firstTs, endSec, section.title ?? null));
     // Each atom → its own paragraph. Keeps editing granularity natural.
+    // strong(4): bold the section's key term IF it appears in the atom (max 1
+    // per atom, none otherwise). Conservative — emphasis stays sparse (Medium).
     for (const a of g.atoms) {
-      if (a.text && a.text.trim()) out.push(paragraph(a.text));
+      if (a.text && a.text.trim()) {
+        const phrase = pickKeyPhrase(section.title ?? '', a.text);
+        out.push(phrase ? paragraphWithBold(a.text, phrase) : paragraph(a.text));
+      }
     }
   }
 

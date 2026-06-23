@@ -49,3 +49,27 @@ describe('note-document-generator — segment endSec', () => {
     expect(vbs.find((v) => v.attrs.vid === 'vidB')!.attrs.endSec).toBe(200);
   });
 });
+
+describe('note-document-generator — strong(4) heuristic', () => {
+  const bookWith = (title: string, text: string): MandalaBookData => ({
+    chapters: [{ ch: 0, title: '백엔드', sections: [{ title, atoms: [{ vid: 'v', ts: 1, text }] }] }],
+  });
+  const paras = (doc: { content?: unknown[] }) =>
+    (doc.content ?? []).filter((n) => (n as { type: string }).type === 'paragraph') as Array<{
+      content?: Array<{ text: string; marks?: Array<{ type: string }> }>;
+    }>;
+
+  it('bolds the section key term when it appears in the atom (max 1, sparse)', () => {
+    const doc = buildInitialNoteDoc(bookWith('REST API 라우팅 구조', '여기서 라우팅 으로 분기한다'));
+    // find the atom paragraph that contains a bold run
+    const bolded = paras(doc).flatMap((p) => p.content ?? []).filter((t) => t.marks?.some((m) => m.type === 'bold'));
+    expect(bolded.length).toBeGreaterThanOrEqual(1);
+    expect(bolded[0]!.text).toBe('라우팅'); // longest title token present in the atom
+  });
+
+  it('no emphasis when no section term appears (Medium-sparse, never over-bold)', () => {
+    const doc = buildInitialNoteDoc(bookWith('REST API 라우팅 구조', '완전히 무관한 문장입니다'));
+    const bolded = paras(doc).flatMap((p) => p.content ?? []).filter((t) => t.marks?.some((m) => m.type === 'bold'));
+    expect(bolded.length).toBe(0);
+  });
+});
