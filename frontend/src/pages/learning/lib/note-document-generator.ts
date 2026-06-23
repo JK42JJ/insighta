@@ -81,11 +81,30 @@ function horizontalRule(): TiptapNode {
   return { type: 'horizontalRule' };
 }
 
-function videoBlockNode(vid: string, fromSec: number, sectionTitle: string | null): TiptapNode {
+function videoBlockNode(
+  vid: string,
+  fromSec: number,
+  endSec: number,
+  sectionTitle: string | null
+): TiptapNode {
   return {
     type: 'videoBlock',
-    attrs: { vid, fromSec, sectionTitle },
+    attrs: { vid, fromSec, endSec, sectionTitle },
   };
+}
+
+/**
+ * Segment end for a vid group: the furthest segment boundary (max seg_ref.to_sec)
+ * so playback covers the group's whole span, not just up to the last atom START.
+ * Falls back to the last atom ts when seg_ref is absent (older books).
+ */
+function groupEndSec(atoms: MandalaBookAtom[]): number {
+  let end = 0;
+  for (const a of atoms) {
+    const segEnd = a.seg_ref?.to_sec;
+    end = Math.max(end, typeof segEnd === 'number' ? segEnd : (a.ts ?? 0));
+  }
+  return end;
 }
 
 /**
@@ -138,7 +157,8 @@ function renderSection(
   for (const g of groups) {
     if (g.atoms.length === 0) continue;
     const firstTs = g.atoms[0].ts ?? 0;
-    out.push(videoBlockNode(g.vid, firstTs, section.title ?? null));
+    const endSec = groupEndSec(g.atoms);
+    out.push(videoBlockNode(g.vid, firstTs, endSec, section.title ?? null));
     // Each atom → its own paragraph. Keeps editing granularity natural.
     for (const a of g.atoms) {
       if (a.text && a.text.trim()) out.push(paragraph(a.text));

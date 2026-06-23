@@ -39,6 +39,7 @@ export interface VideoBlockOptions {
 export interface VideoBlockAttrs {
   vid: string;
   fromSec: number;
+  endSec: number; // segment end (YouTube `end` param); 0 ⇒ play to video end (older books)
   sectionTitle: string | null;
 }
 
@@ -155,9 +156,14 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
         <div className="video-block-frame video-block-frame--active">
           <iframe
             id={iframeIdRef.current}
+            // Segment playback: start..end bounds this topic-group's span so the
+            // player stops at the segment end (not the full video). rel=0 +
+            // modestbranding + iv_load_policy=3 suppress recommendations/branding/
+            // annotations as far as the YouTube iframe API allows (best-effort —
+            // "More videos" on pause + the logo cannot be fully removed).
             src={`https://www.youtube.com/embed/${attrs.vid}?autoplay=1&mute=0&start=${Math.floor(
               attrs.fromSec
-            )}&rel=0&modestbranding=1&enablejsapi=1`}
+            )}${attrs.endSec > attrs.fromSec ? `&end=${Math.ceil(attrs.endSec)}` : ''}&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1`}
             title={attrs.sectionTitle ?? `Video ${attrs.vid}`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
@@ -199,7 +205,10 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
       )}
       {attrs.sectionTitle && (
         <div className="video-block-caption">
-          {ts} — {attrs.sectionTitle}
+          {/* Segment info only — NO "now playing" wording (state is shown by the
+              player chrome). "MM:SS–MM:SS · 구간명" when a segment end exists. */}
+          {attrs.endSec > attrs.fromSec ? `${ts}–${formatTs(attrs.endSec)}` : ts} ·{' '}
+          {attrs.sectionTitle}
         </div>
       )}
     </NodeViewWrapper>
@@ -231,6 +240,11 @@ export const VideoBlock = Node.create<VideoBlockOptions>({
         default: 0,
         parseHTML: (el) => Number(el.getAttribute('data-from-sec') ?? 0),
         renderHTML: (attrs) => ({ 'data-from-sec': String(attrs['fromSec']) }),
+      },
+      endSec: {
+        default: 0,
+        parseHTML: (el) => Number(el.getAttribute('data-end-sec') ?? 0),
+        renderHTML: (attrs) => ({ 'data-end-sec': String(attrs['endSec'] ?? 0) }),
       },
       sectionTitle: {
         default: null,
