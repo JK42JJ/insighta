@@ -13,6 +13,7 @@ import { getMandalaManager } from '@/modules/mandala/manager';
 import { logger } from '@/utils/logger';
 import { buildBookJson, type CellInput, type CellVideoV2 } from './build-book';
 import { parseBookJson } from './book-schema';
+import { loadBookGateConfig, passesBookGate } from '@/config/book-gate';
 import type {
   RichSummaryAnalysis,
   RichSummarySegments,
@@ -36,6 +37,7 @@ interface Placement {
   cellIndex: number;
   videoId: string; // 11-char YouTube id
   title: string;
+  relevance: number | null; // uvs/ulc relevance_pct; null = never scored
 }
 
 interface V2Columns {
@@ -69,11 +71,21 @@ export async function fillMandalaBook(params: {
   const [videoStates, localCards] = await Promise.all([
     prisma.userVideoState.findMany({
       where: { user_id: userId, mandala_id: mandalaId, cell_index: { gte: 0 } },
-      select: { cell_index: true, video: { select: { youtube_video_id: true, title: true } } },
+      select: {
+        cell_index: true,
+        relevance_pct: true,
+        video: { select: { youtube_video_id: true, title: true } },
+      },
     }),
     prisma.user_local_cards.findMany({
       where: { user_id: userId, mandala_id: mandalaId, cell_index: { gte: 0 } },
-      select: { cell_index: true, video_id: true, title: true, metadata_title: true },
+      select: {
+        cell_index: true,
+        video_id: true,
+        title: true,
+        metadata_title: true,
+        relevance_pct: true,
+      },
     }),
   ]);
 
@@ -81,7 +93,12 @@ export async function fillMandalaBook(params: {
   for (const r of videoStates) {
     const vid = r.video?.youtube_video_id;
     if (!vid || r.cell_index == null) continue;
-    placements.push({ cellIndex: r.cell_index, videoId: vid, title: r.video?.title ?? vid });
+    placements.push({
+      cellIndex: r.cell_index,
+      videoId: vid,
+      title: r.video?.title ?? vid,
+      relevance: r.relevance_pct ?? null,
+    });
   }
   for (const r of localCards) {
     // Non-YouTube manual cards have no video_id → no v2 → honest skip.
@@ -90,6 +107,7 @@ export async function fillMandalaBook(params: {
       cellIndex: r.cell_index,
       videoId: r.video_id,
       title: r.title ?? r.metadata_title ?? r.video_id,
+      relevance: r.relevance_pct ?? null,
     });
   }
 
@@ -116,6 +134,15 @@ export async function fillMandalaBook(params: {
 
   // 3. Group into cells. One chapter per cell (skeleton = mandala cells). A cell
   // with no usable-v2 videos yields an empty chapter (honest skip, not dropped).
+  //
+  // SELECTION GATE (§1③): a placed video is sectioned only if it CONTRIBUTES to
+  // the book — relevance_pct >= the gate min (drops scored-low / off-topic cards
+  // like a rel=5 stock video). null relevance = unscored → gate config decides
+  // (default pass, logged — not a silent leak). Placement (mandala data) is
+  // untouched; the gate filters the BOOK only.
+  const gate = loadBookGateConfig();
+  let gatedLow = 0;
+  let gatedNullPass = 0;
   const numCells =
     subjects.length > 0 ? subjects.length : Math.max(0, ...placements.map((p) => p.cellIndex)) + 1;
 
@@ -129,6 +156,11 @@ export async function fillMandalaBook(params: {
       const v2 = v2ByVideo.get(p.videoId);
       if (!v2) continue; // no usable v2 → honest skip
       if (seen.has(p.videoId)) continue; // dedup a video within one cell
+      if (!passesBookGate(p.relevance, gate)) {
+        gatedLow += 1; // scored below the gate min → excluded from the book
+        continue;
+      }
+      if (p.relevance == null) gatedNullPass += 1; // unscored card passed (logged)
       seen.add(p.videoId);
       videos.push({
         videoId: p.videoId,
@@ -188,6 +220,11 @@ export async function fillMandalaBook(params: {
     chapters: cells.length,
     version,
     trigger: params.trigger,
+    // selection gate: scored-low dropped + unscored passed (visible, not silent)
+    gatedLow,
+    gatedNullPass,
+    gateMin: gate.minRelevance,
+    gatePassNull: gate.passNull,
   });
   return {
     ok: true,
