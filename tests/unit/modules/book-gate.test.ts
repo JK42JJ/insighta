@@ -6,6 +6,7 @@
 import {
   passesBookGate,
   loadBookGateConfig,
+  isBookTopicSynthesisEnabled,
   type BookGateConfig,
 } from '../../../src/config/book-gate';
 
@@ -51,5 +52,19 @@ describe('loadBookGateConfig', () => {
     });
     expect(c.minRelevance).toBe(70);
     expect(c.passNull).toBe(false);
+  });
+});
+
+describe('isBookTopicSynthesisEnabled — default ON', () => {
+  it('unset ⇒ true (default on)', () => {
+    expect(isBookTopicSynthesisEnabled({})).toBe(true);
+  });
+  it('only explicit false/0/no disables (rollback)', () => {
+    expect(isBookTopicSynthesisEnabled({ BOOK_TOPIC_SYNTHESIS_ENABLED: 'false' })).toBe(false);
+    expect(isBookTopicSynthesisEnabled({ BOOK_TOPIC_SYNTHESIS_ENABLED: '0' })).toBe(false);
+    expect(isBookTopicSynthesisEnabled({ BOOK_TOPIC_SYNTHESIS_ENABLED: 'no' })).toBe(false);
+  });
+  it('true/anything-else ⇒ enabled', () => {
+    expect(isBookTopicSynthesisEnabled({ BOOK_TOPIC_SYNTHESIS_ENABLED: 'true' })).toBe(true);
   });
 });
