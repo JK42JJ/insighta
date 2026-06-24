@@ -21,6 +21,7 @@ import {
 import { synthesizeCellTopics } from './topic-synthesis';
 import { enqueueEnrichRichSummary } from '@/modules/queue';
 import { enqueueRelevanceBackfillForMandala } from '@/modules/relevance/relevance-backfill-trigger';
+import { getStoredTranslation } from '@/modules/skills/rich-summary-translator';
 import type {
   RichSummaryAnalysis,
   RichSummarySegments,
@@ -129,8 +130,25 @@ export async function fillMandalaBook(params: {
   const videoIds = Array.from(new Set(placements.map((p) => p.videoId)));
   const v2Rows = await prisma.video_rich_summaries.findMany({
     where: { video_id: { in: videoIds }, template_version: 'v2' },
-    select: { video_id: true, analysis: true, segments: true, lora: true, quality_flag: true },
+    select: {
+      video_id: true,
+      analysis: true,
+      segments: true,
+      lora: true,
+      quality_flag: true,
+      // PR-T2 — translation derived layer. When the mandala language differs from
+      // the atom's source language, display the stored ko/en translation instead
+      // of the source-language atoms. v2 atoms stay source-language-fixed (global
+      // cache untouched); this is a DISPLAY substitution only.
+      source_language: true,
+      translations: true,
+    },
   });
+
+  // Display language = mandala language (ko default). Off-language atoms are
+  // substituted with their stored translation if present (PR-T1 populates it on
+  // card-add close; absent ⇒ source-language atoms shown until it lands).
+  const displayLang: 'ko' | 'en' = mandala.language === 'en' ? 'en' : 'ko';
 
   const v2ByVideo = new Map<string, V2Columns>();
   // Terminally-skipped videos (quality_flag='skipped' = no transcript / un-enrichable).
@@ -141,9 +159,17 @@ export async function fillMandalaBook(params: {
   for (const row of v2Rows) {
     if (row.quality_flag === 'skipped') terminallySkipped.add(row.video_id);
     if (row.segments == null) continue; // no time-segments → not a usable 살붙임 source
+    // PR-T2 — substitute the translated atoms when this atom's source language
+    // differs from the display language AND a translation is stored. The
+    // translation mirrors the v2 structure (sameShape-validated at store time),
+    // so analysis/segments are drop-in. Falls back to source atoms when absent.
+    const tr =
+      row.source_language && row.source_language !== displayLang
+        ? getStoredTranslation(row.translations, displayLang)
+        : null;
     v2ByVideo.set(row.video_id, {
-      analysis: (row.analysis ?? null) as RichSummaryAnalysis | null,
-      segments: (row.segments ?? null) as unknown as RichSummarySegments | null,
+      analysis: (tr?.analysis ?? row.analysis ?? null) as RichSummaryAnalysis | null,
+      segments: (tr?.segments ?? row.segments ?? null) as unknown as RichSummarySegments | null,
       lora: (row.lora ?? null) as RichSummaryLora | null,
     });
   }
