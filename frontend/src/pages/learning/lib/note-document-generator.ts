@@ -70,24 +70,6 @@ function paragraph(
 }
 
 /**
- * strong(4) heuristic — pick the section title's most specific token that also
- * appears in the atom text (longest-first, length ≥ 2). Returns null if none →
- * no emphasis. Conservative by design: emphasis only when the atom literally
- * restates a section key term, at most one phrase per atom (Medium-sparse).
- */
-function pickKeyPhrase(sectionTitle: string, atomText: string): string | null {
-  const terms = sectionTitle
-    .split(/[\s·,，()/[\]{}]+/)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 2)
-    .sort((a, b) => b.length - a.length);
-  for (const t of terms) {
-    if (atomText.includes(t)) return t;
-  }
-  return null;
-}
-
-/**
  * C6 — group consecutive atoms into Medium-style paragraphs. Merges adjacent
  * atoms that share the same `type` (fact/tip/argument) into one paragraph, so a
  * paragraph reads as a few related sentences instead of one subtitle line each.
@@ -118,20 +100,6 @@ function groupAtomsIntoParagraphs(atoms: Array<{ text?: string; type?: string }>
   }
   flush();
   return out;
-}
-
-/** Paragraph whose first occurrence of `phrase` is wrapped in <strong>. */
-function paragraphWithBold(text: string, phrase: string): TiptapNode {
-  const norm = normalizeText(text);
-  const idx = norm.indexOf(phrase);
-  if (idx < 0) return paragraph(text);
-  const before = norm.slice(0, idx);
-  const after = norm.slice(idx + phrase.length);
-  const content: Array<{ type: 'text'; text: string; marks?: Array<{ type: string }> }> = [];
-  if (before) content.push({ type: 'text', text: before });
-  content.push({ type: 'text', text: phrase, marks: [{ type: 'bold' }] });
-  if (after) content.push({ type: 'text', text: after });
-  return { type: 'paragraph', content } as TiptapNode;
 }
 
 function heading(level: 2 | 3, text: string): TiptapNode {
@@ -227,10 +195,12 @@ function renderSection(
     const endSec = groupEndSec(g.atoms);
     out.push(videoBlockNode(g.vid, firstTs, endSec, section.title ?? null));
     // C6 — group consecutive same-type atoms into Medium-style paragraphs
-    // (was 1 atom = 1 <p> = "picture-book"). strong: ≤1 key term per paragraph.
+    // (was 1 atom = 1 <p> = "picture-book"). Body stays UN-bolded: Medium body
+    // text has no inline keyword bold (the auto-strong heuristic turned common
+    // repeated words into gold noise). Emphasis lives ONLY in keypoint quotes +
+    // code chips, not running prose.
     for (const para of groupAtomsIntoParagraphs(g.atoms)) {
-      const phrase = pickKeyPhrase(section.title ?? '', para);
-      out.push(phrase ? paragraphWithBold(para, phrase) : paragraph(para));
+      out.push(paragraph(para));
     }
   }
 
