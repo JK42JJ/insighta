@@ -19,6 +19,8 @@ import {
   isBookTopicSynthesisEnabled,
 } from '@/config/book-gate';
 import { synthesizeCellTopics } from './topic-synthesis';
+import { enqueueEnrichRichSummary } from '@/modules/queue';
+import { enqueueRelevanceBackfillForMandala } from '@/modules/relevance/relevance-backfill-trigger';
 import type {
   RichSummaryAnalysis,
   RichSummarySegments,
@@ -36,6 +38,9 @@ export interface FillBookResult {
   chapters?: number;
   version?: number;
   reason?: string;
+  // §1④ coverage — for progress UI (PR2 spinner / "준비 중"). gate-passed cards
+  // = the denominator; v2Done are in the book now; v2Pending were enqueued.
+  coverage?: { gatePassed: number; v2Done: number; v2Pending: number };
 }
 
 interface Placement {
@@ -124,11 +129,17 @@ export async function fillMandalaBook(params: {
   const videoIds = Array.from(new Set(placements.map((p) => p.videoId)));
   const v2Rows = await prisma.video_rich_summaries.findMany({
     where: { video_id: { in: videoIds }, template_version: 'v2' },
-    select: { video_id: true, analysis: true, segments: true, lora: true },
+    select: { video_id: true, analysis: true, segments: true, lora: true, quality_flag: true },
   });
 
   const v2ByVideo = new Map<string, V2Columns>();
+  // Terminally-skipped videos (quality_flag='skipped' = no transcript / un-enrichable).
+  // §1④ must NOT re-enqueue these every fill (the enrich handler would re-throw
+  // NO_TRANSCRIPT each time = caption-fetch churn). They are absent from the book
+  // (no content) but excluded from the v2-pending enqueue.
+  const terminallySkipped = new Set<string>();
   for (const row of v2Rows) {
+    if (row.quality_flag === 'skipped') terminallySkipped.add(row.video_id);
     if (row.segments == null) continue; // no time-segments → not a usable 살붙임 source
     v2ByVideo.set(row.video_id, {
       analysis: (row.analysis ?? null) as RichSummaryAnalysis | null,
@@ -148,6 +159,16 @@ export async function fillMandalaBook(params: {
   const gate = loadBookGateConfig();
   let gatedLow = 0;
   let gatedNullPass = 0;
+  // §1④ coverage — the book targets the GATE-PASSED cards as a whole. The order
+  // is GATE first, then v2: a passed card with no usable v2 is NOT dropped, it is
+  // recorded as "v2 pending" and its v2 is enqueued, so the book progressively
+  // fills to the full passed set (was: v2-missing skipped → only ~v2'd cards
+  // ever appeared). v2 completion re-fires this fill via the #958 trigger.
+  let gatePassed = 0; // distinct passed cards (the coverage denominator)
+  let v2Done = 0; // passed AND usable-v2 present (in the book now)
+  const v2Pending = new Set<string>(); // passed but v2 missing → enqueue
+  let hasNullRelevance = false; // any unscored passed card → backfill relevance
+  const enqueuedGlobal = new Set<string>(); // dedup enqueue across cells
   const numCells =
     subjects.length > 0 ? subjects.length : Math.max(0, ...placements.map((p) => p.cellIndex)) + 1;
 
@@ -158,24 +179,64 @@ export async function fillMandalaBook(params: {
     const seen = new Set<string>();
     for (const p of placements) {
       if (p.cellIndex !== i) continue;
-      const v2 = v2ByVideo.get(p.videoId);
-      if (!v2) continue; // no usable v2 → honest skip
       if (seen.has(p.videoId)) continue; // dedup a video within one cell
+      // §1③ GATE FIRST (before v2) — a scored-low / off-topic card is dropped
+      // regardless of v2. Reordered: v2-absence no longer short-circuits the gate.
       if (!passesBookGate(p.relevance, gate)) {
         gatedLow += 1; // scored below the gate min → excluded from the book
         continue;
       }
-      if (p.relevance == null) gatedNullPass += 1; // unscored card passed (logged)
+      if (p.relevance == null) {
+        gatedNullPass += 1; // unscored card passed (logged)
+        hasNullRelevance = true; // → enqueue relevance backfill so the gate becomes meaningful
+      }
       seen.add(p.videoId);
-      videos.push({
-        videoId: p.videoId,
-        title: p.title,
-        analysis: v2.analysis,
-        segments: v2.segments,
-        lora: v2.lora,
-      });
+      gatePassed += 1;
+      const v2 = v2ByVideo.get(p.videoId);
+      if (v2) {
+        v2Done += 1;
+        videos.push({
+          videoId: p.videoId,
+          title: p.title,
+          analysis: v2.analysis,
+          segments: v2.segments,
+          lora: v2.lora,
+        });
+      } else if (!terminallySkipped.has(p.videoId)) {
+        // Passed the gate but no usable v2 yet → "v2 pending". Enqueue v2 (deduped);
+        // the post-enrich #958 trigger re-fills this book once it completes.
+        // Terminally-skipped (no transcript) cards are NOT pending — un-enrichable.
+        v2Pending.add(p.videoId);
+      }
     }
     cells.push({ cellIndex: i, title, videos });
+  }
+
+  // §1④ coverage enqueues — fire-and-forget (book write must not block on them).
+  // [INV-BOOK-COVERAGE] passed-but-v2-missing cards get their v2 enqueued so the
+  // book converges to the full gate-passed set (not just incidentally-v2'd cards).
+  for (const videoId of v2Pending) {
+    if (enqueuedGlobal.has(videoId)) continue;
+    enqueuedGlobal.add(videoId);
+    const title = placements.find((p) => p.videoId === videoId)?.title ?? videoId;
+    enqueueEnrichRichSummary({ videoId, userId, mandalaId, title }).catch((err) => {
+      log.warn('§1④ v2 enqueue failed (non-fatal)', {
+        videoId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+  // Unscored passed cards → enqueue relevance backfill (Haiku) so the gate is
+  // meaningful on the next fill. Scoring populates relevance; it does not drop.
+  if (hasNullRelevance) {
+    // applyCutoff:false = score ALL unscored cards in the mandala (not just
+    // recently-added) so the gate becomes meaningful for the whole book.
+    enqueueRelevanceBackfillForMandala({ userId, mandalaId, applyCutoff: false }).catch((err) => {
+      log.warn('§1④ relevance backfill enqueue failed (non-fatal)', {
+        mandalaId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
   }
 
   // 3b. §1⑤ topic synthesis (flag-gated; off = legacy per-video). For each
@@ -269,6 +330,10 @@ export async function fillMandalaBook(params: {
     gatedNullPass,
     gateMin: gate.minRelevance,
     gatePassNull: gate.passNull,
+    // §1④ coverage: passed denominator, v2-ready (in book now), v2-pending (enqueued)
+    gatePassed,
+    v2Done,
+    v2Pending: v2Pending.size,
   });
   return {
     ok: true,
@@ -278,5 +343,6 @@ export async function fillMandalaBook(params: {
     sourceAtoms,
     chapters: cells.length,
     version,
+    coverage: { gatePassed, v2Done, v2Pending: v2Pending.size },
   };
 }
