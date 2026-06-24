@@ -430,6 +430,13 @@ export function AddCardsPanel() {
       void apiClient.triggerMandalaRelevance(mandalaId).catch(() => {
         /* never block close UX; idempotent trigger self-heals on the next close */
       });
+      // PR-T1 — v2 translations bulk trigger on close. Same guard/fire-and-forget
+      // shape as relevance: a ko mandala that picked English cards gets their v2
+      // atoms translated (display layer). Insert is untouched; dedup + global
+      // cache make a re-fire cheap. Errors swallowed — never block close.
+      void apiClient.translateMandalaBulk(mandalaId).catch(() => {
+        /* never block close UX; debounced + idempotent → self-heals next close */
+      });
     }
     setIsClosingLocal(true);
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);

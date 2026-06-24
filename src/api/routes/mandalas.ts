@@ -1,6 +1,8 @@
 import { FastifyPluginCallback } from 'fastify';
 import { getMandalaManager } from '../../modules/mandala';
 import { enqueueMandalaBookFill } from '../../modules/queue/handlers/mandala-book-fill';
+import { enqueueTranslateMandalaBulk } from '../../modules/queue/handlers/translate-mandala-bulk';
+import { translateBulkEnqueueOptions } from '../../modules/queue/handlers/book-refill-debounce';
 import { enqueueSegmentRelevanceForMandala } from '../../modules/relevance/segment-relevance-trigger';
 import { markDeckPending, getDeckState } from '../../modules/deck/deck-status';
 import { enqueueDeckBuild } from '../../modules/queue/handlers/deck-build';
@@ -158,6 +160,31 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
     return reply.send({ mandala });
   });
+
+  /**
+   * POST /api/v1/mandalas/:id/translate-bulk — v2 translations (PR-T1).
+   * Fired on card-add panel CLOSE. Enqueues ONE debounced bulk-translate job for
+   * the mandala: off-language v2 atoms → mandala language (Haiku, dedup against
+   * the global translations cache). Insert is unaffected — this is display-layer
+   * only. Returns immediately (the job runs async; the note shows the existing
+   * "generating" rolling until translations land, then re-renders via book-fill).
+   */
+  fastify.post(
+    '/:id/translate-bulk',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request, reply);
+      if (!userId) return;
+      const mandalaId = (request.params as { id: string }).id;
+
+      const jobId = await enqueueTranslateMandalaBulk(
+        { userId, mandalaId, trigger: 'add-cards-close' },
+        translateBulkEnqueueOptions(mandalaId)
+      ).catch(() => null);
+
+      return reply.send({ status: 'ok', data: { enqueued: jobId != null, jobId } });
+    }
+  );
 
   /**
    * PUT /api/v1/mandalas - Upsert default mandala with all levels (backward-compatible)

@@ -19,3 +19,17 @@ const BOOK_REFILL_DEBOUNCE_SEC = 120;
 export function bookRefillEnqueueOptions(mandalaId: string): PgBoss.SendOptions {
   return { singletonKey: `book-fill-${mandalaId}`, startAfter: BOOK_REFILL_DEBOUNCE_SEC };
 }
+
+/**
+ * PR-T1 — debounce for the card-add-close bulk translation. Multiple closes (or
+ * a close fired alongside other events) collapse to ONE queued bulk pass per
+ * mandala; the short delay lets the just-added cards' rows settle first.
+ */
+const TRANSLATE_BULK_DEBOUNCE_SEC = 20;
+
+export function translateBulkEnqueueOptions(mandalaId: string): PgBoss.SendOptions {
+  return {
+    singletonKey: `translate-bulk-${mandalaId}`,
+    startAfter: TRANSLATE_BULK_DEBOUNCE_SEC,
+  };
+}
