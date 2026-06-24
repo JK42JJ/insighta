@@ -151,13 +151,18 @@ export async function fillMandalaBook(params: {
   const displayLang: 'ko' | 'en' = mandala.language === 'en' ? 'en' : 'ko';
 
   const v2ByVideo = new Map<string, V2Columns>();
-  // Terminally-skipped videos (quality_flag='skipped' = no transcript / un-enrichable).
-  // §1④ must NOT re-enqueue these every fill (the enrich handler would re-throw
-  // NO_TRANSCRIPT each time = caption-fetch churn). They are absent from the book
-  // (no content) but excluded from the v2-pending enqueue.
+  // Terminal v2 rows — already attempted, cannot yield usable segments:
+  //   - 'skipped' = no transcript / un-enrichable (enrich re-throws NO_TRANSCRIPT)
+  //   - 'low'     = generated but below the segment-quality bar (no usable atoms)
+  // Both are absent from the book (no content) AND excluded from the v2-pending
+  // enqueue. Counting them as pending = infinite re-enqueue + a "준비 중" spinner
+  // that never completes (v2_pending stuck > 0). They remain in the left TOC (raw
+  // card list, unchanged here); their "생성 불가" label is PR3's TOC work.
   const terminallySkipped = new Set<string>();
   for (const row of v2Rows) {
-    if (row.quality_flag === 'skipped') terminallySkipped.add(row.video_id);
+    if (row.quality_flag === 'skipped' || row.quality_flag === 'low') {
+      terminallySkipped.add(row.video_id);
+    }
     if (row.segments == null) continue; // no time-segments → not a usable 살붙임 source
     // PR-T2 — substitute the translated atoms when this atom's source language
     // differs from the display language AND a translation is stored. The
