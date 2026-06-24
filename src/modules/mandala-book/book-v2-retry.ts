@@ -17,8 +17,15 @@
  * google-auth module chain.
  */
 
-/** Re-enqueue a still-pending (segments-less) v2 card at most this many times. */
-export const BOOK_V2_RETRY_CAP = 2;
+/**
+ * Re-enqueue a still-segments-less 'low' v2 card at most this many times.
+ * 1: the v2 generator already makes MAX_RETRIES+1 = 2 internal attempts (with
+ * transient provider_error retried via `continue`) before writing 'low', so by
+ * the time §1④ has re-enqueued once (counter=1) the card has had ≥4 attempts and
+ * is structural, not transient. Capping at 1 lets the spinner converge in one
+ * extra fill without the permanent-loss risk of a blanket 'low' exclude (#968).
+ */
+export const BOOK_V2_RETRY_CAP = 1;
 
 /** Read the §1④ dedicated retry counter from the translations jsonb. */
 export function readBookV2Retry(translations: unknown): number {
