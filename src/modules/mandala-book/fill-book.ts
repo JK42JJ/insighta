@@ -157,11 +157,16 @@ export async function fillMandalaBook(params: {
   // NO_TRANSCRIPT each time = caption-fetch churn). They are absent from the book
   // (no content) but excluded from the v2-pending enqueue.
   const terminallySkipped = new Set<string>();
+  // quality_flag per video — used to split "준비 중" (never-attempted, genuinely
+  // generating) from 'low' (already failed generation: NOT pending — it must not
+  // keep the spinner up; it gets a bounded background retry instead).
+  const qfByVideo = new Map<string, string>();
   // §1④ retry counts per video (translations._book_v2_retry). At the cap, the
   // card is terminal (can't yield segments) → excluded from v2-pending so the
   // spinner ends. NOT a blanket quality_flag='low' exclude (that would drop
   // transiently-failed cards permanently — #968 was held for this reason).
   for (const row of v2Rows) {
+    if (row.quality_flag) qfByVideo.set(row.video_id, row.quality_flag);
     // Terminal: no-transcript skip, OR §1④ re-enqueued to the cap with no segments.
     if (row.quality_flag === 'skipped' || bookV2RetryCapped(row.translations)) {
       terminallySkipped.add(row.video_id);
@@ -200,7 +205,12 @@ export async function fillMandalaBook(params: {
   // ever appeared). v2 completion re-fires this fill via the #958 trigger.
   let gatePassed = 0; // distinct passed cards (the coverage denominator)
   let v2Done = 0; // passed AND usable-v2 present (in the book now)
-  const v2Pending = new Set<string>(); // passed but v2 missing → enqueue
+  // v2Pending = the SPINNER count: passed cards genuinely generating for the first
+  // time (never attempted / quality_flag='pending'). 'low' cards (already failed)
+  // are NOT pending — they must not keep the spinner up — but still get a bounded
+  // background retry (v2ToEnqueue) so a transient 'low' can still recover.
+  const v2Pending = new Set<string>();
+  const v2ToEnqueue = new Set<string>(); // pending + background-retry 'low' (counter<CAP)
   let hasNullRelevance = false; // any unscored passed card → backfill relevance
   const enqueuedGlobal = new Set<string>(); // dedup enqueue across cells
   const numCells =
@@ -237,10 +247,19 @@ export async function fillMandalaBook(params: {
           lora: v2.lora,
         });
       } else if (!terminallySkipped.has(p.videoId)) {
-        // Passed the gate but no usable v2 yet → "v2 pending". Enqueue v2 (deduped);
-        // the post-enrich #958 trigger re-fills this book once it completes.
-        // Terminally-skipped (no transcript) cards are NOT pending — un-enrichable.
-        v2Pending.add(p.videoId);
+        // Passed the gate but no usable v2 yet. Split by why:
+        //   - 'low' (already failed generation, counter < CAP since capped ones
+        //     are terminallySkipped): NOT pending (don't keep the spinner up on a
+        //     failed card) — enqueue one bounded BACKGROUND retry only.
+        //   - never-attempted (no row / quality_flag='pending'): genuine "준비 중"
+        //     → counts toward the spinner AND is enqueued.
+        // v2 completion re-fires this fill via the #958 trigger either way.
+        if (qfByVideo.get(p.videoId) === 'low') {
+          v2ToEnqueue.add(p.videoId);
+        } else {
+          v2Pending.add(p.videoId);
+          v2ToEnqueue.add(p.videoId);
+        }
       }
     }
     cells.push({ cellIndex: i, title, videos });
@@ -249,7 +268,7 @@ export async function fillMandalaBook(params: {
   // §1④ coverage enqueues — fire-and-forget (book write must not block on them).
   // [INV-BOOK-COVERAGE] passed-but-v2-missing cards get their v2 enqueued so the
   // book converges to the full gate-passed set (not just incidentally-v2'd cards).
-  for (const videoId of v2Pending) {
+  for (const videoId of v2ToEnqueue) {
     if (enqueuedGlobal.has(videoId)) continue;
     enqueuedGlobal.add(videoId);
     const title = placements.find((p) => p.videoId === videoId)?.title ?? videoId;
