@@ -26,6 +26,11 @@ export function useMandalaBook(mandalaId: string | null | undefined): UseMandala
     enabled: Boolean(mandalaId),
     staleTime: MANDALA_BOOK_STALE_MS,
     retry: false,
+    // §1④ PR2 — while the book is still filling (v2 pending), poll every 5s so
+    // the "준비 중" banner + chapters update live as v2 completes (#958 re-fill).
+    // Stops once v2_pending hits 0 (mirrors the deck-status 준비중 polling).
+    refetchInterval: (query) =>
+      (query.state.data?.coverage?.v2Pending ?? 0) > 0 ? 5000 : false,
   });
 
   return {

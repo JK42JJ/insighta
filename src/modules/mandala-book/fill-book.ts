@@ -302,19 +302,26 @@ export async function fillMandalaBook(params: {
   // lag client regen on some deploys (same reason GET /:id/book uses raw SQL).
   const rows = await prisma.$queryRawUnsafe<Array<{ version: number }>>(
     `INSERT INTO mandala_books
-       (mandala_id, book_json, version, source_videos, source_atoms, generated_at, updated_at)
-     VALUES ($1::uuid, $2::jsonb, 1, $3, $4, NOW(), NOW())
+       (mandala_id, book_json, version, source_videos, source_atoms,
+        gate_passed, v2_done, v2_pending, generated_at, updated_at)
+     VALUES ($1::uuid, $2::jsonb, 1, $3, $4, $5, $6, $7, NOW(), NOW())
      ON CONFLICT (mandala_id) DO UPDATE SET
        book_json     = EXCLUDED.book_json,
        source_videos = EXCLUDED.source_videos,
        source_atoms  = EXCLUDED.source_atoms,
+       gate_passed   = EXCLUDED.gate_passed,
+       v2_done       = EXCLUDED.v2_done,
+       v2_pending    = EXCLUDED.v2_pending,
        version       = mandala_books.version + 1,
        updated_at    = NOW()
      RETURNING version`,
     mandalaId,
     JSON.stringify(validated),
     sourceVideos,
-    sourceAtoms
+    sourceAtoms,
+    gatePassed,
+    v2Done,
+    v2Pending.size
   );
 
   const version = rows[0]?.version ?? 1;
