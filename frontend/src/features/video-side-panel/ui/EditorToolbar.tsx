@@ -34,7 +34,7 @@ function ToolbarButton({ active, onClick, label, children, mono }: ToolbarButton
         'text-[11px] font-semibold transition-all duration-100',
         mono && "font-['JetBrains_Mono',monospace] text-[10px]",
         active
-          ? 'bg-[rgba(129,140,248,0.15)] text-[#818cf8]'
+          ? 'bg-primary/[0.15] text-primary'
           : 'text-[#9394a0] hover:bg-[rgba(255,255,255,0.07)] hover:text-[#ededf0]'
       )}
     >
@@ -122,7 +122,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <button
           type="button"
           onClick={applyLink}
-          className="flex h-6 items-center rounded-[5px] bg-[rgba(129,140,248,0.15)] px-2 text-[11px] font-medium text-[#818cf8] hover:bg-[rgba(129,140,248,0.25)]"
+          className="flex h-6 items-center rounded-[5px] bg-primary/[0.15] px-2 text-[11px] font-medium text-primary hover:bg-primary/[0.25]"
         >
           ✓
         </button>

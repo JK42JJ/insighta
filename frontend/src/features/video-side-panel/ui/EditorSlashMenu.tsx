@@ -92,11 +92,11 @@ export function EditorSlashMenu({ onSelect, onClose }: EditorSlashMenuProps) {
           className={cn(
             'flex items-center gap-2.5 w-full px-3 py-1.5 text-left text-[12px] transition-colors',
             i === selected
-              ? 'bg-[rgba(129,140,248,0.12)] text-[#ededf0]'
+              ? 'bg-primary/[0.12] text-[#ededf0]'
               : 'text-[#9394a0] hover:text-[#ededf0]'
           )}
         >
-          <span className={i === selected ? 'text-[#818cf8]' : 'text-[#5a5b68]'}>{item.icon}</span>
+          <span className={i === selected ? 'text-primary' : 'text-[#5a5b68]'}>{item.icon}</span>
           <span className="flex-1">{t(item.i18nKey)}</span>
           {item.shortcut && <span className="text-[10px] text-[#3a3b46]">{item.shortcut}</span>}
         </button>

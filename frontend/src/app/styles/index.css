@@ -1237,6 +1237,11 @@ html.dark .lemonsqueezy-loader {
      current chapter/section marker matches the 시안 accent. */
   --sidebar-primary: 38 39% 62%;
   --sidebar-accent: 210 7% 11%;
+  /* --primary → gold within learning. Kills ALL token-based indigo (border-primary
+     RightPanel tab / CenterPanel toggle / VideoStrip ring + the indigo literals in
+     PanelAISummary·EditorToolbar·EditorSlashMenu that were converted to text/bg/
+     border-primary). Other routes (IndexPage VideoSidePanel) keep the default. */
+  --primary: 38 39% 62%;
 
   /* editorial tokens (referenced by NOTE_PROSE_STYLE + components) */
   --nm-line: rgba(255,255,255,0.07);

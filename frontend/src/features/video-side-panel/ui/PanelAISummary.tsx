@@ -209,7 +209,7 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
                 {tags.map((tag) => (
                   <span
                     key={tag}
-                    className="inline-block rounded-[4px] bg-[rgba(129,140,248,0.08)] px-[7px] py-[2px] text-[10px] font-semibold text-[#818cf8]"
+                    className="inline-block rounded-[4px] bg-primary/[0.08] px-[7px] py-[2px] text-[10px] font-semibold text-primary"
                   >
                     {tag}
                   </span>
@@ -247,7 +247,7 @@ function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
     <div className="space-y-4">
       {tlDr && (
         <section>
-          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#818cf8]">
+          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-primary">
             {t('learning.oneLiner')}
           </h3>
           <p className="text-[13px] leading-[1.6] text-[#ededf0]">{tlDr}</p>
@@ -256,13 +256,13 @@ function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
 
       {keyPoints.length > 0 && (
         <section>
-          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#818cf8]">
+          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-primary">
             {t('learning.keyPoints')}
           </h3>
           <ul className="space-y-1.5 text-[13px] leading-[1.55] text-[rgba(237,237,240,0.84)]">
             {keyPoints.map((pt, idx) => (
               <li key={idx} className="flex gap-2">
-                <span aria-hidden className="mt-[6px] h-1 w-1 shrink-0 rounded-full bg-[#818cf8]" />
+                <span aria-hidden className="mt-[6px] h-1 w-1 shrink-0 rounded-full bg-primary" />
                 <span>{pt}</span>
               </li>
             ))}
@@ -272,7 +272,7 @@ function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
 
       {actionables.length > 0 && (
         <section>
-          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#818cf8]">
+          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-primary">
             {t('learning.actionables')}
           </h3>
           <ul className="space-y-1.5 text-[13px] leading-[1.55] text-[rgba(237,237,240,0.84)]">
@@ -280,7 +280,7 @@ function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
               <li key={idx} className="flex gap-2">
                 <span
                   aria-hidden
-                  className="mt-[2px] flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-[3px] border border-[#818cf8] text-[10px] text-[#818cf8]"
+                  className="mt-[2px] flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-[3px] border border-primary text-[10px] text-primary"
                 >
                   →
                 </span>
@@ -293,7 +293,7 @@ function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
 
       {chapters.length > 0 && (
         <section>
-          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#818cf8]">
+          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-primary">
             {t('learning.chapters')}
           </h3>
           <ul className="divide-y divide-[rgba(255,255,255,0.04)] rounded-[6px] bg-[rgba(255,255,255,0.02)]">
@@ -302,7 +302,7 @@ function RichSummaryV1Block({ structured }: RichSummaryBlockProps) {
                 key={idx}
                 className="flex gap-3 px-3 py-2 text-[12px] text-[rgba(237,237,240,0.84)]"
               >
-                <span className="w-[46px] shrink-0 font-mono text-[11px] text-[#818cf8]">
+                <span className="w-[46px] shrink-0 font-mono text-[11px] text-primary">
                   {formatSeconds(ch.start_sec)}
                 </span>
                 <span>{ch.title}</span>
@@ -328,7 +328,7 @@ function RichSummaryV2Block({ structured }: RichSummaryBlockProps) {
           <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
             {t('learning.coreSummary')}
           </h3>
-          <p className="rounded-r-[6px] border-l-2 border-[#818cf8] bg-[rgba(99,102,241,0.06)] px-[14px] py-[10px] text-[13px] leading-[1.65] text-[#ededf0]">
+          <p className="rounded-r-[6px] border-l-2 border-primary bg-primary/[0.06] px-[14px] py-[10px] text-[13px] leading-[1.65] text-[#ededf0]">
             {tlDr}
           </p>
         </section>
@@ -356,7 +356,7 @@ function RichSummaryV2Block({ structured }: RichSummaryBlockProps) {
             {entities.map((ent) => (
               <span
                 key={ent.name}
-                className="inline-block rounded-[4px] bg-[rgba(129,140,248,0.08)] px-[7px] py-[2px] text-[10px] font-semibold text-[#818cf8]"
+                className="inline-block rounded-[4px] bg-primary/[0.08] px-[7px] py-[2px] text-[10px] font-semibold text-primary"
               >
                 {ent.name}
               </span>
@@ -390,7 +390,7 @@ function SectionRow({ section }: { section: SectionData }) {
     <div className="rounded-[6px] transition-colors hover:bg-[rgba(255,255,255,0.02)]">
       <div className="flex items-center gap-3 px-3 py-[10px]">
         <div className="w-[76px] shrink-0">
-          <span className="font-mono text-[10px] text-[#818cf8]">
+          <span className="font-mono text-[10px] text-primary">
             {formatSeconds(section.from_sec)} — {formatSeconds(section.to_sec)}
           </span>
         </div>
@@ -484,7 +484,7 @@ function RichSummaryV2NewBlock({
       {/* coreArgument in the headline slot. */}
       {coreArg && (
         <section>
-          <p className="rounded-[6px] bg-[rgba(99,102,241,0.06)] px-[14px] py-[10px] text-[13px] leading-[1.65] text-[#ededf0]">
+          <p className="rounded-[6px] bg-primary/[0.06] px-[14px] py-[10px] text-[13px] leading-[1.65] text-[#ededf0]">
             {coreArg}
           </p>
         </section>
@@ -498,7 +498,7 @@ function RichSummaryV2NewBlock({
               const inner = (
                 <>
                   <div className="flex items-baseline gap-3">
-                    <span className="font-mono text-[10px] text-[#818cf8] shrink-0">
+                    <span className="font-mono text-[10px] text-primary shrink-0">
                       {formatSeconds(sec.from_sec)} — {formatSeconds(sec.to_sec)}
                     </span>
                     <p className="flex-1 text-[14px] font-semibold leading-[1.35] text-[rgba(237,237,240,0.92)]">
@@ -534,7 +534,7 @@ function RichSummaryV2NewBlock({
                 </>
               );
               const baseCls =
-                'block rounded-[6px] px-3 py-[10px] transition-colors hover:bg-[rgba(129,140,248,0.06)]';
+                'block rounded-[6px] px-3 py-[10px] transition-colors hover:bg-primary/[0.06]';
               return jump ? (
                 <Link key={idx} to={jump} className={`${baseCls} cursor-pointer`}>
                   {inner}
@@ -558,7 +558,7 @@ function RichSummaryV2NewBlock({
             {entities.map((ent) => (
               <Tooltip key={`${ent.type}:${ent.name}`}>
                 <TooltipTrigger asChild>
-                  <span className="inline-block rounded-[4px] bg-[rgba(129,140,248,0.08)] px-[7px] py-[2px] text-[10px] font-semibold text-[#818cf8] cursor-default">
+                  <span className="inline-block rounded-[4px] bg-primary/[0.08] px-[7px] py-[2px] text-[10px] font-semibold text-primary cursor-default">
                     {ent.name}
                   </span>
                 </TooltipTrigger>
@@ -588,7 +588,7 @@ function RichSummaryV2NewBlock({
 
       {actionables.length > 0 && (
         <section>
-          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#818cf8]">
+          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-primary">
             {t('learning.actionables')}
           </h3>
           <ul className="space-y-1.5 text-[13px] leading-[1.55] text-[rgba(237,237,240,0.84)]">
@@ -596,7 +596,7 @@ function RichSummaryV2NewBlock({
               <li key={idx} className="flex gap-2">
                 <span
                   aria-hidden
-                  className="mt-[2px] flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-[3px] border border-[#818cf8] text-[10px] text-[#818cf8]"
+                  className="mt-[2px] flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-[3px] border border-primary text-[10px] text-primary"
                 >
                   →
                 </span>
@@ -615,7 +615,7 @@ function RichSummaryV2NewBlock({
           <ul className="space-y-2 text-[13px] leading-[1.5]">
             {keyConcepts.map((kc, idx) => (
               <li key={idx} className="rounded-[6px] bg-[rgba(255,255,255,0.02)] px-3 py-2">
-                <p className="text-[14px] font-semibold text-[#818cf8]">{kc.term}</p>
+                <p className="text-[14px] font-semibold text-primary">{kc.term}</p>
                 <p className="mt-[2px] text-[13px] text-[rgba(237,237,240,0.74)]">
                   {kc.definition}
                 </p>
@@ -646,7 +646,7 @@ function RichSummaryV2NewBlock({
             </summary>
             <ul className="mt-[8px] space-y-2 text-[12px]">
               {qaPairs.map((qa, idx) => (
-                <li key={idx} className="border-l-2 border-[rgba(129,140,248,0.4)] pl-3">
+                <li key={idx} className="border-l-2 border-primary/[0.4] pl-3">
                   <p className="font-semibold text-[#ededf0]">Q. {qa.q}</p>
                   <p className="mt-[2px] text-[rgba(237,237,240,0.66)]">A. {qa.a}</p>
                 </li>
@@ -701,7 +701,7 @@ function AtomRow({ atom, jumpUrl }: { atom: VideoRichSummaryAtom; jumpUrl: strin
         {jumpUrl && Number.isFinite(atom.timestamp_sec) && (
           <Link
             to={jumpUrl}
-            className="ml-2 inline-flex items-center gap-0.5 rounded-[3px] bg-[rgba(129,140,248,0.1)] px-[5px] py-[1px] font-mono text-[10px] text-[#818cf8] hover:bg-[rgba(129,140,248,0.2)]"
+            className="ml-2 inline-flex items-center gap-0.5 rounded-[3px] bg-primary/[0.1] px-[5px] py-[1px] font-mono text-[10px] text-primary hover:bg-primary/[0.2]"
           >
             ▶ {formatSeconds(atom.timestamp_sec ?? 0)}
           </Link>
