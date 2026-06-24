@@ -50,6 +50,7 @@ import { getJobQueue } from '../manager';
 import { JOB_NAMES, RICH_SUMMARY_RETRY_OPTIONS, type EnrichRichSummaryPayload } from '../types';
 import { enqueueMandalaBookFill } from './mandala-book-fill';
 import { bookRefillEnqueueOptions } from './book-refill-debounce';
+import { isCompleteV2 } from './v2-completeness';
 import { config } from '@/config/index';
 import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { richSummaryWorkOptions } from './rich-summary-work-options';
@@ -99,12 +100,19 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
   // Pick a language hint so caption-extractor probes the spoken language
   // before falling through to its ko/en defaults.
   let langHint: string | undefined;
+  let cachedComplete = false;
   try {
     const prisma = getPrismaClient();
     const [rsRow, ytRow] = await Promise.all([
       prisma.video_rich_summaries.findUnique({
         where: { video_id: videoId },
-        select: { source_language: true },
+        // completeness fields reuse the full generator's skip-gate definition.
+        select: {
+          source_language: true,
+          template_version: true,
+          transcript_used: true,
+          mandala_relevance_pct: true,
+        },
       }),
       prisma.youtube_videos.findUnique({
         where: { youtube_video_id: videoId },
@@ -112,12 +120,39 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
       }),
     ]);
     langHint = rsRow?.source_language ?? ytRow?.default_language ?? undefined;
+    // v2 atom is a GLOBAL cache (video_rich_summaries.video_id PK). If the row is
+    // already a complete v2 (transcript-grounded + relevance), a re-enrich here
+    // would re-call Haiku+Sonnet for content that already exists for every user.
+    // Short-circuit to honor the cache. (Quality-regen crons still force via
+    // forceRegen; this only guards the on-demand enrich handler.)
+    cachedComplete = isCompleteV2(rsRow);
   } catch (err) {
     logger.warn('enrich-rich-summary: lang-hint lookup failed (continuing without)', {
       jobId: job.id,
       videoId,
       error: err instanceof Error ? err.message : String(err),
     });
+  }
+
+  if (cachedComplete) {
+    logger.info('enrich-rich-summary: global v2 already complete — cache hit, skipping regen', {
+      jobId: job.id,
+      videoId,
+    });
+    // Still re-fill the book so THIS mandala reflects the already-global v2
+    // (the post-enrich book trigger would not fire when generation is skipped).
+    if (mandalaId) {
+      await enqueueMandalaBookFill(
+        { userId, mandalaId, trigger: 'enrich-cache-hit' },
+        bookRefillEnqueueOptions(mandalaId)
+      ).catch((err) => {
+        logger.warn('enrich-rich-summary: cache-hit book re-fill enqueue failed (non-fatal)', {
+          mandalaId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+    return;
   }
 
   // CP500+ H fix — chokepoint: guarantee a youtube_videos row exists before the
