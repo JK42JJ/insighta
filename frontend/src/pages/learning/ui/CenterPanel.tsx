@@ -352,15 +352,27 @@ export function CenterPanel({
         onMouseEnter={() => setActiveRegion('book-index')}
       >
         {centerViewMode === 'note' ? (
-          <NoteEditorView
-            editor={noteDoc.editor}
-            loading={noteDoc.loading}
-            error={noteDoc.error}
-            isEditing={noteDoc.isEditing}
-            setIsEditing={noteDoc.setIsEditing}
-            restoreOriginal={noteDoc.restoreOriginal}
-            hasBook={Boolean(book?.book?.chapters?.length)}
-          />
+          <>
+            {/* §1④ PR2 — "준비 중": when the book is still filling (v2 pending),
+                show progress instead of letting empty chapters read as a bug. */}
+            {(book?.coverage?.v2Pending ?? 0) > 0 && (
+              <div className="mx-auto mt-3 flex max-w-[680px] items-center gap-2 rounded-md border border-white/[0.07] bg-white/[0.03] px-3.5 py-2 text-[12px] text-muted-foreground">
+                <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />
+                <span>
+                  {book?.coverage?.v2Pending}개 영상이 북인덱스에 추가되는 중이에요 · {book?.coverage?.v2Done}/{book?.coverage?.gatePassed} 완료
+                </span>
+              </div>
+            )}
+            <NoteEditorView
+              editor={noteDoc.editor}
+              loading={noteDoc.loading}
+              error={noteDoc.error}
+              isEditing={noteDoc.isEditing}
+              setIsEditing={noteDoc.setIsEditing}
+              restoreOriginal={noteDoc.restoreOriginal}
+              hasBook={Boolean(book?.book?.chapters?.length)}
+            />
+          </>
         ) : (
           // CP445.x — 본문 영역 max-width = 영상 (49.5vh*16/9) 동일 + mx-auto
           // 좌우 정렬. 영상 ↔ AI요약/섹션 시각 일관성.

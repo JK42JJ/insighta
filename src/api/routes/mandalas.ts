@@ -3003,12 +3003,15 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           version: number;
           source_videos: number;
           source_atoms: number;
+          gate_passed: number;
+          v2_done: number;
+          v2_pending: number;
           generated_at: Date;
           updated_at: Date;
         }>
       >(
         `SELECT mandala_id, book_json, version, source_videos, source_atoms,
-                generated_at, updated_at
+                gate_passed, v2_done, v2_pending, generated_at, updated_at
          FROM mandala_books
          WHERE mandala_id = $1::uuid
          LIMIT 1`,
@@ -3031,6 +3034,12 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           version: row.version,
           sourceVideos: row.source_videos,
           sourceAtoms: row.source_atoms,
+          // §1④ coverage (PR2) — v2_pending > 0 ⇒ book still filling.
+          coverage: {
+            gatePassed: row.gate_passed,
+            v2Done: row.v2_done,
+            v2Pending: row.v2_pending,
+          },
           generatedAt: row.generated_at.toISOString(),
           updatedAt: row.updated_at.toISOString(),
           book: row.book_json,

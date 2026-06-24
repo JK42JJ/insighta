@@ -318,6 +318,8 @@ export interface MandalaBookResponse {
   version: number;
   sourceVideos: number;
   sourceAtoms: number;
+  /** §1④ coverage (PR2). v2Pending > 0 ⇒ the book is still filling. */
+  coverage?: { gatePassed: number; v2Done: number; v2Pending: number };
   generatedAt: string;
   updatedAt: string;
   book: MandalaBookData;
