@@ -73,6 +73,14 @@ export const LLM_PRICING: Record<string, LLMPricing> = {
     outputPerToken: 0.000015,
     source: 'openrouter.ai/api/v1/models (2026-04-27)',
   },
+  // The rich-summary v2 generator pins this exact id (SONNET_MODEL). It was
+  // missing → calculateCost returned null → cost_usd NULL for ALL v2 calls
+  // (327/327 in 30d). $3/M in · $15/M out (2026-06 official).
+  'anthropic/claude-sonnet-4-6': {
+    inputPerToken: 0.000003,
+    outputPerToken: 0.000015,
+    source: 'anthropic.com/pricing (2026-06): $3/M in, $15/M out',
+  },
   'anthropic/claude-haiku-4.5': {
     inputPerToken: 0.000001,
     outputPerToken: 0.000005,
