@@ -1035,6 +1035,18 @@ class ApiClient {
     );
   }
 
+  /**
+   * PR-T1 — v2 translations bulk trigger (card-add panel close). Enqueues one
+   * debounced bulk-translate job for the mandala's off-language v2 atoms.
+   * BE: POST /api/v1/mandalas/:id/translate-bulk. Fire-and-forget.
+   */
+  async translateMandalaBulk(mandalaId: string): Promise<void> {
+    await this.request<{ status: 'ok'; data: unknown }>(
+      `/mandalas/${mandalaId}/translate-bulk`,
+      { method: 'POST', body: JSON.stringify({}) }
+    );
+  }
+
   // ─── CP456 Billing (Lemon Squeezy, MoR subscription) ──────────────────────
 
   /**

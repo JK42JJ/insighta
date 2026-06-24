@@ -52,6 +52,12 @@ export const JOB_NAMES = {
    */
   MANDALA_BOOK_FILL: 'mandala-book-fill',
   /**
+   * v2 translations (PR-T1) — bulk-translate a mandala's off-language v2 atoms
+   * into the mandala language. Triggered on card-add panel CLOSE (one job per
+   * mandala, debounced). Dedup + global translations cache; OpenRouter Haiku.
+   */
+  TRANSLATE_MANDALA_BULK: 'translate-mandala-bulk',
+  /**
    * Deck build (③ e2e) — assemble book_json + figures, call slidegen
    * /slides/build (job poll), store the returned presigned pptx_url in
    * slide_decks. Worker = handleDeckBuild.
@@ -311,6 +317,20 @@ export const MANDALA_BOOK_FILL_OPTIONS = {
 } as const;
 
 export interface MandalaBookFillPayload {
+  userId: string;
+  mandalaId: string;
+  trigger?: string;
+}
+
+/** PR-T1 — bulk-translate options. singletonKey is set per-mandala at enqueue. */
+export const TRANSLATE_MANDALA_BULK_OPTIONS = {
+  retryLimit: 2,
+  retryDelay: 30,
+  retryBackoff: true,
+  expireInMinutes: 15,
+} as const;
+
+export interface TranslateMandalaBulkPayload {
   userId: string;
   mandalaId: string;
   trigger?: string;
