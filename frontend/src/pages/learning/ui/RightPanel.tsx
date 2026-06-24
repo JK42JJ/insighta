@@ -180,18 +180,23 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
       </div>
       <div
         className={cn(
-          'relative min-h-0 flex-1 overflow-hidden pb-[35px]',
+          // flex column so the disclaimer sits in normal flow BELOW the chat
+          // (CopilotKit input box). Previously the disclaimer was position:absolute
+          // bottom-2 and overlapped the input. min-h-0 lets the chat area shrink.
+          'flex min-h-0 flex-1 flex-col overflow-hidden',
           activeTab !== 'chatbot' && 'hidden'
         )}
       >
         {activeSectionTitle && (
           // §redesign — chat context (시안 chat-ctx): "지금 읽는 구간 · {제목}".
-          <div className="border-b border-white/[0.06] px-1 pb-2.5 pt-0.5 text-[12px] text-muted-foreground/70">
+          <div className="shrink-0 border-b border-white/[0.06] px-1 pb-2.5 pt-0.5 text-[12px] text-muted-foreground/70">
             지금 읽는 구간 · <span className="text-muted-foreground">{activeSectionTitle}</span>
           </div>
         )}
-        <ChatAssistant key={videoId} mandalaId={mandalaId} videoId={videoId} onSeek={handleSeek} />
-        <p className="absolute bottom-2 left-0 w-full text-center text-[10px] text-muted-foreground/60">
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+          <ChatAssistant key={videoId} mandalaId={mandalaId} videoId={videoId} onSeek={handleSeek} />
+        </div>
+        <p className="shrink-0 w-full py-2 text-center text-[10px] text-muted-foreground/60">
           {t('learning.chatDisclaimer')}
         </p>
       </div>
