@@ -73,3 +73,37 @@ describe('note-document-generator — strong(4) heuristic', () => {
     expect(bolded.length).toBe(0);
   });
 });
+
+describe('note-document-generator — C6 paragraph grouping', () => {
+  const atom = (text: string, type: string) => ({ vid: 'v', ts: 1, text, type });
+  const book = (atoms: Array<{ vid: string; ts: number; text: string; type: string }>): MandalaBookData => ({
+    chapters: [{ ch: 0, title: '백엔드', sections: [{ title: 'API', atoms }] }],
+  });
+  const bodyParas = (doc: { content?: unknown[] }) =>
+    (doc.content ?? []).filter((n) => {
+      const t = n as { type: string; content?: Array<{ marks?: unknown[] }> };
+      return t.type === 'paragraph' && !(t.content?.[0]?.marks); // exclude italic kicker/meta
+    });
+
+  it('merges consecutive same-type atoms into one paragraph (not 1 line each)', () => {
+    const doc = buildInitialNoteDoc(
+      book([atom('첫 문장이다.', 'fact'), atom('둘째 문장이다.', 'fact'), atom('셋째 문장이다.', 'fact')])
+    );
+    // 3 fact atoms → 1 merged paragraph (text joined)
+    const merged = bodyParas(doc).find((p) =>
+      ((p as { content?: Array<{ text?: string }> }).content ?? []).some((t) => t.text?.includes('첫 문장'))
+    ) as { content?: Array<{ text?: string }> };
+    const text = (merged.content ?? []).map((t) => t.text ?? '').join('');
+    expect(text).toContain('첫 문장');
+    expect(text).toContain('셋째 문장'); // all three in ONE paragraph
+  });
+
+  it('starts a new paragraph on type change (thematic coherence)', () => {
+    const doc = buildInitialNoteDoc(book([atom('사실이다.', 'fact'), atom('팁이다.', 'tip')]));
+    const texts = bodyParas(doc).map((p) =>
+      ((p as { content?: Array<{ text?: string }> }).content ?? []).map((t) => t.text ?? '').join('')
+    );
+    const factPara = texts.find((x) => x.includes('사실'));
+    expect(factPara).not.toContain('팁이다'); // different type → separate paragraph
+  });
+});

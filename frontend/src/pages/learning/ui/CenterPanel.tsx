@@ -543,7 +543,25 @@ const NOTE_PROSE_STYLE = `
   margin: 0 0 1.55em;
   color: var(--nm-text);
 }
-.note-prose-root .ProseMirror p strong { font-weight: 600; color: var(--nm-strong); }
+/* C8 — keyword highlight (NOT plain bold): subtle gold tint block, distinct from
+   the code chip (no border, sans). Sparse by the generator heuristic. */
+.note-prose-root .ProseMirror p strong {
+  font-weight: 500;
+  color: var(--nm-gold-text, #e7c79a);
+  background: rgba(194, 168, 120, 0.13);
+  padding: 0 3px;
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+/* B5 — sec-eyebrow ("N.N · 다음 토픽" = em-only paragraph right before an h3) is
+   an editing index; hide it in READ mode. kicker(before doc-meta)+doc-meta stay. */
+.note-prose-root:not(.editing) .ProseMirror p:has(> em:only-child):has(+ h3) {
+  display: none;
+}
+/* A4 — keypoint inner paragraph: kill the body 1.55em margin so the quote has no
+   leading gap under the "핵심 포인트" label. */
+.note-prose-root .ProseMirror blockquote p { margin: 0; }
 .note-prose-root .ProseMirror p em:only-child {
   /* editorial label (kicker / sec-eyebrow) — gold, uppercase, small. Visible in
      BOTH read & edit mode (these are design labels, not editing-only eyebrows). */

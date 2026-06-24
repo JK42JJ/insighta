@@ -87,6 +87,39 @@ function pickKeyPhrase(sectionTitle: string, atomText: string): string | null {
   return null;
 }
 
+/**
+ * C6 — group consecutive atoms into Medium-style paragraphs. Merges adjacent
+ * atoms that share the same `type` (fact/tip/argument) into one paragraph, so a
+ * paragraph reads as a few related sentences instead of one subtitle line each.
+ * Caps prevent over-merge (≤ 4 atoms / ≤ 280 chars → a new paragraph). A type
+ * change also starts a new paragraph (keeps each paragraph thematically coherent).
+ */
+const PARA_MAX_ATOMS = 4;
+const PARA_MAX_CHARS = 280;
+function groupAtomsIntoParagraphs(atoms: Array<{ text?: string; type?: string }>): string[] {
+  const out: string[] = [];
+  let buf: string[] = [];
+  let bufType: string | undefined;
+  let bufLen = 0;
+  const flush = () => {
+    if (buf.length) out.push(buf.join(' '));
+    buf = [];
+    bufLen = 0;
+  };
+  for (const a of atoms) {
+    const text = (a.text ?? '').trim();
+    if (!text) continue;
+    const type = a.type;
+    const wouldOverflow = buf.length >= PARA_MAX_ATOMS || bufLen + text.length > PARA_MAX_CHARS;
+    if (buf.length && (type !== bufType || wouldOverflow)) flush();
+    if (buf.length === 0) bufType = type;
+    buf.push(text);
+    bufLen += text.length;
+  }
+  flush();
+  return out;
+}
+
 /** Paragraph whose first occurrence of `phrase` is wrapped in <strong>. */
 function paragraphWithBold(text: string, phrase: string): TiptapNode {
   const norm = normalizeText(text);
@@ -193,14 +226,11 @@ function renderSection(
     const firstTs = g.atoms[0].ts ?? 0;
     const endSec = groupEndSec(g.atoms);
     out.push(videoBlockNode(g.vid, firstTs, endSec, section.title ?? null));
-    // Each atom → its own paragraph. Keeps editing granularity natural.
-    // strong(4): bold the section's key term IF it appears in the atom (max 1
-    // per atom, none otherwise). Conservative — emphasis stays sparse (Medium).
-    for (const a of g.atoms) {
-      if (a.text && a.text.trim()) {
-        const phrase = pickKeyPhrase(section.title ?? '', a.text);
-        out.push(phrase ? paragraphWithBold(a.text, phrase) : paragraph(a.text));
-      }
+    // C6 — group consecutive same-type atoms into Medium-style paragraphs
+    // (was 1 atom = 1 <p> = "picture-book"). strong: ≤1 key term per paragraph.
+    for (const para of groupAtomsIntoParagraphs(g.atoms)) {
+      const phrase = pickKeyPhrase(section.title ?? '', para);
+      out.push(phrase ? paragraphWithBold(para, phrase) : paragraph(para));
     }
   }
 
