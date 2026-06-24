@@ -48,6 +48,11 @@ const CreateBodySchema = z.object({
 
 const UpdateBodySchema = z.object({
   content_json: TiptapDocSchema,
+  // PR3 regenerate path (PR3b): when the note is rebuilt from a newer book, the
+  // client also pushes the fresh original_json + the book version it was built
+  // from. Both optional — a plain auto-save sends content_json only.
+  original_json: TiptapDocSchema.optional(),
+  based_on_book_version: z.number().int().nonnegative().optional(),
 });
 
 const ParamsByMandalaSchema = z.object({ mandalaId: UuidSchema });
@@ -87,6 +92,7 @@ export const noteDocumentsRoutes: FastifyPluginCallback = (fastify, _opts, done)
           mandala_id: doc.mandala_id,
           content_json: doc.content_json,
           original_json: doc.original_json,
+          based_on_book_version: doc.based_on_book_version,
           created_at: doc.created_at,
           updated_at: doc.updated_at,
         },
@@ -110,6 +116,14 @@ export const noteDocumentsRoutes: FastifyPluginCallback = (fastify, _opts, done)
         .send(createErrorResponse(ErrorCode.INVALID_INPUT, body.error.message, request.url));
     }
     const userId = request.user.userId;
+    // PR3 — stamp the book version this note is generated from, so the note view
+    // can later detect staleness (book.version > based_on_book_version). Looked
+    // up BE-side from the canonical mandala_books (SSOT); 0 when no book yet.
+    const bookRow = await prisma.mandala_books.findUnique({
+      where: { mandala_id: body.data.mandalaId },
+      select: { version: true },
+    });
+    const basedOnBookVersion = bookRow?.version ?? 0;
     // Upsert by unique (user_id, mandala_id) — first call creates, subsequent
     // calls are idempotent (e.g., concurrent first-paint races on different tabs).
     const doc = await prisma.note_documents.upsert({
@@ -119,6 +133,7 @@ export const noteDocumentsRoutes: FastifyPluginCallback = (fastify, _opts, done)
         mandala_id: body.data.mandalaId,
         content_json: body.data.content_json as Prisma.InputJsonValue,
         original_json: body.data.original_json as Prisma.InputJsonValue,
+        based_on_book_version: basedOnBookVersion,
       },
       update: {
         // Existing row: do NOT overwrite original_json. content_json sync
@@ -133,6 +148,7 @@ export const noteDocumentsRoutes: FastifyPluginCallback = (fastify, _opts, done)
           mandala_id: doc.mandala_id,
           content_json: doc.content_json,
           original_json: doc.original_json,
+          based_on_book_version: doc.based_on_book_version,
           created_at: doc.created_at,
           updated_at: doc.updated_at,
         },
@@ -167,7 +183,18 @@ export const noteDocumentsRoutes: FastifyPluginCallback = (fastify, _opts, done)
     // someone else's doc even if the id leaks.
     const result = await prisma.note_documents.updateMany({
       where: { id: params.data.id, user_id: userId },
-      data: { content_json: body.data.content_json as Prisma.InputJsonValue },
+      data: {
+        content_json: body.data.content_json as Prisma.InputJsonValue,
+        // PR3 regenerate: when the client rebuilds from a newer book it also
+        // pushes the fresh original_json + book version. Plain auto-save omits
+        // both → only content_json changes.
+        ...(body.data.original_json !== undefined
+          ? { original_json: body.data.original_json as Prisma.InputJsonValue }
+          : {}),
+        ...(body.data.based_on_book_version !== undefined
+          ? { based_on_book_version: body.data.based_on_book_version }
+          : {}),
+      },
     });
     if (result.count === 0) {
       return reply
@@ -185,6 +212,7 @@ export const noteDocumentsRoutes: FastifyPluginCallback = (fastify, _opts, done)
               mandala_id: doc.mandala_id,
               content_json: doc.content_json,
               original_json: doc.original_json,
+              based_on_book_version: doc.based_on_book_version,
               created_at: doc.created_at,
               updated_at: doc.updated_at,
             }
