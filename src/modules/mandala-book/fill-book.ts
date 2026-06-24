@@ -22,6 +22,7 @@ import { synthesizeCellTopics } from './topic-synthesis';
 import { enqueueEnrichRichSummary } from '@/modules/queue';
 import { enqueueRelevanceBackfillForMandala } from '@/modules/relevance/relevance-backfill-trigger';
 import { getStoredTranslation } from '@/modules/skills/rich-summary-translator';
+import { bookV2RetryCapped } from './book-v2-retry';
 import type {
   RichSummaryAnalysis,
   RichSummarySegments,
@@ -156,8 +157,15 @@ export async function fillMandalaBook(params: {
   // NO_TRANSCRIPT each time = caption-fetch churn). They are absent from the book
   // (no content) but excluded from the v2-pending enqueue.
   const terminallySkipped = new Set<string>();
+  // §1④ retry counts per video (translations._book_v2_retry). At the cap, the
+  // card is terminal (can't yield segments) → excluded from v2-pending so the
+  // spinner ends. NOT a blanket quality_flag='low' exclude (that would drop
+  // transiently-failed cards permanently — #968 was held for this reason).
   for (const row of v2Rows) {
-    if (row.quality_flag === 'skipped') terminallySkipped.add(row.video_id);
+    // Terminal: no-transcript skip, OR §1④ re-enqueued to the cap with no segments.
+    if (row.quality_flag === 'skipped' || bookV2RetryCapped(row.translations)) {
+      terminallySkipped.add(row.video_id);
+    }
     if (row.segments == null) continue; // no time-segments → not a usable 살붙임 source
     // PR-T2 — substitute the translated atoms when this atom's source language
     // differs from the display language AND a translation is stored. The
@@ -245,6 +253,25 @@ export async function fillMandalaBook(params: {
     if (enqueuedGlobal.has(videoId)) continue;
     enqueuedGlobal.add(videoId);
     const title = placements.find((p) => p.videoId === videoId)?.title ?? videoId;
+    // §1④ retry-cap — count this re-enqueue in the dedicated jsonb counter
+    // (atomic jsonb_set so concurrent fills don't lose increments). At the cap,
+    // the NEXT fill's terminallySkipped excludes this card → v2_pending drops →
+    // spinner ends. No-op when the row doesn't exist yet (first attempt); the
+    // enrich then creates the row and the counter applies on subsequent retries.
+    prisma
+      .$executeRawUnsafe(
+        `UPDATE video_rich_summaries
+         SET translations = jsonb_set(
+           COALESCE(translations, '{}'::jsonb),
+           '{_book_v2_retry}',
+           to_jsonb(COALESCE((translations->>'_book_v2_retry')::int, 0) + 1)
+         )
+         WHERE video_id = $1`,
+        videoId
+      )
+      .catch(() => {
+        /* counter bump is best-effort; a missed increment just allows one extra retry */
+      });
     enqueueEnrichRichSummary({ videoId, userId, mandalaId, title }).catch((err) => {
       log.warn('§1④ v2 enqueue failed (non-fatal)', {
         videoId,
