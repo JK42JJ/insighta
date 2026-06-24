@@ -363,6 +363,22 @@ export function CenterPanel({
                 </span>
               </div>
             )}
+            {/* PR3b — note is behind the (settled) book: new cards/translations
+                landed after this note was generated. User-triggered refresh only
+                (no auto-overwrite); edits are preserved on regenerate. */}
+            {noteDoc.stale && (book?.coverage?.v2Pending ?? 0) === 0 && (
+              <div className="mx-auto mt-3 flex max-w-[680px] items-center justify-between gap-3 rounded-md border border-white/[0.07] bg-white/[0.03] px-3.5 py-2 text-[12px] text-muted-foreground">
+                <span>새 내용이 북인덱스에 추가됐어요. 노트를 새로고침하면 반영됩니다.</span>
+                <button
+                  type="button"
+                  onClick={() => void noteDoc.regenerate()}
+                  disabled={noteDoc.regenerating}
+                  className="shrink-0 rounded-md border border-white/[0.12] px-2.5 py-1 text-[12px] text-foreground transition-colors hover:bg-white/[0.06] disabled:opacity-50"
+                >
+                  {noteDoc.regenerating ? '새로고침 중…' : '새로고침'}
+                </button>
+              </div>
+            )}
             <NoteEditorView
               editor={noteDoc.editor}
               loading={noteDoc.loading}

@@ -68,6 +68,11 @@ export interface UseNoteDocumentResult {
   /** Most recent server doc id (null while pre-create). */
   docId: string | null;
   saveStatus: SaveStatus;
+  /** PR3 — book was re-filled after this note was generated (new cards / translations). */
+  stale: boolean;
+  /** PR3 — user-triggered regenerate from the current book (edit-preserving). */
+  regenerate: () => Promise<void>;
+  regenerating: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -233,6 +238,46 @@ export function useNoteDocument(input: UseNoteDocumentInput): UseNoteDocumentRes
     }
   }, [docId, editor, mandalaId, queryClient]);
 
+  // 7b. Stale detection (PR3) — the book was re-filled (new cards / translations)
+  // AFTER this note was generated. We do NOT auto-overwrite (the user may be
+  // reading / have edits); we surface a banner and regenerate only on click.
+  const bookVersion = mandalaBook?.version ?? 0;
+  const noteBasedOn = docQuery.data?.based_on_book_version ?? 0;
+  const stale = Boolean(docQuery.data && mandalaBook && bookVersion > noteBasedOn);
+
+  const [regenerating, setRegenerating] = useState(false);
+
+  // 7c. Regenerate from the current book (user-triggered). Edit preservation
+  // (C안, whole-doc — per-section is not possible): unedited note (content ==
+  // original) is fully refreshed; an EDITED note keeps content_json and only
+  // refreshes original_json (the baseline) so the user's edits survive.
+  const regenerate = useCallback(async () => {
+    if (!docId || !editor || !mandalaBook) return;
+    setRegenerating(true);
+    try {
+      const fresh = await apiClient.getNoteDocument(mandalaId as string);
+      const current = (fresh?.content_json as TiptapDoc | null | undefined) ?? null;
+      const original = (fresh?.original_json as TiptapDoc | null | undefined) ?? null;
+      const edited = JSON.stringify(current) !== JSON.stringify(original);
+      const rebuilt = buildInitialNoteDoc(mandalaBook.book);
+      // Unedited → adopt the rebuilt doc for both. Edited → keep content, refresh
+      // baseline. Either way bump based_on_book_version so stale clears.
+      const nextContent = edited ? (current ?? rebuilt) : rebuilt;
+      await apiClient.updateNoteDocument(docId, nextContent, {
+        original_json: rebuilt,
+        based_on_book_version: mandalaBook.version,
+      });
+      if (!edited) {
+        editor.commands.setContent(rebuilt, false);
+        const histAny = (editor as unknown as { commands: { clearHistory?: () => void } }).commands;
+        if (typeof histAny.clearHistory === 'function') histAny.clearHistory();
+      }
+      if (mandalaId) queryClient.invalidateQueries({ queryKey: queryKey(mandalaId) });
+    } finally {
+      setRegenerating(false);
+    }
+  }, [docId, editor, mandalaBook, mandalaId, queryClient]);
+
   // 8. Save status surface.
   const saveStatus: SaveStatus = updateMutation.isPending
     ? 'saving'
@@ -251,5 +296,8 @@ export function useNoteDocument(input: UseNoteDocumentInput): UseNoteDocumentRes
     restoreOriginal,
     docId,
     saveStatus,
+    stale,
+    regenerate,
+    regenerating,
   };
 }

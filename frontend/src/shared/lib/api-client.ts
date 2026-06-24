@@ -233,6 +233,9 @@ export interface NoteDocumentResponse {
   mandala_id: string;
   content_json: unknown;
   original_json: unknown;
+  /** PR3 — the mandala_books.version this note was generated from. stale when
+   *  the current book.version is greater (book re-filled with new content). */
+  based_on_book_version?: number;
   created_at: string;
   updated_at: string;
 }
@@ -1193,11 +1196,28 @@ class ApiClient {
     return res.data.doc;
   }
 
-  /** Auto-save: update content_json only (original_json immutable). */
-  async updateNoteDocument(id: string, content_json: unknown): Promise<NoteDocumentResponse> {
+  /**
+   * Auto-save: update content_json. opts (PR3 regenerate) optionally rewrites
+   * original_json + based_on_book_version in the same call — used when the note
+   * is rebuilt from a newer book. Plain auto-save passes content_json only.
+   */
+  async updateNoteDocument(
+    id: string,
+    content_json: unknown,
+    opts?: { original_json?: unknown; based_on_book_version?: number }
+  ): Promise<NoteDocumentResponse> {
     const res = await this.request<{ success: boolean; data: { doc: NoteDocumentResponse } }>(
       `/note-documents/${id}`,
-      { method: 'PUT', body: JSON.stringify({ content_json }) }
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          content_json,
+          ...(opts?.original_json !== undefined ? { original_json: opts.original_json } : {}),
+          ...(opts?.based_on_book_version !== undefined
+            ? { based_on_book_version: opts.based_on_book_version }
+            : {}),
+        }),
+      }
     );
     return res.data.doc;
   }
