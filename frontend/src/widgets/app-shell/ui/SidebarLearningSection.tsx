@@ -88,6 +88,23 @@ export function SidebarLearningSection({
   }, [mandalaCards]);
   const { summariesByVideoId } = useV2Summaries(likedVideoIds);
 
+  // §3.5 — "M개 요약됨" = videos that actually render a label in the list, using
+  // the SAME criterion as renderPlayerList (v2 toc_label/one_liner; v1 rows have
+  // neither via the v2-summaries API → not counted). So the header count ===
+  // left-TOC card count. NOT coverage.v2Done (a §1④ book-fill field that is 0 on
+  // stale / uncomputed books — the "0개 요약됨" bug).
+  const summarizedCount = useMemo(() => {
+    const seen = new Set<string>();
+    let n = 0;
+    for (const vid of likedVideoIds) {
+      if (seen.has(vid)) continue;
+      seen.add(vid);
+      const v2 = summariesByVideoId.get(vid);
+      if (v2?.tocLabel?.trim() || v2?.oneLiner?.trim()) n++;
+    }
+    return n;
+  }, [likedVideoIds, summariesByVideoId]);
+
   // CP438+1: find which chapter+section contains an atom whose vid matches
   // the currently-playing video. Used to highlight the active section in
   // the sidebar AND auto-expand the chapter on first match.
@@ -255,7 +272,6 @@ export function SidebarLearningSection({
               //   노트 = book이 합성한 distinct 영상 = "N개 영상에서 종합" (정답 종합).
               //   영상 = 수집 원본 카드 + 요약 진척 = "N개 영상 · M개 요약됨".
               // 문구는 시작값 — James 화면 수렴 대상.
-              const coverage = bookResponse?.coverage;
               if (centerViewMode === 'note') {
                 const synthCount =
                   typeof bookResponse?.book?.source_videos === 'number'
@@ -267,29 +283,12 @@ export function SidebarLearningSection({
                   </p>
                 );
               }
+              // 영상 모드: 수집 카드 수 · 실제 렌더된(요약된) 카드 수 = 좌측 카드
+              // 수와 일치. book-fill coverage 스피너는 영상 카드와 무관 → 제거.
               const collected = mandalaCards.length;
-              if ((coverage?.v2Pending ?? 0) > 0) {
-                const pct =
-                  coverage && coverage.gatePassed > 0
-                    ? Math.round((coverage.v2Done / coverage.gatePassed) * 100)
-                    : 0;
-                return (
-                  <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-sidebar-foreground/50">
-                    <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />
-                    <span>{t('learning.videoCountSummarizing', { count: collected, pct })}</span>
-                  </p>
-                );
-              }
-              if (coverage && typeof coverage.v2Done === 'number') {
-                return (
-                  <p className="mt-0.5 text-[13px] text-sidebar-foreground/50">
-                    {t('learning.videoCountCollected', { count: collected, done: coverage.v2Done })}
-                  </p>
-                );
-              }
               return (
                 <p className="mt-0.5 text-[13px] text-sidebar-foreground/50">
-                  {t('learning.videoCount', { count: collected })}
+                  {t('learning.videoCountCollected', { count: collected, done: summarizedCount })}
                 </p>
               );
             })()}
