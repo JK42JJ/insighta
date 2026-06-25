@@ -23,6 +23,8 @@ import { apiClient } from '@/shared/lib/api-client';
 export interface V2SummaryItem {
   videoId: string;
   oneLiner: string | null;
+  /** CP504 — short noun-form TOC label; null on legacy/quick rows (FE falls back to oneLiner). */
+  tocLabel: string | null;
   /**
    * CP474 — v2 `analysis.core_argument` (2-3 sentences capturing the
    * central thesis). Grid card blockquote prefers this over `oneLiner`

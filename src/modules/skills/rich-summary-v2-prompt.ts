@@ -26,6 +26,10 @@ export type SubjectivityLevel = 'low' | 'medium' | 'high';
 
 export interface RichSummaryCore {
   one_liner: string;
+  /** CP504 — short noun-form label for the left TOC (≤~18 chars), distilled
+   *  from one_liner with context preserved. Optional: legacy/quick rows omit it
+   *  and the FE falls back to one_liner. */
+  toc_label?: string;
   domain: DomainSlug;
   depth_level: DepthLevel;
   content_type: ContentType;
@@ -142,6 +146,8 @@ export interface RichSummaryV2Layered {
 // ============================================================================
 
 export const ONE_LINER_MAX_LEN = 20;
+/** CP504 — max length for the short TOC label (core.toc_label). */
+export const TOC_LABEL_MAX_LEN = 22;
 export const PASS_THRESHOLD = 0.7;
 export const MIN_KEY_CONCEPTS = 3;
 export const MIN_ACTIONABLES = 3;
@@ -203,7 +209,8 @@ User mandala center goal (the learning objective the viewer is pursuing; empty w
 Respond with this exact JSON structure (no extra keys, no comments):
 {{
   "core": {{
-    "one_liner": "{language_label}: 20 characters or less",
+    "one_liner": "{language_label}: ONE sentence (~30-60 chars) capturing the video's core point WITH context (used for summary/tooltip/chatbot)",
+    "toc_label": "{language_label}: short NOUN phrase <= 18 chars distilled from one_liner, context preserved (used as the left table-of-contents label)",
     "domain": "one of: tech | learning | health | business | finance | social | creative | lifestyle | mind",
     "depth_level": "beginner | intermediate | advanced",
     "content_type": "tutorial | lecture | vlog | interview | documentary | review",
@@ -257,7 +264,8 @@ Respond with this exact JSON structure (no extra keys, no comments):
 }}
 
 Field rules:
-- core.one_liner: ≤ 20 chars, no quotes, no trailing punctuation.
+- core.one_liner: ONE sentence (~30-60 chars) capturing the video's core point WITH enough context to stand alone as a summary/tooltip. No quotes.
+- core.toc_label: a short NOUN phrase (<= 18 chars) distilled from one_liner while PRESERVING its meaning — never a blind truncation. End on a noun and drop filler like "및 구성/관리/방법" when it adds no meaning. Examples: "AI 스케일 확대에 따른 창발 능력과 통제 불가능성의 위험" → "창발 능력과 통제 위험"; "Azure Virtual Network 생성 및 구성" → "가상 네트워크 구성".
 - core.domain: MUST be one of the 9 slugs above. No other values, no labels in Korean/English.
 - analysis.key_concepts: 3-5 entries.
 - analysis.entities: 3-10 entries. Each has a 'name' (bare label, no quotes) and a 'type' that MUST be one of: concept | person | tool | framework | organization. Use 'concept' for ideas/methods, 'person' for named individuals, 'tool' for software/products, 'framework' for named methodologies/processes, 'organization' for companies/institutions. When unsure, default to 'concept'. Entries should be distinct (no duplicate names). These are the KG bridge nodes — segments.atoms[].entity_refs should reference these names verbatim.
@@ -412,9 +420,16 @@ export function validateV2Layered(parsed: unknown): RichSummaryV2Layered {
     throw new V2ValidationError(`unknown content_type '${contentType}'`, 'core.content_type');
   }
   const targetAudience = requireString(c['target_audience'], 'core.target_audience');
+  // CP504 — toc_label optional: validate length only when present (legacy/quick
+  // rows omit it; the FE falls back to one_liner).
+  const tocLabel =
+    c['toc_label'] === undefined || c['toc_label'] === null
+      ? undefined
+      : requireString(c['toc_label'], 'core.toc_label', TOC_LABEL_MAX_LEN * 4);
 
   const core: RichSummaryCore = {
     one_liner: oneLiner,
+    ...(tocLabel !== undefined ? { toc_label: tocLabel } : {}),
     domain: domain as DomainSlug,
     depth_level: depthLevel as DepthLevel,
     content_type: contentType as ContentType,
@@ -712,12 +727,12 @@ export function scoreCompleteness(s: RichSummaryV2Layered): CompletenessResult {
   const reasons: string[] = [];
 
   // core (5 × 0.1)
-  if (s.core.one_liner.length > 0 && s.core.one_liner.length <= ONE_LINER_MAX_LEN) {
+  // CP504 — one_liner is now a richer one-sentence (length cap relaxed). Score
+  // it on non-emptiness; the short-label constraint moved to optional toc_label.
+  if (s.core.one_liner.length > 0) {
     score += 0.1;
   } else {
-    reasons.push(
-      `core.one_liner length ${s.core.one_liner.length} (expected 1-${ONE_LINER_MAX_LEN})`
-    );
+    reasons.push('core.one_liner empty');
   }
   if (VALID_DOMAIN_SET.has(s.core.domain)) score += 0.1;
   else reasons.push(`core.domain '${s.core.domain}' not in 9 slugs`);

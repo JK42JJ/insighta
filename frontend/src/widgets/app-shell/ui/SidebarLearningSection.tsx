@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, ChevronRight, ChevronsDownUp, ChevronsUpDown, PanelTop } from 'lucide-react';
+import { BookOpen, ChevronsDownUp, ChevronsUpDown, PanelTop } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
@@ -54,15 +54,13 @@ export function SidebarLearningSection({
     }
   }
 
-  // Group cards by cellIndex so each sub-goal lists its own videos.
-  // CP475+ — user directive 2026-05-20: "북인덱스의 항목은 - 북마크 후에만
-  // 생성되도록 해". Skip cards that the user hasn't bookmarked yet.
-  // `pinnedAt` is the server source-of-truth for "liked" / bookmarked.
-  const cardsByCell = useMemo(() => {
+  // PR3c-a — player tab "videos I collected": all cards in the cell.
+  // mandalaCards is already URL-deduped + cellIndex>=0 (useMandalaCards); no
+  // bookmark / v2-oneLiner gate (the list reflects what the user collected).
+  const cardsByCellAll = useMemo(() => {
     const map = new Map<number, InsightCard[]>();
     for (const card of mandalaCards) {
       if (typeof card.cellIndex !== 'number' || card.cellIndex < 1) continue;
-      if (!card.pinnedAt) continue; // bookmark gate
       const list = map.get(card.cellIndex) ?? [];
       list.push(card);
       map.set(card.cellIndex, list);
@@ -70,8 +68,10 @@ export function SidebarLearningSection({
     return map;
   }, [mandalaCards]);
 
-  // Pull v2 key-concept terms for every liked video so the sub-goal tree
-  // can render keyword-style book-index entries instead of raw titles.
+  // PR3c-a label source — v2 oneLiner per collected video. Player list shows
+  // only summarized videos (label = oneLiner) for a uniform look; videos still
+  // summarizing are omitted from the list and accounted for by the header
+  // "% 요약 중" progress. Bookmark gate stays removed (only the v2 filter).
   const likedVideoIds = useMemo(() => {
     const ids: string[] = [];
     for (const card of mandalaCards) {
@@ -183,8 +183,8 @@ export function SidebarLearningSection({
   const headerTooltip = centerLabelText && centerGoal ? centerGoal : undefined;
 
   return (
-    <div className="pl-5 pr-2 flex flex-col" onMouseEnter={() => setActiveRegion('sidebar')}>
-      <div className="px-3 py-2">
+    <div className="pl-2 pr-2 flex flex-col" onMouseEnter={() => setActiveRegion('sidebar')}>
+      <div className="px-2 py-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             {headerTooltip ? (
@@ -205,14 +205,32 @@ export function SidebarLearningSection({
             )}
             {/* CP445 D18=B — 영상 모드 = 만다라 mapped 전체 영상 / 노트 모드 =
                 mandala_books 가 인용한 distinct vid 수 (필수 영상). */}
-            <p className="mt-0.5 text-[13px] text-sidebar-foreground/50">
-              {t('learning.videoCount', {
-                count:
-                  centerViewMode === 'note' && typeof bookResponse?.book?.source_videos === 'number'
-                    ? bookResponse.book.source_videos
-                    : mandalaCards.length,
-              })}
-            </p>
+            {(() => {
+              const headerCount =
+                centerViewMode === 'note' && typeof bookResponse?.book?.source_videos === 'number'
+                  ? bookResponse.book.source_videos
+                  : mandalaCards.length;
+              // §1④ book-fill progress — surface coverage, no new compute.
+              // v2Pending > 0 ⇒ "N · {pct}% 요약 중" + spinner; else "N 영상".
+              const coverage = bookResponse?.coverage;
+              if ((coverage?.v2Pending ?? 0) > 0) {
+                const pct =
+                  coverage && coverage.gatePassed > 0
+                    ? Math.round((coverage.v2Done / coverage.gatePassed) * 100)
+                    : 0;
+                return (
+                  <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-sidebar-foreground/50">
+                    <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />
+                    <span>{t('learning.videoCountSummarizing', { count: headerCount, pct })}</span>
+                  </p>
+                );
+              }
+              return (
+                <p className="mt-0.5 text-[13px] text-sidebar-foreground/50">
+                  {t('learning.videoCount', { count: headerCount })}
+                </p>
+              );
+            })()}
           </div>
           <div className="mt-0.5 flex shrink-0 items-center gap-0.5">
             <Tooltip>
@@ -278,23 +296,45 @@ export function SidebarLearningSection({
           const rowLabel = labelText || goal;
           const rowTooltip = labelText && goal ? goal : undefined;
 
+          // Highlight the chapter (sector) that contains the active item, and
+          // keep it lit (mirrors the hover-bright look). note: activeSectionRef
+          // is in this chapter; player: a card in this cell == currentVideoId.
+          const chapterActive =
+            centerViewMode === 'note'
+              ? !!bookChapter && activeSectionRef?.chapterIdx === bookChapter.ch
+              : !!currentVideoId &&
+                (cardsByCellAll.get(idx + 1) ?? []).some((c) => {
+                  try {
+                    return extractYouTubeVideoId(new URL(c.videoUrl)) === currentVideoId;
+                  } catch {
+                    return false;
+                  }
+                });
+
           const chapterButton = (
             <button
               type="button"
               onClick={() => toggleChapter(idx)}
               className="group flex w-full items-center gap-2 px-2 py-1 text-left transition-colors"
             >
-              <ChevronRight
+              {/* §redesign — chapter number replaces the chevron (시안 .toc-chapter
+                  .n). Row click still toggles expand/collapse. */}
+              <span
                 className={cn(
-                  'h-3.5 w-3.5 shrink-0 text-sidebar-foreground/35 transition-colors group-hover:text-sidebar-foreground',
-                  isExpanded && 'rotate-90'
+                  'shrink-0 font-mono text-[11px] tabular-nums transition-colors',
+                  chapterActive ? 'text-sidebar-foreground/80' : 'text-sidebar-foreground/35'
                 )}
-              />
-              {/* §redesign — chapter numbering "01·02·03" (시안 .toc-chapter .n) */}
-              <span className="shrink-0 font-mono text-[11px] tabular-nums text-sidebar-foreground/35">
+              >
                 {String(idx + 1).padStart(2, '0')}
               </span>
-              <span className="flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.10em] text-sidebar-foreground/55 transition-colors group-hover:text-sidebar-foreground/80">
+              <span
+                className={cn(
+                  'flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.10em] transition-colors',
+                  chapterActive
+                    ? 'text-sidebar-foreground/80'
+                    : 'text-sidebar-foreground/55 group-hover:text-sidebar-foreground/80'
+                )}
+              >
                 {rowLabel}
               </span>
             </button>
@@ -312,8 +352,16 @@ export function SidebarLearningSection({
                 chapterButton
               )}
 
-              {isExpanded && bookChapter && (
-                <div className="ml-9 pt-0.5">
+              {/* PR3c-a — branch the TOC by centerViewMode so the two SSOTs
+                  never co-render (was: both blocks always rendered → one video
+                  highlighted as oneLiner AND auto-set section = double-select +
+                  1px/2px asymmetry, James-observed prod bug).
+                  note   = book sections (SSOT book_json). active = activeSectionRef
+                           (disambiguates a vid cited by multiple sections).
+                  player = collected cards (SSOT cards). active = vid===currentVideoId.
+                  Same 2px bar in both; one block per tab = bug structurally gone. */}
+              {isExpanded && centerViewMode === 'note' && bookChapter && (
+                <div className="ml-3.5 pt-0.5">
                   <BookChapterPreview
                     chapter={bookChapter}
                     mandalaId={mandalaId}
@@ -326,18 +374,10 @@ export function SidebarLearningSection({
                   />
                 </div>
               )}
-              {/* Book-index entries: keyword tokens distilled from v2
-                  analysis.key_concepts. Cards without a v2 row are
-                  omitted; they reappear once enrich-rich-summary lands. */}
               {isExpanded &&
+                centerViewMode === 'player' &&
                 (() => {
-                  const cellCards = cardsByCell.get(idx + 1) ?? [];
-                  // CP475+ — user directive 2026-05-20: entry text = v2
-                  // core.one_liner only (없으면 entry 자체 미표시). 3-4초
-                  // 안에 fast-path 가 oneLiner 채우므로 잠시 entry 부재는
-                  // 자연스러움. Previous keyConcepts joined pattern
-                  // "체크 · 준비 기간" was rejected as low quality.
-                  const indexedEntries = cellCards
+                  const entries = (cardsByCellAll.get(idx + 1) ?? [])
                     .map((card) => {
                       let vid: string | null = null;
                       try {
@@ -346,31 +386,31 @@ export function SidebarLearningSection({
                         vid = null;
                       }
                       if (!vid) return null;
+                      // CP504 — TOC label = short toc_label; fall back to oneLiner
+                      // when a v2 row predates toc_label (legacy/quick rows).
                       const v2 = summariesByVideoId.get(vid);
-                      const oneLiner = v2?.oneLiner?.trim();
-                      if (!oneLiner) return null;
-                      return { cardId: card.id, vid, indexName: oneLiner };
+                      const label = v2?.tocLabel?.trim() || v2?.oneLiner?.trim();
+                      if (!label) return null; // not yet summarized → header accounts for it
+                      return { cardId: card.id, vid, label };
                     })
-                    .filter(
-                      (e): e is { cardId: string; vid: string; indexName: string } => e !== null
-                    );
-                  if (indexedEntries.length === 0) return null;
+                    .filter((e): e is { cardId: string; vid: string; label: string } => e !== null);
+                  if (entries.length === 0) return null;
                   return (
-                    <ul className="ml-9 pt-0.5">
-                      {indexedEntries.map((entry) => {
+                    <ul className="ml-3.5 pt-0.5">
+                      {entries.map((entry) => {
                         const isActive = entry.vid === currentVideoId;
                         return (
                           <li
                             key={entry.cardId}
                             onClick={() => navigate(`/learning/${mandalaId}/${entry.vid}`)}
                             className={cn(
-                              'cursor-pointer pl-3 py-1.5 leading-[1.5] border-l transition-colors',
+                              'cursor-pointer pl-3.5 py-1.5 leading-[1.5] transition-colors',
                               isActive
-                                ? 'border-sidebar-primary text-[14px] font-medium text-sidebar-primary'
-                                : 'border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/80 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
+                                ? 'border-l-2 border-sidebar-primary text-[14px] font-medium text-sidebar-primary'
+                                : 'border-l border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/50 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
                             )}
                           >
-                            {entry.indexName}
+                            {entry.label}
                           </li>
                         );
                       })}
@@ -430,12 +470,12 @@ function BookChapterPreview({
               }
             }}
             className={cn(
-              'cursor-pointer pl-3 py-1.5 leading-[1.5] transition-colors',
+              'cursor-pointer pl-3.5 py-1.5 leading-[1.5] transition-colors',
               // §redesign — active section: 2px gold bar + strong text (시안).
               // sidebar-primary is gold within .note-mode (overridden in index.css).
               isActiveSection
                 ? 'border-l-2 border-sidebar-primary text-[14px] font-medium text-sidebar-primary'
-                : 'border-l border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/80 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
+                : 'border-l border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/50 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
             )}
           >
             {sec.title}

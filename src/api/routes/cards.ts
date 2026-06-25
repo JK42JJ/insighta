@@ -1013,14 +1013,20 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               // already filters those out. A separate operator action
               // re-enqueues these rows for v2 backfill (see runbook
               // docs/runbook/v2-summary-user-audit-cleansing.md §7).
-              const core = (r?.core ?? null) as { one_liner?: unknown } | null;
+              const core = (r?.core ?? null) as { one_liner?: unknown; toc_label?: unknown } | null;
               const oneLinerOut =
                 core && typeof core.one_liner === 'string' && core.one_liner.length > 0
                   ? core.one_liner
                   : null;
+              // CP504 — short TOC label; FE falls back to oneLiner when absent.
+              const tocLabelOut =
+                core && typeof core.toc_label === 'string' && core.toc_label.length > 0
+                  ? core.toc_label
+                  : null;
               return {
                 videoId: vid,
                 oneLiner: oneLinerOut,
+                tocLabel: tocLabelOut,
                 coreArgument,
                 keyConcepts,
                 fallbackTags,

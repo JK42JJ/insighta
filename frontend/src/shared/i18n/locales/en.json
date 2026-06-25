@@ -1826,6 +1826,7 @@
     "qaLabel": "Q&A",
     "goal": "Learning Goal",
     "videoCount": "{{count}} videos",
+    "videoCountSummarizing": "{{count}} videos · {{pct}}% summarizing",
     "noVideos": "No videos yet",
     "chatTitle": "Learning Assistant",
     "chatInitial": "Ask questions about this video",

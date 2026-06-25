@@ -1044,10 +1044,10 @@ class ApiClient {
    * BE: POST /api/v1/mandalas/:id/translate-bulk. Fire-and-forget.
    */
   async translateMandalaBulk(mandalaId: string): Promise<void> {
-    await this.request<{ status: 'ok'; data: unknown }>(
-      `/mandalas/${mandalaId}/translate-bulk`,
-      { method: 'POST', body: JSON.stringify({}) }
-    );
+    await this.request<{ status: 'ok'; data: unknown }>(`/mandalas/${mandalaId}/translate-bulk`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
   }
 
   // ─── CP456 Billing (Lemon Squeezy, MoR subscription) ──────────────────────
@@ -1751,6 +1751,8 @@ class ApiClient {
       items: Array<{
         videoId: string;
         oneLiner: string | null;
+        /** CP504 — short noun-form TOC label; null on legacy/quick rows (FE falls back to oneLiner). */
+        tocLabel: string | null;
         /** CP474 — `analysis.core_argument`, the v2 essence (2-3 sentences). */
         coreArgument: string | null;
         /** Top `analysis.key_concepts[].term` values (≤ 3). */
