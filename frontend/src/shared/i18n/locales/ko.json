@@ -1252,12 +1252,7 @@
     "monthlyPrice": "$9",
     "monthlyPeriod": "월",
     "monthlyAnnual": "연 $108",
-    "monthlyFeatures": [
-      "만다라트 3개",
-      "AI 요약 (월 100회)",
-      "플레이리스트 동기화",
-      "일반 지원"
-    ],
+    "monthlyFeatures": ["만다라트 3개", "AI 요약 (월 100회)", "플레이리스트 동기화", "일반 지원"],
     "monthlyTrial": "14일 무료 체험",
     "monthlyCtaDisabled": "곧 출시 예정",
     "monthlyCta": "월 구독 시작",
@@ -1835,6 +1830,9 @@
     "goal": "학습 목표",
     "videoCount": "{{count}}개 영상",
     "videoCountSummarizing": "{{count}}개 · {{pct}}% 요약 중",
+    "videoCountCollected": "{{count}}개 영상 · {{done}}개 요약됨",
+    "videoCountSynthesized": "{{count}}개 영상에서 종합",
+    "overview": "개요",
     "noVideos": "아직 영상이 없습니다",
     "chatTitle": "학습 어시스턴트",
     "chatInitial": "이 영상에 대해 질문하세요",
