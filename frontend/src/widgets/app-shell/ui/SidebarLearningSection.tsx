@@ -60,7 +60,9 @@ export function SidebarLearningSection({
   const cardsByCellAll = useMemo(() => {
     const map = new Map<number, InsightCard[]>();
     for (const card of mandalaCards) {
-      if (typeof card.cellIndex !== 'number' || card.cellIndex < 1) continue;
+      // §3.5 — keep cell 0 (center/goal cell); its videos render as the "개요"
+      // group above the numbered chapters (was: cell0 < 1 → silently dropped).
+      if (typeof card.cellIndex !== 'number' || card.cellIndex < 0) continue;
       const list = map.get(card.cellIndex) ?? [];
       list.push(card);
       map.set(card.cellIndex, list);
@@ -152,6 +154,49 @@ export function SidebarLearningSection({
     }
   };
 
+  // §3.5 — shared player-mode list render, reused by the numbered chapters AND
+  // the cell-0 "개요" group. label = short toc_label, falls back to oneLiner;
+  // videos without a v2 row are omitted (header "% 요약 중" accounts for them).
+  const renderPlayerList = (cards: InsightCard[]) => {
+    const entries = cards
+      .map((card) => {
+        let vid: string | null = null;
+        try {
+          vid = extractYouTubeVideoId(new URL(card.videoUrl));
+        } catch {
+          vid = null;
+        }
+        if (!vid) return null;
+        const v2 = summariesByVideoId.get(vid);
+        const label = v2?.tocLabel?.trim() || v2?.oneLiner?.trim();
+        if (!label) return null;
+        return { cardId: card.id, vid, label };
+      })
+      .filter((e): e is { cardId: string; vid: string; label: string } => e !== null);
+    if (entries.length === 0) return null;
+    return (
+      <ul className="ml-3.5 pt-0.5">
+        {entries.map((entry) => {
+          const isActive = entry.vid === currentVideoId;
+          return (
+            <li
+              key={entry.cardId}
+              onClick={() => navigate(`/learning/${mandalaId}/${entry.vid}`)}
+              className={cn(
+                'cursor-pointer pl-3.5 py-1.5 leading-[1.5] transition-colors',
+                isActive
+                  ? 'border-l-2 border-sidebar-primary text-[14px] font-medium text-sidebar-primary'
+                  : 'border-l border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/50 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
+              )}
+            >
+              {entry.label}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
+
   if (collapsed) {
     const collapsedLabel = centerGoal || centerLabel || t('sidebar.learning', 'Learning');
     return (
@@ -206,13 +251,23 @@ export function SidebarLearningSection({
             {/* CP445 D18=B — 영상 모드 = 만다라 mapped 전체 영상 / 노트 모드 =
                 mandala_books 가 인용한 distinct vid 수 (필수 영상). */}
             {(() => {
-              const headerCount =
-                centerViewMode === 'note' && typeof bookResponse?.book?.source_videos === 'number'
-                  ? bookResponse.book.source_videos
-                  : mandalaCards.length;
-              // §1④ book-fill progress — surface coverage, no new compute.
-              // v2Pending > 0 ⇒ "N · {pct}% 요약 중" + spinner; else "N 영상".
+              // §3.5 — 영상/노트 위계를 헤더로 구분 (같은 숫자 "N개 영상" → 혼란).
+              //   노트 = book이 합성한 distinct 영상 = "N개 영상에서 종합" (정답 종합).
+              //   영상 = 수집 원본 카드 + 요약 진척 = "N개 영상 · M개 요약됨".
+              // 문구는 시작값 — James 화면 수렴 대상.
               const coverage = bookResponse?.coverage;
+              if (centerViewMode === 'note') {
+                const synthCount =
+                  typeof bookResponse?.book?.source_videos === 'number'
+                    ? bookResponse.book.source_videos
+                    : 0;
+                return (
+                  <p className="mt-0.5 text-[13px] text-sidebar-foreground/50">
+                    {t('learning.videoCountSynthesized', { count: synthCount })}
+                  </p>
+                );
+              }
+              const collected = mandalaCards.length;
               if ((coverage?.v2Pending ?? 0) > 0) {
                 const pct =
                   coverage && coverage.gatePassed > 0
@@ -221,13 +276,20 @@ export function SidebarLearningSection({
                 return (
                   <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-sidebar-foreground/50">
                     <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />
-                    <span>{t('learning.videoCountSummarizing', { count: headerCount, pct })}</span>
+                    <span>{t('learning.videoCountSummarizing', { count: collected, pct })}</span>
+                  </p>
+                );
+              }
+              if (coverage && typeof coverage.v2Done === 'number') {
+                return (
+                  <p className="mt-0.5 text-[13px] text-sidebar-foreground/50">
+                    {t('learning.videoCountCollected', { count: collected, done: coverage.v2Done })}
                   </p>
                 );
               }
               return (
                 <p className="mt-0.5 text-[13px] text-sidebar-foreground/50">
-                  {t('learning.videoCount', { count: headerCount })}
+                  {t('learning.videoCount', { count: collected })}
                 </p>
               );
             })()}
@@ -285,6 +347,24 @@ export function SidebarLearningSection({
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-none pb-3">
+        {/* §3.5 — cell 0 (center/goal cell) videos = book preface. Rendered as an
+            "개요" group ABOVE the numbered chapters (cell0 ≠ chapter 01). Player
+            mode only; note-mode preface = book_json (§1⑤ track). */}
+        {centerViewMode === 'player' &&
+          (() => {
+            const overview = renderPlayerList(cardsByCellAll.get(0) ?? []);
+            if (!overview) return null;
+            return (
+              <div className="mb-0.5">
+                <div className="flex w-full items-center gap-2 px-2 py-1">
+                  <span className="flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.10em] text-sidebar-foreground/55">
+                    {t('learning.overview', '개요')}
+                  </span>
+                </div>
+                {overview}
+              </div>
+            );
+          })()}
         {subGoals.map((goal, idx) => {
           const bookChapter = bookChaptersByIdx.get(idx);
           const isExpanded = isChapterExpanded(idx);
@@ -376,47 +456,7 @@ export function SidebarLearningSection({
               )}
               {isExpanded &&
                 centerViewMode === 'player' &&
-                (() => {
-                  const entries = (cardsByCellAll.get(idx + 1) ?? [])
-                    .map((card) => {
-                      let vid: string | null = null;
-                      try {
-                        vid = extractYouTubeVideoId(new URL(card.videoUrl));
-                      } catch {
-                        vid = null;
-                      }
-                      if (!vid) return null;
-                      // CP504 — TOC label = short toc_label; fall back to oneLiner
-                      // when a v2 row predates toc_label (legacy/quick rows).
-                      const v2 = summariesByVideoId.get(vid);
-                      const label = v2?.tocLabel?.trim() || v2?.oneLiner?.trim();
-                      if (!label) return null; // not yet summarized → header accounts for it
-                      return { cardId: card.id, vid, label };
-                    })
-                    .filter((e): e is { cardId: string; vid: string; label: string } => e !== null);
-                  if (entries.length === 0) return null;
-                  return (
-                    <ul className="ml-3.5 pt-0.5">
-                      {entries.map((entry) => {
-                        const isActive = entry.vid === currentVideoId;
-                        return (
-                          <li
-                            key={entry.cardId}
-                            onClick={() => navigate(`/learning/${mandalaId}/${entry.vid}`)}
-                            className={cn(
-                              'cursor-pointer pl-3.5 py-1.5 leading-[1.5] transition-colors',
-                              isActive
-                                ? 'border-l-2 border-sidebar-primary text-[14px] font-medium text-sidebar-primary'
-                                : 'border-l border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/50 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
-                            )}
-                          >
-                            {entry.label}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  );
-                })()}
+                renderPlayerList(cardsByCellAll.get(idx + 1) ?? [])}
             </div>
           );
         })}
