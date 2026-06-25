@@ -250,7 +250,7 @@ export function CenterPanel({
   return (
     <div className="flex flex-1 min-w-0 flex-col overflow-hidden pl-4 pr-3 pt-[5px]">
       <div
-        className={cn('shrink-0', centerViewMode === 'note' && 'hidden')}
+        className={cn('mt-2 shrink-0', centerViewMode === 'note' && 'hidden')}
         onMouseEnter={() => {
           setActiveRegion('player');
           onPlayerHoverIn?.();
@@ -359,7 +359,8 @@ export function CenterPanel({
               <div className="mx-auto mt-3 flex max-w-[680px] items-center gap-2 rounded-md border border-white/[0.07] bg-white/[0.03] px-3.5 py-2 text-[12px] text-muted-foreground">
                 <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />
                 <span>
-                  {book?.coverage?.v2Pending}개 영상이 북인덱스에 추가되는 중이에요 · {book?.coverage?.v2Done}/{book?.coverage?.gatePassed} 완료
+                  {book?.coverage?.v2Pending}개 영상이 북인덱스에 추가되는 중이에요 ·{' '}
+                  {book?.coverage?.v2Done}/{book?.coverage?.gatePassed} 완료
                 </span>
               </div>
             )}
@@ -392,7 +393,10 @@ export function CenterPanel({
         ) : (
           // CP445.x — 본문 영역 max-width = 영상 (49.5vh*16/9) 동일 + mx-auto
           // 좌우 정렬. 영상 ↔ AI요약/섹션 시각 일관성.
-          <div className="mx-auto w-full p-4" style={{ maxWidth: 'calc(49.5vh * 16 / 9)' }}>
+          <div
+            className="mx-auto w-full p-4"
+            style={{ maxWidth: 'min(calc(49.5vh * 16 / 9), 760px)' }}
+          >
             {centerTab === 'summary' && (
               <PanelAISummary videoSummary={undefined} videoUrl={videoUrl} />
             )}

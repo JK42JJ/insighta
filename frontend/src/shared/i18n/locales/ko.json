@@ -1834,6 +1834,7 @@
     "qaLabel": "Q&A",
     "goal": "학습 목표",
     "videoCount": "{{count}}개 영상",
+    "videoCountSummarizing": "{{count}}개 · {{pct}}% 요약 중",
     "noVideos": "아직 영상이 없습니다",
     "chatTitle": "학습 어시스턴트",
     "chatInitial": "이 영상에 대해 질문하세요",
