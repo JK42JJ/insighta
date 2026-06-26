@@ -45,6 +45,11 @@ model UserVideoState {
   /// leak. NULL = not yet backfilled; filled by the relevance-backfill queue.
   relevance_pct          Int?
   relevance_at           DateTime?      @db.Timestamptz(6)
+  /// CP504 §0.7 — raw rubric axes (cell_fit / goal_contribution / actionability)
+  /// that compose into relevance_pct. Was log-only; persisted so axis-weight
+  /// re-tuning (0.4/0.4/0.2) can be measured. No write-path/scoring change here.
+  /// Raw SQL DDL: prisma/migrations/relevance-detail/001_relevance_detail.sql
+  relevance_detail       Json?          @db.JsonB
   createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   users                  users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
