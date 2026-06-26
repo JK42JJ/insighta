@@ -16,6 +16,7 @@ import { parseBookJson } from './book-schema';
 import {
   loadBookGateConfig,
   passesBookGate,
+  computeMandalaMedian,
   isBookTopicSynthesisEnabled,
 } from '@/config/book-gate';
 import { synthesizeCellTopics } from './topic-synthesis';
@@ -205,6 +206,14 @@ export async function fillMandalaBook(params: {
   // (default pass, logged — not a silent leak). Placement (mandala data) is
   // untouched; the gate filters the BOOK only.
   const gate = loadBookGateConfig();
+  // CP504 §0.3 D3 — per-mandala median over SCORED placed cards (one video =
+  // one vote; dedup so a video in two cells doesn't double-weight). Inert in
+  // absolute mode; used only when BOOK_GATE_MODE=relative.
+  const relByVideo = new Map<string, number | null>();
+  for (const pl of placements) {
+    if (!relByVideo.has(pl.videoId)) relByVideo.set(pl.videoId, pl.relevance);
+  }
+  const gateCtx = computeMandalaMedian(Array.from(relByVideo.values()));
   let gatedLow = 0;
   let gatedNullPass = 0;
   // §1④ coverage — the book targets the GATE-PASSED cards as a whole. The order
@@ -235,7 +244,7 @@ export async function fillMandalaBook(params: {
       if (seen.has(p.videoId)) continue; // dedup a video within one cell
       // §1③ GATE FIRST (before v2) — a scored-low / off-topic card is dropped
       // regardless of v2. Reordered: v2-absence no longer short-circuits the gate.
-      if (!passesBookGate(p.relevance, gate)) {
+      if (!passesBookGate(p.relevance, gateCtx, gate)) {
         gatedLow += 1; // scored below the gate min → excluded from the book
         continue;
       }
