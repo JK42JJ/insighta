@@ -255,6 +255,12 @@ services:
       # Config-only rollback: delete this line → code default
       # 'anthropic/claude-sonnet-4-6'. cost_usd recorded via PR #979 pricing entry.
       - RICH_SUMMARY_V2_MODEL=deepseek/deepseek-v4-flash
+      # CP504 §0.3 D3 — book gate: absolute rel>=40 (93% no-op) → per-mandala
+      # median+ ∧ floor35. Validated sim: 60% pass, tie-pass protects tight
+      # clusters. PASS_NULL stays true (NULL 79% keep current behavior until D4
+      # backfill = half-activation, intended). Scoring unchanged; single call
+      # site (fill-book). Config-flip rollback = delete this line → 'absolute'.
+      - BOOK_GATE_MODE=relative
       # CP500++ CONFIG-SSOT (2026-06-16) — MIGRATED from deploy.yml→.env to compose
       # (single SSOT; removes the §10-C dual-channel where compose silently wins).
       # Values preserved verbatim from prod printenv 2026-06-16 (value-invariant).
