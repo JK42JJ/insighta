@@ -70,6 +70,19 @@ const envSchema = z.object({
   // Default = ollama so flag-off = pre-Phase-1 behaviour (CLAUDE.md C5).
   MANDALA_EMBED_PROVIDER: z.enum(['ollama', 'openrouter']).default('ollama'),
 
+  // CP504 — race the wizard goal embed across BOTH providers (OpenRouter +
+  // Mac Mini Ollama) and take the first to SUCCEED. Eliminates the single
+  // point of failure that took the wizard down when OpenRouter ran out of
+  // credits (402): the fast cloud provider wins in the common case (speed
+  // preserved), but if it dies the Mac Mini qwen3-embedding:8b survives the
+  // race (availability). Both are same-family Qwen3-Embedding-8B @ 4096d, so
+  // either vector matches the existing mandala_embeddings corpus (search.ts).
+  // Default false = the MANDALA_EMBED_PROVIDER selector (existing behaviour);
+  // flip true in prod, config-only rollback.
+  MANDALA_EMBED_RACE: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
+
   // IKS-scorer / shared embedBatch provider switch (Issue #543, 2026-04-28).
   // Distinct from MANDALA_EMBED_PROVIDER: governs the multi-text batch
   // path used by ensureMandalaEmbeddings, v3 executor semantic gate,
@@ -336,6 +349,7 @@ export const config = {
   // 2026-04-22). See docs/design/wizard-service-redesign-2026-04-22.md.
   mandalaEmbed: {
     provider: env.MANDALA_EMBED_PROVIDER,
+    race: env.MANDALA_EMBED_RACE,
     openRouterBaseUrl: env.OPENROUTER_EMBED_BASE_URL,
     openRouterModel: env.OPENROUTER_EMBED_MODEL,
     openRouterDimension: env.OPENROUTER_EMBED_DIMENSION,

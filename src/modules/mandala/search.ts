@@ -124,19 +124,26 @@ const SYSTEM_TEMPLATES_USER_ID = '00000000-0000-0000-0000-000000000001';
 const inflightEmbeds = new Map<string, Promise<number[]>>();
 
 export async function embedGoalForMandala(goalText: string): Promise<number[]> {
+  const race = config.mandalaEmbed.race;
   const provider = config.mandalaEmbed.provider;
   // CP499 — cache by provider+goal: the embed is goal-deterministic, so the FE
   // search + server merged-gen + retries share one embed instead of N × ~3.7s.
-  const cacheKey = `${provider}:${goalText.trim()}`;
+  // CP504 — race mode caches under a single 'race' namespace (either provider's
+  // vector is corpus-compatible, so the winner is interchangeable).
+  const cacheKey = `${race ? 'race' : provider}:${goalText.trim()}`;
   const cached = goalEmbedCache.get(cacheKey);
   if (cached) return cached;
 
   const inflight = inflightEmbeds.get(cacheKey);
   if (inflight) return inflight;
 
-  const pending = (
-    provider === 'openrouter' ? embedViaOpenRouter(goalText) : embedViaOllama(goalText)
-  )
+  const source = race
+    ? embedViaRace(goalText)
+    : provider === 'openrouter'
+      ? embedViaOpenRouter(goalText)
+      : embedViaOllama(goalText);
+
+  const pending = source
     .then((vector) => {
       goalEmbedCache.set(cacheKey, vector);
       return vector;
@@ -146,6 +153,34 @@ export async function embedGoalForMandala(goalText: string): Promise<number[]> {
     });
   inflightEmbeds.set(cacheKey, pending);
   return pending;
+}
+
+/**
+ * CP504 — embed via BOTH providers in parallel, return the first to SUCCEED.
+ * The fast cloud provider (OpenRouter) wins in the common case (speed kept); if
+ * it fails (e.g. 402 out-of-credits) the Mac Mini Ollama embed survives the race
+ * so the wizard stays up (availability). `Promise.any` ignores the loser's
+ * rejection — only when BOTH reject does it throw an AggregateError, surfaced as
+ * a MandalaSearchError so upstream handlers keep their existing error contract.
+ * The loser is NOT cancelled (cheap; mirrors the generation LoRA fire-and-forget).
+ * Both providers are same-family Qwen3-Embedding-8B @ 4096d, so either vector
+ * matches the mandala_embeddings corpus (Phase 1 reuse guarantee).
+ */
+async function embedViaRace(goalText: string): Promise<number[]> {
+  try {
+    return await Promise.any([embedViaOpenRouter(goalText), embedViaOllama(goalText)]);
+  } catch (err) {
+    if (err instanceof AggregateError) {
+      const first = err.errors.find((e) => e instanceof MandalaSearchError);
+      if (first instanceof MandalaSearchError) throw first;
+      const msgs = err.errors
+        .map((e) => (e instanceof Error ? e.message : String(e)))
+        .join('; ')
+        .slice(0, 300);
+      throw new MandalaSearchError(`All embed providers failed: ${msgs}`, 'SERVICE_UNAVAILABLE');
+    }
+    throw err;
+  }
 }
 
 async function embedViaOllama(goalText: string): Promise<number[]> {
