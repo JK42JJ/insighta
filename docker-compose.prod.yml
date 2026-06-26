@@ -249,6 +249,12 @@ services:
       # Re-enable AFTER (a) cron path captioner integration ships AND
       # (b) the LLM provider is swapped to Sonnet 4.6 in the v2 path.
       - RICH_SUMMARY_V2_CRON_ENABLED=false
+      # CP504 (2026-06-26) — v2 enrich LLM: Sonnet 4.6 → DeepSeek V4-Flash.
+      # 15-cell eval matched atom richness + timestamp coherence (SNAP-clean,
+      # PR #976 gate unchanged) at ~1.5% of Sonnet cost ($0.0016 vs $0.106/card).
+      # Config-only rollback: delete this line → code default
+      # 'anthropic/claude-sonnet-4-6'. cost_usd recorded via PR #979 pricing entry.
+      - RICH_SUMMARY_V2_MODEL=deepseek/deepseek-v4-flash
       # CP500++ CONFIG-SSOT (2026-06-16) — MIGRATED from deploy.yml→.env to compose
       # (single SSOT; removes the §10-C dual-channel where compose silently wins).
       # Values preserved verbatim from prod printenv 2026-06-16 (value-invariant).
