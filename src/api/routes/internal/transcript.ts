@@ -29,6 +29,7 @@ import {
   V2ValidationError,
 } from '@/modules/skills/rich-summary-v2-prompt';
 import { bridgeV2ToOntology } from '@/modules/ontology/v2-bridge';
+import { snapSegmentsToMarkers, type AtomSnapMeta } from '@/modules/skills/atom-marker-snap';
 import { Prisma as PrismaCli } from '@prisma/client';
 import { logger } from '@/utils/logger';
 import { computeV2Quality } from '@/modules/metrics/v2-quality-metrics';
@@ -329,6 +330,15 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
       analysis?: unknown;
       lora?: unknown;
       segments?: unknown;
+      /**
+       * CP504 — raw [mm:ss]-prefixed transcript. When present, the route runs
+       * server-side atom marker-SNAP (atom-marker-snap.ts) BEFORE validation:
+       * snap atoms to the nearest [mm:ss] marker, drop drift/over-duration/dup,
+       * align section bounds. SSOT guard replacing the per-client validate-
+       * atoms.py that CP488 dropped from the Mac Mini fork (hallucinated
+       * timestamps were only clamped, not corrected).
+       */
+      transcript?: string;
       sourceLanguage?: string;
       stampTranscriptFetchedAt?: boolean;
       /**
@@ -381,6 +391,33 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
+    // CP504 — server-side atom marker-SNAP (SSOT). Runs BEFORE validation so the
+    // validator + scoreCompleteness + the write all see the corrected segments.
+    // Replaces the client-side validate-atoms.py that CP488 dropped from the Mac
+    // Mini fork: claude -p's hallucinated atom timestamps were only clamped to
+    // duration (a wrong value capped, not snapped to the real transcript marker).
+    const prisma = getPrismaClient();
+    let snapDurationSec: number | null = null;
+    try {
+      const yvRow = await prisma.$queryRawUnsafe<{ duration_seconds: number | null }[]>(
+        'SELECT duration_seconds FROM youtube_videos WHERE youtube_video_id = $1 LIMIT 1',
+        videoId
+      );
+      snapDurationSec = yvRow[0]?.duration_seconds ?? null;
+    } catch {
+      snapDurationSec = null;
+    }
+    let segmentsForRoute: unknown = body.segments;
+    let snapMeta: AtomSnapMeta | null = null;
+    if (typeof body.transcript === 'string' && body.transcript.length > 0) {
+      const snapped = snapSegmentsToMarkers(body.segments, body.transcript, snapDurationSec);
+      segmentsForRoute = snapped.segments;
+      snapMeta = snapped.meta;
+      if (snapMeta.atom_dropped_count > 0 || snapMeta.snapped_count > 0) {
+        log.warn('v2 atom marker-snap', { videoId, ...snapMeta });
+      }
+    }
+
     let summary;
     try {
       // CP488+ root fix — forward `segments` so summary.segments populates
@@ -394,7 +431,7 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         core: body.core,
         analysis: analysisForValidation,
         lora: body.lora,
-        segments: body.segments,
+        segments: segmentsForRoute,
       });
     } catch (err) {
       const path = err instanceof V2ValidationError ? err.path : '';
@@ -423,39 +460,29 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         atomsCount: summary.segments?.atoms?.length ?? 0,
         enrichmentRich: score.enrichmentRich,
         enrichmentReasons: score.enrichmentReasons,
+        // CP504 — server-side SNAP telemetry so verify-one.sh / the DRY_RUN
+        // gate can confirm the DROP rate (high drop = sparse v2, do not ship).
+        snapMeta,
       });
     }
 
-    const prisma = getPrismaClient();
     const now = new Date();
 
-    // CP438+1: clamp atom timestamp_sec / section from_sec/to_sec to video
-    // duration. Even with the new prompt rule + transcript [mm:ss] markers,
-    // the LLM occasionally still emits values past the duration. Silent
-    // clamp + log keeps the row useful (text + type stay) instead of 422
-    // rejecting the whole row.
+    // CP438+1 / CP504: final duration clamp AFTER the marker-SNAP above — a
+    // safety net for any atom/section the SNAP left within markers but past the
+    // duration. SNAP corrects the position; this only caps residual outliers.
     let clampedAtomCount = 0;
     let clampedSectionCount = 0;
-    let durationSec: number | null = null;
-    let mutatedSegments: unknown = body.segments;
-    try {
-      const yvRow = await prisma.$queryRawUnsafe<{ duration_seconds: number | null }[]>(
-        'SELECT duration_seconds FROM youtube_videos WHERE youtube_video_id = $1 LIMIT 1',
-        videoId
-      );
-      durationSec = yvRow[0]?.duration_seconds ?? null;
-    } catch {
-      // duration unknown — skip clamp; fall back to legacy behavior
-      durationSec = null;
-    }
+    const durationSec = snapDurationSec;
+    let mutatedSegments: unknown = segmentsForRoute;
     if (
       typeof durationSec === 'number' &&
       durationSec > 0 &&
-      body.segments &&
-      typeof body.segments === 'object'
+      segmentsForRoute &&
+      typeof segmentsForRoute === 'object'
     ) {
       const cap = Math.max(0, durationSec - 1);
-      const segCopy = JSON.parse(JSON.stringify(body.segments)) as {
+      const segCopy = JSON.parse(JSON.stringify(segmentsForRoute)) as {
         atoms?: Array<{ timestamp_sec?: number | null }>;
         sections?: Array<{ from_sec?: number | null; to_sec?: number | null }>;
       };
@@ -546,15 +573,20 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
         domain: summary.core.domain,
       });
 
-      // CP446+ — atom validation telemetry. process-one.sh's validate-atoms.py
-      // ships drop counts + reasons in body.validationMeta; persist them in
-      // pipeline_events for monitoring (drop-rate trend, marker-drift drift).
-      // Non-fatal; recordPipelineEvent already swallows errors.
-      if (body.validationMeta && typeof body.validationMeta === 'object') {
+      // CP446+ / CP504 — atom validation telemetry. Prefer the server-generated
+      // SNAP meta (now the SSOT guard); fall back to body.validationMeta for
+      // legacy clients still running validate-atoms.py. Persist in
+      // pipeline_events for drop-rate / marker-drift monitoring. Non-fatal.
+      const atomValidationPayload: Record<string, unknown> | null = snapMeta
+        ? { ...snapMeta }
+        : body.validationMeta && typeof body.validationMeta === 'object'
+          ? body.validationMeta
+          : null;
+      if (atomValidationPayload) {
         await recordPipelineEvent({
           stage: 'atom_validation',
           videoId,
-          payload: body.validationMeta,
+          payload: atomValidationPayload,
         });
       }
 
