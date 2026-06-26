@@ -46,6 +46,19 @@ v2 (재료) → 북인덱스(완성된 책, SSOT) → ├ 슬라이드덱
 ### 0단 범위 + 순서 (2026-06-27 축소)
 **범위 = "채점 재설계" → "게이트 로직 교체"로 축소.** 채점(프롬프트·점수·워커)은 무변경. 0단 = **D3 게이트 교체(절대40 → 상대 median+ ∧ floor35) + D4 NULL backfill(독립)** 둘뿐. 순서: D3 게이트 구현(unset=inert) → D4 backfill → flag flip(`BOOK_GATE_MODE=relative` + `PASS_NULL=false`) → 그 위 §1④.
 
+### D3 영향 격리 — 위저드-검색 무영향 증명 (2026-06-27, 회귀 불가 근거 영구 보존)
+**James 절대조건: 위저드-검색 품질 회귀 = 수용 불가.** 코드로 **3중 격리** 증명:
+1. **점수 무변경** — D3는 relevance_pct 값을 안 건드림(게이트 결정 로직만). 모든 reader(뱃지·정렬·풀·스냅샷)가 동일 점수.
+2. **코드 격리** — `passesBookGate` 호출처 = **단일(fill-book:247).** 위저드/검색/발견/풀/pipeline 경로의 book-gate 참조 = **0 (grep 빈 결과).** 변할 코드 경로 없음.
+3. **시간 격리** — fill-book은 book-build(book뷰 / #958 트리거) 시점 = 위저드 검색→발견→배치 **완료 後 하류.**
+
+**relevance_pct reader 분류** (게이트 외 전부 무영향): fill-book(게이트=D3 변경) / cards.ts 뱃지(`mandala_relevance_pct` 별도 video-keyed 컬럼) / warm-select 스냅샷 segment(intra-video 지표) / pool-serve 자체 게이트(`goalContributionPct`, book-gate와 별개) / write paths(place-auto·enrich·segment = write, 게이트 read 아님).
+
+**회귀 harness (기준선 `/tmp/gate-baseline.json`, 2026-06-27):**
+- gate-영향 (book, 변해야): 1893장 / 70만다라 — 절대40 **93%** → 상대 median∧floor35 **60%.**
+- gate-독립 (search, 불변이어야): `recommendation_cache` 7002 / `video_discover_traces` 5360 / uvs placement.
+- **flip 後 baseline 재실행** → (a) book ~60% 확인(게이트 작동) (b) search 불변량 동일 확인(검색 무회귀) = 자동 검증.
+
 ---
 
 ## §1 전체 파이프라인 (end-to-end)
