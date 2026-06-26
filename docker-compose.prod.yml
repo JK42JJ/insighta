@@ -186,6 +186,13 @@ services:
       # Revert: delete this line and redeploy — code default 'ollama'
       # restores the pre-Phase-1 behavior bit-identically.
       - MANDALA_EMBED_PROVIDER=openrouter
+      # CP504 — race the wizard goal embed across BOTH providers (OpenRouter +
+      # Mac Mini Ollama qwen3-embedding:8b), first success wins. Removes the
+      # OpenRouter-credit single point of failure (the 402 wizard outage): cloud
+      # wins on speed in the common case, Mac Mini survives the race if cloud
+      # dies. Config-only rollback: delete this line → code default false →
+      # the MANDALA_EMBED_PROVIDER selector above.
+      - MANDALA_EMBED_RACE=true
       # Mac Mini deprecation Phase D1 (2026-05-13) — flip iks-scorer
       # embedBatch from Mac-mini-first-with-OpenRouter-fallback to
       # OpenRouter-only. Removes a Mac Mini dependency for ~4 call sites

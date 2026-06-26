@@ -323,7 +323,12 @@ export function SidebarMandalaSection({
                 )}
               >
                 <span className="flex flex-1 min-w-0 items-center gap-2 text-left">
-                  <span className="truncate flex-1">{getCenterLabel(mandala)}</span>
+                  {/* CP504 — narrow sidebar clips long names (DB stores the full
+                      title); keep the ellipsis for layout but expose the full
+                      name on hover via the native title tooltip. */}
+                  <span className="truncate flex-1" title={getCenterLabel(mandala)}>
+                    {getCenterLabel(mandala)}
+                  </span>
                   {newlySyncedCount > 0 && (
                     <span
                       className="shrink-0 flex items-center gap-1 text-[11px] text-primary font-medium"
