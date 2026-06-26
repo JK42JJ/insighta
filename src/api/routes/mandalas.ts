@@ -1851,6 +1851,12 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           FROM user_local_cards
           WHERE mandala_id = ${mandalaId}::uuid AND user_id = ${userId}::uuid
             AND (level_id IS NOT NULL AND level_id != 'scratchpad' AND level_id != '')
+            -- CP504 archive display gate (mandala-scoped)
+            AND NOT EXISTS (
+              SELECT 1 FROM card_interactions ci
+              WHERE ci.user_id = ${userId}::uuid AND ci.signal = 'archive'
+                AND ci.mandala_id = ${mandalaId}::uuid AND ci.video_id = user_local_cards.video_id
+            )
           UNION ALL
           -- video states with level_id mapping
           SELECT CASE
@@ -1860,6 +1866,13 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           FROM user_video_states
           WHERE mandala_id = ${mandalaId}::uuid AND user_id = ${userId}::uuid
             AND (level_id IS NOT NULL AND level_id != 'scratchpad' AND level_id != '')
+            -- CP504 archive display gate (mandala-scoped); uvs.video_id is FK → join youtube_videos
+            AND NOT EXISTS (
+              SELECT 1 FROM card_interactions ci
+              JOIN youtube_videos yv ON yv.youtube_video_id = ci.video_id
+              WHERE ci.user_id = ${userId}::uuid AND ci.signal = 'archive'
+                AND ci.mandala_id = ${mandalaId}::uuid AND yv.id = user_video_states.video_id
+            )
         ) combined
         WHERE cell_pos >= 0 AND cell_pos < 8
         GROUP BY cell_pos

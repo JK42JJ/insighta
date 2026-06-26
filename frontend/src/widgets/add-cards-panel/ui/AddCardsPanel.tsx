@@ -6,8 +6,9 @@ import { useMandalaQuery } from '@/features/mandala';
 import { ChevronDown, ChevronUp, Loader2, Lock, RotateCcw, Search, Undo2, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/shared/lib/utils';
-import { apiClient } from '@/shared/lib/api-client';
+import { apiClient, ApiHttpError } from '@/shared/lib/api-client';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
+import { useArchivedReaddToast } from '@/features/card-management/model/useArchivedReaddToast';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import { useAllVideoStates, youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
 import type { UserVideoStateWithVideo } from '@/entities/youtube/model/types';
@@ -171,6 +172,7 @@ export function AddCardsPanel() {
   const hasSearched = mutation.isSuccess || mutation.isError || rounds.length > 0;
 
   const { like, unlike } = useLikeCard();
+  const notifyArchivedReadd = useArchivedReaddToast();
 
   const handleUnpick = useCallback(
     (videoId: string) => {
@@ -298,7 +300,7 @@ export function AddCardsPanel() {
             // drives the disabled overlay so the user can see what was
             // already added to the mandala.
           },
-          onError: () => {
+          onError: (err) => {
             setLocalPicks((prev) => {
               const next = new Set(prev);
               next.delete(videoId);
@@ -309,11 +311,20 @@ export function AddCardsPanel() {
               youtubeSyncKeys.allVideoStates,
               (prev) => (prev ? prev.filter((r) => r.id !== optimisticId) : prev)
             );
+            // BE rejects re-adding an archived (user, video, mandala) with 409
+            // ALREADY_ARCHIVED. This onError otherwise fails silently (rollback
+            // only), so surface the Restore toast here.
+            if (
+              err instanceof ApiHttpError &&
+              (err.statusCode === 409 || err.code === 'ALREADY_ARCHIVED')
+            ) {
+              notifyArchivedReadd(videoId);
+            }
           },
         }
       );
     },
-    [mandalaId, pickedSet, like, cards, queryClient, handleUnpick]
+    [mandalaId, pickedSet, like, cards, queryClient, handleUnpick, notifyArchivedReadd]
   );
 
   // Seed wizard meta (focus_tags + target_level) as soon as the mandala

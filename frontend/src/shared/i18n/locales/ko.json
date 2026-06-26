@@ -642,6 +642,8 @@
     "latestFirst": "최신순",
     "dragToMove": "드래그하여 이동",
     "addCard": "카드 추가",
+    "alreadyArchived": "이미 보관함에 있는 영상입니다",
+    "restore": "복구",
     "addCardPlaceholder": "URL을 붙여넣으세요...",
     "loadingMore": "로딩 중... {{loaded}} / {{total}}",
     "archive": {

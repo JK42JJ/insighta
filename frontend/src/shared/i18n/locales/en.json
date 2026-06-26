@@ -634,6 +634,8 @@
     "latestFirst": "Latest",
     "dragToMove": "Drag to move",
     "addCard": "Add Card",
+    "alreadyArchived": "This video is already in your archive",
+    "restore": "Restore",
     "addCardPlaceholder": "Paste a URL...",
     "loadingMore": "Loading... {{loaded}} of {{total}}",
     "archive": {

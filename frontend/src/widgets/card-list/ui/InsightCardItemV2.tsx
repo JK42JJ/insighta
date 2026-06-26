@@ -8,6 +8,8 @@ import { cn } from '@/shared/lib/utils';
 import { GripVertical, NotepadText, Loader2, Play, Bookmark, Archive } from 'lucide-react';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { useArchiveCard } from '@/features/card-management/model/useArchiveCard';
+import { useArchivedReaddToast } from '@/features/card-management/model/useArchivedReaddToast';
+import { ApiHttpError } from '@/shared/lib/api-client';
 import { useEnrichStream } from '@/features/card-management/model/useEnrichStream';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
 import { extractYouTubeVideoId } from '@/shared/lib/url-normalize';
@@ -203,6 +205,7 @@ export function InsightCardItemV2({
   }, [likedLocal, serverLiked]);
   const { like, unlike } = useLikeCard();
   const { archive } = useArchiveCard();
+  const notifyArchivedReadd = useArchivedReaddToast();
   const enrichStream = useEnrichStream();
   // CP463 — when the SSE reports 'scored', the BE has just written the
   // new v2 row (mandala_relevance_pct + one_liner). useLikeCard.onSuccess
@@ -280,11 +283,23 @@ export function InsightCardItemV2({
               void enrichStream.open(videoId);
             }
           },
-          onError: () => setLikedLocal(false), // rollback to previous false
+          onError: (err) => {
+            setLikedLocal(false); // rollback to previous false
+            // BE rejects re-adding an archived (user, video, mandala) with
+            // 409 ALREADY_ARCHIVED. Surface the dedicated toast + Restore
+            // action instead of a generic failure (the like hook has no
+            // generic toast, so there is no duplicate to suppress here).
+            if (
+              err instanceof ApiHttpError &&
+              (err.statusCode === 409 || err.code === 'ALREADY_ARCHIVED')
+            ) {
+              notifyArchivedReadd(videoId);
+            }
+          },
         }
       );
     },
-    [card.mandalaId, card.title, enrichStream, like, liked, unlike, videoId]
+    [card.mandalaId, card.title, enrichStream, like, liked, notifyArchivedReadd, unlike, videoId]
   );
 
   const handleArchiveClick = useCallback(

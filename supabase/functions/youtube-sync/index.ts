@@ -678,8 +678,21 @@ Deno.serve(async (req) => {
           );
         }
 
+        // CP504 archive display gate (mandala-scoped) — drop video states the
+        // user archived in that mandala. card_interactions keys archive by
+        // (video_id = youtube_video_id, mandala_id).
+        const { data: ytsArchivedRows } = await supabase
+          .from('card_interactions')
+          .select('video_id, mandala_id')
+          .eq('user_id', user.id)
+          .eq('signal', 'archive');
+        const ytsArchivedSet = new Set(
+          (ytsArchivedRows || []).map((r: any) => `${r.video_id}|${r.mandala_id}`)
+        );
         // video_summaries manual JOIN
-        const videos = data || [];
+        const videos = (data || []).filter(
+          (v: any) => !ytsArchivedSet.has(`${v.video?.youtube_video_id}|${v.mandala_id}`)
+        );
         const ytVideoIds = videos
           .map((v: any) => v.video?.youtube_video_id)
           .filter(Boolean);
