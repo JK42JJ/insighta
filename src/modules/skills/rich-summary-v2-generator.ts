@@ -28,8 +28,11 @@ import { validateV2TimelineRange, V2TimelineRangeError } from './rich-summary-v2
 // (unsorted atom timestamps, narrator-perspective summaries, back half
 // uncovered). 491 rows marked `quality_flag='qwen3_low'`. Quick path
 // already uses claude-haiku-4.5 explicitly; this aligns the slow path on
-// the next tier up. Search-replace point for future model swaps.
-const SONNET_MODEL = 'anthropic/claude-sonnet-4-6';
+// the next tier up. CP504 — the model is now config-driven via
+// RICH_SUMMARY_V2_MODEL (richConfig.enrichModel; default = the Sonnet 4.6 id
+// 'anthropic/claude-sonnet-4-6') so it can be swapped (e.g. to the cheaper
+// deepseek/deepseek-v4-flash) without a code change. SNAP gate (PR #976) keeps
+// the timestamp-coherence guarantee regardless of model.
 
 import { detectContentLanguageFromTitle as detectLanguageFromTitle } from '@/utils/detect-language';
 import {
@@ -182,8 +185,9 @@ export async function generateRichSummaryV2(
     durationSeconds: effectiveDurationSec,
   });
 
-  // CP488+ — pinned Sonnet 4.6 (see SONNET_MODEL doc-comment above).
-  const provider = new OpenRouterGenerationProvider(SONNET_MODEL);
+  // CP504 — model config-driven (RICH_SUMMARY_V2_MODEL); default = the Sonnet
+  // 4.6 id (doc-comment above) so an unset env preserves prior behaviour.
+  const provider = new OpenRouterGenerationProvider(richConfig.enrichModel);
 
   let lastReason = 'unknown_error';
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
