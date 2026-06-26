@@ -22,6 +22,7 @@ import { synthesizeCellTopics } from './topic-synthesis';
 import { enqueueEnrichRichSummary } from '@/modules/queue';
 import { enqueueRelevanceBackfillForMandala } from '@/modules/relevance/relevance-backfill-trigger';
 import { getStoredTranslation } from '@/modules/skills/rich-summary-translator';
+import { getArchivedVideoIds } from '@/modules/exclude/archived-videos';
 import { bookV2RetryCapped } from './book-v2-retry';
 import type {
   RichSummaryAnalysis,
@@ -101,10 +102,17 @@ export async function fillMandalaBook(params: {
     }),
   ]);
 
+  // CP504 archive display gate (mandala-scoped) — a video archived in THIS
+  // mandala must not be synthesised into the book (measured: 4 archived videos
+  // were leaking into notes). Placement rows (uvs/ulc) are untouched; only the
+  // book input is filtered.
+  const archivedIds = await getArchivedVideoIds(prisma, userId, mandalaId);
+
   const placements: Placement[] = [];
   for (const r of videoStates) {
     const vid = r.video?.youtube_video_id;
     if (!vid || r.cell_index == null) continue;
+    if (archivedIds.has(vid)) continue;
     placements.push({
       cellIndex: r.cell_index,
       videoId: vid,
@@ -115,6 +123,7 @@ export async function fillMandalaBook(params: {
   for (const r of localCards) {
     // Non-YouTube manual cards have no video_id → no v2 → honest skip.
     if (!r.video_id || r.cell_index == null) continue;
+    if (archivedIds.has(r.video_id)) continue;
     placements.push({
       cellIndex: r.cell_index,
       videoId: r.video_id,

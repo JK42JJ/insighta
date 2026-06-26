@@ -20,6 +20,26 @@ import type {
 import type { InsightCard } from '@/entities/card/model/types';
 import { localCardToInsightCard, insightCardToAddPayload } from '@/entities/card/model/local-cards';
 import { DEFAULT_CARD_LIMIT, DEFAULT_MANDALA_LIMIT } from '@/shared/config/subscription-tiers';
+import { useArchivedReaddToast } from './useArchivedReaddToast';
+
+/**
+ * Error thrown by useAddLocalCard when the BE rejects a re-add of an
+ * archived (user, video, mandala) with HTTP 409 + code 'ALREADY_ARCHIVED'.
+ * Carries the videoId so the hook-level onError can surface the
+ * "already archived" toast with a Restore action.
+ */
+export interface AlreadyArchivedError extends Error {
+  code: 'ALREADY_ARCHIVED';
+  videoId: string;
+}
+
+export function isAlreadyArchivedError(error: unknown): error is AlreadyArchivedError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'ALREADY_ARCHIVED'
+  );
+}
 
 // Query Keys
 export const localCardsKeys = {
@@ -93,6 +113,7 @@ export function useLocalCardsAsInsight() {
  */
 export function useAddLocalCard() {
   const queryClient = useQueryClient();
+  const notifyArchivedReadd = useArchivedReaddToast();
 
   return useMutation({
     mutationFn: async (payload: AddLocalCardPayload): Promise<LocalCard> => {
@@ -115,6 +136,19 @@ export function useAddLocalCard() {
         if (error.error === 'LIMIT_EXCEEDED') {
           throw error as LimitExceededError;
         }
+        // BE returns 409 + { code/error: 'ALREADY_ARCHIVED', videoId, mandalaId }
+        // when this (user, video, mandala) is currently archived. Re-throw as a
+        // typed error so the hook-level onError can show the Restore toast and
+        // call sites can skip their generic failure toast.
+        if (
+          response.status === 409 &&
+          (error.code === 'ALREADY_ARCHIVED' || error.error === 'ALREADY_ARCHIVED')
+        ) {
+          throw Object.assign(new Error('ALREADY_ARCHIVED'), {
+            code: 'ALREADY_ARCHIVED' as const,
+            videoId: error.videoId as string,
+          });
+        }
         throw new Error(error.error || 'Failed to add local card');
       }
 
@@ -131,6 +165,13 @@ export function useAddLocalCard() {
         cell_index: card.cell_index ?? undefined,
         source: 'manual',
       });
+    },
+    onError: (error) => {
+      // Centralised handling for the archived re-add case so every call site
+      // (handleUrlDrop / handleCardDrop) surfaces the same Restore toast.
+      if (isAlreadyArchivedError(error)) {
+        notifyArchivedReadd(error.videoId);
+      }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: localCardsKeys.list() });

@@ -6,6 +6,7 @@ import { useAuth } from '@/features/auth/model/useAuth';
 import {
   useLocalCards,
   isLimitExceededError,
+  isAlreadyArchivedError,
   localCardsKeys,
 } from '@/features/card-management/model/useLocalCards';
 import { useBatchMoveCards } from '@/features/card-management/model/useBatchMoveCards';
@@ -649,7 +650,11 @@ export function useCardOrchestrator(
         }
       } catch (error) {
         setPendingLocalCards((prev) => prev.filter((c) => c.id !== tempCard.id));
-        if (isLimitExceededError(error)) {
+        if (isAlreadyArchivedError(error)) {
+          // The "already archived" Restore toast is surfaced by the
+          // useAddLocalCard hook-level onError — skip the generic failure toast
+          // to avoid a duplicate.
+        } else if (isLimitExceededError(error)) {
           toast({
             title: t('index.storageLimitExceeded'),
             description: t('index.storageLimitDesc', {
@@ -950,6 +955,10 @@ export function useCardOrchestrator(
           });
         };
         const onError = (error: unknown) => {
+          // The "already archived" Restore toast is surfaced by the
+          // useAddLocalCard hook-level onError — skip the generic failure toast
+          // to avoid a duplicate.
+          if (isAlreadyArchivedError(error)) return;
           toast({
             title: t('index.moveFailed'),
             description: error instanceof Error ? error.message : t('index.moveFailedDesc'),

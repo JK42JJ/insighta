@@ -264,7 +264,22 @@ Deno.serve(async (req) => {
 
         if (cardsResult.error) throw cardsResult.error;
 
-        const cards = cardsResult.data || [];
+        // CP504 archive display gate (mandala-scoped) — drop cards the user
+        // archived in that mandala. card_interactions keys archive by
+        // (video_id, mandala_id); non-YouTube cards (video_id null) never match.
+        const { data: lcArchivedRows } = await supabase
+          .from('card_interactions')
+          .select('video_id, mandala_id')
+          .eq('user_id', user.id)
+          .eq('signal', 'archive');
+        const lcArchivedSet = new Set(
+          (lcArchivedRows || []).map(
+            (r: Record<string, unknown>) => `${r.video_id}|${r.mandala_id}`
+          )
+        );
+        const cards = (cardsResult.data || []).filter(
+          (c: Record<string, unknown>) => !lcArchivedSet.has(`${c.video_id}|${c.mandala_id}`)
+        );
 
         // Enrich YouTube cards with video_summaries (LEFT JOIN equivalent)
         const youtubeCards = cards.filter(
@@ -463,6 +478,38 @@ Deno.serve(async (req) => {
           if (defaultMandala) {
             resolvedMandalaId = defaultMandala.id;
             console.log('[local-cards] add: mandala_id was null for non-scratchpad card, resolved to default:', resolvedMandalaId);
+          }
+        }
+
+        // CP504 — archive re-add guard. If the user archived this youtube video
+        // in THIS mandala, hold the add (the display gate would then hide it =
+        // "added but invisible" stuck) and tell the FE to show a "이미 보관함에
+        // 있는 영상입니다" toast + [복구]. User-initiated restore only — the
+        // system never silently un-archives.
+        if (
+          (body.link_type === 'youtube' || body.link_type === 'youtube-shorts') &&
+          body.video_id &&
+          resolvedMandalaId
+        ) {
+          const { data: archivedRow } = await supabase
+            .from('card_interactions')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('video_id', body.video_id)
+            .eq('signal', 'archive')
+            .eq('mandala_id', resolvedMandalaId)
+            .maybeSingle();
+          if (archivedRow) {
+            return new Response(
+              JSON.stringify({
+                error: 'ALREADY_ARCHIVED',
+                code: 'ALREADY_ARCHIVED',
+                message: 'video is archived in this mandala',
+                videoId: body.video_id,
+                mandalaId: resolvedMandalaId,
+              }),
+              { status: 409, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+            );
           }
         }
 

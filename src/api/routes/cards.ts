@@ -315,6 +315,33 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     }
 
     const prisma = getPrismaClient();
+
+    // CP504 — archive re-add guard. If the user archived this video in THIS
+    // mandala, do NOT silently re-add it: the display gate would then hide the
+    // freshly-added card ("added but invisible" stuck state). Hold the add and
+    // tell the FE to show a "이미 보관함에 있는 영상입니다" toast + [복구] action.
+    // The user — not the system — restores (archive was their explicit intent).
+    if (body.mandalaId) {
+      const archived = await prisma.card_interactions.findFirst({
+        where: {
+          user_id: userId,
+          video_id: videoId,
+          signal: 'archive',
+          mandala_id: body.mandalaId,
+        },
+        select: { id: true },
+      });
+      if (archived) {
+        return reply.code(409).send({
+          status: 'error',
+          code: 'ALREADY_ARCHIVED',
+          message: 'video is archived in this mandala',
+          videoId,
+          mandalaId: body.mandalaId,
+        });
+      }
+    }
+
     try {
       // 1. Signal UPSERT
       await prisma.card_interactions.upsert({

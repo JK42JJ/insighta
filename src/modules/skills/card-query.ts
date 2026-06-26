@@ -61,6 +61,13 @@ export async function queryMandalaCards(opts: CardQueryOptions): Promise<SkillCa
     WHERE ulc.user_id = ${userId}::uuid
       AND ulc.mandala_id = ${mandalaId}::uuid
       AND ulc.cell_index >= 0
+      -- CP504 archive display gate (mandala-scoped) — exclude cards the user
+      -- archived in THIS mandala (card_interactions.signal='archive').
+      AND NOT EXISTS (
+        SELECT 1 FROM card_interactions ci
+        WHERE ci.user_id = ${userId}::uuid AND ci.signal = 'archive'
+          AND ci.mandala_id = ${mandalaId}::uuid AND ci.video_id = ulc.video_id
+      )
       ${cellScope ? Prisma.sql`AND ulc.cell_index = ANY(${cellScope}::int[])` : Prisma.empty}
       ${since ? Prisma.sql`AND ulc.created_at >= ${since}` : Prisma.empty}
     ORDER BY ulc.created_at DESC
@@ -86,6 +93,12 @@ export async function queryMandalaCards(opts: CardQueryOptions): Promise<SkillCa
       AND uvs.mandala_id = ${mandalaId}::uuid
       AND uvs.cell_index >= 0
       AND uvs.is_in_ideation = false
+      -- CP504 archive display gate (mandala-scoped)
+      AND NOT EXISTS (
+        SELECT 1 FROM card_interactions ci
+        WHERE ci.user_id = ${userId}::uuid AND ci.signal = 'archive'
+          AND ci.mandala_id = ${mandalaId}::uuid AND ci.video_id = yv.youtube_video_id
+      )
       ${cellScope ? Prisma.sql`AND uvs.cell_index = ANY(${cellScope}::int[])` : Prisma.empty}
       ${since ? Prisma.sql`AND uvs.created_at >= ${since}` : Prisma.empty}
     ORDER BY uvs.created_at DESC
