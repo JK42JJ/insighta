@@ -77,6 +77,20 @@ export const richSummaryEnvSchema = z.object({
    * caps on Sonnet 4.6 / Haiku 4.5.
    */
   RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS: positiveInt.transform((v) => v ?? 8192),
+  /**
+   * CP504 — v2 enrich LLM model id (OpenRouter; the provider prepends the
+   * `openrouter/` prefix). Default Sonnet 4.6 = the historical pinned model, so
+   * an unset env preserves existing behaviour and rollback is a one-line config
+   * flip. Flip to a cheaper model (e.g. 'deepseek/deepseek-v4-flash') via env.
+   * 15-cell eval (2026-06-26) found DeepSeek V4-Flash matched Sonnet on atom
+   * richness + timestamp coherence (SNAP-clean) at ~1.5% of Sonnet's cost.
+   */
+  RICH_SUMMARY_V2_MODEL: z
+    .preprocess(
+      (v) => (v == null || v === '' ? 'anthropic/claude-sonnet-4-6' : String(v).trim()),
+      z.string()
+    )
+    .default('anthropic/claude-sonnet-4-6'),
 });
 
 export interface RichSummaryConfig {
@@ -92,6 +106,8 @@ export interface RichSummaryConfig {
   transcriptMaxChars: number;
   /** Output token budget. Default 8192. */
   maxOutputTokens: number;
+  /** v2 enrich LLM model id (OpenRouter). Default 'anthropic/claude-sonnet-4-6'. */
+  enrichModel: string;
 }
 
 const FALLBACK_CONFIG: RichSummaryConfig = {
@@ -104,6 +120,7 @@ const FALLBACK_CONFIG: RichSummaryConfig = {
   maxDurationSeconds: 5400,
   transcriptMaxChars: 100000,
   maxOutputTokens: 8192,
+  enrichModel: 'anthropic/claude-sonnet-4-6',
 };
 
 export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): RichSummaryConfig {
@@ -117,6 +134,7 @@ export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): Ric
     RICH_SUMMARY_V2_MAX_DURATION_SECONDS: env['RICH_SUMMARY_V2_MAX_DURATION_SECONDS'],
     RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS: env['RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS'],
     RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS: env['RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS'],
+    RICH_SUMMARY_V2_MODEL: env['RICH_SUMMARY_V2_MODEL'],
   });
   if (!parsed.success) {
     return FALLBACK_CONFIG;
@@ -131,5 +149,6 @@ export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): Ric
     maxDurationSeconds: parsed.data.RICH_SUMMARY_V2_MAX_DURATION_SECONDS,
     transcriptMaxChars: parsed.data.RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS,
     maxOutputTokens: parsed.data.RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS,
+    enrichModel: parsed.data.RICH_SUMMARY_V2_MODEL,
   };
 }

@@ -33,6 +33,14 @@ export interface LLMPricing {
  * (e.g., 'qwen/qwen3-30b-a3b', NOT 'openrouter/qwen/qwen3-30b-a3b').
  */
 export const LLM_PRICING: Record<string, LLMPricing> = {
+  // --- OpenRouter: DeepSeek (CP504 — v2 enrich candidate, 2026-06-26) ---
+  // Key matches the normalized model id (provider strips the `openrouter/`
+  // prefix); without this entry cost_usd would log NULL for DeepSeek v2 enrich.
+  'deepseek/deepseek-v4-flash': {
+    inputPerToken: 0.00000014,
+    outputPerToken: 0.00000028,
+    source: 'simonw/llm-prices (2026-06): $0.14/M in, $0.28/M out',
+  },
   // --- OpenRouter: Qwen family (sourced 2026-04-27) ---
   'qwen/qwen3-30b-a3b': {
     inputPerToken: 0.00000008,
