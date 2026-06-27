@@ -337,6 +337,8 @@ export async function fillMandalaBook(params: {
   // This is the only non-deterministic step; build-book stays pure.
   if (isBookTopicSynthesisEnabled()) {
     let synthOk = 0;
+    let atomsIn = 0; // total atoms fed to compression
+    let atomsCompressed = 0; // §1⑤ intentional drop (removed.compressed) — transparency
     const failedCells: string[] = [];
     for (const cell of cells) {
       const atoms = cell.videos.flatMap((v) =>
@@ -345,26 +347,38 @@ export async function fillMandalaBook(params: {
           .map((a) => ({ vid: v.videoId, ts: a.timestamp_sec as number, text: a.text }))
       );
       if (atoms.length === 0) continue; // empty cell → no synthesis, no topics
-      const r = await synthesizeCellTopics(cell.title, atoms); // retries internally
+      // §1⑤ COMPRESSION: the mandala center goal (mandala.title) is the importance
+      // yardstick. Low-value atoms are intentionally dropped (removed.compressed).
+      const r = await synthesizeCellTopics(cell.title, atoms, mandala.title ?? ''); // retries internally
       if (r.ok) {
         cell.topics = r.topics;
         synthOk += 1;
+        atomsIn += atoms.length;
+        atomsCompressed += r.removed.compressed.length;
       } else {
         // HARD fail after retries. This cell falls to legacy per-video (defect-1
         // clickbait titles) — surfaced LOUDLY here so it is NOT a silent revert.
-        // (8000 tokens makes 942's cells fit; a hard fail signals a too-large
-        // cell that needs chunking — see backlog.)
         failedCells.push(cell.title);
       }
     }
+    const compressionPct = atomsIn ? Math.round((atomsCompressed / atomsIn) * 100) : 0;
     if (failedCells.length > 0) {
       log.error('topic synthesis HARD-FAILED cells → legacy/clickbait fallback (NOT silent)', {
         mandalaId,
         cellsSynthesized: synthOk,
         failedCells,
+        atomsIn,
+        atomsCompressed,
+        compressionPct,
       });
     } else {
-      log.info('topic synthesis', { mandalaId, cellsSynthesized: synthOk, failedCells: 0 });
+      log.info('topic synthesis (compression)', {
+        mandalaId,
+        cellsSynthesized: synthOk,
+        atomsIn,
+        atomsCompressed, // §1⑤ removed.compressed total — nullable→deck/note shorter
+        compressionPct,
+      });
     }
   }
 
