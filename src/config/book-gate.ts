@@ -139,3 +139,17 @@ export function isBookTopicSynthesisEnabled(env: NodeJS.ProcessEnv = process.env
     .toLowerCase();
   return !(v === 'false' || v === '0' || v === 'no'); // unset ⇒ true (default on)
 }
+
+/**
+ * CP504 §1⑤ surface-fix #3 — note-level section budget. The per-cell topic cap
+ * (MAX_TOPICS_CAP=24) bounds each cell but NOT the whole note (8 cells × 24 = 192
+ * possible → TOC longer than the video menu, measured). NOTE_MAX_SECTIONS is the
+ * total budget; fill-book distributes it across non-empty cells by atom share, so
+ * the note's TOC stays "5-min scannable". Default 20 (measured: note sections
+ * ran 30–64 vs ~50 videos → 20 keeps the TOC well under the video menu). Tunable
+ * via env without a code change.
+ */
+export function loadNoteMaxSections(env: NodeJS.ProcessEnv = process.env): number {
+  const parsed = Number(env['NOTE_MAX_SECTIONS']);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 20;
+}

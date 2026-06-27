@@ -18,6 +18,7 @@ import {
   passesBookGate,
   computeMandalaMedian,
   isBookTopicSynthesisEnabled,
+  loadNoteMaxSections,
 } from '@/config/book-gate';
 import { synthesizeCellTopics } from './topic-synthesis';
 import { enqueueEnrichRichSummary } from '@/modules/queue';
@@ -336,20 +337,35 @@ export async function fillMandalaBook(params: {
   // topics undefined → build-book falls back to per-video for THAT cell (safe).
   // This is the only non-deterministic step; build-book stays pure.
   if (isBookTopicSynthesisEnabled()) {
+    // CP504 §1⑤ surface-fix #3 — note-level section budget. Pre-pool each cell's
+    // atoms so NOTE_MAX_SECTIONS can be distributed across cells by atom share
+    // (big cells get more sections; the note total — not just each cell — stays
+    // "5-min scannable", TOC under the video menu).
+    const noteMaxSections = loadNoteMaxSections();
+    const cellAtomLists = cells.map((cell) =>
+      cell.videos.flatMap((v) =>
+        (v.segments?.atoms ?? [])
+          .filter((a) => typeof a.timestamp_sec === 'number')
+          .map((a) => ({ vid: v.videoId, ts: a.timestamp_sec as number, text: a.text }))
+      )
+    );
+    const totalAtoms = cellAtomLists.reduce((sum, a) => sum + a.length, 0);
     let synthOk = 0;
     let atomsIn = 0; // total atoms fed to compression
     let atomsCompressed = 0; // §1⑤ intentional drop (removed.compressed) — transparency
     const failedCells: string[] = [];
-    for (const cell of cells) {
-      const atoms = cell.videos.flatMap((v) =>
-        (v.segments?.atoms ?? [])
-          .filter((a) => typeof a.timestamp_sec === 'number')
-          .map((a) => ({ vid: v.videoId, ts: a.timestamp_sec as number, text: a.text }))
-      );
+    for (let ci = 0; ci < cells.length; ci++) {
+      const cell = cells[ci]!;
+      const atoms = cellAtomLists[ci]!;
       if (atoms.length === 0) continue; // empty cell → no synthesis, no topics
+      // This cell's share of the note budget (≥ MIN handled inside synthesize).
+      const cellCap =
+        totalAtoms > 0
+          ? Math.round((noteMaxSections * atoms.length) / totalAtoms)
+          : noteMaxSections;
       // §1⑤ COMPRESSION: the mandala center goal (mandala.title) is the importance
       // yardstick. Low-value atoms are intentionally dropped (removed.compressed).
-      const r = await synthesizeCellTopics(cell.title, atoms, mandala.title ?? ''); // retries internally
+      const r = await synthesizeCellTopics(cell.title, atoms, mandala.title ?? '', cellCap); // retries internally
       if (r.ok) {
         cell.topics = r.topics;
         synthOk += 1;

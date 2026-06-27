@@ -118,7 +118,8 @@ export function buildTopicSynthesisPrompt(
 export async function synthesizeCellTopics(
   cellTitle: string,
   atoms: TopicAtom[],
-  centerGoal: string
+  centerGoal: string,
+  cellCap?: number
 ): Promise<TopicSynthesisResult> {
   if (atoms.length === 0) return { ok: false, reason: 'no_atoms' };
 
@@ -129,7 +130,7 @@ export async function synthesizeCellTopics(
   // tokens makes 942's largest cell fit so it should not be reached for 942.
   let lastReason = 'unknown';
   for (let attempt = 1; attempt <= SYNTHESIS_ATTEMPTS; attempt++) {
-    const r = await attemptSynthesis(cellTitle, atoms, centerGoal);
+    const r = await attemptSynthesis(cellTitle, atoms, centerGoal, cellCap);
     if (r.ok) {
       if (attempt > 1) log.info('topic-synthesis recovered on retry', { cellTitle, attempt });
       return r;
@@ -156,9 +157,17 @@ export async function synthesizeCellTopics(
 async function attemptSynthesis(
   cellTitle: string,
   atoms: TopicAtom[],
-  centerGoal: string
+  centerGoal: string,
+  cellCap?: number
 ): Promise<TopicSynthesisResult> {
-  const maxTopics = topicCapFor(atoms.length);
+  // CP504 §1⑤ surface-fix #3 — note-level cap. cellCap = this cell's share of
+  // NOTE_MAX_SECTIONS (distributed by atom count in fill-book), tightening the
+  // per-cell topicCapFor so the WHOLE note's section count — not just each cell —
+  // stays "5-min scannable". Unset ⇒ legacy per-cell cap only.
+  const maxTopics =
+    cellCap != null
+      ? Math.max(MIN_TOPICS_PER_CELL, Math.min(cellCap, topicCapFor(atoms.length)))
+      : topicCapFor(atoms.length);
   const prompt = buildTopicSynthesisPrompt(cellTitle, atoms, maxTopics, centerGoal);
 
   let raw: string;

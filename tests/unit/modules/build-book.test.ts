@@ -76,18 +76,20 @@ const baseInput = (): BuildBookInput => ({
 });
 
 describe('build-book assembler', () => {
-  it('produces a chapter per cell and passes the v2 validator', () => {
+  it('produces a chapter per NON-EMPTY cell and passes the v2 validator', () => {
     const { book } = buildBookJson(baseInput());
-    expect(book.chapters).toHaveLength(2);
+    // CP504 §1⑤ surface-fix #2 — empty cells (Cell B) are dropped from the book.
+    expect(book.chapters).toHaveLength(1);
+    expect(book.chapters[0]!.title).toBe('Cell A');
     expect(() => parseBookJson(book)).not.toThrow();
   });
 
-  it('keeps an empty chapter for a cell with no usable videos (honest skip)', () => {
+  it('drops a chapter for a cell with no usable videos (CP504 surface-fix #2)', () => {
     const { book } = buildBookJson(baseInput());
-    const emptyChapter = book.chapters[1]!;
-    expect(emptyChapter.ch).toBe(1);
-    expect(emptyChapter.title).toBe('Cell B (empty)');
-    expect(emptyChapter.sections).toEqual([]);
+    // Render-filter only: the empty cell is absent from the book_json, but every
+    // remaining chapter has sections (no empty TOC headings).
+    expect(book.chapters.find((c) => c.title === 'Cell B (empty)')).toBeUndefined();
+    expect(book.chapters.every((c) => c.sections.length > 0)).toBe(true);
   });
 
   it('skips atoms without timestamp from the book but counts them in source_atoms', () => {
