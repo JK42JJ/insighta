@@ -206,11 +206,22 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
           onDragStart={(e) => e.preventDefault()}
         >
           <img
-            src={`https://img.youtube.com/vi/${attrs.vid}/hqdefault.jpg`}
+            src={`https://img.youtube.com/vi/${attrs.vid}/maxresdefault.jpg`}
             alt=""
             className="video-block-thumb"
             draggable={false}
-            onError={() => setThumbBroken(true)}
+            onError={(e) => {
+              // CP504 — prefer maxresdefault (1280×720). It 404s for videos that
+              // never produced a maxres thumb, so fall back to hqdefault (480×360,
+              // always exists); only mark broken if even that fails.
+              const img = e.currentTarget;
+              if (!img.dataset.fellBack) {
+                img.dataset.fellBack = '1';
+                img.src = `https://img.youtube.com/vi/${attrs.vid}/hqdefault.jpg`;
+              } else {
+                setThumbBroken(true);
+              }
+            }}
           />
           <span className="video-block-overlay" />
           <span
