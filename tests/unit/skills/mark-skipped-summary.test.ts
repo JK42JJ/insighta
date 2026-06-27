@@ -20,10 +20,20 @@ describe('markSkippedSummary', () => {
     upsert.mockResolvedValue({});
   });
 
-  it('does NOT clobber a row that already passed', async () => {
-    findUnique.mockResolvedValue({ quality_flag: 'pass' });
+  it('does NOT clobber a real V2 pass row', async () => {
+    findUnique.mockResolvedValue({ quality_flag: 'pass', template_version: 'v2' });
     await markSkippedSummary('v1', 'no_transcript', 'u1');
     expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('CP504 — overwrites a v1/pass row with skipped (it cannot upgrade to v2)', async () => {
+    // A v1 'pass' is an OLD summary; if v2 generation can never succeed
+    // (NO_TRANSCRIPT), the video must be marked terminal so fill-book stops
+    // re-enqueuing it and the spinner ends.
+    findUnique.mockResolvedValue({ quality_flag: 'pass', template_version: 'v1' });
+    await markSkippedSummary('v1', 'no_transcript', 'u1');
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0][0].update.quality_flag).toBe('skipped');
   });
 
   it('upserts a skipped row (quality_flag=skipped + core.skip_reason) when absent', async () => {

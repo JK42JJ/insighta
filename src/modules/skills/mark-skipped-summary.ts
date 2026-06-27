@@ -36,9 +36,15 @@ export async function markSkippedSummary(
   try {
     const existing = await prisma.video_rich_summaries.findUnique({
       where: { video_id: videoId },
-      select: { quality_flag: true },
+      select: { quality_flag: true, template_version: true },
     });
-    if (existing?.quality_flag === 'pass') return; // never overwrite a good row
+    // CP504 — protect a real V2 pass only. A v1/pass row is an OLD summary that
+    // could not upgrade to v2 (e.g. NO_TRANSCRIPT); leaving it 'pass' means
+    // fill-book never sees the video as terminally skipped, so it re-enqueues it
+    // every book build → the enrich job re-throws NO_TRANSCRIPT forever (measured:
+    // one video failed 12×) and the FE spinner never ends. Overwrite v1/pass with
+    // the terminal skipped marker so re-enqueue + the v2-pending count both stop.
+    if (existing?.quality_flag === 'pass' && existing?.template_version === 'v2') return;
     const skipCore = { skip_reason: reason } as unknown as Prisma.InputJsonValue;
     await prisma.video_rich_summaries.upsert({
       where: { video_id: videoId },
