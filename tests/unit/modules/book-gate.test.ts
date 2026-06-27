@@ -10,6 +10,7 @@ import {
   computeMandalaMedian,
   loadBookGateConfig,
   isBookTopicSynthesisEnabled,
+  loadNoteMaxSections,
   type BookGateConfig,
   type BookGateContext,
 } from '../../../src/config/book-gate';
@@ -131,5 +132,20 @@ describe('isBookTopicSynthesisEnabled — default ON', () => {
   });
   it('true/anything-else ⇒ enabled', () => {
     expect(isBookTopicSynthesisEnabled({ BOOK_TOPIC_SYNTHESIS_ENABLED: 'true' })).toBe(true);
+  });
+});
+
+describe('loadNoteMaxSections — CP504 §1⑤ surface-fix #3', () => {
+  it('defaults to 20 when unset', () => {
+    expect(loadNoteMaxSections({})).toBe(20);
+  });
+  it('reads a positive env override (floored)', () => {
+    expect(loadNoteMaxSections({ NOTE_MAX_SECTIONS: '12' })).toBe(12);
+    expect(loadNoteMaxSections({ NOTE_MAX_SECTIONS: '25.9' })).toBe(25);
+  });
+  it('falls back to 20 on invalid / non-positive', () => {
+    expect(loadNoteMaxSections({ NOTE_MAX_SECTIONS: 'abc' })).toBe(20);
+    expect(loadNoteMaxSections({ NOTE_MAX_SECTIONS: '0' })).toBe(20);
+    expect(loadNoteMaxSections({ NOTE_MAX_SECTIONS: '-5' })).toBe(20);
   });
 });

@@ -72,6 +72,54 @@ describe('buildBookJson — topic mode (§1⑤)', () => {
     expect(secs[0]!.qa.length).toBe(2); // vidA + vidB qa
   });
 
+  it('CP504 surface-fix #1 — dedups provenance atoms + qa by text', () => {
+    const dupVid: CellVideoV2 = {
+      videoId: 'vidD',
+      title: 'VIDEO TITLE vidD',
+      analysis: { core_argument: 'core' } as never,
+      segments: {
+        atoms: [
+          { timestamp_sec: 1, text: '같은 문장' },
+          { timestamp_sec: 2, text: '같은 문장' }, // v2 near-dup
+          { timestamp_sec: 3, text: '같은 문장' }, // v2 near-dup
+          { timestamp_sec: 4, text: '다른 문장' },
+        ],
+        sections: [],
+      } as never,
+      lora: {
+        qa_pairs: [
+          { q: 'q', a: 'a' },
+          { q: 'q', a: 'a' }, // dup qa
+        ],
+      } as never,
+    };
+    const cell: CellInput = {
+      cellIndex: 0,
+      title: 'c',
+      videos: [dupVid],
+      topics: [
+        {
+          topic_title: 't',
+          summary: 's',
+          atom_refs: [
+            { vid: 'vidD', ts: 1 },
+            { vid: 'vidD', ts: 2 },
+            { vid: 'vidD', ts: 3 },
+            { vid: 'vidD', ts: 4 },
+          ],
+        },
+      ],
+    };
+    const sec = sectionsOf(buildBookJson(base([cell])).book)[0]!;
+    // 3 same-text + 1 distinct → 2 atoms; first {vid,ts} (ts=1) wins (provenance kept)
+    expect(sec.atoms.map((a) => (a as unknown as { text: string }).text)).toEqual([
+      '같은 문장',
+      '다른 문장',
+    ]);
+    expect(sec.atoms[0]!.ts).toBe(1);
+    expect(sec.qa).toHaveLength(1); // identical qa pair collapsed
+  });
+
   it('legacy mode (no topics): one section per video, title=video.title (byte-identical)', () => {
     const cell: CellInput = { cellIndex: 0, title: 'c', videos: [vid('vidA', [10])] };
     const { book } = buildBookJson(base([cell]));
