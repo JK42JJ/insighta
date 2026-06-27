@@ -18,24 +18,23 @@ import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'mandala-book/topic-synthesis' });
 
-const HAIKU_MODEL = 'anthropic/claude-haiku-4.5';
-// Large cells need a long completion to list every atom_idx. 4000 still
-// truncated ch0 (434 atoms, completion hit the 4000 ceiling exactly → invalid
-// JSON → synthesis failed → cell fell to legacy per-video = clickbait titles
-// resurfaced). 8000 holds 942's largest cell (~434). >~600-atom cells need
-// chunking (backlog). With the truncation guard below, a still-truncated cell
-// is RETRIED then surfaced loudly — never a silent legacy/clickbait revert.
+// §1⑤ COMPRESSION model = Sonnet (CP504: 6-model + dual-blind-judge verified;
+// Sonnet preserves provenance on big notes — Haiku over-drops [17% vs 52%]).
+// This is no longer "clustering" (drop-0); it is COMPRESSION (importance-select
+// + abstract enumeration-clusters; low-value atoms are intentionally dropped).
+const SONNET_MODEL = 'anthropic/claude-sonnet-4-6';
+// Output is compressed (far fewer atom_idx listed than input) → 8000 holds even
+// the largest cell comfortably. Retry guard below covers a transient truncation.
 const MAX_TOKENS = 8000;
-// Synthesis is retried once on a parse/provider failure (transient or a one-off
-// truncation) before the cell is reported as a hard failure.
+// Retried once on a parse/provider failure (transient or one-off truncation).
 const SYNTHESIS_ATTEMPTS = 2;
 const TEMPERATURE = 0.2;
-// Topics scale with atom count (~12 atoms/topic) so a big cell isn't forced into
-// 6 over-stuffed topics; clamped so it neither collapses (min 2) nor fragments
-// (max 15). Replaces the old fixed 6.
+// Section count target: "5-min core grasp" ~note-size-proportional (CP504 §4.5.0:
+// 168 atoms→~14, 317→~20). ~1 section per ~12 input atoms, clamped [2, 24] so a
+// huge cell still compresses to a readable book chapter, not a wall.
 const ATOMS_PER_TOPIC = 12;
 const MIN_TOPICS_PER_CELL = 2;
-const MAX_TOPICS_CAP = 15;
+const MAX_TOPICS_CAP = 24;
 function topicCapFor(atomCount: number): number {
   return Math.min(
     MAX_TOPICS_CAP,
@@ -57,40 +56,57 @@ export interface TopicSection {
   atom_refs: Array<{ vid: string; ts: number }>; // provenance — resolved from LLM indices
 }
 
+/** Atoms intentionally dropped by compression (transparency — CP504 §4.5.0). */
+export interface RemovedAtoms {
+  compressed: number[]; // low-value / out-of-scope atoms the model dropped
+  dedup: number[]; // cross-cell dedup — populated in a later phase (4.5.1)
+  safety: number[]; // structural only (harmful atoms measured 0% → no pre-pass)
+}
+
 export type TopicSynthesisResult =
-  | { ok: true; topics: TopicSection[]; droppedAtomIdx: number[] }
+  | { ok: true; topics: TopicSection[]; removed: RemovedAtoms }
   | { ok: false; reason: string };
 
-interface LlmTopic {
-  topic_title?: unknown;
-  summary?: unknown;
+interface LlmSection {
+  title?: unknown;
+  content?: unknown;
   atom_idx?: unknown;
 }
 
-/** Build the clustering prompt. Atoms are indexed so the model references them. */
+/**
+ * Build the COMPRESSION prompt (CP504 §4.5.0). Atoms are indexed so the model
+ * references them by number. Unlike the old clustering prompt, this one is told
+ * to COMPRESS — keep high-value atoms, abstract enumeration-clusters into
+ * pattern+example, and intentionally DROP low-value atoms (importance judged
+ * against the mandala's center goal). No drop-0 fallback downstream.
+ */
 export function buildTopicSynthesisPrompt(
   cellTitle: string,
   atoms: TopicAtom[],
-  maxTopics: number
+  maxTopics: number,
+  centerGoal: string
 ): string {
   const indexed = atoms.map((a, i) => `[${i}] ${a.text}`).join('\n');
   return [
-    `당신은 한 주제군의 학습 조각(atom)들을 "내용 토픽"으로 재구성하는 편집자다.`,
-    `주제군(셀): "${cellTitle}"`,
+    `당신은 학습 노트를 "나열"에서 "압축"으로 바꾸는 편집자다. 목표는 독자가 5분 안에 핵심을 파악하는 책의 한 챕터다.`,
+    `이 책 전체의 목표(센터골): "${centerGoal}"`,
+    `이 챕터(주제군): "${cellTitle}"`,
     ``,
-    `아래는 이 주제군에 속한 여러 영상에서 추출한 핵심 조각들이다. 각 줄 앞 [n]은 조각 번호다.`,
+    `아래는 여러 영상에서 추출한 학습 조각(atom)들이다. 각 줄 앞 [n]은 조각 번호다. 총 ${atoms.length}개 — 통째로 나열하면 독자가 안 본다.`,
     indexed,
     ``,
-    `작업:`,
-    `1. 조각들을 "내용 흐름"으로 묶어 자연스러운 토픽으로 재구성하라. 영상 경계는 무시한다 — 같은 내용이면 다른 영상의 조각이라도 한 토픽으로 묶는다.`,
-    `2. 토픽 제목(topic_title)은 반드시 "내용을 설명하는 이름"이어야 한다. 영상 제목·채널명·클릭베이트 금지. (예: O "REST API 라우터 구조", X "이 영상 하나면 끝!")`,
-    `3. 토픽 수는 내용에 맞게 자연스럽게 정하되 최대 ${maxTopics}개를 넘지 않는다.`,
-    `4. summary는 토픽의 1-2문장 요약. 조각에 없는 사실을 지어내지 마라(라벨링·요약만, 창작 금지).`,
-    `5. 각 토픽은 atom_idx 배열로 자신이 묶은 조각 번호들을 가리킨다(출처 보존). 한 조각은 한 토픽에만.`,
-    `6. 명백한 중복·완전 무관 조각만 제외하고, 나머지 조각은 반드시 어느 토픽엔가 배치하라. 임의로 빠뜨리지 마라 — 누락된 조각은 책 내용 손실이다(절삭 금지).`,
+    `압축 작업 (나열 금지):`,
+    `1. 중요도 선별: 센터골에 핵심인 조각만 남긴다. 덜 중요하거나 곁가지인 조각은 의도적으로 버린다(drop). 모든 조각을 담으려 하지 마라 — 그게 나열이다.`,
+    `2. 나열형 군집 추상화: 같은 패턴이 여러 번 반복되면(예: 회화 표현 100개) 통째 나열하지 말고 "패턴 + 대표 예시 몇 개"로 묶는다. content에 패턴을 쓰고 atom_idx로 근거 조각을 가리킨다.`,
+    `3. 고가치 개별 조각은 추상화하지 말고 그대로 살린다(디테일이 가치인 경우). top 중요도 순.`,
+    `4. 섹션 제목(title)은 내용을 설명하는 이름. 영상제목·채널명·클릭베이트 금지.`,
+    `5. content는 그 섹션의 핵심을 담은 압축 서술. 조각에 없는 사실을 지어내지 마라(창작 금지 — content의 모든 주장은 atom_idx가 가리키는 조각에 근거해야 한다).`,
+    `6. atom_idx = 그 섹션이 근거로 삼은 조각 번호들(출처 보존). 버린 조각은 어느 섹션에도 넣지 않는다(그게 압축이다).`,
+    `7. 섹션 수는 내용에 맞게, 최대 ${maxTopics}개. 압축이므로 입력 조각 수보다 훨씬 적어야 정상이다.`,
     ``,
+    `★ content는 반드시 한 줄(개행·줄바꿈 문자 절대 금지 — JSON 파싱 보호).`,
     `JSON만 출력(코드펜스 금지):`,
-    `{"topics":[{"topic_title":"...","summary":"...","atom_idx":[0,3,5]}]}`,
+    `{"sections":[{"title":"...","content":"...","atom_idx":[0,3,5]}]}`,
   ].join('\n');
 }
 
@@ -101,7 +117,8 @@ export function buildTopicSynthesisPrompt(
  */
 export async function synthesizeCellTopics(
   cellTitle: string,
-  atoms: TopicAtom[]
+  atoms: TopicAtom[],
+  centerGoal: string
 ): Promise<TopicSynthesisResult> {
   if (atoms.length === 0) return { ok: false, reason: 'no_atoms' };
 
@@ -112,7 +129,7 @@ export async function synthesizeCellTopics(
   // tokens makes 942's largest cell fit so it should not be reached for 942.
   let lastReason = 'unknown';
   for (let attempt = 1; attempt <= SYNTHESIS_ATTEMPTS; attempt++) {
-    const r = await attemptSynthesis(cellTitle, atoms);
+    const r = await attemptSynthesis(cellTitle, atoms, centerGoal);
     if (r.ok) {
       if (attempt > 1) log.info('topic-synthesis recovered on retry', { cellTitle, attempt });
       return r;
@@ -134,17 +151,19 @@ export async function synthesizeCellTopics(
   return { ok: false, reason: `hard_fail: ${lastReason}` };
 }
 
-/** One synthesis attempt: generate → parse → resolve + fallback. Pure-ish (LLM call). */
+/** One COMPRESSION attempt: generate → parse → resolve. NO drop-0 fallback —
+ *  atoms the model omits are the intentional compression drop (removed.compressed). */
 async function attemptSynthesis(
   cellTitle: string,
-  atoms: TopicAtom[]
+  atoms: TopicAtom[],
+  centerGoal: string
 ): Promise<TopicSynthesisResult> {
   const maxTopics = topicCapFor(atoms.length);
-  const prompt = buildTopicSynthesisPrompt(cellTitle, atoms, maxTopics);
+  const prompt = buildTopicSynthesisPrompt(cellTitle, atoms, maxTopics, centerGoal);
 
   let raw: string;
   try {
-    raw = await new OpenRouterGenerationProvider(HAIKU_MODEL).generate(prompt, {
+    raw = await new OpenRouterGenerationProvider(SONNET_MODEL).generate(prompt, {
       format: 'json',
       temperature: TEMPERATURE,
       maxTokens: MAX_TOKENS,
@@ -162,84 +181,52 @@ async function attemptSynthesis(
     .replace(/\n?\s*```\s*$/i, '')
     .trim();
 
-  let json: { topics?: unknown };
+  let json: { sections?: unknown };
   try {
-    json = JSON.parse(stripped) as { topics?: unknown };
+    json = JSON.parse(stripped) as { sections?: unknown };
   } catch (err) {
     return { ok: false, reason: `json_parse: ${err instanceof Error ? err.message : String(err)}` };
   }
-  if (!Array.isArray(json.topics)) return { ok: false, reason: 'no_topics_array' };
+  if (!Array.isArray(json.sections)) return { ok: false, reason: 'no_sections_array' };
 
   // Resolve LLM atom indices → real {vid, ts}. Drop out-of-range / duplicate
-  // indices (no fabrication). Track which atoms the model placed somewhere.
+  // indices (no fabrication). Atoms NOT referenced by any section are the
+  // COMPRESSION drop (intentional) — recorded in removed.compressed, never reassigned.
   const used = new Set<number>();
   const topics: TopicSection[] = [];
-  for (const t of (json.topics as LlmTopic[]).slice(0, maxTopics)) {
-    const title = typeof t.topic_title === 'string' ? t.topic_title.trim() : '';
+  for (const s of (json.sections as LlmSection[]).slice(0, maxTopics)) {
+    const title = typeof s.title === 'string' ? s.title.trim() : '';
     if (!title) continue;
-    const idxs = Array.isArray(t.atom_idx) ? t.atom_idx : [];
+    const idxs = Array.isArray(s.atom_idx) ? s.atom_idx : [];
     const refs: Array<{ vid: string; ts: number }> = [];
-    for (const raw of idxs) {
-      const i = typeof raw === 'number' ? raw : Number(raw);
+    for (const rawIdx of idxs) {
+      const i = typeof rawIdx === 'number' ? rawIdx : Number(rawIdx);
       if (!Number.isInteger(i) || i < 0 || i >= atoms.length || used.has(i)) continue;
       used.add(i);
       refs.push({ vid: atoms[i]!.vid, ts: atoms[i]!.ts });
     }
-    if (refs.length === 0) continue; // a topic with no real atoms is dropped
-    topics.push({
-      topic_title: title,
-      summary: typeof t.summary === 'string' ? t.summary.trim() : '',
-      atom_refs: refs,
-    });
+    if (refs.length === 0) continue; // a section citing no real atoms is dropped
+    // content is single-line per prompt; defensively collapse any stray newline
+    // (the known Sonnet/Haiku unescaped-newline → JSON.parse trip; CP504 §11).
+    const content =
+      typeof s.content === 'string' ? s.content.replace(/\s*\n+\s*/g, ' ').trim() : '';
+    topics.push({ topic_title: title, summary: content, atom_refs: refs });
   }
 
-  if (topics.length === 0) return { ok: false, reason: 'no_valid_topics' };
+  if (topics.length === 0) return { ok: false, reason: 'no_valid_sections' };
 
-  // FALLBACK (drop 0 보장): any atom the LLM left unplaced is assigned to the
-  // NEAREST topic by proximity — same video first, then closest timestamp among
-  // that topic's atoms (not "the last topic"). Content손실 0 without breaking
-  // topic cohesion. The fallback count is logged so silent over-stuffing shows.
-  const fallbackAssigned = atoms
-    .map((_, i) => i)
-    .filter((i) => !used.has(i))
-    .map((i) => {
-      const atom = atoms[i]!;
-      const topic = nearestTopic(atom, topics);
-      topic.atom_refs.push({ vid: atom.vid, ts: atom.ts });
-      used.add(i);
-      return i;
-    });
+  // COMPRESSION drop: atoms no section referenced are dropped ON PURPOSE
+  // (the point of §1⑤). Logged transparently; NOT reassigned to a nearest topic.
+  const compressed = atoms.map((_, i) => i).filter((i) => !used.has(i));
+  const removed: RemovedAtoms = { compressed, dedup: [], safety: [] };
 
-  log.info('topic-synthesis done', {
+  log.info('topic-synthesis (compression) done', {
     cellTitle,
     atomsIn: atoms.length,
-    topics: topics.length,
-    atomsPlacedByLlm: used.size - fallbackAssigned.length,
-    atomsByFallback: fallbackAssigned.length,
-    atomsDropped: atoms.length - used.size, // 0 by construction (fallback covers all)
+    sections: topics.length,
+    atomsKept: used.size,
+    atomsCompressed: compressed.length, // intentional drop
+    compressionPct: atoms.length ? Math.round((compressed.length / atoms.length) * 100) : 0,
   });
-  return { ok: true, topics, droppedAtomIdx: [] };
-}
-
-/**
- * Nearest topic for an unplaced atom: prefer a topic that already holds an atom
- * from the SAME video (closest ts wins); fall back to the globally closest ts.
- * A large same-video penalty keeps cross-video matches as the last resort, so an
- * orphan lands with related content, never just appended to the last topic.
- */
-function nearestTopic(atom: TopicAtom, topics: TopicSection[]): TopicSection {
-  const SAME_VID_BONUS = 1_000_000;
-  let best = topics[0]!;
-  let bestScore = Infinity;
-  for (const t of topics) {
-    for (const ref of t.atom_refs) {
-      const vidPenalty = ref.vid === atom.vid ? 0 : SAME_VID_BONUS;
-      const score = vidPenalty + Math.abs(ref.ts - atom.ts);
-      if (score < bestScore) {
-        bestScore = score;
-        best = t;
-      }
-    }
-  }
-  return best;
+  return { ok: true, topics, removed };
 }
