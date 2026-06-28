@@ -366,6 +366,12 @@ export function SidebarLearningSection({
           })()}
         {subGoals.map((goal, idx) => {
           const bookChapter = bookChaptersByIdx.get(idx);
+          // CP504 §3.1 — note mode TOC must mirror book content. Empty cells
+          // (no book chapter / 0 sections) leaked a bare heading into the
+          // sidebar even though PR #989 filtered them from book_json. Player
+          // mode keeps every heading so collected-video cards still render.
+          const hasBookSections = (bookChapter?.sections?.length ?? 0) > 0;
+          if (centerViewMode === 'note' && !hasBookSections) return null;
           const isExpanded = isChapterExpanded(idx);
           // Row text = short cell label; tooltip = long-form sub-goal.
           // When the label is explicitly set, the tooltip always surfaces
