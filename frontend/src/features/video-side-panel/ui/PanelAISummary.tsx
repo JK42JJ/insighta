@@ -14,7 +14,6 @@
  */
 import { useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useMandalaQuery } from '@/features/mandala';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { VideoSummary } from '@/entities/card/model/types';
@@ -49,15 +48,7 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
     if (!youtubeId) return;
     void queryClient.invalidateQueries({ queryKey: queryKeys.video.richSummary(youtubeId) });
   }, [youtubeId, queryClient]);
-  // CP499+ v2 translations — display in the MANDALA's language; an en-source
-  // v2 on a ko mandala is served (or on-demand translated) as Korean.
-  const { mandalaMeta } = useMandalaQuery(mandalaId ?? null);
-  const displayLang = mandalaMeta?.language === 'en' ? ('en' as const) : ('ko' as const);
-  const {
-    richSummary,
-    isLoading: isRichLoading,
-    isQualityWarning,
-  } = useRichSummary(youtubeId, mandalaMeta ? displayLang : undefined);
+  const { richSummary, isLoading: isRichLoading, isQualityWarning } = useRichSummary(youtubeId);
 
   const short = videoSummary?.summary_ko || videoSummary?.summary_en || null;
   const tags = videoSummary?.tags ?? [];
@@ -67,6 +58,14 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   const hasLegacyRich = !hasNewV2 && Boolean(richSummary?.structured);
   const hasRich = hasNewV2 || hasLegacyRich;
   const hasShort = Boolean(short) || tags.length > 0;
+
+  // CP500+ — `truncation` rides in core for long-video summaries generated from
+  // the first N minutes (renders a "first N min of M min" badge).
+  const truncation = richSummary?.core?.truncation;
+  // CP500+ PR-B — terminal "skipped" row (no transcript / no metadata) ⇒ show an
+  // "unavailable" message, not an eternal spinner. isQualityWarning(≠'pass')
+  // already suppresses the auto-enrich re-trigger above, ending the churn.
+  const isSkipped = richSummary?.qualityFlag === 'skipped';
 
   // CP475+ — background enrich + SSE wiring. Fire `/enrich-bg` once per
   // (videoId, mandalaId) when the segments block is missing; subscribe
@@ -102,11 +101,16 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
     })();
   }, [youtubeId, mandalaId, isRichLoading, hasSegments, isQualityWarning, openStream]);
 
-  // When the SSE stream terminates with `scored`, refetch the v2 row so
-  // the segments block lands without a manual reload.
+  // When the SSE stream reaches a TERMINAL phase, refetch the v2 row so the
+  // result lands without a manual reload. CP500+ PR-B-followup — `failed` /
+  // `timeout` were missing: a no_transcript job throws NO_TRANSCRIPT → SSE
+  // `failed`, and the PR-B skipped row written server-side was never fetched,
+  // so the panel stayed spinning until a manual refresh. Refetching here also
+  // makes isQualityWarning(≠'pass') true → the auto-enrich re-trigger guard
+  // engages → churn stops.
   useEffect(() => {
     if (!youtubeId) return;
-    if (streamPhase === 'scored') {
+    if (streamPhase === 'scored' || streamPhase === 'failed' || streamPhase === 'timeout') {
       void queryClient.invalidateQueries({ queryKey: queryKeys.video.richSummary(youtubeId) });
     }
   }, [streamPhase, youtubeId, queryClient]);
@@ -138,6 +142,13 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   // CP488+ Phase 4 — quality-warning rows now fall through to the normal
   // render path (they have content, just at lower quality) + display a
   // subtle "auto-improving" indicator below. No more hide.
+  // CP500+ PR-B — terminal "unavailable" (skipped) takes priority: a skipped
+  // row carries core={skip_reason} which would otherwise trip hasNewV2 and
+  // render a garbage block.
+  if (isSkipped && !isRichLoading) {
+    return <SummaryUnavailableMessage reason={richSummary?.core?.skip_reason} />;
+  }
+
   if (!hasNewV2 && !hasLegacyRich && !hasShort && !isRichLoading) {
     if (isEnrichInProgress) {
       return <EnrichInProgressMessage label={t('learning.aiSummaryGenerating')} />;
@@ -152,6 +163,9 @@ export function PanelAISummary({ videoSummary, videoUrl }: PanelAISummaryProps) 
   return (
     <div className="space-y-5">
       {isQualityWarning && <AIQualityImprovingBadge />}
+      {truncation?.truncated && (
+        <TruncatedBadge coveredSec={truncation.coveredSec} fullSec={truncation.fullSec} />
+      )}
       {hasNewV2 && richSummary && (
         <RichSummaryV2NewBlock
           core={richSummary.core ?? null}
@@ -729,6 +743,29 @@ function EnrichInProgressMessage({ label }: { label: string }) {
  * users keep using whatever the current row contains; better content
  * lands on the next view once Phase 3 worker resolves the queue row.
  */
+/**
+ * CP500+ PR-B — terminal "summary unavailable" state for a
+ * `quality_flag='skipped'` row (genuine cannot-generate: no transcript / no
+ * metadata). Replaces the eternal "generating…" spinner; no re-enqueue (caller
+ * already guards on quality_flag ≠ 'pass').
+ */
+function SummaryUnavailableMessage({ reason }: { reason?: string }) {
+  const { t } = useTranslation();
+  const reasonText =
+    reason === 'no_transcript'
+      ? t('learning.aiSummaryUnavailableNoTranscript')
+      : reason === 'no_youtube_metadata'
+        ? t('learning.aiSummaryUnavailableNoMetadata')
+        : t('learning.aiSummaryUnavailableGeneric');
+  return (
+    <p className="py-8 text-center text-[13px] text-[#4e4f5c]" role="status" aria-live="polite">
+      {t('learning.aiSummaryUnavailable')}
+      <br />
+      <span className="text-[12px] text-[#3e3f4a]">{reasonText}</span>
+    </p>
+  );
+}
+
 function AIQualityImprovingBadge() {
   const { t } = useTranslation();
   return (
@@ -742,6 +779,28 @@ function AIQualityImprovingBadge() {
         ●
       </span>
       <span>{t('learning.aiQualityImproving')}</span>
+    </div>
+  );
+}
+
+/**
+ * CP500+ — badge shown on a v2 summary generated from only the first N minutes
+ * of a video that exceeds the duration cap. Tells the user the summary covers a
+ * partial window so a "the conclusion is…" line isn't mistaken for the whole video.
+ */
+function TruncatedBadge({ coveredSec, fullSec }: { coveredSec: number; fullSec: number }) {
+  const { t } = useTranslation();
+  const coveredMin = Math.round(coveredSec / 60);
+  const fullMin = Math.round(fullSec / 60);
+  return (
+    <div
+      role="status"
+      className="flex items-center gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-[12px] text-sky-300"
+    >
+      <span aria-hidden className="text-sky-400">
+        ⚠
+      </span>
+      <span>{t('learning.aiSummaryTruncated', { covered: coveredMin, full: fullMin })}</span>
     </div>
   );
 }

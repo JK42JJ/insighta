@@ -39,18 +39,12 @@ export interface UseRichSummaryResult {
   isQualityWarning: boolean;
 }
 
-export function useRichSummary(
-  videoId: string | null | undefined,
-  // CP499+ v2 translations — display follows the MANDALA language. When the
-  // summary's source language differs, the BE serves (or on-demand creates)
-  // the translation. Absent = original behavior (no branch).
-  lang?: 'ko' | 'en'
-): UseRichSummaryResult {
+export function useRichSummary(videoId: string | null | undefined): UseRichSummaryResult {
   const { data, isLoading, isError } = useQuery({
     queryKey: videoId
-      ? [...queryKeys.video.richSummary(videoId), lang ?? 'src']
+      ? queryKeys.video.richSummary(videoId)
       : ['video', 'rich-summary', 'disabled'],
-    queryFn: () => apiClient.getVideoRichSummary(videoId as string, lang ? { lang } : undefined),
+    queryFn: () => apiClient.getVideoRichSummary(videoId as string),
     enabled: Boolean(videoId),
     staleTime: RICH_SUMMARY_STALE_MS,
     refetchOnMount: 'always',

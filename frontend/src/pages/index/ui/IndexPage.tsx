@@ -767,9 +767,55 @@ function AuthenticatedApp() {
     return () => clearInterval(timer);
   }, [actionsPending, effectiveMandalaId, queryClient]);
 
+  // CP499+ pool-serve — deficit cells being filled asynchronously (UX 원칙 2):
+  // pulse those cells (W1b pattern) and bounded-poll detail + cards until the
+  // fill run reports or the bound expires — a dead worker degrades to plain
+  // empty cells, never an infinite spinner.
+  const FILL_POLL_INTERVAL_MS = 5000;
+  const FILL_POLL_MAX_MS = 90_000;
+  const fillPendingCells = mandalaMeta?.fillPendingCells ?? [];
+  const fillPending = fillPendingCells.length > 0;
+  const fillPollStartedAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (!fillPending || !effectiveMandalaId) {
+      fillPollStartedAt.current = null;
+      return;
+    }
+    fillPollStartedAt.current = fillPollStartedAt.current ?? Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - (fillPollStartedAt.current ?? 0) > FILL_POLL_MAX_MS) {
+        clearInterval(timer);
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.mandala.detail(effectiveMandalaId) });
+      // pool-serve inserts user_video_states rows — that is the cards source to refresh.
+      queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.localCards.all });
+    }, FILL_POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [fillPending, effectiveMandalaId, queryClient]);
+
+  // CP500+ C-fix (completed-grace) — a FAST fill run (measured 17s) can finish
+  // BEFORE this page ever fetches mandalaMeta: fillPendingCells is then already
+  // empty, the poll above never starts, and the card cache stays stale until a
+  // manual refresh. When the meta lands inside the 60s completed-grace window,
+  // invalidate the card sources ONCE (ref-guarded per mandala — the refetched
+  // meta may still carry the grace cells, which must not loop).
+  const fillCompletedCells = mandalaMeta?.fillCompletedCells ?? [];
+  const fillGraceInvalidatedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!effectiveMandalaId || fillPending) return; // poll path already refreshes
+    if (fillCompletedCells.length === 0) return;
+    if (fillGraceInvalidatedFor.current === effectiveMandalaId) return;
+    fillGraceInvalidatedFor.current = effectiveMandalaId;
+    queryClient.invalidateQueries({ queryKey: queryKeys.youtube.allVideoStates() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.localCards.all });
+  }, [fillCompletedCells.length, fillPending, effectiveMandalaId, queryClient]);
+
   // Shared MandalaGrid element
   const mandalaGridElement = () => (
     <MandalaGrid
+      fillPendingCells={fillPendingCells}
       mandalaId={effectiveMandalaId}
       level={navigation.currentLevel}
       actionsPending={actionsPending}

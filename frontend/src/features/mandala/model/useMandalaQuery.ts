@@ -29,6 +29,10 @@ export interface MandalaMeta {
   /** Server-truth card count (user_local_cards ∪ user_video_states dedup'd).
    *  Used by the grid as a layout commitment so unloaded cells render skeletons. */
   cardCount: number;
+  /** CP499+ pool-serve — cells with an async deficit-fill in flight. */
+  fillPendingCells: number[];
+  /** CP500+ — cells whose fill run completed <60s ago (grace: invalidate once). */
+  fillCompletedCells: number[];
 }
 
 interface MandalaQueryShape {
@@ -37,6 +41,8 @@ interface MandalaQueryShape {
 }
 
 const EMPTY_META: MandalaMeta = {
+  fillPendingCells: [],
+  fillCompletedCells: [],
   focusTags: [],
   targetLevel: 'standard',
   language: 'ko',
@@ -67,6 +73,8 @@ export function useMandalaQuery(mandalaId?: string | null) {
             language: apiResponse.mandala.language ?? 'ko',
             title: apiResponse.mandala.title ?? '',
             cardCount: apiResponse.mandala.cardCount ?? 0,
+            fillPendingCells: apiResponse.mandala.fillPendingCells ?? [],
+            fillCompletedCells: apiResponse.mandala.fillCompletedCells ?? [],
           },
         };
       } catch (err: unknown) {

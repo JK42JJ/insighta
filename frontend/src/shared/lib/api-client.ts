@@ -143,6 +143,18 @@ export interface VideoRichSummaryCore {
   depth_level?: string;
   content_type?: string;
   target_audience?: string;
+  /**
+   * CP500+ — present when the source video exceeded the v2 duration cap and
+   * the summary was generated from the first `coveredSec` of `fullSec`
+   * seconds. The FE renders a "first N min of M min" badge.
+   */
+  truncation?: { truncated: boolean; coveredSec: number; fullSec: number };
+  /**
+   * CP500+ PR-B — set on a terminal `quality_flag='skipped'` row (no transcript
+   * / no youtube metadata). The FE renders "summary unavailable: <reason>"
+   * instead of an eternal spinner.
+   */
+  skip_reason?: string;
 }
 
 export interface VideoRichSummaryKeyConcept {
@@ -431,6 +443,10 @@ interface MandalaResponse {
   language?: string;
   // CP467b — server-truth card count for grid layout commitment.
   cardCount?: number;
+  // CP499+ pool-serve — cells with an async deficit-fill in flight (W1b pulse).
+  fillPendingCells?: number[];
+  // CP500+ — cells whose fill run completed <60s ago (grace: invalidate once).
+  fillCompletedCells?: number[];
   createdAt: string;
   updatedAt: string;
   levels: Array<{
@@ -913,14 +929,10 @@ class ApiClient {
    * Returns null on 404 (no passing row) so callers can show an empty-state
    * instead of throwing. Other errors (401/5xx) propagate.
    */
-  async getVideoRichSummary(
-    videoId: string,
-    opts?: { lang?: 'ko' | 'en' }
-  ): Promise<VideoRichSummaryResponse | null> {
+  async getVideoRichSummary(videoId: string): Promise<VideoRichSummaryResponse | null> {
     try {
-      const qs = opts?.lang ? `?lang=${opts.lang}` : '';
       const res = await this.request<{ data: VideoRichSummaryResponse }>(
-        `/videos/${videoId}/rich-summary${qs}`
+        `/videos/${videoId}/rich-summary`
       );
       return res.data;
     } catch (err) {

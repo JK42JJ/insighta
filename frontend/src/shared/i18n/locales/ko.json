@@ -808,7 +808,8 @@
     "switchToFloating": "플로팅으로 전환",
     "switchToDock": "도킹하기",
     "navigateToSub": "{{subject}}로 이동",
-    "actionsFilling": "채워지는 중…"
+    "actionsFilling": "채워지는 중…",
+    "cardsFilling": "채워지는 중…"
   },
   "scratchPad": {
     "title": "스크래치패드",
@@ -1847,6 +1848,11 @@
     "reportPreparing": "보고서 작성 준비중 ...",
     "contentCollecting": "콘텐츠 수집 중...",
     "aiSummaryNotReady": "아직 AI 요약이 생성되지 않았어요",
+    "aiSummaryUnavailable": "AI 요약을 만들 수 없는 영상이에요",
+    "aiSummaryUnavailableNoTranscript": "자막이 없어 요약을 생성할 수 없어요",
+    "aiSummaryUnavailableNoMetadata": "영상 정보를 불러오지 못했어요",
+    "aiSummaryUnavailableGeneric": "이 영상은 요약을 생성할 수 없어요",
+    "aiSummaryTruncated": "앞 {{covered}}분 기준 요약 (전체 {{full}}분)",
     "aiSummaryGenerating": "AI 요약을 생성하고 있습니다",
     "richSummaryGenerating": "상세 요약을 생성하고 있습니다",
     "richSummaryQualityLowPendingRegen": "이 영상의 AI 분석을 개선하고 있습니다",

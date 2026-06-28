@@ -6,6 +6,12 @@
       "target_date": null,
       "reason": "Long-running dev branch (CP410~CP457). Diff vs main not fully audited — keeping until 1:1 commit-content comparison confirms zero unique work. CP490+ 2026-05-30.",
       "registered_at": "2026-05-30"
+    },
+    {
+      "branch": "feat/v2-translations",
+      "target_date": "2026-06-27",
+      "reason": "v2 translations + note/book-index track (James). CP502: 11 PR merged(#961~972). 다음세션 = 벌크-갭→PR-T3→PR3c. main worktree 미커밋(handoffs/sales-resources untracked) 보존.",
+      "registered_at": "2026-06-11"
     }
   ]
 }

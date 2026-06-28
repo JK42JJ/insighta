@@ -800,7 +800,8 @@
     "switchToFloating": "Switch to floating",
     "switchToDock": "Dock",
     "navigateToSub": "Navigate to {{subject}}",
-    "actionsFilling": "Filling…"
+    "actionsFilling": "Filling…",
+    "cardsFilling": "Filling…"
   },
   "scratchPad": {
     "title": "Scratch Pad",
@@ -1839,6 +1840,11 @@
     "reportPreparing": "Preparing report...",
     "contentCollecting": "Collecting content...",
     "aiSummaryNotReady": "No AI summary has been generated yet",
+    "aiSummaryUnavailable": "AI summary can't be generated for this video",
+    "aiSummaryUnavailableNoTranscript": "No captions available to summarize",
+    "aiSummaryUnavailableNoMetadata": "Video metadata couldn't be loaded",
+    "aiSummaryUnavailableGeneric": "This video can't be summarized",
+    "aiSummaryTruncated": "Summary of the first {{covered}} min (of {{full}} min total)",
     "aiSummaryGenerating": "Generating AI summary",
     "richSummaryGenerating": "Generating detailed summary",
     "richSummaryQualityLowPendingRegen": "Improving the AI analysis for this video",

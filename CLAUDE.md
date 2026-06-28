@@ -103,7 +103,6 @@
 
 ### "Done" = Prod Verified (절대 규칙)
 - **빌드 통과 != 완료. Prod 실제 동작 확인이 "완료"의 조건.**
-- **★verified 정의 (CP500+ 2026-06-14, #917 사고)★: 배포 성공 · dist/코드 grep · health 200 · CI green · 컨테이너 재시작 = "코드가 prod 에 있다" 만 증명 ≠ verified. 버그 fix 의 Done = 실제 트리거(예: 카드 하트클릭/열기)를 재현해 의도 산출물(행 생성 + FE 표시)이 나오는지 prod 동작 측정 또는 사용자 화면 재현.** 다층 버그(메타+duration+FE)일 때 한 층 fix 의 배포를 전체 해결로 over-claim 금지 — "이 fix 가 어느 층을 고쳤나 + 남은 층 있나" 측정. 근거: #917 ensure_wired=3 만 보고 "verified" 선언 → 같은 카드 여전히 미생성 (별개 duration-cap 블로커) → James 2회 지적. (LEVEL-1 troubleshooting 등재만으론 개념 재발 못 막아 본문 승격.)
 - Local DB에만 테이블 생성 + Prod 미적용 금지
 - useState만으로 사용자 데이터 저장 **절대 금지** (DB -> API -> Hook -> UI 파이프라인 필수)
 
