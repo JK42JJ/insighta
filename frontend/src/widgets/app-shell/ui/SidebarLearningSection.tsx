@@ -403,14 +403,18 @@ export function SidebarLearningSection({
               className="group flex w-full items-center gap-2 px-2 py-1 text-left transition-colors"
             >
               {/* §redesign — chapter number replaces the chevron (시안 .toc-chapter
-                  .n). Row click still toggles expand/collapse. */}
+                  .n). Row click still toggles expand/collapse.
+                  CP504 — note mode drops the cell-index number: after the §3.1
+                  empty-cell filter the numbers go gappy (02·03·06…), which reads
+                  oddly and contradicts the compression/narrative concept. Note
+                  mode uses a bullet; player mode keeps 01–08 = spatial position. */}
               <span
                 className={cn(
                   'shrink-0 font-mono text-[11px] tabular-nums transition-colors',
                   chapterActive ? 'text-sidebar-foreground/80' : 'text-sidebar-foreground/35'
                 )}
               >
-                {String(idx + 1).padStart(2, '0')}
+                {centerViewMode === 'note' ? '•' : String(idx + 1).padStart(2, '0')}
               </span>
               <span
                 className={cn(
