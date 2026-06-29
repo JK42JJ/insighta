@@ -69,3 +69,30 @@ describe('note-document-generator — loop-1b narrative render', () => {
     expect(paraTexts(ns)).toContain('ATOM_TEXT_A 인사'); // fell through to legacy atom render
   });
 });
+
+const headingTexts = (ns: N[]): string[] =>
+  ns
+    .filter((n) => n.type === 'heading')
+    .map((h) => (h.content ?? []).map((c) => (c as { text?: string }).text ?? '').join(''));
+
+describe('note-document-generator — loop-2 references render (P-REF-RENDER)', () => {
+  const enriched = (): MandalaBookData => {
+    const b = book('이 장은 기초 회화를 다룬다');
+    b.chapters[0]!.research = [{ perspective: '발음', fact: 'WEB_FACT 모음 발음 핵심', ref_id: 1 }];
+    b.references = [{ id: 1, title: 'Phonetics Guide', url: 'https://ex.com/p' }];
+    return b;
+  };
+
+  it('renders chapter 보강 자료 (fact [ref_id]) + bottom 참고 자료 (id, url)', () => {
+    const ns = nodes(buildInitialNoteDoc(enriched()));
+    const texts = paraTexts(ns);
+    expect(texts.some((t) => t.includes('WEB_FACT 모음 발음 핵심') && t.includes('[1]'))).toBe(true);
+    expect(headingTexts(ns)).toContain('참고 자료');
+    expect(texts.some((t) => t.includes('[1]') && t.includes('https://ex.com/p'))).toBe(true);
+  });
+
+  it('no references/research → no 참고 자료 section (legacy/normal book unchanged)', () => {
+    const ns = nodes(buildInitialNoteDoc(book('이 장은 기초 회화를 다룬다')));
+    expect(headingTexts(ns)).not.toContain('참고 자료');
+  });
+});
