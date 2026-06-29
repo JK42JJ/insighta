@@ -40,7 +40,10 @@ const TOPICS_PER_CHAPTER = 4;
 const MIN_CHAPTERS = 2;
 const MAX_CHAPTERS_CAP = 12;
 function chapterCapFor(topicCount: number): number {
-  return Math.min(MAX_CHAPTERS_CAP, Math.max(MIN_CHAPTERS, Math.ceil(topicCount / TOPICS_PER_CHAPTER)));
+  return Math.min(
+    MAX_CHAPTERS_CAP,
+    Math.max(MIN_CHAPTERS, Math.ceil(topicCount / TOPICS_PER_CHAPTER))
+  );
 }
 
 /** One compressed topic (flattened across all cells, in cell order). */
@@ -152,7 +155,10 @@ async function attemptSkeleton(
       maxTokens: MAX_TOKENS,
     });
   } catch (err) {
-    return { ok: false, reason: `provider_error: ${err instanceof Error ? err.message : String(err)}` };
+    return {
+      ok: false,
+      reason: `provider_error: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 
   const parsed = parseSkeletonResponse(raw, topics.length, maxChapters);

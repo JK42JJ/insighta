@@ -101,7 +101,11 @@ export async function weaveChapterBody(
     }
     lastReason = r.reason;
     if (attempt < BODY_ATTEMPTS) {
-      log.warn('chapter-body attempt failed — retrying', { chapterTitle, attempt, reason: r.reason });
+      log.warn('chapter-body attempt failed — retrying', {
+        chapterTitle,
+        attempt,
+        reason: r.reason,
+      });
     }
   }
   log.warn('chapter-body fail after retries → keep original summaries (no fabrication)', {
@@ -126,7 +130,10 @@ async function attemptBody(
       maxTokens: MAX_TOKENS,
     });
   } catch (err) {
-    return { ok: false, reason: `provider_error: ${err instanceof Error ? err.message : String(err)}` };
+    return {
+      ok: false,
+      reason: `provider_error: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
   return parseChapterBodyResponse(raw, topics.length);
 }
@@ -157,7 +164,8 @@ export function parseChapterBodyResponse(raw: string, topicCount: number): Chapt
   for (const s of json.sections as LlmBodySection[]) {
     const i = typeof s.idx === 'number' ? s.idx : Number(s.idx);
     if (!Number.isInteger(i) || i < 0 || i >= topicCount) continue;
-    const narrative = typeof s.narrative === 'string' ? s.narrative.replace(/\s*\n+\s*/g, ' ').trim() : '';
+    const narrative =
+      typeof s.narrative === 'string' ? s.narrative.replace(/\s*\n+\s*/g, ' ').trim() : '';
     if (!narrative) continue;
     if (narratives[i] === '') mapped += 1; // first write for this idx
     narratives[i] = narrative;
