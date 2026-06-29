@@ -510,6 +510,11 @@ function BookChapterPreview({
       {sections.map((sec, sIdx) => {
         const isActiveSection = sIdx === activeSectionIdx;
         const firstAtom = sec.atoms?.[0];
+        // CP505 ② — sidebar TOC readability: topic titles run 60-84 chars and
+        // wrapped to 2 lines. Show the lead clause (before the first colon) +
+        // truncate as a 1-line backstop. The note BODY heading keeps the full
+        // title (note-document-generator) — this shortening is sidebar-only.
+        const tocLabel = sec.title.split(/[:：]/)[0]?.trim() || sec.title;
         return (
           <li
             key={sIdx}
@@ -526,7 +531,7 @@ function BookChapterPreview({
               }
             }}
             className={cn(
-              'cursor-pointer pl-3.5 py-1.5 leading-[1.5] transition-colors',
+              'cursor-pointer truncate pl-3.5 py-1.5 leading-[1.5] transition-colors',
               // §redesign — active section: 2px gold bar + strong text (시안).
               // sidebar-primary is gold within .note-mode (overridden in index.css).
               isActiveSection
@@ -534,7 +539,7 @@ function BookChapterPreview({
                 : 'border-l border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/50 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
             )}
           >
-            {sec.title}
+            {tocLabel}
           </li>
         );
       })}
