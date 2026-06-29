@@ -170,7 +170,8 @@ function groupAtomsByVid(
 function renderSection(
   section: MandalaBookSection,
   chapterIdx: number,
-  sectionIdx: number
+  sectionIdx: number,
+  narrativeMode: boolean
 ): TiptapNode[] {
   const out: TiptapNode[] = [];
 
@@ -187,8 +188,29 @@ function renderSection(
   // Section heading (h3 inside chapter h2)
   out.push(heading(3, section.title));
 
-  // VideoBlocks + atom paragraphs (grouped by vid)
   const groups = groupAtomsByVid(section.atoms ?? []);
+
+  // §4.5.1 loop-1b — narrative book: the woven section.narrative IS the body
+  // (one flowing prose, NOT per-video atom snippets). Source atoms become
+  // citations: one video block per source vid (seek + provenance), AFTER the
+  // prose. Removes the per-video atom-text paragraph dump (the 따로국밥 list) and
+  // the trailing keypoint blockquote (narrative is the body now, not a wrap-up).
+  // Legacy books (no chapter intro → narrativeMode false) fall through to the
+  // unchanged path below. Empty narrative (weave/skeleton edge) also falls
+  // through → graceful legacy render (R-1b-FALLBACK).
+  if (narrativeMode && section.narrative && section.narrative.trim()) {
+    out.push(paragraph(section.narrative));
+    for (const g of groups) {
+      if (g.atoms.length === 0) continue;
+      const firstTs = g.atoms[0].ts ?? 0;
+      const endSec = groupEndSec(g.atoms);
+      out.push(videoBlockNode(g.vid, firstTs, endSec, section.title ?? null));
+    }
+    out.push(horizontalRule());
+    return out;
+  }
+
+  // VideoBlocks + atom paragraphs (grouped by vid) — LEGACY (unchanged).
   for (const g of groups) {
     if (g.atoms.length === 0) continue;
     const firstTs = g.atoms[0].ts ?? 0;
@@ -219,7 +241,7 @@ function renderSection(
   return out;
 }
 
-function renderChapter(chapter: MandalaBookChapter): TiptapNode[] {
+function renderChapter(chapter: MandalaBookChapter, narrativeMode: boolean): TiptapNode[] {
   const out: TiptapNode[] = [];
 
   // Chapter kicker ("CHAPTER NN · 챕터명 · 영상 N · 토픽 N") + h2 doc-title.
@@ -247,7 +269,7 @@ function renderChapter(chapter: MandalaBookChapter): TiptapNode[] {
 
   for (let i = 0; i < chapter.sections.length; i++) {
     const sec = chapter.sections[i];
-    out.push(...renderSection(sec, chapter.ch, i));
+    out.push(...renderSection(sec, chapter.ch, i, narrativeMode));
   }
 
   return out;
@@ -273,9 +295,15 @@ export function buildInitialNoteDoc(book: MandalaBookData | null | undefined): T
 
   const content: TiptapNode[] = [];
   const sortedChapters = book.chapters.slice().sort((a, b) => (a.ch ?? 0) - (b.ch ?? 0));
+  // §4.5.1 loop-1b — narrative-book detection (flag-independent render gate):
+  // skeleton books populate chapter.intro; legacy cell=chapter leaves it ''. A
+  // populated intro ⇒ narrative render (prose body + atom citations); else the
+  // legacy render (atom paragraphs + keypoint blockquote) is byte-unchanged —
+  // so flag-off prod notes are identical, narrative books get the woven body.
+  const narrativeMode = sortedChapters.some((ch) => !!(ch?.intro && ch.intro.trim()));
   for (const ch of sortedChapters) {
     if (!ch || !Array.isArray(ch.sections)) continue;
-    content.push(...renderChapter(ch));
+    content.push(...renderChapter(ch, narrativeMode));
   }
 
   // If the last node is a horizontalRule, drop it (clean trailing).
