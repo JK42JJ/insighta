@@ -18,9 +18,12 @@ import {
   passesBookGate,
   computeMandalaMedian,
   isBookTopicSynthesisEnabled,
+  isBookNarrativeSkeletonEnabled,
   loadNoteMaxSections,
 } from '@/config/book-gate';
 import { synthesizeCellTopics } from './topic-synthesis';
+import { synthesizeBookSkeleton, type BookSkeleton } from './book-skeleton';
+import { weaveChapterBody } from './book-body';
 import { enqueueEnrichRichSummary } from '@/modules/queue';
 import { enqueueRelevanceBackfillForMandala } from '@/modules/relevance/relevance-backfill-trigger';
 import { getStoredTranslation } from '@/modules/skills/rich-summary-translator';
@@ -398,6 +401,78 @@ export async function fillMandalaBook(params: {
     }
   }
 
+  // 3c. §4.5.1 [2] narrative skeleton (flag-gated; off ⇒ legacy cell=chapter).
+  // Reconstruct ALL cells' §1⑤ topics into a narrative book outline (cross-cell
+  // merge + 기승전결 order + chapter intro). The flat topic list = cells in order,
+  // each cell's topics flattened — this MUST match build-book's flatTopics order
+  // (input.cells.flatMap(c => c.topics)) so the skeleton's topic_refs line up.
+  // HARD fail → skeleton stays undefined → build-book uses legacy cell=chapter.
+  let skeleton: BookSkeleton | undefined;
+  if (isBookNarrativeSkeletonEnabled()) {
+    const skeletonTopics = cells.flatMap((cell) =>
+      (cell.topics ?? []).map((tp) => ({
+        cellIndex: cell.cellIndex,
+        cellTitle: cell.title,
+        topicTitle: tp.topic_title,
+        summary: tp.summary,
+      }))
+    );
+    if (skeletonTopics.length > 0) {
+      const sk = await synthesizeBookSkeleton(skeletonTopics, mandala.title ?? '');
+      if (sk.ok) {
+        skeleton = sk.skeleton;
+        log.info('book narrative skeleton (compression→reconstruction)', {
+          mandalaId,
+          topicsIn: skeletonTopics.length,
+          chapters: sk.skeleton.chapters.length,
+          topicsUnplaced: sk.unplaced.length, // transparency — surfaced, not auto-appended
+        });
+      } else {
+        // Surfaced LOUDLY — NOT a silent revert (caller falls to cell=chapter).
+        log.error('book narrative skeleton HARD-FAILED → legacy cell=chapter (NOT silent)', {
+          mandalaId,
+          reason: sk.reason,
+        });
+      }
+    }
+  }
+
+  // 3d. §4.5.1 [3] chapter body weave — ONLY when the skeleton succeeded. For
+  // each narrative chapter, rewrite its topics' summaries into chapter-aware
+  // flowing prose (서사=창작 / 사실=요약 출처, no new facts). Mutates topic.summary
+  // in place (build-book skeleton mode reads it via sectionFromTopic); atom_refs
+  // untouched (provenance travels). Fail → keep the original summary (no
+  // fabrication, no broken chapter). flat order matches build-book's flatTopics
+  // and the skeleton's topic_refs (cells in order, topics flattened).
+  if (skeleton) {
+    const flat = cells.flatMap((c) => c.topics ?? []);
+    let wovenChapters = 0;
+    for (const ch of skeleton.chapters) {
+      const chTopics = ch.topic_refs
+        .map((i) => flat[i])
+        .filter((t): t is NonNullable<typeof t> => t != null);
+      if (chTopics.length === 0) continue;
+      const woven = await weaveChapterBody(
+        ch.title,
+        ch.intro,
+        chTopics.map((t) => ({ topicTitle: t.topic_title, summary: t.summary })),
+        mandala.title ?? ''
+      );
+      if (woven.ok) {
+        woven.narratives.forEach((nv, i) => {
+          const t = chTopics[i];
+          if (t && nv) t.summary = nv; // enrich in place; empty slot ⇒ keep original
+        });
+        wovenChapters += 1;
+      }
+    }
+    log.info('book chapter bodies woven', {
+      mandalaId,
+      chapters: skeleton.chapters.length,
+      wovenChapters, // chapters that got LLM-woven prose (rest kept §1⑤ summaries)
+    });
+  }
+
   // 4. Assemble (pure, LLM-free) + validate (hard gate).
   const generatedAt = new Date().toISOString();
   const { book, sourceVideos, sourceAtoms } = buildBookJson({
@@ -405,6 +480,7 @@ export async function fillMandalaBook(params: {
     mandalaTitle: mandala.title ?? '',
     generatedAt,
     cells,
+    skeleton, // §4.5.1 — undefined ⇒ legacy cell=chapter assembly
   });
 
   let validated;

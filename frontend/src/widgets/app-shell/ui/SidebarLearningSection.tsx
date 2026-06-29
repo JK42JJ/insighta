@@ -47,12 +47,6 @@ export function SidebarLearningSection({
   const { cards: mandalaCards } = useMandalaCards(mandalaId);
   // CP438+1 — book index PoC; non-null when a book has been generated.
   const { book: bookResponse } = useMandalaBook(mandalaId);
-  const bookChaptersByIdx = new Map<number, MandalaBookChapter>();
-  if (bookResponse?.book?.chapters) {
-    for (const ch of bookResponse.book.chapters) {
-      bookChaptersByIdx.set(ch.ch, ch);
-    }
-  }
 
   // PR3c-a — player tab "videos I collected": all cards in the cell.
   // mandalaCards is already URL-deduped + cellIndex>=0 (useMandalaCards); no
@@ -346,125 +340,142 @@ export function SidebarLearningSection({
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-none pb-3">
-        {/* §3.5 — cell 0 (center/goal cell) videos = book preface. Rendered as an
-            "개요" group ABOVE the numbered chapters (cell0 ≠ chapter 01). Player
-            mode only; note-mode preface = book_json (§1⑤ track). */}
-        {centerViewMode === 'player' &&
-          (() => {
-            const overview = renderPlayerList(cardsByCellAll.get(0) ?? []);
-            if (!overview) return null;
-            return (
-              <div className="mb-0.5">
-                <div className="flex w-full items-center gap-2 px-2 py-1">
-                  <span className="flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.10em] text-sidebar-foreground/55">
-                    {t('learning.overview', '개요')}
-                  </span>
+        {centerViewMode === 'note'
+          ? /* §4.5.1 NOTE mode — TOC = the book's OWN narrative chapters (SSOT =
+               book_json). Iterate book.chapters DIRECTLY, not mandala cells: with
+               the narrative skeleton chapters are cross-cell + reordered (ch ≠ cell
+               index), and even in legacy cell mode build-book already empty-filters
+               (#989) + orders them. So no cell-index join, no empty-heading leak
+               (supersedes §3.1/#991), and bullets — not cell numbers (supersedes
+               #992) — since narrative order has no spatial cell number. */
+            (bookResponse?.book?.chapters ?? []).map((chapter) => {
+              const isExpanded = isChapterExpanded(chapter.ch);
+              const chapterActive = activeSectionRef?.chapterIdx === chapter.ch;
+              return (
+                <div key={chapter.ch} className="mb-0.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleChapter(chapter.ch)}
+                    className="group flex w-full items-center gap-2 px-2 py-1 text-left transition-colors"
+                  >
+                    {/* narrative order ⇒ bullet (no spatial cell number). */}
+                    <span
+                      className={cn(
+                        'shrink-0 text-[11px] leading-[1.5] transition-colors',
+                        chapterActive ? 'text-sidebar-foreground/80' : 'text-sidebar-foreground/35'
+                      )}
+                    >
+                      •
+                    </span>
+                    <span
+                      className={cn(
+                        'flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.10em] transition-colors',
+                        chapterActive
+                          ? 'text-sidebar-foreground/80'
+                          : 'text-sidebar-foreground/55 group-hover:text-sidebar-foreground/80'
+                      )}
+                    >
+                      {chapter.title}
+                    </span>
+                  </button>
+                  {isExpanded && (
+                    <div className="ml-3.5 pt-0.5">
+                      <BookChapterPreview
+                        chapter={chapter}
+                        mandalaId={mandalaId}
+                        currentVideoId={currentVideoId}
+                        activeSectionIdx={
+                          activeSectionRef?.chapterIdx === chapter.ch
+                            ? activeSectionRef.sectionIdx
+                            : null
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
-                {overview}
-              </div>
-            );
-          })()}
-        {subGoals.map((goal, idx) => {
-          const bookChapter = bookChaptersByIdx.get(idx);
-          // CP504 §3.1 — note mode TOC must mirror book content. Empty cells
-          // (no book chapter / 0 sections) leaked a bare heading into the
-          // sidebar even though PR #989 filtered them from book_json. Player
-          // mode keeps every heading so collected-video cards still render.
-          const hasBookSections = (bookChapter?.sections?.length ?? 0) > 0;
-          if (centerViewMode === 'note' && !hasBookSections) return null;
-          const isExpanded = isChapterExpanded(idx);
-          // Row text = short cell label; tooltip = long-form sub-goal.
-          // When the label is explicitly set, the tooltip always surfaces
-          // the goal (mirrors header logic above). When no label exists,
-          // the goal becomes the row text and the tooltip is suppressed.
-          const labelText = subjectLabels[idx]?.trim() ?? '';
-          const rowLabel = labelText || goal;
-          const rowTooltip = labelText && goal ? goal : undefined;
-
-          // Highlight the chapter (sector) that contains the active item, and
-          // keep it lit (mirrors the hover-bright look). note: activeSectionRef
-          // is in this chapter; player: a card in this cell == currentVideoId.
-          const chapterActive =
-            centerViewMode === 'note'
-              ? !!bookChapter && activeSectionRef?.chapterIdx === bookChapter.ch
-              : !!currentVideoId &&
-                (cardsByCellAll.get(idx + 1) ?? []).some((c) => {
-                  try {
-                    return extractYouTubeVideoId(new URL(c.videoUrl)) === currentVideoId;
-                  } catch {
-                    return false;
-                  }
-                });
-
-          const chapterButton = (
-            <button
-              type="button"
-              onClick={() => toggleChapter(idx)}
-              className="group flex w-full items-center gap-2 px-2 py-1 text-left transition-colors"
-            >
-              {/* §redesign — chapter number replaces the chevron (시안 .toc-chapter
-                  .n). Row click still toggles expand/collapse. */}
-              <span
-                className={cn(
-                  'shrink-0 font-mono text-[11px] tabular-nums transition-colors',
-                  chapterActive ? 'text-sidebar-foreground/80' : 'text-sidebar-foreground/35'
-                )}
-              >
-                {String(idx + 1).padStart(2, '0')}
-              </span>
-              <span
-                className={cn(
-                  'flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.10em] transition-colors',
-                  chapterActive
-                    ? 'text-sidebar-foreground/80'
-                    : 'text-sidebar-foreground/55 group-hover:text-sidebar-foreground/80'
-                )}
-              >
-                {rowLabel}
-              </span>
-            </button>
-          );
-          return (
-            <div key={idx} className="mb-0.5">
-              {rowTooltip ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>{chapterButton}</TooltipTrigger>
-                  <TooltipContent side="bottom" align="start" className="text-[12px] max-w-[280px]">
-                    {rowTooltip}
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                chapterButton
-              )}
-
-              {/* PR3c-a — branch the TOC by centerViewMode so the two SSOTs
-                  never co-render (was: both blocks always rendered → one video
-                  highlighted as oneLiner AND auto-set section = double-select +
-                  1px/2px asymmetry, James-observed prod bug).
-                  note   = book sections (SSOT book_json). active = activeSectionRef
-                           (disambiguates a vid cited by multiple sections).
-                  player = collected cards (SSOT cards). active = vid===currentVideoId.
-                  Same 2px bar in both; one block per tab = bug structurally gone. */}
-              {isExpanded && centerViewMode === 'note' && bookChapter && (
-                <div className="ml-3.5 pt-0.5">
-                  <BookChapterPreview
-                    chapter={bookChapter}
-                    mandalaId={mandalaId}
-                    currentVideoId={currentVideoId}
-                    activeSectionIdx={
-                      activeSectionRef?.chapterIdx === bookChapter.ch
-                        ? activeSectionRef.sectionIdx
-                        : null
-                    }
-                  />
-                </div>
-              )}
-              {isExpanded &&
-                centerViewMode === 'player' &&
-                renderPlayerList(cardsByCellAll.get(idx + 1) ?? [])}
-            </div>
-          );
-        })}
+              );
+            })
+          : /* PLAYER mode — collected videos by mandala cell (SSOT = cards),
+               UNCHANGED. cell 0 = "개요" preface above the numbered cells; each
+               cell keeps its 01–08 number (spatial position users navigate by). */
+            (() => {
+              const overview = renderPlayerList(cardsByCellAll.get(0) ?? []);
+              return (
+                <>
+                  {overview && (
+                    <div className="mb-0.5">
+                      <div className="flex w-full items-center gap-2 px-2 py-1">
+                        <span className="flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.10em] text-sidebar-foreground/55">
+                          {t('learning.overview', '개요')}
+                        </span>
+                      </div>
+                      {overview}
+                    </div>
+                  )}
+                  {subGoals.map((goal, idx) => {
+                    const isExpanded = isChapterExpanded(idx);
+                    const labelText = subjectLabels[idx]?.trim() ?? '';
+                    const rowLabel = labelText || goal;
+                    const rowTooltip = labelText && goal ? goal : undefined;
+                    // Active = a collected card in this cell is the current video.
+                    const chapterActive =
+                      !!currentVideoId &&
+                      (cardsByCellAll.get(idx + 1) ?? []).some((c) => {
+                        try {
+                          return extractYouTubeVideoId(new URL(c.videoUrl)) === currentVideoId;
+                        } catch {
+                          return false;
+                        }
+                      });
+                    const chapterButton = (
+                      <button
+                        type="button"
+                        onClick={() => toggleChapter(idx)}
+                        className="group flex w-full items-center gap-2 px-2 py-1 text-left transition-colors"
+                      >
+                        <span
+                          className={cn(
+                            'shrink-0 font-mono text-[11px] tabular-nums transition-colors',
+                            chapterActive ? 'text-sidebar-foreground/80' : 'text-sidebar-foreground/35'
+                          )}
+                        >
+                          {String(idx + 1).padStart(2, '0')}
+                        </span>
+                        <span
+                          className={cn(
+                            'flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.10em] transition-colors',
+                            chapterActive
+                              ? 'text-sidebar-foreground/80'
+                              : 'text-sidebar-foreground/55 group-hover:text-sidebar-foreground/80'
+                          )}
+                        >
+                          {rowLabel}
+                        </span>
+                      </button>
+                    );
+                    return (
+                      <div key={idx} className="mb-0.5">
+                        {rowTooltip ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>{chapterButton}</TooltipTrigger>
+                            <TooltipContent
+                              side="bottom"
+                              align="start"
+                              className="text-[12px] max-w-[280px]"
+                            >
+                              {rowTooltip}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          chapterButton
+                        )}
+                        {isExpanded && renderPlayerList(cardsByCellAll.get(idx + 1) ?? [])}
+                      </div>
+                    );
+                  })}
+                </>
+              );
+            })()}
       </div>
     </div>
   );

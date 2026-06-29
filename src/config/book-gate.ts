@@ -153,3 +153,18 @@ export function loadNoteMaxSections(env: NodeJS.ProcessEnv = process.env): numbe
   const parsed = Number(env['NOTE_MAX_SECTIONS']);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 20;
 }
+
+/**
+ * §4.5.1 [2] narrative skeleton on/off. Default FALSE — NEW feature; must NOT
+ * change prod until James prod-verifies the narrative form (한 권의 책: 기승전결,
+ * cross-cell merge, chapter intro). When true, fill-book asks Sonnet to
+ * reconstruct all cells' §1⑤ topics into a narrative book outline (NOT
+ * cell=chapter) and build-book assembles from that skeleton. Code-revert-free
+ * rollback = unset / BOOK_NARRATIVE_SKELETON=false → legacy cell=chapter.
+ */
+export function isBookNarrativeSkeletonEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = String(env['BOOK_NARRATIVE_SKELETON'] ?? '')
+    .trim()
+    .toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes'; // unset ⇒ false (default off)
+}
