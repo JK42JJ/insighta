@@ -20,6 +20,7 @@ import {
   isBookTopicSynthesisEnabled,
   isBookNarrativeSkeletonEnabled,
   isBookEnrichEnabled,
+  isVisualCvEnabled,
   loadNoteMaxSections,
 } from '@/config/book-gate';
 import { synthesizeCellTopics } from './topic-synthesis';
@@ -28,7 +29,7 @@ import { weaveChapterBody } from './book-body';
 import { researchBookGaps } from './book-research';
 import { factcheckChapterBody } from './book-factcheck';
 import { createGoogleCseClient, loadGoogleCseConfig } from '@/modules/google-cse';
-import { enqueueEnrichRichSummary } from '@/modules/queue';
+import { enqueueEnrichRichSummary, enqueueNoteCvEnrich } from '@/modules/queue';
 import { enqueueRelevanceBackfillForMandala } from '@/modules/relevance/relevance-backfill-trigger';
 import { getStoredTranslation } from '@/modules/skills/rich-summary-translator';
 import { getArchivedVideoIds } from '@/modules/exclude/archived-videos';
@@ -495,6 +496,15 @@ export async function fillMandalaBook(params: {
   // woven prose is NOT rewritten, A1). Best-effort; failures leave book unchanged.
   if (skeleton && isBookEnrichEnabled()) {
     await enrichBookLoop2(book, mandala.title ?? '', mandalaId);
+    // [CV-NOTE-WIRE] CP505 — fire-and-forget visual CV figure enrich (default inert)
+    if (isVisualCvEnabled()) {
+      enqueueNoteCvEnrich(mandalaId, userId).catch((err) => {
+        log.warn('note-cv-enrich enqueue failed (non-fatal)', {
+          mandalaId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
   }
 
   let validated;

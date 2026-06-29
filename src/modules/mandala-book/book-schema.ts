@@ -57,6 +57,22 @@ const verificationSchema = z
   })
   .nullish();
 
+// CP505 [CV-NOTE-WIRE] — targeted CV figures attached to a section (ADDITIVE).
+// Sourced from the slidegen /numerize service (cached in video_figure_snapshots),
+// mirroring snapshot FigureRef. The note CV enrich job stores ONLY verified,
+// renderable kinds (chart/table/diagram/equation); keyframe + unverified dropped.
+// Optional → books without CV stay valid. Render: equation→KaTeX(latex),
+// chart/table/diagram→img(asset_path). slidegen repo untouched.
+const bookFigureSchema = z.object({
+  video_id: z.string(),
+  ts_sec: z.number().int(),
+  kind: z.enum(['chart', 'diagram', 'table', 'equation', 'keyframe']),
+  latex: z.string().optional(), // equation → LaTeX (KaTeX render)
+  asset_path: z.string().optional(), // chart/table/diagram → image
+  struct: z.record(z.unknown()).optional(), // mode-B JSON (chart/table/diagram)
+  verification_status: z.string().optional(),
+});
+
 export const bookSectionSchema = z.object({
   title: z.string(),
   narrative: z.string(), // 살붙임 body assembled from v2 analysis + segments
@@ -64,6 +80,7 @@ export const bookSectionSchema = z.object({
   qa: z.array(bookQaSchema).default([]),
   provenance: provenanceSchema, // Fork D placeholder
   verification: verificationSchema, // Fork D placeholder
+  figures: z.array(bookFigureSchema).optional(), // CP505 [CV-NOTE-WIRE] (additive)
 });
 
 // CP504 loop-2-B — STORM gap-fill findings attached to a chapter (additive).
@@ -117,6 +134,7 @@ export type BookJsonInput = z.input<typeof bookJsonSchema>;
 export type BookAtom = z.infer<typeof bookAtomSchema>;
 export type BookSection = z.infer<typeof bookSectionSchema>;
 export type BookChapter = z.infer<typeof bookChapterSchema>;
+export type BookFigure = z.infer<typeof bookFigureSchema>;
 export type BookJson = z.infer<typeof bookJsonSchema>;
 
 /** Throws ZodError on shape violation — call before upserting a generated book. */

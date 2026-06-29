@@ -96,3 +96,35 @@ describe('note-document-generator — loop-2 references render (P-REF-RENDER)', 
     expect(headingTexts(ns)).not.toContain('참고 자료');
   });
 });
+
+// [CV-NOTE-WIRE] — CV figures attached to a section render as figureBlock nodes.
+type FigAttrs = { kind?: string; latex?: string; assetPath?: string };
+const figureBlocks = (ns: N[]) =>
+  ns.filter((n) => n.type === 'figureBlock').map((n) => (n.attrs ?? {}) as FigAttrs);
+
+describe('note-document-generator — CV figures render ([CV-NOTE-WIRE])', () => {
+  const withFigures = (): MandalaBookData => {
+    const b = book('이 장은 기초 회화를 다룬다');
+    b.chapters[0]!.sections[0]!.figures = [
+      { video_id: 'vidA', ts_sec: 10, kind: 'equation', latex: 'E=mc^2', verification_status: 'verified' },
+      { video_id: 'vidA', ts_sec: 12, kind: 'chart', asset_path: 'https://cdn.ex.com/chart.png', verification_status: 'verified' },
+      { video_id: 'vidA', ts_sec: 14, kind: 'diagram', asset_path: 'https://cdn.ex.com/diag.png', verification_status: 'unverified' }, // DROP unverified
+      { video_id: 'vidA', ts_sec: 16, kind: 'keyframe', asset_path: 'https://cdn.ex.com/kf.png', verification_status: 'verified' }, // DROP keyframe
+    ];
+    return b;
+  };
+
+  it('renders equation + chart figureBlock nodes; drops unverified + keyframe', () => {
+    const figs = figureBlocks(nodes(buildInitialNoteDoc(withFigures())));
+    expect(figs.some((f) => f.kind === 'equation' && f.latex === 'E=mc^2')).toBe(true); // equation kept
+    expect(figs.some((f) => f.kind === 'chart' && f.assetPath === 'https://cdn.ex.com/chart.png')).toBe(true); // chart kept
+    expect(figs.some((f) => f.assetPath === 'https://cdn.ex.com/diag.png')).toBe(false); // unverified dropped
+    expect(figs.some((f) => f.kind === 'keyframe')).toBe(false); // keyframe dropped
+    expect(figs).toHaveLength(2);
+  });
+
+  it('no figures → no figureBlock nodes (existing books byte-unchanged)', () => {
+    const figs = figureBlocks(nodes(buildInitialNoteDoc(book('이 장은 기초 회화를 다룬다'))));
+    expect(figs).toHaveLength(0);
+  });
+});

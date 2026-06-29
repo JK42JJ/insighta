@@ -299,12 +299,26 @@ export interface MandalaBookFactcheck {
   correction?: string; // proposal only (prose not rewritten)
 }
 
+// [CV-NOTE-WIRE] — a targeted computer-vision figure attached to a section.
+// Backend writes this additively (flag-gated) AFTER filtering to verified +
+// renderable; the FE render filters defensively too.
+export interface MandalaBookFigure {
+  video_id: string;
+  ts_sec: number;
+  kind: 'chart' | 'diagram' | 'table' | 'equation' | 'keyframe';
+  latex?: string;
+  asset_path?: string;
+  struct?: Record<string, unknown>;
+  verification_status?: string;
+}
+
 export interface MandalaBookSection {
   title: string;
   narrative?: string;
   atoms?: MandalaBookAtom[];
   qa?: Array<{ q: string; a: string }>;
   verification?: { status?: string; notes?: string; checks?: MandalaBookFactcheck[] }; // CP504 loop-2-A
+  figures?: MandalaBookFigure[]; // [CV-NOTE-WIRE] inert until backend populates
 }
 
 export interface MandalaBookChapter {

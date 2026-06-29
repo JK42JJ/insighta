@@ -182,3 +182,14 @@ export function isBookEnrichEnabled(env: NodeJS.ProcessEnv = process.env): boole
     .toLowerCase();
   return v === 'true' || v === '1' || v === 'yes'; // unset ⇒ false (default off)
 }
+
+// CP505 [CV-NOTE-WIRE] — note targeted-CV (slidegen figures). Default OFF.
+// Gates the async NOTE_CV_ENRICH job (Haiku detect → /numerize → section.figures).
+// Independent of SNAPSHOT_SERVICE_TOKEN: even when this is on, an unset token makes
+// extraction a graceful no-op ([] figures). slidegen repo untouched.
+export function isVisualCvEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = String(env['VISUAL_CV_ENABLED'] ?? '')
+    .trim()
+    .toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes'; // unset ⇒ false (default off)
+}
