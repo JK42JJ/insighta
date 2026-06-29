@@ -167,49 +167,11 @@ function groupAtomsByVid(
 // Section / chapter renderers
 // ---------------------------------------------------------------------------
 
-/** seconds → "M:SS" label for the dedup pill. */
-function formatTs(sec: number): string {
-  const s = Math.max(0, Math.floor(sec));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-/**
- * CP505 B — per-chapter video dedup. A vid's FIRST section gets the full
- * videoBlock embed; later sections of the SAME vid (the §1⑤ over-decomposition
- * surfaces one comprehensive video across N topics) get a compact timestamp PILL
- * — a link with `t=<sec>` that TimestampPlugin seeks the already-embedded player
- * to (the repeats are the same chapter video at different timestamps, so onSeek
- * targets the right player). Kills the "same thumbnail N times" repeat without
- * touching topic structure (root fix = §1⑤, separate). Mutates `embeddedVids`.
- */
-function videoNodeForGroup(
-  vid: string,
-  firstTs: number,
-  endSec: number,
-  sectionTitle: string | null,
-  embeddedVids: Set<string>
-): TiptapNode {
-  if (!embeddedVids.has(vid)) {
-    embeddedVids.add(vid);
-    return videoBlockNode(vid, firstTs, endSec, sectionTitle);
-  }
-  return paragraph(`▶ ${formatTs(firstTs)} 이어서 보기`, [
-    {
-      type: 'link',
-      attrs: {
-        href: `https://www.youtube.com/watch?v=${vid}&t=${Math.floor(firstTs)}`,
-        target: '_blank',
-      },
-    },
-  ]);
-}
-
 function renderSection(
   section: MandalaBookSection,
   chapterIdx: number,
   sectionIdx: number,
-  narrativeMode: boolean,
-  embeddedVids: Set<string>
+  narrativeMode: boolean
 ): TiptapNode[] {
   const out: TiptapNode[] = [];
 
@@ -242,7 +204,7 @@ function renderSection(
       if (g.atoms.length === 0) continue;
       const firstTs = g.atoms[0].ts ?? 0;
       const endSec = groupEndSec(g.atoms);
-      out.push(videoNodeForGroup(g.vid, firstTs, endSec, section.title ?? null, embeddedVids));
+      out.push(videoBlockNode(g.vid, firstTs, endSec, section.title ?? null));
     }
     out.push(horizontalRule());
     return out;
@@ -253,7 +215,7 @@ function renderSection(
     if (g.atoms.length === 0) continue;
     const firstTs = g.atoms[0].ts ?? 0;
     const endSec = groupEndSec(g.atoms);
-    out.push(videoNodeForGroup(g.vid, firstTs, endSec, section.title ?? null, embeddedVids));
+    out.push(videoBlockNode(g.vid, firstTs, endSec, section.title ?? null));
     // C6 — group consecutive same-type atoms into Medium-style paragraphs
     // (was 1 atom = 1 <p> = "picture-book"). Body stays UN-bolded: Medium body
     // text has no inline keyword bold (the auto-strong heuristic turned common
@@ -305,12 +267,9 @@ function renderChapter(chapter: MandalaBookChapter, narrativeMode: boolean): Tip
     out.push(paragraph(chapter.intro));
   }
 
-  // CP505 B — dedup repeated video embeds WITHIN this chapter: a vid's first
-  // section = full embed, later same-vid sections = timestamp pill. Reset per chapter.
-  const embeddedVids = new Set<string>();
   for (let i = 0; i < chapter.sections.length; i++) {
     const sec = chapter.sections[i];
-    out.push(...renderSection(sec, chapter.ch, i, narrativeMode, embeddedVids));
+    out.push(...renderSection(sec, chapter.ch, i, narrativeMode));
   }
 
   // CP504 loop-2-B — STORM gap-fill: web-sourced supplemental facts for this
