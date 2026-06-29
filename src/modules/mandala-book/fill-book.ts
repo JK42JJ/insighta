@@ -496,15 +496,6 @@ export async function fillMandalaBook(params: {
   // woven prose is NOT rewritten, A1). Best-effort; failures leave book unchanged.
   if (skeleton && isBookEnrichEnabled()) {
     await enrichBookLoop2(book, mandala.title ?? '', mandalaId);
-    // [CV-NOTE-WIRE] CP505 — fire-and-forget visual CV figure enrich (default inert)
-    if (isVisualCvEnabled()) {
-      enqueueNoteCvEnrich(mandalaId, userId).catch((err) => {
-        log.warn('note-cv-enrich enqueue failed (non-fatal)', {
-          mandalaId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
-    }
   }
 
   let validated;
@@ -545,6 +536,20 @@ export async function fillMandalaBook(params: {
   );
 
   const version = rows[0]?.version ?? 1;
+
+  // [CV-NOTE-WIRE] CP505 — visual CV figure enrich, enqueued AFTER the book is
+  // committed (above). The handler reads the SAVED book_json; enqueuing pre-save
+  // raced → detect read a stale/absent note (fresh mandala → "book_json 없음" → 0
+  // figures). Now it always sees the completed note. Fire-and-forget; default inert.
+  if (skeleton && isVisualCvEnabled()) {
+    enqueueNoteCvEnrich(mandalaId, userId).catch((err) => {
+      log.warn('note-cv-enrich enqueue failed (non-fatal)', {
+        mandalaId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+
   log.info('mandala book filled', {
     mandalaId,
     sourceVideos,
